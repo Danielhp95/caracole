@@ -221,7 +221,10 @@ yours, so `宋冬野 - 斑马斑马` finds that song there, and so would "Banma 
 "Ban Ma Ban Ma" or "Zebra Zebra". Japanese, Korean and Cyrillic names come in
 the same patterns ("打上花火 (Uchiage Hanabi)", "봄날 (Spring Day)",
 "Кино (Kino)"). Caracole has no romanizer for those, so they meet on the part
-in their own script, or on the Latin one.
+in their own script, or on the Latin one. UG also lists some of these titles
+in Latin letters alone, the romanization with its translation in brackets
+("Hong Dou (Red Bean)" for 王菲's 红豆): on an artist page, a title in Latin
+letters counts by what is outside its brackets too, so 红豆 finds it there.
 
 The same goes wherever caracole meets a name it didn't write: a song you
 wrote in two scripts against the index (UG's sitemaps write names in Latin

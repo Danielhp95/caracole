@@ -280,9 +280,6 @@ def test_w7_10_a_romanization_or_translation_after_a_korean_or_japanese_original
     assert ids == {9000002} and song.match_step == "artist_page"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-11: a listing in Latin letters only, a romanization with its "
-                          "translation bracketed, is never split, so the song is missed")
 @pytest.mark.parametrize("artist,title,listed", [
     ("王菲", "红豆", "Hong Dou (Red Bean)"),
     ("Sơn Tùng M-TP", "Nơi này có anh", "Nơi Này Có Anh (Where This Is You)"),

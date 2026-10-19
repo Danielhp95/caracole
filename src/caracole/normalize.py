@@ -313,6 +313,28 @@ def name_forms(name: str) -> tuple[str, ...]:
     return tuple(f for f in dict.fromkeys(forms) if f)
 
 
+# A bracketed group, in any width, as a listing in Latin letters alone holds a translation (listing_forms).
+_BRACKETED = re.compile(r"[(\[（［【][^)\]）］】]*[)\]）］】]")
+
+
+@functools.lru_cache(maxsize=8192)
+def listing_forms(title: str) -> tuple[str, ...]:
+    """The forms of a title as UG lists it on an artist page: its ``name_forms``, and, for a title in
+    Latin letters alone, the key of the title outside its brackets.
+
+    UG lists some titles as a romanization with its translation bracketed ("Hong Dou (Red Bean)" for
+    红豆, "Nơi Này Có Anh (Where This Is You)"), and outside the brackets is the title whatever they
+    hold; what they hold may be anything, so it is no form. Only a listing's: a title you bracket is
+    compared whole, so "Another Brick in the Wall (Part 1)" never takes the tabs of another part.
+    """
+    forms = list(name_forms(title))
+    if not has_other_script(title):
+        outside = slug_key(_BRACKETED.sub(" ", title))
+        if outside and not _generic(outside):
+            forms.append(outside)
+    return tuple(dict.fromkeys(forms))
+
+
 def _own_keys(name: str) -> list[str]:
     """The keys a name always had: its slug key, and its pinyin and Simplified keys when it is Chinese."""
     if has_han(name):

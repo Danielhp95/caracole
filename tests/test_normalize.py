@@ -8,6 +8,7 @@ from caracole.normalize import (
     fold,
     has_han,
     identity_key,
+    listing_forms,
     name_forms,
     romanize,
     slug_key,
@@ -409,6 +410,30 @@ def test_two_names_with_their_own_scripts_are_no_bilingual_name():
 ])
 def test_latin_names_have_their_slug_key_alone(name):
     assert name_forms(name) == (slug_key(name),)
+
+
+@pytest.mark.parametrize("listed,wanted", [
+    # UG lists some titles in Latin letters alone, a romanization with its translation bracketed: on an
+    # artist page, outside the brackets is the title, whatever they hold.
+    ("Hong Dou (Red Bean)", "红豆"),
+    ("Hong Dou (Red Bean)", "Hong Dou"),
+    ("Nơi Này Có Anh (Where This Is You)", "Nơi này có anh"),
+    ("Persiana Americana (Gira Me Verás Volver)", "Persiana Americana"),
+])
+def test_a_listing_in_latin_letters_counts_by_its_title_outside_the_brackets(listed, wanted):
+    assert {compact(f) for f in listing_forms(listed)} & {compact(f) for f in name_forms(wanted)}
+
+
+@pytest.mark.parametrize("listed,wanted", [
+    ("Hong Dou (Red Bean)", "Red Bean"),  # what the brackets hold may be anything
+    ("Intro (Hong Dou)", "Intro"),  # outside them, a generic word is no title either
+])
+def test_what_a_latin_listing_brackets_is_no_title(listed, wanted):
+    assert not {compact(f) for f in listing_forms(listed)} & {compact(f) for f in name_forms(wanted)}
+
+
+def test_listing_forms_of_a_name_in_two_scripts_are_its_forms():
+    assert listing_forms("斑马 斑马 Banma Banma Zebra Zebra") == name_forms("斑马 斑马 Banma Banma Zebra Zebra")
 
 
 def test_chinese_names_lead_with_their_keys_and_pinyin():

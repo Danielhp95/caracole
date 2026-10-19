@@ -71,7 +71,7 @@ from caracole.http import (
 )
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
 from caracole.lyrics import song_lyrics
-from caracole.normalize import clean_title, compact, name_forms, slug_key, without_featuring
+from caracole.normalize import clean_title, compact, listing_forms, name_forms, slug_key, without_featuring
 from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from caracole.songs import Song, get_song, list_songs, refresh_status, update_song
@@ -841,7 +841,7 @@ def _title_score(forms: list[str], listed: list[str]) -> float:
 
 
 def _title_hit(tab: UGVersion, forms: list[str], fresh: bool) -> _Hit | None:
-    listed = _name_keys(clean_title(tab.song_name))
+    listed = list(listing_forms(clean_title(tab.song_name)))
     if not listed or not forms:
         return None
     score = _title_score(forms, listed)
