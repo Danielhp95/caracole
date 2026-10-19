@@ -28,12 +28,7 @@ from tabarr.autochords.btc import (
 
 from conftest import subprocess_pythonpath
 
-# Where this project's development session keeps downloaded weights; anywhere
-# else, set the environment variables above.
-_DEV_MODELS = Path(
-    "/tmp/tabarr-dev/models"
-)
-MODELS_DIR = Path(os.environ.get("TABARR_MODELS_DIR", _DEV_MODELS))
+MODELS_DIR = Path(os.environ["TABARR_MODELS_DIR"]) if os.environ.get("TABARR_MODELS_DIR") else None
 
 
 def _imports(*names: str) -> bool:
@@ -49,7 +44,7 @@ def _model_file(env_var: str, name: str) -> Path | None:
     value = os.environ.get(env_var)
     if value:
         return Path(value) if Path(value).is_file() else None
-    return next(MODELS_DIR.rglob(name), None) if MODELS_DIR.is_dir() else None
+    return next(MODELS_DIR.rglob(name), None) if MODELS_DIR is not None and MODELS_DIR.is_dir() else None
 
 
 HAVE_LIBS = _imports("numpy", "soundfile", "torch", "librosa", "beat_this")
