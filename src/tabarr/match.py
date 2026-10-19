@@ -1,0 +1,455 @@
+"""The local matching ladder: your songs against the UG index, offline (plan §2).
+
+For each song, in order:
+
+1. ``overrides.toml``: ``[ignore]``, then ``[pin]``, then ``[match]``.
+2. For each of the song's artists, the UG artist keys it may go by: its
+   ``[alias]`` first, then its own key, then any UG key that is the same once
+   hyphens are removed (``ac-dc`` → ``acdc``). A Chinese name also tries its
+   pinyin (宋冬野 → ``song-dong-ye``, which meets ``song-dongye`` the same way).
+   Under those artists an exact title accepts at once. Otherwise every title
+   is scored with rapidfuzz ``ratio``, the best of UG's full key and its base
+   key, so ``creep-acoustic`` and ``creep-intro`` count as ``creep``.
+3. The nearest other artist key at or above ``artist_gate``, then step 2 under
+   it, scored as the lower of the artist and title scores.
+4. The title alone, across every artist (covers and misfiled tabs). These are
+   always reviews.
+
+Decision: accept at ``accept`` or more with a lead of ``margin`` over the next
+different title; review from ``review``; otherwise not found.
+
+``match_all`` never replaces a match the fetch step made on a UG artist page
+(step ``artist_page``, amendment A6): the index can't see those bare-id tabs,
+so only your overrides can.
+"""
+
+from __future__ import annotations
+
+import itertools
+import sqlite3
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import Any
+
+from rapidfuzz import fuzz, process
+
+from tabarr.config import MatchPolicy
+from tabarr.normalize import clean_title, compact, has_han, romanize, slug_key, split_variant
+from tabarr.overrides import Overrides
+from tabarr.songs import Song, list_songs, refresh_status, update_song, utc_now_iso
+
+DECISIONS = ("accept", "review", "not_found", "pinned", "ignored")
+STEPS = ("override", "pin", "exact", "alias", "fuzzy_title", "fuzzy_artist", "title_only")
+ARTIST_PAGE = "artist_page"  # the fetch step's matches on UG artist pages (A6)
+MAX_CANDIDATES = 5
+_TITLE_ONLY_TITLES = 10  # nearest titles expanded into candidates, per title form
+
+
+@dataclass(frozen=True)
+class IndexSong:
+    """One song key of an artist in the index, with every tab (id, type) listed under it."""
+
+    song_key: str
+    base_key: str
+    label: str | None
+    tabs: tuple[tuple[int, str], ...]
+
+
+def _songs_of(rows: Iterable[tuple[str, int, str]]) -> list[IndexSong]:
+    """Group rows of (song_key, tab_id, type), sorted by song key, into songs."""
+    songs = []
+    for song_key, group in itertools.groupby(rows, key=lambda r: r[0]):
+        base, label = split_variant(song_key)
+        songs.append(IndexSong(song_key, base, label, tuple((r[1], r[2]) for r in group)))
+    return songs
+
+
+class IndexView:
+    """``ug_index`` as the matcher reads it during one run.
+
+    The artist keys (about 150,000) are loaded once, on first use, and so are
+    the title keys (about 720,000), which only title-only matching needs. An
+    artist's songs are read when a song first asks for that artist.
+    """
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+        self._artists: list[str] | None = None
+        self._artist_set: frozenset[str] = frozenset()
+        self._by_compact: dict[str, tuple[str, ...]] = {}
+        self._songs: dict[str, list[IndexSong]] = {}
+        self._titles: list[str] | None = None
+        self._compact_titles: list[str] | None = None
+
+    def artist_keys(self) -> list[str]:
+        """Every artist key in the index, sorted."""
+        if self._artists is None:
+            self._artists = [r[0] for r in self.conn.execute(
+                "SELECT DISTINCT artist_key FROM ug_index ORDER BY artist_key")]
+            self._artist_set = frozenset(self._artists)
+            by_compact: dict[str, list[str]] = {}
+            for a in self._artists:
+                by_compact.setdefault(compact(a), []).append(a)
+            self._by_compact = {k: tuple(v) for k, v in by_compact.items()}
+        return self._artists
+
+    def has_artist(self, artist_key: str) -> bool:
+        self.artist_keys()
+        return artist_key in self._artist_set
+
+    def compact_artists(self, compact_key: str) -> tuple[str, ...]:
+        """The artist keys that read ``compact_key`` once hyphens are removed."""
+        self.artist_keys()
+        return self._by_compact.get(compact_key, ())
+
+    def songs_for_artist(self, artist_key: str) -> list[IndexSong]:
+        """The artist's songs, one per song key (variant keys such as ``x-acoustic`` are their own)."""
+        songs = self._songs.get(artist_key)
+        if songs is None:
+            rows = self.conn.execute(
+                "SELECT song_key, tab_id, type FROM ug_index WHERE artist_key = ? ORDER BY song_key, tab_id",
+                (artist_key,),
+            )
+            songs = self._songs[artist_key] = _songs_of(tuple(r) for r in rows)
+        return songs
+
+    def title_keys(self) -> list[str]:
+        """Every title in the index as a base key (``creep-acoustic`` is ``creep``), sorted."""
+        if self._titles is None:
+            keys = self.conn.execute("SELECT DISTINCT song_key FROM ug_index")
+            self._titles = sorted({split_variant(r[0])[0] for r in keys})
+        return self._titles
+
+    def compact_title_keys(self) -> list[str]:
+        """``title_keys()`` with hyphens removed, in the same order."""
+        if self._compact_titles is None:
+            self._compact_titles = [compact(t) for t in self.title_keys()]
+        return self._compact_titles
+
+    def songs_for_title(self, title_key: str) -> list[tuple[str, IndexSong]]:
+        """Every (artist key, song) whose base key is ``title_key``."""
+        # A range instead of LIKE, so the song_key index serves the variant keys too.
+        rows = self.conn.execute(
+            "SELECT artist_key, song_key, tab_id, type FROM ug_index "
+            "WHERE song_key = ? OR (song_key > ? AND song_key < ?) ORDER BY artist_key, song_key, tab_id",
+            (title_key, title_key + "-", title_key + "."),
+        ).fetchall()
+        out = []
+        for artist_key, group in itertools.groupby(rows, key=lambda r: r[0]):
+            out += [(artist_key, s) for s in _songs_of((r[1], r[2], r[3]) for r in group) if s.base_key == title_key]
+        return out
+
+    def tab_keys(self, tab_id: int) -> tuple[str, str] | None:
+        """The (artist key, song key) a tab is indexed under, if it is indexed."""
+        row = self.conn.execute("SELECT artist_key, song_key FROM ug_index WHERE tab_id = ?", (tab_id,)).fetchone()
+        return (row[0], row[1]) if row else None
+
+
+@dataclass(frozen=True)
+class MatchCandidate:
+    artist_key: str
+    song_key: str
+    score: float
+    step: str
+
+
+@dataclass(frozen=True)
+class MatchResult:
+    """A song's match: ``decision`` is one of DECISIONS and ``step`` one of STEPS (None when not found).
+
+    ``artist_key``/``song_key`` are the UG song (for a review, the best
+    candidate). ``pinned`` holds the tab ids of a ``[pin]``.
+    """
+
+    decision: str
+    step: str | None
+    score: float | None
+    artist_key: str | None
+    song_key: str | None
+    candidates: tuple[MatchCandidate, ...] = ()
+    pinned: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class MatchChange:
+    """One song in a ``match_all`` run: the song as it was, its previous decision, and its match now."""
+
+    song: Song
+    old: str | None
+    new: MatchResult
+
+
+# --- the ladder -----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Hit:
+    cand: MatchCandidate
+    rank: int  # the order its artist key was tried in
+    tabs: int
+
+
+@dataclass(frozen=True)
+class _Title:
+    keys: tuple[str, ...]  # the title's key, plus its pinyin key for a Chinese title
+    compact_pinyin: tuple[str, ...]  # pinyin keys without hyphens, also compared fuzzily
+
+
+def _title_forms(title: str) -> _Title:
+    clean = clean_title(title)
+    keys = [slug_key(clean)]
+    pinyin = slug_key(romanize(clean)) if has_han(clean) else ""
+    if pinyin:
+        keys.append(pinyin)
+    return _Title(tuple(dict.fromkeys(k for k in keys if k)), (compact(pinyin),) if pinyin else ())
+
+
+def _artist_forms(name: str) -> list[str]:
+    forms = [slug_key(name)]
+    if has_han(name):
+        forms.append(slug_key(romanize(name)))
+    return list(dict.fromkeys(f for f in forms if f))
+
+
+def _own_artists(song: Song, index: IndexView, overrides: Overrides) -> list[tuple[str, bool]]:
+    """(UG artist key, came from [alias]) for each of the song's artists, in the order they're tried."""
+    keys: dict[str, bool] = {}
+
+    def add(key: str, alias: bool = False) -> None:
+        if key and key not in keys and index.has_artist(key):
+            keys[key] = alias
+
+    for name in song.artists or [song.artist]:
+        for a in overrides.alias.get(slug_key(name), ()):
+            add(a, alias=True)
+        for form in _artist_forms(name):
+            add(form)
+            for a in index.compact_artists(compact(form)):
+                add(a)
+    return list(keys.items())
+
+
+def _title_hits(index: IndexView, artist_key: str, title: _Title, rank: int, *, exact_step: str,
+                fuzzy_step: str = "fuzzy_title", cap: float | None = None) -> list[_Hit]:
+    """Score every title of one artist, grouped by base key."""
+    groups: dict[str, list[IndexSong]] = {}
+    for s in index.songs_for_artist(artist_key):
+        groups.setdefault(s.base_key, []).append(s)
+    hits = []
+    for base, members in groups.items():
+        keys = {base, *(m.song_key for m in members)}
+        if any(k in keys or compact(k) == compact(base) for k in title.keys):
+            score, step = 100.0, exact_step
+        else:
+            score = max(fuzz.ratio(k, u) for k in title.keys for u in keys)
+            score = max([score, *(fuzz.ratio(c, compact(base)) for c in title.compact_pinyin)])
+            step = fuzzy_step
+        if cap is not None:
+            score = min(score, cap)
+        tabs = sum(len(m.tabs) for m in members)
+        hits.append(_Hit(MatchCandidate(artist_key, base, round(score, 1), step), rank, tabs))
+    return hits
+
+
+def _ranked(hits: Iterable[_Hit]) -> list[_Hit]:
+    """Best first (score, then the artist tried first, then the most tabs), one hit per UG song."""
+    best: dict[tuple[str, str], _Hit] = {}
+    for h in sorted(hits, key=lambda h: (-h.cand.score, h.rank, -h.tabs)):
+        best.setdefault((h.cand.artist_key, h.cand.song_key), h)
+    return list(best.values())
+
+
+def _decide(hits: list[_Hit], policy: MatchPolicy) -> str:
+    if not hits:
+        return "not_found"
+    best = hits[0].cand
+    rival = next((h.cand.score for h in hits[1:] if h.cand.song_key != best.song_key), 0.0)
+    if best.score >= policy.accept and best.score - rival >= policy.margin:
+        return "accept"
+    return "review" if best.score >= policy.review else "not_found"
+
+
+def _nearest_artists(song: Song, index: IndexView, tried: set[str], gate: float) -> list[tuple[str, float]]:
+    """For each of the song's artists, the closest artist key not tried yet, if it scores ``gate`` or more."""
+    found: dict[str, float] = {}
+    for name in song.artists or [song.artist]:
+        best: tuple[str, float] | None = None
+        for form in _artist_forms(name):
+            skip = tried | found.keys()
+            near = process.extract(form, index.artist_keys(), scorer=fuzz.ratio, score_cutoff=gate,
+                                   limit=len(skip) + 1)
+            key, score = next(((k, s) for k, s, _ in near if k not in skip), (None, 0.0))
+            if key is not None and (best is None or score > best[1]):
+                best = (key, score)
+        if best is not None:
+            found[best[0]] = round(best[1], 1)
+    return list(found.items())
+
+
+def _title_only(index: IndexView, title: _Title, policy: MatchPolicy) -> list[_Hit]:
+    titles = index.title_keys()
+    scores: dict[str, float] = {}
+    queries = [(k, titles) for k in title.keys] + [(c, index.compact_title_keys()) for c in title.compact_pinyin]
+    for query, choices in queries:
+        for _, score, i in process.extract(query, choices, scorer=fuzz.ratio, score_cutoff=policy.review,
+                                           limit=_TITLE_ONLY_TITLES):
+            scores[titles[i]] = max(scores.get(titles[i], 0.0), score)
+    hits = []
+    for key, score in scores.items():
+        tabs: dict[str, int] = {}
+        for artist_key, s in index.songs_for_title(key):
+            tabs[artist_key] = tabs.get(artist_key, 0) + len(s.tabs)
+        hits += [_Hit(MatchCandidate(a, key, round(score, 1), "title_only"), 0, n) for a, n in tabs.items()]
+    return _ranked(hits)
+
+
+def _result(decision: str, hits: list[_Hit]) -> MatchResult:
+    best = hits[0].cand
+    return MatchResult(decision, best.step, best.score, best.artist_key, best.song_key,
+                       candidates=tuple(h.cand for h in hits[:MAX_CANDIDATES]))
+
+
+def _pinned_keys(index: IndexView, pins: tuple[int, ...]) -> tuple[str | None, str | None]:
+    for tab_id in pins:
+        keys = index.tab_keys(tab_id)
+        if keys is not None:
+            return keys[0], split_variant(keys[1])[0]
+    return None, None
+
+
+def match_song(song: Song, index: IndexView, overrides: Overrides, policy: MatchPolicy) -> MatchResult:
+    """Run the ladder for one song."""
+    ident = song.key
+    if ident in overrides.ignore:
+        return MatchResult("ignored", "override", None, None, None)
+    if ident in overrides.pin:
+        pins = tuple(overrides.pin[ident])
+        artist_key, song_key = overrides.match.get(ident) or _pinned_keys(index, pins)
+        return MatchResult("pinned", "pin", None, artist_key, song_key, pinned=pins)
+    if ident in overrides.match:
+        artist_key, song_key = overrides.match[ident]
+        return MatchResult("accept", "override", 100.0, artist_key, song_key,
+                           candidates=(MatchCandidate(artist_key, song_key, 100.0, "override"),))
+
+    title = _title_forms(song.title)
+    if not title.keys:
+        return MatchResult("not_found", None, None, None, None)
+    own = _own_artists(song, index, overrides)
+    hits: list[_Hit] = []
+    for rank, (artist_key, via_alias) in enumerate(own):
+        hits += _title_hits(index, artist_key, title, rank, exact_step="alias" if via_alias else "exact")
+    ranked = _ranked(hits)
+    exact = next((h for h in ranked if h.cand.step in ("exact", "alias")), None)
+    if exact is not None:
+        return _result("accept", [exact, *(h for h in ranked if h is not exact)])
+
+    decision = _decide(ranked, policy)
+    if decision != "accept":
+        tried = {a for a, _ in own}
+        for i, (artist_key, score) in enumerate(_nearest_artists(song, index, tried, policy.artist_gate)):
+            hits += _title_hits(index, artist_key, title, len(own) + i, exact_step="fuzzy_artist",
+                                fuzzy_step="fuzzy_artist", cap=score)
+        ranked = _ranked(hits)
+        decision = _decide(ranked, policy)
+    if decision != "not_found":
+        return _result(decision, ranked)
+
+    by_title = _title_only(index, title, policy)
+    if by_title:
+        return _result("review", by_title)
+    return MatchResult("not_found", None, ranked[0].cand.score if ranked else None, None, None,
+                       candidates=tuple(h.cand for h in ranked[:MAX_CANDIDATES]))
+
+
+# --- match_all ------------------------------------------------------------------------------
+
+
+def _candidate_rows(result: MatchResult) -> list[dict[str, Any]]:
+    """``songs.match_candidates``: for a pin, its pinned tabs (so a changed pin is noticed)."""
+    if result.decision == "pinned":
+        return [{"artist_key": result.artist_key, "song_key": result.song_key, "score": None, "step": "pin",
+                 "tab_id": t} for t in result.pinned]
+    return [{"artist_key": c.artist_key, "song_key": c.song_key, "score": c.score, "step": c.step}
+            for c in result.candidates]
+
+
+def _pins_of(song: Song) -> list[int]:
+    return [c["tab_id"] for c in song.match_candidates or [] if c.get("step") == "pin" and "tab_id" in c]
+
+
+def _needs_fetch(song: Song, new: MatchResult) -> bool:
+    """Whether the song's UG versions must be fetched again: a new accept or pin, other keys, other pins."""
+    if new.decision in ("accept", "pinned") and song.match_decision != new.decision:
+        return True
+    if (song.match_artist_key, song.match_song_key) != (new.artist_key, new.song_key):
+        return True
+    return new.decision == "pinned" and _pins_of(song) != list(new.pinned)
+
+
+def _stored(song: Song) -> MatchResult:
+    cands = tuple(
+        MatchCandidate(c["artist_key"], c["song_key"], c.get("score"), c.get("step"))
+        for c in song.match_candidates or [] if c.get("artist_key") and c.get("song_key")
+    )
+    return MatchResult(song.match_decision or "not_found", song.match_step, song.match_score,
+                       song.match_artist_key, song.match_song_key, candidates=cands)
+
+
+def _save(conn: sqlite3.Connection, song: Song, new: MatchResult, now: str) -> None:
+    values: dict[str, Any] = {
+        "match_decision": new.decision,
+        "match_step": new.step,
+        "match_score": new.score,
+        "match_artist_key": new.artist_key,
+        "match_song_key": new.song_key,
+        "match_candidates": _candidate_rows(new),
+        "review": new.decision == "review",
+    }
+    if any(getattr(song, name) != value for name, value in values.items()):
+        if _needs_fetch(song, new):
+            values["ug_dirty"] = True
+        update_song(conn, song.id, **values, matched_at=now)
+    if new.decision == "ignored" and song.status != "ignored":
+        update_song(conn, song.id, status="ignored")
+    elif new.decision != "ignored" and song.status == "ignored":
+        refresh_status(conn, song.id, ignored=False)
+
+
+@contextmanager
+def _transaction(conn: sqlite3.Connection) -> Iterator[None]:
+    conn.execute("SAVEPOINT match_all")
+    try:
+        yield
+    except BaseException:
+        conn.execute("ROLLBACK TO match_all")
+        conn.execute("RELEASE match_all")
+        raise
+    conn.execute("RELEASE match_all")
+
+
+def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolicy, *,
+              dry_run: bool = False) -> list[MatchChange]:
+    """Match every song, newest first, and store the results (unless ``dry_run``).
+
+    Stores the decision, step, score, matched keys, up to five candidates
+    (dicts with ``artist_key``, ``song_key``, ``score`` and ``step``, best
+    first), ``matched_at`` and the review flag, for songs whose match changed.
+    Sets ``ug_dirty`` when a song becomes accepted or pinned, or its keys or
+    pins change. Ignored songs get status ``ignored``; songs no longer ignored
+    get their status back. Returns one change per song.
+    """
+    index = IndexView(conn)
+    changes = []
+    for song in list_songs(conn):
+        new = match_song(song, index, overrides, policy)
+        if song.match_step == ARTIST_PAGE and new.step not in ("override", "pin"):
+            new = _stored(song)
+        changes.append(MatchChange(song, song.match_decision, new))
+    if not dry_run:
+        now = utc_now_iso()
+        with _transaction(conn):
+            for c in changes:
+                if c.new.step != ARTIST_PAGE:
+                    _save(conn, c.song, c.new, now)
+    return changes

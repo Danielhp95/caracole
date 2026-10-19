@@ -1,0 +1,348 @@
+from tabarr.config import MatchPolicy
+from tabarr.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
+from tabarr.overrides import Overrides
+from tabarr.songs import get_song, update_song
+
+from conftest import add_song
+
+POLICY = MatchPolicy()
+
+
+def index(conn, *rows):
+    """Index rows (tab_id, artist_key, song_key, type), inserted directly."""
+    conn.executemany(
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (?, ?, ?, ?, '1', 'x', ?)",
+        [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows],
+    )
+
+
+def match(conn, artist, title, overrides=None, artists=None):
+    song = add_song(conn, artist, title, artists=artists)
+    return match_song(song, IndexView(conn), overrides or Overrides(), POLICY)
+
+
+def summary(r: MatchResult):
+    return r.decision, r.step, r.score, r.artist_key, r.song_key
+
+
+# --- the index view ---------------------------------------------------------------------
+
+
+def test_index_view_groups_tabs_by_song_and_splits_variant_labels(conn):
+    index(conn, (3, "oasis", "wonderwall", "guitar-pro"), (1, "oasis", "wonderwall", "chords"),
+          (2, "oasis", "wonderwall-acoustic", "chords"), (4, "radiohead", "creep", "chords"))
+    view = IndexView(conn)
+    assert view.songs_for_artist("oasis") == [
+        IndexSong("wonderwall", "wonderwall", None, ((1, "chords"), (3, "guitar-pro"))),
+        IndexSong("wonderwall-acoustic", "wonderwall", "acoustic", ((2, "chords"),)),
+    ]
+    assert view.songs_for_artist("nobody") == []
+    assert view.artist_keys() == ["oasis", "radiohead"]
+    assert view.title_keys() == ["creep", "wonderwall"]
+    assert view.songs_for_title("wonderwall") == [
+        ("oasis", IndexSong("wonderwall", "wonderwall", None, ((1, "chords"), (3, "guitar-pro")))),
+        ("oasis", IndexSong("wonderwall-acoustic", "wonderwall", "acoustic", ((2, "chords"),))),
+    ]
+
+
+# --- the ladder ---------------------------------------------------------------------------
+
+
+def test_exact_accept_collects_all_types(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwall", "tabs"),
+          (3, "oasis", "wonderwall", "guitar-pro"), (4, "oasis", "champagne-supernova", "chords"))
+    r = match(conn, "Oasis", "Wonderwall")
+    assert summary(r) == ("accept", "exact", 100.0, "oasis", "wonderwall")
+    assert r.candidates[0] == MatchCandidate("oasis", "wonderwall", 100.0, "exact")
+
+
+def test_variant_slugs_join_the_same_song(conn):
+    index(conn, (1, "oasis", "wonderwall-acoustic", "chords"), (2, "oasis", "wonderwall-intro", "tabs"),
+          (3, "oasis", "wonderwall-ii", "chords"))
+    r = match(conn, "Oasis", "Wonderwall")
+    assert summary(r) == ("accept", "exact", 100.0, "oasis", "wonderwall")
+    assert [(c.song_key, c.score) for c in r.candidates] == [("wonderwall", 100.0), ("wonderwall-ii", 87.0)]
+
+
+def test_leading_the_and_remaster_suffix(conn):
+    index(conn, (1, "beatles", "let-it-be", "chords"))
+    assert summary(match(conn, "The Beatles", "Let It Be - Remastered 2009")) == (
+        "accept", "exact", 100.0, "beatles", "let-it-be")
+
+
+def test_exact_title_is_accepted_next_to_a_close_title(conn):
+    index(conn, (1, "beatles", "yesterday", "chords"), (2, "beatles", "yesterdays", "chords"))
+    assert summary(match(conn, "The Beatles", "Yesterday"))[:2] == ("accept", "exact")
+
+
+def test_hyphenation_differences_are_exact(conn):
+    # "E.T." keys as e-t; UG wrote the slug as "et"
+    index(conn, (1, "katy-perry", "et", "chords"), (2, "katy-perry", "roar", "chords"))
+    assert summary(match(conn, "Katy Perry", "E.T.")) == ("accept", "exact", 100.0, "katy-perry", "et")
+
+
+def test_fuzzy_title_accept(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "champagne-supernova", "chords"))
+    assert summary(match(conn, "Oasis", "Wonderwal")) == ("accept", "fuzzy_title", 94.7, "oasis", "wonderwall")
+
+
+def test_close_second_title_forces_review(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwalls", "chords"))
+    r = match(conn, "Oasis", "Wonderwal")
+    assert summary(r) == ("review", "fuzzy_title", 94.7, "oasis", "wonderwall")
+    assert [(c.song_key, c.score) for c in r.candidates] == [("wonderwall", 94.7), ("wonderwalls", 90.0)]
+
+
+def test_the_same_title_under_another_of_the_songs_artists_is_no_rival(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "liam-gallagher", "wonderwall", "chords"))
+    r = match(conn, "Oasis", "Wonderwal", artists=["Oasis", "Liam Gallagher"])
+    assert summary(r) == ("accept", "fuzzy_title", 94.7, "oasis", "wonderwall")
+
+
+def test_low_scores_are_not_found_but_kept_as_candidates(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"))
+    r = match(conn, "Oasis", "Supersonic")
+    assert summary(r) == ("not_found", None, 20.0, None, None)
+    assert r.candidates == (MatchCandidate("oasis", "wonderwall", 20.0, "fuzzy_title"),)
+
+
+def test_review_band(conn):
+    index(conn, (1, "oasis", "champagne-supernova", "chords"))
+    assert summary(match(conn, "Oasis", "Champagne Super")) == (
+        "review", "fuzzy_title", 88.2, "oasis", "champagne-supernova")
+
+
+def test_not_found(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"))
+    r = match(conn, "Nobody", "Nothing Like It")
+    assert (r.decision, r.artist_key, r.song_key, r.candidates) == ("not_found", None, None, ())
+
+
+def test_fuzzy_artist(conn):
+    index(conn, (1, "enanitos-verdes", "lamento-boliviano", "chords"),
+          (2, "enanitos-verdes", "la-muralla-verde", "chords"))
+    assert summary(match(conn, "Enanitos Verde", "Lamento Boliviano")) == (
+        "accept", "fuzzy_artist", 96.6, "enanitos-verdes", "lamento-boliviano")
+
+
+def test_fuzzy_artist_looks_past_the_artist_already_tried(conn):
+    # UG files some tabs under a misspelt duplicate of an artist that also exists correctly spelt.
+    index(conn, (1, "red-hot-chili-peppers", "californication", "chords"),
+          (2, "red-hot-chilli-peppers", "under-the-bridge", "chords"))
+    assert summary(match(conn, "Red Hot Chili Peppers", "Under the Bridge")) == (
+        "accept", "fuzzy_artist", 97.7, "red-hot-chilli-peppers", "under-the-bridge")
+
+
+def test_artist_below_the_gate_falls_through_to_title_only(conn):
+    # The real case: Spotify's "Enanitos Verdes" is UG's los-enanitos-verdes (ratio 88.2 < 90).
+    index(conn, (1, "los-enanitos-verdes", "lamento-boliviano", "chords"),
+          (2, "los-enanitos-verdes", "lamento-boliviano", "tabs"),
+          (3, "toque-de-queda", "lamento-boliviano", "guitar-pro"))
+    r = match(conn, "Enanitos Verdes", "Lamento Boliviano")
+    assert summary(r) == ("review", "title_only", 100.0, "los-enanitos-verdes", "lamento-boliviano")
+
+
+def test_alias_wins(conn):
+    index(conn, (1, "soda", "persiana-americana", "chords"), (2, "soda-stereo", "persiana-americana", "chords"))
+    aliased = Overrides(alias={"soda": ("soda-stereo",)})
+    assert summary(match(conn, "Soda", "Persiana Americana", aliased)) == (
+        "accept", "alias", 100.0, "soda-stereo", "persiana-americana")
+    assert summary(match(conn, "Soda", "Persiana Americana - Remasterizado 2007"))[:4] == (
+        "accept", "exact", 100.0, "soda")
+
+
+def test_compact_artist_key(conn):
+    index(conn, (1, "acdc", "highway-to-hell", "chords"))
+    assert summary(match(conn, "AC/DC", "Highway to Hell")) == ("accept", "exact", 100.0, "acdc", "highway-to-hell")
+
+
+def test_second_artist_used(conn):
+    index(conn, (1, "rob-thomas", "smooth", "chords"))
+    assert summary(match(conn, "Santana", "Smooth", artists=["Santana", "Rob Thomas"])) == (
+        "accept", "exact", 100.0, "rob-thomas", "smooth")
+
+
+def test_title_only_is_review(conn):
+    index(conn, (1, "jeff-buckley", "hallelujah", "chords"), (2, "leonard-cohen", "hallelujah", "chords"),
+          (3, "leonard-cohen", "hallelujah-live", "tabs"), (4, "leonard-cohen", "suzanne", "chords"))
+    r = match(conn, "Someone Else", "Hallelujah")
+    assert summary(r) == ("review", "title_only", 100.0, "leonard-cohen", "hallelujah")
+    # the most-tabbed artist of the title comes first; its variant slugs count as the same song
+    assert r.candidates == (MatchCandidate("leonard-cohen", "hallelujah", 100.0, "title_only"),
+                            MatchCandidate("jeff-buckley", "hallelujah", 100.0, "title_only"))
+
+
+def test_ignore_pin_and_match_overrides(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwall-acoustic", "chords"))
+    ignore = frozenset({"oasis/wonderwall"})
+    pin = {"oasis/wonderwall": (2, 999)}
+    over = {"oasis/wonderwall": ("oasis", "wonderwall-ii")}
+    song = add_song(conn, "Oasis", "Wonderwall")
+    view = IndexView(conn)
+
+    def m(**kw):
+        return match_song(song, view, Overrides(**kw), POLICY)
+
+    assert summary(m(ignore=ignore, pin=pin, match=over)) == ("ignored", "override", None, None, None)
+    pinned = m(pin=pin)
+    assert summary(pinned) == ("pinned", "pin", None, "oasis", "wonderwall") and pinned.pinned == (2, 999)
+    assert summary(m(pin=pin, match=over)) == ("pinned", "pin", None, "oasis", "wonderwall-ii")
+    assert summary(m(match=over)) == ("accept", "override", 100.0, "oasis", "wonderwall-ii")
+    bare = m(pin={"oasis/wonderwall": (85053,)})
+    assert summary(bare) == ("pinned", "pin", None, None, None) and bare.pinned == (85053,)
+
+
+def test_pinyin_keys_meet_ug_slugs(conn):
+    # A3: 宋冬野 → "song dong ye" → compact "songdongye" meets UG's song-dongye.
+    index(conn, (1, "song-dongye", "ban-ma-ban-ma", "chords"), (2, "song-dongye", "an-he-qiao", "chords"))
+    assert summary(match(conn, "宋冬野", "斑马，斑马")) == ("accept", "exact", 100.0, "song-dongye", "ban-ma-ban-ma")
+
+
+def test_pinyin_title_compact_form(conn):
+    index(conn, (1, "song-dongye", "banma-banma", "chords"))
+    assert summary(match(conn, "宋冬野", "斑马斑马"))[:2] == ("accept", "exact")
+
+
+def test_pinyin_title_is_also_compared_fuzzily_without_hyphens(conn):
+    # 安和桥北 → an-he-qiao-bei; "anheqiaobei" against "anheqiao" scores 84.2 (78.3 with hyphens)
+    index(conn, (1, "song-dongye", "anhe-qiao", "chords"))
+    assert summary(match(conn, "宋冬野", "安和桥北")) == ("review", "fuzzy_title", 84.2, "song-dongye", "anhe-qiao")
+
+
+def test_chinese_names_without_slugged_rows_are_not_found(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "song-joong-ki", "my-love", "chords"))
+    assert match(conn, "宋冬野", "斑马，斑马").decision == "not_found"
+
+
+def test_title_without_a_key_is_not_found(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"))
+    assert match(conn, "Oasis", "!!!").decision == "not_found"
+
+
+# --- match_all ------------------------------------------------------------------------------
+
+
+def columns(conn, song_id):
+    s = get_song(conn, song_id)
+    return (s.match_decision, s.match_step, s.match_score, s.match_artist_key, s.match_song_key,
+            s.match_candidates, s.review)
+
+
+def test_match_all_writes_decisions_candidates_and_the_review_flag(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwalls", "chords"),
+          (3, "radiohead", "creep", "chords"))
+    creep = add_song(conn, "Radiohead", "Creep", added_at="2026-10-02T00:00:00Z")
+    typo = add_song(conn, "Oasis", "Wonderwal")
+    changes = match_all(conn, Overrides(), POLICY)
+    assert [(c.song.id, c.old, c.new.decision) for c in changes] == [(creep.id, None, "accept"),
+                                                                     (typo.id, None, "review")]
+    assert columns(conn, creep.id) == ("accept", "exact", 100.0, "radiohead", "creep",
+                                       [{"artist_key": "radiohead", "song_key": "creep", "score": 100.0,
+                                         "step": "exact"}], False)
+    assert columns(conn, typo.id) == ("review", "fuzzy_title", 94.7, "oasis", "wonderwall", [
+        {"artist_key": "oasis", "song_key": "wonderwall", "score": 94.7, "step": "fuzzy_title"},
+        {"artist_key": "oasis", "song_key": "wonderwalls", "score": 90.0, "step": "fuzzy_title"},
+    ], True)
+    assert get_song(conn, creep.id).matched_at is not None
+
+
+def test_match_all_keeps_at_most_five_candidates(conn):
+    index(conn, *[(i, "oasis", f"song-{i}", "chords") for i in range(1, 10)])
+    s = add_song(conn, "Oasis", "Song")
+    match_all(conn, Overrides(), POLICY)
+    assert len(get_song(conn, s.id).match_candidates) == 5
+
+
+def test_match_all_dry_run_writes_nothing(conn):
+    index(conn, (1, "radiohead", "creep", "chords"))
+    s = add_song(conn, "Radiohead", "Creep")
+    before = conn.execute("SELECT * FROM songs").fetchall()
+    changes = match_all(conn, Overrides(ignore=frozenset({"radiohead/creep"})), POLICY, dry_run=True)
+    assert [tuple(r) for r in conn.execute("SELECT * FROM songs")] == [tuple(r) for r in before]
+    assert [(c.song.id, c.old, c.new.decision) for c in changes] == [(s.id, None, "ignored")]
+
+
+def test_match_all_marks_dirty_on_new_accept(conn):
+    index(conn, (1, "radiohead", "creep", "chords"))
+    creep = add_song(conn, "Radiohead", "Creep")
+    match_all(conn, Overrides(), POLICY)
+    update_song(conn, creep.id, ug_dirty=False)  # the fetch step finished it
+    late = add_song(conn, "Oasis", "Wonderwall")
+    match_all(conn, Overrides(), POLICY)
+    update_song(conn, late.id, ug_dirty=False)
+    assert get_song(conn, late.id).match_decision == "not_found"
+    index(conn, (2, "oasis", "wonderwall", "chords"))  # the nightly refresh found it
+    changes = match_all(conn, Overrides(), POLICY)
+    assert {c.song.id: (c.old, c.new.decision) for c in changes} == {
+        creep.id: ("accept", "accept"), late.id: ("not_found", "accept")}
+    assert get_song(conn, late.id).ug_dirty is True
+    assert get_song(conn, creep.id).ug_dirty is False  # unchanged match: nothing to refetch
+
+
+def test_match_all_marks_dirty_when_a_review_becomes_an_accept_on_the_same_keys(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwalls", "chords"))
+    s = add_song(conn, "Oasis", "Wonderwal")
+    match_all(conn, Overrides(), POLICY)
+    update_song(conn, s.id, ug_dirty=False)
+    assert get_song(conn, s.id).match_decision == "review"
+    match_all(conn, Overrides(), MatchPolicy(margin=4))  # you loosened the margin in tabarr.toml
+    assert (get_song(conn, s.id).match_decision, get_song(conn, s.id).ug_dirty) == ("accept", True)
+
+
+def test_match_all_new_candidates_alone_need_no_refetch(conn):
+    index(conn, (1, "radiohead", "creep", "chords"))
+    s = add_song(conn, "Radiohead", "Creep")
+    match_all(conn, Overrides(), POLICY)
+    update_song(conn, s.id, ug_dirty=False)
+    index(conn, (2, "radiohead", "creepy-crawl", "chords"))
+    match_all(conn, Overrides(), POLICY)
+    assert len(get_song(conn, s.id).match_candidates) == 2
+    assert get_song(conn, s.id).ug_dirty is False
+
+
+def test_match_all_marks_dirty_when_the_keys_or_pins_change(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwall-ii", "chords"))
+    s = add_song(conn, "Oasis", "Wonderwall")
+    match_all(conn, Overrides(), POLICY)
+    update_song(conn, s.id, ug_dirty=False)
+    match_all(conn, Overrides(match={"oasis/wonderwall": ("oasis", "wonderwall-ii")}), POLICY)
+    assert get_song(conn, s.id).ug_dirty is True and get_song(conn, s.id).match_song_key == "wonderwall-ii"
+
+    match_all(conn, Overrides(pin={"oasis/wonderwall": (1,)}), POLICY)
+    update_song(conn, s.id, ug_dirty=False)
+    match_all(conn, Overrides(pin={"oasis/wonderwall": (1,)}), POLICY)
+    assert get_song(conn, s.id).ug_dirty is False
+    match_all(conn, Overrides(pin={"oasis/wonderwall": (1, 7)}), POLICY)  # same song, another pinned page
+    assert get_song(conn, s.id).ug_dirty is True
+
+
+def test_ignored_songs_get_status_ignored_and_come_back(conn):
+    index(conn, (1, "radiohead", "creep", "chords"))
+    s = add_song(conn, "Radiohead", "Creep")
+    match_all(conn, Overrides(ignore=frozenset({"radiohead/creep"})), POLICY)
+    assert get_song(conn, s.id).status == "ignored"
+    match_all(conn, Overrides(), POLICY)
+    assert (get_song(conn, s.id).status, get_song(conn, s.id).match_decision) == ("wanted", "accept")
+
+
+def test_an_artist_page_match_is_not_undone_by_the_ladder(conn):
+    # A6: the fetch step matched a bare-id song on its UG artist page; the local index can't see it.
+    s = add_song(conn, "Joaquín Sabina", "19 Días y 500 Noches")
+    update_song(conn, s.id, match_decision="accept", match_step="artist_page", match_score=100.0,
+                match_artist_key="joaquin-sabina", match_song_key="19-dias-y-500-noches", ug_dirty=False)
+    index(conn, (1, "sabina-ddumba", "19-dias-y-500-noches", "chords"))  # a title-only lookalike
+    before = columns(conn, s.id)
+    changes = match_all(conn, Overrides(), POLICY)
+    assert columns(conn, s.id) == before
+    assert (changes[0].old, changes[0].new.decision, changes[0].new.step) == ("accept", "accept", "artist_page")
+    match_all(conn, Overrides(match={"joaquin-sabina/19-dias-y-500-noches": ("sabina-ddumba",
+                                                                            "19-dias-y-500-noches")}), POLICY)
+    assert get_song(conn, s.id).match_step == "override"
+
+
+def test_an_artist_page_match_yields_to_ignore(conn):
+    s = add_song(conn, "Joaquín Sabina", "Pongamos Que Hablo de Madrid")
+    update_song(conn, s.id, match_decision="accept", match_step="artist_page")
+    match_all(conn, Overrides(ignore=frozenset({s.key})), POLICY)
+    assert (get_song(conn, s.id).match_decision, get_song(conn, s.id).status) == ("ignored", "ignored")
