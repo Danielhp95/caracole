@@ -328,9 +328,9 @@ in
         Files systemd passes to caracole through `LoadCredential`, by credential
         name. caracole reads `spotify_client_secret`, `ntfy_token` and
         `web_token` (the access token caracole-web asks each browser for). The
-        files are read as root, so they can stay root-only. The nightly run,
-        caracole-web and `caracole-admin` get them; the auto-chords unit, which
-        reads none, doesn't.
+        files are read as root, so they can stay root-only. The nightly run and
+        `caracole-admin` get them; caracole-web gets `web_token` alone, and the
+        auto-chords unit, which reads none, gets none.
       '';
     };
 
@@ -617,29 +617,53 @@ in
 
     # The library page, and song requests: `caracole serve`. A request runs
     # caracole commands in this unit, one at a time, each under caracole's lock,
-    # so it has the nightly run's folders, network and credentials, and its
-    # sandbox.
+    # so it has the nightly run's folders, network and sandbox. Of the
+    # credentials it gets web_token alone: neither the server nor the commands
+    # it runs (add, match, fetch, render) read Spotify or ntfy.
     systemd.services.caracole-web = lib.mkIf cfg.web.enable {
       description = "caracole web: the library page and song requests";
       wantedBy = [ "multi-user.target" ];
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
       onFailure = [ "caracole-notify-failure.service" ];
+      # A fault that lasts (the port taken, the address gone) fails the unit for
+      # good after 30 starts in 10 minutes, about 5 minutes of retries, with one
+      # alert.
+      startLimitIntervalSec = 600;
+      startLimitBurst = 30;
       unitConfig.RequiresMountsFor = writable;
       environment = cacheEnv;
       serviceConfig =
         sandbox
         // identity
-        // secrets
         // paths
         // {
           Type = "exec";
           ExecStart = "${lib.getExe cfg.package} --config ${configFile} serve ${webArgs}";
+          LoadCredential = lib.optional (
+            cfg.credentials ? web_token
+          ) "web_token:${cfg.credentials.web_token}";
           # A tailnet address may not exist yet at boot: try again until it does.
           Restart = "on-failure";
           RestartSec = "10s";
+          # Straight back to starting, not through `failed`, which would start
+          # OnFailure= and send an alert on every try.
+          RestartMode = "direct";
         };
     };
+
+    warnings =
+      lib.optional
+        (
+          cfg.web.enable
+          && !(lib.elem cfg.web.address [
+            "127.0.0.1"
+            "::1"
+            "localhost"
+          ])
+          && !(cfg.credentials ? web_token)
+        )
+        "services.caracole.web listens on ${cfg.web.address} without credentials.web_token: anyone who reaches it can read the library and request songs.";
 
     networking.firewall.allowedTCPPorts = lib.mkIf (cfg.web.enable && cfg.web.openFirewall) [
       cfg.web.port

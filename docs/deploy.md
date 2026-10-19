@@ -129,8 +129,8 @@ each file as root and hands the unit a private copy in
 `$CREDENTIALS_DIRECTORY`. The secret files can stay root-only, which is
 agenix's default. caracole reads three credentials, `spotify_client_secret`,
 `ntfy_token` and `web_token` (caracole-web's access token, section 8); the
-nightly unit, caracole-web and `caracole-admin` get them, and the auto-chords
-unit, which reads none, gets none. The Spotify token itself is not a static
+nightly unit and `caracole-admin` get them, caracole-web gets `web_token`
+alone, and the auto-chords unit, which reads none, gets none. The Spotify token itself is not a static
 secret: it lives in the state folder, written by `caracole auth spotify`.
 
 Add agenix, which the flake registry already knows as `agenix`:
@@ -533,8 +533,9 @@ or build the package with `caracole.override { cjkFont = "…"; }`.
 library page, a form to request songs, and a Fetch now button on each wanted
 song ([usage.md](usage.md), "caracole serve"). A request runs caracole commands
 in the unit, one at a time and each under caracole's lock, so the unit has the
-nightly run's sandbox, folders, network and credentials. It starts at boot and
-restarts when it fails.
+nightly run's sandbox, folders and network. Of the credentials it gets
+`web_token` alone: neither the server nor the commands it runs read Spotify or
+ntfy. It starts at boot and restarts when it fails.
 
 On the tailnet, with an access token:
 
@@ -564,9 +565,15 @@ Make the token with `openssl rand -base64 24` and store it with
   `allowedHosts`), so no other site can reach it under a name of its own, and
   a form is refused unless it comes from its own page. A tailnet whose interface is trusted needs no firewall opening; for a
   LAN address, set `web.openFirewall = true` and keep the token: anyone on
-  the LAN could otherwise read the library and request songs.
+  the LAN could otherwise read the library and request songs. An address
+  beyond this machine without `credentials.web_token` gets a warning when the
+  system builds.
 - **At boot.** A tailnet address may not exist when the unit starts; it fails
-  and tries again every 10 seconds until it does.
+  and tries again every 10 seconds, with no ntfy alert for each try
+  (`RestartMode=direct`). A fault that lasts, such as the port in use or the
+  address gone, stops it after 30 starts in 10 minutes, about 5 minutes of
+  tries: then the unit is `failed`, ntfy says so once, and
+  `sudo systemctl restart caracole-web` starts it again once it's fixed.
 - **Politeness.** The server sends no request of its own. Fetch now runs
   `caracole match`, `caracole fetch --song` and `caracole render`, which wait
   behind a nightly run, keep the pauses between requests and the budgets, and

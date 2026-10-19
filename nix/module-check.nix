@@ -130,6 +130,17 @@ let
       };
     }
   ];
+  # caracole-web on every address, with no access token.
+  webOpen = evalSystem [
+    stubbed
+    configured
+    {
+      services.caracole.web = {
+        enable = true;
+        address = "0.0.0.0";
+      };
+    }
+  ];
   defaults = evalSystem [ ];
   # nix/module.nix imported on its own, without the flake's wrapper.
   standalone =
@@ -414,9 +425,17 @@ let
     # Its requests run caracole commands, which write what the nightly run writes.
     "caracole-web.service writes only the library, state and cache, reads the music if it exists, waits for their mounts and caches there" =
       opens web defaultLayout;
-    "caracole-web.service loads the credentials, web_token among them" =
-      lib.elem "web_token:/run/agenix/caracole-web-token" tailnetWeb.serviceConfig.LoadCredential
-      && lib.elem "ntfy_token:/run/agenix/ntfy_token" tailnetWeb.serviceConfig.LoadCredential;
+    # Neither caracole serve nor the commands it runs (add, match, fetch, render) read Spotify or ntfy.
+    "caracole-web.service loads web_token alone of the credentials, and none without it" =
+      tailnetWeb.serviceConfig.LoadCredential == [ "web_token:/run/agenix/caracole-web-token" ]
+      && (webOpen.systemd.services.caracole-web.serviceConfig.LoadCredential or [ ]) == [ ];
+    "caracole-web listening beyond loopback without credentials.web_token is warned about, and only then" =
+      says [
+        "services.caracole.web listens on 0.0.0.0"
+        "credentials.web_token"
+      ] webOpen.warnings
+      && !(says [ "credentials.web_token" ] webDefault.warnings)
+      && !(says [ "credentials.web_token" ] webTailnet.warnings);
     "caracole-web.service starts at boot after the network, restarts when it fails, and notifies on failure" =
       lib.elem "multi-user.target" web.wantedBy
       && lib.elem "network-online.target" web.after
@@ -424,6 +443,13 @@ let
       && webSc.Restart == "on-failure"
       && webSc.Type == "exec"
       && web.onFailure == [ "caracole-notify-failure.service" ];
+    # RestartMode=normal goes through `failed` before each restart, which starts OnFailure=: an
+    # alert every 10 seconds while a tailnet address is missing, for ever with a lasting fault.
+    "caracole-web.service restarts without an alert each time, and fails once after 30 starts in 10 minutes" =
+      (webSc.RestartMode or null) == "direct"
+      && webSc.RestartSec == "10s"
+      && web.startLimitIntervalSec == 600
+      && web.startLimitBurst == 30;
     "web.openFirewall opens web.port, and only it opens it" =
       lib.elem 8740 webTailnet.networking.firewall.allowedTCPPorts
       && !(lib.elem 8737 webDefault.networking.firewall.allowedTCPPorts);
@@ -477,6 +503,7 @@ let
       noneInDataDir
       webDefault
       webTailnet
+      webOpen
     ];
     "settings.state_dir is rejected, for stateDir" = says [
       "stateDir, not settings.state_dir"
@@ -698,7 +725,12 @@ else
       grep -q -- "LoadCredential=web_token:/run/agenix/caracole-web-token" "$webUnitPath"
       grep -q -- " serve --address 100.64.0.7 --port 8740 " "$webUnitPath"
       grep -qx -- "Restart=on-failure" "$webUnitPath"
+      grep -qx -- "RestartMode=direct" "$webUnitPath"
+      grep -qx -- "StartLimitIntervalSec=600" "$webUnitPath"
+      grep -qx -- "StartLimitBurst=30" "$webUnitPath"
       lacks "--token-file" "$webUnitPath"
+      lacks "ntfy_token" "$webUnitPath"
+      lacks "spotify_client_secret" "$webUnitPath"
 
       mkdir -p $out/data-caracole
       cp "$configFile" $out/caracole.toml
