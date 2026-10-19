@@ -440,6 +440,34 @@ def test_uncached_conditional_get_is_plain(tmp_path):
     assert "if-none-match" not in rec.requests[0].headers
 
 
+def test_has_cached_says_whether_a_request_would_have_a_copy_to_revalidate_and_sends_nothing(tmp_path):
+    # `caracole index build` says how many sitemaps it may not have to download before it asks.
+    def handler(request):
+        return httpx.Response(404 if request.url.path == "/gone.xml" else 200, content=b"<urlset/>")
+
+    client, rec = make_client(tmp_path, handler)
+    sitemap, gone = "https://www.ultimate-guitar.com/sitemap40.xml", "https://www.ultimate-guitar.com/gone.xml"
+    assert not client.has_cached(sitemap)
+    client.get(sitemap, cache=False, conditional=True)
+    client.get(gone, accept=(200, 404))
+    assert client.has_cached(sitemap)
+    assert not client.has_cached("https://www.ultimate-guitar.com/sitemap41.xml")
+    # a cached answer the caller rejects is no copy: it is asked for again, as get() does
+    assert not client.has_cached(gone) and client.has_cached(gone, accept=(200, 404))
+    assert len(rec.requests) == 2
+
+
+def test_has_cached_is_false_when_the_body_is_gone_as_get_would_download_it(tmp_path):
+    client, rec = make_client(tmp_path, ok(b"<urlset/>"))
+    sitemap = "https://www.ultimate-guitar.com/sitemap40.xml"
+    client.get(sitemap, cache=False, conditional=True)
+    for body in (tmp_path / "cache").rglob("*.body"):
+        body.unlink()
+    assert not client.has_cached(sitemap)
+    assert client.get(sitemap, cache=False, conditional=True).status == 200
+    assert "if-none-match" not in rec.requests[-1].headers  # no copy to revalidate: a plain GET
+
+
 def test_consecutive_errors_make_provider_unavailable(tmp_path):
     client, rec = make_client(tmp_path, ok(b"boom", status=502), max_consecutive_errors=3)
     for i in range(3):

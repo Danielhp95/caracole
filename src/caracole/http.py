@@ -373,6 +373,16 @@ class PoliteClient:
         self._fail(at, status, f"HTTP {status}")
         raise AssertionError("unreachable")  # pragma: no cover
 
+    def has_cached(self, url: str, *, accept: Collection[int] = (200,)) -> bool:
+        """Whether the cache holds an answer for ``url`` with a status in ``accept``: one a
+        conditional ``get`` would revalidate, and a plain one serve. Nothing is sent, and the
+        body isn't read: that it is there is enough."""
+        body_path, meta_path = self._paths(hashlib.sha256(url.encode("utf-8")).hexdigest())
+        try:
+            return json.loads(meta_path.read_text(encoding="utf-8"))["status"] in accept and body_path.is_file()
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+
     def close(self) -> None:
         self._http.close()
 
