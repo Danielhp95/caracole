@@ -6,7 +6,8 @@ What a coding agent needs before changing caracole. User documentation: README.m
 
 caracole is a Python CLI, run every night by a NixOS service, that builds a private library
 of sing-along chord sheets (Ultimate Guitar, LaCuerda), lyrics (LRCLIB), PDFs (ChordPro)
-and Guitar Pro picks for the songs in `wanted.txt` and, optionally, Spotify. For a song
+and Guitar Pro files (downloaded from gtptabs.com, or picked on UG for the user to
+download) for the songs in `wanted.txt` and, optionally, Spotify. For a song
 nobody has charted, `caracole autochords` writes a sheet from purchased audio with local
 models (torch, optional). The design lives in three files:
 
@@ -33,6 +34,7 @@ an earlier one failed:
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), rank.py, coverage.py, versions.py |
 | lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the step) |
 | scan | music.py (Music/), inbox.py (Guitar Pro files in `_inbox/`) |
+| gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 

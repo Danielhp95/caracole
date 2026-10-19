@@ -6,7 +6,7 @@ from caracole.db import kv_get_json
 from caracole.health import get_state, is_cooling, record_block
 from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
 from caracole.notify import Notifier
-from caracole.pipeline import RunReport, Services, Step, run_pipeline
+from caracole.pipeline import PROVIDERS, RunReport, Services, Step, run_pipeline
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
 
@@ -32,8 +32,9 @@ class Outbox:
 
 
 def services(outbox, **requests):
+    """A client for every provider, as ``make_services`` makes them, each having made ``requests[p]``."""
     return Services(
-        clients={p: FakeClient(requests.get(p, 0)) for p in ("ug", "lrclib", "lacuerda")},
+        clients={p: FakeClient(requests.get(p, 0)) for p in PROVIDERS},
         spotify=None,
         notifier=outbox.notifier(),
     )
@@ -134,17 +135,102 @@ def test_unexpected_error_marks_the_run_failed_but_later_steps_still_run(conn, c
 def test_report_summary_mentions_requests(conn, cfg):
     out = Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out, ug=7, lrclib=3), steps=[step("todo")], now=NOW)
-    assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0}
+    assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0, "gtptabs": 0}
     assert "ug 7" in report.summary() and "lrclib 3" in report.summary()
 
 
 def test_default_steps_are_in_plan_order():
+    # gtptabs after the scan: a Guitar Pro file you dropped into _inbox/ is filed first, and the
+    # song then gets no second one.
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "render", "todo",
+        "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "render", "todo",
     ]
-    assert {s.name: s.provider for s in default_steps()}["fetch"] == "ug"
+    providers = {s.name: s.provider for s in default_steps()}
+    assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs"
+
+
+def gtptabs_context(conn, cfg, client=None, overrides=None):
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext
+
+    svc = Services(clients={"gtptabs": client or FakeClient()}, spotify=None, notifier=Outbox().notifier())
+    return StepContext(cfg=cfg, conn=conn, overrides=overrides or Overrides(), now=NOW, run_id="r", services=svc,
+                       report=RunReport(run_id="r", started="r"))
+
+
+def test_default_gtptabs_step_passes_overrides_and_reports_errors(conn, cfg, monkeypatch):
+    import caracole.gtptabs_fetch as gf
+    from caracole.overrides import Overrides
+    from caracole.pipeline import _gtptabs
+
+    seen = {}
+
+    def fake(conn_, client, library_dir, now, *, overrides=None):
+        seen.update(overrides=overrides, library_dir=library_dir)
+        return gf.GtpTabsStats(sitemaps=2, tried=3, kept=1, missing=1, errors=1)
+
+    monkeypatch.setattr(gf, "gtptabs_files", fake)
+    o = Overrides(ignore=frozenset({"blur/song-2"}))
+    summary = _gtptabs(gtptabs_context(conn, cfg, overrides=o))
+    assert seen == {"overrides": o, "library_dir": cfg.library_dir}
+    assert summary == "2 sitemaps indexed, 3 tried, 1 Guitar Pro file kept, 1 not on gtptabs.com, 1 error"
+    assert get_state(conn, "gtptabs").last_error == "1 error this run"
+
+
+def test_the_gtptabs_step_says_when_its_budget_is_spent(conn, cfg, monkeypatch):
+    import caracole.gtptabs_fetch as gf
+    from caracole.pipeline import _gtptabs
+
+    monkeypatch.setattr(gf, "gtptabs_files", lambda *a, **k: gf.GtpTabsStats(tried=2, kept=2, budget_exhausted=True))
+    assert _gtptabs(gtptabs_context(conn, cfg)) == (
+        "2 tried, 2 Guitar Pro files kept, 0 not on gtptabs.com, 0 errors (budget spent)")
+
+
+def test_gtptabs_turned_off_is_skipped_and_gets_no_client(conn, cfg, tmp_path):
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+    from caracole.pipeline import default_steps, make_services
+
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    made = make_services(off, conn, "2026-10-19T03:30:00Z")
+    try:
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda"}
+    finally:
+        made.close()
+    steps = [s for s in default_steps() if s.name == "gtptabs"]
+    report = run_pipeline(off, conn=conn, services=services(Outbox()), steps=steps, now=NOW)
+    assert report.ok and report.steps["gtptabs"] == "skipped: gtptabs is off ([providers.gtptabs] enabled = false)"
+
+
+def test_the_run_makes_a_gtptabs_client_when_it_is_on(conn, cfg):
+    from caracole.pipeline import make_services
+
+    made = make_services(cfg, conn, "2026-10-19T03:30:00Z")
+    try:
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs"}
+    finally:
+        made.close()
+
+
+def test_a_gtptabs_block_cools_it_down_and_marks_no_song(conn, cfg, tmp_path):
+    from conftest import add_song
+    from helpers.gtptabs_site import HTML, FakeGtpTabs
+
+    from caracole.pipeline import default_steps
+
+    song = add_song(conn, "Blur", "Beetlebum")
+    site = FakeGtpTabs(pages={"https://gtptabs.com/sitemapGoogle.xml": (403, "Forbidden", HTML)})
+    client = site.client(cfg.cache_dir, now=NOW)
+    svc = Services(clients={"gtptabs": client}, spotify=None, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "gtptabs"]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert report.ok and report.blocked == ["gtptabs"]
+    assert report.steps["gtptabs"].startswith("blocked")
+    assert is_cooling(conn, "gtptabs", NOW + timedelta(hours=25))
+    assert kv_get_json(conn, f"gtptabs:checked:{song.id}") is None
 
 
 def test_unreadable_overrides_stop_the_run_with_an_alert(conn, cfg):
@@ -430,9 +516,9 @@ def todo_step():
 
 
 def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
-    # The page is written before the run ends; a first run must not say "never" after 75 good requests.
-    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5), steps=todo_step(),
-                 now=NOW)
+    # The page is written before the run ends; a first run must not say "never" after 78 good requests.
+    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5, gtptabs=3),
+                 steps=todo_step(), now=NOW)
     page = todo_page(cfg)
     assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
     assert "| lrclib | OK | 2026-10-18 03:30 UTC |  | 10 |" in page

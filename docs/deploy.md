@@ -326,6 +326,11 @@ only the newest ones.
 sudo caracole-admin index build
 ```
 
+gtptabs.com needs no build: the first nightly run reads its sitemaps, seven
+of its 20 requests, and from then on each run downloads Guitar Pro files for
+the songs that have none. To leave gtptabs.com out, set
+`settings.providers.gtptabs.enabled = false;` in `services.caracole`.
+
 **Say what you want to learn.** `wanted.txt` sits in the library, so you can
 edit it on the laptop or the phone. One song per line, as `Artist - Title`,
 optionally followed by ` | Album` and/or ` | m:ss`; `#` starts a comment:

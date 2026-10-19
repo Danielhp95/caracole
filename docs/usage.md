@@ -369,11 +369,15 @@ are never offered again; other candidates still can be.
 5. **fetch**: rank and keep Ultimate Guitar sheets and guitar parts.
 6. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet.
 7. **scan**: link purchases in Music/, and file Guitar Pro downloads.
-8. **render**: write ChordPro files and PDFs.
-9. **todo**: rewrite `_todo.md` and `index.html`.
+8. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
+   has none. It comes after the scan, so a file you dropped into `_inbox/` is
+   filed first, and that song gets none from gtptabs.com.
+9. **render**: write ChordPro files and PDFs.
+10. **todo**: rewrite `_todo.md` and `index.html`.
 
 It prints one line per step and the requests made, and sends that summary to
-ntfy. Every step runs even when an earlier one failed, so the to-do page is
+ntfy. With gtptabs.com turned off, its line is
+`gtptabs: skipped: gtptabs is off ([providers.gtptabs] enabled = false)`. Every step runs even when an earlier one failed, so the to-do page is
 always rewritten. Until the index is built, the index and match steps are
 skipped; after a build that stopped part-way, the match step is skipped until
 the index step's refresh has read the rest.
@@ -386,6 +390,12 @@ is left goes to guitar parts, about a page per type (Guitar Pro, Power Tab,
 tabs) a song. Before sheets came first, a live run spent 8–12 requests a song.
 A long list therefore fills in over a few nights, and a song the budget cut
 off half-way resumes from the cache the next night.
+
+gtptabs.com gets at most 20 requests a run, 10–20 seconds apart. The first
+run spends seven on its sitemap index and six sitemaps, and reads them again
+after 30 days, when each unchanged one costs a request. Then each song costs
+its artist's page, which serves every song by that artist for 30 days, and a
+download for its file.
 
 **Errors are never misses.** A block (HTTP 403, 429 or a challenge page)
 stops that site for the rest of the run and sends one ntfy message, which
@@ -405,7 +415,8 @@ meanwhile the song is filled from its other versions.
 
 Nor does caracole ask for a page robots.txt closes to bots, or follow a
 redirect to one: UG's search, download and print pages, and a few tab pages
-(`/tab/track/…`). A tab at such a page, or at a page UG redirects to one, is
+(`/tab/track/…`); gtptabs.com's search, its Russian copy of every page
+(`/ru/`) and each artist's "Download all" archive (`/storage/`). A tab at such a page, or at a page UG redirects to one, is
 no candidate, and neither is a link in UG's data that isn't a valid address:
 the song is filled from its other versions.
 

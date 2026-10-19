@@ -1,11 +1,12 @@
 """The nightly ``caracole run`` (plan §6).
 
 Steps, in order: sync → index → match → lyrics → fetch → lacuerda → scan →
-render → todo. Each step runs even if an earlier one failed, so the to-do page
-is always rewritten.
+gtptabs → render → todo. Each step runs even if an earlier one failed, so the
+to-do page is always rewritten.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
-  the run once it blocks. A block records a cooldown (24 h, doubling) and sends
+  the run once it blocks. So is gtptabs when caracole.toml turns it off: it gets no
+  client then. A block records a cooldown (24 h, doubling) and sends
   one ntfy message; it is expected behaviour, not a failed run.
 - An exhausted budget or a provider error ends that step for this run; neither
   is a failure, and neither ever marks a song "not found".
@@ -36,7 +37,7 @@ from caracole.overrides import Overrides, OverridesError, load_overrides
 from caracole.songs import ensure_current_keys
 
 log = logging.getLogger(__name__)
-PROVIDERS = ("ug", "lrclib", "lacuerda")
+PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs")
 
 
 @dataclass
@@ -194,6 +195,19 @@ def _lacuerda(ctx: StepContext) -> str:
             f"{_plural(s.errors, 'error')}{tail}")
 
 
+def _gtptabs(ctx: StepContext) -> str:
+    from caracole.gtptabs_fetch import gtptabs_files
+
+    s = gtptabs_files(ctx.conn, ctx.services.client("gtptabs"), ctx.cfg.library_dir, ctx.now,
+                      overrides=ctx.overrides)
+    if s.errors:
+        record_error(ctx.conn, "gtptabs", ctx.now, f"{_plural(s.errors, 'error')} this run")
+    index = f"{_plural(s.sitemaps, 'sitemap')} indexed, " if s.sitemaps else ""
+    tail = " (budget spent)" if s.budget_exhausted else ""
+    return (f"{index}{s.tried} tried, {_plural(s.kept, 'Guitar Pro file')} kept, {s.missing} not on gtptabs.com, "
+            f"{_plural(s.errors, 'error')}{tail}")
+
+
 def _scan(ctx: StepContext) -> str:
     from caracole.inbox import file_inbox
     from caracole.music import scan_music
@@ -248,6 +262,8 @@ def default_steps() -> list[Step]:
         Step("fetch", _fetch, provider="ug"),
         Step("lacuerda", _lacuerda, provider="lacuerda"),
         Step("scan", _scan),
+        # After the scan: a file you dropped into _inbox/ is filed first, so its song gets no other.
+        Step("gtptabs", _gtptabs, provider="gtptabs"),
         Step("render", _render),
         Step("todo", _todo),
     ]
@@ -257,7 +273,7 @@ def default_steps() -> list[Step]:
 
 
 def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Services:
-    """Real clients for a run: one polite client per provider, Spotify if configured.
+    """Real clients for a run: one polite client per provider turned on, Spotify if configured.
 
     The clients are the commands' own (``commands._common.make_client``): each
     holds caracole's lock until it is closed, and its first request keeps the
@@ -268,7 +284,8 @@ def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Service
     clients: dict[str, Any] = {}
     try:
         for p in PROVIDERS:
-            clients[p] = make_client(cfg, conn, p, run_id)
+            if cfg.provider(p).enabled:
+                clients[p] = make_client(cfg, conn, p, run_id)
     except BaseException:  # Ctrl-C during a pause, say: the clients made let go of the lock
         for client in clients.values():
             client.close()
@@ -364,6 +381,9 @@ def _run(cfg: Config, conn: sqlite3.Connection, services: Services, steps: list[
 
     for step in steps if steps is not None else default_steps():
         p = step.provider
+        if p and not cfg.provider(p).enabled:
+            report.steps[step.name] = f"skipped: {p} is off ([providers.{p}] enabled = false)"
+            continue
         if p and p in report.blocked:
             report.steps[step.name] = f"skipped: {p} blocked this run"
             continue

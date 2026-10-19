@@ -11,12 +11,15 @@ the lyrics, saves the lyrics, and makes a PDF.
     └── Oasis/Wonderwall/
         ├── sheet.pdf           chords over lyrics
         ├── lyrics.txt
-        └── tab.txt             a guitar tab, when there is one
+        ├── tab.txt             a guitar tab, when there is one
+        └── guitar-1.gp5        a Guitar Pro file, when there is one
 
 Sheets come from Ultimate Guitar and, for Spanish songs, LaCuerda. Lyrics come
-from LRCLIB. A Spotify playlist works as a song list too, but you don't need
-one. For a song nobody has charted, you can buy the track and let caracole work
-out the chords from the audio.
+from LRCLIB. Guitar Pro files come from gtptabs.com, downloaded for you, and
+from the Ultimate Guitar pages the to-do page lists for you to click. A Spotify
+playlist works as a song list too, but you don't need one. For a song nobody
+has charted, you can buy the track and let caracole work out the chords from
+the audio.
 
 ## Install
 
@@ -38,8 +41,11 @@ in [docs/usage.md](docs/usage.md).
 
 caracole is gentle with the sites it reads. It makes about 60 requests a night
 to Ultimate Guitar, one at a time and 10 to 20 seconds apart. It follows
-robots.txt, never uses a site's search, never downloads Guitar Pro files for
-you, and stops for at least a day when a site pushes back.
+robots.txt, never uses a site's search, never logs in, and stops for at least a
+day when a site pushes back. It downloads Guitar Pro files only where
+robots.txt allows it: from gtptabs.com, with at most 20 requests a night, one
+file for each song that has none. Ultimate Guitar's robots.txt closes its
+downloads to bots, so its Guitar Pro pages are yours to click.
 
 ## Development
 
