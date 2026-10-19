@@ -325,6 +325,136 @@ def test_title_without_a_key_is_not_found(conn):
     assert match(conn, "Oasis", "!!!").decision == "not_found"
 
 
+# --- names that aren't quite UG's ------------------------------------------------------------
+
+# The real index: UG files EPIC: The Musical under its catch-all artist misc-musicals, the show's
+# name inside each title, and the nearest titles across every artist are other songs.
+EPIC = (4742072, "misc-musicals", "epic-the-musical-not-sorry-for-loving-you", "chords")
+NEAR_EPIC = [(1, "bill-fox", "im-not-over-loving-you", "chords"),
+             (2, "last-river-bottomed-fig-plucker", "no-reason-for-loving-you", "chords"),
+             (3, "misc-musicals", "epic-the-musical-monster", "chords"),
+             (4, "misc-musicals", "epic-the-musical-get-in-the-water", "tabs"),
+             (5, "misc-musicals", "hamilton-my-shot", "chords"),
+             (6, "epica", "unleashed", "chords"),
+             (7, "epics", "fireworks", "chords")]
+
+
+def test_the_epic_example_leads_its_review_from_a_catch_all_artist(conn):
+    index(conn, EPIC, *NEAR_EPIC)
+    r = match(conn, "epic", "I'm not sorry for loving you")
+    assert summary(r)[:2] == ("review", "catch_all")
+    assert r.candidates[0] == MatchCandidate("misc-musicals", "epic-the-musical-not-sorry-for-loving-you", 94.1,
+                                             "catch_all")
+    # The title-only cover it used to trail, at 81.6, is still offered, behind it.
+    assert ("bill-fox", "im-not-over-loving-you") in [(c.artist_key, c.song_key) for c in r.candidates[1:]]
+
+
+def test_a_catch_all_match_is_a_review_even_when_the_rest_of_the_title_is_yours_exactly(conn):
+    index(conn, EPIC, *NEAR_EPIC)
+    for artist in ("Epic", "EPIC: The Musical"):
+        r = match(conn, artist, "Get in the Water")
+        assert summary(r) == ("review", "catch_all", 100.0, "misc-musicals", "epic-the-musical-get-in-the-water")
+
+
+def test_a_catch_all_title_must_hold_the_artists_name(conn):
+    index(conn, EPIC, *NEAR_EPIC)
+    r = match(conn, "Lin-Manuel Miranda", "Monster")
+    assert ("misc-musicals", "epic-the-musical-monster") not in [(c.artist_key, c.song_key) for c in r.candidates]
+    r = match(conn, "Hamilton", "My Shot")
+    assert summary(r) == ("review", "catch_all", 100.0, "misc-musicals", "hamilton-my-shot")
+
+
+def test_a_show_song_under_its_composers_name_is_found_at_the_end_of_a_catch_all_title(conn):
+    # Spotify credits EPIC's songs to Jorge Rivera-Herrans, whose name UG's title doesn't hold.
+    index(conn, EPIC, *NEAR_EPIC)
+    r = match(conn, "Jorge Rivera-Herrans", "Not Sorry for Loving You")
+    assert summary(r) == ("review", "catch_all", 90.0, "misc-musicals", "epic-the-musical-not-sorry-for-loving-you")
+    # It leads near titles across every artist: no-reason-for-loving-you scores 83.3 on its title alone.
+    assert r.candidates[1] == MatchCandidate("last-river-bottomed-fig-plucker", "no-reason-for-loving-you", 83.3,
+                                             "title_only")
+    # A one-word title is too common for that: "Monster" ends many a catch-all title.
+    r = match(conn, "Jorge Rivera-Herrans", "Monster")
+    assert r.decision == "not_found"
+
+
+def test_only_artists_named_misc_are_catch_alls(conn):
+    index(conn, (1, "misc-soundtrack", "frozen-let-it-go", "chords"),
+          (2, "misc-cartoons", "steven-universe-here-comes-a-thought", "chords"),
+          (3, "frozen-pop-band", "frozen-let-it-go", "chords"))
+    assert summary(match(conn, "Frozen", "Let It Go")) == (
+        "review", "catch_all", 100.0, "misc-soundtrack", "frozen-let-it-go")
+    r = match(conn, "Steven Universe", "Here Comes a Thought")
+    assert summary(r) == ("review", "catch_all", 100.0, "misc-cartoons", "steven-universe-here-comes-a-thought")
+    assert [c.artist_key for c in match(conn, "Frozen", "Let It Go").candidates] == ["misc-soundtrack"]
+
+
+def test_mashups_are_no_catch_all_two_songs_in_one_are_neither(conn):
+    index(conn, (1, "misc-mashups", "radiohead-creep-mitski-my-love-mine-all-mine", "chords"),
+          (2, "misc-mashups", "taylor-swift-love-story-mitski-my-love-mine-all-mine", "chords"))
+    assert match(conn, "Mitski", "My Love Mine All Mine").decision == "not_found"
+    assert match(conn, "Someone", "My Love Mine All Mine").decision == "not_found"
+
+
+def test_an_artist_ug_does_not_know_matches_a_name_a_letter_off_as_a_review(conn):
+    index(conn, (1, "coldplay", "yellow", "chords"), (2, "coldplay", "fix-you", "chords"),
+          (3, "oasis", "wonderwall", "chords"), (4, "metallica", "one", "tabs"))
+    r = match(conn, "Coldplya", "Yellow")  # two letters swapped: one edit
+    assert summary(r)[:2] == ("review", "typo_artist")
+    assert (r.artist_key, r.song_key, r.score) == ("coldplay", "yellow", 100.0)
+    assert summary(match(conn, "Oaiss", "Wonderwall")) == ("review", "typo_artist", 100.0, "oasis", "wonderwall")
+    assert summary(match(conn, "Metalicca", "One"))[:2] == ("review", "typo_artist")  # two edits, 8+ letters
+
+
+def test_no_typo_route_for_an_artist_ug_knows_or_a_name_too_short(conn):
+    index(conn, (1, "muse", "uprising", "chords"), (2, "fuse", "hysteria", "chords"),
+          (3, "u2", "one", "chords"))
+    for artist, title in (("Muse", "Hysteria"), ("U3", "One")):  # each found on its title alone
+        r = match(conn, artist, title)
+        assert [c.step for c in r.candidates] == ["title_only"], (artist, r.candidates)
+
+
+def test_a_title_that_holds_yours_word_for_word_is_a_review(conn):
+    index(conn, (1, "los-lobos", "cancion-del-mariachi-morena-de-mi-corazon", "chords"),
+          (2, "los-lobos", "la-bamba", "chords"))
+    r = match(conn, "Los Lobos", "Canción del Mariachi")
+    assert summary(r)[:5] == ("review", "word_title", r.score, "los-lobos",
+                              "cancion-del-mariachi-morena-de-mi-corazon")
+    assert POLICY.review <= r.score < POLICY.accept
+    # Yours may hold UG's too, when you wrote more than UG did.
+    index(conn, (3, "los-lobos", "will-the-wolf-survive", "chords"))
+    r = match(conn, "Los Lobos", "Will the Wolf Survive (from the film La Bamba)")
+    assert summary(r)[:2] == ("review", "word_title") and r.song_key == "will-the-wolf-survive"
+
+
+def test_words_count_whole_and_never_a_word_that_names_nothing(conn):
+    index(conn, (1, "metallica", "creeping-death", "chords"), (2, "metallica", "live", "chords"))
+    assert match(conn, "Metallica", "Creep").decision == "not_found"
+    assert match(conn, "Metallica", "Live Forever").decision == "not_found"
+
+
+def test_names_that_are_not_quite_ugs_never_turn_an_accept_into_a_review(conn):
+    index(conn, (1, "radiohead", "creep", "chords"), (2, "misc-mashups", "radiohead-creep", "chords"),
+          (3, "misc-mashups", "radiohead-creep-mitski-my-love-mine-all-mine", "chords"))
+    r = match(conn, "Radiohead", "Creep")
+    assert summary(r) == ("accept", "exact", 100.0, "radiohead", "creep")
+
+
+def test_a_review_also_offers_the_near_names(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwalls", "chords"),
+          (3, "misc-television", "oasis-wonderwal", "chords"))
+    r = match(conn, "Oasis", "Wonderwal")
+    assert r.decision == "review" and r.candidates[0].song_key == "oasis-wonderwal"
+    assert [c.step for c in r.candidates] == ["catch_all", "fuzzy_title", "fuzzy_title"]
+
+
+def test_rejected_near_names_never_come_back(conn):
+    index(conn, EPIC, *NEAR_EPIC)
+    song = add_song(conn, "epic", "I'm not sorry for loving you")
+    rejected = Overrides(reject={song.key: frozenset({("misc-musicals", "epic-the-musical-not-sorry-for-loving-you")})})
+    r = match_song(song, IndexView(conn), rejected, POLICY)
+    assert "epic-the-musical-not-sorry-for-loving-you" not in [c.song_key for c in r.candidates]
+
+
 # --- match_all ------------------------------------------------------------------------------
 
 

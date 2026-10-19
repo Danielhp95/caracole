@@ -71,6 +71,7 @@ from caracole.http import (
 )
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
 from caracole.lyrics import song_lyrics
+from caracole.match import REVIEW_ONLY_STEPS
 from caracole.normalize import clean_title, compact, name_forms, slug_key
 from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
@@ -1386,15 +1387,16 @@ def _ignored(song: Song, overrides: Overrides) -> bool:
 def needs_artist_page(song: Song) -> bool:
     """Whether the index can't settle this song, so its artist's UG page should be read (A6).
 
-    That is a not-found song, or a review whose only candidates are other artists' songs of
-    the same title: on the real index Soda Stereo's "De Música Ligera" (every tab a bare id)
-    reviews as a Portuguese cover.
+    That is a not-found song, or a review whose only candidates come from the steps that never
+    accept (``match.REVIEW_ONLY_STEPS``): other artists' songs of the same title (on the real
+    index Soda Stereo's "De Música Ligera", every tab a bare id, reviews as a Portuguese cover),
+    and names that aren't quite UG's.
     """
     if song.match_decision == "not_found":
         return True
     candidates = song.match_candidates or []
     return song.match_decision == "review" and bool(candidates) and all(
-        c.get("step") == "title_only" for c in candidates
+        c.get("step") in REVIEW_ONLY_STEPS for c in candidates
     )
 
 

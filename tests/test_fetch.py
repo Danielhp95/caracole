@@ -51,6 +51,7 @@ from caracole.ug.fetch import (
     SongFetchOutcome,
     artist_is_known,
     fetch_songs,
+    needs_artist_page,
     pasted_page_problem,
     process_song,
     rescore_kept_sheets,
@@ -2357,6 +2358,24 @@ def test_title_only_reviews_are_tried_on_the_artist_page(conn):
     matched(conn, "Soda Stereo", "Zoom", "review", added_at="2026-10-06T00:00:00Z", match_candidates=[
         {"artist_key": "soda-stereo", "song_key": "zoom-2", "score": 80.0, "step": "fuzzy_title"}])
     assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW)] == [cover.id]
+
+
+def test_reviews_of_names_not_quite_ugs_are_tried_on_the_artist_page_too(conn):
+    # A review made only of the matcher's tolerant steps (match.REVIEW_ONLY_STEPS) is no more sure than
+    # one on the title alone: the artist's page, with its bare-id tabs, may still have the song itself.
+    index(conn, (7, "soda-stereo", "signos", "chords"))
+    near = [{"artist_key": "misc-soundtrack", "song_key": "soda-stereo-de-musica-ligera", "score": 100.0,
+             "step": "catch_all"},
+            {"artist_key": "soda-stereo", "song_key": "de-musica-ligera-en-vivo-1997", "score": 85.0,
+             "step": "word_title"},
+            {"artist_key": "soda-stereos", "song_key": "de-musica-ligera", "score": 100.0, "step": "typo_artist"},
+            *TITLE_ONLY_COVER]
+    tolerant = matched(conn, "Soda Stereo", "De Música Ligera", "review", added_at="2026-10-05T00:00:00Z",
+                       match_candidates=near)
+    matched(conn, "Soda Stereo", "Zoom", "review", added_at="2026-10-06T00:00:00Z", match_candidates=[
+        {"artist_key": "soda-stereo", "song_key": "zoom-2", "score": 80.0, "step": "fuzzy_title"}, *near])
+    assert needs_artist_page(tolerant)
+    assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW)] == [tolerant.id]
 
 
 def test_title_only_review_resolved_on_the_artist_page(conn, tmp_path):

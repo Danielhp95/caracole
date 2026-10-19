@@ -16,15 +16,41 @@ For each song, in order:
 3. The nearest other artist key at or above ``artist_gate``, then step 2 under
    it, scored as the lower of the artist and title scores. A Chinese name's
    pinyin is compared with and without hyphens.
-4. The title alone, across every artist (covers and misfiled tabs). These are
-   always reviews. Here a Chinese title's pinyin must match exactly, hyphens
-   aside: across every artist, short syllables fuzz-match unrelated titles. So
-   must the parts of a title written in two scripts.
+4. Names that aren't quite UG's, when steps 2 and 3 accept nothing. These are
+   always reviews, never accepts, and join the candidates of a review:
+
+   - ``word_title``: under the song's artists (steps 2 and 3), a title that
+     holds yours word for word, or that yours holds ("Canción del Mariachi"
+     in ``cancion-del-mariachi-morena-de-mi-corazon``). It scores 80 to 90,
+     by how much of the longer title the shorter covers.
+   - ``typo_artist``: for an artist none of whose names the index has, the
+     artist keys an edit or so away (one for a name of four to seven letters,
+     two from eight; two letters swapped count as one), so "Coldplya" meets
+     ``coldplay``. Its titles are scored as in step 2, or as a ``word_title``.
+   - ``catch_all``: UG's catch-all artists, ``misc-musicals``,
+     ``misc-soundtrack``, ``misc-cartoons`` and every other ``misc-…`` key,
+     file a song under a title that holds its show's name: "epic" - "I'm Not
+     Sorry for Loving You" is ``misc-musicals/
+     epic-the-musical-not-sorry-for-loving-you``. A catch-all title that holds
+     one of the artist's names as whole words is scored by what is left of it
+     (less the words such as "the musical" next to the name), as in step 2
+     or as a ``word_title``. One that doesn't, but ends in your title of two
+     words or more, scores 90: Spotify credits EPIC's songs to their
+     composer, whose name UG's title doesn't hold. ``misc-mashups`` is no
+     catch-all: its titles hold two songs, neither the one you want.
+
+5. The title alone, across every artist (covers and misfiled tabs), for a song
+   still not found: always reviews, ranked with step 4's. Here a Chinese
+   title's pinyin must match exactly, hyphens aside: across every artist,
+   short syllables fuzz-match unrelated titles. So must the parts of a title
+   written in two scripts.
 
 At every step, the UG songs you rejected for the song (``[reject]``, "none of
 these" in ``caracole review``) are dropped, so they never come back; the others
 still can. Decision: accept at ``accept`` or more with a lead of ``margin`` over
-the next different title; review from ``review``; otherwise not found.
+the next different title; review from ``review``; otherwise not found. A review
+made only of steps 4 and 5 (``REVIEW_ONLY_STEPS``) leaves the song to its
+artist's UG page as well (``ug.fetch.needs_artist_page``).
 
 ``match_all`` never replaces a match the fetch step made on a UG artist page
 (step ``artist_page``, amendment A6): the index can't see those bare-id tabs,
@@ -43,20 +69,46 @@ from dataclasses import dataclass
 from typing import Any
 
 from rapidfuzz import fuzz, process
+from rapidfuzz.distance import OSA
 
 from caracole.config import MatchPolicy
-from caracole.normalize import clean_title, compact, has_han, name_forms, romanize, slug_key, split_variant
+from caracole.normalize import (
+    GENERIC_WORDS,
+    clean_title,
+    compact,
+    has_han,
+    name_forms,
+    romanize,
+    slug_key,
+    split_variant,
+)
 from caracole.overrides import Overrides
 from caracole.songs import Song, list_songs, refresh_status, update_song, utc_now_iso
 from caracole.ug.index import index_state
 from caracole.versions import mark_stale
 
 DECISIONS = ("accept", "review", "not_found", "pinned", "ignored")
-STEPS = ("override", "pin", "exact", "alias", "fuzzy_title", "fuzzy_artist", "title_only")
-LADDER_STEPS = ("exact", "alias", "fuzzy_title", "fuzzy_artist", "title_only")  # what the index decided
+TOLERANT_STEPS = ("word_title", "typo_artist", "catch_all")  # names that aren't quite UG's (step 4)
+STEPS = ("override", "pin", "exact", "alias", "fuzzy_title", "fuzzy_artist", *TOLERANT_STEPS, "title_only")
+LADDER_STEPS = ("exact", "alias", "fuzzy_title", "fuzzy_artist", *TOLERANT_STEPS, "title_only")  # the index's
+# Steps that never accept: a review made only of these leaves the song to its artist's UG page too.
+REVIEW_ONLY_STEPS = (*TOLERANT_STEPS, "title_only")
+# Steps whose candidate is filed under another artist than the song's: choosing one makes no [alias].
+NO_ALIAS_STEPS = ("catch_all", "title_only")
 ARTIST_PAGE = "artist_page"  # the fetch step's matches on UG artist pages (A6)
+CATCH_ALL_PREFIX = "misc-"  # misc-musicals, misc-soundtrack, misc-cartoons, misc-television…
+NOT_CATCH_ALL = frozenset({"misc-mashups"})  # two songs in one title: neither is the one you want
+CATCH_ALL_ENDING = 90.0  # a catch-all title that ends in yours: "hamilton-my-shot" for "My Shot"
+# The keys that start with it, as a range the artist_key index serves: "misc-" up to "misc.".
+_CATCH_ALL_RANGE = (CATCH_ALL_PREFIX, CATCH_ALL_PREFIX[:-1] + chr(ord(CATCH_ALL_PREFIX[-1]) + 1))
 MAX_CANDIDATES = 5
 _TITLE_ONLY_TITLES = 10  # nearest titles expanded into candidates, per title form
+_TYPO_ARTISTS = 5  # nearest artist keys within the typo distance, per name
+# Words a catch-all title may put next to a show's name: "epic-the-musical-not-sorry-for-loving-you".
+_SHOW_WORDS = frozenset({
+    "the", "musical", "soundtrack", "ost", "movie", "film", "show", "series", "tv", "theme", "from",
+    "original", "cast", "broadway", "game", "anime", "opening", "ending",
+})
 
 
 @dataclass(frozen=True)
@@ -95,6 +147,7 @@ class IndexView:
         self._songs: dict[str, list[IndexSong]] = {}
         self._titles: list[str] | None = None
         self._compact_titles: list[str] | None = None
+        self._catch_all: list[tuple[str, str, int]] | None = None
 
     def artist_keys(self) -> list[str]:
         """Every artist key in the index, sorted."""
@@ -163,6 +216,22 @@ class IndexView:
         for artist_key, group in itertools.groupby(rows, key=lambda r: r[0]):
             out += [(artist_key, s) for s in _songs_of((r[1], r[2], r[3]) for r in group) if s.base_key == title_key]
         return out
+
+    def catch_all_songs(self) -> list[tuple[str, str, int]]:
+        """(artist key, base key, tabs) of every song of UG's catch-all artists (``misc-…``, but
+        ``NOT_CATCH_ALL``): about 100,000, variant keys such as ``x-acoustic`` counted with their song."""
+        if self._catch_all is None:
+            rows = self.conn.execute(
+                "SELECT artist_key, song_key, COUNT(*) FROM ug_index WHERE artist_key >= ? AND artist_key < ? "
+                "GROUP BY artist_key, song_key",
+                _CATCH_ALL_RANGE,
+            )
+            tabs: dict[tuple[str, str], int] = {}
+            for artist_key, song_key, n in rows:
+                key = (artist_key, split_variant(song_key)[0])
+                tabs[key] = tabs.get(key, 0) + n
+            self._catch_all = sorted((a, s, n) for (a, s), n in tabs.items() if a not in NOT_CATCH_ALL)
+        return self._catch_all
 
     def tab_keys(self, tab_id: int) -> tuple[str, str] | None:
         """The (artist key, song key) a tab is indexed under, if it is indexed."""
@@ -335,7 +404,8 @@ def _nearest_artists(song: Song, index: IndexView, tried: set[str], gate: float)
     return list(found.items())
 
 
-def _title_only(index: IndexView, title: _Forms, policy: MatchPolicy) -> list[_Hit]:
+def _title_only(index: IndexView, title: _Forms, policy: MatchPolicy, rank: int = 0) -> list[_Hit]:
+    """Step 5; ``rank`` puts its hits behind every other step's of the same score."""
     titles = index.title_keys()
     scores: dict[str, float] = {}
     for query in title.own:
@@ -353,8 +423,146 @@ def _title_only(index: IndexView, title: _Forms, policy: MatchPolicy) -> list[_H
         tabs: dict[str, int] = {}
         for artist_key, s in index.songs_for_title(key):
             tabs[artist_key] = tabs.get(artist_key, 0) + len(s.tabs)
-        hits += [_Hit(MatchCandidate(a, key, round(score, 1), "title_only"), 0, n) for a, n in tabs.items()]
+        hits += [_Hit(MatchCandidate(a, key, round(score, 1), "title_only"), rank, n) for a, n in tabs.items()]
     return _ranked(hits)
+
+
+# --- names that aren't quite UG's (step 4) --------------------------------------------------
+
+
+def _find(words: list[str], part: list[str]) -> int | None:
+    """Where ``part`` first runs, whole words in order, inside ``words``."""
+    n = len(part)
+    return next((i for i in range(len(words) - n + 1) if words[i:i + n] == part), None)
+
+
+def _names_something(words: list[str]) -> bool:
+    """Whether words could name a song or an artist on their own (as ``normalize.name_forms`` judges a
+    part): three letters or more besides ``GENERIC_WORDS`` and numbers, or any Chinese."""
+    kept = [w for w in words if w not in GENERIC_WORDS and not w.isdigit()]
+    return any(has_han(w) for w in kept) or sum(len(w) for w in kept) >= 3
+
+
+def _coverage(short: list[str], long: list[str]) -> float:
+    return len("".join(short)) / len("".join(long))
+
+
+def _word_score(a: str, b: str) -> float:
+    """80 to 90 when one key's words run inside the other's, by how much of the longer the shorter
+    covers; else 0. The shorter must name something on its own: "live" in ``live-forever`` doesn't."""
+    short, long = sorted((a.split("-"), b.split("-")), key=len)
+    if len(short) == len(long) or not _names_something(short) or _find(long, short) is None:
+        return 0.0
+    return 80 + 10 * _coverage(short, long)
+
+
+def _title_score(title: _Forms, key: str) -> float:
+    """A title against one UG title key, as step 2 scores it, or as a ``word_title``."""
+    if any(k == key or compact(k) == compact(key) for k in title.keys):
+        return 100.0
+    return max(max(fuzz.ratio(k, key), _word_score(k, key)) for k in title.keys)
+
+
+def _word_hits(index: IndexView, artist_key: str, title: _Forms, rank: int, *, step: str,
+               cap: float | None = None) -> list[_Hit]:
+    """The artist's titles that hold yours word for word, or that yours holds."""
+    groups: dict[str, list[IndexSong]] = {}
+    for s in index.songs_for_artist(artist_key):
+        groups.setdefault(s.base_key, []).append(s)
+    hits = []
+    for base, members in groups.items():
+        score = max(_word_score(k, u) for k in title.keys for u in {base, *(m.song_key for m in members)})
+        if score:
+            tabs = sum(len(m.tabs) for m in members)
+            score = score if cap is None else min(score, cap)
+            hits.append(_Hit(MatchCandidate(artist_key, base, round(score, 1), step), rank, tabs))
+    return hits
+
+
+def _typo_artists(song: Song, index: IndexView, tried: set[str]) -> list[str]:
+    """The artist keys an edit or so from one of the song's names; two letters swapped count as one.
+
+    One edit for a name of four to seven letters, two from eight; names are compared without hyphens.
+    Only Latin names: a romanization's syllables are too short to tell a typo from another name.
+    """
+    artists, compacts = index.artist_keys(), index.compact_artist_keys()
+    found: dict[str, None] = {}
+    for name in song.artists or [song.artist]:
+        forms = _forms(name)
+        for form in dict.fromkeys(f for f in forms.own + forms.parts if f.isascii()):
+            query = compact(form)
+            if len(query) < 4:
+                continue
+            edits = 1 if len(query) < 8 else 2
+            near = process.extract(query, compacts, scorer=OSA.distance, score_cutoff=edits,
+                                   limit=_TYPO_ARTISTS + len(tried) + len(found))
+            found.update((artists[i], None) for _, _, i in near if artists[i] not in tried)
+    return list(found)
+
+
+def _rests(words: list[str], name: list[str]) -> list[list[str]]:
+    """What a catch-all title holds besides the name, wherever the name runs in it: the words after it,
+    before it, or both, each also without the words next to the name that only say what the name is
+    (``_SHOW_WORDS``: "the musical", "from", "soundtrack")."""
+    i = _find(words, name)
+    if i is None:
+        return []
+    before, after = words[:i], words[i + len(name):]
+    bare_before = list(before)
+    while bare_before and bare_before[-1] in _SHOW_WORDS:
+        bare_before.pop()
+    bare_after = list(after)
+    while bare_after and bare_after[0] in _SHOW_WORDS:
+        bare_after.pop(0)
+    parts = [after, bare_after, before, bare_before]
+    if before and after:
+        parts += [before + after, bare_before + bare_after]
+    return [p for p in parts if p]
+
+
+def _catch_all_hits(song: Song, index: IndexView, title: _Forms, rank: int) -> list[_Hit]:
+    """The songs of UG's catch-all artists whose titles name the song's artist and hold its title.
+
+    A title that holds one of the artist's names as whole words scores what is left of it as step 2
+    does, or as a ``word_title``. One that doesn't, but ends in a title of two words or more that
+    names something, scores ``CATCH_ALL_ENDING``: what comes before is the show's name, which tells
+    nothing against you, so it leads near titles of other artists, and stays behind exact ones.
+    """
+    names = [n for a in (song.artists or [song.artist]) for n in _forms(a).keys if _names_something(n.split("-"))]
+    endings = [k for k in title.own if k.count("-") >= 1 and _names_something(k.split("-"))]
+    hits = []
+    for artist_key, base, tabs in index.catch_all_songs():
+        padded = f"-{base}-"  # a cheap test first: a few thousand titles per song
+        held = [n for n in names if f"-{n}-" in padded]
+        if held:
+            words = base.split("-")
+            rests = [r for n in held for r in _rests(words, n.split("-"))]
+            score = max((_title_score(title, "-".join(r)) for r in rests), default=0.0)
+        else:
+            score = CATCH_ALL_ENDING if any(padded.endswith(f"-{e}-") and e != base for e in endings) else 0.0
+        if score:
+            hits.append(_Hit(MatchCandidate(artist_key, base, round(score, 1), "catch_all"), rank, tabs))
+    return hits
+
+
+def _tolerant_hits(song: Song, index: IndexView, title: _Forms, routes: list[tuple[str, float | None]],
+                   own: bool, policy: MatchPolicy) -> list[_Hit]:
+    """Step 4: the ``word_title``, ``typo_artist`` and ``catch_all`` hits that reach ``review``.
+
+    ``routes`` are the artist keys steps 2 and 3 tried, in order, each with the score its titles are
+    capped at (None for the song's own); ``own`` says whether any of them is the song's own.
+    """
+    hits = []
+    for rank, (artist_key, cap) in enumerate(routes):
+        hits += _word_hits(index, artist_key, title, rank, step="word_title", cap=cap)
+    rank = len(routes)
+    if not own:
+        for artist_key in _typo_artists(song, index, {a for a, _ in routes}):
+            hits += _title_hits(index, artist_key, title, rank, exact_step="typo_artist", fuzzy_step="typo_artist")
+            hits += _word_hits(index, artist_key, title, rank, step="typo_artist")
+            rank += 1
+    hits += _catch_all_hits(song, index, title, rank)
+    return [h for h in hits if h.cand.score >= policy.review]
 
 
 def _allowed(hits: Iterable[_Hit], rejected: frozenset[tuple[str, str]]) -> list[_Hit]:
@@ -405,19 +613,26 @@ def match_song(song: Song, index: IndexView, overrides: Overrides, policy: Match
         return _result("accept", [exact, *(h for h in ranked if h is not exact)])
 
     decision = _decide(ranked, policy)
-    if decision != "accept":
-        tried = {a for a, _ in own}
-        for i, (artist_key, score) in enumerate(_nearest_artists(song, index, tried, policy.artist_gate)):
-            hits += _allowed(_title_hits(index, artist_key, title, len(own) + i, exact_step="fuzzy_artist",
-                                         fuzzy_step="fuzzy_artist", cap=score), rejected)
-        ranked = _ranked(hits)
-        decision = _decide(ranked, policy)
-    if decision != "not_found":
+    if decision == "accept":
+        return _result(decision, ranked)
+    routes: list[tuple[str, float | None]] = [(a, None) for a, _ in own]
+    for i, (artist_key, score) in enumerate(_nearest_artists(song, index, set(dict(routes)), policy.artist_gate)):
+        hits += _allowed(_title_hits(index, artist_key, title, len(own) + i, exact_step="fuzzy_artist",
+                                     fuzzy_step="fuzzy_artist", cap=score), rejected)
+        routes.append((artist_key, score))
+    ranked = _ranked(hits)
+    decision = _decide(ranked, policy)
+    if decision == "accept":
         return _result(decision, ranked)
 
-    by_title = _allowed(_title_only(index, title, policy), rejected)
-    if by_title:
-        return _result("review", by_title)
+    # Names that aren't quite UG's: never an accept.
+    tolerant = _allowed(_tolerant_hits(song, index, title, routes, bool(own), policy), rejected)
+    if decision == "review":
+        return _result("review", _ranked(hits + tolerant))
+    behind = max((h.rank for h in tolerant), default=len(routes)) + 1
+    found = _ranked(tolerant + _allowed(_title_only(index, title, policy, behind), rejected))
+    if found:
+        return _result("review", found)
     return MatchResult("not_found", None, ranked[0].cand.score if ranked else None, None, None,
                        candidates=tuple(h.cand for h in ranked[:MAX_CANDIDATES]))
 

@@ -352,9 +352,9 @@ exits 1 and says why; `--dry-run` still shows what matches so far.
 
 - **accept**: a score of 90 or more, with the next different title at least 8
   points behind.
-- **review**: any other score of 75 or more, and any match on the title alone
-  (usually a cover). You settle these on the to-do page or with
-  `caracole review`.
+- **review**: any other score of 75 or more, any match on the title alone
+  (usually a cover), and any match on a name that isn't quite UG's (step 4
+  below). You settle these on the to-do page or with `caracole review`.
 - **not_found**: below 75. A not-found song is matched again every night, so
   a new tab finds it.
 - **pinned** and **ignored** come from overrides.toml.
@@ -368,9 +368,32 @@ How a song is matched, in order:
    `los-enanitos-verdes`) and, for a Chinese name, in pinyin (宋冬野 meets
    `song-dongye`). An exact title wins, else the closest one.
 3. The nearest other artist name, at 90 or more, then step 2 under it.
-4. The title alone, across all artists: always a review.
+4. Names that aren't quite UG's, when steps 2 and 3 accept nothing. Each is
+   always a review, never an accept, and joins a review's candidates; the
+   step names them:
+   - `word_title`: a title of the song's artist that holds yours word for
+     word, or that yours holds: `Los Lobos - Canción del Mariachi` meets
+     `los-lobos/cancion-del-mariachi-morena-de-mi-corazon`. It scores 80 to
+     90, by how much of the longer title the shorter one covers. A word that
+     names nothing on its own, such as "Live", never counts.
+   - `typo_artist`: for an artist the index knows by none of their names, the
+     artists whose names are a letter or two away, then step 2 under them:
+     `Coldplya - Yellow` meets `coldplay/yellow`. One letter for a name of
+     four to seven letters, two from eight, none for a shorter name; two
+     letters swapped count as one.
+   - `catch_all`: UG files the songs of musicals, films, TV shows, games and
+     cartoons under catch-all artists (`misc-musicals`, `misc-soundtrack`,
+     `misc-television`, `misc-computer-games`, `misc-cartoons`, and every
+     other `misc-…` but `misc-mashups`, whose titles hold two songs), with
+     the show's name inside the title. `epic - I'm not sorry for loving you`
+     meets `misc-musicals/epic-the-musical-not-sorry-for-loving-you`, scored
+     94: a catch-all title that holds the artist's name is scored on what is
+     left of it, less words such as "the musical" next to the name. One that
+     doesn't hold it but ends in your title of two words or more scores 90,
+     for a show's song your source credits to its composer.
+5. The title alone, across all artists: always a review.
 
-At steps 2 to 4, the matcher passes over the UG songs you rejected for the
+At steps 2 to 5, the matcher passes over the UG songs you rejected for the
 song under `[reject]`, and so does the fetch on the artist's UG page, so they
 are never offered again; other candidates still can be.
 
@@ -450,7 +473,8 @@ and cache.
   undone (by `[reject]`, say) loses the sheet and the tab that match kept.
   Songs the index can't settle are looked up on their artist's UG page, when
   it is known, at most once in 30 days: songs not found, songs reviewed on
-  their title alone (only other artists' songs of it), songs found on that
+  their title alone (only other artists' songs of it) or on names that
+  aren't quite UG's (steps 4 and 5 of the matcher, above), songs found on that
   page before, and songs whose chords the index can't offer (bare ids, or
   pages robots.txt closes). Per song it prints what it kept, as
   `Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)`,
@@ -657,7 +681,10 @@ page of that song's oldest tab, whatever its type:
   `[alias] "Radio Head" = "radiohead"` when the artist's name differs, so
   every other song by that artist matches too; an artist with aliases already
   keeps them, and gets this one added. A candidate found by title alone gets
-  no alias: it is usually a cover by someone else.
+  no alias: it is usually a cover by someone else. Nor does one under a
+  catch-all artist (`catch_all`): `misc-musicals` is no other name of
+  EPIC's. One under the right spelling of a misspelt artist (`typo_artist`)
+  does, so the artist's other songs match too.
 - **n** says none of them is the song. It writes them all under `[reject]`,
   as `"Radio Head - Crep" = ["radiohead/creep"]`, and clears the review
   without ignoring the song: the rematch leaves those candidates out for good,
