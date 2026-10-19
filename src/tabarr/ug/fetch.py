@@ -18,7 +18,7 @@ import json
 import logging
 import re
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -748,8 +748,13 @@ def songs_to_fetch(
     return out
 
 
-def fetch_songs(ctx: FetchContext, songs: Iterable[Song]) -> FetchStats:
-    """Process songs in order until the budget is spent.
+def fetch_songs(
+    ctx: FetchContext,
+    songs: Iterable[Song],
+    *,
+    on_song: Callable[[Song, SongFetchOutcome], None] | None = None,
+) -> FetchStats:
+    """Process songs in order until the budget is spent; ``on_song`` hears about each song done.
 
     A block is re-raised (the caller cools the provider down). Any other
     provider error, a page that can't be parsed included, skips that song: it
@@ -758,7 +763,7 @@ def fetch_songs(ctx: FetchContext, songs: Iterable[Song]) -> FetchStats:
     stats = FetchStats()
     for song in songs:
         try:
-            process_song(ctx, song)
+            outcome = process_song(ctx, song)
         except BudgetExhausted:
             stats.budget_exhausted = True
             break
@@ -769,4 +774,6 @@ def fetch_songs(ctx: FetchContext, songs: Iterable[Song]) -> FetchStats:
             stats.songs_failed += 1
             continue
         stats.songs_done += 1
+        if on_song is not None:
+            on_song(song, outcome)
     return stats
