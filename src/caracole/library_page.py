@@ -31,6 +31,7 @@ from typing import Any
 from urllib.parse import quote
 
 from caracole.config import Config
+from caracole.keys import SongKey, key_name, song_key
 from caracole.library import song_dir, write_atomic
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
@@ -66,9 +67,9 @@ _PUNCTUATION = re.compile(r"[\W_]+")
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> str:
     """The whole page: every song, its files, and the links to find what's missing."""
-    keys = _sheet_keys(conn)
     pages = _guitar_pro_pages(conn)
     library = list_songs(conn)
+    keys = {s.id: song_key(conn, cfg.library_dir, s) for s in library}
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
     songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy)
              for s in library]
@@ -96,9 +97,12 @@ def write_library_page(library_dir: Path, html: str) -> Path:
 # --- the data ---------------------------------------------------------------------------
 
 
-def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
+def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | None,
           guitar_pro: list[dict[str, str]], for_buying: bool) -> dict[str, Any]:
-    """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``)."""
+    """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``).
+
+    ``key`` and ``key_source`` are the song's key and where it came from, as in its info.json.
+    """
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
     names = _file_names(song_dir(library_dir, song))
@@ -120,7 +124,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
         "status": status,
         "review": bool(song.review) and status != "ignored",
         "added": song.added_at,
-        "key": key,
+        "key": key.key if key else None,
+        "key_source": key.source if key else None,
         "transpose": overrides.transpose.get(song.key, 0),
         "lyrics": song.lyrics_status,
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
@@ -130,7 +135,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
         "buy": buy,
         "sortArtist": _sort_key(song.artist),
         "sortTitle": _sort_key(title),
-        "search": _haystack([song.artist, *song.artists, title, song.display]),
+        "search": _haystack([song.artist, *song.artists, title, song.display,
+                             *([key_name(key.key)] if key else [])]),  # "a minor", "c major"
     }
 
 
@@ -160,22 +166,6 @@ def _label(name: str) -> str:
     if m:
         return f"{'Power Tab' if m.group(2).lower() == '.ptb' else 'Guitar Pro'} {m.group(1)}"
     return _LABELS[name]
-
-
-def _sheet_keys(conn: sqlite3.Connection) -> dict[int, str]:
-    """The key UG gives each kept sheet's version (``tonality_name``), by song."""
-    keys: dict[int, str] = {}
-    rows = conn.execute(
-        "SELECT f.song_id, v.raw FROM files f JOIN versions v ON v.id = f.version_id WHERE f.name = 'sheet.txt'"
-    )
-    for song_id, raw in rows:
-        try:
-            value = json.loads(raw or "{}").get("tonality_name")
-        except (ValueError, AttributeError):
-            continue
-        if isinstance(value, str) and value.strip():
-            keys[song_id] = value.strip()
-    return keys
 
 
 def _guitar_pro_pages(conn: sqlite3.Connection) -> dict[int, list[dict[str, str]]]:
@@ -295,6 +285,7 @@ a { color: inherit; }
 .chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
 .sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: .9rem; }
+.controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 12px; margin-left: auto; }
 .sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
 .count { margin: 0; color: var(--muted); font-size: .85rem; }
@@ -400,6 +391,13 @@ _SCRIPT = r"""
   };
   const CHIP_TEXT = { found: "found songs", wanted: "wanted songs", review: "songs that need review" };
   const SORTS = ["artist", "recent"];
+  // A key is "A minor" or "C" (keys.py); where it came from, as keys.SOURCES says.
+  const KEY_SOURCES = { tab: "from the tab", chords: "estimated from the chords", audio: "from the audio" };
+  const keyName = (key) => (/ minor$/.test(key) ? key : key + " major");
+  const keyText = (s) => "Key " + keyName(String(s.key)) +
+    (label(KEY_SOURCES, s.key_source) ? " (" + label(KEY_SOURCES, s.key_source) + ")" : "");
+  const keyCounts = new Map();
+  for (const s of songs) if (typeof s.key === "string" && s.key) keyCounts.set(s.key, (keyCounts.get(s.key) || 0) + 1);
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   const order = songs.map((_, i) => i);
@@ -448,7 +446,7 @@ _SCRIPT = r"""
     card.appendChild(head);
 
     const facts = el("p", "facts");
-    if (s.key) facts.appendChild(el("span", "key", "Key " + s.key));
+    if (typeof s.key === "string" && s.key) facts.appendChild(el("span", "key", keyText(s)));
     const shift = Number(s.transpose) || 0;
     if (shift) {
       const t = el("span", "transpose", (shift > 0 ? "+" : "−") + Math.abs(shift));
@@ -485,20 +483,30 @@ _SCRIPT = r"""
     return cards.get(i);
   };
 
-  const state = { q: "", show: "all", sort: "artist" };
+  const state = { q: "", show: "all", sort: "artist", key: "" };
   try {
     const params = new URLSearchParams(location.hash.slice(1));
     state.q = params.get("q") || "";
     if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
+    if (keyCounts.has(params.get("key"))) state.key = params.get("key");
   } catch (err) {
     // A malformed address: start from the defaults.
   }
+  // The key filter lists the keys the library has, each with its count.
+  const keySelect = byId("key");
+  for (const k of Array.from(keyCounts.keys()).sort((a, b) => compare(keyName(a), keyName(b)))) {
+    const option = el("option", null, keyName(k) + " · " + keyCounts.get(k));
+    option.value = k;
+    keySelect.appendChild(option);
+  }
+  byId("keys").hidden = keyCounts.size === 0;
   const save = () => {
     const params = new URLSearchParams();
     if (state.q) params.set("q", state.q);
     if (state.show !== "all") params.set("show", state.show);
     if (state.sort !== "artist") params.set("sort", state.sort);
+    if (state.key) params.set("key", state.key);
     try {
       history.replaceState(null, "", "#" + params.toString());
     } catch (err) {
@@ -523,7 +531,7 @@ _SCRIPT = r"""
   const render = () => {
     const words = terms(state.q);
     const matching = (state.sort === "recent" ? byRecent : byArtist)
-      .filter((i) => words.every((w) => hay[i].indexOf(w) >= 0));
+      .filter((i) => (!state.key || songs[i].key === state.key) && words.every((w) => hay[i].indexOf(w) >= 0));
     const tally = { all: matching.length, found: 0, wanted: 0, review: 0 };
     for (const i of matching) {
       for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
@@ -534,6 +542,7 @@ _SCRIPT = r"""
       chip.querySelector(".n").textContent = String(tally[chip.dataset.show]);
     }
     sort.value = state.sort;
+    keySelect.value = state.key;
     clear.hidden = !state.q;
 
     list.textContent = "";
@@ -588,6 +597,18 @@ _SCRIPT = r"""
         save();
       });
       list.appendChild(all);
+    } else if (!shown.length && state.key) {
+      // The key filter hides them: offer every key.
+      list.appendChild(el("p", "empty", "No songs in " + keyName(state.key) +
+        (state.q ? " match “" + state.q + "”." : ".")));
+      const any = el("button", "btn", "Any key");
+      any.type = "button";
+      any.addEventListener("click", () => {
+        state.key = "";
+        render();
+        save();
+      });
+      list.appendChild(any);
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
       const hint = el("p", "empty-hint", "To look in the offline Ultimate Guitar index, run ");
@@ -630,6 +651,11 @@ _SCRIPT = r"""
   }
   sort.addEventListener("change", () => {
     state.sort = SORTS.indexOf(sort.value) >= 0 ? sort.value : "artist";
+    render();
+    save();
+  });
+  keySelect.addEventListener("change", () => {
+    state.key = keyCounts.has(keySelect.value) ? keySelect.value : "";
     render();
     save();
   });
@@ -700,12 +726,17 @@ _BODY = """<body>
 </div>
 <div class="toolbar">
   <p class="count" id="count" aria-live="polite"></p>
+  <div class="controls">
+  <label class="sort" id="keys" hidden>Key
+    <select id="key"><option value="">Any</option></select>
+  </label>
   <label class="sort">Sort
     <select id="sort">
       <option value="artist">Artist A–Z</option>
       <option value="recent">Recently added</option>
     </select>
   </label>
+  </div>
 </div>
 <main class="list grouped" id="list"></main>
 <noscript><p class="empty">This page needs JavaScript to list your songs. Each song's files are in its

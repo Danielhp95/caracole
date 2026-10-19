@@ -86,10 +86,37 @@ def test_key_comes_from_the_kept_sheets_version_and_transpose_from_overrides(con
     plain = add_song(conn, "Radiohead", "Creep")
     o = Overrides(transpose={s.key: -2})
     songs = songs_of(page(conn, cfg, o))
-    assert songs["Soda Stereo - De Música Ligera"]["key"] == "Bm"
-    assert songs["Soda Stereo - De Música Ligera"]["transpose"] == -2
-    assert songs["Radiohead - Creep"]["key"] is None and songs["Radiohead - Creep"]["transpose"] == 0
+    soda, creep = songs["Soda Stereo - De Música Ligera"], songs["Radiohead - Creep"]
+    assert (soda["key"], soda["key_source"]) == ("B minor", "tab")
+    assert soda["transpose"] == -2
+    assert (creep["key"], creep["key_source"]) == (None, None) and creep["transpose"] == 0
     assert plain.key not in o.transpose
+
+
+def keep_sheet_json(conn, cfg, song, content, *, raw=None, tab_id=1):
+    v = version(conn, song, tab_id, raw=raw)
+    doc = json.dumps({"content": content}).encode()
+    keep_file(conn, cfg.library_dir, song=song, version_id=v, name="sheet.json", data=doc, rank=1)
+    keep_file(conn, cfg.library_dir, song=song, version_id=v, name="sheet.txt", data=content.encode(), rank=1)
+
+
+AM_F_C_G = "[ch]Am[/ch] [ch]F[/ch] [ch]C[/ch] [ch]G[/ch]\nWords\n" * 3
+
+
+def test_the_page_says_where_a_key_came_from_as_keys_py_does():
+    from caracole.keys import SOURCES
+    from caracole.library_page import _SCRIPT
+
+    for source, text in SOURCES.items():
+        assert f'{source}: "{text}"' in _SCRIPT
+
+
+def test_without_ugs_key_the_page_has_the_key_estimated_from_the_chords(conn, cfg):
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet_json(conn, cfg, s, AM_F_C_G)
+    soda = songs_of(page(conn, cfg))[s.display]
+    assert (soda["key"], soda["key_source"]) == ("A minor", "chords")
+    assert "a minor" in soda["search"]  # the search box finds songs by key
 
 
 def test_a_song_in_the_ignore_override_shows_as_ignored(conn, cfg):
@@ -414,3 +441,28 @@ def test_apostrophes_and_empty_results_in_a_real_browser(conn, cfg, tmp_path):
     # The suggested command is quoted for a shell.
     shown = listing(dump_dom(path, tmp_path, "#q=" + quote("guns n' roses")))
     assert "caracole search \"guns n' roses\"" in shown
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_keys_show_with_their_source_and_filter_in_a_real_browser(conn, cfg, tmp_path):
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet_json(conn, cfg, soda, AM_F_C_G)
+    creep = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, creep, "Words\n", raw={"tonality_name": "G"}, tab_id=2)
+    add_song(conn, "Queen", "Don't Stop Me Now")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+
+    dom = dump_dom(path, tmp_path)
+    shown = listing(dom)
+    assert "Key A minor (estimated from the chords)" in shown and "Key G major (from the tab)" in shown
+    assert re.search(r'<option value="A minor"[^>]*>A minor', dom) and re.search(r'<option value="G"[^>]*>G major', dom)
+
+    shown = listing(dump_dom(path, tmp_path, "#key=" + quote("A minor")))
+    assert shown.count("<article") == 1 and "De Música Ligera" in shown
+
+    shown = listing(dump_dom(path, tmp_path, "#key=G&q=soda"))
+    assert shown.count("<article") == 0 and "No songs in G major match" in shown
+    assert "caracole search" not in shown  # the key hides it, not the library
+
+    shown = listing(dump_dom(path, tmp_path, "#q=" + quote("a minor")))
+    assert shown.count("<article") == 1 and "De Música Ligera" in shown

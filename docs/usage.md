@@ -689,15 +689,22 @@ overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
 loads nothing from the network. It shows every song with its status, its key
-or transposition, and links to its files, the PDF first. A song without a
-sheet also gets buy and search links.
+and where the key came from ("Key A minor (from the tab)", "Key C major
+(estimated from the chords)", "(from the audio)": see
+[The song's key](#the-songs-key)), its transposition, and links to its files,
+the PDF first. A song without a sheet also gets buy and search links.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
-"banma" finds 斑马斑马. The buttons show all songs, or only those found,
-wanted or needing review, and you can sort by artist or by when songs were
-added. When nothing in the library matches, the page shows the
+"banma" finds 斑马斑马. It finds keys too: "a minor", or "minor" for every
+song in a minor key. The buttons show all songs, or only those found, wanted
+or needing review; the Key menu, there once a song has a key, shows only the
+songs in one key, with how many each key has; and you can sort by artist or by
+when songs were added. When nothing in the library matches, the page shows the
 `caracole search` line to run.
+
+Each song's entry in the page's data (the `<script type="application/json"
+id="songs">` block) has the same `key` and `key_source` as its info.json.
 
 On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
