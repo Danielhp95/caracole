@@ -21,6 +21,7 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+from tabarr.db import kv_get_json
 from tabarr.normalize import clean_title
 from tabarr.songs import Song
 from tabarr.versions import get_version, song_versions
@@ -134,6 +135,8 @@ def write_info(conn: sqlite3.Connection, library_dir: Path, song: Song) -> Path:
         for v in song_versions(conn, song.id)
         if v.pick_rank is not None
     ]
+    rendered = kv_get_json(conn, f"render:{song.id}")  # recorded by render.render_all
+    render = {"transpose": rendered["transpose"], "pdf": rendered["pdf"]} if rendered else None
     info = {
         "artist": song.artist,
         "title": song.title,
@@ -151,6 +154,7 @@ def write_info(conn: sqlite3.Connection, library_dir: Path, song: Song) -> Path:
         },
         "files": files,
         "picks": sorted(picked, key=lambda p: (p["kind"], p["rank"])),
+        "render": render,
     }
     path = song_dir(library_dir, song) / "info.json"
     write_atomic(path, (json.dumps(info, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
