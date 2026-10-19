@@ -275,7 +275,9 @@ def render_all(
     Ignored songs are left alone. A song that fails (a ``RenderError``, or a
     file that can't be read or written) is logged and counted, and the others
     go on. The pass is recorded in kv ``render:status`` for the to-do page:
-    ``{"at", "rendered", "failed": [display keys], "font_error"}``.
+    ``{"at", "rendered", "failed": [display keys], "font_error"}``, stamped with
+    ``now`` (by default the current time). ``force`` renders every PDF again,
+    up to date or not; ``runner`` runs chordpro (tests pass a fake).
     """
     stats = RenderStats()
     failed: list[str] = []

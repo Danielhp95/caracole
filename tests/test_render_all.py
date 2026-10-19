@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -97,7 +98,8 @@ class FakeChordPro:
 
 def human_sheet(conn, cfg, song, content=UG_SHEET, *, tab_id=85053, tonality="Bm", meta=None):
     """Keep a UG sheet the way the fetch step does: sheet.txt, plus sheet.json beside it
-    holding the raw version JSON and the content."""
+    holding the raw version JSON, the content and the page's tab_view.meta (UG writes an
+    empty one as []). render_all reads only "content" and "meta"."""
     raw = version_dict(tab_id, song=song.title, artist=song.artist, tonality_name=tonality)
     vid = upsert_version(
         conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot="sheet", kind="chords",
@@ -105,7 +107,8 @@ def human_sheet(conn, cfg, song, content=UG_SHEET, *, tab_id=85053, tonality="Bm
     )
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt",
               data=strip_markup(content).encode("utf-8"), rank=1)
-    doc = {**raw, "content": content, "meta": meta if meta is not None else []}
+    doc = {"version": raw, "content": content, "url": raw["tab_url"],
+           "meta": meta if meta is not None else []}
     write_atomic(song_dir(cfg.library_dir, song) / "sheet.json",
                  json.dumps(doc, ensure_ascii=False).encode("utf-8"))
     return vid
@@ -528,6 +531,21 @@ def test_status_time_defaults_to_now(conn, cfg):
     render_all(conn, cfg, Overrides(), runner=FakeChordPro())
     at = datetime.fromisoformat(kv_get_json(conn, "render:status")["at"])
     assert before <= at <= datetime.now(UTC)
+
+
+def test_render_record_says_what_the_pdf_was_made_from(conn, cfg, tmp_path):
+    font = fake_font(tmp_path / "Kai.otf")
+    cfg = replace(cfg, cjk_font=font)
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, song, ZH_SHEET, tonality="")
+    render(conn, cfg, overrides(cfg, '[transpose]\n"宋冬野 - 斑马斑马" = 3\n'))
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_bytes()
+    assert kv_get_json(conn, f"render:{song.id}") == {
+        "source_sha": hashlib.sha256(cho).hexdigest(),
+        "transpose": 3,
+        "font": str(font),
+        "pdf": "sheet.pdf",
+    }
 
 
 def test_info_json_records_the_rendered_transposition(conn, cfg):
