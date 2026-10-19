@@ -90,7 +90,7 @@ def test_comments_blank_lines_and_line_numbers():
     )
     lines, errors = parse_wanted(text)
     assert errors == []
-    assert [(l.line_no, l.artist, l.title) for l in lines] == [
+    assert [(line.line_no, line.artist, line.title) for line in lines] == [
         (4, "Soda Stereo", "Persiana Americana"),
         (6, "Radiohead", "Creep"),
     ]
@@ -123,7 +123,7 @@ def test_bad_lines_are_reported_and_good_lines_kept():
         "- Wonderwall\n"
     )
     lines, errors = parse_wanted(text)
-    assert [l.line_no for l in lines] == [2]
+    assert [line.line_no for line in lines] == [2]
     assert [n for n, _ in errors] == [1, 3, 4, 5, 6]
     messages = dict(errors)
     assert "Artist - Title" in messages[1] and "Soda Stereo De Música Ligera" in messages[1]
@@ -136,7 +136,7 @@ def test_crlf_bom_extra_spaces_and_nbsp():
     text = "\ufeffSoda Stereo  -  De Música   Ligera \r\nOasis\u00a0-\u00a0Wonderwall\r\n"
     lines, errors = parse_wanted(text)
     assert errors == []
-    assert [(l.artist, l.title, l.line_no) for l in lines] == [
+    assert [(line.artist, line.title, line.line_no) for line in lines] == [
         ("Soda Stereo", "De Música Ligera", 1),
         ("Oasis", "Wonderwall", 2),
     ]
@@ -158,8 +158,14 @@ def test_identity_ignores_cjk_punctuation():
 
 @pytest.mark.parametrize(
     "text,ms",
-    [("4:13", 253000), ("04:13", 253000), ("1:02:03", 3723000), ("253", 253000), (" 4:13 ", 253000),
-     ("４：１３", 253000)],
+    [
+        ("4:13", 253000),
+        ("04:13", 253000),
+        ("1:02:03", 3723000),
+        ("253", 253000),
+        (" 4:13 ", 253000),
+        ("４：１３", 253000),
+    ],
 )
 def test_parse_duration(text, ms):
     assert parse_duration(text) == ms
@@ -184,7 +190,10 @@ def test_format_duration_rounds_to_seconds():
 
 
 def test_format_line():
-    assert format_line("宋冬野", "斑马斑马", "安和桥北", 253000) == "宋冬野 - 斑马斑马 | 安和桥北 | 4:13"
+    assert (
+        format_line("宋冬野", "斑马斑马", "安和桥北", 253000)
+        == "宋冬野 - 斑马斑马 | 安和桥北 | 4:13"
+    )
     assert format_line("Soda Stereo", "De Música Ligera") == "Soda Stereo - De Música Ligera"
     assert format_line("Radiohead", "Creep", duration_ms=238000) == "Radiohead - Creep | 3:58"
 
@@ -198,9 +207,13 @@ def test_format_line_escapes_what_the_parser_would_eat():
 
 @pytest.mark.parametrize(
     "artist,title,album,ms",
-    [("John Lennon", "#9 Dream", None, None), ("Some Band", "Either | Or", "A | B", 61000),
-     ("Adele", "Someone Like You", "21", None), ("宋冬野", "斑马，斑马", "安和桥北", 253000),
-     ("Queen", "Bohemian Rhapsody - Remastered 2011", None, 354000)],
+    [
+        ("John Lennon", "#9 Dream", None, None),
+        ("Some Band", "Either | Or", "A | B", 61000),
+        ("Adele", "Someone Like You", "21", None),
+        ("宋冬野", "斑马，斑马", "安和桥北", 253000),
+        ("Queen", "Bohemian Rhapsody - Remastered 2011", None, 354000),
+    ],
 )
 def test_format_line_round_trips(artist, title, album, ms):
     line = one(format_line(artist, title, album, ms))
@@ -234,7 +247,9 @@ def test_append_adds_a_line_at_the_end(tmp_path):
 
 def test_append_skips_a_song_already_listed(tmp_path):
     path = tmp_path / "wanted.txt"
-    path.write_text("宋冬野 - 斑马，斑马 | 安和桥北\nSoda Stereo - De Música Ligera\n", encoding="utf-8")
+    path.write_text(
+        "宋冬野 - 斑马，斑马 | 安和桥北\nSoda Stereo - De Música Ligera\n", encoding="utf-8"
+    )
     before = path.read_bytes()
     assert append_wanted(path, "宋冬野", "斑马斑马", duration_ms=253000) == WantedLine(
         "宋冬野", "斑马，斑马", "安和桥北", None, 1
@@ -247,7 +262,10 @@ def test_append_keeps_crlf_and_adds_a_missing_final_newline(tmp_path):
     path = tmp_path / "wanted.txt"
     path.write_bytes("# list\r\nSoda Stereo - De Música Ligera".encode())
     line = append_wanted(path, "Oasis", "Wonderwall")
-    assert path.read_bytes() == "# list\r\nSoda Stereo - De Música Ligera\r\nOasis - Wonderwall\r\n".encode()
+    assert (
+        path.read_bytes()
+        == "# list\r\nSoda Stereo - De Música Ligera\r\nOasis - Wonderwall\r\n".encode()
+    )
     assert line.line_no == 3
 
 
@@ -301,12 +319,22 @@ class RecordingUpsert:
         self.calls = []
         self.ids = {}
 
-    def __call__(self, conn, *, artists, title, album, duration_ms, isrc, source, source_id, added_at):
+    def __call__(
+        self, conn, *, artists, title, album, duration_ms, isrc, source, source_id, added_at
+    ):
         assert conn is CONN
-        self.calls.append({
-            "artists": list(artists), "title": title, "album": album, "duration_ms": duration_ms,
-            "isrc": isrc, "source": source, "source_id": source_id, "added_at": added_at,
-        })
+        self.calls.append(
+            {
+                "artists": list(artists),
+                "title": title,
+                "album": album,
+                "duration_ms": duration_ms,
+                "isrc": isrc,
+                "source": source,
+                "source_id": source_id,
+                "added_at": added_at,
+            }
+        )
         created = source_id not in self.ids
         self.ids.setdefault(source_id, len(self.ids) + 1)
         return self.ids[source_id], created
@@ -332,15 +360,32 @@ def sync(path, now=NOW, kv=None):
 
 def test_sync_upserts_every_song_with_source_wanted(tmp_path):
     path = tmp_path / "wanted.txt"
-    path.write_text("宋冬野 - 斑马斑马 | 安和桥北 | 4:13\nSoda Stereo - De Música Ligera\n", encoding="utf-8")
+    path.write_text(
+        "宋冬野 - 斑马斑马 | 安和桥北 | 4:13\nSoda Stereo - De Música Ligera\n", encoding="utf-8"
+    )
     stats, up = sync(path)
     assert stats == SyncStats(seen=2, new=2)
     assert up.calls == [
-        {"artists": ["宋冬野"], "title": "斑马斑马", "album": "安和桥北", "duration_ms": 253000,
-         "isrc": None, "source": "wanted", "source_id": "宋冬野/斑马斑马", "added_at": "2026-10-18T03:30:00Z"},
-        {"artists": ["Soda Stereo"], "title": "De Música Ligera", "album": None, "duration_ms": None,
-         "isrc": None, "source": "wanted", "source_id": "soda-stereo/de-musica-ligera",
-         "added_at": "2026-10-18T03:30:00Z"},
+        {
+            "artists": ["宋冬野"],
+            "title": "斑马斑马",
+            "album": "安和桥北",
+            "duration_ms": 253000,
+            "isrc": None,
+            "source": "wanted",
+            "source_id": "宋冬野/斑马斑马",
+            "added_at": "2026-10-18T03:30:00Z",
+        },
+        {
+            "artists": ["Soda Stereo"],
+            "title": "De Música Ligera",
+            "album": None,
+            "duration_ms": None,
+            "isrc": None,
+            "source": "wanted",
+            "source_id": "soda-stereo/de-musica-ligera",
+            "added_at": "2026-10-18T03:30:00Z",
+        },
     ]
 
 
@@ -352,7 +397,9 @@ def test_sync_of_a_missing_file_is_empty(tmp_path):
 
 def test_sync_reports_bad_lines_and_never_raises(tmp_path):
     path = tmp_path / "wanted.txt"
-    path.write_text("Oasis - Wonderwall\nno separator here\nRadiohead - Creep | 4:75\n", encoding="utf-8")
+    path.write_text(
+        "Oasis - Wonderwall\nno separator here\nRadiohead - Creep | 4:75\n", encoding="utf-8"
+    )
     stats, up = sync(path)
     assert [c["title"] for c in up.calls] == ["Wonderwall"]
     assert (stats.seen, stats.new) == (1, 1)
@@ -368,7 +415,8 @@ def test_sync_counts_the_same_song_twice_as_one(tmp_path):
     assert (stats.seen, stats.new) == (1, 1)
     # Both lines reach the repository, which merges them: the second one fills in the album.
     assert [(c["source_id"], c["album"]) for c in up.calls] == [
-        ("宋冬野/斑马斑马", None), ("宋冬野/斑马斑马", "安和桥北")
+        ("宋冬野/斑马斑马", None),
+        ("宋冬野/斑马斑马", "安和桥北"),
     ]
 
 

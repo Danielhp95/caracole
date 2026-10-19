@@ -289,9 +289,8 @@ def _checked_line(
     lines, errors = parse_wanted(text)
     seconds = None if duration_ms is None else (duration_ms + 500) // 1000 * 1000
     expected = (_clean(artist), _clean(title), _clean(album or "") or None, seconds)
-    if errors or len(lines) != 1 or (
-        (lines[0].artist, lines[0].title, lines[0].album, lines[0].duration_ms) != expected
-    ):
+    got = [(line.artist, line.title, line.album, line.duration_ms) for line in lines]
+    if errors or got != [expected]:
         raise ValueError(f"wanted.txt can't hold {artist!r} - {title!r} as written")
     return text, lines[0]
 
