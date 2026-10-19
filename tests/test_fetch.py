@@ -2191,6 +2191,26 @@ def test_a_match_you_reject_takes_its_sheet_and_tab_with_it(conn, tmp_path):
     assert (get_song(conn, song.id).match_decision, names(conn, song)) == ("not_found", {"sheet (auto).txt", "guitar-1.gp5"})
 
 
+def test_a_match_you_reject_for_a_review_loses_its_sheet_without_a_request(conn, tmp_path):
+    # What the matcher has left is a near title of the song's own artist, for you to review: nothing to
+    # fetch, and the rejected UG song's sheet and tab are no sheet of this song.
+    from tabarr.ug.index import mark_built
+
+    song, ug = fetched_persiana(conn, tmp_path)
+    index(conn, (102, "soda-stereo", "persiana-am", "chords"))  # 76 against persiana-americana
+    mark_built(conn, NOW)
+    overrides = overrides_from(tmp_path, '[reject]\n"Soda Stereo - Persiana Americana" = "soda-stereo/persiana-americana"\n')
+    match_all(conn, overrides, MatchPolicy())
+    assert (get_song(conn, song.id).match_decision, get_song(conn, song.id).match_song_key) == ("review", "persiana-am")
+
+    assert [s.id for s in songs_to_fetch(conn, overrides, NOW)] == [song.id]
+    fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides),
+                songs_to_fetch(conn, overrides, NOW))
+
+    assert (names(conn, song), get_song(conn, song.id).status) == (set(), "wanted")
+    assert ug.requests == [] and songs_to_fetch(conn, overrides, NOW) == []
+
+
 def test_a_rejected_match_leaves_a_song_without_any_sheet_wanted(conn, tmp_path):
     ug = FakeUG()
     song = dml_found_on_its_artist_page(conn, tmp_path, ug)
