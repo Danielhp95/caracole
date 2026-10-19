@@ -45,13 +45,15 @@ def _reason(e: OSError | sqlite3.Error) -> str:
 
 def open_db(cfg: Config) -> sqlite3.Connection:
     """The database, the one way a command opens it; a state folder tabarr can't write exits 1,
-    naming the path and why.
+    naming the path and why, and a database a newer tabarr migrated exits 2.
 
     ``tabarr add``, which keeps its wanted.txt line and exits 0 without the database,
     calls ``db.connect`` itself.
     """
     try:
         return db.connect(cfg.db_path)
+    except db.DatabaseTooNew as e:  # a NixOS rollback, say: its message says what to do
+        fail(f"database: {e}", 2)
     except (OSError, sqlite3.Error) as e:
         name = getattr(e, "filename", None)
         where = f" ({name})" if name and Path(name) != cfg.db_path else ""

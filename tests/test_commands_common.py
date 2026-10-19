@@ -118,6 +118,40 @@ def test_every_command_names_a_state_folder_it_cant_use(tmp_path, args):
     assert "can't open" in result.output and str(state) in result.output
 
 
+def newer_database(path: Path) -> int:
+    """A database a newer tabarr migrated, as a NixOS rollback leaves it; returns its version."""
+    conn = db.connect(path)
+    conn.execute(f"PRAGMA user_version = {db.SCHEMA_VERSION + 1}")
+    conn.close()
+    return db.SCHEMA_VERSION + 1
+
+
+def test_a_database_a_newer_tabarr_migrated_exits_2(cfg, capsys):
+    version = newer_database(cfg.db_path)
+    with pytest.raises(typer.Exit) as raised:
+        open_db(cfg)
+    assert raised.value.exit_code == 2
+    assert f"database: {cfg.db_path} is at schema version {version}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("args", DB_COMMANDS, ids=" ".join)
+def test_every_command_exits_2_on_a_database_a_newer_tabarr_migrated(tmp_path, args):
+    version = newer_database(tmp_path / "state" / "tabarr.sqlite")
+    result = invoke(tmp_path, *args)
+    assert result.exit_code == 2, result.output
+    assert not isinstance(result.exception, db.DatabaseTooNew), result.exception
+    assert f"is at schema version {version}, but this tabarr knows up to" in result.output
+
+
+def test_add_keeps_its_line_beside_a_database_a_newer_tabarr_migrated(tmp_path):
+    # wanted.txt is the source of truth: the line is kept, and the database waits for that tabarr.
+    newer_database(tmp_path / "state" / "tabarr.sqlite")
+    result = invoke(tmp_path, "add", "Radiohead", "Creep")
+    assert result.exit_code == 0, result.output
+    assert "a newer tabarr migrated it" in result.output
+    assert (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8").endswith("\nRadiohead - Creep\n")
+
+
 @needs_permissions
 def test_a_library_tabarr_cant_write_names_the_page(tmp_path, cfg, conn, capsys):
     with read_only(cfg.library_dir), pytest.raises(typer.Exit) as raised:
