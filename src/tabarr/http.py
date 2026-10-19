@@ -12,9 +12,20 @@ Rules this module enforces (plan §6, "Politeness"):
 
 from __future__ import annotations
 
+import gzip
+import hashlib
 import json
+import os
+import random
+import time
 from dataclasses import dataclass, field
-from typing import Any, Collection, Mapping, Protocol, runtime_checkable
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Callable, Collection, Mapping, Protocol, runtime_checkable
+
+import httpx
+
+from tabarr.config import ProviderPolicy
 
 
 class ProviderError(Exception):
@@ -99,3 +110,217 @@ class Client(Protocol):
         conditional: bool = False,
         accept: Collection[int] = (200,),
     ) -> Response: ...
+
+
+# --- the polite client --------------------------------------------------------
+
+_CACHED_STATUSES = (200, 404)
+_KEPT_HEADERS = ("etag", "last-modified", "content-type", "location")
+# Markers of a real challenge page. Normal UG pages also load Cloudflare's
+# "/cdn-cgi/challenge-platform/" bot-management script, so that string alone
+# is NOT evidence of a challenge.
+_CHALLENGE_MARKERS = (
+    b"_cf_chl_opt",
+    b"<title>Just a moment...</title>",
+    b"Attention Required! | Cloudflare",
+    b"Enable JavaScript and cookies to continue",
+)
+
+
+def is_challenge(status: int, headers: Mapping[str, str], body: bytes) -> bool:
+    """Whether a response is a bot challenge (which counts as a block)."""
+    if str(_header(headers, "cf-mitigated")).lower() == "challenge":
+        return True
+    head = body[:32768]
+    return any(marker in head for marker in _CHALLENGE_MARKERS)
+
+
+def _header(headers: Mapping[str, str], name: str) -> str | None:
+    for k, v in headers.items():
+        if k.lower() == name:
+            return v
+    return None
+
+
+class PoliteClient:
+    """One provider's HTTP client for one run: cache-first, budgeted, paced, never escalating.
+
+    - A cached 200 or 404 is served without a request (``cache=True``).
+    - ``conditional=True`` revalidates a cached copy with If-None-Match /
+      If-Modified-Since; a 304 returns the cached body.
+    - Before every network request except the first, it pauses for a random
+      time in ``policy.delay``, minus the time already elapsed.
+    - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
+    - 403, 429 or a challenge page raise ``ProviderBlocked``, and no further
+      requests are made this run.
+    - After ``max_consecutive_errors`` other errors, ``ProviderUnavailable``.
+    """
+
+    def __init__(
+        self,
+        provider: str,
+        policy: ProviderPolicy,
+        cache_dir: Path,
+        *,
+        user_agent: str,
+        transport: httpx.BaseTransport | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+        rng: random.Random | None = None,
+        on_event: Callable[[Event], None] | None = None,
+        max_consecutive_errors: int = 3,
+        timeout: float = 30.0,
+        clock: Callable[[], float] = time.monotonic,
+    ):
+        self.provider = provider
+        self.policy = policy
+        self.cache_root = cache_dir / "http" / provider
+        self.requests_made = 0
+        self._sleep = sleep
+        self._rng = rng or random.Random()
+        self._on_event = on_event
+        self._max_errors = max_consecutive_errors
+        self._clock = clock
+        self._last_request: float | None = None
+        self._errors_in_a_row = 0
+        self._blocked: ProviderBlocked | None = None
+        self._unavailable = False
+        self._budget_reported = False
+        self._http = httpx.Client(
+            transport=transport,
+            headers={"User-Agent": user_agent},
+            follow_redirects=True,
+            timeout=timeout,
+        )
+
+    # -- public ------------------------------------------------------------
+
+    def get(
+        self,
+        url: str,
+        *,
+        params: Mapping[str, str | int] | None = None,
+        cache: bool = True,
+        conditional: bool = False,
+        accept: Collection[int] = (200,),
+    ) -> Response:
+        full = str(httpx.URL(url, params=params)) if params else url
+        key = hashlib.sha256(full.encode("utf-8")).hexdigest()
+        cached = self._read_cache(key) if (cache or conditional) else None
+        if cache and cached is not None and not conditional:
+            if cached.status in accept:
+                return cached
+            raise ProviderError(self.provider, full, cached.status, "cached response not accepted")
+
+        if self._blocked is not None:
+            raise ProviderBlocked(self.provider, full, self._blocked.status, "blocked earlier this run")
+        if self._unavailable:
+            raise ProviderUnavailable(self.provider, full, None, "too many errors this run")
+        if self.requests_made >= self.policy.budget:
+            if not self._budget_reported:
+                self._budget_reported = True
+                self._event(full, None, "budget", f"budget of {self.policy.budget} requests spent")
+            raise BudgetExhausted(self.provider)
+
+        self._pause()
+        headers: dict[str, str] = {}
+        if conditional and cached is not None:
+            etag = _header(cached.headers, "etag")
+            modified = _header(cached.headers, "last-modified")
+            if etag:
+                headers["If-None-Match"] = etag
+            if modified:
+                headers["If-Modified-Since"] = modified
+
+        self.requests_made += 1
+        self._last_request = self._clock()
+        try:
+            resp = self._http.get(full, headers=headers)
+            body = resp.content
+        except httpx.HTTPError as e:
+            self._fail(full, None, f"{type(e).__name__}: {e}")
+            raise AssertionError("unreachable")  # pragma: no cover
+
+        status = resp.status_code
+        if status in (403, 429) or is_challenge(status, resp.headers, body):
+            reason = "challenge page" if is_challenge(status, resp.headers, body) else f"HTTP {status}"
+            self._blocked = ProviderBlocked(self.provider, full, status, reason)
+            self._event(full, status, "blocked", reason)
+            raise self._blocked
+
+        if status == 304 and cached is not None:
+            self._errors_in_a_row = 0
+            self._event(full, status, "not_modified", None)
+            return Response(url=full, status=304, content=cached.content, headers=cached.headers, from_cache=True)
+
+        if status in _CACHED_STATUSES:
+            kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
+            self._write_cache(key, full, status, kept, body)
+        if status in accept:
+            self._errors_in_a_row = 0
+            self._event(full, status, "ok", None)
+            kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
+            return Response(url=full, status=status, content=body, headers=kept, from_cache=False)
+
+        self._fail(full, status, f"HTTP {status}")
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    def close(self) -> None:
+        self._http.close()
+
+    def __enter__(self) -> "PoliteClient":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
+    # -- internals ---------------------------------------------------------
+
+    def _pause(self) -> None:
+        if self._last_request is None:
+            return
+        target = self._rng.uniform(*self.policy.delay)
+        remaining = target - (self._clock() - self._last_request)
+        if remaining > 0:
+            self._sleep(remaining)
+
+    def _fail(self, url: str, status: int | None, message: str) -> None:
+        self._errors_in_a_row += 1
+        if self._errors_in_a_row >= self._max_errors:
+            self._unavailable = True
+        self._event(url, status, "error", message)
+        raise ProviderError(self.provider, url, status, message)
+
+    def _event(self, url: str, status: int | None, decision: str, message: str | None) -> None:
+        if self._on_event is not None:
+            self._on_event(Event(provider=self.provider, url=url, status=status, decision=decision, message=message))
+
+    def _paths(self, key: str) -> tuple[Path, Path]:
+        d = self.cache_root / key[:2]
+        return d / f"{key}.body", d / f"{key}.json"
+
+    def _read_cache(self, key: str) -> Response | None:
+        body_path, meta_path = self._paths(key)
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            content = gzip.decompress(body_path.read_bytes())
+        except (OSError, ValueError, EOFError):
+            return None
+        return Response(
+            url=meta["url"], status=meta["status"], content=content,
+            headers=meta.get("headers", {}), from_cache=True,
+        )
+
+    def _write_cache(self, key: str, url: str, status: int, headers: Mapping[str, str], body: bytes) -> None:
+        body_path, meta_path = self._paths(key)
+        body_path.parent.mkdir(parents=True, exist_ok=True)
+        meta = {
+            "url": url, "status": status, "headers": dict(headers),
+            "fetched_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        for path, data in (
+            (body_path, gzip.compress(body, compresslevel=6)),
+            (meta_path, json.dumps(meta, ensure_ascii=False).encode("utf-8")),
+        ):
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_bytes(data)
+            os.replace(tmp, path)
