@@ -758,8 +758,9 @@ song of yours in the key, by name:
 
     The offline Ultimate Guitar index has no keys: search it without --key.
 
-KEY is written the way tabs write keys: `"A minor"`, `Am`, `F#`, `"Bb major"`,
-`"La menor"`; any spelling of the same key matches (`Gbm` finds F# minor). The
+KEY is written the way tabs write keys, in either case: `"A minor"`, `Am`,
+`am`, `F#`, `"Bb major"`, `bbm` (B flat minor), `"La menor"`; any spelling of
+the same key matches (`Gbm` finds F# minor). The
 offline index knows no keys, so `--key` leaves it out, and `--add` can't go
 with it. A KEY that is no key exits with status 2.
 

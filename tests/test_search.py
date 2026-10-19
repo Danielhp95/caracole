@@ -618,6 +618,27 @@ def test_cli_search_by_key_matches_any_spelling_of_the_key(tmp_path):
     assert "Radiohead - Lucky · found · Key F# minor (from the tab)" in result.output
 
 
+@pytest.mark.parametrize(
+    ("typed", "heading", "song"),
+    [
+        ("am", "A minor", "Soda Stereo - De Música Ligera"),
+        ("a minor", "A minor", "Soda Stereo - De Música Ligera"),
+        ("f#m", "F# minor", "Radiohead - Lucky"),
+        ("g", "G major", "Radiohead - Creep"),
+        ("bbm", "Bb minor", "Muse - Hysteria"),  # the b after the letter is a flat
+        ("la menor", "A minor", "Soda Stereo - De Música Ligera"),
+    ],
+)
+def test_cli_search_by_key_takes_the_key_in_lowercase(tmp_path, typed, heading, song):
+    conn = seed_keys(tmp_path)
+    keep_sheet(conn, tmp_path / "lib", add_song(conn, "Muse", "Hysteria"), "Words\n",
+               raw={"tonality_name": "Bbm"}, tab_id=3)
+    result = run(tmp_path, "search", "--key", typed)
+    assert result.exit_code == 0, result.output
+    assert f"In your library, in {heading}" in result.output
+    assert f"  {song} · found · Key {heading}" in result.output
+
+
 def test_cli_search_key_that_is_no_key_is_a_usage_error(tmp_path):
     seed_keys(tmp_path)
     result = run(tmp_path, "search", "--key", "Hm7")

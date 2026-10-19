@@ -45,7 +45,7 @@ def register(app: typer.Typer) -> None:
         ),
         key: str | None = typer.Option(
             None, "--key", metavar="KEY",
-            help='Only your songs in this key: "A minor", Am, F#, "La menor". The offline index '
+            help='Only your songs in this key, in either case: "A minor", am, F#, "La menor". The offline index '
                  "has no keys, so it isn't searched.",
         ),
     ) -> None:
@@ -65,10 +65,16 @@ def register(app: typer.Typer) -> None:
 
 
 def _wanted_key(key: str, add: int | None) -> str:
-    """The key ``--key`` names, as caracole writes keys; a usage error if it names none."""
+    """The key ``--key`` names, as caracole writes keys; a usage error if it names none.
+
+    The value is known to be a key, so its tonic may be lowercase ("am", "bbm", "f#"), which
+    ``parse_key`` refuses in tab text so that the word "am" is no key; a b after the letter is
+    still a flat.
+    """
     from caracole.keys import parse_key
 
-    found = parse_key(key)
+    k = key.strip()
+    found = parse_key(k[:1].upper() + k[1:])
     if found is None:
         fail(f"--key: {key!r} is not a key; write one as A minor, Am, F#, Bb or La menor", 2)
     if add is not None:
