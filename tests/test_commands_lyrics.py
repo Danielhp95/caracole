@@ -326,6 +326,59 @@ def test_lacuerda_keeps_a_sheet_and_reports_the_counts(tmp_path, sites):
     assert (tmp_path / "lib" / "Soda Stereo" / "De Música Ligera" / "sheet.txt").is_file()
 
 
+def ug_sheet_kept_before_its_lyrics(tmp_path, song_id: int, markup: str) -> int:
+    """A UG sheet kept while the song's lyrics were pending: sheet.txt and sheet.json, unscored."""
+    from tabarr.library import keep_file
+    from tabarr.songs import refresh_status
+    from tabarr.versions import upsert_version
+
+    url = "https://tabs.ultimate-guitar.com/tab/soda-stereo/de-musica-ligera-chords-101"
+    conn = open_db(tmp_path)
+    try:
+        vid = upsert_version(conn, provider="ug", tab_id="101", song_id=song_id, slot="sheet",
+                             kind="chords", rating=4.5, votes=20, version=1, label=None, url=url,
+                             raw={"id": 101}, now="2026-10-01T00:00:00Z")
+        files = {"sheet.json": json.dumps({"content": markup, "url": url}), "sheet.txt": markup}
+        for name, text in files.items():
+            keep_file(conn, tmp_path / "lib", song=get_song(conn, song_id), version_id=vid, name=name,
+                      data=text.encode(), rank=1)
+        refresh_status(conn, song_id, ignored=False)
+    finally:
+        conn.close()
+    return vid
+
+
+def test_lacuerda_first_scores_a_sheet_kept_before_its_lyrics(tmp_path, sites):
+    # The kept UG sheet covers 1 of the 7 lyric lines, LaCuerda's 4: a partial sheet that
+    # covers more replaces the kept one, but only once the kept one is scored, as the run does.
+    from tabarr.versions import get_version
+
+    sites.lacuerda.pages.update(soda_pages())
+    (song_id,) = seed(tmp_path, ("Soda Stereo", "De Música Ligera"))
+    vid = ug_sheet_kept_before_its_lyrics(tmp_path, song_id, "Cruzo la plaza con el café frío\n")
+    more = ("las golondrinas vuelven en invierno\nmi abuela tejía bufandas de colores\n"
+            "un perro ladra lejos del molino\n")
+    lyrics = Lyrics(plain=SHEET_LYRICS + more, synced=None, instrumental=False, duration=None,
+                    lrclib_id=None)
+    conn = open_db(tmp_path)
+    try:
+        update_song(conn, song_id, lyrics_status="found", lyrics_json=lyrics.to_json())
+    finally:
+        conn.close()
+
+    result = run(tmp_path, "lacuerda")
+
+    assert result.exit_code == 0, result.output
+    assert "LaCuerda: 1 tried, 1 sheet kept, 0 missing, 0 errors" in result.stdout
+    conn = open_db(tmp_path)
+    try:
+        assert round(get_version(conn, vid).coverage, 3) == round(1 / 7, 3)
+    finally:
+        conn.close()
+    sheet = tmp_path / "lib" / "Soda Stereo" / "De Música Ligera" / "sheet.txt"
+    assert "Baila la lluvia" in sheet.read_text(encoding="utf-8")  # LaCuerda's
+
+
 def test_lacuerda_follows_overrides(tmp_path, sites):
     # Ignored in overrides.toml, though no match has run since.
     sites.lacuerda.pages.update(soda_pages())

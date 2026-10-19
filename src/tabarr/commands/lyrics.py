@@ -80,10 +80,14 @@ def _lyrics(cfg: Config) -> None:
 def _lacuerda(cfg: Config) -> None:
     """Try LaCuerda for the Spanish songs that need a sheet, then print the counts."""
     from tabarr.lacuerda_fetch import lacuerda_sheets
+    from tabarr.ug.fetch import rescore_kept_sheets
 
     overrides = load_ovr(cfg)
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime):
+        # As the run does before its fetch: a sheet kept before its lyrics is scored first (no
+        # request), or no partial LaCuerda sheet could replace it, and a complete one is left be.
+        rescore_kept_sheets(conn, cfg.library_dir, cfg.rank)
         return lacuerda_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides)
 
     s = _provider_pass(cfg, "lacuerda", run)
