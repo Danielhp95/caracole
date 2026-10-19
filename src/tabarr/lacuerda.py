@@ -154,14 +154,12 @@ _SOFT_404_MAX_BYTES = 1024
 def is_missing_artist_page(html: str) -> bool:
     """Whether an artist page that came back with HTTP 200 says "no such artist".
 
-    That is LaCuerda's "aqui llega:…" body, or any page under about 1 KB without
-    the song list (``ul#b_main``). A bigger page without the list is not a miss:
-    :func:`parse_artist_page` reports it as a parse error.
+    Only LaCuerda's short "aqui llega:…" body does. Any other page without the
+    song list, however small (a PHP or database error page, say), is not a
+    miss: :func:`parse_artist_page` reports it as a parse error.
     """
-    if _SOFT_404.match(html):
-        return True
     small = len(html.encode("utf-8")) < _SOFT_404_MAX_BYTES
-    return small and LexborHTMLParser(html).css_first("ul#b_main") is None
+    return small and _SOFT_404.match(html) is not None
 
 
 def parse_lcd(lcd: str) -> tuple[str, tuple[int, ...]]:

@@ -1,9 +1,23 @@
+import json
 import sqlite3
+from datetime import UTC, datetime
 
 import pytest
 
 from tabarr import db
-from tabarr.songs import get_song, find_song, list_songs, refresh_status, update_song, upsert_song
+from tabarr.library import keep_file, kept_files
+from tabarr.normalize import KEY_VERSION
+from tabarr.songs import (
+    KEY_VERSION_KV,
+    ensure_current_keys,
+    find_song,
+    get_song,
+    list_songs,
+    refresh_status,
+    update_song,
+    upsert_song,
+)
+from tabarr.versions import get_version, set_picks, song_versions, upsert_version
 
 from conftest import add_song
 
@@ -127,3 +141,168 @@ def test_refresh_status_found_requires_kept_sheet(conn):
     assert refresh_status(conn, s.id, ignored=False) == "found"
     assert get_song(conn, s.id).status == "found"
     assert refresh_status(conn, s.id, ignored=True) == "ignored"
+
+
+# --- one record per song, whatever the normalizer ------------------------------------------
+
+SPOTIFY = {"album": None, "duration_ms": None, "isrc": None, "source": "spotify",
+           "added_at": "2026-10-01T00:00:00Z"}
+
+
+def test_a_retitled_track_is_still_its_song(conn):
+    # Spotify retitles a track: its id still names the song it was, under the key it had.
+    first, _ = upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana",
+                           source_id="3Zr1nVDLLMxKdDKfbmyhqa", **SPOTIFY)
+    again = upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana (Ensayo)",
+                        source_id="3Zr1nVDLLMxKdDKfbmyhqa", **SPOTIFY)
+    assert again == (first, False)
+    (song,) = list_songs(conn)
+    assert (song.key, song.source_ids) == (
+        "soda-stereo/persiana-americana", {"spotify": ["3Zr1nVDLLMxKdDKfbmyhqa"]})
+
+
+def older_song(conn, artist, title, key, *, source, source_id, added_at="2026-09-01T00:00:00Z"):
+    """A song as an older tabarr stored it: keyed by that day's normalizer, with no key version."""
+    cur = conn.execute(
+        "INSERT INTO songs (key, artist, title, artists, source_ids, added_at, created_at, "
+        "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (key, artist, title, json.dumps([artist]), json.dumps({source: [source_id]}), added_at,
+         added_at, added_at),
+    )
+    db.kv_delete(conn, KEY_VERSION_KV)
+    return cur.lastrowid
+
+
+OLD_LIVE_KEY = "soda-stereo/persiana-americana-en-vivo"  # before " - En Vivo" was a version suffix
+NIGHT = datetime(2026, 10, 19, 3, 30, tzinfo=UTC)
+
+
+def wanted_file(tmp_path):
+    path = tmp_path / "wanted.txt"
+    path.write_text("Soda Stereo - Persiana Americana - En Vivo\n", encoding="utf-8")
+    return path
+
+
+def test_a_wanted_song_keyed_by_an_older_normalizer_is_re_keyed_not_split(conn, tmp_path):
+    # Its source id is its key, so a new normalizer gives the same line a new source id too.
+    from tabarr.wanted import sync_wanted
+
+    song_id = older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
+                         source="wanted", source_id=OLD_LIVE_KEY)
+    sync_wanted(conn, wanted_file(tmp_path), NIGHT)
+    (song,) = list_songs(conn)
+    assert (song.id, song.key) == (song_id, "soda-stereo/persiana-americana")
+    assert song.source_ids == {"wanted": ["soda-stereo/persiana-americana"]}
+    assert db.kv_get(conn, KEY_VERSION_KV) == str(KEY_VERSION)
+
+
+def test_re_keying_carries_a_wanted_lines_first_seen_time(conn, tmp_path):
+    # Re-keyed before the sync reads it (on opening the database), the line keeps its place.
+    from tabarr.wanted import FIRST_SEEN_KEY, sync_wanted
+
+    older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
+               source="wanted", source_id=OLD_LIVE_KEY)
+    db.kv_set(conn, FIRST_SEEN_KEY + OLD_LIVE_KEY, "2026-09-01T00:00:00Z")
+    assert ensure_current_keys(conn) == 1
+    new_key = "soda-stereo/persiana-americana"
+    assert db.kv_get(conn, FIRST_SEEN_KEY + new_key) == "2026-09-01T00:00:00Z"
+    assert db.kv_get(conn, FIRST_SEEN_KEY + OLD_LIVE_KEY) is None
+    sync_wanted(conn, wanted_file(tmp_path), NIGHT)
+    (song,) = list_songs(conn)
+    assert song.added_at == "2026-09-01T00:00:00Z"
+
+
+def test_a_spotify_song_keyed_by_an_older_normalizer_is_re_keyed_not_split(conn):
+    song_id = older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
+                         source="spotify", source_id="sp1")
+    again = upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana - En Vivo",
+                        source_id="sp1", **SPOTIFY)
+    assert again == (song_id, False)
+    assert [s.key for s in list_songs(conn)] == ["soda-stereo/persiana-americana"]
+
+
+def test_todays_overrides_meet_a_song_an_older_normalizer_keyed(conn):
+    from tabarr.overrides import override_key
+
+    song_id = older_song(conn, "Los Enanitos Verdes", "Lamento Boliviano",
+                         "los-enanitos-verdes/lamento-boliviano", source="spotify", source_id="sp9")
+    song = find_song(conn, override_key("Enanitos Verdes - Lamento Boliviano"))
+    assert song is not None and song.id == song_id
+
+
+def keep(conn, lib, song_id, tab_id, kind, name, data, *, pick):
+    slot = "sheet" if kind == "chords" else "guitar"
+    vid = upsert_version(conn, provider="ug", tab_id=tab_id, song_id=song_id, slot=slot, kind=kind,
+                         rating=4.5, votes=10, version=1, label=None, url=f"https://u/{tab_id}",
+                         raw={}, now="2026-09-02T00:00:00Z")
+    keep_file(conn, lib, song=get_song(conn, song_id), version_id=vid, name=name, data=data, rank=1)
+    if pick:
+        set_picks(conn, song_id, (kind,), [vid])
+    return vid
+
+
+def test_songs_an_older_normalizer_kept_apart_are_merged(conn, tmp_path):
+    # Spotify's "Los Enanitos Verdes" and wanted.txt's "Enanitos Verdes": two songs until now.
+    lib = tmp_path / "lib"
+    older = older_song(conn, "Los Enanitos Verdes", "Lamento Boliviano",
+                       "los-enanitos-verdes/lamento-boliviano", source="spotify", source_id="sp9")
+    key = "enanitos-verdes/lamento-boliviano"
+    newer = older_song(conn, "Enanitos Verdes", "Lamento Boliviano", key, source="wanted",
+                       source_id=key, added_at="2026-09-05T00:00:00Z")
+    update_song(conn, newer, album="Igual Que Ayer", duration_ms=223000)
+    # Both were fetched to the same sheet; the newer one also has a Guitar Pro file you filed.
+    sheet = keep(conn, lib, older, "101", "chords", "sheet.txt", b"older's sheet", pick=True)
+    keep(conn, lib, newer, "101", "chords", "sheet.txt", b"newer's sheet", pick=True)
+    keep(conn, lib, newer, "301", "guitar-pro", "guitar-1.gp5", b"gp5", pick=True)
+    update_song(conn, older, ug_dirty=False)
+    refresh_status(conn, older, ignored=False)
+
+    assert ensure_current_keys(conn) == 2
+
+    (song,) = list_songs(conn)
+    # The older record stays, with the first source's display artist.
+    assert (song.id, song.key, song.artist) == (older, key, "Los Enanitos Verdes")
+    assert song.source_ids == {"spotify": ["sp9"], "wanted": [key]}
+    assert (song.added_at, song.album, song.duration_ms) == (
+        "2026-09-05T00:00:00Z", "Igual Que Ayer", 223000)
+    assert song.ug_dirty and song.status == "found"  # the next fetch weighs what it gained
+    kept = {f.name: f for f in kept_files(conn, older)}
+    assert set(kept) == {"sheet.txt", "guitar-1.gp5"} and kept["sheet.txt"].version_id == sheet
+    gp = get_version(conn, kept["guitar-1.gp5"].version_id)
+    assert (gp.tab_id, gp.song_id, gp.pick_rank) == ("301", older, None)  # its picks stand
+    assert sorted(v.tab_id for v in song_versions(conn, older)) == ["101", "301"]
+    assert all((lib / f.path).is_file() for f in kept.values())
+
+
+def test_a_merged_songs_own_state_goes_with_it(conn):
+    # SQLite hands the next new song the id of the newest row once that row is gone.
+    older_song(conn, "Los Enanitos Verdes", "Lamento Boliviano",
+               "los-enanitos-verdes/lamento-boliviano", source="spotify", source_id="sp9")
+    newer = older_song(conn, "Enanitos Verdes", "Lamento Boliviano",
+                       "enanitos-verdes/lamento-boliviano", source="wanted", source_id="x")
+    own = [f"render:{newer}", f"ug:artist_page_checked:{newer}", f"autochords:failed:{newer}"]
+    for key in own:
+        db.kv_set(conn, key, '"2026-10-18T03:30:00Z"')
+    ensure_current_keys(conn)
+    fresh = add_song(conn, "Soda Stereo", "Signos")
+    assert fresh.id == newer
+    assert [db.kv_get(conn, key) for key in own] == [None, None, None]
+
+
+def test_keys_that_change_hands_are_re_keyed_without_a_clash(conn):
+    # One song's new key is another's old one: keys are unique, so neither may wait for the other.
+    moving = older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
+                        source="spotify", source_id="sp1")
+    holder = older_song(conn, "Soda Stereo", "Signos", "soda-stereo/persiana-americana",
+                        source="spotify", source_id="sp2")
+    ensure_current_keys(conn)
+    assert get_song(conn, moving).key == "soda-stereo/persiana-americana"
+    assert get_song(conn, holder).key == "soda-stereo/signos"
+
+
+def test_keys_are_re_keyed_once_per_normalizer_version(conn):
+    add_song(conn, "Soda Stereo", "Signos")
+    assert db.kv_get(conn, KEY_VERSION_KV) == str(KEY_VERSION)
+    conn.execute("UPDATE songs SET key = 'stale/key'")  # keys of this version aren't read again
+    assert ensure_current_keys(conn) == 0
+    assert [s.key for s in list_songs(conn)] == ["stale/key"]

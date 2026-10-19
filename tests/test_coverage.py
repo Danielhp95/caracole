@@ -84,6 +84,25 @@ def test_cjk_coverage():
     assert round(coverage(sheet, lines), 2) == 0.67
 
 
+def test_a_sheet_with_one_stray_word_covers_nothing():
+    # partial_ratio aligns the shorter string inside the longer one: a lone "I" sits in every
+    # line of LYRICS, which must not make chords plus one word a complete sheet.
+    sheet = "[Intro]\n[ch]G[/ch] [ch]D[/ch] [ch]Em[/ch] [ch]C[/ch]\nI\n[ch]G[/ch] [ch]D[/ch]\n"
+    assert coverage(sheet, lyric_lines(LYRICS)) == 0.0
+
+
+def test_a_chinese_sheet_with_one_stray_character_covers_nothing():
+    lines = lyric_lines("斑馬斑馬你不要睡著啦\n再給我看看你受傷的尾巴\n我不想去觸碰你傷口的疤")
+    sheet = "[ch]C[/ch]      [ch]G[/ch]\n我\n[ch]Am[/ch]     [ch]F[/ch]\n"
+    assert coverage(sheet, lines) == 0.0
+
+
+def test_a_sheet_shorter_than_a_line_still_covers_a_line_it_nearly_holds():
+    # Whole strings are compared then: the one line it has, shy of its last word, counts.
+    sheet = "[ch]G[/ch]          [ch]D[/ch]\nWalking down the empty road\n"
+    assert coverage(sheet, lyric_lines(LYRICS)) == 0.25
+
+
 def test_no_lines_is_none():
     assert coverage(FULL_SHEET, []) is None
     assert coverage(FULL_SHEET, lyric_lines("")) is None

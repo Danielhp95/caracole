@@ -2,8 +2,10 @@
 
 A sheet is "complete" when it covers at least 80% of the song's distinct lyric
 lines; a line counts as covered when rapidfuzz ``partial_ratio`` against the
-sheet's lyric text is 85 or more (plan §3). This sinks sheets that chart only
-the first verse, or no lyrics at all, below any complete one.
+sheet's lyric text is 85 or more (plan §3), or, for a sheet whose lyric text
+is shorter than the line, when their whole-string ``ratio`` is. This sinks
+sheets that chart only the first verse, or no lyrics at all, below any
+complete one.
 """
 
 from __future__ import annotations
@@ -92,5 +94,16 @@ def coverage(sheet: str, lines: Sequence[str], *, line_match: int = 85) -> float
     text = _comparable(sheet_lyric_text(sheet))
     if not text:
         return 0.0
-    covered = sum(1 for line in lines if fuzz.partial_ratio(_comparable(line), text) >= line_match)
+    covered = sum(1 for line in lines if _match(_comparable(line), text) >= line_match)
     return covered / len(lines)
+
+
+def _match(line: str, text: str) -> float:
+    """How well the sheet's lyric text holds a lyric line, 0–100.
+
+    ``partial_ratio`` finds the line inside the text. A text shorter than the
+    line can't hold it, and ``partial_ratio`` would align the other way round
+    (a sheet whose only word is "I" sits inside most lines), so the two are
+    then compared whole.
+    """
+    return fuzz.partial_ratio(line, text) if len(text) >= len(line) else fuzz.ratio(line, text)

@@ -19,7 +19,9 @@ in the last 30 days (``songs.lacuerda_checked_at``). Per song:
    complete sheet also replaces the auto-chords sheet.
 
 Errors are never misses: a page that doesn't parse, or any other provider
-error, leaves the song to be tried again next run.
+error, leaves the song to be tried again next run. A cached page that doesn't
+parse (a maintenance notice served with HTTP 200, say) is fetched once more
+before it counts as an error, so one bad night isn't replayed from the cache.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -43,6 +46,7 @@ from tabarr.http import (
 )
 from tabarr.lacuerda import (
     PROVIDER,
+    LaCuerdaParseError,
     LCSong,
     artist_slug_candidates,
     artist_url,
@@ -111,9 +115,10 @@ def lacuerda_sheets(
     """
     stats = LaCuerdaStats()
     stamp = _stamp(now)
+    fetched: set[str] = set()  # URLs fetched from LaCuerda in this pass
     for song in _songs_to_try(conn, rank, now, overrides):
         try:
-            sheet = _find_sheet(client, song.artists[0], song.title, now)
+            sheet = _find_sheet(client, song.artists[0], song.title, now, fetched)
         except ProviderBlocked:
             raise
         except BudgetExhausted:
@@ -199,9 +204,11 @@ class _Sheet:
         return f"{self.artist}/{self.song.slug}-{self.version}"
 
 
-def _find_sheet(client: Client, artist: str, title: str, now: datetime) -> _Sheet | None:
+def _find_sheet(
+    client: Client, artist: str, title: str, now: datetime, fetched: set[str]
+) -> _Sheet | None:
     """The best "acordes" version LaCuerda has of a song, or None when it has none."""
-    found = _artist_songs(client, artist, now)
+    found = _artist_songs(client, artist, now, fetched)
     if found is None:
         return None
     slug, songs = found
@@ -210,13 +217,13 @@ def _find_sheet(client: Client, artist: str, title: str, now: datetime) -> _Shee
     if lc_song is None or n is None:
         return None
     url = version_url(slug, lc_song.slug, n)
-    resp = client.get(url, accept=_ACCEPT)
-    if resp.status == 404:
-        return None  # listed by a cached artist page, since removed
-    return _Sheet(slug, lc_song, n, url, parse_version_page(resp.text, url=url))
+    markup = _read(client, client.get(url, accept=_ACCEPT), url, _version_sheet, fetched)
+    return _Sheet(slug, lc_song, n, url, markup) if markup is not None else None
 
 
-def _artist_songs(client: Client, artist: str, now: datetime) -> tuple[str, list[LCSong]] | None:
+def _artist_songs(
+    client: Client, artist: str, now: datetime, fetched: set[str]
+) -> tuple[str, list[LCSong]] | None:
     """The first artist page LaCuerda has among the artist's slugs, with its songs.
 
     A 404, or LaCuerda's HTTP 200 "aqui llega:" body, means no artist by that
@@ -229,10 +236,44 @@ def _artist_songs(client: Client, artist: str, now: datetime) -> tuple[str, list
             # PoliteClient serves a copy past max_age only once the budget is spent.
             # It is no answer for today: stop as the next request would have.
             raise BudgetExhausted(PROVIDER)
-        if resp.status == 404 or is_missing_artist_page(resp.text):
-            continue
-        return slug, parse_artist_page(resp.text, url=url)
+        songs = _read(client, resp, url, _artist_page_songs, fetched)
+        if songs is not None:
+            return slug, songs
     return None
+
+
+def _read[T](
+    client: Client, resp: Response, url: str, read: Callable[[Response, str], T],
+    fetched: set[str],
+) -> T:
+    """``read(resp, url)``; a cached page it can't read is fetched once more and read again.
+
+    A 200 is cached (version pages forever, artist pages for 30 days), so a
+    maintenance notice or a half-rendered page would otherwise fail the song,
+    from the cache, on every run. A fresh copy that fails too is an error, and
+    a page already fetched in this pass (``fetched``) isn't fetched again.
+    """
+    if not resp.from_cache:
+        fetched.add(url)
+    try:
+        return read(resp, url)
+    except LaCuerdaParseError:
+        if not resp.from_cache or url in fetched:
+            raise
+    fetched.add(url)
+    return read(client.get(url, accept=_ACCEPT, cache=False), url)
+
+
+def _artist_page_songs(resp: Response, url: str) -> list[LCSong] | None:
+    """The songs on an artist page; None when LaCuerda has no artist by that slug."""
+    if resp.status == 404 or is_missing_artist_page(resp.text):
+        return None
+    return parse_artist_page(resp.text, url=url)
+
+
+def _version_sheet(resp: Response, url: str) -> str | None:
+    """The sheet on a version page; None when the page is gone (listed by a cached artist page)."""
+    return None if resp.status == 404 else parse_version_page(resp.text, url=url)
 
 
 def _stale(resp: Response, now: datetime) -> bool:

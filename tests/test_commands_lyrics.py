@@ -228,12 +228,13 @@ def test_lyrics_spent_budget_is_no_failure(tmp_path, sites):
 
 
 def test_lyrics_block_starts_a_cooldown_and_sends_one_alert(tmp_path, sites):
+    # A block is expected behaviour, as for `tabarr fetch` and `tabarr index`: exit 0.
     sites.lrclib.status = 429
     (song_id,) = seed(tmp_path, ("Soda Stereo", "De Música Ligera"))
     result = run(tmp_path, "lyrics", ntfy=True)
-    assert result.exit_code == 1
-    assert "LRCLIB blocked tabarr" in result.stderr
-    assert "Nothing was marked missing" in result.stderr
+    assert result.exit_code == 0, result.output
+    assert "LRCLIB blocked tabarr" in result.stdout
+    assert "Nothing was marked missing" in result.stdout
     assert song(tmp_path, song_id).lyrics_status == "pending"
     conn = open_db(tmp_path)
     try:
@@ -254,8 +255,8 @@ def test_lyrics_asks_nothing_while_lrclib_cools_down(tmp_path, sites):
     finally:
         conn.close()
     result = run(tmp_path, "lyrics")
-    assert result.exit_code == 1
-    assert "LRCLIB is cooling down" in result.stderr
+    assert result.exit_code == 0, result.output
+    assert "LRCLIB is cooling down" in result.stdout
     assert sites.lrclib.requests == []
 
 
@@ -359,15 +360,32 @@ def test_lacuerda_errors_are_counted_and_tried_again(tmp_path, sites):
 def test_lacuerda_block_starts_a_cooldown(tmp_path, sites):
     sites.lacuerda.status = 403
     song_id = spanish_song(tmp_path)
-    result = run(tmp_path, "lacuerda")
-    assert result.exit_code == 1
-    assert "LaCuerda blocked tabarr" in result.stderr
+    result = run(tmp_path, "lacuerda", ntfy=True)
+    assert result.exit_code == 0, result.output
+    assert "LaCuerda blocked tabarr" in result.stdout
+    assert "Nothing was marked missing" in result.stdout
     assert song(tmp_path, song_id).lacuerda_checked_at is None
     conn = open_db(tmp_path)
     try:
         assert is_cooling(conn, "lacuerda", datetime.now(UTC))
     finally:
         conn.close()
+    (alert,) = sites.ntfy.posts
+    assert alert.headers["Title"] == "tabarr: lacuerda blocked"
+
+
+def test_lacuerda_asks_nothing_while_lacuerda_cools_down(tmp_path, sites):
+    song_id = spanish_song(tmp_path)
+    conn = open_db(tmp_path)
+    try:
+        record_block(conn, "lacuerda", datetime.now(UTC), "lacuerda: 403: HTTP 403")
+    finally:
+        conn.close()
+    result = run(tmp_path, "lacuerda")
+    assert result.exit_code == 0, result.output
+    assert "LaCuerda is cooling down" in result.stdout
+    assert sites.lacuerda.requests == []
+    assert song(tmp_path, song_id).lacuerda_checked_at is None
 
 
 def test_lacuerda_spent_budget_is_no_failure(tmp_path, sites):

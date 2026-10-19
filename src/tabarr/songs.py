@@ -2,7 +2,13 @@
 
 A song's identity is ``normalize.identity_key(primary artist, title)``, so the
 same song liked on Spotify and listed in ``wanted.txt`` (or a remaster next to
-the original) becomes one record that remembers every source id.
+the original) becomes one record that remembers every source id. A source id
+it already has finds it first, so a track Spotify retitles stays one song.
+
+The stored keys follow the normalizer: when its rules change
+(``normalize.KEY_VERSION``), every key is recomputed once, before the songs are
+next read or added, and songs that now share a key become one
+(:func:`ensure_current_keys`).
 """
 
 from __future__ import annotations
@@ -13,11 +19,16 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Iterable, Sequence
 
-from tabarr.normalize import display_key, identity_key, title_variant
+from tabarr.db import kv_delete, kv_get, kv_set
+from tabarr.normalize import KEY_VERSION, display_key, identity_key, title_variant
 
 _JSON_COLUMNS = {"artists", "source_ids", "match_candidates", "lyrics_json"}
 _BOOL_COLUMNS = {"review", "ug_dirty"}
 SHEET_FILE_NAMES = ("sheet.txt", "sheet (auto).txt")
+KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored keys were made with
+# What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py).
+# It goes with a song merged into another: SQLite may give that id to the next new song.
+_PER_SONG_KV = ("render:", "ug:artist_page_checked:", "autochords:failed:")
 
 
 def utc_now_iso() -> str:
@@ -94,12 +105,14 @@ def get_song(conn: sqlite3.Connection, song_id: int) -> Song:
 
 
 def find_song(conn: sqlite3.Connection, key: str) -> Song | None:
+    ensure_current_keys(conn)
     row = conn.execute("SELECT * FROM songs WHERE key = ?", (key,)).fetchone()
     return _from_row(row) if row else None
 
 
 def list_songs(conn: sqlite3.Connection, *, statuses: Iterable[str] | None = None) -> list[Song]:
     """Songs, newest ``added_at`` first (so a song you just added is handled first)."""
+    ensure_current_keys(conn)
     if statuses is None:
         rows = conn.execute("SELECT * FROM songs ORDER BY added_at DESC, id DESC").fetchall()
     else:
@@ -125,8 +138,10 @@ def upsert_song(
 ) -> tuple[int, bool]:
     """Insert a song or merge it into the existing record; return ``(song_id, created)``.
 
-    Merging keeps the newest ``added_at``, fills fields that were empty, and adds
-    the source id. The display artist and title of the first source are kept.
+    The existing record is the one that has this source id already, else the
+    one with the song's identity key. Merging keeps the newest ``added_at``,
+    fills fields that were empty, and adds the source id. The display artist
+    and title of the first source are kept, and so is its key.
     """
     names = [a.strip() for a in artists if a and a.strip()]
     if not names:
@@ -134,7 +149,10 @@ def upsert_song(
     title = title.strip()
     key = identity_key(names[0], title)
     now = utc_now_iso()
-    row = conn.execute("SELECT * FROM songs WHERE key = ?", (key,)).fetchone()
+    ensure_current_keys(conn)
+    row = _with_source_id(conn, source, source_id)
+    if row is None:
+        row = conn.execute("SELECT * FROM songs WHERE key = ?", (key,)).fetchone()
     if row is None:
         cur = conn.execute(
             "INSERT INTO songs (key, artist, title, artists, album, duration_ms, isrc, source_ids, "
@@ -163,6 +181,15 @@ def upsert_song(
         ),
     )
     return existing.id, False
+
+
+def _with_source_id(conn: sqlite3.Connection, source: str, source_id: str) -> sqlite3.Row | None:
+    """The song that has ``source_id`` among its ids from ``source``, if any."""
+    return conn.execute(
+        "SELECT songs.* FROM songs, json_each(songs.source_ids, ?) AS sid WHERE sid.value = ? "
+        "ORDER BY songs.id LIMIT 1",
+        (f'$."{source}"', source_id),
+    ).fetchone()
 
 
 def update_song(conn: sqlite3.Connection, song_id: int, **fields: Any) -> None:
@@ -203,3 +230,115 @@ def refresh_status(conn: sqlite3.Connection, song_id: int, *, ignored: bool) -> 
         status = "found" if has_sheet else "wanted"
     update_song(conn, song_id, status=status)
     return status
+
+
+# --- keys after a normalizer change ------------------------------------------------------
+
+
+def ensure_current_keys(conn: sqlite3.Connection) -> int:
+    """Re-key the songs if the normalizer changed since their keys were made; return how many did.
+
+    One kv read when nothing changed, so the readers and ``upsert_song`` call it:
+    whatever command runs first after an upgrade sees today's keys, as overrides
+    (keyed by today's ``identity_key``) and new sources expect. Like a schema
+    migration, it writes whichever command triggers it, a dry run included.
+    """
+    if kv_get(conn, KEY_VERSION_KV) == str(KEY_VERSION):
+        return 0
+    return rekey_songs(conn)
+
+
+def rekey_songs(conn: sqlite3.Connection) -> int:
+    """Give every song the key today's normalizer gives it; merge songs that now share one.
+
+    Of the songs that share a key, the oldest record stays, with its display
+    artist and title, as if the others had arrived as more sources of it
+    (``_merge``). A wanted.txt source id is its line's key, so it follows the
+    key, and so does the line's first-seen time. All in one savepoint; returns
+    how many songs were re-keyed or merged into another.
+    """
+    conn.execute("SAVEPOINT rekey_songs")
+    try:
+        changed = _rekey(conn)
+        kv_set(conn, KEY_VERSION_KV, str(KEY_VERSION))
+    except BaseException:
+        conn.execute("ROLLBACK TO rekey_songs")
+        conn.execute("RELEASE rekey_songs")
+        raise
+    conn.execute("RELEASE rekey_songs")
+    return changed
+
+
+def _rekey(conn: sqlite3.Connection) -> int:
+    groups: dict[str, list[Song]] = {}
+    for row in conn.execute("SELECT * FROM songs ORDER BY id").fetchall():
+        song = _from_row(row)
+        groups.setdefault(identity_key(song.artist, song.title), []).append(song)
+    moves = {key: songs for key, songs in groups.items() if len(songs) > 1 or songs[0].key != key}
+    # Keys are unique, and one song's new key can be another's old one: park them all first.
+    for key, (keep, *others) in moves.items():
+        for other in others:
+            _merge(conn, keep, other)
+        conn.execute("UPDATE songs SET key = ? WHERE id = ?", (f"#rekey:{keep.id}", keep.id))
+    for key, (keep, *others) in moves.items():
+        conn.execute("UPDATE songs SET key = ? WHERE id = ?", (key, keep.id))
+        _follow_wanted(conn, keep.id, {s.key for s in (keep, *others)} - {key}, key)
+    return sum(len(others) + (keep.key != key) for key, (keep, *others) in moves.items())
+
+
+def _merge(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
+    """Fold ``other`` into ``keep`` and delete it.
+
+    ``keep`` gains its source ids, the newer ``added_at`` and the fields it
+    lacked, as ``upsert_song`` merges a source. Versions ``keep`` hasn't seen
+    move over unpicked, so ``keep``'s picks stand; kept files under names
+    ``keep`` hasn't used move with them and stay where they are on disk. The
+    rest goes with ``other``. The fetch step then picks again from all of it.
+    """
+    for source, ids in other.source_ids.items():
+        bucket = keep.source_ids.setdefault(source, [])
+        bucket.extend(i for i in ids if i not in bucket)
+    conn.execute(
+        "UPDATE songs SET source_ids = ?, added_at = MAX(added_at, ?), album = COALESCE(album, ?), "
+        "duration_ms = COALESCE(duration_ms, ?), isrc = COALESCE(isrc, ?), "
+        "variant = COALESCE(variant, ?), ug_dirty = 1, updated_at = ? WHERE id = ?",
+        (
+            json.dumps(keep.source_ids, ensure_ascii=False), other.added_at, other.album,
+            other.duration_ms, other.isrc, other.variant, utc_now_iso(), keep.id,
+        ),
+    )
+    conn.execute(
+        "UPDATE versions SET song_id = ?, pick_rank = NULL WHERE song_id = ? AND NOT EXISTS ("
+        "SELECT 1 FROM versions AS mine WHERE mine.song_id = ? "
+        "AND mine.provider = versions.provider AND mine.tab_id = versions.tab_id)",
+        (keep.id, other.id, keep.id),
+    )
+    conn.execute(
+        "UPDATE files SET song_id = ?, version_id = ("
+        "SELECT mine.id FROM versions AS mine, versions AS theirs "
+        "WHERE theirs.id = files.version_id AND mine.song_id = ? "
+        "AND mine.provider = theirs.provider AND mine.tab_id = theirs.tab_id) "
+        "WHERE song_id = ? AND name NOT IN (SELECT name FROM files WHERE song_id = ?)",
+        (keep.id, keep.id, other.id, keep.id),
+    )
+    conn.execute("DELETE FROM songs WHERE id = ?", (other.id,))
+    for prefix in _PER_SONG_KV:
+        kv_delete(conn, f"{prefix}{other.id}")
+    refresh_status(conn, keep.id, ignored=keep.status == "ignored")
+
+
+def _follow_wanted(conn: sqlite3.Connection, song_id: int, old_keys: set[str], key: str) -> None:
+    """A wanted.txt line's source id is its key, and so is the kv key of its first-seen time
+    (``wanted.sync_wanted``): both move from the song's old keys to its new one."""
+    from tabarr.wanted import FIRST_SEEN_KEY, SOURCE  # a source of songs: imported on use
+
+    ids = get_song(conn, song_id).source_ids
+    if ids.get(SOURCE):
+        ids[SOURCE] = list(dict.fromkeys(key if i in old_keys else i for i in ids[SOURCE]))
+        update_song(conn, song_id, source_ids=ids)
+    for old in old_keys:
+        seen = kv_get(conn, FIRST_SEEN_KEY + old)
+        if seen is not None:
+            current = kv_get(conn, FIRST_SEEN_KEY + key)
+            kv_set(conn, FIRST_SEEN_KEY + key, min(seen, current) if current else seen)
+            kv_delete(conn, FIRST_SEEN_KEY + old)
