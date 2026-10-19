@@ -1,55 +1,52 @@
 # tabarr
 
-Turns the songs you want to learn into a private library of sing-along chord
-sheets, lyrics and guitar parts.
+tabarr builds a folder of chord sheets for the songs you want to learn on
+guitar. You give it a list of songs. Every night it finds a chord sheet with
+the lyrics, saves the lyrics, and makes a PDF.
 
-You list the songs in `wanted.txt`, or in a Spotify playlist if you like.
-Each night tabarr matches them against a local index of Ultimate Guitar's
-sitemaps and keeps each song's best chord sheet, preferring one with all the
-lyrics, from Ultimate Guitar or, for Spanish songs, LaCuerda. It saves the
-lyrics from LRCLIB, picks the best guitar parts, and renders a PDF in your
-key. A to-do page lists the few things only you can do, such as a match to
-confirm or a Guitar Pro file to download. For a song nobody has charted, buy
-the track and a local model writes the chords.
+    ~/Tabs/
+    ├── wanted.txt              your songs, one "Artist - Title" per line
+    ├── _todo.md                what tabarr needs you to do
+    ├── index.html              browse and search everything
+    └── Oasis/Wonderwall/
+        ├── sheet.pdf           chords over lyrics
+        ├── lyrics.txt
+        └── tab.txt             a guitar tab, when there is one
 
-It is polite by design: it never uses Ultimate Guitar's search or any other
-page its robots.txt closes to bots, keeps to a small nightly budget of
-requests, one at a time, never downloads Guitar Pro files itself, and backs
-off when a site pushes back.
+Sheets come from Ultimate Guitar and, for Spanish songs, LaCuerda. Lyrics come
+from LRCLIB. A Spotify playlist works as a song list too, but you don't need
+one. For a song nobody has charted, you can buy the track and let tabarr work
+out the chords from the audio.
 
-## Quick start
+## Install
 
-    nix shell .                   # tabarr on PATH; or nix build, then ./result/bin/tabarr
-    tabarr add 宋冬野 斑马斑马 --album 安和桥北 --duration 4:13
-    tabarr index build            # once: about 10 minutes, 10-20 s between requests
-    tabarr match --dry-run        # how each song matches, saving nothing
-    tabarr run                    # what the nightly timer runs
+See [docs/install.md](docs/install.md) for NixOS, Ubuntu and installing from
+source. [docs/deploy.md](docs/deploy.md) covers running it nightly on a NixOS
+server.
 
-Then open `~/Tabs/_todo.md`, and `~/Tabs/index.html` to browse the library.
-No configuration is needed to start; settings go in
-`~/.config/tabarr/tabarr.toml`.
+## Use
 
-## Documentation
+    tabarr add "Oasis" "Wonderwall"   # or add a line to ~/Tabs/wanted.txt
+    tabarr index build                # once, takes about 10 minutes
+    tabarr run                        # what the nightly timer runs
 
-- [docs/usage.md](docs/usage.md): configuration, sources, the first run,
-  every command, the to-do page, overrides.toml and the library folder, with a
-  worked example.
-- [docs/deploy.md](docs/deploy.md): running it nightly on a NixOS host, with
-  agenix secrets, Syncthing, restic and the offline auto-chords unit.
-- [plan.md](plan.md): the design, and why. The step 0 findings are in
-  [docs/spike-2026-10-18.md](docs/spike-2026-10-18.md).
+Then open `~/Tabs/_todo.md`. Settings go in `~/.config/tabarr/tabarr.toml`,
+and none are needed to start. Commands, settings and overrides are explained
+in [docs/usage.md](docs/usage.md).
+
+## Requests
+
+tabarr is gentle with the sites it reads. It makes about 60 requests a night
+to Ultimate Guitar, one at a time and 10 to 20 seconds apart. It follows
+robots.txt, never uses a site's search, never downloads Guitar Pro files for
+you, and stops for at least a day when a site pushes back.
 
 ## Development
 
     nix develop
     pytest
 
-    nix build                     # the package; its build runs the test suite
-    nix build .#autochords        # with torch, beat-this and librosa
-    nix flake check               # also evaluates the NixOS module's units
-
 ## License
 
-MIT, see [LICENSE](LICENSE). The license covers tabarr's code. The sheets,
-lyrics and tabs it downloads belong to their authors, so keep your library
-private.
+MIT. The sheets and lyrics tabarr downloads belong to their authors, so keep
+your library to yourself.
