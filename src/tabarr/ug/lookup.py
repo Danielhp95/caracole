@@ -64,3 +64,31 @@ def learned_artist_url(conn: sqlite3.Connection, artist_key: str) -> str | None:
 
 def remember_artist_url(conn: sqlite3.Connection, artist_key: str, url: str) -> None:
     kv_set(conn, _artist_url_key(artist_key), url)
+
+
+# --- helpers for ug.fetch (wave 2, w2-ug-fetch) -----------------------------------
+
+
+def _index_tab(row: sqlite3.Row) -> IndexTab:
+    return IndexTab(row["tab_id"], row["type"], row["song_key"], split_variant(row["song_key"])[1], row["path"])
+
+
+def index_tab(conn: sqlite3.Connection, tab_id: int) -> IndexTab | None:
+    """One tab of the index by id, or None when the sitemaps list it bare (or not at all)."""
+    row = conn.execute("SELECT tab_id, type, song_key, path FROM ug_index WHERE tab_id = ?", (tab_id,)).fetchone()
+    return _index_tab(row) if row else None
+
+
+def tab_url_for(conn: sqlite3.Connection, tab_id: int) -> str:
+    """A tab's page URL: its slugged path when the index has it, else the bare ``/tab/{id}``."""
+    tab = index_tab(conn, tab_id)
+    return tab.url if tab is not None else page_url(tab_id)
+
+
+def artist_tabs(conn: sqlite3.Connection, artist_key: str, limit: int = 5) -> list[IndexTab]:
+    """A few slugged tabs of an artist, oldest first, with the paths their pages live at."""
+    rows = conn.execute(
+        "SELECT tab_id, type, song_key, path FROM ug_index WHERE artist_key = ? ORDER BY tab_id LIMIT ?",
+        (artist_key, limit),
+    )
+    return [_index_tab(r) for r in rows]
