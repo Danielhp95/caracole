@@ -13,7 +13,8 @@ the pages look like (captured 18 October 2026; robots.txt is empty):
   ("Algun día" → ``algun_diasomeday``), so songs are matched by title.
 - **The artist page** ``/{artist}/`` lists each song as ``ul#b_main > li[lcd]``
   with a relative link to the song slug and the title, followed by
-  ``<em>acordes</em>``.
+  ``<em>acordes</em>``. An unknown artist gets HTTP 200 and a 54-byte body,
+  "aqui llega:../tabs/z/<slug>/index.html" (:func:`is_missing_artist_page`).
 - **The lcd code**, such as "RHRTTTDTB-314865972", has one type letter per
   version, version 1 first, then the version numbers in the order the song page
   shows them: grouped by type (R, then T, B, D, then H and K), best first within
@@ -29,7 +30,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 from rapidfuzz import fuzz
@@ -67,12 +68,14 @@ class LCSong:
     ``types`` has one letter per version, version 1 first ("RHRTTTDTB": version
     2 is a harmonica part). ``ranking`` lists the version numbers in LaCuerda's
     order, which groups them by type and puts the best first within a type.
+    ``lcd`` is the code both were read from, as the page wrote it.
     """
 
     slug: str
     title: str
     types: str
     ranking: tuple[int, ...]
+    lcd: str = field(default="", repr=False, compare=False)
 
 
 # --- slugs and URLs ----------------------------------------------------------
@@ -141,6 +144,25 @@ def version_url(artist: str, song: str, n: int) -> str:
 
 # --- the artist page ---------------------------------------------------------
 
+# LaCuerda answers an unknown artist with HTTP 200 and a 54-byte body,
+# "aqui llega:../tabs/z/<slug>/index.html" (checked live). Real artist pages,
+# even with one song, carry kilobytes of navigation around the list.
+_SOFT_404 = re.compile(r"\s*aqu[ií] llega:", re.IGNORECASE)
+_SOFT_404_MAX_BYTES = 1024
+
+
+def is_missing_artist_page(html: str) -> bool:
+    """Whether an artist page that came back with HTTP 200 says "no such artist".
+
+    That is LaCuerda's "aqui llega:…" body, or any page under about 1 KB without
+    the song list (``ul#b_main``). A bigger page without the list is not a miss:
+    :func:`parse_artist_page` reports it as a parse error.
+    """
+    if _SOFT_404.match(html):
+        return True
+    small = len(html.encode("utf-8")) < _SOFT_404_MAX_BYTES
+    return small and LexborHTMLParser(html).css_first("ul#b_main") is None
+
 
 def parse_lcd(lcd: str) -> tuple[str, tuple[int, ...]]:
     """Split an ``lcd`` code such as "RHRTTTDTB-314865972" into types and ranking.
@@ -187,8 +209,9 @@ def parse_artist_page(html: str, *, url: str | None = None) -> list[LCSong]:
         slug = _slug_from_href(link.attributes.get("href") or "") if link else ""
         if not slug:
             continue
-        types, ranking = parse_lcd(item.attributes.get("lcd") or "")
-        songs.append(LCSong(slug=slug, title=_link_title(link), types=types, ranking=ranking))
+        lcd = item.attributes.get("lcd") or ""
+        types, ranking = parse_lcd(lcd)
+        songs.append(LCSong(slug=slug, title=_link_title(link), types=types, ranking=ranking, lcd=lcd))
     if not songs and tree.css_first("ul#b_main > li") is not None:
         raise LaCuerdaParseError("no song in the list has an lcd code and a link", url=url)
     return songs
