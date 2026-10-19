@@ -27,7 +27,7 @@ from caracole.library import kept_files
 from caracole.lyrics import Lyrics
 from caracole.music import scan_music
 from caracole.normalize import slug_key
-from caracole.overrides import Overrides, OverridesError, load_overrides
+from caracole.overrides import Overrides, load_overrides
 from caracole.songs import get_song, update_song
 from caracole.ug.artist import artist_page_url
 from caracole.ug.fetch import FetchContext, fetch_songs, process_song
@@ -113,9 +113,6 @@ def toml(tmp_path, text):
 # --- addresses pasted into overrides.toml (an invalid file stops the nightly run) -------------------
 
 
-@pytest.mark.xfail(strict=True, raises=OverridesError,
-                   reason="W7-1: a tab page on UG's Spanish host es.ultimate-guitar.com, which "
-                          "UG's own page links as its Spanish edition, makes overrides.toml invalid")
 @pytest.mark.parametrize("table", ["artist_url", "pin"])
 def test_w7_1_a_tab_page_on_ugs_spanish_host_is_taken(tmp_path, table):
     # Read live on 2026-10-19: /tab/4180894 has store.i18n.links.es = "https://es.ultimate-guitar.com/tab/4180894".
@@ -127,9 +124,6 @@ def test_w7_1_a_tab_page_on_ugs_spanish_host_is_taken(tmp_path, table):
         assert list(o.pin.values()) == [(4180894,)] and list(o.pin_urls.values()) == [(FOUND,)]
 
 
-@pytest.mark.xfail(strict=True, raises=OverridesError,
-                   reason="W7-2: an artist page typed as the address bar shows it (no https://, "
-                          "no www.) makes overrides.toml invalid")
 @pytest.mark.parametrize("pasted", [
     "ultimate-guitar.com/artist/634073",
     "www.ultimate-guitar.com/artist/634073",
@@ -139,9 +133,6 @@ def test_w7_2_an_artist_page_as_the_address_bar_shows_it_is_taken(tmp_path, past
     assert toml(tmp_path, f'[artist_url]\n"宋冬野" = "{pasted}"\n').artist_url == {"宋冬野": ARTIST}
 
 
-@pytest.mark.xfail(strict=True, raises=OverridesError,
-                   reason="W7-3: an address whose host has capitals makes overrides.toml invalid "
-                          "(hosts are case-insensitive)")
 @pytest.mark.parametrize("pasted,stored", [
     ("https://www.Ultimate-Guitar.com/artist/634073", ARTIST),
     ("https://WWW.ULTIMATE-GUITAR.COM/artist/634073", ARTIST),

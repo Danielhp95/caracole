@@ -44,11 +44,13 @@ from tomlkit.exceptions import TOMLKitError
 from caracole.library import NotRegularFile, read_regular, write_atomic
 from caracole.normalize import compact, identity_key, name_forms, slug_key, ug_slug_key
 
-# A query or fragment is allowed (a link's ?ref=, the artist page's own ?filter=chords and ?page=2
-# links) and dropped: caracole asks for the bare page.
-_TAB_URL = re.compile(
-    r"^https?://tabs\.ultimate-guitar\.com/tab/(?:[^/?#]+/)?(?:[^/?#]*-)?(\d+)/?(?:[?#].*)?$"
-)
+# UG's hosts as an address bar shows them, in any case: www and tabs, the bare domain, and a language
+# edition's (UG's tab pages link to es.ultimate-guitar.com as their Spanish edition). Whichever host it
+# was pasted from, caracole asks for a tab page on tabs and an artist page on www.
+_UG_HOST = re.compile(r"(?:(?:www|tabs|[a-z]{2})\.)?ultimate-guitar\.com")
+_SCHEME = re.compile(r"[a-z][a-z0-9+.-]*://", re.IGNORECASE)
+# A tab page is /tab/<id> or /tab/<artist>/<song>-<type>-<id>.
+_TAB_PATH = re.compile(r"/tab/(?:[^/]+/)?(?:[^/]*-)?(\d+)")
 _TAB_HOST = "https://tabs.ultimate-guitar.com"
 # An artist page is /artist/<name>_<id> (/artist/soda_stereo_2946) or, for some artists, /artist/<id>
 # alone (宋冬野's /artist/634073); /artist/<name> without the number answers 404.
@@ -89,44 +91,59 @@ def override_key(display: str) -> str:
     return identity_key(artist.strip(), title.strip())
 
 
+def _ug_path(url: Any) -> str | None:
+    """The path of an address on one of UG's hosts (``_UG_HOST``), without its query, fragment and
+    trailing slash; None for anything else.
+
+    It is taken as an address bar shows it: without ``https://``, without ``www.``, with capitals
+    in the host, on a language edition's host. The query and fragment of a link (``?ref=``, the
+    artist page's own ``?filter=chords``, ``?page=2``, ``#…``) go: caracole asks for the bare page.
+    """
+    if not isinstance(url, str):
+        return None
+    text = url.strip()
+    if not _SCHEME.match(text):
+        text = f"https://{text}"
+    try:
+        parts = urlsplit(text)
+    except ValueError:  # a link urllib can't parse ("Invalid IPv6 URL"): no UG page
+        return None
+    if parts.scheme not in ("http", "https") or not _UG_HOST.fullmatch(parts.netloc.lower()):
+        return None
+    return parts.path.rstrip("/")
+
+
 def tab_id_from_url(url: str | int) -> int:
-    """The tab id of a UG tab page URL (``/tab/85053`` or ``/tab/a/b-chords-85053``)."""
+    """The tab id of a UG tab page URL (``/tab/85053`` or ``/tab/a/b-chords-85053``), written as an
+    address bar shows it (``_ug_path``)."""
     if isinstance(url, int) or (isinstance(url, str) and url.strip().isdigit()):
         return int(url)
-    m = _TAB_URL.match(url.strip())
+    path = _ug_path(url)
+    m = _TAB_PATH.fullmatch(path) if path is not None else None
     if not m:
         raise OverridesError(f"not an Ultimate Guitar tab URL: {url!r}")
     return int(m.group(1))
 
 
 def _pin_url(value: str) -> str:
-    """A pinned page's address: the URL as pasted, over https and without its query, fragment
-    and trailing slash; for a bare tab id, the bare ``/tab/{id}`` page. ``value`` passed
+    """A pinned page's address: the URL as pasted, on the tabs host, over https and without its query,
+    fragment and trailing slash; for a bare tab id, the bare ``/tab/{id}`` page. ``value`` passed
     ``tab_id_from_url``."""
     text = value.strip()
     if text.isdigit():
         return f"{_TAB_HOST}/tab/{int(text)}"
-    return _TAB_HOST + urlsplit(text).path.rstrip("/")
+    return _TAB_HOST + (_ug_path(text) or "")
 
 
 def artist_page_address(url: Any) -> str | None:
-    """A UG artist page's address, over https and without its query, fragment and trailing slash;
-    None if ``url`` isn't one.
+    """A UG artist page's address, on the www host, over https and without its query, fragment and
+    trailing slash; None if ``url`` isn't one.
 
-    Both of UG's shapes are artist pages: ``/artist/<name>_<id>`` and ``/artist/<id>``. The
-    query and fragment of the page's own links (``?filter=chords``, ``?page=2``, ``#…``) go:
-    caracole asks for the bare page.
+    Both of UG's shapes are artist pages: ``/artist/<name>_<id>`` and ``/artist/<id>``. It may be
+    written as an address bar shows it (``_ug_path``).
     """
-    if not isinstance(url, str):
-        return None
-    try:
-        parts = urlsplit(url.strip())
-    except ValueError:  # a link urllib can't parse ("Invalid IPv6 URL"): no artist page
-        return None
-    path = parts.path.rstrip("/")
-    if parts.scheme not in ("http", "https") or parts.netloc != "www.ultimate-guitar.com":
-        return None
-    return _ARTIST_HOST + path if _ARTIST_PATH.fullmatch(path) else None
+    path = _ug_path(url)
+    return _ARTIST_HOST + path if path is not None and _ARTIST_PATH.fullmatch(path) else None
 
 
 def _artist_url_value(url: Any) -> str | None:

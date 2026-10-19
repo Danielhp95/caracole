@@ -791,23 +791,28 @@ tab_ids = [1601668]
   songs by 宋冬野 too (see [names in other scripts](#names-in-other-scripts)).
   The value is the artist's page on UG, whose address ends in the artist's
   number: UG writes some with the name before it
-  (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`) and some with the
-  number alone (宋冬野's is `https://www.ultimate-guitar.com/artist/634073`).
+  (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`) and some with
+  the number alone (宋冬野's is `https://www.ultimate-guitar.com/artist/634073`).
   Paste it as your browser shows it, even after you clicked a filter or
   another page (`?filter=chords`, `?page=2`, `?sort=date`): caracole drops the
-  query. An address without the number (`/artist/joaquin_sabina`) is an error:
-  UG answers it with "page not found". Any tab page of the artist works too,
-  bare or slugged (`https://tabs.ultimate-guitar.com/tab/4180894`): the next
-  fetch reads it once, a request like any other within the night's budget,
-  and remembers the artist page it links to, for every song by the artist. A
-  tab page that leads to no artist page is listed on the to-do page, and its
-  songs wait for another address.
+  query. It may come without `https://` or `www.`, as an address bar shortens
+  it, with capitals, or from one of UG's language editions
+  (`es.ultimate-guitar.com`, the Spanish one): caracole asks for the page at
+  UG's own address. An address without the number (`/artist/joaquin_sabina`)
+  is an error: UG answers it with "page not found". Any tab page of the artist
+  works too, bare or slugged (`https://tabs.ultimate-guitar.com/tab/4180894`):
+  the next fetch reads it once, a request like any other within the night's
+  budget, and remembers the artist page it links to, for every song by the
+  artist. A tab page that leads to no artist page is listed on the to-do page,
+  and its songs wait for another address.
 - **`[pin]`** takes tab page addresses: paste them as your browser shows them,
-  a query or a fragment included. Pinned tabs replace the candidates of their
-  kind (sheet, Guitar Pro, tab), in the order given. A pin whose page is
-  gone, is Official, or is closed to bots by robots.txt (UG's `/tab/track/`
-  pages), or redirects to such a page, pins nothing, and the song's other
-  versions compete for that kind.
+  a query or a fragment included, without `https://` too, and from a language
+  edition (`https://es.ultimate-guitar.com/tab/4180894` is
+  `https://tabs.ultimate-guitar.com/tab/4180894`). Pinned tabs replace the
+  candidates of their kind (sheet, Guitar Pro, tab), in the order given. A pin
+  whose page is gone, is Official, or is closed to bots by robots.txt (UG's
+  `/tab/track/` pages), or redirects to such a page, pins nothing, and the
+  song's other versions compete for that kind.
 - **`[transpose]`** shifts the chords and the key in the PDF. `sheet.txt`
   stays as the source wrote it.
 - **`[ignore]`** takes only `songs = [...]`. It stops all work on a song: no

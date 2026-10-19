@@ -321,6 +321,21 @@ def test_tab_id_from_url():
         tab_id_from_url("https://example.com/tab/1")
 
 
+@pytest.mark.parametrize("pasted", [
+    # Taken as an address bar shows it, but only on UG's own hosts.
+    "example.com/tab/85053",
+    "https://ultimate-guitar.com.example.com/tab/85053",
+    "https://notultimate-guitar.com/tab/85053",
+    "https://tabs.ultimate-guitar.com.example.com/tab/85053",
+    "https://user@tabs.ultimate-guitar.com/tab/85053",
+    "https://tabs.ultimate-guitar.com:8080/tab/85053",
+    "ftp://tabs.ultimate-guitar.com/tab/85053",
+])
+def test_a_lookalike_of_ugs_hosts_is_no_tab_page(pasted):
+    with pytest.raises(OverridesError, match="not an Ultimate Guitar tab URL"):
+        tab_id_from_url(pasted)
+
+
 def test_writers_preserve_comments_and_roundtrip(tmp_path):
     p = write(tmp_path, "# my decisions\n[alias]  # artists\n\"X\" = \"y\"\n")
     add_alias(p, "Bob Marley & The Wailers", "bob-marley")
