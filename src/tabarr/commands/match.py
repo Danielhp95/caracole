@@ -52,9 +52,9 @@ def _match(cfg: Config, dry_run: bool) -> None:
             fail("The UG index is empty: run `tabarr index build` first.")
         if state == "partial" and not dry_run:
             # Errors are not misses: a song in the sitemaps not read yet isn't missing from UG.
-            fail(f"{_PARTIAL}: the songs in the sitemaps not read yet would be saved as not found, so nothing "
-                 "was saved. Finish it with `tabarr index build` (the nightly refresh reads the rest too); "
-                 "`tabarr match --dry-run` shows what it matches so far.")
+            fail(f"{_PARTIAL}: matching now would mark the songs in the sitemaps not read yet as not found, "
+                 "so nothing was saved. Finish it with `tabarr index build` (the nightly refresh reads the rest "
+                 "too); `tabarr match --dry-run` shows what it matches so far.")
         changes = match_all(conn, overrides, cfg.match, dry_run=dry_run)
         pages = _write_pages(conn, cfg, overrides) if changes and not dry_run else None
     if not changes:

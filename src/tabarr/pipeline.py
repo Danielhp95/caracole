@@ -11,6 +11,10 @@ is always rewritten.
   is a failure, and neither ever marks a song "not found".
 - Anything else is a bug: it's recorded, the remaining steps still run, and
   the run exits non-zero so systemd's OnFailure fires.
+- An overrides.toml that can't be read stops the run before its first step
+  (every step reads it); the to-do page is still rewritten, leading with why.
+- A provider counts as working (``record_ok``) only when it answered at least
+  one of the run's requests: a run of nothing but errors is no success.
 """
 
 from __future__ import annotations

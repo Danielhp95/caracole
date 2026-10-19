@@ -134,6 +134,15 @@ def test_title_only_review_of_an_indexed_artist_says_its_page_is_checked_first(c
     assert "tabarr didn't find it on Soda Stereo's UG page either" in item and "after 30 days" in item
 
 
+def test_title_only_review_of_a_song_with_a_sheet_says_nothing_is_lost_by_leaving_it(conn, cfg):
+    # The live smoke: De Música Ligera had a 100% LaCuerda sheet and still offered three covers to pick.
+    index(conn, [(1, "soda-stereo", "persiana-americana", "chords")])
+    s = covers_only(conn, "Soda Stereo", "De Música Ligera", "os-paralamas-do-sucesso", "pereza")
+    update_song(conn, s.id, status="found")
+    item = review_item(todo(conn, cfg), "Soda Stereo - De Música Ligera")
+    assert "probably covers" in item and "has a sheet already" in item
+
+
 def test_a_review_with_a_candidate_by_the_songs_own_artist_gets_no_covers_note(conn, cfg):
     index(conn, [(1, "radiohead", "creep", "chords")])
     s = add_song(conn, "Radio Head", "Crep")

@@ -84,6 +84,8 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
     if song.match_decision != "review" or not needs_artist_page(song):
         return None
     head, artist = "Only other artists' songs with this title (probably covers)", md(song.artist)
+    if song.status == "found":  # a cover's [match] would bring that artist's guitar parts, and no better sheet
+        head += ", and the song has a sheet already: nothing is lost by leaving this"
     if not artist_is_known(conn, song, overrides):
         return (f"{head}. If none is the song you want, UG probably lists {artist} only by bare ids: find the "
                 "artist page (see Artists to find below) and paste it under `[artist_url]`, and tabarr looks "
@@ -91,7 +93,7 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
     if song.id in due:
         return (f"{head}. tabarr looks for it on {artist}'s UG page in the next run: wait for that before "
                 "you pick one.")
-    return (f"{head}, and tabarr didn't find it on {artist}'s UG page either. Pick one only if it is the "
+    return (f"{head}. tabarr didn't find it on {artist}'s UG page either. Pick one only if it is the "
             "version you want; if none is, leave it: tabarr looks at the artist page again after 30 days.")
 
 
