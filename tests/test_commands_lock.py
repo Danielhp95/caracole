@@ -80,14 +80,7 @@ def config(tmp_path) -> Path:
         lines += [f"[providers.{provider}]", "delay = [0, 0]"]
     path = tmp_path / "tabarr.toml"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return path
-
-
-@pytest.fixture
-def conn(tmp_path):
-    c = db.connect(tmp_path / "state" / "tabarr.sqlite")
-    yield c
-    c.close()
+    return path  # beside conftest's conn: tmp_path/state/tabarr.sqlite is the database
 
 
 @contextmanager
@@ -308,6 +301,37 @@ def test_a_command_that_waited_for_a_tabarr_that_got_blocked_asks_nothing(
     assert result.exit_code == 0, result.output
     assert sites.requests == [], result.output
     assert "cooling down" in result.output
+
+
+def lock_is_free(tmp_path: Path) -> bool:
+    fd = os.open(tmp_path / "state" / "tabarr.lock", os.O_RDWR | os.O_CREAT)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    finally:
+        os.close(fd)
+    return True
+
+
+def test_review_never_holds_the_lock_while_it_waits_for_you(tmp_path, config, conn, monkeypatch):
+    # You may take your time: the nightly run must not wait for an answer.
+    import typer
+
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    candidate = {"artist_key": "song-dongye", "song_key": "ban-ma-ban-ma", "score": 80.0,
+                 "step": "fuzzy_title"}
+    update_song(conn, song.id, review=True, match_candidates=[candidate])
+    free_at_each_prompt = []
+
+    def answer(prompt, **kwargs):
+        free_at_each_prompt.append(lock_is_free(tmp_path))
+        return "s"
+
+    monkeypatch.setattr(typer, "prompt", answer)
+    result = CliRunner().invoke(build_app(), ["--config", str(config), "review"])
+    assert result.exit_code == 0, result.output
+    assert free_at_each_prompt and all(free_at_each_prompt)
 
 
 def test_the_nightly_run_waits_for_another_tabarr_process(tmp_path, config):
