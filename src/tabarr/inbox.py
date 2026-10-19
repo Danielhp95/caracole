@@ -7,22 +7,25 @@ files each one under its song as ``guitar-<rank>.<ext>``, or under the lowest
 free number when another file already holds that one: a file is never replaced.
 
 Anyone who can write to the library can put a symbolic link in the inbox, so
-only regular files are read; a link is refused and left where it is.
+only regular files are read; a link is refused and left where it is. So is a
+link in place of ``_inbox`` itself, and nothing it points at is touched.
 """
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import itertools
 import os
 import re
 import sqlite3
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from rapidfuzz import fuzz
 
-from tabarr.library import NotRegularFile, keep_file, read_regular, song_dir
+from tabarr.library import NotRegularFile, keep_file, song_dir
 from tabarr.normalize import clean_title, identity_key, slug_key
 from tabarr.songs import Song, get_song
 from tabarr.versions import VersionRow, picks
@@ -40,7 +43,7 @@ class InboxStats:
     filed: list[Path] = field(default_factory=list)
     duplicates: list[Path] = field(default_factory=list)
     unmatched: list[Path] = field(default_factory=list)
-    refused: list[Path] = field(default_factory=list)  # symbolic links and the like, never read
+    refused: list[Path] = field(default_factory=list)  # symbolic links (_inbox itself, if one), never read
 
 
 def parse_download_name(name: str) -> tuple[str | None, str, int | None]:
@@ -131,43 +134,78 @@ def _free_number(conn: sqlite3.Connection, library_dir: Path, song: Song, rank: 
     return next(n for n in itertools.count(1) if n not in taken)
 
 
+def _read_entry(inbox_fd: int, name: str) -> bytes:
+    """The bytes of the regular file ``name`` in the inbox open at ``inbox_fd``, read the way
+    ``library.read_regular`` reads a path: never through a link, never waiting on a FIFO."""
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=inbox_fd)
+    except OSError as e:
+        if e.errno == errno.ELOOP:  # O_NOFOLLOW's answer for a link
+            raise NotRegularFile(e.errno, "a symbolic link, which tabarr doesn't follow", name) from None
+        raise
+    with open(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise NotRegularFile(errno.EINVAL, "not a regular file", name)
+        return f.read()
+
+
 def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
-    """File every Guitar Pro / Power Tab download in ``_inbox/`` under its song."""
+    """File every Guitar Pro / Power Tab download in ``_inbox/`` under its song.
+
+    The folder is opened without following a link, then listed, read and emptied through that
+    descriptor. A link in place of ``_inbox`` is refused (``refused`` holds it): nothing in the
+    folder it points at is read, filed or deleted.
+    """
     stats = InboxStats()
     inbox = library_dir / "_inbox"
-    if not inbox.is_dir():
-        return stats
-    for path in sorted(p for p in inbox.iterdir() if not p.name.startswith(".")):
-        if path.is_symlink():
-            stats.refused.append(path)
-            continue
-        if not path.is_file():
-            continue
-        ext = path.suffix.lower()
-        if ext not in GP_EXTENSIONS:
-            stats.unmatched.append(path)
-            continue
-        try:
-            data = read_regular(path)
-        except NotRegularFile:  # swapped for a link since it was listed
-            stats.refused.append(path)
-            continue
-        sha = hashlib.sha256(data).hexdigest()
-        if conn.execute("SELECT 1 FROM files WHERE sha256 = ? LIMIT 1", (sha,)).fetchone():
-            path.unlink()
-            stats.duplicates.append(path)
-            continue
-        artist, title, version = parse_download_name(path.name)
-        found = _match(artist, title, _songs_with_open_picks(conn))
-        if found is None:
-            stats.unmatched.append(path)
-            continue
-        song, open_picks = found
-        chosen = _choose_pick(open_picks, version, ext)
-        name = f"guitar-{_free_number(conn, library_dir, song, chosen.pick_rank or 1)}{ext}"
-        if keep_file(conn, library_dir, song=song, version_id=chosen.id, name=name, data=data, rank=chosen.pick_rank or 1):
-            stats.filed.append(song_dir(library_dir, song) / name)
-        else:
-            stats.duplicates.append(path)
-        path.unlink()
+    try:
+        inbox_fd = os.open(inbox, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as e:
+        if inbox.is_symlink():  # Linux answers ENOTDIR for a link here, whatever it points at
+            stats.refused.append(inbox)
+            return stats
+        if isinstance(e, (FileNotFoundError, NotADirectoryError)):  # no inbox yet, or a file of that name
+            return stats
+        raise
+    try:
+        with os.scandir(inbox_fd) as found:
+            entries = sorted((e.name, e.is_symlink(), e.is_file(follow_symlinks=False))
+                             for e in found if not e.name.startswith("."))
+        for entry, link, regular in entries:
+            path = inbox / entry  # for the stats: the file itself is only ever reached through inbox_fd
+            if link:
+                stats.refused.append(path)
+                continue
+            if not regular:
+                continue
+            ext = path.suffix.lower()
+            if ext not in GP_EXTENSIONS:
+                stats.unmatched.append(path)
+                continue
+            try:
+                data = _read_entry(inbox_fd, entry)
+            except NotRegularFile:  # swapped for a link since it was listed
+                stats.refused.append(path)
+                continue
+            sha = hashlib.sha256(data).hexdigest()
+            if conn.execute("SELECT 1 FROM files WHERE sha256 = ? LIMIT 1", (sha,)).fetchone():
+                os.unlink(entry, dir_fd=inbox_fd)
+                stats.duplicates.append(path)
+                continue
+            artist, title, version = parse_download_name(entry)
+            found = _match(artist, title, _songs_with_open_picks(conn))
+            if found is None:
+                stats.unmatched.append(path)
+                continue
+            song, open_picks = found
+            chosen = _choose_pick(open_picks, version, ext)
+            name = f"guitar-{_free_number(conn, library_dir, song, chosen.pick_rank or 1)}{ext}"
+            if keep_file(conn, library_dir, song=song, version_id=chosen.id, name=name, data=data,
+                         rank=chosen.pick_rank or 1):
+                stats.filed.append(song_dir(library_dir, song) / name)
+            else:
+                stats.duplicates.append(path)
+            os.unlink(entry, dir_fd=inbox_fd)
+    finally:
+        os.close(inbox_fd)
     return stats

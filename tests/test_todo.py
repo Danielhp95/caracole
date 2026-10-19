@@ -8,7 +8,7 @@ from tabarr.library import keep_file
 from tabarr.normalize import slug_key
 from tabarr.overrides import Overrides, load_overrides
 from tabarr.songs import update_song
-from tabarr.todo import build_todo, search_links, write_todo
+from tabarr.todo import build_todo, md, search_links, write_todo
 from tabarr.versions import set_coverage, set_picks, upsert_version
 
 from conftest import add_song
@@ -60,6 +60,18 @@ def test_review_item_has_links_and_paste_line(conn, cfg):
     assert "https://tabs.ultimate-guitar.com/tab/1081462" in text
     assert '"Soda - Persiana Americana" = "soda-stereo/persiana-americana"  # under [match]' in text
     assert '"Soda" = "soda-stereo"  # under [alias]' in text
+
+
+def test_a_reviews_heading_is_set_off_from_its_first_candidate(conn, cfg):
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    s = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"}])
+    text = todo(conn, cfg)
+    assert "probably covers" not in text
+    assert "\n### Radio Head - Crep\n\n- 89 · `radiohead/creep` (fuzzy_title)" in text
+    covers_only(conn, "Maná", "Rayando el Sol", "ana-gabriel")  # with a note: one blank line each side
+    assert re.search(r"\n### Maná - Rayando el Sol\n\nOnly other artists' [^\n]*\n\n- 100 · ", todo(conn, cfg))
 
 
 def test_review_links_use_the_slugged_url(conn, cfg):
@@ -190,6 +202,32 @@ def test_setup_problems_count_the_wanted_lines_tabarr_couldnt_read(conn, cfg):
     setup = first_section(todo(conn, cfg))
     assert setup.startswith("Setup problems")
     assert "wanted.txt has 2 lines tabarr couldn't read" in setup and "Sources" in setup
+
+
+def test_a_wanted_file_tabarr_cant_read_says_so_rather_than_count_a_bad_line(conn, cfg):
+    # The sync stores an error about the whole file, such as a link refused unread, as line 0.
+    from tabarr.sources import sync_sources
+    from tabarr.ug.index import mark_built
+
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    mark_built(conn, NOW)
+    private = cfg.state_dir / "spotify-token.json"
+    private.parent.mkdir(parents=True, exist_ok=True)
+    private.write_text("{}", encoding="utf-8")
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.symlink_to(private)
+    sync_sources(conn, cfg, NOW, spotify=None)
+    text = todo(conn, cfg)
+    why = (f"wanted.txt: not read: {cfg.wanted_file} is a symbolic link, which tabarr doesn't follow; put the "
+           "file itself there")
+    setup = first_section(text)
+    assert setup.startswith("Setup problems (1)")
+    assert ("- **wanted.txt can't be read**, so tabarr doesn't see the songs you add to it (those it read "
+            f"before are still looked for): `{why}`.") in setup
+    assert "couldn't read" not in setup and "line" not in setup
+    sources = section_of(text, "Sources")
+    assert f"- wanted.txt: error at 2026-10-18T03:41:00Z: {md(why)}" in sources
+    assert "line 0" not in sources and "0 songs" not in sources
 
 
 def test_partial_sheets_say_how_to_choose_another_version(conn, cfg):
@@ -423,6 +461,60 @@ def test_review_lines_paste_under_the_tables_tabarr_review_wrote(conn, cfg):
     cfg.overrides_file.write_text(text, encoding="utf-8")
     o = load_overrides(cfg.overrides_file)
     assert o.match["radio-head/crep"] == ("radiohead", "creep") and o.alias["radio-head"] == ("radiohead",)
+    assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
+
+
+def paste_as_commented(text, block):
+    """overrides.toml's text with each line of a paste block put where its comment says: under the
+    table it names, or in place of the line the file has for the same key (tomlkit writes it bare)."""
+    for line in block.splitlines():
+        table = re.search(r"under (\[\w+\])$", line).group(1)
+        if "# in place of" in line:
+            key = line.split(" = ", 1)[0]
+            bare = key.strip('"')
+            [old] = [k for k in text.splitlines() if k.startswith((f"{key} = ", f"{bare} = "))]
+            text = text.replace(old, line, 1)
+        else:
+            text = text.replace(f"{table}\n", f"{table}\n{line}\n", 1)
+    return text
+
+
+def review_blocks_with_an_alias(conn, cfg, alias, step):
+    """The paste blocks of a review of Soda - Persiana Americana, whose candidate is under UG's
+    soda-stereo, with overrides.toml holding [match] for another song and ``alias`` for Soda."""
+    from tabarr.overrides import add_alias, add_match
+
+    add_match(cfg.overrides_file, "Soda - Signos", "soda-stereo/signos")
+    for slug in alias:
+        add_alias(cfg.overrides_file, "Soda", slug)
+    index(conn, [(1081460, "soda-stereo", "persiana-americana", "chords")])
+    s = add_song(conn, "Soda", "Persiana Americana")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "soda-stereo", "song_key": "persiana-americana", "score": 82.0, "step": step}])
+    text = todo(conn, cfg, load_overrides(cfg.overrides_file))
+    return toml_blocks(review_item(text, "Soda - Persiana Americana"))
+
+
+def test_an_alias_line_for_an_artist_with_aliases_replaces_its_line_and_keeps_them(conn, cfg):
+    # Soda has an alias already: a second "Soda" key under [alias] would make overrides.toml unreadable
+    # ("Cannot overwrite a value"), so the page gives Soda's whole line, its other UG name included.
+    block, _ = review_blocks_with_an_alias(conn, cfg, ["soda-stereo-ar"], "fuzzy_artist")
+    assert '"Soda" = ["soda-stereo-ar", "soda-stereo"]  # in place of the artist\'s line under [alias]' in block
+    text = paste_as_commented(cfg.overrides_file.read_text(encoding="utf-8"), block)
+    cfg.overrides_file.write_text(text, encoding="utf-8")
+    o = load_overrides(cfg.overrides_file)
+    assert o.alias["soda"] == ("soda-stereo-ar", "soda-stereo")
+    assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
+
+
+def test_no_alias_line_for_an_artist_whose_aliases_name_the_candidates_artist(conn, cfg):
+    # Matched under its alias, on a fuzzy title: the alias is there already, so only [match] is new.
+    block, _ = review_blocks_with_an_alias(conn, cfg, ["soda-stereo-ar", "soda-stereo"], "fuzzy_title")
+    assert block == '"Soda - Persiana Americana" = "soda-stereo/persiana-americana"  # under [match]\n'
+    text = paste_as_commented(cfg.overrides_file.read_text(encoding="utf-8"), block)
+    cfg.overrides_file.write_text(text, encoding="utf-8")
+    o = load_overrides(cfg.overrides_file)
+    assert o.alias["soda"] == ("soda-stereo-ar", "soda-stereo")
     assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
 
 

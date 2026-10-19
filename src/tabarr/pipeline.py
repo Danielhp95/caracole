@@ -200,7 +200,9 @@ def _scan(ctx: StepContext) -> str:
 
     music = scan_music(ctx.conn, ctx.cfg.music_dir)
     inbox = file_inbox(ctx.conn, ctx.cfg.library_dir)
-    return f"{music.matched} purchases linked, {len(inbox.filed)} Guitar Pro files filed"
+    refused = len(inbox.refused)  # links in the inbox, or in its place, never read: the to-do page names them
+    links = f", {_plural(refused, 'symbolic link')} refused" if refused else ""
+    return f"{music.matched} purchases linked, {len(inbox.filed)} Guitar Pro files filed{links}"
 
 
 def _render(ctx: StepContext) -> str:

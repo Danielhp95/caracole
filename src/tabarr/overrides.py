@@ -147,14 +147,23 @@ def _only_key(t: Mapping[str, Any], name: str, key: str, shape: str) -> None:
 
 
 def _read(path: Path) -> str | None:
-    """The file's text, None when there is none; anything but a regular file is refused unread."""
+    """The file's text, None when there is none; anything but a regular file is refused unread.
+
+    A file that can't be read, or isn't UTF-8, is an OverridesError too: every caller reports one.
+    """
     try:
         data = read_regular(path)
     except FileNotFoundError:
         return None
     except NotRegularFile as e:
         raise OverridesError(f"{path}: {e.strerror}; put the file itself there") from e
-    return data.decode("utf-8")
+    except OSError as e:  # no permission to read it, say
+        raise OverridesError(f"{path}: can't read it: {e.strerror or e}") from e
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as e:
+        line = data[: e.start].count(b"\n") + 1
+        raise OverridesError(f"{path}: line {line} is not valid UTF-8 (save the file as UTF-8)") from e
 
 
 def _declared_twice(e: tomllib.TOMLDecodeError) -> str:
