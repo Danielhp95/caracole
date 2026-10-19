@@ -504,6 +504,16 @@ and cache.
   that started asking for a login costs three requests. With gtptabs.com
   turned off it asks nothing and says so. A cooldown, a block or a spent
   budget exits 0.
+- **`caracole musescore`** reads MuseScore's song sitemaps into the local index
+  the to-do page's MuseScore links come from, when it never has, or last did 30
+  days ago; it asks for nothing else, and downloads nothing. It prints
+  `Index: 2 sitemaps read.` and `MuseScore: 80000 song pages in the index.`, or
+  `MuseScore's index is up to date: 720000 song pages.` when nothing was due. A
+  spent budget leaves the rest of the sitemaps for the next run, which goes on
+  where this one stopped. A Cloudflare challenge is a block: the command says
+  `MuseScore blocked caracole: …`, sends one ntfy message, and caracole leaves
+  MuseScore alone until the cooldown ends. With MuseScore turned off it asks
+  nothing and says so. A cooldown, a block or a spent budget exits 0.
 - **`caracole scan`** links the audio files in Music/ to your songs, by their
   tags (or an "Artist - Title" file name) and their duration, give or take 3
   seconds. It never adds a song. A file named as the song wins over one whose
@@ -560,8 +570,9 @@ and cache.
 **The pages.** A command that changes what `_todo.md` and `index.html` show
 rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
 `todo`, `add`, `search --add`, `sync` and `autochords`; `review` when an
-answer changed something; and `fetch`, `lyrics`, `lacuerda` and `gtptabs` when
-they did something or were blocked, so that Provider health shows the cooldown.
+answer changed something; and `fetch`, `lyrics`, `lacuerda`, `gtptabs` and
+`musescore` when they did something or were blocked, so that Provider health
+shows the cooldown.
 A page caracole can't write ends the command with status 1 and
 `can't write …/_todo.md: Permission denied`, its own work saved first; for
 `add`, `search --add` and `sync` that is only a warning.
@@ -569,8 +580,9 @@ A page caracole can't write ends the command with status 1 and
 **One caracole at a time.** The commands that ask the sites for pages or write
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
-`index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`, `render`,
-`match`, `scan`, `todo`, `sync`, `add`, `search --add` and `autochords`. A
+`index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
+`musescore`, `render`, `match`, `scan`, `todo`, `sync`, `add`, `search --add`
+and `autochords`. A
 second one waits for the first, and says which it is:
 `Another caracole is running (pid 4242: run); waiting for it to finish.`
 `caracole review` takes the lock only after your answers, never while it waits

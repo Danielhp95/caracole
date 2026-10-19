@@ -1,4 +1,4 @@
-"""``caracole lyrics``, ``lacuerda`` and ``gtptabs``: one step of the nightly run, by hand.
+"""``caracole lyrics``, ``lacuerda``, ``gtptabs`` and ``musescore``: one step of the nightly run, by hand.
 
 Each makes the same pass as its ``caracole run`` step, with a client of its own:
 this run's budget, and the HTTP cache the nightly run uses too. As in the run,
@@ -8,8 +8,8 @@ neither is a spent budget: each prints what happened and exits 0, as
 ``caracole fetch`` and ``caracole index`` do, and the songs left wait for the
 next run. Then each rewrites _todo.md and index.html, which read
 overrides.toml, unless it did nothing (a cooldown, or no song to ask about).
-``caracole gtptabs`` with gtptabs.com turned off in caracole.toml says so and
-asks nothing.
+``caracole gtptabs`` and ``caracole musescore`` with their site turned off in
+caracole.toml say so and ask nothing.
 
 Every command module is imported on every start, so the passes are imported
 inside the commands.
@@ -46,11 +46,12 @@ if TYPE_CHECKING:
     from caracole.http import Client
     from caracole.lacuerda_fetch import LaCuerdaStats
     from caracole.lyrics import LyricsStats
+    from caracole.musescore_fetch import MuseScoreStats
     from caracole.overrides import Overrides
 
-_NAMES = {"lrclib": "LRCLIB", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com"}
+_NAMES = {"lrclib": "LRCLIB", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com", "musescore": "MuseScore"}
 # Each provider's command, for the lock.
-_COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs"}
+_COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs", "musescore": "musescore"}
 
 
 def register(app: typer.Typer) -> None:
@@ -68,6 +69,11 @@ def register(app: typer.Typer) -> None:
     def gtptabs_cmd(ctx: typer.Context) -> None:
         """Download a Guitar Pro file from gtptabs.com for each song that has none."""
         _gtptabs(load_cfg(ctx))
+
+    @app.command("musescore")
+    def musescore_cmd(ctx: typer.Context) -> None:
+        """Read MuseScore's song sitemaps into the index the to-do page's links come from."""
+        _musescore(load_cfg(ctx))
 
 
 def _lyrics(cfg: Config) -> None:
@@ -157,6 +163,40 @@ def _gtptabs(cfg: Config) -> None:
         typer.echo("Songs with an error are tried again next run.")
     if s.budget_exhausted:
         _budget_spent(cfg, "gtptabs")
+
+
+def _musescore(cfg: Config) -> None:
+    """Read MuseScore's song sitemaps when due, then say what the index holds."""
+    from caracole.musescore_fetch import index_size, musescore_index, songs_wanting_pages
+
+    if not cfg.provider("musescore").enabled:
+        typer.echo("MuseScore is off ([providers.musescore] enabled = false); nothing was asked.")
+        return
+    overrides = load_ovr(cfg)
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime) -> tuple[MuseScoreStats, int, bool]:
+        stats = musescore_index(conn, client, now, overrides=overrides)
+        return stats, index_size(conn), bool(songs_wanting_pages(conn, overrides))
+
+    def ran(result: tuple[MuseScoreStats, int, bool]) -> bool:
+        s = result[0]
+        return bool(s.sitemaps or s.errors or s.budget_exhausted)
+
+    result = _provider_pass(cfg, "musescore", run, overrides, ran)
+    if result is None:
+        return
+    s, size, wanted = result
+    if not ran(result):
+        typer.echo(f"MuseScore's index is up to date: {_count(size, 'song page')}." if wanted
+                   else "No song to look up on MuseScore.")
+        return
+    if s.sitemaps:
+        typer.echo(f"Index: {_count(s.sitemaps, 'sitemap')} read.")
+    errors = f", {_count(s.errors, 'error')}; the next run asks again" if s.errors else ""
+    typer.echo(f"MuseScore: {_count(size, 'song page')} in the index{errors}.")
+    if s.budget_exhausted:
+        typer.echo(f"MuseScore's budget of {_count(cfg.provider('musescore').budget, 'request')} per run is "
+                   "spent; the next run reads the rest of its sitemaps.")
 
 
 def _provider_pass[T](
