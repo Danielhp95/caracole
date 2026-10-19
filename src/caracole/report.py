@@ -17,9 +17,9 @@ say what went wrong. The words are the same wherever they go (``render``):
 plain for ntfy, a pipe or a file; coloured on a terminal; prefixed with their
 syslog priority for the journal.
 
-This module also holds the words the log shares with the report: providers by
-their own names, songs as "Artist – Title", and ``why``, a provider's error as
-a clause without its URL ("didn't answer (HTTP 503)").
+The words are people's: providers by their own names (``provider_name``, from
+logs.py, which the log shares), songs as "Artist – Title", and ``why``, a
+provider's error as a clause without its URL ("didn't answer (HTTP 503)").
 """
 
 from __future__ import annotations
@@ -196,7 +196,8 @@ class StepResult:
 
 
 def failure_line(failure: Failure, retry: str, songs: str) -> str:
-    """"LRCLIB didn't answer (HTTP 503), so the lyrics of 1 song will be tried again on the next run."."""
+    """The line for the songs one cause left: "LRCLIB didn't answer (HTTP 503), so the lyrics of 1 song
+    will be tried again on the next run."."""
     return f"{provider_name(failure.provider)} {failure.cause}, so {retry.format(songs=songs)}."
 
 
