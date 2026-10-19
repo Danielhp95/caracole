@@ -119,6 +119,18 @@ def _library_keys(conn: sqlite3.Connection) -> set[tuple[str, str]]:
     return keys
 
 
+def _matched_elsewhere(conn: sqlite3.Connection, hit: IndexHit) -> Song | None:
+    """A library song matched to this UG song under another identity (another spelling, say)."""
+    from tabarr.normalize import identity_key
+    from tabarr.songs import get_song
+
+    row = conn.execute(
+        "SELECT id FROM songs WHERE match_artist_key = ? AND match_song_key = ? AND key != ? ORDER BY id LIMIT 1",
+        (hit.artist_key, hit.song_key, identity_key(hit.artist, hit.title)),
+    ).fetchone()
+    return get_song(conn, row[0]) if row else None
+
+
 def _wrap(text: str, width: int = 88) -> str:
     """Prose paragraphs wrapped for a terminal; indented lines (the TOML to paste) left as they are."""
     return "\n\n".join(
@@ -150,6 +162,10 @@ def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -
         found = f"only {len(hits)} hit{'s' if len(hits) != 1 else ''}" if hits else "nothing"
         fail(f"--add {n}: Ultimate Guitar has {found} for {text!r}", 2)
     hit = hits[n - 1]
+    other = _matched_elsewhere(conn, hit)
+    if other is not None:  # adding it would make a second record of the same song
+        typer.echo(f"Already in your library as {other.display} ({_status(other)}); wanted.txt is unchanged.")
+        return
     path = cfg.wanted_file
     try:
         listed = find_wanted(path, hit.artist, hit.title)

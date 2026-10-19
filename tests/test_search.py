@@ -185,6 +185,10 @@ def test_accented_query_with_a_strong_hit_still_mentions_bare_ids_briefly(conn):
     assert len(brief) < len(bare_id_hint("Persiana Américana", []))
 
 
+def test_hint_says_the_paste_lines_key_is_the_artist():
+    assert "artist's name" in bare_id_hint("joaquin sabina 19 dias", [])
+
+
 def test_hint_paste_line_names_the_artist():
     assert '"宋冬野" = "https://www.ultimate-guitar.com/artist/<name>_<id>"' in bare_id_hint(
         "宋冬野 斑马", [], artist="宋冬野")
@@ -344,6 +348,17 @@ def test_cli_add_twice_keeps_one_line(tmp_path):
     wanted = (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
     assert wanted.count("Stone Temple Pilots - Creep") == 1
     assert "already" in result.output
+
+
+def test_cli_add_skips_a_hit_your_library_has_under_another_name(tmp_path):
+    conn = seed(tmp_path)
+    other = add_song(conn, "Stone Temple Pilot", "Creep")
+    update_song(conn, other.id, match_decision="accept", match_artist_key="stone-temple-pilots", match_song_key="creep")
+    result = run(tmp_path, "search", "creep", "--add", "2")
+    assert result.exit_code == 0, result.output
+    assert "Stone Temple Pilot - Creep" in result.output
+    assert not (tmp_path / "lib" / "wanted.txt").exists()
+    assert find_song(conn, "stone-temple-pilots/creep") is None
 
 
 def test_cli_add_out_of_range_is_a_usage_error(tmp_path):

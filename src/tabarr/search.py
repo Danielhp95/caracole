@@ -164,6 +164,7 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = N
         "ids, usually because of accents or non-Latin letters (Joaquín Sabina, Maná, 宋冬野), so "
         "tabarr can't see their tabs. Find the artist's page on ultimate-guitar.com once and paste "
         f"its address into overrides.toml:\n\n    [artist_url]\n    {line}\n\n"
+        "The key is the artist's name as your songs write it, so take any title words out of it. "
         "Then add the song with `tabarr add`; the nightly run looks for its tabs on that page."
     )
 
