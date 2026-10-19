@@ -2,7 +2,8 @@
 
 caracole builds a folder of chord sheets for the songs you want to learn on
 guitar. You give it a list of songs. Every night it finds a chord sheet with
-the lyrics, saves the lyrics, and makes a PDF.
+the lyrics, saves the lyrics, and makes a PDF. Each song gets its key, and
+where the key came from.
 
     ~/Tabs/
     ├── wanted.txt              your songs, one "Artist - Title" per line

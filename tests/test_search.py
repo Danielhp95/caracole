@@ -1,3 +1,4 @@
+import json
 import random
 import re
 import socket
@@ -10,8 +11,10 @@ from typer.testing import CliRunner
 
 from caracole import db
 from caracole.cli import build_app
+from caracole.library import keep_file
 from caracole.search import bare_id_hint, display_from_keys, search_index, search_library
 from caracole.songs import find_song, update_song
+from caracole.versions import upsert_version
 
 from conftest import add_song
 
@@ -551,3 +554,87 @@ def test_cli_never_touches_the_network(tmp_path, monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", no_network)
     result = run(tmp_path, "search", "creep", "--add", "1")
     assert result.exit_code == 0, result.output
+
+
+# --- caracole search --key ------------------------------------------------------------
+
+
+def keep_sheet(conn, lib, song, content, *, raw=None, tab_id):
+    v = upsert_version(conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot="sheet",
+                       kind="chords", rating=4.5, votes=10, version=1, label=None,
+                       url=f"https://tabs.ultimate-guitar.com/tab/{tab_id}", raw=raw or {}, now="x")
+    keep_file(conn, lib, song=song, version_id=v, name="sheet.json",
+              data=json.dumps({"content": content}).encode(), rank=1)
+    keep_file(conn, lib, song=song, version_id=v, name="sheet.txt", data=content.encode(), rank=1)
+    update_song(conn, song.id, status="found")
+
+
+def seed_keys(tmp_path):
+    """Creep in G (UG says so), De Música Ligera in A minor (its chords), Lucky in F# minor."""
+    conn = seed(tmp_path)
+    lib = tmp_path / "lib"
+    keep_sheet(conn, lib, find_song(conn, "radiohead/creep"), "Words\n", raw={"tonality_name": "G"},
+               tab_id=4169)
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet(conn, lib, soda, "[ch]Am[/ch] [ch]F[/ch] [ch]C[/ch] [ch]G[/ch]\nWords\n" * 3, tab_id=1)
+    lucky = add_song(conn, "Radiohead", "Lucky")
+    keep_sheet(conn, lib, lucky, "Words\n", raw={"tonality_name": "F#m"}, tab_id=2)
+    add_song(conn, "Queen", "Don't Stop Me Now")
+    return conn
+
+
+def test_cli_library_hits_show_their_key(tmp_path):
+    seed_keys(tmp_path)
+    result = run(tmp_path, "search", "creep")
+    assert result.exit_code == 0, result.output
+    assert "Radiohead - Creep · found · Key G major (from the tab) · " in result.output
+
+
+def test_cli_search_by_key_alone_lists_your_songs_in_that_key(tmp_path):
+    seed_keys(tmp_path)
+    result = run(tmp_path, "search", "--key", "Am")
+    assert result.exit_code == 0, result.output
+    assert "In your library, in A minor" in result.output
+    assert "Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords)" in result.output
+    assert "Creep" not in result.output and "Queen" not in result.output
+    # The offline index knows no keys: it isn't searched.
+    assert "On Ultimate Guitar" not in result.output and "without --key" in result.output
+
+
+def test_cli_search_by_key_and_words(tmp_path):
+    seed_keys(tmp_path)
+    result = run(tmp_path, "search", "radiohead", "--key", "G major")
+    assert result.exit_code == 0, result.output
+    assert "Radiohead - Creep" in result.output and "Lucky" not in result.output
+    result = run(tmp_path, "search", "soda", "--key", "G")
+    assert result.exit_code == 0, result.output
+    assert "nothing matches" in result.output
+
+
+def test_cli_search_by_key_matches_any_spelling_of_the_key(tmp_path):
+    seed_keys(tmp_path)
+    result = run(tmp_path, "search", "--key", "Gbm")
+    assert result.exit_code == 0, result.output
+    assert "Radiohead - Lucky · found · Key F# minor (from the tab)" in result.output
+
+
+def test_cli_search_key_that_is_no_key_is_a_usage_error(tmp_path):
+    seed_keys(tmp_path)
+    result = run(tmp_path, "search", "--key", "Hm7")
+    assert result.exit_code == 2
+    assert "is not a key" in result.output
+
+
+def test_cli_search_key_with_add_is_a_usage_error(tmp_path):
+    seed_keys(tmp_path)
+    result = run(tmp_path, "search", "creep", "--key", "G", "--add", "1")
+    assert result.exit_code == 2
+    assert "--add" in result.output and "--key" in result.output
+    assert not (tmp_path / "lib" / "wanted.txt").exists()
+
+
+def test_cli_search_needs_words_or_a_key(tmp_path):
+    seed_keys(tmp_path)
+    result = run(tmp_path, "search")
+    assert result.exit_code == 2
+    assert "nothing to search for" in result.output

@@ -511,8 +511,9 @@ and cache.
 - **`caracole todo`** rewrites `_todo.md` and `index.html` from the database.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
-- **`caracole search QUERY [--limit N] [--add N]`** searches your library and
-  the offline UG index (see [caracole search](#caracole-search)).
+- **`caracole search QUERY [--limit N] [--add N] [--key KEY]`** searches your
+  library and the offline UG index; `--key` finds your songs in one key (see
+  [caracole search](#caracole-search)).
 - **`caracole autochords`** writes `sheet (auto).txt` from audio you bought, for
   songs with no human sheet (see [the worked example](#a-worked-example)), then
   rewrites `_todo.md` and `index.html`. It needs the flake's
@@ -712,8 +713,8 @@ opens the file directly, works.
 
 ### caracole search
 
-`caracole search QUERY [--limit N] [--add N]` looks in two places, and sends no
-request:
+`caracole search QUERY [--limit N] [--add N] [--key KEY]` looks in two
+places, and sends no request:
 
     $ caracole search creep
     In your library
@@ -727,7 +728,8 @@ request:
          https://tabs.ultimate-guitar.com/tab/stone-temple-pilots/creep-chords-5001
          caracole add "Stone Temple Pilots" "Creep"
 
-- **In your library**: every song, whatever its status, with its folder.
+- **In your library**: every song, whatever its status, with its key when it
+  has one (`Key G major (from the tab)`) and its folder.
 - **On Ultimate Guitar**: numbered hits from the offline index, each with its
   tabs per type, one of its pages, and the `caracole add` line to paste.
 
@@ -745,6 +747,21 @@ entries. For an artist whose page overrides.toml has already, under any form
 of their name, it gives no line and says so. The search reads
 overrides.toml for this hint alone, and still works when the file can't be
 read.
+
+`--key KEY` keeps only your songs in that key (see
+[The song's key](#the-songs-key)), with or without QUERY; without it, every
+song of yours in the key, by name:
+
+    $ caracole search --key Am
+    In your library, in A minor
+      Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
+
+    The offline Ultimate Guitar index has no keys: search it without --key.
+
+KEY is written the way tabs write keys: `"A minor"`, `Am`, `F#`, `"Bb major"`,
+`"La menor"`; any spelling of the same key matches (`Gbm` finds F# minor). The
+offline index knows no keys, so `--key` leaves it out, and `--add` can't go
+with it. A KEY that is no key exits with status 2.
 
 ## overrides.toml: your decisions
 
