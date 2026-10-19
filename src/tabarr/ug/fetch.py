@@ -307,12 +307,26 @@ def _tab_page_url(url: str) -> bool:
     )
 
 
+def _wanted(run: _SongRun, v: UGVersion) -> bool:
+    """A kind tabarr uses (never Official, which UG marks public too), public and not blocked."""
+    return v.kind is not None and v.access == "public" and v.tab_id not in run.ctx.overrides.block
+
+
 def _usable(run: _SongRun, v: UGVersion) -> bool:
-    """A kind tabarr uses (never Official, which UG marks public too), public, not blocked, at a tab page."""
-    return (
-        v.kind is not None and v.access == "public" and v.tab_id not in run.ctx.overrides.block
-        and _tab_page_url(v.url)
-    )
+    """A version tabarr wants, at a tab page."""
+    return _wanted(run, v) and _tab_page_url(v.url)
+
+
+def _check_links(run: _SongRun, versions: Iterable[UGVersion], url: str) -> None:
+    """Raise ``PageParseError`` when a page lists versions tabarr wants and not one links to a tab page.
+
+    Some links go elsewhere (robots.txt closes /tab/download); all of them
+    going elsewhere means UG's links changed shape, which is an error, never
+    "no versions".
+    """
+    wanted = [v for v in versions if _wanted(run, v)]
+    if wanted and not any(_tab_page_url(v.url) for v in wanted):
+        raise PageParseError(PROVIDER, url, None, "no version on the page links to a tab page")
 
 
 def _known(run: _SongRun, tab_id: int) -> bool:
@@ -333,11 +347,18 @@ def _record(run: _SongRun, versions: Iterable[UGVersion], *, fresh: bool) -> Non
             _upsert(run, v)
 
 
-def _record_page(run: _SongRun, page: UGTabPage, *, fresh: bool) -> None:
-    """Record the page's own tab and the versions it lists of the same kind group."""
+def _record_page(run: _SongRun, page: UGTabPage, url: str, *, fresh: bool) -> None:
+    """Record the page's own tab and the versions it lists of the same kind group.
+
+    The page's own tab was just read at ``url``, so it is recorded there
+    should its own link go elsewhere (``_check_links``).
+    """
     group = _GROUP_OF.get(page.tab.kind or "")
-    if group is not None:
-        _record(run, (v for v in (page.tab, *page.versions) if v.kind in group), fresh=fresh)
+    if group is None:
+        return
+    tab, *listed = [v for v in (page.tab, *page.versions) if v.kind in group]
+    _check_links(run, [tab, *listed], url)
+    _record(run, (tab if _tab_page_url(tab.url) else replace(tab, url=url), *listed), fresh=fresh)
 
 
 def _version_row(run: _SongRun, tab_id: int) -> VersionRow | None:
@@ -444,7 +465,7 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
     if page is None:
         _mark_gone(run, tab_id, url, kind)
         return None
-    _record_page(run, page, fresh=fresh)
+    _record_page(run, page, url, fresh=fresh)
     mine = run.artist_key
     _learn_artist_url(run.conn, page, [mine] if mine and _same_artist(mine, page.tab.artist_name) else [])
     return page
@@ -520,7 +541,7 @@ def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple
         url = _pinned_url(run, tab_id, pasted, row)
         kind = row.kind if row is not None else known.type if known is not None else None
         page = _page(run, tab_id, url, kind)
-        if page is None or not _usable(run, page.tab):
+        if page is None or not _wanted(run, page.tab):  # read at a tab page, wherever its own link goes
             continue
         groups.setdefault(_GROUP_OF[page.tab.kind], []).append(page.tab.tab_id)
     return groups
@@ -802,6 +823,7 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
         first = first or page
         last = max(last, page.pages)
         listed = [t for t in page.tabs if t.kind == kind]
+        _check_links(run, listed, url)
         found = [h for t in listed if (h := _title_hit(t, forms, fresh)) is not None]
         hits += found
         if hits and not (found and found[-1].tab is listed[-1]):

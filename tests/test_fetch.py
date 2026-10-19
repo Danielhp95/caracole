@@ -315,6 +315,39 @@ def test_versions_whose_link_is_no_tab_page_are_never_fetched(conn, tmp_path, ta
     assert {int(r.tab_id) for r in song_versions(conn, song.id, include_gone=True)} == {101}
 
 
+MOVED = "https://www.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-{}"  # UG moved tab pages
+
+
+def test_links_that_all_changed_shape_are_an_error_not_a_miss(conn, tmp_path):
+    # Review Focus 4: shape drift is a provider error. Not one version links to a tab page any more.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.add(slugged(101), make_tab_page_html(v(101, tab_url=MOVED.format(101)),
+                                            [v(102, version=2, tab_url=MOVED.format(102))],
+                                            content=sheet("sheet 101", LINES), artist_url=SODA_URL))
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (0, 1)
+    failed = get_song(conn, song.id)  # neither found nor checked: never on the buy list
+    assert (failed.status, failed.ug_dirty, failed.ug_checked_at) == ("wanted", True, None)
+
+
+def test_a_pages_own_tab_is_recorded_at_the_address_it_was_read_from(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    own, other = v(101, rating=4.9, votes=100, tab_url=MOVED.format(101)), v(102, version=2, rating=4.0, votes=5)
+    ug = FakeUG()
+    ug.add(slugged(101), make_tab_page_html(own, [other], content=sheet("sheet 101", LINES), artist_url=SODA_URL))
+    ug.tab(other, [own], content=sheet("sheet 102", LINES))
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert {int(r.tab_id): r.url for r in song_versions(conn, song.id)} == {101: slugged(101), 102: slugged(102)}
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+
 # --- the guitar slot ------------------------------------------------------------------
 
 
@@ -1180,6 +1213,20 @@ def test_an_artist_without_chords_is_read_from_its_other_lists(conn, tmp_path):
     assert ug.requests == [artist_list(BANMA_ARTIST), artist_page_url(BANMA_ARTIST),
                            artist_list(BANMA_ARTIST, "tabs"), f"{TAB}2003000"]
     assert out.tab == 2003000 and get_song(conn, song.id).match_step == "artist_page"
+
+
+def test_artist_list_links_that_all_changed_shape_are_an_error_not_a_miss(conn, tmp_path):
+    song = banma(conn)
+    ug = FakeUG()
+    moved = [banma_tab(2001234, rating=4.7, votes=50, tab_url="https://www.ultimate-guitar.com/tab/2001234"),
+             banma_tab(2001300, song="安和桥", tab_url="https://www.ultimate-guitar.com/tab/2001300")]
+    ug.add(artist_list(BANMA_ARTIST), artist_page(1234567, "宋冬野", moved))
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, PASTED), [song])
+
+    assert stats.songs_failed == 1
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None  # no check recorded: tried next run
+    assert get_song(conn, song.id).match_decision == "not_found"
 
 
 def test_broken_cached_artist_page_is_fetched_again(conn, tmp_path):
