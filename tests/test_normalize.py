@@ -270,6 +270,46 @@ def test_the_translation_after_a_romanization_is_a_form_of_its_own():
 
 
 @pytest.mark.parametrize("ug,wanted", [
+    # Chinese read in any of a character's readings: 重 is chong in 重来, though pypinyin says zhong.
+    ("重来 Chong Lai Start Over", "Chong Lai"),
+    ("重来 Chong Lai Start Over", "Start Over"),
+    ("长大 Zhang Da Growing Up", "Growing Up"),
+    ("绿色 Lü Se Green", "Green"),  # ü written u, as pypinyin's v folds
+    ("女人 Nv Ren Woman", "Woman"),
+    ("西安 Xi'an Old Capital", "Old Capital"),
+    # Korean, in the Revised Romanization and the spellings titles also use.
+    ("봄날 Bomnal Spring Day", "Spring Day"),
+    ("봄날 Bomnal Spring Day", "Bomnal"),
+    ("피 땀 눈물 Pi Ttam Nunmul Blood Sweat & Tears", "Blood Sweat & Tears"),
+    ("피 땀 눈물 Pi Ttam Nunmul Blood Sweat & Tears", "Pi Ttam Nunmul"),
+    ("사랑해 Saranghae I Love You", "I Love You"),
+    ("너의 의미 Neoui Uimi The Meaning of You", "The Meaning of You"),
+    # Japanese: kana as Hepburn writes them, and each kanji as one to three morae.
+    ("夜に駆ける Yoru ni Kakeru Racing Into The Night", "Yoru ni Kakeru"),
+    ("夜に駆ける Yoru ni Kakeru Racing Into The Night", "Racing Into The Night"),
+    ("さくら Sakura Cherry Blossoms", "Cherry Blossoms"),
+    ("ありがとう Arigato Thank You", "Thank You"),
+    ("君の知らない物語 Kimi no Shiranai Monogatari The Story You Don't Know", "Kimi no Shiranai Monogatari"),
+    ("チェリー Cherī Cherry", "Cherry"),
+])
+def test_a_romanization_and_the_translation_after_it_are_forms_of_their_own(ug, wanted):
+    assert shares_a_form(ug, wanted)
+
+
+@pytest.mark.parametrize("ug,wanted", [
+    # Where the Latin part doesn't start with the original's reading, it stays whole: no word of a
+    # translation is a name of its own.
+    ("봄날 Spring Day", "Day"),
+    ("夜に駆ける Racing Into The Night", "Night"),
+    ("夜に駆ける Racing Into The Night", "Into The Night"),
+    ("与我交谈 Speak With Me", "With Me"),
+    ("Кино Kino Cinema", "Cinema"),  # Cyrillic: no reading of it here
+])
+def test_a_translation_alone_is_never_cut(ug, wanted):
+    assert not shares_a_form(ug, wanted)
+
+
+@pytest.mark.parametrize("ug,wanted", [
     ("莉莉安 Lilian", "莉莉安"),
     ("莉莉安 Lilian", "Lilian"),
     ("与我交谈 Speak With Me", "与我交谈"),

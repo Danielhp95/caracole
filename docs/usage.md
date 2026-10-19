@@ -214,23 +214,30 @@ Simplified ones.
 Ultimate Guitar often writes a non-Latin name in two scripts at once: the
 original, a romanization and a translation, in any order in brackets or after
 " / " or " - ", or, with nothing between them, the original first and the rest
-after a space. 宋冬野's artist page calls him "Song Dongye (宋冬野)", and the
-song "斑马 斑马 Banma Banma Zebra Zebra".
-Each part counts as a name of its own when caracole compares UG's names with
-yours, so `宋冬野 - 斑马斑马` finds that song there, and so would "Banma Banma",
-"Ban Ma Ban Ma" or "Zebra Zebra". Japanese, Korean and Cyrillic names come in
-the same patterns ("打上花火 (Uchiage Hanabi)", "봄날 (Spring Day)",
-"Кино (Kino)"). Caracole has no romanizer for those, so they meet on the part
-in their own script, or on the Latin one. UG also lists some of these titles
-in Latin letters alone, the romanization with its translation in brackets
-("Hong Dou (Red Bean)" for 王菲's 红豆): on an artist page, a title in Latin
-letters counts by what is outside its brackets too, so 红豆 finds it there.
+after a space. 宋冬野's artist page calls him "Song Dongye (宋冬野)", and the song
+"斑马 斑马 Banma Banma Zebra Zebra". Each part counts as a name of its own when
+caracole compares UG's names with yours, so `宋冬野 - 斑马斑马` finds that song
+there, and so would "Banma Banma", "Ban Ma Ban Ma" or "Zebra Zebra".
+
+Japanese, Korean and Cyrillic names come in the same patterns ("打上花火 (Uchiage
+Hanabi)", "봄날 (Spring Day)", "Кино (Kino)"). Caracole doesn't romanize those
+to compare them: they meet on the part in their own script, or on the Latin
+one. It reads Hangul and kana only to tell where a romanization ends and a
+translation starts, as it does for Chinese with pinyin in any reading of a
+character: "봄날 Bomnal Spring Day" is "Bomnal" and "Spring Day", "夜に駆ける Yoru ni
+Kakeru Racing Into The Night" is "Yoru ni Kakeru" and "Racing Into The Night",
+and "重来 Chong Lai Start Over" is "Chong Lai" and "Start Over".
 
 The same goes wherever caracole meets a name it didn't write: a song you
 wrote in two scripts against the index (UG's sitemaps write names in Latin
 letters only, so `DAOKO - 打上花火 (Uchiage Hanabi)` meets
 `daoko/uchiage-hanabi`), a purchase tagged that way, and a Guitar Pro download
 UG named so.
+
+UG also lists some of these titles in Latin letters alone, the romanization
+with its translation in brackets ("Hong Dou (Red Bean)" for 王菲's 红豆): on an
+artist page, a title in Latin letters counts by what is outside its brackets
+too, so 红豆 finds it there.
 
 A part that only names a version or a part, such as "Live", "Acoustic",
 "Remix" or "Intro", or that is a number or a single Latin letter, never makes

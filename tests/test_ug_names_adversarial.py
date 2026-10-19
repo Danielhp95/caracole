@@ -262,9 +262,6 @@ def test_w7_9_a_short_original_title_meets_its_listing_in_two_scripts(conn, tmp_
     assert ids == {9000002} and song.match_step == "artist_page"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-10: after a Korean or Japanese original, an unbracketed romanization "
-                          "and translation stay one part, so neither one alone meets")
 @pytest.mark.parametrize("artist,title,listed", [
     ("BTS", "Spring Day", "봄날 Bomnal Spring Day"),  # Spotify's title for 봄날
     ("BTS", "Blood Sweat & Tears", "피 땀 눈물 Pi Ttam Nunmul Blood Sweat & Tears"),
@@ -338,9 +335,6 @@ def test_w7_15_a_title_with_a_featured_artist_in_cjk_brackets(conn, tmp_path, li
     assert ids == {9000002} and song.match_step == "artist_page"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-16: a romanization is split from its translation only where pypinyin "
-                          "reads the characters the same; 重来 is chong lai, pypinyin says zhong lai")
 def test_w7_16_a_romanization_of_a_polyphonic_character(conn, tmp_path):
     ug = FakeUG()
     serve_artist(ug, "宋冬野", [(9000001, "Another Song"), (9000002, "重来 Chong Lai Start Over")])
