@@ -102,7 +102,7 @@ a { color: inherit; }
 
 .foot { margin-top: 32px; color: var(--muted); font-size: .8rem; }
 .foot p { margin: 6px 0 0; }
-.licence summary { display: inline-flex; align-items: center; min-height: 32px; cursor: pointer; }
+.licence summary { padding: 6px 0; cursor: pointer; }
 .licence pre { margin: 4px 0 0; white-space: pre-wrap; font: .72rem/1.4 ui-monospace, SFMono-Regular, Menlo,
   Consolas, monospace; }
 .foot .pdf { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 10px;

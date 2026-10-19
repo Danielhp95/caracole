@@ -263,7 +263,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         + '<footer class="foot">\n'
         + pdf_link
         + f'<p>Chord shapes from <a href="{CREDIT_URL}">chords-db</a>, © 2016 David Rubert, MIT licence.</p>\n'
-        + f'<details class="licence"><summary>Its licence</summary><pre>{escape(_credit_notice())}</pre></details>\n'
+        + f'<details class="licence"><summary>The chords-db licence</summary><pre>{escape(_credit_notice())}</pre></details>\n'
         + "<p>Keep this page private: the lyrics and chords are other people's work.</p>\n"
         + "</footer>\n</div>\n"
         + _CONTROLS
