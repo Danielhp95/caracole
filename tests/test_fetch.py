@@ -131,10 +131,11 @@ class FakeUG:
         status, html = self.pages.get(url, (404, NOT_FOUND))
         return httpx.Response(status, text=html)
 
-    def client(self, cache_dir, budget=60):
+    def client(self, cache_dir, budget=60, *, now=NOW):
+        """A client for one run at ``now``, which is also the age the HTTP cache is judged by."""
         return PoliteClient("ug", ProviderPolicy(budget=budget, delay=(0.0, 0.0)), cache_dir,
                             user_agent="tabarr-test", transport=httpx.MockTransport(self.handler),
-                            sleep=lambda s: None)
+                            sleep=lambda s: None, wall_clock=lambda: now)
 
 
 def lyrics_json(plain):
@@ -154,9 +155,9 @@ def accepted(conn, artist="Soda Stereo", title="Persiana Americana", akey="soda-
     return get_song(conn, song.id)
 
 
-def context(conn, client, tmp_path, overrides=None, **kw):
+def context(conn, client, tmp_path, overrides=None, *, now=NOW, **kw):
     return FetchContext(conn=conn, client=client, overrides=overrides or Overrides(), rank=RankPolicy(),
-                        library_dir=tmp_path / "lib", now=NOW, **kw)
+                        library_dir=tmp_path / "lib", now=now, **kw)
 
 
 def read(tmp_path, song, name):
@@ -1124,6 +1125,164 @@ def test_broken_cached_artist_page_is_fetched_again(conn, tmp_path):
     assert (second.songs_done, second.songs_failed) == (1, 0)
     assert ug.requests[0] == artist_list(BANMA_ARTIST)
     assert get_song(conn, song.id).status == "found"
+
+
+# --- artist-page songs, thirty days on ----------------------------------------------------------
+
+LATER = NOW + timedelta(days=31)
+
+
+def banma_found(conn, ug, tmp_path, *, kinds=("chords",)):
+    """斑马斑马 matched on 宋冬野's artist page (A6) on NOW: 2001234 is kept, 2001235 covers half."""
+    song = banma(conn)
+    serve_banma(ug, [banma_tab(2001234, rating=4.7, votes=50), banma_tab(2001235, version=2, rating=4.2, votes=5)],
+                kinds=kinds)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, PASTED), song)
+    assert "sheet 2001234" in read(tmp_path, song, "sheet.txt")
+    ug.requests.clear()
+    return get_song(conn, song.id)
+
+
+def relist_banma(ug, *tabs, kinds=("chords",), page=1, pages=1):
+    """宋冬野's chords list as UG shows it thirty days on."""
+    ug.add(artist_list(BANMA_ARTIST, page=page),
+           artist_page(1234567, "宋冬野", list(tabs), page=page, pages=pages, kinds=kinds))
+
+
+def test_artist_page_songs_are_checked_again_after_thirty_days(conn, tmp_path):
+    # The index can't see a bare id, so no index refresh ever makes 斑马斑马 dirty again.
+    song = banma_found(conn, FakeUG(), tmp_path)
+    assert get_song(conn, song.id).ug_dirty is False
+    assert songs_to_fetch(conn, PASTED, NOW + timedelta(days=29)) == []
+    assert [s.id for s in songs_to_fetch(conn, PASTED, NOW + timedelta(days=30))] == [song.id]
+    assert [s.id for s in songs_to_fetch(conn, PASTED, LATER)] == [song.id]
+
+
+def test_ignored_artist_page_songs_are_not_checked_again(conn, tmp_path):
+    song = banma_found(conn, FakeUG(), tmp_path)
+    assert songs_to_fetch(conn, Overrides(artist_url=PASTED.artist_url, ignore=frozenset({song.key})), LATER) == []
+
+
+def test_an_artist_page_song_upgrades_on_the_fresh_ratings(conn, tmp_path):
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+    newer = banma_tab(2001236, version=3, rating=4.9, votes=300)
+    relist_banma(ug, banma_tab(2001234, rating=4.5, votes=60), banma_tab(2001235, version=2, rating=4.2, votes=6),
+                 newer)
+    ug.tab(newer, content=sheet("sheet 2001236", BANMA_LINES), artist_url=BANMA_ARTIST)
+    (due,) = songs_to_fetch(conn, PASTED, LATER)
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache", now=LATER), tmp_path, PASTED, now=LATER), due)
+
+    # The list is read again (its cached copy is 31 days old); of the tab pages only the new one is asked for.
+    assert ug.requests == [artist_list(BANMA_ARTIST), f"{TAB}2001236"]
+    assert out.sheet == 2001236 and "sheet 2001236" in read(tmp_path, song, "sheet.txt")
+    assert pick_ids(conn, song, "chords") == [2001236]
+    rows = {int(r.tab_id): (r.rating, r.votes) for r in song_versions(conn, song.id)}
+    assert rows == {2001234: (4.5, 60), 2001235: (4.2, 6), 2001236: (4.9, 300)}
+    done = get_song(conn, song.id)
+    assert (done.match_decision, done.match_step, done.ug_checked_at) == ("accept", "artist_page", "2026-11-18T03:30:00Z")
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") == "2026-11-18T03:30:00Z"
+    assert songs_to_fetch(conn, PASTED, LATER) == []
+
+
+def test_an_artist_page_song_keeps_its_sheet_when_not_outranked(conn, tmp_path):
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+    path = song_dir(tmp_path / "lib", song) / "sheet.txt"
+    before = (path.stat().st_ino, kept_version(conn, song, "sheet.txt"))
+    relist_banma(ug, banma_tab(2001234, rating=4.8, votes=80), banma_tab(2001235, version=2, rating=4.6, votes=40))
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache", now=LATER), tmp_path, PASTED, now=LATER),
+                       get_song(conn, song.id))
+
+    assert ug.requests == [artist_list(BANMA_ARTIST)]  # both sheets come from the cache
+    assert out.sheet == 2001234 and (path.stat().st_ino, kept_version(conn, song, "sheet.txt")) == before
+    assert {int(r.tab_id): r.votes for r in song_versions(conn, song.id)} == {2001234: 80, 2001235: 40}
+
+
+def test_an_artist_page_song_picks_up_a_new_list_of_guitar_parts(conn, tmp_path):
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+    kinds = ("chords", "guitar-pro")  # 宋冬野 has a Guitar Pro list now
+    relist_banma(ug, banma_tab(2001234, rating=4.7, votes=50), banma_tab(2001235, version=2, rating=4.2, votes=5),
+                 kinds=kinds)
+    pro = banma_tab(2002000, type="Pro", rating=4.5, votes=12)
+    ug.add(artist_list(BANMA_ARTIST, "guitar-pro"), artist_page(1234567, "宋冬野", [pro], kinds=kinds))
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache", now=LATER), tmp_path, PASTED, now=LATER),
+                       get_song(conn, song.id))
+
+    assert ug.requests == [artist_list(BANMA_ARTIST), artist_list(BANMA_ARTIST, "guitar-pro")]
+    assert out.guitar_pro == (2002000,) and out.sheet == 2001234
+
+
+def test_a_stale_artist_page_is_no_answer_once_the_budget_is_spent(conn, tmp_path):
+    # PoliteClient serves a copy past its 30 days only when the budget is spent: that is no fresh rating.
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache", budget=0, now=LATER), tmp_path, PASTED,
+                                now=LATER), [get_song(conn, song.id)])
+
+    assert stats == FetchStats(songs_done=0, songs_failed=0, budget_exhausted=True)
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") == "2026-10-18T03:30:00Z"  # still due
+    assert [s.id for s in songs_to_fetch(conn, PASTED, LATER)] == [song.id]
+
+
+def test_a_recheck_cut_short_by_the_page_cap_resumes_next_run(conn, tmp_path):
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+    newer = banma_tab(2001236, version=3, rating=4.9, votes=300)
+    relist_banma(ug, banma_tab(2001234, rating=4.7, votes=50), banma_tab(2001235, version=2, rating=4.2, votes=5),
+                 page=1, pages=2)
+    relist_banma(ug, newer, banma_tab(2001400, song="鸽子"), page=2, pages=2)
+    ug.tab(newer, content=sheet("sheet 2001236", BANMA_LINES), artist_url=BANMA_ARTIST)
+
+    first = process_song(context(conn, ug.client(tmp_path / "cache", now=LATER), tmp_path, PASTED, now=LATER,
+                                 artist_pages_per_kind=1), get_song(conn, song.id))
+
+    assert ug.requests == [artist_list(BANMA_ARTIST)] and first.sheet is None
+    assert "sheet 2001234" in read(tmp_path, song, "sheet.txt")  # untouched
+    assert [s.id for s in songs_to_fetch(conn, PASTED, LATER)] == [song.id]
+
+    ug.requests.clear()
+    second = process_song(context(conn, ug.client(tmp_path / "cache", now=LATER), tmp_path, PASTED, now=LATER,
+                                  artist_pages_per_kind=1), get_song(conn, song.id))
+
+    assert ug.requests == [artist_list(BANMA_ARTIST, page=2), f"{TAB}2001236"]
+    assert second.sheet == 2001236 and songs_to_fetch(conn, PASTED, LATER) == []
+
+
+def test_a_recheck_that_no_longer_lists_the_title_leaves_the_match(conn, tmp_path):
+    # What the list says no longer is no miss: the versions and the sheet you have stay.
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+    relist_banma(ug, banma_tab(2001300, song="安和桥", rating=4.9, votes=80))
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache", now=LATER), tmp_path, PASTED, now=LATER),
+                       get_song(conn, song.id))
+
+    assert out.sheet == 2001234 and ug.requests == [artist_list(BANMA_ARTIST)]
+    done = get_song(conn, song.id)
+    assert (done.match_decision, done.match_step, done.status) == ("accept", "artist_page", "found")
+    assert {int(r.tab_id) for r in song_versions(conn, song.id)} == {2001234, 2001235}
+    assert songs_to_fetch(conn, PASTED, LATER) == []  # checked; again in thirty days
+
+
+def test_an_error_on_the_recheck_changes_nothing(conn, tmp_path):
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+    ug.add(artist_list(BANMA_ARTIST), "Internal Server Error", status=500)
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache", now=LATER), tmp_path, PASTED, now=LATER),
+                        [get_song(conn, song.id)])
+
+    assert stats.songs_failed == 1
+    same = get_song(conn, song.id)
+    assert (same.match_decision, same.match_step, same.status) == ("accept", "artist_page", "found")
+    assert "sheet 2001234" in read(tmp_path, song, "sheet.txt")
+    assert [s.id for s in songs_to_fetch(conn, PASTED, LATER)] == [song.id]
 
 
 # --- sheets from elsewhere: auto-chords, LaCuerda, and blocks ----------------------------------------
