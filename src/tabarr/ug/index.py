@@ -295,9 +295,11 @@ def index_count(conn: sqlite3.Connection) -> int:
 
 
 def index_stats(conn: sqlite3.Connection) -> dict[str, Any]:
-    """Rows by type, distinct artists, sitemaps indexed, and when the index was built and refreshed."""
+    """Rows by type (most first), distinct artists, sitemaps indexed, and when the index was built
+    and refreshed."""
     types = {
-        r[0]: r[1] for r in conn.execute("SELECT type, COUNT(*) FROM ug_index GROUP BY type ORDER BY COUNT(*) DESC")
+        r[0]: r[1]
+        for r in conn.execute("SELECT type, COUNT(*) FROM ug_index GROUP BY type ORDER BY COUNT(*) DESC, type")
     }
     return {
         "rows": sum(types.values()),
