@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from urllib.parse import quote
 
-from tabarr.db import kv_set_json
+from tabarr.db import kv_set, kv_set_json
 from tabarr.health import record_block
 from tabarr.library import keep_file
 from tabarr.overrides import Overrides
@@ -129,6 +129,30 @@ def test_buy_list_waits_while_the_index_is_incomplete(conn, cfg):
     mark_built(conn, NOW)
     text = todo(conn, cfg)
     assert "## Buy list (1)" in text and "index is incomplete" not in text
+
+
+def test_buy_list_waits_for_a_due_artist_page_check(conn, cfg):
+    # You just pasted the artist page: the next fetch looks for the song there before anything is bought.
+    s = add_song(conn, "宋冬野", "斑马斑马")
+    update_song(conn, s.id, match_decision="not_found")
+    o = Overrides(artist_url={"宋冬野": "https://www.ultimate-guitar.com/artist/song_dongye_1234567"})
+    text = todo(conn, cfg, o)
+    assert "## Buy list" not in text
+    assert "1 song waiting for the nightly fetch" in text
+    # Once the page has been read for the song (and didn't list it), buying is the next step.
+    kv_set(conn, f"ug:artist_page_checked:{s.id}", "2026-10-18T03:35:00Z")
+    assert "## Buy list (1)" in todo(conn, cfg, o)
+
+
+def test_buy_list_waits_for_lacuerda_to_be_asked(conn, cfg):
+    s = add_song(conn, "Joaquín Sabina", "Y Nos Dieron las Diez")
+    update_song(conn, s.id, match_decision="not_found")
+    text = todo(conn, cfg)
+    assert "## Buy list" not in text and "1 song waiting for the nightly fetch" in text
+    update_song(conn, s.id, lacuerda_checked_at="2026-10-18T03:36:00Z")  # LaCuerda had none
+    text = todo(conn, cfg)
+    assert "## Buy list (1)" in text and "No human sheet found yet" in text
+    assert "No human sheet exists" not in text
 
 
 def test_buy_list_waits_for_pending_fetches(conn, cfg):

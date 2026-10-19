@@ -160,6 +160,7 @@ def test_path_unsafe_names_link_to_the_folder_the_library_uses(conn, cfg, artist
 
 def test_songs_without_a_sheet_get_buy_and_search_links(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马，斑马")
+    update_song(conn, s.id, match_decision="not_found")  # UG has nothing tabarr can see
     found = add_song(conn, "Radiohead", "Creep")
     update_song(conn, found.id, status="found")
     put(cfg, found, "sheet.txt")
@@ -173,6 +174,37 @@ def test_songs_without_a_sheet_get_buy_and_search_links(conn, cfg):
     assert buy == {"Bandcamp": expected["bandcamp"], "Qobuz": expected["qobuz"], "iTunes": expected["itunes"]}
     for song in (songs[found.display], songs[ignored.display]):
         assert song["links"] == [] and song["buy"] == []
+
+
+def test_songs_tabarr_will_still_look_for_get_no_buy_links(conn, cfg):
+    # The to-do page's rule: no "buy the track" while a fetch, an artist page or LaCuerda is still to come.
+    from tabarr.db import kv_set
+
+    waiting = add_song(conn, "Radiohead", "Creep")  # accepted, not fetched yet (33 UG tabs)
+    update_song(conn, waiting.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    unmatched = add_song(conn, "Oasis", "Wonderwall")  # not matched yet
+    spanish = add_song(conn, "Joaquín Sabina", "Y Nos Dieron las Diez")  # LaCuerda not asked yet
+    update_song(conn, spanish.id, match_decision="not_found")
+    pasted = add_song(conn, "宋冬野", "斑马斑马")  # its artist page was just pasted
+    update_song(conn, pasted.id, match_decision="not_found")
+    o = Overrides(artist_url={"宋冬野": "https://www.ultimate-guitar.com/artist/song_dongye_1234567"})
+    songs = songs_of(page(conn, cfg, o))
+    for s in (waiting, unmatched, spanish, pasted):
+        assert songs[s.display]["buy"] == [], s.display
+        assert [link["label"] for link in songs[s.display]["links"]] == ["Chordify", "YouTube"]
+    update_song(conn, spanish.id, lacuerda_checked_at="2026-10-18T03:36:00Z")
+    kv_set(conn, f"ug:artist_page_checked:{pasted.id}", "2026-10-18T03:35:00Z")
+    update_song(conn, waiting.id, ug_dirty=False, ug_checked_at="2026-10-18T03:35:00Z")
+    songs = songs_of(page(conn, cfg, o))
+    for s in (waiting, spanish, pasted):
+        assert [link["label"] for link in songs[s.display]["buy"]] == ["Bandcamp", "Qobuz", "iTunes"], s.display
+    assert songs[unmatched.display]["buy"] == []
+
+
+def test_a_song_whose_audio_you_have_gets_no_buy_links(conn, cfg):
+    s = add_song(conn, "宋冬野", "斑马斑马")
+    update_song(conn, s.id, match_decision="not_found", audio_path="/music/斑马斑马.flac")
+    assert songs_of(page(conn, cfg))[s.display]["buy"] == []
 
 
 def test_guitar_pro_pages_to_click_are_the_picks_without_files(conn, cfg):

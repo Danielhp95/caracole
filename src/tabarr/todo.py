@@ -17,10 +17,13 @@ from urllib.parse import quote
 from tabarr.config import Config
 from tabarr.db import kv_get_json
 from tabarr.health import get_state
+from tabarr.lacuerda import artist_slug_candidates, looks_spanish
 from tabarr.library import write_atomic
+from tabarr.lyrics import song_lyrics
 from tabarr.normalize import clean_title, display_key, has_han, identity_key, romanize, slug_key
 from tabarr.overrides import Overrides
 from tabarr.songs import Song, list_songs
+from tabarr.ug.fetch import songs_to_fetch
 from tabarr.ug.index import index_state
 from tabarr.ug.lookup import artist_known, learned_artist_url, song_tabs
 
@@ -145,25 +148,52 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
     return items, len(wanted)
 
 
-def _buy_list(songs: list[Song], index: str) -> tuple[list[str], int]:
-    items, waiting = [], 0
+def _lacuerda_due(song: Song) -> bool:
+    """Whether LaCuerda is still to be asked for a song with no sheet (``lacuerda_fetch``'s rule):
+    it looks Spanish, an artist slug can be built from its name, and LaCuerda never answered for it."""
+    if song.lacuerda_checked_at is not None:
+        return False
+    lyrics = song_lyrics(song)
+    return looks_spanish(clean_title(song.title), lyrics.plain if lyrics is not None else None) and bool(
+        artist_slug_candidates(song.artists[0]))
+
+
+def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides,
+                 now: datetime) -> tuple[list[Song], int]:
+    """The wanted songs whose next step is buying the track, and how many wait for tabarr first.
+
+    A song is for buying once nothing tabarr will still do may find it a human
+    sheet: its UG match was fetched, or UG doesn't have it; no fetch, artist
+    page or LaCuerda check is due for it (those songs are the waiting ones);
+    and, for a song not found, the index is complete. Songs not matched yet,
+    reviews and songs whose audio you have are neither.
+    """
+    due = {s.id for s in songs_to_fetch(conn, overrides, now)}
+    partial = index_state(conn) == "partial"
+    buy, waiting = [], 0
     for s in songs:
-        if s.status != "wanted" or s.audio_path:
+        if s.status != "wanted" or s.audio_path or s.key in overrides.ignore:
             continue
-        # A not-found decision settles nothing while the index is partial (see _setup).
-        settled = (s.match_decision == "not_found" and index != "partial") or (
-            s.match_decision in ("accept", "pinned") and s.ug_checked_at)
-        if not settled:
-            if s.match_decision in ("accept", "pinned"):
-                waiting += 1
+        if s.match_decision not in ("accept", "pinned", "not_found"):
             continue
+        unfetched = s.match_decision != "not_found" and not s.ug_checked_at
+        if s.id in due or unfetched or _lacuerda_due(s):
+            waiting += 1
+        elif not (partial and s.match_decision == "not_found"):  # see _setup
+            buy.append(s)
+    return buy, waiting
+
+
+def _buy_list(songs: list[Song]) -> list[str]:
+    items = []
+    for s in songs:
         L = search_links(s.artist, s.title)
         items.append(
             f"- **{md(s.display)}** · buy: {_link('Bandcamp', L['bandcamp'])} · {_link('Qobuz', L['qobuz'])}"
             f" · {_link('iTunes', L['itunes'])} · check first: {_link('Chordify', L['chordify'])}"
             f" · {_link('Songsterr', L['songsterr'])} · {_link('YouTube', L['youtube'])}"
         )
-    return items, waiting
+    return items
 
 
 def _code(s: str) -> str:
@@ -353,7 +383,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         "Browse or search every song: [index.html](index.html)",
         "",
     ]
-    buy, waiting = _buy_list(songs, index)
+    to_buy, waiting = songs_to_buy(conn, songs, overrides, now)
     if waiting:
         out += [f"{waiting} song{'s' if waiting != 1 else ''} waiting for the nightly fetch.", ""]
     setup = _setup(index)
@@ -375,9 +405,9 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         ("Artists to find on Ultimate Guitar", artists,
          "UG's sitemaps list these artists only by bare ids (usually because of accents or non-Latin "
          "letters), so tabarr can't see their tabs. Find the artist page once and paste it.", n_artists),
-        ("Buy list", buy,
-         "No human sheet exists. Buy the track (DRM-free), drop it into Music/, and tabarr will "
-         "generate an auto sheet.", None),
+        ("Buy list", _buy_list(to_buy),
+         "No human sheet found yet. Buy the track (DRM-free), drop it into Music/, and tabarr will "
+         "generate an auto sheet; a human sheet found later takes its place.", None),
         ("Auto-chords couldn't read these purchases", unread, unread_intro, None),
         ("Guitar Pro pages to click", gp_pages,
          "Download each file with the page's Download button and drop it into `_inbox/`; tabarr "
