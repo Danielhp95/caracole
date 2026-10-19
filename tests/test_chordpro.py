@@ -298,3 +298,25 @@ def test_lacuerda_style_sheet():
 
 def test_marker_only_lines_leave_no_blank_lines():
     assert body("[tab]\n[ch]G[/ch]\nHello\n[/tab]\nNext") == ["[G]Hello", "Next"]
+
+
+@pytest.mark.parametrize("key,capo", [("  ", None), (None, 0), (None, "0"), ("", " ")])
+def test_blank_key_and_zero_capo_are_left_out(key, capo):
+    assert to_chordpro("", title="T", artist="A", key=key, capo=capo).splitlines() == ["{title: T}", "{artist: A}"]
+
+
+def test_capo_given_as_text():
+    assert "{capo: 3}" in to_chordpro("", title="T", artist="A", capo=" 3 ").splitlines()
+
+
+def test_section_header_with_repeat_mark():
+    assert body("[Chorus] x2") == ["{comment: Chorus x2}"]
+
+
+def test_section_header_followed_by_chords_on_its_line():
+    assert body("[Intro] [ch]G[/ch] [ch]D[/ch]\nWords") == ["{comment: Intro}", "[G] [D]", "Words"]
+
+
+def test_bracketed_note_before_lyrics_stays_a_lyric_line():
+    content = "[ch]G[/ch]          [ch]D[/ch]\n[x2] again and again"
+    assert body(content) == ["[G](x2) again [D]and again"]

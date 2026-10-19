@@ -452,3 +452,12 @@ def test_chinese_glyphs_lost_with_core_fonts(tmp_path):
     render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
     text = pdf_text(pdf)
     assert "这是一个" not in text and "斑马" not in text
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_render_real_paths_with_chinese_names(tmp_path):
+    song = tmp_path / "宋冬野" / "斑马斑马"
+    cho = write_chordpro("[ch]G[/ch]\nHello", song / "sheet.cho", title="斑马斑马", artist="宋冬野")
+    render_pdf(cho, song / "sheet.pdf", chordpro_bin=CHORDPRO)
+    assert sorted(p.name for p in song.iterdir()) == ["sheet.cho", "sheet.pdf"]

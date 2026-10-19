@@ -19,7 +19,7 @@ import unicodedata
 
 _CHORD = re.compile(r"\[ch\](.*?)\[/ch\]")
 _TAB_MARK = re.compile(r"\[/?tab\]")
-_SECTION = re.compile(r"^\s*\[(?!/?(?:ch|tab)\])([^\[\]]+)\]\s*$")
+_SECTION = re.compile(r"\s*\[(?!/?(?:ch|tab)\])([^\[\]]+)\]\s*(.*?)\s*")
 # Repeat marks ("x2", "(x4)", "2x", LaCuerda's "(4)") and no-chord marks keep
 # their place on a chord line, as ChordPro annotations.
 _MARK = re.compile(
@@ -92,12 +92,26 @@ def to_chordpro(
     capo: int | str | None = None,
     auto: bool = False,
 ) -> str:
-    """Convert UG sheet markup into a ChordPro document."""
+    """Convert UG sheet markup into a ChordPro document.
+
+    - A chord line followed by a lyric line becomes one line, each chord at its
+      column; a chord line with no lyric line under it becomes a chord-only line.
+    - ``[Verse 1]`` becomes ``{comment: Verse 1}``.
+    - A ``[tab]`` block holding staff lines, or a run of staff lines outside one,
+      becomes ``{start_of_tab}`` … ``{end_of_tab}``, kept verbatim.
+    - Solfège chords get letter names; repeat marks become annotations (``[*x2]``).
+    - Text ChordPro would misread is escaped (see ``_escape_inline``).
+
+    The header carries the title, the artist, the key and capo when given, and an
+    "auto-generated, unverified" comment for auto-chords sheets.
+    """
     head = [f"{{title: {_directive_text(title)}}}", f"{{artist: {_directive_text(artist)}}}"]
-    if key:
-        head.append(f"{{key: {_directive_text(normalize_chord(key.strip()))}}}")
-    if capo:
-        head.append(f"{{capo: {_directive_text(str(capo))}}}")
+    key_text = (key or "").strip()
+    capo_text = "" if capo is None else str(capo).strip()
+    if key_text:
+        head.append(f"{{key: {_directive_text(normalize_chord(key_text))}}}")
+    if capo_text not in ("", "0"):
+        head.append(f"{{capo: {_directive_text(capo_text)}}}")
     if auto:
         head.append("{comment: auto-generated, unverified}")
     return "\n".join(head + _body(content)) + "\n"
@@ -118,9 +132,13 @@ def _body(content: str) -> list[str]:
                 out.append(merge_chord_line(entry, nxt))
                 i += 1
             else:
-                out.append(" ".join(token for _, token in _chord_items(entry)))
-        elif m := _SECTION.match(entry):
-            out.append(f"{{comment: {_directive_text(m.group(1))}}}")
+                out.append(_chord_only(entry))
+        elif section := _section(entry):
+            label, rest = section
+            if is_chord_line(rest):
+                out += [f"{{comment: {_directive_text(label)}}}", _chord_only(rest)]
+            else:
+                out.append(f"{{comment: {_directive_text(f'{label} {rest}'.rstrip())}}}")
         else:
             out.append(_text_line(entry))
     return _trim_blank(out)
@@ -173,7 +191,22 @@ def _is_staff(line: str) -> bool:
 
 
 def _is_lyric(line: str) -> bool:
-    return bool(line.strip()) and not _CHORD.search(line) and not _SECTION.match(line)
+    return bool(line.strip()) and not _CHORD.search(line) and not _section(line)
+
+
+def _section(line: str) -> tuple[str, str] | None:
+    """A section header's label, and the chords or repeat mark after it on its line."""
+    m = _SECTION.fullmatch(line)
+    if not m:
+        return None
+    label, rest = m.groups()
+    if rest and not (is_chord_line(rest) or _MARK.fullmatch(rest)):
+        return None  # "[x2] and again" is a lyric with a note, not a header
+    return label, rest
+
+
+def _chord_only(line: str) -> str:
+    return " ".join(token for _, token in _chord_items(line))
 
 
 def _chord_items(line: str) -> list[tuple[int, str]]:
@@ -256,7 +289,7 @@ def _finish(line: str) -> str:
     return " " + line if line.startswith("#") else line
 
 
-def _trim_blank(lines: list) -> list:
+def _trim_blank(lines: list[str]) -> list[str]:
     start, end = 0, len(lines)
     while start < end and not lines[start].strip():
         start += 1
