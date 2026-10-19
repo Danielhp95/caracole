@@ -27,9 +27,11 @@ up as a nightly service on a NixOS host, with secrets, Syncthing and backups.
 Tabarr reads one TOML file: the one `--config` (`-c`) or `$TABARR_CONFIG`
 names, or else `~/.config/tabarr/tabarr.toml` (under `$XDG_CONFIG_HOME` when
 that is set). Without a file, the defaults apply. Every key is optional, and an
-unknown key is an error, so a typo never falls back to a default unnoticed.
-`~` is your home folder, and a relative path is relative to the config file's
-folder.
+unknown key is an error, so a typo never falls back to a default unnoticed. So
+is a value of the wrong type or out of range: write `true` and `false`, and
+numbers, without quotes, and paths and names as quoted strings. The commands
+then exit with status 2 and name the key. `~` is your home folder, and a
+relative path is relative to the config file's folder.
 
 Here is every key with its default. The commented-out keys have none.
 
@@ -70,26 +72,27 @@ delay = [10, 20]
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
 margin = 8                        # ...when the next different title is this far behind
-review = 75                       # from here up to an accept, ask you
+review = 75                       # from here up to an accept, ask you (at most accept)
 artist_gate = 90                  # how close another artist's name must be to be tried
 
 [rank]                            # which sheets and guitar parts are kept
-coverage_threshold = 0.8          # a sheet is complete when it covers 80% of the lyric lines
-line_match = 85                   # how close a lyric line must be to count as covered
+coverage_threshold = 0.8          # a sheet is complete when it covers 80% of the lyric lines (0-1)
+line_match = 85                   # how close a lyric line must be to count as covered (0-100)
 prior_votes = 10                  # m in the Bayesian rating (v·R + m·C) / (v + m)
 scored_sheets = 3                 # sheets per song scored for coverage: the top 3 by rating
 label_penalty = 0.5               # off the rating of an intro, solo, outro, riff or lesson
 variant_bonus = 0.25              # onto an acoustic or live version, when your song is one
 keep_guitar_pro = 2               # Guitar Pro or Power Tab pages picked per song
-keep_sheet = 1                    # read but not used: tabarr keeps one sheet
-keep_tab = 1                      # read but not used: tabarr keeps one text tab
 
 [autochords]                      # read only by `tabarr autochords`
 # btc_weights = "/path/to/weights.pt"         # or $TABARR_BTC_WEIGHTS
 # beat_checkpoint = "/path/to/final0.ckpt"    # or $TABARR_BEAT_CHECKPOINT
-# btc_config = "/path/to/config"              # or $TABARR_BTC_CONFIG; read but not used
 device = "cpu"                    # where the models run
 ```
+
+Tabarr keeps one sheet and one text tab per song; only the number of Guitar
+Pro picks is a setting. Scores and thresholds can't be negative, scores stop
+at 100, and `scored_sheets` and `keep_guitar_pro` are whole numbers.
 
 **Folders.** `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
 `$XDG_STATE_HOME/tabarr`, else `~/.local/state/tabarr`. `cache_dir` works the
@@ -106,8 +109,8 @@ else the file `client_secret_file` names, else
 `$CREDENTIALS_DIRECTORY/ntfy_token`, else `token_file`, else
 `$TABARR_NTFY_TOKEN`.
 
-**Providers** are exactly `ug`, `lrclib` and `lacuerda`. Spell the table
-names as shown: a misspelled provider table isn't reported.
+**Providers** are exactly `ug`, `lrclib` and `lacuerda`. Any other
+`[providers.…]` table is an error, like any other unknown key.
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the

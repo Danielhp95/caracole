@@ -83,7 +83,6 @@ let
   # wrapper's --set-default values apply; settings.autochords wins over both.
   modelEnv = lib.filterAttrs (_: value: value != null) {
     TABARR_BTC_WEIGHTS = cfg.autochords.btcWeights;
-    TABARR_BTC_CONFIG = cfg.autochords.btcConfig;
     TABARR_BEAT_CHECKPOINT = cfg.autochords.beatCheckpoint;
   };
 
@@ -245,12 +244,6 @@ in
           Other BTC chord model weights, as TABARR_BTC_WEIGHTS. Null leaves the
           package's own; settings.autochords.btc_weights wins over both.
         '';
-      };
-
-      btcConfig = lib.mkOption {
-        type = lib.types.nullOr lib.types.path;
-        default = null;
-        description = "The BTC model's run configuration, as TABARR_BTC_CONFIG, if the package does not ship one.";
       };
 
       beatCheckpoint = lib.mkOption {
