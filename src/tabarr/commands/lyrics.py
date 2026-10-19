@@ -3,8 +3,10 @@
 Each makes the same pass as its ``tabarr run`` step, with a client of its own:
 this run's budget, and the HTTP cache the nightly run uses too. As in the run,
 a provider cooling down after a block is left alone, and a block starts (or
-extends) its cooldown and sends one ntfy alert; both exit 1. A spent budget is
-no failure: the songs left wait for the next run.
+extends) its cooldown and sends one ntfy alert. Neither is a failure, and
+neither is a spent budget: each prints what happened and exits 0, as
+``tabarr fetch`` and ``tabarr index`` do, and the songs left wait for the
+next run.
 
 Every command module is imported on every start, so the passes are imported
 inside the commands.
@@ -23,7 +25,6 @@ import typer
 
 from tabarr.commands import _common
 from tabarr.commands._common import (
-    fail,
     load_cfg,
     load_ovr,
     make_client,
@@ -61,6 +62,8 @@ def _lyrics(cfg: Config) -> None:
         return fetch_pending_lyrics(conn, client, cfg.library_dir, now)
 
     s = _provider_pass(cfg, "lrclib", run)
+    if s is None:
+        return
     if not (s.found or s.missing or s.instrumental or s.errors or s.budget_exhausted):
         typer.echo("No song is waiting for lyrics.")
         return
@@ -82,6 +85,8 @@ def _lacuerda(cfg: Config) -> None:
         return lacuerda_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides)
 
     s = _provider_pass(cfg, "lacuerda", run)
+    if s is None:
+        return
     if not (s.tried or s.budget_exhausted):
         typer.echo("No song to try on LaCuerda.")
         return
@@ -95,9 +100,10 @@ def _lacuerda(cfg: Config) -> None:
 
 def _provider_pass[T](
     cfg: Config, provider: str, run: Callable[[sqlite3.Connection, Client, datetime], T]
-) -> T:
-    """Run one provider's pass as the nightly run does; exit 1 on a cooldown or a block.
+) -> T | None:
+    """Run one provider's pass as the nightly run does; None after a cooldown or a block.
 
+    Either way it says so first; neither is a failure, so the command exits 0.
     Requests are logged to ``events`` under a run id of their own. A pass that
     made requests without a block clears the provider's strikes, as a run does.
     """
@@ -107,8 +113,9 @@ def _provider_pass[T](
     with closing(open_db(cfg)) as conn:
         if is_cooling(conn, provider, now):
             until = get_state(conn, provider).cooldown_until
-            fail(f"{name} is cooling down after a block until {_when(until)}; "
-                 "tabarr won't ask it before then.")
+            typer.echo(f"{name} is cooling down after a block until {_when(until)}; "
+                       "tabarr won't ask it before then.")
+            return None
         client = make_client(cfg, conn, provider, run_id_for(now))
         try:
             result = run(conn, client, now)
@@ -119,7 +126,8 @@ def _provider_pass[T](
                 f"(block #{state.strikes}). Nothing was marked missing."
             )
             _alert(cfg, f"tabarr: {provider} blocked", message)
-            fail(f"{name} blocked tabarr: {message}")
+            typer.echo(f"{name} blocked tabarr: {message}")
+            return None
         finally:
             client.close()
         if client.requests_made:
