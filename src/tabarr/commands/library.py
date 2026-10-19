@@ -36,12 +36,13 @@ def register(app: typer.Typer) -> None:
         cfg = load_cfg(ctx)
         load_ovr(cfg)  # a broken file stops here, before a question whose answer it couldn't keep
         conn = open_db(cfg)
+
+        def read(prompt: str) -> str:  # the prompts end in ": "; Enter answers ""
+            return typer.prompt(prompt, default="", show_default=False, prompt_suffix="")
+
         try:
-            stats = review_songs(
-                conn, cfg, ReviewIO(read=lambda prompt: typer.prompt(prompt, default="s", show_default=False),
-                                    write=typer.echo),
-                rematch=lambda: _rematch(conn, cfg),
-            )
+            stats = review_songs(conn, cfg, ReviewIO(read=read, write=typer.echo),
+                                 rematch=lambda: _rematch(conn, cfg))
         except OverridesError as e:  # the file broke while review waited for an answer
             fail(f"overrides: {e}", 2)
         typer.echo(

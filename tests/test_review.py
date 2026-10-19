@@ -89,6 +89,15 @@ def test_bad_pin_url_is_reported_and_skipped(conn, cfg):
     assert not cfg.overrides_file.exists()
 
 
+def test_enter_at_the_url_prompt_skips_the_song(conn, cfg):
+    s = review_song(conn)
+    script = Script("p", "")
+    stats = review_songs(conn, cfg, script.io())
+    assert stats.skipped == 1 and stats.pinned == 0 and get_song(conn, s.id).review is True
+    assert not any("not an Ultimate Guitar tab URL" in line for line in script.out)
+    assert not cfg.overrides_file.exists()
+
+
 def test_skip_and_quit(conn, cfg):
     review_song(conn, "A", "One")
     review_song(conn, "B", "Two")

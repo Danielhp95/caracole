@@ -62,6 +62,16 @@ def test_review_skip_and_quit(tmp_path):
     assert "song-dongye/ban-ma-ban-ma" in result.output and "skipped 1" in result.output
 
 
+def test_review_prompts_end_in_one_colon_and_enter_at_the_url_prompt_skips(tmp_path):
+    conn, sid = seed(tmp_path)
+    update_song(conn, sid, review=True, match_candidates=[CANDIDATE])
+    result = run(tmp_path, "review", input="p\n\n")
+    assert result.exit_code == 0, result.output
+    assert "(q)uit: p" in result.output and ": :" not in result.output
+    assert "not an Ultimate Guitar tab URL" not in result.output and "skipped 1" in result.output
+    assert not (tmp_path / "lib" / "overrides.toml").exists()
+
+
 def test_review_with_broken_overrides_stops_before_the_first_prompt(tmp_path):
     conn, sid = seed(tmp_path)
     update_song(conn, sid, review=True, match_candidates=[CANDIDATE])

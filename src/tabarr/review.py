@@ -78,6 +78,9 @@ def review_songs(
             stats.ignored += 1
         elif answer == "p":
             url = io.read("UG tab URL: ").strip()
+            if not url:  # Enter: skip after all
+                stats.skipped += 1
+                continue
             try:
                 tab_id_from_url(url)
             except OverridesError as e:
