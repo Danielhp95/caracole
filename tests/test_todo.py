@@ -283,3 +283,41 @@ def test_spotify_auth_line_keeps_reason_and_advice(conn, cfg):
                                          "message": "the refresh token was revoked"})
     text = todo(conn, cfg)
     assert "the refresh token was revoked" in text and "Run `tabarr auth spotify`." in text
+
+
+AUTOCHORDS = "## Auto-chords couldn't read these purchases"
+
+
+def test_autochords_failures_listed_with_their_file_and_error(conn, cfg):
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, match_decision="not_found")
+    kv_set_json(conn, "autochords:status", {"at": "2026-10-18T04:12:00Z", "generated": 1, "skipped": 3, "failed": [
+        {"song": "宋冬野 - 斑马斑马", "error": "RuntimeError: Error opening '…': Format not recognised.",
+         "audio": str(cfg.music_dir / "宋冬野" / "斑马斑马.m4a")},
+        {"song": "A_B - [C]", "error": "ValueError: too short_to [read]", "audio": "/elsewhere/a `b`.wav"},
+    ]})
+    text = todo(conn, cfg)
+    assert f"{AUTOCHORDS} (2)\n" in text
+    assert text.index("## Buy list") < text.index(AUTOCHORDS) < text.index("## Provider health")
+    section = text.split(f"{AUTOCHORDS} (2)\n", 1)[1].split("\n## ", 1)[0]
+    assert "Re-download" in section and "convert it" in section and "replace the original" in section
+    assert "tries a changed file again" in section and "2026-10-18 04:12 UTC" in section
+    # Files in Music/ are shown from there, as you'd find them on the laptop.
+    assert "- **宋冬野 - 斑马斑马**: `宋冬野/斑马斑马.m4a` · RuntimeError: Error opening '…': Format not recognised." in section
+    assert r"- **A\_B - \[C\]**: /elsewhere/a \`b\`.wav · ValueError: too short\_to \[read\]" in section
+
+
+def test_autochords_section_only_with_failures(conn, cfg):
+    assert AUTOCHORDS not in todo(conn, cfg)
+    for record in ({"at": "2026-10-18T04:12:00Z", "generated": 2, "skipped": 0, "failed": []},
+                   ["not", "a", "record"], {"failed": "A - T"}, {"failed": [None, "x", {"song": "A - T"}]}):
+        kv_set_json(conn, "autochords:status", record)
+        assert AUTOCHORDS not in todo(conn, cfg), record
+
+
+def test_autochords_section_copes_with_a_bad_timestamp(conn, cfg):
+    kv_set_json(conn, "autochords:status", {"at": "nonsense", "failed": [
+        {"song": "A - T", "error": "EOFError", "audio": "/music/x.wav"}, {"song": "B - U"}]})
+    text = todo(conn, cfg)
+    assert f"{AUTOCHORDS} (1)" in text and "- **A - T**: `/music/x.wav` · EOFError" in text
+    assert "nonsense" not in text and "B - U" not in text

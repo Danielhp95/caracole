@@ -1,8 +1,9 @@
 """_todo.md: the whole user interface until a richer one is needed (plan §5).
 
 Every section is a list of things only you can do: confirm a match, download a
-Guitar Pro file, buy a track, find an artist's UG page. Each comes with the
-links to do it, and the exact overrides.toml line to paste.
+Guitar Pro file, buy a track, replace a purchase auto-chords can't read, find an
+artist's UG page. Each comes with the links to do it, and the exact
+overrides.toml line to paste.
 """
 
 from __future__ import annotations
@@ -162,6 +163,36 @@ def _buy_list(songs: list[Song]) -> tuple[list[str], int]:
     return items, waiting
 
 
+def _code(s: str) -> str:
+    """Inline code, or escaped text when ``s`` has a backtick of its own."""
+    return md(s) if "`" in s else f"`{s}`"
+
+
+def _autochords_failures(conn: sqlite3.Connection, cfg: Config) -> tuple[list[str], str]:
+    """Purchases auto-chords couldn't read, and what to do about them.
+
+    They come from kv ``autochords:status``, written by ``autochords.run.autochords_pending``.
+    A file in the music folder is shown from there, as it is on every synced copy.
+    """
+    status = kv_get_json(conn, "autochords:status", default=None)
+    failed = status.get("failed") if isinstance(status, dict) else None
+    items = []
+    for f in failed if isinstance(failed, list) else []:
+        if not isinstance(f, dict) or not all(isinstance(f.get(k), str) for k in ("song", "audio", "error")):
+            continue
+        audio = Path(f["audio"])
+        shown = str(audio.relative_to(cfg.music_dir)) if audio.is_relative_to(cfg.music_dir) else f["audio"]
+        items.append(f"- **{md(f['song'])}**: {_code(shown)} · {md(f['error'])}")
+    if not items:
+        return [], ""
+    try:
+        last = f" (last run {_fmt(datetime.fromisoformat(str(status['at'])))})"
+    except (KeyError, ValueError):
+        last = ""
+    return items, ("Re-download each file, or convert it (to FLAC, say) and replace the original. "
+                   f"Auto-chords tries a changed file again on its next run{last}.")
+
+
 def _guitar_pro_pages(conn: sqlite3.Connection, songs_by_id: dict[int, Song]) -> tuple[list[str], int]:
     rows = conn.execute(
         "SELECT v.* FROM versions v WHERE v.kind IN ('guitar-pro', 'power') AND v.pick_rank IS NOT NULL "
@@ -312,6 +343,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                 "tabarr wasn't sure about these matches. Paste the line for the right candidate into "
                 "overrides.toml, or run `tabarr review`.", "", *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
+    unread, unread_intro = _autochords_failures(conn, cfg)
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
     for title, items, intro, count in (
         ("Partial sheets", _partial_sheets(conn, cfg, by_id),
@@ -322,6 +354,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         ("Buy list", buy,
          "No human sheet exists. Buy the track (DRM-free), drop it into Music/, and tabarr will "
          "generate an auto sheet.", None),
+        ("Auto-chords couldn't read these purchases", unread, unread_intro, None),
         ("Guitar Pro pages to click", gp_pages,
          "Download each file with the page's Download button and drop it into `_inbox/`; tabarr "
          "files it under the right song.", n_pages),
