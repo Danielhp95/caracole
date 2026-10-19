@@ -351,6 +351,12 @@ def test_tapping_through_the_controls(tmp_path):
 
 
 @in_chromium
+def test_a_sheet_without_chords_has_no_key_button(tmp_path):
+    dom = dump_dom(build_viewer("{title: T}\n{artist: A}\nOnly words\n"), tmp_path)
+    assert 'data-ready="1"' in dom and re.search(r'id="fab"[^>]*hidden', dom)
+
+
+@in_chromium
 def test_a_chord_caracole_cant_read_is_left_as_written(tmp_path):
     dom = dump_dom(build_viewer("{title: T}\n{artist: A}\n[G]la [(G)]lo\n"), tmp_path, "#t=2")
     assert chord_texts(dom) == {"0": "A", "1": "(G)"}

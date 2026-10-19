@@ -455,7 +455,7 @@
     if (scrolling && !e.target.closest(".fab")) stopScroll();
   }, { passive: true });
 
-  fab.hidden = false;
+  fab.hidden = count === 0;  // nothing to transpose
   render();
   if (hash.get("panel") === "1") open(panel);
   if (hash.has("chord")) openCard(String(hash.get("chord")));
