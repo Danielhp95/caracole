@@ -204,6 +204,29 @@ updated, the line is kept all the same, a warning says why, and the next sync
 adds the song. The first `caracole add` creates the file, with a header that
 explains the format.
 
+### Names in other scripts
+
+Write a song as you know it, in its own script or in Latin letters:
+`宋冬野 - 斑马斑马`, `宋冬野 - 斑馬斑馬` and `Song Dongye - Banma Banma` all
+work. Caracole compares Chinese as pinyin too, and Traditional characters as
+Simplified ones.
+
+Ultimate Guitar often writes a non-Latin name in two scripts at once: the
+original, a romanization and a translation, in any order, in brackets, after
+" / " or " - ", or with nothing between them. 宋冬野's artist page calls him
+"Song Dongye (宋冬野)", and the song "斑马 斑马 Banma Banma Zebra Zebra".
+Each part counts as a name of its own when caracole compares UG's names with
+yours, so `宋冬野 - 斑马斑马` finds that song there, and so would "Banma Banma",
+"Ban Ma Ban Ma" or "Zebra Zebra". Japanese, Korean and Cyrillic names come in
+the same patterns ("打上花火 (Uchiage Hanabi)", "봄날 (Spring Day)",
+"Кино (Kino)"). Caracole has no romanizer for those, so they meet on the part
+in their own script, or on the Latin one.
+
+A part that only names a version or a part, such as "Live", "Acoustic",
+"Remix" or "Intro", or that is a number, a single letter or fewer than three
+Latin letters, never makes a match on its own. Another song of the artist never
+stands in for yours either: 董小姐 is no 斑马斑马, in any script.
+
 ### caracole sync
 
 `caracole sync` reads wanted.txt, then Spotify when it's set up, and prints a

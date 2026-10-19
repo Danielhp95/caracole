@@ -1,12 +1,14 @@
 import pytest
 
 from caracole.normalize import (
+    KEY_VERSION,
     clean_title,
     compact,
     display_key,
     fold,
     has_han,
     identity_key,
+    name_forms,
     romanize,
     slug_key,
     split_variant,
@@ -241,3 +243,125 @@ def test_names_made_only_of_and_keep_a_key():
     # 32 real UG URLs have artist or song slugs that are only "and" tokens (the band "And And And").
     assert slug_key("And And And") == ug_slug_key("and-and-and") == "and-and-and"
     assert ug_slug_key("and") == "and"
+
+
+# --- a name's forms: how UG writes non-Latin names --------------------------------------------
+
+
+def shares_a_form(one: str, other: str) -> bool:
+    """Whether two names have a form in common, hyphens aside, as the artist-page fetch compares them."""
+    return bool({compact(f) for f in name_forms(one)} & {compact(f) for f in name_forms(other)})
+
+
+# The forms UG gave the live case (2026-10-19): the song, and its artist.
+BANMA_UG = "斑马 斑马 Banma Banma Zebra Zebra"
+SONG_DONGYE_UG = "Song Dongye (宋冬野)"
+
+
+@pytest.mark.parametrize("wanted", ["斑马斑马", "斑馬斑馬", "Banma Banma", "Ban Ma Ban Ma", "斑马，斑马"])
+def test_original_romanization_and_translation_unseparated(wanted):
+    assert shares_a_form(BANMA_UG, wanted)
+
+
+def test_the_translation_after_a_romanization_is_a_form_of_its_own():
+    assert shares_a_form(BANMA_UG, "Zebra Zebra")
+    assert {"banma-banma", "zebra-zebra"} <= set(name_forms(BANMA_UG))
+
+
+@pytest.mark.parametrize("ug,wanted", [
+    ("莉莉安 Lilian", "莉莉安"),
+    ("莉莉安 Lilian", "Lilian"),
+    ("与我交谈 Speak With Me", "与我交谈"),
+    ("与我交谈 Speak With Me", "Speak With Me"),
+])
+def test_original_and_translation(ug, wanted):
+    assert shares_a_form(ug, wanted)
+
+
+@pytest.mark.parametrize("wanted", ["宋冬野", "Song Dongye", "宋冬野 (Song Dongye)", "Song Dong Ye", "song-dongye"])
+def test_romanization_and_original_in_brackets(wanted):
+    assert shares_a_form(SONG_DONGYE_UG, wanted)
+
+
+@pytest.mark.parametrize("ug,wanted", [
+    ("打上花火 (Uchiage Hanabi)", "打上花火"),  # Japanese kanji, which no romanizer here reads
+    ("打上花火 (Uchiage Hanabi)", "Uchiage Hanabi"),
+    ("さくら (Sakura)", "さくら"),  # kana
+    ("Lemon (レモン)", "レモン"),
+    ("봄날 (Spring Day)", "봄날"),  # Hangul
+    ("봄날 (Spring Day)", "Spring Day"),
+    ("Кино (Kino)", "Кино"),  # Cyrillic
+    ("Кино (Kino)", "Kino"),
+    ("Группа крови / Gruppa Krovi", "Группа крови"),
+])
+def test_other_scripts_in_the_same_patterns(ug, wanted):
+    assert shares_a_form(ug, wanted)
+
+
+@pytest.mark.parametrize("ug", [
+    "斑马，斑马", "斑马·斑马", "斑马・斑马", "「斑马斑马」", "『斑马斑马』", "斑马斑马（Banma Banma）",
+    "【斑马斑马】Zebra Zebra", "《斑马斑马》 Banma Banma",
+])
+def test_fullwidth_and_cjk_punctuation_between_the_parts(ug):
+    assert shares_a_form(ug, "斑马斑马")
+
+
+@pytest.mark.parametrize("ug,wanted", [
+    ("斑马斑马 / Zebra Zebra", "斑马斑马"),
+    ("斑马斑马 / Zebra Zebra", "Zebra Zebra"),
+    ("斑马斑马 - Banma Banma", "斑马斑马"),
+    ("Song Dongye - 宋冬野", "宋冬野"),
+    ("宋冬野 / Song Dongye", "Song Dongye"),
+    ("斑马斑马 Banma Banma - Zebra Zebra", "Zebra Zebra"),
+])
+def test_separators_between_the_parts(ug, wanted):
+    assert shares_a_form(ug, wanted)
+
+
+@pytest.mark.parametrize("ug", ["董小姐", "郭源潮", "莉莉安 Lilian", "与我交谈 Speak With Me"])
+def test_another_song_of_the_artist_never_shares_a_form(ug):
+    assert not shares_a_form(ug, "斑马斑马")
+    assert not shares_a_form(ug, BANMA_UG)
+
+
+@pytest.mark.parametrize("ug,generic,own", [
+    ("斑马斑马 Live", "Live", "斑马斑马"),
+    ("斑马斑马 (Acoustic)", "Acoustic", "斑马斑马"),
+    ("斑马斑马 Remix", "Remix", "斑马斑马"),
+    ("斑马斑马 (Intro)", "Intro", "斑马斑马"),
+    ("斑马斑马 (Live Version)", "Live Version", "斑马斑马"),
+    ("斑马斑马 2", "2", "斑马斑马 2"),
+    ("斑马斑马 B", "B", "斑马斑马"),
+    ("爱 Ai", "Ai", "爱"),  # under three Latin letters
+    ("Кино (Live)", "Live", "Кино"),
+])
+def test_a_generic_part_never_makes_a_match_on_its_own(ug, generic, own):
+    assert not shares_a_form(ug, generic)
+    assert shares_a_form(ug, own)  # the rest of the name still matches
+
+
+def test_two_names_with_their_own_scripts_are_no_bilingual_name():
+    # A duet written "A (甲) & B (乙)" is neither of its singers.
+    duet = "Joey Yung (容祖儿) & Eason Chan (陈奕迅)"
+    assert not shares_a_form(duet, "陈奕迅") and not shares_a_form(duet, "Joey Yung")
+
+
+@pytest.mark.parametrize("name", [
+    "Soda Stereo", "Paranoid / War Pigs", "Creep (Acoustic)", "Live and Let Die", "Wonderwall - Remix",
+    "De Música Ligera", "AC/DC", "The The", "Mötley Crüe",
+])
+def test_latin_names_have_their_slug_key_alone(name):
+    assert name_forms(name) == (slug_key(name),)
+
+
+def test_chinese_names_lead_with_their_keys_and_pinyin():
+    assert name_forms("斑马斑马") == ("斑马斑马", "ban-ma-ban-ma")
+    assert name_forms("斑馬斑馬") == ("斑馬斑馬", "ban-ma-ban-ma", "斑马斑马")  # Traditional, then Simplified
+    assert name_forms(SONG_DONGYE_UG)[:2] == (slug_key(SONG_DONGYE_UG), slug_key(romanize(SONG_DONGYE_UG)))
+    assert name_forms(BANMA_UG)[0] == slug_key(BANMA_UG) == "斑马斑马-banma-banma-zebra-zebra"
+
+
+def test_forms_are_for_comparing_and_keys_stay_as_they_were():
+    # Forms never change a song's key, so no re-keying (KEY_VERSION) comes with them.
+    assert KEY_VERSION == 2
+    assert identity_key(SONG_DONGYE_UG, BANMA_UG) == "song-dongye-宋冬野/斑马斑马-banma-banma-zebra-zebra"

@@ -71,7 +71,7 @@ from caracole.http import (
 )
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
 from caracole.lyrics import song_lyrics
-from caracole.normalize import clean_title, compact, has_han, romanize, slug_key
+from caracole.normalize import clean_title, compact, name_forms, slug_key
 from caracole.overrides import Overrides, artist_page_address
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from caracole.songs import Song, get_song, list_songs, refresh_status, update_song
@@ -227,11 +227,10 @@ def _slot(kind: str) -> str:
 
 
 def _name_keys(name: str) -> list[str]:
-    """A name's keys: its slug key, plus its pinyin key when it is Chinese."""
-    keys = [slug_key(name)]
-    if has_han(name):
-        keys.append(slug_key(romanize(name)))
-    return [k for k in dict.fromkeys(keys) if k]
+    """A name's keys, its slug key first (``normalize.name_forms``): its pinyin key when it is Chinese,
+    and each part of a name UG writes in two scripts, as "Song Dongye (宋冬野)" or
+    "斑马 斑马 Banma Banma Zebra Zebra"."""
+    return list(name_forms(name))
 
 
 def artist_keys(song: Song, overrides: Overrides) -> list[str]:
@@ -433,7 +432,9 @@ def _artist_page_base(url: str | None) -> str | None:
 
 
 def _same_artist(key: str, name: str) -> bool:
-    return compact(key) in {compact(k) for k in _name_keys(name)}
+    """Whether the artist UG names ``name`` is the one filed under ``key``: they share a form, hyphens
+    aside, as "宋冬野" and "Song Dongye (宋冬野)" do."""
+    return not {compact(k) for k in _name_keys(key)}.isdisjoint(compact(k) for k in _name_keys(name))
 
 
 def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[str] = ()) -> str | None:
