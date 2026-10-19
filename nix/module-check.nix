@@ -82,6 +82,16 @@ let
     autochordsOn
   ];
   defaults = evalSystem [ ];
+  # nix/module.nix imported on its own, without the flake's wrapper.
+  standalone =
+    (pkgs.nixos [
+      ./module.nix
+      {
+        boot.isContainer = true;
+        system.stateVersion = lib.trivial.release;
+        services.tabarr.enable = true;
+      }
+    ]).config;
   stateDirSet = evalSystem [
     stubbed
     { services.tabarr.settings.state_dir = "/elsewhere"; }
@@ -204,6 +214,9 @@ let
       defaults.services.tabarr.package.drvPath == defaultPackage.drvPath;
     "the auto-chords package defaults to this flake's autochords package" =
       defaults.services.tabarr.autochords.package.drvPath == autochordsPackage.drvPath;
+    "without the flake, the module builds the same packages from nix/package.nix" =
+      standalone.services.tabarr.package.drvPath == defaultPackage.drvPath
+      && standalone.services.tabarr.autochords.package.drvPath == autochordsPackage.drvPath;
     "the whole system evaluates" = nucAutochords.system.build.toplevel.drvPath != "";
   };
 
