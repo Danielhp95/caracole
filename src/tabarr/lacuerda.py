@@ -15,10 +15,15 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
+from selectolax.lexbor import LexborHTMLParser, LexborNode
+
+from tabarr.http import ProviderError
 from tabarr.normalize import fold
 
 BASE_URL = "https://acordes.lacuerda.net"
+PROVIDER = "lacuerda"
 
 ACORDES = "R"
 # Version types by lcd letter, labelled as the song page labels them. The artist
@@ -30,6 +35,13 @@ TYPE_NAMES = {
     "D": "Batería",
     "H": "Armónica",
 }
+
+
+class LaCuerdaParseError(ProviderError):
+    """A LaCuerda page without the expected markup: a provider error, never a miss."""
+
+    def __init__(self, message: str, *, url: str | None = None):
+        super().__init__(PROVIDER, url=url, message=message)
 
 
 @dataclass(frozen=True)
@@ -139,3 +151,39 @@ def version_url(artist: str, song: str, n: int) -> str:
         raise ValueError(f"LaCuerda version numbers start at 1, not {n}")
     suffix = "" if n == 1 else f"-{n}"
     return f"{BASE_URL}/{artist}/{song}{suffix}.shtml"
+
+
+def parse_artist_page(html: str, *, url: str | None = None) -> list[LCSong]:
+    """The songs listed on an artist page, in page order.
+
+    Raises :class:`LaCuerdaParseError` when the page has no ``ul#b_main``, so a
+    changed or unexpected page is never read as "the artist has no songs".
+    """
+    tree = LexborHTMLParser(html)
+    if tree.css_first("ul#b_main") is None:
+        raise LaCuerdaParseError("no song list (ul#b_main)", url=url)
+    songs = []
+    for item in tree.css("ul#b_main > li[lcd]"):
+        link = item.css_first("a[href]")
+        slug = _slug_from_href(link.attributes.get("href") or "") if link else ""
+        if not slug:
+            continue
+        types, ranking = parse_lcd(item.attributes.get("lcd") or "")
+        songs.append(LCSong(slug=slug, title=_link_title(link), types=types, ranking=ranking))
+    return songs
+
+
+def _slug_from_href(href: str) -> str:
+    """The last path segment: the real page links "de_musica_ligera" relatively."""
+    segments = [s for s in urlsplit(href.strip()).path.split("/") if s]
+    return segments[-1] if segments else ""
+
+
+def _link_title(link: LexborNode) -> str:
+    """The link text without its trailing <em>acordes</em> label."""
+    nodes = list(link.iter(include_text=True))
+    while nodes and nodes[-1].tag == "-text" and not (nodes[-1].text_content or "").strip():
+        nodes.pop()
+    if nodes and nodes[-1].tag == "em":
+        nodes.pop()
+    return " ".join("".join(n.text(deep=True) for n in nodes).split())

@@ -1,17 +1,27 @@
 import unicodedata
+from pathlib import Path
 
 import pytest
 
+from tabarr.http import ProviderError
 from tabarr.lacuerda import (
     BASE_URL,
+    LaCuerdaParseError,
     LCSong,
     artist_slug,
     artist_slug_candidates,
     artist_url,
     best_acordes_version,
+    parse_artist_page,
     parse_lcd,
     version_url,
 )
+
+FIXTURES = Path(__file__).parent / "fixtures" / "lacuerda"
+
+
+def _fixture(name: str) -> str:
+    return (FIXTURES / name).read_text(encoding="utf-8")
 
 # --- slugs and URLs -------------------------------------------------------
 
@@ -173,3 +183,81 @@ def test_best_acordes_version_is_none_without_acordes():
 
 def test_best_acordes_version_skips_ranks_with_no_version():
     assert best_acordes_version(LCSong("cancion", "Canción", "TR", (5, 2, 1))) == 2
+
+
+# --- the artist page -------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def artist_songs() -> list[LCSong]:
+    return parse_artist_page(_fixture("artist.html"))
+
+
+def _by_slug(songs: list[LCSong], slug: str) -> LCSong:
+    return next(s for s in songs if s.slug == slug)
+
+
+def test_parse_artist_page_lists_every_song_in_page_order(artist_songs):
+    assert len(artist_songs) == 14
+    assert [s.slug for s in artist_songs[:3]] == ["1990", "algun_diasomeday", "angel_electrico"]
+    assert artist_songs[-1].slug == "un_millon_de_anios_luz"
+
+
+def test_parse_artist_page_ignores_the_other_lists(artist_songs):
+    # The sidebar, the filter bar, the extras and the suggested artists are lists too.
+    slugs = {s.slug for s in artist_songs}
+    assert "tratame_suavemente" not in slugs
+    assert "huayra" not in slugs
+
+
+def test_parse_artist_page_titles_drop_the_acordes_label(artist_songs):
+    assert _by_slug(artist_songs, "de_musica_ligera").title == "De Música Ligera"
+    assert _by_slug(artist_songs, "algun_diasomeday").title == "Algun día"
+    assert _by_slug(artist_songs, "picnic_en_el_4o_b").title == "Pic-Nic en el 4o. B"
+    assert _by_slug(artist_songs, "1990").title == "1990"
+    assert (
+        _by_slug(artist_songs, "cuando_pase_el_temblor_unplugged").title
+        == "Cuando pase el temblor (unplugged)"
+    )
+
+
+def test_parse_artist_page_lcd(artist_songs):
+    song = _by_slug(artist_songs, "de_musica_ligera")
+    assert song == LCSong(
+        "de_musica_ligera", "De Música Ligera", "RHRTTTDTB", (3, 1, 4, 8, 6, 5, 9, 7, 2)
+    )
+    assert best_acordes_version(song) == 3
+
+
+def test_parse_artist_page_finds_songs_without_acordes(artist_songs):
+    no_acordes = [s.slug for s in artist_songs if best_acordes_version(s) is None]
+    assert no_acordes == ["disco_eterno_unplugged", "telaranias"]
+
+
+def test_parse_artist_page_keeps_every_type_letter(artist_songs):
+    assert set("".join(s.types for s in artist_songs)) == set("RTBKDH")
+
+
+def test_parse_artist_page_decodes_entities_and_skips_items_without_lcd_or_link():
+    html = """<ul id=b_main>
+    <li lcd='R-1'><a href="cancion_y_co">Canci&oacute;n &amp; Co <em>acordes</em></a></li>
+    <li><a href="sin_lcd">Sin lcd <em>acordes</em></a></li>
+    <li lcd='T-1'>sin enlace</li>
+    <li lcd='RT-21'><a href="/otra_banda/otra">Otra <em>acordes</em></a></li>
+    </ul>"""
+    songs = parse_artist_page(html)
+    assert [(s.slug, s.title) for s in songs] == [("cancion_y_co", "Canción & Co"), ("otra", "Otra")]
+
+
+def test_parse_artist_page_with_an_empty_list():
+    assert parse_artist_page("<ul id=b_main class=b_main></ul>") == []
+
+
+def test_a_page_without_the_song_list_is_a_parse_error():
+    url = "https://acordes.lacuerda.net/soda_stereo/"
+    with pytest.raises(LaCuerdaParseError) as err:
+        parse_artist_page(_fixture("song.html"), url=url)
+    # A provider error, never "the artist has no songs".
+    assert isinstance(err.value, ProviderError)
+    assert err.value.provider == "lacuerda"
+    assert err.value.url == url
