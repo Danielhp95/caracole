@@ -39,7 +39,7 @@ import json
 import logging
 import re
 import sqlite3
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -862,19 +862,33 @@ def _matched_title_forms(song: Song) -> list[str]:
     return [f for f in dict.fromkeys(forms) if f]
 
 
-def _recheck_artist_page(run: _SongRun) -> bool:
-    """Read an artist-page song's lists again: fresh ratings, and the versions added since.
+def _learn_from_own_tabs(run: _SongRun, tabs: Sequence[IndexTab], keys: list[str]) -> str | None:
+    """Read the song's own slugged tabs, which its guitar slots need anyway, for the artist page."""
+    for tab in tabs[:LEARN_TRIES]:
+        page = _page(run, tab.tab_id, tab.url, tab.type)
+        if page is not None and (url := _known_artist_page(run.conn, keys, run.ctx.overrides)):
+            return url
+    return None
 
-    The index can't watch bare-id tabs, so a song accepted on its artist's page
-    never becomes dirty by itself; ``songs_to_fetch`` brings it back once
-    ``artist_page_max_age`` has passed, and the 30-day cache serves the lists
-    in between. The match stands whatever the lists say. False when this run's
+
+def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[IndexTab] = ()) -> bool:
+    """Read a matched song's entries in its artist's UG lists of these kinds, as its versions.
+
+    For tabs the index can't watch, because they are bare ids: every list of a
+    song accepted on its artist's page (fresh ratings, versions added since),
+    or the chords list of a song whose index tabs hold no chords. The page's
+    address comes from [artist_url] or a learned one, else from a tab page:
+    the song's own index tabs (``own``) first, then the artist's others.
+    ``songs_to_fetch`` brings these songs back once ``artist_page_max_age``
+    has passed; the 30-day cache serves the lists in between, one request per
+    artist. The match stands whatever the lists say. False when this run's
     page cap cut a list short: the song waits for the next run, as it was.
     """
     keys = _matched_artist_keys(run)
-    base = _known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_artist_page(run, keys)
+    base = (_known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_from_own_tabs(run, own, keys)
+            or _learn_artist_page(run, keys))
     if base is not None:
-        listing = _read_artist_page(run, base, ARTIST_PAGE_KINDS, _matched_title_forms(run.song))
+        listing = _read_artist_page(run, base, kinds, _matched_title_forms(run.song))
         if not listing.complete:
             return False
         if listing.gone:
@@ -883,6 +897,21 @@ def _recheck_artist_page(run: _SongRun) -> bool:
             _record_hits(run, _usable_hits(run, listing.hits))
     _mark_checked(run)
     return True
+
+
+def _song_index_tabs(conn: sqlite3.Connection, song: Song, block: frozenset[int]) -> list[IndexTab]:
+    """The song's tabs in the index, under its match's keys; blocked ones left out."""
+    tabs = song_tabs(conn, song.match_artist_key, song.match_song_key) if song.match_song_key else []
+    return [t for t in tabs if t.tab_id not in block]
+
+
+def _live_chords(conn: sqlite3.Connection, song: Song, tabs: list[IndexTab]) -> list[IndexTab]:
+    """The chords tabs among the song's index ``tabs`` that UG hasn't since answered 404 for."""
+    gone = {
+        int(r.tab_id) for r in song_versions(conn, song.id, kinds=CHORDS_KINDS, include_gone=True)
+        if r.provider == PROVIDER and r.gone
+    }
+    return [t for t in tabs if t.type in CHORDS_KINDS and t.tab_id not in gone]
 
 
 # --- one song, and a run ---------------------------------------------------------------------------
@@ -894,9 +923,10 @@ def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
     A not-found song is first looked up on its artist's UG page (A6), and goes
     on only when it is found there. A song found there before has its lists
     read again first (from the cache within 30 days), for fresh ratings and new
-    versions. Each kind group is rated and its slot filled before the next
-    group is touched, so the sheet a singer needs most is settled before the
-    budget goes to guitar parts.
+    versions; a song whose index tabs hold no chords (bare ids) has its sheet
+    candidates read from its artist's chords list. Each kind group is rated and
+    its slot filled before the next group is touched, so the sheet a singer
+    needs most is settled before the budget goes to guitar parts.
     """
     start = ctx.client.requests_made
     run = _SongRun(ctx, song)
@@ -908,11 +938,9 @@ def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
         if not _artist_page_route(run):
             return unfinished()
         song = run.song
-    elif song.match_step == ARTIST_PAGE and not _recheck_artist_page(run):
+    elif song.match_step == ARTIST_PAGE and not _artist_page_versions(run, ARTIST_PAGE_KINDS):
         return unfinished()
-    block = ctx.overrides.block
-    tabs = song_tabs(ctx.conn, song.match_artist_key, song.match_song_key) if song.match_song_key else []
-    tabs = [t for t in tabs if t.tab_id not in block]
+    tabs = _song_index_tabs(ctx.conn, song, ctx.overrides.block)
     pinned = _fetch_pins(run, _pins(ctx.overrides, song))
 
     def rated(group: tuple[str, ...]) -> list[int] | None:
@@ -920,7 +948,12 @@ def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
             _rate_group(run, [t for t in tabs if t.type in group])
         return pinned.get(group)
 
-    sheet = _sheet_slot(run, rated(CHORDS_KINDS))
+    sheet_pins = rated(CHORDS_KINDS)
+    if sheet_pins is None and song.match_step != ARTIST_PAGE and not _live_chords(ctx.conn, song, tabs):
+        own = [t for t in tabs if t.type not in CHORDS_KINDS]
+        if not _artist_page_versions(run, CHORDS_KINDS, own):
+            return unfinished()
+    sheet = _sheet_slot(run, sheet_pins)
     guitar_pro = _guitar_pro_slot(run, rated(GUITAR_PRO_KINDS))
     tab = _tab_slot(run, rated(TAB_KINDS))
     _finish(run)
@@ -945,12 +978,22 @@ def _checked_within(conn: sqlite3.Connection, song_id: int, now: datetime, max_a
     return checked is not None and now - checked < max_age
 
 
-def _recheck_due(conn: sqlite3.Connection, song: Song, now: datetime, max_age: timedelta) -> bool:
-    """Whether a song accepted on its artist's UG page is due to have that page read again."""
-    if song.match_decision != "accept" or song.match_step != ARTIST_PAGE:
+def _recheck_due(
+    conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime, max_age: timedelta
+) -> bool:
+    """Whether an accepted song is due to have its artist's UG page read again.
+
+    That is a song accepted there, or one whose index tabs hold no chords, once
+    ``max_age`` has passed since the page was last read for it.
+    """
+    if song.match_decision != "accept":
         return False
     checked = _last_checked(conn, song.id)
-    return checked is not None and now - checked >= max_age
+    if checked is None or now - checked < max_age:
+        return False
+    return song.match_step == ARTIST_PAGE or not _live_chords(
+        conn, song, _song_index_tabs(conn, song, overrides.block)
+    )
 
 
 def _ignored(song: Song, overrides: Overrides) -> bool:
@@ -986,9 +1029,11 @@ def songs_to_fetch(
     - Not-found songs whose artist is known (A6), so that its UG artist page,
       which lists bare-id tabs the index can't see, is searched for the
       title, at most once per ``artist_page_max_age``.
-    - Songs accepted on their artist's UG page, once ``artist_page_max_age``
-      has passed since it was last read for them: no index refresh can make
-      them dirty, so this is how they get fresh ratings and new versions.
+    - Accepted songs whose versions come from their artist's UG page, once
+      ``artist_page_max_age`` has passed since it was last read for them: the
+      songs accepted there, and the songs whose chords the index lists only
+      as bare ids. No index refresh can make those dirty, so this is how they
+      get fresh ratings and new versions.
     """
     out = []
     for song in list_songs(conn):
@@ -1000,7 +1045,7 @@ def songs_to_fetch(
             and not _checked_within(conn, song.id, now, artist_page_max_age)
             and artist_is_known(conn, song, overrides)
         )
-        if dirty or due or _recheck_due(conn, song, now, artist_page_max_age):
+        if dirty or due or _recheck_due(conn, song, overrides, now, artist_page_max_age):
             out.append(song)
     return out
 
