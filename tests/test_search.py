@@ -385,6 +385,29 @@ def test_cli_add_out_of_range_is_a_usage_error(tmp_path):
     assert not (tmp_path / "lib" / "wanted.txt").exists()
 
 
+def test_cli_add_a_hit_beyond_those_shown_is_refused(tmp_path):
+    # `--limit 1` shows one hit: hit 2 was never seen (a typo such as --add 12 for --add 2 does the same).
+    seed(tmp_path)
+    result = run(tmp_path, "search", "creep", "--limit", "1", "--add", "2")
+    assert not (tmp_path / "lib" / "wanted.txt").exists(), result.output
+    assert result.exit_code == 2
+    assert "only the first hit is shown" in result.output and "--limit 2" in result.output
+    shown = run(tmp_path, "search", "creep", "--limit", "2", "--add", "2")
+    assert shown.exit_code == 0, shown.output
+    assert "Stone Temple Pilots - Creep" in (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
+
+
+def test_cli_add_12_for_add_2_with_the_default_limit_is_refused(tmp_path):
+    covers = [(8100 + i, f"cover-band-{i:02d}", "creep", "chords") for i in range(12)]
+    seed(tmp_path, rows=ROWS + covers)
+    listed = run(tmp_path, "search", "creep").output
+    assert "10. " in listed and "11. " not in listed  # ten hits shown
+    result = run(tmp_path, "search", "creep", "--add", "12")
+    assert not (tmp_path / "lib" / "wanted.txt").exists(), result.output
+    assert result.exit_code == 2
+    assert "only the first 10 hits are shown" in result.output and "--limit 12" in result.output
+
+
 def test_cli_chinese_query_points_to_artist_url(tmp_path):
     seed(tmp_path)
     result = run(tmp_path, "search", "宋冬野")

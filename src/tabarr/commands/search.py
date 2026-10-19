@@ -50,7 +50,7 @@ def register(app: typer.Typer) -> None:
             if add is None:
                 _search(cfg, conn, text, limit)
             else:
-                _add(cfg, conn, text, add, max(limit, add))
+                _add(cfg, conn, text, add, limit)
 
 
 def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int) -> None:
@@ -152,12 +152,19 @@ def _index_built(conn: sqlite3.Connection) -> bool:
 
 
 def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -> None:
-    """Add UG hit ``n`` of the search the way ``tabarr add`` adds a song, and say what happened."""
+    """Add UG hit ``n`` of the search the way ``tabarr add`` adds a song, and say what happened.
+
+    Only a hit the same search shows can be added: ``n`` up to ``limit``.
+    """
     from tabarr.search import search_index
     from tabarr.wanted import format_line
 
     if not _index_built(conn):
         fail(f"--add {n}: {_EMPTY_INDEX}", 2)
+    if n > limit:  # a hit you never saw, such as --add 12 typed for --add 2
+        shown = "the first hit is" if limit == 1 else f"the first {limit} hits are"
+        fail(f"--add {n}: only {shown} shown; see hit {n} with --limit {n} first, then add it with "
+             f"--limit {n} --add {n}", 2)
     hits = search_index(conn, text, limit)
     if not 1 <= n <= len(hits):
         found = f"only {len(hits)} hit{'s' if len(hits) != 1 else ''}" if hits else "nothing"
