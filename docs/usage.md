@@ -114,7 +114,7 @@ goes when the PDF is done, so caracole must be able to write there.
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
 to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
-status 2: `database: … is at schema version 2, but this caracole knows up to 1:
+status 2: `database: … is at schema version 3, but this caracole knows up to 2:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
 when there is one. A state folder caracole can't use ends a command with status
 1 and `can't open the database …` (or `can't open …/caracole.lock: …`).

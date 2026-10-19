@@ -4,6 +4,7 @@ Tables (plan §5, plus ``kv``):
 
 - ``songs``: what you want to learn, and where each song stands.
 - ``ug_index``: the local Ultimate Guitar index, built from sitemaps.
+- ``gtptabs_index``: the pages gtptabs.com's sitemaps list, its artists and songs (schema 2).
 - ``versions``: every sheet, tab or Guitar Pro version seen for a song.
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
@@ -18,7 +19,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -120,9 +121,25 @@ CREATE TABLE IF NOT EXISTS kv (
 );
 """
 
+# gtptabs.com's sitemaps, read by gtptabs_fetch.py: one row per artist or song page, keyed
+# by its path ("tabs/2/blur/song-2-2.html"). An artist page has no title: '' in both title
+# columns. base_key is title_key without a trailing version number ("song-2" for "song-2-2").
+_SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS gtptabs_index (
+  path TEXT PRIMARY KEY,
+  artist_path TEXT NOT NULL,
+  artist_key TEXT NOT NULL,
+  title_key TEXT NOT NULL,
+  base_key TEXT NOT NULL,
+  sitemap TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS gtptabs_index_artist ON gtptabs_index(artist_key);
+CREATE INDEX IF NOT EXISTS gtptabs_index_sitemap ON gtptabs_index(sitemap);
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
-_MIGRATIONS = {1: _SCHEMA_V1}
+_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):
