@@ -142,8 +142,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     any two, redirect hops included: `PoliteClient` paces its own requests, and
     `_common._pause_after_last_request` its first after the last one any tabarr sent.
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
-    more that run, `health.record_block` cools the provider down 24 h, twice as long after
-    each further block, and nothing retries or works around it (no proxies).
+    more that run, `health.record_block` cools the provider down for 24 h × 2^(k−1) + 2 h after
+    the k-th block in a row (so the next nightly run is always skipped), and nothing retries or works around it (no proxies).
   - No URL robots.txt closes is asked for, or followed to (`http.ROBOTS_DISALLOW`,
     `robots_disallows`): not UG's `/search.php` (matching is local, against the sitemap
     index), `/tab/download`, `/tab/print?` or `/download/public/`.
