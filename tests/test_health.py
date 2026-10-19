@@ -108,7 +108,7 @@ def test_the_run_after_a_block_leaves_the_provider_alone_however_late_it_starts(
     second, asked, _ = _nightly_run(conn, cfg, night(1, LATE))  # the next night, 45 minutes late
     assert first.blocked == ["ug"] and not asked
     # The block's message and the skipped step print the time the run went by.
-    assert "No more requests to ug until 2026-10-19 05:30 UTC (block #1)" in sent[0]
+    assert "so caracole leaves it alone until 2026-10-19 05:30 UTC." in sent[0]
     assert second.steps["fetch"] == "skipped: ug cooling down until 2026-10-19 05:30 UTC"
     _, asked, _ = _nightly_run(conn, cfg, night(2))  # the night after that, on time, asks again
     assert asked and get_state(conn, "ug").strikes == 0

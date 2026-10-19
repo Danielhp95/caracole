@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -79,7 +80,12 @@ def test_ug_block_cools_down_and_never_marks_not_found(conn, cfg):
     assert is_cooling(conn, "ug", NOW + timedelta(hours=23))
     assert report.ok  # a block is expected behaviour, not a failure
     titles = [t for t, _ in out.sent]
-    assert titles.count("caracole: ug blocked") == 1
+    assert titles.count("caracole: Ultimate Guitar blocked") == 1
+    # The alert and the run's summary say it in the same words.
+    [alert] = [body for t, body in out.sent if t == "caracole: Ultimate Guitar blocked"]
+    assert alert == ("Ultimate Guitar blocked caracole (HTTP 403) during the fetch step, so caracole leaves it "
+                     "alone until 2026-10-19 05:30 UTC. Nothing was marked not found.")
+    assert alert in report.summary().splitlines()
 
 
 def test_later_steps_of_a_blocked_provider_are_skipped(conn, cfg):
@@ -135,7 +141,76 @@ def test_report_summary_mentions_requests(conn, cfg):
     out = Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out, ug=7, lrclib=3), steps=[step("todo")], now=NOW)
     assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0}
-    assert "ug 7" in report.summary() and "lrclib 3" in report.summary()
+    assert "Requests: Ultimate Guitar 7, LRCLIB 3, LaCuerda 0." in report.summary().splitlines()
+
+
+def test_requests_are_counted_against_each_clients_budget(conn, cfg):
+    from caracole.config import ProviderPolicy
+    from caracole.http import PoliteClient
+
+    lrclib = PoliteClient("lrclib", ProviderPolicy(budget=200, delay=(0.0, 0.0)), cfg.cache_dir,
+                          user_agent="caracole-test", transport=httpx.MockTransport(lambda r: httpx.Response(200)))
+    svc = Services(clients={"lrclib": lrclib}, spotify=None, notifier=Outbox().notifier())
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=[step("todo")], now=NOW)
+    assert report.budgets == {"lrclib": 200}
+    assert "Requests: LRCLIB 0 of 200." in report.summary().splitlines()
+
+
+def test_a_step_plugs_into_the_summary_by_returning_a_result(conn, cfg):
+    # A new provider's step: what it did, and the songs an error left, in the run's words.
+    from caracole.report import Failure, StepResult
+
+    def gtptabs(ctx):
+        return StepResult(title="GtpTabs", done=["2 sheets kept"], status="2 kept, 1 error",
+                          failures=[Failure("gtptabs", "A – B", "didn't answer (HTTP 503)")])
+
+    out = Outbox()
+    report = run_pipeline(cfg, conn=conn, services=services(out), steps=[Step("gtptabs", gtptabs)], now=NOW)
+    assert report.steps == {"gtptabs": "2 kept, 1 error"}
+    lines = report.summary().splitlines()
+    assert "GtpTabs: 2 sheets kept." in lines
+    assert "gtptabs didn't answer (HTTP 503), so 1 song will be tried again on the next run." in lines
+    assert out.sent[-1] == ("caracole run", report.summary())  # ntfy gets the same words
+
+
+def test_a_step_that_returns_a_line_of_text_still_shows_it(conn, cfg):
+    out = Outbox()
+    report = run_pipeline(cfg, conn=conn, services=services(out), steps=[step("gtptabs", result="2 kept")],
+                          now=NOW)
+    assert report.steps == {"gtptabs": "2 kept"}
+    assert "gtptabs: 2 kept." in report.summary().splitlines()
+
+
+def test_a_cooldown_that_skips_two_steps_is_said_once(conn, cfg):
+    record_block(conn, "ug", NOW - timedelta(hours=2), "HTTP 403")
+    steps = [step("index", provider="ug"), step("fetch", provider="ug")]
+    report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=steps, now=NOW)
+    said = [line for line in report.summary().splitlines() if "cooling down" in line]
+    assert said == ["Ultimate Guitar is cooling down after a block until 2026-10-19 03:30 UTC, so caracole "
+                    "leaves it alone this run."]
+
+
+def test_the_run_is_timed_on_its_own_clock(conn, cfg, monkeypatch):
+    import caracole.pipeline as pipeline
+
+    readings = iter([100.0])
+    monkeypatch.setattr(pipeline, "clock", lambda: next(readings, 225.0))
+    report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=[step("todo")], now=NOW)
+    assert report.seconds == 125.0
+    assert report.summary().splitlines()[-1] == "Took 2 min 5 s."
+
+
+def test_a_bug_is_logged_with_its_traceback_behind_one_line(conn, cfg, caplog):
+    out = Outbox()
+    steps = [step("match", result=RuntimeError("boom")), step("todo")]
+    with caplog.at_level(logging.ERROR, logger="caracole.pipeline"):
+        report = run_pipeline(cfg, conn=conn, services=services(out), steps=steps, now=NOW)
+    [record] = caplog.records
+    assert record.getMessage().startswith("The match step failed: RuntimeError: boom.")
+    assert "\n" not in record.getMessage() and record.exc_info is not None  # the traceback follows it
+    assert ("The match step failed: RuntimeError: boom. That's a bug in caracole: its traceback is in the log, "
+            "and the run exits 1.") in report.summary().splitlines()
+    assert out.sent[-1][0] == "caracole run failed"
 
 
 def test_default_steps_are_in_plan_order():
@@ -194,13 +269,24 @@ def test_run_command_exit_codes(tmp_path, monkeypatch):
     cfgfile = tmp_path / "caracole.toml"
     cfgfile.write_text(f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n'
                        f'library_dir = "{tmp_path / "lib"}"\n', encoding="utf-8")
-    results = iter([RunReport(run_id="r", started="r", steps={"todo": "ok"}),
-                    RunReport(run_id="r", started="r", steps={"match": "failed: boom"}, errors=["match: boom"])])
+    from caracole.report import Problem, StepResult, bug
+
+    blocked = Problem("Ultimate Guitar blocked caracole (HTTP 429) during the fetch step, …")
+    results = iter([
+        RunReport(run_id="r", started="r", steps={"fetch": "blocked: ug: 429"}, blocked=["ug"],
+                  results={"fetch": StepResult(problems=[blocked])}),
+        RunReport(run_id="r", started="r", steps={"lyrics": "budget spent (lrclib)"},
+                  results={"lyrics": StepResult(spent=["lrclib"])}),
+        RunReport(run_id="r", started="r", steps={"match": "failed: RuntimeError: boom"}, errors=["match: boom"],
+                  results={"match": StepResult(problems=[bug(RuntimeError("boom"), "match")])}),
+    ])
     monkeypatch.setattr(pipeline, "run_pipeline", lambda cfg, **kw: next(results))
-    ok = CliRunner().invoke(build_app(), ["--config", str(cfgfile), "run"])
-    assert ok.exit_code == 0 and "todo: ok" in ok.output
+    block = CliRunner().invoke(build_app(), ["--config", str(cfgfile), "run"])
+    assert block.exit_code == 0 and blocked.text in block.stdout  # a block is no failure
+    spent = CliRunner().invoke(build_app(), ["--config", str(cfgfile), "run"])
+    assert spent.exit_code == 0  # nor is a spent budget
     bad = CliRunner().invoke(build_app(), ["--config", str(cfgfile), "run"])
-    assert bad.exit_code == 1 and "match: failed: boom" in bad.output
+    assert bad.exit_code == 1 and "The match step failed: RuntimeError: boom." in bad.stdout  # a bug is
 
 
 def test_a_run_re_keys_the_songs_before_the_sync_reads_wanted_txt(conn, cfg):
@@ -288,7 +374,7 @@ def test_default_match_step_skips_while_the_index_is_empty(conn, cfg):
     out = Outbox()
     ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(out),
                       report=RunReport(run_id="r", started="r"))
-    assert _match(ctx).startswith("skipped: the index is empty")
+    assert _match(ctx).status.startswith("skipped: the index is empty")
     assert conn.execute("SELECT match_decision FROM songs").fetchone()[0] is None
 
 
@@ -309,7 +395,7 @@ def test_default_match_step_waits_for_an_index_a_build_left_half_done(conn, cfg)
                 match_song_key="wonderwall", match_score=100.0)
     ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
                       report=RunReport(run_id="r", started="r"))
-    summary = _match(ctx)
+    summary = _match(ctx).status
     assert get_song(conn, creep.id).match_decision is None, summary
     assert summary.startswith("skipped: the index is incomplete")
     assert get_song(conn, wall.id).match_decision == "accept"
@@ -375,7 +461,7 @@ def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, mo
     out = Outbox()
     ctx = StepContext(cfg=cfg, conn=conn, overrides=o, now=NOW, run_id="r", services=services(out),
                       report=RunReport(run_id="r", started="r"))
-    summary = _lacuerda(ctx)
+    summary = _lacuerda(ctx).status
     assert seen["overrides"] is o
     assert "1 error" in summary
     assert get_state(conn, "lacuerda").last_error is not None
@@ -388,18 +474,18 @@ def test_default_scan_step_says_how_many_links_the_inbox_refused(conn, cfg, tmp_
 
     ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
                       report=RunReport(run_id="r", started="r"))
-    assert _scan(ctx) == "0 purchases linked, 0 Guitar Pro files filed"
+    assert _scan(ctx).status == "0 purchases linked, 0 Guitar Pro files filed"
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     (elsewhere / "Soda Stereo - Signos.gp5").write_bytes(b"GP")
     cfg.library_dir.mkdir(parents=True)
     (cfg.library_dir / "_inbox").symlink_to(elsewhere)
-    assert _scan(ctx) == "0 purchases linked, 0 Guitar Pro files filed, 1 symbolic link refused"
+    assert _scan(ctx).status == "0 purchases linked, 0 Guitar Pro files filed, 1 symbolic link refused"
     (cfg.library_dir / "_inbox").unlink()
     (cfg.library_dir / "_inbox").mkdir()
     for name in ("a.gp5", "b.gp5"):
         (cfg.library_dir / "_inbox" / name).symlink_to(elsewhere / "Soda Stereo - Signos.gp5")
-    assert _scan(ctx) == "0 purchases linked, 0 Guitar Pro files filed, 2 symbolic links refused"
+    assert _scan(ctx).status == "0 purchases linked, 0 Guitar Pro files filed, 2 symbolic links refused"
 
 
 def test_fetch_summary_counts_settled_sheets(conn, cfg, monkeypatch):
@@ -413,7 +499,44 @@ def test_fetch_summary_counts_settled_sheets(conn, cfg, monkeypatch):
         songs_done=1, songs_failed=0, budget_exhausted=True, sheets_done=2))
     ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
                       report=RunReport(run_id="r", started="r"))
-    assert _fetch(ctx) == "2 sheets settled, 1 song done, 0 failed (budget spent)"
+    result = _fetch(ctx)
+    assert result.status == "2 sheets settled, 1 song done, 0 failed (budget spent)"
+    assert (result.title, result.done, result.spent) == ("Ultimate Guitar", ["2 sheets settled", "1 song done"],
+                                                         ["ug"])
+
+
+def test_the_default_steps_say_in_the_summary_what_they_did_and_leave_out_the_zeros(conn, cfg):
+    from conftest import add_song
+
+    from caracole.pipeline import default_steps
+
+    cfg.library_dir.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("Soda Stereo - Persiana Americana\n", encoding="utf-8")
+    add_song(conn, "Radiohead", "Creep")
+    steps = [s for s in default_steps() if s.name in ("sync", "index", "match", "scan", "render", "todo")]
+    report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=steps, now=NOW)
+    lines = report.summary().splitlines()
+    assert lines[:2] == ["First, build the index once: caracole index build (about 10 minutes).",
+                         "Until then, no song is matched or looked for on Ultimate Guitar."]
+    assert "Songs: 1 in wanted.txt, 1 new." in lines
+    assert not [line for line in lines if " 0 " in line or line.startswith(("Matching", "PDFs", "Music"))]
+    assert sum("caracole index build" in line for line in lines) == 1  # said once, though two steps wait for it
+    assert f"1 thing on your to-do page needs you: {cfg.library_dir / '_todo.md'}" in lines
+
+
+def test_spotify_needing_you_is_said_in_the_summarys_words_and_alerted_once(conn, cfg, monkeypatch):
+    import caracole.sources as sources
+    from caracole.pipeline import default_steps
+
+    monkeypatch.setattr(sources, "sync_sources", lambda *a, **k: sources.SourcesReport(
+        wanted=sources.SyncStats(seen=2), spotify_state="auth_needed", spotify_message="The token was revoked."))
+    out = Outbox()
+    sync = [s for s in default_steps() if s.name == "sync"]
+    report = run_pipeline(cfg, conn=conn, services=services(out), steps=sync, now=NOW)
+    said = ("Authorize Spotify again: caracole auth spotify. The token was revoked. wanted.txt keeps working "
+            "meanwhile.")
+    assert ("caracole: Spotify needs you", said) in out.sent
+    assert report.summary().splitlines()[0] == "First, authorize Spotify again: caracole auth spotify."
 
 
 # --- provider health on the to-do page ------------------------------------------------------

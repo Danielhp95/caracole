@@ -1387,7 +1387,7 @@ def fetch_songs(
         except ProviderBlocked:
             raise
         except ProviderError as e:
-            log.warning("UG fetch failed for %s: %s", song.display, e)
+            log.debug("UG fetch failed for %s: %s", song.display, e)
             stats.songs_failed += 1
             stats.failures.append((song, e))
             continue
@@ -1407,7 +1407,7 @@ def fetch_songs(
         except ProviderBlocked:
             raise
         except ProviderError as e:
-            log.warning("UG fetch failed for %s: %s", song.display, e)
+            log.debug("UG fetch failed for %s: %s", song.display, e)
             stats.songs_failed += 1
             stats.failures.append((song, e))
             continue

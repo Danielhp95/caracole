@@ -521,13 +521,13 @@ def fetch_pending_lyrics(
             stats.budget_exhausted = True
             break
         except ProviderUnavailable as e:
-            log.warning("LRCLIB is unavailable for the rest of this run: %s", e)
+            log.info("LRCLIB is unavailable for the rest of this run: %s", e)
             stats.failures += [(left, e) for left, _ in songs[i:]]
             break
         except ProviderError as e:
             stats.errors += 1
             stats.failures.append((song, e))
-            log.warning("lyrics for %s: %s", song.display, e)
+            log.debug("lyrics for %s: %s", song.display, e)
             continue
         _record(conn, library_dir, song, result, stamp)
         if result.status == "found":

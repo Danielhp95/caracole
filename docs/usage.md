@@ -357,11 +357,36 @@ are never offered again; other candidates still can be.
 8. **render**: write ChordPro files and PDFs.
 9. **todo**: rewrite `_todo.md` and `index.html`.
 
-It prints one line per step and the requests made, and sends that summary to
-ntfy. Every step runs even when an earlier one failed, so the to-do page is
-always rewritten. Until the index is built, the index and match steps are
-skipped; after a build that stopped part-way, the match step is skipped until
-the index step's refresh has read the rest.
+Every step runs even when an earlier one failed, so the to-do page is always
+rewritten. Until the index is built, the index and match steps are skipped;
+after a build that stopped part-way, the match step is skipped until the index
+step's refresh has read the rest.
+
+The run ends with a short summary, and sends the same words to ntfy. On a first
+night, with one song in wanted.txt, the index not built yet and LRCLIB
+overloaded, it reads:
+
+    First, build the index once: caracole index build (about 10 minutes).
+    Until then, no song is matched or looked for on Ultimate Guitar.
+
+    Songs: 1 in wanted.txt, 1 new.
+
+    1 thing on your to-do page needs you: /home/you/Tabs/_todo.md
+    LRCLIB didn't answer (HTTP 503), so the lyrics of 1 song will be tried again on the next run.
+    Requests: Ultimate Guitar 0 of 60, LRCLIB 2 of 200, LaCuerda 0 of 30.
+    Took 3 s.
+
+- **First** comes the one thing that unblocks the rest, when there is one, said
+  once however many steps wait for it: build or finish the index, fix
+  overrides.toml or wanted.txt, authorize Spotify again.
+- **Then a line for each step that did something**, its counts without the
+  zeros ("Lyrics: 3 found, 1 missing."). A step with nothing to do has none.
+- **Last**: how many things on the to-do page need you, and where it is; the
+  problems, a site at a time, with its cooldown and until when, and the songs
+  one cause left for the next run counted on one line; the requests against
+  each site's budget; and how long the run took.
+
+A block's ntfy message is that block's line of the summary.
 
 **The budget.** A run sends Ultimate Guitar at most 60 requests, the index
 refresh included, 10–20 seconds apart and one at a time. It settles the sheet

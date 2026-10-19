@@ -135,14 +135,14 @@ def lacuerda_sheets(
             stats.budget_exhausted = True
             break
         except ProviderUnavailable as e:
-            log.warning("LaCuerda is unavailable for the rest of this run: %s", e)
+            log.info("LaCuerda is unavailable for the rest of this run: %s", e)
             stats.failures += [(left, e) for left in songs[i:]]
             break
         except ProviderError as e:
             stats.tried += 1
             stats.errors += 1
             stats.failures.append((song, e))
-            log.warning("LaCuerda for %s: %s", song.display, e)
+            log.debug("LaCuerda for %s: %s", song.display, e)
             continue
         stats.tried += 1
         if sheet is None:
