@@ -66,6 +66,24 @@ def test_title_only_accept_writes_match_without_alias(conn, cfg):
     assert not o.alias
 
 
+def test_a_catch_all_accept_writes_match_without_alias(conn, cfg):
+    # misc-musicals files every show's songs: an alias would make it the artist of all of epic's songs.
+    review_song(conn, "epic", "I'm not sorry for loving you", cands=[
+        {"artist_key": "misc-musicals", "song_key": "epic-the-musical-not-sorry-for-loving-you", "score": 94.1,
+         "step": "catch_all"}])
+    review_songs(conn, cfg, Script("1").io())
+    o = load_overrides(cfg.overrides_file)
+    assert o.match["epic/im-not-sorry-for-loving-you"] == ("misc-musicals", "epic-the-musical-not-sorry-for-loving-you")
+    assert not o.alias
+
+
+def test_a_misspelt_artists_accept_writes_its_alias(conn, cfg):
+    review_song(conn, "Coldplya", "Yellow", cands=[
+        {"artist_key": "coldplay", "song_key": "yellow", "score": 100.0, "step": "typo_artist"}])
+    review_songs(conn, cfg, Script("1").io())
+    assert load_overrides(cfg.overrides_file).alias["coldplya"] == ("coldplay",)
+
+
 def test_ignore(conn, cfg):
     s = review_song(conn)
     stats = review_songs(conn, cfg, Script("i").io())

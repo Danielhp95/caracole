@@ -104,8 +104,8 @@ def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> S
     """The song ``--song`` names, if it is one UG can be asked about; otherwise say what's missing.
 
     As in the nightly run, a song the index can't settle (not found, or a
-    review of other artists' songs of its title) is looked up on its artist's
-    UG page.
+    review of other artists' songs of its title or of names that aren't quite
+    UG's, ``match.REVIEW_ONLY_STEPS``) is looked up on its artist's UG page.
     """
     from caracole.overrides import OverridesError, override_key
     from caracole.songs import find_song

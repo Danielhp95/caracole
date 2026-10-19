@@ -5,7 +5,8 @@ can live in git:
 
 - choosing a candidate writes ``[match]``, plus an ``[alias]`` when the artist
   differs, so every other song by that artist is fixed too (but never for a
-  title-only match: that's usually a cover by someone else);
+  title-only match, usually a cover by someone else, nor for one under a
+  catch-all artist such as ``misc-musicals``: ``match.NO_ALIAS_STEPS``);
 - ``n`` (none of these) writes every candidate shown under ``[reject]``: they
   never come back, and the song is still looked for, on its artist's UG page
   too, without being ignored;
@@ -20,6 +21,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from caracole.config import Config
+from caracole.match import NO_ALIAS_STEPS
 from caracole.normalize import slug_key
 from caracole.overrides import (
     OverridesError,
@@ -80,7 +82,7 @@ def review_songs(
         if answer.isdigit() and 1 <= int(answer) <= len(cands):
             c = cands[int(answer) - 1]
             add_match(cfg.overrides_file, s.display, f"{c['artist_key']}/{c['song_key']}")
-            if c.get("step") != "title_only" and slug_key(s.artist) != c["artist_key"]:
+            if c.get("step") not in NO_ALIAS_STEPS and slug_key(s.artist) != c["artist_key"]:
                 add_alias(cfg.overrides_file, s.artist, c["artist_key"])
             update_song(conn, s.id, review=False)
             stats.accepted += 1

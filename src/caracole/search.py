@@ -11,7 +11,10 @@
   the query's two longest words (a typo in one of them still finds the song),
   or, for names made of initials, the hyphenated and the compact key
   (UG writes R.E.M. as ``r-e-m`` but AC/DC as ``acdc``). Variant slugs such as
-  ``creep-acoustic`` are grouped under their song.
+  ``creep-acoustic`` are grouped under their song. A song of a catch-all
+  artist (``misc-musicals``…) is also scored on its title alone, with and
+  without words such as "the musical": "epic not sorry for loving you" is
+  ``misc-musicals/epic-the-musical-not-sorry-for-loving-you``.
 
 Both sides are compared as words made the way slug keys are made (accents
 folded, apostrophes, "and" and a leading "the" dropped), and Chinese is also
@@ -21,6 +24,11 @@ between them, so ``song-dongye``, ``songdongye`` and ``song-dong-ye`` all match.
 
 UG's sitemaps list artists with accented or non-Latin names only by bare ids,
 so the index can't see their tabs; ``bare_id_hint`` says what to do then.
+
+Where a name isn't quite UG's, a library song in review shows its first
+candidates (``did_you_mean``), and a hit under one of UG's catch-all artists,
+such as ``misc-musicals``, says so (``IndexHit.catch_all``): its title holds
+the show's name, and its artist is no one's.
 """
 
 from __future__ import annotations
@@ -33,6 +41,7 @@ from typing import Mapping, Sequence
 
 from rapidfuzz import fuzz
 
+from caracole.match import SHOW_WORDS, is_catch_all
 from caracole.normalize import clean_title, fold, has_han, name_forms, romanize, split_variant
 from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
 from caracole.songs import Song, list_songs
@@ -43,6 +52,7 @@ STRONG = 90  # a hit this good is the song you meant
 PARTIAL_SCALE = 0.9  # a query that is only part of a name tops out at 90
 TYPE_ORDER = ("chords", "tabs", "guitar-pro", "power")
 MAX_PATTERNS = 2
+SHOWN_CANDIDATES = 3  # a review's candidates shown under its song: the rest are in `caracole review`
 
 _WORD_SPLIT = re.compile(r"[\W_]+")
 _APOSTROPHES = re.compile(r"['’‘`´ʼ]")
@@ -77,6 +87,12 @@ class IndexHit:
     artist: str = ""
     title: str = ""
 
+    @property
+    def catch_all(self) -> bool:
+        """Whether UG files this song under a catch-all artist (``misc-musicals``…), the show's name
+        in its title: added under UG's names, the song's artist would be that catch-all."""
+        return is_catch_all(self.artist_key)
+
 
 def display_from_keys(artist_key: str, song_key: str) -> tuple[str, str]:
     """An artist and a title made from UG keys or slugs: each word capitalized.
@@ -85,6 +101,14 @@ def display_from_keys(artist_key: str, song_key: str) -> tuple[str, str]:
     Only a word's first letter changes, so "3am" stays "3am".
     """
     return _title_words(artist_key), _title_words(song_key)
+
+
+def did_you_mean(song: Song, limit: int = SHOWN_CANDIDATES) -> list[dict]:
+    """A song in review's first candidates, best first (``songs.match_candidates`` rows): the UG songs
+    the matcher thinks it may be. Empty for a song not in review."""
+    if not song.review:
+        return []
+    return [c for c in song.match_candidates or [] if c.get("artist_key") and c.get("song_key")][:limit]
 
 
 def search_library(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[LibraryHit]:
@@ -128,6 +152,9 @@ def search_index(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[
     for (artist_key, base), n in groups.items():
         artist, title = artist_key.replace("-", " "), base.replace("-", " ")
         score = max(q.score(artist, title) for q in queries)
+        if is_catch_all(artist_key):  # no one's name: the title holds the show's, so it is scored alone
+            show = " ".join(w for w in base.split("-") if w not in SHOW_WORDS)
+            score = max(score, *(q.score("", t) for q in queries for t in (title, show) if t))
         if score >= MIN_SCORE:
             scored.append((score, n, artist_key, base))
     scored.sort(key=lambda s: (-s[0], -s[1], s[2], s[3]))

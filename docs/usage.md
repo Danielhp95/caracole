@@ -241,6 +241,28 @@ for you, then syncs the file at once and rewrites `_todo.md` and
       宋冬野 - 斑马斑马 | 安和桥北 | 4:13
     Song 宋冬野/斑马斑马: new; the next `caracole run` looks for it
 
+Then it matches the song against the offline index, as the nightly match
+step would (see [caracole match](#caracole-match---dry-run)), saves the match
+and says what it found: the UG song it matched
+(`On Ultimate Guitar: radiohead/creep (exact)`), that the index has nothing
+under that name, or, when it isn't sure, the candidates, each with its score,
+the step that found it and a page, as `caracole review` lists them:
+
+    $ caracole add epic "I'm not sorry for loving you"
+    Added to /home/you/Tabs/wanted.txt, line 17:
+      epic - I'm not sorry for loving you
+    Song epic/im-not-sorry-for-loving-you: new; the next `caracole run` looks for it
+    Not sure which Ultimate Guitar song it is. Did you mean:
+      1) 94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)  https://tabs.ultimate-guitar.com/tab/misc-musicals/epic-the-musical-not-sorry-for-loving-you-chords-4742072
+      2) 82  bill-fox/im-not-over-loving-you (title_only)  https://tabs.ultimate-guitar.com/tab/bill-fox/im-not-over-loving-you-chords-1066803
+    Pick one with `caracole review`, or on _todo.md.
+
+The review is saved, so `caracole review` can settle it at once. Nothing is
+matched while the index is empty (it says to run `caracole index build`) or
+overrides.toml can't be read, and an incomplete index records no miss: the
+song may be in a sitemap not read yet. `caracole search --add` matches the song
+it adds the same way.
+
 A song that is already listed isn't added twice, and its line stays as it is:
 edit the line to change its album or duration, and the next sync changes the
 song. The file is the source of truth, so the line is written first, before
@@ -481,9 +503,9 @@ exits 1 and says why; `--dry-run` still shows what matches so far.
 
 - **accept**: a score of 90 or more, with the next different title at least 8
   points behind.
-- **review**: any other score of 75 or more, and any match on the title alone
-  (usually a cover). You settle these on the to-do page or with
-  `caracole review`.
+- **review**: any other score of 75 or more, any match on the title alone
+  (usually a cover), and any match on a name that isn't quite UG's (step 4
+  below). You settle these on the to-do page or with `caracole review`.
 - **not_found**: below 75. A not-found song is matched again every night, so
   a new tab finds it.
 - **pinned** and **ignored** come from overrides.toml.
@@ -497,11 +519,51 @@ How a song is matched, in order:
    `los-enanitos-verdes`) and, for a Chinese name, in pinyin (宋冬野 meets
    `song-dongye`). An exact title wins, else the closest one.
 3. The nearest other artist name, at 90 or more, then step 2 under it.
-4. The title alone, across all artists: always a review.
+4. Names that aren't quite UG's, when steps 2 and 3 accept nothing. Each is
+   always a review, never an accept, and joins a review's candidates; the
+   step names them:
+   - `word_title`: a title of the song's artist that holds yours word for
+     word, or that yours holds: `Los Lobos - Canción del Mariachi` meets
+     `los-lobos/cancion-del-mariachi-morena-de-mi-corazon`. It scores 80 to
+     90, by how much of the longer title the shorter one covers. A word that
+     names nothing on its own, such as "Live", never counts.
+   - `typo_artist`: for an artist the index knows by none of their names, the
+     artists whose names are a letter or two away, then step 2 under them:
+     `Coldplya - Yellow` meets `coldplay/yellow`. One letter for a name of
+     four to seven letters, two from eight, none for a shorter name; two
+     letters swapped count as one. Of those, the five nearest, then those
+     with the most tabs, come first: `Tolo` meets `tool` before `colo`,
+     `lolo`, `molo`, `polo` and `solo`.
+   - `catch_all`: UG files the songs of musicals, films, TV shows, games and
+     cartoons under catch-all artists (`misc-musicals`, `misc-soundtrack`,
+     `misc-television`, `misc-computer-games`, `misc-cartoons`), with the
+     show's name inside the title. `epic - I'm not sorry for loving you`
+     meets `misc-musicals/epic-the-musical-not-sorry-for-loving-you`, scored
+     94: a catch-all title that holds the artist's name is scored on what is
+     left of it, less words such as "the musical" next to the name. One that
+     doesn't hold it but ends in your title of two words or more scores 90,
+     for a show's song your source credits to its composer. `misc-originals`
+     and `misc-unsigned-bands` file a song as "performer - title"
+     (`misc-originals/ray-porter-red-sarah`): there the artist's name must
+     start the title, and no ending counts. The other `misc-…` artists
+     (`misc-praise-songs`, `misc-traditional`, `misc-christmas`,
+     `misc-children`) file the bare title, which step 5 finds;
+     `misc-mashups` titles hold two songs, neither the one you want.
+5. The title alone, across all artists: always a review.
 
-At steps 2 to 4, the matcher passes over the UG songs you rejected for the
+A review keeps its five best candidates, but the best `catch_all` and the
+best `typo_artist` candidate are always among them, in place of the last of
+the others: `Idina Menzel - Let It Go` lists covers of "Let It Go" at 100,
+and `misc-cartoons/frozen-let-it-go` (90) too.
+
+At steps 2 to 5, the matcher passes over the UG songs you rejected for the
 song under `[reject]`, and so does the fetch on the artist's UG page, so they
 are never offered again; other candidates still can be.
+
+Matching never asks a search engine. A fallback through an official search
+API with your own key (Brave Search API, or a SearXNG of your own) is
+designed, and not built: [web-search.md](web-search.md) has the
+configuration it would take, and why it waits.
 
 ### caracole run
 
@@ -644,13 +706,15 @@ and cache.
   undone (by `[reject]`, say) loses the sheet and the tab that match kept.
   Songs the index can't settle are looked up on their artist's UG page, when
   it is known, at most once in 30 days: songs not found, songs reviewed on
-  their title alone (only other artists' songs of it), songs found on that
+  their title alone (only other artists' songs of it) or on names that
+  aren't quite UG's (steps 4 and 5 of the matcher, above), songs found on that
   page before, and songs whose chords the index can't offer (bare ids, or
   pages robots.txt closes). Per song it prints what it kept, as
   `Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)`,
   or `nothing kept`. `--song` fetches that one song now, even when nothing
   about it changed; the song must be in the library and matched, or not found
-  or reviewed on its title alone with its artist page known. A cooldown, a
+  or reviewed on its title alone or on names that aren't quite UG's, with its
+  artist page known. A cooldown, a
   block or a spent budget exits 0.
 - **`caracole lacuerda`** looks on LaCuerda for Spanish songs (judged by their
   lyrics, or by their title until there are lyrics) that have no complete
@@ -816,9 +880,25 @@ when it has something in it:
   `# in place of the artist's line under [alias]`. After the candidates
   comes the `[reject]` line that dismisses them all; for a song with a
   `[reject]` line already, the whole line to put in its place (see
-  [Review](#review)). When the candidates are only other artists' songs of
-  the title, probably covers, the item says so, and whether caracole has looked
-  on the artist's own UG page yet.
+  [Review](#review)). When the candidates come only from the steps that never
+  accept (other artists' songs of the title, probably covers, and names that
+  aren't quite UG's), the item says what they are, and whether caracole has
+  looked on the artist's own UG page yet:
+
+  ```
+  Only songs UG files under a catch-all artist (`misc-musicals`) with the
+  show's name in the title and other artists' songs with this title
+  (probably covers). If none is the song you want, dismiss them all (below):
+  UG may list epic only by bare ids, and the to-do page then lists them under
+  Artists to find.
+  ```
+
+  For a candidate under `misc-originals` or `misc-unsigned-bands`, it says
+  instead that the performer's name starts the title. A candidate under a
+  catch-all artist gets no `[alias]` line. When some
+  candidates come from names that aren't quite UG's, the section's
+  introduction says what each of their steps (`catch_all`, `typo_artist`,
+  `word_title`) means.
 - **Partial sheets.** The best sheet covers less than 80% of the lyrics: the
   percentage, the sheet and its source page. A more complete sheet takes its
   place when one turns up; to use another UG version now, pin it under
@@ -826,7 +906,12 @@ when it has something in it:
 - **Artists to find on Ultimate Guitar.** UG lists artists with accented or
   non-Latin names only by bare ids (Joaquín Sabina, Maná, 宋冬野), so caracole
   can't see their tabs. For each such artist with a song not found, or
-  reviewed on its title alone, the page links a UG search. Open the artist's
+  reviewed on its title alone or on names that aren't quite UG's, the page
+  links a UG search. A song with a candidate under the right spelling of a
+  misspelt name (`typo_artist`) or under a catch-all artist (`catch_all`)
+  isn't counted while that candidate stands: it is likelier the song than a
+  page of bare ids, and `Coldplya` is no artist to look for. Dismissed in
+  `caracole review`, it gives way. Open the artist's
   page once, by hand, or any of their tab pages, and paste its address, as
   your browser shows it, into the one block the page gives for all of them,
   in place of `https://www.ultimate-guitar.com/artist/…`:
@@ -930,7 +1015,10 @@ page of that song's oldest tab, whatever its type:
   `[alias] "Radio Head" = "radiohead"` when the artist's name differs, so
   every other song by that artist matches too; an artist with aliases already
   keeps them, and gets this one added. A candidate found by title alone gets
-  no alias: it is usually a cover by someone else.
+  no alias: it is usually a cover by someone else. Nor does one under a
+  catch-all artist (`catch_all`): `misc-musicals` is no other name of
+  EPIC's. One under the right spelling of a misspelt artist (`typo_artist`)
+  does, so the artist's other songs match too.
 - **n** says none of them is the song. It writes them all under `[reject]`,
   as `"Radio Head - Crep" = ["radiohead/creep"]`, and clears the review
   without ignoring the song: the rematch leaves those candidates out for good,
@@ -1065,9 +1153,30 @@ two places, and sends no request:
          caracole add "Stone Temple Pilots" "Creep"
 
 - **In your library**: every song, whatever its status, with its key when it
-  has one (`Key G major (from the tab)`) and its folder.
+  has one (`Key G major (from the tab)`) and its folder. A song in review
+  also shows its first three candidates, as the matcher found them:
+
+      epic - I'm not sorry for loving you · wanted, needs review · no folder yet
+         Did you mean (`caracole review` settles it):
+           94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)
+           82  bill-fox/im-not-over-loving-you (title_only)
+
 - **On Ultimate Guitar**: numbered hits from the offline index, each with its
-  tabs per type, one of its pages, and the `caracole add` line to paste.
+  tabs per type, one of its pages, and the `caracole add` line to paste. A
+  song of one of UG's catch-all artists (`misc-musicals`, `misc-soundtrack`…,
+  see [caracole match](#caracole-match---dry-run)) is also scored on its title
+  alone, with and without words such as "the musical", so
+  `caracole search epic not sorry for loving you` finds
+  `misc-musicals/epic-the-musical-not-sorry-for-loving-you` first. Its hit has
+  no `caracole add` line: added with UG's names, the song's artist would be
+  "Misc Musicals". It says instead that its artist is a catch-all, to add the
+  song as you know it and pick that hit in `caracole review`:
+
+      1. Misc Musicals - Epic The Musical Not Sorry For Loving You · chords×1
+         https://tabs.ultimate-guitar.com/tab/misc-musicals/epic-the-musical-not-sorry-for-loving-you-chords-4742072
+         misc-musicals is UG's catch-all artist, no one's name: add the song as you know it,
+         then pick this hit in `caracole review`:
+           caracole add "<the show or singer>" "<the song>"
 
 QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
@@ -1075,7 +1184,8 @@ compares Chinese as pinyin. `--limit N` (or `-n N`) shows up to N hits from
 each place, 10 by default. `--add N` adds UG hit N to wanted.txt and syncs it,
 the same way `caracole add` does. N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another
-name is left alone. When nothing matches well, or the query has accented or
+name is left alone. A hit under a catch-all artist is refused (exit 2, nothing
+written), with the same advice as its hit. When nothing matches well, or the query has accented or
 non-Latin letters, the command also explains bare ids and prints the
 `[artist_url]` line to paste, for the artist's page or one of their tab pages,
 with the table's header only while overrides.toml has no `[artist_url]`
@@ -1432,21 +1542,23 @@ lyrics without timings.
     Added to /home/you/Tabs/wanted.txt, line 16:
       宋冬野 - 斑马斑马 | 安和桥北 | 4:13
     Song 宋冬野/斑马斑马: new; the next `caracole run` looks for it
+    Not in the offline Ultimate Guitar index under this name: `caracole search` with a few of its words looks wider.
 
 The album and duration make the lyrics lookup exact. Written "斑马，斑马",
 with a comma, it is the same song to caracole, and so is 斑馬斑馬, in
 Traditional characters, as some releases write it.
 
 **2. It isn't found on Ultimate Guitar.** UG's sitemaps list every tab of
-宋冬野 by a bare id, so the local index has none of them:
+宋冬野 by a bare id, so the local index has none of them, as `caracole add`
+said, and `caracole match` says too:
 
     $ caracole match --dry-run
-    not_found      -  -             宋冬野 - 斑马斑马 → -  CHANGED unmatched → not_found
+    not_found      -  -             宋冬野 - 斑马斑马 → -
 
-`--dry-run` saves nothing. After the next `caracole run` (or `caracole match`),
-the to-do page lists 宋冬野 under "Artists to find on Ultimate Guitar", with a
-link to search UG and the line to paste, and puts the song on the buy list
-meanwhile:
+`--dry-run` saves nothing; `caracole add` saved that match already, so the
+to-do page it rewrote lists 宋冬野 under "Artists to find on Ultimate
+Guitar", with a link to search UG and the line to paste, and puts the song on
+the buy list meanwhile:
 
 ```toml
 [artist_url]

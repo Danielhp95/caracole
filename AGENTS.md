@@ -88,6 +88,7 @@ and `search --key`).
   timer, `caracole-admin`), module-check.nix (`checks.module`).
 - `docs/`: usage.md (configuration, commands, the to-do page, overrides.toml, the library
   folder), deploy.md (the NixOS host), install.md, and the design files above.
+  web-search.md designs a search-API fallback for matching, not built.
 
 ## Development
 

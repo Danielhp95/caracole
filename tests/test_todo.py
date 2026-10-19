@@ -98,6 +98,119 @@ def test_title_only_candidate_gets_no_alias_line(conn, cfg):
     assert "# under [alias]" not in text
 
 
+EPIC_TAB = (4742072, "misc-musicals", "epic-the-musical-not-sorry-for-loving-you", "chords")
+
+
+def epic_review(conn, *more):
+    """The matcher's review of "epic - I'm not sorry for loving you": a catch-all artist's song first."""
+    index(conn, [EPIC_TAB, (11, "bill-fox", "im-not-over-loving-you", "chords")])
+    s = add_song(conn, "epic", "I'm not sorry for loving you")
+    update_song(conn, s.id, review=True, match_decision="review", match_step="catch_all", match_score=94.1,
+                match_artist_key="misc-musicals", match_song_key=EPIC_TAB[2], match_candidates=[
+                    {"artist_key": "misc-musicals", "song_key": EPIC_TAB[2], "score": 94.1, "step": "catch_all"},
+                    {"artist_key": "bill-fox", "song_key": "im-not-over-loving-you", "score": 81.6,
+                     "step": "title_only"}, *more])
+    return s
+
+
+def test_a_catch_all_candidate_gets_no_alias_line(conn, cfg):
+    epic_review(conn)
+    text = todo(conn, cfg)
+    item = review_item(text, "epic - I'm not sorry for loving you")
+    assert "- 94 · `misc-musicals/epic-the-musical-not-sorry-for-loving-you` (catch_all)" in item
+    assert ('"epic - I\'m not sorry for loving you" = "misc-musicals/epic-the-musical-not-sorry-for-loving-you"'
+            "  # under [match]") in item
+    assert "# under [alias]" not in item
+
+
+def test_a_review_of_names_not_quite_ugs_says_what_they_are(conn, cfg):
+    epic_review(conn)
+    text = todo(conn, cfg)
+    item = review_item(text, "epic - I'm not sorry for loving you")
+    assert item.lstrip().startswith("Only songs UG files under a catch-all artist")
+    assert "and other artists' songs with this title (probably covers)" in item
+    # The catch-all candidate is likelier the song than a page of epic's on UG: no artist to find yet.
+    assert "## Artists to find" not in text
+    assert ("If none is the song you want, dismiss them all (below): UG may list epic only by bare ids, "
+            "and the to-do page then lists them under Artists to find.") in item
+    intro = review_intro(text)
+    assert "`catch_all`" in intro and "never accepted" in intro
+    assert "`typo_artist`" not in intro and "`word_title`" not in intro  # no candidate came from those
+
+
+def test_an_artists_other_songs_still_ask_for_its_page(conn, cfg):
+    epic_review(conn)
+    s = add_song(conn, "epic", "Some Song Nobody Charted")
+    update_song(conn, s.id, match_decision="not_found")
+    section = todo(conn, cfg).split("## Artists to find on Ultimate Guitar (1)", 1)[1]
+    assert "**epic** (1 song)" in section
+
+
+def test_a_misspelt_artists_review_asks_for_no_artist_page(conn, cfg):
+    # "Coldplya" is a misspelling, not an artist UG lists by bare ids.
+    index(conn, [(1, "coldplay", "yellow", "chords")])
+    s = add_song(conn, "Coldplya", "Yellow")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "coldplay", "song_key": "yellow", "score": 100.0, "step": "typo_artist"},
+        {"artist_key": "cover-band", "song_key": "yellow", "score": 100.0, "step": "title_only"}])
+    text = todo(conn, cfg)
+    assert "## Artists to find" not in text
+    assert ("If none is the song you want and Coldplya is spelt right, dismiss them all (below): UG may list "
+            "Coldplya only by bare ids") in review_item(text, "Coldplya - Yellow")
+
+
+def test_a_performers_catch_all_candidate_is_called_one(conn, cfg):
+    # misc-originals files "performer-title": no show's name there.
+    index(conn, [(1, "misc-originals", "ray-porter-red-sarah", "chords")])
+    s = add_song(conn, "Ray Porter", "Red Sarah")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "misc-originals", "song_key": "ray-porter-red-sarah", "score": 100.0, "step": "catch_all"}])
+    text = todo(conn, cfg)
+    item = review_item(text, "Ray Porter - Red Sarah")
+    assert item.lstrip().startswith(
+        "Only songs UG files under `misc-originals` with the performer's name at the start of the title")
+    assert "show's name" not in item
+    assert "`misc-originals`" in review_intro(text)
+
+
+def review_intro(text):
+    return text.split("\n## Review (", 1)[1].split("\n### ", 1)[0]
+
+
+def test_the_review_intro_explains_no_step_none_of_its_candidates_came_from(conn, cfg):
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    s = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"}])
+    intro = review_intro(todo(conn, cfg))
+    assert "never accepted" not in intro and "catch_all" not in intro
+
+
+def test_a_review_with_a_near_name_among_its_own_artists_titles_gets_no_note(conn, cfg):
+    # A fuzzy title of the artist's own is a candidate the index is fairly sure of: no note, no artist page.
+    index(conn, [(1, "los-lobos", "cancion-del-mariachi-morena-de-mi-corazon", "chords"),
+                 (2, "los-lobos", "cancion-del-mariachy", "chords")])
+    s = add_song(conn, "Los Lobos", "Canción del Mariachi")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "los-lobos", "song_key": "cancion-del-mariachy", "score": 97.6, "step": "fuzzy_title"},
+        {"artist_key": "los-lobos", "song_key": "cancion-del-mariachi-morena-de-mi-corazon", "score": 83.3,
+         "step": "word_title"}])
+    text = todo(conn, cfg)
+    item = review_item(text, "Los Lobos - Canción del Mariachi")
+    assert item.lstrip().startswith("- 98 · `los-lobos/cancion-del-mariachy` (fuzzy_title)")
+    assert "`word_title`" in review_intro(text)
+
+
+def test_a_misspelt_artists_candidate_gets_its_alias_line(conn, cfg):
+    index(conn, [(1, "coldplay", "yellow", "chords")])
+    s = add_song(conn, "Coldplya", "Yellow")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "coldplay", "song_key": "yellow", "score": 100.0, "step": "typo_artist"}])
+    item = review_item(todo(conn, cfg), "Coldplya - Yellow")
+    assert '"Coldplya" = "coldplay"  # under [alias]' in item
+    assert item.lstrip().startswith("Only songs of artists whose names are a letter or two off this one's")
+
+
 def covers_only(conn, artist, title, *covers):
     """A song reviewed on its title alone: its only candidates are other artists' songs (covers)."""
     s = add_song(conn, artist, title)

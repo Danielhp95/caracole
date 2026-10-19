@@ -23,6 +23,7 @@ from caracole.lacuerda import artist_slug_candidates, looks_spanish
 from caracole.library import safe_name, write_atomic
 from caracole.lyrics import song_lyrics
 from caracole.musescore import song_pages
+from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, Overrides
 from caracole.songs import Song, list_songs
@@ -36,6 +37,7 @@ GUITAR_KINDS = ("guitar-pro", "power", "tabs")
 NEW_FILES_FOR = timedelta(days=7)  # how long a file downloaded from gtptabs.com is listed as new
 _MD_SPECIAL = "\\`*_[]<>|"
 _KIND_NAMES = {"guitar-pro": "Guitar Pro", "power": "Power Tab", "tabs": "Tab", "chords": "Chords"}
+PERFORMER = "catch_all:performer"  # a catch_all candidate under misc-originals or misc-unsigned-bands
 
 
 def md(s: str) -> str:
@@ -82,16 +84,73 @@ def _section(title: str, items: list[str], intro: str | None = None, count: int 
     return out + items + [""]
 
 
+# What a review's candidates are, by the step that found them, for the steps that never accept
+# (match.REVIEW_ONLY_STEPS); "{artists}" is filled with the catch-all artists among them.
+_NEAR_NAMES = {
+    "catch_all": "songs UG files under a catch-all artist ({artists}) with the show's name in the title",
+    # A catch_all candidate under match.PERFORMER_CATCH_ALLS, which files "performer-title".
+    PERFORMER: "songs UG files under {artists} with the performer's name at the start of the title",
+    "typo_artist": "songs of artists whose names are a letter or two off this one's",
+    "word_title": "the artist's titles that hold this one word for word or that it holds",
+    "title_only": "other artists' songs with this title (probably covers)",
+}
+# The Review section's word on each step of names that aren't quite UG's (match.TOLERANT_STEPS).
+_NEAR_NAME_STEPS = {
+    "catch_all": "`catch_all`: a song UG files under a catch-all artist such as `misc-musicals`, with the "
+                 "show's name in its title.",
+    PERFORMER: "`catch_all` under `misc-originals` or `misc-unsigned-bands`: a song UG files with its "
+               "performer's name at the start of its title.",
+    "typo_artist": "`typo_artist`: a song of an artist whose name is a letter or two off yours.",
+    "word_title": "`word_title`: a title of the artist's that holds yours word for word, or that yours holds.",
+}
+
+
+def _kind(cand: dict[str, Any]) -> str | None:
+    """A candidate's step, or ``PERFORMER`` for a catch_all one under a performer's catch-all."""
+    step = cand.get("step")
+    return PERFORMER if step == "catch_all" and cand.get("artist_key") in PERFORMER_CATCH_ALLS else step
+
+
+def _and(parts: list[str]) -> str:
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _what_candidates_are(song: Song) -> str:
+    """"Only …": what a review's candidates are, when every one comes from a step that never accepts."""
+    cands = song.match_candidates or []
+    kinds = [k for k in dict.fromkeys(_kind(c) for c in cands) if k in _NEAR_NAMES]
+
+    def artists(kind: str) -> str:
+        return ", ".join(f"`{a}`" for a in dict.fromkeys(c.get("artist_key") for c in cands if _kind(c) == kind))
+    return "Only " + _and([_NEAR_NAMES[k].format(artists=artists(k)) for k in kinds])
+
+
+# Candidates likelier the song than a page of its artist's that UG lists only by bare ids: the right
+# spelling of a misspelt artist's name, or a catch-all artist's song (a show's, or a performer's).
+_LEADS_ELSEWHERE = ("typo_artist", "catch_all")
+
+
+def _leads_elsewhere(song: Song) -> bool:
+    return any(c.get("step") in _LEADS_ELSEWHERE for c in song.match_candidates or [])
+
+
 def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due: set[int]) -> str | None:
-    """What to do when no candidate is right, for a review whose candidates are all other artists'
-    songs of the title: the index has nothing of the song's own artist, and its UG page may (A6)."""
+    """What to do when no candidate is right, for a review whose candidates all come from steps that
+    never accept: other artists' songs of the title (probably covers), and names that aren't quite
+    UG's. The index has nothing surer of the song's own artist, and its UG page may (A6)."""
     if song.match_decision != "review" or not needs_artist_page(song):
         return None
-    head, artist = "Only other artists' songs with this title (probably covers)", md(song.artist)
+    head, artist = _what_candidates_are(song), md(song.artist)
     if song.status == "found":  # a cover's [match] would bring that artist's guitar parts, and no better sheet
         head += ", and the song has a sheet already: nothing is lost by leaving this"
     if not artist_is_known(conn, song, overrides) or pasted_page_problem(conn, song, overrides) is not None:
-        return (f"{head}. If none is the song you want, UG probably lists {artist} only by bare ids: find the "
+        steps = {c.get("step") for c in song.match_candidates or []}
+        spelt = f" and {artist} is spelt right" if "typo_artist" in steps else ""
+        if _leads_elsewhere(song):  # not under Artists to find while these candidates stand
+            return (f"{head}. If none is the song you want{spelt}, dismiss them all (below): UG may list {artist} "
+                    "only by bare ids, and the to-do page then lists them under Artists to find.")
+        lists = "probably lists" if steps == {"title_only"} else "may list"
+        return (f"{head}. If none is the song you want{spelt}, UG {lists} {artist} only by bare ids: find the "
                 "artist's page, or one of their tab pages (see Artists to find below), and paste its address "
                 "under `[artist_url]`, and caracole looks for the song there.")
     if song.id in due:
@@ -100,6 +159,18 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
     return (f"{head}. caracole didn't find it on {artist}'s UG page either. Pick one only if it is the "
             "version you want; if none is, dismiss them all (below): caracole looks at the artist page again "
             "after 30 days.")
+
+
+def _near_names_intro(songs: list[Song]) -> list[str]:
+    """The Review section's word on the candidates of names that aren't quite UG's, for the steps the
+    candidates listed come from (none, when no candidate does)."""
+    steps = {_kind(c) for s in songs if s.review and s.status != "ignored"
+             for c in (s.match_candidates or [])[:5]}
+    named = [text for step, text in _NEAR_NAME_STEPS.items() if step in steps]
+    if not named:
+        return []
+    return ["Some candidates come from names that aren't quite UG's, and are never accepted without you:", "",
+            *(f"- {text}" for text in named), ""]
 
 
 def _dismissal(song: Song, refs: list[str], overrides: Overrides) -> list[str]:
@@ -156,7 +227,7 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, d
             # No table headers: overrides.toml may hold [match] and [alias] already (`caracole review`
             # writes them), and a table declared twice makes the whole file unreadable.
             lines = [f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}  # under [match]"]
-            if step != "title_only" and slug_key(s.artist) != akey:
+            if step not in NO_ALIAS_STEPS and slug_key(s.artist) != akey:
                 lines += _alias_line(s.artist, akey, overrides)
             items += _paste(lines)
         if refs:
@@ -187,13 +258,17 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
     wanted: dict[str, list[Song]] = {}
     pasted: dict[str, tuple[str, str]] = {}  # artist -> (the tab page under [artist_url], what is wrong with it)
     for s in songs:
-        # Not found, or reviewed on its title alone (only covers), by an artist whose UG page the
-        # fetch can't find: the index has no slugged tab of theirs, and no address was pasted or learned
-        # (or the tab page pasted leads to none, or can't be read for now).
+        # Not found, or reviewed on its title alone (only covers) or on names that aren't quite UG's, by
+        # an artist whose UG page the fetch can't find: the index has no slugged tab of theirs, and no
+        # address was pasted or learned (or the tab page pasted leads to none, or can't be read for now).
+        # Not while a misspelling's or a catch-all's candidate is likelier the song than bare ids:
+        # dismissed, it gives way.
         if s.status == "ignored" or not needs_artist_page(s):
             continue
         problem = pasted_page_problem(conn, s, overrides)
         if problem is None and artist_is_known(conn, s, overrides):
+            continue
+        if _leads_elsewhere(s):
             continue
         wanted.setdefault(s.artist, []).append(s)
         if problem is not None:
@@ -647,7 +722,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                 "the right candidate's lines (or, when none is right, the `[reject]` line) to overrides.toml "
                 "yourself, each under the table its comment names. The file holds each table once: write a "
                 "table's header (`[match]`, `[alias]`, `[reject]`) only if the file doesn't have that table yet.",
-                "", *review]
+                "", *_near_names_intro(songs), *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
