@@ -97,7 +97,7 @@ def test_cooling_provider_skipped_next_run(conn, cfg):
     steps = [step("fetch", provider="ug", calls=calls), step("lyrics", provider="lrclib", calls=calls)]
     report = run_pipeline(cfg, conn=conn, services=services(out), steps=steps, now=NOW)
     assert calls == ["lyrics"]
-    assert report.steps["fetch"].startswith("skipped: ug cooling down until 2026-10-19 01:30 UTC")
+    assert report.steps["fetch"].startswith("skipped: ug cooling down until 2026-10-19 03:30 UTC")
 
 
 def test_successful_use_resets_cooldown_strikes(conn, cfg):
