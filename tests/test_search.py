@@ -109,6 +109,26 @@ def test_names_made_of_initials(conn, query, expected):
     assert keys(search_index(conn, query))[0] == expected
 
 
+def test_hit_names_come_from_ugs_slugs_which_keep_the_and_and(conn):
+    conn.executemany(
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (?, ?, ?, 'chords', '1', 'x', ?)",
+        [(389691, "rifles", "local-boy", "the-rifles/local-boy-chords-389691"),
+         (767025, "adam-the-ants", "stand-deliver", "adam-and-the-ants/stand-and-deliver-chords-767025")],
+    )
+    hit = search_index(conn, "the rifles local boy")[0]
+    assert (hit.artist, hit.title) == ("The Rifles", "Local Boy")
+    hit = search_index(conn, "adam and the ants stand and deliver")[0]
+    assert (hit.artist, hit.title) == ("Adam And The Ants", "Stand And Deliver")
+
+
+def test_a_song_listed_only_by_its_variant_is_named_without_the_label(conn):
+    index(conn, [(6236009, "misc-traditional", "froggy-went-a-courtin-intro", "chords")])
+    hit = search_index(conn, "froggy went a courtin")[0]
+    assert (hit.song_key, hit.labels) == ("froggy-went-a-courtin", ("intro",))
+    assert hit.title == "Froggy Went A Courtin"
+
+
 def test_limit_and_unrelated_rows_left_out(conn):
     index(conn, ROWS)
     hits = search_index(conn, "creep", limit=2)
@@ -120,6 +140,12 @@ def test_limit_and_unrelated_rows_left_out(conn):
 def test_chinese_queries_try_romanized_keys(conn, query):
     index(conn, ROWS + PINYIN_ROWS)
     assert keys(search_index(conn, query))[0] == ("song-dongye", "ban-ma-ban-ma")
+
+
+@pytest.mark.parametrize("artist_key", ["song-dongye", "songdongye", "song-dong-ye"])
+def test_pinyin_syllables_match_however_ug_hyphenates_them(conn, artist_key):
+    index(conn, ROWS + [(8001, artist_key, "ban-ma-ban-ma", "chords")])
+    assert keys(search_index(conn, "宋冬野"))[0] == (artist_key, "ban-ma-ban-ma")
 
 
 def test_chinese_query_without_pinyin_rows_finds_nothing_and_hints_at_artist_url(conn):
@@ -140,6 +166,21 @@ def test_hint_for_an_accented_name_without_a_strong_hit(conn):
     hits = search_index(conn, "Joaquín Sabina")
     assert all(h.score < 90 for h in hits)
     assert "[artist_url]" in bare_id_hint("Joaquín Sabina", hits)
+
+
+def test_accented_query_with_a_strong_hit_still_mentions_bare_ids_briefly(conn):
+    index(conn, ROWS)
+    hits = search_index(conn, "Persiana Américana")
+    assert hits[0].score == 100
+    brief = bare_id_hint("Persiana Américana", hits)
+    assert "[artist_url]" in brief and "bare" in brief
+    assert len(brief) < len(bare_id_hint("Persiana Américana", []))
+
+
+def test_hint_paste_line_names_the_artist():
+    assert '"宋冬野" = "https://www.ultimate-guitar.com/artist/<name>_<id>"' in bare_id_hint(
+        "宋冬野 斑马", [], artist="宋冬野")
+    assert '"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/' in bare_id_hint("Joaquín Sabina", [])
 
 
 def test_empty_query_finds_nothing(conn):
@@ -194,6 +235,18 @@ def test_library_search_matches_han_text_and_pinyin(conn, query):
     add_song(conn, "Radiohead", "Creep")
     hits = search_library(conn, query)
     assert [h.song.artist for h in hits] == ["宋冬野"]
+
+
+def test_library_search_finds_simplified_titles_from_traditional_characters(conn):
+    add_song(conn, "宋冬野", "斑马，斑马")
+    add_song(conn, "Radiohead", "Creep")
+    assert [h.song.artist for h in search_library(conn, "斑馬")] == ["宋冬野"]
+
+
+def test_library_search_matches_any_of_a_songs_artists(conn):
+    add_song(conn, "Shakira", "La Tortura", artists=["Shakira", "Alejandro Sanz"])
+    add_song(conn, "Radiohead", "Creep")
+    assert [h.song.title for h in search_library(conn, "alejandro sanz")] == ["La Tortura"]
 
 
 def test_library_search_finds_songs_of_any_status(conn):
