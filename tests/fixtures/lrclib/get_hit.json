@@ -1,0 +1,13 @@
+{
+  "id": 1040023,
+  "name": "De Música Ligera",
+  "trackName": "De Música Ligera",
+  "artistName": "Soda Stereo",
+  "albumName": "Originales - 20 Exitos",
+  "duration": 213.0,
+  "instrumental": false,
+  "hasWordSync": false,
+  "plainLyrics": "Línea uno de prueba bajo la luz\nLínea dos de prueba sin canción\nLínea tres de prueba en la ciudad\nLínea cuatro de prueba al final\n\nCoro de prueba, coro de prueba\nCoro de prueba, coro de prueba",
+  "syncedLyrics": "[00:23.62] Línea uno de prueba bajo la luz\n[00:31.28] Línea dos de prueba sin canción\n[00:38.75] Línea tres de prueba en la ciudad\n[00:46.52] Línea cuatro de prueba al final\n[01:08.35] \n[01:25.25] Coro de prueba, coro de prueba\n[01:32.74] Coro de prueba, coro de prueba\n[03:02.97] ",
+  "lyricsfile": "version: '1.0'\nmetadata:\n  title: De Música Ligera\n  artist: Soda Stereo\n  album: Originales - 20 Exitos\n  duration_ms: 213000\n  instrumental: false\nlines:\n- text: Línea uno de prueba bajo la luz\n  start_ms: 23620\n  end_ms: 31280\n- text: Línea dos de prueba sin canción\n  start_ms: 31280\n  end_ms: 38750\n- text: Línea tres de prueba en la ciudad\n  start_ms: 38750\n  end_ms: 46520\n- text: Línea cuatro de prueba al final\n  start_ms: 46520\n  end_ms: 68350\n- text: ''\n  start_ms: 68350\n  end_ms: 85250\n- text: Coro de prueba, coro de prueba\n  start_ms: 85250\n  end_ms: 92740\n- text: Coro de prueba, coro de prueba\n  start_ms: 92740\n  end_ms: 182970\n- text: ''\n  start_ms: 182970\nplain: |-\n  Línea uno de prueba bajo la luz\n  Línea dos de prueba sin canción\n  Línea tres de prueba en la ciudad\n  Línea cuatro de prueba al final\n\n  Coro de prueba, coro de prueba\n  Coro de prueba, coro de prueba\n"
+}

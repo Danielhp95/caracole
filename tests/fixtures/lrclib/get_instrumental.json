@@ -1,0 +1,13 @@
+{
+  "id": 4242424,
+  "name": "Interludio de Prueba",
+  "trackName": "Interludio de Prueba",
+  "artistName": "Conjunto de Prueba",
+  "albumName": "Álbum de Prueba",
+  "duration": 184.0,
+  "instrumental": true,
+  "hasWordSync": false,
+  "plainLyrics": null,
+  "syncedLyrics": null,
+  "lyricsfile": "version: '1.0'\nmetadata:\n  title: Interludio de Prueba\n  artist: Conjunto de Prueba\n  album: Álbum de Prueba\n  duration_ms: 184000\n  instrumental: true\nlines: []\nplain: ''\n"
+}
