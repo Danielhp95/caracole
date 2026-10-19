@@ -10,9 +10,10 @@ imported from ``tabarr.songs`` and ``tabarr.db`` on first use.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Callable, Protocol, Sequence
+from datetime import UTC, datetime
+from typing import Protocol
 
 
 @dataclass
@@ -78,5 +79,5 @@ def default_kv_set() -> KvSet:
 def utc_stamp(now: datetime) -> str:
     """``now`` as ISO 8601 UTC to the second ("2026-10-18T03:30:00Z"). Naive times are UTC."""
     if now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
-    return now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        now = now.replace(tzinfo=UTC)
+    return now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
