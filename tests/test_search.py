@@ -471,7 +471,7 @@ def test_cli_chinese_query_points_to_artist_url(tmp_path):
 def paste_hint(output: str, overrides: Path) -> None:
     """The hint's lines, pasted into overrides.toml as it says: a block with its header at the end,
     lines without one under the [artist_url] table the file has."""
-    block = [line for line in re.findall(r"^    (\S.*)$", output, re.M)]
+    block = re.findall(r"^    (\S.*)$", output, re.M)
     lines = "".join(f"{line}\n" for line in block).replace("<name>_<id>", "joaquin_sabina_1234")
     text = overrides.read_text(encoding="utf-8")
     if block[0] == "[artist_url]":
