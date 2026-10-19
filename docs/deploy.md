@@ -105,6 +105,9 @@ in
 }
 ```
 
+It refers to the `tabarr-ntfy` secret, so it evaluates once section 2 has
+declared the secrets.
+
 `settings` is `tabarr.toml`, as `src/tabarr/config.py` reads it, and unknown
 keys are fatal there. The module adds `library_dir` and `music_dir` from its
 options. State and cache always live in `/var/lib/tabarr` and
