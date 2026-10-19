@@ -134,12 +134,14 @@ Traps:
 Each names where it is enforced. Don't weaken one to make a test pass.
 
 - **Politeness** (http.py, health.py, commands/_common.py).
-  - Budgets per run: `ug` 60, `lrclib` 200, `lacuerda` 30 requests
+  - Budgets per run: `ug` 60, `lrclib` 200, `lacuerda` 30, `gtptabs` 20 requests
     (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100 (`BUILD_BUDGET`,
-    commands/index.py). Then `BudgetExhausted`.
+    commands/index.py). Then `BudgetExhausted`. Only a provider in `config.SWITCHABLE`
+    (`gtptabs`) can be turned off (`enabled = false`): then it gets no client and its step
+    is skipped.
   - One request at a time (a synchronous client, and the lock below), with a random pause
-    from the provider's `delay` (10–20 s for UG and LaCuerda, 1–2 s for LRCLIB) between
-    any two, redirect hops included: `PoliteClient` paces its own requests, and
+    from the provider's `delay` (10–20 s for UG, LaCuerda and gtptabs.com, 1–2 s for
+    LRCLIB) between any two, redirect hops included: `PoliteClient` paces its own requests, and
     `_common._pause_after_last_request` its first after the last one any caracole sent.
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
     more that run, `health.record_block` cools the provider down for 24 h × 2^(k−1) + 2 h after

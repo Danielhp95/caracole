@@ -44,7 +44,7 @@ music_dir = "~/Music"             # tracks you bought; read only, used only for 
 # overrides_file = "..."          # default: overrides.toml in library_dir
 # wanted_file = "..."             # default: wanted.txt in library_dir
 user_agent = "caracole/0.1 (personal tab library)"
-guitar_pro_mode = "assisted"      # the only mode: caracole never downloads Guitar Pro files
+guitar_pro_mode = "assisted"      # Ultimate Guitar's, the only mode: you download its Guitar Pro files
 chordpro_bin = "chordpro"         # the program that renders PDFs
 # cjk_font = "/path/to/font.ttf"  # or $CARACOLE_CJK_FONT; see "Fonts for Chinese sheets"
 
@@ -68,6 +68,10 @@ budget = 200
 delay = [1, 2]
 [providers.lacuerda]              # Spanish chord sheets
 budget = 30
+delay = [10, 20]
+[providers.gtptabs]               # Guitar Pro files, downloaded for you
+enabled = true                    # false: caracole asks gtptabs.com nothing
+budget = 20
 delay = [10, 20]
 
 [match]                           # how sure a match must be, on a 0-100 score
@@ -124,8 +128,19 @@ else the file `client_secret_file` names, else
 `$CREDENTIALS_DIRECTORY/ntfy_token`, else `token_file`, else
 `$CARACOLE_NTFY_TOKEN`.
 
-**Providers** are exactly `ug`, `lrclib` and `lacuerda`. Any other
-`[providers.…]` table is an error, like any other unknown key.
+**Providers** are exactly `ug`, `lrclib`, `lacuerda` and `gtptabs`. Any other
+`[providers.…]` table is an error, like any other unknown key. Only gtptabs.com
+can be turned off: with `enabled = false` under `[providers.gtptabs]`, caracole
+sends it nothing, the nightly run skips its step, and the to-do page's Provider
+health says it is off. The other three are what caracole is built on, so
+`enabled` in their tables is an unknown key.
+
+**Guitar Pro files** come two ways. Ultimate Guitar's robots.txt closes its
+download endpoint to bots, so its Guitar Pro pages are yours to click:
+`guitar_pro_mode` is Ultimate Guitar's, and takes only `"assisted"` (any other
+value is an error). gtptabs.com's robots.txt leaves its downloads open, so
+caracole downloads a file there for each song that has none (`caracole gtptabs`,
+in [One step at a time](#one-step-at-a-time)).
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the

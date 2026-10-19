@@ -31,13 +31,19 @@ class ConfigError(Exception):
 class ProviderPolicy:
     budget: int
     delay: tuple[float, float]
+    enabled: bool = True  # only a provider in SWITCHABLE can be off
 
 
 DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     "ug": ProviderPolicy(budget=60, delay=(10.0, 20.0)),
     "lrclib": ProviderPolicy(budget=200, delay=(1.0, 2.0)),
     "lacuerda": ProviderPolicy(budget=30, delay=(10.0, 20.0)),
+    # Guitar Pro files, downloaded for you: its robots.txt allows /tabs/download/ (gtptabs.py).
+    "gtptabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
 }
+# The providers [providers.<name>] can turn off with `enabled = false`. The others are what
+# caracole is built on, so for them `enabled` is an unknown key like any other.
+SWITCHABLE = frozenset({"gtptabs"})
 
 
 @dataclass(frozen=True)
@@ -314,11 +320,15 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
     overrides_file = dir_value("overrides_file", library_dir / "overrides.toml")
     wanted_file = dir_value("wanted_file", library_dir / "wanted.txt")
 
+    # Ultimate Guitar's mode, which its robots.txt fixes (it disallows /tab/download for bots):
+    # the key stays so that older files load. Downloads for you are gtptabs.com's, in its table.
     mode = data.get("guitar_pro_mode", "assisted")
     if mode != "assisted":
         raise ConfigError(
-            f"guitar_pro_mode = {mode!r} is not supported; only 'assisted' is implemented "
-            "(UG's robots.txt disallows /tab/download for bots)"
+            f"guitar_pro_mode = {_shown(mode)} is not supported; only 'assisted' is: Ultimate Guitar's "
+            "robots.txt disallows /tab/download for bots, so its Guitar Pro pages are yours to click. "
+            "caracole downloads Guitar Pro files for you from gtptabs.com only, unless "
+            "[providers.gtptabs] says enabled = false"
         )
 
     sp = _table(data, "spotify")
@@ -352,7 +362,8 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
             )
         if not isinstance(table, Mapping):
             raise ConfigError(f"[providers.{name}] must be a table")
-        _check_keys(table, _PROVIDER_KEYS, f"[providers.{name}]")
+        keys = _PROVIDER_KEYS | ({"enabled"} if name in SWITCHABLE else set())
+        _check_keys(table, keys, f"[providers.{name}]")
         base = providers[name]
         budget = table.get("budget", base.budget)
         if isinstance(budget, bool) or not isinstance(budget, int) or budget < 0:
@@ -360,7 +371,8 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
                 f"[providers.{name}].budget must be a non-negative integer, not {_shown(budget)}"
             )
         delay = _delay(table["delay"], f"[providers.{name}]") if "delay" in table else base.delay
-        providers[name] = ProviderPolicy(budget=budget, delay=delay)
+        enabled = _bool(table.get("enabled", base.enabled), f"[providers.{name}].enabled")
+        providers[name] = ProviderPolicy(budget=budget, delay=delay, enabled=enabled)
 
     match = MatchPolicy(**_numbers(_table(data, "match"), _MATCH_RANGES, "[match]"))
     if match.review > match.accept:

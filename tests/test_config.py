@@ -173,8 +173,43 @@ def test_unknown_top_level_key_is_config_error(tmp_path):
 
 
 def test_automatic_guitar_pro_mode_is_rejected(tmp_path):
+    # Ultimate Guitar stays assisted whatever the file says: its robots.txt closes /tab/download.
+    # Automatic downloads are gtptabs.com's, switched in its own table.
     p = write(tmp_path, 'guitar_pro_mode = "automatic"\n')
-    with pytest.raises(ConfigError, match="assisted"):
+    with pytest.raises(ConfigError, match=r"only 'assisted'.*\[providers\.gtptabs\]"):
+        load_config(p, env={"HOME": str(tmp_path)})
+
+
+def test_assisted_guitar_pro_mode_still_loads(tmp_path):
+    # Older files, and the example in docs/usage.md, set it; it names UG's mode, which is fixed.
+    p = write(tmp_path, 'guitar_pro_mode = "assisted"\n')
+    cfg = load_config(p, env={"HOME": str(tmp_path)})
+    assert cfg.guitar_pro_mode == "assisted"
+    assert cfg.provider("gtptabs").enabled
+
+
+def test_gtptabs_downloads_are_on_by_default_with_a_small_budget(tmp_path):
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    assert cfg.provider("gtptabs") == ProviderPolicy(budget=20, delay=(10.0, 20.0), enabled=True)
+
+
+def test_gtptabs_can_be_turned_off_and_keeps_its_other_settings(tmp_path):
+    p = write(tmp_path, "[providers.gtptabs]\nenabled = false\ndelay = [12, 18]\n")
+    policy = load_config(p, env={"HOME": str(tmp_path)}).provider("gtptabs")
+    assert policy == ProviderPolicy(budget=20, delay=(12.0, 18.0), enabled=False)
+
+
+def test_only_gtptabs_can_be_turned_off(tmp_path):
+    # UG, LRCLIB and LaCuerda are what caracole is built on: no switch, so a typo can't pass for one.
+    for name in ("ug", "lrclib", "lacuerda"):
+        p = write(tmp_path, f"[providers.{name}]\nenabled = false\n")
+        with pytest.raises(ConfigError, match=rf"unknown key\(s\) in \[providers\.{name}\]: enabled"):
+            load_config(p, env={"HOME": str(tmp_path)})
+
+
+def test_gtptabs_enabled_must_be_true_or_false(tmp_path):
+    p = write(tmp_path, '[providers.gtptabs]\nenabled = "no"\n')
+    with pytest.raises(ConfigError, match=r'\[providers\.gtptabs\]\.enabled must be true or false, not "no"'):
         load_config(p, env={"HOME": str(tmp_path)})
 
 
