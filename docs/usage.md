@@ -44,7 +44,7 @@ music_dir = "~/Music"             # tracks you bought; read only, used only for 
 # overrides_file = "..."          # default: overrides.toml in library_dir
 # wanted_file = "..."             # default: wanted.txt in library_dir
 user_agent = "caracole/0.1 (personal tab library)"
-guitar_pro_mode = "assisted"      # Ultimate Guitar's, the only mode: you download its Guitar Pro files
+guitar_pro_mode = "assisted"      # UG's mode, the only one: you click its Guitar Pro pages
 chordpro_bin = "chordpro"         # the program that renders PDFs
 # cjk_font = "/path/to/font.ttf"  # or $CARACOLE_CJK_FONT; see "Fonts for Chinese sheets"
 

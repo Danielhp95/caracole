@@ -122,9 +122,9 @@ Traps:
   gtptabs.com, musescore.com or Spotify. Give `PoliteClient` an `httpx.MockTransport` as
   `transport=`; CLI tests monkeypatch `caracole.commands._common.transport_for` (and
   `_common.sleep`); pipeline tests pass `Services` with fake clients (`FakeGtpTabs.client`
-  and `FakeMuseScore.client` make real ones); Spotify tests use `FakeSpotify` (test_spotify.py) or
-  patch `caracole.spotify.client_from_config`. Nothing blocks the network for the whole
-  suite; only the package build's sandbox has none.
+  and `FakeMuseScore.client` make real ones); Spotify tests use `FakeSpotify`
+  (test_spotify.py) or patch `caracole.spotify.client_from_config`. Nothing blocks the
+  network for the whole suite; only the package build's sandbox has none.
 - `load_config` takes `env=`, and unit tests pass it. CLI tests read the real environment:
   clear what could leak in, as `OUTSIDE_SETTINGS` does in test_commands_sources.py.
 - Heavy imports stay inside the command function: `cli.build_app` imports every module in
@@ -151,8 +151,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     then it gets no client and its step is skipped.
   - One request at a time (a synchronous client, and the lock below), with a random pause
     from the provider's `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore, 1–2 s
-    for LRCLIB) between any two, redirect hops included: `PoliteClient` paces its own requests, and
-    `_common._pause_after_last_request` its first after the last one any caracole sent.
+    for LRCLIB) between any two, redirect hops included: `PoliteClient` paces its own
+    requests, and `_common._pause_after_last_request` its first after the last one any
+    caracole sent.
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
     more that run, `health.record_block` cools the provider down for 24 h × 2^(k−1) + 2 h after
     the k-th block in a row (so the next nightly run is always skipped), and nothing retries or works around it (no proxies).
@@ -198,9 +199,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   in (`test_musescore_fetch.py::test_caracole_asks_for_the_sitemaps_alone`). Its Cloudflare
   challenge is a block like a 403, and the to-do page then says plainly that MuseScore is
   blocking caracole, even with no page to list (`todo._musescore_pages`). Every match is on
-  the title alone, a possible match (`musescore.song_pages`). inbox.py files what the user downloads (`SCORE_EXTENSIONS`) as
-  `score-N.<ext>`, never as `sheet.pdf`, under the song's one `inbox` version of kind
-  `score`; a MusicXML header is read with `musicxml.header`, up to the part list only.
+  the title alone, a possible match (`musescore.song_pages`). inbox.py files what the user
+  downloads (`SCORE_EXTENSIONS`) as `score-N.<ext>`, never as `sheet.pdf`, under the
+  song's one `inbox` version of kind `score`; a MusicXML header is read with
+  `musicxml.header`, up to the part list only.
 - **Chinese is compared as pinyin** (`normalize.romanize`, with pypinyin) in match.py,
   coverage.py, music.py, search.py, library_page.py and ug/fetch.py; identity keys also fold
   Traditional characters to Simplified. A change to `clean_title`, `slug_key` or
@@ -208,8 +210,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `songs.ensure_current_keys`, run before songs are looked up, listed or added, then re-keys
   them once and merges those that now share a key. It re-keys `songs` only; `ug_index` keys
   change when a sitemap is parsed again, and the keys of a table site_index.py fills
-  (`gtptabs_index`, `musescore_index`) at its next refresh, which parses every sitemap again, an unchanged
-  one from the cache
+  (`gtptabs_index`, `musescore_index`) at its next refresh, which parses every sitemap
+  again, an unchanged one from the cache
   (`test_gtptabs_fetch.py::test_new_keys_read_the_sitemaps_again_even_when_they_are_unchanged`).
   Name new per-song kv keys `<prefix><song id>` and add the prefix to
   `songs._PER_SONG_KV`, so a merge deletes them.
