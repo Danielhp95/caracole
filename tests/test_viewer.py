@@ -115,7 +115,12 @@ def test_the_pdf_is_linked_only_when_there_is_one():
 
 def test_the_page_credits_the_fingerings():
     html = build_viewer(UG_CHO)
-    assert "chords-db" in html and "MIT" in html
+    foot = re.search(r'<footer class="foot">(.*?)</footer>', html, re.S).group(1)
+    assert "chords-db" in foot and "© 2016 David Rubert" in foot and "MIT" in foot
+    # MIT: the copyright and permission notice go with every copy of the fingerings
+    assert "Copyright (c) 2016 David Rubert" in foot
+    assert "Permission is hereby granted, free of charge" in foot
+    assert 'THE SOFTWARE IS PROVIDED "AS IS"' in foot.replace("&quot;", '"')
 
 
 def test_an_auto_sheet_says_it_is_unverified():

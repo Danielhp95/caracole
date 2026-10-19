@@ -729,7 +729,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   barre and the fret they start on (swipe, or ‹ ›, for the next). Every place
   the chord is played lights up while its card is open. The shapes come from
   [chords-db](https://github.com/tombatossals/chords-db) by David Rubert (MIT
-  licence); a chord it has no shape for shows the closest one, saying so.
+  licence, whose notice is at the foot of every page); a chord it has no
+  shape for shows the closest one, saying so.
 - **The key button** (bottom right) opens the settings. **Transpose** moves
   every chord, its shapes and the key by semitones; Reset goes back to the
   song's `[transpose]`, where the viewer starts, like the PDF. In an awkward

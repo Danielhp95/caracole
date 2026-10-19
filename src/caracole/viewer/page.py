@@ -260,11 +260,20 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         + f'<article class="sheet" id="sheet"{lang}>\n{_sheet_html(sheet)}</article>\n'
         + '<footer class="foot">\n'
         + pdf_link
-        + f'<p>Chord shapes from <a href="{CREDIT_URL}">chords-db</a> by David Rubert (MIT licence).</p>\n'
+        + f'<p>Chord shapes from <a href="{CREDIT_URL}">chords-db</a>, © 2016 David Rubert, MIT licence.</p>\n'
+        + f'<details class="licence"><summary>Its licence</summary><pre>{escape(_credit_notice())}</pre></details>\n'
         + "<p>Keep this page private: the lyrics and chords are other people's work.</p>\n"
         + "</footer>\n</div>\n"
         + _CONTROLS
     )
+
+
+@lru_cache(maxsize=1)
+def _credit_notice() -> str:
+    """chords-db's copyright and permission notice (MIT): it goes with every copy of its
+    fingerings, and each page holds some."""
+    text = (HERE / "LICENSE-chords-db").read_text(encoding="utf-8")
+    return text[text.index("MIT License"):].strip()
 
 
 def _texts(sheet: Sheet) -> list[str]:
