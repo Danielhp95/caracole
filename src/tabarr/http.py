@@ -6,6 +6,7 @@ Rules this module enforces (plan §6, "Politeness"):
   forever, and a cached URL never costs a request again;
 - a per-run request budget, with a random pause before every network request;
 - one request at a time;
+- a URL its host's robots.txt disallows (``ROBOTS_DISALLOW``) is never requested;
 - a 403, a 429 or a challenge page raises ``ProviderBlocked``. Errors are never
   misses: callers must not turn any ``ProviderError`` into "not found".
 """
@@ -17,6 +18,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -144,6 +146,46 @@ def _header(headers: Mapping[str, str], name: str) -> str | None:
     return None
 
 
+# The Disallow lines of the "User-agent: *" group of each host's robots.txt, as fetched
+# on 2026-10-18 (docs/spike-2026-10-18.md). LaCuerda's robots.txt is empty and LRCLIB is
+# an API, so their hosts have none.
+ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
+    "www.ultimate-guitar.com": (
+        "/search.php", "/forum/showthread.php?p=", "/forum/showpost.php", "/guitar/", "/tabmanager/",
+        "/follow_me.php", "/goto.php", "/show.php", "/show", "/analytics/tracker/", "/updates/?filter=",
+        "/contribution/", "/tabs/*.htm?sort=date", "/vote0.php", "/*?no_takeover",
+        "/forum/showthread.php?t=*&goto=*", "/forum/archive/index.php?t-*.html",
+        "/contribution/contest/index?", "/edu", "/components/", "/send?", "/profile/messages",
+        "/profile/manage/", "/user/auth/", "/user/activity", "/tp/", "/pro/", "/redirect/away",
+        "/courses/section", "/tab/applicature/transpose", "/tab-pro/download", "/books?*",
+        "/user/tab/view?*", "/explore*song_id[]=*",
+    ),
+    "tabs.ultimate-guitar.com": (
+        "/forum/", "/tab/print?", "/components/", "/contribution/", "/user/tab/", "/download/public/",
+        "/tab/download", "/tab/track/", "/tab/applicature/transpose", "/user/tab/view?*",
+    ),
+}
+_ROBOTS = {
+    host: [(rule, re.compile(".*".join(map(re.escape, rule.split("*"))))) for rule in rules]
+    for host, rules in ROBOTS_DISALLOW.items()
+}
+
+
+def robots_disallows(url: str) -> str | None:
+    """The robots.txt rule (``ROBOTS_DISALLOW``) that closes ``url``, or None when it is open.
+
+    A rule matches the start of the URL's path and query, and ``*`` stands for any
+    run of characters (RFC 9309). ``PoliteClient`` never requests a closed URL;
+    other modules can use this to skip one before asking for it.
+    """
+    u = httpx.URL(url)
+    target = u.raw_path.decode("ascii")
+    for rule, pattern in _ROBOTS.get(u.host, ()):
+        if pattern.match(target):
+            return rule
+    return None
+
+
 class PoliteClient:
     """One provider's HTTP client for one run: cache-first, budgeted, paced, never escalating.
 
@@ -155,6 +197,8 @@ class PoliteClient:
     - Before every network request except the first, it pauses for a random
       time in ``policy.delay``, minus the time already elapsed.
     - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
+    - A URL robots.txt disallows (``robots_disallows``) raises ``ProviderError``
+      without a request.
     - 403, 429 or a challenge page raise ``ProviderBlocked``, and no further
       requests are made this run.
     - After ``max_consecutive_errors`` other errors, ``ProviderUnavailable``. Only a
@@ -224,6 +268,9 @@ class PoliteClient:
         if stale and self.requests_made >= self.policy.budget:
             return cached
 
+        rule = robots_disallows(full)
+        if rule is not None:  # nothing is sent, so the error breaker doesn't count it either
+            raise ProviderError(self.provider, full, None, f"robots.txt disallows it ({rule})")
         if self._blocked is not None:
             raise ProviderBlocked(self.provider, full, self._blocked.status, "blocked earlier this run")
         if self._unavailable:

@@ -163,6 +163,62 @@ def test_after_a_block_no_more_requests_this_run(tmp_path):
     assert len(rec.requests) == 1
 
 
+TABS = "https://tabs.ultimate-guitar.com"
+WWW = "https://www.ultimate-guitar.com"
+# Each closed by a Disallow line of its host's robots.txt (User-agent: *), as captured in the spike.
+ROBOTS_CLOSED = [
+    TABS + "/tab/print?id=1",  # /tab/print?
+    TABS + "/tab/download?id=1",  # /tab/download
+    TABS + "/tab/download-kids-worship/shine-your-light-chords-4818770",  # /tab/download, a prefix (real index row)
+    TABS + "/tab/track/se-que-es-tarde-chords-1126580",  # /tab/track/ (real index row)
+    TABS + "/tab/applicature/transpose?id=1",  # /tab/applicature/transpose
+    TABS + "/download/public/1234",  # /download/public/
+    WWW + "/search.php?search_type=title&value=x",  # /search.php
+    WWW + "/tab-pro/download?id=1",  # /tab-pro/download
+    WWW + "/artist/soda_stereo_2946?no_takeover",  # /*?no_takeover
+]
+READ_BY_TABARR = [
+    TABS + "/tab/soda-stereo/persiana-americana-tabs-1081462",
+    TABS + "/tab/85053",
+    WWW + "/artist/soda_stereo_2946?filter=chords&page=2",
+    WWW + "/sitemap_last.xml",
+    "https://lrclib.net/api/search?track_name=%E6%96%91%E9%A9%AC%E6%96%91%E9%A9%AC&artist_name=x",
+    "https://acordes.lacuerda.net/soda_stereo/",
+]
+
+
+@pytest.mark.parametrize("url", ROBOTS_CLOSED)
+def test_urls_robots_txt_closes_are_never_requested(tmp_path, url):
+    client, rec = make_client(tmp_path, ok())
+    with pytest.raises(ProviderError) as e:
+        client.get(url)
+    assert not isinstance(e.value, (ProviderBlocked, ProviderUnavailable))
+    assert rec.requests == [] and client.requests_made == 0
+
+
+@pytest.mark.parametrize("url", READ_BY_TABARR)
+def test_urls_tabarr_reads_are_open(tmp_path, url):
+    client, rec = make_client(tmp_path, ok())
+    assert client.get(url).status == 200 and len(rec.requests) == 1
+
+
+def test_robots_disallows_names_the_rule_for_other_modules():
+    from tabarr.http import robots_disallows
+
+    assert robots_disallows(TABS + "/tab/track/ave-fenix-guitar-pro-1149792") == "/tab/track/"
+    assert [u for u in READ_BY_TABARR if robots_disallows(u)] == []
+
+
+def test_robots_refusals_are_not_provider_failures(tmp_path):
+    # No request was sent, so the breaker neither counts them nor resets.
+    client, rec = make_client(tmp_path, ok(), max_consecutive_errors=3)
+    for i in range(3):
+        with pytest.raises(ProviderError):
+            client.get(f"{TABS}/tab/print?id={i}")
+    assert client.get(TABS + "/tab/85053").status == 200
+    assert len(rec.requests) == 1
+
+
 def test_500_is_error_and_not_cached(tmp_path):
     client, rec = make_client(tmp_path, ok(b"boom", status=500))
     with pytest.raises(ProviderError) as e:
