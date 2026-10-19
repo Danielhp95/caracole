@@ -252,6 +252,8 @@ LONG_MINOR = (
         ("Bm G D A", Key(11, "aeolian")),
         ("D A/C# Bm G", Key(2, "ionian")),
         (LONG_MINOR, Key(9, "aeolian")),
+        # a tab that starts on the tonic and ends on an outro chord: the start counts as much
+        ("G D Em C G D Em C C G/B Am F C G D C", Key(7, "ionian")),
     ],
 )
 def test_the_key_is_guessed_from_the_chords(progression, key):

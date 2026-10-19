@@ -341,8 +341,8 @@ def estimate_key(chords: list[Chord]) -> Key | None:
 
     Each chord whose notes are all in a key counts for it (in a minor key, a dominant or
     leading-note chord may raise the seventh: E7 in A minor), and one with only its root in
-    the key counts a little. The tonic chord counts again, more when the song starts and,
-    more still, when it ends on it; a major chord on the fifth, a little. Between relative
+    the key counts a little. The tonic chord counts again, and more when the song starts or
+    ends on it; a major chord on the fifth, a little. Between relative
     keys (G major and E minor share every note) that decides. None without chords.
     """
     if not chords:
@@ -380,9 +380,9 @@ def _key_score(chords: list[Chord], key: Key) -> float:
         if chord.root == dominant and 4 in chord.intervals:
             score += 0.25
     if is_tonic(chords[0]):
-        score += 1
-    if is_tonic(chords[-1]):
-        score += 1.5
+        score += 1.25
+    if is_tonic(chords[-1]):  # tabs often end on an outro or a fade, so no more than the start
+        score += 1.25
     return score
 
 

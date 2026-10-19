@@ -1,0 +1,312 @@
+"""caracole.viewer: sheet.html, the phone-friendly page beside each sheet's PDF."""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from caracole.chordpro import to_chordpro
+from caracole.viewer import build_viewer, info_key
+from caracole.viewer.voicings import load_voicings
+
+FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
+UG_CHO = (FIXTURES / "ug_sheet.cho").read_text(encoding="utf-8")
+MINOR = to_chordpro(
+    "[ch]Cm[/ch]      [ch]Ab[/ch]\nTiny minor words\n[ch]Bb[/ch]     [ch]G7[/ch]\nand back home",
+    title="Minor", artist="Placeholders", key="Cm",
+)
+
+
+def data_of(html: str) -> dict:
+    found = re.search(r'<script type="application/json" id="song">(.*?)</script>', html, re.S)
+    assert found, "no song data"
+    return json.loads(found.group(1))
+
+
+def sheet_of(html: str) -> str:
+    found = re.search(r'<article[^>]*id="sheet"[^>]*>(.*?)</article>', html, re.S)
+    assert found, "no sheet"
+    return found.group(1)
+
+
+# --- the static page --------------------------------------------------------------------------
+
+
+def test_the_page_shows_the_sheet_with_its_chords_marked():
+    html = build_viewer(UG_CHO)
+    assert "<title>Synthetic Test Song · The Placeholders</title>" in html
+    sheet = sheet_of(html)
+    assert re.search(r'<b class="c" data-c="0"[^>]*>G</b>', sheet)
+    assert re.search(r'<b class="c" data-c="4"[^>]*>G/B</b>', sheet)
+    assert ">Verse 1</h2>" in sheet and "Tiny " in sheet
+    assert '<pre class="tab">e|-----0---0---|' in sheet
+    assert '<i class="m">x2</i>' in sheet
+
+
+def test_words_after_a_chord_wrap_one_by_one():
+    sheet = sheet_of(build_viewer(UG_CHO))
+    # the first word rides with its chord; the rest are words of their own, so a narrow
+    # screen wraps the line between words and never between a chord and its syllable
+    assert re.search(r'<span class="s"><b class="c" data-c="0"[^>]*>G</b><span class="y">Tiny </span></span>'
+                     r'<span class="w">test </span>', sheet)
+
+
+def test_chinese_words_wrap_by_character():
+    zh = to_chordpro((FIXTURES / "zh_sheet.txt").read_text(encoding="utf-8"), title="斑马斑马", artist="宋冬野")
+    sheet = sheet_of(build_viewer(zh))
+    assert '<span class="y">合</span></span><span class="w">成</span><span class="w">的</span>' in sheet
+
+
+def test_what_the_sheet_says_is_text_never_markup():
+    cho = "{title: Creep</script><b>x</b>}\n{artist: A & B}\n{comment: <i>Verse</i>}\n[G]<img src=x> \"words\"\n"
+    html = build_viewer(cho)
+    assert "<b>x</b>" not in html and "<img" not in html and "<i>Verse" not in html
+    assert "Creep&lt;/script&gt;&lt;b&gt;x&lt;/b&gt;" in html
+    assert "A &amp; B" in html
+    payload = re.search(r'id="song">(.*?)</script>', html, re.S).group(1)
+    assert "<" not in payload
+
+
+def test_the_content_security_policy_allows_exactly_the_inline_script_and_style():
+    html = build_viewer(UG_CHO)
+    csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
+    script = re.search(r"<script>(.*?)</script>", html, re.S).group(1)
+    style = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+
+    def sha(text: str) -> str:
+        return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode()).digest()).decode() + "'"
+
+    assert "default-src 'none'" in csp
+    assert f"script-src {sha(script)}" in csp
+    assert f"style-src {sha(style)}" in csp
+    assert "base-uri 'none'" in csp and "form-action 'none'" in csp
+
+
+def test_the_page_loads_nothing_and_links_only_beside_itself():
+    html = build_viewer(UG_CHO, pdf="sheet.pdf")
+    assert "<link" not in html and "@import" not in html and "url(" not in html
+    assert not re.search(r"\ssrc=", html)
+    hrefs = re.findall(r'href="([^"]*)"', html)
+    assert "sheet.pdf" in hrefs and "../../index.html" in hrefs
+    assert [h for h in hrefs if "://" in h] == ["https://github.com/tombatossals/chords-db"]
+
+
+def test_the_pdf_is_linked_only_when_there_is_one():
+    assert 'href="sheet (auto).pdf"' in build_viewer(UG_CHO, pdf="sheet (auto).pdf")
+    assert not re.search(r'href="[^"]*\.pdf"', build_viewer(UG_CHO))
+
+
+def test_the_page_credits_the_fingerings():
+    html = build_viewer(UG_CHO)
+    assert "chords-db" in html and "MIT" in html
+
+
+def test_an_auto_sheet_says_it_is_unverified():
+    html = build_viewer(to_chordpro("[ch]Am[/ch]\nla", title="T", artist="A", auto=True))
+    assert "auto-generated, unverified" in html.lower() or "Auto-generated, unverified" in html
+
+
+# --- the key ------------------------------------------------------------------------------------
+
+
+def test_the_key_from_info_json_comes_first():
+    data = data_of(build_viewer(UG_CHO, key="Em", key_source="tab"))
+    assert data["key"] == {"tonic": 4, "mode": "aeolian", "from": "from the tab"}
+
+
+def test_then_the_key_the_sheet_gives():
+    data = data_of(build_viewer(UG_CHO))
+    assert data["key"] == {"tonic": 7, "mode": "ionian", "from": "from the sheet"}
+
+
+def test_then_a_key_guessed_from_the_chords():
+    cho = UG_CHO.replace("{key: G}\n", "")
+    data = data_of(build_viewer(cho, key="soda stereo|de musica ligera", key_source=None))
+    assert data["key"] == {"tonic": 7, "mode": "ionian", "from": "guessed from the chords"}
+
+
+def test_a_sheet_without_chords_has_no_key():
+    data = data_of(build_viewer("{title: T}\n{artist: A}\nOnly words\n"))
+    assert data["key"] is None
+
+
+@pytest.mark.parametrize(
+    ("source", "label"),
+    [("tab", "from the tab"), ("model", "from the audio"), ("autochords", "from the audio"),
+     ("estimate", "guessed from the chords"), ("Musicbrainz", "from Musicbrainz"), (None, "from info.json")],
+)
+def test_where_the_key_came_from_is_said_in_words(source, label):
+    assert data_of(build_viewer(UG_CHO, key="G", key_source=source))["key"]["from"] == label
+
+
+@pytest.mark.parametrize(
+    ("info", "found"),
+    [
+        ({"key": "Am", "key_source": "tab"}, ("Am", "tab")),
+        ({"key": "C dorian"}, ("C dorian", None)),
+        ({"key": "radiohead|creep"}, (None, None)),  # the song's identity key, not a musical one
+        ({"key": 5, "key_source": "tab"}, (None, None)),
+        ({}, (None, None)),
+        (["not", "a", "dict"], (None, None)),
+    ],
+)
+def test_info_json_gives_a_musical_key_or_none(info, found):
+    assert info_key(info) == found
+
+
+# --- what the script works from ------------------------------------------------------------------
+
+
+def test_the_viewer_starts_at_the_transposition_the_pdf_has():
+    assert data_of(build_viewer(UG_CHO, transpose=3))["transpose"] == 3
+    assert data_of(build_viewer(UG_CHO))["transpose"] == 0
+
+
+def test_chords_are_given_as_root_suffix_and_bass():
+    chords = data_of(build_viewer(UG_CHO))["chords"]
+    assert chords[0][:3] == [7, "", None]  # G
+    assert chords[4][:3] == [7, "", 11]  # G/B
+    assert chords[2][:3] == [4, "m", None]  # Em
+
+
+def test_a_chord_caracole_cant_read_is_shown_as_written():
+    html = build_viewer("{title: T}\n{artist: A}\n[G]la [(G)]lo [H7]li\n")
+    assert data_of(html)["chords"][1:] == [None, None]
+    assert ">(G)</b>" in sheet_of(html) and ">H7</b>" in sheet_of(html)
+
+
+def test_every_chord_shown_has_fingerings_on_every_root():
+    data = data_of(build_viewer(MINOR))
+    reps = [r for r in data["chords"] if r]
+    reps += [r for mode in data["mapped"].values() for r in mode if r]
+    reps += [r for mode in data["alts"].values() for alts in mode for r in alts]
+    for rep in reps:
+        assert len(data["voicings"][rep[3]]) == 12, rep
+        if rep[5]:
+            assert len(data["voicings"][rep[5]]) == 12, rep
+    assert data["voicings"]["m"] == load_voicings()["m"]
+
+
+def test_each_mode_maps_the_chords_by_scale_degree():
+    data = data_of(build_viewer(MINOR))
+    assert data["modes"] == ["ionian", "dorian", "phrygian", "lydian", "mixolydian", "aeolian", "locrian"]
+    major = data["mapped"]["ionian"]
+    assert [r[:3] for r in major] == [[0, "", None], [9, "m", None], [11, "dim", None], [7, "7", None]]
+    assert data["mapped"]["aeolian"] == data["chords"]  # the key's own mode: as written
+
+
+def test_alternatives_are_given_for_each_chord_in_each_mode():
+    data = data_of(build_viewer(MINOR))
+    assert set(data["alts"]) == set(data["modes"])
+    assert all(len(alts) == len(data["chords"]) for alts in data["alts"].values())
+    tonic = data["alts"]["aeolian"][0]  # Cm's, in C minor
+    assert [0, "m7", None] in [r[:3] for r in tonic]
+
+
+def test_names_spell_every_key_of_every_mode():
+    data = data_of(build_viewer(MINOR))
+    assert data["names"]["ionian"][5] == "C Db D Eb E F Gb G Ab A Bb B"
+    assert data["names"]["aeolian"][9] == "C C# D Eb E F F# G G# A Bb B"
+    assert data["keyNames"]["aeolian"][0] == "Cm" and data["keyNames"]["dorian"][2] == "D dorian"
+
+
+def test_without_a_key_one_spelling_serves_every_transposition():
+    data = data_of(build_viewer("{title: T}\n{artist: A}\nOnly words\n"))
+    assert data["names"] == {"": "C C# D Eb E F F# G Ab A Bb B"}
+    assert data["mapped"] == {} and data["capo"] == {}
+
+
+def test_capo_hints_are_given_for_each_transposition():
+    data = data_of(build_viewer(UG_CHO))  # in G
+    assert data["capo"]["ionian"][0] == []  # G: open chords already
+    assert data["capo"]["ionian"][3] == [[1, "A"], [3, "G"]]  # up three: Bb
+    assert data["capoSheet"] == 2  # the sheet's own capo, which a hint adds to
+
+
+# --- in a real browser ---------------------------------------------------------------------------
+
+CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
+in_chromium = pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+
+
+def dump_dom(html: str, tmp_path: Path, fragment: str = "") -> str:
+    """The page's DOM after its script ran; skips the test when this machine can't run Chromium.
+
+    Each call has a profile of its own, so nothing a page kept in localStorage carries over."""
+    page = tmp_path / "Artist" / "Title" / "sheet.html"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(html, encoding="utf-8")
+    profile = tmp_path / f"chrome-{len(list(tmp_path.glob('chrome-*')))}"
+    try:
+        result = subprocess.run(
+            [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+             f"--user-data-dir={profile}", "--window-size=390,844", "--virtual-time-budget=3000",
+             "--dump-dom", page.as_uri() + fragment],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    if result.returncode != 0 or "<html" not in result.stdout:
+        pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
+    return result.stdout
+
+
+def chord_texts(dom: str) -> dict[str, str]:
+    """Each chord's label in the sheet, by its index (the first of its places)."""
+    found: dict[str, str] = {}
+    for index, text in re.findall(r'<b class="c[^"]*" data-c="(\d+)"[^>]*>([^<]*)</b>', sheet_of(dom)):
+        found.setdefault(index, text)
+    return found
+
+
+@in_chromium
+def test_the_script_runs_and_leaves_the_sheet_as_written(tmp_path):
+    dom = dump_dom(build_viewer(UG_CHO), tmp_path)
+    assert 'data-ready="1"' in dom
+    assert chord_texts(dom) == {"0": "G", "1": "D", "2": "Em", "3": "C", "4": "G/B", "5": "Am", "6": "F"}
+    assert re.search(r'id="fab"[^>]*>Key G</button>', dom)
+
+
+@in_chromium
+def test_transposing_renames_every_chord(tmp_path):
+    dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=2")
+    assert chord_texts(dom) == {"0": "A", "1": "E", "2": "F#m", "3": "D", "4": "A/C#", "5": "Bm", "6": "G"}
+    assert "Key <b>A</b> (+2)" in dom
+    dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=-4")  # down to Eb: flats
+    assert chord_texts(dom)["2"] == "Cm" and chord_texts(dom)["0"] == "Eb"
+
+
+@in_chromium
+def test_a_capo_shows_the_shapes_to_play(tmp_path):
+    dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=3&shapes=1")  # Bb, capo 1 more: A shapes
+    assert chord_texts(dom)["0"] == "A"
+    assert "Capo <b>3</b>, A shapes" in dom  # the sheet's capo 2, and 1 more
+
+
+@in_chromium
+def test_a_mode_change_moves_the_chords(tmp_path):
+    dom = dump_dom(build_viewer(MINOR), tmp_path, "#mode=ionian")
+    assert chord_texts(dom) == {"0": "C", "1": "Am", "2": "Bdim", "3": "G7"}
+
+
+@in_chromium
+def test_tapping_a_chord_shows_its_shapes_and_alternatives(tmp_path):
+    dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#chord=0")
+    card = re.search(r'<section class="sheet-ui card" id="card"([^>]*)>(.*?)</section>', dom, re.S)
+    assert "hidden" not in card.group(1)
+    assert '<h2 id="card-name">G</h2>' in card.group(2)
+    assert "<svg" in card.group(2) and card.group(2).count('class="dg-dot"') == 3  # 320003
+    assert ">Gmaj7</button>" in card.group(2) and ">Em</button>" in card.group(2)
+
+
+@in_chromium
+def test_a_chord_caracole_cant_read_is_left_as_written(tmp_path):
+    dom = dump_dom(build_viewer("{title: T}\n{artist: A}\n[G]la [(G)]lo\n"), tmp_path, "#t=2")
+    assert chord_texts(dom) == {"0": "A", "1": "(G)"}
