@@ -33,7 +33,8 @@ A kept file is replaced only when another version outranks it, and is not
 rewritten when it wins again.
 
 ``rescore_kept_sheets`` scores the sheets kept before their song had lyrics,
-without a request; the nightly run calls it before fetching.
+without a request, and sends a song whose kept sheet proves partial back to
+have its sheets ranked again; the nightly run calls it before fetching.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ from rapidfuzz import fuzz
 
 from tabarr import coverage
 from tabarr.config import RankPolicy
-from tabarr.db import kv_get, kv_set
+from tabarr.db import kv_delete, kv_get, kv_get_json, kv_set, kv_set_json
 from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError, Response
 from tabarr.library import drop_file, keep_file, kept_files, write_info
 from tabarr.lyrics import song_lyrics
@@ -84,6 +85,7 @@ from tabarr.ug.page import (
 )
 from tabarr.versions import (
     SHEET_KINDS,
+    STALE,
     VersionRow,
     get_version,
     mark_gone,
@@ -117,6 +119,15 @@ TITLE_MATCH = 90  # rapidfuzz ratio of title keys, the matcher's accept score
 TITLE_MARGIN = 8  # a fuzzy title must lead the next different title by this much
 LEARN_TRIES = 3  # slugged tabs read at most to learn an artist's page
 _ARTIST_PATH = re.compile(r"/artist/[^/?#]+_\d+")
+
+# A tab page that won't parse, even fetched again, is asked for again after a week, then after
+# twice as long each time it still won't.
+UNREADABLE_RETRY = timedelta(days=7)
+UNREADABLE_RETRY_MAX = timedelta(days=90)
+
+
+class UnreadablePage(PageParseError):
+    """A cached page that doesn't parse, fetched again and still not parsing: a provider error."""
 
 
 @dataclass
@@ -177,6 +188,7 @@ class _SongRun:
     song: Song
     pages: dict[int, UGTabPage | None] = field(default_factory=dict)
     fetched: Counter[str] = field(default_factory=Counter)
+    unreadable: set[int] = field(default_factory=set)  # tabs whose pages couldn't be read this run
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -244,7 +256,8 @@ def _get_page[P: (UGTabPage, UGArtistPage)](
     UG's 404 page has no js-store, so the status is checked before parsing.
     A 200 is cached (tab pages forever), so a cached body that no longer
     parses (a truncated or maintenance page) is fetched once more instead of
-    failing the song on every run.
+    failing the song on every run; when that copy doesn't parse either, UG
+    keeps serving it, and the page is ``UnreadablePage``.
 
     With ``max_age``, a cached copy older than that is no answer for ``now``:
     PoliteClient serves one only once the budget is spent, so this stops as
@@ -262,7 +275,10 @@ def _get_page[P: (UGTabPage, UGArtistPage)](
     except PageParseError:
         if not resp.from_cache:
             raise
-    return parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False)), True
+    try:
+        return parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False)), True
+    except PageParseError as e:
+        raise UnreadablePage(e.provider, e.url, e.status, e.message) from e
 
 
 def _stale(resp: Response, now: datetime, max_age: timedelta) -> bool:
@@ -292,17 +308,33 @@ def _tab_page_url(url: str) -> bool:
     )
 
 
+def _wanted(run: _SongRun, v: UGVersion) -> bool:
+    """A kind tabarr uses (never Official, which UG marks public too), public and not blocked."""
+    return v.kind is not None and v.access == "public" and v.tab_id not in run.ctx.overrides.block
+
+
 def _usable(run: _SongRun, v: UGVersion) -> bool:
-    """A kind tabarr uses (never Official, which UG marks public too), public, not blocked, at a tab page."""
-    return (
-        v.kind is not None and v.access == "public" and v.tab_id not in run.ctx.overrides.block
-        and _tab_page_url(v.url)
-    )
+    """A version tabarr wants, at a tab page."""
+    return _wanted(run, v) and _tab_page_url(v.url)
+
+
+def _check_links(run: _SongRun, versions: Iterable[UGVersion], url: str) -> None:
+    """Raise ``PageParseError`` when a page lists versions tabarr wants and not one links to a tab page.
+
+    Some links go elsewhere (robots.txt closes /tab/download); all of them
+    going elsewhere means UG's links changed shape, which is an error, never
+    "no versions".
+    """
+    wanted = [v for v in versions if _wanted(run, v)]
+    if wanted and not any(_tab_page_url(v.url) for v in wanted):
+        raise PageParseError(PROVIDER, url, None, "no version on the page links to a tab page")
 
 
 def _known(run: _SongRun, tab_id: int) -> bool:
+    """Whether the song has the version on record under its current match (a stale one isn't)."""
     return run.conn.execute(
-        "SELECT 1 FROM versions WHERE provider = ? AND tab_id = ? AND song_id = ?", (PROVIDER, str(tab_id), run.song.id)
+        "SELECT 1 FROM versions WHERE provider = ? AND tab_id = ? AND song_id = ? AND gone != ?",
+        (PROVIDER, str(tab_id), run.song.id, STALE),
     ).fetchone() is not None
 
 
@@ -318,11 +350,18 @@ def _record(run: _SongRun, versions: Iterable[UGVersion], *, fresh: bool) -> Non
             _upsert(run, v)
 
 
-def _record_page(run: _SongRun, page: UGTabPage, *, fresh: bool) -> None:
-    """Record the page's own tab and the versions it lists of the same kind group."""
+def _record_page(run: _SongRun, page: UGTabPage, url: str, *, fresh: bool) -> None:
+    """Record the page's own tab and the versions it lists of the same kind group.
+
+    The page's own tab was just read at ``url``, so it is recorded there
+    should its own link go elsewhere (``_check_links``).
+    """
     group = _GROUP_OF.get(page.tab.kind or "")
-    if group is not None:
-        _record(run, (v for v in (page.tab, *page.versions) if v.kind in group), fresh=fresh)
+    if group is None:
+        return
+    tab, *listed = [v for v in (page.tab, *page.versions) if v.kind in group]
+    _check_links(run, [tab, *listed], url)
+    _record(run, (tab if _tab_page_url(tab.url) else replace(tab, url=url), *listed), fresh=fresh)
 
 
 def _version_row(run: _SongRun, tab_id: int) -> VersionRow | None:
@@ -372,23 +411,64 @@ def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[
     return url
 
 
+def _unreadable_key(tab_id: int) -> str:
+    return f"ug:unreadable:{tab_id}"
+
+
+def _waits(run: _SongRun, tab_id: int) -> bool:
+    """Whether the tab's page proved unreadable and isn't due to be asked for again yet."""
+    record = kv_get_json(run.conn, _unreadable_key(tab_id))
+    try:
+        return run.ctx.now < _parse_iso(record["until"])
+    except (TypeError, KeyError, ValueError):
+        return False
+
+
+def _unreadable(run: _SongRun, tab_id: int, kind: str | None, error: UnreadablePage | None = None) -> None:
+    """No page for the tab this run; with ``error``, note when to ask for it again.
+
+    The tab is never taken for gone: the song goes on with its other versions,
+    and stays dirty to read this one once it is due.
+    """
+    if error is not None:
+        run.fetched[kind or "?"] += 1  # the request that fetched it again
+        record = kv_get_json(run.conn, _unreadable_key(tab_id))
+        strikes = int(record.get("strikes", 0) if isinstance(record, dict) else 0) + 1
+        until = run.ctx.now + min(UNREADABLE_RETRY * 2 ** (strikes - 1), UNREADABLE_RETRY_MAX)
+        kv_set_json(run.conn, _unreadable_key(tab_id),
+                    {"until": _iso(until), "strikes": strikes, "error": str(error)})
+        log.warning("UG tab %s can't be read (%s); asked for again after %s", tab_id, error, _iso(until))
+    run.pages[tab_id] = None
+    run.unreadable.add(tab_id)
+
+
 def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTabPage | None:
-    """A tab page of this song, read once per run; None when UG says it's gone.
+    """A tab page of this song, read once per run; None when UG says it's gone, or it can't be read.
 
     ``kind`` (the index's type) lets a deleted tab that was never rated be
     remembered as gone. Every page also teaches tabarr its artist's UG page,
-    filed under the song's artist only when the tab is by that artist.
+    filed under the song's artist only when the tab is by that artist. A page
+    that won't parse even fetched again is left alone until it is due
+    (``UNREADABLE_RETRY``).
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
-    page, fresh = _get_page(run.ctx.client, url, parse_tab_page)
+    if _waits(run, tab_id):
+        _unreadable(run, tab_id, kind)
+        return None
+    try:
+        page, fresh = _get_page(run.ctx.client, url, parse_tab_page)
+    except UnreadablePage as e:
+        _unreadable(run, tab_id, kind, e)
+        return None
+    kv_delete(run.conn, _unreadable_key(tab_id))
     run.pages[tab_id] = page
     if fresh:
         run.fetched[(page.tab.kind if page is not None else None) or kind or "?"] += 1
     if page is None:
         _mark_gone(run, tab_id, url, kind)
         return None
-    _record_page(run, page, fresh=fresh)
+    _record_page(run, page, url, fresh=fresh)
     mine = run.artist_key
     _learn_artist_url(run.conn, page, [mine] if mine and _same_artist(mine, page.tab.artist_name) else [])
     return page
@@ -398,7 +478,11 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
 
 
 def _seen_ids(run: _SongRun) -> set[int]:
-    return {int(r.tab_id) for r in song_versions(run.conn, run.song.id, include_gone=True) if r.provider == PROVIDER}
+    """The tabs rated (or found gone) under the song's current match; a stale one is read again."""
+    return {
+        int(r.tab_id) for r in song_versions(run.conn, run.song.id, include_gone=True)
+        if r.provider == PROVIDER and not r.stale
+    }
 
 
 def _rate_group(run: _SongRun, tabs: list[IndexTab], pages: int) -> None:
@@ -464,7 +548,7 @@ def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple
         url = _pinned_url(run, tab_id, pasted, row)
         kind = row.kind if row is not None else known.type if known is not None else None
         page = _page(run, tab_id, url, kind)
-        if page is None or not _usable(run, page.tab):
+        if page is None or not _wanted(run, page.tab):  # read at a tab page, wherever its own link goes
             continue
         groups.setdefault(_GROUP_OF[page.tab.kind], []).append(page.tab.tab_id)
     return groups
@@ -495,7 +579,7 @@ def _candidate(row: VersionRow) -> Candidate:
 
 
 def _text_page(run: _SongRun, row: VersionRow) -> UGTabPage | None:
-    """A version's page with its text, or None when the page is gone."""
+    """A version's page with its text, or None when the page is gone or can't be read now."""
     page = _page(run, int(row.tab_id), row.url, row.kind)
     return page if page is not None and page.content is not None else None
 
@@ -551,10 +635,13 @@ def _retire_auto_sheet(conn: sqlite3.Connection, library_dir: Path, song: Song) 
         set_picks(conn, song.id, (auto.kind,), [])
 
 
-def _drop_if_blocked(run: _SongRun, names: tuple[str, str]) -> None:
-    """Files kept from a UG version you have blocked since go, even when nothing replaces them."""
+def _drop_left_over(run: _SongRun, names: tuple[str, str]) -> None:
+    """Files kept from a UG version you have blocked since, or that an earlier match found (another
+    song's, by your correction), go even when nothing replaces them."""
     kept = _kept_version(run.conn, run.song.id, names[0])
-    if kept is not None and kept.provider == PROVIDER and int(kept.tab_id) in run.ctx.overrides.block:
+    if kept is None or kept.provider != PROVIDER:
+        return
+    if kept.stale or int(kept.tab_id) in run.ctx.overrides.block:
         for name in names:
             drop_file(run.conn, run.ctx.library_dir, song=run.song, name=name)
 
@@ -580,7 +667,7 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     pages: dict[int, UGTabPage] = {}
 
     def scored(c: Candidate) -> bool:
-        """Fetch the sheet and score its coverage; False when its page is gone."""
+        """Fetch the sheet and score its coverage; False when its page is gone or unreadable."""
         assert c.version_id is not None
         page = _text_page(run, by_id[c.version_id])
         if page is None:
@@ -598,13 +685,13 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
         alive: list[Candidate] = []
         for c in rank_by_rating([_candidate(r) for r in rows], policy, variant=run.song.variant):
             if len(pages) < policy.scored_sheets and not scored(c):
-                continue  # gone; the next one is scored instead
+                continue  # gone or unreadable; the next one is scored instead
             alive.append(c)
         ranked = rank_sheets(alive, policy, variant=run.song.variant)
     best = _first_with_text(run, ranked, rows, pages)
     if best is None:
         set_picks(run.conn, run.song.id, CHORDS_KINDS, [])
-        _drop_if_blocked(run, SHEET_FILES)
+        _drop_left_over(run, SHEET_FILES)
         return None
     c, page = best
     assert c.version_id is not None
@@ -643,7 +730,7 @@ def _tab_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     best = _first_with_text(run, ranked, rows, {})
     if best is None:
         set_picks(run.conn, run.song.id, TAB_KINDS, [])
-        _drop_if_blocked(run, TAB_FILES)
+        _drop_left_over(run, TAB_FILES)
         return None
     c, page = best
     assert c.version_id is not None
@@ -746,6 +833,7 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
         first = first or page
         last = max(last, page.pages)
         listed = [t for t in page.tabs if t.kind == kind]
+        _check_links(run, listed, url)
         found = [h for t in listed if (h := _title_hit(t, forms, fresh)) is not None]
         hits += found
         if hits and not (found and found[-1].tab is listed[-1]):
@@ -908,7 +996,12 @@ def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[I
     has passed; the 30-day cache serves the lists in between, one request per
     artist. The match stands whatever the lists say. False when this run's
     page cap cut a list short: the song waits for the next run, as it was.
+
+    The check is recorded once the lists are read, before the slots are
+    filled, so the song is marked dirty first: a recheck the budget or an
+    error cuts short resumes next run, and ``_finish`` makes it clean.
     """
+    update_song(run.conn, run.song.id, ug_dirty=True)
     keys = _matched_artist_keys(run)
     base = (_known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_from_own_tabs(run, own, keys)
             or _learn_artist_page(run, keys))
@@ -991,10 +1084,65 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
 
 
 def _finish(run: _SongRun) -> None:
-    """Every slot is done: refresh the status, mark the song checked, and describe it in info.json."""
+    """Every slot is done: refresh the status, mark the song checked, and describe it in info.json.
+
+    A song with a page that couldn't be read is neither checked nor clean (an
+    error is never a miss): it is fetched again, from the cache, until that
+    page is due and read. The tabs [block] left out are remembered, so that
+    taking one out of [block] brings the song back (``songs_to_fetch``).
+    """
     refresh_status(run.conn, run.song.id, ignored=False)
-    update_song(run.conn, run.song.id, ug_dirty=False, ug_checked_at=_iso(run.ctx.now))
+    if run.unreadable:
+        update_song(run.conn, run.song.id, ug_dirty=True)
+    else:
+        update_song(run.conn, run.song.id, ug_dirty=False, ug_checked_at=_iso(run.ctx.now))
+    left_out = _left_out(run)
+    if left_out:
+        kv_set_json(run.conn, _left_out_key(run.song.id), left_out)
+    else:
+        kv_delete(run.conn, _left_out_key(run.song.id))
     write_info(run.conn, run.ctx.library_dir, get_song(run.conn, run.song.id))
+
+
+def _left_out_key(song_id: int) -> str:
+    return f"ug:blocked:{song_id}"
+
+
+def _left_out(run: _SongRun) -> list[int]:
+    """The tabs you have blocked among the song's: its UG versions, its index tabs and its pins."""
+    block = run.ctx.overrides.block
+    if not block:
+        return []
+    song = run.song
+    ids = {
+        int(r.tab_id) for r in song_versions(run.conn, song.id, include_gone=True)
+        if r.provider == PROVIDER and not r.stale  # an earlier match's: no candidate, blocked or not
+    }
+    ids |= {t.tab_id for t in _song_index_tabs(run.conn, song, frozenset())}
+    ids |= set(run.ctx.overrides.pin.get(song.key, ()))
+    return sorted(ids & block)
+
+
+def _block_changed(conn: sqlite3.Connection, song: Song, block: frozenset[int]) -> bool:
+    """Whether [block] changed for the song since its fetch finished.
+
+    That is a tab it keeps (as ``sheet.txt`` or ``tab.txt``) or picks that
+    you have blocked since, or a tab the fetch left out that you no longer
+    block.
+    """
+    left_out = kv_get_json(conn, _left_out_key(song.id), default=[]) or []
+    if any(t not in block for t in left_out):
+        return True
+    if not block:
+        return False
+    names = (*SHEET_FILES, *TAB_FILES)
+    marks = ",".join("?" for _ in names)
+    rows = conn.execute(
+        "SELECT v.tab_id FROM versions v WHERE v.song_id = ? AND v.provider = ? AND (v.pick_rank IS NOT NULL "
+        f"OR EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id AND f.name IN ({marks})))",
+        (song.id, PROVIDER, *names),
+    )
+    return any(int(r[0]) in block for r in rows)
 
 
 def _last_checked(conn: sqlite3.Connection, song_id: int) -> datetime | None:
@@ -1055,7 +1203,8 @@ def songs_to_fetch(
     """The songs this run should fetch, newest first.
 
     - Accepted or pinned songs that are dirty (new match, new tabs, or a run
-      that stopped half-way).
+      that stopped half-way), or whose [block] changed since their fetch: a
+      tab they keep or pick is blocked now, or one left out is no longer.
     - Not-found songs whose artist is known (A6), so that its UG artist page,
       which lists bare-id tabs the index can't see, is searched for the
       title, at most once per ``artist_page_max_age``.
@@ -1069,7 +1218,9 @@ def songs_to_fetch(
     for song in list_songs(conn):
         if _ignored(song, overrides):
             continue
-        dirty = song.match_decision in ("accept", "pinned") and song.ug_dirty
+        dirty = song.match_decision in ("accept", "pinned") and (
+            song.ug_dirty or _block_changed(conn, song, overrides.block)
+        )
         due = (
             needs_artist_page(song)
             and not _checked_within(conn, song.id, now, artist_page_max_age)
@@ -1150,6 +1301,10 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
     ``content`` of the ``sheet.json`` kept beside it, from UG or LaCuerda) is
     scored as the fetch would have scored it. No request is made. A sheet that
     proves complete retires the auto-chords sheet, as it would have on keeping.
+
+    A sheet that proves partial was chosen on rating alone, so its song is
+    marked dirty when it has UG sheets that coverage never ranked: the next
+    fetch ranks them again, from the cached pages.
     """
     rows = conn.execute(
         "SELECT f.song_id, f.version_id FROM files f JOIN versions v ON v.id = f.version_id "
@@ -1167,9 +1322,19 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
         set_coverage(conn, row["version_id"], value)
         if value is not None and value >= rank.coverage_threshold:
             _retire_auto_sheet(conn, library_dir, song)
+        elif _unranked_rivals(conn, song.id, row["version_id"]):
+            update_song(conn, song.id, ug_dirty=True)
         write_info(conn, library_dir, song)
         scored += 1
     return scored
+
+
+def _unranked_rivals(conn: sqlite3.Connection, song_id: int, kept_id: int) -> bool:
+    """Whether the song has live UG sheets besides the kept one that lyric coverage hasn't ranked."""
+    return any(
+        r.provider == PROVIDER and r.id != kept_id and r.coverage is None
+        for r in song_versions(conn, song_id, kinds=CHORDS_KINDS)
+    )
 
 
 def _kept_markup(conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int) -> str | None:

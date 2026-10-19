@@ -22,11 +22,12 @@ from helpers.ug_pages import (
     version_dict,
 )
 
-from tabarr.config import ProviderPolicy, RankPolicy
+from tabarr.config import MatchPolicy, ProviderPolicy, RankPolicy
 from tabarr.db import kv_get, kv_set
 from tabarr.http import PoliteClient, ProviderBlocked
 from tabarr.library import keep_file, kept_files, song_dir
 from tabarr.lyrics import Lyrics
+from tabarr.match import match_all
 from tabarr.overrides import Overrides, load_overrides
 from tabarr.songs import get_song, update_song
 from tabarr.ug.artist import artist_page_url
@@ -315,6 +316,39 @@ def test_versions_whose_link_is_no_tab_page_are_never_fetched(conn, tmp_path, ta
     assert {int(r.tab_id) for r in song_versions(conn, song.id, include_gone=True)} == {101}
 
 
+MOVED = "https://www.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-{}"  # UG moved tab pages
+
+
+def test_links_that_all_changed_shape_are_an_error_not_a_miss(conn, tmp_path):
+    # Review Focus 4: shape drift is a provider error. Not one version links to a tab page any more.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.add(slugged(101), make_tab_page_html(v(101, tab_url=MOVED.format(101)),
+                                            [v(102, version=2, tab_url=MOVED.format(102))],
+                                            content=sheet("sheet 101", LINES), artist_url=SODA_URL))
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (0, 1)
+    failed = get_song(conn, song.id)  # neither found nor checked: never on the buy list
+    assert (failed.status, failed.ug_dirty, failed.ug_checked_at) == ("wanted", True, None)
+
+
+def test_a_pages_own_tab_is_recorded_at_the_address_it_was_read_from(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    own, other = v(101, rating=4.9, votes=100, tab_url=MOVED.format(101)), v(102, version=2, rating=4.0, votes=5)
+    ug = FakeUG()
+    ug.add(slugged(101), make_tab_page_html(own, [other], content=sheet("sheet 101", LINES), artist_url=SODA_URL))
+    ug.tab(other, [own], content=sheet("sheet 102", LINES))
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert {int(r.tab_id): r.url for r in song_versions(conn, song.id)} == {101: slugged(101), 102: slugged(102)}
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+
 # --- the guitar slot ------------------------------------------------------------------
 
 
@@ -555,6 +589,55 @@ def test_kept_sheet_blocked_later_is_replaced(conn, tmp_path):
     assert pick_ids(conn, song, "chords") == [702]
 
 
+def test_a_kept_sheet_blocked_after_the_fetch_sends_its_song_back_and_unblocking_does_too(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)])
+    ug = FakeUG()
+    three_chords(ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 102" in read(tmp_path, song, "sheet.txt") and songs_to_fetch(conn, Overrides(), NOW) == []
+
+    blocked = Overrides(block=frozenset({102}))  # "this sheet is wrong, never use it"
+    assert [s.id for s in songs_to_fetch(conn, blocked, NOW)] == [song.id]
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, blocked), get_song(conn, song.id))
+    assert "sheet 103" in read(tmp_path, song, "sheet.txt") and songs_to_fetch(conn, blocked, NOW) == []
+
+    # You take it out of [block] again: it competes again, and wins.
+    assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW)] == [song.id]
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+    assert "sheet 102" in read(tmp_path, song, "sheet.txt") and songs_to_fetch(conn, Overrides(), NOW) == []
+    assert ug.requests == [slugged(101), slugged(102), slugged(103)]  # all of it from the cache since
+
+
+def test_a_guitar_pro_pick_blocked_after_the_fetch_sends_its_song_back(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (301, "soda-stereo", "persiana-americana", "guitar-pro"),
+          (302, "soda-stereo", "persiana-americana", "guitar-pro"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    best, other = v(301, "guitar-pro", rating=4.8, votes=30), v(302, "guitar-pro", version=2, rating=4.2, votes=10)
+    ug.tab(best, [other], meta={"fileExtension": ".gp5"})
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert pick_ids(conn, song, "guitar-pro", "power") == [301, 302]
+
+    blocked = Overrides(block=frozenset({301}))
+    assert [s.id for s in songs_to_fetch(conn, blocked, NOW)] == [song.id]
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, blocked), get_song(conn, song.id))
+
+    assert pick_ids(conn, song, "guitar-pro", "power") == [302]  # off the to-do page's pages to click
+    assert songs_to_fetch(conn, blocked, NOW) == []
+
+
+def test_blocking_a_tab_the_song_doesnt_use_sends_nothing_back(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)])
+    ug = FakeUG()
+    three_chords(ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)  # keeps 102
+    assert songs_to_fetch(conn, Overrides(block=frozenset({101})), NOW) == []
+
+
 # --- fetch_songs: budget, errors and blocks -----------------------------------------------
 
 
@@ -647,6 +730,65 @@ def test_broken_cached_page_is_fetched_again(conn, tmp_path):
     assert "sheet 101" in read(tmp_path, song, "sheet.txt")
 
 
+def unreadable_11(conn, ug):
+    """Persiana Americana: UG keeps serving chords tab 11 with HTTP 200 and no js-store (a removed-tab
+    notice, say); tab 12 is a good sheet."""
+    song = accepted(conn)
+    index(conn, (11, "soda-stereo", "persiana-americana", "chords"),
+          (12, "soda-stereo", "persiana-americana", "chords"))
+    ug.add(slugged(11), BROKEN)
+    ug.tab(v(12), content=sheet("sheet 12", LINES))
+    return song
+
+
+def night(conn, ug, tmp_path, day):
+    """One nightly fetch, ``day`` days after NOW: its stats and the requests it made."""
+    ug.requests.clear()
+    when = NOW + timedelta(days=day)
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache", now=when), tmp_path, now=when),
+                        songs_to_fetch(conn, Overrides(), when))
+    return stats, list(ug.requests)
+
+
+def test_a_page_that_never_parses_is_skipped_and_the_song_goes_on(conn, tmp_path):
+    ug = FakeUG()
+    song = unreadable_11(conn, ug)
+
+    first, asked = night(conn, ug, tmp_path, 0)
+    assert first.songs_failed == 1 and asked == [slugged(11)]  # one bad answer may be a passing fault
+
+    second, asked = night(conn, ug, tmp_path, 1)
+    assert second.songs_failed == 0 and asked == [slugged(11), slugged(12)]  # fetched again: still unreadable
+    assert "sheet 12" in read(tmp_path, song, "sheet.txt") and get_song(conn, song.id).status == "found"
+
+    for day in (2, 3):
+        stats, asked = night(conn, ug, tmp_path, day)
+        assert stats.songs_failed == 0 and asked == []  # waits for its retry date: no request a night
+    assert "sheet 12" in read(tmp_path, song, "sheet.txt")
+    # Never gone, never a miss: the song is neither clean nor checked while tab 11 waits to be read.
+    assert [r.tab_id for r in song_versions(conn, song.id, include_gone=True)] == ["12"]
+    done = get_song(conn, song.id)
+    assert (done.ug_dirty, done.ug_checked_at) == (True, None)
+
+
+def test_an_unreadable_page_is_asked_for_again_after_its_retry_date(conn, tmp_path):
+    ug = FakeUG()
+    song = unreadable_11(conn, ug)
+    night(conn, ug, tmp_path, 0)
+    night(conn, ug, tmp_path, 1)
+
+    assert night(conn, ug, tmp_path, 7)[1] == []
+    assert night(conn, ug, tmp_path, 8)[1] == [slugged(11)]  # a week on: still unreadable
+    assert night(conn, ug, tmp_path, 21)[1] == []  # and next time it waits twice as long
+    ug.tab(v(11, rating=4.9, votes=200), [v(12)], content=sheet("sheet 11", LINES))  # UG serves it again
+    assert night(conn, ug, tmp_path, 22)[1] == [slugged(11)]
+
+    assert "sheet 11" in read(tmp_path, song, "sheet.txt")
+    done = get_song(conn, song.id)
+    assert (done.ug_dirty, done.ug_checked_at) == (False, "2026-11-09T03:30:00Z")
+    assert night(conn, ug, tmp_path, 23)[0] == FetchStats()
+
+
 # --- upgrades ---------------------------------------------------------------------------------
 
 
@@ -702,6 +844,104 @@ def test_kept_sheet_stays_when_not_outranked(conn, tmp_path):
 
     assert out.sheet == 101 and pick_ids(conn, song, "chords") == [101]
     assert (path.stat().st_ino, kept_version(conn, song, "sheet.txt")) == before  # not even rewritten
+
+
+# --- a corrected match ------------------------------------------------------------------------------
+
+
+def signos_tab(tab_id, kind="chords", **kw):
+    """A tab of Soda Stereo's "Signos": another song than Persiana Americana."""
+    kw.setdefault("tab_url", slugged(tab_id, kind, song="signos"))
+    return version_dict(tab_id, type=UG_TYPES[kind], song="Signos", artist="Soda Stereo", **kw)
+
+
+def correct_to(conn, tmp_path, song_key):
+    """You correct Persiana Americana's match in overrides.toml (as the to-do page tells you), then match."""
+    path = tmp_path / "overrides.toml"
+    path.write_text(f'[match]\n"Soda Stereo - Persiana Americana" = "soda-stereo/{song_key}"\n', encoding="utf-8")
+    overrides = load_overrides(path)
+    match_all(conn, overrides, MatchPolicy())
+    assert get_song(conn, 1).match_song_key == song_key
+    return overrides
+
+
+@pytest.mark.parametrize("plain", [None, LYRICS])
+def test_a_corrected_match_leaves_the_old_songs_sheets_out_of_the_running(conn, tmp_path, plain):
+    # Persiana Americana was wrongly accepted as "Signos", whose 901 is rated 4.9 from 200 votes. Without
+    # lyrics it wins on rating; with them it covers nothing, but so does no complete sheet.
+    song = accepted(conn, akey="soda-stereo", skey="signos", plain=plain)
+    index(conn, (901, "soda-stereo", "signos", "chords"), (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(signos_tab(901, rating=4.9, votes=200), content=sheet("sheet 901", ["completely other words here"]))
+    ug.tab(v(101, rating=4.0, votes=10), content=sheet("sheet 101", LINES[:5]))  # half the lyrics
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 901" in read(tmp_path, song, "sheet.txt")
+
+    overrides = correct_to(conn, tmp_path, "persiana-americana")
+    assert [s.id for s in songs_to_fetch(conn, overrides, NOW)] == [song.id]
+    ug.requests.clear()
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), get_song(conn, song.id))
+
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt") and pick_ids(conn, song, "chords") == [101]
+    assert [r.tab_id for r in song_versions(conn, song.id)] == ["101"] and ug.requests == [slugged(101)]
+
+
+def test_a_corrected_match_leaves_the_old_songs_guitar_parts_out_of_the_running(conn, tmp_path):
+    song = accepted(conn, akey="soda-stereo", skey="signos")
+    index(conn, (901, "soda-stereo", "signos", "chords"), (911, "soda-stereo", "signos", "guitar-pro"),
+          (921, "soda-stereo", "signos", "tabs"), (101, "soda-stereo", "persiana-americana", "chords"),
+          (301, "soda-stereo", "persiana-americana", "guitar-pro"))
+    ug = FakeUG()
+    ug.tab(signos_tab(901), content=sheet("sheet 901", LINES))
+    ug.tab(signos_tab(911, "guitar-pro", rating=4.9, votes=300), meta={"fileExtension": ".gp5"})
+    ug.tab(signos_tab(921, "tabs"), content=riff("tab 921"))
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    ug.tab(v(301, "guitar-pro", rating=4.2, votes=12), meta={"fileExtension": ".gp5"})
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert pick_ids(conn, song, "guitar-pro", "power") == [911] and "tab 921" in read(tmp_path, song, "tab.txt")
+
+    overrides = correct_to(conn, tmp_path, "persiana-americana")
+    assert pick_ids(conn, song, "guitar-pro", "power") == []  # off the to-do page's pages to click at once
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), get_song(conn, song.id))
+
+    assert pick_ids(conn, song, "guitar-pro", "power") == [301]
+    assert names(conn, song) == {"sheet.txt", "sheet.json"}  # Persiana Americana has no tab: Signos's goes
+    assert not (song_dir(tmp_path / "lib", song) / "tab.txt").exists()
+
+
+def test_unblocking_a_tab_only_an_earlier_match_found_sends_nothing_back(conn, tmp_path):
+    song = accepted(conn, akey="soda-stereo", skey="signos")
+    index(conn, (901, "soda-stereo", "signos", "chords"), (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(signos_tab(901), content=sheet("sheet 901", LINES))
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    correct_to(conn, tmp_path, "persiana-americana")
+    blocked = Overrides(match={song.key: ("soda-stereo", "persiana-americana")}, block=frozenset({901}))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, blocked), get_song(conn, song.id))
+
+    unblocked = Overrides(match=blocked.match)
+    assert songs_to_fetch(conn, unblocked, NOW) == []  # 901 is Signos's: it competes either way for nothing
+
+
+def test_versions_the_old_and_new_match_share_come_back_from_the_cache(conn, tmp_path):
+    # The match covered the variant slug "persiana-americana-acoustic"; you narrow it to that variant.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (102, "soda-stereo", "persiana-americana-acoustic", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101, rating=4.9, votes=100), content=sheet("sheet 101", LINES))
+    ug.tab(v(102, version=2, rating=4.0, votes=10, tab_url=slugged(102, song="persiana-americana-acoustic")),
+           content=sheet("sheet 102", LINES))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+    overrides = correct_to(conn, tmp_path, "persiana-americana-acoustic")
+    ug.requests.clear()
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), get_song(conn, song.id))
+
+    assert ug.requests == []
+    assert "sheet 102" in read(tmp_path, song, "sheet.txt") and coverages(conn, song) == {102: 1.0}
 
 
 # --- learning artist pages ------------------------------------------------------------------------
@@ -1124,6 +1364,20 @@ def test_an_artist_without_chords_is_read_from_its_other_lists(conn, tmp_path):
     assert out.tab == 2003000 and get_song(conn, song.id).match_step == "artist_page"
 
 
+def test_artist_list_links_that_all_changed_shape_are_an_error_not_a_miss(conn, tmp_path):
+    song = banma(conn)
+    ug = FakeUG()
+    moved = [banma_tab(2001234, rating=4.7, votes=50, tab_url="https://www.ultimate-guitar.com/tab/2001234"),
+             banma_tab(2001300, song="安和桥", tab_url="https://www.ultimate-guitar.com/tab/2001300")]
+    ug.add(artist_list(BANMA_ARTIST), artist_page(1234567, "宋冬野", moved))
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, PASTED), [song])
+
+    assert stats.songs_failed == 1
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None  # no check recorded: tried next run
+    assert get_song(conn, song.id).match_decision == "not_found"
+
+
 def test_broken_cached_artist_page_is_fetched_again(conn, tmp_path):
     song = banma(conn)
     ug = FakeUG()
@@ -1283,6 +1537,32 @@ def test_a_recheck_cut_short_by_the_page_cap_resumes_next_run(conn, tmp_path):
 
     assert ug.requests == [artist_list(BANMA_ARTIST, page=2), f"{TAB}2001236"]
     assert second.sheet == 2001236 and songs_to_fetch(conn, PASTED, LATER) == []
+
+
+def test_a_recheck_the_budget_cuts_short_resumes_next_run(conn, tmp_path):
+    # Live, the budget usually runs out in the middle of a song: here after the list, before the new
+    # version's page. The list was read, so the check is recorded; the song must come back anyway.
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+    newer = banma_tab(2001236, version=3, rating=4.9, votes=300)
+    relist_banma(ug, banma_tab(2001234, rating=4.7, votes=50), banma_tab(2001235, version=2, rating=4.2, votes=5),
+                 newer)
+    ug.tab(newer, content=sheet("sheet 2001236", BANMA_LINES), artist_url=BANMA_ARTIST)
+
+    first = fetch_songs(context(conn, ug.client(tmp_path / "cache", budget=1, now=LATER), tmp_path, PASTED,
+                                now=LATER), songs_to_fetch(conn, PASTED, LATER))
+
+    assert first.budget_exhausted and ug.requests == [artist_list(BANMA_ARTIST)]
+    tomorrow = LATER + timedelta(days=1)
+    assert [s.id for s in songs_to_fetch(conn, PASTED, tomorrow)] == [song.id]
+
+    ug.requests.clear()
+    fetch_songs(context(conn, ug.client(tmp_path / "cache", now=tomorrow), tmp_path, PASTED, now=tomorrow),
+                songs_to_fetch(conn, PASTED, tomorrow))
+
+    assert ug.requests == [f"{TAB}2001236"]  # yesterday's list comes from the cache
+    assert "sheet 2001236" in read(tmp_path, song, "sheet.txt")
+    assert songs_to_fetch(conn, PASTED, tomorrow) == []
 
 
 def test_a_recheck_that_no_longer_lists_the_title_leaves_the_match(conn, tmp_path):
@@ -1732,6 +2012,50 @@ def test_banma_kept_before_its_lyrics_is_scored_in_pinyin(conn, tmp_path):
     assert rescore(conn, tmp_path) == 1
 
     assert coverages(conn, song) == {2001234: 1.0, 2001235: None}  # only the kept sheet is scored
+
+
+def test_a_partial_sheet_kept_before_its_lyrics_sends_its_song_back_to_be_ranked(conn, tmp_path):
+    # LRCLIB failed the night the song was fetched, so its sheets were ranked on rating alone:
+    # 101, the best rated, charts only the first verse; 102 and 103 are complete, and cached.
+    song = accepted(conn, plain=None)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)])
+    ug = FakeUG()
+    three_chords(ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt") and get_song(conn, song.id).ug_dirty is False
+
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics_json(LYRICS))
+    assert rescore(conn, tmp_path) == 1
+    assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW + timedelta(days=1))] == [song.id]
+
+    ug.requests.clear()
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+
+    assert ug.requests == []  # ranked again from the cache
+    assert "sheet 102" in read(tmp_path, song, "sheet.txt") and pick_ids(conn, song, "chords") == [102]
+    assert coverages(conn, song) == {101: pytest.approx(0.3), 102: 1.0, 103: 1.0}
+    assert songs_to_fetch(conn, Overrides(), NOW + timedelta(days=1)) == []
+
+
+@pytest.mark.parametrize("contents", [
+    {101: LINES, 102: LINES[:3]},  # the kept sheet proves complete: no other sheet can beat it
+    {101: LINES[:3]},  # partial, but no other sheet to rank it against
+])
+def test_a_rescored_sheet_leaves_its_song_alone_when_ranking_again_cant_help(conn, tmp_path, contents):
+    song = accepted(conn, plain=None)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in contents])
+    ug = FakeUG()
+    tabs = {t: v(t, version=n, rating=4.9 - n / 10, votes=50) for n, t in enumerate(contents, start=1)}
+    for t, lines in contents.items():
+        ug.tab(tabs[t], [o for o in tabs.values() if o is not tabs[t]], content=sheet(f"sheet {t}", lines))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics_json(LYRICS))
+    assert rescore(conn, tmp_path) == 1
+
+    assert get_song(conn, song.id).ug_dirty is False
+    assert songs_to_fetch(conn, Overrides(), NOW + timedelta(days=1)) == []
 
 
 @pytest.mark.parametrize("status,plain", [("pending", None), ("instrumental", "")])

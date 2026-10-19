@@ -1,7 +1,8 @@
 """``tabarr fetch``: fetch, rank and keep UG sheets and guitar parts, within the request budget.
 
 The nightly ``tabarr run`` does this as one of its steps; the command runs it
-on its own, or for one song with ``--song``. A block or a spent budget is
+on its own, or for one song with ``--song``, and like the run it first scores
+the sheets kept before their lyrics arrived. A block or a spent budget is
 expected behaviour, not a failure, so both exit 0. Every command module is
 imported on every start, so the fetch code is imported inside the command.
 """
@@ -50,7 +51,7 @@ def register(app: typer.Typer) -> None:
 def _fetch(cfg: Config, display: str | None) -> None:
     from tabarr.health import get_state, is_cooling, record_block, record_ok
     from tabarr.http import ProviderBlocked
-    from tabarr.ug.fetch import FetchContext, fetch_songs, songs_to_fetch
+    from tabarr.ug.fetch import FetchContext, fetch_songs, rescore_kept_sheets, songs_to_fetch
 
     now = utcnow()
     overrides = load_ovr(cfg)
@@ -59,6 +60,11 @@ def _fetch(cfg: Config, display: str | None) -> None:
             until = _when(get_state(conn, PROVIDER).cooldown_until)
             typer.echo(f"Ultimate Guitar is cooling down after a block until {until}; nothing fetched.")
             return
+        # As in the nightly run: sheets kept before their lyrics are scored first, with no request,
+        # and a partial one sends its song back to have its sheets ranked again.
+        rescored = rescore_kept_sheets(conn, cfg.library_dir, cfg.rank)
+        if rescored:
+            typer.echo(f"Scored {_count(rescored, 'kept sheet')} against lyrics that came later.")
         songs = [_one_song(conn, display, overrides)] if display else songs_to_fetch(conn, overrides, now)
         if not songs:
             typer.echo("Nothing to fetch.")
@@ -86,10 +92,15 @@ def _fetch(cfg: Config, display: str | None) -> None:
 
 
 def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> Song:
-    """The song ``--song`` names, if it is one UG can be asked about; otherwise say what's missing."""
+    """The song ``--song`` names, if it is one UG can be asked about; otherwise say what's missing.
+
+    As in the nightly run, a song the index can't settle (not found, or a
+    review of other artists' songs of its title) is looked up on its artist's
+    UG page.
+    """
     from tabarr.overrides import OverridesError, override_key
     from tabarr.songs import find_song
-    from tabarr.ug.fetch import artist_is_known
+    from tabarr.ug.fetch import artist_is_known, needs_artist_page
 
     try:
         key = override_key(display)
@@ -100,14 +111,15 @@ def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> S
         fail(f'No song "{display}" in the library. Add it with `tabarr add` first.')
     if song.status == "ignored" or song.match_decision == "ignored" or key in overrides.ignore:
         fail(f'"{song.display}" is ignored in overrides.toml.')
-    if song.match_decision == "review":
+    artist_page = needs_artist_page(song)
+    if song.match_decision == "review" and not artist_page:
         fail(f'"{song.display}" needs review first: run `tabarr review`.')
-    if song.match_decision == "not_found" and not artist_is_known(conn, song, overrides):
+    if artist_page and not artist_is_known(conn, song, overrides):
         fail(
             f"Ultimate Guitar lists {song.artist} only by bare tab ids, which tabarr can't see. "
             "Find the artist's page on UG and paste it under [artist_url] in overrides.toml."
         )
-    if song.match_decision not in ("accept", "pinned", "not_found"):
+    if song.match_decision not in ("accept", "pinned") and not artist_page:
         fail(f'"{song.display}" isn\'t matched yet: run `tabarr match` first.')
     return song
 

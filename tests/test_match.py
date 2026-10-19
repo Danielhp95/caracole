@@ -2,6 +2,7 @@ from tabarr.config import MatchPolicy
 from tabarr.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
 from tabarr.overrides import Overrides
 from tabarr.songs import get_song, update_song
+from tabarr.versions import picks, set_picks, song_versions, upsert_version
 
 from conftest import add_song
 
@@ -339,6 +340,34 @@ def test_match_all_marks_dirty_when_the_keys_or_pins_change(conn):
     match_all(conn, Overrides(pin={"oasis/wonderwall": (1,)}), POLICY)
     assert get_song(conn, s.id).ug_dirty is False
     match_all(conn, Overrides(pin={"oasis/wonderwall": (1, 7)}), POLICY)  # same song, another pinned page
+    assert get_song(conn, s.id).ug_dirty is True
+
+
+def version(conn, song, tab_id, kind="chords", provider="ug"):
+    return upsert_version(conn, provider=provider, tab_id=str(tab_id), song_id=song.id,
+                          slot="sheet" if kind in ("chords", "acordes") else "guitar", kind=kind, rating=4.5,
+                          votes=10, version=1, label=None, url=f"https://tabs.ultimate-guitar.com/tab/{tab_id}",
+                          raw={}, now="2026-10-18T03:30:00Z")
+
+
+def test_a_corrected_match_takes_the_old_matchs_ug_versions_out_of_the_running(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwall-ii", "chords"))
+    s = add_song(conn, "Oasis", "Wonderwall")
+    match_all(conn, Overrides(), POLICY)
+    sheet, gp = version(conn, s, 1), version(conn, s, 3, "guitar-pro")
+    lacuerda = version(conn, s, "oasis/wonderwall-1", "acordes", provider="lacuerda")
+    set_picks(conn, s.id, ("chords",), [sheet])
+    set_picks(conn, s.id, ("guitar-pro",), [gp])
+    set_picks(conn, s.id, ("acordes",), [lacuerda])
+    match_all(conn, Overrides(), POLICY)  # the same match: nothing changes
+    assert len(song_versions(conn, s.id)) == 3
+
+    match_all(conn, Overrides(match={s.key: ("oasis", "wonderwall-ii")}), POLICY)
+
+    # UG's versions were the old match's; LaCuerda's are the song's whatever UG's index says.
+    assert [v.tab_id for v in song_versions(conn, s.id)] == ["oasis/wonderwall-1"]
+    assert [v.tab_id for v in song_versions(conn, s.id, include_gone=True) if v.stale] == ["1", "3"]
+    assert [v.kind for v in picks(conn, s.id, ("chords", "acordes", "guitar-pro"))] == ["acordes"]
     assert get_song(conn, s.id).ug_dirty is True
 
 
