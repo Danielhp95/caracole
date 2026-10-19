@@ -641,8 +641,9 @@ when it has something in it:
   ```
   Only songs UG files under a catch-all artist (`misc-musicals`) with the
   show's name in the title and other artists' songs with this title
-  (probably covers). If none is the song you want, UG may list epic only by
-  bare ids: …
+  (probably covers). If none is the song you want, dismiss them all (below):
+  UG may list epic only by bare ids, and the to-do page then lists them under
+  Artists to find.
   ```
 
   For a candidate under `misc-originals` or `misc-unsigned-bands`, it says
@@ -659,7 +660,11 @@ when it has something in it:
   non-Latin names only by bare ids (Joaquín Sabina, Maná, 宋冬野), so caracole
   can't see their tabs. For each such artist with a song not found, or
   reviewed on its title alone or on names that aren't quite UG's, the page
-  links a UG search. Open the artist's
+  links a UG search. A song with a candidate under the right spelling of a
+  misspelt name (`typo_artist`) or under a catch-all artist (`catch_all`)
+  isn't counted while that candidate stands: it is likelier the song than a
+  page of bare ids, and `Coldplya` is no artist to look for. Dismissed in
+  `caracole review`, it gives way. Open the artist's
   page once, by hand, or any of their tab pages, and paste its address, as
   your browser shows it, into the one block the page gives for all of them,
   in place of `https://www.ultimate-guitar.com/artist/…`:

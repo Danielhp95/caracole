@@ -129,11 +129,34 @@ def test_a_review_of_names_not_quite_ugs_says_what_they_are(conn, cfg):
     item = review_item(text, "epic - I'm not sorry for loving you")
     assert item.lstrip().startswith("Only songs UG files under a catch-all artist")
     assert "and other artists' songs with this title (probably covers)" in item
-    # They are no sure match, so the artist's own page may still have the song: find it once.
-    assert "**epic** (1 song)" in text.split("## Artists to find on Ultimate Guitar", 1)[1]
+    # The catch-all candidate is likelier the song than a page of epic's on UG: no artist to find yet.
+    assert "## Artists to find" not in text
+    assert ("If none is the song you want, dismiss them all (below): UG may list epic only by bare ids, "
+            "and the to-do page then lists them under Artists to find.") in item
     intro = review_intro(text)
     assert "`catch_all`" in intro and "never accepted" in intro
     assert "`typo_artist`" not in intro and "`word_title`" not in intro  # no candidate came from those
+
+
+def test_an_artists_other_songs_still_ask_for_its_page(conn, cfg):
+    epic_review(conn)
+    s = add_song(conn, "epic", "Some Song Nobody Charted")
+    update_song(conn, s.id, match_decision="not_found")
+    section = todo(conn, cfg).split("## Artists to find on Ultimate Guitar (1)", 1)[1]
+    assert "**epic** (1 song)" in section
+
+
+def test_a_misspelt_artists_review_asks_for_no_artist_page(conn, cfg):
+    # "Coldplya" is a misspelling, not an artist UG lists by bare ids.
+    index(conn, [(1, "coldplay", "yellow", "chords")])
+    s = add_song(conn, "Coldplya", "Yellow")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "coldplay", "song_key": "yellow", "score": 100.0, "step": "typo_artist"},
+        {"artist_key": "cover-band", "song_key": "yellow", "score": 100.0, "step": "title_only"}])
+    text = todo(conn, cfg)
+    assert "## Artists to find" not in text
+    assert ("If none is the song you want and Coldplya is spelt right, dismiss them all (below): UG may list "
+            "Coldplya only by bare ids") in review_item(text, "Coldplya - Yellow")
 
 
 def test_a_performers_catch_all_candidate_is_called_one(conn, cfg):

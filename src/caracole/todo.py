@@ -122,6 +122,15 @@ def _what_candidates_are(song: Song) -> str:
     return "Only " + _and([_NEAR_NAMES[k].format(artists=artists(k)) for k in kinds])
 
 
+# Candidates likelier the song than a page of its artist's that UG lists only by bare ids: the right
+# spelling of a misspelt artist's name, or a catch-all artist's song (a show's, or a performer's).
+_LEADS_ELSEWHERE = ("typo_artist", "catch_all")
+
+
+def _leads_elsewhere(song: Song) -> bool:
+    return any(c.get("step") in _LEADS_ELSEWHERE for c in song.match_candidates or [])
+
+
 def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due: set[int]) -> str | None:
     """What to do when no candidate is right, for a review whose candidates all come from steps that
     never accept: other artists' songs of the title (probably covers), and names that aren't quite
@@ -134,6 +143,9 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
     if not artist_is_known(conn, song, overrides):
         steps = {c.get("step") for c in song.match_candidates or []}
         spelt = f" and {artist} is spelt right" if "typo_artist" in steps else ""
+        if _leads_elsewhere(song):  # not under Artists to find while these candidates stand
+            return (f"{head}. If none is the song you want{spelt}, dismiss them all (below): UG may list {artist} "
+                    "only by bare ids, and the to-do page then lists them under Artists to find.")
         lists = "probably lists" if steps == {"title_only"} else "may list"
         return (f"{head}. If none is the song you want{spelt}, UG {lists} {artist} only by bare ids: find the "
                 "artist's page, or one of their tab pages (see Artists to find below), and paste its address "
@@ -243,10 +255,13 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
     wanted: dict[str, list[Song]] = {}
     pasted: dict[str, tuple[str, str]] = {}  # artist -> (the tab page under [artist_url], what is wrong with it)
     for s in songs:
-        # Not found, or reviewed on its title alone (only covers), by an artist whose UG page the
-        # fetch can't find: the index has no slugged tab of theirs, and no address was pasted or learned
-        # (or the tab page pasted leads to none).
+        # Not found, or reviewed on its title alone (only covers) or on names that aren't quite UG's, by
+        # an artist whose UG page the fetch can't find: the index has no slugged tab of theirs, and no
+        # address was pasted or learned (or the tab page pasted leads to none). Not while a misspelling's
+        # or a catch-all's candidate is likelier the song than bare ids: dismissed, it gives way.
         if s.status == "ignored" or not needs_artist_page(s) or artist_is_known(conn, s, overrides):
+            continue
+        if _leads_elsewhere(s):
             continue
         wanted.setdefault(s.artist, []).append(s)
         if (problem := pasted_page_problem(conn, s, overrides)) is not None:
