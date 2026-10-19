@@ -1,0 +1,108 @@
+"""What keeps ``caracole serve`` to its owner: host names, cross-origin writes, tokens.
+
+- **Host names.** A page on another site can make a browser send requests to
+  127.0.0.1 under a name of its own that it points there (DNS rebinding), and
+  then read the answers. Every request must name the server by one of the names
+  it answers to: localhost, its loopback addresses, the address it listens on,
+  the machine's name, and those ``--allow-host`` adds.
+- **Writes** must come from the server's own pages: Filippo Valsorda's check,
+  the one Go's ``net/http.CrossOriginProtection`` makes, with ``Sec-Fetch-Site``
+  and, where a browser sends no such header (plain HTTP to a LAN address),
+  ``Origin`` against ``Host``. Every form also carries a token the server made
+  when it started, which another site can't read.
+- **An access token**, optional, for a server on the LAN: a sign-in page sets a
+  cookie holding a digest of it, never the token itself.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import re
+from collections.abc import Iterable, Mapping
+from http.cookies import CookieError, SimpleCookie
+from urllib.parse import urlsplit
+
+SESSION_COOKIE = "caracole_session"
+LOOPBACK = ("localhost", "127.0.0.1", "::1")
+WILDCARDS = ("", "0.0.0.0", "::")
+_NAME = re.compile(r"[a-z0-9._-]+|[0-9a-f:.]+")
+_SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
+def host_name(header: str | None) -> str | None:
+    """The name a ``Host`` header gives, lowercase, without its port or a final dot; None if it isn't one."""
+    if not header:
+        return None
+    text = header.strip().lower()
+    if text.startswith("["):
+        name, sep, rest = text[1:].partition("]")
+        if not sep or (rest and not (rest[:1] == ":" and rest[1:].isdigit())):
+            return None
+    else:
+        name, sep, port = text.partition(":")
+        if sep and not port.isdigit():
+            return None
+    name = name.rstrip(".")
+    return name if name and _NAME.fullmatch(name) else None
+
+
+def allowed_hosts(address: str, *, hostname: str = "", extra: Iterable[str] = ()) -> frozenset[str]:
+    """The names the server answers to: loopback, ``address`` unless it's a wildcard, ``hostname``, ``extra``."""
+    names = set(LOOPBACK)
+    bound = address.strip().strip("[]").lower()
+    if bound not in WILDCARDS:
+        names.add(bound)
+    for name in (hostname, *extra):
+        name = name.strip().lower().rstrip(".")
+        if name:
+            names.add(name)
+    return frozenset(names)
+
+
+def cross_origin_ok(method: str, headers: Mapping[str, str], host: str | None) -> bool:
+    """Whether a request may change something: not a cross-origin write from a browser.
+
+    ``headers`` has lowercase names. Reads always may. A browser that sends
+    ``Sec-Fetch-Site`` says where the request comes from; one that sends only
+    ``Origin`` has it compared with ``Host``. A client that sends neither is no
+    browser, so no other site can be making it.
+    """
+    if method in _SAFE_METHODS:
+        return True
+    site = headers.get("sec-fetch-site")
+    if site is not None:
+        return site in ("same-origin", "none")
+    origin = headers.get("origin")
+    if origin is None:
+        return True
+    try:
+        netloc = urlsplit(origin).netloc
+    except ValueError:
+        return False
+    return bool(netloc) and bool(host) and netloc.lower() == host.strip().lower()
+
+
+def same_token(given: str | None, expected: str) -> bool:
+    """Whether a token is the expected one, compared in constant time; nothing never matches."""
+    if not given or not expected:
+        return False
+    return hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8"))
+
+
+def session_value(access_token: str) -> str:
+    """What the sign-in cookie holds: a digest of the access token, the same after a restart."""
+    return hmac.new(access_token.encode("utf-8"), b"caracole serve session", hashlib.sha256).hexdigest()
+
+
+def session_cookie(header: str | None) -> str | None:
+    """The sign-in cookie's value in a ``Cookie`` header, if it has one."""
+    if not header:
+        return None
+    jar = SimpleCookie()
+    try:
+        jar.load(header)
+    except CookieError:
+        return None
+    morsel = jar.get(SESSION_COOKIE)
+    return morsel.value if morsel is not None else None

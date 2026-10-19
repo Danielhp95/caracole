@@ -701,7 +701,8 @@ finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
 wanted or needing review, and you can sort by artist, by title or by when
 songs were added. Sorted by artist or title, a row of letters jumps to the
 first song under each. When nothing in the library matches, the page shows
-the `caracole search` line to run.
+the `caracole search` line to run. `caracole serve` serves the same page with
+a form to request songs (see below).
 
 On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
@@ -742,6 +743,56 @@ entries. For an artist whose page overrides.toml has already, under any form
 of their name, it gives no line and says so. The search reads
 overrides.toml for this hint alone, and still works when the file can't be
 read.
+
+### caracole serve
+
+`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
+[--token-file FILE]` serves the library page over HTTP, at
+`http://127.0.0.1:8737/` by default, with three things the file on disk can't
+do:
+
+- **Request a song.** The form at the top takes an artist, a title and,
+  optionally, the album and the length. The song goes into wanted.txt at once,
+  as `caracole add ARTIST TITLE` writes it (a song listed already is left as
+  it is), then `caracole add` runs to put it in the library.
+- **Fetch it now.** Ticked, as it is by default, the request also runs
+  `caracole match` (offline), `caracole fetch --song "ARTIST - TITLE"` and
+  `caracole render` (offline), so a sheet can be there in a minute or two.
+  Each wanted song's card has a Fetch now button that does the same. Lyrics,
+  LaCuerda and the rest wait for the nightly run.
+- **Requests**, the page at `/jobs`, lists each request, the commands it
+  runs and what each printed, and refreshes itself while one waits or runs.
+
+Every request runs the `caracole` command line, one command at a time, so the
+server is never more aggressive than you at a terminal: each command takes
+caracole's lock (behind a nightly run, it waits), keeps the pause after the
+last request any caracole sent, and keeps the budgets and cooldowns. The
+queue holds 20 requests and one per song; a request is in wanted.txt as soon as
+it's made, so a full queue or a restart loses no song. The page links each
+song's files, which the server sends from the library: PDFs, text, info.json,
+and Guitar Pro files as downloads, never through a symbolic link, never a
+hidden file, and never the database, the token or the cache.
+
+Who can reach it:
+
+- `--address` is 127.0.0.1 by default: this machine alone. A LAN or tailnet
+  address, or 0.0.0.0 for every address, opens it to those networks. `--port`
+  is 8737 by default.
+- It answers only to the names it knows: localhost, its address, the
+  machine's name, and each `--allow-host NAME`, such as its full tailnet
+  name. A browser that names it otherwise gets 421; this keeps other sites
+  from reaching it under a name of their own (DNS rebinding).
+- Every form must come from the server's own page: it carries a token the
+  server makes when it starts, and a request from another site is refused
+  (403). A form posted from a page older than the server's last start is
+  refused too; reload the page.
+- `--token-file FILE` asks each browser once for the access token in FILE (16
+  characters or more, such as `openssl rand -base64 24`), then remembers it in
+  a cookie. Without the option, a `web_token` credential from systemd
+  (`$CREDENTIALS_DIRECTORY/web_token`) does the same. Listening beyond this
+  machine without a token, it warns.
+
+It runs until Ctrl-C.
 
 ## overrides.toml: your decisions
 
