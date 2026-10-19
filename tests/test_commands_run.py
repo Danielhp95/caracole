@@ -119,6 +119,17 @@ def test_one_song_no_index_and_lrclib_down_reads_as_a_short_report(tmp_path, sit
     assert len(sites.requests) == 2  # /api/get, then /api/search
 
 
+def test_lrclib_down_for_many_songs_is_one_line(tmp_path, sites, clock):
+    # Three songs fail, then caracole stops asking LRCLIB: the two songs it never asked about wait too.
+    wanted(tmp_path, *(f"epic - Song {n}" for n in range(5)))
+    result = run(tmp_path)
+    assert result.exit_code == 0, result.output
+    problems = [line for line in result.stdout.splitlines() if line.startswith("LRCLIB")]
+    assert problems == ["LRCLIB didn't answer (HTTP 503) and caracole stopped asking it, so the lyrics of 5 songs "
+                        "will be tried again on the next run."]
+    assert len(sites.requests) == 6  # /api/get and /api/search for each of the three
+
+
 def test_quiet_keeps_what_needs_you_and_what_went_wrong(tmp_path, sites, clock):
     wanted(tmp_path, SONG)
     result = run(tmp_path, "-q")

@@ -90,6 +90,9 @@ def _network_error(error: BaseException) -> BaseException | None:
     return None
 
 
+STOPPED = "kept failing and caracole stopped asking it"  # why, once the client gave up on a provider
+
+
 def why(error: BaseException) -> str:
     """What a provider did, as the clause after its name: "didn't answer (HTTP 503)".
 
@@ -102,7 +105,7 @@ def why(error: BaseException) -> str:
     if isinstance(error, ProviderBlocked):
         return f"blocked caracole ({error.message})" if error.message else "blocked caracole"
     if isinstance(error, ProviderUnavailable):
-        return "kept failing and caracole stopped asking it"
+        return STOPPED
     if isinstance(error, RobotsClosed):
         return "closes that page to bots (robots.txt)"
     network = _network_error(error)
@@ -305,17 +308,36 @@ def _requests(report: _Report, spent: set[str]) -> str | None:
     return f"Requests: {', '.join(parts)}."
 
 
+def _groups(failures: list[Failure]) -> list[tuple[Failure, int]]:
+    """The failures by provider and cause, in the order they came, each with its count of songs.
+
+    The songs a client never asked about once it gave up on a provider (``STOPPED``) join
+    the cause that made it give up, the provider's last one before: one cause, one line.
+    """
+    groups: dict[tuple[str, str], list[Failure]] = {}
+    stopped: dict[str, tuple[str, str]] = {}  # provider -> the group its songs left unasked join
+    for f in failures:
+        key = (f.provider, f.cause)
+        if f.cause == STOPPED:
+            if f.provider not in stopped:
+                earlier = [k for k in groups if k[0] == f.provider]
+                stopped[f.provider] = key
+                if earlier:
+                    stopped[f.provider] = (f.provider, f"{earlier[-1][1]} and caracole stopped asking it")
+                    groups[stopped[f.provider]] = groups.pop(earlier[-1])
+            key = stopped[f.provider]
+        groups.setdefault(key, []).append(f)
+    return [(Failure(provider, group[0].song, cause), len(group)) for (provider, cause), group in groups.items()]
+
+
 def _problems(results: list[StepResult]) -> list[Line]:
     """Each step's problems, then its failures, one line per provider and cause; errors first."""
     found: dict[str, Line] = {}
     for r in results:
         for p in r.problems:
             found.setdefault(p.text, Line(p.text, p.level))
-        groups: dict[tuple[str, str], list[Failure]] = {}
-        for f in r.failures:
-            groups.setdefault((f.provider, f.cause), []).append(f)
-        for group in groups.values():
-            text = failure_line(group[0], r.retry, plural(len(group), "song"))
+        for failure, n in _groups(r.failures):
+            text = failure_line(failure, r.retry, plural(n, "song"))
             found.setdefault(text, Line(text, WARNING))
     return sorted(found.values(), key=lambda line: -line.level)
 

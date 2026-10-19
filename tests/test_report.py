@@ -161,13 +161,27 @@ def test_repeated_errors_of_one_cause_collapse_into_one_line_with_a_count():
 def test_errors_of_two_causes_get_a_line_each_in_the_order_they_came():
     text = summary_text(report(lyrics(
         Failure("lrclib", "A – One", "had an error (HTTP 500)"),
-        Failure("lrclib", "A – Two", "had an error (HTTP 500)"),
-        Failure("lrclib", "A – Three", "kept failing and caracole stopped asking it"),
+        Failure("lrclib", "A – Two", "didn't answer (HTTP 503)"),
+        Failure("lrclib", "A – Three", "had an error (HTTP 500)"),
     )))
-    assert text.splitlines()[:2] == [
+    assert text.splitlines() == [
         "LRCLIB had an error (HTTP 500), so the lyrics of 2 songs will be tried again on the next run.",
-        "LRCLIB kept failing and caracole stopped asking it, so the lyrics of 1 song will be tried again on "
-        "the next run.",
+        "LRCLIB didn't answer (HTTP 503), so the lyrics of 1 song will be tried again on the next run.",
+    ]
+
+
+def test_the_songs_left_once_caracole_stops_asking_share_the_line_of_the_errors_that_stopped_it():
+    # One cause: LRCLIB is down. Three songs failed, then caracole stopped asking, and 40 more wait.
+    down = [Failure("lrclib", f"A – {n}", "didn't answer (HTTP 503)") for n in range(3)]
+    left = [Failure("lrclib", f"B – {n}", "kept failing and caracole stopped asking it") for n in range(40)]
+    assert lines(report(lyrics(*down, *left))) == [
+        "LRCLIB didn't answer (HTTP 503) and caracole stopped asking it, so the lyrics of 43 songs will be tried "
+        "again on the next run.",
+    ]
+    # Stopped by an earlier step's errors, the songs left have a line of their own.
+    assert lines(report(lyrics(*left[:2]))) == [
+        "LRCLIB kept failing and caracole stopped asking it, so the lyrics of 2 songs will be tried again on the "
+        "next run.",
     ]
 
 
