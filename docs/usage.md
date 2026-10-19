@@ -143,7 +143,7 @@ says come before the command (`caracole -v run`):
 |---|---|
 | none | the problems: warnings and errors |
 | `-q`, `--quiet` | the problems too |
-| `-v`, `--verbose` | caracole's own information too |
+| `-v`, `--verbose` | caracole's own information too, such as a line per request: `LRCLIB GET https://lrclib.net/api/get?… → 503 Service Unavailable in 0.21 s (1 of 200 requests)`, or `→ 200 OK from the cache` for an answer it sent no request for |
 | `-vv` | debugging lines too, each with the name of its logger, and the logs of the libraries caracole uses (httpx, httpcore, urllib3, spotipy, and numba or torch under auto-chords), which otherwise show only their warnings and errors |
 
 A warning starts with `warning:` and an error with `error:`, coloured on a

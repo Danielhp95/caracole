@@ -43,6 +43,33 @@ THIRD_PARTY = ("httpx", "httpcore", "urllib3", "requests", "spotipy", "numba", "
 _LEVELS = {QUIET: logging.WARNING, NORMAL: logging.WARNING, VERBOSE: logging.INFO, DEBUG: logging.DEBUG}
 
 
+PROVIDER_NAMES: Mapping[str, str] = {
+    "ug": "Ultimate Guitar",
+    "lrclib": "LRCLIB",
+    "lacuerda": "LaCuerda",
+    "spotify": "Spotify",
+}
+
+
+def provider_name(provider: str) -> str:
+    """A provider as people call it: "Ultimate Guitar", not "ug"."""
+    return PROVIDER_NAMES.get(provider, provider)
+
+
+def request_line(provider: str, method: str, url: str, answer: str, *, cached: bool = False,
+                 seconds: float | None = None, used: int, budget: int) -> str:
+    """One request, as the log shows it at -v: who was asked what, what came back, how fast, and
+    how much of the run's budget is used. ``answer`` is a status ("503 Service Unavailable"), or
+    the error a request ended on ("ReadTimeout")."""
+    if cached:
+        how = " from the cache"
+    elif seconds is None:
+        how = ""
+    else:
+        how = f" {'in' if answer[:1].isdigit() else 'after'} {seconds:.2f} s"
+    return f"{provider_name(provider)} {method} {url} → {answer}{how} ({used} of {budget} requests)"
+
+
 def verbosity(verbose: int, quiet: bool) -> int:
     """The verbosity the root options ask for: ``-q``, nothing, ``-v`` or ``-vv`` (more counts as ``-vv``)."""
     return QUIET if quiet else min(max(verbose, 0), DEBUG)

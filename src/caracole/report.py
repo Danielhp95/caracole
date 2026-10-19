@@ -32,22 +32,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from caracole.logs import priority
+from caracole.logs import PROVIDER_NAMES as PROVIDER_NAMES  # the log's names, which the report shares
+from caracole.logs import priority, provider_name
 from caracole.normalize import clean_title
 
 INFO, WARNING, ERROR = logging.INFO, logging.WARNING, logging.ERROR
-
-PROVIDER_NAMES: Mapping[str, str] = {
-    "ug": "Ultimate Guitar",
-    "lrclib": "LRCLIB",
-    "lacuerda": "LaCuerda",
-    "spotify": "Spotify",
-}
-
-
-def provider_name(provider: str) -> str:
-    """A provider as people call it: "Ultimate Guitar", not "ug"."""
-    return PROVIDER_NAMES.get(provider, provider)
 
 
 class _Song(Protocol):

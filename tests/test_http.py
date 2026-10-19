@@ -1,3 +1,4 @@
+import logging
 import random
 from datetime import UTC, datetime, timedelta
 
@@ -528,3 +529,47 @@ def test_max_age_refetches_stale_copies_and_falls_back_when_budget_is_spent(tmp_
     clock[0] += timedelta(days=40)
     stale = client.get(url, max_age=timedelta(days=30))  # budget spent: the stale copy beats nothing
     assert stale.from_cache and stale.content == b"v2" and len(rec.requests) == 2
+
+
+# --- a line per request in the log, at -v -----------------------------------------------------
+
+
+def request_lines(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name == "caracole.http"]
+
+
+def test_each_request_is_one_line_at_info_with_its_status_time_and_budget(tmp_path, caplog, monkeypatch):
+    import caracole.http as http
+
+    ticks = iter([10.0, 10.25, 20.0, 20.5])
+    monkeypatch.setattr(http, "perf_counter", lambda: next(ticks))
+    client, _ = make_client(tmp_path, lambda r: httpx.Response(503 if "busy" in str(r.url) else 200), budget=60)
+    with caplog.at_level(logging.INFO, logger="caracole.http"):
+        client.get("https://tabs.ultimate-guitar.com/tab/1")
+        with pytest.raises(ProviderError):
+            client.get("https://tabs.ultimate-guitar.com/tab/busy", params={"q": "x y"})
+        client.get("https://tabs.ultimate-guitar.com/tab/1")  # from the cache: no request, no budget
+    assert request_lines(caplog) == [
+        "Ultimate Guitar GET https://tabs.ultimate-guitar.com/tab/1 → 200 OK in 0.25 s (1 of 60 requests)",
+        "Ultimate Guitar GET https://tabs.ultimate-guitar.com/tab/busy?q=x+y → 503 Service Unavailable in 0.50 s "
+        "(2 of 60 requests)",
+        "Ultimate Guitar GET https://tabs.ultimate-guitar.com/tab/1 → 200 OK from the cache (2 of 60 requests)",
+    ]
+    assert {r.levelno for r in caplog.records if r.name == "caracole.http"} == {logging.INFO}
+
+
+def test_a_request_that_gets_no_answer_says_what_happened(tmp_path, caplog, monkeypatch):
+    import caracole.http as http
+
+    ticks = iter([1.0, 31.0])
+    monkeypatch.setattr(http, "perf_counter", lambda: next(ticks))
+
+    def timeout(request):
+        raise httpx.ReadTimeout("timed out", request=request)
+
+    client, _ = make_client(tmp_path, timeout)
+    with caplog.at_level(logging.INFO, logger="caracole.http"), pytest.raises(ProviderError):
+        client.get("https://tabs.ultimate-guitar.com/tab/1")
+    assert request_lines(caplog) == [
+        "Ultimate Guitar GET https://tabs.ultimate-guitar.com/tab/1 → ReadTimeout after 30.00 s (1 of 60 requests)",
+    ]
