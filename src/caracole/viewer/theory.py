@@ -160,7 +160,9 @@ _EXTENSION = re.compile(r"(maj)?(69|13|11|9|7|6)?")
 _SUS = re.compile(r"sus(2|4)?")
 _ALTERATION = re.compile(r"add(?:2|4|6|9|11|13)|[b#](?:5|9|11|13)|no[35]")
 _ADDED = {"2": 2, "9": 2, "4": 5, "11": 5, "6": 9, "13": 9}
-_ALTERED = {"b9": 1, "#9": 3, "#11": 6, "b13": 8}
+# Every altered extension _ALTERATION reads (b5 and #5 alter the fifth instead). A flat eleventh
+# sounds as the major third, a sharp thirteenth as the flat seventh: rare, but sheets write them.
+_ALTERED = {"b9": 1, "#9": 3, "b11": 4, "#11": 6, "b13": 8, "#13": 10}
 
 
 def _normalize(suffix: str) -> str:
@@ -222,10 +224,12 @@ def _intervals(s: str) -> frozenset[int] | None:
             third = None
         elif token == "no5":
             fifth = None
-        else:
+        elif (altered := _ALTERED.get(token)) is not None:
             if token in ("b9", "#9"):
                 extra.discard(2)  # an altered ninth replaces the natural one
-            extra.add(_ALTERED[token])
+            extra.add(altered)
+        else:
+            return None  # read by the pattern but not known: the suffix spells no chord
         pos = alt.end()
     tones = {0, *extra} | {t for t in (third, fifth, seventh) if t is not None}
     return frozenset(tones)

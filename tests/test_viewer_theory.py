@@ -143,6 +143,31 @@ def test_chords_compare_by_sound_and_spelling():
     assert parse_chord("CM7").pitch_classes == parse_chord("Cmaj7").pitch_classes
 
 
+@pytest.mark.parametrize(
+    ("text", "intervals"),
+    [
+        ("C7#13", {0, 4, 7, 10}),  # a sharp thirteenth sounds as the flat seventh
+        ("C7(#13)", {0, 4, 7, 10}),
+        ("E7+13", {0, 4, 7, 10}),  # "+13" is "#13"
+        ("Am7b11", {0, 3, 4, 7, 10}),  # a flat eleventh sounds as the major third
+        ("Bb7-11", {0, 4, 7, 10}),
+    ],
+)
+def test_odd_alterations_on_real_sheets_are_read_as_they_sound(text, intervals):
+    assert parse_chord(text).intervals == frozenset(intervals)
+    assert parse_chord(text, strict=False).intervals == frozenset(intervals)
+
+
+@pytest.mark.parametrize(
+    "alteration",
+    ["b5", "#5", "b9", "#9", "b11", "#11", "b13", "#13", "add2", "add4", "add6", "add9", "add11",
+     "add13", "no3", "no5"],
+)
+def test_every_alteration_a_suffix_may_hold_is_read(alteration):
+    for base in ("C", "Cm", "C7", "Cm7", "Cmaj7", "Csus4"):
+        assert parse_chord(base + alteration, strict=False) is not None, base + alteration
+
+
 def test_a_lenient_read_keeps_the_root_of_a_suffix_it_doesnt_know():
     chord = parse_chord("Cfoo/E", strict=False)
     assert (chord.root, chord.bass, chord.shown, chord.intervals) == (0, 4, "foo", frozenset({0, 4, 7}))
