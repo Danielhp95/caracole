@@ -90,8 +90,10 @@ class OneTrackSpotify:
 
     def __init__(self, error=None):
         self.error = error
+        self.calls = 0
 
     def current_user_saved_tracks(self, limit=20, offset=0, market=None):
+        self.calls += 1
         if self.error:
             raise self.error
         creep = {
@@ -186,9 +188,27 @@ def test_sync_sources_needs_authorization_without_a_client(tmp_path, wanted):
 
 
 def test_sync_sources_says_when_the_client_secret_is_missing(tmp_path, wanted):
-    report = run(config(tmp_path, client_id="cid"), Repo(), None)
-    assert report.spotify_state == "auth_needed"
+    # `tabarr auth spotify` would fail the same way: the advice is to give the secret.
+    repo = Repo()
+    report = run(config(tmp_path, client_id="cid"), repo, None)
+    assert report.spotify_state == "setup_needed"
     assert "client secret" in report.spotify_message
+    assert "services.tabarr.credentials.spotify_client_secret" in report.spotify_message
+    assert repo.record("source:spotify")["state"] == "setup_needed"
+    summary = report.summary()
+    assert "Spotify isn't fully set up (The client secret is missing" in summary
+    assert "authoriz" not in summary
+
+
+def test_summary_says_spotify_isnt_fully_set_up():
+    report = SourcesReport(
+        wanted=SyncStats(seen=3, new=0),
+        spotify_state="setup_needed",
+        spotify_message="The client secret is missing.",
+    )
+    assert report.summary() == (
+        "wanted.txt 3 songs, 0 new; Spotify isn't fully set up (The client secret is missing.)"
+    )
 
 
 def test_sync_sources_turns_a_refused_token_into_auth_needed(tmp_path, wanted):
@@ -220,6 +240,40 @@ def test_summary_says_how_to_authorize_spotify():
     assert report.summary() == (
         "wanted.txt 3 songs, 0 new; Spotify needs authorization (run `tabarr auth spotify`)"
     )
+
+
+def test_a_long_retry_after_keeps_spotify_unasked_until_then(tmp_path, wanted):
+    # Spotify asks an app over its limits to wait; asking again is how it stays there.
+    repo = Repo()
+    cfg = config(tmp_path, client_id="cid", client_secret="secret")
+    limited = SpotifyException(
+        429, -1, "https://api.spotify.com/v1/me/tracks:\n API rate limit exceeded",
+        headers={"Retry-After": "3600"},
+    )
+    spotify = OneTrackSpotify(error=limited)
+    report = run(cfg, repo, spotify)
+    assert report.spotify_state == "error" and "HTTP 429" in report.spotify_message
+    assert repo.kv["spotify:retry_after_until"] == "2026-10-18T04:30:00Z"
+
+    def sync_at(minutes):
+        return sync_sources(CONN, cfg, NOW + timedelta(minutes=minutes), spotify=spotify,
+                            upsert=repo.upsert, kv_get=repo.kv_get, kv_set=repo.kv_set)
+
+    later = sync_at(30)
+    assert spotify.calls == 1  # not asked again within the hour
+    assert later.spotify_state == "error" and "2026-10-18T04:30:00Z" in later.spotify_message
+    assert repo.record("source:spotify")["message"] == later.spotify_message
+    assert later.wanted.seen == 2  # wanted.txt syncs all the same
+    spotify.error = None
+    assert sync_at(61).spotify_state == "ok" and spotify.calls == 2
+
+
+def test_a_garbled_wait_does_not_keep_spotify_unasked(tmp_path, wanted):
+    repo = Repo()
+    repo.kv["spotify:retry_after_until"] = "someday"
+    spotify = OneTrackSpotify()
+    report = run(config(tmp_path, client_id="cid", client_secret="secret"), repo, spotify)
+    assert report.spotify_state == "ok" and spotify.calls == 1
 
 
 def test_sync_sources_reports_spotify_problems_as_errors(tmp_path, wanted):

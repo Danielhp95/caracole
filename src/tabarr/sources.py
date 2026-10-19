@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 # Where sync_sources records how each source went, as JSON, for the to-do page.
 WANTED_STATUS_KEY = "source:wanted"
 SPOTIFY_STATUS_KEY = "source:spotify"
+# Until when Spotify asked tabarr to wait after an HTTP 429 (ISO 8601 UTC); not asked before.
+SPOTIFY_RETRY_KEY = "spotify:retry_after_until"
 
 
 @dataclass
@@ -34,6 +36,8 @@ class SyncStats:
     ``errors`` are messages for the run report; nothing in them is fatal.
     ``line_errors`` repeats wanted.txt's bad lines as ``(line_no, message)``.
     ``missing_playlists`` lists configured Spotify playlists that couldn't be read.
+    ``retry_after_until`` is when Spotify's rate limit lets tabarr ask again
+    (ISO 8601 UTC), when a sync stopped at one that said how long to wait.
     """
 
     seen: int = 0
@@ -41,6 +45,7 @@ class SyncStats:
     errors: list[str] = field(default_factory=list)
     missing_playlists: list[str] = field(default_factory=list)
     line_errors: list[tuple[int, str]] = field(default_factory=list)
+    retry_after_until: str | None = None
 
 
 class Upsert(Protocol):
@@ -97,9 +102,11 @@ def utc_stamp(now: datetime) -> str:
 class SourcesReport:
     """How one ``sync_sources`` went.
 
-    ``spotify_state`` is "off" (not configured), "ok", "auth_needed" or "error".
-    ``spotify_message`` says what went wrong; it leaves out the advice to run
-    ``tabarr auth spotify``, which callers add where they show it.
+    ``spotify_state`` is "off" (not configured), "ok", "setup_needed" (configured
+    in part, such as without its client secret), "auth_needed" or "error".
+    ``spotify_message`` says what went wrong; for "auth_needed" it leaves out the
+    advice to run ``tabarr auth spotify``, which callers add where they show it.
+    For "setup_needed" that advice would not help: the message says what to set.
     """
 
     wanted: SyncStats
@@ -118,6 +125,9 @@ class SourcesReport:
             parts.append("Spotify off")
         elif self.spotify_state == "auth_needed":
             parts.append("Spotify needs authorization (run `tabarr auth spotify`)")
+        elif self.spotify_state == "setup_needed":
+            line = "Spotify isn't fully set up"
+            parts.append(f"{line} ({self.spotify_message})" if self.spotify_message else line)
         else:
             s = self.spotify
             line = (
@@ -146,10 +156,13 @@ def sync_sources(
     ``spotify`` is the client from ``spotify.client_from_config``, or None when
     there is none. wanted.txt always syncs, and no Spotify failure raises: it
     becomes the report's ``spotify_state``. Each source's outcome is stored as
-    JSON in the kv table under "source:wanted" and "source:spotify".
+    JSON in the kv table under "source:wanted" and "source:spotify". After a
+    rate limit that said how long to wait, Spotify isn't asked until then
+    (kv ``spotify:retry_after_until``).
     """
     from tabarr.wanted import sync_wanted
 
+    kv_get = kv_get or default_kv_get()
     kv_set = kv_set or default_kv_set()
     stamp = utc_stamp(now)
     wanted = sync_wanted(conn, cfg.wanted_file, now, upsert=upsert, kv_get=kv_get, kv_set=kv_set)
@@ -165,21 +178,39 @@ def sync_sources(
     if not cfg.spotify.enabled:
         return report
 
-    from tabarr.spotify import SpotifyAuthError, SpotifyError, no_client_error, sync_spotify
+    from tabarr.spotify import (
+        SpotifyAuthError,
+        SpotifyError,
+        SpotifySetupError,
+        no_client_error,
+        sync_spotify,
+    )
 
+    def needs(e: SpotifyAuthError) -> tuple[str, str]:
+        state = "setup_needed" if isinstance(e, SpotifySetupError) else "auth_needed"
+        return state, _sentence(e.problem)
+
+    wait_until = _stamp_or_none(kv_get(conn, SPOTIFY_RETRY_KEY))
     if spotify is None:
-        report.spotify_state = "auth_needed"
-        report.spotify_message = _sentence(no_client_error(cfg).problem)
+        report.spotify_state, report.spotify_message = needs(no_client_error(cfg))
+    elif wait_until and stamp < wait_until:
+        report.spotify = SyncStats()
+        report.spotify_state = "error"
+        report.spotify_message = (
+            f"Spotify asked tabarr to wait until {wait_until} (HTTP 429); not asked before then"
+        )
     else:
         try:
             report.spotify = sync_spotify(
                 conn, spotify, cfg.spotify, now, upsert=upsert, kv_set=kv_set
             )
         except SpotifyAuthError as e:
-            report.spotify_state, report.spotify_message = "auth_needed", _sentence(e.problem)
+            report.spotify_state, report.spotify_message = needs(e)
         except SpotifyError as e:
             report.spotify_state, report.spotify_message = "error", str(e)
         else:
+            if report.spotify.retry_after_until:
+                kv_set(conn, SPOTIFY_RETRY_KEY, report.spotify.retry_after_until)
             problems = list(report.spotify.errors)
             if missing := report.spotify.missing_playlists:
                 names = ", ".join(repr(ref) for ref in missing)
@@ -209,6 +240,15 @@ def sync_sources(
 
 def _count(n: int, noun: str) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
+def _stamp_or_none(value: str | None) -> str | None:
+    """``value`` when it is a ``utc_stamp``, so it compares in time order as a string."""
+    try:
+        datetime.strptime(value or "", "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
+    return value
 
 
 def _record(kv_set: KvSet, conn: sqlite3.Connection, key: str, value: Any) -> None:

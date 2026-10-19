@@ -9,6 +9,11 @@ missing, the model files are missing or unusable, or a sheet can't be kept in
 the library. A purchase it can't read fails the song alone, with exit 0: the
 to-do page lists it, and it is tried again once its file changes, so a file
 that will never decode doesn't fail the unit (and alert you) every night.
+
+The unit runs after the nightly run has written _todo.md and index.html, so
+the command writes both again, with its own sheets and failures. It holds
+tabarr's lock while it works, so it waits for another tabarr writing the
+library (a ``tabarr-admin`` command, say).
 """
 
 from __future__ import annotations
@@ -18,7 +23,15 @@ from importlib.util import find_spec
 
 import typer
 
-from tabarr.commands._common import fail, load_cfg, load_ovr, open_db
+from tabarr.commands._common import (
+    exclusive,
+    fail,
+    load_cfg,
+    load_ovr,
+    open_db_or_exit,
+    utcnow,
+    write_pages,
+)
 
 MODEL_PACKAGES = ("torch", "librosa", "beat_this")
 NOT_BUILT = "this tabarr was built without auto-chords; use the flake's packages.autochords"
@@ -42,13 +55,15 @@ def register(app: typer.Typer) -> None:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
         cfg = load_cfg(ctx)
         overrides = load_ovr(cfg)
-        conn = open_db(cfg)
-        # A track dropped in after the night's run, with the unit started by hand, is
-        # linked here first.
-        music = scan_music(conn, cfg.music_dir)
-        files = "file" if music.seen == 1 else "files"
-        typer.echo(f"Music: {music.seen} {files}, {music.matched} linked")
-        stats = autochords_pending(conn, cfg, overrides=overrides)
-        typer.echo(f"auto-chords: {stats.summary()}")
+        conn = open_db_or_exit(cfg)
+        with exclusive(cfg, "autochords"):
+            # A track dropped in after the night's run, with the unit started by hand, is
+            # linked here first.
+            music = scan_music(conn, cfg.music_dir)
+            files = "file" if music.seen == 1 else "files"
+            typer.echo(f"Music: {music.seen} {files}, {music.matched} linked")
+            stats = autochords_pending(conn, cfg, overrides=overrides)
+            typer.echo(f"auto-chords: {stats.summary()}")
+            write_pages(conn, cfg, overrides, utcnow())
         if stats.errors:  # the setup's problems; stats.failures are listed on the to-do page
             raise typer.Exit(1)

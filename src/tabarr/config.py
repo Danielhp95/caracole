@@ -4,11 +4,14 @@ Directories resolve in this order: an explicit key in the TOML file, then the
 systemd-provided ``$STATE_DIRECTORY`` / ``$CACHE_DIRECTORY``, then the XDG base
 directories, then ``~``. Secrets come from ``$CREDENTIALS_DIRECTORY`` (systemd
 ``LoadCredential``), then a ``*_file`` key, then an environment variable.
-Unknown keys are errors, so a typo never silently falls back to a default.
+Unknown keys are errors, and so are values of the wrong type or out of range,
+so a typo never silently falls back to a default or turns into another value.
 """
 
 from __future__ import annotations
 
+import json
+import math
 import os
 import tomllib
 from dataclasses import dataclass, field
@@ -66,9 +69,25 @@ class RankPolicy:
     scored_sheets: int = 3
     label_penalty: float = 0.5
     variant_bonus: float = 0.25
-    keep_sheet: int = 1
     keep_guitar_pro: int = 2
-    keep_tab: int = 1
+
+
+# What each [match] and [rank] value may be: (lowest, highest or None, whole numbers only).
+_MATCH_RANGES = {
+    "accept": (0, 100, False),
+    "margin": (0, 100, False),
+    "review": (0, 100, False),
+    "artist_gate": (0, 100, False),
+}
+_RANK_RANGES = {
+    "coverage_threshold": (0, 1, False),  # a fraction of the lyric lines
+    "line_match": (0, 100, False),
+    "prior_votes": (0, None, False),
+    "scored_sheets": (1, None, True),
+    "label_penalty": (0, None, False),
+    "variant_bonus": (0, None, False),
+    "keep_guitar_pro": (0, None, True),
+}
 
 
 @dataclass(frozen=True)
@@ -80,7 +99,6 @@ class NtfyConfig:
 @dataclass(frozen=True)
 class AutochordsConfig:
     btc_weights: Path | None = None
-    btc_config: Path | None = None
     beat_checkpoint: Path | None = None
     device: str = "cpu"
 
@@ -123,7 +141,7 @@ _SPOTIFY_KEYS = {
 }
 _PROVIDER_KEYS = {"budget", "delay"}
 _NTFY_KEYS = {"url", "token_file"}
-_AUTOCHORDS_KEYS = {"btc_weights", "btc_config", "beat_checkpoint", "device"}
+_AUTOCHORDS_KEYS = {"btc_weights", "beat_checkpoint", "device"}
 
 
 def _check_keys(table: Mapping[str, Any], allowed: set[str], where: str) -> None:
@@ -137,6 +155,57 @@ def _table(data: Mapping[str, Any], key: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise ConfigError(f"[{key}] must be a table")
     return value
+
+
+def _shown(value: Any) -> str:
+    """A value about as TOML writes it, for an error message: true, "false", 5."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    try:
+        return json.dumps(value, ensure_ascii=False)
+    except (TypeError, ValueError):  # a TOML date, say
+        return str(value)
+
+
+def _string(value: Any, where: str) -> str:
+    if not isinstance(value, str):
+        raise ConfigError(f"{where} must be a string, not {_shown(value)}")
+    return value
+
+
+def _optional_string(table: Mapping[str, Any], key: str, where: str) -> str | None:
+    """The string at ``key``, or None when it's absent or empty."""
+    value = table.get(key)
+    if value is None:
+        return None
+    return _string(value, where) or None
+
+
+def _bool(value: Any, where: str) -> bool:
+    if not isinstance(value, bool):
+        raise ConfigError(f"{where} must be true or false, not {_shown(value)}")
+    return value
+
+
+def _number(value: Any, where: str, low: float, high: float | None, whole: bool) -> float:
+    """A finite number (never a boolean) from ``low`` up to ``high``; ``whole`` wants an integer."""
+    kinds = int if whole else (int, float)
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, kinds)
+        or not math.isfinite(value)
+        or value < low
+        or (high is not None and value > high)
+    ):
+        kind = "a whole number" if whole else "a number"
+        span = f"from {low:g} to {high:g}" if high is not None else f"of {low:g} or more"
+        raise ConfigError(f"{where} must be {kind} {span}, not {_shown(value)}")
+    return value
+
+
+def _numbers(table: Mapping[str, Any], ranges: Mapping[str, tuple], where: str) -> dict[str, Any]:
+    _check_keys(table, set(ranges), where)
+    return {key: _number(value, f"{where}.{key}", *ranges[key]) for key, value in table.items()}
 
 
 class _Paths:
@@ -189,11 +258,12 @@ def _delay(value: Any, where: str) -> tuple[float, float]:
     if (
         not isinstance(value, (list, tuple))
         or len(value) != 2
-        or not all(isinstance(v, (int, float)) for v in value)
+        or not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
+        or not all(math.isfinite(v) for v in value)
         or value[0] < 0
         or value[1] < value[0]
     ):
-        raise ConfigError(f"{where}.delay must be [min, max] seconds")
+        raise ConfigError(f"{where}.delay must be [min, max] seconds, not {_shown(value)}")
     return (float(value[0]), float(value[1]))
 
 
@@ -222,7 +292,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
     _check_keys(data, _TOP_KEYS, "tabarr.toml")
 
     def dir_value(key: str, default: Path) -> Path:
-        value = data.get(key)
+        value = _optional_string(data, key, key)
         return paths.resolve(value) if value else default
 
     library_dir = dir_value("library_dir", paths.home / "Tabs")
@@ -245,56 +315,72 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
     if not isinstance(playlists, list) or not all(isinstance(x, str) for x in playlists):
         raise ConfigError("[spotify].playlists must be a list of strings")
     spotify = SpotifyConfig(
-        client_id=sp.get("client_id") or None,
+        client_id=_optional_string(sp, "client_id", "[spotify].client_id"),
         client_secret=_read_secret(
-            env, paths, "spotify_client_secret", sp.get("client_secret_file"),
+            env, paths, "spotify_client_secret",
+            _optional_string(sp, "client_secret_file", "[spotify].client_secret_file"),
             "TABARR_SPOTIFY_CLIENT_SECRET",
         ),
-        redirect_uri=sp.get("redirect_uri", SpotifyConfig.redirect_uri),
-        liked_songs=bool(sp.get("liked_songs", True)),
+        redirect_uri=_string(
+            sp.get("redirect_uri", SpotifyConfig.redirect_uri), "[spotify].redirect_uri"
+        ),
+        liked_songs=_bool(sp.get("liked_songs", True), "[spotify].liked_songs"),
         playlists=tuple(playlists),
-        suggest_top_tracks=bool(sp.get("suggest_top_tracks", True)),
+        suggest_top_tracks=_bool(
+            sp.get("suggest_top_tracks", True), "[spotify].suggest_top_tracks"
+        ),
     )
 
     providers = dict(DEFAULT_PROVIDERS)
     for name, table in _table(data, "providers").items():
+        if name not in DEFAULT_PROVIDERS:
+            known = ", ".join(sorted(DEFAULT_PROVIDERS))
+            raise ConfigError(
+                f"unknown provider [providers.{name}]; tabarr's providers are {known}"
+            )
         if not isinstance(table, Mapping):
             raise ConfigError(f"[providers.{name}] must be a table")
         _check_keys(table, _PROVIDER_KEYS, f"[providers.{name}]")
-        base = providers.get(name, ProviderPolicy(budget=30, delay=(10.0, 20.0)))
+        base = providers[name]
         budget = table.get("budget", base.budget)
-        if not isinstance(budget, int) or budget < 0:
-            raise ConfigError(f"[providers.{name}].budget must be a non-negative integer")
+        if isinstance(budget, bool) or not isinstance(budget, int) or budget < 0:
+            raise ConfigError(
+                f"[providers.{name}].budget must be a non-negative integer, not {_shown(budget)}"
+            )
         delay = _delay(table["delay"], f"[providers.{name}]") if "delay" in table else base.delay
         providers[name] = ProviderPolicy(budget=budget, delay=delay)
 
-    match_t = _table(data, "match")
-    _check_keys(match_t, set(MatchPolicy.__dataclass_fields__), "[match]")
-    rank_t = _table(data, "rank")
-    _check_keys(rank_t, set(RankPolicy.__dataclass_fields__), "[rank]")
+    match = MatchPolicy(**_numbers(_table(data, "match"), _MATCH_RANGES, "[match]"))
+    if match.review > match.accept:
+        raise ConfigError(
+            f"[match].review ({match.review:g}) must not be above [match].accept ({match.accept:g})"
+        )
+    rank = RankPolicy(**_numbers(_table(data, "rank"), _RANK_RANGES, "[rank]"))
 
     ntfy_t = _table(data, "ntfy")
     _check_keys(ntfy_t, _NTFY_KEYS, "[ntfy]")
     ntfy = NtfyConfig(
-        url=ntfy_t.get("url") or None,
-        token=_read_secret(env, paths, "ntfy_token", ntfy_t.get("token_file"), "TABARR_NTFY_TOKEN"),
+        url=_optional_string(ntfy_t, "url", "[ntfy].url"),
+        token=_read_secret(
+            env, paths, "ntfy_token", _optional_string(ntfy_t, "token_file", "[ntfy].token_file"),
+            "TABARR_NTFY_TOKEN",
+        ),
     )
 
     ac_t = _table(data, "autochords")
     _check_keys(ac_t, _AUTOCHORDS_KEYS, "[autochords]")
 
     def ac_path(key: str, env_var: str) -> Path | None:
-        value = ac_t.get(key) or env.get(env_var)
+        value = _optional_string(ac_t, key, f"[autochords].{key}") or env.get(env_var)
         return paths.resolve(value) if value else None
 
     autochords = AutochordsConfig(
         btc_weights=ac_path("btc_weights", "TABARR_BTC_WEIGHTS"),
-        btc_config=ac_path("btc_config", "TABARR_BTC_CONFIG"),
         beat_checkpoint=ac_path("beat_checkpoint", "TABARR_BEAT_CHECKPOINT"),
-        device=ac_t.get("device", "cpu"),
+        device=_string(ac_t.get("device", "cpu"), "[autochords].device"),
     )
 
-    cjk_font_value = data.get("cjk_font") or env.get("TABARR_CJK_FONT")
+    cjk_font_value = _optional_string(data, "cjk_font", "cjk_font") or env.get("TABARR_CJK_FONT")
 
     return Config(
         library_dir=library_dir,
@@ -303,14 +389,14 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         cache_dir=cache_dir,
         overrides_file=overrides_file,
         wanted_file=wanted_file,
-        user_agent=data.get("user_agent", DEFAULT_USER_AGENT),
+        user_agent=_string(data.get("user_agent", DEFAULT_USER_AGENT), "user_agent"),
         guitar_pro_mode=mode,
-        chordpro_bin=data.get("chordpro_bin", "chordpro"),
+        chordpro_bin=_string(data.get("chordpro_bin", "chordpro"), "chordpro_bin"),
         cjk_font=paths.resolve(cjk_font_value) if cjk_font_value else None,
         spotify=spotify,
         providers=providers,
-        match=MatchPolicy(**match_t),
-        rank=RankPolicy(**rank_t),
+        match=match,
+        rank=rank,
         ntfy=ntfy,
         autochords=autochords,
     )

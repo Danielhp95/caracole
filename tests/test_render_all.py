@@ -23,12 +23,12 @@ from tabarr.autochords import ChordSegment, build_sheet
 from tabarr.cli import build_app
 from tabarr.db import kv_get_json
 from tabarr.lacuerda import parse_version_page
-from tabarr.library import keep_file, song_dir, write_atomic, write_info
+from tabarr.library import drop_file, keep_file, song_dir, write_atomic, write_info
 from tabarr.overrides import Overrides, load_overrides
 from tabarr.render import RenderStats, render_all
 from tabarr.songs import get_song, update_song
 from tabarr.ug.page import strip_markup
-from tabarr.versions import upsert_version
+from tabarr.versions import set_coverage, upsert_version
 
 from conftest import add_song
 from helpers.ug_pages import version_dict
@@ -229,11 +229,18 @@ def test_auto_sheet_rendered_under_its_own_name(conn, cfg):
     assert stats.rendered == 1
 
 
-def test_human_sheet_replaces_auto_outputs(conn, cfg):
+def complete_human_sheet(conn, cfg, song):
+    """A complete human sheet arrives: the fetch step keeps it and retires the auto sheet."""
+    vid = human_sheet(conn, cfg, song)
+    set_coverage(conn, vid, 1.0)
+    drop_file(conn, cfg.library_dir, song=song, name="sheet (auto).txt")
+
+
+def test_a_complete_human_sheet_replaces_auto_outputs(conn, cfg):
     song = add_song(conn, "Placeholder Band", "Synthetic Song")
     auto_sheet(conn, cfg, song)
     render(conn, cfg)
-    human_sheet(conn, cfg, song)
+    complete_human_sheet(conn, cfg, song)
     stats = render(conn, cfg)
     folder = song_dir(cfg.library_dir, song)
     assert stats.rendered == 1
@@ -241,20 +248,68 @@ def test_human_sheet_replaces_auto_outputs(conn, cfg):
     assert (folder / "sheet.pdf").is_file()
     assert not (folder / "sheet (auto).cho").exists()
     assert not (folder / "sheet (auto).pdf").exists()
-    assert (folder / "sheet (auto).txt").is_file()  # the kept auto sheet is the fetch step's
 
 
 def test_auto_outputs_stay_until_the_human_pdf_replaces_them(conn, cfg):
     song = add_song(conn, "Placeholder Band", "Synthetic Song")
     auto_sheet(conn, cfg, song)
     render(conn, cfg)
-    human_sheet(conn, cfg, song)
+    complete_human_sheet(conn, cfg, song)
     folder = song_dir(cfg.library_dir, song)
     assert render(conn, cfg, runner=FakeChordPro(fail=("sheet.cho",))).failed == 1
     assert (folder / "sheet (auto).pdf").is_file()  # still the song's only PDF
     assert (folder / "sheet (auto).cho").is_file()
     assert render(conn, cfg).rendered == 1
     assert not (folder / "sheet (auto).pdf").exists()
+
+
+def test_auto_outputs_stay_while_the_human_sheet_waits_for_a_font(conn, cfg):
+    assert cfg.cjk_font is None
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    render(conn, cfg)
+    vid = human_sheet(conn, cfg, song, f"[ch]G[/ch]\nUna can{chr(0x434)}ión de prueba\n")  # д
+    set_coverage(conn, vid, 1.0)
+    drop_file(conn, cfg.library_dir, song=song, name="sheet (auto).txt")
+    stats = render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    assert stats.font_error is not None and not (folder / "sheet.pdf").exists()
+    assert (folder / "sheet (auto).pdf").is_file()  # still the song's only PDF
+
+
+def test_a_partial_human_sheet_keeps_the_auto_pdf_beside_it(conn, cfg):
+    # The fetch step keeps 'sheet (auto).txt' until a complete human sheet arrives, so
+    # both are rendered: the auto sheet still has every verse.
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    render(conn, cfg)
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)
+    stats = render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    assert stats.failed == 0 and stats.rendered >= 1
+    for name in ("sheet.cho", "sheet.pdf", "sheet (auto).cho", "sheet (auto).pdf"):
+        assert (folder / name).is_file(), name
+    assert info_json(cfg, song)["render"] == {"transpose": 0, "pdf": "sheet.pdf"}
+    run = FakeChordPro()
+    assert render(conn, cfg, runner=run).skipped == 2 and run.calls == []
+    down = overrides(cfg, '[transpose]\n"Placeholder Band - Synthetic Song" = -2\n')
+    assert render(conn, cfg, down).rendered == 2  # both PDFs are in your key
+    assert b"--transpose=-2" in pdf_of(cfg, song, "sheet (auto).pdf").read_bytes()
+
+
+def test_the_auto_pdf_goes_once_the_human_sheet_proves_complete(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    vid = human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    assert (folder / "sheet (auto).pdf").is_file()  # coverage unknown: no lyrics yet
+    set_coverage(conn, vid, 0.95)
+    drop_file(conn, cfg.library_dir, song=song, name="sheet (auto).txt")  # as rescoring does
+    render(conn, cfg)
+    assert not (folder / "sheet (auto).pdf").exists() and not (folder / "sheet (auto).cho").exists()
+    assert (folder / "sheet.pdf").is_file()
+    assert kv_get_json(conn, f"render:{song.id}:auto") is None
 
 
 def test_lacuerda_sheet_gets_letter_chords(conn, cfg):
@@ -412,6 +467,57 @@ def test_a_stray_symbol_uses_the_font_when_there_is_one(conn, cfg, tmp_path):
     assert f"--define=pdf.fonts.text.file={font}".encode() in pdf_of(cfg, song).read_bytes()
 
 
+# UG's Hotel California sheet writes its repeat as "(х2)", with a Cyrillic х (U+0445).
+HOTEL = (
+    f"[Intro] ({chr(0x445)}2)\n"
+    "[ch]Bm[/ch]    [ch]F#[/ch]\n"
+    "\n"
+    "[Verse 1]\n"
+    "[tab][ch]Bm[/ch]               [ch]F#[/ch]\n"
+    "On a dark desert highway[/tab]\n"
+)
+
+
+def test_a_stray_letter_that_looks_latin_needs_no_font(conn, cfg):
+    assert cfg.cjk_font is None
+    song = add_song(conn, "Eagles", "Hotel California")
+    human_sheet(conn, cfg, song, HOTEL, tonality="Bm")
+    stats = render(conn, cfg)
+    assert stats.rendered == 1 and stats.font_error is None
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    assert "(Intro) (x2)" in cho and chr(0x445) not in cho
+
+
+def test_a_stray_letter_that_looks_latin_keeps_the_built_in_fonts(conn, cfg, tmp_path):
+    # With a CJK font set, the whole English sheet would be set in the Kai brush face.
+    cfg = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
+    song = add_song(conn, "Eagles", "Hotel California")
+    human_sheet(conn, cfg, song, HOTEL, tonality="Bm")
+    render(conn, cfg)
+    assert b"pdf.fonts" not in pdf_of(cfg, song).read_bytes()
+
+
+def test_letters_that_look_latin_stay_beside_letters_that_dont(conn, cfg, tmp_path):
+    # Only a sheet whose every such letter has a Latin twin is rewritten.
+    cfg = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, song, ZH_SHEET + f"({chr(0x445)}2)\n", tonality="")
+    render(conn, cfg)
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    assert f"({chr(0x445)}2)" in cho
+
+
+def test_the_font_error_names_the_letter_each_sheet_needs(conn, cfg):
+    assert cfg.cjk_font is None
+    hotel = add_song(conn, "Eagles", "Hotel California")
+    human_sheet(conn, cfg, hotel, HOTEL.replace("desert", f"{chr(0x434)}esert"), tab_id=1)  # д
+    zh = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, zh, ZH_SHEET, tab_id=2, tonality="")
+    stats = render(conn, cfg)
+    assert f"Eagles - Hotel California ({chr(0x434)} U+0434)" in stats.font_error
+    assert "宋冬野 - 斑马斑马 (斑 U+6591)" in stats.font_error
+
+
 @pytest.mark.parametrize(
     "data,problem",
     [(b"ttcf" + bytes(60), "font collection"), (None, "font file not found")],
@@ -469,6 +575,21 @@ def test_a_failed_rerender_keeps_the_previous_pdf(conn, cfg):
     assert pdf_of(cfg, song).read_bytes() == before
     folder = song_dir(cfg.library_dir, song)
     assert [p.name for p in folder.iterdir() if p.name.startswith(".")] == []
+
+
+def test_another_writers_temporary_files_are_not_in_the_way(conn, cfg):
+    # Two tabarr processes rendering at once (the nightly run and `tabarr render`) shared one
+    # temporary name per file, so one's rename found the other's file gone, or in the way.
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    folder = song_dir(cfg.library_dir, song)
+    for name in (".sheet.cho.tmp", ".sheet.tmp.pdf"):
+        (folder / name).mkdir()  # another writer's, mid-write
+    assert render(conn, cfg) == RenderStats(rendered=1)
+    assert pdf_of(cfg, song).read_bytes().startswith(b"%PDF")
+    assert sorted(p.name for p in folder.iterdir() if p.name.startswith(".")) == [
+        ".sheet.cho.tmp", ".sheet.tmp.pdf",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -758,6 +879,18 @@ def test_real_lacuerda_sheet_with_solfege(conn, real):
             assert shown in text
         assert set(CHORD.findall(text)) == {"Am", "F", "C", "G", "G7", "Dm", "Em"}
         assert SOLFEGE.findall(text) == []
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_real_english_sheet_with_a_cyrillic_x_keeps_the_built_in_fonts(conn, real):
+    song = add_song(conn, "Eagles", "Hotel California")
+    human_sheet(conn, real, song, HOTEL, tonality="Bm")
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    pdf = pdf_of(real, song)
+    assert_built_in_fonts(real, pdf)  # not the CJK font, even when one is set
+    if (text := pdf_text(pdf)) is not None:
+        assert "(x2)" in text and "On a dark desert highway" in text
 
 
 @pytest.mark.chordpro

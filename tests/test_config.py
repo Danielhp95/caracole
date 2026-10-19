@@ -29,7 +29,7 @@ def test_defaults(tmp_path):
     assert cfg.match == MatchPolicy(accept=90, margin=8, review=75, artist_gate=90)
     assert cfg.rank == RankPolicy(
         coverage_threshold=0.8, line_match=85, prior_votes=10, scored_sheets=3,
-        label_penalty=0.5, variant_bonus=0.25, keep_sheet=1, keep_guitar_pro=2, keep_tab=1,
+        label_penalty=0.5, variant_bonus=0.25, keep_guitar_pro=2,
     )
     assert cfg.spotify.redirect_uri == "http://127.0.0.1:8888/callback"
     assert cfg.spotify.client_id is None and not cfg.spotify.enabled
@@ -150,3 +150,140 @@ def test_cjk_font_setting_and_env(tmp_path):
     cfg = load_config(None, env={"HOME": str(tmp_path), "TABARR_CJK_FONT": "/env/font.otf"})
     assert cfg.cjk_font == Path("/env/font.otf")
     assert load_config(None, env={"HOME": str(tmp_path)}).cjk_font is None
+
+
+# --- values of the wrong type or out of range -----------------------------------------------
+#
+# Unknown keys are errors so that a typo never falls back to a default unnoticed (usage.md);
+# a value of the wrong type must not either, nor end in a traceback.
+
+
+def load(tmp_path, text):
+    return load_config(write(tmp_path, text), env={"HOME": str(tmp_path)})
+
+
+@pytest.mark.parametrize(
+    "toml,named",
+    [
+        ("library_dir = 5\n", "library_dir"),
+        ("music_dir = true\n", "music_dir"),
+        ('state_dir = ["/srv/state"]\n', "state_dir"),
+        ("cache_dir = 1.5\n", "cache_dir"),
+        ("overrides_file = 5\n", "overrides_file"),
+        ("wanted_file = 5\n", "wanted_file"),
+        ("cjk_font = 5\n", "cjk_font"),
+        ("[spotify]\nclient_secret_file = 5\n", "client_secret_file"),
+        ("[ntfy]\ntoken_file = 5\n", "token_file"),
+        ("[autochords]\nbtc_weights = 5\n", "btc_weights"),
+        ("[autochords]\nbeat_checkpoint = 5\n", "beat_checkpoint"),
+    ],
+)
+def test_a_path_that_is_not_a_string_is_a_config_error(tmp_path, toml, named):
+    with pytest.raises(ConfigError, match=f"{named} must be a string, not "):
+        load(tmp_path, toml)
+
+
+@pytest.mark.parametrize(
+    "toml,named",
+    [
+        ("user_agent = 5\n", "user_agent"),
+        ("chordpro_bin = 5\n", "chordpro_bin"),
+        ("[spotify]\nclient_id = 12345\n", "client_id"),
+        ("[spotify]\nredirect_uri = 5\n", "redirect_uri"),
+        ("[ntfy]\nurl = 5\n", "url"),
+        ("[autochords]\ndevice = 0\n", "device"),
+    ],
+)
+def test_a_setting_that_is_not_a_string_is_a_config_error(tmp_path, toml, named):
+    with pytest.raises(ConfigError, match=f"{named} must be a string, not "):
+        load(tmp_path, toml)
+
+
+@pytest.mark.parametrize("key", ["liked_songs", "suggest_top_tracks"])
+@pytest.mark.parametrize("value", ['"false"', '"true"', "0", "1"])
+def test_a_spotify_switch_must_be_true_or_false(tmp_path, key, value):
+    # bool("false") is True: a quoted false would quietly turn the source on.
+    message = rf"\[spotify\]\.{key} must be true or false, not {value}"
+    with pytest.raises(ConfigError, match=message):
+        load(tmp_path, f"[spotify]\n{key} = {value}\n")
+
+
+def test_spotify_switches_read_as_written(tmp_path):
+    cfg = load(tmp_path, "[spotify]\nliked_songs = false\nsuggest_top_tracks = false\n")
+    assert cfg.spotify.liked_songs is False and cfg.spotify.suggest_top_tracks is False
+
+
+@pytest.mark.parametrize(
+    "toml",
+    [
+        "[providers.ug]\nbudget = true\n",
+        "[providers.ug]\nbudget = 2.5\n",
+        '[providers.ug]\nbudget = "60"\n',
+        "[providers.ug]\nbudget = -1\n",
+        "[providers.ug]\ndelay = [true, 20]\n",
+        "[providers.ug]\ndelay = [10, nan]\n",
+    ],
+)
+def test_a_provider_budget_or_delay_of_the_wrong_kind_is_a_config_error(tmp_path, toml):
+    with pytest.raises(ConfigError, match=r"\[providers\.ug\]\.(budget|delay) must be"):
+        load(tmp_path, toml)
+
+
+def test_an_unknown_provider_is_a_config_error(tmp_path):
+    with pytest.raises(ConfigError, match="lrclb"):
+        load(tmp_path, "[providers.lrclb]\nbudget = 5\n")
+
+
+@pytest.mark.parametrize(
+    "toml,named",
+    [
+        ('[match]\naccept = "90"\n', "accept"),
+        ("[match]\naccept = true\n", "accept"),
+        ("[match]\naccept = 120\n", "accept"),
+        ("[match]\nmargin = -1\n", "margin"),
+        ("[match]\nartist_gate = 101\n", "artist_gate"),
+        ("[match]\nreview = nan\n", "review"),
+        ("[rank]\ncoverage_threshold = 80\n", "coverage_threshold"),  # a fraction, not a percentage
+        ('[rank]\nline_match = "85"\n', "line_match"),
+        ("[rank]\nprior_votes = -1\n", "prior_votes"),
+        ("[rank]\nprior_votes = inf\n", "prior_votes"),
+        ("[rank]\nscored_sheets = 0\n", "scored_sheets"),
+        ("[rank]\nscored_sheets = 2.5\n", "scored_sheets"),
+        ("[rank]\nlabel_penalty = -0.5\n", "label_penalty"),
+        ("[rank]\nvariant_bonus = false\n", "variant_bonus"),
+        ("[rank]\nkeep_guitar_pro = 1.5\n", "keep_guitar_pro"),
+    ],
+)
+def test_match_and_rank_values_of_the_wrong_kind_are_config_errors(tmp_path, toml, named):
+    table = toml.split("]")[0].lstrip("[")
+    with pytest.raises(ConfigError, match=rf"\[{table}\]\.{named} must be a (whole )?number"):
+        load(tmp_path, toml)
+
+
+def test_review_above_accept_is_a_config_error(tmp_path):
+    with pytest.raises(ConfigError, match=r"\[match\]\.review .* above \[match\]\.accept"):
+        load(tmp_path, "[match]\naccept = 85\nreview = 88\n")
+
+
+def test_match_and_rank_numbers_in_range_load(tmp_path):
+    cfg = load(tmp_path, (
+        "[match]\naccept = 92.5\nreview = 70\nmargin = 0\n"
+        "[rank]\ncoverage_threshold = 0.75\nline_match = 80.5\n"
+        "scored_sheets = 2\nkeep_guitar_pro = 0\n"
+    ))
+    assert (cfg.match.accept, cfg.match.review, cfg.match.margin) == (92.5, 70, 0)
+    assert (cfg.rank.coverage_threshold, cfg.rank.line_match) == (0.75, 80.5)
+    assert (cfg.rank.scored_sheets, cfg.rank.keep_guitar_pro) == (2, 0)
+
+
+@pytest.mark.parametrize(
+    "toml,named",
+    [
+        ("[rank]\nkeep_sheet = 1\n", "keep_sheet"),
+        ("[rank]\nkeep_tab = 1\n", "keep_tab"),
+        ('[autochords]\nbtc_config = "/models/btc.yaml"\n', "btc_config"),
+    ],
+)
+def test_settings_tabarr_never_reads_are_unknown_keys(tmp_path, toml, named):
+    with pytest.raises(ConfigError, match=f"unknown key.*{named}"):
+        load(tmp_path, toml)

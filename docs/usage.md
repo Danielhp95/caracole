@@ -27,9 +27,11 @@ up as a nightly service on a NixOS host, with secrets, Syncthing and backups.
 Tabarr reads one TOML file: the one `--config` (`-c`) or `$TABARR_CONFIG`
 names, or else `~/.config/tabarr/tabarr.toml` (under `$XDG_CONFIG_HOME` when
 that is set). Without a file, the defaults apply. Every key is optional, and an
-unknown key is an error, so a typo never falls back to a default unnoticed.
-`~` is your home folder, and a relative path is relative to the config file's
-folder.
+unknown key is an error, so a typo never falls back to a default unnoticed. So
+is a value of the wrong type or out of range: write `true` and `false`, and
+numbers, without quotes, and paths and names as quoted strings. The commands
+then exit with status 2 and name the key. `~` is your home folder, and a
+relative path is relative to the config file's folder.
 
 Here is every key with its default. The commented-out keys have none.
 
@@ -70,26 +72,27 @@ delay = [10, 20]
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
 margin = 8                        # ...when the next different title is this far behind
-review = 75                       # from here up to an accept, ask you
+review = 75                       # from here up to an accept, ask you (at most accept)
 artist_gate = 90                  # how close another artist's name must be to be tried
 
 [rank]                            # which sheets and guitar parts are kept
-coverage_threshold = 0.8          # a sheet is complete when it covers 80% of the lyric lines
-line_match = 85                   # how close a lyric line must be to count as covered
+coverage_threshold = 0.8          # a sheet is complete when it covers 80% of the lyric lines (0-1)
+line_match = 85                   # how close a lyric line must be to count as covered (0-100)
 prior_votes = 10                  # m in the Bayesian rating (v·R + m·C) / (v + m)
 scored_sheets = 3                 # sheets per song scored for coverage: the top 3 by rating
 label_penalty = 0.5               # off the rating of an intro, solo, outro, riff or lesson
 variant_bonus = 0.25              # onto an acoustic or live version, when your song is one
 keep_guitar_pro = 2               # Guitar Pro or Power Tab pages picked per song
-keep_sheet = 1                    # read but not used: tabarr keeps one sheet
-keep_tab = 1                      # read but not used: tabarr keeps one text tab
 
 [autochords]                      # read only by `tabarr autochords`
 # btc_weights = "/path/to/weights.pt"         # or $TABARR_BTC_WEIGHTS
 # beat_checkpoint = "/path/to/final0.ckpt"    # or $TABARR_BEAT_CHECKPOINT
-# btc_config = "/path/to/config"              # or $TABARR_BTC_CONFIG; read but not used
 device = "cpu"                    # where the models run
 ```
+
+Tabarr keeps one sheet and one text tab per song; only the number of Guitar
+Pro picks is a setting. Scores and thresholds can't be negative, scores stop
+at 100, and `scored_sheets` and `keep_guitar_pro` are whole numbers.
 
 **Folders.** `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
 `$XDG_STATE_HOME/tabarr`, else `~/.local/state/tabarr`. `cache_dir` works the
@@ -106,8 +109,8 @@ else the file `client_secret_file` names, else
 `$CREDENTIALS_DIRECTORY/ntfy_token`, else `token_file`, else
 `$TABARR_NTFY_TOKEN`.
 
-**Providers** are exactly `ug`, `lrclib` and `lacuerda`. Spell the table
-names as shown: a misspelled provider table isn't reported.
+**Providers** are exactly `ug`, `lrclib` and `lacuerda`. Any other
+`[providers.…]` table is an error, like any other unknown key.
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
@@ -191,7 +194,9 @@ song in the library.
 4. Run `tabarr sync`, or leave it to the nightly run.
 
 Without a client id, Spotify is skipped silently, and `tabarr auth spotify`
-prints these steps instead. Spotify never fails a sync or a run. When the
+prints these steps instead. Spotify never fails a sync or a run. With a client
+id but no client secret, the sync says that Spotify isn't fully set up and
+where the secret goes; authorizing can't help until it is there. When the
 token is missing or has expired, the run carries on with wanted.txt, the to-do
 page says that Spotify needs authorization, and ntfy tells you once. Spotify
 expires the refresh token about six months after you authorize: run
@@ -199,6 +204,11 @@ expires the refresh token about six months after you authorize: run
 
 Development Mode reads only playlists you own or collaborate on, so
 editorial playlists don't work. A playlist that can't be read is reported.
+
+When Spotify says tabarr is asking too often (HTTP 429), a wait of up to 30
+seconds is waited out a few times; a longer one isn't. The sync then stops
+asking, keeps the songs it has read, and doesn't ask Spotify again until the
+wait is over, so an app over its limits isn't kept there.
 
 ## The first run
 
@@ -294,10 +304,13 @@ always rewritten. Until the index is built, the index and match steps are
 skipped.
 
 **The budget.** A run sends Ultimate Guitar at most 60 requests, the index
-refresh included, 10–20 seconds apart and one at a time. A matched song costs
-about 3–6 requests. A long list therefore fills in over a few nights, newest
-songs first, and a song the budget cut off half-way resumes from the cache the
-next night.
+refresh included, 10–20 seconds apart and one at a time. It settles the sheet
+of every waiting song first, newest songs first: a few requests a song, for
+its versions pages and then up to three sheets scored against the lyrics. What
+is left goes to guitar parts, about a page per type (Guitar Pro, Power Tab,
+tabs) a song. Before sheets came first, a live run spent 8–12 requests a song.
+A long list therefore fills in over a few nights, and a song the budget cut
+off half-way resumes from the cache the next night.
 
 **Errors are never misses.** A block (HTTP 403, 429 or a challenge page)
 stops that site for the rest of the run, cools it down for 24 hours (twice as
@@ -339,8 +352,14 @@ and cache.
   when LaCuerda is cooling down or blocks it.
 - **`tabarr scan`** links the audio files in Music/ to your songs, by their
   tags (or an "Artist - Title" file name) and their duration, give or take 3
-  seconds. It never adds a song. Then it files the Guitar Pro and Power Tab
-  files you dropped into `_inbox/`, by their names: a file named
+  seconds. It never adds a song. A file named as the song wins over one whose
+  name only comes close, so a whole album's "Pt. 1" doesn't take the place of
+  its "Pt. 2". A close name must also be clearly closer than any other, and
+  when your line gives no duration, the file must be as long as LRCLIB's
+  lyrics say. Chinese names are compared as pinyin too, so 斑馬斑馬 meets
+  斑马斑马. A Music/ folder that is missing or has no audio, such as a disk
+  that isn't mounted, unlinks nothing. Then it files the Guitar Pro and Power
+  Tab files you dropped into `_inbox/`, by their names: a file named
   `Soda Stereo - De Musica Ligera (ver 2).gp5` becomes that song's
   `guitar-N.gp5`, where N is the rank tabarr gave version 2. A file the
   library already has is removed from the inbox; a file it can't place stays
@@ -356,18 +375,28 @@ and cache.
 - **`tabarr search QUERY [--limit N] [--add N]`** searches your library and
   the offline UG index (see [tabarr search](#tabarr-search)).
 - **`tabarr autochords`** writes `sheet (auto).txt` from audio you bought, for
-  songs with no human sheet (see [the worked example](#a-worked-example)). It
-  needs the flake's `packages.autochords`, with torch, librosa and beat_this;
-  the default package says so and exits 1. It exits 1 too when a song failed,
-  which is tried again next time.
+  songs with no human sheet (see [the worked example](#a-worked-example)), then
+  rewrites `_todo.md` and `index.html`. It needs the flake's
+  `packages.autochords`, with torch, librosa and beat_this; the default package
+  says so and exits 1. A purchase it can't read fails that song alone: it
+  exits 0, the to-do page lists the file, and the song is tried again once the
+  file changes. It exits 1 when auto-chords can't work at all: the model files
+  missing or unusable, or a sheet it can't write into the library.
+
+The commands that send requests (`run`, `index build` and `refresh`, `lyrics`,
+`fetch`, `lacuerda`) and `autochords` take tabarr's lock, `tabarr.lock` in the
+state folder, so they never run beside another tabarr doing the same: a second
+one waits for the first and says which it is. A command also waits out the
+pause after the last request to the same site, even one another tabarr sent, so
+the budget and the pauses hold for the machine, not per process.
 
 ## The to-do page
 
 `Library/_todo.md` lists only what needs you, with the links to do it and the
-exact lines to paste. Each run rewrites it, and so does `tabarr todo`. It
-starts with a summary (songs found, wanted and ignored), a link to
-`index.html`, and how many songs are waiting for the nightly fetch. Then each
-of these sections, when it has something in it:
+exact lines to paste. Each run rewrites it, and so do `tabarr todo` and
+`tabarr autochords`. It starts with a summary (songs found, wanted and
+ignored), a link to `index.html`, and how many songs are waiting for the
+nightly fetch. Then each of these sections, when it has something in it:
 
 - **Review.** Matches tabarr wasn't sure about. Each candidate has its score,
   the UG song, the step that found it and links to its pages by type, then the
@@ -393,6 +422,9 @@ of these sections, when it has something in it:
   iTunes Store) and to check the song first (Chordify, Songsterr, a YouTube
   lesson search). Drop the purchase into Music/, and auto-chords writes a sheet
   from it. Songs whose audio you have are left off.
+- **Auto-chords couldn't read these purchases.** Each file auto-chords failed
+  on, with the error. Re-download it, or convert it (to FLAC, say) and replace
+  the original: a changed file is tried again on the next run.
 - **Guitar Pro pages to click.** The Guitar Pro and Power Tab versions tabarr
   picked for each song, best first, with version, rating and votes. Open each
   page, click its Download button, and drop the file into `_inbox/`; the next
@@ -408,18 +440,21 @@ of these sections, when it has something in it:
   Add the ones you want to learn to your Learn playlist or to wanted.txt.
 - **PDFs.** The last render: how many PDFs were made or failed, a font
   problem if there is one, and the sheets that failed.
-- **Sources.** Whether Spotify is off, synced, or needs `tabarr auth spotify`,
-  and how many songs wanted.txt has, with the lines it couldn't read.
+- **Sources.** Whether Spotify is off, synced, not fully set up (the client
+  secret missing, say), or needs `tabarr auth spotify`, and how many songs
+  wanted.txt has, with the lines it couldn't read.
 - **Provider health.** For Ultimate Guitar, LRCLIB and LaCuerda: OK, or
   cooling down until when; the last success; the last error; the requests of
   the last run.
 
 ### Review
 
-`tabarr review` asks about each song to review in turn:
+`tabarr review` asks about each song to review in turn. It lists up to five
+candidates, each with its score, the UG song, the step that found it and the
+page of that song's oldest tab, whatever its type:
 
     [1/1] Radio Head - Crep
-      1) 89  radiohead/creep (fuzzy_title)  https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169
+      1) 89  radiohead/creep (fuzzy_title)  https://tabs.ultimate-guitar.com/tab/radiohead/creep-tabs-4119
     Pick 1-1, (p)in a URL, (i)gnore, (s)kip, (q)uit:
 
 - **A number** accepts that candidate. It writes
@@ -440,7 +475,7 @@ to paste, if you'd rather edit the file.
 
 ### Library/index.html
 
-`index.html` sits next to `_todo.md`, and each run rewrites it. Open it from
+`index.html` sits next to `_todo.md`, and is rewritten with it. Open it from
 the synced folder, in a browser on the laptop or the phone. It needs no server
 and loads nothing from the network. It shows every song with its status, its
 key or transposition, and links to its files, the PDF first. A song without a
@@ -557,8 +592,16 @@ with an error instead of writing a PDF with blank text:
 
 A CFF-based `.otf` works too; it is embedded whole, so its PDFs are larger.
 Until a usable font is set, a Chinese sheet still gets its `.cho` file, and
-the to-do page's PDFs section names the sheets waiting for a font. Section 7 of
-[deploy.md](deploy.md#7-chinese-sheets-in-the-pdfs) has the details.
+the to-do page's PDFs section names the sheets waiting for a font, each with
+the first letter it needs the font for, such as `宋冬野 - 斑马斑马 (斑 U+6591)`.
+Section 7 of [deploy.md](deploy.md#7-chinese-sheets-in-the-pdfs) has the
+details.
+
+The font is used only for sheets that need it. Some transcribers type a
+Cyrillic or Greek letter that looks Latin, such as the Cyrillic х in a repeat
+mark "(х2)": when those are a sheet's only such letters, they are written as
+the Latin ones, so the sheet keeps ChordPro's built-in fonts and needs no font
+file.
 
 ## The library folder
 
@@ -578,9 +621,9 @@ Library/                    library_dir: ~/Tabs by default, /srv/tabs on the NUC
       lyrics.lrc            the timed lyrics, when LRCLIB has them
       guitar-1.gp5          Guitar Pro or Power Tab files you downloaded, best first
       tab.txt  tab.json     the best text tab
-      sheet (auto).txt      made from audio you bought, when no human sheet exists
-      sheet (auto).cho      its ChordPro and PDF
-      sheet (auto).pdf
+      sheet (auto).txt      made from audio you bought, when no human sheet exists;
+      sheet (auto).cho      it stays, with its ChordPro and PDF, beside a partial
+      sheet (auto).pdf      human sheet, until a complete one replaces it
       info.json             where everything came from
 Music/                      music_dir: the tracks you bought (tabarr only reads it)
 ```
@@ -613,8 +656,10 @@ with a comma, it is the same song to tabarr.
     $ tabarr match --dry-run
     not_found      -  -             宋冬野 - 斑马斑马 → -  CHANGED unmatched → not_found
 
-The to-do page then lists 宋冬野 under "Artists to find on Ultimate Guitar",
-with a link to search UG, and puts the song on the buy list. Either way works:
+`--dry-run` saves nothing. After the next `tabarr run` (or `tabarr match`,
+then `tabarr todo`), the to-do page lists 宋冬野 under "Artists to find on
+Ultimate Guitar", with a link to search UG, and puts the song on the buy list.
+Either way works:
 
 - **Paste the artist's page.** Search UG in your browser, open 宋冬野's artist
   page, and paste its address into overrides.toml:
@@ -646,7 +691,8 @@ song by its tags and duration, finds the chords and the beats, and writes
 a chord chart by bars followed by the plain lyrics. It starts with
 "auto-generated, unverified", the song counts as found, and the next render
 makes `sheet (auto).pdf` with the Chinese font. A complete human sheet found
-later takes its place.
+later takes its place; a partial one is rendered beside it, and the auto
+sheet's PDF stays until a complete one arrives.
 
 If the scan reports the file as unmatched, make the file's artist and title
 tags match the song's line in wanted.txt.
