@@ -104,6 +104,62 @@ def test_match_and_artist_url_tables(tmp_path):
     assert o.artist_url["宋冬野"] == "https://www.ultimate-guitar.com/artist/song_dongye_99"
 
 
+@pytest.mark.parametrize("pasted", [
+    "https://www.ultimate-guitar.com/artist/soda_stereo_2946?filter=chords",
+    "https://www.ultimate-guitar.com/artist/soda_stereo_2946?filter=chords&page=2",
+    "https://www.ultimate-guitar.com/artist/soda_stereo_2946?page=6",
+    "https://www.ultimate-guitar.com/artist/soda_stereo_2946?sort=date",
+    "https://www.ultimate-guitar.com/artist/soda_stereo_2946/#tabs",
+])
+def test_artist_url_takes_the_artist_pages_own_links(tmp_path, pasted):
+    # The artist page links to filtered, paged and sorted copies of itself: any of them is the page.
+    o = load_overrides(write(tmp_path, f'[artist_url]\n"Soda Stereo" = "{pasted}"\n'))
+    assert o.artist_url["soda-stereo"] == "https://www.ultimate-guitar.com/artist/soda_stereo_2946"
+
+
+def test_add_artist_url_writes_the_page_without_its_query(tmp_path):
+    p = tmp_path / "overrides.toml"
+    add_artist_url(p, "Soda Stereo", "https://www.ultimate-guitar.com/artist/soda_stereo_2946?filter=chords")
+    assert "?filter" not in p.read_text(encoding="utf-8")
+    assert load_overrides(p).artist_url["soda-stereo"] == "https://www.ultimate-guitar.com/artist/soda_stereo_2946"
+
+
+def test_a_bad_artist_url_shows_what_was_pasted(tmp_path):
+    # UG answers /artist/joaquin_sabina with 404: the page's address needs its number.
+    p = write(tmp_path, '[artist_url]\n"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/joaquin_sabina"\n')
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == (
+        f"{p}: [artist_url] 'Joaquín Sabina': expected https://www.ultimate-guitar.com/artist/<name>_<id>, "
+        "got 'https://www.ultimate-guitar.com/artist/joaquin_sabina'"
+    )
+
+
+def test_pins_take_addresses_with_a_query_or_fragment(tmp_path):
+    o = load_overrides(write(tmp_path, '''
+[pin]
+"Soda Stereo - Persiana Americana" = [
+  "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-1081460?ref=artist",
+  "https://tabs.ultimate-guitar.com/tab/85053/#comments",
+]
+'''))
+    assert o.pin["soda-stereo/persiana-americana"] == (1081460, 85053)
+    assert o.pin_urls["soda-stereo/persiana-americana"] == (  # fetched without the query
+        "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-1081460",
+        "https://tabs.ultimate-guitar.com/tab/85053",
+    )
+
+
+@pytest.mark.parametrize("url", [
+    "https://tabs.ultimate-guitar.com/tab/print?id=85053",
+    "https://tabs.ultimate-guitar.com/tab/download?id=85053",
+    "https://www.ultimate-guitar.com/search.php?value=85053",
+])
+def test_pages_tabarr_never_requests_are_not_tab_urls(url):
+    with pytest.raises(OverridesError, match="not an Ultimate Guitar tab URL"):
+        tab_id_from_url(url)
+
+
 def test_bad_values_are_errors(tmp_path):
     with pytest.raises(OverridesError, match="pin"):
         load_overrides(write(tmp_path, '[pin]\n"A - B" = ["https://example.com/x"]\n'))

@@ -34,9 +34,14 @@ from tomlkit.exceptions import TOMLKitError
 
 from tabarr.normalize import identity_key, slug_key, ug_slug_key
 
-_TAB_URL = re.compile(r"^https?://tabs\.ultimate-guitar\.com/tab/(?:[^/?#]+/)?(?:[^/?#]*-)?(\d+)/?$")
+# A query or fragment is allowed (a link's ?ref=, the artist page's own ?filter=chords and ?page=2
+# links) and dropped: tabarr asks for the bare page.
+_TAB_URL = re.compile(
+    r"^https?://tabs\.ultimate-guitar\.com/tab/(?:[^/?#]+/)?(?:[^/?#]*-)?(\d+)/?(?:[?#].*)?$"
+)
 _TAB_HOST = "https://tabs.ultimate-guitar.com"
-_ARTIST_URL = re.compile(r"^https://www\.ultimate-guitar\.com/artist/[^/?#]+_\d+/?$")
+_ARTIST_URL = re.compile(r"^https://www\.ultimate-guitar\.com/artist/[^/?#]+_\d+/?(?:[?#].*)?$")
+_ARTIST_HOST = "https://www.ultimate-guitar.com"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block"}
 
 
@@ -77,12 +82,21 @@ def tab_id_from_url(url: str | int) -> int:
 
 
 def _pin_url(value: str) -> str:
-    """A pinned page's address: the URL as pasted, over https and without a trailing slash;
-    for a bare tab id, the bare ``/tab/{id}`` page. ``value`` passed ``tab_id_from_url``."""
+    """A pinned page's address: the URL as pasted, over https and without its query, fragment
+    and trailing slash; for a bare tab id, the bare ``/tab/{id}`` page. ``value`` passed
+    ``tab_id_from_url``."""
     text = value.strip()
     if text.isdigit():
         return f"{_TAB_HOST}/tab/{int(text)}"
     return _TAB_HOST + urlsplit(text).path.rstrip("/")
+
+
+def _artist_page(url: Any) -> str | None:
+    """A UG artist page's address, without its query, fragment and trailing slash; None if
+    ``url`` isn't one."""
+    if not isinstance(url, str) or not _ARTIST_URL.match(url.strip()):
+        return None
+    return _ARTIST_HOST + urlsplit(url.strip()).path.rstrip("/")
 
 
 def _ug_ref(value: Any, where: str) -> tuple[str, str]:
@@ -148,11 +162,13 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
 
     artist_url: dict[str, str] = {}
     for artist, url in table("artist_url").items():
-        if not isinstance(url, str) or not _ARTIST_URL.match(url.strip()):
+        page = _artist_page(url)
+        if page is None:
             raise OverridesError(
-                f"[artist_url] {artist!r}: expected https://www.ultimate-guitar.com/artist/<name>_<id>"
+                f"[artist_url] {artist!r}: expected https://www.ultimate-guitar.com/artist/<name>_<id>, "
+                f"got {url!r}"
             )
-        artist_url[slug_key(artist)] = url.strip().rstrip("/")
+        artist_url[slug_key(artist)] = page
 
     pin: dict[str, tuple[int, ...]] = {}
     pin_urls: dict[str, tuple[str, ...]] = {}
@@ -217,9 +233,10 @@ def add_match(path: Path, display: str, ug_ref: str) -> None:
 
 
 def add_artist_url(path: Path, artist: str, url: str) -> None:
-    if not _ARTIST_URL.match(url.strip()):
+    page = _artist_page(url)
+    if page is None:
         raise OverridesError(f"[artist_url] {artist!r}: not a UG artist page URL: {url!r}")
-    _edit(path, lambda doc: _table_of(doc, "artist_url").__setitem__(artist, url.strip()))
+    _edit(path, lambda doc: _table_of(doc, "artist_url").__setitem__(artist, page))
 
 
 def add_pin(path: Path, display: str, urls: Sequence[str]) -> None:
