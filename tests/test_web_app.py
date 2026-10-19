@@ -241,6 +241,34 @@ def test_fetch_now_needs_a_song_of_the_library(app, conn, cfg):
     assert post(app, "/fetch", {"song": str(ignored.id)}).status == 409
 
 
+REVIEW = [{"artist_key": "radiohead", "song_key": "creep", "score": 88, "step": "fuzzy"},
+          {"artist_key": "radiohead", "song_key": "creep-acoustic", "score": 86, "step": "fuzzy"}]
+
+
+def test_fetch_now_of_a_song_that_needs_review_is_refused_before_anything_is_queued(app, conn, queue):
+    # `caracole fetch --song` would only fail with "needs review first".
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="review", match_candidates=REVIEW, review=True)
+    response = post(app, "/fetch", {"song": str(creep.id)})
+    assert response.status == 409 and "caracole review" in text(response)
+    assert queue.snapshot() == []
+    assert '"fetchable":false' in text(get(app, "/"))
+
+
+def test_a_review_that_overrides_toml_settles_or_an_artist_page_answers_can_be_fetched(app, conn, cfg, queue):
+    from caracole.overrides import add_match
+
+    settled = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, settled.id, match_decision="review", match_candidates=REVIEW, review=True)
+    add_match(cfg.overrides_file, settled.display, "radiohead/creep")  # by hand: `caracole match` comes first
+    covers = add_song(conn, "Soda Stereo", "De Música Ligera")  # only other artists' songs of its title
+    update_song(conn, covers.id, match_decision="review", review=True, match_candidates=[
+        {"artist_key": "ana-carolina", "song_key": "de-musica-ligera", "score": 90, "step": "title_only"}])
+    assert post(app, "/fetch", {"song": str(settled.id)}).status == 303
+    assert post(app, "/fetch", {"song": str(covers.id)}).status == 303
+    assert '"fetchable":false' not in text(get(app, "/"))
+
+
 def test_fetch_now_of_a_song_ignored_in_overrides_toml_is_refused(app, conn, cfg, queue):
     from caracole.overrides import add_ignore
 

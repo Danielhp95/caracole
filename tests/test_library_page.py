@@ -539,7 +539,9 @@ def test_the_served_page_offers_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
     busy = add_song(conn, "Oasis", "Wonderwall")
     found = add_song(conn, "Soda Stereo", "De Música Ligera")
     update_song(conn, found.id, status="found")
-    controls = WebControls(csrf="tok", busy=frozenset({busy.id}), active=1)
+    held = add_song(conn, "Queen", "Bohemian Rhapsody")
+    update_song(conn, held.id, review=True)
+    controls = WebControls(csrf="tok", busy=frozenset({busy.id}), active=1, held=frozenset({held.id}))
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
     path = write_library_page(cfg.library_dir, html)
     shown = listing(dump_dom(path, tmp_path))
@@ -547,3 +549,6 @@ def test_the_served_page_offers_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
     assert len(forms) == 1
     assert f'name="song" value="{wanted.id}"' in forms[0] and 'name="csrf" value="tok"' in forms[0]
     assert "Fetching" in shown  # the song with a job queued says so instead
+    # The song caracole fetch would refuse until it's reviewed says so instead of offering a fetch.
+    card = re.search(r"<article[^>]*>(?:(?!</article>).)*Bohemian Rhapsody.*?</article>", shown, re.S).group(0)
+    assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", card) and "/fetch" not in card

@@ -84,12 +84,14 @@ class WebControls:
 
     ``csrf`` is the token every form posts back; ``busy`` holds the songs with a
     fetch queued or running, whose cards say so instead of offering another;
-    ``active`` is how many requests are queued or running, for the masthead.
+    ``active`` is how many requests are queued or running, for the masthead;
+    ``held`` holds the songs a fetch must wait for a review of, whose cards say so.
     """
 
     csrf: str
     busy: frozenset[int] = frozenset()
     active: int = 0
+    held: frozenset[int] = frozenset()
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
@@ -111,6 +113,8 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     }
     if controls is not None:
         data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active}
+        for song in songs:
+            song["fetchable"] = song["id"] not in controls.held
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     csp = _CSP.replace("__FORMS__", "'self'" if controls is not None else "'none'")
     return (
@@ -353,6 +357,7 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
   border-radius: 11px; border: 1px solid var(--border); background: var(--raised); color: var(--text); font: inherit;
   font-size: .9rem; font-weight: 550; text-decoration: none; overflow-wrap: anywhere; cursor: pointer; }
 .btn:hover { border-color: var(--border-strong); }
+.btn:disabled { color: var(--muted); border-style: dashed; cursor: default; }
 .btn.primary { min-height: 44px; background: var(--accent); border-color: var(--accent); color: var(--on-accent);
   font-weight: 650; }
 .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
@@ -672,6 +677,13 @@ _SCRIPT = r"""
         jobs.href = "/jobs";
         note.appendChild(jobs);
         card.appendChild(note);
+      } else if (s.fetchable === false) {
+        // caracole fetch would refuse it: the match needs review first (the note above says how).
+        const held = el("button", "btn", "Review first");
+        held.type = "button";
+        held.disabled = true;
+        held.title = "caracole review settles this match; then it can be fetched";
+        actions.appendChild(held);
       } else {
         actions.appendChild(fetchForm(s));
       }

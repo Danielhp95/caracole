@@ -4,7 +4,7 @@
     GET  /jobs            the requests, and what each command printed
     GET  /<file>          a file of the library (files.py)
     POST /request         a song for wanted.txt; with ``fetch``, fetched now too
-    POST /fetch           fetch a song of the library now
+    POST /fetch           fetch a song of the library now, unless it needs review first
     GET, POST /login      the sign-in page, with an access token
 
 Every request must name the server by a name it answers to (421 otherwise).
@@ -28,6 +28,7 @@ from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from caracole import db
@@ -43,6 +44,10 @@ from caracole.web.security import (
     session_cookie,
     session_value,
 )
+
+if TYPE_CHECKING:
+    from caracole.overrides import Overrides
+    from caracole.songs import Song
 
 MAX_BODY = 16 * 1024
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
@@ -190,10 +195,13 @@ class WebApp:
         except OverridesError as e:
             return _message(503, "overrides.toml can't be read",
                             f"overrides.toml can't be read: {e}. Fix it, then reload this page.")
+        from caracole.songs import list_songs
+
         try:
             with closing(self._connect()) as conn:
                 busy = _song_ids(conn, self.queue.fetching_keys())
-                controls = WebControls(self.csrf, busy, self.queue.active_count())
+                held = frozenset(s.id for s in list_songs(conn) if review_first(s, overrides))
+                controls = WebControls(self.csrf, busy, self.queue.active_count(), held)
                 html = build_library_page(conn, self.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
                                           controls=controls)
         except (sqlite3.Error, OSError) as e:  # DatabaseTooNew is an sqlite3.DatabaseError
@@ -282,12 +290,30 @@ class WebApp:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
         if song.status == "ignored" or song.key in overrides.ignore:
             return _message(409, "Ignored", f"{song.display} is ignored in overrides.toml.")
+        if review_first(song, overrides):
+            return _message(409, "Review it first",
+                            f"caracole isn't sure which Ultimate Guitar song {song.display} is, so it can't "
+                            "fetch it yet: run caracole review, or settle it in overrides.toml, then fetch it.")
         try:
             job, _ = self.queue.submit(f"Fetch {song.display}", song.key, fetch_steps(song.display),
                                        fetching=True)
         except QueueFull:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
         return _redirect(f"/jobs#job-{job.id}")
+
+
+def review_first(song: Song, overrides: Overrides) -> bool:
+    """Whether ``caracole fetch --song`` would refuse the song as needing review first (commands/fetch.py).
+
+    A review that its artist's UG page settles can be fetched, and so can one
+    that overrides.toml settles (``[match]``, ``[pin]``, ``[reject]``): the
+    job's ``caracole match`` reads it before the fetch.
+    """
+    from caracole.ug.fetch import needs_artist_page
+
+    if song.match_decision != "review" or needs_artist_page(song):
+        return False
+    return not any(song.key in table for table in (overrides.match, overrides.pin, overrides.reject))
 
 
 def _song_ids(conn: sqlite3.Connection, keys: set[str]) -> frozenset[int]:

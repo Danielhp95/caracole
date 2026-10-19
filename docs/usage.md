@@ -758,8 +758,11 @@ do:
 - **Fetch it now.** Ticked, as it is by default, the request also runs
   `caracole match` (offline), `caracole fetch --song "ARTIST - TITLE"` and
   `caracole render` (offline), so a sheet can be there in a minute or two.
-  Each wanted song's card has a Fetch now button that does the same. Lyrics,
-  LaCuerda and the rest wait for the nightly run.
+  Each wanted song's card has a Fetch now button that does the same, except
+  on a song that needs review: it says Review first, since `caracole fetch`
+  waits for `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
+  overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for
+  the nightly run.
 - **Requests**, the page at `/jobs`, lists each request, the commands it
   runs and what each printed, and refreshes itself while one waits or runs.
 
