@@ -151,9 +151,6 @@ def _fmt(dt: datetime | None) -> str:
 # --- the default steps ----------------------------------------------------------
 
 
-_plural = plural
-
-
 def _counted(*counts: tuple[int, str]) -> list[str]:
     """The counts that aren't zero, the way a step's line shows them: "3 found"."""
     return [f"{n} {words}" for n, words in counts if n]
@@ -241,7 +238,7 @@ def _lyrics(ctx: StepContext) -> StepResult:
 
     s = fetch_pending_lyrics(ctx.conn, ctx.services.client("lrclib"), ctx.cfg.library_dir, ctx.now)
     if s.errors:
-        record_error(ctx.conn, "lrclib", ctx.now, f"{_plural(s.errors, 'song')} failed this run")
+        record_error(ctx.conn, "lrclib", ctx.now, f"{plural(s.errors, 'song')} failed this run")
     tail = " (budget spent)" if s.budget_exhausted else ""
     return StepResult(
         title="Lyrics",
@@ -250,7 +247,7 @@ def _lyrics(ctx: StepContext) -> StepResult:
         retry="the lyrics of {songs} will be tried again on the next run",
         spent=["lrclib"] if s.budget_exhausted else [],
         status=(f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental, "
-                f"{_plural(s.errors, 'error')}{tail}"),
+                f"{plural(s.errors, 'error')}{tail}"),
     )
 
 
@@ -266,10 +263,10 @@ def _fetch(ctx: StepContext) -> StepResult:
     )
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
     if s.songs_failed:
-        record_error(ctx.conn, "ug", ctx.now, f"{_plural(s.songs_failed, 'song')} failed this run")
-    scored = f", {_plural(rescored, 'kept sheet')} rescored" if rescored else ""
+        record_error(ctx.conn, "ug", ctx.now, f"{plural(s.songs_failed, 'song')} failed this run")
+    scored = f", {plural(rescored, 'kept sheet')} rescored" if rescored else ""
     tail = " (budget spent)" if s.budget_exhausted else ""
-    sheets = f"{_plural(s.sheets_done, 'sheet')} settled, " if s.sheets_done else ""
+    sheets = f"{plural(s.sheets_done, 'sheet')} settled, " if s.sheets_done else ""
     return StepResult(
         title="Ultimate Guitar",
         done=_counted((s.sheets_done, "sheet settled" if s.sheets_done == 1 else "sheets settled"),
@@ -278,7 +275,7 @@ def _fetch(ctx: StepContext) -> StepResult:
         failures=[Failure.of(song, e) for song, e in s.failures],
         retry="{songs} will be looked for on Ultimate Guitar again on the next run",
         spent=["ug"] if s.budget_exhausted else [],
-        status=f"{sheets}{_plural(s.songs_done, 'song')} done, {s.songs_failed} failed{scored}{tail}",
+        status=f"{sheets}{plural(s.songs_done, 'song')} done, {s.songs_failed} failed{scored}{tail}",
     )
 
 
@@ -288,7 +285,7 @@ def _lacuerda(ctx: StepContext) -> StepResult:
     s = lacuerda_sheets(ctx.conn, ctx.services.client("lacuerda"), ctx.cfg.library_dir, ctx.cfg.rank, ctx.now,
                         overrides=ctx.overrides)
     if s.errors:
-        record_error(ctx.conn, "lacuerda", ctx.now, f"{_plural(s.errors, 'song')} failed this run")
+        record_error(ctx.conn, "lacuerda", ctx.now, f"{plural(s.errors, 'song')} failed this run")
     tail = " (budget spent)" if s.budget_exhausted else ""
     return StepResult(
         title="LaCuerda",
@@ -296,8 +293,8 @@ def _lacuerda(ctx: StepContext) -> StepResult:
         failures=[Failure.of(song, e) for song, e in s.failures],
         retry="{songs} will be looked for on LaCuerda again on the next run",
         spent=["lacuerda"] if s.budget_exhausted else [],
-        status=(f"{s.tried} tried, {_plural(s.kept, 'sheet')} kept, {s.missing} not on LaCuerda, "
-                f"{_plural(s.errors, 'error')}{tail}"),
+        status=(f"{s.tried} tried, {plural(s.kept, 'sheet')} kept, {s.missing} not on LaCuerda, "
+                f"{plural(s.errors, 'error')}{tail}"),
     )
 
 
@@ -308,7 +305,7 @@ def _scan(ctx: StepContext) -> StepResult:
     music = scan_music(ctx.conn, ctx.cfg.music_dir)
     inbox = file_inbox(ctx.conn, ctx.cfg.library_dir)
     refused = len(inbox.refused)  # links in the inbox, or in its place, never read: the to-do page names them
-    links = f", {_plural(refused, 'symbolic link')} refused" if refused else ""
+    links = f", {plural(refused, 'symbolic link')} refused" if refused else ""
     filed = len(inbox.filed)
     result = StepResult(
         title="Music and inbox",
