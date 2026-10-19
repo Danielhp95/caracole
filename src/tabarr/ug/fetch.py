@@ -13,6 +13,7 @@ For each matched song (plan §3, Task 15):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import sqlite3
@@ -24,7 +25,7 @@ from pathlib import Path
 from tabarr import coverage
 from tabarr.config import RankPolicy
 from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError, Response
-from tabarr.library import keep_file, write_info
+from tabarr.library import keep_file, kept_files, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.overrides import Overrides
 from tabarr.rank import Candidate, rank_by_rating, rank_guitar, rank_sheets
@@ -113,14 +114,30 @@ def _usable(run: _SongRun, v: UGVersion) -> bool:
     return v.kind is not None and v.access == "public" and v.tab_id not in run.ctx.overrides.block
 
 
-def _record_page(run: _SongRun, page: UGTabPage) -> None:
+def _known(run: _SongRun, tab_id: int) -> bool:
+    return run.conn.execute(
+        "SELECT 1 FROM versions WHERE provider = ? AND tab_id = ? AND song_id = ?", (PROVIDER, str(tab_id), run.song.id)
+    ).fetchone() is not None
+
+
+def _record(run: _SongRun, versions: Iterable[UGVersion], *, fresh: bool) -> None:
+    """Record usable versions of the song.
+
+    Ratings change, and pages are cached forever, so only a page fetched from
+    UG this run (``fresh``) may overwrite what is stored; a cached page only
+    adds versions the song doesn't have yet.
+    """
+    for v in versions:
+        if _usable(run, v) and (fresh or not _known(run, v.tab_id)):
+            _upsert(run, v)
+
+
+def _record_page(run: _SongRun, page: UGTabPage, *, fresh: bool) -> None:
     """Record the page's own tab and the versions it lists of the same kind group."""
     group = _GROUP_OF.get(page.tab.kind or "")
     if group is None:
         return
-    for v in (page.tab, *page.versions):
-        if _usable(run, v) and v.kind in group:
-            _upsert(run, v)
+    _record(run, (v for v in (page.tab, *page.versions) if v.kind in group), fresh=fresh)
 
 
 def _version_row(run: _SongRun, tab_id: int) -> VersionRow | None:
@@ -151,8 +168,8 @@ def _parsed(resp: Response, url: str) -> UGTabPage | None:
     return None if resp.status == 404 else parse_tab_page(resp.content, url=url)
 
 
-def _load(client: Client, url: str) -> UGTabPage | None:
-    """A tab page from the HTTP cache or UG; None when UG answers 404.
+def _load(client: Client, url: str) -> tuple[UGTabPage | None, bool]:
+    """A tab page from the HTTP cache or UG (None when UG answers 404), and whether it was fetched now.
 
     Every 200 is cached forever, so a cached body that no longer parses (a
     truncated page, a maintenance page) is fetched once more instead of failing
@@ -160,11 +177,11 @@ def _load(client: Client, url: str) -> UGTabPage | None:
     """
     resp = client.get(url, accept=_PAGE_ACCEPT)
     try:
-        return _parsed(resp, url)
+        return _parsed(resp, url), not resp.from_cache
     except PageParseError:
         if not resp.from_cache:
             raise
-    return _parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False), url)
+    return _parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False), url), True
 
 
 def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTabPage | None:
@@ -175,12 +192,12 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
-    page = _load(run.ctx.client, url)
+    page, fresh = _load(run.ctx.client, url)
     run.pages[tab_id] = page
     if page is None:
         _mark_gone(run, tab_id, url, kind)
         return None
-    _record_page(run, page)
+    _record_page(run, page, fresh=fresh)
     return page
 
 
@@ -237,15 +254,21 @@ def _content(run: _SongRun, row: VersionRow) -> str | None:
     return page.content if page is not None else None
 
 
+def _keep(run: _SongRun, version_id: int, name: str, data: bytes) -> None:
+    """Keep one file, unless this version's identical bytes are kept already (no churn for Syncthing)."""
+    sha = hashlib.sha256(data).hexdigest()
+    if any(f.name == name and f.version_id == version_id and f.sha256 == sha
+           for f in kept_files(run.conn, run.song.id)):
+        return
+    keep_file(run.conn, run.ctx.library_dir, song=run.song, version_id=version_id, name=name, data=data, rank=1)
+
+
 def _keep_text(run: _SongRun, version_id: int, content: str, txt: str, doc: str) -> None:
     """Keep a sheet or tab: the text without UG's markup, and the version's JSON with the raw content."""
     row = get_version(run.conn, version_id)
-    lib = run.ctx.library_dir
-    keep_file(run.conn, lib, song=run.song, version_id=row.id, name=txt,
-              data=strip_markup(content).encode("utf-8"), rank=1)
+    _keep(run, row.id, txt, strip_markup(content).encode("utf-8"))
     body = {"version": row.raw, "content": content, "url": row.url}
-    keep_file(run.conn, lib, song=run.song, version_id=row.id, name=doc,
-              data=(json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"), rank=1)
+    _keep(run, row.id, doc, (json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 
 
 def _lyric_lines(song: Song) -> list[str]:

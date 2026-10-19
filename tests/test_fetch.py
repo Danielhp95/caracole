@@ -17,7 +17,7 @@ from helpers.ug_pages import make_tab_page_html, version_dict
 from conftest import add_song
 from tabarr.config import ProviderPolicy, RankPolicy
 from tabarr.http import PoliteClient, ProviderBlocked
-from tabarr.library import song_dir
+from tabarr.library import kept_files, song_dir
 from tabarr.lyrics import Lyrics
 from tabarr.overrides import Overrides
 from tabarr.songs import get_song, update_song
@@ -517,3 +517,60 @@ def test_broken_cached_page_is_fetched_again(conn, tmp_path):
     assert (stats.songs_done, stats.songs_failed) == (1, 0)
     assert ug.requests == [slugged(101)]
     assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+
+# --- upgrades ---------------------------------------------------------------------------------
+
+
+def kept_version(conn, song, name):
+    return {f.name: f.version_id for f in kept_files(conn, song.id)}[name]
+
+
+def two_chords(conn, ug):
+    """101 (4.5, 20 votes) beats 102 (4.0, 10 votes); both complete."""
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"), (102, "soda-stereo", "persiana-americana", "chords"))
+    a, b = v(101, rating=4.5, votes=20), v(102, version=2, rating=4.0, votes=10)
+    ug.tab(a, [b], content=sheet("sheet 101", LINES))
+    ug.tab(b, [a], content=sheet("sheet 102", LINES))
+
+
+def test_upgrade_replaces_when_outranked(conn, tmp_path):
+    song = accepted(conn)
+    ug = FakeUG()
+    two_chords(conn, ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+    # The nightly index refresh finds 103 and marks the song dirty. 103's page also
+    # carries fresh ratings for the versions seen before.
+    index(conn, (103, "soda-stereo", "persiana-americana", "chords"))
+    new = v(103, version=3, rating=4.9, votes=200)
+    ug.tab(new, [v(101, rating=4.6, votes=30), v(102, version=2, rating=4.0, votes=10)],
+           content=sheet("sheet 103", LINES))
+    update_song(conn, song.id, ug_dirty=True)
+    ug.requests.clear()
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+
+    assert out.sheet == 103 and "sheet 103" in read(tmp_path, song, "sheet.txt")
+    assert pick_ids(conn, song, "chords") == [103]
+    assert ug.requests == [slugged(103)]  # the new page only; 101 and 102 come from the cache
+    rows = {int(r.tab_id): (r.rating, r.votes) for r in song_versions(conn, song.id)}
+    assert rows[101] == (4.6, 30)
+
+
+def test_kept_sheet_stays_when_not_outranked(conn, tmp_path):
+    song = accepted(conn)
+    ug = FakeUG()
+    two_chords(conn, ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    path = song_dir(tmp_path / "lib", song) / "sheet.txt"
+    before = (path.stat().st_ino, kept_version(conn, song, "sheet.txt"))
+
+    index(conn, (103, "soda-stereo", "persiana-americana", "chords"))
+    ug.tab(v(103, version=3, rating=3.9, votes=12), [v(101, rating=4.5, votes=20)], content=sheet("sheet 103", LINES))
+    update_song(conn, song.id, ug_dirty=True)
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+
+    assert out.sheet == 101 and pick_ids(conn, song, "chords") == [101]
+    assert (path.stat().st_ino, kept_version(conn, song, "sheet.txt")) == before  # not even rewritten
