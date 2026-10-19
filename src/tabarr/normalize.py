@@ -36,29 +36,39 @@ _HAN = re.compile("[㐀-䶿一-鿿豈-﫿\U00020000-\U0002ebef]")
 
 # Spotify's version suffixes. Each is removed only as a " - …" suffix or as a
 # parenthesized group, never from the start of a title ("Live and Let Die").
+# Live and acoustic versions are named in Spanish and Portuguese too ("En Vivo",
+# "Ao Vivo", "Versión Acústica"), and may run on after a ";" or a ","
+# ("Acoustic; Live at MTV Unplugged, …; 2013 Remaster").
+_LIVE = r"live|(?:en|ao)\s+vivo|en\s+directo"
+_ACOUSTIC = r"acoustic|(?:en\s+)?ac[uú]stic[oa]|versi[oó]n\s+ac[uú]stica"
+_RUN_ON = r"(?:[\s;,/].*)?"
 _DASH_SUFFIX = re.compile(
     r"\s+[-–—]\s+(?:"
     r"(?:\d{4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+(?:version|edition|\d{4}))*"
     r"|remasterizad[oa](?:\s+\d{4})?"
-    r"|live(?:\s.*)?"
-    r"|(?:mtv\s+)?unplugged(?:\s.*)?"
-    r"|acoustic(?:\s+version)?"
-    r"|radio\s+edit|single\s+version|album\s+version|edit|demo|bonus\s+track"
-    r"|mono|stereo|(?:\d{4}\s+)?(?:stereo|mono)\s+(?:mix|version)"
+    rf"|(?:{_LIVE}|(?:mtv\s+)?unplugged|{_ACOUSTIC}){_RUN_ON}"
+    r"|radio\s+(?:edit|version)|single\s+(?:edit|version)|album\s+version|edit"
+    r"|demo(?:\s+version)?|bonus\s+track"
+    r"|mono|stereo|(?:\d{4}\s+)?(?:stereo|mono)\s+(?:mix|version)|\d{4}\s+mix"
+    r"|recorded\s+(?:live\s+)?at\s.*|[^-–—]*\bsessions?|from\s.*\bsoundtrack\b.*|from\s+[\"“].*"
     r")\s*$",
     re.IGNORECASE,
 )
 _PAREN_FEAT = re.compile(r"\s*[\(\[](?:feat\.?|ft\.?|featuring|with)\s[^\)\]]*[\)\]]", re.IGNORECASE)
 _PAREN_SUFFIX = re.compile(
     r"\s*[\(\[](?:"
-    r"live(?:\s+(?:at|from|in|on)\b[^\)\]]*)?"
+    r"live(?:\s+(?:at|from|in|on)\b[^\)\]]*)?|(?:(?:en|ao)\s+vivo|en\s+directo)(?:\s[^\)\]]*)?"
     r"|(?:\d{4}\s+)?remaster(?:ed)?(?:\s+\d{4})?"
     r"|remasterizad[oa](?:\s+\d{4})?"
-    r"|acoustic(?:\s+version)?|(?:mtv\s+)?unplugged"
-    r"|radio\s+edit|mono|stereo"
+    rf"|(?:{_ACOUSTIC})(?:\s+version)?|(?:mtv\s+)?unplugged"
+    r"|radio\s+(?:edit|version)|single\s+edit|demo(?:\s+version)?|\d{4}\s+mix|mono|stereo"
+    r"|from\s[^\)\]]*\bsoundtrack\b[^\)\]]*|from\s+[\"“][^\)\]]*"
     r")[\)\]]",
     re.IGNORECASE,
 )
+# What title_variant reads in a removed suffix.
+_ACOUSTIC_WORD = re.compile(r"\b(?:acoustic|ac[uú]stic[oa]|unplugged)\b", re.IGNORECASE)
+_LIVE_WORD = re.compile(r"\b(?:live|vivo|directo)\b", re.IGNORECASE)
 
 
 def fold(s: str) -> str:
@@ -69,7 +79,8 @@ def fold(s: str) -> str:
 
 
 def clean_title(title: str) -> str:
-    """Drop Spotify's version suffixes: remasters, live, featurings, radio edits."""
+    """Drop Spotify's version suffixes: remasters, live and acoustic versions (in English,
+    Spanish or Portuguese), featurings, mixes, edits, demos and session recordings."""
     prev = None
     cur = title.strip()
     while cur != prev:
@@ -81,11 +92,11 @@ def clean_title(title: str) -> str:
 
 
 def title_variant(title: str) -> str | None:
-    """"acoustic" or "live" when the source title says so, else None."""
-    suffix = title[len(clean_title(title)) :].lower()
-    if "acoustic" in suffix or "unplugged" in suffix:
+    """"acoustic" or "live" when the source title says so ("Acústico", "En Vivo" too), else None."""
+    suffix = title[len(clean_title(title)) :]
+    if _ACOUSTIC_WORD.search(suffix):
         return "acoustic"
-    if "live" in suffix:
+    if _LIVE_WORD.search(suffix):
         return "live"
     return None
 
