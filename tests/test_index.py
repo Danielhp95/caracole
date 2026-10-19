@@ -412,3 +412,61 @@ def test_a_build_that_finishes_is_complete(conn, tmp_path):
 
     build_index(conn, site().client(tmp_path / "cache"), NOW)
     assert index_state(conn) == "complete"
+
+
+# --- tabs robots.txt closes ------------------------------------------------------------------
+
+# robots.txt on the tabs host closes /tab/track/ and every path that starts with /tab/download, so
+# tabarr may never read these pages; the live sitemaps list four such tabs, these three among them.
+SE_QUE_ES_TARDE = "track/se-que-es-tarde-chords-1126580"
+AVE_FENIX = "track/ave-fenix-guitar-pro-1149792"
+SHINE = "download-kids-worship/shine-your-light-chords-4818770"
+
+
+def test_tabs_robots_txt_closes_are_left_out_of_the_index(conn, tmp_path):
+    # No song may match a tab tabarr may never read. "tracks/" is open; "./download…" is
+    # /tab/download… once the URL drops its dot segment.
+    ug = site(**{"sitemap_last.xml": urlset("radiohead/creep-chords-2002", SE_QUE_ES_TARDE, AVE_FENIX, SHINE,
+                                            "tracks/tracks-chords-3004", "./download-chords-3005")})
+    stats = build_index(conn, ug.client(tmp_path / "cache"), NOW)
+    assert [r[0] for r in rows(conn)] == [1001, 1002, 1005, 1006, 2001, 2002, 3004]
+    assert stats.new_tab_ids == (1001, 1002, 1005, 1006, 2001, 2002, 3004)
+
+
+def test_a_refresh_drops_the_indexed_tabs_robots_txt_closes(conn, tmp_path):
+    # Indexed before tabarr checked robots.txt, in sitemaps a refresh doesn't read again.
+    ug = site()
+    build_index(conn, ug.client(tmp_path / "cache"), NOW)
+    upsert_rows(conn, [IndexRow(1126580, "track", "se-que-es-tarde", "chords", SE_QUE_ES_TARDE),
+                       IndexRow(4818770, "download-kids-worship", "shine-your-light", "chords", SHINE),
+                       IndexRow(1126581, "track", "se-que-es-tarde", "chords", "the-track/se-que-es-tarde-chords-1126581"),
+                       IndexRow(1126582, ".", "download", "chords", "./download-chords-1126582")], "1", NOW)
+    fenix = accepted(conn, "Track", "Ave Fénix", "track", "ave-fenix")
+    ug.files["sitemap_last.xml"] = urlset("radiohead/creep-chords-2002", "radiohead/creep-acoustic-guitar-pro-3001",
+                                          AVE_FENIX)
+
+    stats = refresh_index(conn, ug.client(tmp_path / "cache"), LATER)
+
+    assert [r[0] for r in rows(conn)] == [1001, 1002, 1005, 1006, 2001, 2002, 3001, 1126581]
+    assert stats.new_tab_ids == () and get_song(conn, fenix).ug_dirty is False  # a closed new tab is no news
+
+
+def test_a_build_drops_the_indexed_tabs_robots_txt_closes(conn, tmp_path):
+    upsert_rows(conn, [IndexRow(1126580, "track", "se-que-es-tarde", "chords", SE_QUE_ES_TARDE)], "12", NOW)
+    d = tmp_path / "sitemaps"
+    d.mkdir()
+    (d / "sitemap_last.xml").write_bytes(urlset("radiohead/creep-chords-2002", AVE_FENIX))
+
+    build_index(conn, None, LATER, from_dir=d)
+
+    assert [r[0] for r in rows(conn)] == [2002]
+
+
+def test_only_rows_a_rule_may_reach_are_checked_and_a_rule_that_may_reach_any_is_not_missed(monkeypatch):
+    # The nightly drop reads the rows whose path starts as a rule's text does. A rule that starts
+    # before /tab/ ends, such as the "/*?no_takeover" www has, may close any tab page: every row.
+    from tabarr.ug import index
+
+    rules = ("/forum/", "/tab/track/", "/tab/print?", "/*?no_takeover")
+    monkeypatch.setattr(index, "ROBOTS_DISALLOW", {"tabs.ultimate-guitar.com": rules})
+    assert set(index._closed_starts()) == {".", "track/", "print?", ""}

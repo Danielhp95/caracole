@@ -19,6 +19,10 @@ A build that stops part-way (a block, the budget, Ctrl-C) leaves the index
 partial until a refresh reads the sitemaps it left, or another build
 finishes: only then is ``kv['ug:index:built_at']`` set. Songs are matched
 only against a complete index (``index_state``).
+
+A tab whose page robots.txt closes (``tabarr.http.robots_disallows``: the
+band Track's, under ``/tab/track/``) is never indexed, so no song matches a
+page tabarr may never read; a build or refresh drops any indexed earlier.
 """
 
 from __future__ import annotations
@@ -32,11 +36,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from tabarr.db import kv_get, kv_get_json, kv_set, kv_set_json
-from tabarr.http import Client, ProviderError
+from tabarr.http import ROBOTS_DISALLOW, Client, ProviderError, robots_disallows
 from tabarr.songs import update_song
 from tabarr.ug.lookup import song_tabs
+from tabarr.ug.page import TAB_BASE_URL, page_url
 from tabarr.ug.sitemap import IndexRow, iter_locs, parse_tab_url, sitemap_name, tab_sitemaps
 
 SITEMAP_INDEX_URL = "https://www.ultimate-guitar.com/sitemap.xml"
@@ -152,6 +158,51 @@ def mark_dirty_for_new(conn: sqlite3.Connection, tab_ids: Iterable[int]) -> int:
     return marked
 
 
+# --- tabs robots.txt closes ---------------------------------------------------------------------
+
+_TAB_HOST, _TAB_PATH = urlsplit(TAB_BASE_URL).netloc, urlsplit(TAB_BASE_URL).path
+
+
+def _closed_starts() -> tuple[str, ...]:
+    """How the index paths of the tabs whose page robots.txt may close start ("" when any may).
+
+    A Disallow rule of the tabs host closes the paths under ``/tab/`` that start
+    with its text up to its first ``*``. "." stands for a dot segment, which a
+    URL drops before the rules see it (``./download-…`` is ``download-…``).
+    """
+    starts = ["."]
+    for rule in ROBOTS_DISALLOW.get(_TAB_HOST, ()):
+        text = rule.split("*", 1)[0]
+        if text.startswith(_TAB_PATH):
+            starts.append(text[len(_TAB_PATH):])
+        elif _TAB_PATH.startswith(text):
+            starts.append("")
+    return tuple(dict.fromkeys(starts))
+
+
+_CLOSED_STARTS = _closed_starts()
+
+
+def _closed(tab_id: int, path: str) -> bool:
+    """Whether robots.txt closes the tab's page (``robots_disallows``), which tabarr may then never read."""
+    return path.startswith(_CLOSED_STARTS) and robots_disallows(page_url(tab_id, path)) is not None
+
+
+def _drop_closed(conn: sqlite3.Connection) -> list[int]:
+    """Delete the indexed tabs whose page robots.txt closes, indexed before tabarr checked; return their ids.
+
+    Only the rows whose path starts as a closed one may (``_closed_starts``) are
+    read, so the check doesn't walk the whole index every night.
+    """
+    where = " OR ".join("substr(path, 1, ?) = ?" for _ in _CLOSED_STARTS)
+    starts = [x for start in _CLOSED_STARTS for x in (len(start), start)]
+    rows = conn.execute(f"SELECT tab_id, path FROM ug_index WHERE {where}", starts).fetchall()
+    closed = [r[0] for r in rows if _closed(r[0], r[1])]
+    with _transaction(conn, "ug_closed"):
+        conn.executemany("DELETE FROM ug_index WHERE tab_id = ?", [(t,) for t in closed])
+    return closed
+
+
 # --- reading sitemaps ---------------------------------------------------------------
 
 
@@ -166,7 +217,9 @@ def _locs(data: bytes, where: str, status: int | None) -> list[str]:
 
 
 def _rows(data: bytes, where: str, status: int | None = None) -> list[IndexRow]:
-    return [r for r in map(parse_tab_url, _locs(data, where, status)) if r is not None]
+    """A sitemap's index rows: its tab pages, less the ones robots.txt closes."""
+    rows = (parse_tab_url(loc) for loc in _locs(data, where, status))
+    return [r for r in rows if r is not None and not _closed(r.tab_id, r.path)]
 
 
 def _validators(headers: Mapping[str, str]) -> dict[str, str | None]:
@@ -265,8 +318,10 @@ def build_index(conn: sqlite3.Connection, client: Client | None, now: datetime, 
     The files are ``sitemapN.xml`` and ``sitemap_last.xml``, gzipped or not.
     ``progress`` is called after each sitemap. Raises ``ProviderError``
     (including blocks) and ``BudgetExhausted`` from the client; sitemaps
-    stored before the error stay stored.
+    stored before the error stay stored. Indexed tabs whose page robots.txt
+    closes are dropped first.
     """
+    _drop_closed(conn)
     if from_dir is not None:
         stats = _index_files(conn, Path(from_dir), now, progress)
     else:
@@ -284,8 +339,10 @@ def refresh_index(conn: sqlite3.Connection, client: Client, now: datetime, *,
 
     The last of those are what a stopped build left: once every tab sitemap is
     indexed, the build counts as finished (``mark_built``). ``progress`` is
-    called after each sitemap. Errors propagate as in ``build_index``.
+    called after each sitemap. Errors propagate as in ``build_index``, and
+    indexed tabs whose page robots.txt closes are dropped first, as there.
     """
+    _drop_closed(conn)
     urls = _tab_sitemap_urls(client)
     indexed = _indexed(conn)
     numbered = [u for u in urls if sitemap_name(u) != "last"]
