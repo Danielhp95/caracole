@@ -693,6 +693,20 @@ def test_suggestions_exclude_songs_already_wanted(conn, cfg):
     assert "Radiohead - Karma Police" in text
 
 
+def test_suggestions_leave_out_the_songs_you_removed(conn, cfg):
+    from caracole.songs import mark_removed
+
+    mark_removed(conn, add_song(conn, "Radiohead", "Karma Police"), "2026-10-10T00:00:00Z")
+    conn.execute("DELETE FROM songs")
+    kv_set_json(conn, "spotify:top_tracks", [
+        {"id": "1", "title": "Creep", "artists": ["Radiohead"]},
+        {"id": "2", "title": "Karma Police", "artists": ["Radiohead"]},
+    ])
+    text = todo(conn, cfg)
+    assert "## Suggestions from your Spotify top tracks (1)" in text
+    assert "Karma Police" not in text
+
+
 def test_sources_status(conn, cfg):
     import dataclasses
 

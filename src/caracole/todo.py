@@ -25,7 +25,7 @@ from caracole.lyrics import song_lyrics
 from caracole.musescore import song_pages
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, Overrides
-from caracole.songs import Song, list_songs
+from caracole.songs import Song, list_removed, list_songs
 from caracole.ug.fetch import artist_is_known, needs_artist_page, pasted_page_problem, songs_to_fetch
 from caracole.ug.index import index_state
 from caracole.ug.lookup import song_tabs
@@ -477,7 +477,7 @@ def _inbox(cfg: Config) -> list[str]:
 
 def _suggestions(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:
     tracks: list[dict[str, Any]] = kv_get_json(conn, "spotify:top_tracks", default=[]) or []
-    have = {s.key for s in songs}
+    have = {s.key for s in songs} | {r.key for r in list_removed(conn)}  # nor what you removed
     items = []
     for t in tracks:
         artists = t.get("artists") or []

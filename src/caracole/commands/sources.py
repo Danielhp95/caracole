@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from caracole.config import Config
-    from caracole.songs import Song
+    from caracole.songs import RemovedSong, Song
     from caracole.spotify import SpotifyAPI
     from caracole.wanted import WantedLine
 
@@ -176,6 +176,8 @@ class AddedSong:
     ``song`` the record after it. ``problems`` are the lines of wanted.txt the
     sync couldn't read. ``db_error`` says why the database couldn't be updated;
     the line is in the file all the same, and the next sync adds the song.
+    ``removed`` is the tombstone of a song ``caracole remove`` took out, which
+    the line brought back.
     """
 
     line: WantedLine
@@ -184,6 +186,7 @@ class AddedSong:
     song: Song | None = None
     problems: tuple[str, ...] = ()
     db_error: Exception | None = None
+    removed: RemovedSong | None = None
 
 
 def add_song(
@@ -204,7 +207,7 @@ def add_song(
     line is written at once; the database waits for caracole's lock. After the
     sync, _todo.md and index.html are rewritten (``_write_pages``).
     """
-    from caracole.songs import find_song
+    from caracole.songs import find_song, removed_song
     from caracole.wanted import append_wanted, find_wanted, sync_wanted
 
     path = cfg.wanted_file
@@ -221,12 +224,13 @@ def add_song(
             nullcontext(conn) if conn is not None else closing(db.connect(cfg.db_path)) as conn,
         ):
             known = find_song(conn, line.identity)
+            removed = removed_song(conn, line.identity)
             stats = sync_wanted(conn, path, utcnow())
             song = find_song(conn, line.identity)
             _write_pages(conn, cfg)
     except (sqlite3.Error, OSError) as e:
         return AddedSong(line, listed, db_error=e)
-    return AddedSong(line, listed, known, song, tuple(stats.errors))
+    return AddedSong(line, listed, known, song, tuple(stats.errors), removed=removed)
 
 
 def _write_pages(conn: sqlite3.Connection, cfg: Config) -> None:
@@ -264,7 +268,10 @@ def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: i
             "the next `caracole sync` or `caracole run` adds it."
         )
         return
-    if added.known is None:
+    if added.known is None and added.removed is not None and added.song is not None:
+        when = added.removed.removed_at[:10]
+        state = f"back from its removal on {when}, as new; the next `caracole run` looks for it"
+    elif added.known is None:
         state = "new; the next `caracole run` looks for it"
     else:
         status = (added.song or added.known).status

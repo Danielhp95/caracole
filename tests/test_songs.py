@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -280,14 +281,16 @@ def test_a_merged_songs_own_state_goes_with_it(conn):
                "los-enanitos-verdes/lamento-boliviano", source="spotify", source_id="sp9")
     newer = older_song(conn, "Enanitos Verdes", "Lamento Boliviano",
                        "enanitos-verdes/lamento-boliviano", source="wanted", source_id="x")
-    own = [f"render:{newer}", f"ug:artist_page_checked:{newer}", f"autochords:failed:{newer}",
-           f"gtptabs:checked:{newer}"]
-    for key in own:
+    own = [f"render:{newer}", f"render:{newer}:auto", f"ug:artist_page_checked:{newer}",
+           f"autochords:failed:{newer}", f"gtptabs:checked:{newer}", f"ug:blocked:{newer}"]
+    for key in own + [f"render:{newer}0", "render:status"]:
         db.kv_set(conn, key, '"2026-10-18T03:30:00Z"')
     ensure_current_keys(conn)
     fresh = add_song(conn, "Soda Stereo", "Signos")
     assert fresh.id == newer
-    assert [db.kv_get(conn, key) for key in own] == [None, None, None, None]
+    assert [db.kv_get(conn, key) for key in own] == [None] * len(own)
+    # Another song's, and no song's, stay.
+    assert db.kv_get(conn, f"render:{newer}0") and db.kv_get(conn, "render:status")
 
 
 def test_keys_that_change_hands_are_re_keyed_without_a_clash(conn):
@@ -426,3 +429,98 @@ def test_re_keying_carries_what_a_wanted_line_said(conn):
     song = get_song(conn, song_id)
     assert (song.album, song.duration_ms, song.isrc, song.variant) == (
         "Comfort y Música Para Volar", 300000, "ARX1", "live")
+
+
+# --- removed songs (caracole remove) ------------------------------------------------------------
+
+REMOVED_AT = "2026-10-10T00:00:00Z"
+
+
+def removed(conn, song):
+    """The song as removal.py leaves it: a tombstone, and no record."""
+    from caracole.songs import mark_removed
+
+    mark_removed(conn, song, REMOVED_AT)
+    conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))
+
+
+def test_no_spotify_track_added_before_a_songs_removal_brings_it_back(conn):
+    from caracole.songs import SongRemoved, removed_song
+
+    track(conn)
+    (song,) = list_songs(conn)
+    removed(conn, song)
+    with pytest.raises(SongRemoved) as raised:
+        track(conn)  # the track you liked before removing the song
+    assert raised.value.removed.display == "Radiohead - Creep"
+    with pytest.raises(SongRemoved):
+        track(conn, "tCreepRemaster", "Creep - Remastered 2008")  # another track of it: the same song
+    assert list_songs(conn) == []
+    assert removed_song(conn, "radiohead/creep").source_ids == {"spotify": ["tCreep"]}
+
+
+def test_a_wanted_line_brings_a_removed_song_back_as_new(conn):
+    from caracole.songs import removed_song
+
+    track(conn)
+    (song,) = list_songs(conn)
+    removed(conn, song)
+    song_id, created = line(conn)
+    assert created and removed_song(conn, "radiohead/creep") is None
+    # Then Spotify's track is one of its sources again.
+    assert track(conn) == (song_id, False)
+    assert get_song(conn, song_id).source_ids == {"wanted": [LINE], "spotify": ["tCreep"]}
+
+
+def test_a_track_added_to_spotify_again_after_the_removal_brings_the_song_back(conn):
+    from caracole.songs import removed_song
+
+    track(conn)
+    (song,) = list_songs(conn)
+    removed(conn, song)
+    again = upsert_song(conn, artists=["Radiohead"], title="Creep", album=None, duration_ms=None, isrc=None,
+                        source="spotify", source_id="tCreep", added_at="2026-10-11T00:00:00Z")
+    assert again[1] and removed_song(conn, "radiohead/creep") is None
+
+
+def test_a_song_of_the_same_key_in_the_library_outranks_a_tombstone(conn):
+    # After a re-keying, a removed song may share its key with one you have.
+    from caracole.songs import mark_removed
+
+    mark_removed(conn, add_song(conn, "Radiohead", "Creep", source="spotify", source_id="tOld"), REMOVED_AT)
+    conn.execute("DELETE FROM songs")
+    conn.execute("UPDATE removed SET key = 'radiohead/creep-old'")
+    kept = add_song(conn, "Radiohead", "Creep", source="spotify", source_id="tNew")
+    conn.execute("UPDATE removed SET key = 'radiohead/creep'")
+    assert track(conn, "tOther") == (kept.id, False)
+
+
+def test_removed_songs_are_listed_newest_first_and_merge_their_sources(conn):
+    from caracole.songs import list_removed, mark_removed
+
+    creep = add_song(conn, "Radiohead", "Creep", source="spotify", source_id="t1")
+    mark_removed(conn, creep, "2026-10-01T00:00:00Z")
+    signos = add_song(conn, "Soda Stereo", "Signos")
+    mark_removed(conn, signos, "2026-10-05T00:00:00Z")
+    # A song removed under a key that has a tombstone already (two songs re-keyed into one, say).
+    mark_removed(conn, replace(creep, source_ids={"wanted": ["radiohead/creep"]}), "2026-10-03T00:00:00Z")
+    assert [(r.display, r.removed_at) for r in list_removed(conn)] == [
+        ("Soda Stereo - Signos", "2026-10-05T00:00:00Z"), ("Radiohead - Creep", "2026-10-03T00:00:00Z")]
+    assert list_removed(conn)[1].source_ids == {"spotify": ["t1"], "wanted": ["radiohead/creep"]}
+
+
+def test_removed_songs_are_re_keyed_with_the_songs(conn):
+    from caracole.songs import SongRemoved, removed_song
+
+    conn.execute(
+        "INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES (?, ?, ?, ?, ?)",
+        (OLD_LIVE_KEY, "Soda Stereo", "Persiana Americana - En Vivo",
+         json.dumps({"wanted": [OLD_LIVE_KEY], "spotify": ["sp1"]}), REMOVED_AT),
+    )
+    db.kv_delete(conn, KEY_VERSION_KV)
+    ensure_current_keys(conn)
+    assert removed_song(conn, OLD_LIVE_KEY) is None
+    stone = removed_song(conn, "soda-stereo/persiana-americana")
+    assert stone.source_ids == {"wanted": ["soda-stereo/persiana-americana"], "spotify": ["sp1"]}
+    with pytest.raises(SongRemoved):
+        upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana", source_id="sp2", **SPOTIFY)

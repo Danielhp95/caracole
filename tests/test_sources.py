@@ -231,6 +231,14 @@ def test_summary_counts_read_as_english():
     assert two.summary() == "wanted.txt 2 songs, 0 new, 2 problems; Spotify 0 songs, 0 new"
 
 
+def test_summary_counts_the_removed_songs_spotify_still_lists():
+    report = SourcesReport(wanted=SyncStats(seen=2, new=0), spotify=SyncStats(seen=5, new=1, removed=2),
+                           spotify_state="ok")
+    assert report.summary() == "wanted.txt 2 songs, 0 new; Spotify 5 songs, 1 new, 2 removed songs left out"
+    one = SourcesReport(wanted=SyncStats(), spotify=SyncStats(seen=1, removed=1), spotify_state="ok")
+    assert one.summary().endswith("Spotify 1 song, 0 new, 1 removed song left out")
+
+
 def test_summary_says_how_to_authorize_spotify():
     report = SourcesReport(
         wanted=SyncStats(seen=3, new=0),

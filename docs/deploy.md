@@ -352,7 +352,9 @@ Soda Stereo - De Música Ligera
 
 The album and duration are optional; they make the lyrics lookup exact.
 `sudo caracole-admin add "宋冬野" "斑马斑马" --album "安和桥北" --duration 4:13`
-appends the same line.
+appends the same line. `sudo caracole-admin remove "宋冬野 - 斑马斑马"` takes a
+song out for good, its line and the files caracole wrote, until you add it
+again ([usage.md](usage.md), "caracole remove").
 
 **Spotify, optionally.** Liked Songs and the playlists you name join
 `wanted.txt` as sources. Without a client id the Spotify step is skipped

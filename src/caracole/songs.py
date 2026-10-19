@@ -14,6 +14,12 @@ The stored keys follow the normalizer: when its rules change
 (``normalize.KEY_VERSION``), every key is recomputed once, before the songs are
 next read or added, and songs that now share a key become one
 (:func:`ensure_current_keys`).
+
+A song ``caracole remove`` took out leaves a tombstone in the ``removed`` table
+(:func:`mark_removed`; removal.py does the rest). No source brings it back
+(:class:`SongRemoved`) until you ask for it again: a wanted.txt line for it, the
+one ``caracole add`` and the web page write too, or a Spotify track you added
+after the removal. Then it comes back as a new song.
 """
 
 from __future__ import annotations
@@ -40,9 +46,11 @@ _SOURCE_FIELDS = ("album", "duration_ms", "isrc", "variant")
 _WANTED = "wanted"
 _PRECEDENCE = (_WANTED, "spotify")
 # What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py,
-# gtptabs_fetch.py). It goes with a song merged into another: SQLite may give that id to the
-# next new song.
-_PER_SONG_KV = ("render:", "ug:artist_page_checked:", "autochords:failed:", "gtptabs:checked:")
+# gtptabs_fetch.py), as "<prefix><song id>" or "<prefix><song id>:<more>" ("render:7:auto").
+# It goes with a song merged into another or removed (delete_song_kv): SQLite may give that id
+# to the next new song.
+_PER_SONG_KV = ("render:", "ug:artist_page_checked:", "autochords:failed:", "gtptabs:checked:",
+                "ug:blocked:")
 
 
 def utc_now_iso() -> str:
@@ -162,6 +170,10 @@ def upsert_song(
     then takes each field from the first of its sources that gives it
     (:func:`_resolve`). So a wanted.txt line you correct corrects the song at
     the next sync, and a value you take off the line gives way to Spotify's.
+
+    A song ``caracole remove`` took out, found by the source id or, failing a
+    record of yours, by the key, raises SongRemoved, unless this is a request
+    for it again (:func:`_unless_removed`): then it comes back as a new song.
     """
     names = [a.strip() for a in artists if a and a.strip()]
     if not names:
@@ -173,8 +185,10 @@ def upsert_song(
     ensure_current_keys(conn)
     row = _with_source_id(conn, source, source_id)
     if row is None:
+        _unless_removed(conn, _removed_with_source_id(conn, source, source_id), source, added_at)
         row = conn.execute("SELECT * FROM songs WHERE key = ?", (key,)).fetchone()
     if row is None:
+        _unless_removed(conn, removed_song(conn, key), source, added_at)
         cur = conn.execute(
             "INSERT INTO songs (key, artist, title, artists, album, duration_ms, isrc, source_ids, "
             "added_at, variant, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -310,6 +324,113 @@ def refresh_status(conn: sqlite3.Connection, song_id: int, *, ignored: bool) -> 
     return status
 
 
+# --- removed songs ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RemovedSong:
+    """A song ``caracole remove`` took out: its key then, its name, the source ids it had."""
+
+    key: str
+    artist: str
+    title: str
+    source_ids: dict[str, list[str]]
+    removed_at: str
+
+    @property
+    def display(self) -> str:
+        return display_key(self.artist, self.title)
+
+
+class SongRemoved(Exception):
+    """A source handed over a song you removed, and that isn't asking for it again."""
+
+    def __init__(self, removed: RemovedSong):
+        super().__init__(f"{removed.display} was removed with caracole remove on {removed.removed_at}")
+        self.removed = removed
+
+
+def _removed_from_row(row: sqlite3.Row) -> RemovedSong:
+    return RemovedSong(row["key"], row["artist"], row["title"], json.loads(row["source_ids"]), row["removed_at"])
+
+
+def removed_song(conn: sqlite3.Connection, key: str) -> RemovedSong | None:
+    """The tombstone of the song with this identity key, if it was removed."""
+    row = conn.execute("SELECT * FROM removed WHERE key = ?", (key,)).fetchone()
+    return _removed_from_row(row) if row else None
+
+
+def list_removed(conn: sqlite3.Connection) -> list[RemovedSong]:
+    """Every removed song, the latest removed first."""
+    ensure_current_keys(conn)
+    rows = conn.execute("SELECT * FROM removed ORDER BY removed_at DESC, key").fetchall()
+    return [_removed_from_row(r) for r in rows]
+
+
+def _removed_with_source_id(conn: sqlite3.Connection, source: str, source_id: str) -> RemovedSong | None:
+    row = conn.execute(
+        "SELECT removed.* FROM removed, json_each(removed.source_ids, ?) AS sid WHERE sid.value = ? "
+        "ORDER BY removed.removed_at DESC LIMIT 1",
+        (f'$."{source}"', source_id),
+    ).fetchone()
+    return _removed_from_row(row) if row else None
+
+
+def mark_removed(conn: sqlite3.Connection, song: Song, removed_at: str) -> RemovedSong:
+    """Leave the song's tombstone, so no source brings it back (``upsert_song``); return it.
+
+    A tombstone under its key already (two songs re-keyed into one) gains its
+    source ids and the later time. The song's record itself is removal.py's to delete.
+    """
+    before = removed_song(conn, song.key)
+    ids: dict[str, list[str]] = {k: list(v) for k, v in (before.source_ids if before else {}).items()}
+    for source, values in song.source_ids.items():
+        bucket = ids.setdefault(source, [])
+        bucket.extend(v for v in values if v not in bucket)
+    stone = RemovedSong(song.key, song.artist, song.title, ids,
+                        max(removed_at, before.removed_at) if before else removed_at)
+    _write_removed(conn, stone)
+    return stone
+
+
+def _write_removed(conn: sqlite3.Connection, stone: RemovedSong) -> None:
+    conn.execute(
+        "INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET artist = excluded.artist, title = excluded.title, "
+        "source_ids = excluded.source_ids, removed_at = excluded.removed_at",
+        (stone.key, stone.artist, stone.title, json.dumps(stone.source_ids, ensure_ascii=False), stone.removed_at),
+    )
+
+
+def forget_removed(conn: sqlite3.Connection, key: str) -> bool:
+    """Drop a song's tombstone; whether it had one."""
+    return conn.execute("DELETE FROM removed WHERE key = ?", (key,)).rowcount > 0
+
+
+def _unless_removed(conn: sqlite3.Connection, stone: RemovedSong | None, source: str, added_at: str) -> None:
+    """Raise SongRemoved for a removed song, unless the source asks for it again.
+
+    A wanted.txt line asks for it: ``caracole remove`` took the song's lines
+    out, so a line there now is one you wrote since, or ``caracole add``, or
+    the web page. Another source asks for it with a track added after the
+    removal (Spotify's date it was liked or put on a playlist); one added
+    before, which the playlist still lists, doesn't. A request drops the
+    tombstone, and the song comes back new.
+    """
+    if stone is None:
+        return
+    if source != _WANTED and added_at <= stone.removed_at:
+        raise SongRemoved(stone)
+    forget_removed(conn, stone.key)
+
+
+def delete_song_kv(conn: sqlite3.Connection, song_id: int) -> None:
+    """Delete what other modules keep in kv under the song's id (``_PER_SONG_KV``)."""
+    for prefix in _PER_SONG_KV:
+        own = f"{prefix}{song_id}"
+        conn.execute("DELETE FROM kv WHERE key = ? OR substr(key, 1, ?) = ?", (own, len(own) + 1, own + ":"))
+
+
 # --- keys after a normalizer change ------------------------------------------------------
 
 
@@ -332,12 +453,14 @@ def rekey_songs(conn: sqlite3.Connection) -> int:
     Of the songs that share a key, the oldest record stays, with its display
     artist and title, as if the others had arrived as more sources of it
     (``_merge``). A wanted.txt source id is its line's key, so it follows the
-    key, and so does the line's first-seen time. All in one savepoint; returns
-    how many songs were re-keyed or merged into another.
+    key, and so does the line's first-seen time. The tombstones of removed songs
+    are re-keyed too (``_rekey_removed``). All in one savepoint; returns how many
+    songs were re-keyed or merged into another.
     """
     conn.execute("SAVEPOINT rekey_songs")
     try:
         changed = _rekey(conn)
+        _rekey_removed(conn)
         kv_set(conn, KEY_VERSION_KV, str(KEY_VERSION))
     except BaseException:
         conn.execute("ROLLBACK TO rekey_songs")
@@ -362,6 +485,33 @@ def _rekey(conn: sqlite3.Connection) -> int:
         conn.execute("UPDATE songs SET key = ? WHERE id = ?", (key, keep.id))
         _follow_wanted(conn, keep.id, {s.key for s in (keep, *others)} - {key}, key)
     return sum(len(others) + (keep.key != key) for key, (keep, *others) in moves.items())
+
+
+def _rekey_removed(conn: sqlite3.Connection) -> None:
+    """Give every tombstone the key today's normalizer gives its song, as ``_rekey`` does the songs:
+    tombstones that now share a key become one, with every source id and the latest time, and a
+    wanted.txt source id, its line's key, follows the key."""
+    from caracole.wanted import SOURCE  # a source of songs: imported on use
+
+    groups: dict[str, list[RemovedSong]] = {}
+    for row in conn.execute("SELECT * FROM removed ORDER BY removed_at, key").fetchall():
+        stone = _removed_from_row(row)
+        groups.setdefault(identity_key(stone.artist, stone.title), []).append(stone)
+    for key, stones in groups.items():
+        if len(stones) == 1 and stones[0].key == key:
+            continue
+        old_keys = {s.key for s in stones}
+        ids: dict[str, list[str]] = {}
+        for stone in stones:
+            for source, values in stone.source_ids.items():
+                bucket = ids.setdefault(source, [])
+                for value in values:
+                    value = key if source == SOURCE and value in old_keys else value
+                    if value not in bucket:
+                        bucket.append(value)
+        latest = stones[-1]
+        conn.executemany("DELETE FROM removed WHERE key = ?", [(k,) for k in old_keys])
+        _write_removed(conn, RemovedSong(key, latest.artist, latest.title, ids, latest.removed_at))
 
 
 def _merge(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
@@ -400,8 +550,7 @@ def _merge(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
         (keep.id, keep.id, other.id, keep.id),
     )
     conn.execute("DELETE FROM songs WHERE id = ?", (other.id,))
-    for prefix in _PER_SONG_KV:
-        kv_delete(conn, f"{prefix}{other.id}")
+    delete_song_kv(conn, other.id)
     refresh_status(conn, keep.id, ignored=keep.status == "ignored")
 
 

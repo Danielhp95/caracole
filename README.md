@@ -33,6 +33,7 @@ server.
     caracole add "Oasis" "Wonderwall"   # or add a line to ~/Tabs/wanted.txt
     caracole index build                # once, takes about 10 minutes
     caracole run                        # what the nightly timer runs
+    caracole remove "Oasis - Wonderwall"   # gone for good, until you add it again
 
 Then open `~/Tabs/_todo.md`, or `~/Tabs/index.html` to browse. `caracole serve`
 serves that page at `http://127.0.0.1:8737/`, with a form to request a song and

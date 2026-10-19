@@ -228,6 +228,10 @@ def rendered(tmp_path, sites, conn) -> bool:
     return db.kv_get(conn, "render:status") is not None
 
 
+def removed(tmp_path, sites, conn) -> bool:
+    return conn.execute("SELECT COUNT(*) FROM removed").fetchone()[0] > 0
+
+
 def added_to_wanted_txt(tmp_path, sites, conn) -> bool:
     wanted = tmp_path / "lib" / "wanted.txt"
     return wanted.exists() and "Stone Temple Pilots - Creep" in wanted.read_text(encoding="utf-8")
@@ -259,6 +263,7 @@ WRITERS = [
     Case(("match",), a_song_to_match, matched),
     Case(("search", "stone temple pilots creep", "--add", "1"), a_song_to_match,
          added_to_wanted_txt),
+    Case(("remove", "--yes", "Radiohead - Creep"), a_song_to_match, removed),
 ]
 
 
@@ -278,7 +283,7 @@ def test_a_command_that_writes_waits_for_another_caracole(tmp_path, config, site
     assert case.done(tmp_path, sites, conn), result.output
 
 
-READERS = [("search", "creep"), ("match", "--dry-run"), ("index", "stats")]
+READERS = [("search", "creep"), ("match", "--dry-run"), ("index", "stats"), ("remove", "--list")]
 
 
 @pytest.mark.parametrize("args", READERS, ids=" ".join)
@@ -350,6 +355,23 @@ def test_review_never_holds_the_lock_while_it_waits_for_you(tmp_path, config, co
     result = CliRunner().invoke(build_app(), ["--config", str(config), "review"])
     assert result.exit_code == 0, result.output
     assert free_at_each_prompt and all(free_at_each_prompt)
+
+
+def test_remove_never_holds_the_lock_while_it_asks(tmp_path, config, conn, monkeypatch):
+    import typer
+
+    add_song(conn, "Radiohead", "Creep")
+    free_when_asked = []
+
+    def answer(prompt, **kwargs):
+        free_when_asked.append(lock_is_free(tmp_path))
+        return True
+
+    monkeypatch.setattr(typer, "confirm", answer)
+    result = CliRunner().invoke(build_app(), ["--config", str(config), "remove", "Radiohead - Creep"])
+    assert result.exit_code == 0, result.output
+    assert free_when_asked == [True]
+    assert removed(tmp_path, None, conn)
 
 
 def test_the_nightly_run_waits_for_another_caracole_process(tmp_path, config):

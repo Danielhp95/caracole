@@ -607,6 +607,10 @@ def sync_spotify(
     ``stats.retry_after_until`` says until when. A SpotifyAuthError is raised:
     nothing can be read without authorization.
 
+    A song you removed (``caracole remove``) stays out, counted in
+    ``stats.removed``, unless its track was added to Liked Songs or a playlist
+    after the removal: then it comes back (``songs.upsert_song``).
+
     With ``cfg.suggest_top_tracks``, the top tracks are stored as a JSON list under
     ``kv["spotify:top_tracks"]`` for the to-do page. They never become songs.
     """
@@ -641,18 +645,24 @@ def sync_spotify(
         except SpotifySourceError as e:
             stats.errors.append(str(e))
 
+    from caracole.songs import SongRemoved
+
     for track in sorted(newest.values(), key=lambda t: t.added_at or UNDATED, reverse=True):
-        _, created = upsert(
-            conn,
-            artists=list(track.artists),
-            title=track.title,
-            album=track.album,
-            duration_ms=track.duration_ms,
-            isrc=track.isrc,
-            source=SOURCE,
-            source_id=track.id,
-            added_at=track.added_at or UNDATED,
-        )
+        try:
+            _, created = upsert(
+                conn,
+                artists=list(track.artists),
+                title=track.title,
+                album=track.album,
+                duration_ms=track.duration_ms,
+                isrc=track.isrc,
+                source=SOURCE,
+                source_id=track.id,
+                added_at=track.added_at or UNDATED,
+            )
+        except SongRemoved:  # you removed it, and haven't added it on Spotify since
+            stats.removed += 1
+            continue
         stats.seen += 1
         stats.new += int(created)
 

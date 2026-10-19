@@ -126,9 +126,33 @@ def test_a_version_2_database_gains_the_musescore_index_and_keeps_its_gtptabs_ro
     db.connect(path).close()
 
     cols, version = columns(path, "musescore_index")
-    assert version == 3
+    assert version == NOW
     assert cols == ["page_id", "path", "title_key", "sitemap"]
     c = sqlite3.connect(path)
     assert c.execute("SELECT artist_key FROM gtptabs_index").fetchall() == [("blur",)]
     c.close()
     assert columns(path.with_name("caracole.sqlite.v2.bak"), "musescore_index") == ([], 2)
+
+
+def test_a_version_3_database_gains_the_removed_songs_and_keeps_its_songs(tmp_path):
+    # As the MuseScore caracole left it: schema 3, with a song in it.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript(db._MIGRATIONS[1] + db._MIGRATIONS[2] + db._MIGRATIONS[3] + "\nPRAGMA user_version = 3;")
+    old.execute(
+        "INSERT INTO songs (key, artist, title, artists, added_at, created_at, updated_at) "
+        "VALUES ('blur/song-2', 'Blur', 'Song 2', '[\"Blur\"]', 'x', 'x', 'x')"
+    )
+    old.commit()
+    old.close()
+
+    db.connect(path).close()
+
+    cols, version = columns(path, "removed")
+    assert version == NOW == 4
+    assert cols == ["key", "artist", "title", "source_ids", "removed_at"]
+    c = sqlite3.connect(path)
+    assert c.execute("SELECT key FROM songs").fetchall() == [("blur/song-2",)]
+    c.close()
+    assert columns(path.with_name("caracole.sqlite.v3.bak"), "removed") == ([], 3)
