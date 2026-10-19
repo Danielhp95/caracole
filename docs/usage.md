@@ -36,6 +36,7 @@ relative path is relative to the config file's folder.
 Here is every key with its default. The commented-out keys have none.
 
 ```toml
+# data_dir = "..."                # one folder for the four below (see below)
 library_dir = "~/Tabs"            # sheets, lyrics, _todo.md, index.html, wanted.txt
 music_dir = "~/Music"             # tracks you bought; read only, used only for auto-chords
 # state_dir = "..."               # the database, the Spotify token and the lock (see below)
@@ -94,7 +95,10 @@ Tabarr keeps one sheet and one text tab per song; only the number of Guitar
 Pro picks is a setting. Scores and thresholds can't be negative, scores stop
 at 100, and `scored_sheets` and `keep_guitar_pro` are whole numbers.
 
-**Folders.** `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
+**Folders.** With `data_dir`, everything is in one folder: `library_dir`,
+`music_dir`, `state_dir` and `cache_dir` default to its `library`, `music`,
+`state` and `cache` folders, and one you set yourself still wins. Without
+it, `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
 `$XDG_STATE_HOME/tabarr`, else `~/.local/state/tabarr`. `cache_dir` works the
 same way from `$CACHE_DIRECTORY`, `$XDG_CACHE_HOME/tabarr` or
 `~/.cache/tabarr`. The state folder holds `tabarr.sqlite`, the Spotify token
@@ -764,7 +768,7 @@ file.
 ## The library folder
 
 ```
-Library/                    library_dir: ~/Tabs by default, /srv/tabs on the NUC
+Library/                    library_dir: ~/Tabs by default, /var/lib/tabarr/library on the NUC
   _todo.md                  what needs you
   index.html                browse and search the library
   wanted.txt                your songs
