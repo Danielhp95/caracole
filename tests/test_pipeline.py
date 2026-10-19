@@ -173,6 +173,18 @@ def test_unreadable_overrides_still_rewrite_the_todo_page_with_the_error_first(c
     assert setup.startswith("Setup problems") and "Cannot declare ('artist_url',) twice" in setup
 
 
+def test_an_overrides_file_that_isnt_utf8_stops_the_run_like_any_unreadable_one(conn, cfg):
+    # Saved as Latin-1, it used to raise UnicodeDecodeError out of the run: no page, no alert.
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_bytes('[ignore]\nsongs = ["Maná - Rayando el Sol"]\n'.encode("latin-1"))
+    calls, out = [], Outbox()
+    report = run_pipeline(cfg, conn=conn, services=services(out), steps=[step("todo", calls=calls)], now=NOW)
+    assert not report.ok and calls == [] and list(report.steps) == ["overrides"]
+    assert out.sent[-1][0] == "tabarr run failed" and "line 2 is not valid UTF-8" in out.sent[-1][1]
+    setup = todo_page(cfg).split("\n## ", 1)[1].split("\n## ", 1)[0]
+    assert setup.startswith("Setup problems") and "line 2 is not valid UTF-8 (save the file as UTF-8)" in setup
+
+
 def test_run_command_exit_codes(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 

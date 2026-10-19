@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -413,6 +414,37 @@ def test_writers_never_write_through_a_link_at_a_temporary_name(tmp_path):
     add_ignore(p, "A - B")
     assert victim.read_text(encoding="utf-8") == "precious"
     assert not p.is_symlink() and load_overrides(p).ignore == frozenset({"a/b"})
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads files it has no permission for")
+def test_a_file_tabarr_may_not_read_is_an_overrides_error(tmp_path):
+    # Every command, and the nightly run, reports an OverridesError cleanly; anything else is a traceback.
+    p = write(tmp_path, '[ignore]\nsongs = ["A - B"]\n')
+    p.chmod(0o200)
+    try:
+        with pytest.raises(OverridesError) as e:
+            load_overrides(p)
+        assert str(e.value) == f"{p}: can't read it: Permission denied"
+        for add in all_writers(p):
+            with pytest.raises(OverridesError, match="can't read it: Permission denied"):
+                add()
+    finally:
+        p.chmod(0o600)
+    assert p.read_text(encoding="utf-8") == '[ignore]\nsongs = ["A - B"]\n'
+
+
+def test_a_file_that_isnt_utf8_is_an_overrides_error_naming_the_line(tmp_path):
+    # Saved as Latin-1 by an editor, say: "Maná" is the byte 0xE1 then.
+    p = tmp_path / "overrides.toml"
+    latin1 = '# mine\n[ignore]\nsongs = ["Maná - Rayando el Sol"]\n'.encode("latin-1")
+    p.write_bytes(latin1)
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == f"{p}: line 3 is not valid UTF-8 (save the file as UTF-8)"
+    for add in all_writers(p):
+        with pytest.raises(OverridesError, match="line 3 is not valid UTF-8"):
+            add()
+    assert p.read_bytes() == latin1
 
 
 def test_writers_report_a_broken_file_as_an_overrides_error(tmp_path):
