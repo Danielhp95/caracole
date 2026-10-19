@@ -47,17 +47,23 @@ def open_db(cfg: Config) -> sqlite3.Connection:
     """The database, the one way a command opens it; a state folder tabarr can't write exits 1,
     naming the path and why, and a database a newer tabarr migrated exits 2.
 
-    ``tabarr add``, which keeps its wanted.txt line and exits 0 without the database,
-    calls ``db.connect`` itself.
+    Its songs are re-keyed first when the normalizer changed since they were keyed
+    (``songs.ensure_current_keys``), before anything reads them: wanted.txt's sync, for
+    one, reads a line's first-seen time under its key. ``tabarr add``, which keeps its
+    wanted.txt line and exits 0 without the database, calls ``db.connect`` itself.
     """
+    from tabarr.songs import ensure_current_keys
+
     try:
-        return db.connect(cfg.db_path)
+        conn = db.connect(cfg.db_path)
     except db.DatabaseTooNew as e:  # a NixOS rollback, say: its message says what to do
         fail(f"database: {e}", 2)
     except (OSError, sqlite3.Error) as e:
         name = getattr(e, "filename", None)
         where = f" ({name})" if name and Path(name) != cfg.db_path else ""
         fail(f"can't open the database {cfg.db_path}: {_reason(e)}{where}")
+    ensure_current_keys(conn)
+    return conn
 
 
 open_db_or_exit = open_db  # its older name

@@ -33,6 +33,7 @@ from tabarr.health import get_state, is_cooling, record_block, record_error, rec
 from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
 from tabarr.notify import Notifier
 from tabarr.overrides import Overrides, OverridesError, load_overrides
+from tabarr.songs import ensure_current_keys
 
 log = logging.getLogger(__name__)
 PROVIDERS = ("ug", "lrclib", "lacuerda")
@@ -313,6 +314,7 @@ def run_pipeline(
     now = (now or datetime.now(UTC)).replace(microsecond=0)
     run_id = _iso(now)
     conn = conn or db.connect(cfg.db_path)
+    ensure_current_keys(conn)  # before a step reads a song's key, or wanted.txt's first-seen times by it
     services = services or make_services(cfg, conn, run_id)
     report = RunReport(run_id=run_id, started=run_id)
     try:

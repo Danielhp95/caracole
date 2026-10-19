@@ -191,6 +191,35 @@ def test_run_command_exit_codes(tmp_path, monkeypatch):
     assert bad.exit_code == 1 and "match: failed: boom" in bad.output
 
 
+def test_a_run_re_keys_the_songs_before_the_sync_reads_wanted_txt(conn, cfg):
+    # After an upgrade that changed a line's key, the sync must find its first-seen time under
+    # the new key; read under none, it would be the run's, and the song would jump the queue.
+    import json
+
+    from tabarr.db import kv_delete, kv_set
+    from tabarr.pipeline import default_steps
+    from tabarr.songs import KEY_VERSION_KV, list_songs
+    from tabarr.wanted import FIRST_SEEN_KEY
+
+    old_key, september = "soda-stereo/persiana-americana-en-vivo", "2026-09-01T00:00:00Z"
+    conn.execute(
+        "INSERT INTO songs (key, artist, title, artists, source_ids, added_at, created_at, updated_at) "
+        "VALUES (?, 'Soda Stereo', 'Persiana Americana - En Vivo', ?, ?, ?, ?, ?)",
+        (old_key, json.dumps(["Soda Stereo"]), json.dumps({"wanted": [old_key]}), september, september,
+         september),
+    )
+    kv_set(conn, FIRST_SEEN_KEY + old_key, september)
+    kv_delete(conn, KEY_VERSION_KV)
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("Soda Stereo - Persiana Americana - En Vivo\n", encoding="utf-8")
+    sync = [s for s in default_steps() if s.name == "sync"]
+
+    run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=sync, now=NOW)
+
+    [song] = list_songs(conn)
+    assert (song.key, song.added_at) == ("soda-stereo/persiana-americana", september)
+
+
 def test_default_match_step_skips_while_the_index_is_empty(conn, cfg):
     from tabarr.pipeline import _match, StepContext
     from tabarr.overrides import Overrides

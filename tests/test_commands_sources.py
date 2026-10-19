@@ -296,6 +296,49 @@ def test_sync_without_spotify_reads_wanted_txt(tmp_path, monkeypatch):
     assert clients_made == []  # Spotify is off: no client is even made
 
 
+OLD_LIVE_KEY = "soda-stereo/persiana-americana-en-vivo"  # before " - En Vivo" was a version suffix
+SEPTEMBER = "2026-09-01T00:00:00Z"
+
+
+def listed_since_september_under_an_older_key(tmp_path):
+    """Persiana Americana - En Vivo, in wanted.txt since September, as an older tabarr keyed it."""
+    import json
+
+    from tabarr.songs import KEY_VERSION_KV
+    from tabarr.wanted import FIRST_SEEN_KEY
+
+    wanted_file(tmp_path, "Soda Stereo - Persiana Americana - En Vivo\n")
+    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    try:
+        conn.execute(
+            "INSERT INTO songs (key, artist, title, artists, source_ids, added_at, created_at, "
+            "updated_at) VALUES (?, 'Soda Stereo', 'Persiana Americana - En Vivo', ?, ?, ?, ?, ?)",
+            (OLD_LIVE_KEY, json.dumps(["Soda Stereo"]), json.dumps({"wanted": [OLD_LIVE_KEY]}),
+             SEPTEMBER, SEPTEMBER, SEPTEMBER),
+        )
+        db.kv_set(conn, FIRST_SEEN_KEY + OLD_LIVE_KEY, SEPTEMBER)
+        db.kv_delete(conn, KEY_VERSION_KV)
+    finally:
+        conn.close()
+
+
+def test_sync_after_an_upgrade_keeps_a_re_keyed_lines_place_in_the_queue(tmp_path):
+    # The songs are re-keyed as the database opens, before the sync reads a line's first-seen
+    # time: read under the old key, it would be "now", and the song would jump the queue.
+    from tabarr.wanted import FIRST_SEEN_KEY
+
+    listed_since_september_under_an_older_key(tmp_path)
+    result = run(tmp_path, "sync")
+    assert result.exit_code == 0, result.output
+    [song] = songs(tmp_path)
+    assert (song.key, song.added_at) == ("soda-stereo/persiana-americana", SEPTEMBER)
+    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    try:
+        assert db.kv_get(conn, FIRST_SEEN_KEY + "soda-stereo/persiana-americana") == SEPTEMBER
+    finally:
+        conn.close()
+
+
 def test_sync_with_nothing_to_read_says_how_to_start(tmp_path):
     result = run(tmp_path, "sync")
     assert result.exit_code == 0, result.output
