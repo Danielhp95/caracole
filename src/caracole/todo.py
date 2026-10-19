@@ -18,10 +18,11 @@ from urllib.parse import quote
 from caracole.config import Config
 from caracole.db import kv_get_json
 from caracole.health import get_state
-from caracole.inbox import GP_EXTENSIONS
+from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS, SCORE_KIND
 from caracole.lacuerda import artist_slug_candidates, looks_spanish
-from caracole.library import write_atomic
+from caracole.library import safe_name, write_atomic
 from caracole.lyrics import song_lyrics
+from caracole.musescore import song_pages
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from caracole.overrides import Overrides
 from caracole.songs import Song, list_songs
@@ -29,7 +30,8 @@ from caracole.ug.fetch import artist_is_known, needs_artist_page, songs_to_fetch
 from caracole.ug.index import index_state
 from caracole.ug.lookup import song_tabs
 
-PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs")
+PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs", "musescore")
+SCORES_TITLE = "Scores on MuseScore"
 GUITAR_KINDS = ("guitar-pro", "power", "tabs")
 NEW_FILES_FOR = timedelta(days=7)  # how long a file downloaded from gtptabs.com is listed as new
 _MD_SPECIAL = "\\`*_[]<>|"
@@ -340,6 +342,65 @@ def _guitar_pro_pages(conn: sqlite3.Connection, songs_by_id: dict[int, Song]) ->
     return lines, sum(len(links) for links in by_song.values())
 
 
+def save_as(song: Song, ext: str = ".mscz") -> str:
+    """The name a score of the song is filed by from ``_inbox/``: "Artist - Title.mscz"."""
+    return safe_name(song.display).replace("`", "'") + ext
+
+
+def _songs_with_a_score(conn: sqlite3.Connection) -> set[int]:
+    rows = conn.execute("SELECT DISTINCT f.song_id FROM files f JOIN versions v ON v.id = f.version_id "
+                        "WHERE v.kind = ?", (SCORE_KIND,))
+    return {r[0] for r in rows}
+
+
+def _musescore_pages(conn: sqlite3.Connection, cfg: Config, songs: list[Song], overrides: Overrides,
+                     now: datetime) -> tuple[list[str], str | None, int, bool]:
+    """Each song's MuseScore pages, the section's intro, how many pages, and whether MuseScore is
+    blocking caracole (the section is shown then, even with no page to list). Nothing while
+    caracole.toml turns MuseScore off. A song with a score filed, or ignored, is left out."""
+    if not cfg.provider("musescore").enabled:
+        return [], None, 0, False
+    with_score = _songs_with_a_score(conn)
+    wanting = [s for s in songs if s.status != "ignored" and s.key not in overrides.ignore and s.id not in with_score]
+    items, n = [], 0
+    for s in wanting:
+        pages = song_pages(conn, s)
+        if not pages:
+            continue
+        links = " · ".join(_link(p.path.removeprefix("song/"), p.url) for p in pages)
+        mark = "possible match" if len(pages) == 1 else "possible matches"
+        items.append(f"- **{md(s.display)}** ({mark}): {links} · save as {_code(save_as(s))}")
+        n += len(pages)
+    intro = (
+        "MuseScore's song sitemaps give titles only, never the artist, so each page here is a possible "
+        "match: a song of the same title. Open one, pick a score, and click its Download button (MuseScore "
+        "asks you to log in, and most scores need a Pro account). Save the file under the name given, with "
+        "its own extension (.mscz, .mxl, .musicxml, .pdf, .mid), and drop it into `_inbox/`: caracole files "
+        "it as the song's score-N. caracole never downloads these itself."
+    )
+    state = get_state(conn, "musescore")
+    if not state.strikes:
+        return items, intro, n, False
+    until = state.cooldown_until
+    wait = (f"it leaves MuseScore alone until {_fmt(until)}" if until and now < until
+            else "it asks again at its next run")
+    error = f" ({md(state.last_error)}, {_fmt(state.last_error_at)})" if state.last_error else ""
+    again = f", block {state.strikes} in a row" if state.strikes > 1 else ""
+    notice = (f"**MuseScore is blocking caracole.** Its Cloudflare protection answered caracole's request for "
+              f"its song sitemaps with a challenge or a refusal{error}{again}. caracole never works around "
+              f"that: {wait}, and each block in a row doubles the wait.")
+    if items:
+        notice += " The pages below come from the sitemaps read before."
+    else:
+        read = conn.execute("SELECT EXISTS (SELECT 1 FROM musescore_index)").fetchone()[0]
+        notice += (" None of the song pages read before has one of your songs' titles." if read else
+                   " caracole has read none of MuseScore's song sitemaps, so it can list no page here.")
+        example = _code(save_as(wanting[0])) if wanting else "`Artist - Title.mscz`"
+        notice += (" You can still find a score on musescore.com yourself, download it, and drop it into "
+                   f"`_inbox/` named as the song is in caracole, such as {example}.")
+    return items, f"{notice}\n\n{intro}" if items else notice, n, True
+
+
 def _guitar_parts_not_found(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:
     items = []
     for s in songs:
@@ -386,9 +447,12 @@ def _inbox(cfg: Config) -> list[str]:
         elif suffix.lower() in GP_EXTENSIONS:
             items.append(f"- {_code(name)}: rename it \"Artist - Title (ver N){suffix}\", as Guitar Pro pages "
                          "to click names the song and the version")
+        elif suffix.lower() in SCORE_EXTENSIONS:
+            items.append(f"- {_code(name)}: a score? Rename it \"Artist - Title{suffix}\", the song as caracole "
+                         f"names it, as {SCORES_TITLE} does")
         else:
-            items.append(f"- {_code(name)}: not a Guitar Pro or Power Tab file ({', '.join(GP_EXTENSIONS)}), "
-                         "so caracole leaves it there")
+            items.append(f"- {_code(name)}: not a Guitar Pro, Power Tab or score file "
+                         f"({', '.join(GP_EXTENSIONS + SCORE_EXTENSIONS)}), so caracole leaves it there")
     return items
 
 
@@ -568,6 +632,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
+    ms_pages, ms_intro, n_ms, ms_blocking = _musescore_pages(conn, cfg, songs, overrides, now)
     for title, items, intro, count in (
         ("Partial sheets", _partial_sheets(conn, cfg, by_id),
          f"These sheets cover less than {cfg.rank.coverage_threshold:.0%} of the lyrics. caracole keeps "
@@ -589,18 +654,20 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         ("Guitar Pro pages to click", gp_pages,
          "Download each file with the page's Download button and drop it into `_inbox/`; caracole "
          "files it under the right song.", n_pages),
+        (SCORES_TITLE, ms_pages, ms_intro, n_ms),
         ("Guitar parts not found", _guitar_parts_not_found(conn, songs), None, None),
         ("Inbox: files caracole couldn't place", _inbox(cfg),
          "caracole files a download by its name, for a version listed under Guitar Pro pages to click: the "
-         "next run, or `caracole scan`, makes it the song's guitar-N file. Don't move one into a song's folder "
-         "yourself: caracole wouldn't know it is there.", None),
+         "next run, or `caracole scan`, makes it the song's guitar-N file. It files a score "
+         "(.mscz, .mxl, .musicxml, .pdf, .mid, .midi) as `Artist - Title.mscz`, for any song, as its score-N. "
+         "Don't move one into a song's folder yourself: caracole wouldn't know it is there.", None),
         ("Missing lyrics", [f"- {md(s.display)}" for s in songs
                             if s.lyrics_status == "missing" and s.status != "ignored"],
          "LRCLIB has no lyrics for these yet.", None),
         ("Suggestions from your Spotify top tracks", _suggestions(conn, songs),
          "Add any you want to learn to your Learn playlist or to wanted.txt.", None),
     ):
-        if items:
+        if items or (title == SCORES_TITLE and ms_blocking):  # a block is said, even with nothing to list
             out += _section(title, items, intro, count)
     out += _render_status(conn)
     out += _sources(conn, cfg)

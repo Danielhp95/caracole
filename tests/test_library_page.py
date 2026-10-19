@@ -120,6 +120,38 @@ def test_links_to_kept_files_are_relative_percent_encoded_and_in_order(conn, cfg
     assert [f["primary"] for f in files] == [True] + [False] * 8
 
 
+def test_scores_are_linked_after_the_guitar_pro_files_and_a_score_pdf_is_never_the_primary(conn, cfg):
+    # caracole renders sheet.pdf; a PDF from MuseScore is a score, so the sheet text stays first.
+    s = add_song(conn, "Oasis", "Wonderwall")
+    put(cfg, s, "sheet.txt", "score-2.pdf", "score-1.mscz", "guitar-1.gp5", "score-1.pdf", "score-1.mid", "tab.txt")
+    files = songs_of(page(conn, cfg))[s.display]["files"]
+    assert [(f["name"], f["label"]) for f in files] == [
+        ("sheet.txt", "Sheet text"), ("guitar-1.gp5", "Guitar Pro 1"), ("score-1.mscz", "Score 1 (MuseScore)"),
+        ("score-1.pdf", "Score 1 (PDF)"), ("score-1.mid", "Score 1 (MIDI)"), ("score-2.pdf", "Score 2 (PDF)"),
+        ("tab.txt", "Tab")]
+    assert [f["name"] for f in files if f["primary"]] == ["sheet.txt"]
+
+
+def test_a_songs_musescore_pages_are_linked_as_possible_matches(conn, cfg):
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+    from caracole.musescore import parse_song_url
+
+    for path in ("song/wonderwall-680101", "song/creep-680102"):
+        conn.execute("INSERT INTO musescore_index VALUES (?, ?, ?, '18')", parse_song_url(f"https://musescore.com/{path}"))
+    oasis = add_song(conn, "Oasis", "Wonderwall")
+    ignored = add_song(conn, "Radiohead", "Creep")
+    html = page(conn, cfg, Overrides(ignore=frozenset({ignored.key})))
+    cards = songs_of(html)
+    assert cards[oasis.display]["museScore"] == [
+        {"label": "wonderwall-680101 (possible match)", "href": "https://musescore.com/song/wonderwall-680101"}]
+    assert cards[ignored.display]["museScore"] == []
+    assert '"Scores on MuseScore"' in html  # the card's heading for them
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
+    assert songs_of(page(conn, off))[oasis.display]["museScore"] == []
+
+
 def test_a_guitar_pro_file_from_gtptabs_says_where_it_came_from(conn, cfg):
     # One downloaded for you, beside one you filed from _inbox for a UG pick.
     s = add_song(conn, "Blur", "Song 2")

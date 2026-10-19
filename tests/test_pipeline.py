@@ -588,13 +588,14 @@ def todo_step():
 
 
 def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
-    # The page is written before the run ends; a first run must not say "never" after 78 good requests.
-    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5, gtptabs=3),
+    # The page is written before the run ends; a first run must not say "never" after 80 good requests.
+    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5, gtptabs=3, musescore=2),
                  steps=todo_step(), now=NOW)
     page = todo_page(cfg)
     assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
     assert "| lrclib | OK | 2026-10-18 03:30 UTC |  | 10 |" in page
     assert "| gtptabs | OK | 2026-10-18 03:30 UTC |  | 3 |" in page
+    assert "| musescore | OK | 2026-10-18 03:30 UTC |  | 2 |" in page
     assert "never" not in page.split("## Provider health", 1)[1]
 
 

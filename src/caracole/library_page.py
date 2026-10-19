@@ -31,7 +31,9 @@ from typing import Any
 from urllib.parse import quote
 
 from caracole.config import Config
+from caracole.inbox import SCORE_EXTENSIONS
 from caracole.library import song_dir, write_atomic
+from caracole.musescore import song_pages
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
 from caracole.songs import Song, list_songs
@@ -43,6 +45,10 @@ PAGE_NAME = "index.html"
 _FIRST = ("sheet.pdf", "sheet (auto).pdf", "sheet.txt", "sheet.cho", "lyrics.txt", "lyrics.lrc")
 _LAST = ("tab.txt", "sheet (auto).txt", "sheet (auto).cho", "info.json")
 _GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
+# Scores filed from _inbox/ (inbox.py), after the guitar files, in SCORE_EXTENSIONS' order.
+_SCORE = re.compile(r"score-(\d+)(\.[a-z]+)")
+_SCORE_FORMATS = {".mscz": "MuseScore", ".mxl": "MusicXML", ".musicxml": "MusicXML", ".pdf": "PDF", ".mid": "MIDI",
+                  ".midi": "MIDI"}
 _LABELS = {
     "sheet.pdf": "Sheet PDF",
     "sheet (auto).pdf": "Auto sheet PDF",
@@ -71,8 +77,9 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     sources = _downloaded(conn)
     library = list_songs(conn)
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
+    musescore = cfg.provider("musescore").enabled
     songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
-                   sources.get(s.id, {}))
+                   sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [])
              for s in library]
     data = {
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -98,10 +105,19 @@ def write_library_page(library_dir: Path, html: str) -> Path:
 # --- the data ---------------------------------------------------------------------------
 
 
+def _musescore_links(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> list[dict[str, str]]:
+    """The song's MuseScore pages, each a possible match: the sitemaps give titles only."""
+    if song.status == "ignored" or song.key in overrides.ignore:
+        return []
+    return [{"label": f"{p.path.removeprefix('song/')} (possible match)", "href": p.url} for p in song_pages(conn, song)]
+
+
 def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
-          guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str]) -> dict[str, Any]:
+          guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
+          musescore: list[dict[str, str]]) -> dict[str, Any]:
     """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
-    ``sources`` the site each file caracole downloaded for it came from, by name."""
+    ``sources`` the site each file caracole downloaded for it came from, by name, and ``musescore``
+    the song's MuseScore pages."""
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
     names = _file_names(song_dir(library_dir, song))
@@ -129,6 +145,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
         "files": _files(library_dir, song, names, sources),
         "guitarPro": guitar_pro,
+        "museScore": musescore,
         "links": links,
         "buy": buy,
         "sortArtist": _sort_key(song.artist),
@@ -145,12 +162,16 @@ def _file_names(folder: Path) -> set[str]:
 
 
 def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, str]) -> list[dict[str, Any]]:
-    """Links to the kept files that exist, as paths relative to index.html, percent-encoded."""
+    """Links to the kept files that exist, as paths relative to index.html, percent-encoded. The
+    primary one is the sheet's PDF, else its text: never a score, whatever its format."""
     guitar = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
-    ordered = [n for n in _FIRST if n in names] + [n for _, n in guitar] + [n for n in _LAST if n in names]
+    scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
+                    for n in names if (m := _SCORE.fullmatch(n)) and m.group(2) in SCORE_EXTENSIONS)
+    ordered = ([n for n in _FIRST if n in names] + [n for _, n in guitar] + [n for _, _, n in scores]
+               + [n for n in _LAST if n in names])
     folder = song_dir(library_dir, song).relative_to(library_dir)
     base = "/".join(quote(part, safe="") for part in folder.parts)
-    primary = next((n for n in ordered if n.endswith(".pdf")), None) or next(
+    primary = next((n for n in ordered if n in ("sheet.pdf", "sheet (auto).pdf")), None) or next(
         (n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None)
     return [
         {"name": n, "label": _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}", "primary": n == primary}
@@ -163,6 +184,9 @@ def _label(name: str, source: str | None = None) -> str:
     if m:
         kind = "Power Tab" if m.group(2).lower() == ".ptb" else "Guitar Pro"
         return f"{kind} {m.group(1)}" + (f" · {source}" if source else "")
+    m = _SCORE.fullmatch(name)
+    if m:
+        return f"Score {m.group(1)} ({_SCORE_FORMATS[m.group(2)]})"
     return _LABELS[name]
 
 
@@ -490,6 +514,7 @@ _SCRIPT = r"""
       card.appendChild(row);
     }
     linkRow(card, "Guitar Pro to download", listOf(s.guitarPro), "btn small");
+    linkRow(card, "Scores on MuseScore", listOf(s.museScore), "btn small");
     linkRow(card, "Find the chords", listOf(s.links), "btn small");
     linkRow(card, "Buy the track for an auto sheet", listOf(s.buy), "btn small");
     return card;

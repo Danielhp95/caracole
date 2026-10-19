@@ -672,12 +672,26 @@ when it has something in it:
   to bots. A song with a file from gtptabs.com says so, as
   `(guitar-1.gpx came from gtptabs.com)`: its UG pages stay in case you want
   another version.
+- **Scores on MuseScore.** For each song with no score filed, up to three
+  MuseScore song pages with its title, oldest first, each a possible match:
+  MuseScore's sitemaps give titles only, never the artist. Open one, pick a
+  score, and click its Download button (MuseScore asks you to log in, and most
+  scores need a Pro account). Save the file under the name the line gives, such
+  as `Oasis - Wonderwall.mscz`, with its own extension, and drop it into
+  `_inbox/`: the next run files it as the song's `score-N`. Caracole never
+  downloads these itself. When MuseScore is blocking caracole (its Cloudflare
+  protection answered with a challenge, as it did in October 2026), the section
+  says so first, with the last answer and until when caracole leaves MuseScore
+  alone, even when it has nothing to list: the pages listed then come from the
+  sitemaps read before, and with none read, you can still find a score on
+  musescore.com yourself and drop it into `_inbox/` named the same way.
 - **Guitar parts not found.** Songs UG has no guitar part for, and with no
   Guitar Pro or Power Tab file kept (from `_inbox/` or gtptabs.com), with
   Songsterr and YouTube links.
 - **Inbox: files caracole couldn't place.** Rename such a file
   "Artist - Title (ver N).ext", as Guitar Pro pages to click names the song
-  and the version, and the next run files it. Don't move it into the song's
+  and the version, or a score "Artist - Title.ext", the song as caracole names
+  it, and the next run files it. Don't move it into the song's
   folder yourself: caracole wouldn't know it is there. A symbolic link in
   `_inbox/` is listed too: caracole files only regular files. If `_inbox` is a
   link itself, the page lists nothing from it, and says to make it a folder;
@@ -692,10 +706,10 @@ when it has something in it:
   secret missing, say), or needs `caracole auth spotify`, and how many songs
   wanted.txt has, with the lines it couldn't read; for a wanted.txt it
   couldn't read at all, the error, as `wanted.txt: error at <time>: …`.
-- **Provider health.** For Ultimate Guitar, LRCLIB, LaCuerda and gtptabs.com:
-  OK, errors (nothing has worked since the last error), cooling down until
-  when, or off (`[providers.gtptabs] enabled = false`); the last success; the
-  last error; the requests of the last run.
+- **Provider health.** For Ultimate Guitar, LRCLIB, LaCuerda, gtptabs.com and
+  MuseScore: OK, errors (nothing has worked since the last error), cooling down
+  until when, or off (`[providers.gtptabs] enabled = false`, and the same for
+  `musescore`); the last success; the last error; the requests of the last run.
 
 ### Review
 
@@ -745,8 +759,11 @@ transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
 loads nothing from the network. It shows every song with its status, its key
 or transposition, and links to its files, the PDF first. A Guitar Pro file
-caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`. A song
-without a sheet also gets buy and search links.
+caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`, and a
+score its format, as `Score 1 (MuseScore)`; a score's PDF is never the card's
+main link, which is the sheet's. Under "Scores on MuseScore", a song has its
+MuseScore pages, each a possible match, as on the to-do page. A song without a
+sheet also gets buy and search links.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or

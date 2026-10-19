@@ -196,8 +196,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **MuseScore is links and the inbox.** musescore_fetch.py asks MuseScore for its song
   sitemaps alone: never a song page, a score, a download or `/api/jmuse`, and never logged
   in (`test_musescore_fetch.py::test_caracole_asks_for_the_sitemaps_alone`). Its Cloudflare
-  challenge is a block like a 403. Every match is on the title alone, a possible match
-  (`musescore.song_pages`). inbox.py files what the user downloads (`SCORE_EXTENSIONS`) as
+  challenge is a block like a 403, and the to-do page then says plainly that MuseScore is
+  blocking caracole, even with no page to list (`todo._musescore_pages`). Every match is on
+  the title alone, a possible match (`musescore.song_pages`). inbox.py files what the user downloads (`SCORE_EXTENSIONS`) as
   `score-N.<ext>`, never as `sheet.pdf`, under the song's one `inbox` version of kind
   `score`; a MusicXML header is read with `musicxml.header`, up to the part list only.
 - **Chinese is compared as pinyin** (`normalize.romanize`, with pypinyin) in match.py,
