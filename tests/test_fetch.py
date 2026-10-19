@@ -41,6 +41,7 @@ from caracole.http import PoliteClient, ProviderBlocked
 from caracole.library import drop_file, keep_file, kept_files, song_dir
 from caracole.lyrics import Lyrics
 from caracole.match import match_all
+from caracole.normalize import slug_key
 from caracole.overrides import Overrides, load_overrides
 from caracole.render import render_all
 from caracole.songs import get_song, update_song
@@ -1524,6 +1525,27 @@ def test_a_tab_page_of_another_artist_in_two_scripts_teaches_nothing_for_the_son
 
     assert learned_artist_url(conn, "宋冬野") is None
     assert learned_artist_url(conn, "李志") == "https://www.ultimate-guitar.com/artist/99"
+
+
+@pytest.mark.parametrize("pair", [
+    "Li Zhi (feat. 宋冬野)", "Li Zhi feat. Song Dongye", "Li Zhi (feat. 宋冬野 Song Dongye)",
+    "Song Dongye (宋冬野) feat. Li Zhi",
+])
+def test_a_tab_of_a_pair_teaches_its_page_to_neither_artist(conn, tmp_path, pair):
+    # UG may give a pair a page of its own, which lists neither artist's other songs: filed under either
+    # one's name, it would stand in for that artist's own page, and their songs would be missed there.
+    song = song_by_song_dongye(conn, "斑马斑马", decision="pinned")
+    remember_artist_url(conn, "李志", "https://www.ultimate-guitar.com/artist/li_zhi_5")
+    duet = version_dict(778, song=BANMA_UG, artist=pair)
+    ug = FakeUG()
+    ug.tab(duet, content=song_dongye_sheet(BANMA_TRADITIONAL_LINES), artist_url="https://www.ultimate-guitar.com/artist/99")
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, Overrides(pin={song.key: (778,)})), song)
+
+    for key in ("宋冬野", "song-dong-ye", "song-dongye", "song-dongye-宋冬野", "li-zhi"):
+        assert learned_artist_url(conn, key) is None, key
+    assert learned_artist_url(conn, "李志") == "https://www.ultimate-guitar.com/artist/li_zhi_5"
+    assert learned_artist_url(conn, slug_key(pair)) == "https://www.ultimate-guitar.com/artist/99"  # the pair's
 
 
 # --- a tab page pasted under [artist_url] --------------------------------------------------------

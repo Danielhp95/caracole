@@ -343,6 +343,20 @@ def test_the_original_ends_where_its_romanization_starts(ug, wanted):
     assert shares_a_form(ug, wanted)
 
 
+@pytest.mark.parametrize("ug", ["南山南（feat. 宋冬野）", "南山南 feat. 宋冬野", "南山南【feat. 宋冬野】", "南山南 (ft. 宋冬野)"])
+def test_a_featured_artist_is_no_part_of_a_title(ug):
+    assert shares_a_form(ug, "南山南")
+    assert not shares_a_form(ug, "宋冬野")
+
+
+@pytest.mark.parametrize("ug", [
+    "Ma Di (feat. 宋冬野)", "Ma Di feat. 宋冬野", "Ma Di (feat. 宋冬野 Song Dongye)", "Ma Di feat. Song Dongye",
+])
+def test_a_featured_artist_is_no_name_of_the_artist(ug):
+    assert shares_a_form(ug, "马頔")
+    assert not shares_a_form(ug, "宋冬野") and not shares_a_form(ug, "Song Dongye")
+
+
 @pytest.mark.parametrize("ug", ["董小姐", "郭源潮", "莉莉安 Lilian", "与我交谈 Speak With Me"])
 def test_another_song_of_the_artist_never_shares_a_form(ug):
     assert not shares_a_form(ug, "斑马斑马")

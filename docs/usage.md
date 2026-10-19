@@ -231,12 +231,15 @@ UG named so.
 
 A part that only names a version or a part, such as "Live", "Acoustic",
 "Remix" or "Intro", or that is a number, a single letter or fewer than three
-Latin letters, never makes a match on its own. Another song of the artist never
-stands in for yours either: 董小姐 is no 斑马斑马, in any script, and Latin
+Latin letters, never makes a match on its own. Another song of the artist
+never stands in for yours either: 董小姐 is no 斑马斑马, in any script, and Latin
 before the original, or glued to it, is part of the title: "Baby 对不起" and
-"我的Baby" are neither 对不起 nor "Baby". A name with
-two non-Latin parts, as a duet's "Joey Yung (容祖儿) & Eason Chan (陈奕迅)", is
-taken whole: it is neither singer.
+"我的Baby" are neither 对不起 nor "Baby". A name with two non-Latin parts, as a
+duet's "Joey Yung (容祖儿) & Eason Chan (陈奕迅)", is taken whole: it is neither
+singer. Nor is an artist a name features part of it, bracketed in any width or
+not: "Ma Di (feat. 宋冬野)" is Ma Di's, never 宋冬野's, and "南山南（feat. 宋冬野）" is 南山南.
+A tab page of such a pair teaches caracole no artist page for either of them,
+as UG may give the pair a page of its own.
 
 ### caracole sync
 

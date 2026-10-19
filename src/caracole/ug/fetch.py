@@ -71,7 +71,7 @@ from caracole.http import (
 )
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
 from caracole.lyrics import song_lyrics
-from caracole.normalize import clean_title, compact, name_forms, slug_key
+from caracole.normalize import clean_title, compact, name_forms, slug_key, without_featuring
 from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from caracole.songs import Song, get_song, list_songs, refresh_status, update_song
@@ -444,18 +444,32 @@ def _artist_page_base(url: str | None) -> str | None:
         return None
 
 
+def _a_pair(name: str) -> bool:
+    """Whether the artist UG names ``name`` features another ("Ma Di (feat. 宋冬野)"): UG may give such a
+    pair a page of its own, which lists neither artist's other songs."""
+    return without_featuring(name) != name.strip()
+
+
 def _same_artist(key: str, name: str) -> bool:
     """Whether the artist UG names ``name`` is the one filed under ``key``: they share a form, hyphens
-    aside, as "宋冬野" and "Song Dongye (宋冬野)" do."""
+    aside, as "宋冬野" and "Song Dongye (宋冬野)" do. A pair is neither of its artists."""
+    if _a_pair(name):
+        return False
     return not {compact(k) for k in _name_keys(key)}.isdisjoint(compact(k) for k in _name_keys(name))
 
 
 def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[str] = ()) -> str | None:
-    """Remember the artist page a tab page links to, under its artist's keys and ``also``; return it."""
+    """Remember the artist page a tab page links to, under its artist's keys and ``also``; return it.
+
+    A pair's page is filed under the pair's own name alone: under either artist's, it would stand in
+    for that artist's own page (``_same_artist``)."""
     url = _artist_page_base(page.artist_url)
     if url is not None:
-        for key in dict.fromkeys([*_name_keys(page.tab.artist_name), *also]):
-            remember_artist_url(conn, key, url)
+        name = page.tab.artist_name
+        own = [slug_key(name)] if _a_pair(name) else _name_keys(name)
+        for key in dict.fromkeys([*own, *also]):
+            if key:
+                remember_artist_url(conn, key, url)
     return url
 
 

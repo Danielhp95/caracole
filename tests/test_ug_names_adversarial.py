@@ -340,9 +340,6 @@ def test_w7_14_digits_between_the_original_and_its_romanization(conn, tmp_path):
     assert ids == {9000002} and song.match_step == "artist_page"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-15: a featured artist in fullwidth brackets or unbracketed is "
-                          "neither cleaned off nor split (two CJK parts), so the title is missed")
 @pytest.mark.parametrize("listed", ["南山南（feat. 宋冬野）", "南山南 feat. 宋冬野"])
 def test_w7_15_a_title_with_a_featured_artist_in_cjk_brackets(conn, tmp_path, listed):
     ug = FakeUG()

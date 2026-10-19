@@ -245,10 +245,23 @@ GENERIC_WORDS = frozenset({
     "pt", "english", "chinese", "mandarin", "cantonese", "japanese", "korean", "russian", "translation",
     "romanized", "lyrics",
 })
-# Where a name written in two scripts breaks into its parts, besides each change of script: brackets
-# of every width ("Song Dongye (宋冬野)", "【斑马斑马】Zebra Zebra") and a spaced " / " or " - ".
+# Where a name written in two scripts breaks into its parts, besides where its original ends (_cut):
+# brackets of every width ("Song Dongye (宋冬野)", "【斑马斑马】Zebra Zebra") and a spaced " / " or " - ".
 _PART_BREAK = re.compile(r"\s+[-–—/|]\s+|[()\[\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]")
 _LATIN, _CJK_SCRIPT, _OTHER = "latin", "cjk", "other"
+# The artists a name features, bracketed in any width or after it: "Ma Di (feat. 宋冬野)", "南山南（feat.
+# 宋冬野）", "Ma Di feat. 宋冬野". Spotify's ASCII-bracketed featurings leave titles in clean_title.
+_FEATURING = re.compile(
+    r"\s*[(\[（［【]\s*(?:feat\.|ft\.|(?:feat|ft|featuring|with)\s)[^)\]）］】]*[)\]）］】]"
+    r"|\s+(?:feat\.|ft\.|featuring\s).*$",
+    re.IGNORECASE,
+)
+
+
+def without_featuring(name: str) -> str:
+    """The name without the artists it features ("Ma Di (feat. 宋冬野)" is "Ma Di"); the name itself when
+    it features nobody, or is nothing else."""
+    return _FEATURING.sub("", name).strip() or name.strip()
 
 
 @functools.lru_cache(maxsize=8192)
@@ -269,24 +282,36 @@ def name_forms(name: str) -> tuple[str, ...]:
     "与我交谈 Speak With Me", "17岁 17 Sui"). Latin before the original, or glued to it, is
     part of the title ("Baby 对不起", "我的Baby", "K歌之王"), never another song's name. Each
     part of such a name is a form too, with its pinyin and its Simplified key when it is
-    Chinese, so "宋冬野" meets
-    "Song Dongye (宋冬野)" and "Song Dong Ye" meets "Song Dongye". A Latin part that starts or
-    ends with the pinyin of the Chinese part also gives the romanization and the rest (a
-    translation) apart: "banma-banma" and "zebra-zebra". Scripts without a romanizer here
-    (Japanese, Korean, Cyrillic) meet on their original part, or on the Latin one.
+    Chinese, so "宋冬野" meets "Song Dongye (宋冬野)" and "Song Dong Ye" meets "Song Dongye". A
+    Latin part that starts or ends with the pinyin of the Chinese part also gives the
+    romanization and the rest (a translation) apart: "banma-banma" and "zebra-zebra". Scripts
+    without a romanizer here (Japanese, Korean, Cyrillic) meet on their original part, or on
+    the Latin one.
+
+    The artists a name features are no part of it: "Ma Di (feat. 宋冬野)" and "Ma Di feat. 宋冬野"
+    are Ma Di's, never 宋冬野's, and "南山南（feat. 宋冬野）" is 南山南, so the name without them
+    (``without_featuring``) gives its keys and its parts.
 
     A part that is only words such as "Live", "Acoustic" or "Remix" (``GENERIC_WORDS``),
     numbers, single letters or fewer than three Latin letters is no form: it never makes a
     match on its own. Nor is a name with two non-Latin parts split ("A (甲) & B (乙)", two
     singers): its parts would be other artists' names.
     """
-    forms = [slug_key(name)]
-    if has_han(name):
-        forms += [slug_key(romanize(name)), slug_key(_simplified(name))]
-    parts = _parts(name)
+    core = without_featuring(name)
+    forms = _own_keys(name)
+    if core != name.strip():
+        forms += _own_keys(core)
+    parts = _parts(core)
     for part in parts:
         forms += _part_forms(part, parts)
     return tuple(f for f in dict.fromkeys(forms) if f)
+
+
+def _own_keys(name: str) -> list[str]:
+    """The keys a name always had: its slug key, and its pinyin and Simplified keys when it is Chinese."""
+    if has_han(name):
+        return [slug_key(name), slug_key(romanize(name)), slug_key(_simplified(name))]
+    return [slug_key(name)]
 
 
 def _script(c: str) -> str | None:
