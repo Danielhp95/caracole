@@ -158,11 +158,14 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     (tests/fixtures/gtptabs/robots.txt for gtptabs.com).
   - Every accepted 200 and 404 is cached forever, in `cache_dir/http/<provider>/`.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
-  that won't parse (`PageParseError`) never makes a song not found or its lyrics missing:
-  the song waits for the next run (http.py, pipeline.py, ug/fetch.py, lyrics.py;
+  that won't parse (`PageParseError`, `GtpTabsParseError`) never makes a song not found,
+  its lyrics missing or its Guitar Pro file a miss: the song waits for the next run
+  (http.py, pipeline.py, ug/fetch.py, lyrics.py, gtptabs_fetch.py;
   `test_pipeline.py::test_ug_block_cools_down_and_never_marks_not_found`,
-  `test_fetch.py::test_parse_error_is_not_a_miss`). A block or a spent budget exits 0; a
-  bug exits 1, which fires the unit's ntfy alert.
+  `test_fetch.py::test_parse_error_is_not_a_miss`,
+  `test_gtptabs_fetch.py::test_a_spent_budget_is_no_miss`). On gtptabs.com only an artist
+  page that answered without a candidate is a miss, asked about again after 30 days. A
+  block or a spent budget exits 0; a bug exits 1, which fires the unit's ntfy alert.
 - **Slugged tabs only at their slugged URL**, as UG answers 404 for them at `/tab/{id}`:
   the index keeps each tab's sitemap path (`ug_index.path`), from which ug/page.py
   `page_url` and ug/lookup.py `IndexTab.url` and `tab_url_for` build it. **Bare-id tabs**
@@ -171,18 +174,29 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   its URL from `[artist_url]` or learned from a tab page into kv `ug:artist_url:<artist key>`
   (`test_fetch.py::test_slugged_tabs_fetched_at_their_slugged_url`,
   `::test_bare_id_chords_of_a_matched_song_come_from_its_artist_page`).
-- **Guitar Pro is assisted only.** config.py refuses any `guitar_pro_mode` but "assisted";
-  ug/fetch.py picks Guitar Pro and Power Tab versions and downloads none; the to-do page
-  lists them, and inbox.py files what the user drops into `_inbox/`. Official and
-  non-public versions are never used.
+- **Guitar Pro: Ultimate Guitar's assisted, gtptabs.com's downloaded.** config.py refuses
+  any `guitar_pro_mode` but "assisted", which is UG's mode (its robots.txt closes
+  `/tab/download`); ug/fetch.py picks Guitar Pro and Power Tab versions and downloads
+  none; the to-do page lists them, and inbox.py files what the user drops into `_inbox/`.
+  Official and non-public versions are never used. gtptabs_fetch.py downloads from
+  `/tabs/download/{id}.html` alone, never logged in, one file for a song with no Guitar
+  Pro or Power Tab file in `files` (filed or downloaded, deleted since or not), and keeps
+  it only when `gtptabs.sniff` reads a Guitar Pro or Power Tab header: as the lowest
+  `guitar-N` no file holds (`inbox.guitar_number`), with its version (provider
+  `gtptabs`). It never replaces or deletes a file
+  (`test_gtptabs_fetch.py::test_a_song_with_a_guitar_pro_file_gets_no_other`,
+  `::test_a_number_a_file_in_the_folder_holds_is_never_reused`).
 - **Chinese is compared as pinyin** (`normalize.romanize`, with pypinyin) in match.py,
   coverage.py, music.py, search.py, library_page.py and ug/fetch.py; identity keys also fold
   Traditional characters to Simplified. A change to `clean_title`, `slug_key` or
   `identity_key` that can change a key bumps `normalize.KEY_VERSION`:
   `songs.ensure_current_keys`, run before songs are looked up, listed or added, then re-keys
   them once and merges those that now share a key. It re-keys `songs` only; `ug_index` keys
-  change when a sitemap is parsed again. Name new per-song kv keys `<prefix><song id>` and
-  add the prefix to `songs._PER_SONG_KV`, so a merge deletes them.
+  change when a sitemap is parsed again, and `gtptabs_index` keys at the next gtptabs
+  pass, which parses every sitemap again, an unchanged one from the cache
+  (`test_gtptabs_fetch.py::test_new_keys_read_the_sitemaps_again_even_when_they_are_unchanged`).
+  Name new per-song kv keys `<prefix><song id>` and add the prefix to
+  `songs._PER_SONG_KV`, so a merge deletes them.
 - **Schema changes go through db.py**: bump `SCHEMA_VERSION` and add the script to
   `_MIGRATIONS`. `_migrate` copies an existing database to `caracole.sqlite.v<N>.bak`
   (`VACUUM INTO`), then runs each script in one `BEGIN IMMEDIATE` transaction with its

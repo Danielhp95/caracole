@@ -115,7 +115,7 @@ def _choose_pick(open_picks: list[VersionRow], version: int | None, ext: str) ->
     return same_kind[0] if same_kind else open_picks[0]
 
 
-def _free_number(conn: sqlite3.Connection, library_dir: Path, song: Song, rank: int) -> int:
+def guitar_number(conn: sqlite3.Connection, library_dir: Path, song: Song, rank: int) -> int:
     """The N of a new ``guitar-N`` file: the pick's rank, or the lowest number no file holds.
 
     Picks are ranked again as versions appear, so the rank may be the number of
@@ -199,7 +199,7 @@ def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
                 continue
             song, open_picks = found
             chosen = _choose_pick(open_picks, version, ext)
-            name = f"guitar-{_free_number(conn, library_dir, song, chosen.pick_rank or 1)}{ext}"
+            name = f"guitar-{guitar_number(conn, library_dir, song, chosen.pick_rank or 1)}{ext}"
             if keep_file(conn, library_dir, song=song, version_id=chosen.id, name=name, data=data,
                          rank=chosen.pick_rank or 1):
                 stats.filed.append(song_dir(library_dir, song) / name)
