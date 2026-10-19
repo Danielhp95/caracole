@@ -325,13 +325,33 @@ def test_other_methods_and_paths_are_refused(app):
 def test_the_requests_page_lists_each_job_and_its_output(app, queue):
     post(app, "/request", {"artist": "Evil", "title": "<script>alert(1)</script>", "fetch": "1"})
     body = text(get(app, "/jobs"))
-    assert '<meta http-equiv="refresh" content="3">' in body  # while one waits or runs
+    assert '<meta http-equiv="refresh" content="10">' in body  # while one waits or runs
     assert 'id="job-1"' in body and "Queued" in body
     assert "<script>alert" not in body and "&lt;script&gt;alert(1)&lt;/script&gt;" in body
     queue.run_pending()
     body = text(get(app, "/jobs"))
     assert 'http-equiv="refresh"' not in body
     assert "Done" in body and "Fetch from Ultimate Guitar" in body and "<pre>ok" in body
+
+
+def test_the_requests_page_can_stop_refreshing_so_an_output_can_be_read(app, queue):
+    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
+    body = text(get(app, "/jobs"))
+    assert 'href="/jobs?refresh=0"' in body and "Stop refreshing" in body
+    still = text(get(app, "/jobs?refresh=0"))
+    assert 'http-equiv="refresh"' not in still and 'href="/jobs"' in still
+    assert 'href="/jobs?refresh=0"' not in still
+
+
+def test_the_newest_requests_output_is_open_and_the_older_ones_closed(app, queue):
+    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
+    queue.run_pending()
+    post(app, "/request", {"artist": "Oasis", "title": "Wonderwall"})
+    queue.run_pending()
+    body = text(get(app, "/jobs"))
+    newest, older = re.findall(r'<article class="job" id="job-\d+">.*?</article>', body, re.S)
+    assert "Oasis" in newest and "<details open>" in newest
+    assert "Radiohead" in older and "<details>" in older and "<details open>" not in older
 
 
 def test_the_requests_page_with_nothing_queued(app):

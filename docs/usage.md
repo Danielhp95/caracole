@@ -765,7 +765,9 @@ do:
   overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for
   the nightly run.
 - **Requests**, the page at `/jobs`, lists each request, the commands it
-  runs and what each printed, and refreshes itself while one waits or runs.
+  runs and what each printed (the newest request's output open), and
+  refreshes itself every 10 seconds while one waits or runs. Stop refreshing
+  keeps it still, so an output stays open to read.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes

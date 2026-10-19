@@ -2,7 +2,10 @@
 
 They share index.html's look (``library_page.BASE_STYLE``), carry no script,
 and every text in them is escaped. The requests page refreshes itself every
-few seconds while a request waits or runs, with a meta refresh: no script.
+10 seconds while a request waits or runs, with a meta refresh: no script. A
+reload closes what the reader opened, so the newest request's output is open
+already, with any step's that runs or failed, and "Stop refreshing"
+(``/jobs?refresh=0``) leaves the page still.
 """
 
 from __future__ import annotations
@@ -58,20 +61,28 @@ def page(title: str, body: str, *, head: str = "") -> str:
     )
 
 
-def jobs_page(jobs: list[Job]) -> str:
-    """Every request remembered, newest first, with each step's output."""
+REFRESH = 10  # seconds between reloads while a request waits or runs
+
+
+def jobs_page(jobs: list[Job], *, refresh: bool = True) -> str:
+    """Every request remembered, newest first, with each step's output; ``refresh``: reload while one is active."""
     waiting = any(job.active for job in jobs)
+    if not waiting:
+        note = ""
+    elif refresh:
+        note = (f"This page refreshes itself every {REFRESH} seconds while one waits or runs. "
+                '<a href="/jobs?refresh=0">Stop refreshing</a>')
+    else:
+        note = 'This page stays as it is: <a href="/jobs">refresh it</a> to see how they go.'
     lede = (
         '<p class="lede">Requests run one at a time, each a caracole command under its lock, with the same '
-        "pauses between requests as from a terminal. "
-        + ("This page refreshes itself while one waits or runs." if waiting else "")
-        + "</p>"
+        f"pauses between requests as from a terminal. {note}</p>"
     )
     if not jobs:
         items = '<p class="empty">No requests yet. Request a song from <a href="/">the library</a>.</p>'
     else:
-        items = '<div class="jobs">' + "".join(_job(job) for job in jobs) + "</div>"
-    head = '<meta http-equiv="refresh" content="3">\n' if waiting else ""
+        items = '<div class="jobs">' + "".join(_job(job, newest=n == 0) for n, job in enumerate(jobs)) + "</div>"
+    head = f'<meta http-equiv="refresh" content="{REFRESH}">\n' if waiting and refresh else ""
     return page("Requests", lede + items, head=head)
 
 
@@ -83,11 +94,11 @@ def _badge(state: str) -> str:
     return f'<span class="badge {escape(state)}">{escape(_STATE_TEXT.get(state, state))}</span>'
 
 
-def _job(job: Job) -> str:
+def _job(job: Job, *, newest: bool = False) -> str:
     meta = f"Requested {_when(job.queued_at)}"
     if job.note:
         meta += f" · {escape(job.note)}"
-    steps = "".join(_step(step) for step in job.steps)
+    steps = "".join(_step(step, shown=newest) for step in job.steps)
     return (
         f'<article class="job" id="job-{job.id}">\n'
         f'  <div class="job-head"><h2>{escape(job.title)}</h2>{_badge(job.state)}</div>\n'
@@ -95,12 +106,13 @@ def _job(job: Job) -> str:
     )
 
 
-def _step(step: Step) -> str:
+def _step(step: Step, *, shown: bool = False) -> str:
+    """A step, its output open when ``shown`` (the newest request's) or when it runs or failed."""
     output = ""
     if step.output or step.dropped:
         lines = ([f"… {step.dropped} earlier lines"] if step.dropped else []) + step.output
-        shown = " open" if step.state in ("running", "failed") else ""
-        output = (f"<details{shown}><summary>Output</summary><pre>"
+        opened = " open" if shown or step.state in ("running", "failed") else ""
+        output = (f"<details{opened}><summary>Output</summary><pre>"
                   + escape("\n".join(lines)) + "</pre></details>")
     return (f'<li class="step {escape(step.state)}"><div class="step-head"><span>{escape(step.label)}</span>'
             f"{_badge(step.state)}</div>{output}</li>")

@@ -1,7 +1,7 @@
 """The routes of ``caracole serve``, as one function from a request to a response.
 
     GET  /, /index.html   the library page, with its forms (library_page, WebControls)
-    GET  /jobs            the requests, and what each command printed
+    GET  /jobs            the requests, and what each command printed (?refresh=0: no reloading)
     GET  /<file>          a file of the library (files.py)
     POST /request         a song for wanted.txt; with ``fetch``, fetched now too
     POST /fetch           fetch a song of the library now, unless it needs review first
@@ -136,7 +136,8 @@ class WebApp:
             if path in ("/", "/index.html"):
                 return self._library()
             if path == "/jobs":
-                return _html(200, pages.jobs_page(self.queue.snapshot()))
+                still = parse_qs(urlsplit(request.target).query).get("refresh") == ["0"]
+                return _html(200, pages.jobs_page(self.queue.snapshot(), refresh=not still))
             if path == "/login":
                 return _redirect("/")
             return self._file(path)
