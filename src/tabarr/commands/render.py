@@ -1,12 +1,17 @@
-"""``tabarr render``: a ChordPro file and a PDF, in your key, for every kept sheet."""
+"""``tabarr render``: a ChordPro file and a PDF, in your key, for every kept sheet.
+
+Then it rewrites _todo.md, which says when the PDFs were last made and which
+failed, and index.html, which links them.
+"""
 
 from __future__ import annotations
 
 import logging
+from contextlib import closing
 
 import typer
 
-from tabarr.commands._common import load_cfg, load_ovr, open_db
+from tabarr.commands._common import exclusive, load_cfg, load_ovr, open_db, utcnow, write_pages
 
 
 def register(app: typer.Typer) -> None:
@@ -25,7 +30,10 @@ def register(app: typer.Typer) -> None:
 
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
         cfg = load_cfg(ctx)
-        stats = render_all(open_db(cfg), cfg, load_ovr(cfg), force=force)
+        overrides = load_ovr(cfg)
+        with exclusive(cfg, "render"), closing(open_db(cfg)) as conn:
+            stats = render_all(conn, cfg, overrides, force=force)
+            write_pages(conn, cfg, overrides, utcnow())
         typer.echo(f"{stats.rendered} rendered, {stats.skipped} up to date, {stats.failed} failed")
         if stats.failed:
             raise typer.Exit(1)

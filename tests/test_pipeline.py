@@ -191,6 +191,82 @@ def test_run_command_exit_codes(tmp_path, monkeypatch):
     assert bad.exit_code == 1 and "match: failed: boom" in bad.output
 
 
+def test_a_run_re_keys_the_songs_before_the_sync_reads_wanted_txt(conn, cfg):
+    # After an upgrade that changed a line's key, the sync must find its first-seen time under
+    # the new key; read under none, it would be the run's, and the song would jump the queue.
+    import json
+
+    from tabarr.db import kv_delete, kv_set
+    from tabarr.pipeline import default_steps
+    from tabarr.songs import KEY_VERSION_KV, list_songs
+    from tabarr.wanted import FIRST_SEEN_KEY
+
+    old_key, september = "soda-stereo/persiana-americana-en-vivo", "2026-09-01T00:00:00Z"
+    conn.execute(
+        "INSERT INTO songs (key, artist, title, artists, source_ids, added_at, created_at, "
+        "updated_at) VALUES (?, 'Soda Stereo', 'Persiana Americana - En Vivo', ?, ?, ?, ?, ?)",
+        (old_key, json.dumps(["Soda Stereo"]), json.dumps({"wanted": [old_key]}), september,
+         september, september),
+    )
+    kv_set(conn, FIRST_SEEN_KEY + old_key, september)
+    kv_delete(conn, KEY_VERSION_KV)
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("Soda Stereo - Persiana Americana - En Vivo\n", encoding="utf-8")
+    sync = [s for s in default_steps() if s.name == "sync"]
+
+    run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=sync, now=NOW)
+
+    [song] = list_songs(conn)
+    assert (song.key, song.added_at) == ("soda-stereo/persiana-americana", september)
+
+
+# --- one tabarr at a time ---------------------------------------------------------------
+
+
+def lock_is_free(cfg) -> bool:
+    """Whether another process could take tabarr's lock now."""
+    import fcntl
+    import os
+
+    path = cfg.state_dir / "tabarr.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    finally:
+        os.close(fd)
+    return True
+
+
+def test_the_runs_clients_keep_the_pause_after_another_tabarrs_last_request(conn, cfg, monkeypatch):
+    # A `tabarr-admin fetch` asked UG 3 s ago: the run's first UG request waits out UG's pause.
+    from tabarr.commands import _common
+    from tabarr.pipeline import make_services
+
+    slept = []
+    monkeypatch.setattr(_common, "sleep", slept.append)
+    at = (datetime.now(UTC) - timedelta(seconds=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+        ("earlier", at, "ug", "https://tabs.ultimate-guitar.com/tab/1", 200, "ok"),
+    )
+    made = make_services(cfg, conn, "2026-10-18T03:30:00Z")
+    for client in made.clients.values():
+        client.close()
+    [pause] = slept
+    low, high = cfg.provider("ug").delay
+    assert low - 4 <= pause <= high - 3
+
+
+def test_a_run_lets_go_of_the_lock_its_clients_held(conn, cfg):
+    # Its own clients hold tabarr's lock; once the run is over, another tabarr may go on.
+    report = run_pipeline(cfg, conn=conn, steps=[step("todo")], now=NOW)
+    assert report.ok
+    assert lock_is_free(cfg)
+
+
 def test_default_match_step_skips_while_the_index_is_empty(conn, cfg):
     from tabarr.pipeline import _match, StepContext
     from tabarr.overrides import Overrides

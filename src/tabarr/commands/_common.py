@@ -7,7 +7,7 @@ import os
 import random
 import sqlite3
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,9 +17,9 @@ import httpx
 import typer
 
 from tabarr import db
-from tabarr.config import Config, ConfigError, load_config
+from tabarr.config import Config, ConfigError, ProviderPolicy, load_config
 from tabarr.health import EventLog
-from tabarr.http import PoliteClient
+from tabarr.http import Event, PoliteClient
 from tabarr.overrides import Overrides, OverridesError, load_overrides
 
 LOCK_NAME = "tabarr.lock"  # in the state directory
@@ -44,19 +44,29 @@ def _reason(e: OSError | sqlite3.Error) -> str:
 
 
 def open_db(cfg: Config) -> sqlite3.Connection:
-    """The database. It raises OSError or sqlite3.Error, for a caller that carries on without it
-    (``tabarr add``); a command that can't, opens it with ``open_db_or_exit``."""
-    return db.connect(cfg.db_path)
+    """The database, the one way a command opens it; a state folder tabarr can't write exits 1,
+    naming the path and why, and a database a newer tabarr migrated exits 2.
 
+    Its songs are re-keyed first when the normalizer changed since they were keyed
+    (``songs.ensure_current_keys``), before anything reads them: wanted.txt's sync, for
+    one, reads a line's first-seen time under its key. ``tabarr add``, which keeps its
+    wanted.txt line and exits 0 without the database, calls ``db.connect`` itself.
+    """
+    from tabarr.songs import ensure_current_keys
 
-def open_db_or_exit(cfg: Config) -> sqlite3.Connection:
-    """The database; a state folder tabarr can't write exits 1, naming the path and why."""
     try:
-        return db.connect(cfg.db_path)
+        conn = db.connect(cfg.db_path)
+    except db.DatabaseTooNew as e:  # a NixOS rollback, say: its message says what to do
+        fail(f"database: {e}", 2)
     except (OSError, sqlite3.Error) as e:
         name = getattr(e, "filename", None)
         where = f" ({name})" if name and Path(name) != cfg.db_path else ""
         fail(f"can't open the database {cfg.db_path}: {_reason(e)}{where}")
+    ensure_current_keys(conn)
+    return conn
+
+
+open_db_or_exit = open_db  # its older name
 
 
 def load_ovr(cfg: Config) -> Overrides:
@@ -79,7 +89,7 @@ def run_id_for(now: datetime) -> str:
 _held: dict[Path, tuple[int, int]] = {}  # lock file -> (its descriptor, how many hold it here)
 
 
-def _acquire(cfg: Config, what: str) -> Path:
+def _acquire(cfg: Config, what: str, *, fatal: bool = True) -> Path:
     """Take tabarr's lock, waiting for another process that holds it; see ``exclusive``."""
     path = cfg.state_dir / LOCK_NAME
     if path in _held:
@@ -90,6 +100,8 @@ def _acquire(cfg: Config, what: str) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
     except OSError as e:
+        if not fatal:
+            raise
         fail(f"can't open {path}: {_reason(e)}")
     try:
         try:
@@ -126,7 +138,7 @@ def _holder(fd: int) -> str:
 
 
 @contextmanager
-def exclusive(cfg: Config, what: str) -> Iterator[None]:
+def exclusive(cfg: Config, what: str, *, fatal: bool = True) -> Iterator[None]:
     """Hold tabarr's lock, ``state_dir/tabarr.lock``, for a command that sends requests or writes.
 
     Two tabarr processes at once, such as the nightly run and a ``tabarr-admin
@@ -135,8 +147,13 @@ def exclusive(cfg: Config, what: str) -> Iterator[None]:
     first, saying which it is (``what``). The lock is an flock, so it goes
     with its process, whatever ends it. The process that holds it may take it
     again at no cost, so a command and the clients it makes nest.
+
+    A command takes it before it reads what another tabarr may change, such as
+    a provider's cooldown. A lock file tabarr can't open exits 1, naming it;
+    ``fatal=False`` raises the OSError instead, for a caller that carries on
+    without the state folder (``tabarr add``).
     """
-    path = _acquire(cfg, what)
+    path = _acquire(cfg, what, fatal=fatal)
     try:
         yield
     finally:
@@ -194,24 +211,42 @@ def _pause_after_last_request(
         sleep(min(remaining, delay[1]))  # never longer than one pause, the clock set back or not
 
 
-def make_client(cfg: Config, conn: sqlite3.Connection, provider: str, run_id: str) -> PoliteClient:
+def make_client(
+    cfg: Config,
+    conn: sqlite3.Connection,
+    provider: str,
+    run_id: str,
+    *,
+    policy: ProviderPolicy | None = None,
+    on_event: Callable[[Event], None] | None = None,
+) -> PoliteClient:
     """A polite client for one provider and one run, logging every request to ``events``.
 
     It holds tabarr's lock (``exclusive``) until it is closed, so no other
     tabarr sends requests meanwhile, and its first request keeps the pause
-    after the provider's last one, made by this process or another.
+    after the provider's last one, made by this process or another. Every
+    caller closes it. ``policy`` stands in for the provider's own (``tabarr
+    index build`` has a budget of its own), and ``on_event`` hears every
+    event too, once it is logged.
     """
     lock = _acquire(cfg, f"{provider} requests")
     try:
-        policy = cfg.provider(provider)
+        policy = policy or cfg.provider(provider)
         _pause_after_last_request(conn, provider, policy.delay)
+        log = EventLog(conn, run_id)
+
+        def logged(event: Event) -> None:
+            log(event)
+            if on_event is not None:
+                on_event(event)
+
         return _LockedClient(
             provider,
             policy,
             cfg.cache_dir,
             user_agent=cfg.user_agent,
             transport=transport_for(provider),
-            on_event=EventLog(conn, run_id),
+            on_event=logged,
             lock=lock,
         )
     except BaseException:
@@ -223,22 +258,38 @@ def make_client(cfg: Config, conn: sqlite3.Connection, provider: str, run_id: st
 
 
 def write_pages(
-    conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime
-) -> tuple[Path, Path]:
-    """Rewrite Library/_todo.md and Library/index.html; a library tabarr can't write exits 1."""
-    from tabarr.library_page import PAGE_NAME, build_library_page, write_library_page
-    from tabarr.todo import build_todo, write_todo
+    conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
+    fatal: bool = True,
+) -> tuple[Path, Path] | None:
+    """Rewrite Library/_todo.md and Library/index.html (``todo.write_pages``), the way every
+    command does, and return their paths.
 
-    todo_text = build_todo(conn, cfg, overrides, now)
-    page_html = build_library_page(conn, cfg, overrides, now)
-    written = []
-    for name, write in (
-        ("_todo.md", lambda: write_todo(cfg.library_dir, todo_text)),
-        (PAGE_NAME, lambda: write_library_page(cfg.library_dir, page_html)),
-    ):
-        try:
-            written.append(write())
-        except OSError as e:
-            fail(f"can't write {cfg.library_dir / name}: {_reason(e)}")
-    todo, page = written
-    return todo, page
+    A library tabarr can't write exits 1, naming the page; ``fatal=False`` only
+    warns, and returns None, for a command whose own work is done and must
+    still say so (``tabarr add`` and ``tabarr sync``).
+    """
+    from tabarr import todo
+
+    try:
+        return todo.write_pages(conn, cfg, overrides, now)
+    except OSError as e:
+        message = f"can't write {_page_named(e, cfg.library_dir)}: {_reason(e)}"
+        if fatal:
+            fail(message)
+        typer.secho(message, err=True, fg=typer.colors.YELLOW)
+        return None
+
+
+def _page_named(e: OSError, library_dir: Path) -> Path:
+    """The page an error writing the pages is about, else the library folder.
+
+    Each page is written through a temporary file beside it, named after it
+    (``library.write_atomic``), so the error names one or the other.
+    """
+    from tabarr.library_page import PAGE_NAME
+
+    names = [Path(f).name for f in (e.filename, e.filename2) if f]
+    return next(
+        (library_dir / page for page in ("_todo.md", PAGE_NAME) for name in names if page in name),
+        library_dir,
+    )

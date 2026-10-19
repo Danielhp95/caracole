@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Callable
 import typer
 
 from tabarr.commands import _common
-from tabarr.commands._common import fail, load_cfg, open_db, run_id_for, utcnow
+from tabarr.commands._common import exclusive, fail, load_cfg, open_db, run_id_for, utcnow
 
 if TYPE_CHECKING:
     from tabarr.config import Config, ProviderPolicy
@@ -65,8 +65,8 @@ def _build(cfg: Config, from_dir: Path | None) -> None:
     from tabarr.config import ProviderPolicy
     from tabarr.ug.index import build_index, index_count
 
-    now = utcnow()
-    with closing(open_db(cfg)) as conn:
+    with exclusive(cfg, "index build"), closing(open_db(cfg)) as conn:
+        now = utcnow()
         if from_dir is not None:
             typer.echo(f"Reading the sitemap files in {from_dir} (no requests).")
             try:
@@ -92,8 +92,8 @@ def _build(cfg: Config, from_dir: Path | None) -> None:
 def _refresh(cfg: Config) -> None:
     from tabarr.ug.index import index_count, mark_dirty_for_new, refresh_index
 
-    now = utcnow()
-    with closing(open_db(cfg)) as conn:
+    with exclusive(cfg, "index refresh"), closing(open_db(cfg)) as conn:
+        now = utcnow()
         if index_count(conn) == 0:
             fail("The index is empty: run `tabarr index build` first.")
         stats = _with_ug(conn, cfg, now, cfg.provider("ug"),
@@ -133,26 +133,24 @@ def _with_ug(conn: sqlite3.Connection, cfg: Config, now: datetime, policy: Provi
 
     A cooldown means no request is sent; a block starts (or doubles) the
     cooldown; neither, nor a spent budget, is a failure, so they print a message
-    and return None. Any other provider error is recorded and exits 1.
+    and return None. Any other provider error is recorded and exits 1. The
+    client is the commands' own (``make_client``), with ``policy`` for UG's.
     """
-    from tabarr.health import EventLog, get_state, is_cooling, record_block, record_error, record_ok
-    from tabarr.http import BudgetExhausted, Event, PoliteClient, ProviderBlocked, ProviderError
+    from tabarr.health import get_state, is_cooling, record_block, record_error, record_ok
+    from tabarr.http import BudgetExhausted, Event, ProviderBlocked, ProviderError
 
     if is_cooling(conn, "ug", now):
         until = get_state(conn, "ug").cooldown_until
         typer.echo(f"Ultimate Guitar is cooling down after a block until {_when(until)}; no request was sent.")
         return None
-    log = EventLog(conn, run_id_for(now))
     answered = 0
 
     def on_event(event: Event) -> None:
         nonlocal answered
-        log(event)
         if event.decision in ("ok", "not_modified"):  # an error or a block is no answer
             answered += 1
 
-    client = PoliteClient("ug", policy, cfg.cache_dir, user_agent=cfg.user_agent,
-                          transport=_common.transport_for("ug"), on_event=on_event)
+    client = _common.make_client(cfg, conn, "ug", run_id_for(now), policy=policy, on_event=on_event)
     result: IndexStats | None = None
     note = failure = None
     try:

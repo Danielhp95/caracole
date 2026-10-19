@@ -3,8 +3,9 @@
 wanted.txt is the source that always works. Spotify is optional, and no Spotify
 failure makes ``tabarr sync`` fail. ``add_song`` is the one way a command adds
 a song: ``tabarr add`` and ``tabarr search --add`` both call it, and each says
-in its own words what it did. Every command module is imported on every start,
-so spotipy and the source modules are imported inside the commands.
+in its own words what it did. A sync, an add's too, then rewrites _todo.md and
+index.html. Every command module is imported on every start, so spotipy and
+the source modules are imported inside the commands.
 """
 
 from __future__ import annotations
@@ -16,7 +17,8 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from tabarr.commands._common import fail, load_cfg, open_db, utcnow
+from tabarr import db
+from tabarr.commands._common import exclusive, fail, load_cfg, open_db, utcnow, write_pages
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -115,9 +117,10 @@ def _sync(cfg: Config) -> None:
     """Sync every source, print the summary and each problem; Spotify never fails it."""
     from tabarr.sources import sync_sources
 
-    spotify = _spotify_client(cfg)
-    with closing(open_db(cfg)) as conn:
+    with exclusive(cfg, "sync"), closing(open_db(cfg)) as conn:
+        spotify = _spotify_client(cfg)  # it may refresh the token in the state folder
         report = sync_sources(conn, cfg, utcnow(), spotify=spotify)
+        _write_pages(conn, cfg)
     typer.echo(report.summary())
     for problem in report.wanted.errors:
         _warn(problem)
@@ -197,7 +200,9 @@ def add_song(
     A song the file can't hold exits with status 2, and a file that can't be
     written with status 1. The file is the source of truth, so a database that
     can't be opened or updated is no failure: it's reported in ``db_error``.
-    ``conn`` is the caller's open database; without one, it's opened here.
+    ``conn`` is the caller's open database; without one, it's opened here. The
+    line is written at once; the database waits for tabarr's lock. After the
+    sync, _todo.md and index.html are rewritten (``_write_pages``).
     """
     from tabarr.songs import find_song
     from tabarr.wanted import append_wanted, find_wanted, sync_wanted
@@ -211,13 +216,35 @@ def add_song(
     except OSError as e:
         fail(f"can't update {path}: {e.strerror or e}")
     try:
-        with (nullcontext(conn) if conn is not None else closing(open_db(cfg))) as conn:
+        with (
+            exclusive(cfg, "add", fatal=False),
+            nullcontext(conn) if conn is not None else closing(db.connect(cfg.db_path)) as conn,
+        ):
             known = find_song(conn, line.identity)
             stats = sync_wanted(conn, path, utcnow())
             song = find_song(conn, line.identity)
+            _write_pages(conn, cfg)
     except (sqlite3.Error, OSError) as e:
         return AddedSong(line, listed, db_error=e)
     return AddedSong(line, listed, known, song, tuple(stats.errors))
+
+
+def _write_pages(conn: sqlite3.Connection, cfg: Config) -> None:
+    """Rewrite _todo.md and index.html for the songs just synced.
+
+    The pages need overrides.toml (ignored songs, transpositions), which a sync
+    doesn't, and a library folder tabarr can write. wanted.txt always works, so
+    without either the pages are left as they are, with a warning, and the
+    sync fails nothing.
+    """
+    from tabarr.overrides import OverridesError, load_overrides
+
+    try:
+        overrides = load_overrides(cfg.overrides_file)
+    except OverridesError as e:
+        _warn(f"overrides: {e}\n_todo.md and index.html are left as they were until it's fixed.")
+        return
+    write_pages(conn, cfg, overrides, utcnow(), fatal=False)
 
 
 def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None) -> None:

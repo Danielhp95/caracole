@@ -3,8 +3,10 @@
 The nightly ``tabarr run`` does this as one of its steps; the command runs it
 on its own, or for one song with ``--song``, and like the run it first scores
 the sheets kept before their lyrics arrived. A block or a spent budget is
-expected behaviour, not a failure, so both exit 0. Every command module is
-imported on every start, so the fetch code is imported inside the command.
+expected behaviour, not a failure, so both exit 0. Then it rewrites _todo.md
+and index.html, unless it did nothing (a cooldown, or nothing to fetch or
+score). Every command module is imported on every start, so the fetch code is
+imported inside the command.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from typing import TYPE_CHECKING
 import typer
 
 from tabarr.commands._common import (
+    exclusive,
     fail,
     load_cfg,
     load_ovr,
@@ -24,6 +27,7 @@ from tabarr.commands._common import (
     open_db,
     run_id_for,
     utcnow,
+    write_pages,
 )
 
 if TYPE_CHECKING:
@@ -53,9 +57,10 @@ def _fetch(cfg: Config, display: str | None) -> None:
     from tabarr.http import ProviderBlocked
     from tabarr.ug.fetch import FetchContext, fetch_songs, rescore_kept_sheets, songs_to_fetch
 
-    now = utcnow()
     overrides = load_ovr(cfg)
-    with closing(open_db(cfg)) as conn:
+    # Under tabarr's lock from the start: a run this waited for may have been blocked meanwhile.
+    with exclusive(cfg, "fetch"), closing(open_db(cfg)) as conn:
+        now = utcnow()
         if is_cooling(conn, PROVIDER, now):
             until = _when(get_state(conn, PROVIDER).cooldown_until)
             typer.echo(f"Ultimate Guitar is cooling down after a block until {until}; nothing fetched.")
@@ -68,6 +73,8 @@ def _fetch(cfg: Config, display: str | None) -> None:
         songs = [_one_song(conn, display, overrides)] if display else songs_to_fetch(conn, overrides, now)
         if not songs:
             typer.echo("Nothing to fetch.")
+            if rescored:  # a partial sheet it found shows at once
+                write_pages(conn, cfg, overrides, utcnow())
             return
         client = make_client(cfg, conn, PROVIDER, run_id_for(now))
         ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank,
@@ -80,11 +87,13 @@ def _fetch(cfg: Config, display: str | None) -> None:
                 f"Ultimate Guitar blocked tabarr ({e}). No more UG requests until "
                 f"{_when(state.cooldown_until)} (block #{state.strikes}). Nothing was marked not found."
             )
+            write_pages(conn, cfg, overrides, utcnow())  # with what it kept, and the cooldown
             return
         finally:
             client.close()
         if client.requests_made:
             record_ok(conn, PROVIDER, now)
+        write_pages(conn, cfg, overrides, utcnow())
     typer.echo(_totals(stats, client.requests_made))
     if stats.budget_exhausted:
         budget = cfg.provider(PROVIDER).budget
