@@ -262,3 +262,79 @@ def _chord(text: str) -> str:
     lead = text[: len(text) - len(text.lstrip())]
     trail = text[len(text.rstrip()) :]
     return f"{lead}[ch]{name}[/ch]{trail}"
+
+
+# Common function words, accent-folded. Words that both languages use ("a",
+# "no", "me", "he", "son", "sin") and Portuguese's "o" and "e" count for neither.
+_SPANISH_WORDS = frozenset(
+    """
+    de la que el en y los se del las un por con una su para es al lo como mas pero
+    sus le ya este si porque esta entre cuando muy sobre tambien hasta hay donde
+    quien desde todo nos todos uno les ni otro ese eso esto mi yo tu te ti tus mis
+    nada ella ellos algo nosotros estoy estas estan eres soy fue era voy vas va
+    tengo tienes tiene quiero puedo aqui asi ahora nunca siempre otra vez cada cual
+    mucho poco tan tanto aunque contigo conmigo esa aquel nuestro nuestra hoy sea
+    ser estar hacer puede
+    """.split()
+)
+_ENGLISH_WORDS = frozenset(
+    """
+    the and of to in is it its you your youre i im ive ill id my we our us be been
+    on for with are was were this that these those but not all so what can cant
+    just do dont does did didnt know like when will wont would could should now up
+    out if there they them their she her his at have has had from by one yeah never
+    ever every more how why where who here about into over than then too very an or
+    as got get gonna wanna say said see go
+    """.split()
+)
+# A Latin word, or one character of any other script: Chinese has no spaces, and
+# counting its characters keeps a Spanish phrase from tipping Chinese lyrics.
+_TOKEN = re.compile(r"[a-z]+|[^\W\da-z_]")
+_APOSTROPHE = re.compile(r"['’‘`´ʼ]")
+# Real Spanish lyrics run at 45–53% of these words, and any four lines at 20% or
+# more; real English lyrics at 3% or less (LRCLIB, 18 October 2026).
+_MIN_SPANISH_SHARE = 0.15
+
+_SPANISH_SIGNS = re.compile(r"[ñ¿¡]", re.IGNORECASE)
+_SPANISH_ACCENTS = re.compile(r"[áéíóú]|gü", re.IGNORECASE)
+_OTHER_ACCENTS = re.compile(r"[àèìòùâêîôûãõçëïöÿåøæœß]|(?<!g)ü", re.IGNORECASE)
+
+
+def _language_counts(text: str) -> tuple[int, int, int]:
+    """(Spanish words, English words, all words) in a text."""
+    tokens = _TOKEN.findall(_APOSTROPHE.sub("", fold(text)))
+    spanish = sum(t in _SPANISH_WORDS for t in tokens)
+    english = sum(t in _ENGLISH_WORDS for t in tokens)
+    return spanish, english, len(tokens)
+
+
+def is_spanish(text: str) -> bool:
+    """Whether a text reads as Spanish, by its share of Spanish function words.
+
+    Spanish words must outnumber English ones and make up at least 15% of the
+    words.
+    """
+    spanish, english, total = _language_counts(text)
+    return spanish > english and spanish >= _MIN_SPANISH_SHARE * total
+
+
+def looks_spanish(title: str, lyrics: str | None = None) -> bool:
+    """Whether a song is probably Spanish. Its lyrics decide when it has any.
+
+    Without lyrics the title decides: "ñ", "¿" or "¡"; or Spanish accents (á é í
+    ó ú, "gü") with no other language's (à, ç, ö…) and no more English function
+    words than Spanish ones; or else :func:`is_spanish` on the title.
+    """
+    if lyrics and lyrics.strip():
+        return is_spanish(lyrics)
+    return _spanish_spelling(title) or is_spanish(title)
+
+
+def _spanish_spelling(title: str) -> bool:
+    s = unicodedata.normalize("NFC", title)
+    if _SPANISH_SIGNS.search(s):
+        return True
+    if not _SPANISH_ACCENTS.search(s) or _OTHER_ACCENTS.search(s):
+        return False
+    spanish, english, _ = _language_counts(s)
+    return english <= spanish

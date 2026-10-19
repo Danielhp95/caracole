@@ -14,6 +14,8 @@ from tabarr.lacuerda import (
     artist_slug_candidates,
     artist_url,
     best_acordes_version,
+    is_spanish,
+    looks_spanish,
     match_title,
     parse_artist_page,
     parse_lcd,
@@ -385,3 +387,118 @@ def test_a_page_without_a_sheet_is_a_parse_error():
 def test_an_empty_sheet_is_a_parse_error():
     with pytest.raises(LaCuerdaParseError):
         parse_version_page(_sheet_page("  \n<div></div>\n"))
+
+
+# --- is it Spanish? ----------------------------------------------------------
+# Invented lyrics, written for these tests.
+
+SPANISH_LYRICS = """\
+Cruzo la plaza con el café frío
+y cuento las luces del tren de las seis
+nadie me espera en el andén vacío
+guardo tu nombre y no sé qué hacer
+Baila la lluvia sobre los tejados
+suena la radio de la vecindad
+llevo en el bolso tu carta doblada
+mañana el puerto se va a despertar
+"""
+
+ENGLISH_LYRICS = """\
+I walk the long road when the city is asleep
+and the lights on the river are the only thing I keep
+you said that tomorrow would be easy on the heart
+but the morning came early and we fell apart
+oh the radio is playing all the songs we used to know
+and I'm counting every window on the way back home
+"""
+
+# In the manner of 斑马斑马: a Chinese folk ballad.
+CHINESE_LYRICS = """\
+我走过安静的长街
+风吹着旧城的屋檐
+你说远方没有尽头
+我把歌留在桥边
+斑马在梦里慢慢地走
+南方的雨下个不停
+"""
+
+
+def test_is_spanish_on_spanish_lyrics():
+    assert is_spanish(SPANISH_LYRICS)
+
+
+def test_is_spanish_on_english_lyrics():
+    assert not is_spanish(ENGLISH_LYRICS)
+
+
+def test_is_spanish_on_chinese_lyrics():
+    assert not is_spanish(CHINESE_LYRICS)
+    assert not is_spanish("斑马，斑马")
+
+
+@pytest.mark.parametrize(
+    "title,spanish",
+    [
+        ("De Música Ligera", True),
+        ("La Flaca", True),
+        ("19 Días y 500 Noches", True),
+        ("Te Para Tres", True),
+        ("Let It Be", False),
+        ("Wonderwall", False),
+        ("Hotel California", False),
+        ("Persiana Americana", False),  # nothing to go on in two words
+        ("", False),
+    ],
+)
+def test_is_spanish_on_short_titles(title, spanish):
+    assert is_spanish(title) is spanish
+
+
+def test_is_spanish_on_mixed_text():
+    assert is_spanish(SPANISH_LYRICS + "oh baby you know that I love you\n")
+    assert not is_spanish(ENGLISH_LYRICS + "te quiero mi amor\n")
+    # Each Chinese character counts as a word, so a Spanish phrase can't tip Chinese lyrics.
+    assert not is_spanish(CHINESE_LYRICS + "te quiero mi amor\n")
+
+
+def test_is_spanish_is_not_fooled_by_a_la_la_chorus():
+    assert not is_spanish(ENGLISH_LYRICS + "la la la la la la\nla la la la\n")
+
+
+def test_looks_spanish_lets_the_lyrics_decide():
+    assert not looks_spanish("Señorita", ENGLISH_LYRICS)
+    assert looks_spanish("Persiana Americana", SPANISH_LYRICS)
+    assert not looks_spanish("斑马，斑马", CHINESE_LYRICS)
+
+
+def test_looks_spanish_without_lyrics_reads_the_title():
+    assert looks_spanish("Señorita")
+    assert looks_spanish("Señorita", None)
+    assert looks_spanish("Señorita", "  \n")
+
+
+@pytest.mark.parametrize(
+    "title,spanish",
+    [
+        ("Señorita", True),
+        ("¿Dónde Estás?", True),
+        ("¡Ay!", True),
+        ("Corazón Espinado", True),
+        ("Pingüino", True),
+        ("La Bamba", True),  # no marks, but a Spanish article
+        ("Persiana Americana", False),
+        ("Déjà Vu", False),  # à is not Spanish
+        ("Für Elise", False),  # ü only follows g in Spanish
+        ("Ça Ira", False),
+        ("Café in the Rain", False),  # an accent, but English words
+        ("Wonderwall", False),
+        ("斑马，斑马", False),
+    ],
+)
+def test_looks_spanish_title_marks(title, spanish):
+    assert looks_spanish(title) is spanish
+
+
+def test_looks_spanish_reads_decomposed_and_capital_marks():
+    assert looks_spanish(unicodedata.normalize("NFD", "Señorita"))
+    assert looks_spanish("CORAZÓN ESPINADO")
