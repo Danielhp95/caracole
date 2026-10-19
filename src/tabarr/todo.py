@@ -94,7 +94,22 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
         return (f"{head}. tabarr looks for it on {artist}'s UG page in the next run: wait for that before "
                 "you pick one.")
     return (f"{head}. tabarr didn't find it on {artist}'s UG page either. Pick one only if it is the "
-            "version you want; if none is, leave it: tabarr looks at the artist page again after 30 days.")
+            "version you want; if none is, dismiss them all (below): tabarr looks at the artist page again "
+            "after 30 days.")
+
+
+def _dismissal(song: Song, refs: list[str], overrides: Overrides) -> list[str]:
+    """How to say that no candidate is the song: ``tabarr review``, or the song's ``[reject]`` line.
+
+    A song rejected before gets its whole line, the UG songs rejected then included, to put in place
+    of the one it has: a second line for the same song would make overrides.toml unreadable.
+    """
+    before = [f"{a}/{s}" for a, s in sorted(overrides.reject.get(song.key, ()))]
+    listed = ", ".join(_toml_str(r) for r in dict.fromkeys([*before, *refs]))
+    where = "put this line in place of the song's line under" if before else "add this line under"
+    return [f"None of these? Answer `n` in `tabarr review`, or {where} `[reject]`: tabarr drops these "
+            "candidates for good and goes on looking for the song.",
+            *_paste([f"{_toml_str(song.display)} = [{listed}]  # under [reject]"])]
 
 
 def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, due: set[int]) -> list[str]:
@@ -106,10 +121,12 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, d
         note = _covers_note(conn, s, overrides, due)
         if note:
             items += ["", note, ""]
+        refs: list[str] = []
         for cand in (s.match_candidates or [])[:5]:
             akey, skey = cand.get("artist_key"), cand.get("song_key")
             if not akey or not skey:
                 continue
+            refs.append(f"{akey}/{skey}")
             tabs = song_tabs(conn, akey, skey)
             first: dict[str, str] = {}
             for t in tabs:
@@ -123,6 +140,8 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, d
             if step != "title_only" and slug_key(s.artist) != akey:
                 lines.append(f"{_toml_str(s.artist)} = {_toml_str(akey)}  # under [alias]")
             items += _paste(lines)
+        if refs:
+            items += _dismissal(s, refs, overrides)
         items.append("")
     return items
 
@@ -452,9 +471,10 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         # The count is of songs, not lines, so the header is built here rather than by _section.
         out += [f"## Review ({sum(1 for s in songs if s.review and s.status != 'ignored')})", "",
                 "tabarr wasn't sure about these matches. Run `tabarr review` to settle them one by one, or add "
-                "the right candidate's lines to overrides.toml yourself, each under the table its comment "
-                "names. The file holds each table once: write a table's header (`[match]`, `[alias]`) only "
-                "if the file doesn't have that table yet.", "", *review]
+                "the right candidate's lines (or, when none is right, the `[reject]` line) to overrides.toml "
+                "yourself, each under the table its comment names. The file holds each table once: write a "
+                "table's header (`[match]`, `[alias]`, `[reject]`) only if the file doesn't have that table yet.",
+                "", *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
