@@ -90,3 +90,7 @@ Once the phone sheet viewer lands (`sheet.html`, in progress), it covers the sam
 ## Better presentation for sources and reslts
 
 Currently we have a "gallery view" for songs. I would also like to have a row-style view where I can see more results at once. I would like when searching for tabs to have similar outputs. Depending on which source the song comes from (la cuerda, ultimate guitar) I want a little icon to denote it, make the icon come from the webisite's own icon
+
+## Songbooks
+
+bundle in a songbook app too. I want the ability to "make songbook" so that i select different songs and a songbook is generated from them
