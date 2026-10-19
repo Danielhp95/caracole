@@ -645,6 +645,61 @@ def test_a_version_page_without_a_sheet_is_an_error(conn, tmp_path):
     assert_untouched(conn, song, tmp_path)
 
 
+# A maintenance notice served with HTTP 200: cached like any page, but no sheet in it.
+MAINTENANCE = (
+    "<html><head><title>LaCuerda.net</title></head><body>"
+    + "<p>Estamos realizando tareas de mantenimiento. Vuelve en unos minutos.</p>" * 30
+    + "</body></html>"
+)
+
+
+def test_a_cached_version_page_that_does_not_parse_is_fetched_again(conn, tmp_path):
+    # One bad night must not cost the song its sheet for good: the next run asks once more.
+    site = FakeLaCuerda()
+    site.pages[DML_3] = (200, MAINTENANCE)
+    song = spanish_song(conn)
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, errors=1)
+    assert_untouched(conn, song, tmp_path)
+
+    site.pages[DML_3] = (200, fixture("version.html"))  # LaCuerda is back
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, kept=1)
+    assert site.requests == [SODA, DML_3, DML_3]
+    assert get_song(conn, song.id).lacuerda_checked_at == STAMP
+
+
+def test_a_cached_artist_page_that_does_not_parse_is_fetched_again(conn, tmp_path):
+    # The artist page is cached for 30 days: a bad copy would fail the artist's songs for a month.
+    site = FakeLaCuerda({SODA: (200, MAINTENANCE), DML_3: (200, fixture("version.html"))})
+    song = spanish_song(conn)
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, errors=1)
+    assert_untouched(conn, song, tmp_path)
+
+    site.pages[SODA] = (200, fixture("artist.html"))
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, kept=1)
+    assert site.requests == [SODA, SODA, DML_3]
+
+
+def test_a_page_that_still_does_not_parse_costs_one_request_a_run(conn, tmp_path):
+    # Still broken when fetched again: an error again, never a miss, and no more asking.
+    site = FakeLaCuerda()
+    site.pages[DML_3] = (200, MAINTENANCE)
+    song = spanish_song(conn)
+    run(site, conn, tmp_path)
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, errors=1)
+    assert site.requests == [SODA, DML_3, DML_3]
+    assert_untouched(conn, song, tmp_path)
+
+
+def test_a_cached_bad_page_that_is_gone_when_fetched_again_is_a_miss(conn, tmp_path):
+    site = FakeLaCuerda()
+    site.pages[DML_3] = (200, MAINTENANCE)
+    song = spanish_song(conn)
+    run(site, conn, tmp_path)
+    site.pages[DML_3] = (404, "<html><body>No existe</body></html>")
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, missing=1)
+    assert_missed(conn, song, tmp_path)
+
+
 def test_an_error_does_not_end_the_pass(conn, tmp_path):
     site = FakeLaCuerda()
     persiana_2 = f"{BASE}/soda_stereo/persiana_americana-2.shtml"
