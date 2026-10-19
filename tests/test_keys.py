@@ -308,6 +308,18 @@ def test_a_sheet_json_that_is_no_json_gives_no_estimate_but_ugs_key_still_counts
     assert song_key(conn, cfg.library_dir, other) is None
 
 
+def test_a_sheet_json_nested_too_deep_to_decode_is_no_json_either(conn, cfg):
+    # Any synced device can write one; json.loads raises RecursionError, not ValueError, on it.
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "F"})
+    keep = add_song(conn, "Radiohead", "Creep")
+    keep_sheet(conn, cfg, keep, tab_id="1")
+    for song in (s, keep):
+        (song_dir(cfg.library_dir, song) / "sheet.json").write_text("[" * 100_000 + "]" * 100_000)
+    assert song_key(conn, cfg.library_dir, s) == SongKey("F", "tab")
+    assert song_key(conn, cfg.library_dir, keep) is None
+
+
 def test_info_json_written_before_keys_gets_them_once(conn, cfg):
     s = add_song(conn)
     keep_sheet(conn, cfg, s, raw={"tonality_name": "Bm"})

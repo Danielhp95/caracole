@@ -276,13 +276,17 @@ def _tonality(raw: Mapping[str, Any], field: str = "tonality_name") -> str | Non
 
 
 def _markup(library_dir: Path, doc: KeptFile | None, sheet: KeptFile) -> str | None:
-    """The human sheet's markup: the ``content`` of the sheet.json kept with it."""
+    """The human sheet's markup: the ``content`` of the sheet.json kept with it.
+
+    Any synced device can write that file, so whatever it holds gives None at worst: a file
+    nested too deep for the decoder raises RecursionError, not ValueError.
+    """
     if doc is None or doc.version_id != sheet.version_id:
         return None
     text = _text(library_dir / doc.path)
     try:
         data = json.loads(text) if text is not None else None
-    except ValueError:
+    except (ValueError, RecursionError):
         return None
     content = data.get("content") if isinstance(data, dict) else None
     return content if isinstance(content, str) else None
