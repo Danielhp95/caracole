@@ -377,10 +377,11 @@ _SCRIPT = r"""
   const EDGES = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
   const terms = (query) => fold(query).split(/\s+/).map((w) => w.replace(EDGES, "")).filter(Boolean);
   const hay = songs.map((s) => String(s.search || ""));
-  const list_of = (value) => (Array.isArray(value) ? value : []);
+  const listOf = (value) => (Array.isArray(value) ? value : []);
 
   const STATUS_TEXT = { found: "Found", wanted: "Wanted", ignored: "Ignored" };
   const LYRICS_TEXT = { pending: "Lyrics pending", missing: "No lyrics found", instrumental: "Instrumental" };
+  const label = (texts, value) => (own.call(texts, value) ? texts[value] : "");
   const SHOWS = {
     all: () => true,
     found: (s) => s.status === "found",
@@ -425,11 +426,11 @@ _SCRIPT = r"""
     const head = el("div", "head");
     const names = el("div", "names");
     names.appendChild(el("h3", null, s.title));
-    const artists = list_of(s.artists);
+    const artists = listOf(s.artists);
     names.appendChild(el("p", "artist", artists.length > 1 ? artists.join(", ") : s.artist));
     head.appendChild(names);
     const badges = el("div", "badges");
-    badges.appendChild(el("span", "badge " + String(s.status), STATUS_TEXT[s.status] || s.status));
+    badges.appendChild(el("span", "badge " + String(s.status), label(STATUS_TEXT, s.status) || s.status));
     if (SHOWS.review(s)) badges.appendChild(el("span", "badge review", "Needs review"));
     if (s.auto) badges.appendChild(el("span", "badge auto", "Auto sheet"));
     head.appendChild(badges);
@@ -444,7 +445,7 @@ _SCRIPT = r"""
         " semitone" + (Math.abs(shift) === 1 ? "" : "s");
       facts.appendChild(t);
     }
-    if (LYRICS_TEXT[s.lyrics]) facts.appendChild(el("span", "lyrics", LYRICS_TEXT[s.lyrics]));
+    if (label(LYRICS_TEXT, s.lyrics)) facts.appendChild(el("span", "lyrics", label(LYRICS_TEXT, s.lyrics)));
     if (s.added) facts.appendChild(el("span", "added", "Added " + String(s.added).slice(0, 10)));
     if (facts.childNodes.length) card.appendChild(facts);
     if (SHOWS.review(s)) {
@@ -456,15 +457,15 @@ _SCRIPT = r"""
       card.appendChild(note);
     }
 
-    const files = list_of(s.files);
+    const files = listOf(s.files);
     if (files.length) {
       const row = el("div", "actions");
       for (const f of files) row.appendChild(link(f, f.primary ? "btn primary" : "btn", false));
       card.appendChild(row);
     }
-    linkRow(card, "Guitar Pro to download", list_of(s.guitarPro), "btn small");
-    linkRow(card, "Find the chords", list_of(s.links), "btn small");
-    linkRow(card, "Buy the track for an auto sheet", list_of(s.buy), "btn small");
+    linkRow(card, "Guitar Pro to download", listOf(s.guitarPro), "btn small");
+    linkRow(card, "Find the chords", listOf(s.links), "btn small");
+    linkRow(card, "Buy the track for an auto sheet", listOf(s.buy), "btn small");
     return card;
   };
   const cards = new Map();
