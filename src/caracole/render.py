@@ -45,7 +45,8 @@ The viewer is made from the .cho, needs no font, and is written at every pass
 when it has changed (a new key in info.json, a PDF now there to link), and
 when the PDF could not be rendered too. It takes the song's musical key from
 the "key" and "key_source" of its info.json, read before the pass rewrites it
-and never through a link. It is an extra: one that can't be built (a bug) or
+and never through a link: a key heard in the audio for the auto sheet, any
+other for the human sheet (``viewer.key_heard``). It is an extra: one that can't be built (a bug) or
 written (a link in its place) is logged as "no viewer for", with the traceback
 of a bug, and counts the song as failed, but never costs it a PDF.
 
@@ -117,7 +118,7 @@ from caracole.overrides import Overrides
 from caracole.songs import Song, list_songs
 from caracole.ug.page import json_int
 from caracole.versions import get_version
-from caracole.viewer import build_viewer, info_key
+from caracole.viewer import build_viewer, info_key, key_heard
 
 log = logging.getLogger(__name__)
 
@@ -437,16 +438,22 @@ def _render_song(
     outputs go once that has happened and the human sheet's PDF is in place.
     A human sheet the song no longer keeps takes its outputs along
     (``_drop_human_outputs``).
+
+    info.json's key goes to the viewer of the sheet it is of: one heard in the audio to the
+    auto sheet's, any other to the human sheet's (``viewer.key_heard``). The other viewer
+    takes its sheet's own key, or guesses it from its chords.
     """
     files = {f.name: f for f in kept_files(conn, song.id)}
     human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
     folder = song_dir(cfg.library_dir, song)
     done: list[_Done] = []
     key = _info_key(folder) if human or auto else (None, None)
+    heard = key_heard(key[1])
 
     def render(kept: KeptFile, sheet: _Sheet, state_key: str) -> None:
+        mine = key if sheet.auto == heard else (None, None)
         done.append(_render_sheet(conn, cfg, overrides, song, folder, kept, sheet, state_key,
-                                  cjk_font=cjk_font, runner=runner, force=force, key=key))
+                                  cjk_font=cjk_font, runner=runner, force=force, key=mine))
 
     if human is not None:
         render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id))

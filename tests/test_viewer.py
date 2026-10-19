@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from caracole.chordpro import to_chordpro
-from caracole.viewer import build_viewer, info_key
+from caracole.viewer import build_viewer, info_key, key_heard
 from caracole.viewer.voicings import load_voicings
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
@@ -159,6 +159,15 @@ def test_where_the_key_came_from_is_said_in_words(source, label):
 )
 def test_info_json_gives_a_musical_key_or_none(info, found):
     assert info_key(info) == found
+
+
+@pytest.mark.parametrize(
+    ("source", "heard"),
+    [("audio", True), ("model", True), ("autochords", True), (" Audio ", True),
+     ("tab", False), ("chords", False), ("estimate", False), (None, False), (5, False)],
+)
+def test_a_key_heard_in_the_audio_is_told_apart(source, heard):
+    assert key_heard(source) is heard
 
 
 # --- what the script works from ------------------------------------------------------------------

@@ -73,6 +73,15 @@ def _assets() -> tuple[str, str]:
     return (HERE / "viewer.css").read_text(encoding="utf-8"), (HERE / "viewer.js").read_text(encoding="utf-8")
 
 
+def key_heard(source: str | None) -> bool:
+    """Whether info.json's "key_source" says the key was heard in the audio (an auto sheet's).
+
+    Such a key is the auto sheet's alone, and any other key a human sheet's: the model's chords
+    may be in another key than the tab's (another transposition, or the capo).
+    """
+    return isinstance(source, str) and _SOURCES.get(" ".join(source.split()).lower()) == "from the audio"
+
+
 def info_key(info: Any) -> tuple[str | None, str | None]:
     """The musical key in a song's info.json, and where it came from: ("Am", "tab").
 

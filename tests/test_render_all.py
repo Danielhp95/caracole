@@ -445,13 +445,53 @@ def test_the_viewer_starts_in_the_key_of_the_pdf(conn, cfg):
     assert viewer_data(viewer_of(cfg, song))["transpose"] == 3
 
 
+def write_key(cfg, song, key: str, source: str) -> None:
+    """info.json names the song's key, as the key step writes it."""
+    info = {"key": key, "key_source": source}
+    write_atomic(song_dir(cfg.library_dir, song) / "info.json", json.dumps(info).encode("utf-8"))
+
+
 def test_the_viewer_takes_the_key_info_json_gives(conn, cfg):
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     human_sheet(conn, cfg, song)  # the tab says Bm
-    info = {"key": "D", "key_source": "model"}
-    write_atomic(song_dir(cfg.library_dir, song) / "info.json", json.dumps(info).encode("utf-8"))
+    write_key(cfg, song, "D", "chords")
     render(conn, cfg)
-    assert viewer_data(viewer_of(cfg, song))["key"] == {"tonic": 2, "mode": "ionian", "from": "from the audio"}
+    assert viewer_data(viewer_of(cfg, song))["key"]["tonic"] == 2
+
+
+def test_an_auto_sheet_takes_the_key_heard_in_the_audio(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)  # C, then G
+    write_key(cfg, song, "D", "audio")
+    render(conn, cfg)
+    assert viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["key"] == {
+        "tonic": 2, "mode": "ionian", "from": "from the audio",
+    }
+
+
+@pytest.mark.parametrize("source", ["tab", "chords"])
+def test_beside_a_human_sheet_each_viewer_takes_its_own_sheets_key(conn, cfg, source):
+    # The key step prefers the human sheet's key, which the auto sheet's chords, as the model
+    # heard them, may not be in: another transposition, or the capo.
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)  # C, then G
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)  # in Bm
+    write_key(cfg, song, "B minor", source)
+    render(conn, cfg)
+    human = viewer_data(viewer_of(cfg, song))["key"]
+    auto = viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["key"]
+    assert (human["tonic"], human["mode"]) == (11, "aeolian")
+    assert (auto["tonic"], auto["mode"]) in [(0, "ionian"), (7, "ionian")]
+
+
+def test_a_human_sheet_never_takes_a_key_heard_in_the_audio(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)  # the tab says Bm
+    write_key(cfg, song, "D", "audio")
+    render(conn, cfg)
+    assert viewer_data(viewer_of(cfg, song))["key"] == {"tonic": 11, "mode": "aeolian", "from": "from the sheet"}
+    assert viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["key"]["tonic"] == 2
 
 
 def test_info_json_is_never_read_through_a_link(conn, cfg):
