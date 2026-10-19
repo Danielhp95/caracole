@@ -33,6 +33,22 @@ The code is in `src/caracole/keys.py`.
 - Instead of having a static site, allow for a lightweight server that wraps around the `caracole` CLI such that I can request songs from the website
 - Improve the website, making it more visually appealing and functional. Do a subagent driven research for this
 
+**Done in [9cd5423](https://github.com/Danielhp95/caracole/commit/9cd5423).** `caracole serve` serves the library page at http://127.0.0.1:8737/. It uses only Python's standard library. Options: `--address`, `--port`, `--allow-host`, `--token-file`.
+- **Request a song:** the form writes the song to wanted.txt, as `caracole add` does. With "Fetch it now" ticked, it also runs `caracole match`, `caracole fetch --song` and `caracole render` for that song.
+- **Fetch now:** each wanted card has this button. A song that needs review shows "Review first" instead.
+- **Politeness:** commands run one at a time, each under caracole's lock, with the usual pauses and budgets.
+- **/jobs:** shows each command's output.
+- **Security:** it refuses cross-origin writes and unknown host names. `--token-file`, or a `web_token` credential, asks each browser for a token once.
+
+The page itself was redesigned:
+- one responsive grid, so a desktop shows three or four columns;
+- per-artist coloured monograms;
+- an A–Z letter strip;
+- a "Title A–Z" sort;
+- clicking an artist's name shows only their songs, with a chip that removes the filter.
+
+On NixOS, `services.caracole.web.enable = true` runs it as `caracole-web.service`. The options `web.address`, `web.allowedHosts` and `web.openFirewall` open it to a LAN or tailnet. See docs/usage.md ("caracole serve") and docs/deploy.md (section 8).
+
 ## Sheet pdf "makeup" and phone quality.
 
 - Is there a way to make the music sheet pdf cleaner so that it's more readable?
