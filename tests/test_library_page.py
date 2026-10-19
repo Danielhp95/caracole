@@ -334,6 +334,13 @@ def dump_dom(path: Path, tmp_path: Path, fragment: str = "") -> str:
     return result.stdout
 
 
+def listing(dom: str) -> str:
+    """The rendered song list (the DOM dump also holds the page's own script text)."""
+    found = re.search(r'<main[^>]*id="list"[^>]*>(.*?)</main>', dom, re.S)
+    assert found, dom[-2000:]
+    return found.group(1)
+
+
 @pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
 def test_the_page_renders_and_filters_in_a_real_browser(conn, cfg, tmp_path):
     s = add_song(conn, "宋冬野", "斑马，斑马")
@@ -342,12 +349,36 @@ def test_the_page_renders_and_filters_in_a_real_browser(conn, cfg, tmp_path):
     add_song(conn, "Radiohead", "Creep</script><b>x</b>")
     path = write_library_page(cfg.library_dir, page(conn, cfg))
 
-    dom = dump_dom(path, tmp_path)
-    assert dom.count("<article") == 3  # one card per song
-    assert "Creep&lt;/script&gt;&lt;b&gt;x&lt;/b&gt;" in dom  # shown as text, never as markup
-    assert "<b>x</b>" not in dom
+    shown = listing(dump_dom(path, tmp_path))
+    assert shown.count("<article") == 3  # one card per song
+    assert "Creep&lt;/script&gt;&lt;b&gt;x&lt;/b&gt;" in shown  # shown as text, never as markup
+    assert "<b>x</b>" not in shown
 
     for query, title in (("ban ma", "斑马，斑马"), ("musica", "De Música Ligera"), ("MÚSICA", "De Música Ligera")):
-        dom = dump_dom(path, tmp_path, "#q=" + quote(query))
-        assert dom.count("<article") == 1, query
-        assert title in dom
+        shown = listing(dump_dom(path, tmp_path, "#q=" + quote(query)))
+        assert shown.count("<article") == 1, query
+        assert title in shown
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_apostrophes_and_empty_results_in_a_real_browser(conn, cfg, tmp_path):
+    add_song(conn, "Queen", "Don't Stop Me Now")
+    oasis = add_song(conn, "Oasis", "Don’t Look Back in Anger")
+    update_song(conn, oasis.id, status="found")
+    add_song(conn, "Radiohead", "Creep")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+
+    # A phone's keyboard types curly apostrophes; the titles may have either kind.
+    for query, title in (("don’t stop", "Don't Stop Me Now"), ("don't look", "Don’t Look Back in Anger")):
+        shown = listing(dump_dom(path, tmp_path, "#q=" + quote(query)))
+        assert shown.count("<article") == 1, query
+        assert title in shown
+
+    # A match hidden by the status filter is offered, not reported missing.
+    shown = listing(dump_dom(path, tmp_path, "#show=found&q=creep"))
+    assert shown.count("<article") == 0
+    assert "Show all 1 match" in shown and "tabarr search" not in shown
+
+    # The suggested command is quoted for a shell.
+    shown = listing(dump_dom(path, tmp_path, "#q=" + quote("guns n' roses")))
+    assert "tabarr search \"guns n' roses\"" in shown

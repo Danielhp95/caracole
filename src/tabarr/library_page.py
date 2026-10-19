@@ -374,8 +374,13 @@ _SCRIPT = r"""
     }
     return out.toLowerCase();
   };
+  // Apostrophes go, as in tabarr's keys: "don’t" and "don't" both find "dont" (the search text has every
+  // name without punctuation too). Other punctuation is only trimmed off the ends of a word.
+  const APOSTROPHES = /['’‘`´ʼ]/g;
   const EDGES = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
-  const terms = (query) => fold(query).split(/\s+/).map((w) => w.replace(EDGES, "")).filter(Boolean);
+  const terms = (query) => fold(query).split(/\s+/)
+    .map((w) => w.replace(APOSTROPHES, "").replace(EDGES, "")).filter(Boolean);
+  const shellQuote = (text) => '"' + text.replace(/(["\\$`])/g, "\\$1") + '"';
   const hay = songs.map((s) => String(s.search || ""));
   const listOf = (value) => (Array.isArray(value) ? value : []);
 
@@ -388,6 +393,7 @@ _SCRIPT = r"""
     wanted: (s) => s.status === "wanted",
     review: (s) => Boolean(s.review) && s.status !== "ignored",
   };
+  const CHIP_TEXT = { found: "found songs", wanted: "wanted songs", review: "songs that need review" };
   const SORTS = ["artist", "recent"];
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -565,10 +571,22 @@ _SCRIPT = r"""
       hint.appendChild(el("code", null, "tabarr add ARTIST TITLE"));
       hint.appendChild(document.createTextNode("; the next run lists the song here."));
       list.appendChild(hint);
+    } else if (!shown.length && matching.length) {
+      // The words match songs that the status filter hides: offer them.
+      list.appendChild(el("p", "empty", "No " + CHIP_TEXT[state.show] + " match “" + state.q + "”."));
+      const n = matching.length;
+      const all = el("button", "btn", "Show all " + n + " match" + (n === 1 ? "" : "es"));
+      all.type = "button";
+      all.addEventListener("click", () => {
+        state.show = "all";
+        render();
+        save();
+      });
+      list.appendChild(all);
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
       const hint = el("p", "empty-hint", "To look in the offline Ultimate Guitar index, run ");
-      hint.appendChild(el("code", null, "tabarr search " + state.q));
+      hint.appendChild(el("code", null, "tabarr search " + shellQuote(state.q)));
       list.appendChild(hint);
     } else if (!shown.length) {
       list.appendChild(el("p", "empty", state.show === "review" ? "Nothing needs review." : "No songs here."));
