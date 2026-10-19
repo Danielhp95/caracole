@@ -376,7 +376,14 @@ def _health(conn: sqlite3.Connection, now: datetime) -> list[str]:
 _NUC_BUILD = "`tabarr index build` (on the NUC: `sudo tabarr-admin index build`)"
 
 
-def _setup(index: str, overrides_error: str | None) -> list[str]:
+def _wanted_errors(conn: sqlite3.Connection) -> int:
+    """How many wanted.txt lines the last sync couldn't read (listed under Sources)."""
+    w = kv_get_json(conn, "source:wanted", default=None)
+    errors = w.get("errors") if isinstance(w, dict) else None
+    return len(errors) if isinstance(errors, list) else 0
+
+
+def _setup(index: str, overrides_error: str | None, unreadable_lines: int) -> list[str]:
     """What stops tabarr from doing its job until you act, for the section at the top."""
     items = []
     if overrides_error:
@@ -387,12 +394,21 @@ def _setup(index: str, overrides_error: str | None) -> list[str]:
             "night. A table such as `[match]` may appear only once in the file: when the error says one is "
             "declared twice, merge the two into one."
         )
-    if index == "partial":
+    if index == "empty":
+        items.append(
+            "- **The Ultimate Guitar index isn't built**, so no song is matched yet, and none is looked for on "
+            f"UG. Run {_NUC_BUILD} once: about 42 requests, 10 minutes."
+        )
+    elif index == "partial":
         items.append(
             "- **The Ultimate Guitar index is incomplete**: a build stopped before it read every sitemap. Until "
             "the rest are read, tabarr matches no song and suggests buying none, so nothing UG has is taken for "
             f"missing. The nightly refresh reads them as its budget allows, or run {_NUC_BUILD}."
         )
+    if unreadable_lines:
+        lines = f"{unreadable_lines} line{'s' if unreadable_lines != 1 else ''}"
+        items.append(f"- **wanted.txt has {lines} tabarr couldn't read**, so those songs aren't looked for; "
+                     "the other lines still count. Sources, below, says what is wrong with each.")
     return items
 
 
@@ -417,7 +433,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     to_buy, waiting = songs_to_buy(conn, songs, overrides, now)
     if waiting:
         out += [f"{waiting} song{'s' if waiting != 1 else ''} waiting for the nightly fetch.", ""]
-    setup = _setup(index, overrides_error)
+    setup = _setup(index, overrides_error, _wanted_errors(conn))
     if setup:
         out += _section("Setup problems", setup)
 
@@ -434,7 +450,10 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
     for title, items, intro, count in (
         ("Partial sheets", _partial_sheets(conn, cfg, by_id),
-         f"These sheets cover less than {cfg.rank.coverage_threshold:.0%} of the lyrics.", None),
+         f"These sheets cover less than {cfg.rank.coverage_threshold:.0%} of the lyrics. tabarr keeps "
+         "looking, and a more complete sheet takes a partial one's place when one turns up. To use another "
+         "Ultimate Guitar version now, pin its page under `[pin]` in overrides.toml: "
+         '`"Artist - Title" = ["https://tabs.ultimate-guitar.com/tab/…"]`.', None),
         ("Artists to find on Ultimate Guitar", artists,
          "UG's sitemaps list these artists only by bare ids (usually because of accents or non-Latin "
          "letters), so tabarr can't see their tabs. Find each artist's page once: search Ultimate Guitar, "

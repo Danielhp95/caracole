@@ -155,6 +155,43 @@ def test_partial_sheet_listed_with_percent(conn, cfg):
     assert "https://tabs.ultimate-guitar.com/tab/85053" in text
 
 
+def first_section(text):
+    return text.split("\n## ", 1)[1].split("\n## ", 1)[0]
+
+
+def test_setup_problems_say_the_index_isnt_built_before_anything_else(conn, cfg):
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"}])
+    setup = first_section(todo(conn, cfg))
+    assert setup.startswith("Setup problems")
+    assert "The Ultimate Guitar index isn't built" in setup
+    assert "`tabarr index build`" in setup and "`sudo tabarr-admin index build`" in setup
+
+
+def test_setup_problems_count_the_wanted_lines_tabarr_couldnt_read(conn, cfg):
+    from tabarr.ug.index import mark_built
+
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    mark_built(conn, NOW)
+    assert "## Setup problems" not in todo(conn, cfg)
+    kv_set_json(conn, "source:wanted", {"at": "2026-10-18T03:30:00Z", "lines": 12, "new": 0,
+                                        "errors": [[3, "expected \"Artist - Title\""], [7, "bad duration"]]})
+    setup = first_section(todo(conn, cfg))
+    assert setup.startswith("Setup problems")
+    assert "wanted.txt has 2 lines tabarr couldn't read" in setup and "Sources" in setup
+
+
+def test_partial_sheets_say_how_to_choose_another_version(conn, cfg):
+    s = add_song(conn)
+    v = version(conn, s, 85053)
+    set_coverage(conn, v, 0.45)
+    keep_file(conn, cfg.library_dir, song=s, version_id=v, name="sheet.txt", data=b"x", rank=1)
+    section = section_of(todo(conn, cfg), "Partial sheets")
+    assert "pin its page under `[pin]`" in section
+    assert '`"Artist - Title" = ["https://tabs.ultimate-guitar.com/tab/…"]`' in section
+
+
 def test_buy_list_links(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马，斑马", album="安和桥北", duration_ms=253000)
     update_song(conn, s.id, match_decision="not_found")
