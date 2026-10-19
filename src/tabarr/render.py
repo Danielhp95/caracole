@@ -62,6 +62,7 @@ import hashlib
 import json
 import logging
 import os
+import secrets
 import sqlite3
 import struct
 import subprocess
@@ -196,9 +197,15 @@ def write_chordpro(
     except (OSError, UnicodeDecodeError):
         pass
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    # A name of its own, so another tabarr writing the same file isn't in the way.
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(4)}.tmp")
+    try:
+        with open(tmp, "x", encoding="utf-8") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     return path
 
 
@@ -522,8 +529,12 @@ def _render_into(
     font_file: Path | None,
     runner: Runner,
 ) -> None:
-    """``render_pdf`` through a temporary file: a failed run leaves the last good PDF in place."""
-    tmp = pdf.with_name(f".{pdf.stem}.tmp.pdf")  # chordpro picks its backend by the extension
+    """``render_pdf`` through a temporary file: a failed run leaves the last good PDF in place.
+
+    The name is its own, so another tabarr rendering the same sheet isn't in the way, and
+    ends in .pdf, because chordpro picks its backend by the extension.
+    """
+    tmp = pdf.with_name(f".{pdf.stem}.{secrets.token_hex(4)}.tmp.pdf")
     try:
         render_pdf(cho, tmp, transpose=transpose, chordpro_bin=chordpro_bin, font_file=font_file,
                    runner=runner)

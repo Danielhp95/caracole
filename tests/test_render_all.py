@@ -562,6 +562,21 @@ def test_a_failed_rerender_keeps_the_previous_pdf(conn, cfg):
     assert [p.name for p in folder.iterdir() if p.name.startswith(".")] == []
 
 
+def test_another_writers_temporary_files_are_not_in_the_way(conn, cfg):
+    # Two tabarr processes rendering at once (the nightly run and `tabarr render`) shared one
+    # temporary name per file, so one's rename found the other's file gone, or in the way.
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    folder = song_dir(cfg.library_dir, song)
+    for name in (".sheet.cho.tmp", ".sheet.tmp.pdf"):
+        (folder / name).mkdir()  # another writer's, mid-write
+    assert render(conn, cfg) == RenderStats(rendered=1)
+    assert pdf_of(cfg, song).read_bytes().startswith(b"%PDF")
+    assert sorted(p.name for p in folder.iterdir() if p.name.startswith(".")) == [
+        ".sheet.cho.tmp", ".sheet.tmp.pdf",
+    ]
+
+
 @pytest.mark.parametrize(
     "doc", [None, b"{not json", b'["a list"]', b'{"meta": []}', b'{"content": "  "}'],
     ids=["missing", "not-json", "not-an-object", "no-content", "blank-content"],
