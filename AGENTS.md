@@ -41,7 +41,8 @@ an earlier one failed:
 Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`),
 http.py (`PoliteClient`, robots rules), health.py (cooldowns, `events`), normalize.py (keys,
 pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy),
-site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's).
+site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's and
+MuseScore's).
 
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
@@ -56,9 +57,10 @@ site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com'
   builds fake UG tab and artist pages, escaped the way UG escapes them
   (`from helpers.ug_pages import ...`). helpers/gtptabs_site.py is `FakeGtpTabs`, a fake
   gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7
-  and Power Tab files (a format's magic header, then filler). fixtures/ holds UG,
-  LaCuerda, LRCLIB, gtptabs.com and ChordPro samples: real response shapes, trimmed, and
-  synthetic lyrics, sheets and files.
+  and Power Tab files (a format's magic header, then filler). helpers/musescore_site.py
+  is `FakeMuseScore`, its song sitemaps and the challenge Cloudflare answers caracole
+  with (`challenge()`). fixtures/ holds UG, LaCuerda, LRCLIB, gtptabs.com, MuseScore and
+  ChordPro samples: real response shapes, trimmed, and synthetic lyrics, sheets and files.
 - `nix/`: package.nix (`buildPythonApplication`; the wrapper puts `chordpro` on PATH and
   defaults `CARACOLE_CJK_FONT`; `withAutochords` adds the extra and the model files),
   autochords.nix (the model files, fixed-output), module.nix (`services.caracole`: units,
@@ -116,10 +118,10 @@ Traps:
 
 - Test first: a test that fails (on the missing name or an assertion), then the code.
 - Never a live request in a test: not to ultimate-guitar.com, lrclib.net, lacuerda.net,
-  gtptabs.com or Spotify. Give `PoliteClient` an `httpx.MockTransport` as `transport=`;
-  CLI tests monkeypatch `caracole.commands._common.transport_for` (and `_common.sleep`);
-  pipeline tests pass `Services` with fake clients (`FakeGtpTabs.client` makes a real
-  one for gtptabs.com); Spotify tests use `FakeSpotify` (test_spotify.py) or
+  gtptabs.com, musescore.com or Spotify. Give `PoliteClient` an `httpx.MockTransport` as
+  `transport=`; CLI tests monkeypatch `caracole.commands._common.transport_for` (and
+  `_common.sleep`); pipeline tests pass `Services` with fake clients (`FakeGtpTabs.client`
+  and `FakeMuseScore.client` make real ones); Spotify tests use `FakeSpotify` (test_spotify.py) or
   patch `caracole.spotify.client_from_config`. Nothing blocks the network for the whole
   suite; only the package build's sandbox has none.
 - `load_config` takes `env=`, and unit tests pass it. CLI tests read the real environment:
@@ -197,7 +199,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `songs.ensure_current_keys`, run before songs are looked up, listed or added, then re-keys
   them once and merges those that now share a key. It re-keys `songs` only; `ug_index` keys
   change when a sitemap is parsed again, and the keys of a table site_index.py fills
-  (`gtptabs_index`) at its next refresh, which parses every sitemap again, an unchanged
+  (`gtptabs_index`, `musescore_index`) at its next refresh, which parses every sitemap again, an unchanged
   one from the cache
   (`test_gtptabs_fetch.py::test_new_keys_read_the_sitemaps_again_even_when_they_are_unchanged`).
   Name new per-song kv keys `<prefix><song id>` and add the prefix to
