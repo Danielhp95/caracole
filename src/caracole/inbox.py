@@ -26,7 +26,7 @@ from pathlib import Path
 from rapidfuzz import fuzz
 
 from caracole.library import NotRegularFile, keep_file, song_dir
-from caracole.normalize import clean_title, identity_key, slug_key
+from caracole.normalize import clean_title, identity_key, name_forms
 from caracole.songs import Song, get_song
 from caracole.versions import VersionRow, picks
 
@@ -76,28 +76,40 @@ def _songs_with_open_picks(conn: sqlite3.Connection) -> list[tuple[Song, list[Ve
 
 
 def _match(artist: str | None, title: str, candidates: list[tuple[Song, list[VersionRow]]]):
+    """The song a download is of: by identity, else the closest, by the forms of the names UG gave
+    it (``normalize.name_forms``), which it writes in two scripts for some artists."""
     if artist:
         key = identity_key(artist, title)
         for song, open_picks in candidates:
             if song.key == key:
                 return song, open_picks
-        a = slug_key(artist).replace("-", " ")
-    t = slug_key(clean_title(title))
+    titles = name_forms(clean_title(title))
     best, best_score = None, 0.0
     for song, open_picks in candidates:
-        title_score = fuzz.ratio(t, slug_key(clean_title(song.title)))
+        score = _title_score(titles, song)
         if artist:
-            sa = slug_key(song.artist).replace("-", " ")
-            score = min(title_score, max(fuzz.ratio(a, sa), fuzz.token_set_ratio(a, sa)))
-        else:
-            score = title_score
+            score = min(score, _artist_score(artist, song.artist))
         if score >= MATCH_CUTOFF and score > best_score:
             best, best_score = (song, open_picks), score
     if best is None or artist:
         return best
     # A name without an artist is only trusted when exactly one song fits.
-    fits = [c for c in candidates if fuzz.ratio(t, slug_key(clean_title(c[0].title))) >= MATCH_CUTOFF]
+    fits = [c for c in candidates if _title_score(titles, c[0]) >= MATCH_CUTOFF]
     return best if len(fits) == 1 else None
+
+
+def _title_score(titles: tuple[str, ...], song: Song) -> float:
+    return max((fuzz.ratio(t, s) for t in titles for s in name_forms(clean_title(song.title))), default=0.0)
+
+
+def _artist_score(artist: str, other: str) -> float:
+    """How alike two artists' names are, compared as words (``token_set_ratio``) and whole."""
+    words = [k.replace("-", " ") for k in name_forms(other)]
+    return max(
+        (max(fuzz.ratio(a, b), fuzz.token_set_ratio(a, b))
+         for a in (k.replace("-", " ") for k in name_forms(artist)) for b in words),
+        default=0.0,
+    )
 
 
 def _choose_pick(open_picks: list[VersionRow], version: int | None, ext: str) -> VersionRow:

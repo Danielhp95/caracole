@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from caracole.config import MatchPolicy
 from caracole.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
 from caracole.overrides import Overrides
@@ -289,6 +291,33 @@ def test_fuzzy_artist_compares_pinyin_without_hyphens(conn):
     index(conn, (1, "sung-dongye", "ban-ma-ban-ma", "chords"))
     assert summary(match(conn, "宋冬野", "斑马，斑马")) == (
         "accept", "fuzzy_artist", 90.0, "sung-dongye", "ban-ma-ban-ma")
+
+
+@pytest.mark.parametrize("artist,title,row", [
+    # UG's sitemaps write names in Latin letters only; a name you write in two scripts meets them
+    # on its Latin part, as on UG's artist pages (normalize.name_forms).
+    ("DAOKO", "打上花火 (Uchiage Hanabi)", ("daoko", "uchiage-hanabi")),
+    ("BTS", "봄날 (Spring Day)", ("bts", "spring-day")),
+    ("Song Dongye (宋冬野)", "斑马斑马", ("song-dongye", "ban-ma-ban-ma")),
+    ("Kino (Кино)", "Gruppa Krovi / Группа крови", ("kino", "gruppa-krovi")),
+])
+def test_names_written_in_two_scripts_meet_ugs_latin_slugs(conn, artist, title, row):
+    index(conn, (1, *row, "chords"), (2, row[0], "another-song", "chords"))
+    assert summary(match(conn, artist, title)) == ("accept", "exact", 100.0, *row)
+
+
+def test_a_title_in_two_scripts_is_found_across_artists_only_exactly(conn):
+    # As for pinyin: across every artist a romanized part fuzz-matches unrelated titles.
+    index(conn, (1, "papon", "banao-banao", "chords"), (2, "zhao-lei", "banma-banma", "chords"))
+    r = match(conn, "宋冬野", "斑马 斑马 Banma Banma Zebra Zebra")
+    assert summary(r) == ("review", "title_only", 100.0, "zhao-lei", "banma-banma")
+    assert [c.artist_key for c in r.candidates] == ["zhao-lei"]
+
+
+def test_a_generic_part_of_a_title_matches_nothing_on_its_own(conn):
+    index(conn, (1, "song-dongye", "remix", "chords"), (2, "other", "remix", "chords"))
+    r = match(conn, "Song Dongye (宋冬野)", "斑马斑马 Remix")
+    assert r.decision == "not_found" and all(c.score < POLICY.review for c in r.candidates)
 
 
 def test_title_without_a_key_is_not_found(conn):

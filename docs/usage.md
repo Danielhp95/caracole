@@ -222,10 +222,18 @@ the same patterns ("打上花火 (Uchiage Hanabi)", "봄날 (Spring Day)",
 "Кино (Kino)"). Caracole has no romanizer for those, so they meet on the part
 in their own script, or on the Latin one.
 
+The same goes wherever caracole meets a name it didn't write: a song you
+wrote in two scripts against the index (UG's sitemaps write names in Latin
+letters only, so `DAOKO - 打上花火 (Uchiage Hanabi)` meets
+`daoko/uchiage-hanabi`), a purchase tagged that way, and a Guitar Pro download
+UG named so.
+
 A part that only names a version or a part, such as "Live", "Acoustic",
 "Remix" or "Intro", or that is a number, a single letter or fewer than three
 Latin letters, never makes a match on its own. Another song of the artist never
-stands in for yours either: 董小姐 is no 斑马斑马, in any script.
+stands in for yours either: 董小姐 is no 斑马斑马, in any script. A name with
+two non-Latin parts, as a duet's "Joey Yung (容祖儿) & Eason Chan (陈奕迅)", is
+taken whole: it is neither singer.
 
 ### caracole sync
 

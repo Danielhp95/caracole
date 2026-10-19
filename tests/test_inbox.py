@@ -154,6 +154,18 @@ def test_cjk_name_files_into_cjk_song(conn, cfg):
     assert (cfg.library_dir / "宋冬野" / "斑马，斑马" / "guitar-1.gp").exists()
 
 
+def test_a_download_named_in_two_scripts_files_into_its_song(conn, cfg):
+    # UG names a download after its artist and song, which it writes in two scripts for 宋冬野.
+    s = add_song(conn, "宋冬野", "斑马斑马")
+    other = add_song(conn, "宋冬野", "董小姐")
+    set_picks(conn, s.id, ["guitar-pro", "power"], [pick(conn, s, 7)])
+    set_picks(conn, other.id, ["guitar-pro", "power"], [pick(conn, other, 8)])
+    drop(cfg, "Song Dongye (宋冬野) - 斑马 斑马 Banma Banma Zebra Zebra (ver 1 by someone).gp5")
+    file_inbox(conn, cfg.library_dir)
+    assert [f.name for f in kept_files(conn, s.id)] == ["guitar-1.gp5"]
+    assert kept_files(conn, other.id) == []
+
+
 def test_title_only_name_matches_a_unique_open_pick(conn, cfg):
     s = add_song(conn, "Radiohead", "Creep")
     v = pick(conn, s, 9)
