@@ -54,6 +54,12 @@ file) counts as none. Cyrillic and Greek letters that look like Latin ones,
 which UG transcribers type now and then ("(х2)" with a Cyrillic х), are
 written as those Latin letters when they are a sheet's only such letters, so
 the sheet keeps the built-in fonts.
+
+Others can write to the library (the Syncthing group, every synced device), so
+no sheet there is read through a symbolic link: a link or a FIFO in the place of
+``sheet.json``, ``sheet (auto).txt`` or a .cho fails that song. chordpro reads a
+copy of the .cho and writes the PDF in a private directory under the cache
+directory, and the PDF then goes into the song's folder in one rename.
 """
 
 from __future__ import annotations
@@ -61,11 +67,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
-import secrets
 import sqlite3
 import struct
 import subprocess
+import tempfile
 import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -79,7 +84,15 @@ from tabarr.autochords.merge import AUTO_MARKER
 from tabarr.chordpro import to_chordpro
 from tabarr.config import Config
 from tabarr.db import kv_delete, kv_get_json, kv_set_json
-from tabarr.library import KeptFile, kept_files, song_dir, write_info
+from tabarr.library import (
+    KeptFile,
+    NotRegularFile,
+    kept_files,
+    read_regular,
+    song_dir,
+    write_atomic,
+    write_info,
+)
 from tabarr.normalize import clean_title
 from tabarr.overrides import Overrides
 from tabarr.songs import Song, list_songs
@@ -186,26 +199,22 @@ def write_chordpro(
     """Convert UG sheet markup and write it to ``cho_path``.
 
     An existing file with the same content is left alone, so Syncthing has
-    nothing to sync; otherwise the file is replaced in one rename. Stray
-    letters that only look foreign are written in Latin (``_as_latin``).
+    nothing to sync; otherwise the file is replaced in one rename
+    (``library.write_atomic``). Stray letters that only look foreign are
+    written in Latin (``_as_latin``). Raises RenderError when something other
+    than a regular file, such as a symbolic link, is in the file's place: the
+    old file is read only to compare, but never through a link (``read_regular``).
     """
     path = Path(cho_path)
     text = _as_latin(to_chordpro(markup, title=title, artist=artist, key=key, capo=capo, auto=auto))
     try:
-        if path.read_text(encoding="utf-8") == text:
+        if read_regular(path).decode("utf-8") == text:
             return path
+    except NotRegularFile as e:
+        raise RenderError(f"cannot read {path}: {e}") from e
     except (OSError, UnicodeDecodeError):
         pass
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # A name of its own, so another tabarr writing the same file isn't in the way.
-    tmp = path.with_name(f".{path.name}.{secrets.token_hex(4)}.tmp")
-    try:
-        with open(tmp, "x", encoding="utf-8") as f:
-            f.write(text)
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
+    write_atomic(path, text.encode("utf-8"))
     return path
 
 
@@ -434,7 +443,7 @@ def _render_sheet(
         capo=sheet.capo,
         auto=sheet.auto,
     )
-    text = cho.read_text(encoding="utf-8")
+    text = _read_text(cho)
     need = _font_need(text)
     font = cjk_font if need else None
     if need == "letters" and font is None:
@@ -449,8 +458,8 @@ def _render_sheet(
     }
     if not force and pdf.is_file() and kv_get_json(conn, state_key) == state:
         return _Done("skipped")
-    _render_into(cho, pdf, transpose=transpose, chordpro_bin=cfg.chordpro_bin, font_file=font,
-                 runner=runner)
+    _render_into(text, pdf, work_dir=cfg.cache_dir, transpose=transpose,
+                 chordpro_bin=cfg.chordpro_bin, font_file=font, runner=runner)
     kv_set_json(conn, state_key, state)
     write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
     return _Done("rendered")
@@ -477,12 +486,25 @@ class _Sheet:
     auto: bool = False
 
 
+def _read_text(path: Path) -> str:
+    """A file in the library as UTF-8 text, never read through a symbolic link (``read_regular``).
+
+    Others can write to the library (the Syncthing group, every synced device). A
+    link planted there to one of tabarr's private files would have it printed into
+    the .cho and the PDF, and a FIFO would hold up the pass. Raises RenderError.
+    """
+    try:
+        return read_regular(path).decode("utf-8")
+    except (OSError, ValueError) as e:  # NotRegularFile is an OSError; ValueError: not UTF-8
+        raise RenderError(f"cannot read {path}: {e}") from e
+
+
 def _human_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) -> _Sheet:
     """The sheet the fetch step kept: the markup in sheet.json, the key UG gives the version."""
     path = (library_dir / kept.path).with_name("sheet.json")
     try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as e:  # ValueError: not UTF-8, or not JSON
+        doc = json.loads(_read_text(path))
+    except ValueError as e:  # not JSON
         raise RenderError(f"cannot read {path}: {e}") from e
     content = doc.get("content") if isinstance(doc, Mapping) else None
     if not isinstance(content, str) or not content.strip():
@@ -508,11 +530,7 @@ def _capo(meta: Any) -> int | None:
 
 def _auto_sheet(library_dir: Path, kept: KeptFile) -> _Sheet:
     """An auto-chords sheet without its two header lines, which to_chordpro writes as directives."""
-    path = library_dir / kept.path
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except (OSError, ValueError) as e:
-        raise RenderError(f"cannot read {path}: {e}") from e
+    lines = _read_text(library_dir / kept.path).splitlines()
     if lines and lines[0].strip() == AUTO_MARKER:
         lines = lines[2:]  # the marker, then "Artist - Title"
     return _Sheet("\n".join(lines), auto=True)
@@ -522,26 +540,34 @@ def _auto_sheet(library_dir: Path, kept: KeptFile) -> _Sheet:
 
 
 def _render_into(
-    cho: Path,
+    text: str,
     pdf: Path,
     *,
+    work_dir: Path,
     transpose: int,
     chordpro_bin: str,
     font_file: Path | None,
     runner: Runner,
 ) -> None:
-    """``render_pdf`` through a temporary file: a failed run leaves the last good PDF in place.
+    """``render_pdf`` of the ChordPro ``text`` in a private directory, then the PDF to ``pdf``.
 
-    The name is its own, so another tabarr rendering the same sheet isn't in the way, and
-    ends in .pdf, because chordpro picks its backend by the extension.
+    chordpro opens its input and its output by name and follows symbolic links, and
+    others can write to the song's folder: either file could be swapped for a link
+    while it runs, to print one of tabarr's private files into the PDF or to write
+    over it. So chordpro reads a copy of the .cho and writes the PDF in a directory
+    of its own under ``work_dir`` (the cache), which only tabarr can enter (mode
+    0700). The PDF then goes to ``pdf`` through ``write_atomic``, so a failed run
+    leaves the last good one in place, and another tabarr rendering the same sheet
+    isn't in the way. The copies keep the sheet's names: chordpro picks its backend
+    by the extension, and its messages then say which sheet failed.
     """
-    tmp = pdf.with_name(f".{pdf.stem}.{secrets.token_hex(4)}.tmp.pdf")
-    try:
-        render_pdf(cho, tmp, transpose=transpose, chordpro_bin=chordpro_bin, font_file=font_file,
+    work_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="render-", dir=work_dir) as tmp:
+        cho, out = Path(tmp) / f"{pdf.stem}.cho", Path(tmp) / pdf.name
+        cho.write_bytes(text.encode("utf-8"))
+        render_pdf(cho, out, transpose=transpose, chordpro_bin=chordpro_bin, font_file=font_file,
                    runner=runner)
-        os.replace(tmp, pdf)
-    finally:
-        tmp.unlink(missing_ok=True)
+        write_atomic(pdf, out.read_bytes())
 
 
 _INVISIBLE = frozenset({"Cc", "Cf"})  # controls, zero-width spaces, byte-order marks
