@@ -419,6 +419,11 @@ At steps 2 to 5, the matcher passes over the UG songs you rejected for the
 song under `[reject]`, and so does the fetch on the artist's UG page, so they
 are never offered again; other candidates still can be.
 
+Matching never asks a search engine. A fallback through an official search
+API with your own key (Brave Search API, or a SearXNG of your own) is
+designed, and not built: [web-search.md](web-search.md) has the
+configuration it would take, and why it waits.
+
 ### caracole run
 
 `caracole run` is what the nightly timer starts. Its steps, in order:
