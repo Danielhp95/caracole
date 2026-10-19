@@ -158,6 +158,7 @@ def test_a_spent_budget_says_so_and_exits_0(tmp_path, ug):
     assert result.exit_code == 0, result.output
     assert "1 song done, 0 failed, 1 UG request." in result.output
     assert "The UG budget of 1 request is spent; the rest waits for the next run." in result.output
+    assert get_song(conn, persiana).status == "found"  # newest first
     assert get_song(conn, signos).ug_dirty is True
 
 

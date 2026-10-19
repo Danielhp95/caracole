@@ -1,14 +1,31 @@
 """Per-song Ultimate Guitar fetch: rate every version, keep the best sheet, pick guitar parts.
 
-For each matched song (plan §3, Task 15):
+For each song (plan §3, Task 15, amendment A6):
 
-1. **Ratings.** UG lists a song's versions per (type, part) group on each tab
-   page, so for every kind group tabarr fetches the page of the lowest id it
-   has no rating for, and records that page's own tab plus the versions it
-   lists, until every id has a rating or ``max_pages_per_group`` pages were read.
-2. **Sheet.** The top ``scored_sheets`` sheets by rating are scored for lyric
-   coverage against LRCLIB's lyrics, then ranked by completeness and rating; the
-   best is kept as ``sheet.txt`` (markup stripped) and ``sheet.json``.
+1. **Candidates.** The song's tabs in the local index, fetched at their
+   slugged URLs (UG answers 404 for a slugged tab at the bare ``/tab/{id}``),
+   and its pins, which replace the kind group they belong to. Blocked ids
+   never compete. A not-found song is looked up on its artist's UG page,
+   which also lists the bare-id tabs the index can't see (A6).
+2. **Ratings.** A tab page lists the other versions of its type and part, so
+   for each kind group (chords; Guitar Pro and Power Tab; tabs) tabarr reads
+   the page of the lowest id it has no rating for, up to
+   ``max_pages_per_group`` pages, recording the page's own tab and the
+   versions it lists. Official, non-public and blocked versions are skipped.
+3. **Slots, one at a time,** so the sheet a singer needs most is settled
+   before the budget goes to guitar parts:
+   - the sheet: the top ``scored_sheets`` chords versions by rating are
+     scored for lyric coverage, ranked complete-first, and the best is kept
+     as ``sheet.txt`` and ``sheet.json``; a complete one retires
+     ``sheet (auto).txt``;
+   - Guitar Pro and Power Tab: the best are picked, never downloaded
+     (assisted mode: the to-do page lists them);
+   - tabs: the best is kept as ``tab.txt`` and ``tab.json``.
+4. Only when every slot is done is the song marked checked and clean, so a
+   song interrupted by the budget resumes from the HTTP cache next run.
+
+A kept file is replaced only when another version outranks it, and is not
+rewritten when it wins again.
 """
 
 from __future__ import annotations
@@ -38,12 +55,25 @@ from tabarr.rank import Candidate, is_complete, rank_by_rating, rank_guitar, ran
 from tabarr.songs import Song, get_song, list_songs, refresh_status, update_song
 from tabarr.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
 from tabarr.ug.lookup import (
-    IndexTab, artist_known, artist_tabs, forget_artist_url, index_tab, learned_artist_url,
-    remember_artist_url, song_tabs, tab_url_for,
+    IndexTab,
+    artist_known,
+    artist_tabs,
+    forget_artist_url,
+    index_tab,
+    learned_artist_url,
+    remember_artist_url,
+    song_tabs,
+    tab_url_for,
 )
 from tabarr.ug.page import PageParseError, UGTabPage, UGVersion, parse_tab_page, strip_markup
 from tabarr.versions import (
-    VersionRow, get_version, mark_gone, set_coverage, set_picks, song_versions, upsert_version,
+    VersionRow,
+    get_version,
+    mark_gone,
+    set_coverage,
+    set_picks,
+    song_versions,
+    upsert_version,
 )
 
 log = logging.getLogger(__name__)
@@ -63,7 +93,7 @@ AUTO_SHEET = "sheet (auto).txt"
 ARTIST_PAGE = "artist_page"  # the match step of a song found on its artist's page
 ARTIST_PAGE_MAX_AGE = timedelta(days=30)
 ARTIST_PAGE_KINDS = ("chords", "guitar-pro", "power", "tabs")  # the sheet's list first
-TITLE_MATCH = 90  # rapidfuzz ratio of title keys, as the matcher's accept score
+TITLE_MATCH = 90  # rapidfuzz ratio of title keys, the matcher's accept score
 TITLE_MARGIN = 8  # a fuzzy title must lead the next different title by this much
 LEARN_TRIES = 3  # slugged tabs read at most to learn an artist's page
 _ARTIST_PATH = re.compile(r"/artist/[^/?#]+_\d+")
@@ -91,7 +121,10 @@ class FetchContext:
 
 @dataclass(frozen=True)
 class SongFetchOutcome:
-    """What one song's fetch kept: UG tab ids of the sheet, Guitar Pro picks and text tab."""
+    """What one song's fetch kept: UG tab ids of the sheet, the Guitar Pro picks and the text tab.
+
+    ``requests`` counts the requests sent to UG for the song (cache hits are free).
+    """
 
     song_id: int
     sheet: int | None
@@ -102,22 +135,16 @@ class SongFetchOutcome:
 
 @dataclass
 class FetchStats:
+    """A fetch run: songs finished, songs skipped after a provider error, and whether the budget ran out."""
+
     songs_done: int = 0
     songs_failed: int = 0
     budget_exhausted: bool = False
 
 
-def _iso(dt: datetime) -> str:
-    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _slot(kind: str) -> str:
-    return "sheet" if kind in SHEET_KINDS else "guitar"
-
-
 @dataclass
 class _SongRun:
-    """One song's fetch: its pages read so far, and the tab ids that belong to it."""
+    """One song's fetch: the song, and the tab pages already read for it this run."""
 
     ctx: FetchContext
     song: Song
@@ -131,6 +158,68 @@ class _SongRun:
     def artist_key(self) -> str:
         """The UG artist key the song is filed under: its match, else its own artist's key."""
         return self.song.match_artist_key or slug_key(self.song.artist)
+
+
+def _iso(dt: datetime) -> str:
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _slot(kind: str) -> str:
+    return "sheet" if kind in SHEET_KINDS else "guitar"
+
+
+# --- artist keys ------------------------------------------------------------------------------
+
+
+def _name_keys(name: str) -> list[str]:
+    """A name's keys: its slug key, plus its pinyin key when it is Chinese."""
+    keys = [slug_key(name)]
+    if has_han(name):
+        keys.append(slug_key(romanize(name)))
+    return [k for k in dict.fromkeys(keys) if k]
+
+
+def artist_keys(song: Song, overrides: Overrides) -> list[str]:
+    """The UG artist keys a song may be listed under: [alias] first, then each artist's own keys."""
+    keys: list[str] = []
+    for name in song.artists or [song.artist]:
+        keys += overrides.alias.get(slug_key(name), ())
+        keys += _name_keys(name)
+    return [k for k in dict.fromkeys(keys) if k]
+
+
+def artist_is_known(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> bool:
+    """Whether the song's artist page can be found: pasted in [artist_url], learned, or in the index."""
+    return any(
+        k in overrides.artist_url or learned_artist_url(conn, k) or artist_known(conn, k)
+        for k in artist_keys(song, overrides)
+    )
+
+
+# --- pages and versions ---------------------------------------------------------------------------
+
+
+def _get_page[P: (UGTabPage, UGArtistPage)](
+    client: Client, url: str, parse: Callable[..., P], *, max_age: timedelta | None = None
+) -> tuple[P | None, bool]:
+    """A UG page from the HTTP cache or UG (None when UG answers 404), and whether it was fetched now.
+
+    UG's 404 page has no js-store, so the status is checked before parsing.
+    A 200 is cached (tab pages forever), so a cached body that no longer
+    parses (a truncated or maintenance page) is fetched once more instead of
+    failing the song on every run.
+    """
+
+    def parsed(resp: Response) -> P | None:
+        return None if resp.status == 404 else parse(resp.content, url=url)
+
+    resp = client.get(url, accept=_PAGE_ACCEPT, max_age=max_age)
+    try:
+        return parsed(resp), not resp.from_cache
+    except PageParseError:
+        if not resp.from_cache:
+            raise
+    return parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False)), True
 
 
 def _upsert(run: _SongRun, v: UGVersion) -> int:
@@ -168,9 +257,8 @@ def _record(run: _SongRun, versions: Iterable[UGVersion], *, fresh: bool) -> Non
 def _record_page(run: _SongRun, page: UGTabPage, *, fresh: bool) -> None:
     """Record the page's own tab and the versions it lists of the same kind group."""
     group = _GROUP_OF.get(page.tab.kind or "")
-    if group is None:
-        return
-    _record(run, (v for v in (page.tab, *page.versions) if v.kind in group), fresh=fresh)
+    if group is not None:
+        _record(run, (v for v in (page.tab, *page.versions) if v.kind in group), fresh=fresh)
 
 
 def _version_row(run: _SongRun, tab_id: int) -> VersionRow | None:
@@ -194,27 +282,6 @@ def _mark_gone(run: _SongRun, tab_id: int, url: str, kind: str | None) -> None:
     else:
         return
     mark_gone(run.conn, version_id)
-
-
-def _parsed(resp: Response, url: str) -> UGTabPage | None:
-    # UG's 404 page has no js-store, so the status is checked before parsing.
-    return None if resp.status == 404 else parse_tab_page(resp.content, url=url)
-
-
-def _load(client: Client, url: str) -> tuple[UGTabPage | None, bool]:
-    """A tab page from the HTTP cache or UG (None when UG answers 404), and whether it was fetched now.
-
-    Every 200 is cached forever, so a cached body that no longer parses (a
-    truncated page, a maintenance page) is fetched once more instead of failing
-    the song on every run.
-    """
-    resp = client.get(url, accept=_PAGE_ACCEPT)
-    try:
-        return _parsed(resp, url), not resp.from_cache
-    except PageParseError:
-        if not resp.from_cache:
-            raise
-    return _parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False), url), True
 
 
 def _artist_page_base(url: str | None) -> str | None:
@@ -250,7 +317,7 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
-    page, fresh = _load(run.ctx.client, url)
+    page, fresh = _get_page(run.ctx.client, url, parse_tab_page)
     run.pages[tab_id] = page
     if page is None:
         _mark_gone(run, tab_id, url, kind)
@@ -259,6 +326,9 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
     mine = run.artist_key
     _learn_artist_url(run.conn, page, [mine] if mine and _same_artist(mine, page.tab.artist_name) else [])
     return page
+
+
+# --- ratings and pins -------------------------------------------------------------------------------
 
 
 def _seen_ids(run: _SongRun) -> set[int]:
@@ -296,6 +366,18 @@ def _fetch_pins(run: _SongRun, pins: tuple[int, ...]) -> dict[tuple[str, ...], l
     return groups
 
 
+# --- the slots ---------------------------------------------------------------------------------------
+
+
+def _rows(run: _SongRun, kinds: tuple[str, ...]) -> list[VersionRow]:
+    """The song's live UG versions of these kinds; blocked ids never compete, even if seen earlier."""
+    block = run.ctx.overrides.block
+    return [
+        r for r in song_versions(run.conn, run.song.id, kinds=kinds)
+        if r.provider == PROVIDER and int(r.tab_id) not in block
+    ]
+
+
 def _in_order(rows: list[VersionRow], tab_ids: list[int]) -> list[VersionRow]:
     by_tab = {int(r.tab_id): r for r in rows}
     return [by_tab[t] for t in tab_ids if t in by_tab]
@@ -312,6 +394,19 @@ def _text_page(run: _SongRun, row: VersionRow) -> UGTabPage | None:
     """A version's page with its text, or None when the page is gone."""
     page = _page(run, int(row.tab_id), row.url, row.kind)
     return page if page is not None and page.content is not None else None
+
+
+def _first_with_text(
+    run: _SongRun, ranked: Iterable[Candidate], rows: list[VersionRow], pages: dict[int, UGTabPage]
+) -> tuple[Candidate, UGTabPage] | None:
+    """The best-ranked candidate whose page still has its text, with that page."""
+    by_id = {r.id: r for r in rows}
+    for c in ranked:
+        assert c.version_id is not None
+        page = pages.get(c.version_id) or _text_page(run, by_id[c.version_id])
+        if page is not None:
+            return c, page
+    return None
 
 
 def _keep(run: _SongRun, version_id: int, name: str, data: bytes) -> None:
@@ -355,27 +450,6 @@ def _drop_if_blocked(run: _SongRun, names: tuple[str, str]) -> None:
 def _lyric_lines(song: Song) -> list[str]:
     lyrics = song_lyrics(song)
     return coverage.lyric_lines(lyrics.plain) if lyrics is not None else []
-
-
-def _rows(run: _SongRun, kinds: tuple[str, ...]) -> list[VersionRow]:
-    """The song's live UG versions of these kinds; blocked ids never compete, even if seen earlier."""
-    block = run.ctx.overrides.block
-    return [
-        r for r in song_versions(run.conn, run.song.id, kinds=kinds)
-        if r.provider == PROVIDER and int(r.tab_id) not in block
-    ]
-
-
-def _first_with_text(
-    run: _SongRun, ranked: Iterable[Candidate], rows: list[VersionRow], pages: dict[int, UGTabPage]
-) -> tuple[Candidate, UGTabPage] | None:
-    by_id = {r.id: r for r in rows}
-    for c in ranked:
-        assert c.version_id is not None
-        page = pages.get(c.version_id) or _text_page(run, by_id[c.version_id])
-        if page is not None:
-            return c, page
-    return None
 
 
 def _is_complete_row(row: VersionRow, policy: RankPolicy) -> bool:
@@ -532,7 +606,7 @@ def _learn_artist_page(run: _SongRun, keys: list[str]) -> str | None:
     """
     for key in keys:
         for tab in artist_tabs(run.conn, key, limit=LEARN_TRIES):
-            page, _ = _load(run.ctx.client, tab.url)
+            page, _ = _get_page(run.ctx.client, tab.url, parse_tab_page)
             if page is not None and (url := _learn_artist_url(run.conn, page, [key])):
                 return url
     return None
@@ -555,20 +629,32 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
         if fetched >= ctx.artist_pages_per_kind:
             return hits, False, first
         url = artist_page_url(base, kind=kind, page=number)
-        resp = ctx.client.get(url, accept=_PAGE_ACCEPT, max_age=ctx.artist_page_max_age)
-        fetched += not resp.from_cache
-        if resp.status == 404:
+        page, fresh = _get_page(ctx.client, url, parse_artist_page, max_age=ctx.artist_page_max_age)
+        fetched += fresh
+        if page is None:
             break
-        page = parse_artist_page(resp.content, url=url)
         first = first or page
         last = max(last, page.pages)
         listed = [t for t in page.tabs if t.kind == kind]
-        found = [h for t in listed if (h := _title_hit(t, forms, not resp.from_cache)) is not None]
+        found = [h for t in listed if (h := _title_hit(t, forms, fresh)) is not None]
         hits += found
         if hits and not (found and found[-1].tab is listed[-1]):
             break
         number += 1
     return hits, True, first
+
+
+def _offered_kinds(run: _SongRun, base: str) -> set[str] | None:
+    """The kinds of list the artist page offers, read from its unfiltered first page; None when it's gone."""
+    page, _ = _get_page(run.ctx.client, artist_page_url(base), parse_artist_page,
+                        max_age=run.ctx.artist_page_max_age)
+    if page is None:
+        return None
+    return set(page.filters) or set(ARTIST_PAGE_KINDS)
+
+
+def _checked_key(song_id: int) -> str:
+    return f"ug:artist_page_checked:{song_id}"
 
 
 def _mark_checked(run: _SongRun) -> None:
@@ -621,14 +707,17 @@ def _artist_page_route(run: _SongRun) -> bool:
         found, complete, first = _read_list(run, base, kind, forms)
         if not complete:
             return False
-        if first is None and kind == ARTIST_PAGE_KINDS[0]:
-            log.warning("UG artist page %s answered 404; check [artist_url] for %s", base, run.song.artist)
-            _forget_learned(run, keys, base)
-            _mark_checked(run)
-            return False
         if first is not None:
             name = name or first.name
-            offered = offered if offered is not None or not first.filters else set(first.filters)
+            if offered is None and first.filters:
+                offered = set(first.filters)
+        elif offered is None:
+            offered = _offered_kinds(run, base)  # an empty list may answer 404; the artist page tells
+            if offered is None:
+                log.warning("UG artist page %s answered 404; check [artist_url] for %s", base, run.song.artist)
+                _forget_learned(run, keys, base)
+                _mark_checked(run)
+                return False
         hits += found
     _mark_checked(run)
     best = [h for h in _best_title(hits) if _usable(run, h.tab)]
@@ -636,6 +725,9 @@ def _artist_page_route(run: _SongRun) -> bool:
         return False
     _accept_artist_page_match(run, best, name)
     return True
+
+
+# --- one song, and a run ---------------------------------------------------------------------------
 
 
 def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
@@ -676,38 +768,6 @@ def _finish(run: _SongRun) -> None:
     write_info(run.conn, run.ctx.library_dir, get_song(run.conn, run.song.id))
 
 
-# --- which songs a run fetches -------------------------------------------------------------
-
-
-def _name_keys(name: str) -> list[str]:
-    """A name's keys: its slug key, plus its pinyin key when it is Chinese."""
-    keys = [slug_key(name)]
-    if has_han(name):
-        keys.append(slug_key(romanize(name)))
-    return [k for k in dict.fromkeys(keys) if k]
-
-
-def artist_keys(song: Song, overrides: Overrides) -> list[str]:
-    """The UG artist keys a song may be listed under: [alias] first, then each artist's own keys."""
-    keys: list[str] = []
-    for name in song.artists or [song.artist]:
-        keys += overrides.alias.get(slug_key(name), ())
-        keys += _name_keys(name)
-    return [k for k in dict.fromkeys(keys) if k]
-
-
-def artist_is_known(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> bool:
-    """Whether the song's artist page can be found: pasted in [artist_url], learned, or in the index."""
-    return any(
-        k in overrides.artist_url or learned_artist_url(conn, k) or artist_known(conn, k)
-        for k in artist_keys(song, overrides)
-    )
-
-
-def _checked_key(song_id: int) -> str:
-    return f"ug:artist_page_checked:{song_id}"
-
-
 def _checked_within(conn: sqlite3.Connection, song_id: int, now: datetime, max_age: timedelta) -> bool:
     value = kv_get(conn, _checked_key(song_id))
     if value is None:
@@ -739,12 +799,14 @@ def songs_to_fetch(
     for song in list_songs(conn):
         if _ignored(song, overrides):
             continue
-        if song.match_decision in ("accept", "pinned"):
-            if song.ug_dirty:
-                out.append(song)
-        elif song.match_decision == "not_found":
-            if not _checked_within(conn, song.id, now, artist_page_max_age) and artist_is_known(conn, song, overrides):
-                out.append(song)
+        dirty = song.match_decision in ("accept", "pinned") and song.ug_dirty
+        due = (
+            song.match_decision == "not_found"
+            and not _checked_within(conn, song.id, now, artist_page_max_age)
+            and artist_is_known(conn, song, overrides)
+        )
+        if dirty or due:
+            out.append(song)
     return out
 
 

@@ -15,7 +15,15 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from tabarr.commands._common import fail, load_cfg, load_ovr, make_client, open_db, run_id_for, utcnow
+from tabarr.commands._common import (
+    fail,
+    load_cfg,
+    load_ovr,
+    make_client,
+    open_db,
+    run_id_for,
+    utcnow,
+)
 
 if TYPE_CHECKING:
     from tabarr.config import Config

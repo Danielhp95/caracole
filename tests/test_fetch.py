@@ -12,11 +12,16 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
+from conftest import add_song
 from helpers.ug_pages import (
-    ARTIST_FILTERS, artist_path, make_tab_page_html, name_stripped, store_page_html, version_dict,
+    ARTIST_FILTERS,
+    artist_path,
+    make_tab_page_html,
+    name_stripped,
+    store_page_html,
+    version_dict,
 )
 
-from conftest import add_song
 from tabarr.config import ProviderPolicy, RankPolicy
 from tabarr.db import kv_get, kv_set
 from tabarr.http import PoliteClient, ProviderBlocked
@@ -27,7 +32,12 @@ from tabarr.songs import get_song, update_song
 from tabarr.ug.artist import artist_page_url
 from tabarr.ug.fetch import FetchContext, FetchStats, fetch_songs, process_song, songs_to_fetch
 from tabarr.ug.lookup import (
-    IndexTab, artist_tabs, index_tab, learned_artist_url, remember_artist_url, tab_url_for,
+    IndexTab,
+    artist_tabs,
+    index_tab,
+    learned_artist_url,
+    remember_artist_url,
+    tab_url_for,
 )
 from tabarr.versions import picks, set_coverage, set_picks, song_versions, upsert_version
 
@@ -121,8 +131,8 @@ def accepted(conn, artist="Soda Stereo", title="Persiana Americana", akey="soda-
              skey="persiana-americana", *, plain=LYRICS, **kw):
     """A song the matcher accepted, with LRCLIB lyrics (``plain=None`` leaves them pending)."""
     song = add_song(conn, artist, title, **kw)
-    fields = dict(match_decision="accept", match_step="exact", match_score=100.0, match_artist_key=akey,
-                  match_song_key=skey, ug_dirty=True)
+    fields = {"match_decision": "accept", "match_step": "exact", "match_score": 100.0,
+              "match_artist_key": akey, "match_song_key": skey, "ug_dirty": True}
     if plain is not None:
         fields.update(lyrics_status="found", lyrics_json=lyrics_json(plain))
     update_song(conn, song.id, **fields)
@@ -224,7 +234,7 @@ def test_own_tab_recorded_from_page_tab(conn, tmp_path):
     # The spike's tab 85053: UG's versions list leaves the page's own tab out.
     song = accepted(conn, "Soda Stereo", "De Música Ligera", "soda-stereo", "de-musica-ligera")
     index(conn, (85053, "soda-stereo", "de-musica-ligera", "chords"))
-    dml = dict(song="De Música Ligera", artist="Soda Stereo", song_id=67588)
+    dml = {"song": "De Música Ligera", "artist": "Soda Stereo", "song_id": 67588}
     own = version_dict(85053, version=2, rating=4.54038, votes=7,
                        tab_url=f"{TAB}soda-stereo/de-musica-ligera-chords-85053", **dml)
     others = [version_dict(85042, version=1, rating=4.83354, votes=277, **dml),
@@ -663,8 +673,9 @@ def test_artist_page_checks_wait_thirty_days(conn):
 # LRCLIB (as its 斑马斑马 records are). Each pair reads the same in pinyin.
 BANMA_LINES = ["河边的小路通向远方", "我在窗前数星星", "秋天的风吹过山岗",
                "旧信封里有一个夏天", "火车开往没有名字的城", "灯光照亮回家的桥"]
-BANMA_TRADITIONAL = "\n".join(["河邊的小路通向遠方", "我在窗前數星星", "秋天的風吹過山崗",
-                               "舊信封裡有一個夏天", "火車開往沒有名字的城", "燈光照亮回家的橋"])
+BANMA_TRADITIONAL_LINES = ["河邊的小路通向遠方", "我在窗前數星星", "秋天的風吹過山崗",
+                           "舊信封裡有一個夏天", "火車開往沒有名字的城", "燈光照亮回家的橋"]
+BANMA_TRADITIONAL = "\n".join(BANMA_TRADITIONAL_LINES)
 KIND_TYPES = {"chords": "Chords", "tabs": "Tabs", "guitar-pro": "Pro", "power": "Power"}
 
 
@@ -752,7 +763,7 @@ def soda_dml(conn):
 
 
 def serve_dml(ug):
-    dml = dict(song="De Música Ligera", artist="Soda Stereo", song_id=67588)
+    dml = {"song": "De Música Ligera", "artist": "Soda Stereo", "song_id": 67588}
     v1 = version_dict(85042, version=1, rating=4.83354, votes=277, **dml)
     v2 = version_dict(85053, version=2, rating=4.54038, votes=7, **dml)
     persiana = v(1601640, rating=4.8, votes=40)
@@ -945,8 +956,7 @@ def test_artist_pages_are_cached_thirty_days_and_tab_pages_forever(conn, tmp_pat
 def test_blocked_ids_are_no_artist_page_candidates(conn, tmp_path):
     song = banma(conn)
     ug = FakeUG()
-    best, other = serve_banma(ug, [banma_tab(2001234, rating=4.7, votes=50),
-                                   banma_tab(2001235, version=2, rating=4.2, votes=5)])
+    serve_banma(ug, [banma_tab(2001234, rating=4.7, votes=50), banma_tab(2001235, version=2, rating=4.2, votes=5)])
 
     out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path,
                                Overrides(artist_url=PASTED.artist_url, block=frozenset({2001234}))), song)
@@ -975,15 +985,49 @@ def test_artist_page_match_resumes_after_the_budget_runs_out(conn, tmp_path):
 
 def test_a_learned_artist_page_that_is_gone_is_forgotten(conn, tmp_path):
     index(conn, (1081462, "soda-stereo", "persiana-americana", "tabs"))
-    remember_artist_url(conn, "soda-stereo", "https://www.ultimate-guitar.com/artist/soda_stereo_1")
+    stale = "https://www.ultimate-guitar.com/artist/soda_stereo_1"
+    remember_artist_url(conn, "soda-stereo", stale)
     song = soda_dml(conn)
-    ug = FakeUG()  # UG answers its 404 page for the stale address
+    ug = FakeUG()  # UG answers its 404 page for the stale address, filtered or not
 
     process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
 
-    assert ug.requests == [artist_list("https://www.ultimate-guitar.com/artist/soda_stereo_1")]
+    assert ug.requests == [artist_list(stale), artist_page_url(stale)]
     assert learned_artist_url(conn, "soda-stereo") is None  # the next check learns it again
     assert get_song(conn, song.id).match_decision == "not_found"
+
+
+def test_an_artist_without_chords_is_read_from_its_other_lists(conn, tmp_path):
+    # Should UG answer 404 for an empty ?filter=chords, the unfiltered page still names the lists.
+    song = banma(conn)
+    ug = FakeUG()
+    riff_tab = banma_tab(2003000, type="Tabs", rating=4.0, votes=3)
+    ug.add(artist_page_url(BANMA_ARTIST), artist_page(1234567, "宋冬野", [riff_tab], kinds=("tabs",)))
+    ug.add(artist_list(BANMA_ARTIST, "tabs"), artist_page(1234567, "宋冬野", [riff_tab], kinds=("tabs",)))
+    ug.tab(riff_tab, content=riff("banma riff"), artist_url=BANMA_ARTIST)
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, PASTED), song)
+
+    assert ug.requests == [artist_list(BANMA_ARTIST), artist_page_url(BANMA_ARTIST),
+                           artist_list(BANMA_ARTIST, "tabs"), f"{TAB}2003000"]
+    assert out.tab == 2003000 and get_song(conn, song.id).match_step == "artist_page"
+
+
+def test_broken_cached_artist_page_is_fetched_again(conn, tmp_path):
+    song = banma(conn)
+    ug = FakeUG()
+    ug.add(artist_list(BANMA_ARTIST), BROKEN)
+    first = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, PASTED), [song])
+    assert first.songs_failed == 1  # a provider error, not a miss: no check is recorded
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None
+
+    ug.requests.clear()
+    serve_banma(ug, [banma_tab(2001234, rating=4.7, votes=50)])
+    second = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, PASTED), [get_song(conn, song.id)])
+
+    assert (second.songs_done, second.songs_failed) == (1, 0)
+    assert ug.requests[0] == artist_list(BANMA_ARTIST)
+    assert get_song(conn, song.id).status == "found"
 
 
 # --- sheets from elsewhere: auto-chords, LaCuerda, and blocks ----------------------------------------
