@@ -55,7 +55,7 @@ from rapidfuzz import fuzz
 
 from tabarr import coverage
 from tabarr.config import RankPolicy
-from tabarr.db import kv_get, kv_set
+from tabarr.db import kv_delete, kv_get, kv_get_json, kv_set, kv_set_json
 from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError, Response
 from tabarr.library import drop_file, keep_file, kept_files, write_info
 from tabarr.lyrics import song_lyrics
@@ -119,6 +119,15 @@ TITLE_MARGIN = 8  # a fuzzy title must lead the next different title by this muc
 LEARN_TRIES = 3  # slugged tabs read at most to learn an artist's page
 _ARTIST_PATH = re.compile(r"/artist/[^/?#]+_\d+")
 
+# A tab page that won't parse, even fetched again, is asked for again after a week, then after
+# twice as long each time it still won't.
+UNREADABLE_RETRY = timedelta(days=7)
+UNREADABLE_RETRY_MAX = timedelta(days=90)
+
+
+class UnreadablePage(PageParseError):
+    """A cached page that doesn't parse, fetched again and still not parsing: a provider error."""
+
 
 @dataclass
 class FetchContext:
@@ -178,6 +187,7 @@ class _SongRun:
     song: Song
     pages: dict[int, UGTabPage | None] = field(default_factory=dict)
     fetched: Counter[str] = field(default_factory=Counter)
+    unreadable: set[int] = field(default_factory=set)  # tabs whose pages couldn't be read this run
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -245,7 +255,8 @@ def _get_page[P: (UGTabPage, UGArtistPage)](
     UG's 404 page has no js-store, so the status is checked before parsing.
     A 200 is cached (tab pages forever), so a cached body that no longer
     parses (a truncated or maintenance page) is fetched once more instead of
-    failing the song on every run.
+    failing the song on every run; when that copy doesn't parse either, UG
+    keeps serving it, and the page is ``UnreadablePage``.
 
     With ``max_age``, a cached copy older than that is no answer for ``now``:
     PoliteClient serves one only once the budget is spent, so this stops as
@@ -263,7 +274,10 @@ def _get_page[P: (UGTabPage, UGArtistPage)](
     except PageParseError:
         if not resp.from_cache:
             raise
-    return parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False)), True
+    try:
+        return parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False)), True
+    except PageParseError as e:
+        raise UnreadablePage(e.provider, e.url, e.status, e.message) from e
 
 
 def _stale(resp: Response, now: datetime, max_age: timedelta) -> bool:
@@ -373,16 +387,57 @@ def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[
     return url
 
 
+def _unreadable_key(tab_id: int) -> str:
+    return f"ug:unreadable:{tab_id}"
+
+
+def _waits(run: _SongRun, tab_id: int) -> bool:
+    """Whether the tab's page proved unreadable and isn't due to be asked for again yet."""
+    record = kv_get_json(run.conn, _unreadable_key(tab_id))
+    try:
+        return run.ctx.now < _parse_iso(record["until"])
+    except (TypeError, KeyError, ValueError):
+        return False
+
+
+def _unreadable(run: _SongRun, tab_id: int, kind: str | None, error: UnreadablePage | None = None) -> None:
+    """No page for the tab this run; with ``error``, note when to ask for it again.
+
+    The tab is never taken for gone: the song goes on with its other versions,
+    and stays dirty to read this one once it is due.
+    """
+    if error is not None:
+        run.fetched[kind or "?"] += 1  # the request that fetched it again
+        record = kv_get_json(run.conn, _unreadable_key(tab_id))
+        strikes = int(record.get("strikes", 0) if isinstance(record, dict) else 0) + 1
+        until = run.ctx.now + min(UNREADABLE_RETRY * 2 ** (strikes - 1), UNREADABLE_RETRY_MAX)
+        kv_set_json(run.conn, _unreadable_key(tab_id),
+                    {"until": _iso(until), "strikes": strikes, "error": str(error)})
+        log.warning("UG tab %s can't be read (%s); asked for again after %s", tab_id, error, _iso(until))
+    run.pages[tab_id] = None
+    run.unreadable.add(tab_id)
+
+
 def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTabPage | None:
-    """A tab page of this song, read once per run; None when UG says it's gone.
+    """A tab page of this song, read once per run; None when UG says it's gone, or it can't be read.
 
     ``kind`` (the index's type) lets a deleted tab that was never rated be
     remembered as gone. Every page also teaches tabarr its artist's UG page,
-    filed under the song's artist only when the tab is by that artist.
+    filed under the song's artist only when the tab is by that artist. A page
+    that won't parse even fetched again is left alone until it is due
+    (``UNREADABLE_RETRY``).
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
-    page, fresh = _get_page(run.ctx.client, url, parse_tab_page)
+    if _waits(run, tab_id):
+        _unreadable(run, tab_id, kind)
+        return None
+    try:
+        page, fresh = _get_page(run.ctx.client, url, parse_tab_page)
+    except UnreadablePage as e:
+        _unreadable(run, tab_id, kind, e)
+        return None
+    kv_delete(run.conn, _unreadable_key(tab_id))
     run.pages[tab_id] = page
     if fresh:
         run.fetched[(page.tab.kind if page is not None else None) or kind or "?"] += 1
@@ -496,7 +551,7 @@ def _candidate(row: VersionRow) -> Candidate:
 
 
 def _text_page(run: _SongRun, row: VersionRow) -> UGTabPage | None:
-    """A version's page with its text, or None when the page is gone."""
+    """A version's page with its text, or None when the page is gone or can't be read now."""
     page = _page(run, int(row.tab_id), row.url, row.kind)
     return page if page is not None and page.content is not None else None
 
@@ -581,7 +636,7 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     pages: dict[int, UGTabPage] = {}
 
     def scored(c: Candidate) -> bool:
-        """Fetch the sheet and score its coverage; False when its page is gone."""
+        """Fetch the sheet and score its coverage; False when its page is gone or unreadable."""
         assert c.version_id is not None
         page = _text_page(run, by_id[c.version_id])
         if page is None:
@@ -599,7 +654,7 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
         alive: list[Candidate] = []
         for c in rank_by_rating([_candidate(r) for r in rows], policy, variant=run.song.variant):
             if len(pages) < policy.scored_sheets and not scored(c):
-                continue  # gone; the next one is scored instead
+                continue  # gone or unreadable; the next one is scored instead
             alive.append(c)
         ranked = rank_sheets(alive, policy, variant=run.song.variant)
     best = _first_with_text(run, ranked, rows, pages)
@@ -997,9 +1052,17 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
 
 
 def _finish(run: _SongRun) -> None:
-    """Every slot is done: refresh the status, mark the song checked, and describe it in info.json."""
+    """Every slot is done: refresh the status, mark the song checked, and describe it in info.json.
+
+    A song with a page that couldn't be read is neither checked nor clean (an
+    error is never a miss): it is fetched again, from the cache, until that
+    page is due and read.
+    """
     refresh_status(run.conn, run.song.id, ignored=False)
-    update_song(run.conn, run.song.id, ug_dirty=False, ug_checked_at=_iso(run.ctx.now))
+    if run.unreadable:
+        update_song(run.conn, run.song.id, ug_dirty=True)
+    else:
+        update_song(run.conn, run.song.id, ug_dirty=False, ug_checked_at=_iso(run.ctx.now))
     write_info(run.conn, run.ctx.library_dir, get_song(run.conn, run.song.id))
 
 

@@ -647,6 +647,64 @@ def test_broken_cached_page_is_fetched_again(conn, tmp_path):
     assert "sheet 101" in read(tmp_path, song, "sheet.txt")
 
 
+def unreadable_11(conn, ug):
+    """Persiana Americana: UG keeps serving chords tab 11 with HTTP 200 and no js-store (a removed-tab
+    notice, say); tab 12 is a good sheet."""
+    song = accepted(conn)
+    index(conn, (11, "soda-stereo", "persiana-americana", "chords"), (12, "soda-stereo", "persiana-americana", "chords"))
+    ug.add(slugged(11), BROKEN)
+    ug.tab(v(12), content=sheet("sheet 12", LINES))
+    return song
+
+
+def night(conn, ug, tmp_path, day):
+    """One nightly fetch, ``day`` days after NOW: its stats and the requests it made."""
+    ug.requests.clear()
+    when = NOW + timedelta(days=day)
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache", now=when), tmp_path, now=when),
+                        songs_to_fetch(conn, Overrides(), when))
+    return stats, list(ug.requests)
+
+
+def test_a_page_that_never_parses_is_skipped_and_the_song_goes_on(conn, tmp_path):
+    ug = FakeUG()
+    song = unreadable_11(conn, ug)
+
+    first, asked = night(conn, ug, tmp_path, 0)
+    assert first.songs_failed == 1 and asked == [slugged(11)]  # one bad answer may be a passing fault
+
+    second, asked = night(conn, ug, tmp_path, 1)
+    assert second.songs_failed == 0 and asked == [slugged(11), slugged(12)]  # fetched again: still unreadable
+    assert "sheet 12" in read(tmp_path, song, "sheet.txt") and get_song(conn, song.id).status == "found"
+
+    for day in (2, 3):
+        stats, asked = night(conn, ug, tmp_path, day)
+        assert stats.songs_failed == 0 and asked == []  # waits for its retry date: no request a night
+    assert "sheet 12" in read(tmp_path, song, "sheet.txt")
+    # Never gone, never a miss: the song is neither clean nor checked while tab 11 waits to be read.
+    assert [r.tab_id for r in song_versions(conn, song.id, include_gone=True)] == ["12"]
+    done = get_song(conn, song.id)
+    assert (done.ug_dirty, done.ug_checked_at) == (True, None)
+
+
+def test_an_unreadable_page_is_asked_for_again_after_its_retry_date(conn, tmp_path):
+    ug = FakeUG()
+    song = unreadable_11(conn, ug)
+    night(conn, ug, tmp_path, 0)
+    night(conn, ug, tmp_path, 1)
+
+    assert night(conn, ug, tmp_path, 7)[1] == []
+    assert night(conn, ug, tmp_path, 8)[1] == [slugged(11)]  # a week on: still unreadable
+    assert night(conn, ug, tmp_path, 21)[1] == []  # and next time it waits twice as long
+    ug.tab(v(11, rating=4.9, votes=200), [v(12)], content=sheet("sheet 11", LINES))  # UG serves it again
+    assert night(conn, ug, tmp_path, 22)[1] == [slugged(11)]
+
+    assert "sheet 11" in read(tmp_path, song, "sheet.txt")
+    done = get_song(conn, song.id)
+    assert (done.ug_dirty, done.ug_checked_at) == (False, "2026-11-09T03:30:00Z")
+    assert night(conn, ug, tmp_path, 23)[0] == FetchStats()
+
+
 # --- upgrades ---------------------------------------------------------------------------------
 
 
