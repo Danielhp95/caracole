@@ -253,7 +253,8 @@ def _record(
     """Record LaCuerda's version with its coverage; keep it if it beats the kept sheet.
 
     The sheet already kept, met again, is only rescored: the lyrics may have
-    arrived since. Returns whether the sheet was kept now.
+    arrived since, and once it proves complete the auto-chords sheet gives way,
+    as it would have on keeping. Returns whether the sheet was kept now.
     """
     lyrics = song_lyrics(song)
     lines = coverage.lyric_lines(lyrics.plain) if lyrics is not None else []
@@ -271,6 +272,8 @@ def _record(
     )
     if keep:
         _keep(conn, library_dir, song, vid, sheet, complete=_complete(value, rank))
+    elif already_kept and _complete(value, rank):
+        _retire_auto_sheet(conn, library_dir, song, vid)
     update_song(conn, song.id, lacuerda_checked_at=stamp)
     if keep or already_kept:  # info.json lists the kept sheet's coverage
         write_info(conn, library_dir, get_song(conn, song.id))
@@ -298,9 +301,17 @@ def _keep(
         keep_file(conn, library_dir, song=song, version_id=version_id, name=name,
                   data=text.encode("utf-8"), rank=1)
     if complete:
-        drop_file(conn, library_dir, song=song, name=AUTO_SHEET)
+        _retire_auto_sheet(conn, library_dir, song, version_id)
     set_picks(conn, song.id, SHEET_KINDS, [version_id])
     refresh_status(conn, song.id, ignored=False)
+
+
+def _retire_auto_sheet(
+    conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int
+) -> None:
+    """The kept sheet is complete: ``sheet (auto).txt`` goes; the kept sheet is the only pick."""
+    drop_file(conn, library_dir, song=song, name=AUTO_SHEET)
+    set_picks(conn, song.id, SHEET_KINDS, [version_id])
 
 
 # --- small helpers -----------------------------------------------------------------------

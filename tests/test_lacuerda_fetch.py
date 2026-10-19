@@ -547,6 +547,47 @@ def test_a_partial_sheet_is_kept_beside_the_auto_sheet(conn, tmp_path):
     assert picked(conn, song) == {"auto": None, "lacuerda": 1}
 
 
+def kept_names(conn, song) -> set[str]:
+    return set(files_of(conn, song))
+
+
+def test_a_complete_sheet_retires_the_auto_sheet_from_the_library_and_info(conn, tmp_path):
+    song = spanish_song(conn)
+    keep_auto_sheet(conn, tmp_path, song)
+    run(FakeLaCuerda(), conn, tmp_path)
+    info = json.loads((song_folder(tmp_path) / "info.json").read_text(encoding="utf-8"))
+    assert {f["name"] for f in info["files"]} == {"sheet.txt", "sheet.json"}
+    assert [p["kind"] for p in info["picks"]] == ["acordes"]
+
+
+def test_the_kept_sheet_rescored_complete_retires_the_auto_sheet(conn, tmp_path):
+    # Kept beside the auto sheet while the lyrics were pending; once they are in it is complete.
+    site = FakeLaCuerda()
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_auto_sheet(conn, tmp_path, song)
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, kept=1)
+    assert kept_names(conn, song) == {"sheet.txt", "sheet.json", "sheet (auto).txt"}
+
+    with_lyrics(conn, song, SHEET_LYRICS)
+    assert run(site, conn, tmp_path, NOW + timedelta(days=31)) == LaCuerdaStats(tried=1)
+
+    assert kept_names(conn, song) == {"sheet.txt", "sheet.json"}
+    assert not (song_folder(tmp_path) / "sheet (auto).txt").exists()
+    assert picked(conn, song) == {"auto": None, "lacuerda": 1}
+    info = json.loads((song_folder(tmp_path) / "info.json").read_text(encoding="utf-8"))
+    assert "sheet (auto).txt" not in {f["name"] for f in info["files"]}
+
+
+def test_the_kept_sheet_rescored_partial_leaves_the_auto_sheet(conn, tmp_path):
+    site = FakeLaCuerda()
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_auto_sheet(conn, tmp_path, song)
+    run(site, conn, tmp_path)
+    with_lyrics(conn, song, HALF_LYRICS)
+    run(site, conn, tmp_path, NOW + timedelta(days=31))
+    assert kept_names(conn, song) == {"sheet.txt", "sheet.json", "sheet (auto).txt"}
+
+
 def test_the_sheet_already_kept_is_rescored_not_written_again(conn, tmp_path):
     # Kept while the lyrics were pending; 31 days later the lyrics are in.
     site = FakeLaCuerda()

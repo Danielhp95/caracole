@@ -1081,6 +1081,28 @@ def test_auto_sheet_dropped_when_a_complete_human_sheet_arrives(conn, tmp_path, 
     assert (song_dir(tmp_path / "lib", song) / "sheet (auto).txt").exists() is not dropped
     # Either way the human sheet is the slot's only pick; a partial one leaves the auto file as a fallback.
     assert pick_ids(conn, song, "chords", "acordes", "auto") == [101]
+    info = json.loads(read(tmp_path, song, "info.json"))
+    assert ("sheet (auto).txt" in {f["name"] for f in info["files"]}) is not dropped
+
+
+def test_a_kept_sheet_found_complete_later_retires_the_auto_sheet(conn, tmp_path):
+    # Kept beside the auto sheet while the lyrics were pending; with them it proves complete.
+    song = accepted(conn, plain=None)
+    keep_other_sheet(conn, tmp_path, song, provider="auto", kind="auto", name="sheet (auto).txt")
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert names(conn, song) == {"sheet.txt", "sheet.json", "sheet (auto).txt"}
+
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics_json(LYRICS), ug_dirty=True)
+    ug.requests.clear()
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+
+    assert ug.requests == []  # the sheet's page comes from the cache
+    assert names(conn, song) == {"sheet.txt", "sheet.json"}
+    assert not (song_dir(tmp_path / "lib", song) / "sheet (auto).txt").exists()
+    assert pick_ids(conn, song, "chords", "acordes", "auto") == [101]
 
 
 @pytest.mark.parametrize("lacuerda,ug_lines,replaced", [

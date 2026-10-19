@@ -455,17 +455,25 @@ def _keep_text(run: _SongRun, version_id: int, page: UGTabPage, names: tuple[str
     _keep(run, version_id, doc, (json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 
 
-def _kept_version(run: _SongRun, name: str) -> VersionRow | None:
+def _kept_version(conn: sqlite3.Connection, song_id: int, name: str) -> VersionRow | None:
     """The version a kept file came from, whichever step kept it."""
-    for f in kept_files(run.conn, run.song.id):
+    for f in kept_files(conn, song_id):
         if f.name == name:
-            return get_version(run.conn, f.version_id)
+            return get_version(conn, f.version_id)
     return None
+
+
+def _retire_auto_sheet(conn: sqlite3.Connection, library_dir: Path, song: Song) -> None:
+    """A complete human sheet is kept: the auto-chords sheet, which only stands in for one, goes."""
+    auto = _kept_version(conn, song.id, AUTO_SHEET)
+    if auto is not None:
+        drop_file(conn, library_dir, song=song, name=AUTO_SHEET)
+        set_picks(conn, song.id, (auto.kind,), [])
 
 
 def _drop_if_blocked(run: _SongRun, names: tuple[str, str]) -> None:
     """Files kept from a UG version you have blocked since go, even when nothing replaces them."""
-    kept = _kept_version(run, names[0])
+    kept = _kept_version(run.conn, run.song.id, names[0])
     if kept is not None and kept.provider == PROVIDER and int(kept.tab_id) in run.ctx.overrides.block:
         for name in names:
             drop_file(run.conn, run.ctx.library_dir, song=run.song, name=name)
@@ -520,16 +528,15 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
         return None
     c, page = best
     assert c.version_id is not None
-    kept = _kept_version(run, SHEET_FILES[0])
+    kept = _kept_version(run.conn, run.song.id, SHEET_FILES[0])
     if (kept is not None and kept.provider != PROVIDER and pinned is None
             and not replaces_sheet(c.coverage, kept.coverage, policy.coverage_threshold)):
         set_picks(run.conn, run.song.id, CHORDS_KINDS, [])  # the other site's sheet stays the pick
         return None
     _keep_text(run, c.version_id, page, SHEET_FILES)
     set_picks(run.conn, run.song.id, SHEET_KINDS, [c.version_id])
-    if is_complete(c, policy) and (auto := _kept_version(run, AUTO_SHEET)) is not None:
-        drop_file(run.conn, run.ctx.library_dir, song=run.song, name=AUTO_SHEET)
-        set_picks(run.conn, run.song.id, (auto.kind,), [])
+    if is_complete(c, policy):
+        _retire_auto_sheet(run.conn, run.ctx.library_dir, run.song)
     return int(c.tab_id)
 
 
