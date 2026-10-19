@@ -293,8 +293,10 @@ def refresh_index(conn: sqlite3.Connection, client: Client, now: datetime, *,
     wanted = [u for u in urls if sitemap_name(u) == "last" or u == highest or sitemap_name(u) not in indexed]
     stats = _index_sitemaps(conn, client, wanted, now, progress)
     kv_set(conn, _REFRESHED_KEY, _iso(now))
-    if kv_get(conn, _BUILT_KEY) is None and all(sitemap_name(u) in _indexed(conn) for u in urls):
-        mark_built(conn, now)
+    if kv_get(conn, _BUILT_KEY) is None:
+        done = _indexed(conn)
+        if all(sitemap_name(u) in done for u in urls):
+            mark_built(conn, now)
     return stats
 
 
