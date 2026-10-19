@@ -40,7 +40,8 @@ an earlier one failed:
 
 Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`),
 http.py (`PoliteClient`, robots rules), health.py (cooldowns, `events`), normalize.py (keys,
-pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy).
+pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy),
+site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's).
 
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
@@ -194,8 +195,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `identity_key` that can change a key bumps `normalize.KEY_VERSION`:
   `songs.ensure_current_keys`, run before songs are looked up, listed or added, then re-keys
   them once and merges those that now share a key. It re-keys `songs` only; `ug_index` keys
-  change when a sitemap is parsed again, and `gtptabs_index` keys at the next gtptabs
-  pass, which parses every sitemap again, an unchanged one from the cache
+  change when a sitemap is parsed again, and the keys of a table site_index.py fills
+  (`gtptabs_index`) at its next refresh, which parses every sitemap again, an unchanged
+  one from the cache
   (`test_gtptabs_fetch.py::test_new_keys_read_the_sitemaps_again_even_when_they_are_unchanged`).
   Name new per-song kv keys `<prefix><song id>` and add the prefix to
   `songs._PER_SONG_KV`, so a merge deletes them.

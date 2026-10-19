@@ -5,13 +5,11 @@ Ultimate Guitar's Guitar Pro pages stay yours to click: its robots.txt closes
 file there for each song that has no Guitar Pro or Power Tab file yet. What the site
 looks like is in gtptabs.py. A pass:
 
-1. **The index.** gtptabs.com's sitemaps are read into ``gtptabs_index`` (db.py) when
-   they never were, and again after 30 days, with conditional requests: a sitemap
-   unchanged since it was indexed costs one request and isn't parsed. After a change
-   to caracole's keys (``normalize.KEY_VERSION``) they are read again at once, and an
-   unchanged one is parsed from the cache's copy. A pass the budget cuts short goes
-   on where it stopped. Each sitemap is stored in one transaction, and one the index
-   no longer lists leaves it.
+1. **The index.** gtptabs.com's sitemaps are read into ``gtptabs_index`` (db.py) by
+   site_index.py: when they never were, again after 30 days with conditional requests
+   (a sitemap unchanged since it was indexed costs one request and isn't parsed), and
+   at once after a change to caracole's keys. A pass the budget cuts short goes on
+   where it stopped.
 2. **Which songs.** Not ignored; with no Guitar Pro or Power Tab file in the files
    table (filed from _inbox or downloaded here, whether or not you deleted it since);
    by an artist the index knows, under the name's own key or the site's "Last,
@@ -43,15 +41,12 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
 
-from caracole import normalize
-from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json
+from caracole import site_index
+from caracole.db import kv_get, kv_set
 from caracole.gtptabs import (
     PROVIDER,
     SITEMAP_INDEX_URL,
@@ -81,8 +76,8 @@ from caracole.inbox import GUITAR_FILE_KINDS, guitar_number
 from caracole.library import keep_file, write_info
 from caracole.normalize import compact, slug_key
 from caracole.overrides import Overrides
+from caracole.site_index import Site
 from caracole.songs import Song, get_song, list_songs
-from caracole.ug.sitemap import iter_locs
 from caracole.versions import upsert_version
 
 log = logging.getLogger(__name__)
@@ -97,8 +92,6 @@ MAX_SIZE_KB = 5 * 1024
 FORMATS = frozenset({"gp3", "gp4", "gp5", "gpx", "gp", "ptb"})  # the artist page's classes the library files
 _ACCEPT = (200, 404)  # a 404 is an answer: no such artist, or no such file
 
-_SITEMAPS_KEY = "gtptabs:sitemaps"  # each indexed sitemap: validators, rows, when last checked
-_COMPLETE_KEY = "gtptabs:index:complete_at"  # when every sitemap the index lists was last checked
 CHECKED_PREFIX = "gtptabs:checked:"  # + song id: when its artist's page last answered for it
 _UNUSABLE_PREFIX = "gtptabs:unusable:"  # + tab id: when its download last gave no file
 
@@ -143,8 +136,11 @@ def gtptabs_files(
     wanting = _songs_wanting_a_file(conn, now, overrides)
     if not wanting:
         return stats
+    def read() -> None:
+        stats.sitemaps += 1
+
     try:
-        _refresh_index(conn, client, now, stats)
+        site_index.refresh(conn, client, SITE, now, on_read=read)
     except ProviderBlocked:
         raise
     except BudgetExhausted:
@@ -187,117 +183,11 @@ def gtptabs_files(
 
 # --- the index ------------------------------------------------------------------------------------
 
-
-def _refresh_index(conn: sqlite3.Connection, client: Client, now: datetime, stats: GtpTabsStats) -> None:
-    """Read the sitemaps into the index when they never were all read, were last 30 days ago, or
-    were parsed with keys older than caracole's."""
-    complete = _parse(kv_get(conn, _COMPLETE_KEY))
-    old_keys = any(not _current(entry) for entry in _indexed(conn).values())
-    if complete is not None and now - complete < INDEX_MAX_AGE and not old_keys:
-        return
-    resp = client.get(SITEMAP_INDEX_URL, cache=False, conditional=True)
-    listed = _children(resp)
-    for name in [n for n in _indexed(conn) if n not in listed]:
-        _forget(conn, name)
-    for name, url in listed.items():
-        entry = _indexed(conn).get(name)
-        current = entry is not None and _current(entry)
-        if current and not _before(entry.get("checked_at"), now - INDEX_MAX_AGE):
-            continue  # read or found unchanged in this round already
-        r = client.get(url, cache=False, conditional=True)
-        validators = _validators(r.headers)
-        if r.status == 304 and current and _validators_of(entry) == validators:
-            _record(conn, name, {**entry, "checked_at": _iso(now)})
-            continue
-        _store(conn, name, _rows(r.content, url, r.status), validators, now)
-        stats.sitemaps += 1
-    kv_set(conn, _COMPLETE_KEY, _iso(now))
-
-
-def _children(resp: Response) -> dict[str, str]:
-    """The child sitemaps the sitemap index lists, by name ("1"), each over https."""
-    children = {
-        name: https(loc)
-        for loc in _locs(resp.content, SITEMAP_INDEX_URL, resp.status)
-        if (name := sitemap_name(loc)) is not None
-    }
-    if not children:
-        raise ProviderError(PROVIDER, SITEMAP_INDEX_URL, resp.status, "the sitemap index lists no sitemaps")
-    return children
-
-
-def _locs(data: bytes, url: str, status: int) -> list[str]:
-    try:
-        locs = list(iter_locs(data))
-    except (OSError, EOFError, ValueError) as e:  # a truncated or corrupt gzip body
-        raise ProviderError(PROVIDER, url, status, f"unreadable sitemap: {e}") from e
-    if not locs:
-        raise ProviderError(PROVIDER, url, status, "not a sitemap (no <loc> entries)")
-    return locs
-
-
-def _rows(data: bytes, url: str, status: int) -> list[IndexRow]:
-    """A sitemap's artist and song pages, less the ones robots.txt closes (every /ru/ copy)."""
-    return [row for row in map(parse_page_url, _locs(data, url, status)) if row is not None]
-
-
-def _indexed(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
-    return kv_get_json(conn, _SITEMAPS_KEY, default={}) or {}
-
-
-def _record(conn: sqlite3.Connection, name: str, entry: Mapping[str, Any]) -> None:
-    indexed = _indexed(conn)
-    indexed[name] = dict(entry)
-    kv_set_json(conn, _SITEMAPS_KEY, indexed)
-
-
-def _store(conn: sqlite3.Connection, name: str, rows: list[IndexRow], validators: Mapping[str, str | None],
-           now: datetime) -> None:
-    """Put one sitemap's rows in place of those it gave before, and record it, in one transaction."""
-    with _savepoint(conn, "gtptabs_sitemap"):
-        conn.execute("DELETE FROM gtptabs_index WHERE sitemap = ?", (name,))
-        conn.executemany(
-            "INSERT OR REPLACE INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [(*row, name) for row in rows],
-        )
-        _record(conn, name, {**validators, "checked_at": _iso(now), "rows": len(rows),
-                             "keys": normalize.KEY_VERSION})
-
-
-def _forget(conn: sqlite3.Connection, name: str) -> None:
-    """A sitemap the index no longer lists: its rows go, and its record."""
-    with _savepoint(conn, "gtptabs_forget"):
-        conn.execute("DELETE FROM gtptabs_index WHERE sitemap = ?", (name,))
-        indexed = _indexed(conn)
-        indexed.pop(name, None)
-        kv_set_json(conn, _SITEMAPS_KEY, indexed)
-
-
-def _current(entry: Mapping[str, Any]) -> bool:
-    """Whether a sitemap's rows were made with caracole's keys as they are now."""
-    return entry.get("keys") == normalize.KEY_VERSION
-
-
-def _validators(headers: Mapping[str, str]) -> dict[str, str | None]:
-    lower = {k.lower(): v for k, v in headers.items()}
-    return {"etag": lower.get("etag"), "last_modified": lower.get("last-modified")}
-
-
-def _validators_of(entry: Mapping[str, Any]) -> dict[str, str | None]:
-    return {"etag": entry.get("etag"), "last_modified": entry.get("last_modified")}
-
-
-@contextmanager
-def _savepoint(conn: sqlite3.Connection, name: str) -> Iterator[None]:
-    conn.execute(f"SAVEPOINT {name}")
-    try:
-        yield
-    except BaseException:
-        conn.execute(f"ROLLBACK TO {name}")
-        conn.execute(f"RELEASE {name}")
-        raise
-    conn.execute(f"RELEASE {name}")
+# gtptabs.com's sitemaps, as site_index.py reads them into gtptabs_index.
+SITE = Site(
+    provider=PROVIDER, index_url=SITEMAP_INDEX_URL, table="gtptabs_index", columns=IndexRow._fields,
+    child=sitemap_name, row=parse_page_url, max_age=INDEX_MAX_AGE, fetch_url=https,
+)
 
 
 class _Index:
