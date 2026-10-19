@@ -68,9 +68,11 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     """The whole page: every song, its files, and the links to find what's missing."""
     keys = _sheet_keys(conn)
     pages = _guitar_pro_pages(conn)
+    sources = _downloaded(conn)
     library = list_songs(conn)
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
-    songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy)
+    songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
+                   sources.get(s.id, {}))
              for s in library]
     data = {
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -97,8 +99,9 @@ def write_library_page(library_dir: Path, html: str) -> Path:
 
 
 def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
-          guitar_pro: list[dict[str, str]], for_buying: bool) -> dict[str, Any]:
-    """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``)."""
+          guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str]) -> dict[str, Any]:
+    """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
+    ``sources`` the site each file caracole downloaded for it came from, by name."""
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
     names = _file_names(song_dir(library_dir, song))
@@ -124,7 +127,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
         "transpose": overrides.transpose.get(song.key, 0),
         "lyrics": song.lyrics_status,
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
-        "files": _files(library_dir, song, names),
+        "files": _files(library_dir, song, names, sources),
         "guitarPro": guitar_pro,
         "links": links,
         "buy": buy,
@@ -141,7 +144,7 @@ def _file_names(folder: Path) -> set[str]:
         return set()
 
 
-def _files(library_dir: Path, song: Song, names: set[str]) -> list[dict[str, Any]]:
+def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, str]) -> list[dict[str, Any]]:
     """Links to the kept files that exist, as paths relative to index.html, percent-encoded."""
     guitar = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
     ordered = [n for n in _FIRST if n in names] + [n for _, n in guitar] + [n for n in _LAST if n in names]
@@ -150,16 +153,28 @@ def _files(library_dir: Path, song: Song, names: set[str]) -> list[dict[str, Any
     primary = next((n for n in ordered if n.endswith(".pdf")), None) or next(
         (n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None)
     return [
-        {"name": n, "label": _label(n), "href": f"{base}/{quote(n, safe='')}", "primary": n == primary}
+        {"name": n, "label": _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}", "primary": n == primary}
         for n in ordered
     ]
 
 
-def _label(name: str) -> str:
+def _label(name: str, source: str | None = None) -> str:
     m = _GUITAR.fullmatch(name)
     if m:
-        return f"{'Power Tab' if m.group(2).lower() == '.ptb' else 'Guitar Pro'} {m.group(1)}"
+        kind = "Power Tab" if m.group(2).lower() == ".ptb" else "Guitar Pro"
+        return f"{kind} {m.group(1)}" + (f" · {source}" if source else "")
     return _LABELS[name]
+
+
+def _downloaded(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
+    """The files caracole downloaded from gtptabs.com, as {song id: {file name: "gtptabs.com"}}."""
+    found: dict[int, dict[str, str]] = {}
+    rows = conn.execute(
+        "SELECT f.song_id, f.name FROM files f JOIN versions v ON v.id = f.version_id WHERE v.provider = 'gtptabs'"
+    )
+    for song_id, name in rows:
+        found.setdefault(song_id, {})[name] = "gtptabs.com"
+    return found
 
 
 def _sheet_keys(conn: sqlite3.Connection) -> dict[int, str]:

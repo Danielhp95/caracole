@@ -522,6 +522,7 @@ def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     page = todo_page(cfg)
     assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
     assert "| lrclib | OK | 2026-10-18 03:30 UTC |  | 10 |" in page
+    assert "| gtptabs | OK | 2026-10-18 03:30 UTC |  | 3 |" in page
     assert "never" not in page.split("## Provider health", 1)[1]
 
 

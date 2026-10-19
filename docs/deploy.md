@@ -384,8 +384,8 @@ journalctl -u caracole.service -e           # what it did
 ```
 
 Then read `_todo.md` in the library: setup problems first, if any, then
-review items, partial sheets, the buy list, Guitar Pro pages to download by
-hand, and provider health. A block or an exhausted budget is not a failure:
+review items, partial sheets, the buy list, the Guitar Pro files gtptabs.com
+gave this week, Guitar Pro pages to download by hand, and provider health. A block or an exhausted budget is not a failure:
 the run exits 0 and the song stays pending. After a block, ntfy says until
 when caracole leaves that site alone: the next night's run skips it, the next
 two after a second block in a row, the next four after a third

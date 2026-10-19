@@ -331,6 +331,54 @@ def test_guitar_parts_not_found(conn, cfg):
     assert search_links("Radiohead", "Creep")["songsterr"] in text
 
 
+def gtptabs_file(conn, cfg, song, tab_id, name, *, at="2026-10-17T03:30:00Z", page="tabs/2/blur/song-2.html"):
+    """A file the gtptabs step downloaded for the song, on ``at``."""
+    vid = upsert_version(conn, provider="gtptabs", tab_id=str(tab_id), song_id=song.id, slot="guitar",
+                         kind="power" if name.endswith(".ptb") else "guitar-pro", rating=4, votes=0, version=1,
+                         label=None, url=f"https://gtptabs.com/{page}",
+                         raw={"download": f"https://gtptabs.com/tabs/download/{tab_id}.html"}, now=at)
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=name, data=b"gp" + name.encode(), rank=1)
+    return vid
+
+
+def test_a_song_with_a_file_from_gtptabs_has_its_guitar_part(conn, cfg):
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, match_decision="accept", ug_checked_at="2026-10-18T03:35:00Z")
+    gtptabs_file(conn, cfg, s, 77, "guitar-1.gp5", page="tabs/18/radiohead/creep.html")
+    assert "## Guitar parts not found" not in todo(conn, cfg)
+
+
+def test_files_downloaded_from_gtptabs_this_week_are_listed_with_their_page(conn, cfg):
+    s = add_song(conn, "Blur", "Song 2")
+    gtptabs_file(conn, cfg, s, 12, "guitar-1.gpx")
+    section = section_of(todo(conn, cfg), "New Guitar Pro files from gtptabs.com")
+    assert section.startswith(" (1)\n")
+    assert ("- **Blur - Song 2**: [guitar-1.gpx](Blur/Song%202/guitar-1.gpx) · "
+            "[its page](https://gtptabs.com/tabs/2/blur/song-2.html)") in section
+    week_later = build_todo(conn, cfg, Overrides(), datetime(2026, 10, 25, 3, 41, tzinfo=UTC))
+    assert "New Guitar Pro files from gtptabs.com" not in week_later
+
+
+def test_guitar_pro_pages_to_click_say_which_songs_have_a_file_from_gtptabs(conn, cfg):
+    # UG's pages stay to click: one may be a better version. The line says the song has a file.
+    s = add_song(conn)
+    v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", rating=4.2, votes=5, ver=1)
+    set_picks(conn, s.id, ["guitar-pro"], [v1])
+    gtptabs_file(conn, cfg, s, 31, "guitar-1.gp4", page="tabs/19/soda-stereo/de-musica-ligera.html")
+    section = section_of(todo(conn, cfg), "Guitar Pro pages to click")
+    assert "- **Soda Stereo - De Música Ligera** (guitar-1.gp4 came from gtptabs.com): [guitar-1" in section
+
+
+def test_provider_health_has_gtptabs_and_says_when_it_is_off(conn, cfg):
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+
+    assert "| gtptabs | OK | never |  |  |" in todo(conn, cfg)
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    assert "| gtptabs | off ([providers.gtptabs] enabled = false) | never |  |  |" in todo(conn, off)
+
+
 def test_inbox_unmatched_files_listed(conn, cfg):
     inbox = cfg.library_dir / "_inbox"
     inbox.mkdir(parents=True)

@@ -120,6 +120,19 @@ def test_links_to_kept_files_are_relative_percent_encoded_and_in_order(conn, cfg
     assert [f["primary"] for f in files] == [True] + [False] * 8
 
 
+def test_a_guitar_pro_file_from_gtptabs_says_where_it_came_from(conn, cfg):
+    # One downloaded for you, beside one you filed from _inbox for a UG pick.
+    s = add_song(conn, "Blur", "Song 2")
+    gtp = upsert_version(conn, provider="gtptabs", tab_id="12", song_id=s.id, slot="guitar", kind="guitar-pro",
+                         rating=4, votes=0, version=1, label=None, url="https://gtptabs.com/tabs/2/blur/song-2.html",
+                         raw={}, now="2026-10-17T03:30:00Z")
+    keep_file(conn, cfg.library_dir, song=s, version_id=gtp, name="guitar-1.gpx", data=b"gpx", rank=1)
+    ug = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
+    keep_file(conn, cfg.library_dir, song=s, version_id=ug, name="guitar-2.gp5", data=b"gp5", rank=2)
+    files = {f["name"]: f["label"] for f in songs_of(page(conn, cfg))["Blur - Song 2"]["files"]}
+    assert files == {"guitar-1.gpx": "Guitar Pro 1 · gtptabs.com", "guitar-2.gp5": "Guitar Pro 2"}
+
+
 def test_only_files_that_exist_are_linked(conn, cfg):
     s = add_song(conn, "Radiohead", "Creep")
     v = version(conn, s, 4169)

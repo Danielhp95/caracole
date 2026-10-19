@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -29,8 +29,9 @@ from caracole.ug.fetch import artist_is_known, needs_artist_page, songs_to_fetch
 from caracole.ug.index import index_state
 from caracole.ug.lookup import song_tabs
 
-PROVIDERS = ("ug", "lrclib", "lacuerda")
+PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs")
 GUITAR_KINDS = ("guitar-pro", "power", "tabs")
+NEW_FILES_FOR = timedelta(days=7)  # how long a file downloaded from gtptabs.com is listed as new
 _MD_SPECIAL = "\\`*_[]<>|"
 _KIND_NAMES = {"guitar-pro": "Guitar Pro", "power": "Power Tab", "tabs": "Tab", "chords": "Chords"}
 
@@ -284,6 +285,36 @@ def _autochords_failures(conn: sqlite3.Connection, cfg: Config) -> tuple[list[st
                    f"Auto-chords tries a changed file again on its next run{last}.")
 
 
+def _gtptabs_files(conn: sqlite3.Connection) -> dict[int, list[sqlite3.Row]]:
+    """The files the gtptabs step downloaded, newest first, by song."""
+    rows = conn.execute(
+        "SELECT f.song_id, f.name, f.path, v.url, v.fetched_at FROM files f JOIN versions v ON v.id = f.version_id "
+        "WHERE v.provider = 'gtptabs' ORDER BY v.fetched_at DESC, f.name"
+    ).fetchall()
+    by_song: dict[int, list[sqlite3.Row]] = {}
+    for r in rows:
+        by_song.setdefault(r["song_id"], []).append(r)
+    return by_song
+
+
+def _new_gtptabs_files(conn: sqlite3.Connection, songs_by_id: dict[int, Song], now: datetime) -> list[str]:
+    """The files downloaded from gtptabs.com in the last week, each with a link to the page it came from."""
+    items = []
+    for song_id, rows in _gtptabs_files(conn).items():
+        s = songs_by_id.get(song_id)
+        if s is None or s.status == "ignored":
+            continue
+        for r in rows:
+            try:
+                when = datetime.fromisoformat(r["fetched_at"])
+            except (TypeError, ValueError):
+                continue
+            when = when.replace(tzinfo=UTC) if when.tzinfo is None else when
+            if now - when <= NEW_FILES_FOR:
+                items.append(f"- **{md(s.display)}**: {_link(r['name'], quote(r['path']))} · {_link('its page', r['url'])}")
+    return items
+
+
 def _guitar_pro_pages(conn: sqlite3.Connection, songs_by_id: dict[int, Song]) -> tuple[list[str], int]:
     rows = conn.execute(
         "SELECT v.* FROM versions v WHERE v.kind IN ('guitar-pro', 'power') AND v.pick_rank IS NOT NULL "
@@ -299,7 +330,13 @@ def _guitar_pro_pages(conn: sqlite3.Connection, songs_by_id: dict[int, Song]) ->
         text = (f"guitar-{v['pick_rank']}: {_KIND_NAMES[v['kind']]} ver {v['version']}{label} · "
                 f"{v['rating']:.1f}★ ({v['votes']} votes)")
         by_song.setdefault(v["song_id"], []).append(_link(text, v["url"]))
-    lines = [f"- **{md(songs_by_id[sid].display)}**: " + " · ".join(links) for sid, links in by_song.items()]
+    downloaded = _gtptabs_files(conn)
+    lines = []
+    for sid, links in by_song.items():
+        # A song with a file from gtptabs.com has a guitar part already: its UG pages are optional.
+        has = ", ".join(r["name"] for r in downloaded.get(sid, []))
+        note = f" ({md(has)} came from gtptabs.com)" if has else ""
+        lines.append(f"- **{md(songs_by_id[sid].display)}**{note}: " + " · ".join(links))
     return lines, sum(len(links) for links in by_song.values())
 
 
@@ -310,6 +347,9 @@ def _guitar_parts_not_found(conn: sqlite3.Connection, songs: list[Song]) -> list
             continue
         has = conn.execute(
             "SELECT 1 FROM versions WHERE song_id = ? AND slot = 'guitar' AND pick_rank IS NOT NULL LIMIT 1", (s.id,)
+        ).fetchone() or conn.execute(  # a file kept for the song, such as one gtptabs.com gave
+            "SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id "
+            "WHERE f.song_id = ? AND v.kind IN ('guitar-pro', 'power') LIMIT 1", (s.id,)
         ).fetchone()
         if has:
             continue
@@ -422,14 +462,16 @@ def _fmt(dt: datetime | None) -> str:
     return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "never"
 
 
-def _health(conn: sqlite3.Connection, now: datetime) -> list[str]:
+def _health(conn: sqlite3.Connection, cfg: Config, now: datetime) -> list[str]:
     last = kv_get_json(conn, "run:last", default={}) or {}
     requests = last.get("requests", {})
     out = ["## Provider health", "", "| Provider | Status | Last OK | Last error | Requests last run |",
            "|---|---|---|---|---|"]
     for p in PROVIDERS:
         s = get_state(conn, p)
-        if s.cooldown_until and now < s.cooldown_until:
+        if not cfg.provider(p).enabled:
+            status = f"off ([providers.{p}] enabled = false)"
+        elif s.cooldown_until and now < s.cooldown_until:
             blocks = f"{s.strikes} block{'s' if s.strikes != 1 else ''}"
             status = f"cooling down until {_fmt(s.cooldown_until)} ({blocks})"
         elif s.last_error_at and (s.last_ok is None or s.last_ok < s.last_error_at):
@@ -540,6 +582,10 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
          "No human sheet found yet. Buy the track (DRM-free), drop it into Music/, and caracole will "
          "generate an auto sheet; a human sheet found later takes its place.", None),
         ("Auto-chords couldn't read these purchases", unread, unread_intro, None),
+        ("New Guitar Pro files from gtptabs.com", _new_gtptabs_files(conn, by_id, now),
+         "caracole downloaded these in the last 7 days, one for each song that had none. Open each in "
+         "Guitar Pro or TuxGuitar: if it isn't the version you want, any Ultimate Guitar page below is "
+         "still there to click.", None),
         ("Guitar Pro pages to click", gp_pages,
          "Download each file with the page's Download button and drop it into `_inbox/`; caracole "
          "files it under the right song.", n_pages),
@@ -558,7 +604,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
             out += _section(title, items, intro, count)
     out += _render_status(conn)
     out += _sources(conn, cfg)
-    out += _health(conn, now)
+    out += _health(conn, cfg, now)
     return "\n".join(out).rstrip() + "\n"
 
 

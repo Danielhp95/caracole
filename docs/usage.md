@@ -599,6 +599,10 @@ when it has something in it:
 - **Auto-chords couldn't read these purchases.** Each file auto-chords failed
   on, with the error. Re-download it, or convert it (to FLAC, say) and replace
   the original: a changed file is tried again on the next run.
+- **New Guitar Pro files from gtptabs.com.** The files caracole downloaded in
+  the last 7 days, one for each song that had none, each with a link to its
+  page on gtptabs.com. Open each in Guitar Pro or TuxGuitar: if it isn't the
+  version you want, any Ultimate Guitar page below is still there to click.
 - **Guitar Pro pages to click.** The Guitar Pro and Power Tab versions caracole
   picked for each song, best first, with version, rating and votes. Each is
   labelled with its rank, as `guitar-1`: the name its file gets, unless a file
@@ -606,9 +610,12 @@ when it has something in it:
   Open each page, click its Download button, and drop the file into
   `_inbox/`; the next run, or `caracole scan`, files it under its song. Caracole
   never downloads these itself: UG's robots.txt closes its download endpoint
-  to bots.
-- **Guitar parts not found.** Songs UG has no guitar part for, with Songsterr
-  and YouTube links.
+  to bots. A song with a file from gtptabs.com says so, as
+  `(guitar-1.gpx came from gtptabs.com)`: its UG pages stay in case you want
+  another version.
+- **Guitar parts not found.** Songs UG has no guitar part for, and with no
+  Guitar Pro or Power Tab file kept (from `_inbox/` or gtptabs.com), with
+  Songsterr and YouTube links.
 - **Inbox: files caracole couldn't place.** Rename such a file
   "Artist - Title (ver N).ext", as Guitar Pro pages to click names the song
   and the version, and the next run files it. Don't move it into the song's
@@ -626,9 +633,10 @@ when it has something in it:
   secret missing, say), or needs `caracole auth spotify`, and how many songs
   wanted.txt has, with the lines it couldn't read; for a wanted.txt it
   couldn't read at all, the error, as `wanted.txt: error at <time>: …`.
-- **Provider health.** For Ultimate Guitar, LRCLIB and LaCuerda: OK, errors
-  (nothing has worked since the last error), or cooling down until when; the
-  last success; the last error; the requests of the last run.
+- **Provider health.** For Ultimate Guitar, LRCLIB, LaCuerda and gtptabs.com:
+  OK, errors (nothing has worked since the last error), cooling down until
+  when, or off (`[providers.gtptabs] enabled = false`); the last success; the
+  last error; the requests of the last run.
 
 ### Review
 
@@ -677,8 +685,9 @@ overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
 loads nothing from the network. It shows every song with its status, its key
-or transposition, and links to its files, the PDF first. A song without a
-sheet also gets buy and search links.
+or transposition, and links to its files, the PDF first. A Guitar Pro file
+caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`. A song
+without a sheet also gets buy and search links.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
@@ -875,7 +884,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key
       lyrics.txt            the lyrics, from LRCLIB
       lyrics.lrc            the timed lyrics, when LRCLIB has them
-      guitar-1.gp5          Guitar Pro or Power Tab downloads, by rank when filed
+      guitar-1.gp5          Guitar Pro or Power Tab files: filed by rank, or from gtptabs.com
       tab.txt  tab.json     the best text tab
       sheet (auto).txt      made from audio you bought, when no human sheet exists;
       sheet (auto).cho      it stays, with its ChordPro and PDF, beside a partial
@@ -908,8 +917,9 @@ file still as caracole wrote it is never written again, so Syncthing has
 nothing to sync. Keep your own edits and annotations in a copy under another
 name: caracole leaves alone the files it doesn't track. A lost
 `sheet (auto).txt`, `lyrics.txt` or `lyrics.lrc` isn't written again, nor is
-a Guitar Pro file, which caracole never downloads: put one you lost back in the
-song's folder under its name.
+a Guitar Pro file: a song that has had one, filed from `_inbox/` or
+downloaded from gtptabs.com, gets no other from gtptabs.com, even after you
+delete it. Put one you lost back in the song's folder under its name.
 
 Keep the library private. The sheets and lyrics are other people's work, and
 a personal offline copy is the closest thing to the sites' personal-use terms.
