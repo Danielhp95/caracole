@@ -17,6 +17,7 @@ import json
 import os
 import stat
 from dataclasses import dataclass
+from datetime import timedelta
 from functools import partial
 from pathlib import Path
 
@@ -71,6 +72,8 @@ class Call:
     url: str
     params: dict
     accept: tuple[int, ...]
+    cache: bool = True
+    max_age: timedelta | None = None
 
 
 class FakeClient:
@@ -85,8 +88,8 @@ class FakeClient:
         self.calls: list[Call] = []
         self.requests_made = 0
 
-    def get(self, url, *, params=None, cache=True, conditional=False, accept=(200,)):
-        self.calls.append(Call(url, dict(params or {}), tuple(accept)))
+    def get(self, url, *, params=None, cache=True, conditional=False, accept=(200,), max_age=None):
+        self.calls.append(Call(url, dict(params or {}), tuple(accept), cache, max_age))
         reply = self.replies.get(url.removeprefix(LRCLIB_API))
         if reply is None:
             raise AssertionError(f"unexpected request: {url}")
@@ -110,8 +113,11 @@ def fetch(
     title="De Música Ligera",
     album="Canción Animal",
     duration_s=213.0,
+    **options,
 ):
-    return fetch_lyrics(client, artist=artist, title=title, album=album, duration_s=duration_s)
+    return fetch_lyrics(
+        client, artist=artist, title=title, album=album, duration_s=duration_s, **options
+    )
 
 
 # The get_hit song: Soda Stereo – De Música Ligera, 213 s.
@@ -420,6 +426,22 @@ def test_search_title_joins_han_split_by_punctuation(title, searched):
     fetch(client, artist="Artista", title=title, album=None, duration_s=None)
     assert client.calls[0].params["track_name"] == title
     assert client.calls[1].params["track_name"] == searched
+
+
+def test_lookup_reads_the_cache_forever_by_default():
+    client = FakeClient(get=OVERLOADED, search=(200, []))
+    fetch(client)
+    assert [(c.cache, c.max_age) for c in client.calls] == [(True, None), (True, None)]
+
+
+def test_cache_options_reach_every_request():
+    # A re-check of a missing song must get past the cached miss on both endpoints.
+    client = FakeClient(get=OVERLOADED, search=(200, []))
+    fetch(client, cache=False, max_age=timedelta(days=30))
+    assert [(c.cache, c.max_age) for c in client.calls] == [
+        (False, timedelta(days=30)),
+        (False, timedelta(days=30)),
+    ]
 
 
 def test_banma_plain_only_found_with_duration_253(tmp_path):

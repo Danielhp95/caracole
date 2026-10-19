@@ -14,6 +14,7 @@ from tabarr.lacuerda import (
     artist_slug_candidates,
     artist_url,
     best_acordes_version,
+    is_missing_artist_page,
     is_spanish,
     looks_spanish,
     match_title,
@@ -261,8 +262,49 @@ def test_parse_artist_page_decodes_entities_and_skips_items_without_lcd_or_link(
     ]
 
 
+def test_parse_artist_page_keeps_each_lcd_code_as_written(artist_songs):
+    assert _by_slug(artist_songs, "de_musica_ligera").lcd == "RHRTTTDTB-314865972"
+    # The raw code is kept even where its ranking is unreadable.
+    page = "<ul id=b_main><li lcd='RT-1'><a href='x'>X <em>acordes</em></a></li></ul>"
+    (song,) = parse_artist_page(page)
+    assert (song.lcd, song.ranking) == ("RT-1", (1, 2))
+
+
 def test_parse_artist_page_with_an_empty_list():
     assert parse_artist_page("<ul id=b_main class=b_main></ul>") == []
+
+
+# --- "no such artist" --------------------------------------------------------
+
+
+# LaCuerda's answer to /zzq_no_such_artist_qqz/, byte for byte: HTTP 200, 54 bytes.
+SOFT_404 = "aqui llega:../tabs/z/zzq_no_such_artist_qqz/index.html"
+
+
+def test_the_soft_404_body_is_a_missing_artist():
+    assert len(SOFT_404.encode()) == 54
+    assert is_missing_artist_page(SOFT_404)
+    assert is_missing_artist_page(SOFT_404 + "\n")
+
+
+def test_a_small_page_without_a_song_list_is_a_missing_artist():
+    assert is_missing_artist_page("")
+    assert is_missing_artist_page("<html><body>No encontrado</body></html>")
+
+
+def test_a_page_with_a_song_list_is_not_missing(artist_songs):
+    assert not is_missing_artist_page(_fixture("artist.html"))
+    # However small: an artist with one song is still an artist.
+    assert not is_missing_artist_page(
+        "<ul id=b_main><li lcd='R-1'><a href='rosas'>Rosas <em>acordes</em></a></li></ul>"
+    )
+    assert not is_missing_artist_page("<ul id=b_main class=b_main></ul>")
+
+
+def test_a_full_page_without_a_song_list_is_not_a_soft_404():
+    # A real page that lost its list is shape drift, which parse_artist_page reports
+    # as an error; it must not read as "LaCuerda doesn't have this artist".
+    assert not is_missing_artist_page(_fixture("song.html"))
 
 
 def test_a_song_list_with_no_readable_item_is_a_parse_error():
