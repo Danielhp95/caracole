@@ -16,13 +16,16 @@ def _rematch(conn, cfg) -> None:
 def register(app: typer.Typer) -> None:
     @app.command("todo")
     def todo_cmd(ctx: typer.Context) -> None:
-        """Rewrite Library/_todo.md from the database."""
+        """Rewrite Library/_todo.md and Library/index.html from the database."""
+        from tabarr.library_page import build_library_page, write_library_page
         from tabarr.todo import build_todo, write_todo
 
         cfg = load_cfg(ctx)
         conn = open_db(cfg)
-        path = write_todo(cfg.library_dir, build_todo(conn, cfg, load_ovr(cfg), utcnow()))
-        typer.echo(f"Wrote {path}")
+        overrides, now = load_ovr(cfg), utcnow()
+        path = write_todo(cfg.library_dir, build_todo(conn, cfg, overrides, now))
+        page = write_library_page(cfg.library_dir, build_library_page(conn, cfg, overrides, now))
+        typer.echo(f"Wrote {path} and {page}")
 
     @app.command("review")
     def review_cmd(ctx: typer.Context) -> None:

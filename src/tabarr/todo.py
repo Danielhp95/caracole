@@ -241,6 +241,27 @@ def _sources(conn: sqlite3.Connection, cfg: Config) -> list[str]:
     return out + [""]
 
 
+def _render_status(conn: sqlite3.Connection) -> list[str]:
+    """The last PDF render, from kv ``render:status`` (written by ``render.render_all``)."""
+    status = kv_get_json(conn, "render:status", default=None)
+    if not isinstance(status, dict):
+        return []
+    failed = status.get("failed")
+    names = [str(name) for name in failed] if isinstance(failed, list) else []
+    n_failed = failed if isinstance(failed, int) and not isinstance(failed, bool) else len(names)
+    try:
+        when = _fmt(datetime.fromisoformat(str(status.get("at"))))
+    except ValueError:
+        when = md(str(status.get("at")))
+    out = ["## PDFs", "", f"- Last render {when}: {status.get('rendered', 0)} rendered, {n_failed} failed."]
+    if status.get("font_error"):
+        out.append(f"- Font: {md(str(status['font_error']))}")
+    if names:
+        out.append(f"- Couldn't render {len(names)} (the run's log says why):")
+        out += [f"  - {md(name)}" for name in names]
+    return out + [""]
+
+
 def _fmt(dt: datetime | None) -> str:
     return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "never"
 
@@ -274,6 +295,8 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         "",
         f"_Updated {_fmt(now)} · {n} song{'s' if n != 1 else ''}: {counts['found']} found, "
         f"{counts['wanted']} wanted, {counts['ignored']} ignored_",
+        "",
+        "Browse or search every song: [index.html](index.html)",
         "",
     ]
     buy, waiting = _buy_list(songs)
@@ -310,6 +333,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     ):
         if items:
             out += _section(title, items, intro, count)
+    out += _render_status(conn)
     out += _sources(conn, cfg)
     out += _health(conn, now)
     return "\n".join(out).rstrip() + "\n"

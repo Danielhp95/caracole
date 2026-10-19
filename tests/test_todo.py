@@ -230,3 +230,44 @@ def test_write_todo(cfg):
     path = write_todo(cfg.library_dir, "# tabarr to-do\n")
     assert path == cfg.library_dir / "_todo.md"
     assert path.read_text(encoding="utf-8") == "# tabarr to-do\n"
+
+
+def test_header_links_to_the_library_page(conn, cfg):
+    head = todo(conn, cfg).split("\n## ", 1)[0]
+    assert "[index.html](index.html)" in head
+
+
+def test_render_status_line(conn, cfg):
+    kv_set_json(conn, "render:status",
+                {"at": "2026-10-18T03:40:00Z", "rendered": 12, "failed": [], "font_error": None})
+    text = todo(conn, cfg)
+    assert "## PDFs" in text
+    assert "2026-10-18 03:40 UTC: 12 rendered, 0 failed" in text
+    assert "Couldn't render" not in text and "Font" not in text
+
+
+def test_render_failures_and_font_error_are_shown(conn, cfg):
+    kv_set_json(conn, "render:status", {
+        "at": "2026-10-18T03:40:00Z", "rendered": 3, "failed": ["Soda Stereo - Persiana Americana", "A_B - [C]"],
+        "font_error": "set cjk_font or TABARR_CJK_FONT to render 宋冬野 - 斑马斑马",
+    })
+    text = todo(conn, cfg)
+    assert "## PDFs" in text
+    pdfs = text.split("## PDFs", 1)[1].split("\n## ", 1)[0]
+    assert "3 rendered, 2 failed" in pdfs
+    assert r"set cjk\_font or TABARR\_CJK\_FONT to render 宋冬野 - 斑马斑马" in pdfs
+    assert "Soda Stereo - Persiana Americana" in pdfs and r"A\_B - \[C\]" in pdfs
+
+
+def test_render_status_with_a_count_instead_of_names_still_renders(conn, cfg):
+    kv_set_json(conn, "render:status", {"at": "2026-10-18T03:40:00Z", "rendered": 4, "failed": 2, "font_error": None})
+    assert "4 rendered, 2 failed" in todo(conn, cfg)
+    kv_set_json(conn, "render:status", {"at": "nonsense", "rendered": 4, "failed": "abc"})
+    text = todo(conn, cfg)
+    assert "4 rendered, 0 failed" in text and "  - a" not in text
+
+
+def test_no_pdf_section_before_the_first_render_or_for_a_bad_record(conn, cfg):
+    assert "## PDFs" not in todo(conn, cfg)
+    kv_set_json(conn, "render:status", ["not", "a", "record"])
+    assert "## PDFs" not in todo(conn, cfg)
