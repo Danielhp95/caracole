@@ -219,8 +219,8 @@ class PoliteClient:
     - Before every network request except the first, it pauses for a random
       time in ``policy.delay``, minus the time already elapsed.
     - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
-    - A URL robots.txt disallows (``robots_disallows``) raises ``ProviderError``
-      without a request.
+    - A URL robots.txt disallows (``robots_disallows``) is never requested: when
+      no cached answer is served, ``ProviderError``.
     - Redirects are followed one hop at a time, at most three. Each hop is a
       request like any other (budget, pause, event) and must stay on the site
       asked for and be open in robots.txt, or ``ProviderError``. The final answer

@@ -210,13 +210,16 @@ def test_robots_disallows_names_the_rule_for_other_modules():
 
 
 def test_robots_refusals_are_not_provider_failures(tmp_path):
-    # No request was sent, so the breaker neither counts them nor resets.
-    client, rec = make_client(tmp_path, ok(), max_consecutive_errors=3)
-    for i in range(3):
-        with pytest.raises(ProviderError):
-            client.get(f"{TABS}/tab/print?id={i}")
-    assert client.get(TABS + "/tab/85053").status == 200
-    assert len(rec.requests) == 1
+    # No request is sent, so the breaker neither counts a refusal nor resets on one.
+    client, rec = make_client(tmp_path, ok(b"boom", status=502), max_consecutive_errors=3)
+    refused = [f"{TABS}/tab/print?id={i}" for i in range(3)]
+    for url in [TABS + "/tab/1", *refused, TABS + "/tab/2", TABS + "/tab/3"]:
+        with pytest.raises(ProviderError) as e:
+            client.get(url)
+        assert not isinstance(e.value, ProviderUnavailable)
+    with pytest.raises(ProviderUnavailable):  # /tab/1, /tab/2 and /tab/3 failed in a row
+        client.get(TABS + "/tab/4")
+    assert len(rec.requests) == 3
 
 
 OLD = TABS + "/tab/a/old-chords-1"
