@@ -5,6 +5,9 @@ asks ``/api/search`` once and chooses among the records locally
 (``pick_candidate``). Lyrics are saved as ``lyrics.txt`` and, when LRCLIB has
 them timed, ``lyrics.lrc``, and stored as JSON in the ``songs`` table.
 
+The nightly pass (``fetch_pending_lyrics``) looks up every song once, through
+the forever cache, and asks again about a miss after 30 days, past the cache.
+
 Errors are never misses: whatever the client raises, and any body that is not
 the JSON LRCLIB documents, propagates and leaves the song pending.
 """
@@ -12,19 +15,33 @@ the JSON LRCLIB documents, propagates and leaves the song pending.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
 import secrets
+import sqlite3
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from rapidfuzz import fuzz
 
-from tabarr.http import Client, ProviderError, Response
+from tabarr.http import (
+    BudgetExhausted,
+    Client,
+    ProviderBlocked,
+    ProviderError,
+    ProviderUnavailable,
+    Response,
+)
+from tabarr.library import song_dir
 from tabarr.normalize import clean_title, fold, slug_key
+from tabarr.songs import Song, list_songs, update_song
+
+log = logging.getLogger(__name__)
 
 LRCLIB_API = "https://lrclib.net/api"
 PROVIDER = "lrclib"
@@ -316,7 +333,14 @@ def _search_title(track: str) -> str:
 
 
 def fetch_lyrics(
-    client: Client, *, artist: str, title: str, album: str | None, duration_s: float | None
+    client: Client,
+    *,
+    artist: str,
+    title: str,
+    album: str | None,
+    duration_s: float | None,
+    cache: bool = True,
+    max_age: timedelta | None = None,
 ) -> LyricsResult:
     """Look a song up on LRCLIB: ``/api/get`` first, then ``/api/search``.
 
@@ -326,14 +350,18 @@ def fetch_lyrics(
     only an empty or non-matching search result is "missing". Errors raised by
     the client (``ProviderError``, ``BudgetExhausted``) and unreadable bodies
     propagate, so the song stays pending: an error is never a miss.
+
+    ``cache`` and ``max_age`` go to every ``client.get``. By default a cached
+    answer is used forever; ``cache=False`` asks LRCLIB again.
     """
+    options: dict[str, Any] = {"cache": cache, "max_age": max_age}
     track = clean_title(title)
     params: dict[str, str | int] = {"artist_name": artist, "track_name": track}
     if album:
         params["album_name"] = album
     if duration_s is not None:
         params["duration"] = round(duration_s)
-    resp = client.get(f"{LRCLIB_API}/get", params=params, accept=_GET_ACCEPT)
+    resp = client.get(f"{LRCLIB_API}/get", params=params, accept=_GET_ACCEPT, **options)
     if resp.status == 200:
         found = _json(resp)
         if not isinstance(found, Mapping):
@@ -346,6 +374,7 @@ def fetch_lyrics(
         f"{LRCLIB_API}/search",
         params={"track_name": _search_title(track), "artist_name": artist},
         accept=(200,),
+        **options,
     )
     cands = _json(resp)
     if not isinstance(cands, list):
@@ -391,3 +420,124 @@ def write_lyrics(song_dir: Path, lyrics: Lyrics) -> list[Path]:
         else:
             path.unlink(missing_ok=True)
     return written
+
+
+# --- the nightly pass ----------------------------------------------------------
+
+
+@dataclass
+class LyricsStats:
+    """What one ``fetch_pending_lyrics`` pass did."""
+
+    found: int = 0
+    missing: int = 0
+    instrumental: int = 0
+    errors: int = 0
+    budget_exhausted: bool = False
+
+
+RECHECK_MISSING_AFTER = timedelta(days=30)
+
+
+def _utc(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
+
+
+def _stamp(now: datetime) -> str:
+    """``now`` as stored in ``songs.lyrics_at``; naive times are UTC."""
+    return _utc(now).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _before(stamp: str | None, cutoff: datetime) -> bool:
+    """Whether a stored time is older than ``cutoff``; a missing or unreadable one is."""
+    try:
+        return stamp is None or _utc(datetime.fromisoformat(stamp)) < cutoff
+    except ValueError:
+        return True
+
+
+def _songs_to_look_up(
+    conn: sqlite3.Connection, now: datetime, recheck_after: timedelta
+) -> list[tuple[Song, bool]]:
+    """Songs never looked up, newest first, then misses older than ``recheck_after``.
+
+    The flag marks a re-check, whose cached answer is the old miss itself.
+    """
+    cutoff = _utc(now) - recheck_after
+    pending: list[tuple[Song, bool]] = []
+    due: list[tuple[Song, bool]] = []
+    for song in list_songs(conn):
+        if song.status == "ignored":
+            continue
+        if song.lyrics_status == "pending":
+            pending.append((song, False))
+        elif song.lyrics_status == "missing" and _before(song.lyrics_at, cutoff):
+            due.append((song, True))
+    return pending + due
+
+
+def fetch_pending_lyrics(
+    conn: sqlite3.Connection,
+    client: Client,
+    library_dir: Path,
+    now: datetime,
+    *,
+    recheck_missing_after: timedelta = RECHECK_MISSING_AFTER,
+) -> LyricsStats:
+    """Look up the lyrics of every song that has none yet, newest first.
+
+    Ignored songs are skipped. Songs LRCLIB had no lyrics for are asked again
+    once their ``lyrics_at`` is older than ``recheck_missing_after``, after the
+    songs never looked up. A re-check bypasses the cache (``cache=False``):
+    the cached answer is the old miss, and a client that has spent its budget
+    may still serve it, so only a real request counts as a re-check.
+
+    Found lyrics are written to the song's folder (``write_lyrics``) and stored
+    in ``songs.lyrics_json``; every outcome stores ``lyrics_at``.
+
+    Errors are never misses. ``ProviderBlocked`` propagates; ``BudgetExhausted``
+    ends the pass (``budget_exhausted``); any other ``ProviderError`` counts in
+    ``errors`` and leaves the song as it was, for the next run. Once the client
+    gives up on the provider for this run (``ProviderUnavailable``), the pass ends.
+    """
+    stats = LyricsStats()
+    stamp = _stamp(now)
+    for song, recheck in _songs_to_look_up(conn, now, recheck_missing_after):
+        try:
+            result = fetch_lyrics(
+                client, artist=song.artists[0], title=song.title, album=song.album,
+                duration_s=song.duration_s, cache=not recheck,
+            )
+        except ProviderBlocked:
+            raise
+        except BudgetExhausted:
+            stats.budget_exhausted = True
+            break
+        except ProviderUnavailable as e:
+            log.warning("LRCLIB is unavailable for the rest of this run: %s", e)
+            break
+        except ProviderError as e:
+            stats.errors += 1
+            log.warning("lyrics for %s: %s", song.display, e)
+            continue
+        _record(conn, library_dir, song, result, stamp)
+        if result.status == "found":
+            stats.found += 1
+        elif result.status == "instrumental":
+            stats.instrumental += 1
+        else:
+            stats.missing += 1
+    return stats
+
+
+def _record(
+    conn: sqlite3.Connection, library_dir: Path, song: Song, result: LyricsResult, stamp: str
+) -> None:
+    """Store one lookup's outcome: the lyric files first, so a failed write leaves it pending."""
+    if result.lyrics is None:
+        update_song(conn, song.id, lyrics_status=result.status, lyrics_at=stamp)
+        return
+    write_lyrics(song_dir(library_dir, song), result.lyrics)
+    update_song(
+        conn, song.id, lyrics_status=result.status, lyrics_json=result.lyrics.to_json(), lyrics_at=stamp
+    )
