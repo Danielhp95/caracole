@@ -15,6 +15,19 @@ I believe this system to be powerful enough. But there may be better ways of bei
 - Add key for each song. That's added, denote whether the key comes from running a model locally or extracted fro the information on the tab itself.
 - Allow searching / filtering by key
 
+**Done in [c8cc83d](https://github.com/Danielhp95/caracole/commit/c8cc83d).** Every song with a sheet now has a key, and caracole says where it came from:
+- "from the tab": UG's key for the kept version, or one the sheet states (`{key: Am}`, `Key: G`, LaCuerda's `Tono: La menor`).
+- "estimated from the chords": worked out offline from the human sheet's chords.
+- "from the audio": what the local model heard, for an auto-chords sheet.
+
+The key is stored in info.json as `key` and `key_source`; the song's identity moved to `identity_key`.
+
+To filter by key:
+- **index.html:** each card shows the key ("Key A minor (from the tab)"). The Key menu lists each key once, spellings merged ("F# / Gb minor · 2"). The search box takes a typed key ("a minor", "f# major", "bbm"); "minor" alone shows every minor song.
+- **Command line:** `caracole search --key am` (any case or spelling) lists your songs in that key.
+
+The code is in `src/caracole/keys.py`.
+
 ## Web server
 
 - Instead of having a static site, allow for a lightweight server that wraps around the `caracole` CLI such that I can request songs from the website
