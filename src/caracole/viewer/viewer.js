@@ -31,7 +31,8 @@
   // --- the state: where the song is played, kept per page ------------------------------------
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, shapes: 0, fs: 18, strip: false };
   const store = "caracole-viewer:" + location.pathname;
-  // Chords chosen instead of others are kept by index: they only hold while the sheet's chords do.
+  // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
+  // while the sheet's chords do.
   const sheetChords = Object.keys(written).map((i) => written[i]).join("|");
   const validMode = (m) => Boolean(key) && data.modes.indexOf(m) >= 0;
   const clampT = (t) => Math.max(-11, Math.min(11, Math.round(Number(t) || 0)));
@@ -63,7 +64,14 @@
   const names = (s) => (key ? data.names[modeNow()][mod12(key.tonic + s)] : data.names[""]).split(" ");
   const keyName = (s) => (key ? data.keyNames[modeNow()][mod12(key.tonic + s)] : "");
   const choices = () => state.alt[modeNow()] || {};
-  const choice = (i) => (own.call(choices(), i) ? choices()[i] : -1);
+  // A chord chosen instead of another is kept as itself ([root, suffix, bass]) and found again
+  // among the alternatives offered now: once the key or caracole's alternatives change, a
+  // chord no longer offered is dropped rather than another one played in its place.
+  const sameChord = (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  const choice = (i) => {
+    const chosen = own.call(choices(), i) ? choices()[i] : null;
+    return Array.isArray(chosen) ? alts(i).findIndex((rep) => sameChord(rep, chosen)) : -1;
+  };
   const alts = (i) => (key && data.alts[modeNow()] ? data.alts[modeNow()][i] || [] : []);
   const base = (i) => (asWritten() ? data.chords[i] : data.mapped[modeNow()][i]);
   const current = (i) => {
@@ -350,7 +358,7 @@
   $("use").addEventListener("click", () => {
     const mode = modeNow();
     const mine = Object.assign({}, state.alt[mode] || {});
-    if (shown.pick >= 0) mine[shown.i] = shown.pick;
+    if (shown.pick >= 0) mine[shown.i] = alts(shown.i)[shown.pick].slice(0, 3);
     else delete mine[shown.i];
     state.alt[mode] = mine;
     render();

@@ -391,16 +391,52 @@ window.addEventListener("load", () => {
 """
 
 
-def run_in_page(html: str, tmp_path: Path, body: str, fragment: str = ""):
-    """What ``body`` (JavaScript, after the page's own script ran) gives as ``out``, in Chromium."""
+def run_in_page(html: str, tmp_path: Path, body: str, fragment: str = "", before: str = ""):
+    """What ``body`` (JavaScript, after the page's own script ran) gives as ``out``, in Chromium.
+
+    ``before`` runs before the page's script, once the sheet is there."""
     script = ("<script>\nwindow.addEventListener(\"load\", () => {\n"
               "const q = (s) => document.querySelector(s);\nlet out;\n" + body
               + "\ndocument.body.dataset.result = JSON.stringify(out);\n});\n</script>\n")
     html = re.sub(r'<meta http-equiv="Content-Security-Policy"[^>]*>\n', "", html)
+    if before:
+        data = '<script type="application/json" id="song">'
+        html = html.replace(data, f"<script>\n{before}\n</script>\n{data}")
     dom = dump_dom(html.replace("</body>", script + "</body>"), tmp_path, fragment)
     found = re.search(r'data-result="([^"]*)"', dom)
     assert found, "the harness didn't run"
     return json.loads(found.group(1).replace("&quot;", '"').replace("&amp;", "&"))
+
+
+SAVED_ALTERNATIVES = """
+  const written = {};
+  for (const el of document.querySelectorAll("#sheet .c")) if (!(el.dataset.c in written)) written[el.dataset.c] = el.textContent;
+  const chords = Object.keys(written).map((i) => written[i]).join("|");
+  localStorage.setItem("caracole-viewer:" + location.pathname, JSON.stringify({
+    base: 0, chords,
+    alt: { ionian: {
+      "0": [4, "m", null],  // Em for G: still offered
+      "1": [1, "dim", null],  // C#dim for D: not offered (any more)
+      "2": 0,  // what an older viewer kept: an index into a list that may have changed since
+    } },
+  }));
+"""
+
+
+@in_chromium
+def test_a_chosen_chord_is_kept_as_itself_not_as_its_place_in_a_list(tmp_path):
+    shown, changed, saved = run_in_page(build_viewer(UG_CHO), tmp_path, """
+      const sheet = (i) => q('#sheet .c[data-c="' + i + '"]');
+      const shown = [0, 1, 2].map((i) => sheet(i).textContent);
+      const changed = [0, 1, 2].map((i) => sheet(i).classList.contains("changed"));
+      sheet(3).click();  // C: play its first alternative everywhere
+      [...document.querySelectorAll("#alts .chip")][1].click();
+      q("#use").click();
+      const kept = JSON.parse(localStorage.getItem("caracole-viewer:" + location.pathname));
+      out = [shown, changed, kept.alt.ionian["3"]];
+    """, before=SAVED_ALTERNATIVES)
+    assert shown == ["Em", "D", "Em"] and changed == [True, False, False]
+    assert isinstance(saved, list) and len(saved) == 3 and saved[0] in range(12)  # root, suffix, bass
 
 
 @in_chromium
