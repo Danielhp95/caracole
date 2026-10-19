@@ -17,6 +17,7 @@ from tabarr.commands._common import fail, load_cfg, open_db, utcnow
 
 if TYPE_CHECKING:
     from tabarr.config import Config
+    from tabarr.spotify import SpotifyAPI
     from tabarr.wanted import WantedLine
 
 # How `tabarr add` describes a song the library already had, by its status.
@@ -42,6 +43,48 @@ def register(app: typer.Typer) -> None:
         """Add a song to wanted.txt, then sync wanted.txt into the library."""
         duration_ms = _duration_ms(duration)
         _add(load_cfg(ctx), artist, title, album, duration_ms)
+
+    @app.command("sync")
+    def sync_cmd(ctx: typer.Context) -> None:
+        """Add new songs from wanted.txt and, when it's set up, from Spotify."""
+        _sync(load_cfg(ctx))
+
+
+# --- tabarr sync ----------------------------------------------------------------------------
+
+
+def _sync(cfg: Config) -> None:
+    """Sync every source, print the summary and each problem; Spotify never fails it."""
+    from tabarr.sources import sync_sources
+
+    spotify = _spotify_client(cfg)
+    with closing(open_db(cfg)) as conn:
+        report = sync_sources(conn, cfg, utcnow(), spotify=spotify)
+    typer.echo(report.summary())
+    for problem in report.wanted.errors:
+        _warn(problem)
+    if report.spotify_state == "auth_needed" and report.spotify_message:
+        _warn(f"Spotify: {report.spotify_message}")
+    if report.spotify_state == "off" and not cfg.wanted_file.exists():
+        typer.echo(f"No {cfg.wanted_file} yet: `tabarr add ARTIST TITLE` creates it.")
+
+
+def _spotify_client(cfg: Config) -> SpotifyAPI | None:
+    """The Spotify client, or None; as in the nightly run, no failure here stops the sync.
+
+    A SpotifyError is left for ``sync_sources`` to explain, so it's said once.
+    """
+    if not cfg.spotify.enabled:
+        return None
+    from tabarr.spotify import SpotifyError, client_from_config
+
+    try:
+        return client_from_config(cfg)
+    except SpotifyError:
+        return None
+    except Exception as e:  # noqa: BLE001 (Spotify is optional: nothing it raises stops the sync)
+        _warn(f"Spotify unavailable: {type(e).__name__}: {e}")
+        return None
 
 
 # --- tabarr add -----------------------------------------------------------------------------

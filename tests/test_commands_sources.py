@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 import requests
+from spotipy.exceptions import SpotifyException
 from typer.testing import CliRunner
 
 from tabarr import db
@@ -70,6 +71,57 @@ def songs(tmp_path):
         return list_songs(conn)
     finally:
         conn.close()
+
+
+def spotify_config(tmp_path, *, secret=True):
+    """A [spotify] table for tabarr.toml; the client secret sits in a file next to it."""
+    if not secret:
+        return '[spotify]\nclient_id = "cid"\n'
+    (tmp_path / "spotify_secret").write_text("secret\n", encoding="utf-8")
+    return '[spotify]\nclient_id = "cid"\nclient_secret_file = "spotify_secret"\n'
+
+
+class OneTrackSpotify:
+    """A Spotify account with one liked track, no playlists and no top tracks."""
+
+    def __init__(self, error=None):
+        self.error = error
+
+    def current_user_saved_tracks(self, limit=20, offset=0, market=None):
+        if self.error:
+            raise self.error
+        creep = {
+            "type": "track",
+            "id": "tCreep",
+            "name": "Creep",
+            "artists": [{"name": "Radiohead"}],
+            "album": {"name": "Pablo Honey"},
+            "duration_ms": 238000,
+        }
+        return {"items": [{"added_at": "2026-10-01T12:00:00Z", "track": creep}], "next": None}
+
+    def current_user_playlists(self, limit=50, offset=0):
+        return {"items": [], "next": None}
+
+    def playlist_items(self, playlist_id, **kwargs):
+        raise SpotifyException(404, -1, "x:\n Not found")
+
+    def current_user_top_tracks(self, limit=20, offset=0, time_range="medium_term"):
+        return {"items": [], "next": None}
+
+    def next(self, result):
+        return None
+
+
+def fake_spotify(monkeypatch, client):
+    """Make ``client_from_config`` return ``client``, or raise it when it's an exception."""
+
+    def client_from_config(cfg):
+        if isinstance(client, BaseException):
+            raise client
+        return client
+
+    monkeypatch.setattr("tabarr.spotify.client_from_config", client_from_config)
 
 
 # --- tabarr add -----------------------------------------------------------------------------
@@ -181,3 +233,77 @@ def test_add_keeps_the_line_when_the_database_is_out_of_reach(tmp_path):
     assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith("\nRadiohead - Creep\n")
     assert "Added to" in result.output
     assert "`tabarr sync`" in result.output  # the next sync adds it to the database
+
+
+# --- tabarr sync ----------------------------------------------------------------------------
+
+TWO_SONGS_AND_A_TYPO = (
+    "宋冬野 - 斑马斑马 | 安和桥北 | 4:13\nnot a song line\nSoda Stereo - De Música Ligera\n"
+)
+
+
+def test_sync_without_spotify_reads_wanted_txt(tmp_path, monkeypatch):
+    fake_spotify(monkeypatch, AssertionError("Spotify is off, so no client is made"))
+    wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
+    result = run(tmp_path, "sync")
+    assert result.exit_code == 0, result.output
+    assert "wanted.txt 2 songs, 2 new, 1 problem; Spotify off\n" in result.output
+    assert "wanted.txt line 2: expected 'Artist - Title'" in result.output
+    assert {s.key for s in songs(tmp_path)} == {"宋冬野/斑马斑马", "soda-stereo/de-musica-ligera"}
+
+
+def test_sync_with_nothing_to_read_says_how_to_start(tmp_path):
+    result = run(tmp_path, "sync")
+    assert result.exit_code == 0, result.output
+    assert "wanted.txt 0 songs, 0 new; Spotify off" in result.output
+    assert str(wanted_file(tmp_path)) in result.output and "`tabarr add" in result.output
+
+
+def test_sync_with_spotify(tmp_path, monkeypatch):
+    fake_spotify(monkeypatch, OneTrackSpotify())
+    wanted_file(tmp_path, "宋冬野 - 斑马斑马 | 安和桥北 | 4:13\n")
+    result = run(tmp_path, "sync", config=spotify_config(tmp_path))
+    assert result.exit_code == 0, result.output
+    assert "wanted.txt 1 song, 1 new; Spotify 1 song, 1 new\n" in result.output
+    by_key = {s.key: s for s in songs(tmp_path)}
+    assert set(by_key) == {"宋冬野/斑马斑马", "radiohead/creep"}
+    assert by_key["radiohead/creep"].source_ids == {"spotify": ["tCreep"]}
+
+
+def test_sync_when_spotify_needs_authorization(tmp_path):
+    # Spotify is set up but never authorized: the real client_from_config finds no token.
+    wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
+    result = run(tmp_path, "sync", config=spotify_config(tmp_path))
+    assert result.exit_code == 0, result.output
+    assert "Spotify needs authorization (run `tabarr auth spotify`)" in result.output
+    token = tmp_path / "state" / "spotify_token.json"
+    assert f"Spotify: No Spotify authorization is saved yet (no token in {token})." in result.output
+    assert len(songs(tmp_path)) == 2  # wanted.txt synced all the same
+
+
+def test_sync_says_once_that_the_client_secret_is_missing(tmp_path):
+    token = tmp_path / "state" / "spotify_token.json"
+    token.parent.mkdir(parents=True)
+    token.write_text('{"access_token": "AT", "refresh_token": "RT", "expires_at": 4102444800}')
+    result = run(tmp_path, "sync", config=spotify_config(tmp_path, secret=False))
+    assert result.exit_code == 0, result.output
+    assert result.output.count("client secret is missing") == 1
+
+
+def test_sync_when_spotify_fails(tmp_path, monkeypatch):
+    outage = SpotifyException(502, -1, "https://api.spotify.com/v1/me/tracks:\n Bad gateway")
+    fake_spotify(monkeypatch, OneTrackSpotify(error=outage))
+    wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
+    result = run(tmp_path, "sync", config=spotify_config(tmp_path))
+    assert result.exit_code == 0, result.output
+    assert "Spotify 0 songs, 0 new (Spotify Liked Songs: HTTP 502: Bad gateway)" in result.output
+    assert len(songs(tmp_path)) == 2
+
+
+def test_sync_when_the_spotify_client_cannot_be_made(tmp_path, monkeypatch):
+    fake_spotify(monkeypatch, RuntimeError("the token cache is unreadable"))
+    wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
+    result = run(tmp_path, "sync", config=spotify_config(tmp_path))
+    assert result.exit_code == 0, result.output
+    assert "Spotify unavailable: RuntimeError: the token cache is unreadable" in result.output
+    assert len(songs(tmp_path)) == 2
