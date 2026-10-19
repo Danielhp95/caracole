@@ -247,6 +247,35 @@ def test_success_resets_error_count(tmp_path):
     assert results == ["ProviderError", "ProviderError", 200, "ProviderError", "ProviderError", 200]
 
 
+def lrclib_outage(get_status):
+    """LRCLIB with /api/get answering ``get_status`` and /api/search failing with 503."""
+    return lambda r: httpx.Response(get_status if r.url.path == "/api/get" else 503, content=b"ServerOverloaded")
+
+
+def test_an_accepted_503_does_not_reset_the_error_count(tmp_path):
+    # /api/get accepts 503 (LRCLIB's answer to a miss); in an outage it must not hide
+    # /api/search's errors from the breaker.
+    client, rec = make_client(tmp_path, lrclib_outage(503), max_consecutive_errors=3)
+    for i in range(3):
+        assert client.get(f"https://lrclib.net/api/get?n={i}", accept=(200, 404, 503)).status == 503
+        with pytest.raises(ProviderError):
+            client.get(f"https://lrclib.net/api/search?n={i}")
+    with pytest.raises(ProviderUnavailable):
+        client.get("https://lrclib.net/api/get?n=3", accept=(200, 404, 503))
+    assert len(rec.requests) == 6
+
+
+def test_an_accepted_404_resets_the_error_count(tmp_path):
+    client, rec = make_client(tmp_path, lrclib_outage(404), max_consecutive_errors=3)
+    for i in range(3):
+        assert client.get(f"https://lrclib.net/api/get?n={i}", accept=(200, 404, 503)).status == 404
+        with pytest.raises(ProviderError) as e:
+            client.get(f"https://lrclib.net/api/search?n={i}")
+        assert not isinstance(e.value, ProviderUnavailable)
+    assert client.get("https://lrclib.net/api/get?n=3", accept=(200, 404, 503)).status == 404
+    assert len(rec.requests) == 7
+
+
 def test_events_reported(tmp_path):
     events = []
     client, _ = make_client(tmp_path, ok(), events=events)

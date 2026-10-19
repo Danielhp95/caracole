@@ -155,7 +155,8 @@ class PoliteClient:
     - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
     - 403, 429 or a challenge page raise ``ProviderBlocked``, and no further
       requests are made this run.
-    - After ``max_consecutive_errors`` other errors, ``ProviderUnavailable``.
+    - After ``max_consecutive_errors`` other errors, ``ProviderUnavailable``. Only a
+      healthy answer resets the count: an accepted 5xx is returned but doesn't.
     """
 
     def __init__(
@@ -266,7 +267,8 @@ class PoliteClient:
             kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
             self._write_cache(key, full, status, kept, body)
         if status in accept:
-            self._errors_in_a_row = 0
+            if status < 500:  # an accepted 5xx (LRCLIB's 503 for a miss) is no sign of health
+                self._errors_in_a_row = 0
             self._event(full, status, "ok", None)
             kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
             return Response(url=full, status=status, content=body, headers=kept, from_cache=False)
