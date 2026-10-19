@@ -692,7 +692,8 @@ loads nothing from the network. It shows every song as a card, in a grid as
 wide as the screen: one column on a phone, three or four on a laptop. A card
 has its status, its key or transposition, and links to its files, the PDF
 first. Each artist's cards share a coloured monogram, and the artist's name
-under a title shows only that artist's songs. A song without a sheet also has
+under a title shows only that artist's songs ("Queen" leaves out ABBA's
+"Dancing Queen"), until you take its chip off. A song without a sheet also has
 "Find it elsewhere", which opens its search and buy links.
 
 The search box filters as you type. It ignores case and accents, so "musica"

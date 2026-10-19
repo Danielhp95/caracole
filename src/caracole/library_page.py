@@ -447,6 +447,7 @@ _STYLE = BASE_STYLE + """
 .chip .n { color: var(--muted); font-variant-numeric: tabular-nums; }
 .chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
+.chip.person { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: .9rem; }
 .sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
@@ -519,7 +520,8 @@ _SCRIPT = r"""
   const sort = byId("sort");
   const count = byId("count");
   const jump = byId("jump");
-  const chips = Array.from(document.querySelectorAll(".chip"));
+  const chips = Array.from(document.querySelectorAll(".chip[data-show]"));
+  const artistChip = byId("artist");
 
   let data;
   try {
@@ -621,7 +623,7 @@ _SCRIPT = r"""
     return form;
   };
 
-  let setQuery = () => {};
+  let setArtist = () => {};
   const makeCard = (s) => {
     const card = el("article", "card");
     card.dataset.status = String(s.status);
@@ -638,7 +640,7 @@ _SCRIPT = r"""
     who.type = "button";
     who.title = "Show only " + String(s.artist) + "'s songs";
     who.addEventListener("click", () => {
-      setQuery(String(s.artist));
+      setArtist(String(s.sortArtist || ""));
       window.scrollTo(0, 0);
     });
     names.appendChild(who);
@@ -708,10 +710,17 @@ _SCRIPT = r"""
     return cards.get(i);
   };
 
-  const state = { q: "", show: "all", sort: "artist" };
+  // artist: one artist's songs alone, by sortArtist, which a search for the name wouldn't give
+  // ("Queen" also finds "Dancing Queen").
+  const state = { q: "", show: "all", sort: "artist", artist: "" };
+  const artistName = (key) => {
+    const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
+    return s ? String(s.artist) : "";
+  };
   try {
     const params = new URLSearchParams(location.hash.slice(1));
     state.q = params.get("q") || "";
+    if (artistName(params.get("artist") || "")) state.artist = params.get("artist");
     if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
   } catch (err) {
@@ -722,6 +731,7 @@ _SCRIPT = r"""
     if (state.q) params.set("q", state.q);
     if (state.show !== "all") params.set("show", state.show);
     if (state.sort !== "artist") params.set("sort", state.sort);
+    if (state.artist) params.set("artist", state.artist);
     try {
       history.replaceState(null, "", "#" + params.toString());
     } catch (err) {
@@ -752,7 +762,9 @@ _SCRIPT = r"""
 
   const render = () => {
     const words = terms(state.q);
-    const matching = ORDERS[state.sort].filter((i) => words.every((w) => hay[i].indexOf(w) >= 0));
+    const matching = ORDERS[state.sort].filter((i) =>
+      (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
+      words.every((w) => hay[i].indexOf(w) >= 0));
     const tally = { all: matching.length, found: 0, wanted: 0, review: 0 };
     for (const i of matching) {
       for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
@@ -764,6 +776,9 @@ _SCRIPT = r"""
     }
     sort.value = state.sort;
     clear.hidden = !state.q;
+    artistChip.hidden = !state.artist;
+    artistChip.textContent = state.artist ? artistName(state.artist) + " ×" : "";
+    artistChip.setAttribute("aria-label", state.artist ? "Show every artist, not only " + artistName(state.artist) : "");
 
     // One grid, whatever the order, so the cards fill each row; the strip jumps to a letter's first card.
     list.textContent = "";
@@ -810,6 +825,19 @@ _SCRIPT = r"""
         save();
       });
       list.appendChild(all);
+    } else if (!shown.length && state.artist) {
+      // The artist filter hides what the search finds: say so, and offer every artist.
+      const who = artistName(state.artist);
+      list.appendChild(el("p", "empty", state.q ? "No songs of " + who + " match “" + state.q + "”."
+        : "No songs of " + who + " here."));
+      const every = el("button", "btn", "Look in every artist's songs");
+      every.type = "button";
+      every.addEventListener("click", () => {
+        state.artist = "";
+        render();
+        save();
+      });
+      list.appendChild(every);
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
       const hint = el("p", "empty-hint", "To look in the offline Ultimate Guitar index, run ");
@@ -831,12 +859,21 @@ _SCRIPT = r"""
       save();
     });
   };
-  setQuery = (q) => {
+  const setQuery = (q) => {
     input.value = q;
     state.q = q;
     render();
     save();
   };
+  setArtist = (key) => {
+    state.artist = key;
+    setQuery("");
+  };
+  artistChip.addEventListener("click", () => {
+    state.artist = "";
+    render();
+    save();
+  });
   input.value = state.q;
   input.addEventListener("input", () => {
     state.q = input.value;
@@ -923,6 +960,7 @@ __REQUEST__<div class="searchbar" role="search">
     <button type="button" class="chip" data-show="found" aria-pressed="false">Found <span class="n"></span></button>
     <button type="button" class="chip" data-show="wanted" aria-pressed="false">Wanted <span class="n"></span></button>
     <button type="button" class="chip" data-show="review" aria-pressed="false">Needs review <span class="n"></span></button>
+    <button type="button" class="chip person" id="artist" hidden></button>
   </div>
   <label class="sort">Sort
     <select id="sort">

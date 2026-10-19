@@ -591,3 +591,44 @@ def test_a_screen_reader_hears_each_cards_song_and_a_jump_moves_the_focus(conn, 
     assert 'aria-label="Fetch Yesterday by The Beatles now"' in shown
     # After a jump, the next Tab goes on from the card jumped to, not from the strip.
     assert re.search(r'<body[^>]*data-focus="Creep"', dom), dom[-1500:]
+
+
+# Clicks the artist under the first card titled "Bohemian Rhapsody", then notes the titles shown and the chip.
+ARTIST_CLICK = """
+(() => {
+  const card = Array.from(document.querySelectorAll("#list article"))
+    .find((c) => c.querySelector("h2").textContent === "Bohemian Rhapsody");
+  card.querySelector("button.artist").click();
+  const titles = Array.from(document.querySelectorAll("#list article h2")).map((h) => h.textContent);
+  const chip = document.getElementById("artist");
+  document.body.setAttribute("data-after", JSON.stringify({titles, chip: chip.hidden ? null : chip.textContent,
+    q: document.getElementById("q").value, hash: location.hash}));
+  chip.click();
+  document.body.setAttribute("data-cleared", String(document.querySelectorAll("#list article").length));
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(conn, cfg, tmp_path):
+    import html as html_module
+
+    add_song(conn, "Queen", "Bohemian Rhapsody")
+    add_song(conn, "Queen", "Don't Stop Me Now")
+    add_song(conn, "ABBA", "Dancing Queen")
+    add_song(conn, "Queens of the Stone Age", "No One Knows")
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ARTIST_CLICK))
+    dom = dump_dom(path, tmp_path)
+    after = json.loads(html_module.unescape(re.search(r'data-after="([^"]*)"', dom).group(1)))
+    assert sorted(after["titles"]) == ["Bohemian Rhapsody", "Don't Stop Me Now"], after
+    assert after["chip"].startswith("Queen") and after["q"] == "" and "artist=queen" in after["hash"]
+    assert re.search(r'data-cleared="4"', dom)  # the chip takes the filter off
+
+    # The address keeps the filter, as it keeps the search.
+    plain = write_library_page(cfg.library_dir, page(conn, cfg))
+    shown = listing(dump_dom(plain, tmp_path, "#artist=queen"))
+    assert shown.count("<article") == 2 and "Dancing Queen" not in shown
+    # A search that only another artist's songs answer says the filter is on, and offers to take it off.
+    shown = listing(dump_dom(plain, tmp_path, "#artist=queen&q=dancing"))
+    assert "No songs of Queen match “dancing”" in shown and "every artist" in shown
+    assert "caracole search" not in shown
