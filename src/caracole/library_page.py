@@ -16,15 +16,27 @@ Each song carries a search string: its artist, title and display name folded
 (accents stripped, lowercase), the same without punctuation ("acdc"), and
 pinyin for Chinese ("ban ma ban ma", "banma"). The page folds what you type the
 same way, so "musica" finds "Música" and "ban ma" finds 斑马，斑马.
+
+The songs are one grid of cards, as many columns as the screen holds, in every
+order: a section per artist left one narrow card per row on a desktop. Each
+card has its artist's monogram, in a colour of that artist's, and an A-Z strip
+jumps to the first card of a letter.
+
+``caracole serve`` serves the same page with ``controls`` (``WebControls``): a
+form to request a song, a "Fetch now" button on each wanted song, and a CSP
+that lets the forms post to the server (``form-action 'self'``). The file on
+disk has neither, and lets no form be sent.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
+import html as html_text
 import json
 import re
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -62,25 +74,48 @@ _KIND_NAMES = {"guitar-pro": "Guitar Pro", "power": "Power Tab"}
 # typed queries with this table, so the values come from fold itself.
 _TRANSLITERATED = "øØæÆœŒßẞđĐłŁþÞðÐıħĦ"
 _PUNCTUATION = re.compile(r"[\W_]+")
+_WORD = re.compile(r"[^\W_]+")
+HUES = 8  # monogram colours, .hue-0 to .hue-7
 
 
-def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> str:
-    """The whole page: every song, its files, and the links to find what's missing."""
+@dataclass(frozen=True)
+class WebControls:
+    """What ``caracole serve`` adds to the page it serves (caracole/web/).
+
+    ``csrf`` is the token every form posts back; ``busy`` holds the songs with a
+    fetch queued or running, whose cards say so instead of offering another;
+    ``active`` is how many requests are queued or running, for the masthead.
+    """
+
+    csrf: str
+    busy: frozenset[int] = frozenset()
+    active: int = 0
+
+
+def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
+                       controls: WebControls | None = None) -> str:
+    """The whole page: every song, its files, and the links to find what's missing.
+
+    With ``controls``, the page ``caracole serve`` serves: the same, with its forms.
+    """
     keys = _sheet_keys(conn)
     pages = _guitar_pro_pages(conn)
     library = list_songs(conn)
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
     songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy)
              for s in library]
-    data = {
+    data: dict[str, Any] = {
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "fold": {c: fold(c) for c in _TRANSLITERATED},
         "songs": songs,
     }
+    if controls is not None:
+        data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active}
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+    csp = _CSP.replace("__FORMS__", "'self'" if controls is not None else "'none'")
     return (
-        _HEAD.replace("__CSP__", _CSP).replace("__STYLE__", _STYLE)
-        + _BODY
+        _HEAD.replace("__CSP__", csp).replace("__STYLE__", _STYLE)
+        + _BODY.replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
         + f'<script type="application/json" id="songs">{payload}</script>\n'
         + f"<script>{_SCRIPT}</script>\n</body>\n</html>\n"
     )
@@ -130,6 +165,10 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
         "buy": buy,
         "sortArtist": _sort_key(song.artist),
         "sortTitle": _sort_key(title),
+        "artistLetter": _letter(_sort_key(song.artist)),
+        "titleLetter": _letter(_sort_key(title)),
+        "monogram": _monogram(song.artist),
+        "hue": _hue(song.artist),
         "search": _haystack([song.artist, *song.artists, title, song.display]),
     }
 
@@ -202,6 +241,27 @@ def _sort_key(text: str) -> str:
     return slug_key(romanize(text)) or fold(text)
 
 
+def _letter(sort_key: str) -> str:
+    """The A-Z strip's letter for a sort key; "#" for a digit or anything else."""
+    first = sort_key[:1]
+    return first.upper() if "a" <= first <= "z" else "#"
+
+
+def _monogram(artist: str) -> str:
+    """The card's badge for an artist: two initials ("SS"), or the first Han character ("宋")."""
+    if has_han(artist):
+        return next(c for c in artist if has_han(c))
+    words = _WORD.findall(artist)
+    if not words:
+        return artist.strip()[:1] or "?"
+    return "".join(w[0] for w in words[:2]).upper()
+
+
+def _hue(artist: str) -> int:
+    """The monogram's colour, the same for every song of an artist."""
+    return int.from_bytes(hashlib.sha256(fold(artist).encode("utf-8")).digest()[:4], "big") % HUES
+
+
 def _haystack(texts: list[str]) -> str:
     """What the page's filter looks in: folded text, the same without punctuation, and pinyin."""
     parts: dict[str, None] = {}
@@ -217,40 +277,49 @@ def _haystack(texts: list[str]) -> str:
 
 # --- the page ---------------------------------------------------------------------------
 
-_STYLE = """
+# Shared with the pages caracole serve writes itself (caracole/web/): colours, type, buttons.
+BASE_STYLE = """
 :root {
   color-scheme: light dark;
-  --bg: #f7f6f3;
+  --bg: #f6f5f1;
   --surface: #ffffff;
-  --raised: #f0eee9;
-  --text: #1f1e1c;
+  --raised: #f1efea;
+  --text: #1d1c1a;
   --muted: #645f57;
-  --border: #e1ddd5;
+  --border: #e3dfd6;
+  --border-strong: #cdc7bb;
   --accent: #b4441e;
+  --accent-hover: #9a3915;
   --on-accent: #ffffff;
   --focus: #1f6feb;
+  --shadow: 0 1px 2px rgb(31 30 28 / 6%), 0 6px 18px rgb(31 30 28 / 5%);
   --found: #1d6b43; --found-bg: #def1e5;
   --wanted: #7a4c00; --wanted-bg: #fbeed2;
   --ignored: #5c5c5c; --ignored-bg: #ebebeb;
   --review: #5b34a8; --review-bg: #ece4fa;
   --auto: #0e5c6e; --auto-bg: #dbf0f5;
+  --failed: #a3261b; --failed-bg: #fbe1dd;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #131312;
-    --surface: #1d1c1b;
-    --raised: #292826;
+    --surface: #1c1b1a;
+    --raised: #282725;
     --text: #edebe7;
     --muted: #aaa59c;
-    --border: #363431;
+    --border: #34322f;
+    --border-strong: #4b4844;
     --accent: #f0895c;
+    --accent-hover: #f5a47f;
     --on-accent: #1b0e07;
     --focus: #6ea8fe;
+    --shadow: none;
     --found: #83d6a6; --found-bg: #133222;
     --wanted: #f2c46e; --wanted-bg: #36290d;
     --ignored: #b8b8b8; --ignored-bg: #2d2d2d;
     --review: #c6adff; --review-bg: #2b2047;
     --auto: #8fd6e8; --auto-bg: #102f37;
+    --failed: #ff9d92; --failed-bg: #3d1713;
   }
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -265,15 +334,95 @@ body {
 }
 a { color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.page { max-width: 1120px; margin: 0 auto; padding: 0 16px 48px; }
-.masthead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 20px 0 4px; }
-.masthead h1 { margin: 0; font-size: 1.6rem; line-height: 1.2; letter-spacing: -0.01em; }
-.masthead .app { display: block; color: var(--muted); font-size: .8rem; font-weight: 600; letter-spacing: .08em;
+code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 1px 5px; border-radius: 6px;
+  background: var(--raised); overflow-wrap: anywhere; }
+.page { max-width: 1320px; margin: 0 auto; padding: 0 16px 56px; }
+.masthead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px;
+  padding: 20px 0 8px; }
+.masthead h1 { margin: 0; font-size: 1.6rem; line-height: 1.15; letter-spacing: -0.015em; }
+.app { margin: 0 0 2px; color: var(--accent); font-size: .78rem; font-weight: 700; letter-spacing: .1em;
   text-transform: uppercase; }
-.summary { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
-.nowrap { white-space: nowrap; }
-.todo { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 999px;
+.app a { text-decoration: none; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.navlink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--surface); text-decoration: none; font-weight: 600; }
+.navlink:hover { border-color: var(--border-strong); }
+.navlink .n { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: var(--on-accent);
+  font-size: .78rem; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 13px;
+  border-radius: 11px; border: 1px solid var(--border); background: var(--raised); color: var(--text); font: inherit;
+  font-size: .9rem; font-weight: 550; text-decoration: none; overflow-wrap: anywhere; cursor: pointer; }
+.btn:hover { border-color: var(--border-strong); }
+.btn.primary { min-height: 44px; background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+  font-weight: 650; }
+.btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn.small { min-height: 36px; padding: 0 11px; font-size: .85rem; }
+.badge { padding: 2px 9px; border-radius: 999px; font-size: .75rem; font-weight: 650; white-space: nowrap; }
+.badge.found, .badge.done { color: var(--found); background: var(--found-bg); }
+.badge.wanted, .badge.queued, .badge.running { color: var(--wanted); background: var(--wanted-bg); }
+.badge.ignored { color: var(--ignored); background: var(--ignored-bg); }
+.badge.review { color: var(--review); background: var(--review-bg); }
+.badge.auto { color: var(--auto); background: var(--auto-bg); }
+.badge.failed { color: var(--failed); background: var(--failed-bg); }
+.f { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .85rem; font-weight: 600; }
+.f em { font-style: normal; font-weight: 500; }
+.f input { width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border-strong);
+  background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; font-weight: 400; }
+.f input:focus { border-color: var(--focus); outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
+.footer { margin-top: 40px; color: var(--muted); font-size: .8rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0; }
+@media (min-width: 720px) {
+  .page { padding: 0 24px 64px; }
+  .masthead { padding-top: 32px; }
+  .masthead h1 { font-size: 2.1rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn, .navlink { transition: background-color .12s, border-color .12s; }
+}
+"""
+
+_STYLE = BASE_STYLE + """
+:root {
+  --h0: #8a3313; --h0-bg: #f6ded3;
+  --h1: #7a4c00; --h1-bg: #f7e8c7;
+  --h2: #4c5a12; --h2-bg: #e6edcf;
+  --h3: #1d6b43; --h3-bg: #d7eedf;
+  --h4: #0e5c5a; --h4-bg: #d3eceb;
+  --h5: #23508f; --h5-bg: #dbe6f7;
+  --h6: #5b34a8; --h6-bg: #e8e0f7;
+  --h7: #8e2a52; --h7-bg: #f6dde6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --h0: #f4b298; --h0-bg: #3d2117;
+    --h1: #f2c46e; --h1-bg: #36290d;
+    --h2: #c9d98a; --h2-bg: #2a3110;
+    --h3: #83d6a6; --h3-bg: #133222;
+    --h4: #7fd3cf; --h4-bg: #0f302f;
+    --h5: #9dbff2; --h5-bg: #172843;
+    --h6: #c6adff; --h6-bg: #2b2047;
+    --h7: #f2a3c1; --h7-bg: #3b1828;
+  }
+}
+.summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.stat { padding: 3px 10px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: .82rem;
+  font-variant-numeric: tabular-nums; }
+.stat b { color: var(--text); font-weight: 650; }
+.request { margin: 8px 0 0; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.request > summary { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; cursor: pointer;
+  font-weight: 650; list-style: none; }
+.request > summary::-webkit-details-marker { display: none; }
+.plus { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  background: var(--accent); color: var(--on-accent); font-size: 1.15rem; line-height: 1; }
+.request[open] > summary .plus { transform: rotate(45deg); }
+.request-form { display: grid; gap: 12px; padding: 0 16px 16px; }
+.fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+.request-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; cursor: pointer; }
+.check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.hint { margin: 0; color: var(--muted); font-size: .85rem; }
 .searchbar { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 12px 0 10px; }
 .field { position: relative; }
 .field input {
@@ -285,9 +434,8 @@ a { color: inherit; }
 .field input:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
 .clear { position: absolute; top: 3px; right: 3px; width: 44px; height: 44px; border: 0; border-radius: 12px;
   background: transparent; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
-  margin: 10px 0 4px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .9rem;
   cursor: pointer; }
@@ -297,49 +445,56 @@ a { color: inherit; }
 .sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: .9rem; }
 .sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
-.count { margin: 0; color: var(--muted); font-size: .85rem; }
-.group { margin-top: 20px; }
-.group h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 1.05rem; overflow-wrap: anywhere; }
-.group h2 .n { color: var(--muted); font-size: .85rem; font-weight: 500; }
-.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
-.list:not(.grouped) .grid { margin-top: 12px; }
-.card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px 16px;
-  border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
-  content-visibility: auto; contain-intrinsic-size: auto 190px; }
+.jump { display: flex; gap: 2px; margin: 10px 0 0; padding: 2px 0; overflow-x: auto; scrollbar-width: none; }
+.jump::-webkit-scrollbar { display: none; }
+.jump button { flex: none; min-width: 36px; height: 36px; padding: 0 8px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--muted); font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
+.jump button:hover { background: var(--raised); color: var(--text); }
+.count { margin: 8px 0 0; color: var(--muted); font-size: .85rem; }
+.grid { display: grid; gap: 12px; margin-top: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
+  border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: 84px; }
 .card[data-status="ignored"] { opacity: .7; }
-.card .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.card .names { min-width: 0; }
-.card h3 { margin: 0; font-size: 1.08rem; line-height: 1.3; overflow-wrap: anywhere; }
-.card .artist { margin: 2px 0 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
-.grouped .card .artist { display: none; }
-.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex: none; max-width: 50%; }
-.badge { padding: 2px 9px; border-radius: 999px; font-size: .75rem; font-weight: 650; white-space: nowrap; }
-.badge.found { color: var(--found); background: var(--found-bg); }
-.badge.wanted { color: var(--wanted); background: var(--wanted-bg); }
-.badge.ignored { color: var(--ignored); background: var(--ignored-bg); }
-.badge.review { color: var(--review); background: var(--review-bg); }
-.badge.auto { color: var(--auto); background: var(--auto-bg); }
+.head { display: flex; align-items: flex-start; gap: 12px; }
+.mono { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
+  font-size: .95rem; font-weight: 700; letter-spacing: .02em; color: var(--h0); background: var(--h0-bg); }
+.hue-1 { color: var(--h1); background: var(--h1-bg); }
+.hue-2 { color: var(--h2); background: var(--h2-bg); }
+.hue-3 { color: var(--h3); background: var(--h3-bg); }
+.hue-4 { color: var(--h4); background: var(--h4-bg); }
+.hue-5 { color: var(--h5); background: var(--h5-bg); }
+.hue-6 { color: var(--h6); background: var(--h6-bg); }
+.hue-7 { color: var(--h7); background: var(--h7-bg); }
+.names { flex: 1; min-width: 0; }
+.card h3 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
+.artist { display: inline; margin: 2px 0 0; padding: 0; border: 0; background: none; color: var(--muted); font: inherit;
+  font-size: .9rem; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.artist:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex: none; max-width: 42%; }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--muted); font-size: .85rem; }
 .facts .key, .facts .transpose { color: var(--text); font-weight: 600; }
 .note { margin: 0; color: var(--review); font-size: .85rem; }
+.busy { margin: 0; color: var(--wanted); font-size: .88rem; font-weight: 600; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions form { margin: 0; }
 .subhead { margin: 2px 0 -2px; color: var(--muted); font-size: .75rem; font-weight: 650; letter-spacing: .06em;
   text-transform: uppercase; }
-.btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 12px;
-  border: 1px solid var(--border); background: var(--raised); color: var(--text); font-size: .92rem;
-  font-weight: 550; text-decoration: none; overflow-wrap: anywhere; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.btn.small { min-height: 40px; padding: 0 12px; font-size: .88rem; }
+.more { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border); }
+.more > summary { display: flex; align-items: center; gap: 4px; min-height: 32px; color: var(--muted);
+  font-size: .85rem; font-weight: 600; list-style: none; cursor: pointer; }
+.more > summary::-webkit-details-marker { display: none; }
+.more > summary::before { content: "›"; display: inline-block; width: 1em; font-size: 1.15rem; line-height: 1;
+  text-align: center; }
+.more[open] > summary::before { transform: rotate(90deg); }
+.more > .subhead { margin: 8px 0 6px; }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
 .empty-hint { margin: 0; color: var(--muted); }
-.empty-hint code, .footer code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  padding: 1px 5px; border-radius: 6px; background: var(--raised); overflow-wrap: anywhere; }
-.footer { margin-top: 40px; color: var(--muted); font-size: .8rem; }
-.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
-  white-space: nowrap; border: 0; }
 @media (min-width: 720px) {
-  .masthead h1 { font-size: 2rem; }
-  .masthead { padding-top: 28px; }
+  .jump { flex-wrap: wrap; overflow: visible; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .plus { transition: transform .15s; }
 }
 """
 
@@ -358,6 +513,7 @@ _SCRIPT = r"""
   const clear = byId("clear");
   const sort = byId("sort");
   const count = byId("count");
+  const jump = byId("jump");
   const chips = Array.from(document.querySelectorAll(".chip"));
 
   let data;
@@ -370,6 +526,10 @@ _SCRIPT = r"""
   const songs = Array.isArray(data.songs) ? data.songs : [];
   const table = data.fold && typeof data.fold === "object" ? data.fold : {};
   const own = Object.prototype.hasOwnProperty;
+  const listOf = (value) => (Array.isArray(value) ? value : []);
+  // Served by caracole serve: its forms' token, and the songs it is fetching already.
+  const server = data.server && typeof data.server === "object" ? data.server : null;
+  const busy = new Set(listOf(server && server.busy).map(Number));
 
   // The same folding as caracole's normalize.fold: NFKD, no accents, a few letters spelled out, lowercase.
   const fold = (text) => {
@@ -387,7 +547,6 @@ _SCRIPT = r"""
     .map((w) => w.replace(APOSTROPHES, "").replace(EDGES, "")).filter(Boolean);
   const shellQuote = (text) => '"' + text.replace(/(["\\$`])/g, "\\$1") + '"';
   const hay = songs.map((s) => String(s.search || ""));
-  const listOf = (value) => (Array.isArray(value) ? value : []);
 
   const STATUS_TEXT = { found: "Found", wanted: "Wanted", ignored: "Ignored" };
   const LYRICS_TEXT = { pending: "Lyrics pending", missing: "No lyrics found", instrumental: "Instrumental" };
@@ -399,15 +558,20 @@ _SCRIPT = r"""
     review: (s) => Boolean(s.review) && s.status !== "ignored",
   };
   const CHIP_TEXT = { found: "found songs", wanted: "wanted songs", review: "songs that need review" };
-  const SORTS = ["artist", "recent"];
+  const SORTS = ["artist", "title", "recent"];
+  const LETTERS = { artist: "artistLetter", title: "titleLetter" };  // the A-Z strip's letter, by sort
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   const order = songs.map((_, i) => i);
-  const byArtist = order.slice().sort((i, j) =>
-    compare(String(songs[i].sortArtist), String(songs[j].sortArtist)) ||
-    compare(String(songs[i].sortTitle), String(songs[j].sortTitle)) || i - j);
-  const byRecent = order.slice().sort((i, j) =>
-    compare(String(songs[j].added || ""), String(songs[i].added || "")) || (songs[j].id || 0) - (songs[i].id || 0));
+  const sortedBy = (first, second) => order.slice().sort((i, j) =>
+    compare(String(songs[i][first]), String(songs[j][first])) ||
+    compare(String(songs[i][second]), String(songs[j][second])) || i - j);
+  const ORDERS = {
+    artist: sortedBy("sortArtist", "sortTitle"),
+    title: sortedBy("sortTitle", "sortArtist"),
+    recent: order.slice().sort((i, j) =>
+      compare(String(songs[j].added || ""), String(songs[i].added || "")) || (songs[j].id || 0) - (songs[i].id || 0)),
+  };
 
   const safeHref = (href, external) => {
     const value = String(href || "");
@@ -423,22 +587,54 @@ _SCRIPT = r"""
     }
     return a;
   };
-  const linkRow = (card, heading, items, cls) => {
+  const linkRow = (parent, heading, items, cls) => {
     if (!items.length) return;
-    card.appendChild(el("p", "subhead", heading));
+    parent.appendChild(el("p", "subhead", heading));
     const row = el("div", "actions");
     for (const item of items) row.appendChild(link(item, cls, true));
-    card.appendChild(row);
+    parent.appendChild(row);
+  };
+  const hidden = (name, value) => {
+    const field = el("input");
+    field.setAttribute("type", "hidden");
+    field.setAttribute("name", name);
+    field.setAttribute("value", String(value));
+    return field;
+  };
+  // A wanted song's "Fetch now": caracole serve queues a fetch of this song alone.
+  const fetchForm = (s) => {
+    const form = el("form", "fetch");
+    form.setAttribute("method", "post");
+    form.setAttribute("action", "/fetch");
+    form.appendChild(hidden("csrf", String(server.csrf || "")));
+    form.appendChild(hidden("song", Number(s.id)));
+    const go = el("button", "btn primary", "Fetch now");
+    go.type = "submit";
+    go.title = "Ask Ultimate Guitar for this song now, politely";
+    form.appendChild(go);
+    return form;
   };
 
+  let setQuery = () => {};
   const makeCard = (s) => {
     const card = el("article", "card");
     card.dataset.status = String(s.status);
     const head = el("div", "head");
+    const hue = Number.isInteger(s.hue) && s.hue >= 0 && s.hue < 8 ? s.hue : 0;
+    const mono = el("span", "mono hue-" + hue, s.monogram || "");
+    mono.setAttribute("aria-hidden", "true");
+    head.appendChild(mono);
     const names = el("div", "names");
     names.appendChild(el("h3", null, s.title));
     const artists = listOf(s.artists);
-    names.appendChild(el("p", "artist", artists.length > 1 ? artists.join(", ") : s.artist));
+    const who = el("button", "artist", artists.length > 1 ? artists.join(", ") : s.artist);
+    who.type = "button";
+    who.title = "Show only " + String(s.artist) + "'s songs";
+    who.addEventListener("click", () => {
+      setQuery(String(s.artist));
+      window.scrollTo(0, 0);
+    });
+    names.appendChild(who);
     head.appendChild(names);
     const badges = el("div", "badges");
     badges.appendChild(el("span", "badge " + String(s.status), label(STATUS_TEXT, s.status) || s.status));
@@ -468,15 +664,28 @@ _SCRIPT = r"""
       card.appendChild(note);
     }
 
-    const files = listOf(s.files);
-    if (files.length) {
-      const row = el("div", "actions");
-      for (const f of files) row.appendChild(link(f, f.primary ? "btn primary" : "btn", false));
-      card.appendChild(row);
+    const actions = el("div", "actions");
+    if (server && s.status === "wanted") {
+      if (busy.has(Number(s.id))) {
+        const note = el("p", "busy", "Fetching… ");
+        const jobs = el("a", null, "see the requests");
+        jobs.href = "/jobs";
+        note.appendChild(jobs);
+        card.appendChild(note);
+      } else {
+        actions.appendChild(fetchForm(s));
+      }
     }
+    for (const f of listOf(s.files)) actions.appendChild(link(f, f.primary ? "btn primary" : "btn", false));
+    if (actions.childNodes.length) card.appendChild(actions);
     linkRow(card, "Guitar Pro to download", listOf(s.guitarPro), "btn small");
-    linkRow(card, "Find the chords", listOf(s.links), "btn small");
-    linkRow(card, "Buy the track for an auto sheet", listOf(s.buy), "btn small");
+    if (listOf(s.links).length || listOf(s.buy).length) {
+      const more = el("details", "more");
+      more.appendChild(el("summary", null, "Find it elsewhere"));
+      linkRow(more, "Find the chords", listOf(s.links), "btn small");
+      linkRow(more, "Buy the track for an auto sheet", listOf(s.buy), "btn small");
+      card.appendChild(more);
+    }
     return card;
   };
   const cards = new Map();
@@ -511,19 +720,25 @@ _SCRIPT = r"""
     const by = { found: 0, wanted: 0, ignored: 0 };
     for (const s of songs) if (own.call(by, s.status)) by[s.status] += 1;
     const summary = byId("summary");
-    const parts = [plural(songs.length, "song"), by.found + " found", by.wanted + " wanted", by.ignored + " ignored"];
-    parts.forEach((part, k) => {
-      if (k) summary.appendChild(document.createTextNode(" · "));
-      summary.appendChild(el("span", "nowrap", part));
-    });
+    const stat = (n, word) => {
+      const item = el("li", "stat");
+      item.appendChild(el("b", null, n));
+      item.appendChild(document.createTextNode(" " + word));
+      summary.appendChild(item);
+    };
+    stat(songs.length, songs.length === 1 ? "song" : "songs");
+    stat(by.found, "found");
+    stat(by.wanted, "wanted");
+    if (by.ignored) stat(by.ignored, "ignored");
     const when = String(data.generated || "").replace("T", " ").slice(0, 16);
     if (when) byId("updated").textContent = "Updated by caracole " + when + " UTC. ";
   };
+  const smooth = () => (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto" : "smooth");
 
   const render = () => {
     const words = terms(state.q);
-    const matching = (state.sort === "recent" ? byRecent : byArtist)
-      .filter((i) => words.every((w) => hay[i].indexOf(w) >= 0));
+    const matching = ORDERS[state.sort].filter((i) => words.every((w) => hay[i].indexOf(w) >= 0));
     const tally = { all: matching.length, found: 0, wanted: 0, review: 0 };
     for (const i of matching) {
       for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
@@ -536,39 +751,29 @@ _SCRIPT = r"""
     sort.value = state.sort;
     clear.hidden = !state.q;
 
+    // One grid, whatever the order, so the cards fill each row; the strip jumps to a letter's first card.
     list.textContent = "";
-    list.className = state.sort === "artist" ? "list grouped" : "list";
-    const frag = document.createDocumentFragment();
-    if (state.sort === "artist") {
-      let key = null;
-      let grid = null;
-      let tag = null;
-      let n = 0;
-      for (const i of shown) {
-        const s = songs[i];
-        if (String(s.sortArtist) !== key || grid === null) {
-          if (tag) tag.textContent = String(n);
-          key = String(s.sortArtist);
-          n = 0;
-          const group = el("section", "group");
-          const h = el("h2", null, s.artist);
-          tag = el("span", "n");
-          h.appendChild(tag);
-          grid = el("div", "grid");
-          group.appendChild(h);
-          group.appendChild(grid);
-          frag.appendChild(group);
-        }
-        grid.appendChild(cardFor(i));
-        n += 1;
+    jump.textContent = "";
+    const grid = el("div", "grid");
+    const letterOf = LETTERS[state.sort];
+    const firsts = new Map();
+    for (const i of shown) {
+      const card = cardFor(i);
+      if (letterOf) {
+        const letter = String(songs[i][letterOf] || "#");
+        if (!firsts.has(letter)) firsts.set(letter, card);
       }
-      if (tag) tag.textContent = String(n);
-    } else {
-      const grid = el("div", "grid");
-      for (const i of shown) grid.appendChild(cardFor(i));
-      frag.appendChild(grid);
+      grid.appendChild(card);
     }
-    list.appendChild(frag);
+    if (shown.length) list.appendChild(grid);
+    for (const [letter, card] of firsts) {
+      const to = el("button", null, letter);
+      to.type = "button";
+      to.setAttribute("aria-label", "Jump to " + letter);
+      to.addEventListener("click", () => card.scrollIntoView({ block: "start", behavior: smooth() }));
+      jump.appendChild(to);
+    }
+    jump.hidden = firsts.size < 2;
 
     if (!songs.length) {
       list.appendChild(el("p", "empty", "No songs yet."));
@@ -609,16 +814,19 @@ _SCRIPT = r"""
       save();
     });
   };
+  setQuery = (q) => {
+    input.value = q;
+    state.q = q;
+    render();
+    save();
+  };
   input.value = state.q;
   input.addEventListener("input", () => {
     state.q = input.value;
     update();
   });
   clear.addEventListener("click", () => {
-    input.value = "";
-    state.q = "";
-    render();
-    save();
+    setQuery("");
     input.focus();
   });
   for (const chip of chips) {
@@ -640,10 +848,7 @@ _SCRIPT = r"""
       input.focus();
       input.select();
     } else if (e.key === "Escape" && typing && input.value) {
-      input.value = "";
-      state.q = "";
-      render();
-      save();
+      setQuery("");
     }
   });
   summarize();
@@ -652,14 +857,16 @@ _SCRIPT = r"""
 """
 
 
-def _sha256(text: str) -> str:
+def sha256_source(text: str) -> str:
+    """A CSP source allowing exactly this inline script or stylesheet."""
     return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
 
 
-# default-src 'none' blocks every fetch the page could make; links still navigate.
+# default-src 'none' blocks every fetch the page could make; links still navigate. Forms may post
+# only to caracole serve, and only on the page it serves.
 _CSP = (
-    f"default-src 'none'; script-src {_sha256(_SCRIPT)}; style-src {_sha256(_STYLE)}; "
-    "base-uri 'none'; form-action 'none'"
+    f"default-src 'none'; script-src {sha256_source(_SCRIPT)}; style-src {sha256_source(_STYLE)}; "
+    "base-uri 'none'; form-action __FORMS__"
 )
 
 _HEAD = """<!doctype html>
@@ -679,12 +886,13 @@ _BODY = """<body>
 <div class="page">
 <header class="masthead">
   <div>
-    <h1><span class="app">caracole</span>Your library</h1>
-    <p class="summary" id="summary"></p>
+    <p class="app">caracole</p>
+    <h1>Your library</h1>
+    <ul class="summary" id="summary" aria-label="The library in numbers"></ul>
   </div>
-  <a class="todo" href="_todo.md">To-do</a>
+  <nav class="links" aria-label="Pages">__NAV__</nav>
 </header>
-<div class="searchbar" role="search">
+__REQUEST__<div class="searchbar" role="search">
   <label class="visually-hidden" for="q">Search your songs</label>
   <div class="field">
     <input id="q" type="search" placeholder="Search artist, title or pinyin" autocomplete="off"
@@ -692,25 +900,66 @@ _BODY = """<body>
     <button type="button" id="clear" class="clear" aria-label="Clear the search" hidden>×</button>
   </div>
 </div>
-<div class="chips" role="group" aria-label="Show">
-  <button type="button" class="chip" data-show="all" aria-pressed="true">All <span class="n"></span></button>
-  <button type="button" class="chip" data-show="found" aria-pressed="false">Found <span class="n"></span></button>
-  <button type="button" class="chip" data-show="wanted" aria-pressed="false">Wanted <span class="n"></span></button>
-  <button type="button" class="chip" data-show="review" aria-pressed="false">Needs review <span class="n"></span></button>
-</div>
 <div class="toolbar">
-  <p class="count" id="count" aria-live="polite"></p>
+  <div class="chips" role="group" aria-label="Show">
+    <button type="button" class="chip" data-show="all" aria-pressed="true">All <span class="n"></span></button>
+    <button type="button" class="chip" data-show="found" aria-pressed="false">Found <span class="n"></span></button>
+    <button type="button" class="chip" data-show="wanted" aria-pressed="false">Wanted <span class="n"></span></button>
+    <button type="button" class="chip" data-show="review" aria-pressed="false">Needs review <span class="n"></span></button>
+  </div>
   <label class="sort">Sort
     <select id="sort">
       <option value="artist">Artist A–Z</option>
+      <option value="title">Title A–Z</option>
       <option value="recent">Recently added</option>
     </select>
   </label>
 </div>
-<main class="list grouped" id="list"></main>
+<nav class="jump" id="jump" aria-label="Jump to a letter" hidden></nav>
+<p class="count" id="count" aria-live="polite"></p>
+<main class="list" id="list"></main>
 <noscript><p class="empty">This page needs JavaScript to list your songs. Each song's files are in its
   folder, next to this page.</p></noscript>
 <footer class="footer"><span id="updated"></span>Keep this library private: the sheets and lyrics are other
   people's work.</footer>
 </div>
 """
+
+# The form caracole serve adds: a song for wanted.txt, written as `caracole add` writes it.
+_REQUEST = """<details class="request">
+  <summary><span class="plus" aria-hidden="true">+</span>Request a song</summary>
+  <form class="request-form" method="post" action="/request">
+    <input type="hidden" name="csrf" value="__CSRF__">
+    <div class="fields">
+      <label class="f">Artist<input name="artist" required maxlength="200" autocomplete="off"></label>
+      <label class="f">Title<input name="title" required maxlength="300" autocomplete="off"></label>
+      <label class="f"><span>Album <em>(optional)</em></span><input name="album" maxlength="300"
+        autocomplete="off"></label>
+      <label class="f"><span>Length <em>(optional, m:ss)</em></span><input name="duration" maxlength="12"
+        inputmode="numeric" autocomplete="off" placeholder="3:45"></label>
+    </div>
+    <div class="request-row">
+      <label class="check"><input type="checkbox" name="fetch" value="1" checked>Fetch it now</label>
+      <button class="btn primary" type="submit">Request</button>
+    </div>
+    <p class="hint">It goes into wanted.txt, as <code>caracole add</code> writes it. Fetch it now asks
+      Ultimate Guitar for this song alone, under the same pauses as every caracole command; its lyrics
+      come with the nightly run.</p>
+  </form>
+</details>
+"""
+
+
+def _nav(controls: WebControls | None) -> str:
+    """The masthead's links: the to-do page, and caracole serve's requests."""
+    links = '<a class="navlink" href="_todo.md">To-do</a>'
+    if controls is not None:
+        n = f'<span class="n">{controls.active}</span>' if controls.active else ""
+        links += f'<a class="navlink" href="/jobs">Requests{n}</a>'
+    return links
+
+
+def _request_form(controls: WebControls | None) -> str:
+    if controls is None:
+        return ""
+    return _REQUEST.replace("__CSRF__", html_text.escape(controls.csrf, quote=True))

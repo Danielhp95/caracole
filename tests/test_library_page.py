@@ -41,6 +41,14 @@ def songs_of(html):
     return {s["display"]: s for s in data_of(html)["songs"]}
 
 
+def csp_of(html):
+    return re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
+
+
+def sha(text):
+    return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
+
+
 def put(cfg, song, *names, data=b"x"):
     folder = song_dir(cfg.library_dir, song)
     folder.mkdir(parents=True, exist_ok=True)
@@ -101,6 +109,53 @@ def test_an_empty_library_still_makes_a_page(conn, cfg):
     html = page(conn, cfg)
     assert data_of(html)["songs"] == []
     assert html.lstrip().lower().startswith("<!doctype html>")
+
+
+def test_each_card_has_its_artists_monogram_hue_and_jump_letters(conn, cfg):
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    other = add_song(conn, "Soda Stereo", "Persiana Americana")
+    han = add_song(conn, "宋冬野", "斑马，斑马")
+    beatles = add_song(conn, "The Beatles", "Yesterday")
+    pac = add_song(conn, "2Pac", "Changes")
+    songs = songs_of(page(conn, cfg))
+    assert [songs[s.display]["monogram"] for s in (soda, han, beatles, pac)] == ["SS", "宋", "TB", "2"]
+    assert songs[soda.display]["hue"] == songs[other.display]["hue"]  # one artist, one colour
+    assert all(songs[s.display]["hue"] in range(8) for s in (soda, han, beatles, pac))
+    # The A-Z strip's letters come from the sort keys: "The Beatles" is under B, 宋冬野 under S.
+    assert [songs[s.display]["artistLetter"] for s in (soda, han, beatles, pac)] == ["S", "S", "B", "#"]
+    assert [songs[s.display]["titleLetter"] for s in (soda, han, beatles, pac)] == ["D", "B", "Y", "C"]
+
+
+def test_the_page_on_disk_has_no_forms_and_lets_none_be_sent(conn, cfg):
+    add_song(conn, "Radiohead", "Creep")
+    html = page(conn, cfg)
+    assert "form-action 'none'" in csp_of(html)
+    assert "<form" not in JSON_BLOCK.sub("", html)
+    assert "server" not in data_of(html)
+
+
+def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
+    from caracole.library_page import WebControls
+
+    wanted = add_song(conn, "Radiohead", "Creep")
+    found = add_song(conn, "Soda Stereo", "De Música Ligera")
+    update_song(conn, found.id, status="found")
+    controls = WebControls(csrf='t0k"<en', busy=frozenset({wanted.id}), active=2)
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    shell = JSON_BLOCK.sub("", html)
+    form = re.search(r'<form[^>]*action="/request"[^>]*>(.*?)</form>', shell, re.S)
+    assert form and 'method="post"' in form.group(0)
+    for name in ("artist", "title", "album", "duration", "fetch"):
+        assert f'name="{name}"' in form.group(1), name
+    assert '<input type="hidden" name="csrf" value="t0k&quot;&lt;en">' in form.group(1)
+    assert 'href="/jobs"' in shell
+    assert "form-action 'self'" in csp_of(html) and "form-action 'none'" not in csp_of(html)
+    assert data_of(html)["server"] == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2}
+    # Still one script and one style, each allowed by its hash.
+    scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+    styles = re.findall(r"<style>(.*?)</style>", html, re.S)
+    assert len(scripts) == 1 and len(styles) == 1
+    assert sha(scripts[0]) in csp_of(html) and sha(styles[0]) in csp_of(html)
 
 
 # --- files ---------------------------------------------------------------------------
@@ -288,10 +343,6 @@ def test_the_content_security_policy_allows_exactly_the_inline_script_and_style(
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     styles = re.findall(r"<style>(.*?)</style>", html, re.S)
     assert len(scripts) == 1 and len(styles) == 1
-
-    def sha(text):
-        return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
-
     assert f"script-src {sha(scripts[0])}" in csp
     assert f"style-src {sha(styles[0])}" in csp
 
@@ -350,13 +401,14 @@ def test_the_nightly_todo_step_also_writes_index_html(conn, cfg):
 CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 
 
-def dump_dom(path: Path, tmp_path: Path, fragment: str = "") -> str:
+def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,900") -> str:
     """The page's DOM after its script ran; skips the test when this machine can't run Chromium."""
     url = path.as_uri() + fragment
     try:
         result = subprocess.run(
             [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={tmp_path / 'chrome'}", "--virtual-time-budget=3000", "--dump-dom", url],
+             f"--user-data-dir={tmp_path / 'chrome'}", f"--window-size={size}", "--hide-scrollbars",
+             "--virtual-time-budget=3000", "--dump-dom", url],
             capture_output=True, text=True, timeout=60,
         )
     except (OSError, subprocess.TimeoutExpired) as e:
@@ -414,3 +466,84 @@ def test_apostrophes_and_empty_results_in_a_real_browser(conn, cfg, tmp_path):
     # The suggested command is quoted for a shell.
     shown = listing(dump_dom(path, tmp_path, "#q=" + quote("guns n' roses")))
     assert "caracole search \"guns n' roses\"" in shown
+
+
+# A script the tests add to a copy of the page, allowed by its hash, to read the layout back.
+MEASURE = """
+(() => {
+  const cards = Array.from(document.querySelectorAll("#list article"));
+  const box = (node) => node.getBoundingClientRect();
+  document.body.setAttribute("data-layout", JSON.stringify({
+    tops: cards.map((c) => Math.round(box(c).top + window.scrollY)),
+    widths: cards.map((c) => Math.round(box(c).width)),
+    page: window.innerWidth,
+    scroll: document.documentElement.scrollWidth,
+  }));
+})();
+"""
+
+
+def measured(html: str) -> str:
+    csp = csp_of(html)
+    html = html.replace(csp, csp.replace("script-src ", f"script-src {sha(MEASURE)} "))
+    return html.replace("</body>", f"<script>{MEASURE}</script>\n</body>")
+
+
+def layout_of(dom: str) -> dict:
+    import html as html_module
+
+    found = re.search(r'data-layout="([^"]*)"', dom)
+    assert found, dom[-2000:]
+    return json.loads(html_module.unescape(found.group(1)))
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_cards_fill_a_desktop_row_and_stack_on_a_phone(conn, cfg, tmp_path):
+    # One song per artist: each artist used to get a section of its own, one narrow card wide.
+    for artist, title in (("Radiohead", "Creep"), ("Soda Stereo", "De Música Ligera"), ("Oasis", "Wonderwall"),
+                          ("宋冬野", "斑马，斑马")):
+        add_song(conn, artist, title)
+    path = write_library_page(cfg.library_dir, measured(page(conn, cfg)))
+
+    wide = layout_of(dump_dom(path, tmp_path, size="1280,900"))
+    assert len(wide["tops"]) == 4
+    assert wide["tops"].count(wide["tops"][0]) >= 3, wide  # at least three cards share the first row
+    assert wide["scroll"] <= wide["page"]
+
+    phone = layout_of(dump_dom(path, tmp_path, size="390,844"))
+    assert len(set(phone["tops"])) == 4, phone  # one card per row
+    assert phone["scroll"] <= phone["page"], phone  # nothing wider than the screen
+    assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_letter_strip_lists_the_artists_initials(conn, cfg, tmp_path):
+    for artist, title in (("The Beatles", "Yesterday"), ("Radiohead", "Creep"), ("Soda Stereo", "Música"),
+                          ("宋冬野", "斑马，斑马")):
+        add_song(conn, artist, title)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    dom = dump_dom(path, tmp_path)
+    strip = re.search(r'<nav[^>]*id="jump"[^>]*>(.*?)</nav>', dom, re.S)
+    assert strip, dom[-2000:]
+    assert re.findall(r"<button[^>]*>([^<]+)</button>", strip.group(1)) == ["B", "R", "S"]
+    shown = listing(dump_dom(path, tmp_path, "#sort=recent"))
+    assert shown.count("<article") == 4
+    assert re.search(r'<nav[^>]*id="jump"[^>]*hidden', dump_dom(path, tmp_path, "#sort=recent"))
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_page_offers_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
+    from caracole.library_page import WebControls
+
+    wanted = add_song(conn, "Radiohead", "Creep")
+    busy = add_song(conn, "Oasis", "Wonderwall")
+    found = add_song(conn, "Soda Stereo", "De Música Ligera")
+    update_song(conn, found.id, status="found")
+    controls = WebControls(csrf="tok", busy=frozenset({busy.id}), active=1)
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    path = write_library_page(cfg.library_dir, html)
+    shown = listing(dump_dom(path, tmp_path))
+    forms = re.findall(r'<form[^>]*action="/fetch"[^>]*>(.*?)</form>', shown, re.S)
+    assert len(forms) == 1
+    assert f'name="song" value="{wanted.id}"' in forms[0] and 'name="csrf" value="tok"' in forms[0]
+    assert "Fetching" in shown  # the song with a job queued says so instead

@@ -688,16 +688,20 @@ paste, if you'd rather edit the file.
 overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
-loads nothing from the network. It shows every song with its status, its key
-or transposition, and links to its files, the PDF first. A song without a
-sheet also gets buy and search links.
+loads nothing from the network. It shows every song as a card, in a grid as
+wide as the screen: one column on a phone, three or four on a laptop. A card
+has its status, its key or transposition, and links to its files, the PDF
+first. Each artist's cards share a coloured monogram, and the artist's name
+under a title shows only that artist's songs. A song without a sheet also has
+"Find it elsewhere", which opens its search and buy links.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
 "banma" finds 斑马斑马. The buttons show all songs, or only those found,
-wanted or needing review, and you can sort by artist or by when songs were
-added. When nothing in the library matches, the page shows the
-`caracole search` line to run.
+wanted or needing review, and you can sort by artist, by title or by when
+songs were added. Sorted by artist or title, a row of letters jumps to the
+first song under each. When nothing in the library matches, the page shows
+the `caracole search` line to run.
 
 On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
