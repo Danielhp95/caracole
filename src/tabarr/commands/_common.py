@@ -44,19 +44,21 @@ def _reason(e: OSError | sqlite3.Error) -> str:
 
 
 def open_db(cfg: Config) -> sqlite3.Connection:
-    """The database. It raises OSError or sqlite3.Error, for a caller that carries on without it
-    (``tabarr add``); a command that can't, opens it with ``open_db_or_exit``."""
-    return db.connect(cfg.db_path)
+    """The database, the one way a command opens it; a state folder tabarr can't write exits 1,
+    naming the path and why.
 
-
-def open_db_or_exit(cfg: Config) -> sqlite3.Connection:
-    """The database; a state folder tabarr can't write exits 1, naming the path and why."""
+    ``tabarr add``, which keeps its wanted.txt line and exits 0 without the database,
+    calls ``db.connect`` itself.
+    """
     try:
         return db.connect(cfg.db_path)
     except (OSError, sqlite3.Error) as e:
         name = getattr(e, "filename", None)
         where = f" ({name})" if name and Path(name) != cfg.db_path else ""
         fail(f"can't open the database {cfg.db_path}: {_reason(e)}{where}")
+
+
+open_db_or_exit = open_db  # its older name
 
 
 def load_ovr(cfg: Config) -> Overrides:

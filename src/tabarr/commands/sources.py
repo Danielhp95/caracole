@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
+from tabarr import db
 from tabarr.commands._common import fail, load_cfg, open_db, utcnow
 
 if TYPE_CHECKING:
@@ -211,7 +212,7 @@ def add_song(
     except OSError as e:
         fail(f"can't update {path}: {e.strerror or e}")
     try:
-        with (nullcontext(conn) if conn is not None else closing(open_db(cfg))) as conn:
+        with (nullcontext(conn) if conn is not None else closing(db.connect(cfg.db_path))) as conn:
             known = find_song(conn, line.identity)
             stats = sync_wanted(conn, path, utcnow())
             song = find_song(conn, line.identity)

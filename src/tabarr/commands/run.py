@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+from contextlib import closing
 
 import typer
 
-from tabarr.commands._common import load_cfg
+from tabarr.commands._common import load_cfg, open_db
 
 
 def register(app: typer.Typer) -> None:
@@ -17,7 +18,8 @@ def register(app: typer.Typer) -> None:
 
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
         cfg = load_cfg(ctx)
-        report = pipeline.run_pipeline(cfg)
+        with closing(open_db(cfg)) as conn:
+            report = pipeline.run_pipeline(cfg, conn=conn)
         typer.echo(report.summary())
         if not report.ok:
             raise typer.Exit(1)

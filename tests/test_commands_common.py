@@ -55,7 +55,7 @@ def test_a_state_folder_tabarr_cant_create_names_the_database(tmp_path, capsys):
         toml = write_config(tmp_path, state_dir=locked / "state")
         cfg = load_config(toml, env={"HOME": str(tmp_path)})
         with pytest.raises(typer.Exit) as raised:
-            open_db_or_exit(cfg)
+            open_db(cfg)
     assert raised.value.exit_code == 1
     db_path = locked / "state" / "tabarr.sqlite"
     assert f"can't open the database {db_path}: Permission denied ({locked / 'state'})" in (
@@ -65,19 +65,18 @@ def test_a_state_folder_tabarr_cant_create_names_the_database(tmp_path, capsys):
 
 @needs_permissions
 def test_a_database_tabarr_cant_write_names_it(tmp_path, cfg, capsys):
-    open_db(cfg).close()
+    db.connect(cfg.db_path).close()
     # The database is there, but its folder can't take its journal.
     with read_only(cfg.state_dir), pytest.raises(typer.Exit) as raised:
-        open_db_or_exit(cfg)
+        open_db(cfg)
     assert raised.value.exit_code == 1
     assert f"can't open the database {cfg.db_path}: " in capsys.readouterr().err
 
 
-@needs_permissions
-def test_open_db_still_raises_for_a_caller_that_carries_on(tmp_path, cfg):
-    # `tabarr add` keeps the line in wanted.txt and exits 0 when only the database fails.
-    with read_only(cfg.state_dir.parent), pytest.raises(OSError):
-        open_db(cfg)
+def test_open_db_is_the_one_way_to_open_the_database():
+    # The older name stays for callers that still use it; `tabarr add`, which carries on
+    # without the database, opens it with db.connect itself.
+    assert open_db_or_exit is open_db
 
 
 @needs_permissions
@@ -91,6 +90,32 @@ def test_a_command_that_needs_the_database_says_so_instead_of_a_traceback(tmp_pa
     assert result.exit_code == 1
     assert not isinstance(result.exception, OSError)
     assert "Permission denied" in result.output and str(locked / "state") in result.output
+
+
+# Every command that opens the database, as you'd type it ({tmp} is the test's folder).
+DB_COMMANDS = [
+    ["run"], ["sync"], ["fetch"], ["fetch", "--song", "Radiohead - Creep"], ["lyrics"], ["lacuerda"],
+    ["render"], ["match"], ["match", "--dry-run"], ["index", "build", "--from", "{tmp}"],
+    ["index", "refresh"], ["index", "stats"], ["search", "creep"], ["search", "creep", "--add", "1"],
+    ["todo"], ["review"], ["scan"],
+]
+
+
+def invoke(tmp_path: Path, *args: str):
+    toml = write_config(tmp_path, music_dir=tmp_path / "music")
+    argv = [arg.format(tmp=tmp_path) for arg in args]
+    return CliRunner().invoke(build_app(), ["--config", str(toml), *argv])
+
+
+@pytest.mark.parametrize("args", DB_COMMANDS, ids=" ".join)
+def test_every_command_names_a_state_folder_it_cant_use(tmp_path, args):
+    # A file where the state folder should be, as a wrong mount would leave it (root too).
+    state = tmp_path / "state"
+    state.write_text("not a folder", encoding="utf-8")
+    result = invoke(tmp_path, *args)
+    assert result.exit_code == 1, result.output
+    assert not isinstance(result.exception, OSError), result.exception  # a message, no traceback
+    assert "can't open" in result.output and str(state) in result.output
 
 
 @needs_permissions
