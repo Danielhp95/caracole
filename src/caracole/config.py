@@ -40,10 +40,12 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     "lacuerda": ProviderPolicy(budget=30, delay=(10.0, 20.0)),
     # Guitar Pro files, downloaded for you: its robots.txt allows /tabs/download/ (gtptabs.py).
     "gtptabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
+    # Its song sitemaps, for the to-do page's links: nothing is downloaded (musescore.py).
+    "musescore": ProviderPolicy(budget=10, delay=(10.0, 20.0)),
 }
 # The providers [providers.<name>] can turn off with `enabled = false`. The others are what
 # caracole is built on, so for them `enabled` is an unknown key like any other.
-SWITCHABLE = frozenset({"gtptabs"})
+SWITCHABLE = frozenset({"gtptabs", "musescore"})
 
 
 @dataclass(frozen=True)

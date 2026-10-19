@@ -199,7 +199,19 @@ def test_gtptabs_can_be_turned_off_and_keeps_its_other_settings(tmp_path):
     assert policy == ProviderPolicy(budget=20, delay=(12.0, 18.0), enabled=False)
 
 
-def test_only_gtptabs_can_be_turned_off(tmp_path):
+def test_musescore_is_on_by_default_with_a_small_budget(tmp_path):
+    # Its index is about 19 sitemaps: read over two nights, then refreshed monthly.
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    assert cfg.provider("musescore") == ProviderPolicy(budget=10, delay=(10.0, 20.0), enabled=True)
+
+
+def test_musescore_can_be_turned_off(tmp_path):
+    p = write(tmp_path, "[providers.musescore]\nenabled = false\n")
+    assert load_config(p, env={"HOME": str(tmp_path)}).provider("musescore") == ProviderPolicy(
+        budget=10, delay=(10.0, 20.0), enabled=False)
+
+
+def test_only_gtptabs_and_musescore_can_be_turned_off(tmp_path):
     # UG, LRCLIB and LaCuerda are what caracole is built on: no switch, so a typo can't pass for one.
     for name in ("ug", "lrclib", "lacuerda"):
         p = write(tmp_path, f"[providers.{name}]\nenabled = false\n")

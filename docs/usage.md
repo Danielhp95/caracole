@@ -73,6 +73,10 @@ delay = [10, 20]
 enabled = true                    # false: caracole asks gtptabs.com nothing
 budget = 20
 delay = [10, 20]
+[providers.musescore]             # MuseScore's song sitemaps, for links to its pages
+enabled = true                    # false: caracole asks MuseScore nothing
+budget = 10
+delay = [10, 20]
 
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
@@ -128,12 +132,13 @@ else the file `client_secret_file` names, else
 `$CREDENTIALS_DIRECTORY/ntfy_token`, else `token_file`, else
 `$CARACOLE_NTFY_TOKEN`.
 
-**Providers** are exactly `ug`, `lrclib`, `lacuerda` and `gtptabs`. Any other
-`[providers.…]` table is an error, like any other unknown key. Only gtptabs.com
-can be turned off: with `enabled = false` under `[providers.gtptabs]`, caracole
-sends it nothing, the nightly run skips its step, and the to-do page's Provider
-health says it is off. The other three are what caracole is built on, so
-`enabled` in their tables is an unknown key.
+**Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs` and
+`musescore`. Any other `[providers.…]` table is an error, like any other
+unknown key. Only gtptabs.com and MuseScore can be turned off: with
+`enabled = false` under `[providers.gtptabs]` or `[providers.musescore]`,
+caracole sends that site nothing, the nightly run skips its step, and the to-do
+page's Provider health says it is off. The other three are what caracole is
+built on, so `enabled` in their tables is an unknown key.
 
 **Guitar Pro files** come two ways. Ultimate Guitar's robots.txt closes its
 download endpoint to bots, so its Guitar Pro pages are yours to click:
