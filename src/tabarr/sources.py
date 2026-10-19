@@ -1,0 +1,212 @@
+"""Song sources: what they share, and ``sync_sources``, which runs them all.
+
+Two sources feed the song table. ``wanted.txt`` is always available; Spotify is
+optional. Each sync hands its songs to ``songs.upsert_song``, which merges a song
+that arrives from several sources into one record. The repository functions are
+injected, so a source can be tested without a database; by default they are
+imported from ``tabarr.songs`` and ``tabarr.db`` on first use.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Protocol
+
+from tabarr.config import Config
+
+if TYPE_CHECKING:
+    from tabarr.spotify import SpotifyAPI
+
+# Where sync_sources records how each source went, as JSON, for the to-do page.
+WANTED_STATUS_KEY = "source:wanted"
+SPOTIFY_STATUS_KEY = "source:spotify"
+
+
+@dataclass
+class SyncStats:
+    """What one sync of one source did.
+
+    ``seen`` counts distinct songs read, ``new`` the ones the repository created.
+    ``errors`` are messages for the run report; nothing in them is fatal.
+    ``line_errors`` repeats wanted.txt's bad lines as ``(line_no, message)``.
+    ``missing_playlists`` lists configured Spotify playlists that couldn't be read.
+    """
+
+    seen: int = 0
+    new: int = 0
+    errors: list[str] = field(default_factory=list)
+    missing_playlists: list[str] = field(default_factory=list)
+    line_errors: list[tuple[int, str]] = field(default_factory=list)
+
+
+class Upsert(Protocol):
+    """``songs.upsert_song``: insert or merge a song, returning ``(song_id, created)``."""
+
+    def __call__(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        artists: Sequence[str],
+        title: str,
+        album: str | None,
+        duration_ms: int | None,
+        isrc: str | None,
+        source: str,
+        source_id: str,
+        added_at: str,
+    ) -> tuple[int, bool]: ...
+
+
+KvGet = Callable[[sqlite3.Connection, str], str | None]
+KvSet = Callable[[sqlite3.Connection, str, str], None]
+
+
+def default_upsert() -> Upsert:
+    """The song repository's ``upsert_song``, imported on first use."""
+    from tabarr.songs import upsert_song
+
+    return upsert_song
+
+
+def default_kv_get() -> KvGet:
+    """``db.kv_get``, imported on first use."""
+    from tabarr.db import kv_get
+
+    return kv_get
+
+
+def default_kv_set() -> KvSet:
+    """``db.kv_set``, imported on first use."""
+    from tabarr.db import kv_set
+
+    return kv_set
+
+
+def utc_stamp(now: datetime) -> str:
+    """``now`` as ISO 8601 UTC to the second ("2026-10-18T03:30:00Z"). Naive times are UTC."""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    return now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+@dataclass
+class SourcesReport:
+    """How one ``sync_sources`` went.
+
+    ``spotify_state`` is "off" (not configured), "ok", "auth_needed" or "error".
+    ``spotify_message`` says what went wrong; it leaves out the advice to run
+    ``tabarr auth spotify``, which callers add where they show it.
+    """
+
+    wanted: SyncStats
+    spotify: SyncStats | None = None
+    spotify_state: str = "off"
+    spotify_message: str | None = None
+
+    def summary(self) -> str:
+        """One line for the run report."""
+        w = self.wanted
+        line = f"wanted.txt {w.seen} songs, {w.new} new"
+        if w.errors:
+            line += f", {len(w.errors)} {'problem' if len(w.errors) == 1 else 'problems'}"
+        parts = [line]
+        if self.spotify_state == "off":
+            parts.append("Spotify off")
+        elif self.spotify_state == "auth_needed":
+            parts.append("Spotify needs authorization")
+        else:
+            s = self.spotify
+            line = f"Spotify {s.seen} songs, {s.new} new" if s is not None else "Spotify failed"
+            if self.spotify_state == "error" and self.spotify_message:
+                line += f" ({self.spotify_message})"
+            parts.append(line)
+        return "; ".join(parts)
+
+
+def sync_sources(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    now: datetime,
+    *,
+    spotify: SpotifyAPI | None = None,
+    upsert: Upsert | None = None,
+    kv_get: KvGet | None = None,
+    kv_set: KvSet | None = None,
+) -> SourcesReport:
+    """Sync wanted.txt, then Spotify when it's configured, and record how each went.
+
+    ``spotify`` is the client from ``spotify.client_from_config``, or None when
+    there is none. wanted.txt always syncs, and no Spotify failure raises: it
+    becomes the report's ``spotify_state``. Each source's outcome is stored as
+    JSON in the kv table under "source:wanted" and "source:spotify".
+    """
+    from tabarr.wanted import sync_wanted
+
+    kv_set = kv_set or default_kv_set()
+    stamp = utc_stamp(now)
+    wanted = sync_wanted(conn, cfg.wanted_file, now, upsert=upsert, kv_get=kv_get, kv_set=kv_set)
+    if cfg.wanted_file.exists():  # before it exists, the to-do page says how to create it
+        errors = [[n, m] for n, m in wanted.line_errors] or [[0, m] for m in wanted.errors]
+        _record(
+            kv_set,
+            conn,
+            WANTED_STATUS_KEY,
+            {"at": stamp, "lines": wanted.seen, "new": wanted.new, "errors": errors},
+        )
+    report = SourcesReport(wanted=wanted)
+    if not cfg.spotify.enabled:
+        return report
+
+    from tabarr.spotify import SpotifyAuthError, SpotifyError, no_client_error, sync_spotify
+
+    if spotify is None:
+        report.spotify_state = "auth_needed"
+        report.spotify_message = _sentence(no_client_error(cfg).problem)
+    else:
+        try:
+            report.spotify = sync_spotify(
+                conn, spotify, cfg.spotify, now, upsert=upsert, kv_set=kv_set
+            )
+        except SpotifyAuthError as e:
+            report.spotify_state, report.spotify_message = "auth_needed", _sentence(e.problem)
+        except SpotifyError as e:
+            report.spotify_state, report.spotify_message = "error", str(e)
+        else:
+            problems = list(report.spotify.errors)
+            if missing := report.spotify.missing_playlists:
+                names = ", ".join(repr(ref) for ref in missing)
+                problems.insert(
+                    0,
+                    f"can't read playlist {names}: check the name, and that the "
+                    "playlist is yours or you collaborate on it",
+                )
+            report.spotify_state = "error" if problems else "ok"
+            report.spotify_message = "; ".join(problems) or None
+    s = report.spotify
+    _record(
+        kv_set,
+        conn,
+        SPOTIFY_STATUS_KEY,
+        {
+            "state": report.spotify_state,
+            "at": stamp,
+            "seen": s.seen if s else 0,
+            "new": s.new if s else 0,
+            "message": report.spotify_message,
+            "missing_playlists": list(s.missing_playlists) if s else [],
+        },
+    )
+    return report
+
+
+def _record(kv_set: KvSet, conn: sqlite3.Connection, key: str, value: Any) -> None:
+    kv_set(conn, key, json.dumps(value, ensure_ascii=False))
+
+
+def _sentence(text: str) -> str:
+    text = text.strip()
+    return text[:1].upper() + text[1:] + ("" if text.endswith(".") else ".")
