@@ -580,9 +580,9 @@ when it has something in it:
   non-Latin names only by bare ids (Joaquín Sabina, Maná, 宋冬野), so caracole
   can't see their tabs. For each such artist with a song not found, or
   reviewed on its title alone, the page links a UG search. Open the artist's
-  page once, by hand, and paste its address, as your browser shows it, into
-  the one block the page gives for all of them, in place of
-  `https://www.ultimate-guitar.com/artist/…`:
+  page once, by hand, or any of their tab pages, and paste its address, as
+  your browser shows it, into the one block the page gives for all of them,
+  in place of `https://www.ultimate-guitar.com/artist/…`:
 
   ```toml
   [artist_url]
@@ -594,6 +594,12 @@ when it has something in it:
   under the table. The artist page lists all of the artist's tabs, bare ids
   included. The next run reads it, finds your songs on it by title, and
   fetches them like any matched song. That's once per artist, not per song.
+  A tab page you pasted is read first, once, for the artist page it links to.
+  When it leads to none (UG answers 404 for it, robots.txt closes it, or it
+  doesn't link to its artist's page), the artist stays on the list, with the
+  page you pasted and what is wrong with it, and no new line: put the
+  artist's page, or another of their tab pages, in its place. The song isn't
+  taken for missing meanwhile.
 - **Buy list.** No human sheet found yet, and nothing caracole will still do may
   find one: the song's UG fetch is done (or UG doesn't have it), no fetch,
   artist page or LaCuerda check is due for it, and, for a song not found, the
@@ -726,9 +732,10 @@ the same way `caracole add` does. N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another
 name is left alone. When nothing matches well, or the query has accented or
 non-Latin letters, the command also explains bare ids and prints the
-`[artist_url]` line to paste, with the table's header only while
-overrides.toml has no `[artist_url]` entries. For an artist whose page
-overrides.toml has already, it gives no line and says so. The search reads
+`[artist_url]` line to paste, for the artist's page or one of their tab pages,
+with the table's header only while overrides.toml has no `[artist_url]`
+entries. For an artist whose page overrides.toml has already, under any form
+of their name, it gives no line and says so. The search reads
 overrides.toml for this hint alone, and still works when the file can't be
 read.
 
@@ -779,15 +786,22 @@ tab_ids = [1601668]
   and Guitar Pro picks from the new one. When the new one has no sheet, the
   old sheet goes all the same, and the next render takes its `sheet.cho` and
   `sheet.pdf` along.
-- **`[artist_url]`** is keyed by the artist's name as your songs write it. The
-  value is the artist's page on UG, whose address ends in the artist's number:
-  UG writes some with the name before it
+- **`[artist_url]`** is keyed by the artist's name as your songs write it, or
+  as UG writes it: an entry for "Song Dongye (宋冬野)" or "Song Dongye" serves
+  songs by 宋冬野 too (see [names in other scripts](#names-in-other-scripts)).
+  The value is the artist's page on UG, whose address ends in the artist's
+  number: UG writes some with the name before it
   (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`) and some with the
   number alone (宋冬野's is `https://www.ultimate-guitar.com/artist/634073`).
   Paste it as your browser shows it, even after you clicked a filter or
   another page (`?filter=chords`, `?page=2`, `?sort=date`): caracole drops the
   query. An address without the number (`/artist/joaquin_sabina`) is an error:
-  UG answers it with "page not found".
+  UG answers it with "page not found". Any tab page of the artist works too,
+  bare or slugged (`https://tabs.ultimate-guitar.com/tab/4180894`): the next
+  fetch reads it once, a request like any other within the night's budget,
+  and remembers the artist page it links to, for every song by the artist. A
+  tab page that leads to no artist page is listed on the to-do page, and its
+  songs wait for another address.
 - **`[pin]`** takes tab page addresses: paste them as your browser shows them,
   a query or a fragment included. Pinned tabs replace the candidates of their
   kind (sheet, Guitar Pro, tab), in the order given. A pin whose page is

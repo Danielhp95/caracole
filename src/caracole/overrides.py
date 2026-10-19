@@ -7,7 +7,8 @@ Tables:
 - ``[match]``: "Artist - Title" → "ug-artist/ug-song", for a title-level
   correction that still picks up new tabs.
 - ``[artist_url]``: artist → UG artist page, for artists UG's sitemaps list
-  only by bare ids (accented names, Chinese names).
+  only by bare ids (accented names, Chinese names), or one of the artist's tab
+  pages, which the fetch reads once for the artist page it links to.
 - ``[pin]``: "Artist - Title" → tab page URLs to always use. Each pin keeps its
   tab id (``pin``) and the address you pasted (``pin_urls``): UG serves a
   slugged tab only at its slugged URL.
@@ -34,14 +35,14 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit
 
 import tomlkit
 from tomlkit.exceptions import TOMLKitError
 
 from caracole.library import NotRegularFile, read_regular, write_atomic
-from caracole.normalize import identity_key, slug_key, ug_slug_key
+from caracole.normalize import compact, identity_key, name_forms, slug_key, ug_slug_key
 
 # A query or fragment is allowed (a link's ?ref=, the artist page's own ?filter=chords and ?page=2
 # links) and dropped: caracole asks for the bare page.
@@ -53,7 +54,9 @@ _TAB_HOST = "https://tabs.ultimate-guitar.com"
 # alone (宋冬野's /artist/634073); /artist/<name> without the number answers 404.
 _ARTIST_PATH = re.compile(r"/artist/(?:[^/?#]+_)?\d+")
 _ARTIST_HOST = "https://www.ultimate-guitar.com"
-ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"  # how messages and the to-do page write an artist page
+# How messages and the to-do page write an artist page's address and a tab page's.
+ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
+TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject"}
 _TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
 
@@ -126,8 +129,46 @@ def artist_page_address(url: Any) -> str | None:
     return _ARTIST_HOST + path if _ARTIST_PATH.fullmatch(path) else None
 
 
-def _artist_page(url: Any) -> str | None:
-    return artist_page_address(url)
+def _artist_url_value(url: Any) -> str | None:
+    """An ``[artist_url]`` value: the artist's page (``artist_page_address``), or one of the artist's
+    tab pages, written as a pin's is (``_pin_url``), which caracole reads once for the artist's page
+    it links to. None for anything else, a bare number included: it could be either page's."""
+    page = artist_page_address(url)
+    if page is not None or not isinstance(url, str) or url.strip().isdigit():
+        return page
+    try:
+        tab_id_from_url(url)
+    except OverridesError:
+        return None
+    return _pin_url(url)
+
+
+def pasted_tab_id(url: str) -> int | None:
+    """The tab id when an ``[artist_url]`` value is a tab page; None when it is the artist's page."""
+    if not url.startswith(f"{_TAB_HOST}/tab/"):
+        return None
+    try:
+        return tab_id_from_url(url)
+    except OverridesError:
+        return None
+
+
+def artist_url_entry(overrides: Overrides, keys: Iterable[str]) -> tuple[str, str] | None:
+    """Your ``[artist_url]`` entry for an artist known by these keys, as (its key, its address).
+
+    The entry under one of the keys comes first, else one whose name shares a form with them
+    (``normalize.name_forms``), hyphens aside: an entry written "Song Dongye (宋冬野)", as UG
+    names the artist, or "Song Dongye" serves 宋冬野's songs.
+    """
+    keys = [k for k in keys if k]
+    for key in keys:
+        if key in overrides.artist_url:
+            return key, overrides.artist_url[key]
+    wanted = {compact(k) for k in keys}
+    for key, url in overrides.artist_url.items():
+        if not wanted.isdisjoint(compact(f) for f in name_forms(key)):
+            return key, url
+    return None
 
 
 def _ug_ref(value: Any, where: str) -> tuple[str, str]:
@@ -227,11 +268,11 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
 
     artist_url: dict[str, str] = {}
     for artist, url in table("artist_url").items():
-        page = _artist_page(url)
+        page = _artist_url_value(url)
         if page is None:
             raise OverridesError(
-                f"[artist_url] {artist!r}: expected the artist's page, {ARTIST_PAGE_SHAPE} as your browser "
-                f"shows it, got {url!r}"
+                f"[artist_url] {artist!r}: expected the artist's page ({ARTIST_PAGE_SHAPE}) or one of their "
+                f"tab pages ({TAB_PAGE_SHAPE}), as your browser shows it, got {url!r}"
             )
         artist_url[slug_key(artist)] = page
 
@@ -361,9 +402,9 @@ def add_reject(path: Path, display: str, ug_refs: Sequence[str]) -> None:
 
 
 def add_artist_url(path: Path, artist: str, url: str) -> None:
-    page = _artist_page(url)
+    page = _artist_url_value(url)
     if page is None:
-        raise OverridesError(f"[artist_url] {artist!r}: not a UG artist page URL: {url!r}")
+        raise OverridesError(f"[artist_url] {artist!r}: not a UG artist page or tab page URL: {url!r}")
     _edit(path, lambda doc: _table_of(doc, "artist_url").__setitem__(artist, page))
 
 

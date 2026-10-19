@@ -33,8 +33,8 @@ from typing import Mapping, Sequence
 
 from rapidfuzz import fuzz
 
-from caracole.normalize import clean_title, fold, has_han, romanize, slug_key, split_variant
-from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides
+from caracole.normalize import clean_title, fold, has_han, name_forms, romanize, split_variant
+from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
 from caracole.songs import Song, list_songs
 from caracole.ug.lookup import IndexTab, song_tabs
 
@@ -153,7 +153,9 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = N
     ``overrides`` is the file's (None when there is none to read). As on the
     to-do page, a table or a key declared twice makes it unreadable, so the line
     comes with the table's header only when it has no such table, and there is
-    no line for an artist whose page it has: the hint says so instead.
+    no line for an artist whose page it has, under any form of their name
+    (``overrides.artist_url_entry``): the hint says so instead. The address may
+    be the artist's page or one of their tab pages.
     """
     strong = any(h.score >= STRONG for h in hits)
     if strong and not any(c.isalpha() and not c.isascii() for c in query):
@@ -165,9 +167,9 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = N
         "caracole can't see their tabs."
     )
     shown = artist or " ".join(query.split())
-    page = overrides.artist_url.get(slug_key(shown)) if overrides is not None else None
-    if page:
-        return (f"{lead} overrides.toml has {shown}'s page already ({page}): the nightly run looks "
+    entry = artist_url_entry(overrides, name_forms(shown)) if overrides is not None else None
+    if entry is not None:
+        return (f"{lead} overrides.toml has {shown}'s page already ({entry[1]}): the nightly run looks "
                 "there for the songs you add by them.")
     name = shown.replace("\\", "\\\\").replace('"', '\\"')
     line = f'"{name}" = "{ARTIST_PAGE_SHAPE}"'
@@ -179,13 +181,14 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = N
         where, block = "", f"    [artist_url]\n    {line}"
     if strong:
         return (
-            f"{lead} If the one you want isn't above, find their page on ultimate-guitar.com and paste "
-            f"its address, as your browser shows it, into overrides.toml{where}:\n\n{block}"
+            f"{lead} If the one you want isn't above, find their page on ultimate-guitar.com, or one of "
+            f"their tab pages, and paste its address, as your browser shows it, into overrides.toml"
+            f"{where}:\n\n{block}"
         )
     return (
-        f"{lead} Find the artist's page on ultimate-guitar.com once and paste its address, as your "
-        f"browser shows it (it ends in the artist's number, as …/artist/634073 does), into "
-        f"overrides.toml{where}:\n\n{block}\n\n"
+        f"{lead} Find the artist's page on ultimate-guitar.com once, or one of their tab pages, and "
+        f"paste its address, as your browser shows it (an artist page's ends in the artist's number, "
+        f"as …/artist/634073 does), into overrides.toml{where}:\n\n{block}\n\n"
         "The key is the artist's name as your songs write it, so take any title words out of it. "
         "Then add the song with `caracole add`; the nightly run looks for its tabs on that page."
     )

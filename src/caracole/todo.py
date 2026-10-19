@@ -23,9 +23,9 @@ from caracole.lacuerda import artist_slug_candidates, looks_spanish
 from caracole.library import write_atomic
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
-from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides
+from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, Overrides
 from caracole.songs import Song, list_songs
-from caracole.ug.fetch import artist_is_known, needs_artist_page, songs_to_fetch
+from caracole.ug.fetch import artist_is_known, needs_artist_page, pasted_page_problem, songs_to_fetch
 from caracole.ug.index import index_state
 from caracole.ug.lookup import song_tabs
 
@@ -89,8 +89,8 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
         head += ", and the song has a sheet already: nothing is lost by leaving this"
     if not artist_is_known(conn, song, overrides):
         return (f"{head}. If none is the song you want, UG probably lists {artist} only by bare ids: find the "
-                "artist page (see Artists to find below) and paste it under `[artist_url]`, and caracole looks "
-                "for the song there.")
+                "artist's page, or one of their tab pages (see Artists to find below), and paste its address "
+                "under `[artist_url]`, and caracole looks for the song there.")
     if song.id in due:
         return (f"{head}. caracole looks for it on {artist}'s UG page in the next run: wait for that before "
                 "you pick one.")
@@ -182,29 +182,41 @@ def _partial_sheets(conn: sqlite3.Connection, cfg: Config, songs_by_id: dict[int
 
 def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides) -> tuple[list[str], int]:
     wanted: dict[str, list[Song]] = {}
+    pasted: dict[str, tuple[str, str]] = {}  # artist -> (the tab page under [artist_url], what is wrong with it)
     for s in songs:
         # Not found, or reviewed on its title alone (only covers), by an artist whose UG page the
-        # fetch can't find: the index has no slugged tab of theirs, and no address was pasted or learned.
+        # fetch can't find: the index has no slugged tab of theirs, and no address was pasted or learned
+        # (or the tab page pasted leads to none).
         if s.status == "ignored" or not needs_artist_page(s) or artist_is_known(conn, s, overrides):
             continue
         wanted.setdefault(s.artist, []).append(s)
+        if (problem := pasted_page_problem(conn, s, overrides)) is not None:
+            pasted.setdefault(s.artist, problem)
     items = []
     for artist, group in sorted(wanted.items()):
         n = len(group)
         search = f"https://www.ultimate-guitar.com/search.php?search_type=band&value={quote(artist)}"
-        items.append(f"- **{md(artist)}** ({n} song{'s' if n != 1 else ''}): {_link('search Ultimate Guitar', search)}")
-    if wanted:
+        item = f"- **{md(artist)}** ({n} song{'s' if n != 1 else ''}): {_link('search Ultimate Guitar', search)}"
+        if artist in pasted:
+            url, problem = pasted[artist]
+            item += (f" · the page under `[artist_url]` for them, {_link(url, url)}: {md(problem)}. Put the "
+                     "artist's page, or another of their tab pages, in its place.")
+        items.append(item)
+    new = [a for a in sorted(wanted) if a not in pasted]  # a second line for an artist: the file unreadable
+    if new:
         # One block for every artist, with the table's header only when the file has no such table:
         # a table declared twice makes overrides.toml unreadable, and the nightly run stops.
-        lines = [f"{_toml_str(a)} = {_toml_str(ARTIST_PAGE_SHAPE)}" for a in sorted(wanted)]
+        lines = [f"{_toml_str(a)} = {_toml_str(ARTIST_PAGE_SHAPE)}" for a in new]
         if overrides.artist_url:
             how = ("Then add these lines under the `[artist_url]` table your overrides.toml already has (a second "
                    "`[artist_url]` header would make the file unreadable)")
         else:
             how, lines = "Then paste this block into overrides.toml", ["[artist_url]", *lines]
-        items += ["", f"{how}, with each artist page's address, as your browser shows it, in place of "
-                      f"`{ARTIST_PAGE_SHAPE}` (it ends in the artist's number, as "
-                      "`https://www.ultimate-guitar.com/artist/634073` does):", *_paste(lines)]
+        items += ["", f"{how}, with each address, as your browser shows it, in place of `{ARTIST_PAGE_SHAPE}`. "
+                      "An artist page's ends in the artist's number, as "
+                      "`https://www.ultimate-guitar.com/artist/634073` does; for a tab page's "
+                      f"(`{TAB_PAGE_SHAPE}`), the next run reads that page once for its artist's page:",
+                  *_paste(lines)]
     return items, len(wanted)
 
 
@@ -536,8 +548,8 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
          '`"Artist - Title" = ["https://tabs.ultimate-guitar.com/tab/…"]`.', None),
         ("Artists to find on Ultimate Guitar", artists,
          "UG's sitemaps list these artists only by bare ids (usually because of accents or non-Latin "
-         "letters), so caracole can't see their tabs. Find each artist's page once: search Ultimate Guitar, "
-         "open the artist page and copy its address.", n_artists),
+         "letters), so caracole can't see their tabs. Find each artist once: search Ultimate Guitar, "
+         "open the artist's page, or any of their tab pages, and copy its address.", n_artists),
         ("Buy list", _buy_list(to_buy),
          "No human sheet found yet. Buy the track (DRM-free), drop it into Music/, and caracole will "
          "generate an auto sheet; a human sheet found later takes its place.", None),

@@ -14,7 +14,16 @@ from pathlib import Path
 
 import httpx
 import pytest
-from helpers.ug_pages import make_artist_page_html, make_tab_page_html, version_dict
+from helpers.ug_pages import (
+    BANMA_TRADITIONAL_LINES,
+    SONG_DONGYE_URL,
+    make_artist_page_html,
+    make_tab_page_html,
+    song_dongye_chords,
+    song_dongye_page_html,
+    song_dongye_sheet,
+    version_dict,
+)
 from typer.testing import CliRunner
 
 from caracole import db
@@ -238,6 +247,47 @@ def test_song_option_for_an_artist_ug_lists_only_by_bare_ids(tmp_path, ug):
     result = run(tmp_path, "--song", "Joaquín Sabina - 19 Días y 500 Noches")
 
     assert result.exit_code == 1 and "[artist_url]" in result.output
+    assert ug.requests == []
+
+
+def banma(tmp_path, conn, pasted):
+    """宋冬野 - 斑马斑马, not found in the index, and overrides.toml pointing at ``pasted`` for the artist."""
+    song_id, _ = upsert_song(conn, artists=["宋冬野"], title="斑马斑马", album=None, duration_ms=None, isrc=None,
+                             source="wanted", source_id="banma", added_at="2026-10-01T00:00:00Z")
+    record = {"id": 1, "plainLyrics": "\n".join(BANMA_TRADITIONAL_LINES), "syncedLyrics": None,
+              "instrumental": False, "duration": 253.0}
+    update_song(conn, song_id, match_decision="not_found", lyrics_status="found",
+                lyrics_json=Lyrics.from_record(record).to_json())
+    (tmp_path / "lib").mkdir(exist_ok=True)
+    (tmp_path / "lib" / "overrides.toml").write_text(f'[artist_url]\n"宋冬野" = "{pasted}"\n', encoding="utf-8")
+    return song_id
+
+
+def test_song_option_reads_a_tab_page_pasted_under_artist_url_for_the_artist_page(tmp_path, ug):
+    conn = connect(tmp_path)
+    banma(tmp_path, conn, "https://tabs.ultimate-guitar.com/tab/4180894?ref=search")
+    tabs = song_dongye_chords()
+    ug.pages[artist_page_url(SONG_DONGYE_URL, kind="chords")] = (200, song_dongye_page_html(tabs))
+    for tab in tabs[1:3]:
+        ug.pages[tab["tab_url"]] = (200, make_tab_page_html(tab, [], content=song_dongye_sheet(BANMA_TRADITIONAL_LINES),
+                                                            artist_url=SONG_DONGYE_URL))
+
+    result = run(tmp_path, "--song", "宋冬野 - 斑马斑马")
+
+    assert result.exit_code == 0, result.output
+    assert "宋冬野 - 斑马斑马: sheet 4180894" in result.output
+    assert ug.requests[:2] == [f"{TAB}4180894", artist_page_url(SONG_DONGYE_URL, kind="chords")]
+
+
+def test_song_option_for_an_artist_whose_pasted_tab_page_leads_nowhere(tmp_path, ug):
+    conn = connect(tmp_path)
+    banma(tmp_path, conn, "https://tabs.ultimate-guitar.com/tab/4180894")
+    db.kv_set_json(conn, "ug:pasted_tab:4180894", {"artist_url": None, "problem": "UG answers 404 for it"})
+
+    result = run(tmp_path, "--song", "宋冬野 - 斑马斑马")
+
+    assert result.exit_code == 1
+    assert "https://tabs.ultimate-guitar.com/tab/4180894" in result.output and "UG answers 404 for it" in result.output
     assert ug.requests == []
 
 

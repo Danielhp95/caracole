@@ -405,6 +405,37 @@ def test_find_artist_on_ug(conn, cfg):
     assert "## Artists to find" not in todo(conn, cfg, o)
 
 
+def test_artists_to_find_take_the_artist_page_or_any_of_their_tab_pages(conn, cfg):
+    s = add_song(conn, "宋冬野", "斑马斑马")
+    update_song(conn, s.id, match_decision="not_found")
+    section = section_of(todo(conn, cfg), "Artists to find")
+    assert "open the artist's page, or any of their tab pages, and copy its address" in section
+    assert "`https://www.ultimate-guitar.com/artist/…`" in section and "tab page" in section
+    # A tab page you pasted counts until the next run has read it.
+    tab = Overrides(artist_url={"宋冬野": "https://tabs.ultimate-guitar.com/tab/4180894"})
+    assert "## Artists to find" not in todo(conn, cfg, tab)
+
+
+def test_a_pasted_tab_page_that_leads_to_no_artist_page_is_asked_for_again(conn, cfg):
+    # The fetch read the page, which named no artist page: the song wasn't looked for, and the page says so.
+    s = add_song(conn, "宋冬野", "斑马斑马")
+    update_song(conn, s.id, match_decision="not_found")
+    other = add_song(conn, "Joaquín Sabina", "19 Días y 500 Noches")
+    update_song(conn, other.id, match_decision="not_found")
+    pasted = "https://tabs.ultimate-guitar.com/tab/4180894"
+    kv_set_json(conn, "ug:pasted_tab:4180894", {"artist_url": None, "problem": "it doesn't link to its artist's page",
+                                               "at": "2026-10-18T03:35:00Z"})
+    o = Overrides(artist_url={"宋冬野": pasted})
+    section = section_of(todo(conn, cfg, o), "Artists to find")
+    assert "## Artists to find on Ultimate Guitar (2)" in todo(conn, cfg, o)
+    item = next(line for line in section.splitlines() if line.startswith("- **宋冬野**"))
+    assert f"[{pasted}]({pasted}): it doesn't link to its artist's page" in item
+    assert "in its place" in item
+    # One line per artist: 宋冬野's is in overrides.toml already, so only Joaquín Sabina gets a new one.
+    blocks = "".join(toml_blocks(section))
+    assert '"Joaquín Sabina"' in blocks and "宋冬野" not in blocks and "[artist_url]" not in blocks
+
+
 def toml_blocks(text):
     return re.findall(r"```toml\n(.*?)```", text, re.S)
 

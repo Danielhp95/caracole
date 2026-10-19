@@ -197,6 +197,19 @@ def test_hint_paste_line_names_the_artist():
     assert '"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/' in bare_id_hint("Joaquín Sabina", [])
 
 
+def test_hint_takes_a_tab_page_of_the_artist_too():
+    for hint in (bare_id_hint("宋冬野", []), bare_id_hint("Persiana Américana", [], artist="Soda Stereo")):
+        assert "or one of their tab pages" in hint
+
+
+def test_hint_knows_an_entry_written_as_ug_names_the_artist():
+    from caracole.overrides import Overrides
+
+    o = Overrides(artist_url={"song-dongye-宋冬野": "https://tabs.ultimate-guitar.com/tab/4180894"})
+    hint = bare_id_hint("宋冬野", [], overrides=o)
+    assert "overrides.toml has 宋冬野's page already (https://tabs.ultimate-guitar.com/tab/4180894)" in hint
+
+
 MANA = '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n'
 
 
