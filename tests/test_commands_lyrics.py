@@ -277,6 +277,21 @@ def test_a_pass_that_went_well_clears_old_strikes(tmp_path, sites):
         conn.close()
 
 
+def test_a_pass_that_asked_nothing_leaves_the_strikes(tmp_path, sites):
+    # Nothing was waiting, so nothing shows LRCLIB answers again.
+    conn = open_db(tmp_path)
+    try:
+        record_block(conn, "lrclib", datetime.now(UTC) - timedelta(days=2), "lrclib: 429: HTTP 429")
+    finally:
+        conn.close()
+    assert run(tmp_path, "lyrics").exit_code == 0
+    conn = open_db(tmp_path)
+    try:
+        assert get_state(conn, "lrclib").strikes == 1
+    finally:
+        conn.close()
+
+
 # --- tabarr lacuerda -------------------------------------------------------------------
 
 
@@ -330,6 +345,16 @@ def test_lacuerda_with_nothing_to_try(tmp_path, sites):
     assert result.exit_code == 0, result.output
     assert "No song to try on LaCuerda." in result.stdout
     assert sites.lacuerda.requests == []
+
+
+def test_lacuerda_errors_are_counted_and_tried_again(tmp_path, sites):
+    sites.lacuerda.status = 500
+    song_id = spanish_song(tmp_path)
+    result = run(tmp_path, "lacuerda")
+    assert result.exit_code == 0, result.output
+    assert "LaCuerda: 1 tried, 0 sheets kept, 0 missing, 1 error" in result.stdout
+    assert "tried again next run" in result.stdout
+    assert song(tmp_path, song_id).lacuerda_checked_at is None
 
 
 def test_lacuerda_block_starts_a_cooldown(tmp_path, sites):

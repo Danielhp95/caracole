@@ -269,8 +269,9 @@ def test_a_soft_404_moves_on_to_the_next_artist_slug(conn, tmp_path):
 
 
 def test_an_http_404_for_an_artist_page_moves_on_too(conn, tmp_path):
+    # A full error page, too big to pass for the soft 404's short body.
     site = fito_site()
-    site.pages[f"{BASE}/fito_y_fitipaldis/"] = (404, "<html><body>Not Found</body></html>")
+    site.pages[f"{BASE}/fito_y_fitipaldis/"] = (404, fixture("song.html"))
     spanish_song(conn, "Fito y Fitipaldis", "Por la boca vive el pez")
     assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, kept=1)
 
