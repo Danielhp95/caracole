@@ -30,11 +30,11 @@ from tabarr import coverage
 from tabarr.config import RankPolicy
 from tabarr.db import kv_get, kv_set
 from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError, Response
-from tabarr.library import keep_file, kept_files, write_info
+from tabarr.library import drop_file, keep_file, kept_files, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.normalize import clean_title, compact, has_han, romanize, slug_key
 from tabarr.overrides import Overrides
-from tabarr.rank import Candidate, rank_by_rating, rank_guitar, rank_sheets
+from tabarr.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from tabarr.songs import Song, get_song, list_songs, refresh_status, update_song
 from tabarr.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
 from tabarr.ug.lookup import (
@@ -55,6 +55,9 @@ GUITAR_PRO_KINDS = ("guitar-pro", "power")
 TAB_KINDS = ("tabs",)
 _GROUPS = (SHEET_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)
 _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
+SHEET_FILES = ("sheet.txt", "sheet.json")
+TAB_FILES = ("tab.txt", "tab.json")
+AUTO_SHEET = "sheet (auto).txt"
 
 # The artist-page route (A6).
 ARTIST_PAGE = "artist_page"  # the match step of a song found on its artist's page
@@ -305,10 +308,10 @@ def _candidate(row: VersionRow) -> Candidate:
     )
 
 
-def _content(run: _SongRun, row: VersionRow) -> str | None:
-    """A version's sheet text, or None when its page is gone."""
+def _text_page(run: _SongRun, row: VersionRow) -> UGTabPage | None:
+    """A version's page with its text, or None when the page is gone."""
     page = _page(run, int(row.tab_id), row.url, row.kind)
-    return page.content if page is not None else None
+    return page if page is not None and page.content is not None else None
 
 
 def _keep(run: _SongRun, version_id: int, name: str, data: bytes) -> None:
@@ -320,12 +323,33 @@ def _keep(run: _SongRun, version_id: int, name: str, data: bytes) -> None:
     keep_file(run.conn, run.ctx.library_dir, song=run.song, version_id=version_id, name=name, data=data, rank=1)
 
 
-def _keep_text(run: _SongRun, version_id: int, content: str, txt: str, doc: str) -> None:
-    """Keep a sheet or tab: the text without UG's markup, and the version's JSON with the raw content."""
-    row = get_version(run.conn, version_id)
-    _keep(run, row.id, txt, strip_markup(content).encode("utf-8"))
-    body = {"version": row.raw, "content": content, "url": row.url}
-    _keep(run, row.id, doc, (json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+def _keep_text(run: _SongRun, version_id: int, page: UGTabPage, names: tuple[str, str]) -> None:
+    """Keep a sheet or tab: the text without UG's markup, and the version's JSON with the raw content.
+
+    The JSON also carries the page's ``meta``, where UG gives the capo.
+    """
+    assert page.content is not None
+    txt, doc = names
+    url = get_version(run.conn, version_id).url
+    _keep(run, version_id, txt, strip_markup(page.content).encode("utf-8"))
+    body = {"version": dict(page.tab.raw), "content": page.content, "url": url, "meta": dict(page.meta)}
+    _keep(run, version_id, doc, (json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+
+
+def _kept_version(run: _SongRun, name: str) -> VersionRow | None:
+    """The version a kept file came from, whichever step kept it."""
+    for f in kept_files(run.conn, run.song.id):
+        if f.name == name:
+            return get_version(run.conn, f.version_id)
+    return None
+
+
+def _drop_if_blocked(run: _SongRun, names: tuple[str, str]) -> None:
+    """Files kept from a UG version you have blocked since go, even when nothing replaces them."""
+    kept = _kept_version(run, names[0])
+    if kept is not None and kept.provider == PROVIDER and int(kept.tab_id) in run.ctx.overrides.block:
+        for name in names:
+            drop_file(run.conn, run.ctx.library_dir, song=run.song, name=name)
 
 
 def _lyric_lines(song: Song) -> list[str]:
@@ -342,22 +366,44 @@ def _rows(run: _SongRun, kinds: tuple[str, ...]) -> list[VersionRow]:
     ]
 
 
+def _first_with_text(
+    run: _SongRun, ranked: Iterable[Candidate], rows: list[VersionRow], pages: dict[int, UGTabPage]
+) -> tuple[Candidate, UGTabPage] | None:
+    by_id = {r.id: r for r in rows}
+    for c in ranked:
+        assert c.version_id is not None
+        page = pages.get(c.version_id) or _text_page(run, by_id[c.version_id])
+        if page is not None:
+            return c, page
+    return None
+
+
+def _is_complete_row(row: VersionRow, policy: RankPolicy) -> bool:
+    return row.coverage is not None and row.coverage >= policy.coverage_threshold
+
+
 def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
-    """Score the top sheets for lyric coverage, rank them, and keep the best (or the first pin)."""
+    """Score the top sheets for lyric coverage, rank them, and keep the best (or the first pin).
+
+    A sheet another site gave (LaCuerda's) yields only to a complete UG sheet
+    when it isn't complete itself: ratings can't be compared across sites. A
+    complete sheet retires the auto-chords sheet.
+    """
     policy = run.ctx.rank
     rows = _rows(run, SHEET_KINDS)
     lines = _lyric_lines(run.song)
     by_id = {r.id: r for r in rows}
-    contents: dict[int, str] = {}
+    pages: dict[int, UGTabPage] = {}
 
     def scored(c: Candidate) -> bool:
         """Fetch the sheet and score its coverage; False when its page is gone."""
         assert c.version_id is not None
-        content = _content(run, by_id[c.version_id])
-        if content is None:
+        page = _text_page(run, by_id[c.version_id])
+        if page is None:
             return False
-        contents[c.version_id] = content
-        c.coverage = coverage.coverage(content, lines, line_match=policy.line_match)
+        pages[c.version_id] = page
+        assert page.content is not None
+        c.coverage = coverage.coverage(page.content, lines, line_match=policy.line_match)
         set_coverage(run.conn, c.version_id, c.coverage)
         return True
 
@@ -367,19 +413,27 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     else:
         alive: list[Candidate] = []
         for c in rank_by_rating([_candidate(r) for r in rows], policy, variant=run.song.variant):
-            if len(contents) < policy.scored_sheets and not scored(c):
+            if len(pages) < policy.scored_sheets and not scored(c):
                 continue  # gone; the next one is scored instead
             alive.append(c)
         ranked = rank_sheets(alive, policy, variant=run.song.variant)
-    for c in ranked:
-        assert c.version_id is not None
-        content = contents.get(c.version_id) or _content(run, by_id[c.version_id])
-        if content is None:
-            continue
-        _keep_text(run, c.version_id, content, "sheet.txt", "sheet.json")
-        set_picks(run.conn, run.song.id, SHEET_KINDS, [c.version_id])
-        return int(c.tab_id)
-    return None
+    best = _first_with_text(run, ranked, rows, pages)
+    other = _kept_version(run, SHEET_FILES[0])
+    other = other if other is not None and other.provider != PROVIDER else None
+    if best is None or (other is not None and pinned is None
+                        and not (is_complete(best[0], policy) and not _is_complete_row(other, policy))):
+        set_picks(run.conn, run.song.id, SHEET_KINDS, [])
+        _drop_if_blocked(run, SHEET_FILES)
+        return None
+    c, page = best
+    assert c.version_id is not None
+    _keep_text(run, c.version_id, page, SHEET_FILES)
+    set_picks(run.conn, run.song.id, SHEET_KINDS, [c.version_id])
+    if other is not None:
+        set_picks(run.conn, run.song.id, (other.kind,), [])
+    if is_complete(c, policy):
+        drop_file(run.conn, run.ctx.library_dir, song=run.song, name=AUTO_SHEET)
+    return int(c.tab_id)
 
 
 def _guitar_pro_slot(run: _SongRun, pinned: list[int] | None) -> tuple[int, ...]:
@@ -398,20 +452,20 @@ def _guitar_pro_slot(run: _SongRun, pinned: list[int] | None) -> tuple[int, ...]
 def _tab_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     """Keep the best text tab (or the first pin) as tab.txt and tab.json."""
     rows = _rows(run, TAB_KINDS)
-    by_id = {r.id: r for r in rows}
     if pinned is not None:
         ranked = [_candidate(r) for r in _in_order(rows, pinned)]
     else:
         ranked = rank_guitar([_candidate(r) for r in rows], run.ctx.rank, variant=run.song.variant)
-    for c in ranked:
-        assert c.version_id is not None
-        content = _content(run, by_id[c.version_id])
-        if content is None:
-            continue
-        _keep_text(run, c.version_id, content, "tab.txt", "tab.json")
-        set_picks(run.conn, run.song.id, TAB_KINDS, [c.version_id])
-        return int(c.tab_id)
-    return None
+    best = _first_with_text(run, ranked, rows, {})
+    if best is None:
+        set_picks(run.conn, run.song.id, TAB_KINDS, [])
+        _drop_if_blocked(run, TAB_FILES)
+        return None
+    c, page = best
+    assert c.version_id is not None
+    _keep_text(run, c.version_id, page, TAB_FILES)
+    set_picks(run.conn, run.song.id, TAB_KINDS, [c.version_id])
+    return int(c.tab_id)
 
 
 # --- the artist-page route (A6) ----------------------------------------------------------------

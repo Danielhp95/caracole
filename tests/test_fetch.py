@@ -20,7 +20,7 @@ from conftest import add_song
 from tabarr.config import ProviderPolicy, RankPolicy
 from tabarr.db import kv_get, kv_set
 from tabarr.http import PoliteClient, ProviderBlocked
-from tabarr.library import kept_files, song_dir
+from tabarr.library import keep_file, kept_files, song_dir
 from tabarr.lyrics import Lyrics
 from tabarr.overrides import Overrides
 from tabarr.songs import get_song, update_song
@@ -29,7 +29,7 @@ from tabarr.ug.fetch import FetchContext, FetchStats, fetch_songs, process_song,
 from tabarr.ug.lookup import (
     IndexTab, artist_tabs, index_tab, learned_artist_url, remember_artist_url, tab_url_for,
 )
-from tabarr.versions import picks, song_versions
+from tabarr.versions import picks, set_coverage, set_picks, song_versions, upsert_version
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
 TAB = "https://tabs.ultimate-guitar.com/tab/"
@@ -984,3 +984,88 @@ def test_a_learned_artist_page_that_is_gone_is_forgotten(conn, tmp_path):
     assert ug.requests == [artist_list("https://www.ultimate-guitar.com/artist/soda_stereo_1")]
     assert learned_artist_url(conn, "soda-stereo") is None  # the next check learns it again
     assert get_song(conn, song.id).match_decision == "not_found"
+
+
+# --- sheets from elsewhere: auto-chords, LaCuerda, and blocks ----------------------------------------
+
+
+def keep_other_sheet(conn, tmp_path, song, *, provider, kind, name, coverage=None):
+    """A sheet another step kept: auto-chords' 'sheet (auto).txt', or LaCuerda's sheet.txt."""
+    vid = upsert_version(conn, provider=provider, tab_id=f"{provider}-1", song_id=song.id, slot="sheet", kind=kind,
+                         rating=0, votes=0, version=1, label=None, url=f"https://example.invalid/{provider}",
+                         raw={}, now="2026-10-01T00:00:00Z")
+    set_coverage(conn, vid, coverage)
+    keep_file(conn, tmp_path / "lib", song=song, version_id=vid, name=name, data=f"{provider} sheet".encode(), rank=1)
+    set_picks(conn, song.id, (kind,), [vid])
+    return vid
+
+
+def names(conn, song):
+    return {f.name for f in kept_files(conn, song.id)}
+
+
+@pytest.mark.parametrize("lines,dropped", [(LINES, True), (LINES[:3], False)])
+def test_auto_sheet_dropped_when_a_complete_human_sheet_arrives(conn, tmp_path, lines, dropped):
+    song = accepted(conn)
+    keep_other_sheet(conn, tmp_path, song, provider="auto", kind="auto", name="sheet (auto).txt")
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", lines))
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert "sheet.txt" in names(conn, song)
+    assert ("sheet (auto).txt" not in names(conn, song)) is dropped
+    assert (song_dir(tmp_path / "lib", song) / "sheet (auto).txt").exists() is not dropped
+
+
+@pytest.mark.parametrize("lacuerda,ug_lines,replaced", [
+    (1.0, LINES[:3], False),  # a complete LaCuerda sheet beats a partial UG one
+    (1.0, LINES, False),  # ratings can't be compared across sites: a tie keeps what you have
+    (0.5, LINES, True),  # a complete UG sheet beats a partial LaCuerda one
+])
+def test_a_sheet_from_lacuerda_yields_only_to_a_complete_ug_sheet(conn, tmp_path, lacuerda, ug_lines, replaced):
+    song = accepted(conn)
+    keep_other_sheet(conn, tmp_path, song, provider="lacuerda", kind="acordes", name="sheet.txt", coverage=lacuerda)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", ug_lines))
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    text = read(tmp_path, song, "sheet.txt")
+    assert ("sheet 101" in text) is replaced and ("lacuerda sheet" in text) is not replaced
+    assert (out.sheet == 101) is replaced
+    assert pick_ids(conn, song, "chords") == ([101] if replaced else [])
+    assert len(picks(conn, song.id, ("acordes",))) == (0 if replaced else 1)
+
+
+def test_kept_files_of_a_tab_blocked_later_are_dropped_when_nothing_replaces_them(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"), (401, "soda-stereo", "persiana-americana", "tabs"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    ug.tab(v(401, "tabs"), content=riff("tab 401"))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert names(conn, song) == {"sheet.txt", "sheet.json", "tab.txt", "tab.json"}
+
+    update_song(conn, song.id, ug_dirty=True)  # you added both to [block]
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, Overrides(block=frozenset({101, 401}))),
+                 get_song(conn, song.id))
+
+    assert names(conn, song) == set()
+    assert not (song_dir(tmp_path / "lib", song) / "sheet.txt").exists()
+    assert get_song(conn, song.id).status == "wanted"
+    assert pick_ids(conn, song, "chords", "tabs") == []
+
+
+def test_sheet_json_carries_the_page_meta(conn, tmp_path):
+    # The renderer reads the capo from it.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES), meta={"capo": 2, "tonality": "Am"})
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert json.loads(read(tmp_path, song, "sheet.json"))["meta"] == {"capo": 2, "tonality": "Am"}
