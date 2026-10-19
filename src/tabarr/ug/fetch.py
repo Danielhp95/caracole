@@ -16,11 +16,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from tabarr import coverage
 from tabarr.config import RankPolicy
@@ -30,9 +32,12 @@ from tabarr.lyrics import song_lyrics
 from tabarr.overrides import Overrides
 from tabarr.rank import Candidate, rank_by_rating, rank_guitar, rank_sheets
 from tabarr.db import kv_get
-from tabarr.normalize import has_han, romanize, slug_key
+from tabarr.normalize import compact, has_han, romanize, slug_key
 from tabarr.songs import Song, get_song, list_songs, refresh_status, update_song
-from tabarr.ug.lookup import IndexTab, artist_known, index_tab, learned_artist_url, song_tabs, tab_url_for
+from tabarr.ug.artist import WWW
+from tabarr.ug.lookup import (
+    IndexTab, artist_known, index_tab, learned_artist_url, remember_artist_url, song_tabs, tab_url_for,
+)
 from tabarr.ug.page import PageParseError, UGTabPage, UGVersion, parse_tab_page, strip_markup
 from tabarr.versions import (
     VersionRow, get_version, mark_gone, set_coverage, set_picks, song_versions, upsert_version,
@@ -48,6 +53,7 @@ TAB_KINDS = ("tabs",)
 _GROUPS = (SHEET_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)
 _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
 ARTIST_PAGE_MAX_AGE = timedelta(days=30)
+_ARTIST_PATH = re.compile(r"/artist/[^/?#]+_\d+")
 
 
 @dataclass
@@ -101,6 +107,11 @@ class _SongRun:
     @property
     def conn(self) -> sqlite3.Connection:
         return self.ctx.conn
+
+    @property
+    def artist_key(self) -> str:
+        """The UG artist key the song is filed under: its match, else its own artist's key."""
+        return self.song.match_artist_key or slug_key(self.song.artist)
 
 
 def _upsert(run: _SongRun, v: UGVersion) -> int:
@@ -187,11 +198,36 @@ def _load(client: Client, url: str) -> tuple[UGTabPage | None, bool]:
     return _parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False), url), True
 
 
+def _artist_page_base(url: str | None) -> str | None:
+    """A UG artist page address (``https://www.ultimate-guitar.com/artist/<name>_<id>``), else None."""
+    if not url:
+        return None
+    parts = urlsplit(urljoin(WWW + "/", url.strip()))
+    path = parts.path.rstrip("/")
+    if parts.netloc != urlsplit(WWW).netloc or not _ARTIST_PATH.fullmatch(path):
+        return None
+    return urlunsplit(("https", parts.netloc, path, "", ""))
+
+
+def _same_artist(key: str, name: str) -> bool:
+    return compact(key) in {compact(k) for k in _name_keys(name)}
+
+
+def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[str] = ()) -> str | None:
+    """Remember the artist page a tab page links to, under its artist's keys and ``also``; return it."""
+    url = _artist_page_base(page.artist_url)
+    if url is not None:
+        for key in dict.fromkeys([*_name_keys(page.tab.artist_name), *also]):
+            remember_artist_url(conn, key, url)
+    return url
+
+
 def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTabPage | None:
     """A tab page of this song, read once per run; None when UG says it's gone.
 
     ``kind`` (the index's type) lets a deleted tab that was never rated be
-    remembered as gone.
+    remembered as gone. Every page also teaches tabarr its artist's UG page,
+    filed under the song's artist only when the tab is by that artist.
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
@@ -201,6 +237,8 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
         _mark_gone(run, tab_id, url, kind)
         return None
     _record_page(run, page, fresh=fresh)
+    mine = run.artist_key
+    _learn_artist_url(run.conn, page, [mine] if mine and _same_artist(mine, page.tab.artist_name) else [])
     return page
 
 

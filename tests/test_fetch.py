@@ -23,7 +23,9 @@ from tabarr.lyrics import Lyrics
 from tabarr.overrides import Overrides
 from tabarr.songs import get_song, update_song
 from tabarr.ug.fetch import FetchContext, FetchStats, fetch_songs, process_song, songs_to_fetch
-from tabarr.ug.lookup import IndexTab, artist_tabs, index_tab, remember_artist_url, tab_url_for
+from tabarr.ug.lookup import (
+    IndexTab, artist_tabs, index_tab, learned_artist_url, remember_artist_url, tab_url_for,
+)
 from tabarr.versions import picks, song_versions
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
@@ -576,6 +578,34 @@ def test_kept_sheet_stays_when_not_outranked(conn, tmp_path):
 
     assert out.sheet == 101 and pick_ids(conn, song, "chords") == [101]
     assert (path.stat().st_ino, kept_version(conn, song, "sheet.txt")) == before  # not even rewritten
+
+
+# --- learning artist pages ------------------------------------------------------------------------
+
+
+def test_artist_url_learned_from_every_tab_page(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))  # its data.tab.artist_url is Soda Stereo's page
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert learned_artist_url(conn, "soda-stereo") == SODA_URL
+
+
+def test_another_artists_page_is_not_learned_for_the_song(conn, tmp_path):
+    # A pinned cover: its artist page belongs to the cover's artist, not to Soda Stereo.
+    song = accepted(conn)
+    cover = version_dict(777, song="Persiana Americana", artist="Los Imitadores")
+    ug = FakeUG()
+    ug.tab(cover, content=sheet("sheet 777", LINES),
+           artist_url="https://www.ultimate-guitar.com/artist/los_imitadores_99")
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, Overrides(pin={song.key: (777,)})), song)
+
+    assert learned_artist_url(conn, "soda-stereo") is None
+    assert learned_artist_url(conn, "los-imitadores") == "https://www.ultimate-guitar.com/artist/los_imitadores_99"
 
 
 # --- which songs a run fetches ------------------------------------------------------------------
