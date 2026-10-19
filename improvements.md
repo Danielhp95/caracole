@@ -86,3 +86,7 @@ It's also useful on its own: songbook apps import ChordPro directly and handle a
 Don't edit it in place, because the next render rewrites it. Copy it under another name for your own version, and use `[transpose]` in overrides.toml to change the key.
 
 Once the phone sheet viewer lands (`sheet.html`, in progress), it covers the same ground in the browser. This answer is also in docs/usage.md (the library folder section).
+
+## Better presentation for sources and reslts
+
+Currently we have a "gallery view" for songs. I would also like to have a row-style view where I can see more results at once. I would like when searching for tabs to have similar outputs. Depending on which source the song comes from (la cuerda, ultimate guitar) I want a little icon to denote it, make the icon come from the webisite's own icon
