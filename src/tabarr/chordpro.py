@@ -217,7 +217,8 @@ def _chord_items(line: str) -> list[tuple[int, str]]:
     pos = 0
     for m in _CHORD.finditer(line):
         plain += line[pos : m.start()]
-        name = normalize_chord(m.group(1).strip().replace("[", "").replace("]", ""))
+        # ChordPro draws chord names with markup too, and its <img> opens a local file.
+        name = _escape_inline(normalize_chord(m.group(1).strip().replace("[", "").replace("]", "")))
         spans.append((len(plain), len(plain) + len(m.group(1)), f"[{name}]" if name else ""))
         plain += m.group(1)
         pos = m.end()
