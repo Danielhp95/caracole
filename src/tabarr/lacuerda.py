@@ -211,7 +211,8 @@ def parse_artist_page(html: str, *, url: str | None = None) -> list[LCSong]:
             continue
         lcd = item.attributes.get("lcd") or ""
         types, ranking = parse_lcd(lcd)
-        songs.append(LCSong(slug=slug, title=_link_title(link), types=types, ranking=ranking, lcd=lcd))
+        title = _link_title(link)
+        songs.append(LCSong(slug=slug, title=title, types=types, ranking=ranking, lcd=lcd))
     if not songs and tree.css_first("ul#b_main > li") is not None:
         raise LaCuerdaParseError("no song in the list has an lcd code and a link", url=url)
     return songs

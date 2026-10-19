@@ -69,7 +69,8 @@ class FakeLrclib:
                     return httpx.Response(200, json=r)
             return httpx.Response(self.get_miss, json={"name": "TrackNotFound"})
         if endpoint == "search":
-            return httpx.Response(200, json=[r for r in self.records if r["trackName"] == params["track_name"]])
+            named = [r for r in self.records if r["trackName"] == params["track_name"]]
+            return httpx.Response(200, json=named)
         raise AssertionError(f"unexpected request: {request.url}")
 
     @staticmethod
@@ -123,8 +124,9 @@ def test_found_lyrics_are_written_and_stored(conn, tmp_path):
 
 def test_lookup_uses_the_first_artist_the_clean_title_the_album_and_the_duration(conn, tmp_path):
     lrclib = FakeLrclib([record(albumName="Canción Animal")])
-    add_song(conn, artists=["Soda Stereo", "Andrea Echeverri"], title="De Música Ligera - Remasterizado 2007",
-             album="Canción Animal", duration_ms=212600)
+    add_song(conn, artists=["Soda Stereo", "Andrea Echeverri"],
+             title="De Música Ligera - Remasterizado 2007", album="Canción Animal",
+             duration_ms=212600)
     run(lrclib, conn, tmp_path)
     assert lrclib.requests == [("get", {
         "artist_name": "Soda Stereo",
@@ -259,10 +261,11 @@ def test_ignored_songs_are_not_looked_up(conn, tmp_path):
 
 def test_settled_songs_are_left_alone(conn, tmp_path):
     old = "2026-01-01T00:00:00Z"
-    for title, status in [("Uno", "found"), ("Dos", "instrumental")]:
-        update_song(conn, add_song(conn, "Soda Stereo", title).id, lyrics_status=status, lyrics_at=old)
     recent = (NOW - timedelta(days=29)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    update_song(conn, add_song(conn, "Soda Stereo", "Tres").id, lyrics_status="missing", lyrics_at=recent)
+    settled = [("Uno", "found", old), ("Dos", "instrumental", old), ("Tres", "missing", recent)]
+    for title, status, at in settled:
+        song = add_song(conn, "Soda Stereo", title)
+        update_song(conn, song.id, lyrics_status=status, lyrics_at=at)
     lrclib = FakeLrclib()
     assert run(lrclib, conn, tmp_path) == LyricsStats()
     assert lrclib.requests == []
@@ -331,7 +334,8 @@ def test_a_recheck_the_budget_cannot_pay_for_changes_nothing(conn, tmp_path):
     add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-02T00:00:00Z")
     lrclib.records.append(load("get_hit.json"))
     later = NOW + timedelta(days=31)
-    assert run(lrclib, conn, tmp_path, later, budget=1) == LyricsStats(found=1, budget_exhausted=True)
+    stats = run(lrclib, conn, tmp_path, later, budget=1)
+    assert stats == LyricsStats(found=1, budget_exhausted=True)
     stored = get_song(conn, miss.id)
     assert (stored.lyrics_status, stored.lyrics_at) == ("missing", STAMP)
 

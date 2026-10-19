@@ -265,7 +265,8 @@ def test_parse_artist_page_decodes_entities_and_skips_items_without_lcd_or_link(
 def test_parse_artist_page_keeps_each_lcd_code_as_written(artist_songs):
     assert _by_slug(artist_songs, "de_musica_ligera").lcd == "RHRTTTDTB-314865972"
     # The raw code is kept even where its ranking is unreadable.
-    (song,) = parse_artist_page("<ul id=b_main><li lcd='RT-1'><a href='x'>X <em>acordes</em></a></li></ul>")
+    page = "<ul id=b_main><li lcd='RT-1'><a href='x'>X <em>acordes</em></a></li></ul>"
+    (song,) = parse_artist_page(page)
     assert (song.lcd, song.ranking) == ("RT-1", (1, 2))
 
 

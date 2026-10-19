@@ -17,12 +17,20 @@ import sqlite3
 from collections.abc import Callable
 from contextlib import closing
 from datetime import datetime
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 import typer
 
 from tabarr.commands import _common
-from tabarr.commands._common import fail, load_cfg, load_ovr, make_client, open_db, run_id_for, utcnow
+from tabarr.commands._common import (
+    fail,
+    load_cfg,
+    load_ovr,
+    make_client,
+    open_db,
+    run_id_for,
+    utcnow,
+)
 from tabarr.health import get_state, is_cooling, record_block, record_ok
 from tabarr.http import ProviderBlocked
 
@@ -31,7 +39,6 @@ if TYPE_CHECKING:
     from tabarr.http import Client
 
 _NAMES = {"lrclib": "LRCLIB", "lacuerda": "LaCuerda"}
-T = TypeVar("T")
 
 
 def register(app: typer.Typer) -> None:
@@ -50,13 +57,15 @@ def _lyrics(cfg: Config) -> None:
     """Look up every song still waiting for lyrics, and old misses, then print the counts."""
     from tabarr.lyrics import fetch_pending_lyrics
 
-    s = _provider_pass(cfg, "lrclib", lambda conn, client, now: fetch_pending_lyrics(conn, client, cfg.library_dir, now))
+    def run(conn: sqlite3.Connection, client: Client, now: datetime):
+        return fetch_pending_lyrics(conn, client, cfg.library_dir, now)
+
+    s = _provider_pass(cfg, "lrclib", run)
     if not (s.found or s.missing or s.instrumental or s.errors or s.budget_exhausted):
         typer.echo("No song is waiting for lyrics.")
         return
-    typer.echo(
-        f"Lyrics: {s.found} found, {s.missing} missing, {s.instrumental} instrumental, {_count(s.errors, 'error')}"
-    )
+    counts = f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental"
+    typer.echo(f"Lyrics: {counts}, {_count(s.errors, 'error')}")
     if s.errors:
         typer.echo("Songs with an error stay pending; the next run asks LRCLIB again.")
     if s.budget_exhausted:
@@ -68,24 +77,26 @@ def _lacuerda(cfg: Config) -> None:
     from tabarr.lacuerda_fetch import lacuerda_sheets
 
     overrides = load_ovr(cfg)
-    s = _provider_pass(
-        cfg, "lacuerda",
-        lambda conn, client, now: lacuerda_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides),
-    )
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime):
+        return lacuerda_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides)
+
+    s = _provider_pass(cfg, "lacuerda", run)
     if not (s.tried or s.budget_exhausted):
         typer.echo("No song to try on LaCuerda.")
         return
-    typer.echo(
-        f"LaCuerda: {s.tried} tried, {_count(s.kept, 'sheet')} kept, {s.missing} missing, {_count(s.errors, 'error')}"
-    )
+    counts = f"{s.tried} tried, {_count(s.kept, 'sheet')} kept, {s.missing} missing"
+    typer.echo(f"LaCuerda: {counts}, {_count(s.errors, 'error')}")
     if s.errors:
         typer.echo("Songs with an error are tried again next run.")
     if s.budget_exhausted:
         _budget_spent(cfg, "lacuerda")
 
 
-def _provider_pass(cfg: Config, provider: str, run: Callable[[sqlite3.Connection, Client, datetime], T]) -> T:
-    """Run one provider's pass the way the nightly run does; exit 1 while it cools down or on a block.
+def _provider_pass[T](
+    cfg: Config, provider: str, run: Callable[[sqlite3.Connection, Client, datetime], T]
+) -> T:
+    """Run one provider's pass as the nightly run does; exit 1 on a cooldown or a block.
 
     Requests are logged to ``events`` under a run id of their own. A pass that
     made requests without a block clears the provider's strikes, as a run does.
@@ -96,7 +107,8 @@ def _provider_pass(cfg: Config, provider: str, run: Callable[[sqlite3.Connection
     with closing(open_db(cfg)) as conn:
         if is_cooling(conn, provider, now):
             until = get_state(conn, provider).cooldown_until
-            fail(f"{name} is cooling down after a block until {_when(until)}; tabarr won't ask it before then.")
+            fail(f"{name} is cooling down after a block until {_when(until)}; "
+                 "tabarr won't ask it before then.")
         client = make_client(cfg, conn, provider, run_id_for(now))
         try:
             result = run(conn, client, now)

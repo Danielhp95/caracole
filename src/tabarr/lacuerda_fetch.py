@@ -145,7 +145,8 @@ def _songs_to_try(
     ignored = overrides.ignore if overrides is not None else frozenset()
     songs = []
     for song in list_songs(conn):
-        if song.status == "ignored" or song.key in ignored or not _before(song.lacuerda_checked_at, cutoff):
+        recent = not _before(song.lacuerda_checked_at, cutoff)
+        if song.status == "ignored" or song.key in ignored or recent:
             continue
         kept = _kept_sheet(conn, song.id)
         if kept is not None and (_complete(kept.coverage, rank) or _pinned(overrides, song, kept)):
@@ -239,7 +240,8 @@ def _stale(resp: Response, now: datetime) -> bool:
 
 
 def _record(
-    conn: sqlite3.Connection, library_dir: Path, rank: RankPolicy, song: Song, sheet: _Sheet, stamp: str
+    conn: sqlite3.Connection, library_dir: Path, rank: RankPolicy, song: Song, sheet: _Sheet,
+    stamp: str,
 ) -> bool:
     """Record LaCuerda's version with its coverage; keep it if it beats the kept sheet.
 
@@ -281,7 +283,8 @@ def _better(value: float | None, kept: float | None, rank: RankPolicy) -> bool:
 
 
 def _keep(
-    conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int, sheet: _Sheet, *, complete: bool
+    conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int, sheet: _Sheet, *,
+    complete: bool,
 ) -> None:
     """Keep the sheet as ``sheet.txt`` (no markup) and ``sheet.json``, and pick it for the slot.
 
@@ -289,11 +292,16 @@ def _keep(
     complete sheet replaces the auto-chords sheet, which only stands in for a
     human sheet until one covers the lyrics.
     """
-    doc = {"provider": PROVIDER, "url": sheet.url, "content": sheet.markup, "version": sheet.version}
-    keep_file(conn, library_dir, song=song, version_id=version_id, name="sheet.json",
-              data=(json.dumps(doc, ensure_ascii=False, indent=2) + "\n").encode("utf-8"), rank=1)
-    keep_file(conn, library_dir, song=song, version_id=version_id, name=HUMAN_SHEET,
-              data=strip_markup(sheet.markup).encode("utf-8"), rank=1)
+    doc = {
+        "provider": PROVIDER, "url": sheet.url, "content": sheet.markup, "version": sheet.version,
+    }
+    files = {
+        "sheet.json": json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
+        HUMAN_SHEET: strip_markup(sheet.markup),
+    }
+    for name, text in files.items():
+        keep_file(conn, library_dir, song=song, version_id=version_id, name=name,
+                  data=text.encode("utf-8"), rank=1)
     if complete:
         drop_file(conn, library_dir, song=song, name=AUTO_SHEET)
     set_picks(conn, song.id, SHEET_KINDS, [version_id])

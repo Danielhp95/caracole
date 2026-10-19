@@ -100,12 +100,13 @@ class FakeLaCuerda:
     def handler(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         self.requests.append(url)
+        html = {"Content-Type": "text/html; charset=UTF-8"}
         if url in self.pages:
             status, body = self.pages[url]
-            return httpx.Response(status, text=body, headers={"Content-Type": "text/html; charset=UTF-8"})
+            return httpx.Response(status, text=body, headers=html)
         slug = request.url.path.strip("/")
         if request.url.path.endswith("/") and "/" not in slug:
-            return httpx.Response(200, text=soft_404(slug), headers={"Content-Type": "text/html; charset=UTF-8"})
+            return httpx.Response(200, text=soft_404(slug), headers=html)
         raise AssertionError(f"unexpected request: {url}")
 
     def client(self, cache_dir: Path, *, budget: int = 30, now: datetime = NOW) -> PoliteClient:
@@ -246,9 +247,8 @@ FITO_PEZ = f"{BASE}/fito__fitipaldis/por_la_boca_vive_el_pez.shtml"
 
 
 def fito_site() -> FakeLaCuerda:
-    page = artist_page(
-        "Fito & Fitipaldis", "fito__fitipaldis", ("por_la_boca_vive_el_pez", "Por la boca vive el pez", "R-1")
-    )
+    pez = ("por_la_boca_vive_el_pez", "Por la boca vive el pez", "R-1")
+    page = artist_page("Fito & Fitipaldis", "fito__fitipaldis", pez)
     return FakeLaCuerda({FITO: (200, page), FITO_PEZ: (200, fixture("version.html"))})
 
 
@@ -324,18 +324,20 @@ BANMA_LYRICS = "範例歌詞 第一行\n範例歌詞 第二行\n你是一匹斑�
 
 
 def keep_ug_sheet(conn, tmp_path, song, value):
-    """A UG sheet kept by the fetch step (sheet.txt and sheet.json), with lyric coverage ``value``."""
+    """A UG sheet kept by the fetch step (sheet.txt and sheet.json), covering ``value``."""
     url = "https://tabs.ultimate-guitar.com/tab/85053"
+    raw = {"id": 85053, "type": "Chords"}
     vid = upsert_version(
-        conn, provider="ug", tab_id="85053", song_id=song.id, slot="sheet", kind="chords", rating=4.5,
-        votes=20, version=2, label=None, url=url, raw={"id": 85053, "type": "Chords"}, now="2026-10-10T03:30:00Z",
+        conn, provider="ug", tab_id="85053", song_id=song.id, slot="sheet", kind="chords",
+        rating=4.5, votes=20, version=2, label=None, url=url, raw=raw, now="2026-10-10T03:30:00Z",
     )
     set_coverage(conn, vid, value)
     content = "[ch]Am[/ch]             [ch]F[/ch]\nCruzo la plaza,    con el café frío\n"
-    doc = {"version": {"id": 85053, "type": "Chords"}, "content": content, "url": url}
-    lib = tmp_path / "lib"
-    keep_file(conn, lib, song=song, version_id=vid, name="sheet.txt", data=strip_markup(content).encode(), rank=1)
-    keep_file(conn, lib, song=song, version_id=vid, name="sheet.json", data=json.dumps(doc).encode(), rank=1)
+    doc = {"version": raw, "content": content, "url": url}
+    files = {"sheet.txt": strip_markup(content), "sheet.json": json.dumps(doc)}
+    for name, text in files.items():
+        keep_file(conn, tmp_path / "lib", song=song, version_id=vid, name=name, data=text.encode(),
+                  rank=1)
     set_picks(conn, song.id, ("chords",), [vid])
     refresh_status(conn, song.id, ignored=False)
     return vid
@@ -419,11 +421,12 @@ def test_without_lyrics_a_spanish_title_decides(conn, tmp_path):
 def keep_auto_sheet(conn, tmp_path, song):
     """An auto-chords sheet, kept as "sheet (auto).txt" and picked for the slot."""
     vid = upsert_version(
-        conn, provider="auto", tab_id="auto", song_id=song.id, slot="sheet", kind="auto", rating=0, votes=0,
-        version=1, label=None, url="", raw={}, now="2026-10-10T03:30:00Z",
+        conn, provider="auto", tab_id="auto", song_id=song.id, slot="sheet", kind="auto",
+        rating=0, votes=0, version=1, label=None, url="", raw={}, now="2026-10-10T03:30:00Z",
     )
     text = "# auto-generated, unverified\nAm F C G\nCruzo la plaza con el café frío\n"
-    keep_file(conn, tmp_path / "lib", song=song, version_id=vid, name="sheet (auto).txt", data=text.encode(), rank=1)
+    keep_file(conn, tmp_path / "lib", song=song, version_id=vid, name="sheet (auto).txt",
+              data=text.encode(), rank=1)
     set_picks(conn, song.id, ("auto",), [vid])
     refresh_status(conn, song.id, ignored=False)
     return vid
@@ -471,7 +474,7 @@ def test_a_partial_lacuerda_sheet_that_covers_more_replaces_a_partial_one(conn, 
 
 
 @pytest.mark.parametrize("ug_coverage", [0.6, 0.5])
-def test_a_partial_lacuerda_sheet_that_covers_no_more_leaves_the_kept_one(conn, tmp_path, ug_coverage):
+def test_a_partial_sheet_that_covers_no_more_leaves_the_kept_one(conn, tmp_path, ug_coverage):
     song = spanish_song(conn, plain=HALF_LYRICS)
     ug_vid = keep_ug_sheet(conn, tmp_path, song, ug_coverage)
     assert run(FakeLaCuerda(), conn, tmp_path) == LaCuerdaStats(tried=1)
@@ -614,9 +617,9 @@ def test_an_exhausted_budget_ends_the_pass_and_the_next_run_resumes(conn, tmp_pa
 def test_three_errors_in_a_row_end_the_pass(conn, tmp_path):
     # PoliteClient stops asking a provider after three errors in a row in one run.
     names = ["Uno", "Dos", "Tres", "Cuatro", "Cinco"]
-    site = FakeLaCuerda({f"{BASE}/{name.lower()}/": (500, "Internal Server Error") for name in names})
+    site = FakeLaCuerda({f"{BASE}/{name.lower()}/": (500, "Server Error") for name in names})
     songs = [
-        spanish_song(conn, artist=name, title="Canción de Prueba", added_at=f"2026-10-0{i + 1}T00:00:00Z")
+        spanish_song(conn, name, "Canción de Prueba", added_at=f"2026-10-0{i + 1}T00:00:00Z")
         for i, name in enumerate(names)
     ]
     assert run(site, conn, tmp_path) == LaCuerdaStats(tried=3, errors=3)
@@ -632,9 +635,10 @@ def test_a_stale_artist_page_is_no_answer_once_the_budget_is_spent(conn, tmp_pat
     before = NOW - timedelta(days=31)
     old = spanish_song(conn, title="Canción Inexistente", added_at="2026-09-01T00:00:00Z")
     assert run(site, conn, tmp_path, before) == LaCuerdaStats(tried=1, missing=1)
-    spanish_song(conn, "Fito y Fitipaldis", "Por la boca vive el pez", added_at="2026-10-10T00:00:00Z")
+    newer = "2026-10-10T00:00:00Z"
+    spanish_song(conn, "Fito y Fitipaldis", "Por la boca vive el pez", added_at=newer)
 
-    # Fito's two pages spend the budget; Soda Stereo's page is 31 days old.
+    # Fito's three requests spend the budget; Soda Stereo's page is 31 days old.
     stats = run(site, conn, tmp_path, budget=3)
     assert stats == LaCuerdaStats(tried=1, kept=1, budget_exhausted=True)
     assert site.requests == [SODA, f"{BASE}/fito_y_fitipaldis/", FITO, FITO_PEZ]
@@ -692,7 +696,8 @@ def test_songs_ignored_in_overrides_are_not_tried(conn, tmp_path):
     # Ignored in overrides.toml since the last match: the status still says "wanted".
     song = spanish_song(conn)
     site = FakeLaCuerda()
-    assert run_with(site, conn, tmp_path, Overrides(ignore=frozenset({song.key}))) == LaCuerdaStats()
+    overrides = Overrides(ignore=frozenset({song.key}))
+    assert run_with(site, conn, tmp_path, overrides) == LaCuerdaStats()
     assert site.requests == []
 
 
@@ -705,8 +710,8 @@ def test_the_nightly_lacuerda_step_reports_the_counts(conn, cfg, tmp_path):
 
     spanish_song(conn)
     spanish_song(conn, title="Canción Inexistente")
-    services = Services(clients={"lacuerda": FakeLaCuerda().client(tmp_path / "cache")}, spotify=None,
-                        notifier=Notifier(None, None))
+    client = FakeLaCuerda().client(tmp_path / "cache")
+    services = Services(clients={"lacuerda": client}, spotify=None, notifier=Notifier(None, None))
     steps = [s for s in default_steps() if s.name == "lacuerda"]
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
     assert report.steps == {"lacuerda": "2 tried, 1 sheets kept"}

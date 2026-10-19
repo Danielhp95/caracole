@@ -539,5 +539,6 @@ def _record(
         return
     write_lyrics(song_dir(library_dir, song), result.lyrics)
     update_song(
-        conn, song.id, lyrics_status=result.status, lyrics_json=result.lyrics.to_json(), lyrics_at=stamp
+        conn, song.id,
+        lyrics_status=result.status, lyrics_json=result.lyrics.to_json(), lyrics_at=stamp,
     )

@@ -43,7 +43,9 @@ guardo tu nombre y no sé qué hacer
 """
 
 # Environment load_config would read; none of it may leak into a test.
-OUTSIDE_SETTINGS = ("CREDENTIALS_DIRECTORY", "TABARR_CONFIG", "TABARR_NTFY_TOKEN", "TABARR_SPOTIFY_CLIENT_SECRET")
+OUTSIDE_SETTINGS = (
+    "CREDENTIALS_DIRECTORY", "TABARR_CONFIG", "TABARR_NTFY_TOKEN", "TABARR_SPOTIFY_CLIENT_SECRET",
+)
 
 
 class FakeLrclib:
@@ -61,8 +63,9 @@ class FakeLrclib:
             return httpx.Response(self.status, text="nope")
         params = {k: v[0] for k, v in parse_qs(urlsplit(str(request.url)).query).items()}
         if request.url.path == "/api/get":
+            wanted = (params["artist_name"], params["track_name"])
             for r in self.records:
-                if (r["artistName"], r["trackName"]) == (params["artist_name"], params["track_name"]):
+                if (r["artistName"], r["trackName"]) == wanted:
                     return httpx.Response(200, json=r)
             return httpx.Response(503, json={"name": "ServerOverloaded"})
         if request.url.path == "/api/search":
@@ -142,7 +145,8 @@ def write_config(tmp_path: Path, *, budgets=None, ntfy=False) -> Path:
 
 
 def run(tmp_path, *args, **config):
-    return CliRunner().invoke(build_app(), ["--config", str(write_config(tmp_path, **config)), *args])
+    path = write_config(tmp_path, **config)
+    return CliRunner().invoke(build_app(), ["--config", str(path), *args])
 
 
 def open_db(tmp_path):
@@ -177,7 +181,9 @@ def song(tmp_path, song_id):
 
 def test_lyrics_looks_up_pending_songs_and_reports_the_counts(tmp_path, sites):
     sites.lrclib.records.append(hit_record())
-    found, missing = seed(tmp_path, ("Soda Stereo", "De Música Ligera"), ("Soda Stereo", "Canción Inexistente"))
+    found, missing = seed(
+        tmp_path, ("Soda Stereo", "De Música Ligera"), ("Soda Stereo", "Canción Inexistente")
+    )
     result = run(tmp_path, "lyrics")
     assert result.exit_code == 0, result.output
     assert "Lyrics: 1 found, 1 missing, 0 instrumental, 0 errors" in result.stdout
@@ -211,12 +217,15 @@ def test_lyrics_errors_leave_songs_pending_and_say_so(tmp_path, sites):
 
 def test_lyrics_spent_budget_is_no_failure(tmp_path, sites):
     sites.lrclib.records.append(hit_record())
-    older, newer = seed(tmp_path, ("Soda Stereo", "Persiana Americana"), ("Soda Stereo", "De Música Ligera"))
+    older, newer = seed(
+        tmp_path, ("Soda Stereo", "Persiana Americana"), ("Soda Stereo", "De Música Ligera")
+    )
     result = run(tmp_path, "lyrics", budgets={"lrclib": 1})
     assert result.exit_code == 0, result.output
     assert "Lyrics: 1 found, 0 missing, 0 instrumental, 0 errors" in result.stdout
     assert "budget of 1 request" in result.stdout and "next run" in result.stdout
-    assert (song(tmp_path, newer).lyrics_status, song(tmp_path, older).lyrics_status) == ("found", "pending")
+    assert song(tmp_path, newer).lyrics_status == "found"
+    assert song(tmp_path, older).lyrics_status == "pending"
 
 
 def test_lyrics_block_starts_a_cooldown_and_sends_one_alert(tmp_path, sites):
@@ -273,7 +282,9 @@ def test_a_pass_that_went_well_clears_old_strikes(tmp_path, sites):
 
 def spanish_song(tmp_path, title="De Música Ligera") -> int:
     (song_id,) = seed(tmp_path, ("Soda Stereo", title))
-    lyrics = Lyrics(plain=SHEET_LYRICS, synced=None, instrumental=False, duration=None, lrclib_id=None)
+    lyrics = Lyrics(
+        plain=SHEET_LYRICS, synced=None, instrumental=False, duration=None, lrclib_id=None
+    )
     conn = open_db(tmp_path)
     try:
         update_song(conn, song_id, lyrics_status="found", lyrics_json=lyrics.to_json())
@@ -350,15 +361,17 @@ def test_lacuerda_spent_budget_is_no_failure(tmp_path, sites):
 def test_registering_the_commands_imports_neither_pass(tmp_path):
     # Every command module is imported on every start; the passes wait for their command.
     src = Path(__file__).resolve().parents[1] / "src"
+    passes = ("tabarr.lyrics", "tabarr.lacuerda", "tabarr.lacuerda_fetch")
     code = (
         "import sys, typer\n"
         "from tabarr.commands import lyrics\n"
         "lyrics.register(typer.Typer())\n"
-        "print([m for m in ('tabarr.lyrics', 'tabarr.lacuerda', 'tabarr.lacuerda_fetch') if m in sys.modules])\n"
+        f"print([m for m in {passes!r} if m in sys.modules])\n"
     )
     env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(src)}
     result = subprocess.run(
-        [sys.executable, "-c", code], env=env, cwd=tmp_path, capture_output=True, text=True, check=False
+        [sys.executable, "-c", code], env=env, cwd=tmp_path, capture_output=True, text=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr[-2000:]
     assert result.stdout.strip() == "[]"
