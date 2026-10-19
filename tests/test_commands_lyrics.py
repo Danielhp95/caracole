@@ -14,7 +14,6 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
@@ -61,7 +60,7 @@ class FakeLrclib:
         self.requests.append(request.url.path)
         if self.status is not None:
             return httpx.Response(self.status, text="nope")
-        params = {k: v[0] for k, v in parse_qs(urlsplit(str(request.url)).query).items()}
+        params = dict(request.url.params)
         if request.url.path == "/api/get":
             wanted = (params["artist_name"], params["track_name"])
             for r in self.records:
@@ -113,7 +112,7 @@ class Sites:
         fakes = {"lrclib": self.lrclib, "lacuerda": self.lacuerda, "ntfy": self.ntfy}
         if provider not in fakes:
             pytest.fail(f"a client for {provider} was made")
-        return httpx.MockTransport(lambda request: fakes[provider].handler(request))
+        return httpx.MockTransport(fakes[provider].handler)
 
 
 @pytest.fixture

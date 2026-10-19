@@ -734,3 +734,26 @@ def test_the_nightly_lacuerda_step_reports_the_counts(conn, cfg, tmp_path):
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
     assert report.steps == {"lacuerda": "2 tried, 1 sheets kept"}
     assert (cfg.library_dir / "Soda Stereo" / "De Música Ligera" / "sheet.txt").is_file()
+
+
+def test_tonights_lyrics_score_tonights_lacuerda_sheet(conn, cfg, tmp_path):
+    # The lyrics step runs first, so a song added today is judged with its lyrics.
+    from tabarr.notify import Notifier
+    from tabarr.pipeline import Services, default_steps, run_pipeline
+
+    hit = json.loads((FIXTURES.parent / "lrclib" / "get_hit.json").read_text(encoding="utf-8"))
+    record = {**hit, "plainLyrics": SHEET_LYRICS, "syncedLyrics": None}
+    answer = httpx.MockTransport(lambda request: httpx.Response(200, json=record))
+    lrclib = PoliteClient(
+        "lrclib", ProviderPolicy(budget=10, delay=(0.0, 0.0)), tmp_path / "cache",
+        user_agent="tabarr-test", transport=answer, sleep=lambda seconds: None,
+        wall_clock=lambda: NOW,
+    )
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    clients = {"lrclib": lrclib, "lacuerda": FakeLaCuerda().client(tmp_path / "cache")}
+    services = Services(clients=clients, spotify=None, notifier=Notifier(None, None))
+    steps = [s for s in default_steps() if s.name in ("lyrics", "lacuerda")]
+    report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
+    assert report.steps["lacuerda"] == "1 tried, 1 sheets kept"
+    (v,) = lacuerda_versions(conn, song)
+    assert v.coverage == 1.0
