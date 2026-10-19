@@ -8,10 +8,11 @@ For each song, in order:
    hyphens are removed (``ac-dc`` → ``acdc``). A Chinese name also tries its
    pinyin (宋冬野 → ``song-dong-ye``, which meets ``song-dongye`` the same way),
    and a name written in two scripts each of its parts (``normalize.name_forms``):
-   UG's sitemaps write names in Latin letters only, so "打上花火 (Uchiage Hanabi)"
-   meets ``uchiage-hanabi``. Under those artists an exact title accepts at once. Otherwise every title
-   is scored with rapidfuzz ``ratio``, the best of UG's full key and its base
-   key, so ``creep-acoustic`` and ``creep-intro`` count as ``creep``.
+   UG's sitemaps write names in Latin letters only, so "打上花火 (Uchiage
+   Hanabi)" meets ``uchiage-hanabi``. Under those artists an exact title
+   accepts at once. Otherwise every title is scored with rapidfuzz ``ratio``,
+   the best of UG's full key and its base key, so ``creep-acoustic`` and
+   ``creep-intro`` count as ``creep``.
 3. The nearest other artist key at or above ``artist_gate``, then step 2 under
    it, scored as the lower of the artist and title scores. A Chinese name's
    pinyin is compared with and without hyphens.

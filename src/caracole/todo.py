@@ -202,7 +202,9 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
             item += (f" · the page under `[artist_url]` for them, {_link(url, url)}: {md(problem)}. Put the "
                      "artist's page, or another of their tab pages, in its place.")
         items.append(item)
-    new = [a for a in sorted(wanted) if a not in pasted]  # a second line for an artist: the file unreadable
+    # An artist whose line overrides.toml has already gets no other: the same key twice in a table
+    # makes the file unreadable. Its item says to change that line instead.
+    new = [a for a in sorted(wanted) if a not in pasted]
     if new:
         # One block for every artist, with the table's header only when the file has no such table:
         # a table declared twice makes overrides.toml unreadable, and the nightly run stops.

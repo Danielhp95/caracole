@@ -349,6 +349,7 @@ def test_two_names_with_their_own_scripts_are_no_bilingual_name():
 @pytest.mark.parametrize("name", [
     "Soda Stereo", "Paranoid / War Pigs", "Creep (Acoustic)", "Live and Let Die", "Wonderwall - Remix",
     "De Música Ligera", "AC/DC", "The The", "Mötley Crüe",
+    "Ŋoma Band", "Mələk Live",  # Latin letters that fold to no ASCII one are Latin all the same
 ])
 def test_latin_names_have_their_slug_key_alone(name):
     assert name_forms(name) == (slug_key(name),)

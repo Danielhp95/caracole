@@ -253,9 +253,10 @@ _LATIN, _CJK_SCRIPT, _OTHER = "latin", "cjk", "other"
 
 @functools.lru_cache(maxsize=8192)
 def name_forms(name: str) -> tuple[str, ...]:
-    """The keys a name is compared by, where Ultimate Guitar meets the names you want: on artist
-    pages, in learned artist pages, and in purchases' tags. Forms are for comparing; no key is
-    made from them.
+    """The keys a name is compared by wherever a name caracole didn't write meets yours: UG's
+    artist pages and sitemap slugs, the artist pages learned from UG's tab pages, purchases'
+    tags, UG's names for a download, and your ``[artist_url]`` keys. Forms are for comparing;
+    no key is made from them.
 
     First come the keys a name always had: its slug key, then, for Chinese, its pinyin key and
     its Simplified one. A Latin name has its slug key alone, and a name in one other script
@@ -286,12 +287,13 @@ def name_forms(name: str) -> tuple[str, ...]:
 
 
 def _script(c: str) -> str | None:
-    """A letter's script as name forms tell parts apart (CJK, Latin or other); None for a non-letter."""
+    """A letter's script as name forms tell parts apart (CJK, Latin or other); None for a non-letter.
+    A Latin letter that folds to no ASCII one (ŋ, ə) is Latin all the same."""
     if not c.isalpha():
         return None
     if _CJK.match(c):
         return _CJK_SCRIPT
-    return _LATIN if fold(c).isascii() else _OTHER
+    return _LATIN if fold(c).isascii() or "LATIN" in unicodedata.name(c, "") else _OTHER
 
 
 def _runs(text: str) -> list[str]:

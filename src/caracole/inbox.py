@@ -99,6 +99,7 @@ def _match(artist: str | None, title: str, candidates: list[tuple[Song, list[Ver
 
 
 def _title_score(titles: tuple[str, ...], song: Song) -> float:
+    """How alike a download's title forms and a song's title are, 0-100."""
     return max((fuzz.ratio(t, s) for t in titles for s in name_forms(clean_title(song.title))), default=0.0)
 
 

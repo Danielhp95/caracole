@@ -246,8 +246,7 @@ def artist_is_known(conn: sqlite3.Connection, song: Song, overrides: Overrides) 
     """Whether the song's artist page can be found: pasted in [artist_url] (a tab page there counts
     until reading it shows it leads to no artist page), learned, or in the index."""
     keys = artist_keys(song, overrides)
-    entry = artist_url_entry(overrides, keys)
-    if entry is not None and _paste_problem(conn, entry[1]) is None:
+    if artist_url_entry(overrides, keys) is not None and _failed_paste(conn, keys, overrides) is None:
         return True
     return any(learned_artist_url(conn, k) or artist_known(conn, k) for k in keys)
 
@@ -255,9 +254,7 @@ def artist_is_known(conn: sqlite3.Connection, song: Song, overrides: Overrides) 
 def pasted_page_problem(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> tuple[str, str] | None:
     """The tab page you pasted under [artist_url] for the song's artist and what is wrong with it, when
     reading it gave no artist page (``PASTE_GONE``, ``PASTE_CLOSED``, ``PASTE_NO_ARTIST``); else None."""
-    entry = artist_url_entry(overrides, artist_keys(song, overrides))
-    problem = _paste_problem(conn, entry[1]) if entry is not None else None
-    return (entry[1], problem) if entry is not None and problem is not None else None
+    return _failed_paste(conn, artist_keys(song, overrides), overrides)
 
 
 # --- pages and versions ---------------------------------------------------------------------------
@@ -880,9 +877,12 @@ def _pasted_page(conn: sqlite3.Connection, url: str) -> str | None:
     return page if isinstance(page, str) and page else None
 
 
-def _paste_problem(conn: sqlite3.Connection, url: str) -> str | None:
-    problem = (_pasted_record(conn, url) or {}).get("problem")
-    return problem if isinstance(problem, str) and problem else None
+def _failed_paste(conn: sqlite3.Connection, keys: list[str], overrides: Overrides) -> tuple[str, str] | None:
+    """Your [artist_url] address for an artist with these keys and what is wrong with it, when it is a
+    tab page that reading showed leads to no artist page."""
+    entry = artist_url_entry(overrides, keys)
+    problem = (_pasted_record(conn, entry[1]) or {}).get("problem") if entry is not None else None
+    return (entry[1], problem) if entry is not None and isinstance(problem, str) and problem else None
 
 
 def _read_pasted_tab_page(run: _SongRun, keys: list[str]) -> None:
@@ -896,10 +896,12 @@ def _read_pasted_tab_page(run: _SongRun, keys: list[str]) -> None:
     the to-do page asks for another one.
     """
     entry = artist_url_entry(run.ctx.overrides, keys)
-    tab_id = pasted_tab_id(entry[1]) if entry is not None else None
-    if entry is None or tab_id is None or _pasted_record(run.conn, entry[1]) is not None:
+    if entry is None:
         return
     key, url = entry
+    tab_id = pasted_tab_id(url)
+    if tab_id is None or _pasted_record(run.conn, url) is not None:
+        return
     target = url if _slugged_url(url, tab_id) else tab_url_for(run.conn, tab_id)
     artist, problem = None, PASTE_CLOSED  # unless read: robots.txt closes it, or where UG sends it
     if not _closed(target):
@@ -1110,8 +1112,7 @@ def _artist_page_route(run: _SongRun) -> bool:
     _read_pasted_tab_page(run, keys)
     base = _known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_artist_page(run, keys)
     if base is None:
-        entry = artist_url_entry(run.ctx.overrides, keys)
-        if entry is not None and _paste_problem(run.conn, entry[1]) is not None:
+        if _failed_paste(run.conn, keys, run.ctx.overrides) is not None:
             return False
         return _not_on_artist_page(run)
     listing = _read_artist_page(run, base, ARTIST_PAGE_KINDS, _name_keys(clean_title(run.song.title)))
