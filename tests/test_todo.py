@@ -271,3 +271,15 @@ def test_no_pdf_section_before_the_first_render_or_for_a_bad_record(conn, cfg):
     assert "## PDFs" not in todo(conn, cfg)
     kv_set_json(conn, "render:status", ["not", "a", "record"])
     assert "## PDFs" not in todo(conn, cfg)
+
+
+def test_spotify_auth_line_keeps_reason_and_advice(conn, cfg):
+    import dataclasses
+
+    from tabarr.config import SpotifyConfig
+
+    cfg = dataclasses.replace(cfg, spotify=SpotifyConfig(client_id="abc"))
+    kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-18T03:30:00Z",
+                                         "message": "the refresh token was revoked"})
+    text = todo(conn, cfg)
+    assert "the refresh token was revoked" in text and "Run `tabarr auth spotify`." in text

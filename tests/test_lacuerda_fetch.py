@@ -732,7 +732,7 @@ def test_the_nightly_lacuerda_step_reports_the_counts(conn, cfg, tmp_path):
     services = Services(clients={"lacuerda": client}, spotify=None, notifier=Notifier(None, None))
     steps = [s for s in default_steps() if s.name == "lacuerda"]
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
-    assert report.steps == {"lacuerda": "2 tried, 1 sheets kept"}
+    assert report.steps == {"lacuerda": "2 tried, 1 sheet kept, 1 not on LaCuerda, 0 errors"}
     assert (cfg.library_dir / "Soda Stereo" / "De Música Ligera" / "sheet.txt").is_file()
 
 
@@ -754,6 +754,6 @@ def test_tonights_lyrics_score_tonights_lacuerda_sheet(conn, cfg, tmp_path):
     services = Services(clients=clients, spotify=None, notifier=Notifier(None, None))
     steps = [s for s in default_steps() if s.name in ("lyrics", "lacuerda")]
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
-    assert report.steps["lacuerda"] == "1 tried, 1 sheets kept"
+    assert report.steps["lacuerda"] == "1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors"
     (v,) = lacuerda_versions(conn, song)
     assert v.coverage == 1.0

@@ -26,6 +26,8 @@ from tabarr.autochords.btc import (
     vocabulary,
 )
 
+from conftest import subprocess_pythonpath
+
 # Where this project's development session keeps downloaded weights; anywhere
 # else, set the environment variables above.
 _DEV_MODELS = Path(
@@ -245,7 +247,7 @@ def test_features_work_without_a_writable_home(tmp_path):
         "from tabarr.autochords.btc import cqt_features\n"
         "print(cqt_features(numpy.zeros(4096, 'float32')).shape)"
     )
-    env = {"HOME": str(locked / "home"), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(src)}
+    env = {"HOME": str(locked / "home"), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
     try:
         result = subprocess.run(
             [sys.executable, "-c", code],

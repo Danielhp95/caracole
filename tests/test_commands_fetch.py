@@ -21,6 +21,7 @@ from tabarr import db
 from tabarr.cli import build_app
 from tabarr.health import get_state, record_block
 from tabarr.songs import find_song, get_song, update_song, upsert_song
+from conftest import subprocess_pythonpath
 
 TAB = "https://tabs.ultimate-guitar.com/tab/"
 PERSIANA = f"{TAB}soda-stereo/persiana-americana-chords-101"
@@ -231,7 +232,7 @@ def test_registering_the_command_imports_no_fetch_code(tmp_path):
         "fetch.register(typer.Typer())\n"
         "print([m for m in ('tabarr.ug.fetch', 'rapidfuzz', 'selectolax') if m in sys.modules])\n"
     )
-    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(src)}
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
     result = subprocess.run([sys.executable, "-c", code], env=env, cwd=tmp_path, capture_output=True, text=True,
                             check=False)
     assert result.returncode == 0, result.stderr[-2000:]

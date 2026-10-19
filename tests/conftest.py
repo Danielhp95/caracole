@@ -47,3 +47,11 @@ def add_song(conn, artist="Soda Stereo", title="De Música Ligera", *, added_at=
         added_at=added_at,
     )
     return get_song(conn, song_id)
+
+
+def subprocess_pythonpath(src) -> str:
+    """PYTHONPATH for a child Python: ``src`` first, then the inherited path (inside a
+    Nix build the dependencies arrive on PYTHONPATH)."""
+    import os
+
+    return os.pathsep.join(p for p in (str(src), os.environ.get("PYTHONPATH")) if p)

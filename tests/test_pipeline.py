@@ -172,3 +172,38 @@ def test_run_command_exit_codes(tmp_path, monkeypatch):
     assert ok.exit_code == 0 and "todo: ok" in ok.output
     bad = CliRunner().invoke(build_app(), ["--config", str(cfgfile), "run"])
     assert bad.exit_code == 1 and "match: failed: boom" in bad.output
+
+
+def test_default_match_step_skips_while_the_index_is_empty(conn, cfg):
+    from tabarr.pipeline import _match, StepContext
+    from tabarr.overrides import Overrides
+    from conftest import add_song
+
+    add_song(conn, "Radiohead", "Creep")
+    out = Outbox()
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(out),
+                      report=RunReport(run_id="r", started="r"))
+    assert _match(ctx).startswith("skipped: the index is empty")
+    assert conn.execute("SELECT match_decision FROM songs").fetchone()[0] is None
+
+
+def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, monkeypatch):
+    import tabarr.lacuerda_fetch as lf
+    from tabarr.overrides import Overrides
+    from tabarr.pipeline import StepContext, _lacuerda
+
+    seen = {}
+
+    def fake(conn_, client, library_dir, rank, now, *, overrides=None):
+        seen["overrides"] = overrides
+        return lf.LaCuerdaStats(tried=2, kept=1, missing=0, errors=1, budget_exhausted=False)
+
+    monkeypatch.setattr(lf, "lacuerda_sheets", fake)
+    o = Overrides(block=frozenset({1}))
+    out = Outbox()
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=o, now=NOW, run_id="r", services=services(out),
+                      report=RunReport(run_id="r", started="r"))
+    summary = _lacuerda(ctx)
+    assert seen["overrides"] is o
+    assert "1 error" in summary
+    assert get_state(conn, "lacuerda").last_error is not None

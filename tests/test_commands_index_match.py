@@ -22,7 +22,7 @@ from tabarr.cli import build_app
 from tabarr.health import get_state
 from tabarr.songs import get_song, update_song
 
-from conftest import add_song
+from conftest import add_song, subprocess_pythonpath
 
 WWW = "https://www.ultimate-guitar.com/"
 TAB = "https://tabs.ultimate-guitar.com/tab/"
@@ -307,5 +307,5 @@ def test_registering_the_commands_imports_neither_the_matcher_nor_the_index():
             "print(sorted(m for m in sys.modules if m.startswith(('rapidfuzz', 'tabarr.match', 'tabarr.ug'))))")
     src = Path(__file__).resolve().parents[1] / "src"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
-                         env={"PYTHONPATH": str(src)})
+                         env={"PYTHONPATH": subprocess_pythonpath(src)})
     assert out.stdout.strip() == "[]"

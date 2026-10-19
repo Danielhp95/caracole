@@ -21,6 +21,7 @@ from tabarr import db
 from tabarr.cli import build_app
 from tabarr.songs import list_songs
 from tabarr.wanted import HEADER
+from conftest import subprocess_pythonpath
 
 # Environment that load_config or spotipy would read; none of it may leak into a test.
 OUTSIDE_SETTINGS = (
@@ -450,7 +451,7 @@ def test_registering_the_commands_imports_no_spotipy(tmp_path):
         "sources.register(typer.Typer())\n"
         "print([m for m in ('spotipy', 'tabarr.spotify') if m in sys.modules])\n"
     )
-    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(src)}
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
     result = subprocess.run(
         [sys.executable, "-c", code],
         env=env,

@@ -119,9 +119,18 @@ def _index(ctx: StepContext) -> str:
     return f"{len(stats.new_tab_ids)} new tabs, {dirty} songs to refetch"
 
 
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
 def _match(ctx: StepContext) -> str:
     from tabarr.match import match_all
+    from tabarr.ug.index import index_count
 
+    if index_count(ctx.conn) == 0:
+        # Matching against an empty index would mark every song not found (and put it on the
+        # buy list); errors are not misses, and a missing index is not evidence of absence.
+        return "skipped: the index is empty; run `tabarr index build` once"
     changes = match_all(ctx.conn, ctx.overrides, ctx.cfg.match)
     changed = [c for c in changes if c.old != c.new.decision]
     return f"{len(changed)} decisions changed"
@@ -131,7 +140,10 @@ def _lyrics(ctx: StepContext) -> str:
     from tabarr.lyrics import fetch_pending_lyrics
 
     s = fetch_pending_lyrics(ctx.conn, ctx.services.client("lrclib"), ctx.cfg.library_dir, ctx.now)
-    return f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental, {s.errors} errors"
+    if s.errors:
+        record_error(ctx.conn, "lrclib", ctx.now, f"{_plural(s.errors, 'song')} failed this run")
+    tail = " (budget spent)" if s.budget_exhausted else ""
+    return f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental, {_plural(s.errors, 'error')}{tail}"
 
 
 def _fetch(ctx: StepContext) -> str:
@@ -143,14 +155,19 @@ def _fetch(ctx: StepContext) -> str:
     )
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
     tail = " (budget spent)" if s.budget_exhausted else ""
-    return f"{s.songs_done} songs done, {s.songs_failed} failed{tail}"
+    return f"{_plural(s.songs_done, 'song')} done, {s.songs_failed} failed{tail}"
 
 
 def _lacuerda(ctx: StepContext) -> str:
     from tabarr.lacuerda_fetch import lacuerda_sheets
 
-    s = lacuerda_sheets(ctx.conn, ctx.services.client("lacuerda"), ctx.cfg.library_dir, ctx.cfg.rank, ctx.now)
-    return f"{s.tried} tried, {s.kept} sheets kept"
+    s = lacuerda_sheets(ctx.conn, ctx.services.client("lacuerda"), ctx.cfg.library_dir, ctx.cfg.rank, ctx.now,
+                        overrides=ctx.overrides)
+    if s.errors:
+        record_error(ctx.conn, "lacuerda", ctx.now, f"{_plural(s.errors, 'song')} failed this run")
+    tail = " (budget spent)" if s.budget_exhausted else ""
+    return (f"{s.tried} tried, {_plural(s.kept, 'sheet')} kept, {s.missing} not on LaCuerda, "
+            f"{_plural(s.errors, 'error')}{tail}")
 
 
 def _scan(ctx: StepContext) -> str:
@@ -165,8 +182,9 @@ def _scan(ctx: StepContext) -> str:
 def _render(ctx: StepContext) -> str:
     from tabarr.render import render_all
 
-    s = render_all(ctx.conn, ctx.cfg, ctx.overrides)
-    return f"{s.rendered} rendered, {s.failed} failed"
+    s = render_all(ctx.conn, ctx.cfg, ctx.overrides, now=ctx.now)
+    tail = f"; {s.font_error}" if s.font_error else ""
+    return f"{s.rendered} rendered, {s.failed} failed{tail}"
 
 
 def _todo(ctx: StepContext) -> str:

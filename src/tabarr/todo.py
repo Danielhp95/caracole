@@ -228,7 +228,9 @@ def _sources(conn: sqlite3.Connection, cfg: Config) -> list[str]:
     elif sp.get("state") == "ok":
         out.append(f"- Spotify: OK, last sync {sp.get('at')} ({sp.get('new', 0)} new)")
     elif sp.get("state") == "auth_needed":
-        out.append(f"- Spotify: needs authorization: {sp.get('message') or 'run `tabarr auth spotify`'}")
+        reason = (sp.get("message") or "").strip().rstrip(".")
+        out.append(f"- Spotify: needs authorization{': ' + md(reason) + '.' if reason else '.'} "
+                   "Run `tabarr auth spotify`.")
     else:
         out.append(f"- Spotify: error at {sp.get('at')}: {sp.get('message')}")
     w = kv_get_json(conn, "source:wanted", default=None)

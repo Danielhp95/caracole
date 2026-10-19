@@ -17,7 +17,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from conftest import add_song
+from conftest import add_song, subprocess_pythonpath
 from typer.testing import CliRunner
 
 from tabarr import db
@@ -392,7 +392,7 @@ def test_registering_the_commands_imports_neither_pass(tmp_path):
         "lyrics.register(typer.Typer())\n"
         f"print([m for m in {passes!r} if m in sys.modules])\n"
     )
-    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(src)}
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
     result = subprocess.run(
         [sys.executable, "-c", code], env=env, cwd=tmp_path, capture_output=True, text=True,
         check=False,
