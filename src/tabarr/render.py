@@ -43,7 +43,8 @@ The PDF is transposed by the song's ``[transpose]`` override. kv
 .cho, the transposition, the font and the PDF's name), so a PDF is rendered
 again only when one of those changes, when it is missing, or when forced.
 A sheet whose letters the built-in fonts lack gets its .cho but no PDF until a
-CJK font is set: one font error for the pass, not a failure per song.
+usable CJK font is set: one font error for the pass, not a failure per song. A
+font that is set but unusable (a collection, a missing file) counts as none.
 """
 
 from __future__ import annotations
@@ -251,7 +252,7 @@ class RenderStats:
 
     ``rendered`` PDFs were written, ``skipped`` ones were already up to date and
     ``failed`` songs could not be rendered. ``font_error`` says, once for the
-    pass, which sheets have no PDF for want of a CJK font.
+    pass, which sheets have no PDF for want of a usable CJK font.
     """
 
     rendered: int = 0
@@ -279,11 +280,14 @@ def render_all(
     stats = RenderStats()
     failed: list[str] = []
     no_font: list[str] = []
+    font, font_problem = _cjk_font(cfg.cjk_font)
     for song in list_songs(conn):
         if song.status == "ignored" or song.key in overrides.ignore:
             continue
         try:
-            outcome = _render_song(conn, cfg, overrides, song, runner=runner, force=force)
+            outcome = _render_song(
+                conn, cfg, overrides, song, cjk_font=font, runner=runner, force=force
+            )
         except (RenderError, OSError) as e:
             log.warning("no PDF for %s: %s", song.display, e)
             failed.append(song.display)
@@ -296,7 +300,7 @@ def render_all(
             no_font.append(song.display)
     stats.failed = len(failed)
     if no_font:
-        stats.font_error = _font_error(no_font)
+        stats.font_error = _font_error(no_font, font_problem)
         log.warning("%s", stats.font_error)
     at = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     kv_set_json(conn, STATUS_KEY, {
@@ -311,10 +315,11 @@ def _render_song(
     overrides: Overrides,
     song: Song,
     *,
+    cjk_font: Path | None,
     runner: Runner,
     force: bool,
 ) -> Outcome | None:
-    """Render one song's sheet; None when it has none."""
+    """Render one song's sheet; None when it has none. ``cjk_font`` is a usable font or None."""
     files = {f.name: f for f in kept_files(conn, song.id)}
     if (kept := files.get(HUMAN_SHEET)) is not None:
         sheet = _human_sheet(conn, cfg.library_dir, kept)
@@ -335,7 +340,7 @@ def _render_song(
     )
     text = cho.read_text(encoding="utf-8")
     need = _font_need(text)
-    font = cfg.cjk_font if need else None
+    font = cjk_font if need else None
     if need == "letters" and font is None:
         return "no font"
     pdf = folder / f"{stem}.pdf"
@@ -459,8 +464,24 @@ def _font_need(text: str) -> Literal["letters", "symbols"] | None:
     return "symbols" if lost else None
 
 
-def _font_error(songs: list[str], shown: int = 3) -> str:
-    """One line for every sheet that has no PDF for want of a CJK font."""
+def _cjk_font(path: Path | None) -> tuple[Path | None, str | None]:
+    """The CJK font when ChordPro can use it; otherwise None, and what is wrong with the one set.
+
+    Checked once per pass: an unusable font (a .ttc collection, a missing file)
+    then counts as none, instead of failing every sheet that needs it.
+    """
+    if path is None:
+        return None, None
+    try:
+        _font_options(path)
+    except RenderError as e:
+        return None, f"cjk_font is unusable: {e}"
+    return path, None
+
+
+def _font_error(songs: list[str], problem: str | None = None, shown: int = 3) -> str:
+    """One line for every sheet that has no PDF for want of a usable CJK font."""
     names = ", ".join(songs[:shown])
     more = f" and {len(songs) - shown} more" if len(songs) > shown else ""
-    return f"{FONT_HINT} to render {names}{more}"
+    reason = f"{problem}; " if problem else ""
+    return f"{reason}{FONT_HINT} to render {names}{more}"

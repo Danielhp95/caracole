@@ -13,6 +13,7 @@ import pytest
 
 from tabarr.autochords import ChordSegment, build_sheet
 from tabarr.db import kv_get_json
+from tabarr.lacuerda import parse_version_page
 from tabarr.library import keep_file, song_dir, write_atomic, write_info
 from tabarr.overrides import Overrides, load_overrides
 from tabarr.render import RenderStats, render_all
@@ -44,6 +45,20 @@ ZH_SHEET = (
     "这是一个合成的例子[/tab]\n"
     "[tab][ch]Am[/ch]          [ch]F[/ch]\n"
     "测试歌词第二行[/tab]\n"
+)
+
+# A LaCuerda version page as acordes.lacuerda.net writes it (synthetic lyrics): solfège
+# chords in <A> tags, each chord line after an empty <div></div>.
+LC_PAGE = (
+    "<html><body><div id=t_body><PRE>Intro:\n"
+    "\n"
+    "<div></div><A>Lam</A>-<A>Fa</A>-<A>Do</A>-<A>Sol</A>\n"
+    "\n"
+    "<div></div><A>Lam</A>             <A>Fa</A>          <A>Do</A>        <A>Sol7</A>\n"
+    "Cruzo la plaza,    con el café frío\n"
+    "<div></div><A>Rem</A>              <A>Mim</A>       <A>Fa</A>    <A>Sol</A>\n"
+    "guardo tu nombre,    y no sé qué hacer\n"
+    "</PRE></div></body></html>"
 )
 
 # Built with chr() so no editor or tool turns them into invisible literals.
@@ -103,6 +118,23 @@ def auto_sheet(conn, cfg, song):
     )
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet (auto).txt",
               data=text.encode("utf-8"), rank=1)
+
+
+def lacuerda_sheet(conn, cfg, song, content, *, n=3):
+    """Keep a LaCuerda sheet the way the LaCuerda step does: an "acordes" version whose raw
+    JSON (the artist page's lcd code) names no key, and sheet.json holding the markup."""
+    tab_id = f"placeholder_banda/cancion_sintetica-{n}"
+    url = f"https://acordes.lacuerda.net/{tab_id}.shtml"
+    vid = upsert_version(
+        conn, provider="lacuerda", tab_id=tab_id, song_id=song.id, slot="sheet",
+        kind="acordes", rating=0, votes=0, version=n, label=None, url=url,
+        raw={"lcd": "RRT-312", "title": song.title}, now=FETCHED,
+    )
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt",
+              data=strip_markup(content).encode("utf-8"), rank=1)
+    doc = {"provider": "lacuerda", "url": url, "version": n, "content": content}
+    write_atomic(song_dir(cfg.library_dir, song) / "sheet.json",
+                 json.dumps(doc, ensure_ascii=False).encode("utf-8"))
 
 
 def overrides(cfg, toml: str) -> Overrides:
@@ -199,6 +231,36 @@ def test_human_sheet_replaces_auto_outputs(conn, cfg):
     assert not (folder / "sheet (auto).cho").exists()
     assert not (folder / "sheet (auto).pdf").exists()
     assert (folder / "sheet (auto).txt").is_file()  # the kept auto sheet is the fetch step's
+
+
+def test_auto_outputs_stay_until_the_human_pdf_replaces_them(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    render(conn, cfg)
+    human_sheet(conn, cfg, song)
+    folder = song_dir(cfg.library_dir, song)
+    assert render(conn, cfg, runner=FakeChordPro(fail=("sheet.cho",))).failed == 1
+    assert (folder / "sheet (auto).pdf").is_file()  # still the song's only PDF
+    assert (folder / "sheet (auto).cho").is_file()
+    assert render(conn, cfg).rendered == 1
+    assert not (folder / "sheet (auto).pdf").exists()
+
+
+def test_lacuerda_sheet_gets_letter_chords(conn, cfg):
+    song = add_song(conn, "Placeholder Banda", "Canción Sintética")
+    lacuerda_sheet(conn, cfg, song, parse_version_page(LC_PAGE))
+    assert render(conn, cfg).rendered == 1
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    assert cho.splitlines() == [
+        "{title: Canción Sintética}",
+        "{artist: Placeholder Banda}",  # and no key: LaCuerda names none
+        "Intro:",
+        "",
+        "[Am] [F] [C] [G]",
+        "",
+        "[Am]Cruzo la plaza, [F]   con el ca[C]fé frío   [G7]",
+        "[Dm]guardo tu nombre,[Em]    y no s[F]é qué [G]hacer",
+    ]
 
 
 def test_ignored_songs_are_not_rendered(conn, cfg):
@@ -337,6 +399,36 @@ def test_a_stray_symbol_uses_the_font_when_there_is_one(conn, cfg, tmp_path):
     human_sheet(conn, cfg, song, f"[ch]G[/ch]\nUna canción de prueba {NOTE}\n")
     render(conn, cfg)
     assert f"--define=pdf.fonts.text.file={font}".encode() in pdf_of(cfg, song).read_bytes()
+
+
+@pytest.mark.parametrize(
+    "data,problem",
+    [(b"ttcf" + bytes(60), "font collection"), (None, "font file not found")],
+    ids=["collection", "missing"],
+)
+def test_an_unusable_cjk_font_is_reported_once_like_a_missing_one(
+    conn, cfg, tmp_path, data, problem
+):
+    # Noto CJK, the CJK font NixOS users have at hand, comes only as .ttc collections.
+    font = tmp_path / "NotoSansCJK-Regular.ttc"
+    if data is not None:
+        font.write_bytes(data)
+    cfg = replace(cfg, cjk_font=font)
+    songs = [add_song(conn, "宋冬野", "斑马斑马"), add_song(conn, "宋冬野", "安和桥")]
+    for tab_id, song in enumerate(songs, start=1):
+        human_sheet(conn, cfg, song, ZH_SHEET, tab_id=tab_id, tonality="")
+    latin = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, latin, f"[ch]G[/ch]\nUna canción de prueba {NOTE}\n", tab_id=3)
+    run = FakeChordPro()
+    stats = render(conn, cfg, runner=run)
+    assert (stats.rendered, stats.failed) == (1, 0)
+    assert problem in stats.font_error and "TABARR_CJK_FONT" in stats.font_error
+    assert "宋冬野 - 斑马斑马" in stats.font_error and "宋冬野 - 安和桥" in stats.font_error
+    for song in songs:
+        assert (song_dir(cfg.library_dir, song) / "sheet.cho").is_file()
+        assert not pdf_of(cfg, song).exists()
+    # A stray symbol needs no font, so the Spanish sheet renders without the broken one.
+    assert len(run.calls) == 1 and b"pdf.fonts" not in pdf_of(cfg, latin).read_bytes()
 
 
 # --- failures --------------------------------------------------------------------------------
