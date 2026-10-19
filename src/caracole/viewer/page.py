@@ -1,10 +1,10 @@
 """sheet.html: one sheet as a page for a phone, written beside its PDF.
 
 The page is one self-contained file. It opens from the synced library folder with
-no server, and from any server that serves the folder: it loads nothing (a
-Content-Security-Policy with the hashes of its one script and one stylesheet makes
-the browser enforce that) and links only to the PDF beside it and to the library's
-index.html two folders up.
+no server: it loads nothing (a Content-Security-Policy with the hashes of its one
+script and one stylesheet makes the browser enforce that) and links only to the PDF
+beside it and to the library's index.html two folders up. A server may serve it
+too, only while it is the page caracole wrote, with ``viewer_csp()`` as its header.
 
 The sheet itself is static HTML, so it reads without the script, and prints. Every
 text from the sheet is escaped. The script (viewer.js) relabels the chords from the
@@ -115,10 +115,7 @@ def build_viewer(
     data = _data(sheet, chords, song_key, origin, transpose)
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     style, script = _assets()
-    csp = (
-        f"default-src 'none'; script-src {_sha256(script)}; style-src {_sha256(style)}; "
-        "base-uri 'none'; form-action 'none'"
-    )
+    csp = _policy()
     title = sheet.title or "Untitled"
     head_title = f"{title} · {sheet.artist}" if sheet.artist else title
     return (
@@ -130,6 +127,28 @@ def build_viewer(
         + _body(sheet, title, song_key, origin, pdf)
         + f'<script type="application/json" id="song">{payload}</script>\n'
         + f"<script>{script}</script>\n</body>\n</html>\n"
+    )
+
+
+def viewer_csp() -> str:
+    """The Content-Security-Policy header a server sends with a viewer caracole wrote.
+
+    It is the page's own policy (its one script and one stylesheet, by their hashes, and
+    nothing else to load, no form to send, no base to change) with a sandbox, which a
+    ``<meta>`` policy can't set: the page then runs in an origin of its own, with no cookie
+    and no way to ask the server for anything. Its script still runs; it can't remember
+    settings there, and does without. Serve only a viewer still as caracole wrote it
+    (``render.written_file``, ``library.holds``): anyone with a synced device can put a page
+    of their own in the library.
+    """
+    return "sandbox allow-scripts; " + _policy()
+
+
+def _policy() -> str:
+    style, script = _assets()
+    return (
+        f"default-src 'none'; script-src {_sha256(script)}; style-src {_sha256(style)}; "
+        "base-uri 'none'; form-action 'none'"
     )
 
 

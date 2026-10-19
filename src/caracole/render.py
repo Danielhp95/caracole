@@ -46,14 +46,19 @@ when it has changed (a new key in info.json, a PDF now there to link), and
 when the PDF could not be rendered too. It takes the song's musical key from
 the "key" and "key_source" of its info.json, read before the pass rewrites it
 and never through a link: a key heard in the audio for the auto sheet, any
-other for the human sheet (``viewer.key_heard``). It is an extra: one that can't be built (a bug) or
-written (a link in its place) is logged as "no viewer for", with the traceback
-of a bug, and counts the song as failed, but never costs it a PDF.
+other for the human sheet (``viewer.key_heard``). It is an extra: one that
+can't be built (a bug) or written (a link in its place) is logged as "no
+viewer for", with the traceback of a bug, and counts the song as failed, but
+never costs it a PDF. kv ``render:files:<song id>`` keeps the SHA-256 and the
+length of each .cho and viewer written (``written_file``), PDF or no PDF: a
+server serves a viewer only while it is still those bytes.
 
 A human sheet the song no longer keeps (the fetch drops one whose UG match was
 undone when nothing replaces it) takes the ``sheet.cho``, ``sheet.pdf`` and
-``sheet.html`` rendered from it along, at the next pass. Only what the record
-below says caracole rendered goes: files of yours by those names stay.
+``sheet.html`` rendered from it along, at the next pass. Only what the records
+say caracole wrote goes: the three when the PDF's record below names it, else
+the .cho and the viewer while they are still as written. Files of yours by
+those names stay.
 
 The PDFs take caracole's look (``STYLE_FILE``, a ChordPro config) and are
 transposed by the song's ``[transpose]`` override. kv ``render:<song id>``
@@ -127,6 +132,7 @@ HUMAN_OUTPUTS = ("sheet.cho", "sheet.pdf", "sheet.html")
 AUTO_SHEET = "sheet (auto).txt"  # rendered to the AUTO_OUTPUTS
 AUTO_OUTPUTS = ("sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html")
 STATUS_KEY = "render:status"  # kv: the last pass, for the to-do page
+FILES_KEY = "render:files:"  # kv, then the song's id: each .cho and viewer written (written_file)
 FONT_HINT = "set cjk_font or CARACOLE_CJK_FONT"
 
 TIMEOUT = 120  # seconds; a sheet renders in about one
@@ -461,6 +467,7 @@ def _render_song(
             for name in AUTO_OUTPUTS:
                 (folder / name).unlink(missing_ok=True)
             kv_delete(conn, _state_key(song.id, auto=True))
+            _forget_written(conn, song.id, AUTO_OUTPUTS)
     else:
         _drop_human_outputs(conn, cfg.library_dir, song, folder)
     if auto is not None:
@@ -498,11 +505,16 @@ def _render_sheet(
         auto=sheet.auto,
     )
     text = _read_text(cho)
+    _note_written(conn, song.id, cho.name, text.encode("utf-8"))
     pdf = folder / f"{stem}.pdf"
     transpose = overrides.transpose.get(song.key, 0)
 
     def viewer() -> bool:
-        return _write_viewer(song, text, folder / f"{stem}.html", pdf, key=key, transpose=transpose)
+        page = folder / f"{stem}.html"
+        data = _write_viewer(song, text, page, pdf, key=key, transpose=transpose)
+        if data is not None:
+            _note_written(conn, song.id, page.name, data)
+        return data is not None
 
     try:
         done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, transpose,
@@ -548,12 +560,13 @@ def _render_sheet_pdf(
 
 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *,
-                  key: tuple[str | None, str | None], transpose: int) -> bool:
+                  key: tuple[str | None, str | None], transpose: int) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
-    there is one. It starts in the song's ``[transpose]``, as the PDF does, and takes its key
-    from info.json when that names one. A viewer that hasn't changed isn't written again.
+    there is one, and return the page's bytes. It starts in the song's ``[transpose]``, as the
+    PDF does, and takes its key from info.json when that names one. A viewer that hasn't
+    changed isn't written again.
 
-    The viewer is an extra: False, logged as "no viewer for", when it can't be built (a bug,
+    The viewer is an extra: None, logged as "no viewer for", when it can't be built (a bug,
     with its traceback) or written (a link or a FIFO in its place), and the song's PDFs and
     its other sheet go on all the same.
     """
@@ -562,13 +575,65 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *,
         html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, pdf=linked)
     except Exception:  # a sheet the viewer can't read must never cost the PDFs
         log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
-        return False
+        return None
+    data = html.encode("utf-8")
     try:
-        _write_if_changed(page, html.encode("utf-8"))
+        _write_if_changed(page, data)
     except (RenderError, OSError) as e:
         log.warning("no viewer for %s: %s", song.display, e)
-        return False
-    return True
+        return None
+    return data
+
+
+def written_file(conn: sqlite3.Connection, song_id: int, name: str) -> tuple[str, int] | None:
+    """The SHA-256 and the length of the .cho or the viewer ``name`` caracole last wrote in the
+    song's folder ("sheet.html", "sheet (auto).cho"), or None when it wrote none there.
+
+    For a server: anyone with a synced device can put a page in the library, so a viewer is
+    served only while ``library.holds`` says it is still these bytes, and with
+    ``viewer.viewer_csp()`` as its Content-Security-Policy header.
+    """
+    entry = _written(conn, song_id).get(name)
+    return None if entry is None else (entry["sha256"], entry["size"])
+
+
+def _written(conn: sqlite3.Connection, song_id: int) -> dict[str, dict[str, Any]]:
+    """kv ``render:files:<song id>``: {name: {"sha256", "size"}}, its odd entries left out."""
+    record = kv_get_json(conn, f"{FILES_KEY}{song_id}")
+    if not isinstance(record, Mapping):
+        return {}
+    return {
+        name: entry for name, entry in record.items()
+        if isinstance(entry, Mapping) and isinstance(entry.get("sha256"), str)
+        and isinstance(entry.get("size"), int)
+    }
+
+
+def _note_written(conn: sqlite3.Connection, song_id: int, name: str, data: bytes) -> None:
+    """Record that the file ``name`` in the song's folder holds ``data``, as caracole wrote it."""
+    written = _written(conn, song_id)
+    entry = {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
+    if written.get(name) != entry:
+        written[name] = entry
+        kv_set_json(conn, f"{FILES_KEY}{song_id}", written)
+
+
+def _forget_written(conn: sqlite3.Connection, song_id: int, names: tuple[str, ...],
+                    folder: Path | None = None) -> None:
+    """Forget the files ``names``; with ``folder``, first remove each one still as written there
+    (``library.holds``): one of yours by that name stays."""
+    written = _written(conn, song_id)
+    gone = [name for name in names if name in written]
+    if not gone:
+        return
+    for name in gone:
+        entry = written.pop(name)
+        if folder is not None and holds(folder / name, entry["sha256"], entry["size"]):
+            (folder / name).unlink(missing_ok=True)
+    if written:
+        kv_set_json(conn, f"{FILES_KEY}{song_id}", written)
+    else:
+        kv_delete(conn, f"{FILES_KEY}{song_id}")
 
 
 def _info_key(folder: Path) -> tuple[str | None, str | None]:
@@ -596,9 +661,12 @@ def _up_to_date(pdf: Path, record: Any, state: Mapping[str, Any]) -> bool:
 
 def _drop_human_outputs(conn: sqlite3.Connection, library_dir: Path, song: Song, folder: Path) -> None:
     """The song keeps no human sheet now (the fetch dropped one whose UG match was undone, say): the
-    .cho and the PDF rendered from the one it kept go, with their record, before an auto sheet's PDF
-    takes the record's place. Only when the record says caracole rendered them: a ``sheet.cho`` or
-    ``sheet.pdf`` of yours, in a folder caracole never rendered a human sheet in, stays."""
+    .cho, the PDF and the viewer rendered from the one it kept go, with their record, before an
+    auto sheet's PDF takes the record's place. Only when the record says caracole rendered them: a
+    ``sheet.cho`` or ``sheet.pdf`` of yours, in a folder caracole never rendered a human sheet in,
+    stays. A sheet that never got a PDF (waiting for a font, or chordpro failed on it) still had
+    its .cho and viewer written: each goes while it is still as written (``_forget_written``)."""
+    _forget_written(conn, song.id, (HUMAN_OUTPUTS[0], HUMAN_OUTPUTS[2]), folder)
     key = _state_key(song.id)
     record = kv_get_json(conn, key)
     if not isinstance(record, Mapping) or record.get("pdf") != HUMAN_OUTPUTS[1]:

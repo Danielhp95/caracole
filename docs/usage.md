@@ -504,7 +504,9 @@ and cache.
   once more. The viewer is written again whenever it would change, at every
   render. A song that no longer keeps its human sheet (its UG match was
   undone, say) loses the `sheet.cho`, `sheet.pdf` and `sheet.html` made from
-  it; one you put where caracole never rendered one stays.
+  it; one you put where caracole never rendered one stays. A sheet that never
+  got a PDF (waiting for a font, or chordpro failed on it) loses its
+  `sheet.cho` and `sheet.html` while they are still as caracole wrote them.
   chordpro works on a copy, in a private folder in the cache, and the new PDF
   replaces the old one in one rename, so a failed render leaves the last good
   PDF in place. It exits 1 when a sheet couldn't be rendered, and the log
@@ -712,8 +714,11 @@ added. When nothing in the library matches, the page shows the
 
 Each sheet's `sheet.html` (`sheet (auto).html` for an auto sheet) is the sheet
 as a page for the phone. Like `index.html` it is one file that opens from the
-synced folder with no server, or from any server that serves the folder, and
-loads nothing from the network. It is made at render time from the song's own
+synced folder with no server, and loads nothing from the network. Don't serve
+the library folder as it is to other browsers: anyone with a synced device
+could put a page of their own there, which would run as your server's own.
+caracole records each viewer it writes, so that a server can tell its pages
+from anyone else's. It is made at render time from the song's own
 `.cho`, and stays in the song's folder: nothing of the sheet is copied
 anywhere else. It links back to `index.html` and to the PDF beside it.
 

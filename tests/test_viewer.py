@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import http.server
 import json
 import re
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
 
 from caracole.chordpro import to_chordpro
-from caracole.viewer import build_viewer, info_key, key_heard
+from caracole.viewer import build_viewer, info_key, key_heard, viewer_csp
 from caracole.viewer.voicings import load_voicings
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
@@ -87,6 +89,14 @@ def test_the_content_security_policy_allows_exactly_the_inline_script_and_style(
     assert f"script-src {sha(script)}" in csp
     assert f"style-src {sha(style)}" in csp
     assert "base-uri 'none'" in csp and "form-action 'none'" in csp
+
+
+def test_a_server_sends_the_pages_own_policy_in_a_sandbox():
+    # A <meta> policy can't sandbox the page; a server's header can: the page then has an
+    # origin of its own, with no cookie and no way to ask the server for anything.
+    html = build_viewer(UG_CHO)
+    meta = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
+    assert viewer_csp() == "sandbox allow-scripts; " + meta
 
 
 def test_the_page_loads_nothing_and_links_only_beside_itself():
@@ -252,12 +262,17 @@ def dump_dom(html: str, tmp_path: Path, fragment: str = "") -> str:
     page = tmp_path / "Artist" / "Title" / "sheet.html"
     page.parent.mkdir(parents=True, exist_ok=True)
     page.write_text(html, encoding="utf-8")
+    return dump_url(page.as_uri() + fragment, tmp_path)
+
+
+def dump_url(url: str, tmp_path: Path) -> str:
+    """The DOM of the page at ``url`` after its script ran, in Chromium (see dump_dom)."""
     profile = tmp_path / f"chrome-{len(list(tmp_path.glob('chrome-*')))}"
     try:
         result = subprocess.run(
             [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
              f"--user-data-dir={profile}", "--window-size=390,844", "--virtual-time-budget=3000",
-             "--dump-dom", page.as_uri() + fragment],
+             "--dump-dom", url],
             capture_output=True, text=True, timeout=60,
         )
     except (OSError, subprocess.TimeoutExpired) as e:
@@ -281,6 +296,32 @@ def test_the_script_runs_and_leaves_the_sheet_as_written(tmp_path):
     assert 'data-ready="1"' in dom
     assert chord_texts(dom) == {"0": "G", "1": "D", "2": "Em", "3": "C", "4": "G/B", "5": "Am", "6": "F"}
     assert re.search(r'id="fab"[^>]*>Key G</button>', dom)
+
+
+@in_chromium
+def test_the_page_works_served_in_a_sandbox(tmp_path):
+    page = build_viewer(UG_CHO).encode("utf-8")
+
+    class Server(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", viewer_csp())
+            self.end_headers()
+            self.wfile.write(page)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Server)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        dom = dump_url(f"http://127.0.0.1:{server.server_port}/Artist/Title/sheet.html#t=2", tmp_path)
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert 'data-ready="1"' in dom  # its script ran, under the header's hashes
+    assert chord_texts(dom)["0"] == "A"  # and without storage, which a sandbox refuses
 
 
 @in_chromium

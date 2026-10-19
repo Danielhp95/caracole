@@ -41,7 +41,7 @@ _WANTED = "wanted"
 _PRECEDENCE = (_WANTED, "spotify")
 # What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py).
 # It goes with a song merged into another: SQLite may give that id to the next new song.
-_PER_SONG_KV = ("render:", "ug:artist_page_checked:", "autochords:failed:")
+_PER_SONG_KV = ("render:", "render:files:", "ug:artist_page_checked:", "autochords:failed:")
 
 
 def utc_now_iso() -> str:

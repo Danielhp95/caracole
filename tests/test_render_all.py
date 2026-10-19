@@ -27,7 +27,7 @@ from caracole.lacuerda import parse_version_page
 from caracole.library import drop_file, keep_file, song_dir, write_atomic, write_info
 from caracole.overrides import Overrides, load_overrides
 from caracole import render as render_module
-from caracole.render import STYLE_FILE, RenderStats, render_all
+from caracole.render import STYLE_FILE, RenderStats, render_all, written_file
 from caracole.songs import get_song, update_song
 from caracole.ug.page import strip_markup
 from caracole.versions import set_coverage, upsert_version
@@ -351,6 +351,35 @@ def test_the_cho_and_pdf_of_a_sheet_no_longer_kept_go(conn, cfg, auto):
     assert info_json(cfg, song)["render"] == ({"transpose": 0, "pdf": "sheet (auto).pdf"} if auto else None)
 
 
+@pytest.mark.parametrize("why", ["no font", "chordpro failed"])
+@pytest.mark.parametrize("yours", [False, True], ids=["as-written", "yours"])
+def test_the_cho_and_viewer_of_a_sheet_that_never_got_a_pdf_go_with_it(conn, cfg, why, yours):
+    assert cfg.cjk_font is None
+    if why == "no font":
+        song = add_song(conn, "宋冬野", "斑马斑马")
+        human_sheet(conn, cfg, song, ZH_SHEET, tonality="")
+        assert render(conn, cfg).font_error is not None
+    else:
+        song = add_song(conn, "Soda Stereo", "De Música Ligera")
+        human_sheet(conn, cfg, song)
+        assert render(conn, cfg, runner=FakeChordPro(fail=("Música",))).failed == 1
+    folder = song_dir(cfg.library_dir, song)
+    assert (folder / "sheet.cho").is_file() and (folder / "sheet.html").is_file()
+    assert not (folder / "sheet.pdf").exists() and kv_get_json(conn, f"render:{song.id}") is None
+    if yours:  # a page of your own, under that name
+        (folder / "sheet.html").write_bytes(b"yours")
+    drop_human_sheet(conn, cfg, song)
+
+    render(conn, cfg)
+
+    assert not (folder / "sheet.cho").exists()
+    assert (folder / "sheet.html").exists() is yours
+    if yours:
+        assert (folder / "sheet.html").read_bytes() == b"yours"
+    assert written_file(conn, song.id, "sheet.html") is None
+    assert written_file(conn, song.id, "sheet.cho") is None
+
+
 def test_a_sheet_pdf_caracole_never_rendered_stays(conn, cfg):
     # No render record names it, so it is yours: a song caracole found no sheet for, say.
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
@@ -551,6 +580,51 @@ def test_a_sheet_chordpro_fails_on_still_gets_its_viewer(conn, cfg, caplog):
     html = viewer_of(cfg, song)
     assert "<h1>De Música Ligera</h1>" in html and not re.search(r'href="[^"]*\.pdf"', html)
     assert "no PDF for Soda Stereo - De Música Ligera" in caplog.text
+
+
+def recorded(data: bytes) -> tuple[str, int]:
+    return hashlib.sha256(data).hexdigest(), len(data)
+
+
+def test_each_cho_and_viewer_written_is_recorded(conn, cfg):
+    # A server serves a viewer only while it is the page caracole wrote: anyone with a synced
+    # device could put a sheet.html of their own there, whose script would run as the server's.
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    for name in ("sheet.cho", "sheet.html", "sheet (auto).cho", "sheet (auto).html"):
+        assert written_file(conn, song.id, name) == recorded((folder / name).read_bytes()), name
+    assert written_file(conn, song.id, "sheet.pdf") is None  # the PDF has a record of its own
+    write_key(cfg, song, "D", "audio")
+    render(conn, cfg)  # a new key: the auto sheet's viewer changes, and its record with it
+    page = (folder / "sheet (auto).html").read_bytes()
+    assert b"from the audio" in page
+    assert written_file(conn, song.id, "sheet (auto).html") == recorded(page)
+
+
+def test_a_viewer_that_cant_be_written_is_not_recorded(conn, cfg, private_file):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    page = song_dir(cfg.library_dir, song) / "sheet.html"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.symlink_to(private_file)
+    assert render(conn, cfg).failed == 1
+    assert written_file(conn, song.id, "sheet.html") is None
+    assert written_file(conn, song.id, "sheet.cho") is not None
+
+
+def test_the_records_of_retired_auto_outputs_go_with_them(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    render(conn, cfg)
+    assert written_file(conn, song.id, "sheet (auto).html") is not None
+    complete_human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    assert written_file(conn, song.id, "sheet (auto).html") is None
+    assert written_file(conn, song.id, "sheet (auto).cho") is None
+    assert written_file(conn, song.id, "sheet.html") is not None
 
 
 def test_an_unchanged_viewer_is_not_written_again(conn, cfg):
