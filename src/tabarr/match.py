@@ -227,6 +227,19 @@ def _forms(text: str) -> _Forms:
     return _Forms(tuple(k for k in (own,) if k), tuple(k for k in (pinyin,) if k and k != own))
 
 
+# Spanish leading articles are part of some UG artist slugs and not of the source's name, or the
+# other way round: UG files Enanitos Verdes as los-enanitos-verdes.
+_ARTICLES = ("los", "las", "el", "la")
+
+
+def _article_forms(key: str) -> list[str]:
+    """The same artist key with a leading Spanish article removed, or with each one added."""
+    head, sep, rest = key.partition("-")
+    if sep and rest and head in _ARTICLES:
+        return [rest]
+    return [f"{a}-{key}" for a in _ARTICLES]
+
+
 def _own_artists(song: Song, index: IndexView, overrides: Overrides) -> list[tuple[str, bool]]:
     """(UG artist key, came from [alias]) for each of the song's artists, in the order they're tried."""
     keys: dict[str, bool] = {}
@@ -242,6 +255,9 @@ def _own_artists(song: Song, index: IndexView, overrides: Overrides) -> list[tup
             add(form)
             for a in index.compact_artists(compact(form)):
                 add(a)
+        for form in _forms(name).keys:
+            for alt in _article_forms(form):
+                add(alt)
     return list(keys.items())
 
 

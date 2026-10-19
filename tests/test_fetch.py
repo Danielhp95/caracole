@@ -1132,3 +1132,34 @@ def test_sheet_json_carries_the_page_meta(conn, tmp_path):
     process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
 
     assert json.loads(read(tmp_path, song, "sheet.json"))["meta"] == {"capo": 2, "tonality": "Am"}
+
+
+TITLE_ONLY_COVER = [{"artist_key": "os-paralamas-do-sucesso", "song_key": "de-musica-ligeira", "score": 97.0,
+                     "step": "title_only"}]
+
+
+def test_title_only_reviews_are_tried_on_the_artist_page(conn):
+    # On the real index De Música Ligera ends as a title-only review of a Portuguese cover,
+    # because every tab of Soda Stereo's own song is a bare id.
+    index(conn, (7, "soda-stereo", "signos", "chords"))
+    cover = matched(conn, "Soda Stereo", "De Música Ligera", "review", added_at="2026-10-05T00:00:00Z",
+                    match_candidates=TITLE_ONLY_COVER)
+    matched(conn, "Soda Stereo", "Zoom", "review", added_at="2026-10-06T00:00:00Z", match_candidates=[
+        {"artist_key": "soda-stereo", "song_key": "zoom-2", "score": 80.0, "step": "fuzzy_title"}])
+    assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW)] == [cover.id]
+
+
+def test_title_only_review_resolved_on_the_artist_page(conn, tmp_path):
+    index(conn, (1081462, "soda-stereo", "persiana-americana", "tabs"))
+    song = soda_dml(conn)
+    update_song(conn, song.id, match_decision="review", review=True, match_candidates=TITLE_ONLY_COVER)
+    song = get_song(conn, song.id)
+    ug = FakeUG()
+    ug.tab(v(1081462, "tabs"), [v(1081470, "tabs", version=2)], content=riff("persiana riff"))
+    serve_dml(ug)
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    done = get_song(conn, song.id)
+    assert (done.match_decision, done.match_step, done.review) == ("accept", "artist_page", False)
+    assert "sheet 85042" in read(tmp_path, song, "sheet.txt")

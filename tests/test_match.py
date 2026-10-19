@@ -135,11 +135,12 @@ def test_fuzzy_artist_looks_past_the_artist_already_tried(conn):
 
 
 def test_artist_below_the_gate_falls_through_to_title_only(conn):
-    # The real case: Spotify's "Enanitos Verdes" is UG's los-enanitos-verdes (ratio 88.2 < 90).
+    # "Los Enanitos" vs los-enanitos-verdes scores 77, below the gate of 90, and no article
+    # form helps. (The real "Enanitos Verdes" case is accepted by the article rule.)
     index(conn, (1, "los-enanitos-verdes", "lamento-boliviano", "chords"),
           (2, "los-enanitos-verdes", "lamento-boliviano", "tabs"),
           (3, "toque-de-queda", "lamento-boliviano", "guitar-pro"))
-    r = match(conn, "Enanitos Verdes", "Lamento Boliviano")
+    r = match(conn, "Los Enanitos", "Lamento Boliviano")
     assert summary(r) == ("review", "title_only", 100.0, "los-enanitos-verdes", "lamento-boliviano")
 
 
@@ -397,3 +398,11 @@ def test_an_artist_page_match_yields_to_ignore(conn):
     update_song(conn, s.id, match_decision="accept", match_step="artist_page")
     match_all(conn, Overrides(ignore=frozenset({s.key})), POLICY)
     assert (get_song(conn, s.id).match_decision, get_song(conn, s.id).status) == ("ignored", "ignored")
+
+
+def test_leading_spanish_article_on_either_side(conn):
+    # UG files Enanitos Verdes as los-enanitos-verdes (262 rows, none under enanitos-verdes).
+    index(conn, (1, "los-enanitos-verdes", "lamento-boliviano", "chords"), (2, "prisioneros", "tren-al-sur", "chords"))
+    assert summary(match(conn, "Enanitos Verdes", "Lamento Boliviano"))[:2] == ("accept", "exact")
+    assert match(conn, "Enanitos Verdes", "Lamento Boliviano").artist_key == "los-enanitos-verdes"
+    assert summary(match(conn, "Los Prisioneros", "Tren al Sur"))[:2] == ("accept", "exact")

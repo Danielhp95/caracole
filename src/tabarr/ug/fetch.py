@@ -763,7 +763,7 @@ def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
     """
     start = ctx.client.requests_made
     run = _SongRun(ctx, song)
-    if song.match_decision == "not_found":
+    if needs_artist_page(song):
         if not _artist_page_route(run):
             return SongFetchOutcome(song.id, None, (), None, ctx.client.requests_made - start)
         song = run.song
@@ -803,6 +803,21 @@ def _ignored(song: Song, overrides: Overrides) -> bool:
     return song.status == "ignored" or song.match_decision == "ignored" or song.key in overrides.ignore
 
 
+def needs_artist_page(song: Song) -> bool:
+    """Whether the index can't settle this song, so its artist's UG page should be read (A6).
+
+    That is a not-found song, or a review whose only candidates are other artists' songs of
+    the same title: on the real index Soda Stereo's "De Música Ligera" (every tab a bare id)
+    reviews as a Portuguese cover.
+    """
+    if song.match_decision == "not_found":
+        return True
+    candidates = song.match_candidates or []
+    return song.match_decision == "review" and bool(candidates) and all(
+        c.get("step") == "title_only" for c in candidates
+    )
+
+
 def songs_to_fetch(
     conn: sqlite3.Connection,
     overrides: Overrides,
@@ -824,7 +839,7 @@ def songs_to_fetch(
             continue
         dirty = song.match_decision in ("accept", "pinned") and song.ug_dirty
         due = (
-            song.match_decision == "not_found"
+            needs_artist_page(song)
             and not _checked_within(conn, song.id, now, artist_page_max_age)
             and artist_is_known(conn, song, overrides)
         )
