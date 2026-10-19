@@ -281,10 +281,11 @@ def test_writer_creates_missing_file(tmp_path):
     assert load_overrides(p).ignore == frozenset({"a/b"})
 
 
-def test_writers_report_a_broken_file_as_an_overrides_error(tmp_path):
-    broken = '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n[artist_url]\n'
-    p = write(tmp_path, broken)
-    writers = [
+SECRET = '[ignore]\nsongs = ["Private - Token"]\n'  # a private file that happens to parse as overrides
+
+
+def all_writers(p: Path):
+    return [
         lambda: add_alias(p, "Maná", "mana"),
         lambda: add_match(p, "Maná - Rayando el Sol", "mana/rayando-el-sol"),
         lambda: add_artist_url(p, "宋冬野", "https://www.ultimate-guitar.com/artist/song_dongye_99"),
@@ -292,7 +293,62 @@ def test_writers_report_a_broken_file_as_an_overrides_error(tmp_path):
         lambda: add_ignore(p, "Maná - Rayando el Sol"),
         lambda: add_block(p, 1601668),
     ]
-    for add in writers:
+
+
+def planted(tmp_path: Path, kind: str) -> tuple[Path, Path]:
+    """overrides.toml in the library as something other than a file: a link (to a private file, or
+    to nothing) or a folder. Returns it and the private file."""
+    secret = tmp_path / "private" / "secret.toml"
+    secret.parent.mkdir()
+    secret.write_text(SECRET, encoding="utf-8")
+    p = tmp_path / "lib" / "overrides.toml"
+    p.parent.mkdir()
+    if kind == "link":
+        p.symlink_to(secret)
+    elif kind == "dangling link":
+        p.symlink_to(tmp_path / "private" / "gone.toml")
+    else:
+        p.mkdir()
+    return p, secret
+
+
+LINK = "a symbolic link, which tabarr doesn't follow"
+
+
+@pytest.mark.parametrize("kind, said", [
+    ("link", LINK), ("dangling link", LINK), ("folder", "not a regular file"),
+])
+def test_overrides_that_arent_a_file_are_refused_unread(tmp_path, kind, said):
+    # The library is writable by every synced device: a link planted as overrides.toml could point at
+    # tabarr's private files, which would then be read, or copied into the library by a writer.
+    p, secret = planted(tmp_path, kind)
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == f"{p}: {said}; put the file itself there"
+    for add in all_writers(p):
+        with pytest.raises(OverridesError) as e:
+            add()
+        assert str(e.value) == f"{p}: {said}; put the file itself there"
+    assert p.is_symlink() == ("link" in kind) and secret.read_text(encoding="utf-8") == SECRET
+    copied = [f for f in (tmp_path / "lib").rglob("*") if f.is_file() and not f.is_symlink()]
+    assert copied == []  # nothing of the private file reached the library
+
+
+def test_writers_never_write_through_a_link_at_a_temporary_name(tmp_path):
+    p = write(tmp_path, "[ignore]\nsongs = []\n")
+    victim = tmp_path / "victim.txt"
+    victim.write_text("precious", encoding="utf-8")
+    for name in ("overrides.toml.tmp", ".overrides.toml.tmp"):
+        (tmp_path / name).symlink_to(victim)
+    add_ignore(p, "A - B")
+    assert victim.read_text(encoding="utf-8") == "precious"
+    assert not p.is_symlink() and load_overrides(p).ignore == frozenset({"a/b"})
+
+
+def test_writers_report_a_broken_file_as_an_overrides_error(tmp_path):
+    broken = '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n[artist_url]\n'
+    p = write(tmp_path, broken)
+    for add in all_writers(p):
         with pytest.raises(OverridesError, match=r"overrides\.toml: .*artist_url"):
             add()
     assert p.read_text(encoding="utf-8") == broken

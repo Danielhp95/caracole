@@ -17,11 +17,15 @@ Tables:
 
 Keys are canonicalized when loaded, so they're matched the same way songs are.
 Writers use tomlkit, so your comments and layout survive.
+
+The file usually sits in the library, which every synced device can write to,
+so it is read only when it is a regular file: a symbolic link there could point
+at tabarr's private files. Writers replace it through a temporary file of a
+name of its own (``library.write_atomic``).
 """
 
 from __future__ import annotations
 
-import os
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -32,6 +36,7 @@ from urllib.parse import urlsplit
 import tomlkit
 from tomlkit.exceptions import TOMLKitError
 
+from tabarr.library import NotRegularFile, read_regular, write_atomic
 from tabarr.normalize import identity_key, slug_key, ug_slug_key
 
 # A query or fragment is allowed (a link's ?ref=, the artist page's own ?filter=chords and ?page=2
@@ -133,12 +138,24 @@ def _only_key(t: Mapping[str, Any], name: str, key: str, shape: str) -> None:
         raise OverridesError(f"unknown key(s) in [{name}]: {listed}; expected {key} = {shape}")
 
 
+def _read(path: Path) -> str | None:
+    """The file's text, None when there is none; anything but a regular file is refused unread."""
+    try:
+        data = read_regular(path)
+    except FileNotFoundError:
+        return None
+    except NotRegularFile as e:
+        raise OverridesError(f"{path}: {e.strerror}; put the file itself there") from e
+    return data.decode("utf-8")
+
+
 def load_overrides(path: Path) -> Overrides:
     """Read overrides.toml; a missing file means no overrides. Every error names the file."""
-    if not path.is_file():
+    text = _read(path)
+    if text is None:
         return Overrides()
     try:
-        return _parse(tomllib.loads(path.read_text(encoding="utf-8")))
+        return _parse(tomllib.loads(text))
     except (tomllib.TOMLDecodeError, OverridesError) as e:
         raise OverridesError(f"{path}: {e}") from e
 
@@ -205,7 +222,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
 
 
 def _edit(path: Path, change) -> None:
-    old = path.read_text(encoding="utf-8") if path.is_file() else None
+    old = _read(path)
     try:
         doc = tomlkit.document() if old is None else tomlkit.parse(old)
     except TOMLKitError as e:
@@ -214,10 +231,7 @@ def _edit(path: Path, change) -> None:
     text = tomlkit.dumps(doc)
     if text == old:
         return  # nothing changed: the file is left alone
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    write_atomic(path, text.encode("utf-8"))
 
 
 def _table_of(doc, name: str):
