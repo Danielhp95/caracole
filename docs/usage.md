@@ -922,7 +922,9 @@ from. It takes the first of these that gives one:
    chords fit best, and whether it starts and ends on that key's home chord.
    Chords that fit no key give no estimate.
 3. **From the audio**, for a sheet auto-chords wrote: the key of the chords
-   the model heard.
+   the model heard, each weighed by how long it sounds. Auto-chords records
+   it with the sheet; for a sheet made before it did, the key is estimated
+   from the chords the sheet shows.
 
 The key is the key of the chords as the sheet writes them, the shapes you
 play: with a capo, the song sounds higher. It is the sheet's key before any

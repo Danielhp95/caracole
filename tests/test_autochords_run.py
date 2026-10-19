@@ -205,7 +205,7 @@ def test_auto_sheet_kept_with_its_version_and_the_song_becomes_found(conn, cfg, 
     )
     assert (v.rating, v.votes, v.version, v.label) == (0, 0, 1, None)
     assert v.url == "file://" + s.audio_path
-    assert v.raw == {"audio": s.audio_path, "model": "btc_large_voca", "lyrics": "plain"}
+    assert v.raw == {"audio": s.audio_path, "model": "btc_large_voca", "lyrics": "plain", "key": "G"}
     assert v.fetched_at == "2026-10-18T04:05:00Z"
 
     song = get_song(conn, s.id)
@@ -217,6 +217,39 @@ def test_auto_sheet_kept_with_its_version_and_the_song_becomes_found(conn, cfg, 
     assert [(f["name"], f["provider"], f["kind"]) for f in info["files"]] == [
         (AUTO_SHEET, "auto", "auto")
     ]
+
+
+class Heard(FakeRecognizer):
+    """A recognizer that hears the given chords, as (start, end, label)."""
+
+    def __init__(self, *segments: tuple[float, float, str]):
+        super().__init__()
+        self.segments = [ChordSegment(*s) for s in segments]
+
+    def recognize(self, path):
+        super().recognize(path)
+        return self.segments
+
+
+def test_the_auto_sheet_keeps_the_key_of_the_chords_the_model_heard(conn, cfg, tmp_path):
+    # Am rings for most of the song, F, C and G pass by: A minor, weighed by time.
+    heard = Heard((0.0, 0.5, "N"), (0.5, 4.0, "Am"), (4.0, 5.0, "F"), (5.0, 6.0, "C"),
+                  (6.0, 7.0, "G"), (7.0, 10.0, "Am"))
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg, heard)
+    [kept] = kept_files(conn, s.id)
+    assert get_version(conn, kept.version_id).raw["key"] == "A minor"
+    info = json.loads((song_dir(cfg.library_dir, s) / "info.json").read_text(encoding="utf-8"))
+    assert (info["key"], info["key_source"]) == ("A minor", "audio")
+
+
+def test_an_auto_sheet_of_no_chords_keeps_no_key(conn, cfg, tmp_path):
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"))
+    run(conn, cfg, Heard((0.0, 10.0, "N")))
+    [kept] = kept_files(conn, s.id)
+    assert "key" not in get_version(conn, kept.version_id).raw
+    info = json.loads((song_dir(cfg.library_dir, s) / "info.json").read_text(encoding="utf-8"))
+    assert (info["key"], info["key_source"]) == (None, None)
 
 
 def test_pending_selects_only_songs_without_human_sheet(conn, cfg, tmp_path):
