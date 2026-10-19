@@ -87,17 +87,21 @@ def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int, key: s
     from caracole.keys import key_name, song_key
     from caracole.search import STRONG, bare_id_hint, search_index, search_library
 
+    more = 0  # songs in the key that --limit leaves out
     if key is None:
         typer.echo("In your library")
         hits = search_library(conn, text, limit)
         library = [(hit, song_key(conn, cfg.library_dir, hit.song)) for hit in hits]
     else:
         typer.echo(f"In your library, in {key_name(key)}")
-        library = _in_key(cfg, conn, text, key, limit)
+        in_key = _in_key(cfg, conn, text, key)
+        library, more = in_key[:limit], max(len(in_key) - limit, 0)
     for hit, found in library:
         typer.echo(_library_line(cfg, hit, found))
     if not library:
         typer.echo("  nothing matches")
+    elif more:
+        typer.echo(f"  … and {more} more: see them with --limit {limit + more}")
     if key is not None:
         typer.echo("\nThe offline Ultimate Guitar index has no keys: search it without --key.")
         return
@@ -131,10 +135,11 @@ def _overrides(cfg: Config) -> Overrides | None:
 
 
 def _in_key(
-    cfg: Config, conn: sqlite3.Connection, text: str, key: str, limit: int
+    cfg: Config, conn: sqlite3.Connection, text: str, key: str
 ) -> list[tuple[LibraryHit, SongKey]]:
     """Your songs in ``key``, however it is spelled (``keys.same_key``): those that match ``text``,
-    best first, or with no text every one, by name."""
+    best first, or with no text every one, by name. All of them, so the listing can say how many
+    ``--limit`` leaves out."""
     from caracole.keys import same_key, song_key
     from caracole.search import LibraryHit, search_library
     from caracole.songs import list_songs
@@ -149,8 +154,6 @@ def _in_key(
         known = song_key(conn, cfg.library_dir, hit.song)
         if known is not None and same_key(known.key, key):
             found.append((hit, known))
-            if len(found) == limit:
-                break
     return found
 
 

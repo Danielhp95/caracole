@@ -511,9 +511,9 @@ and cache.
 - **`caracole todo`** rewrites `_todo.md` and `index.html` from the database.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
-- **`caracole search QUERY [--limit N] [--add N] [--key KEY]`** searches your
-  library and the offline UG index; `--key` finds your songs in one key (see
-  [caracole search](#caracole-search)).
+- **`caracole search [QUERY]... [--limit N] [--add N] [--key KEY]`** searches
+  your library and the offline UG index; `--key` finds your songs in one key
+  (see [caracole search](#caracole-search)).
 - **`caracole autochords`** writes `sheet (auto).txt` from audio you bought, for
   songs with no human sheet (see [the worked example](#a-worked-example)), then
   rewrites `_todo.md` and `index.html`. It needs the flake's
@@ -717,8 +717,8 @@ opens the file directly, works.
 
 ### caracole search
 
-`caracole search QUERY [--limit N] [--add N] [--key KEY]` looks in two
-places, and sends no request:
+`caracole search [QUERY]... [--limit N] [--add N] [--key KEY]` looks in
+two places, and sends no request:
 
     $ caracole search creep
     In your library
@@ -753,8 +753,9 @@ overrides.toml for this hint alone, and still works when the file can't be
 read.
 
 `--key KEY` keeps only your songs in that key (see
-[The song's key](#the-songs-key)), with or without QUERY; without it, every
-song of yours in the key, by name:
+[The song's key](#the-songs-key)), with or without QUERY; without it, your
+songs in the key, by name. It lists up to `--limit` of them, and says how many
+more there are:
 
     $ caracole search --key Am
     In your library, in A minor

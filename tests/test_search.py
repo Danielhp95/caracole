@@ -639,6 +639,21 @@ def test_cli_search_by_key_takes_the_key_in_lowercase(tmp_path, typed, heading, 
     assert f"  {song} · found · Key {heading}" in result.output
 
 
+def test_cli_search_by_key_says_when_limit_cuts_the_list(tmp_path):
+    conn = seed_keys(tmp_path)
+    for tab_id, title in enumerate(("Airbag", "Bones", "Climbing Up the Walls"), start=10):
+        keep_sheet(conn, tmp_path / "lib", add_song(conn, "Radiohead", title), "Words\n",
+                   raw={"tonality_name": "G"}, tab_id=tab_id)
+    result = run(tmp_path, "search", "--key", "G", "--limit", "2")
+    assert result.exit_code == 0, result.output
+    assert "Radiohead - Airbag" in result.output and "Radiohead - Bones" in result.output
+    assert "Climbing" not in result.output and "Creep" not in result.output
+    assert "  … and 2 more: see them with --limit 4" in result.output
+    result = run(tmp_path, "search", "--key", "G", "--limit", "4")
+    assert result.exit_code == 0, result.output
+    assert "Radiohead - Creep" in result.output and "more" not in result.output
+
+
 def test_cli_search_key_that_is_no_key_is_a_usage_error(tmp_path):
     seed_keys(tmp_path)
     result = run(tmp_path, "search", "--key", "Hm7")
