@@ -107,7 +107,7 @@ def autochords_pending(
             continue
         try:
             reason = _skip_reason(conn, song, overrides)
-        except Exception as e:  # a song's bad data must not stop the others
+        except Exception as e:  # noqa: BLE001 - a song's bad data must not stop the others
             _failed(stats, song, e)
             continue
         if reason is not None:
@@ -127,7 +127,7 @@ def autochords_pending(
             continue
         try:
             used = _generate(conn, cfg, song, *models, stamp)
-        except Exception as e:  # one file's problem must not stop the others
+        except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
             _failed(stats, song, e)
             continue
         stats.generated += 1
@@ -187,7 +187,7 @@ def _models(
             recognizer = _default_recognizer(cfg)
         except ModelsUnavailable as e:
             problems += e.args
-        except Exception as e:  # missing or broken weights, or torch failing to load
+        except Exception as e:  # noqa: BLE001 - missing or broken weights, or torch failing to load
             problems.append(f"{type(e).__name__}: {e}")
     if problems or recognizer is None or beats_fn is None:
         raise ModelsUnavailable(*problems)
