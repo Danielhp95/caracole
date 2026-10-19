@@ -35,7 +35,6 @@
   # options, then settings.autochords, win over them. Null leaves one unset.
   models ? callPackage ./autochords.nix { },
   btcWeights ? models.btcWeights,
-  btcConfig ? null,
   beatCheckpoint ? models.beatThisCheckpoint,
 }:
 
@@ -45,7 +44,6 @@ let
   # Wrapper defaults only: a variable already set (by the NixOS unit, say) wins.
   modelFiles = lib.filterAttrs (_: file: file != null) {
     TABARR_BTC_WEIGHTS = btcWeights;
-    TABARR_BTC_CONFIG = btcConfig;
     TABARR_BEAT_CHECKPOINT = beatCheckpoint;
   };
   modelDefaults = lib.concatLists (
