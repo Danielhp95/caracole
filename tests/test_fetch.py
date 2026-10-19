@@ -909,6 +909,21 @@ def test_a_corrected_match_leaves_the_old_songs_guitar_parts_out_of_the_running(
     assert not (song_dir(tmp_path / "lib", song) / "tab.txt").exists()
 
 
+def test_unblocking_a_tab_only_an_earlier_match_found_sends_nothing_back(conn, tmp_path):
+    song = accepted(conn, akey="soda-stereo", skey="signos")
+    index(conn, (901, "soda-stereo", "signos", "chords"), (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(signos_tab(901), content=sheet("sheet 901", LINES))
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    correct_to(conn, tmp_path, "persiana-americana")
+    blocked = Overrides(match={song.key: ("soda-stereo", "persiana-americana")}, block=frozenset({901}))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, blocked), get_song(conn, song.id))
+
+    unblocked = Overrides(match=blocked.match)
+    assert songs_to_fetch(conn, unblocked, NOW) == []  # 901 is Signos's: it competes either way for nothing
+
+
 def test_versions_the_old_and_new_match_share_come_back_from_the_cache(conn, tmp_path):
     # The match covered the variant slug "persiana-americana-acoustic"; you narrow it to that variant.
     song = accepted(conn)

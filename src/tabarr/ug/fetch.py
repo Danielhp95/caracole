@@ -1114,7 +1114,10 @@ def _left_out(run: _SongRun) -> list[int]:
     if not block:
         return []
     song = run.song
-    ids = {int(r.tab_id) for r in song_versions(run.conn, song.id, include_gone=True) if r.provider == PROVIDER}
+    ids = {
+        int(r.tab_id) for r in song_versions(run.conn, song.id, include_gone=True)
+        if r.provider == PROVIDER and not r.stale  # an earlier match's: no candidate, blocked or not
+    }
     ids |= {t.tab_id for t in _song_index_tabs(run.conn, song, frozenset())}
     ids |= set(run.ctx.overrides.pin.get(song.key, ()))
     return sorted(ids & block)
