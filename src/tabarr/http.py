@@ -4,9 +4,11 @@ Rules this module enforces (plan §6, "Politeness"):
 
 - every raw response worth keeping (a 200 or 404 the caller accepts) is cached
   forever, and a cached URL never costs a request again;
-- a per-run request budget, with a random pause before every network request;
+- a per-run request budget, with a random pause before every network request,
+  redirect hops included;
 - one request at a time;
-- a URL its host's robots.txt disallows (``ROBOTS_DISALLOW``) is never requested;
+- a URL its host's robots.txt disallows (``ROBOTS_DISALLOW``) is never requested,
+  nor followed to;
 - a 403, a 429 or a challenge page raises ``ProviderBlocked``. Errors are never
   misses: callers must not turn any ``ProviderError`` into "not found".
 """
@@ -94,7 +96,7 @@ class Event:
     provider: str
     url: str
     status: int | None
-    decision: str  # ok | not_modified | blocked | error | budget | unavailable
+    decision: str  # ok | not_modified | redirect | blocked | error | budget | unavailable
     message: str | None = None
 
 
@@ -186,6 +188,26 @@ def robots_disallows(url: str) -> str | None:
     return None
 
 
+_MAX_REDIRECTS = 3  # hops followed for one request; httpx alone would follow 20
+
+
+def _redirect_problem(origin: str, target: str, hops: int) -> str | None:
+    """Why the ``hops``-th redirect of a request for ``origin``, to ``target``, isn't followed, if it isn't."""
+    if hops > _MAX_REDIRECTS:
+        return f"more than {_MAX_REDIRECTS} redirects"
+    if _site(target) != _site(origin):
+        return f"redirect to another site: {target}"
+    rule = robots_disallows(target)
+    if rule is not None:
+        return f"redirect to {target}, which robots.txt disallows ({rule})"
+    return None
+
+
+def _site(url: str) -> str:
+    """A URL's site: the last two labels of its host (each provider is on a plain .com or .net domain)."""
+    return ".".join(httpx.URL(url).host.split(".")[-2:])
+
+
 class PoliteClient:
     """One provider's HTTP client for one run: cache-first, budgeted, paced, never escalating.
 
@@ -199,6 +221,10 @@ class PoliteClient:
     - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
     - A URL robots.txt disallows (``robots_disallows``) raises ``ProviderError``
       without a request.
+    - Redirects are followed one hop at a time, at most three. Each hop is a
+      request like any other (budget, pause, event) and must stay on the site
+      asked for and be open in robots.txt, or ``ProviderError``. The final answer
+      is cached under the URL asked for.
     - 403, 429 or a challenge page raise ``ProviderBlocked``, and no further
       requests are made this run.
     - After ``max_consecutive_errors`` other errors, ``ProviderUnavailable``. Only a
@@ -239,7 +265,7 @@ class PoliteClient:
         self._http = httpx.Client(
             transport=transport,
             headers={"User-Agent": user_agent},
-            follow_redirects=True,
+            follow_redirects=False,  # get() follows them, one counted, paced and checked hop at a time
             timeout=timeout,
         )
 
@@ -271,17 +297,6 @@ class PoliteClient:
         rule = robots_disallows(full)
         if rule is not None:  # nothing is sent, so the error breaker doesn't count it either
             raise ProviderError(self.provider, full, None, f"robots.txt disallows it ({rule})")
-        if self._blocked is not None:
-            raise ProviderBlocked(self.provider, full, self._blocked.status, "blocked earlier this run")
-        if self._unavailable:
-            raise ProviderUnavailable(self.provider, full, None, "too many errors this run")
-        if self.requests_made >= self.policy.budget:
-            if not self._budget_reported:
-                self._budget_reported = True
-                self._event(full, None, "budget", f"budget of {self.policy.budget} requests spent")
-            raise BudgetExhausted(self.provider)
-
-        self._pause()
         headers: dict[str, str] = {}
         if conditional and cached is not None:
             etag = _header(cached.headers, "etag")
@@ -291,25 +306,23 @@ class PoliteClient:
             if modified:
                 headers["If-Modified-Since"] = modified
 
-        self.requests_made += 1
-        self._last_request = self._clock()
-        try:
-            resp = self._http.get(full, headers=headers)
-            body = resp.content
-        except httpx.HTTPError as e:
-            self._fail(full, None, f"{type(e).__name__}: {e}")
-            raise AssertionError("unreachable")  # pragma: no cover
+        at = full  # the URL that answered: the one asked for, or the last redirect hop
+        resp = self._send(at, self._http.build_request("GET", full, headers=headers))
+        hops = 0
+        while resp.next_request is not None:  # a redirect; its hop is a request like any other
+            hops += 1
+            target = str(resp.next_request.url)
+            problem = _redirect_problem(full, target, hops)
+            if problem is not None:
+                self._fail(at, resp.status_code, problem)
+                raise AssertionError("unreachable")  # pragma: no cover
+            self._event(at, resp.status_code, "redirect", target)
+            at, resp = target, self._send(target, resp.next_request)
 
-        status = resp.status_code
-        if status in (403, 429) or is_challenge(status, resp.headers, body):
-            reason = "challenge page" if is_challenge(status, resp.headers, body) else f"HTTP {status}"
-            self._blocked = ProviderBlocked(self.provider, full, status, reason)
-            self._event(full, status, "blocked", reason)
-            raise self._blocked
-
+        status, body = resp.status_code, resp.content
         if status == 304 and cached is not None:
             self._errors_in_a_row = 0
-            self._event(full, status, "not_modified", None)
+            self._event(at, status, "not_modified", None)
             return Response(url=full, status=304, content=cached.content, headers=cached.headers, from_cache=True)
 
         if status in accept:
@@ -318,10 +331,10 @@ class PoliteClient:
                 self._write_cache(key, full, status, kept, body)
             if status < 500:  # an accepted 5xx (LRCLIB's 503 for a miss) is no sign of health
                 self._errors_in_a_row = 0
-            self._event(full, status, "ok", None)
+            self._event(at, status, "ok", None)
             return Response(url=full, status=status, content=body, headers=kept, from_cache=False)
 
-        self._fail(full, status, f"HTTP {status}")
+        self._fail(at, status, f"HTTP {status}")
         raise AssertionError("unreachable")  # pragma: no cover
 
     def close(self) -> None:
@@ -340,6 +353,35 @@ class PoliteClient:
             return True
         fetched = datetime.strptime(cached.fetched_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
         return self._wall_clock() - fetched > max_age
+
+    def _send(self, url: str, request: httpx.Request) -> httpx.Response:
+        """One network request, a redirect hop included: within the budget, after the pause."""
+        if self._blocked is not None:
+            raise ProviderBlocked(self.provider, url, self._blocked.status, "blocked earlier this run")
+        if self._unavailable:
+            raise ProviderUnavailable(self.provider, url, None, "too many errors this run")
+        if self.requests_made >= self.policy.budget:
+            if not self._budget_reported:
+                self._budget_reported = True
+                self._event(url, None, "budget", f"budget of {self.policy.budget} requests spent")
+            raise BudgetExhausted(self.provider)
+
+        self._pause()
+        self.requests_made += 1
+        self._last_request = self._clock()
+        try:
+            resp = self._http.send(request)
+        except httpx.HTTPError as e:
+            self._fail(url, None, f"{type(e).__name__}: {e}")
+            raise AssertionError("unreachable")  # pragma: no cover
+
+        status, body = resp.status_code, resp.content
+        if status in (403, 429) or is_challenge(status, resp.headers, body):
+            reason = "challenge page" if is_challenge(status, resp.headers, body) else f"HTTP {status}"
+            self._blocked = ProviderBlocked(self.provider, url, status, reason)
+            self._event(url, status, "blocked", reason)
+            raise self._blocked
+        return resp
 
     def _pause(self) -> None:
         if self._last_request is None:

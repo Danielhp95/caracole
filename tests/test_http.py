@@ -219,6 +219,85 @@ def test_robots_refusals_are_not_provider_failures(tmp_path):
     assert len(rec.requests) == 1
 
 
+OLD = TABS + "/tab/a/old-chords-1"
+NEW = TABS + "/tab/a/new-chords-1"
+
+
+def moved(location, *, status=301, frm=OLD):
+    """A site where ``frm`` redirects to ``location`` and every other URL answers 200."""
+    def handler(request):
+        if str(request.url) == frm:
+            return httpx.Response(status, headers={"Location": location})
+        return httpx.Response(200, content=b"page")
+    return handler
+
+
+def test_each_redirect_hop_is_counted_and_paced(tmp_path):
+    sleeps: list[float] = []
+    client, rec = make_client(tmp_path, moved("/tab/a/new-chords-1"), sleeps=sleeps)
+    assert client.get(OLD).content == b"page"
+    assert [str(r.url) for r in rec.requests] == [OLD, NEW]
+    assert client.requests_made == 2
+    assert len(sleeps) == 1 and 10.0 <= sleeps[0] <= 20.0
+
+
+def test_each_redirect_hop_is_an_event(tmp_path):
+    events = []
+    client, _ = make_client(tmp_path, moved(NEW, status=302), events=events)
+    client.get(OLD)
+    assert [(e.url, e.status, e.decision) for e in events] == [(OLD, 302, "redirect"), (NEW, 200, "ok")]
+
+
+def test_a_redirected_answer_is_cached_under_the_url_asked(tmp_path):
+    client, rec = make_client(tmp_path, moved(NEW))
+    assert client.get(OLD).url == OLD
+    again = client.get(OLD)
+    assert again.from_cache and again.content == b"page" and len(rec.requests) == 2
+
+
+def test_a_redirect_hop_needs_budget(tmp_path):
+    client, rec = make_client(tmp_path, moved(NEW), budget=1)
+    with pytest.raises(BudgetExhausted):
+        client.get(OLD)
+    assert len(rec.requests) == 1
+
+
+def test_a_redirect_loop_stops_after_three_hops(tmp_path):
+    # Old PHP sites (LaCuerda) can redirect to themselves; httpx alone would follow 20 hops.
+    sleeps: list[float] = []
+    client, rec = make_client(tmp_path, lambda r: httpx.Response(302, headers={"Location": str(r.url)}),
+                              sleeps=sleeps, max_consecutive_errors=3)
+    for i in range(3):
+        with pytest.raises(ProviderError) as e:
+            client.get(f"https://acordes.lacuerda.net/artist_{i}/")
+        assert not isinstance(e.value, ProviderUnavailable)
+    with pytest.raises(ProviderUnavailable):
+        client.get("https://acordes.lacuerda.net/artist_9/")
+    assert len(rec.requests) == client.requests_made == 12  # each: the request and 3 hops
+    assert len(sleeps) == 11
+
+
+def test_a_redirect_robots_txt_closes_is_not_followed(tmp_path):
+    client, rec = make_client(tmp_path, moved("/tab/print?id=1", status=302))
+    with pytest.raises(ProviderError) as e:
+        client.get(OLD)
+    assert not isinstance(e.value, ProviderBlocked)
+    assert [str(r.url) for r in rec.requests] == [OLD]
+
+
+def test_a_redirect_to_another_site_is_not_followed(tmp_path):
+    client, rec = make_client(tmp_path, moved("https://accounts.example.com/login?next=/tab/a", status=302))
+    with pytest.raises(ProviderError):
+        client.get(OLD)
+    assert [str(r.url) for r in rec.requests] == [OLD]
+
+
+def test_a_redirect_between_the_hosts_of_one_site_is_followed(tmp_path):
+    client, rec = make_client(tmp_path, moved(WWW + "/artist/a_1"))
+    assert client.get(OLD).status == 200
+    assert [str(r.url) for r in rec.requests] == [OLD, WWW + "/artist/a_1"]
+
+
 def test_500_is_error_and_not_cached(tmp_path):
     client, rec = make_client(tmp_path, ok(b"boom", status=500))
     with pytest.raises(ProviderError) as e:
