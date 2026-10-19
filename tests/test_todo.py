@@ -259,6 +259,14 @@ def test_render_failures_and_font_error_are_shown(conn, cfg):
     assert "Soda Stereo - Persiana Americana" in pdfs and r"A\_B - \[C\]" in pdfs
 
 
+def test_render_status_with_a_count_instead_of_names_still_renders(conn, cfg):
+    kv_set_json(conn, "render:status", {"at": "2026-10-18T03:40:00Z", "rendered": 4, "failed": 2, "font_error": None})
+    assert "4 rendered, 2 failed" in todo(conn, cfg)
+    kv_set_json(conn, "render:status", {"at": "nonsense", "rendered": 4, "failed": "abc"})
+    text = todo(conn, cfg)
+    assert "4 rendered, 0 failed" in text and "  - a" not in text
+
+
 def test_no_pdf_section_before_the_first_render_or_for_a_bad_record(conn, cfg):
     assert "## PDFs" not in todo(conn, cfg)
     kv_set_json(conn, "render:status", ["not", "a", "record"])
