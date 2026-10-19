@@ -20,8 +20,9 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 from selectolax.lexbor import LexborHTMLParser
 
@@ -42,9 +43,10 @@ class PageParseError(ProviderError):
 
 
 def kind_of(ug_type: str | None) -> str | None:
-    """tabarr's kind for a UG tab type: Chords → chords, Tabs → tabs, Pro → guitar-pro, Power → power.
+    """tabarr's kind for a UG tab type.
 
-    UG's type ``Pro`` is a public, user-submitted Guitar Pro file. Any other
+    Chords → chords, Tabs → tabs, Pro → guitar-pro, Power → power. UG's type
+    ``Pro`` is a public, user-submitted Guitar Pro file. Any other
     type, ``Official`` included, has no kind (None).
     """
     if not isinstance(ug_type, str):
@@ -108,7 +110,12 @@ class UGTabPage:
 
 
 def page_url(tab_id: int) -> str:
-    """The URL of a tab page. UG serves every tab at this bare form."""
+    """The bare URL of a tab page, ``.../tab/{id}``.
+
+    It is the ``tab_url`` UG gives tabs that have no slugs (85053 and 555890
+    were fetched at it). That slugged tabs are served there too is likely
+    but not verified.
+    """
     return f"{TAB_BASE_URL}{tab_id}"
 
 
@@ -187,8 +194,14 @@ def read_page_data(html: str | bytes, *, url: str | None = None) -> dict[str, An
     return data
 
 
-def read_versions(data: Mapping[str, Any], key: str, *, url: str | None = None) -> tuple[UGVersion, ...]:
-    """The usable tabs in the list ``data[key]``: a missing key or a non-list is a parse error, null is empty."""
+def read_versions(
+    data: Mapping[str, Any], key: str, *, url: str | None = None
+) -> tuple[UGVersion, ...]:
+    """The usable tabs in the list ``data[key]``.
+
+    A missing key or a value that isn't a list is a ``PageParseError``; null is
+    no tabs. Entries that aren't usable tabs (see ``parse_version``) are skipped.
+    """
     if key not in data:
         raise PageParseError("ug", url, None, f"no {key} on the page")
     items = data[key]

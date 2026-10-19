@@ -15,8 +15,9 @@ are relative, such as ``/artist/soda_stereo_2946?filter=chords``.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
 
 from tabarr.ug.page import PageParseError, UGVersion, json_int, read_page_data, read_versions

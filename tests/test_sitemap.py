@@ -24,9 +24,9 @@ def test_chords_url():
 
 
 def test_http_scheme_accepted():
-    assert parse_tab_url("http://tabs.ultimate-guitar.com/tab/queen/bohemian-rhapsody-tabs-1") == IndexRow(
-        1, "queen", "bohemian-rhapsody", "tabs"
-    )
+    assert parse_tab_url(
+        "http://tabs.ultimate-guitar.com/tab/queen/bohemian-rhapsody-tabs-1"
+    ) == IndexRow(1, "queen", "bohemian-rhapsody", "tabs")
 
 
 def test_guitar_pro_peeled_before_single_word():
@@ -36,7 +36,9 @@ def test_guitar_pro_peeled_before_single_word():
 
 
 def test_power_kept():
-    assert parse_tab_url(TAB + "queen/the-miracle-power-1041631") == IndexRow(1041631, "queen", "miracle", "power")
+    assert parse_tab_url(TAB + "queen/the-miracle-power-1041631") == IndexRow(
+        1041631, "queen", "miracle", "power"
+    )
 
 
 @pytest.mark.parametrize(
@@ -76,7 +78,9 @@ def test_empty_artist_skipped():
     assert parse_tab_url(TAB + "/autosmile-chords-65163") is None
 
 
-@pytest.mark.parametrize("path", ["some-artist/chords-123", "some-artist/and-chords-123", "and/song-chords-123"])
+@pytest.mark.parametrize(
+    "path", ["some-artist/chords-123", "some-artist/and-chords-123", "and/song-chords-123"]
+)
 def test_empty_key_after_canonicalization_skipped(path):
     assert parse_tab_url(TAB + path) is None
 
@@ -94,8 +98,14 @@ def test_other_hosts_are_none(url):
 
 
 def test_leading_the_and_trailing_hyphen():
-    assert parse_tab_url(TAB + "the-rifles/the-general-guitar-pro-6228251")[1:3] == ("rifles", "general")
-    assert parse_tab_url(TAB + "misc-originals/armokto--guitar-pro-6573314")[1:3] == ("misc-originals", "armokto")
+    assert parse_tab_url(TAB + "the-rifles/the-general-guitar-pro-6228251")[1:3] == (
+        "rifles",
+        "general",
+    )
+    assert parse_tab_url(TAB + "misc-originals/armokto--guitar-pro-6573314")[1:3] == (
+        "misc-originals",
+        "armokto",
+    )
     assert parse_tab_url(TAB + "fontaines-d-c-/big-tabs-2626344")[1:3] == ("fontaines-d-c", "big")
     assert parse_tab_url(TAB + "-feast/jerusalem-chords-2766562")[1:3] == ("feast", "jerusalem")
 
@@ -119,7 +129,9 @@ def test_iter_locs_gunzips():
 
 
 def test_iter_locs_unescapes_xml_entities():
-    assert list(iter_locs(b"<url><loc>https://x.test/a?b=1&amp;c=2</loc></url>")) == ["https://x.test/a?b=1&c=2"]
+    assert list(iter_locs(b"<url><loc>https://x.test/a?b=1&amp;c=2</loc></url>")) == [
+        "https://x.test/a?b=1&c=2"
+    ]
 
 
 def test_iter_locs_strips_whitespace():
@@ -127,7 +139,9 @@ def test_iter_locs_strips_whitespace():
 
 
 def test_fixture_sitemap_rows():
-    rows = [r for r in map(parse_tab_url, iter_locs((FIXTURES / "sitemap_tabs.xml").read_bytes())) if r]
+    rows = [
+        r for r in map(parse_tab_url, iter_locs((FIXTURES / "sitemap_tabs.xml").read_bytes())) if r
+    ]
     assert rows == [
         IndexRow(6228227, "amy-shark", "ill-be-yours", "chords"),
         IndexRow(6228251, "rifles", "general", "guitar-pro"),
@@ -149,7 +163,11 @@ def test_fixture_sitemap_rows():
 def test_parse_sitemap_index_lists_children_in_order():
     children = parse_sitemap_index((FIXTURES / "sitemap_index.xml").read_bytes())
     assert len(children) == 15
-    assert children[:3] == [WWW + "sitemap_news.xml", WWW + "sitemap40.xml", WWW + "sitemap_ukulele1.xml"]
+    assert children[:3] == [
+        WWW + "sitemap_news.xml",
+        WWW + "sitemap40.xml",
+        WWW + "sitemap_ukulele1.xml",
+    ]
 
 
 def test_tab_sitemaps_numeric_order_then_last():

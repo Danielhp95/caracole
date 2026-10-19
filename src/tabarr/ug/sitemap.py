@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import gzip
 import re
-from typing import Iterator, NamedTuple
+from collections.abc import Iterator
+from typing import NamedTuple
 from xml.sax.saxutils import unescape
 
 from tabarr.normalize import ug_slug_key
@@ -22,7 +23,16 @@ KEEP_TYPES = frozenset({"chords", "tabs", "guitar-pro", "power"})
 # Every type token seen in the sitemaps. "guitar-pro" comes first, so it is peeled
 # off whole before any single-word token could match its last part.
 TYPE_TOKENS = (
-    "guitar-pro", "chords", "tabs", "bass", "ukulele", "power", "official", "video", "musescore", "drums",
+    "guitar-pro",
+    "chords",
+    "tabs",
+    "bass",
+    "ukulele",
+    "power",
+    "official",
+    "video",
+    "musescore",
+    "drums",
 )
 
 _GZIP_MAGIC = b"\x1f\x8b"
@@ -104,7 +114,8 @@ def tab_sitemaps(children: list[str]) -> list[str]:
 
 
 def sitemap_name(url: str) -> str:
-    """The short name of a tab sitemap: ``"40"`` for ``sitemap40.xml``, ``"last"`` for ``sitemap_last.xml``."""
+    """The short name of a tab sitemap: ``"40"`` for ``sitemap40.xml``, ``"last"`` for
+    ``sitemap_last.xml``. Any other sitemap is a ValueError."""
     m = _TAB_SITEMAP.search(url)
     if m is None:
         raise ValueError(f"not a tab sitemap: {url}")

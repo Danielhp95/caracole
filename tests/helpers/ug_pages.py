@@ -3,7 +3,7 @@
 Every UG tab page and artist page is a React app whose data sits in a single
 attribute::
 
-    <div class="js-store" data-content="{&quot;store&quot;:{&quot;page&quot;:{&quot;data&quot;:{...}}}}"></div>
+    <div class="js-store" data-content="{&quot;store&quot;:{&quot;page&quot;:{...}}}"></div>
 
 The JSON is compact UTF-8, and UG escapes it like PHP's
 ``htmlentities($json, ENT_QUOTES)``: ``"`` becomes ``&quot;``, ``'`` becomes
@@ -18,10 +18,11 @@ Import from a test module (pytest puts ``tests/`` on ``sys.path``)::
 
 A tab page, as ``tabarr.ug.page.parse_tab_page`` reads it::
 
-    tab = version_dict(85053, version=2, rating=4.54, votes=7, song="De Música Ligera", artist="Soda Stereo")
+    song = {"song": "De Música Ligera", "artist": "Soda Stereo"}
+    tab = version_dict(85053, version=2, rating=4.54, votes=7, **song)
     others = [
-        version_dict(85042, rating=4.83, votes=277, song="De Música Ligera", artist="Soda Stereo"),
-        version_dict(2528571, type="Official", song="De Música Ligera", artist="Soda Stereo"),
+        version_dict(85042, rating=4.83, votes=277, **song),
+        version_dict(2528571, type="Official", **song),
     ]
     html = make_tab_page_html(
         tab, others,
@@ -34,6 +35,16 @@ Serve it to code under test with ``httpx.MockTransport``::
     pages = {"https://tabs.ultimate-guitar.com/tab/85053": html}
     transport = httpx.MockTransport(lambda req: httpx.Response(200, text=pages[str(req.url)]))
 
+An artist page, as ``tabarr.ug.artist.parse_artist_page`` reads it, for the URL
+``artist_page_url("https://www.ultimate-guitar.com/artist/soda_stereo_2946", kind="chords")``::
+
+    html = make_artist_page_html(2946, "Soda Stereo", [tab, *others], page=1, pages=1)
+
+A page whose shape has drifted, which the parsers must report as
+``PageParseError`` rather than as "no versions"::
+
+    html = store_page_html({"tab": version_dict(1, type="Pro")})  # no tab_view
+
 Shapes to keep in mind (they are UG's, not choices made here):
 
 - A tab page's ``tab_view.versions`` leaves out the page's own tab, which is
@@ -42,8 +53,10 @@ Shapes to keep in mind (they are UG's, not choices made here):
 - A Guitar Pro or Power Tab page has no ``wiki_tab.content`` (``content=None``)
   and carries the file's details in ``tab_view.meta``, e.g.
   ``{"fileExtension": ".gp5", "duration": 14}``. UG writes an empty meta as ``[]``.
-- ``tab_url`` is the bare ``https://tabs.ultimate-guitar.com/tab/{id}``, which
-  UG serves for every tab, so tests can route on it.
+- ``version_dict`` writes ``tab_url`` in its bare form,
+  ``https://tabs.ultimate-guitar.com/tab/{id}`` (``tabarr.ug.page.page_url``),
+  so tests can route on it. On UG that is the ``tab_url`` of tabs without
+  slugs; slugged tabs carry their slugged URL.
 """
 
 from __future__ import annotations
@@ -87,7 +100,7 @@ ARTIST_FILTERS = {
 
 
 def escape_attr(text: str) -> str:
-    """Escape text for ``data-content`` exactly as UG does (PHP ``htmlentities``, ``ENT_QUOTES``)."""
+    """Escape text for ``data-content`` as UG does: PHP ``htmlentities`` with ``ENT_QUOTES``."""
     out = []
     for ch in text:
         if ch == "'":
@@ -207,8 +220,9 @@ def make_tab_page_html(
             "meta": meta if meta is not None else [],
         },
     }
+    song = str(tab.get("song_name", "")).upper()
     kind = str(tab.get("type_name") or tab.get("type") or "").upper()
-    title = f"{str(tab.get('song_name', '')).upper()} {kind} by {tab.get('artist_name', '')} @ Ultimate-Guitar.Com"
+    title = f"{song} {kind} by {tab.get('artist_name', '')} @ Ultimate-Guitar.Com"
     return store_page_html(data, title=title)
 
 
@@ -250,9 +264,14 @@ def make_artist_page_html(
         "other_tabs": list(tabs),
         "current_page": page,
         "pagination": {
-            "pages": [{"page": n, "url": path if n == 1 else f"{path}?page={n}"} for n in range(1, pages + 1)],
+            "pages": [
+                {"page": n, "url": path if n == 1 else f"{path}?page={n}"}
+                for n in range(1, pages + 1)
+            ],
             "current": page,
         },
         "filters": {"types": filters, "current_filters": {"types": "new_tab_type"}},
     }
-    return store_page_html(data, title=f"{name} Chords & Tabs for Guitar, Ukulele, Bass, Drums at Ultimate-Guitar")
+    return store_page_html(
+        data, title=f"{name} Chords & Tabs for Guitar, Ukulele, Bass, Drums at Ultimate-Guitar"
+    )
