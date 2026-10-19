@@ -314,9 +314,9 @@ def track_from_item(item: Mapping[str, Any] | None, added_at: str | None) -> Spo
     """The track in a saved or playlist item, or None for what tabarr skips.
 
     ``item`` is the object under an item's ``item`` key (``track`` before 2026),
-    or an entry of the top tracks. Local files, podcast episodes, null tracks and
-    tracks Spotify can no longer identify are skipped. Raises ValueError for an
-    object that isn't shaped like a track.
+    or an entry of the top tracks. Local files, podcast episodes and null tracks
+    are skipped. Raises ValueError for an object that isn't shaped like a track:
+    one without an id, a name or an artist (only local files lack an id).
     """
     if item is None:
         return None
@@ -326,16 +326,14 @@ def track_from_item(item: Mapping[str, Any] | None, added_at: str | None) -> Spo
     if item.get("type", "track") != "track" or item.get("episode") is True or item.get("is_local"):
         return None
     track_id = item.get("id")
-    if not track_id:
-        return None
     title = _text(item.get("name"))
     artists = tuple(
         name
         for a in item.get("artists") or ()
         if isinstance(a, Mapping) and (name := _text(a.get("name")))
     )
-    if not isinstance(track_id, str) or not title or not artists:
-        raise ValueError(f"track {track_id!r} has no usable name or artists")
+    if not isinstance(track_id, str) or not track_id or not title or not artists:
+        raise ValueError(f"track {track_id!r} has no id, name or artists")
     album = item.get("album")
     external_ids = item.get("external_ids")
     isrc = _text(external_ids.get("isrc")) if isinstance(external_ids, Mapping) else None

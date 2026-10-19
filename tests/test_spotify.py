@@ -547,11 +547,19 @@ def test_accounts_service_outage_is_not_an_auth_error():
 
 
 def test_malformed_items_are_reported_and_good_tracks_kept():
-    odd = {"type": "track", "id": "tOdd", "name": "No Artists", "artists": []}
-    sp = FakeSpotify(saved=[saved(SODA), saved(odd), "not an item"], page_size=10)
+    no_artists = {"type": "track", "id": "tOdd", "name": "No Artists", "artists": []}
+    no_id = {
+        "type": "track",
+        "track_id": "tRenamed",
+        "name": "Creep",
+        "artists": [{"name": "Radiohead"}],
+    }
+    sp = FakeSpotify(
+        saved=[saved(SODA), saved(no_artists), saved(no_id), "not an item"], page_size=10
+    )
     stats, up, _ = sync(sp, spotify(suggest_top_tracks=False))
     assert [c["source_id"] for c in up.calls] == ["tSoda"]
-    assert len(stats.errors) == 1 and "2 items" in stats.errors[0]
+    assert len(stats.errors) == 1 and "3 items" in stats.errors[0]
 
 
 # --- authorization --------------------------------------------------------------------------
