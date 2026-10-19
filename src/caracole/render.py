@@ -45,7 +45,9 @@ The viewer is made from the .cho, needs no font, and is written at every pass
 when it has changed (a new key in info.json, a PDF now there to link), and
 when the PDF could not be rendered too. It takes the song's musical key from
 the "key" and "key_source" of its info.json, read before the pass rewrites it
-and never through a link.
+and never through a link. It is an extra: one that can't be built (a bug) or
+written (a link in its place) is logged as "no viewer for", with the traceback
+of a bug, and counts the song as failed, but never costs it a PDF.
 
 A human sheet the song no longer keeps (the fetch drops one whose UG match was
 undone when nothing replaces it) takes the ``sheet.cho``, ``sheet.pdf`` and
@@ -72,7 +74,8 @@ the sheet keeps the built-in fonts.
 
 Others can write to the library (the Syncthing group, every synced device), so
 no sheet there is read through a symbolic link: a link or a FIFO in the place of
-``sheet.json``, ``sheet (auto).txt``, a .cho or a viewer fails that song. chordpro reads a
+``sheet.json``, ``sheet (auto).txt``, a .cho or a viewer fails that song (a viewer's
+alone: the PDFs are still rendered). chordpro reads a
 copy of the .cho and writes the PDF in a private directory under the cache
 directory, and the PDF then goes into the song's folder in one rename.
 """
@@ -88,7 +91,7 @@ import subprocess
 import tempfile
 import unicodedata
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from functools import lru_cache
 from itertools import pairwise
@@ -392,6 +395,8 @@ def render_all(
             continue
         stats.rendered += sum(1 for d in done if d.outcome == "rendered")
         stats.skipped += sum(1 for d in done if d.outcome == "skipped")
+        if any(d.viewer_failed for d in done):
+            failed.append(song.display)
         if missing := next((d.missing for d in done if d.outcome == "no font"), None):
             no_font.append(f"{song.display} ({missing} U+{ord(missing):04X})")
     stats.failed = len(failed)
@@ -407,10 +412,12 @@ def render_all(
 
 @dataclass(frozen=True)
 class _Done:
-    """One sheet's pass; for "no font", ``missing`` is its first letter the built-in fonts lack."""
+    """One sheet's pass; for "no font", ``missing`` is its first letter the built-in fonts lack.
+    ``viewer_failed``: its viewer couldn't be built or written (``_write_viewer`` logged why)."""
 
     outcome: Outcome
     missing: str | None = None
+    viewer_failed: bool = False
 
 
 def _render_song(
@@ -486,14 +493,17 @@ def _render_sheet(
     text = _read_text(cho)
     pdf = folder / f"{stem}.pdf"
     transpose = overrides.transpose.get(song.key, 0)
+
+    def viewer() -> bool:
+        return _write_viewer(song, text, folder / f"{stem}.html", pdf, key=key, transpose=transpose)
+
     try:
         done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, transpose,
                                  cjk_font=cjk_font, runner=runner, force=force)
     except RenderError:
-        _write_viewer(text, folder / f"{stem}.html", pdf, key=key, transpose=transpose)
+        viewer()  # the PDF's error is the song's; the viewer's own, if any, is logged
         raise
-    _write_viewer(text, folder / f"{stem}.html", pdf, key=key, transpose=transpose)
-    return done
+    return done if viewer() else replace(done, viewer_failed=True)
 
 
 def _render_sheet_pdf(
@@ -530,14 +540,28 @@ def _render_sheet_pdf(
     return _Done("rendered")
 
 
-def _write_viewer(text: str, page: Path, pdf: Path, *, key: tuple[str | None, str | None],
-                  transpose: int) -> None:
+def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *,
+                  key: tuple[str | None, str | None], transpose: int) -> bool:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
     there is one. It starts in the song's ``[transpose]``, as the PDF does, and takes its key
-    from info.json when that names one. A viewer that hasn't changed isn't written again."""
+    from info.json when that names one. A viewer that hasn't changed isn't written again.
+
+    The viewer is an extra: False, logged as "no viewer for", when it can't be built (a bug,
+    with its traceback) or written (a link or a FIFO in its place), and the song's PDFs and
+    its other sheet go on all the same.
+    """
     linked = pdf.name if pdf.is_file() and not pdf.is_symlink() else None
-    html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, pdf=linked)
-    _write_if_changed(page, html.encode("utf-8"))
+    try:
+        html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, pdf=linked)
+    except Exception:  # a sheet the viewer can't read must never cost the PDFs
+        log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
+        return False
+    try:
+        _write_if_changed(page, html.encode("utf-8"))
+    except (RenderError, OSError) as e:
+        log.warning("no viewer for %s: %s", song.display, e)
+        return False
+    return True
 
 
 def _info_key(folder: Path) -> tuple[str | None, str | None]:

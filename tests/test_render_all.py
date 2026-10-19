@@ -26,6 +26,7 @@ from caracole.db import kv_get_json, kv_set_json
 from caracole.lacuerda import parse_version_page
 from caracole.library import drop_file, keep_file, song_dir, write_atomic, write_info
 from caracole.overrides import Overrides, load_overrides
+from caracole import render as render_module
 from caracole.render import STYLE_FILE, RenderStats, render_all
 from caracole.songs import get_song, update_song
 from caracole.ug.page import strip_markup
@@ -467,6 +468,51 @@ def test_info_json_is_never_read_through_a_link(conn, cfg):
     assert viewer_data(html)["key"]["from"] == "from the sheet" and "not yours" not in html
 
 
+def test_odd_chord_names_on_a_sheet_get_their_viewer(conn, cfg):
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    odd = add_song(conn, "Soda Stereo", "Persiana Americana")  # newer: rendered first
+    human_sheet(conn, cfg, odd, "[ch]E7+13[/ch]  [ch]Am7b11[/ch]  [ch]C7(#13)[/ch]\nuna prueba\n", tab_id=1)
+    stats = render(conn, cfg)
+    assert (stats.rendered, stats.failed) == (2, 0)
+    assert ">E7+13</b>" in viewer_of(cfg, odd) and ">Am7b11</b>" in viewer_of(cfg, odd)
+    assert "<h1>De Música Ligera</h1>" in viewer_of(cfg, good)
+
+
+def test_a_viewer_that_cant_be_built_never_costs_the_pdfs(conn, cfg, caplog, monkeypatch):
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")  # newer: rendered first
+    human_sheet(conn, cfg, bad, tab_id=1)
+    real = render_module.build_viewer
+
+    def build_viewer(cho, **kwargs):
+        if "Persiana" in cho:
+            raise ValueError("a bug in the viewer")
+        return real(cho, **kwargs)
+
+    monkeypatch.setattr(render_module, "build_viewer", build_viewer)
+    stats = render(conn, cfg)
+    assert (stats.rendered, stats.failed) == (2, 1)  # both PDFs; one song without its viewer
+    assert pdf_of(cfg, bad).is_file() and pdf_of(cfg, good).is_file()
+    assert not (song_dir(cfg.library_dir, bad) / "sheet.html").exists()
+    assert "<h1>De Música Ligera</h1>" in viewer_of(cfg, good)
+    assert "no viewer for Soda Stereo - Persiana Americana" in caplog.text
+    assert "Traceback" in caplog.text and "a bug in the viewer" in caplog.text
+    assert "no PDF for" not in caplog.text
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Persiana Americana"]
+
+
+def test_a_sheet_chordpro_fails_on_still_gets_its_viewer(conn, cfg, caplog):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    stats = render(conn, cfg, runner=FakeChordPro(fail=("Música",)))
+    assert stats.failed == 1 and not pdf_of(cfg, song).exists()
+    html = viewer_of(cfg, song)
+    assert "<h1>De Música Ligera</h1>" in html and not re.search(r'href="[^"]*\.pdf"', html)
+    assert "no PDF for Soda Stereo - De Música Ligera" in caplog.text
+
+
 def test_an_unchanged_viewer_is_not_written_again(conn, cfg):
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     human_sheet(conn, cfg, song)
@@ -847,9 +893,13 @@ def test_a_link_or_fifo_in_place_of_a_sheet_fails_that_song_only(
     human_sheet(conn, cfg, good, tab_id=2)
     stats = render(conn, cfg)
     assert SECRET.encode() not in library_bytes(cfg)
-    assert (stats.rendered, stats.failed) == (1, 1)
+    viewer = name == "sheet.html"  # then only the viewer can't be written: the PDF is
+    assert (stats.rendered, stats.failed) == ((2, 1) if viewer else (1, 1))
     assert name in caplog.text
     assert ("symbolic link" if planted == "link" else "not a regular file") in caplog.text
+    said = "no viewer for" if viewer else "no PDF for"
+    assert f"{said} Placeholder Band - Synthetic Song" in caplog.text
+    assert pdf_of(cfg, bad).is_file() is viewer
     assert private_file.read_text(encoding="utf-8") == json.dumps({"content": SECRET})
 
 

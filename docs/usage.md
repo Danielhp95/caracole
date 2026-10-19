@@ -509,7 +509,9 @@ and cache.
   replaces the old one in one rename, so a failed render leaves the last good
   PDF in place. It exits 1 when a sheet couldn't be rendered, and the log
   says why, as `no PDF for Artist - Title: …` (chordpro's own messages name
-  the copy in the cache). A symbolic link, a FIFO or a folder in the place of
+  the copy in the cache). A viewer that couldn't be made or written is logged
+  as `no viewer for Artist - Title: …` and counts the song as failed too, but
+  never costs it its PDFs. A symbolic link, a FIFO or a folder in the place of
   `sheet.json`, `sheet (auto).txt`, a `.cho` file or a viewer fails that song
   alone: caracole reads no sheet through a link. Remove the link, and the next
   render writes the `.cho` and the viewer again; the next `caracole run` writes
