@@ -248,6 +248,13 @@ def test_a_new_client_pauses_after_another_process_s_last_request(cfg, conn, pau
     assert 10 - 4 <= pause <= 20 - 3
 
 
+def test_a_request_logged_in_the_future_costs_one_pause_at_most(cfg, conn, pauses):
+    log_request(conn, "ug", ago=-3600)  # the clock was set back since
+    make_client(cfg, conn, "ug", "run").close()
+    [pause] = pauses
+    assert pause <= 20
+
+
 @pytest.mark.parametrize(
     "provider,ago,decision",
     [("ug", 25, "ok"), ("lrclib", 1, "ok"), ("ug", 1, "budget")],

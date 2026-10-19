@@ -191,7 +191,7 @@ def _pause_after_last_request(
         return
     remaining = random.uniform(*delay) - (datetime.now(UTC) - last).total_seconds()
     if remaining > 0:
-        sleep(remaining)
+        sleep(min(remaining, delay[1]))  # never longer than one pause, the clock set back or not
 
 
 def make_client(cfg: Config, conn: sqlite3.Connection, provider: str, run_id: str) -> PoliteClient:
