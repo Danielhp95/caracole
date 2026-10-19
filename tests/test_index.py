@@ -10,9 +10,14 @@ from caracole.config import ProviderPolicy
 from caracole.http import PoliteClient, ProviderError
 from caracole.songs import get_song, update_song
 from caracole.ug.index import (
+    IndexPlan,
     IndexStats,
+    SitemapRead,
+    TabCounts,
     build_index,
+    describe_sitemaps,
     index_count,
+    index_coverage,
     index_stats,
     mark_dirty_for_new,
     refresh_index,
@@ -128,7 +133,8 @@ def test_build_inserts_kept_types_only(conn, tmp_path):
     assert ug.names() == ["sitemap.xml", "sitemap1.xml", "sitemap2.xml", "sitemap_last.xml"]
     # 2002 is listed by sitemap2 and sitemap_last: one row, reported new once.
     assert stats == IndexStats(sitemaps_fetched=3, sitemaps_unchanged=0, rows=8,
-                               new_tab_ids=(1001, 1002, 1005, 1006, 2001, 2002, 3001))
+                               new_tab_ids=(1001, 1002, 1005, 1006, 2001, 2002, 3001),
+                               parsed=("1", "2", "last"), completed=True)
     assert index_count(conn) == 7
 
 
@@ -192,18 +198,52 @@ def test_refresh_picks_up_new_numbered_sitemaps(conn, tmp_path):
     assert ug.names() == ["sitemap.xml", "sitemap4.xml", "sitemap_last.xml"]
 
 
-def test_build_and_refresh_report_each_sitemap(conn, tmp_path):
+def test_build_reports_its_plan_before_it_asks_for_a_tab_sitemap(conn, tmp_path):
     ug = site()
     seen = []
-    build_index(conn, ug.client(tmp_path / "cache"), NOW, progress=lambda name, s: seen.append((name, s)))
-    assert seen == [
-        ("1", IndexStats(sitemaps_fetched=1, rows=4, new_tab_ids=(1001, 1002, 1005, 1006))),
-        ("2", IndexStats(sitemaps_fetched=1, rows=2, new_tab_ids=(2001, 2002))),
-        ("last", IndexStats(sitemaps_fetched=1, rows=2, new_tab_ids=(3001,))),
+    build_index(conn, ug.client(tmp_path / "cache"), NOW, progress=lambda event: seen.append((event, ug.names())))
+    plan, asked = seen[0]
+    assert plan == IndexPlan(listed=("1", "2", "last"), reads=("1", "2", "last"))
+    assert asked == ["sitemap.xml"]
+    assert plan.expected_urls == 150_000  # a sitemap holds at most 50,000 URLs, and UG fills its numbered ones
+
+
+def test_build_reports_what_each_sitemap_held(conn, tmp_path):
+    ug = site()
+    seen = []
+    build_index(conn, ug.client(tmp_path / "cache"), NOW, progress=seen.append)
+    # sitemap1: 4 rows, the bare id 1004, and a bass and a ukulele tab the index doesn't keep
+    assert seen[1:] == [
+        SitemapRead(1, 3, "1", "sitemap1.xml", tabs=TabCounts(urls=7, indexed=4, bare=1, other={"bass": 1, "ukulele": 1}),
+                    new_tab_ids=(1001, 1002, 1005, 1006)),
+        SitemapRead(2, 3, "2", "sitemap2.xml", tabs=TabCounts(urls=2, indexed=2), new_tab_ids=(2001, 2002)),
+        SitemapRead(3, 3, "last", "sitemap_last.xml", tabs=TabCounts(urls=2, indexed=2), new_tab_ids=(3001,)),
     ]
-    seen.clear()
-    refresh_index(conn, ug.client(tmp_path / "cache"), LATER, progress=lambda name, s: seen.append((name, s)))
-    assert seen == [("2", IndexStats(sitemaps_unchanged=1)), ("last", IndexStats(sitemaps_unchanged=1))]
+
+
+def test_refresh_reports_its_plan_and_each_sitemap_unchanged(conn, tmp_path):
+    ug = site()
+    build_index(conn, ug.client(tmp_path / "cache"), NOW)
+    seen = []
+    refresh_index(conn, ug.client(tmp_path / "cache"), LATER, progress=seen.append)
+    assert seen == [
+        IndexPlan(listed=("1", "2", "last"), reads=("2", "last"), indexed=("2", "last")),
+        SitemapRead(1, 2, "2", "sitemap2.xml", unchanged=True),
+        SitemapRead(2, 2, "last", "sitemap_last.xml", unchanged=True),
+    ]
+    assert seen[0].expected_urls == 0  # both indexed already: nothing is expected to be downloaded
+
+
+def test_a_plan_counts_the_sitemaps_the_http_cache_holds(tmp_path):
+    """A fresh database next to a warm HTTP cache: a 304 then serves each sitemap, and nothing is downloaded."""
+    from caracole import db
+
+    ug = site()
+    build_index(db.connect(tmp_path / "a.sqlite"), ug.client(tmp_path / "cache"), NOW)
+    seen = []
+    build_index(db.connect(tmp_path / "b.sqlite"), ug.client(tmp_path / "cache"), LATER, progress=seen.append)
+    assert seen[0] == IndexPlan(listed=("1", "2", "last"), reads=("1", "2", "last"), cached=("1", "2", "last"))
+    assert [(e.from_cache, e.tabs.indexed) for e in seen[1:]] == [(True, 4), (True, 2), (True, 2)]
 
 
 def test_build_from_dir_reports_each_file(conn, tmp_path):
@@ -212,9 +252,12 @@ def test_build_from_dir_reports_each_file(conn, tmp_path):
     (d / "sitemap2.xml").write_bytes(S2)
     (d / "sitemap_last.xml.gz").write_bytes(gzip.compress(LAST))
     seen = []
-    build_index(conn, None, NOW, from_dir=d, progress=lambda name, s: seen.append((name, s)))
-    assert seen == [("2", IndexStats(sitemaps_fetched=1, rows=2, new_tab_ids=(2001, 2002))),
-                    ("last", IndexStats(sitemaps_fetched=1, rows=2, new_tab_ids=(3001,)))]
+    build_index(conn, None, NOW, from_dir=d, progress=seen.append)
+    assert seen == [
+        IndexPlan(listed=("2", "last"), reads=("2", "last")),
+        SitemapRead(1, 2, "2", "sitemap2.xml", tabs=TabCounts(urls=2, indexed=2), new_tab_ids=(2001, 2002)),
+        SitemapRead(2, 2, "last", "sitemap_last.xml.gz", tabs=TabCounts(urls=2, indexed=2), new_tab_ids=(3001,)),
+    ]
 
 
 def test_a_304_for_a_sitemap_this_database_never_indexed_is_parsed(tmp_path):
@@ -390,8 +433,8 @@ def test_a_refresh_that_reads_what_a_stopped_build_left_completes_the_index(conn
     with pytest.raises(ProviderError):
         build_index(conn, blocked.client(tmp_path / "cache"), NOW)
     # The refresh reads every numbered sitemap never indexed, so sitemap2 too.
-    refresh_index(conn, site().client(tmp_path / "cache"), LATER)
-    assert index_state(conn) == "complete"
+    stats = refresh_index(conn, site().client(tmp_path / "cache"), LATER)
+    assert index_state(conn) == "complete" and stats.completed
     assert index_stats(conn)["built_at"] == "2026-10-19T03:30:00Z"
 
 
@@ -428,9 +471,11 @@ def test_tabs_robots_txt_closes_are_left_out_of_the_index(conn, tmp_path):
     # /tab/download… once the URL drops its dot segment.
     ug = site(**{"sitemap_last.xml": urlset("radiohead/creep-chords-2002", SE_QUE_ES_TARDE, AVE_FENIX, SHINE,
                                             "tracks/tracks-chords-3004", "./download-chords-3005")})
-    stats = build_index(conn, ug.client(tmp_path / "cache"), NOW)
+    seen = []
+    stats = build_index(conn, ug.client(tmp_path / "cache"), NOW, progress=seen.append)
     assert [r[0] for r in rows(conn)] == [1001, 1002, 1005, 1006, 2001, 2002, 3004]
     assert stats.new_tab_ids == (1001, 1002, 1005, 1006, 2001, 2002, 3004)
+    assert seen[-1].tabs == TabCounts(urls=6, indexed=2, closed=4)  # the four closed ones, counted apart
 
 
 def test_a_refresh_drops_the_indexed_tabs_robots_txt_closes(conn, tmp_path):
@@ -445,9 +490,11 @@ def test_a_refresh_drops_the_indexed_tabs_robots_txt_closes(conn, tmp_path):
     ug.files["sitemap_last.xml"] = urlset("radiohead/creep-chords-2002", "radiohead/creep-acoustic-guitar-pro-3001",
                                           AVE_FENIX)
 
-    stats = refresh_index(conn, ug.client(tmp_path / "cache"), LATER)
+    seen = []
+    stats = refresh_index(conn, ug.client(tmp_path / "cache"), LATER, progress=seen.append)
 
     assert [r[0] for r in rows(conn)] == [1001, 1002, 1005, 1006, 2001, 2002, 3001, 1126581]
+    assert seen[0].dropped == 3  # the plan says how many indexed tabs were dropped
     assert stats.new_tab_ids == () and get_song(conn, fenix).ug_dirty is False  # a closed new tab is no news
 
 
@@ -470,3 +517,62 @@ def test_only_rows_a_rule_may_reach_are_checked_and_a_rule_that_may_reach_any_is
     rules = ("/forum/", "/tab/track/", "/tab/print?", "/*?no_takeover")
     monkeypatch.setattr(index, "ROBOTS_DISALLOW", {"tabs.ultimate-guitar.com": rules})
     assert set(index._closed_starts()) == {".", "track/", "print?", ""}
+
+
+# --- what the index covers, and how a refresh resumes ---------------------------------------
+
+
+def test_coverage_names_what_a_stopped_build_left_and_a_refresh_reads_exactly_that(conn, tmp_path):
+    from caracole.http import ProviderBlocked
+    from caracole.ug.sitemap import sitemap_label
+
+    assert index_coverage(conn).listed is None  # no sitemap index read yet
+    blocked = BlockingUG(site().files, blocked={"sitemap2.xml"})
+    with pytest.raises(ProviderBlocked):
+        build_index(conn, blocked.client(tmp_path / "cache"), NOW)
+    cov = index_coverage(conn)
+    assert (cov.listed, cov.indexed, cov.left) == (("1", "2", "last"), ("1",), ("2", "last"))
+    assert cov.tabs == TabCounts(urls=7, indexed=4, bare=1, other={"bass": 1, "ukulele": 1})
+    ug = site()
+    refresh_index(conn, ug.client(tmp_path / "cache"), LATER)
+    assert ug.names()[1:] == [sitemap_label(n) for n in cov.refresh] == ["sitemap2.xml", "sitemap_last.xml"]
+
+
+def test_coverage_of_a_complete_index_sums_what_its_sitemaps_held(conn, tmp_path):
+    build_index(conn, site().client(tmp_path / "cache"), NOW)
+    cov = index_coverage(conn)
+    assert cov.left == () and cov.refresh == ("2", "last")
+    assert cov.tabs == TabCounts(urls=11, indexed=8, bare=1, other={"bass": 1, "ukulele": 1})
+
+
+@pytest.mark.parametrize(
+    ("stats", "refetch", "line"),
+    [
+        (IndexStats(sitemaps_fetched=1, sitemaps_unchanged=1, rows=3, new_tab_ids=(3002,), parsed=("last",)), 1,
+         "1 of 2 sitemaps changed (sitemap_last.xml): +1 tab, 1 song to refetch"),
+        (IndexStats(sitemaps_fetched=1, sitemaps_unchanged=1, rows=3, parsed=("40",)), 0,
+         "1 of 2 sitemaps changed (sitemap40.xml): no new tabs, no song to refetch"),
+        (IndexStats(sitemaps_unchanged=2), 0, "2 sitemaps checked, none changed"),
+        (IndexStats(sitemaps_fetched=29, rows=1_000_000, new_tab_ids=tuple(range(1259)),
+                    parsed=(*map(str, range(13, 41)), "last"), completed=True), None,
+         "29 of 29 sitemaps changed (sitemap13.xml to sitemap40.xml and sitemap_last.xml): +1,259 tabs; "
+         "the index is now complete"),
+    ],
+)
+def test_a_refresh_sums_itself_up_in_one_line(stats, refetch, line):
+    assert stats.summary(refetch) == line
+
+
+@pytest.mark.parametrize(
+    ("names", "text"),
+    [
+        (("last",), "sitemap_last.xml"),
+        (("40", "last"), "sitemap40.xml and sitemap_last.xml"),
+        (("1", "2", "last"), "sitemap1.xml, sitemap2.xml and sitemap_last.xml"),
+        ((*map(str, range(1, 41)), "last"), "sitemap1.xml to sitemap40.xml and sitemap_last.xml"),
+        (("3", "7", "8", "9", "12", "20", "last"),
+         "sitemap3.xml, sitemap7.xml to sitemap9.xml, sitemap12.xml and 2 more"),
+    ],
+)
+def test_describe_sitemaps_names_runs_of_numbers_as_ranges(names, text):
+    assert describe_sitemaps(names) == text

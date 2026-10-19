@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import io
 import subprocess
 import sys
 from pathlib import Path
@@ -80,6 +81,12 @@ def ug(monkeypatch) -> FakeUG:
     return fake
 
 
+@pytest.fixture(autouse=True)
+def frozen_clock(monkeypatch):
+    """The index commands' clock stands still: every duration is 0.0 s, so their output is exact."""
+    monkeypatch.setattr("caracole.commands.index.clock", lambda: 0.0)
+
+
 def run(tmp_path: Path, *args: str, budget: int = 60):
     path = tmp_path / "caracole.toml"
     path.write_text(
@@ -114,16 +121,85 @@ def tab_ids(tmp_path: Path) -> list[int]:
 
 # --- caracole index build ---------------------------------------------------------------------------
 
+INTRO = [
+    "Indexing Ultimate Guitar's tab pages as rows of artist, title and type, to match your songs offline.",
+    "Only the sitemaps UG publishes for search engines are read: no tab itself is downloaded.",
+]
+PLAN = [
+    "Reading the sitemap index...",
+    "The sitemap index lists 3 tab sitemaps (sitemap1.xml, sitemap2.xml and sitemap_last.xml): 3 to download.",
+    "About 150,000 tab URLs (up to 50,000 a sitemap). 3 requests, 0 s apart: under a second.",
+]
+SITEMAP1 = "[1/3] sitemap1.xml  4 tabs: 2 indexed, 1 bare id, 1 of another type  2 left, under a second"
+INDEX = [  # what the index holds after a build, whatever the build read
+    "  Indexed     5 tabs: chords 2, guitar-pro 1, power 1, tabs 1",
+    "  Artists     4",
+    "  Bare ids    1 of 8 tab URLs (12.5%): with no artist or title in the URL, only artist pages lead to them",
+    "  Left out    1 of another type (bass 1)",
+    "  robots.txt  no tab left out",
+]
+COMPLETE = ("The index is complete: `caracole match` can now match your songs against it, "
+            "and the nightly run keeps it up to date.")
+PARTIAL = "The index is partial: 1 of 3 tab sitemaps indexed, so no song is matched against it yet."
+
+
+def resume_line(output: str) -> str:
+    return next(line for line in output.splitlines() if line.startswith(("To resume", "To finish")))
+
+
+def test_cli_index_build_says_what_it_indexes_how_each_sitemap_went_and_what_the_index_holds(tmp_path, ug):
+    result = run(tmp_path, "index", "build")
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines() == [
+        *INTRO,
+        *PLAN,
+        SITEMAP1,
+        "[2/3] sitemap2.xml  2 tabs: 2 indexed  1 left, under a second",
+        "[3/3] sitemap_last.xml  2 tabs: 2 indexed (1 new)",  # 2002 is in sitemap2 too
+        "Index built: 3 sitemaps read; 5 new tabs.",
+        *INDEX,
+        "  Requests    4 of a budget of 100",
+        "  Duration    0.0 s",
+        COMPLETE,
+    ]
+    assert "\r" not in result.output and "\x1b" not in result.output  # no live line, no color, but on a terminal
+
 
 def test_cli_index_build_from_dir_sends_no_requests(tmp_path, ug):
-    result = run(tmp_path, "index", "build", "--from", str(sitemap_dir(tmp_path)))
+    d = sitemap_dir(tmp_path)
+    result = run(tmp_path, "index", "build", "--from", str(d))
     assert result.exit_code == 0, result.output
     assert ug.requests == []
     assert tab_ids(tmp_path) == [1001, 1005, 2002, 2003, 3001]
+    assert result.output.splitlines() == [
+        INTRO[0],
+        f"Only the sitemap files in {d} are read: no request is sent.",
+        "Found 3 sitemap files (sitemap1.xml, sitemap2.xml and sitemap_last.xml).",
+        "About 150,000 tab URLs (up to 50,000 a sitemap): about 2 s.",
+        "[1/3] sitemap1.xml.gz  4 tabs: 2 indexed, 1 bare id, 1 of another type  2 left, under a second",
+        "[2/3] sitemap2.xml  2 tabs: 2 indexed  1 left, under a second",
+        "[3/3] sitemap_last.xml.gz  2 tabs: 2 indexed (1 new)",
+        "Index built from 3 sitemap files; 5 new tabs.",
+        *INDEX,
+        "  Requests    none: read from files",
+        "  Duration    0.0 s",
+        COMPLETE,
+    ]
+
+
+def test_cli_index_build_from_a_dir_with_a_broken_file_keeps_the_files_before_it_and_exits_1(tmp_path, ug):
+    d = sitemap_dir(tmp_path)
+    (d / "sitemap2.xml").write_bytes(b"<html>not a sitemap</html>")
+    result = run(tmp_path, "index", "build", "--from", str(d))
+    assert result.exit_code == 1
+    assert ug.requests == [] and tab_ids(tmp_path) == [1001, 1005]
     lines = result.output.splitlines()
-    assert "sitemap1: 2 tabs, 2 new" in lines and "sitemap2: 2 tabs, 2 new" in lines
-    assert "sitemap_last: 2 tabs, 1 new" in lines
-    assert lines[-1] == "Index built: 3 sitemaps read, 0 unchanged; 5 new tabs. The index holds 5 tabs."
+    assert "Index build stopped after 1 of 3 sitemaps; 2 new tabs." in lines
+    assert lines[-3:] == [
+        "The index is partial: 1 tab sitemap indexed, so no song is matched against it yet.",
+        f"To finish, run `caracole index build --from {d}` again: it reads every file again, with no request.",
+        f"index build: {d / 'sitemap2.xml'}: not a sitemap (no <loc> entries)",
+    ]
 
 
 def test_cli_index_build_from_a_dir_without_sitemaps_fails(tmp_path):
@@ -148,9 +224,15 @@ def test_cli_index_build_again_finds_the_sitemaps_unchanged(tmp_path, ug):
     run(tmp_path, "index", "build")
     result = run(tmp_path, "index", "build")
     assert result.exit_code == 0, result.output
-    assert "sitemap2: unchanged" in result.output.splitlines()
-    assert result.output.splitlines()[-1] == (
-        "Index built: 0 sitemaps read, 3 unchanged; 0 new tabs. The index holds 5 tabs.")
+    lines = result.output.splitlines()
+    assert lines[3:5] == [
+        "The sitemap index lists 3 tab sitemaps (sitemap1.xml, sitemap2.xml and sitemap_last.xml): "
+        "3 indexed already, asked for again and skipped if unchanged.",
+        "3 requests, 0 s apart: under a second.",
+    ]
+    assert "[2/3] sitemap2.xml  unchanged  1 left, under a second" in lines
+    assert "Index built: 0 sitemaps read, 3 unchanged; 0 new tabs." in lines
+    assert lines[-1] == COMPLETE
 
 
 def test_cli_index_block_cools_ug_down_and_exits_0(tmp_path, ug):
@@ -161,11 +243,70 @@ def test_cli_index_block_cools_ug_down_and_exits_0(tmp_path, ug):
     assert tab_ids(tmp_path) == [1001, 1005]  # sitemap1 was stored before the block
     state = get_state(connect(tmp_path), "ug")
     assert state.strikes == 1 and state.cooldown_until is not None
+    lines = result.output.splitlines()
+    assert lines[len(INTRO) + len(PLAN)] == SITEMAP1
+    assert "Index build stopped after 1 of 3 sitemaps; 2 new tabs." in lines
+    assert "  Requests    3 of a budget of 100" in lines
+    until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC")
+    assert lines[-2:] == [
+        PARTIAL,
+        f"To resume, run `caracole index refresh` after {until}: it reads the 2 sitemaps left, "
+        "sitemap2.xml and sitemap_last.xml (3 requests, under a second). The nightly run does the same.",
+    ]
     # During the cooldown no request is sent at all.
     ug.requests.clear()
     again = run(tmp_path, "index", "refresh")
     assert again.exit_code == 0, again.output
     assert ug.requests == [] and "cooling down" in again.output
+
+
+def test_cli_index_build_in_a_cooldown_sends_nothing_and_still_says_how_to_resume(tmp_path, ug):
+    ug.status["sitemap2.xml"] = 403
+    run(tmp_path, "index", "build")
+    ug.requests.clear()
+    result = run(tmp_path, "index", "build")
+    assert result.exit_code == 0, result.output
+    assert ug.requests == []
+    until = get_state(connect(tmp_path), "ug").cooldown_until.strftime("%Y-%m-%d %H:%M UTC")
+    assert result.output.splitlines() == [
+        *INTRO,
+        f"Ultimate Guitar is cooling down after a block until {until}; no request was sent.",
+        PARTIAL,
+        f"To resume, run `caracole index refresh` after {until}: it reads the 2 sitemaps left, "
+        "sitemap2.xml and sitemap_last.xml (3 requests, under a second). The nightly run does the same.",
+    ]
+
+
+def test_cli_index_build_with_its_budget_spent_exits_0_and_says_how_to_resume(tmp_path, ug, monkeypatch):
+    monkeypatch.setattr("caracole.commands.index.BUILD_BUDGET", 2)
+    result = run(tmp_path, "index", "build", budget=2)  # the sitemap index and sitemap1
+    assert result.exit_code == 0, result.output
+    assert ug.requests == ["sitemap.xml", "sitemap1.xml"]
+    lines = result.output.splitlines()
+    assert "The Ultimate Guitar budget of 2 requests is spent; the sitemaps read so far are kept." in lines
+    assert "  Requests    2 of a budget of 2" in lines
+    assert lines[-2] == PARTIAL
+    assert resume_line(result.output).startswith(
+        "To resume, run `caracole index refresh`: it reads the 2 sitemaps left, sitemap2.xml and sitemap_last.xml")
+
+
+def test_cli_index_build_stopped_by_ctrl_c_keeps_what_it_read_and_says_how_to_resume(tmp_path, ug, monkeypatch):
+    def interrupted(request):
+        if request.url.path == "/sitemap2.xml":
+            raise KeyboardInterrupt
+        return ug.handler(request)
+
+    monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(interrupted))
+    result = run(tmp_path, "index", "build")
+    assert result.exit_code == 130  # as Ctrl-C always ends a caracole command
+    assert tab_ids(tmp_path) == [1001, 1005]
+    lines = result.output.splitlines()
+    assert "Stopped by Ctrl-C; the sitemaps read so far are kept." in lines
+    assert "Index build stopped after 1 of 3 sitemaps; 2 new tabs." in lines
+    assert lines[-2] == PARTIAL
+    assert resume_line(result.output) == (
+        "To resume, run `caracole index refresh`: it reads the 2 sitemaps left, sitemap2.xml and sitemap_last.xml "
+        "(3 requests, under a second). The nightly run does the same.")
 
 
 def test_cli_index_other_errors_exit_1_and_are_recorded(tmp_path, ug):
@@ -175,6 +316,10 @@ def test_cli_index_other_errors_exit_1_and_are_recorded(tmp_path, ug):
     assert "500" in result.output and "sitemaps read so far are kept" in result.output
     state = get_state(connect(tmp_path), "ug")
     assert "500" in (state.last_error or "") and state.cooldown_until is None
+    # sitemap1 and sitemap2 are in; a refresh reads sitemap_last and, as always, checks the highest-numbered one
+    assert resume_line(result.output) == (
+        "To resume, run `caracole index refresh`: it reads the sitemap left, sitemap_last.xml, and checks "
+        "sitemap2.xml (3 requests, under a second). The nightly run does the same.")
 
 
 def test_cli_index_build_whose_every_request_failed_is_no_success(tmp_path, ug):
@@ -183,6 +328,26 @@ def test_cli_index_build_whose_every_request_failed_is_no_success(tmp_path, ug):
     assert result.exit_code == 1
     state = get_state(connect(tmp_path), "ug")
     assert "502" in (state.last_error or "") and state.last_ok is None
+
+
+class Terminal(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def test_cli_index_build_on_a_terminal_keeps_one_live_line(tmp_path, ug, monkeypatch):
+    from caracole.progress import Console
+
+    screen = Terminal()
+    monkeypatch.setattr("caracole.commands.index.console",
+                        lambda: Console(screen, environ={"TERM": "xterm", "NO_COLOR": "1"}, width=lambda: 200))
+    result = run(tmp_path, "index", "build")
+    assert result.exit_code == 0, result.output
+    out = screen.getvalue()
+    assert "\r" + SITEMAP1 in out and SITEMAP1 + "\n" not in out  # rewritten in place, never a line of its own
+    lines = [line.rsplit("\r", 1)[-1] for line in out.split("\n")]  # what stays on screen
+    assert lines[:2] == INTRO and "Index built: 3 sitemaps read; 5 new tabs." in lines and COMPLETE in lines
+    assert "\x1b" not in out  # NO_COLOR
 
 
 # --- caracole index refresh -------------------------------------------------------------------------
@@ -199,10 +364,52 @@ def test_cli_index_refresh_reports_new_tabs_and_songs_to_refetch(tmp_path, ug):
     result = run(tmp_path, "index", "refresh")
     assert result.exit_code == 0, result.output
     assert ug.requests == ["sitemap.xml", "sitemap2.xml", "sitemap_last.xml"]
-    lines = result.output.splitlines()
-    assert "sitemap2: unchanged" in lines and "sitemap_last: 2 tabs, 1 new" in lines
-    assert lines[-1] == "Index refreshed: 1 sitemap read, 1 unchanged; 1 new tab; 1 song to refetch."
+    # compact: the unchanged sitemap2 gets no line of its own
+    assert result.output.splitlines() == [
+        "Checking the sitemap index for new tabs...",
+        "[2/2] sitemap_last.xml  2 tabs: 2 indexed (1 new)",
+        "Index refreshed: 1 of 2 sitemaps changed (sitemap_last.xml): +1 tab, 1 song to refetch. 3 requests, 0.0 s.",
+    ]
     assert get_song(conn, creep.id).ug_dirty is True
+
+
+def test_cli_index_refresh_reads_what_a_stopped_build_left_and_completes_the_index(tmp_path, ug, monkeypatch):
+    monkeypatch.setattr("caracole.commands.index.BUILD_BUDGET", 2)
+    run(tmp_path, "index", "build", budget=2)
+    ug.requests.clear()
+    result = run(tmp_path, "index", "refresh")
+    assert result.exit_code == 0, result.output
+    assert ug.requests == ["sitemap.xml", "sitemap2.xml", "sitemap_last.xml"]
+    assert result.output.splitlines() == [
+        "Checking the sitemap index for new tabs...",
+        "Reading sitemap2.xml and sitemap_last.xml, not indexed yet: 2 requests, 0 s apart, under a second.",
+        "[1/2] sitemap2.xml  2 tabs: 2 indexed  1 left, under a second",
+        "[2/2] sitemap_last.xml  2 tabs: 2 indexed (1 new)",
+        "Index refreshed: 2 of 2 sitemaps changed (sitemap2.xml and sitemap_last.xml): +3 tabs, no song to refetch; "
+        "the index is now complete. 3 requests, 0.0 s.",
+    ]
+
+
+def test_cli_index_refresh_stopped_by_ctrl_c_sums_up_what_it_read_and_says_how_to_resume(tmp_path, ug, monkeypatch):
+    monkeypatch.setattr("caracole.commands.index.BUILD_BUDGET", 2)
+    run(tmp_path, "index", "build", budget=2)  # sitemap1 only
+
+    def interrupted(request):
+        if request.url.path == "/sitemap_last.xml":
+            raise KeyboardInterrupt
+        return ug.handler(request)
+
+    monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(interrupted))
+    result = run(tmp_path, "index", "refresh")
+    assert result.exit_code == 130
+    assert tab_ids(tmp_path) == [1001, 1005, 2002, 2003]  # sitemap2 is kept
+    assert result.output.splitlines()[-4:] == [
+        "Stopped by Ctrl-C; the sitemaps read so far are kept.",
+        "Index refresh stopped: 1 of 1 sitemap changed (sitemap2.xml): +2 tabs. 3 requests, 0.0 s.",  # the cut one too
+        "The index is partial: 2 of 3 tab sitemaps indexed, so no song is matched against it yet.",
+        "To resume, run `caracole index refresh`: it reads the sitemap left, sitemap_last.xml, and checks "
+        "sitemap2.xml (3 requests, under a second). The nightly run does the same.",
+    ]
 
 
 def test_cli_index_refresh_with_the_budget_spent_exits_0(tmp_path, ug):
@@ -212,6 +419,7 @@ def test_cli_index_refresh_with_the_budget_spent_exits_0(tmp_path, ug):
     assert result.exit_code == 0, result.output
     assert ug.requests == ["sitemap.xml", "sitemap2.xml"]
     assert "budget of 2 requests is spent" in result.output
+    assert result.output.splitlines()[-1] == "Index refresh stopped: 1 sitemap checked, none changed. 2 requests, 0.0 s."
 
 
 def test_cli_index_refresh_needs_a_built_index(tmp_path, ug):
