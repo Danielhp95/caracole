@@ -60,6 +60,19 @@ def test_review_item_has_links_and_paste_line(conn, cfg):
     assert '[alias]\n"Soda" = "soda-stereo"' in text
 
 
+def test_review_links_use_the_slugged_url(conn, cfg):
+    conn.execute(
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (1081462, 'soda-stereo', 'persiana-americana', 'tabs', '1', 'x', "
+        "'soda-stereo/persiana-americana-tabs-1081462')"
+    )
+    s = add_song(conn, "Soda", "Persiana Americana")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "soda-stereo", "song_key": "persiana-americana", "score": 82.0, "step": "fuzzy_artist"},
+    ])
+    assert "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-tabs-1081462" in todo(conn, cfg)
+
+
 def test_title_only_candidate_gets_no_alias_line(conn, cfg):
     index(conn, [(5, "jeff-buckley", "hallelujah", "chords")])
     s = add_song(conn, "Someone", "Hallelujah")

@@ -59,7 +59,7 @@ def review_songs(
         io.write(f"\n[{i}/{len(songs)}] {s.display}")
         for n, c in enumerate(cands, start=1):
             tabs = song_tabs(conn, c["artist_key"], c["song_key"])
-            url = f"  https://tabs.ultimate-guitar.com/tab/{tabs[0].tab_id}" if tabs else ""
+            url = f"  {tabs[0].url}" if tabs else ""
             io.write(f"  {n}) {float(c.get('score') or 0):.0f}  {c['artist_key']}/{c['song_key']} ({c.get('step', '')}){url}")
         choices = f"1-{len(cands)}, " if cands else ""
         answer = io.read(f"Pick {choices}(p)in a URL, (i)gnore, (s)kip, (q)uit: ").strip().lower()

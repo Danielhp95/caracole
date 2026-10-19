@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from tabarr.db import kv_get, kv_set
 from tabarr.normalize import split_variant
+from tabarr.ug.page import page_url
 
 
 @dataclass(frozen=True)
@@ -15,23 +16,29 @@ class IndexTab:
     type: str
     song_key: str
     label: str | None
+    path: str = ""
+
+    @property
+    def url(self) -> str:
+        """The tab page URL; slugged tabs are only served at their slugged path."""
+        return page_url(self.tab_id, self.path or None)
 
 
 def song_tabs(conn: sqlite3.Connection, artist_key: str, song_key: str) -> list[IndexTab]:
     """Every indexed tab of a song, including variant slugs such as ``song-key-acoustic``."""
     rows = conn.execute(
-        "SELECT tab_id, type, song_key FROM ug_index WHERE artist_key = ? AND (song_key = ? OR song_key LIKE ?) "
+        "SELECT tab_id, type, song_key, path FROM ug_index WHERE artist_key = ? AND (song_key = ? OR song_key LIKE ?) "
         "ORDER BY tab_id",
         (artist_key, song_key, song_key + "-%"),
     )
     out: list[IndexTab] = []
     for r in rows:
         if r["song_key"] == song_key:
-            out.append(IndexTab(r["tab_id"], r["type"], r["song_key"], None))
+            out.append(IndexTab(r["tab_id"], r["type"], r["song_key"], None, r["path"]))
             continue
         base, label = split_variant(r["song_key"])
         if base == song_key:
-            out.append(IndexTab(r["tab_id"], r["type"], r["song_key"], label))
+            out.append(IndexTab(r["tab_id"], r["type"], r["song_key"], label, r["path"]))
     return out
 
 

@@ -83,10 +83,10 @@ def _review(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:
             if not akey or not skey:
                 continue
             tabs = song_tabs(conn, akey, skey)
-            first: dict[str, int] = {}
+            first: dict[str, str] = {}
             for t in tabs:
-                first.setdefault(t.type, t.tab_id)
-            links = " · ".join(_link(_KIND_NAMES.get(k, k), ug_url(i)) for k, i in first.items())
+                first.setdefault(t.type, t.url)
+            links = " · ".join(_link(_KIND_NAMES.get(k, k), url) for k, url in first.items())
             step = cand.get("step") or ""
             items.append(f"- {float(cand.get('score') or 0):.0f} · `{akey}/{skey}` ({step}) · {links}".rstrip(" ·"))
             lines = ["[match]", f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}"]

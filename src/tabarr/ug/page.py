@@ -109,14 +109,18 @@ class UGTabPage:
     artist_url: str | None = None
 
 
-def page_url(tab_id: int) -> str:
-    """The bare URL of a tab page, ``.../tab/{id}``.
+def page_url(tab_id: int, path: str | None = None) -> str:
+    """The URL of a tab page.
 
-    It is the ``tab_url`` UG gives tabs that have no slugs (85053 and 555890
-    were fetched at it). That slugged tabs are served there too is likely
-    but not verified.
+    With the sitemap ``path`` (``artist/song-type-id``) it is the slugged URL,
+    which is the only one UG serves for slugged tabs: the bare ``/tab/{id}``
+    answers 404 for them (checked live on 1081462). Without a path it is the
+    bare URL, which is what UG lists for tabs that have no slugs.
     """
-    return f"{TAB_BASE_URL}{tab_id}"
+    if path:
+        return f"https://tabs.ultimate-guitar.com/tab/{path.lstrip('/')}"
+    return f"https://tabs.ultimate-guitar.com/tab/{tab_id}"
+
 
 
 def strip_markup(content: str) -> str:

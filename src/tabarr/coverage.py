@@ -13,7 +13,7 @@ from typing import Sequence
 
 from rapidfuzz import fuzz
 
-from tabarr.normalize import fold
+from tabarr.normalize import fold, has_han, romanize
 
 _NON_WORD = re.compile(r"[\W_]+")
 _CH_SPAN = re.compile(r"\[ch\].*?\[/ch\]", re.IGNORECASE)
@@ -79,12 +79,18 @@ def sheet_lyric_text(sheet: str) -> str:
     return " ".join(kept)
 
 
+def _comparable(s: str) -> str:
+    """Chinese text is compared as pinyin, so Traditional lyrics (LRCLIB's 斑馬) meet a
+    Simplified sheet (斑马)."""
+    return normalize_line(romanize(s)) if has_han(s) else s
+
+
 def coverage(sheet: str, lines: Sequence[str], *, line_match: int = 85) -> float | None:
     """Share of ``lines`` (from ``lyric_lines``) found in the sheet; None without lyrics."""
     if not lines:
         return None
-    text = sheet_lyric_text(sheet)
+    text = _comparable(sheet_lyric_text(sheet))
     if not text:
         return 0.0
-    covered = sum(1 for line in lines if fuzz.partial_ratio(line, text) >= line_match)
+    covered = sum(1 for line in lines if fuzz.partial_ratio(_comparable(line), text) >= line_match)
     return covered / len(lines)

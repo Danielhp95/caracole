@@ -300,3 +300,12 @@ def test_helper_page_round_trip():
         None,
     )
     assert [v.tab_id for v in page.versions] == [11]
+
+
+def test_page_url_uses_the_slugged_path_when_known():
+    from tabarr.ug.page import page_url
+
+    assert page_url(85053) == "https://tabs.ultimate-guitar.com/tab/85053"
+    assert page_url(1081462, "soda-stereo/persiana-americana-tabs-1081462") == (
+        "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-tabs-1081462"
+    )

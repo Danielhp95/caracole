@@ -92,3 +92,10 @@ def test_no_lines_is_none():
 def test_plain_text_chord_names_are_dropped():
     sheet = "G  D/F#  Em  C\nWalking down the empty road tonight\nAm7 Cadd9 Dsus4\n"
     assert sheet_lyric_text(sheet).strip() == "walking down the empty road tonight"
+
+
+def test_simplified_sheet_covers_traditional_lyrics():
+    # LRCLIB's 斑马斑马 lyrics are in Traditional characters (斑馬, 睡著) while sheets use Simplified.
+    lines = lyric_lines("斑馬斑馬你不要睡著啦\n再給我看看你受傷的尾巴")
+    sheet = "[ch]C[/ch]      [ch]G[/ch]\n斑马斑马 你不要睡着啦\n[ch]Am[/ch]     [ch]F[/ch]\n再给我看看你受伤的尾巴"
+    assert coverage(sheet, lines) == 1.0

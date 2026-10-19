@@ -43,12 +43,19 @@ _XML_ENTITIES = {"&quot;": '"', "&apos;": "'"}
 
 
 class IndexRow(NamedTuple):
-    """One tab of the local index. The keys are canonical (``ug_slug_key``), not raw slugs."""
+    """One tab of the local index.
+
+    The keys are canonical (``ug_slug_key``), for matching. ``path`` is the URL
+    path after ``/tab/`` exactly as the sitemap lists it: UG serves a slugged tab
+    only at its slugged URL (the bare ``/tab/{id}`` answers 404), and canonical
+    keys can't be turned back into slugs (``the-rifles`` → ``rifles``).
+    """
 
     tab_id: int
     artist_key: str
     song_key: str
     type: str
+    path: str
 
 
 def _peel_type(rest: str) -> tuple[str, str] | None:
@@ -79,7 +86,7 @@ def parse_tab_url(url: str) -> IndexRow | None:
     artist_key, song_key = ug_slug_key(artist_slug), ug_slug_key(song_slug)
     if not artist_key or not song_key:
         return None
-    return IndexRow(int(tab_id), artist_key, song_key, kind)
+    return IndexRow(int(tab_id), artist_key, song_key, kind, url.split("/tab/", 1)[1])
 
 
 def iter_locs(data: bytes) -> Iterator[str]:

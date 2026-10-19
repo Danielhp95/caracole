@@ -108,7 +108,9 @@ def _join(tokens: list[str]) -> str:
 
 
 def _canon(tokens: list[str]) -> str:
-    tokens = [t for t in tokens if t and t != "and"]
+    present = [t for t in tokens if t]
+    # Drop "and", unless the name is nothing but "and" (the band "And And And").
+    tokens = [t for t in present if t != "and"] or present
     if len(tokens) > 1 and tokens[0] == "the":
         tokens = tokens[1:]
     return _join(tokens)

@@ -124,3 +124,9 @@ def test_han_detection_and_romanization():
     assert romanize("宋冬野") == "song dong ye"
     assert romanize("Soda Stereo") == "Soda Stereo"
     assert compact(slug_key(romanize("宋冬野"))) == compact(ug_slug_key("song-dongye"))
+
+
+def test_names_made_only_of_and_keep_a_key():
+    # 32 real UG URLs have artist or song slugs that are only "and" tokens (the band "And And And").
+    assert slug_key("And And And") == ug_slug_key("and-and-and") == "and-and-and"
+    assert ug_slug_key("and") == "and"

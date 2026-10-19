@@ -3,8 +3,9 @@ from tabarr.ug.lookup import IndexTab, artist_known, artist_tab_ids, learned_art
 
 def index(conn, rows):
     conn.executemany(
-        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen) VALUES (?, ?, ?, ?, '1', 'x')",
-        rows,
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (?, ?, ?, ?, '1', 'x', ?)",
+        [(*r, f"{r[1]}/{r[2]}-{r[3]}-{r[0]}") for r in rows],
     )
 
 
@@ -17,10 +18,16 @@ def test_song_tabs_includes_variant_slugs_only(conn):
         (5, "other", "wonderwall", "chords"),
     ])
     assert song_tabs(conn, "oasis", "wonderwall") == [
-        IndexTab(1, "chords", "wonderwall", None),
-        IndexTab(2, "chords", "wonderwall-acoustic", "acoustic"),
-        IndexTab(3, "tabs", "wonderwall-intro", "intro"),
+        IndexTab(1, "chords", "wonderwall", None, "oasis/wonderwall-chords-1"),
+        IndexTab(2, "chords", "wonderwall-acoustic", "acoustic", "oasis/wonderwall-acoustic-chords-2"),
+        IndexTab(3, "tabs", "wonderwall-intro", "intro", "oasis/wonderwall-intro-tabs-3"),
     ]
+
+
+def test_index_tab_url_is_the_slugged_page(conn):
+    index(conn, [(1081462, "soda-stereo", "persiana-americana", "tabs")])
+    t = song_tabs(conn, "soda-stereo", "persiana-americana")[0]
+    assert t.url == "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-tabs-1081462"
 
 
 def test_artist_helpers(conn):

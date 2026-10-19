@@ -63,7 +63,8 @@ CREATE TABLE IF NOT EXISTS ug_index (
   song_key TEXT NOT NULL,
   type TEXT NOT NULL,
   sitemap TEXT NOT NULL,
-  first_seen TEXT NOT NULL
+  first_seen TEXT NOT NULL,
+  path TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ug_index_artist ON ug_index(artist_key, song_key);
 CREATE INDEX IF NOT EXISTS ug_index_song ON ug_index(song_key);
