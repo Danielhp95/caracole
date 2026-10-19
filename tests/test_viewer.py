@@ -99,7 +99,7 @@ def test_the_page_loads_nothing_and_links_only_beside_itself():
 
 
 def test_the_pdf_is_linked_only_when_there_is_one():
-    assert 'href="sheet (auto).pdf"' in build_viewer(UG_CHO, pdf="sheet (auto).pdf")
+    assert 'href="sheet%20%28auto%29.pdf"' in build_viewer(UG_CHO, pdf="sheet (auto).pdf")
     assert not re.search(r'href="[^"]*\.pdf"', build_viewer(UG_CHO))
 
 
@@ -304,6 +304,50 @@ def test_tapping_a_chord_shows_its_shapes_and_alternatives(tmp_path):
     assert '<h2 id="card-name">G</h2>' in card.group(2)
     assert "<svg" in card.group(2) and card.group(2).count('class="dg-dot"') == 3  # 320003
     assert ">Gmaj7</button>" in card.group(2) and ">Em</button>" in card.group(2)
+
+
+# Taps through the page as a guitarist would; run after the page's own script.
+HARNESS = """<script>
+window.addEventListener("load", () => {
+  const out = [];
+  const q = (s) => document.querySelector(s);
+  const chip = (box, text) => [...document.querySelectorAll(box + " .chip")]
+    .find((b) => b.firstChild.textContent === text);
+  q('#sheet .c[data-c="0"]').click();
+  out.push(q("#card-name").textContent, q("#card").hidden);
+  chip("#alts", "Em").click();
+  out.push(q("#card-name").textContent, q("#use").textContent);
+  q("#use").click();
+  const g = q('#sheet .c[data-c="0"]');
+  out.push(g.textContent, g.classList.contains("changed"));
+  q("#scrim").click();
+  q("#fab").click();
+  q("#up").click();
+  q("#up").click();
+  out.push(q('#sheet .c[data-c="1"]').textContent, g.textContent, q("#fab").textContent);
+  chip("#modes", "Minor").click();
+  out.push(q('#sheet .c[data-c="1"]').textContent, g.textContent);
+  q("#reset-all").click();
+  out.push(g.textContent, q('#sheet .c[data-c="1"]').textContent);
+  document.body.dataset.result = JSON.stringify(out);
+});
+</script>
+"""
+
+
+@in_chromium
+def test_tapping_through_the_controls(tmp_path):
+    html = re.sub(r'<meta http-equiv="Content-Security-Policy"[^>]*>\n', "", build_viewer(UG_CHO))
+    dom = dump_dom(html.replace("</body>", HARNESS + "</body>"), tmp_path)
+    result = json.loads(re.search(r'data-result="([^"]*)"', dom).group(1).replace("&quot;", '"'))
+    assert result == [
+        "G", False,  # the card opens on the chord
+        "Em", "Play Em for every G",  # an alternative, tried
+        "Em", True,  # and played everywhere, marked as changed
+        "E", "F#m", "Key A · +2",  # up two semitones, the alternative too
+        "Em", "Am",  # G minor: D becomes Dm, G Gm; still up two
+        "G", "D",  # all back as written
+    ]
 
 
 @in_chromium

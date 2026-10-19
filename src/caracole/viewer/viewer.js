@@ -31,6 +31,8 @@
   // --- the state: where the song is played, kept per page ------------------------------------
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, shapes: 0, fs: 18, strip: false };
   const store = "caracole-viewer:" + location.pathname;
+  // Chords chosen instead of others are kept by index: they only hold while the sheet's chords do.
+  const sheetChords = Object.keys(written).map((i) => written[i]).join("|");
   const validMode = (m) => Boolean(key) && data.modes.indexOf(m) >= 0;
   const clampT = (t) => Math.max(-11, Math.min(11, Math.round(Number(t) || 0)));
   try {
@@ -38,7 +40,7 @@
     if (saved && typeof saved === "object") {
       if (saved.base === data.transpose) state.t = clampT(saved.t);  // a new [transpose] starts afresh
       if (validMode(saved.mode)) state.mode = saved.mode;
-      if (saved.alt && typeof saved.alt === "object") state.alt = saved.alt;
+      if (saved.alt && typeof saved.alt === "object" && saved.chords === sheetChords) state.alt = saved.alt;
       if (Number(saved.fs) >= FS.min && Number(saved.fs) <= FS.max) state.fs = Number(saved.fs);
       state.strip = saved.strip === true;
       state.shapes = Math.max(0, Number(saved.shapes) || 0);
@@ -50,7 +52,7 @@
   if (hash.has("shapes")) state.shapes = Math.max(0, Number(hash.get("shapes")) || 0);
   const save = () => {
     try {
-      localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose }, state)));
+      localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose, chords: sheetChords }, state)));
     } catch (err) { /* private mode */ }
   };
 

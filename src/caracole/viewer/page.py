@@ -35,6 +35,7 @@ from functools import lru_cache
 from html import escape
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from caracole.normalize import has_han
 from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Section, Sheet, Tab, Text, parse_sheet
@@ -219,7 +220,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         if sheet.auto else ""
     )
     lang = ' lang="zh"' if has_han(sheet.title + "".join(_texts(sheet))) else ""
-    pdf_link = f'<a class="pdf" href="{escape(pdf)}">PDF</a>\n' if pdf else ""
+    pdf_link = f'<a class="pdf" href="{escape(quote(pdf))}">PDF</a>\n' if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'

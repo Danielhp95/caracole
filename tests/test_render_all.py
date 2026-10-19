@@ -421,7 +421,7 @@ def test_an_auto_sheet_gets_a_viewer_of_its_own(conn, cfg):
     auto_sheet(conn, cfg, song)
     render(conn, cfg)
     html = viewer_of(cfg, song, "sheet (auto).html")
-    assert 'href="sheet (auto).pdf"' in html and "unverified" in html
+    assert 'href="sheet%20%28auto%29.pdf"' in html and "unverified" in html
     assert not (song_dir(cfg.library_dir, song) / "sheet.html").exists()
 
 

@@ -33,7 +33,7 @@ an earlier one failed:
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), rank.py, coverage.py, versions.py |
 | lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the step) |
 | scan | music.py (Music/), inbox.py (Guitar Pro files in `_inbox/`) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 
 Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`),
@@ -44,6 +44,12 @@ pinyin), overrides.py, library.py (song folders, safe file access), notify.py (n
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `write_pages`, `fail`.
   The logic of `caracole review` and `caracole search` is in review.py and search.py.
+- `viewer/`: the sheet viewer render.py writes beside each PDF. page.py builds the page
+  (`build_viewer`) from the song's .cho (sheet.py reads it back); theory.py names chords and
+  keys, guesses keys, changes modes and finds alternatives; voicings.py and voicings.json are
+  the fingerings, a checked subset of chords-db (MIT, LICENSE-chords-db); viewer.js and
+  viewer.css are inlined, and the page's CSP holds their hashes. The music theory is Python,
+  tested in test_viewer_theory.py; the script only looks up what page.py precomputed.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
@@ -78,7 +84,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html` in a real browser (test_library_page.py) | neither |
+| `chromium` on PATH | `index.html` and `sheet.html` in a real browser (test_library_page.py, test_viewer.py) | neither |
 
 Before a change is done:
 
