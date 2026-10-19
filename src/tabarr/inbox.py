@@ -3,7 +3,8 @@
 UG's download endpoint is disallowed for bots, so tabarr never downloads
 Guitar Pro or Power Tab files. It lists the pages it picked on the to-do page;
 you click Download and drop the files into ``Library/_inbox/``; this module
-files each one under its song as ``guitar-<rank>.<ext>``.
+files each one under its song as ``guitar-<rank>.<ext>``, or under the lowest
+free number when another file already holds that one: a file is never replaced.
 
 Anyone who can write to the library can put a symbolic link in the inbox, so
 only regular files are read; a link is refused and left where it is.
@@ -12,6 +13,8 @@ only regular files are read; a link is refused and left where it is.
 from __future__ import annotations
 
 import hashlib
+import itertools
+import os
 import re
 import sqlite3
 from dataclasses import dataclass, field
@@ -28,6 +31,7 @@ GP_EXTENSIONS = (".gp3", ".gp4", ".gp5", ".gpx", ".gp", ".ptb")
 GUITAR_FILE_KINDS = ("guitar-pro", "power")
 _VERSION = re.compile(r"\(\s*ver\.?\s*(\d+)[^)]*\)", re.IGNORECASE)
 _PARENS = re.compile(r"\s*\([^)]*\)")
+_GUITAR_FILE = re.compile(r"guitar-(\d+)\.", re.IGNORECASE)
 MATCH_CUTOFF = 90
 
 
@@ -108,6 +112,25 @@ def _choose_pick(open_picks: list[VersionRow], version: int | None, ext: str) ->
     return same_kind[0] if same_kind else open_picks[0]
 
 
+def _free_number(conn: sqlite3.Connection, library_dir: Path, song: Song, rank: int) -> int:
+    """The N of a new ``guitar-N`` file: the pick's rank, or the lowest number no file holds.
+
+    Picks are ranked again as versions appear, so the rank may be the number of
+    a file you downloaded for another version, or put in the folder yourself.
+    That file is never replaced. A number is taken by any kept file, or any file
+    in the folder, named ``guitar-N.*``, whatever its extension.
+    """
+    names = {r[0] for r in conn.execute("SELECT name FROM files WHERE song_id = ?", (song.id,))}
+    try:
+        names.update(os.listdir(song_dir(library_dir, song)))
+    except FileNotFoundError:
+        pass
+    taken = {int(m.group(1)) for n in names if (m := _GUITAR_FILE.match(n))}
+    if rank not in taken:
+        return rank
+    return next(n for n in itertools.count(1) if n not in taken)
+
+
 def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
     """File every Guitar Pro / Power Tab download in ``_inbox/`` under its song."""
     stats = InboxStats()
@@ -141,7 +164,7 @@ def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
             continue
         song, open_picks = found
         chosen = _choose_pick(open_picks, version, ext)
-        name = f"guitar-{chosen.pick_rank}{ext}"
+        name = f"guitar-{_free_number(conn, library_dir, song, chosen.pick_rank or 1)}{ext}"
         if keep_file(conn, library_dir, song=song, version_id=chosen.id, name=name, data=data, rank=chosen.pick_rank or 1):
             stats.filed.append(song_dir(library_dir, song) / name)
         else:
