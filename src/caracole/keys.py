@@ -68,14 +68,18 @@ _SHIFT = {"#": 1, "b": -1, "": 0}
 
 # A key at the start of a text: "Am", "A minor", "F#m", "La menor", "Sib", "Do mayor".
 # A letter tonic is a capital; solfège names come in any case.
-_KEY_HEAD = re.compile(
-    r"(?P<root>[A-G]|(?i:sol|do|re|mi|fa|la|si))(?P<acc>[#♯b♭])?"
+_KEY_TAIL = (
+    r"(?P<acc>[#♯b♭])?"
     r"(?:\s*(?P<word>(?i:minor|menor|major|mayor|min|maj))|(?P<m>m))?"
     r"(?![\w#♯♭+/])"
 )
+_KEY_HEAD = re.compile(r"(?P<root>[A-G]|(?i:sol|do|re|mi|fa|la|si))" + _KEY_TAIL)
+# After an English label, a solfège name only with its capital: "Key: do not use a capo" is no key.
+_KEY_HEAD_ENGLISH = re.compile(r"(?P<root>[A-G]|Sol|Do|Re|Mi|Fa|La|Si)" + _KEY_TAIL)
 # What introduces a key in a sheet's notes: "Key: G", "Key of Bb", "Tono: La menor".
 _KEY_LABEL = re.compile(
-    r"(?<!\w)(?i:key\s*(?:of\s+|[:=–—-]\s*)|(?:tono(?:\s+original)?|tonalidad|tonality)\s*[:=–—-]\s*)"
+    r"(?<!\w)(?:(?P<english>(?i:key\s*(?:of\s+|[:=–—-]\s*)|tonality\s*[:=–—-]\s*))"
+    r"|(?i:(?:tono(?:\s+original)?|tonalidad)\s*[:=–—-]\s*))"
 )
 _DIRECTIVE = re.compile(r"\s*\{\s*(?i:key)\s*:\s*(.*?)\s*\}\s*")
 _CHORD_TAG = re.compile(r"\[ch\](.*?)\[/ch\]")
@@ -126,9 +130,11 @@ def same_key(a: str, b: str) -> bool:
 def key_in_text(sheet: str) -> str | None:
     """The key a sheet states itself, in UG markup or plain text; None if it states none.
 
-    A ChordPro ``{key: …}`` directive anywhere, or a note before the first chord
-    line: "Key: G", "Key of Bb", "Tono: La menor", "Tonalidad: Re". Later notes
-    are left alone, as they often describe a key change.
+    A ChordPro ``{key: …}`` directive anywhere, or a note before the first chords:
+    "Key: G", "Key of Bb", "Tono: La menor", "Tonalidad: Re". The chords start at a
+    line of chords, or at any line with a chord tag ("Intro: [ch]Am[/ch]"), which
+    can still state the key itself ("Key: [ch]F#m[/ch]"). Later notes are left
+    alone, as they often describe a key change.
     """
     for raw in sheet.splitlines():
         directive = _DIRECTIVE.fullmatch(raw)
@@ -141,9 +147,11 @@ def key_in_text(sheet: str) -> str | None:
             return None
         line = _CHORD_TAG.sub(lambda m: m.group(1), raw)
         for label in _KEY_LABEL.finditer(line):
-            m = _KEY_HEAD.match(line, label.end())
+            m = (_KEY_HEAD_ENGLISH if label.group("english") else _KEY_HEAD).match(line, label.end())
             if m:
                 return _canonical(m)
+        if _CHORD_TAG.search(raw):  # the chords have started
+            return None
     return None
 
 

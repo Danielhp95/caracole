@@ -98,6 +98,10 @@ def test_a_key_line_before_the_first_chords_is_the_tabs_key():
         ("Key - Em (capo 3)", "E minor"),
         ("Tuning: E A D G B E, Key: Em", "E minor"),
         ("Key: Am  Capo: 2", "A minor"),
+        ("Tono: la menor", "A minor"),  # Spanish solfège, in any case
+        ("tonalidad: sol", "G"),
+        ("Key: La menor", "A minor"),
+        ("Key: Sol", "G"),
     ],
 )
 def test_key_lines_in_english_and_spanish(line, key):
@@ -109,9 +113,16 @@ def test_a_key_line_after_the_chords_start_is_not_read():
     assert key_in_text(sheet) is None
 
 
+def test_a_labelled_chord_line_starts_the_chords_too():
+    # Often a key change, after the intro.
+    assert key_in_text("Intro: [ch]Am[/ch] [ch]G[/ch]\nKey: D\n[ch]D[/ch]\nWords\n") is None
+    assert key_in_text("Capo 2\nIntro: [ch]Am[/ch] [ch]G[/ch]\n") is None
+
+
 @pytest.mark.parametrize(
     "line",
-    ["The key: I lost it", "Key change: up a tone", "Monkey: G", "Keys: Am", "no key here"],
+    ["The key: I lost it", "Key change: up a tone", "Monkey: G", "Keys: Am", "no key here",
+     "Key: do not use a capo", "Key: la la la", "key of mine", "Tonality: si señor"],
 )
 def test_lines_that_only_look_like_a_key_line(line):
     assert key_in_text(f"{line}\n[ch]G[/ch]\nWords\n") is None
