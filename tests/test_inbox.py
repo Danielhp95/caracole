@@ -54,6 +54,29 @@ def test_version_number_selects_pick(conn, cfg):
     assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-2.gp5", b)]
 
 
+@pytest.mark.parametrize("ext,kind", [(".gp5", "guitar-pro"), (".ptb", "power")])
+def test_version_number_selects_a_pick_of_the_files_kind(conn, cfg, ext, kind):
+    # UG numbers versions within each type, so a Power Tab and a Guitar Pro file are both "ver 1".
+    s = add_song(conn)
+    other = "power" if kind == "guitar-pro" else "guitar-pro"
+    first = pick(conn, s, 1, kind=other, version=1)
+    second = pick(conn, s, 2, kind=kind, version=1)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [first, second])
+    drop(cfg, f"Soda Stereo - De Musica Ligera (ver 1){ext}")
+    file_inbox(conn, cfg.library_dir)
+    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [(f"guitar-2{ext}", second)]
+
+
+def test_version_number_of_another_kind_falls_back_to_the_kind(conn, cfg):
+    s = add_song(conn)
+    gp = pick(conn, s, 1, kind="guitar-pro", version=3)
+    pt = pick(conn, s, 2, kind="power", version=1)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [gp, pt])
+    drop(cfg, "Soda Stereo - De Musica Ligera (ver 1).gp5")
+    file_inbox(conn, cfg.library_dir)
+    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-1.gp5", gp)]
+
+
 def test_second_file_takes_next_open_pick(conn, cfg):
     s = add_song(conn)
     a, b = pick(conn, s, 1), pick(conn, s, 2, version=2)
@@ -63,6 +86,42 @@ def test_second_file_takes_next_open_pick(conn, cfg):
     drop(cfg, "Soda Stereo - De Musica Ligera.gpx", b"two")
     file_inbox(conn, cfg.library_dir)
     assert [f.name for f in kept_files(conn, s.id)] == ["guitar-1.gp5", "guitar-2.gpx"]
+
+
+def test_a_new_top_pick_never_overwrites_the_file_of_the_old_one(conn, cfg):
+    s = add_song(conn)
+    a = pick(conn, s, 1, version=1)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [a])
+    drop(cfg, "Soda Stereo - De Musica Ligera (ver 1).gp5", b"A's file")
+    file_inbox(conn, cfg.library_dir)
+    # A better-rated version appears: the next fetch ranks it first and A second.
+    b = pick(conn, s, 2, version=2)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [b, a])
+    drop(cfg, "Soda Stereo - De Musica Ligera (ver 2).gp5", b"B's file")
+    stats = file_inbox(conn, cfg.library_dir)
+    folder = song_dir(cfg.library_dir, s)
+    assert (folder / "guitar-1.gp5").read_bytes() == b"A's file"
+    assert stats.filed == [folder / "guitar-2.gp5"]
+    assert (folder / "guitar-2.gp5").read_bytes() == b"B's file"
+    kept = kept_files(conn, s.id)
+    assert [(f.name, f.version_id) for f in kept] == [("guitar-1.gp5", a), ("guitar-2.gp5", b)]
+    assert [f.kept_rank for f in kept] == [1, 1]  # each version's rank when it was filed
+
+
+def test_a_guitar_file_put_in_the_folder_by_hand_is_never_overwritten(conn, cfg):
+    s = add_song(conn)
+    v = pick(conn, s, 1)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
+    folder = song_dir(cfg.library_dir, s)
+    folder.mkdir(parents=True)
+    (folder / "guitar-1.gp5").write_bytes(b"mine")
+    (folder / "guitar-2.gpx").write_bytes(b"also mine")  # a number is taken whatever the extension
+    drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"download")
+    file_inbox(conn, cfg.library_dir)
+    assert (folder / "guitar-1.gp5").read_bytes() == b"mine"
+    assert (folder / "guitar-2.gpx").read_bytes() == b"also mine"
+    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-3.gp5", v)]
+    assert (folder / "guitar-3.gp5").read_bytes() == b"download"
 
 
 def test_ptb_prefers_power_pick(conn, cfg):
@@ -112,6 +171,27 @@ def test_unmatched_stays(conn, cfg):
     b = drop(cfg, "notes.pdf")
     stats = file_inbox(conn, cfg.library_dir)
     assert sorted(stats.unmatched) == sorted([a, b]) and a.exists() and b.exists()
+
+
+def test_a_symlink_in_the_inbox_is_refused_and_left_alone(conn, cfg, tmp_path):
+    # Anyone who can write to the library could point a link at tabarr's credentials,
+    # under a name the to-do page lists ("Guitar Pro pages to click").
+    s = add_song(conn)
+    v = pick(conn, s, 555890)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
+    secret = tmp_path / "credentials" / "spotify_client_secret"
+    secret.parent.mkdir()
+    secret.write_text("f00dfeedcafe0123456789abcdef0123\n")
+    inbox = cfg.library_dir / "_inbox"
+    inbox.mkdir(parents=True)
+    gp, other = inbox / "Soda Stereo - De Musica Ligera.gp5", inbox / "notes.txt"
+    gp.symlink_to(secret)
+    other.symlink_to(secret)
+    stats = file_inbox(conn, cfg.library_dir)
+    assert kept_files(conn, s.id) == []
+    assert not song_dir(cfg.library_dir, s).exists()
+    assert gp.is_symlink() and other.is_symlink()
+    assert stats.refused == [gp, other] and stats.filed == [] and stats.unmatched == []
 
 
 def test_no_inbox_is_fine(conn, cfg):

@@ -12,11 +12,14 @@ path separator or a reserved character, so a song can't escape the library.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import re
+import secrets
 import sqlite3
+import stat
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,12 +52,59 @@ def song_dir(library_dir: Path, song: Song) -> Path:
 
 
 def write_atomic(path: Path, data: bytes) -> str:
-    """Write through a temporary file and rename; return the SHA-256 of the data."""
+    """Write through a temporary file and rename; return the SHA-256 of the data.
+
+    Anyone who can write to the library can plant a symbolic link there, so the
+    temporary file gets a random name and is created exclusively (O_EXCL): a
+    link waiting at a predictable name is never written through. The rename
+    replaces a link at ``path`` itself rather than its target. open(..., "x")
+    rather than mkstemp: mkstemp makes 0600 files, which would hide the library
+    from Syncthing reading it through the group.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(4)}.tmp")
+    try:
+        with open(tmp, "xb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     return hashlib.sha256(data).hexdigest()
+
+
+class NotRegularFile(OSError):
+    """A path tabarr won't open: a symbolic link, a directory, a FIFO or a device."""
+
+
+def open_regular(path: Path, flags: int = os.O_RDONLY) -> int:
+    """A descriptor for the regular file at ``path``, never opened through a symbolic link.
+
+    The library is writable by the Syncthing group and every synced device, so a
+    link planted there could point at tabarr's private files (the database, the
+    Spotify token, the credentials): read, they would be copied into the
+    library; written, they would be destroyed. The file is opened without
+    following a link and without waiting on a FIFO, then checked on the open
+    descriptor, so it can't be swapped in between. Raises NotRegularFile,
+    FileNotFoundError when nothing is there, or another OSError.
+    """
+    try:
+        fd = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as e:
+        if e.errno == errno.ELOOP:  # O_NOFOLLOW's answer for a link
+            link = "a symbolic link, which tabarr doesn't follow"
+            raise NotRegularFile(e.errno, link, str(path)) from None
+        raise
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise NotRegularFile(errno.EINVAL, "not a regular file", str(path))
+    return fd
+
+
+def read_regular(path: Path) -> bytes:
+    """The bytes of the regular file at ``path``, never read through a link (``open_regular``)."""
+    with open(open_regular(path), "rb") as f:
+        return f.read()
 
 
 @dataclass

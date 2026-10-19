@@ -1,3 +1,9 @@
+import functools
+import os
+import shutil
+import struct
+import subprocess
+import zlib
 from pathlib import Path
 
 import pytest
@@ -211,6 +217,16 @@ def test_markup_lookalike_is_defused():
     assert body("I <3 you") == ["I <3 you"]
 
 
+def test_markup_in_a_chord_name_is_defused():
+    # ChordPro draws chord names with markup, and its <img> opens a local file.
+    assert body('[ch]<img src="x.png"/>[/ch]\nHello world') == ['[‹img src="x.png"/>]Hello world']
+    assert merge_chord_line('[ch]<img src="x.png"/>[/ch]', "Hi") == '[‹img src="x.png"/>]Hi'
+
+
+def test_markup_and_braces_in_a_chord_only_line_are_defused():
+    assert body("[ch]<b>G</b>[/ch] [ch]{D}[/ch]") == ["[‹b>G‹/b>] [(D)]"]
+
+
 def test_escaping_keeps_chords_in_place():
     content = "[ch]G[/ch]          [ch]D[/ch]\n[x2] again {and} again"
     assert body(content) == ["[G](x2) again [D](and) again"]
@@ -373,3 +389,41 @@ def test_section_header_followed_by_chords_on_its_line():
 def test_bracketed_note_before_lyrics_stays_a_lyric_line():
     content = "[ch]G[/ch]          [ch]D[/ch]\n[x2] again and again"
     assert body(content) == ["[G](x2) again [D]and again"]
+
+
+# --- with the real chordpro 6.050.7 ------------------------------------------------
+
+CHORDPRO = os.environ.get("TABARR_CHORDPRO_BIN") or shutil.which("chordpro")
+real_chordpro = pytest.mark.skipif(CHORDPRO is None, reason="needs the chordpro binary")
+
+
+def _png(path: Path, width: int, height: int) -> None:
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        crc = zlib.crc32(kind + data)
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", crc)
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    rows = b"".join(b"\x00" + b"\xff\x00\x00" * width for _ in range(height))
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+@real_chordpro
+@pytest.mark.parametrize("image", ["private.png", "missing.png"])
+def test_a_chord_name_cannot_embed_or_ask_for_a_local_image(tmp_path, image):
+    from tabarr.render import render_pdf
+
+    _png(tmp_path / "private.png", 37, 11)  # stands for any image the tabarr user can read
+    cho = tmp_path / "sheet.cho"
+    sheet = f'[ch]<img src="{image}"/>[/ch]\nHello world\n'
+    cho.write_text(to_chordpro(sheet, title="T", artist="A"), encoding="utf-8")
+    pdf = tmp_path / "sheet.pdf"
+    # chordpro resolves the image against its working directory.
+    in_tmp = functools.partial(subprocess.run, cwd=tmp_path)
+    render_pdf(cho, pdf, chordpro_bin=CHORDPRO, runner=in_tmp)
+    data = pdf.read_bytes()
+    assert not (b"/Width 37" in data and b"/Height 11" in data)

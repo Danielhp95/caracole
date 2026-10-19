@@ -120,7 +120,13 @@ CREATE TABLE IF NOT EXISTS kv (
 );
 """
 
+# Each script runs in one transaction with its PRAGMA user_version (see _migrate),
+# so a script must not BEGIN or COMMIT itself.
 _MIGRATIONS = {1: _SCHEMA_V1}
+
+
+class DatabaseTooNew(sqlite3.DatabaseError):
+    """The database was migrated by a newer tabarr than this one."""
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -128,18 +134,53 @@ def connect(path: Path) -> sqlite3.Connection:
 
     Rows are ``sqlite3.Row``; statements commit automatically (autocommit mode)
     unless the caller opens a transaction with ``with conn:``.
+
+    Each migration applies whole or not at all, after the database is copied to
+    ``<name>.v<N>.bak`` (N: the version it's migrated from). A database newer
+    than this tabarr, say after a NixOS rollback, raises DatabaseTooNew.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, isolation_level=None, timeout=30)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA busy_timeout = 30000")
-    current = conn.execute("PRAGMA user_version").fetchone()[0]
-    for version in sorted(v for v in _MIGRATIONS if v > current):
-        conn.executescript(_MIGRATIONS[version])
-        conn.execute(f"PRAGMA user_version = {version}")
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA busy_timeout = 30000")
+        _migrate(conn, path)
+    except BaseException:
+        conn.close()
+        raise
     return conn
+
+
+def _migrate(conn: sqlite3.Connection, path: Path) -> None:
+    current = conn.execute("PRAGMA user_version").fetchone()[0]
+    if current > SCHEMA_VERSION:
+        backup = path.with_name(f"{path.name}.v{SCHEMA_VERSION}.bak")
+        restore = ""
+        if backup.exists():
+            restore = f", or restore {backup.name}, the copy saved before it was migrated"
+        raise DatabaseTooNew(
+            f"{path} is at schema version {current}, but this tabarr knows up to {SCHEMA_VERSION}: "
+            f"a newer tabarr migrated it. Run that tabarr{restore}."
+        )
+    pending = sorted(v for v in _MIGRATIONS if v > current)
+    if current and pending:
+        backup = path.with_name(f"{path.name}.v{current}.bak")
+        backup.unlink(missing_ok=True)  # VACUUM INTO won't overwrite an older copy
+        conn.execute("VACUUM INTO ?", (str(backup),))
+    for version in pending:
+        # executescript adds no transaction of its own: without this one, each
+        # statement would commit alone and a failure would leave half a migration.
+        script = _MIGRATIONS[version]
+        try:
+            conn.executescript(
+                f"BEGIN IMMEDIATE;\n{script}\nPRAGMA user_version = {version};\nCOMMIT;"
+            )
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
 
 
 def kv_get(conn: sqlite3.Connection, key: str) -> str | None:
