@@ -78,28 +78,6 @@ def songs(tmp_path):
         conn.close()
 
 
-def test_registering_the_commands_imports_no_spotipy(tmp_path):
-    # Every command module is imported on every start, so spotipy waits for a command.
-    src = Path(__file__).resolve().parents[1] / "src"
-    code = (
-        "import sys, typer\n"
-        "from tabarr.commands import sources\n"
-        "sources.register(typer.Typer())\n"
-        "print([m for m in ('spotipy', 'tabarr.spotify') if m in sys.modules])\n"
-    )
-    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(src)}
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        env=env,
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr[-2000:]
-    assert result.stdout.strip() == "[]"
-
-
 def spotify_config(tmp_path, *, secret=True):
     """A [spotify] table for tabarr.toml; the client secret sits in a file next to it."""
     if not secret:
@@ -141,14 +119,17 @@ class OneTrackSpotify:
 
 
 def fake_spotify(monkeypatch, client):
-    """Make ``client_from_config`` return ``client``, or raise it when it's an exception."""
+    """Make ``client_from_config`` return ``client`` (or raise it); returns a list of its calls."""
+    calls = []
 
     def client_from_config(cfg):
+        calls.append(cfg)
         if isinstance(client, BaseException):
             raise client
         return client
 
     monkeypatch.setattr("tabarr.spotify.client_from_config", client_from_config)
+    return calls
 
 
 # --- tabarr add -----------------------------------------------------------------------------
@@ -270,13 +251,14 @@ TWO_SONGS_AND_A_TYPO = (
 
 
 def test_sync_without_spotify_reads_wanted_txt(tmp_path, monkeypatch):
-    fake_spotify(monkeypatch, AssertionError("Spotify is off, so no client is made"))
+    clients_made = fake_spotify(monkeypatch, OneTrackSpotify())
     wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
     result = run(tmp_path, "sync")
     assert result.exit_code == 0, result.output
     assert "wanted.txt 2 songs, 2 new, 1 problem; Spotify off\n" in result.output
     assert "wanted.txt line 2: expected 'Artist - Title'" in result.output
     assert {s.key for s in songs(tmp_path)} == {"宋冬野/斑马斑马", "soda-stereo/de-musica-ligera"}
+    assert clients_made == []  # Spotify is off: no client is even made
 
 
 def test_sync_with_nothing_to_read_says_how_to_start(tmp_path):
@@ -454,3 +436,28 @@ def test_auth_spotify_when_spotify_cannot_be_reached_exits_1(tmp_path, monkeypat
     )
     assert result.exit_code == 1, result.output
     assert "couldn't reach accounts.spotify.com" in result.output
+
+
+# --- the module -----------------------------------------------------------------------------
+
+
+def test_registering_the_commands_imports_no_spotipy(tmp_path):
+    # Every command module is imported on every start, so spotipy waits for a command.
+    src = Path(__file__).resolve().parents[1] / "src"
+    code = (
+        "import sys, typer\n"
+        "from tabarr.commands import sources\n"
+        "sources.register(typer.Typer())\n"
+        "print([m for m in ('spotipy', 'tabarr.spotify') if m in sys.modules])\n"
+    )
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(src)}
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert result.stdout.strip() == "[]"

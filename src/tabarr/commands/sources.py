@@ -40,7 +40,7 @@ instead (docs/deploy.md, section 5)."""
 _DEFAULT_CONFIG = "tabarr.toml (~/.config/tabarr/tabarr.toml, unless --config names another)"
 
 # How `tabarr add` describes a song the library already had, by its status.
-_KNOWN = {"wanted": "no sheet yet", "found": "has a sheet", "ignored": "ignored"}
+_KNOWN = {"wanted": "no sheet yet", "found": "has a sheet", "ignored": "ignored by overrides.toml"}
 
 
 def register(app: typer.Typer) -> None:
@@ -155,7 +155,7 @@ def _duration_ms(text: str | None) -> int | None:
     except ValueError as e:
         fail(f"--duration: {e}", 2)
     if ms is None:
-        fail(f"--duration: {text.strip()!r} is not a duration: write m:ss or whole seconds", 2)
+        fail(f"--duration: {text.strip()!r} isn't a duration: write m:ss, h:mm:ss or seconds", 2)
     return ms
 
 
@@ -215,7 +215,7 @@ def _sync_wanted_song(cfg: Config, line: WantedLine) -> None:
     if known is None:
         state = "new; the next `tabarr run` looks for it"
     else:
-        status = song.status if song is not None else known.status
+        status = (song or known).status
         state = f"already known, {_KNOWN.get(status, status)}"
     typer.echo(f"Song {line.identity}: {state}")
     for problem in stats.errors:
