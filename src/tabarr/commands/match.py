@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from tabarr.match import MatchChange, MatchResult
 
 _ORDER = ("accept", "pinned", "review", "not_found", "ignored")
+_PARTIAL = "The UG index is incomplete (a build stopped before it read every sitemap)"
 
 
 def register(app: typer.Typer) -> None:
@@ -37,12 +38,18 @@ def register(app: typer.Typer) -> None:
 
 def _match(cfg: Config, dry_run: bool) -> None:
     from tabarr.match import match_all
-    from tabarr.ug.index import index_count
+    from tabarr.ug.index import index_state
 
     overrides = load_ovr(cfg)
     with closing(open_db(cfg)) as conn:
-        if index_count(conn) == 0:
+        state = index_state(conn)
+        if state == "empty":
             fail("The UG index is empty: run `tabarr index build` first.")
+        if state == "partial" and not dry_run:
+            # Errors are not misses: a song in the sitemaps not read yet isn't missing from UG.
+            fail(f"{_PARTIAL}: the songs in the sitemaps not read yet would be saved as not found, so nothing "
+                 "was saved. Finish it with `tabarr index build` (the nightly refresh reads the rest too); "
+                 "`tabarr match --dry-run` shows what it matches so far.")
         changes = match_all(conn, overrides, cfg.match, dry_run=dry_run)
     if not changes:
         typer.echo("No songs yet: add some to wanted.txt, or run `tabarr sync`.")
@@ -50,6 +57,8 @@ def _match(cfg: Config, dry_run: bool) -> None:
     for c in changes:
         typer.echo(_line(c))
     typer.echo(_totals(changes, dry_run=dry_run))
+    if state == "partial":
+        typer.echo(f"{_PARTIAL}: a song whose tabs are in the sitemaps not read yet shows as not_found.")
     reviews = sum(1 for c in changes if c.new.decision == "review")
     if reviews and not dry_run:
         typer.echo(f"Settle the {'review' if reviews == 1 else f'{reviews} reviews'} with `tabarr review`, "

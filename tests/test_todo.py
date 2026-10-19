@@ -116,6 +116,21 @@ def test_buy_list_excludes_found_and_songs_with_audio(conn, cfg):
     assert "## Buy list" not in todo(conn, cfg)
 
 
+def test_buy_list_waits_while_the_index_is_incomplete(conn, cfg):
+    # A build stopped part-way: UG may have sheets for a song marked not found against it.
+    from tabarr.ug.index import mark_built
+
+    index(conn, [(1001, "oasis", "wonderwall", "chords")])
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, match_decision="not_found")
+    text = todo(conn, cfg)
+    assert "## Buy list" not in text
+    assert "The Ultimate Guitar index is incomplete" in text.split("\n## Review", 1)[0]
+    mark_built(conn, NOW)
+    text = todo(conn, cfg)
+    assert "## Buy list (1)" in text and "index is incomplete" not in text
+
+
 def test_buy_list_waits_for_pending_fetches(conn, cfg):
     s = add_song(conn, "Radiohead", "Creep")
     update_song(conn, s.id, match_decision="accept")

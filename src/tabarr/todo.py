@@ -21,6 +21,7 @@ from tabarr.library import write_atomic
 from tabarr.normalize import clean_title, display_key, has_han, identity_key, romanize, slug_key
 from tabarr.overrides import Overrides
 from tabarr.songs import Song, list_songs
+from tabarr.ug.index import index_state
 from tabarr.ug.lookup import artist_known, learned_artist_url, song_tabs
 
 PROVIDERS = ("ug", "lrclib", "lacuerda")
@@ -144,12 +145,14 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
     return items, len(wanted)
 
 
-def _buy_list(songs: list[Song]) -> tuple[list[str], int]:
+def _buy_list(songs: list[Song], index: str) -> tuple[list[str], int]:
     items, waiting = [], 0
     for s in songs:
         if s.status != "wanted" or s.audio_path:
             continue
-        settled = s.match_decision == "not_found" or (s.match_decision in ("accept", "pinned") and s.ug_checked_at)
+        # A not-found decision settles nothing while the index is partial (see _setup).
+        settled = (s.match_decision == "not_found" and index != "partial") or (
+            s.match_decision in ("accept", "pinned") and s.ug_checked_at)
         if not settled:
             if s.match_decision in ("accept", "pinned"):
                 waiting += 1
@@ -320,8 +323,24 @@ def _health(conn: sqlite3.Connection, now: datetime) -> list[str]:
     return out + [""]
 
 
+_NUC_BUILD = "`tabarr index build` (on the NUC: `sudo tabarr-admin index build`)"
+
+
+def _setup(index: str) -> list[str]:
+    """What stops tabarr from doing its job until you act, for the section at the top."""
+    items = []
+    if index == "partial":
+        items.append(
+            "- **The Ultimate Guitar index is incomplete**: a build stopped before it read every sitemap. Until "
+            "the rest are read, tabarr matches no song and suggests buying none, so nothing UG has is taken for "
+            f"missing. The nightly refresh reads them as its budget allows, or run {_NUC_BUILD}."
+        )
+    return items
+
+
 def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> str:
     songs = list_songs(conn)
+    index = index_state(conn)
     by_id = {s.id: s for s in songs}
     counts = {st: sum(1 for s in songs if s.status == st) for st in ("found", "wanted", "ignored")}
     n = len(songs)
@@ -334,9 +353,12 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         "Browse or search every song: [index.html](index.html)",
         "",
     ]
-    buy, waiting = _buy_list(songs)
+    buy, waiting = _buy_list(songs, index)
     if waiting:
         out += [f"{waiting} song{'s' if waiting != 1 else ''} waiting for the nightly fetch.", ""]
+    setup = _setup(index)
+    if setup:
+        out += _section("Setup problems", setup)
 
     review = _review(conn, songs)
     if review:
