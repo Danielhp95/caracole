@@ -1,17 +1,20 @@
-"""render_all: every kept sheet written as ChordPro and rendered to a PDF in your key."""
+"""render_all and ``tabarr render``: every kept sheet as ChordPro and as a PDF in your key."""
 
 from __future__ import annotations
 
 import json
 import struct
 import subprocess
+import sys
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 from tabarr.autochords import ChordSegment, build_sheet
+from tabarr.cli import build_app
 from tabarr.db import kv_get_json
 from tabarr.lacuerda import parse_version_page
 from tabarr.library import keep_file, song_dir, write_atomic, write_info
@@ -535,3 +538,77 @@ def test_info_json_keeps_the_render_entry_when_another_step_rewrites_it(conn, cf
     render(conn, cfg)
     write_info(conn, cfg.library_dir, get_song(conn, song.id))  # as the fetch step does
     assert info_json(cfg, song).get("render") == {"transpose": 0, "pdf": "sheet (auto).pdf"}
+
+
+# --- tabarr render ---------------------------------------------------------------------------
+
+# A stand-in for the chordpro program, run as one: it writes a PDF naming its options,
+# and fails on a sheet whose path holds "Persiana".
+FAKE_CHORDPRO = """\
+#!{python}
+import sys
+
+out = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--output="))
+if "Persiana" in sys.argv[-1]:
+    sys.exit("Unhandled fonts detected -- aborted")
+with open(out, "w", encoding="utf-8") as f:
+    f.write("%PDF-1.4 fake " + " ".join(sys.argv[1:-1]))
+"""
+
+
+@pytest.fixture
+def fake_chordpro(tmp_path) -> Path:
+    path = tmp_path / "bin" / "chordpro"
+    path.parent.mkdir()
+    path.write_text(FAKE_CHORDPRO.format(python=sys.executable), encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+def tabarr_render(cfg, chordpro: Path, *args: str):
+    """Run ``tabarr render`` on the library and database of ``cfg``, with ``chordpro``."""
+    toml = cfg.state_dir.parent / "tabarr.toml"
+    toml.write_text(
+        f'library_dir = "{cfg.library_dir}"\nstate_dir = "{cfg.state_dir}"\n'
+        f'cache_dir = "{cfg.cache_dir}"\nchordpro_bin = "{chordpro}"\n',
+        encoding="utf-8",
+    )
+    return CliRunner().invoke(
+        build_app(), ["--config", str(toml), "render", *args], env={"TABARR_CJK_FONT": None}
+    )
+
+
+def test_render_command_renders_skips_and_forces(conn, cfg, fake_chordpro):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    first = tabarr_render(cfg, fake_chordpro)
+    assert first.exit_code == 0, first.output
+    assert "1 rendered, 0 up to date, 0 failed" in first.output
+    assert pdf_of(cfg, song).read_bytes().startswith(b"%PDF")
+    again = tabarr_render(cfg, fake_chordpro)
+    assert "0 rendered, 1 up to date, 0 failed" in again.output
+    forced = tabarr_render(cfg, fake_chordpro, "--force")
+    assert forced.exit_code == 0, forced.output
+    assert "1 rendered, 0 up to date, 0 failed" in forced.output
+
+
+def test_render_command_exits_1_when_a_sheet_fails(conn, cfg, fake_chordpro, caplog):
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, bad, tab_id=1)
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    result = tabarr_render(cfg, fake_chordpro)
+    assert result.exit_code == 1
+    assert "1 rendered, 0 up to date, 1 failed" in result.output
+    # The warning says which song and why; the command then needs to add nothing.
+    assert "no PDF for Soda Stereo - Persiana Americana" in caplog.text
+    assert "Unhandled fonts detected" in caplog.text
+
+
+def test_render_command_a_missing_font_is_no_failure(conn, cfg, fake_chordpro, caplog):
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, song, ZH_SHEET, tonality="")
+    result = tabarr_render(cfg, fake_chordpro)
+    assert result.exit_code == 0, result.output
+    assert "0 rendered, 0 up to date, 0 failed" in result.output
+    assert "set cjk_font or TABARR_CJK_FONT to render 宋冬野 - 斑马斑马" in caplog.text
