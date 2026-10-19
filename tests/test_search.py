@@ -494,6 +494,24 @@ def test_cli_hint_pasted_as_shown_keeps_overrides_readable(tmp_path):
         assert set(load_overrides(overrides).artist_url) == artists, overrides.read_text(encoding="utf-8")
 
 
+def test_cli_hint_for_an_artist_whose_page_overrides_has_gives_no_second_line(tmp_path):
+    # The song is in your library, by an artist UG lists only by bare ids, whose page you pasted: a
+    # second line for the artist under [artist_url] would make overrides.toml unreadable.
+    from tabarr.overrides import load_overrides
+
+    conn = seed(tmp_path)
+    add_song(conn, "Joaquín Sabina", "19 Días y 500 Noches")
+    overrides = tmp_path / "lib" / "overrides.toml"
+    page = "https://www.ultimate-guitar.com/artist/joaquin_sabina_1234"
+    overrides.write_text(f'[artist_url]\n"Joaquín Sabina" = "{page}"\n', encoding="utf-8")
+    result = run(tmp_path, "search", "19", "dias", "y", "500", "noches")
+    assert result.exit_code == 0, result.output
+    assert not re.findall(r"^    (\S.*)$", result.output, re.M), result.output
+    hint = " ".join(result.output.split())
+    assert f"overrides.toml has Joaquín Sabina's page already ({page})" in hint
+    assert set(load_overrides(overrides).artist_url) == {"joaquin-sabina"}
+
+
 def test_cli_search_still_hints_when_overrides_cant_be_read(tmp_path):
     seed(tmp_path)
     (tmp_path / "lib" / "overrides.toml").write_text(MANA + "\n" + MANA, encoding="utf-8")
