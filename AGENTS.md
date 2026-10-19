@@ -55,6 +55,11 @@ and `search --key`).
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `write_pages`, `fail`, `warn`.
   The logic of `caracole review` and `caracole search` is in review.py and search.py.
+- `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
+  writes, tokens), files.py (library files, no link followed), jobs.py (the queue: each
+  request runs the `caracole` CLI in a child process, one command at a time), app.py (the
+  routes), pages.py, server.py (`http.server`). The page is library_page.py's, with
+  `WebControls`.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
@@ -249,6 +254,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `search`, `match --dry-run` and `index stats` only read and never wait. `review` takes it
   only after its questions (commands/library.py), so the nightly run never waits for an
   answer (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`).
+  `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
+  runs every other change as a `caracole` command in a child process, one at a time
+  (web/jobs.py), since the lock is re-entrant within a process and its threads would share it.
 - **Spotify is optional, and wanted.txt is always a source.** `sources.sync_sources` syncs
   wanted.txt first, then Spotify, importing spotipy, only when `cfg.spotify.enabled` (a
   `client_id` is set); any Spotify failure becomes a state on its report, never an error.

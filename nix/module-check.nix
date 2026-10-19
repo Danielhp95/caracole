@@ -106,6 +106,41 @@ let
     configured
     { services.caracole.autochords.enable = true; }
   ];
+  # caracole-web with its defaults, and on a tailnet address with a token.
+  webDefault = evalSystem [
+    stubbed
+    { services.caracole.web.enable = true; }
+  ];
+  webTailnet = evalSystem [
+    stubbed
+    configured
+    {
+      services.caracole = {
+        web = {
+          enable = true;
+          address = "100.64.0.7";
+          port = 8740;
+          allowedHosts = [
+            "nuc.example.ts.net"
+            "nuc"
+          ];
+          openFirewall = true;
+        };
+        credentials.web_token = "/run/agenix/caracole-web-token";
+      };
+    }
+  ];
+  # caracole-web on every address, with no access token.
+  webOpen = evalSystem [
+    stubbed
+    configured
+    {
+      services.caracole.web = {
+        enable = true;
+        address = "0.0.0.0";
+      };
+    }
+  ];
   defaults = evalSystem [ ];
   # nix/module.nix imported on its own, without the flake's wrapper.
   standalone =
@@ -172,6 +207,12 @@ let
   stateInLibrary = rejections { stateDir = "/var/lib/caracole/library/.state"; };
   libraryInState = rejections { stateDir = "/var/lib/caracole"; };
   stateIsCache = rejections { cacheDir = "/var/lib/caracole/state"; };
+  webOnPort80 = rejections {
+    web = {
+      enable = true;
+      port = 80;
+    };
+  };
 
   # The folders a system's units must open: the library, music, state and cache.
   layout = data: {
@@ -267,6 +308,10 @@ let
   autochords = nucAutochords.systemd.services.caracole-autochords;
   autochordsSc = autochords.serviceConfig;
   autochordsPackageModels = nucModelsFromPackage.systemd.services.caracole-autochords;
+  web = webDefault.systemd.services.caracole-web;
+  webSc = web.serviceConfig;
+  webConfigFile = toml.generate "caracole.toml" webDefault.services.caracole.settings;
+  tailnetWeb = webTailnet.systemd.services.caracole-web;
   findAdmin =
     system: lib.findFirst (p: lib.getName p == "caracole-admin") null system.environment.systemPackages;
   admin = findAdmin nuc;
@@ -366,6 +411,52 @@ let
     "caracole-autochords.service follows a successful run and notifies on failure" =
       nucAutochords.systemd.services.caracole.onSuccess == [ "caracole-autochords.service" ]
       && autochords.onFailure == [ "caracole-notify-failure.service" ];
+    "caracole-web.service exists only when web.enable is set" =
+      !(nuc.systemd.services ? caracole-web) && !(nucAutochords.systemd.services ? caracole-web);
+    # --config is a root option of the CLI, so it precedes the subcommand.
+    "caracole-web.service runs `caracole --config <generated caracole.toml> serve` on 127.0.0.1:8737 by default" =
+      webSc.ExecStart == "${lib.getExe stub} --config ${webConfigFile} serve --address 127.0.0.1 --port 8737";
+    "caracole-web.service listens where web.address and web.port say, answering to web.allowedHosts" =
+      lib.hasSuffix " serve --address 100.64.0.7 --port 8740 --allow-host nuc.example.ts.net --allow-host nuc"
+        tailnetWeb.serviceConfig.ExecStart;
+    "caracole-web.service is hardened as caracole.service is, MemoryDenyWriteExecute included" =
+      hardened webSc && webSc.MemoryDenyWriteExecute && webSc.RestrictNamespaces;
+    "caracole-web.service runs as caracole, with a group-writable umask" = sameUser webSc;
+    # Its requests run caracole commands, which write what the nightly run writes.
+    "caracole-web.service writes only the library, state and cache, reads the music if it exists, waits for their mounts and caches there" =
+      opens web defaultLayout;
+    # Neither caracole serve nor the commands it runs (add, match, fetch, render) read Spotify or ntfy.
+    "caracole-web.service loads web_token alone of the credentials, and none without it" =
+      tailnetWeb.serviceConfig.LoadCredential == [ "web_token:/run/agenix/caracole-web-token" ]
+      && (webOpen.systemd.services.caracole-web.serviceConfig.LoadCredential or [ ]) == [ ];
+    "caracole-web listening beyond loopback without credentials.web_token is warned about, and only then" =
+      says [
+        "services.caracole.web listens on 0.0.0.0"
+        "credentials.web_token"
+      ] webOpen.warnings
+      && !(says [ "credentials.web_token" ] webDefault.warnings)
+      && !(says [ "credentials.web_token" ] webTailnet.warnings);
+    "caracole-web.service starts at boot after the network, restarts when it fails, and notifies on failure" =
+      lib.elem "multi-user.target" web.wantedBy
+      && lib.elem "network-online.target" web.after
+      && lib.elem "network-online.target" web.wants
+      && webSc.Restart == "on-failure"
+      && webSc.Type == "exec"
+      && web.onFailure == [ "caracole-notify-failure.service" ];
+    # RestartMode=normal goes through `failed` before each restart, which starts OnFailure=: an
+    # alert every 10 seconds while a tailnet address is missing, for ever with a lasting fault.
+    "caracole-web.service restarts without an alert each time, and fails once after 30 starts in 10 minutes" =
+      (webSc.RestartMode or null) == "direct"
+      && webSc.RestartSec == "10s"
+      && web.startLimitIntervalSec == 600
+      && web.startLimitBurst == 30;
+    "web.openFirewall opens web.port, and only it opens it" =
+      lib.elem 8740 webTailnet.networking.firewall.allowedTCPPorts
+      && !(lib.elem 8737 webDefault.networking.firewall.allowedTCPPorts);
+    "a web.port below 1024 is rejected" = says [
+      "1024"
+      "port 80"
+    ] webOnPort80;
     "the caracole system user and group exist" =
       nuc.users.users.caracole.isSystemUser
       && nuc.users.users.caracole.group == "caracole"
@@ -410,6 +501,9 @@ let
       moved
       libraryAlone
       noneInDataDir
+      webDefault
+      webTailnet
+      webOpen
     ];
     "settings.state_dir is rejected, for stateDir" = says [
       "stateDir, not settings.state_dir"
@@ -470,7 +564,9 @@ let
       standalone.services.caracole.package.drvPath == defaultPackage.drvPath
       && standalone.services.caracole.autochords.package.drvPath == autochordsPackage.drvPath;
     "the whole system evaluates" =
-      nucAutochords.system.build.toplevel.drvPath != "" && moved.system.build.toplevel.drvPath != "";
+      nucAutochords.system.build.toplevel.drvPath != ""
+      && moved.system.build.toplevel.drvPath != ""
+      && webTailnet.system.build.toplevel.drvPath != "";
   };
 
   broken = lib.attrNames (lib.filterAttrs (_: ok: !ok) expectations);
@@ -519,6 +615,7 @@ else
         "movedRunUnit"
         "movedAutochordsUnit"
         "movedNotifyUnit"
+        "webUnit"
       ];
       loadCases = builtins.toJSON [
         (loads nuc defaultLayout)
@@ -532,6 +629,7 @@ else
       movedRunUnit = unitText moved "caracole.service";
       movedAutochordsUnit = unitText moved "caracole-autochords.service";
       movedNotifyUnit = unitText moved "caracole-notify-failure.service";
+      webUnit = unitText webTailnet "caracole-web.service";
     }
     ''
       # Fails the build when the file has the text: `! grep` would not, since
@@ -623,12 +721,24 @@ else
       lacks LoadCredential "$autochordsUnitPath"
       grep -q -- "LoadCredential=ntfy_token:/run/agenix/ntfy_token" "$runUnitPath"
 
+      # caracole-web, as systemd reads it: the token by credential, never on its command line.
+      grep -q -- "LoadCredential=web_token:/run/agenix/caracole-web-token" "$webUnitPath"
+      grep -q -- " serve --address 100.64.0.7 --port 8740 " "$webUnitPath"
+      grep -qx -- "Restart=on-failure" "$webUnitPath"
+      grep -qx -- "RestartMode=direct" "$webUnitPath"
+      grep -qx -- "StartLimitIntervalSec=600" "$webUnitPath"
+      grep -qx -- "StartLimitBurst=30" "$webUnitPath"
+      lacks "--token-file" "$webUnitPath"
+      lacks "ntfy_token" "$webUnitPath"
+      lacks "spotify_client_secret" "$webUnitPath"
+
       mkdir -p $out/data-caracole
       cp "$configFile" $out/caracole.toml
       cp "$runUnitPath" $out/caracole.service
       cp "$timerUnitPath" $out/caracole.timer
       cp "$notifyUnitPath" $out/caracole-notify-failure.service
       cp "$autochordsUnitPath" $out/caracole-autochords.service
+      cp "$webUnitPath" $out/caracole-web.service
       cp "$movedRunUnitPath" $out/data-caracole/caracole.service
       cp "$movedTmpfiles" $out/data-caracole/caracole-tmpfiles.conf
     ''

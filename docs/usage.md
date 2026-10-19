@@ -951,15 +951,19 @@ paste, if you'd rather edit the file.
 overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
-loads nothing from the network. It shows every song with its status, its key
-and where the key came from ("Key A minor (from the tab)", "Key C major
-(estimated from the chords)", "(from the audio)": see
+loads nothing from the network. It shows every song as a card, in a grid as
+wide as the screen: one column on a phone, three or four on a laptop. A card
+has its status, its key and where the key came from ("Key A minor (from the
+tab)", "Key C major (estimated from the chords)", "(from the audio)": see
 [The song's key](#the-songs-key)), its transposition, and links to its files,
 the PDF first. A Guitar Pro file caracole downloaded names its site, as
 `Guitar Pro 1 · gtptabs.com`, and a score its format, as `Score 1 (MuseScore)`;
-a score's PDF is never the card's main link, which is the sheet's. Under
-"Scores on MuseScore", a song has its MuseScore pages, each a possible match,
-as on the to-do page. A song without a sheet also gets buy and search links.
+a score's PDF is never the card's main link, which is the sheet's. Each
+artist's cards share a coloured monogram, and the artist's name under a title
+shows only that artist's songs ("Queen" leaves out ABBA's "Dancing Queen"),
+until you take its chip off. "Find it elsewhere" opens a song's MuseScore
+pages, each a possible match, as on the to-do page, and, for a song without a
+sheet, its search and buy links.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
@@ -970,9 +974,12 @@ as "am", also finds the names with "am" in them ("I Am the Walrus"). The
 buttons show all songs, or only those found, wanted or needing review; the Key
 menu, there once a song has a key, shows only the songs in one key, with how
 many each key has, and puts the spellings of one key together ("F# / Gb
-minor"); and you can sort by artist or by when songs were added. When nothing
-in the library matches, the page shows the `caracole search` line to run,
-unless you searched for a key, which the offline index doesn't know.
+minor"); and you can sort by artist, by title or by when songs were added.
+Sorted by artist or title, a row of letters jumps to the first song under
+each. When nothing in the library matches, the page shows the
+`caracole search` line to run, unless you searched for a key, which the
+offline index doesn't know. `caracole serve` serves the same page with a form
+to request songs (see below).
 
 Each song's entry in the page's data (the `<script type="application/json"
 id="songs">` block) has the same `key` and `key_source` as its info.json.
@@ -1034,6 +1041,66 @@ KEY is written the way tabs write keys, in either case: `"A minor"`, `Am`,
 the same key matches (`Gbm` finds F# minor). The
 offline index knows no keys, so `--key` leaves it out, and `--add` can't go
 with it. A KEY that is no key exits with status 2.
+
+### caracole serve
+
+`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
+[--token-file FILE]` serves the library page over HTTP, at
+`http://127.0.0.1:8737/` by default, with three things the file on disk can't
+do:
+
+- **Request a song.** The form at the top takes an artist, a title and,
+  optionally, the album and the length. The song goes into wanted.txt at once,
+  as `caracole add ARTIST TITLE` writes it (a song listed already is left as
+  it is), then `caracole add` runs to put it in the library.
+- **Fetch it now.** Ticked, as it is by default, the request also runs
+  `caracole match` (offline), `caracole fetch --song "ARTIST - TITLE"` and
+  `caracole render` (offline), so a sheet can be there in a minute or two.
+  Each wanted song's card has a Fetch now button that does the same, except
+  on a song that needs review: it says Review first, since `caracole fetch`
+  waits for `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
+  overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for
+  the nightly run.
+- **Requests**, the page at `/jobs`, lists each request, the commands it
+  runs and what each printed (the newest request's output open), and
+  refreshes itself every 10 seconds while one waits or runs. Stop refreshing
+  keeps it still, so an output stays open to read.
+
+Every request runs the `caracole` command line, one command at a time, so the
+server is never more aggressive than you at a terminal: each command takes
+caracole's lock (behind a nightly run, it waits), keeps the pause after the
+last request any caracole sent, and keeps the budgets and cooldowns. The
+queue holds 20 requests and one per song: asking again for a song gives its
+request, and Fetch it now on a song whose request only adds it fetches it too.
+A request is in wanted.txt as soon as it's made, so a full queue or a restart
+loses no song. The page links each
+song's files, which the server sends from the library: PDFs, text, info.json,
+and Guitar Pro files as downloads, never through a symbolic link, never a
+hidden file, and never the database, the token or the cache.
+
+Who can reach it:
+
+- `--address` is 127.0.0.1 by default: this machine alone. A LAN or tailnet
+  address, or 0.0.0.0 for every address, opens it to those networks. `--port`
+  is 8737 by default.
+- It answers to any of its IP addresses (`http://192.168.1.20:8737/`), and
+  only to the names it knows: localhost, the machine's name and its `.local`
+  name, and each `--allow-host NAME`, such as its full tailnet name. A
+  browser that names it otherwise gets 421; this keeps other sites from
+  reaching it under a name of their own (DNS rebinding), which an address
+  can't be.
+- Every form must come from the server's own page: it carries a token the
+  server makes when it starts, and a request from another site is refused
+  (403). A form posted from a page older than the server's last start is
+  refused too; reload the page.
+- `--token-file FILE` asks each browser once for the access token in FILE (16
+  characters or more, such as `openssl rand -base64 24`), then remembers it in
+  a cookie. Without the option, a `web_token` credential from systemd
+  (`$CREDENTIALS_DIRECTORY/web_token`) does the same. Listening beyond this
+  machine without a token, it warns.
+
+It runs until Ctrl-C. On the NUC, `services.caracole.web` runs it as a unit
+([deploy.md](deploy.md), section 8).
 
 ## overrides.toml: your decisions
 
@@ -1387,6 +1454,7 @@ tags match the song's line in wanted.txt.
 
 [deploy.md](deploy.md) sets caracole up as a nightly NixOS service: the timer,
 the hardened units, agenix secrets, Syncthing for the library and the music,
-restic backups, and the offline auto-chords unit. There, run any command as
-the service does with `sudo caracole-admin COMMAND`, for example
+restic backups, the offline auto-chords unit, and caracole-web, which serves
+the library page with its request form. There, run any command as the service
+does with `sudo caracole-admin COMMAND`, for example
 `sudo caracole-admin index build`.
