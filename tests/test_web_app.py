@@ -109,6 +109,12 @@ def test_a_name_the_server_doesnt_answer_to_is_refused(app, conn):
     assert app.handle(Request("GET", "/", {})).status == 421
 
 
+def test_a_phone_on_the_lan_may_name_the_server_by_its_address(app, conn):
+    # caracole serve --address 0.0.0.0, opened as http://192.168.1.20:8737/ or http://[fd7a::7]:8737/
+    for host in ("192.168.1.20:8737", "[fd7a::7]:8737"):
+        assert app.handle(Request("GET", "/", {"host": host})).status == 200, host
+
+
 def test_the_page_says_what_is_wrong_with_overrides_toml(app, cfg):
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
     cfg.overrides_file.write_text("[ignore\n", encoding="utf-8")

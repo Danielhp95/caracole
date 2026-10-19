@@ -4,6 +4,7 @@ import pytest
 
 from caracole.web.security import (
     allowed_hosts,
+    answers_to,
     cross_origin_ok,
     host_name,
     same_token,
@@ -32,7 +33,19 @@ def test_a_host_header_that_isnt_one_has_no_name(header):
 
 def test_the_server_answers_to_its_own_names_and_those_you_add():
     hosts = allowed_hosts("127.0.0.1", hostname="NUC", extra=["nuc.example.ts.net", "Music.Lan."])
-    assert {"localhost", "127.0.0.1", "::1", "nuc", "nuc.example.ts.net", "music.lan"} == hosts
+    assert {"localhost", "127.0.0.1", "::1", "nuc", "nuc.local", "nuc.example.ts.net", "music.lan"} == hosts
+
+
+@pytest.mark.parametrize("name", ["192.168.1.20", "100.64.0.7", "fd7a:115c:a1e0::7", "::ffff:192.168.1.20"])
+def test_an_ip_address_is_always_answered(name):
+    # A page can rebind only a DNS name: under an address, its origin is that address, the server's own.
+    assert answers_to(name, frozenset({"localhost"}))
+
+
+@pytest.mark.parametrize("name", [None, "evil.example", "nuc.evil.example", "0x7f.1", "192.168.1.20.nip.io"])
+def test_a_dns_name_is_answered_only_when_allowed(name):
+    assert not answers_to(name, frozenset({"localhost", "nuc", "nuc.local"}))
+    assert answers_to("nuc.local", frozenset({"localhost", "nuc", "nuc.local"}))
 
 
 def test_a_name_given_with_a_port_is_the_name_and_a_name_that_isnt_one_is_refused():

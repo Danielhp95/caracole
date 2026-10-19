@@ -1,8 +1,8 @@
 """``caracole serve``: the library page over HTTP, with a form to request songs (caracole/web/).
 
 It listens on 127.0.0.1 unless ``--address`` says otherwise: a LAN or tailnet
-address, or 0.0.0.0. It answers only to the names it knows (localhost, the
-address, the machine's name, and ``--allow-host``), and with ``--token-file``,
+address, or 0.0.0.0. It answers only to an IP address and the names it knows
+(localhost, the machine's name, and ``--allow-host``), and with ``--token-file``,
 or a ``web_token`` credential from systemd, asks for that access token once
 per browser. A request runs the caracole command line, one command at a time,
 under caracole's lock. The server code is imported inside the command, as every
@@ -88,7 +88,7 @@ def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow
         typer.secho(f"Listening on {address}: anyone who can reach it can read the library and request "
                     "songs. On a LAN, give an access token with --token-file.", err=True,
                     fg=typer.colors.YELLOW)
-    typer.echo("It answers to " + ", ".join(sorted(hosts)) + "; --allow-host adds a name.")
+    typer.echo("It answers to " + ", ".join(sorted(hosts)) + " and any IP address; --allow-host adds a name.")
     try:
         server.serve(app, address, port, announce=typer.echo)
     except OSError as e:

@@ -3,8 +3,9 @@
 - **Host names.** A page on another site can make a browser send requests to
   127.0.0.1 under a name of its own that it points there (DNS rebinding), and
   then read the answers. Every request must name the server by one of the names
-  it answers to: localhost, its loopback addresses, the address it listens on,
-  the machine's name, and those ``--allow-host`` adds.
+  it answers to: localhost, the machine's name and its ``.local`` name, those
+  ``--allow-host`` adds, or an IP address. An address can't be rebound: a page
+  that names one has that address for its origin, the server's own.
 - **Writes** must come from the server's own pages: Filippo Valsorda's check,
   the one Go's ``net/http.CrossOriginProtection`` makes, with ``Sec-Fetch-Site``
   and, where a browser sends no such header (plain HTTP to a LAN address),
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import re
 from collections.abc import Iterable, Mapping
 from http.cookies import CookieError, SimpleCookie
@@ -48,7 +50,8 @@ def host_name(header: str | None) -> str | None:
 
 
 def allowed_hosts(address: str, *, hostname: str = "", extra: Iterable[str] = ()) -> frozenset[str]:
-    """The names the server answers to: loopback, ``address`` unless it's a wildcard, ``hostname``, ``extra``.
+    """The names the server answers to: loopback, ``address`` unless it's a wildcard, ``hostname`` and
+    its mDNS name (``hostname.local``), ``extra``. ``answers_to`` also takes any IP address.
 
     A name in ``extra`` may come with a port, which goes; ValueError for one that isn't a host name.
     """
@@ -56,14 +59,29 @@ def allowed_hosts(address: str, *, hostname: str = "", extra: Iterable[str] = ()
     bound = address.strip().strip("[]").lower()
     if bound not in WILDCARDS:
         names.add(bound)
-    if hostname.strip():
-        names.add(hostname.strip().lower().rstrip("."))
+    own = hostname.strip().lower().rstrip(".")
+    if own:
+        names.update((own, own.split(".")[0] + ".local"))
     for given in extra:
         name = host_name(given)
         if name is None:
             raise ValueError(f"{given.strip()!r} isn't a host name")
         names.add(name)
     return frozenset(names)
+
+
+def answers_to(name: str | None, allowed: frozenset[str]) -> bool:
+    """Whether the server answers to the name a ``Host`` header gives (``host_name``): one it knows, or an
+    IP address, which no other site can point at it."""
+    if name is None:
+        return False
+    if name in allowed:
+        return True
+    try:
+        ipaddress.ip_address(name)
+    except ValueError:
+        return False
+    return True
 
 
 def cross_origin_ok(method: str, headers: Mapping[str, str], host: str | None) -> bool:

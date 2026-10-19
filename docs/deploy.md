@@ -559,10 +559,10 @@ Make the token with `openssl rand -base64 24` and store it with
 `nix run agenix -- -e caracole-web-token.age`, after adding that file to
 `secrets/secrets.nix`. Each browser asks for it once and remembers it.
 
-- **Who can reach it.** It answers only to the names it knows (localhost,
-  `address`, the host's name and `allowedHosts`), so no other site can reach it
-  under a name of its own, and a form is refused unless it comes from its own
-  page. A tailnet whose interface is trusted needs no firewall opening; for a
+- **Who can reach it.** It answers to an IP address and only to the names it
+  knows (localhost, the host's name and its `.local` name, and
+  `allowedHosts`), so no other site can reach it under a name of its own, and
+  a form is refused unless it comes from its own page. A tailnet whose interface is trusted needs no firewall opening; for a
   LAN address, set `web.openFirewall = true` and keep the token: anyone on
   the LAN could otherwise read the library and request songs.
 - **At boot.** A tailnet address may not exist when the unit starts; it fails

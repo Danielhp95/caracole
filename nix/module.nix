@@ -365,9 +365,10 @@ in
         example = [ "nuc.example-tailnet.ts.net" ];
         description = ''
           More names caracole-web answers to, such as its full tailnet name. It
-          answers to localhost, its address, and the host's name already, and
-          refuses every other name a browser sends, so that no other site can
-          reach it under a name of its own (DNS rebinding).
+          answers to localhost, any IP address, and the host's name and its
+          `.local` name already, and refuses every other name a browser sends,
+          so that no other site can reach it under a name of its own (DNS
+          rebinding).
         '';
       };
 

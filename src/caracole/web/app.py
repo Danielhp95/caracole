@@ -38,6 +38,7 @@ from caracole.web.files import NotServed, read_library_file
 from caracole.web.jobs import JobQueue, QueueFull, add_steps, fetch_steps
 from caracole.web.security import (
     SESSION_COOKIE,
+    answers_to,
     cross_origin_ok,
     host_name,
     same_token,
@@ -116,7 +117,7 @@ class WebApp:
     # --- routing -----------------------------------------------------------------------------------
 
     def _route(self, request: Request) -> Response:
-        if host_name(request.headers.get("host")) not in self.allowed:
+        if not answers_to(host_name(request.headers.get("host")), self.allowed):
             return Response(421, b"caracole serve doesn't answer to this host name; "
                                  b"start it with --allow-host NAME to add one.\n",
                             [("Content-Type", "text/plain; charset=utf-8")])

@@ -783,10 +783,12 @@ Who can reach it:
 - `--address` is 127.0.0.1 by default: this machine alone. A LAN or tailnet
   address, or 0.0.0.0 for every address, opens it to those networks. `--port`
   is 8737 by default.
-- It answers only to the names it knows: localhost, its address, the
-  machine's name, and each `--allow-host NAME`, such as its full tailnet
-  name. A browser that names it otherwise gets 421; this keeps other sites
-  from reaching it under a name of their own (DNS rebinding).
+- It answers to any of its IP addresses (`http://192.168.1.20:8737/`), and
+  only to the names it knows: localhost, the machine's name and its `.local`
+  name, and each `--allow-host NAME`, such as its full tailnet name. A
+  browser that names it otherwise gets 421; this keeps other sites from
+  reaching it under a name of their own (DNS rebinding), which an address
+  can't be.
 - Every form must come from the server's own page: it carries a token the
   server makes when it starts, and a request from another site is refused
   (403). A form posted from a page older than the server's last start is
