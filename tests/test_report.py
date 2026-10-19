@@ -29,6 +29,7 @@ from caracole.report import (
     render,
     sentence,
     song_name,
+    style_for,
     summary_text,
     todo_count,
     why,
@@ -280,6 +281,22 @@ def test_for_the_journal_each_line_carries_its_priority_and_blank_lines_go():
         "<3>The match step failed: RuntimeError: boom.",
         "<6>Requests: LRCLIB 2.",
     ]
+
+
+def test_the_style_follows_where_the_summary_goes(tmp_path):
+    import io
+    import os
+
+    class TTY(io.StringIO):
+        def isatty(self):
+            return True
+
+    assert style_for(io.StringIO(), {}) == PLAIN  # a pipe, a file, ntfy
+    assert style_for(TTY(), {}) == Style(colour=True)
+    assert style_for(TTY(), {"NO_COLOR": "1"}) == PLAIN
+    with open(tmp_path / "journal", "w") as f:
+        st = os.fstat(f.fileno())
+        assert style_for(f, {"JOURNAL_STREAM": f"{st.st_dev}:{st.st_ino}"}) == JOURNAL
 
 
 def test_an_empty_summary_renders_as_nothing():

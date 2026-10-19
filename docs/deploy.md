@@ -527,22 +527,27 @@ or build the package with `caracole.override { cjkFont = "…"; }`.
 
 ## Logs
 
-The units write to the journal. caracole starts each line with its syslog
-priority, which journald files the line under, and adds no timestamp, as the
-journal keeps its own:
+The units write to the journal: the run's summary from stdout, the log from
+stderr. caracole starts each line of both with its syslog priority, which
+journald files the line under, and adds no timestamp, as the journal keeps
+its own:
 
 | Priority | Lines |
 |---|---|
-| 3, `err` | an error a command stops on; a bug, its traceback included |
-| 4, `warning` | a problem: a site that failed, a file caracole couldn't read |
-| 6, `info` | with `-v`: caracole's information |
+| 3, `err` | an error a command stops on; a bug, its traceback included, and its line in the summary |
+| 4, `warning` | a problem: a site that failed, a file caracole couldn't read; and the summary's lines that need you or say what went wrong |
+| 6, `info` | the rest of the summary: what each step did, the requests, the time; with `-v`, caracole's information |
 | 7, `debug` | with `-vv`: debugging, and the libraries' own logs |
 
 ```sh
-journalctl -u caracole -p warning     # only what went wrong
-journalctl -u caracole -b -o cat      # the lines as caracole wrote them
-sudo caracole-admin -v lyrics         # a command, saying more, on the terminal
+journalctl -u caracole -p warning     # only what needs you or went wrong
+journalctl -u caracole -b -o cat      # the lines as caracole wrote them, the summary among them
+sudo caracole-admin -v run            # a run now, a line per request, on the terminal
 ```
+
+The run exits 0 after a block, a cooldown or a spent budget, and 1 for a bug
+(the unit fails, and its `OnFailure` sends the ntfy alert); see
+[usage.md](usage.md#caracole-run) for every status.
 
 No secret reaches the journal, at any priority (see
 [usage.md](usage.md#what-caracole-prints)).

@@ -385,6 +385,16 @@ def summary_text(report: _Report, *, quiet: bool = False, style: Style = PLAIN) 
     return render(summary(report, quiet=quiet), style)
 
 
+def style_for(stream: Any, env: Mapping[str, str] | None = None) -> Style:
+    """How to write the summary to ``stream``: for the journal under systemd, coloured on a terminal
+    (unless ``$NO_COLOR``), else plain, as the log decides for stderr (logs.py)."""
+    from caracole.logs import is_journal, wants_colour
+
+    if is_journal(stream, env):
+        return JOURNAL
+    return Style(colour=True) if wants_colour(stream, env) else PLAIN
+
+
 _COUNTED = re.compile(r"^## (.+) \((\d+)\)$", re.MULTILINE)
 # Sections of the to-do page that only tell you something: caracole keeps at them by itself.
 FOR_YOUR_INFORMATION = frozenset({"Partial sheets", "Missing lyrics", "Suggestions from your Spotify top tracks"})

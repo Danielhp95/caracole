@@ -142,7 +142,7 @@ says come before the command (`caracole -v run`):
 | Option | The log on stderr |
 |---|---|
 | none | the problems: warnings and errors |
-| `-q`, `--quiet` | the problems too |
+| `-q`, `--quiet` | the problems too; `caracole run` also cuts its summary down to what needs you and what went wrong |
 | `-v`, `--verbose` | caracole's own information too, such as a line per request: `LRCLIB GET https://lrclib.net/api/get?… → 503 Service Unavailable in 0.21 s (1 of 200 requests)`, or `→ 200 OK from the cache` for an answer it sent no request for |
 | `-vv` | debugging lines too, each with the name of its logger, and the logs of the libraries caracole uses (httpx, httpcore, urllib3, spotipy, and numba or torch under auto-chords), which otherwise show only their warnings and errors |
 
@@ -411,7 +411,12 @@ overloaded, it reads:
   one cause left for the next run counted on one line; the requests against
   each site's budget; and how long the run took.
 
-A block's ntfy message is that block's line of the summary.
+A block's ntfy message is that block's line of the summary. The summary is
+all `caracole run` prints on stdout; on a terminal, what needs you and what
+went wrong are coloured. Its log, on stderr, shows only the problems the
+summary doesn't already say: nothing, that night above. `caracole -v run`
+adds a line per step and per request there, and `caracole -q run` prints only
+the lines that need you or went wrong.
 
 **The budget.** A run sends Ultimate Guitar at most 60 requests, the index
 refresh included, 10–20 seconds apart and one at a time. It settles the sheet
@@ -444,11 +449,18 @@ redirect to one: UG's search, download and print pages, and a few tab pages
 no candidate, and neither is a link in UG's data that isn't a valid address:
 the song is filled from its other versions.
 
-The run exits 1 for an unexpected error (a bug), after all the steps have
-run, so that systemd's `OnFailure` can tell you. Blocks and a spent budget
-exit 0. A broken overrides.toml stops the run before its first step (exit 1,
-with an ntfy message), because every step reads it. The to-do page is still
-rewritten, leading with the error, and index.html is left as it was.
+**Exit status.**
+
+| Status | When |
+|---|---|
+| 0 | the run did what it could: a block, a cooldown, a spent budget or a site's errors included, as the songs wait for the next run |
+| 1 | a bug, after all the steps have run, so that systemd's `OnFailure` can tell you: the summary says which step failed, and the log has its traceback behind a one-line summary; or an overrides.toml caracole can't read; or a database it can't open |
+| 2 | a caracole.toml it can't read, or a database a newer caracole migrated |
+
+A broken overrides.toml stops the run before its first step (with an ntfy
+message, which is the summary leading with the error), because every step
+reads it. The to-do page is still rewritten, leading with the error, and
+index.html is left as it was.
 
 ## One step at a time
 
