@@ -368,3 +368,24 @@ def test_a_song_key_reads_as_its_source_says():
     assert SongKey("A minor", "tab").describe() == "A minor (from the tab)"
     assert SongKey("C", "chords").describe() == "C major (estimated from the chords)"
     assert SongKey("F#", "audio").describe() == "F# major (from the audio)"
+
+
+def test_one_info_json_that_cant_be_written_leaves_the_others_alone(conn, cfg, monkeypatch):
+    from caracole import library
+
+    good, bad = add_song(conn), add_song(conn, "Radiohead", "Creep")
+    keep_sheet(conn, cfg, good)
+    keep_sheet(conn, cfg, bad, tab_id="1")
+    real = library.write_atomic
+
+    def refuse(path, data):
+        if path.parent == song_dir(cfg.library_dir, bad):
+            raise PermissionError(13, "Permission denied")
+        return real(path, data)
+
+    monkeypatch.setattr(library, "write_atomic", refuse)
+    assert refresh_info_keys(conn, cfg.library_dir) == 1
+    info = song_dir(cfg.library_dir, good) / "info.json"
+    inode = info.stat().st_ino
+    refresh_info_keys(conn, cfg.library_dir)  # tries the other one again, every time
+    assert info.stat().st_ino == inode  # and leaves this one, whose bytes are the same, alone

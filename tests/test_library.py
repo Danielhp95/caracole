@@ -277,3 +277,16 @@ def test_write_info_of_a_song_whose_key_is_unknown(conn, tmp_path):
     keep_file(conn, lib, song=s, version_id=_version(conn, s, 99), name="sheet.txt", data=b"x", rank=1)
     info = json.loads(write_info(conn, lib, s).read_text(encoding="utf-8"))
     assert (info["key"], info["key_source"]) == (None, None)
+
+
+def test_write_info_leaves_an_info_json_that_holds_the_same_bytes_alone(conn, tmp_path):
+    # Each rewrite is one more sync on every device.
+    lib = tmp_path / "Library"
+    s = add_song(conn)
+    keep_file(conn, lib, song=s, version_id=_version(conn, s, 99), name="sheet.txt", data=b"x", rank=1)
+    path = write_info(conn, lib, s)
+    inode = path.stat().st_ino
+    assert write_info(conn, lib, s) == path and path.stat().st_ino == inode
+    path.write_text("{}")  # changed by hand, or by another device
+    write_info(conn, lib, s)
+    assert json.loads(path.read_text(encoding="utf-8"))["identity_key"] == s.key

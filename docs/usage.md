@@ -1002,7 +1002,9 @@ transcriber gives it. Either is the sheet's key before any `[transpose]`.
   `null` with no key.
 - `identity_key` is caracole's own key for the song, which info.json called
   `key` before. The first command that rewrites the pages after an upgrade
-  rewrites every song's info.json once, with these fields.
+  rewrites every song's info.json once, with these fields. caracole never
+  rewrites an info.json that holds the same text already, so Syncthing has
+  nothing to sync for it.
 
 ## A worked example
 

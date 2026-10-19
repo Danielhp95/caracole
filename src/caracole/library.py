@@ -220,6 +220,9 @@ def write_info(conn: sqlite3.Connection, library_dir: Path, song: Song) -> Path:
     ``key`` is the song's musical key ("A minor", "C") and ``key_source`` where it
     came from ("tab", "chords" or "audio"), both null when unknown (``keys.song_key``);
     ``identity_key`` is caracole's key for the song itself.
+
+    An info.json that holds these bytes already is left alone: each rewrite is one more sync on
+    every device.
     """
     from caracole.keys import song_key  # it reads the library through this module
 
@@ -262,5 +265,7 @@ def write_info(conn: sqlite3.Connection, library_dir: Path, song: Song) -> Path:
         "render": render,
     }
     path = song_dir(library_dir, song) / "info.json"
-    write_atomic(path, (json.dumps(info, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+    data = (json.dumps(info, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    if not holds(path, hashlib.sha256(data).hexdigest(), len(data)):
+        write_atomic(path, data)
     return path

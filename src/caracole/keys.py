@@ -243,13 +243,13 @@ def song_key(conn: sqlite3.Connection, library_dir: Path, song: Song) -> SongKey
 
 def refresh_info_keys(conn: sqlite3.Connection, library_dir: Path) -> int:
     """Rewrite the info.json of every song that keeps files, once per ``INFO_VERSION``; return how
-    many were written.
+    many are up to date (``write_info`` leaves one that holds the same bytes alone).
 
     An info.json changes whenever its song's files do, so this only brings those an older
     caracole wrote up to date: their ``key`` was the song's identity key, and they had no
     ``key_source``. Bump ``INFO_VERSION`` when what ``song_key`` gives can change for files that
     haven't (a better estimate, say). An info.json that can't be written is logged and tried
-    again next time; the pages go on.
+    again next time, which leaves the others, written already, as they are; the pages go on.
     """
     if kv_get_json(conn, INFO_VERSION_KEY) == INFO_VERSION:
         return 0
