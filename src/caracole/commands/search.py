@@ -227,5 +227,7 @@ def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -
         typer.echo(f"Song {line.identity}: new; the next `caracole run` looks for it.")
     else:
         typer.echo(f"Song {line.identity}: already in your library ({_status(added.known)}).")
+    for text in sources.match_lines(added.match):
+        typer.echo(text)
     for problem in added.problems:
         typer.secho(problem, err=True, fg=typer.colors.YELLOW)

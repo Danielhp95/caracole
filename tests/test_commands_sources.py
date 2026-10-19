@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -276,6 +277,105 @@ def test_add_and_search_add_go_through_one_add_path(tmp_path, monkeypatch):
         "\nRadiohead - Creep | Pablo Honey | 3:58\nStone Temple Pilots - Creep\n"
     )
     assert {s.key for s in songs(tmp_path)} == {"radiohead/creep", "stone-temple-pilots/creep"}
+
+
+EPIC = (4742072, "misc-musicals", "epic-the-musical-not-sorry-for-loving-you", "chords")
+
+
+def ug_index(tmp_path, *rows, built=True):
+    """Index rows (tab_id, artist_key, song_key, type) in the state folder's database; ``built=False``
+    leaves the index partial, as a build stopped part-way does."""
+    from caracole.ug.index import mark_built
+
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    try:
+        conn.executemany(
+            "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+            "VALUES (?, ?, ?, ?, '1', 'x', ?)",
+            [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows],
+        )
+        if built:
+            mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+    finally:
+        conn.close()
+
+
+def test_add_says_at_once_which_ug_songs_a_name_not_quite_ugs_may_be(tmp_path):
+    # The owner's example: UG files EPIC: The Musical under misc-musicals, the show's name in each title.
+    ug_index(tmp_path, EPIC, (11, "bill-fox", "im-not-over-loving-you", "chords"))
+    result = run(tmp_path, "add", "epic", "I'm not sorry for loving you")
+    assert result.exit_code == 0, result.output
+    out = result.output
+    assert "Did you mean" in out
+    lines = out[out.index("Did you mean"):].splitlines()
+    assert lines[1] == ("  1) 94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)  "
+                        "https://tabs.ultimate-guitar.com/tab/misc-musicals/"
+                        "epic-the-musical-not-sorry-for-loving-you-chords-4742072")
+    assert lines[2].startswith("  2) 82  bill-fox/im-not-over-loving-you (title_only)  https://")
+    assert "`caracole review`" in out
+    # Saved as the nightly match step would save it: a review, there for `caracole review` and the to-do page now.
+    [song] = songs(tmp_path)
+    assert (song.match_decision, song.review, song.match_artist_key) == ("review", True, "misc-musicals")
+    todo = (tmp_path / "lib" / "_todo.md").read_text(encoding="utf-8")
+    assert "### epic - I'm not sorry for loving you" in todo.split("## Review (1)", 1)[1]
+
+
+def test_add_says_which_ug_song_it_matched(tmp_path):
+    ug_index(tmp_path, (4169, "radiohead", "creep", "chords"), (4170, "radiohead", "karma-police", "chords"))
+    result = run(tmp_path, "add", "Radiohead", "Creep")
+    assert result.exit_code == 0, result.output
+    assert "On Ultimate Guitar: radiohead/creep (exact)" in result.output
+    assert "Did you mean" not in result.output
+    [song] = songs(tmp_path)
+    assert (song.match_decision, song.match_song_key, song.ug_dirty) == ("accept", "creep", True)
+
+
+def test_add_of_a_song_the_index_lacks_says_so_and_how_to_look_wider(tmp_path):
+    ug_index(tmp_path, (4169, "radiohead", "creep", "chords"))
+    result = run(tmp_path, "add", "Soda Stereo", "Persiana Americana")
+    assert result.exit_code == 0, result.output
+    assert "Not in the offline Ultimate Guitar index under this name" in result.output
+    assert "`caracole search`" in result.output
+    [song] = songs(tmp_path)
+    assert song.match_decision == "not_found"
+
+
+def test_add_matches_nothing_against_an_index_that_isnt_built(tmp_path):
+    result = run(tmp_path, "add", "Radiohead", "Creep")
+    assert result.exit_code == 0, result.output
+    assert "The offline index is empty: run `caracole index build` once" in result.output
+    [song] = songs(tmp_path)
+    assert song.match_decision is None
+
+
+def test_add_records_no_miss_against_a_partial_index(tmp_path):
+    # Errors are never misses: a song in the sitemaps not read yet isn't missing from UG.
+    ug_index(tmp_path, (4169, "radiohead", "creep", "chords"), built=False)
+    result = run(tmp_path, "add", "Soda Stereo", "Persiana Americana")
+    assert result.exit_code == 0, result.output
+    assert "incomplete" in result.output and "Not in the offline" not in result.output
+    [song] = songs(tmp_path)
+    assert song.match_decision is None
+    found = run(tmp_path, "add", "Radiohead", "Creep")
+    assert "On Ultimate Guitar: radiohead/creep (exact)" in found.output
+
+
+def test_add_with_a_broken_overrides_file_matches_nothing(tmp_path):
+    ug_index(tmp_path, (4169, "radiohead", "creep", "chords"))
+    (tmp_path / "lib").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "lib" / "overrides.toml").write_text("[match\n", encoding="utf-8")
+    result = run(tmp_path, "add", "Radiohead", "Creep")
+    assert result.exit_code == 0, result.output
+    assert "On Ultimate Guitar" not in result.output and "overrides" in result.output
+    [song] = songs(tmp_path)
+    assert song.match_decision is None
+
+
+def test_search_add_says_which_ug_song_it_matched_too(tmp_path):
+    ug_index(tmp_path, (5001, "stone-temple-pilots", "creep", "chords"))
+    result = run(tmp_path, "search", "stone temple pilots creep", "--add", "1")
+    assert result.exit_code == 0, result.output
+    assert "On Ultimate Guitar: stone-temple-pilots/creep (exact)" in result.output
 
 
 # --- caracole sync ----------------------------------------------------------------------------

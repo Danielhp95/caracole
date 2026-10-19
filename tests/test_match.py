@@ -489,6 +489,17 @@ def test_match_all_keeps_at_most_five_candidates(conn):
     assert len(get_song(conn, s.id).match_candidates) == 5
 
 
+def test_match_all_can_match_only_the_songs_it_is_given(conn):
+    # `caracole add` matches the one song it adds, as the nightly match step would.
+    index(conn, (1, "radiohead", "creep", "chords"), (2, "oasis", "wonderwall", "chords"))
+    creep = add_song(conn, "Radiohead", "Creep")
+    wall = add_song(conn, "Oasis", "Wonderwall", added_at="2026-10-02T00:00:00Z")
+    changes = match_all(conn, Overrides(), POLICY, song_ids={wall.id})
+    assert [(c.song.id, c.new.decision) for c in changes] == [(wall.id, "accept")]
+    assert get_song(conn, wall.id).match_decision == "accept"
+    assert get_song(conn, creep.id).match_decision is None
+
+
 def test_match_all_dry_run_writes_nothing(conn):
     index(conn, (1, "radiohead", "creep", "chords"))
     s = add_song(conn, "Radiohead", "Creep")

@@ -63,7 +63,7 @@ from __future__ import annotations
 
 import itertools
 import sqlite3
-from collections.abc import Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -727,8 +727,9 @@ def _transaction(conn: sqlite3.Connection) -> Iterator[None]:
 
 
 def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolicy, *,
-              dry_run: bool = False) -> list[MatchChange]:
-    """Match every song, newest first, and store the results (unless ``dry_run``).
+              dry_run: bool = False, song_ids: Collection[int] | None = None) -> list[MatchChange]:
+    """Match every song, newest first, and store the results (unless ``dry_run``). With
+    ``song_ids``, only those songs: ``caracole add`` matches the song it adds.
 
     Stores the decision, step, score, matched keys, up to five candidates
     (dicts with ``artist_key``, ``song_key``, ``score`` and ``step``, best
@@ -750,6 +751,8 @@ def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolic
     complete = index_state(conn) == "complete"
     changes, kept = [], set()
     for song in list_songs(conn):
+        if song_ids is not None and song.id not in song_ids:
+            continue
         new = match_song(song, index, overrides, policy)
         if _keeps_stored(song, new, overrides.reject.get(song.key, frozenset()), complete=complete):
             new = _stored(song)

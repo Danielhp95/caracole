@@ -196,6 +196,28 @@ for you, then syncs the file at once and rewrites `_todo.md` and
       宋冬野 - 斑马斑马 | 安和桥北 | 4:13
     Song 宋冬野/斑马斑马: new; the next `caracole run` looks for it
 
+Then it matches the song against the offline index, as the nightly match
+step would (see [caracole match](#caracole-match---dry-run)), saves the match
+and says what it found: the UG song it matched
+(`On Ultimate Guitar: radiohead/creep (exact)`), that the index has nothing
+under that name, or, when it isn't sure, the candidates, each with its score,
+the step that found it and a page, as `caracole review` lists them:
+
+    $ caracole add epic "I'm not sorry for loving you"
+    Added to /home/you/Tabs/wanted.txt, line 17:
+      epic - I'm not sorry for loving you
+    Song epic/im-not-sorry-for-loving-you: new; the next `caracole run` looks for it
+    Not sure which Ultimate Guitar song it is. Did you mean:
+      1) 94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)  https://tabs.ultimate-guitar.com/tab/misc-musicals/epic-the-musical-not-sorry-for-loving-you-chords-4742072
+      2) 82  bill-fox/im-not-over-loving-you (title_only)  https://tabs.ultimate-guitar.com/tab/bill-fox/im-not-over-loving-you-chords-1066803
+    Pick one with `caracole review`, or on _todo.md.
+
+The review is saved, so `caracole review` can settle it at once. Nothing is
+matched while the index is empty (it says to run `caracole index build`) or
+overrides.toml can't be read, and an incomplete index records no miss: the
+song may be in a sitemap not read yet. `caracole search --add` matches the song
+it adds the same way.
+
 A song that is already listed isn't added twice, and its line stays as it is:
 edit the line to change its album or duration, and the next sync changes the
 song. The file is the source of truth, so the line is written first, before

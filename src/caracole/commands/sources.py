@@ -3,9 +3,12 @@
 wanted.txt is the source that always works. Spotify is optional, and no Spotify
 failure makes ``caracole sync`` fail. ``add_song`` is the one way a command adds
 a song: ``caracole add`` and ``caracole search --add`` both call it, and each says
-in its own words what it did. A sync, an add's too, then rewrites _todo.md and
-index.html. Every command module is imported on every start, so spotipy and
-the source modules are imported inside the commands.
+in its own words what it did. It also matches the song against the offline
+index at once, as the nightly match step would, so a name that isn't quite
+UG's is a review you can settle now ("Did you mean", ``match_lines``). A sync,
+an add's too, then rewrites _todo.md and index.html. Every command module is
+imported on every start, so spotipy, the matcher and the source modules are
+imported inside the commands.
 """
 
 from __future__ import annotations
@@ -24,6 +27,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from caracole.config import Config
+    from caracole.match import MatchResult
+    from caracole.overrides import Overrides
     from caracole.songs import Song
     from caracole.spotify import SpotifyAPI
     from caracole.wanted import WantedLine
@@ -120,7 +125,7 @@ def _sync(cfg: Config) -> None:
     with exclusive(cfg, "sync"), closing(open_db(cfg)) as conn:
         spotify = _spotify_client(cfg)  # it may refresh the token in the state folder
         report = sync_sources(conn, cfg, utcnow(), spotify=spotify)
-        _write_pages(conn, cfg)
+        _write_pages(conn, cfg, _page_overrides(cfg))
     typer.echo(report.summary())
     for problem in report.wanted.errors:
         _warn(problem)
@@ -167,6 +172,21 @@ def _duration_ms(text: str | None) -> int | None:
 
 
 @dataclass(frozen=True)
+class AddedMatch:
+    """What ``add_song`` found for the song in the offline UG index.
+
+    ``index`` is the index's state (``ug.index.index_state``); ``result`` the
+    match, None when the index is empty. ``pages`` has the page of each
+    candidate's oldest tab, as ``caracole review`` shows it (None for one the
+    index has no tab of).
+    """
+
+    index: str
+    result: MatchResult | None = None
+    pages: tuple[str | None, ...] = ()
+
+
+@dataclass(frozen=True)
 class AddedSong:
     """What ``add_song`` did, for the command to put in its own words.
 
@@ -176,6 +196,8 @@ class AddedSong:
     ``song`` the record after it. ``problems`` are the lines of wanted.txt the
     sync couldn't read. ``db_error`` says why the database couldn't be updated;
     the line is in the file all the same, and the next sync adds the song.
+    ``match`` is what the offline index says of the song (None when
+    overrides.toml can't be read: the match waits for it, as the pages do).
     """
 
     line: WantedLine
@@ -184,6 +206,7 @@ class AddedSong:
     song: Song | None = None
     problems: tuple[str, ...] = ()
     db_error: Exception | None = None
+    match: AddedMatch | None = None
 
 
 def add_song(
@@ -202,7 +225,8 @@ def add_song(
     can't be opened or updated is no failure: it's reported in ``db_error``.
     ``conn`` is the caller's open database; without one, it's opened here. The
     line is written at once; the database waits for caracole's lock. After the
-    sync, _todo.md and index.html are rewritten (``_write_pages``).
+    sync, the song is matched against the offline index (``_match_added``), and
+    _todo.md and index.html are rewritten (``_write_pages``).
     """
     from caracole.songs import find_song
     from caracole.wanted import append_wanted, find_wanted, sync_wanted
@@ -223,28 +247,88 @@ def add_song(
             known = find_song(conn, line.identity)
             stats = sync_wanted(conn, path, utcnow())
             song = find_song(conn, line.identity)
-            _write_pages(conn, cfg)
+            overrides = _page_overrides(cfg)
+            match = _match_added(conn, cfg, song, overrides) if song is not None else None
+            if match is not None and match.result is not None:
+                song = find_song(conn, line.identity)
+            _write_pages(conn, cfg, overrides)
     except (sqlite3.Error, OSError) as e:
         return AddedSong(line, listed, db_error=e)
-    return AddedSong(line, listed, known, song, tuple(stats.errors))
+    return AddedSong(line, listed, known, song, tuple(stats.errors), match=match)
 
 
-def _write_pages(conn: sqlite3.Connection, cfg: Config) -> None:
-    """Rewrite _todo.md and index.html for the songs just synced.
+def _match_added(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides | None) -> AddedMatch | None:
+    """Match the song just added against the offline index, and save it, as the nightly match step would.
 
-    The pages need overrides.toml (ignored songs, transpositions), which a sync
-    doesn't, and a library folder caracole can write. wanted.txt always works, so
-    without either the pages are left as they are, with a warning, and the
-    sync fails nothing.
+    Nothing is matched without overrides.toml (None), nor against an empty index. A partial
+    one records no miss (``match.match_all``): a song in the sitemaps not read yet isn't missing.
     """
+    from caracole.match import match_all
+    from caracole.ug.index import index_state
+    from caracole.ug.lookup import song_tabs
+
+    if overrides is None:
+        return None
+    state = index_state(conn)
+    if state == "empty":
+        return AddedMatch(state)
+    [change] = match_all(conn, overrides, cfg.match, song_ids={song.id})
+    pages = []
+    for c in change.new.candidates:
+        tabs = song_tabs(conn, c.artist_key, c.song_key)
+        pages.append(tabs[0].url if tabs else None)
+    return AddedMatch(state, change.new, tuple(pages))
+
+
+def match_lines(match: AddedMatch | None) -> list[str]:
+    """What the offline index says of a song just added: the UG song it matched, the candidates of a
+    review ("Did you mean"), or that it has nothing under that name."""
+    if match is None:
+        return []
+    if match.result is None:
+        return ["The offline index is empty: run `caracole index build` once (about 10 minutes), and the "
+                "song can be matched."]
+    r = match.result
+    if r.decision in ("accept", "pinned"):
+        target = f"{r.artist_key}/{r.song_key}" if r.artist_key and r.song_key else "tabs " + ", ".join(
+            str(t) for t in r.pinned)
+        return [f"On Ultimate Guitar: {target} ({r.step})"]
+    if r.decision == "review":
+        lines = ["Not sure which Ultimate Guitar song it is. Did you mean:"]
+        for n, (c, page) in enumerate(zip(r.candidates, match.pages, strict=True), start=1):
+            lines.append(f"  {n}) {float(c.score or 0):.0f}  {c.artist_key}/{c.song_key} ({c.step})"
+                         + (f"  {page}" if page else ""))
+        return [*lines, "Pick one with `caracole review`, or on _todo.md."]
+    if r.decision == "not_found" and match.index == "partial":
+        return ["The offline index is incomplete (a build stopped before it read every sitemap), and the "
+                "part read so far hasn't the song: the nightly refresh reads the rest."]
+    if r.decision == "not_found":
+        return ["Not in the offline Ultimate Guitar index under this name: `caracole search` with a few of its "
+                "words looks wider."]
+    return []
+
+
+def _page_overrides(cfg: Config) -> Overrides | None:
+    """overrides.toml, which the pages need (ignored songs, transpositions), and so does an add's
+    match; a sync doesn't. None, with a warning, when it can't be read."""
     from caracole.overrides import OverridesError, load_overrides
 
     try:
-        overrides = load_overrides(cfg.overrides_file)
+        return load_overrides(cfg.overrides_file)
     except OverridesError as e:
         _warn(f"overrides: {e}\n_todo.md and index.html are left as they were until it's fixed.")
-        return
-    write_pages(conn, cfg, overrides, utcnow(), fatal=False)
+        return None
+
+
+def _write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides | None) -> None:
+    """Rewrite _todo.md and index.html for the songs just synced.
+
+    The pages need overrides.toml and a library folder caracole can write.
+    wanted.txt always works, so without either (``overrides`` None) the pages
+    are left as they are, with a warning, and the sync fails nothing.
+    """
+    if overrides is not None:
+        write_pages(conn, cfg, overrides, utcnow(), fatal=False)
 
 
 def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None) -> None:
@@ -270,6 +354,8 @@ def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: i
         status = (added.song or added.known).status
         state = f"already known, {_KNOWN.get(status, status)}"
     typer.echo(f"Song {line.identity}: {state}")
+    for text in match_lines(added.match):
+        typer.echo(text)
     for problem in added.problems:
         _warn(problem)
 
