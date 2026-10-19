@@ -126,8 +126,9 @@ def test_title_variant_reads_spanish_and_portuguese(title, variant):
 
 
 def test_a_live_version_shares_the_studio_versions_identity():
-    assert identity_key("Soda Stereo", "De Música Ligera - En Vivo") == "soda-stereo/de-musica-ligera"
-    assert identity_key("Jarabe de Palo", "La Flaca - Versión Acústica") == "jarabe-de-palo/la-flaca"
+    live = identity_key("Soda Stereo", "De Música Ligera - En Vivo")
+    acoustic = identity_key("Jarabe de Palo", "La Flaca - Versión Acústica")
+    assert (live, acoustic) == ("soda-stereo/de-musica-ligera", "jarabe-de-palo/la-flaca")
 
 
 @pytest.mark.parametrize(
@@ -174,6 +175,42 @@ def test_split_variant():
 def test_identity_key():
     assert identity_key("Soda Stereo", "De Música Ligera - Remastered 2007") == "soda-stereo/de-musica-ligera"
     assert identity_key("The Beatles", "Let It Be - Remastered 2009") == "beatles/let-it-be"
+
+
+@pytest.mark.parametrize(
+    "one,other",
+    [
+        # Traditional and Simplified Han: Spotify's Taiwanese releases use Traditional.
+        (("宋冬野", "斑馬斑馬"), ("宋冬野", "斑马斑马")),
+        (("周杰倫", "告白氣球"), ("周杰伦", "告白气球")),
+        # A leading Spanish article on the artist, as the matcher tries it both ways.
+        (("Los Enanitos Verdes", "Lamento Boliviano"), ("Enanitos Verdes", "Lamento Boliviano")),
+        # An artist's "y" and "&", as "and" and "&" already are.
+        (("Fito y Fitipaldis", "Soldadito Marinero"), ("Fito & Fitipaldis", "Soldadito Marinero")),
+        # Number words and digits.
+        (("Soda Stereo", "Té Para Tres"), ("Soda Stereo", "Té para 3")),
+        (("The Jackson Five", "ABC"), ("The Jackson 5", "ABC")),
+    ],
+)
+def test_one_song_written_two_ways_has_one_identity(one, other):
+    assert identity_key(*one) == identity_key(*other)
+
+
+def test_identity_keys_of_already_canonical_names_stay_as_they_were():
+    assert identity_key("宋冬野", "斑马斑马") == "宋冬野/斑马斑马"
+    assert identity_key("Enanitos Verdes", "Lamento") == "enanitos-verdes/lamento"
+    assert identity_key("Soda Stereo", "De Música Ligera") == "soda-stereo/de-musica-ligera"
+    # An article that is the whole name, or leads a title, stays; so does a title's "y".
+    assert identity_key("La", "La Flaca") == "la/la-flaca"
+    assert identity_key("Joaquín Sabina", "19 Días y 500 Noches") == "joaquin-sabina/19-dias-y-500-noches"
+
+
+def test_slug_keys_still_meet_ugs_slugs():
+    # The matcher and the stored index compare slug keys: identity's folding stays out of them.
+    assert slug_key("Fito y Fitipaldis") == "fito-y-fitipaldis"
+    assert slug_key("Los Enanitos Verdes") == "los-enanitos-verdes"
+    assert slug_key("Té Para Tres") == "te-para-tres"
+    assert slug_key("斑馬斑馬") == "斑馬斑馬"
 
 
 def test_display_key():
