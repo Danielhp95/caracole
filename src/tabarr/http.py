@@ -8,7 +8,8 @@ Rules this module enforces (plan §6, "Politeness"):
   redirect hops included;
 - one request at a time;
 - a URL its host's robots.txt disallows (``ROBOTS_DISALLOW``) is never requested,
-  nor followed to;
+  nor followed to: ``RobotsClosed``, a ``ProviderError`` that is no failure of the
+  provider, so a caller may pass that URL over as one it may not read;
 - a 403, a 429 or a challenge page raises ``ProviderBlocked``. Errors are never
   misses: callers must not turn any ``ProviderError`` into "not found".
 """
@@ -62,6 +63,12 @@ class ProviderBlocked(ProviderError):
 
 class ProviderUnavailable(ProviderError):
     """Too many consecutive errors this run; the provider is skipped until the next run."""
+
+
+class RobotsClosed(ProviderError):
+    """A URL robots.txt disallows (``robots_disallows``), asked for or redirected to: nothing is
+    requested there. No failure of the provider, and no miss: a caller can pass the URL over as
+    one tabarr may not read."""
 
 
 class BudgetExhausted(Exception):
@@ -209,14 +216,14 @@ _MAX_REDIRECTS = 3  # hops followed for one request; httpx alone would follow 20
 
 
 def _redirect_problem(origin: str, target: str, hops: int) -> str | None:
-    """Why the ``hops``-th redirect of a request for ``origin``, to ``target``, isn't followed, if it isn't."""
+    """Why the ``hops``-th redirect of a request for ``origin``, to ``target``, is an error, if it is.
+
+    A target robots.txt closes is no error (``RobotsClosed``), and is checked after these.
+    """
     if hops > _MAX_REDIRECTS:
         return f"more than {_MAX_REDIRECTS} redirects"
     if _site(target) != _site(origin):
         return f"redirect to another site: {target}"
-    rule = robots_disallows(target)
-    if rule is not None:
-        return f"redirect to {target}, which robots.txt disallows ({rule})"
     return None
 
 
@@ -237,12 +244,13 @@ class PoliteClient:
       time in ``policy.delay``, minus the time already elapsed.
     - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
     - A URL robots.txt disallows (``robots_disallows``) is never requested: when
-      no cached answer is served, ``ProviderError``. Nor is a string httpx can't
+      no cached answer is served, ``RobotsClosed``. Nor is a string httpx can't
       parse as a URL, which is a ``ProviderError`` at once.
     - Redirects are followed one hop at a time, at most three. Each hop is a
       request like any other (budget, pause, event) and must stay on the site
-      asked for and be open in robots.txt, or ``ProviderError``. The final answer
-      is cached under the URL asked for.
+      asked for, or ``ProviderError``. A hop robots.txt closes isn't followed:
+      ``RobotsClosed``, which the error breaker doesn't count (the site
+      answered). The final answer is cached under the URL asked for.
     - 403, 429 or a challenge page raise ``ProviderBlocked``, and no further
       requests are made this run.
     - After ``max_consecutive_errors`` other errors, ``ProviderUnavailable``. Only a
@@ -319,7 +327,7 @@ class PoliteClient:
             return cached
 
         if rule is not None:  # nothing is sent, so the error breaker doesn't count it either
-            raise ProviderError(self.provider, full, None, f"robots.txt disallows it ({rule})")
+            raise RobotsClosed(self.provider, full, None, f"robots.txt disallows it ({rule})")
         headers: dict[str, str] = {}
         if conditional and cached is not None:
             etag = _header(cached.headers, "etag")
@@ -339,6 +347,11 @@ class PoliteClient:
             if problem is not None:
                 self._fail(at, resp.status_code, problem)
                 raise AssertionError("unreachable")  # pragma: no cover
+            closed = robots_disallows(target)
+            if closed is not None:  # the site answered, so the breaker neither counts this nor resets
+                message = f"redirect to {target}, which robots.txt disallows ({closed})"
+                self._event(at, resp.status_code, "redirect", f"not followed: {message}")
+                raise RobotsClosed(self.provider, at, resp.status_code, message)
             self._event(at, resp.status_code, "redirect", target)
             at, resp = target, self._send(target, resp.next_request)
 

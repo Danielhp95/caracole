@@ -7,9 +7,10 @@ For each song (plan §3, Task 15, amendment A6):
    and its pins, which replace the kind group they belong to and are fetched
    at the slugged address you pasted, if you pasted one. Blocked ids never
    compete, and neither does a tab at a URL robots.txt closes
-   (``tabarr.http.robots_disallows``): such a URL is never asked for. A
-   not-found song is looked up on its artist's UG page, which also lists the
-   bare-id tabs the index can't see (A6).
+   (``tabarr.http.robots_disallows``): such a URL is never asked for. Nor does
+   one whose page UG redirects to such a URL (``tabarr.http.RobotsClosed``),
+   or one at a link that isn't a URL. A not-found song is looked up on its
+   artist's UG page, which also lists the bare-id tabs the index can't see (A6).
 2. **Ratings.** A tab page lists the other versions of its type and part, so
    for each kind group (chords; Guitar Pro and Power Tab; tabs) tabarr reads
    the page of the lowest id it has no rating for, up to
@@ -64,6 +65,7 @@ from tabarr.http import (
     ProviderBlocked,
     ProviderError,
     Response,
+    RobotsClosed,
     robots_disallows,
 )
 from tabarr.library import drop_file, keep_file, kept_files, read_regular, write_info
@@ -484,7 +486,8 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
     filed under the song's artist only when the tab is by that artist. A page
     that won't parse even fetched again is left alone until it is due
     (``UNREADABLE_RETRY``). A page robots.txt closes is None without a request,
-    and is neither gone nor unreadable.
+    and is neither gone nor unreadable; so is one UG redirects to where
+    robots.txt closes (``RobotsClosed``), which isn't asked for again this run.
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
@@ -497,6 +500,10 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
         page, fresh = _get_page(run.ctx.client, url, parse_tab_page)
     except UnreadablePage as e:
         _unreadable(run, tab_id, kind, e)
+        return None
+    except RobotsClosed:
+        run.fetched[kind or "?"] += 1  # the request UG answered with the redirect
+        run.pages[tab_id] = None
         return None
     kv_delete(run.conn, _unreadable_key(tab_id))
     run.pages[tab_id] = page
@@ -839,13 +846,16 @@ def _learn_artist_page(run: _SongRun, keys: list[str]) -> str | None:
     """Read a slugged tab of the artist, from the index, for the artist page it links to.
 
     The tab is another song's, so none of its versions are recorded for this song.
-    A tab whose page robots.txt closes is passed over.
+    A tab whose page robots.txt closes, or redirects to where it does, is passed over.
     """
     for key in keys:
         for tab in artist_tabs(run.conn, key, limit=LEARN_TRIES):
             if _closed(tab.url):
                 continue
-            page, _ = _get_page(run.ctx.client, tab.url, parse_tab_page)
+            try:
+                page, _ = _get_page(run.ctx.client, tab.url, parse_tab_page)
+            except RobotsClosed:
+                continue
             if page is not None and (url := _learn_artist_url(run.conn, page, [key])):
                 return url
     return None
@@ -858,8 +868,8 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
     run's page cap stopped it), and the list's first page (None when UG
     answered 404). Lists are sorted by title, so the title's entries are
     consecutive: reading stops once they end, and goes on to the next page
-    only when they reach the end of this one. A page robots.txt closes ends
-    the list, unread.
+    only when they reach the end of this one. A page robots.txt closes, or
+    redirects to where it does, ends the list, unread.
     """
     ctx = run.ctx
     hits: list[_Hit] = []
@@ -871,7 +881,11 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
         url = artist_page_url(base, kind=kind, page=number)
         if _closed(url):
             break
-        page, fresh = _get_page(ctx.client, url, parse_artist_page, max_age=ctx.artist_page_max_age, now=ctx.now)
+        try:
+            page, fresh = _get_page(ctx.client, url, parse_artist_page, max_age=ctx.artist_page_max_age,
+                                    now=ctx.now)
+        except RobotsClosed:
+            break
         fetched += fresh
         if page is None:
             break
@@ -889,12 +903,15 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
 
 def _offered_kinds(run: _SongRun, base: str) -> set[str] | None:
     """The kinds of list the artist page offers, read from its unfiltered first page; None when it's
-    gone, and none when robots.txt closes it."""
+    gone, and none when robots.txt closes it (or the page redirects to where it does)."""
     url = artist_page_url(base)
     if _closed(url):
         return set()
-    page, _ = _get_page(run.ctx.client, url, parse_artist_page,
-                        max_age=run.ctx.artist_page_max_age, now=run.ctx.now)
+    try:
+        page, _ = _get_page(run.ctx.client, url, parse_artist_page,
+                            max_age=run.ctx.artist_page_max_age, now=run.ctx.now)
+    except RobotsClosed:
+        return set()
     if page is None:
         return None
     return set(page.filters) or set(ARTIST_PAGE_KINDS)

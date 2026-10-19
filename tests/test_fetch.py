@@ -120,10 +120,15 @@ class FakeUG:
 
     def __init__(self):
         self.pages: dict[str, tuple[int, str]] = {}
+        self.moved: dict[str, str] = {}
         self.requests: list[str] = []
 
     def add(self, url, html, status=200):
         self.pages[str(httpx.URL(url))] = (status, html)
+
+    def redirect(self, url, location):
+        """Answer ``url`` with a 301 to ``location``."""
+        self.moved[str(httpx.URL(url))] = location
 
     def tab(self, tab, versions=(), *, content=None, meta=None, artist_url=SODA_URL):
         """Serve a tab page at the tab's own ``tab_url``."""
@@ -133,6 +138,8 @@ class FakeUG:
     def handler(self, request):
         url = str(request.url)
         self.requests.append(url)
+        if url in self.moved:
+            return httpx.Response(301, headers={"Location": self.moved[url]})
         status, html = self.pages.get(url, (404, NOT_FOUND))
         return httpx.Response(status, text=html)
 
@@ -2394,6 +2401,42 @@ def test_an_artist_page_robots_txt_closes_is_never_asked_for(conn, tmp_path, mon
     assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == []
     assert get_song(conn, song.id).match_decision == "not_found"
     assert kv_get(conn, f"ug:artist_page_checked:{song.id}") == "2026-10-18T03:30:00Z"
+
+
+OPEN_TOO = f"{TAB}the-track/se-que-es-tarde-chords-2000002"
+
+
+def test_a_listed_version_whose_page_redirects_where_robots_txt_closes_is_no_candidate(conn, tmp_path):
+    # Not seen live (UG answers 404 for a slugged tab's bare URL). Should UG move a page under a closed
+    # path, the song goes on with its other versions, as for a closed link, instead of failing every night.
+    song = se_que_es_tarde(conn)
+    index_at(conn, (2000002, "track", "se-que-es-tarde", "chords", OPEN_TOO))
+    ug = FakeUG()
+    ug.tab(track_tab(OPEN_TOO, rating=4.0, votes=5), [track_tab(OPEN, version=2, rating=4.9, votes=300)],
+           content=sheet("sheet 2000002", LINES))
+    ug.redirect(OPEN, CLOSED)
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and CLOSED not in ug.requests
+    assert "sheet 2000002" in read(tmp_path, song, "sheet.txt")
+    done = get_song(conn, song.id)
+    assert (done.status, done.ug_dirty, done.ug_checked_at) == ("found", False, "2026-10-18T03:30:00Z")
+
+
+def test_an_indexed_tab_whose_page_redirects_where_robots_txt_closes_is_no_candidate(conn, tmp_path):
+    song = se_que_es_tarde(conn)
+    index_at(conn, (2000001, "track", "se-que-es-tarde", "chords", OPEN),
+             (2000002, "track", "se-que-es-tarde", "chords", OPEN_TOO))
+    ug = FakeUG()
+    ug.redirect(OPEN, CLOSED)
+    ug.tab(track_tab(OPEN_TOO), content=sheet("sheet 2000002", LINES))
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and CLOSED not in ug.requests
+    assert "sheet 2000002" in read(tmp_path, song, "sheet.txt")
+    assert [r.tab_id for r in song_versions(conn, song.id, include_gone=True)] == ["2000002"]
 
 
 # --- strings that aren't URLs -------------------------------------------------------------------

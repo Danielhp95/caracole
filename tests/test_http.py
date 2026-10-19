@@ -319,6 +319,32 @@ def test_a_redirect_robots_txt_closes_is_not_followed(tmp_path):
     assert [str(r.url) for r in rec.requests] == [OLD]
 
 
+def test_a_url_robots_txt_closes_is_robots_closed_asked_for_or_redirected_to(tmp_path):
+    # One error for both, so a caller can treat the URL as one tabarr may not read, not as a failure.
+    from tabarr.http import RobotsClosed
+
+    client, _ = make_client(tmp_path, moved("/tab/print?id=1", status=302))
+    for url in (TABS + "/tab/print?id=1", OLD):
+        with pytest.raises(RobotsClosed) as e:
+            client.get(url)
+        assert isinstance(e.value, ProviderError) and "/tab/print?" in str(e.value)
+
+
+def test_a_redirect_robots_txt_closes_is_no_failure_of_the_provider(tmp_path):
+    # UG answered: the breaker doesn't count the hop it won't follow, and the event says redirect.
+    from tabarr.http import RobotsClosed
+
+    events = []
+    client, rec = make_client(tmp_path, moved("/tab/print?id=1", status=302), events=events,
+                              max_consecutive_errors=1)
+    with pytest.raises(RobotsClosed):
+        client.get(OLD)
+    assert client.get(NEW).status == 200
+    assert [str(r.url) for r in rec.requests] == [OLD, NEW]
+    assert [(e.url, e.status, e.decision) for e in events] == [(OLD, 302, "redirect"), (NEW, 200, "ok")]
+    assert "robots.txt" in (events[0].message or "")
+
+
 def test_a_redirect_to_another_site_is_not_followed(tmp_path):
     client, rec = make_client(tmp_path, moved("https://accounts.example.com/login?next=/tab/a", status=302))
     with pytest.raises(ProviderError):
