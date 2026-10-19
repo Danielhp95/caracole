@@ -288,3 +288,58 @@ def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
     assert "| lrclib | OK | 2026-10-18 03:30 UTC |  | 10 |" in page
     assert "never" not in page.split("## Provider health", 1)[1]
+
+
+def health_row(cfg, provider):
+    return next(line for line in todo_page(cfg).splitlines() if line.startswith(f"| {provider} |"))
+
+
+def test_ug_fetch_errors_reach_provider_health_and_an_all_error_run_is_no_success(conn, cfg):
+    # Every UG request answers 502, so the fetch fails every song: an error for the page, and no success.
+    from conftest import add_song
+
+    from tabarr.config import ProviderPolicy
+    from tabarr.health import EventLog
+    from tabarr.http import PoliteClient
+    from tabarr.pipeline import default_steps
+    from tabarr.songs import update_song
+
+    for n in range(5):
+        conn.execute(
+            "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+            "VALUES (?, 'radiohead', ?, 'chords', '1', 'x', ?)",
+            (100 + n, f"song-{n}", f"radiohead/song-{n}-chords-{100 + n}"),
+        )
+        s = add_song(conn, "Radiohead", f"Song {n}")
+        update_song(conn, s.id, match_decision="accept", match_step="exact", match_artist_key="radiohead",
+                    match_song_key=f"song-{n}")
+    ug = PoliteClient("ug", ProviderPolicy(budget=60, delay=(0.0, 0.0)), cfg.cache_dir, user_agent="tabarr-test",
+                      transport=httpx.MockTransport(lambda request: httpx.Response(502, text="bad gateway")),
+                      sleep=lambda s: None, on_event=EventLog(conn, "2026-10-18T03:30:00Z"))
+    svc = Services(clients={"ug": ug, "lrclib": FakeClient(), "lacuerda": FakeClient()}, spotify=None,
+                   notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name in ("fetch", "todo")]
+
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+
+    assert report.steps["fetch"] == "0 songs done, 5 failed"
+    state = get_state(conn, "ug")
+    assert state.last_error == "5 songs failed this run" and state.last_error_at == NOW
+    assert state.last_ok is None
+    row = health_row(cfg, "ug")
+    assert row.startswith("| ug | errors | never | 5 songs failed this run (2026-10-18 03:30 UTC) |"), row
+
+
+def test_a_run_with_some_good_answers_still_counts_as_a_success(conn, cfg):
+    # One 502 among good answers: the provider works, and its error is shown beside the success.
+    from tabarr.health import EventLog
+    from tabarr.http import Event
+
+    log = EventLog(conn, "2026-10-18T03:30:00Z")
+    log(Event("ug", "https://tabs.ultimate-guitar.com/tab/1", 200, "ok"))
+    log(Event("ug", "https://tabs.ultimate-guitar.com/tab/2", 502, "error", "HTTP 502"))
+    steps = [step("fetch", provider="ug", result=ProviderError("ug", "u", 502, "HTTP 502")), *todo_step()]
+    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=2), steps=steps, now=NOW)
+    assert get_state(conn, "ug").last_ok == NOW
+    row = health_row(cfg, "ug")
+    assert row.startswith("| ug | OK | 2026-10-18 03:30 UTC | ug: 502: u: HTTP 502"), row

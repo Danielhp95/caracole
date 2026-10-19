@@ -136,14 +136,23 @@ def _with_ug(conn: sqlite3.Connection, cfg: Config, now: datetime, policy: Provi
     and return None. Any other provider error is recorded and exits 1.
     """
     from tabarr.health import EventLog, get_state, is_cooling, record_block, record_error, record_ok
-    from tabarr.http import BudgetExhausted, PoliteClient, ProviderBlocked, ProviderError
+    from tabarr.http import BudgetExhausted, Event, PoliteClient, ProviderBlocked, ProviderError
 
     if is_cooling(conn, "ug", now):
         until = get_state(conn, "ug").cooldown_until
         typer.echo(f"Ultimate Guitar is cooling down after a block until {_when(until)}; no request was sent.")
         return None
+    log = EventLog(conn, run_id_for(now))
+    answered = 0
+
+    def on_event(event: Event) -> None:
+        nonlocal answered
+        log(event)
+        if event.decision in ("ok", "not_modified"):  # an error or a block is no answer
+            answered += 1
+
     client = PoliteClient("ug", policy, cfg.cache_dir, user_agent=cfg.user_agent,
-                          transport=_common.transport_for("ug"), on_event=EventLog(conn, run_id_for(now)))
+                          transport=_common.transport_for("ug"), on_event=on_event)
     result: IndexStats | None = None
     note = failure = None
     try:
@@ -161,7 +170,7 @@ def _with_ug(conn: sqlite3.Connection, cfg: Config, now: datetime, policy: Provi
         failure = f"Ultimate Guitar failed: {e}. The sitemaps read so far are kept."
     finally:
         client.close()
-    if client.requests_made:
+    if answered:
         record_ok(conn, "ug", now)  # UG answered without a block, as the nightly run records it
     if failure is not None:
         fail(failure)

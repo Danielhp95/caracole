@@ -157,6 +157,8 @@ def _fetch(ctx: StepContext) -> str:
         library_dir=ctx.cfg.library_dir, now=ctx.now,
     )
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
+    if s.songs_failed:
+        record_error(ctx.conn, "ug", ctx.now, f"{_plural(s.songs_failed, 'song')} failed this run")
     scored = f", {_plural(rescored, 'kept sheet')} rescored" if rescored else ""
     tail = " (budget spent)" if s.budget_exhausted else ""
     sheets = f"{_plural(s.sheets_done, 'sheet')} settled, " if s.sheets_done else ""
@@ -245,10 +247,27 @@ def _requests(services: Services) -> dict[str, int]:
     return {p: int(getattr(c, "requests_made", 0)) for p, c in services.clients.items()}
 
 
+def _answered(conn: sqlite3.Connection, run_id: str, provider: str, requests: int) -> bool:
+    """Whether the provider answered at least one of this run's requests.
+
+    Every request a PoliteClient sends is logged to ``events`` as answered
+    (``ok``, ``not_modified``), an ``error`` or a ``blocked``; a client that
+    logs nothing counts as answered.
+    """
+    failed = conn.execute(
+        "SELECT COUNT(*) FROM events WHERE run = ? AND provider = ? AND decision IN ('error', 'blocked')",
+        (run_id, provider),
+    ).fetchone()[0]
+    return requests > failed
+
+
 def _record_ok(conn: sqlite3.Connection, report: RunReport, now: datetime) -> None:
-    """A provider used this run without a block had a good run: clear its cooldown, note the time."""
+    """A provider that answered this run without a block had a good run: clear its cooldown, note the time.
+
+    A run whose every request failed (UG answering 502, say) is no success.
+    """
     for p, n in report.requests.items():
-        if n and p not in report.blocked:
+        if n and p not in report.blocked and _answered(conn, report.run_id, p, n):
             record_ok(conn, p, now)
 
 

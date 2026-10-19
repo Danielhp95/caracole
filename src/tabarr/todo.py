@@ -309,6 +309,8 @@ def _health(conn: sqlite3.Connection, now: datetime) -> list[str]:
         if s.cooldown_until and now < s.cooldown_until:
             blocks = f"{s.strikes} block{'s' if s.strikes != 1 else ''}"
             status = f"cooling down until {_fmt(s.cooldown_until)} ({blocks})"
+        elif s.last_error_at and (s.last_ok is None or s.last_ok < s.last_error_at):
+            status = "errors"  # nothing has worked since the last error
         else:
             status = "OK"
         err = md(s.last_error) if s.last_error else ""

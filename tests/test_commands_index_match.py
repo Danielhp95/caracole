@@ -177,6 +177,14 @@ def test_cli_index_other_errors_exit_1_and_are_recorded(tmp_path, ug):
     assert "500" in (state.last_error or "") and state.cooldown_until is None
 
 
+def test_cli_index_build_whose_every_request_failed_is_no_success(tmp_path, ug):
+    ug.status["sitemap.xml"] = 502
+    result = run(tmp_path, "index", "build")
+    assert result.exit_code == 1
+    state = get_state(connect(tmp_path), "ug")
+    assert "502" in (state.last_error or "") and state.last_ok is None
+
+
 # --- tabarr index refresh -------------------------------------------------------------------------
 
 
