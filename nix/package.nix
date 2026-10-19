@@ -170,6 +170,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
 
   meta = {
     inherit (project) description;
+    homepage = "https://github.com/Danielhp95/tabarr";
     license = lib.licenses.mit;
     mainProgram = "tabarr";
     platforms = lib.platforms.linux;

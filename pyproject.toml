@@ -20,6 +20,10 @@ dependencies = [
   "pypinyin",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Danielhp95/tabarr"
+Repository = "https://github.com/Danielhp95/tabarr"
+
 [project.optional-dependencies]
 autochords = ["torch", "torchaudio", "beat-this", "librosa", "numpy", "scipy", "soundfile", "pyyaml"]
 

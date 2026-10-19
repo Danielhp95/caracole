@@ -47,3 +47,9 @@ No configuration is needed to start; settings go in
     nix build                     # the package; its build runs the test suite
     nix build .#autochords        # with torch, beat-this and librosa
     nix flake check               # also evaluates the NixOS module's units
+
+## License
+
+MIT, see [LICENSE](LICENSE). The license covers tabarr's code. The sheets,
+lyrics and tabs it downloads belong to their authors, so keep your library
+private.
