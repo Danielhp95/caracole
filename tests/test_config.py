@@ -142,3 +142,11 @@ def test_autochords_settings(tmp_path):
     assert cfg.autochords.btc_weights == Path("/w/btc.pt")
     assert cfg.autochords.beat_checkpoint == Path("/w/beat.ckpt")
     assert cfg.autochords.device == "cpu"
+
+
+def test_cjk_font_setting_and_env(tmp_path):
+    p = write(tmp_path, 'cjk_font = "/fonts/NotoSansCJK.ttc"\n')
+    assert load_config(p, env={"HOME": str(tmp_path)}).cjk_font == Path("/fonts/NotoSansCJK.ttc")
+    cfg = load_config(None, env={"HOME": str(tmp_path), "TABARR_CJK_FONT": "/env/font.otf"})
+    assert cfg.cjk_font == Path("/env/font.otf")
+    assert load_config(None, env={"HOME": str(tmp_path)}).cjk_font is None

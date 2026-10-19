@@ -96,6 +96,7 @@ class Config:
     user_agent: str = DEFAULT_USER_AGENT
     guitar_pro_mode: str = "assisted"
     chordpro_bin: str = "chordpro"
+    cjk_font: Path | None = None
     spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
     providers: Mapping[str, ProviderPolicy] = field(default_factory=lambda: dict(DEFAULT_PROVIDERS))
     match: MatchPolicy = field(default_factory=MatchPolicy)
@@ -113,7 +114,7 @@ class Config:
 
 _TOP_KEYS = {
     "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file", "wanted_file",
-    "user_agent", "guitar_pro_mode", "chordpro_bin",
+    "user_agent", "guitar_pro_mode", "chordpro_bin", "cjk_font",
     "spotify", "providers", "match", "rank", "ntfy", "autochords",
 }
 _SPOTIFY_KEYS = {
@@ -293,6 +294,8 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         device=ac_t.get("device", "cpu"),
     )
 
+    cjk_font_value = data.get("cjk_font") or env.get("TABARR_CJK_FONT")
+
     return Config(
         library_dir=library_dir,
         music_dir=music_dir,
@@ -303,6 +306,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         user_agent=data.get("user_agent", DEFAULT_USER_AGENT),
         guitar_pro_mode=mode,
         chordpro_bin=data.get("chordpro_bin", "chordpro"),
+        cjk_font=paths.resolve(cjk_font_value) if cjk_font_value else None,
         spotify=spotify,
         providers=providers,
         match=MatchPolicy(**match_t),
