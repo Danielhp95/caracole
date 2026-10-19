@@ -215,6 +215,30 @@ def test_chinese_names_without_slugged_rows_are_not_found(conn):
     assert match(conn, "宋冬野", "斑马，斑马").decision == "not_found"
 
 
+def test_pinyin_titles_must_match_exactly_across_all_artists(conn):
+    # Real index: "banmabanma" scored 80 against papon's "banao-banao", an unrelated song, so a
+    # fuzzy pinyin title-only review hid 宋冬野 from the to-do page's "Artists to find".
+    index(conn, (1, "papon", "banao-banao", "chords"), (2, "anitta", "banana", "chords"))
+    r = match(conn, "宋冬野", "斑马，斑马")
+    assert (r.decision, r.candidates) == ("not_found", ())
+
+
+def test_pinyin_title_only_finds_covers_with_or_without_hyphens(conn):
+    index(conn, (1, "li-zhi", "ban-ma-ban-ma", "chords"), (2, "li-zhi", "ban-ma-ban-ma", "tabs"),
+          (3, "zhao-lei", "banma-banma", "chords"))
+    r = match(conn, "宋冬野", "斑马，斑马")
+    assert summary(r) == ("review", "title_only", 100.0, "li-zhi", "ban-ma-ban-ma")
+    assert r.candidates == (MatchCandidate("li-zhi", "ban-ma-ban-ma", 100.0, "title_only"),
+                            MatchCandidate("zhao-lei", "banma-banma", 100.0, "title_only"))
+
+
+def test_fuzzy_artist_compares_pinyin_without_hyphens(conn):
+    # "song-dong-ye" scores 87.0 against "sung-dongye", under the gate; "songdongye" scores 90.0.
+    index(conn, (1, "sung-dongye", "ban-ma-ban-ma", "chords"))
+    assert summary(match(conn, "宋冬野", "斑马，斑马")) == (
+        "accept", "fuzzy_artist", 90.0, "sung-dongye", "ban-ma-ban-ma")
+
+
 def test_title_without_a_key_is_not_found(conn):
     index(conn, (1, "oasis", "wonderwall", "chords"))
     assert match(conn, "Oasis", "!!!").decision == "not_found"
@@ -315,6 +339,33 @@ def test_match_all_marks_dirty_when_the_keys_or_pins_change(conn):
     assert get_song(conn, s.id).ug_dirty is False
     match_all(conn, Overrides(pin={"oasis/wonderwall": (1, 7)}), POLICY)  # same song, another pinned page
     assert get_song(conn, s.id).ug_dirty is True
+
+
+def test_a_pin_is_stored_as_one_candidate_listing_its_tabs(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"))
+    s = add_song(conn, "Oasis", "Wonderwall")
+    pins = (1, 11, 12, 13, 14, 15, 16)
+    match_all(conn, Overrides(pin={s.key: pins}), POLICY)
+    assert get_song(conn, s.id).match_candidates == [
+        {"artist_key": "oasis", "song_key": "wonderwall", "score": None, "step": "pin", "tab_ids": list(pins)}]
+
+
+def test_an_empty_index_keeps_what_the_ladder_found(conn):
+    # An index never built, or emptied, can't tell a miss: earlier ladder results stay, overrides still apply.
+    index(conn, (1, "radiohead", "creep", "chords"), (2, "oasis", "wonderwall", "chords"))
+    creep = add_song(conn, "Radiohead", "Creep")
+    wonderwall = add_song(conn, "Oasis", "Wonderwall")
+    match_all(conn, Overrides(ignore=frozenset({wonderwall.key})), POLICY)
+    update_song(conn, creep.id, ug_dirty=False)
+    before = columns(conn, creep.id)
+    conn.execute("DELETE FROM ug_index")
+    hotel = add_song(conn, "Eagles", "Hotel California")
+    changes = match_all(conn, Overrides(match={hotel.key: ("eagles", "hotel-california")}), POLICY)
+    assert columns(conn, creep.id) == before and get_song(conn, creep.id).ug_dirty is False
+    assert {c.song.id: (c.old, c.new.decision) for c in changes} == {
+        creep.id: ("accept", "accept"), wonderwall.id: ("ignored", "not_found"), hotel.id: (None, "accept")}
+    assert get_song(conn, wonderwall.id).status == "wanted"
+    assert get_song(conn, hotel.id).match_step == "override"
 
 
 def test_ignored_songs_get_status_ignored_and_come_back(conn):

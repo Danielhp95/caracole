@@ -11,16 +11,19 @@ For each song, in order:
    is scored with rapidfuzz ``ratio``, the best of UG's full key and its base
    key, so ``creep-acoustic`` and ``creep-intro`` count as ``creep``.
 3. The nearest other artist key at or above ``artist_gate``, then step 2 under
-   it, scored as the lower of the artist and title scores.
+   it, scored as the lower of the artist and title scores. A Chinese name's
+   pinyin is compared with and without hyphens.
 4. The title alone, across every artist (covers and misfiled tabs). These are
-   always reviews.
+   always reviews. Here a Chinese title's pinyin must match exactly, hyphens
+   aside: across every artist, short syllables fuzz-match unrelated titles.
 
 Decision: accept at ``accept`` or more with a lead of ``margin`` over the next
 different title; review from ``review``; otherwise not found.
 
 ``match_all`` never replaces a match the fetch step made on a UG artist page
 (step ``artist_page``, amendment A6): the index can't see those bare-id tabs,
-so only your overrides can.
+so only your overrides can. Nor does an empty index (never built, or emptied)
+undo what the ladder found before: an index that can't be searched is not a miss.
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ from tabarr.songs import Song, list_songs, refresh_status, update_song, utc_now_
 
 DECISIONS = ("accept", "review", "not_found", "pinned", "ignored")
 STEPS = ("override", "pin", "exact", "alias", "fuzzy_title", "fuzzy_artist", "title_only")
+LADDER_STEPS = ("exact", "alias", "fuzzy_title", "fuzzy_artist", "title_only")  # what the index decided
 ARTIST_PAGE = "artist_page"  # the fetch step's matches on UG artist pages (A6)
 MAX_CANDIDATES = 5
 _TITLE_ONLY_TITLES = 10  # nearest titles expanded into candidates, per title form
@@ -78,9 +82,14 @@ class IndexView:
         self._artists: list[str] | None = None
         self._artist_set: frozenset[str] = frozenset()
         self._by_compact: dict[str, tuple[str, ...]] = {}
+        self._compact_artists: list[str] | None = None
         self._songs: dict[str, list[IndexSong]] = {}
         self._titles: list[str] | None = None
         self._compact_titles: list[str] | None = None
+
+    def empty(self) -> bool:
+        """Whether the index has no rows at all: never built, or emptied."""
+        return self.conn.execute("SELECT 1 FROM ug_index LIMIT 1").fetchone() is None
 
     def artist_keys(self) -> list[str]:
         """Every artist key in the index, sorted."""
@@ -102,6 +111,12 @@ class IndexView:
         """The artist keys that read ``compact_key`` once hyphens are removed."""
         self.artist_keys()
         return self._by_compact.get(compact_key, ())
+
+    def compact_artist_keys(self) -> list[str]:
+        """``artist_keys()`` with hyphens removed, in the same order."""
+        if self._compact_artists is None:
+            self._compact_artists = [compact(a) for a in self.artist_keys()]
+        return self._compact_artists
 
     def songs_for_artist(self, artist_key: str) -> list[IndexSong]:
         """The artist's songs, one per song key (variant keys such as ``x-acoustic`` are their own)."""
@@ -127,6 +142,10 @@ class IndexView:
             self._compact_titles = [compact(t) for t in self.title_keys()]
         return self._compact_titles
 
+    def titles_reading(self, compact_key: str) -> list[str]:
+        """The title keys that read ``compact_key`` once hyphens are removed."""
+        return [t for t, c in zip(self.title_keys(), self.compact_title_keys(), strict=True) if c == compact_key]
+
     def songs_for_title(self, title_key: str) -> list[tuple[str, IndexSong]]:
         """Every (artist key, song) whose base key is ``title_key``."""
         # A range instead of LIKE, so the song_key index serves the variant keys too.
@@ -150,7 +169,7 @@ class IndexView:
 class MatchCandidate:
     artist_key: str
     song_key: str
-    score: float
+    score: float | None
     step: str
 
 
@@ -191,25 +210,21 @@ class _Hit:
 
 
 @dataclass(frozen=True)
-class _Title:
-    keys: tuple[str, ...]  # the title's key, plus its pinyin key for a Chinese title
-    compact_pinyin: tuple[str, ...]  # pinyin keys without hyphens, also compared fuzzily
+class _Forms:
+    """A name or title as keys: its own key, and its pinyin key when it has Chinese characters."""
+
+    own: tuple[str, ...]
+    pinyin: tuple[str, ...] = ()
+
+    @property
+    def keys(self) -> tuple[str, ...]:
+        return self.own + self.pinyin
 
 
-def _title_forms(title: str) -> _Title:
-    clean = clean_title(title)
-    keys = [slug_key(clean)]
-    pinyin = slug_key(romanize(clean)) if has_han(clean) else ""
-    if pinyin:
-        keys.append(pinyin)
-    return _Title(tuple(dict.fromkeys(k for k in keys if k)), (compact(pinyin),) if pinyin else ())
-
-
-def _artist_forms(name: str) -> list[str]:
-    forms = [slug_key(name)]
-    if has_han(name):
-        forms.append(slug_key(romanize(name)))
-    return list(dict.fromkeys(f for f in forms if f))
+def _forms(text: str) -> _Forms:
+    own = slug_key(text)
+    pinyin = slug_key(romanize(text)) if has_han(text) else ""
+    return _Forms(tuple(k for k in (own,) if k), tuple(k for k in (pinyin,) if k and k != own))
 
 
 def _own_artists(song: Song, index: IndexView, overrides: Overrides) -> list[tuple[str, bool]]:
@@ -223,19 +238,20 @@ def _own_artists(song: Song, index: IndexView, overrides: Overrides) -> list[tup
     for name in song.artists or [song.artist]:
         for a in overrides.alias.get(slug_key(name), ()):
             add(a, alias=True)
-        for form in _artist_forms(name):
+        for form in _forms(name).keys:
             add(form)
             for a in index.compact_artists(compact(form)):
                 add(a)
     return list(keys.items())
 
 
-def _title_hits(index: IndexView, artist_key: str, title: _Title, rank: int, *, exact_step: str,
+def _title_hits(index: IndexView, artist_key: str, title: _Forms, rank: int, *, exact_step: str,
                 fuzzy_step: str = "fuzzy_title", cap: float | None = None) -> list[_Hit]:
     """Score every title of one artist, grouped by base key."""
     groups: dict[str, list[IndexSong]] = {}
     for s in index.songs_for_artist(artist_key):
         groups.setdefault(s.base_key, []).append(s)
+    compact_pinyin = [compact(p) for p in title.pinyin]
     hits = []
     for base, members in groups.items():
         keys = {base, *(m.song_key for m in members)}
@@ -243,7 +259,7 @@ def _title_hits(index: IndexView, artist_key: str, title: _Title, rank: int, *, 
             score, step = 100.0, exact_step
         else:
             score = max(fuzz.ratio(k, u) for k in title.keys for u in keys)
-            score = max([score, *(fuzz.ratio(c, compact(base)) for c in title.compact_pinyin)])
+            score = max([score, *(fuzz.ratio(c, compact(base)) for c in compact_pinyin)])
             step = fuzzy_step
         if cap is not None:
             score = min(score, cap)
@@ -271,15 +287,23 @@ def _decide(hits: list[_Hit], policy: MatchPolicy) -> str:
 
 
 def _nearest_artists(song: Song, index: IndexView, tried: set[str], gate: float) -> list[tuple[str, float]]:
-    """For each of the song's artists, the closest artist key not tried yet, if it scores ``gate`` or more."""
+    """For each of the song's artists, the closest artist key not tried yet, if it scores ``gate`` or more.
+
+    A Chinese name's pinyin is also compared without hyphens (``songdongye``
+    against every artist key read that way).
+    """
+    artists = index.artist_keys()
     found: dict[str, float] = {}
     for name in song.artists or [song.artist]:
+        forms = _forms(name)
+        queries = [(f, artists) for f in forms.keys]
+        queries += [(compact(p), index.compact_artist_keys()) for p in forms.pinyin]
         best: tuple[str, float] | None = None
-        for form in _artist_forms(name):
+        for query, choices in queries:
             skip = tried | found.keys()
-            near = process.extract(form, index.artist_keys(), scorer=fuzz.ratio, score_cutoff=gate,
-                                   limit=len(skip) + 1)
-            key, score = next(((k, s) for k, s, _ in near if k not in skip), (None, 0.0))
+            # At most len(skip) of these are skipped, so one is left whenever any artist passes the gate.
+            near = process.extract(query, choices, scorer=fuzz.ratio, score_cutoff=gate, limit=len(skip) + 1)
+            key, score = next(((artists[i], s) for _, s, i in near if artists[i] not in skip), (None, 0.0))
             if key is not None and (best is None or score > best[1]):
                 best = (key, score)
         if best is not None:
@@ -287,14 +311,18 @@ def _nearest_artists(song: Song, index: IndexView, tried: set[str], gate: float)
     return list(found.items())
 
 
-def _title_only(index: IndexView, title: _Title, policy: MatchPolicy) -> list[_Hit]:
+def _title_only(index: IndexView, title: _Forms, policy: MatchPolicy) -> list[_Hit]:
     titles = index.title_keys()
     scores: dict[str, float] = {}
-    queries = [(k, titles) for k in title.keys] + [(c, index.compact_title_keys()) for c in title.compact_pinyin]
-    for query, choices in queries:
-        for _, score, i in process.extract(query, choices, scorer=fuzz.ratio, score_cutoff=policy.review,
+    for query in title.own:
+        for _, score, i in process.extract(query, titles, scorer=fuzz.ratio, score_cutoff=policy.review,
                                            limit=_TITLE_ONLY_TITLES):
             scores[titles[i]] = max(scores.get(titles[i], 0.0), score)
+    # Across every artist, pinyin counts only when it matches exactly (hyphens aside): short
+    # syllables fuzz-match unrelated titles ("banmabanma" scores 80 against "banaobanao").
+    for query in title.pinyin:
+        for key in index.titles_reading(compact(query)):
+            scores[key] = 100.0
     hits = []
     for key, score in scores.items():
         tabs: dict[str, int] = {}
@@ -332,7 +360,7 @@ def match_song(song: Song, index: IndexView, overrides: Overrides, policy: Match
         return MatchResult("accept", "override", 100.0, artist_key, song_key,
                            candidates=(MatchCandidate(artist_key, song_key, 100.0, "override"),))
 
-    title = _title_forms(song.title)
+    title = _forms(clean_title(song.title))
     if not title.keys:
         return MatchResult("not_found", None, None, None, None)
     own = _own_artists(song, index, overrides)
@@ -366,16 +394,17 @@ def match_song(song: Song, index: IndexView, overrides: Overrides, policy: Match
 
 
 def _candidate_rows(result: MatchResult) -> list[dict[str, Any]]:
-    """``songs.match_candidates``: for a pin, its pinned tabs (so a changed pin is noticed)."""
+    """``songs.match_candidates``. A pin is one row that also lists its tabs, so a changed pin is noticed."""
     if result.decision == "pinned":
         return [{"artist_key": result.artist_key, "song_key": result.song_key, "score": None, "step": "pin",
-                 "tab_id": t} for t in result.pinned]
+                 "tab_ids": list(result.pinned)}]
     return [{"artist_key": c.artist_key, "song_key": c.song_key, "score": c.score, "step": c.step}
-            for c in result.candidates]
+            for c in result.candidates[:MAX_CANDIDATES]]
 
 
 def _pins_of(song: Song) -> list[int]:
-    return [c["tab_id"] for c in song.match_candidates or [] if c.get("step") == "pin" and "tab_id" in c]
+    pin = next((c for c in song.match_candidates or [] if c.get("step") == "pin"), {})
+    return [int(t) for t in pin.get("tab_ids", [])]
 
 
 def _needs_fetch(song: Song, new: MatchResult) -> bool:
@@ -385,6 +414,20 @@ def _needs_fetch(song: Song, new: MatchResult) -> bool:
     if (song.match_artist_key, song.match_song_key) != (new.artist_key, new.song_key):
         return True
     return new.decision == "pinned" and _pins_of(song) != list(new.pinned)
+
+
+def _keeps_stored(song: Song, new: MatchResult, *, empty: bool) -> bool:
+    """Whether a song keeps its stored match instead of ``new``.
+
+    Your overrides always win. Otherwise a match the fetch step made on a UG
+    artist page stays (A6), and so does what the ladder found before while
+    the index is empty.
+    """
+    if new.step in ("override", "pin"):
+        return False
+    if song.match_step == ARTIST_PAGE:
+        return True
+    return empty and song.match_step in LADDER_STEPS
 
 
 def _stored(song: Song) -> MatchResult:
@@ -434,22 +477,29 @@ def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolic
 
     Stores the decision, step, score, matched keys, up to five candidates
     (dicts with ``artist_key``, ``song_key``, ``score`` and ``step``, best
-    first), ``matched_at`` and the review flag, for songs whose match changed.
-    Sets ``ug_dirty`` when a song becomes accepted or pinned, or its keys or
-    pins change. Ignored songs get status ``ignored``; songs no longer ignored
-    get their status back. Returns one change per song.
+    first; a pin's one row also lists its ``tab_ids``), ``matched_at`` and the
+    review flag, for songs whose match changed. Sets ``ug_dirty`` when a song
+    becomes accepted or pinned, or its keys or pins change. Ignored songs get
+    status ``ignored``; songs no longer ignored get their status back.
+
+    A song matched on a UG artist page (A6) keeps that match unless an
+    override applies, and while the index is empty so does any song the ladder
+    matched before. Returns one change per song; a kept song's ``new`` is its
+    stored match.
     """
     index = IndexView(conn)
-    changes = []
+    empty = index.empty()
+    changes, kept = [], set()
     for song in list_songs(conn):
         new = match_song(song, index, overrides, policy)
-        if song.match_step == ARTIST_PAGE and new.step not in ("override", "pin"):
+        if _keeps_stored(song, new, empty=empty):
             new = _stored(song)
+            kept.add(song.id)
         changes.append(MatchChange(song, song.match_decision, new))
     if not dry_run:
         now = utc_now_iso()
         with _transaction(conn):
             for c in changes:
-                if c.new.step != ARTIST_PAGE:
+                if c.song.id not in kept:
                     _save(conn, c.song, c.new, now)
     return changes
