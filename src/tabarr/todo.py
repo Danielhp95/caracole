@@ -8,6 +8,7 @@ overrides.toml line to paste.
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -303,16 +304,35 @@ def _guitar_parts_not_found(conn: sqlite3.Connection, songs: list[Song]) -> list
 
 
 def _inbox(cfg: Config) -> list[str]:
+    """What is left in _inbox/. Nothing is followed through a link: a link planted in the library could
+    point at tabarr's private files, whose names would end up on this page, on every synced device."""
     inbox = cfg.library_dir / "_inbox"
-    if not inbox.is_dir():
-        return []
+    try:  # the folder itself, never what a link there points at, and listed as opened
+        fd = os.open(inbox, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError:
+        if not inbox.is_symlink():
+            return []
+        return ["- `_inbox` is a symbolic link, so this page doesn't list what it points at. Make `_inbox` a "
+                "folder of its own."]
+    try:
+        with os.scandir(fd) as found:
+            entries = sorted((e.name, e.is_symlink(), e.is_file(follow_symlinks=False))
+                             for e in found if not e.name.startswith("."))
+    finally:
+        os.close(fd)
     items = []
-    for p in sorted(p for p in inbox.iterdir() if p.is_file() and not p.name.startswith(".")):
-        if p.suffix.lower() in GP_EXTENSIONS:
-            items.append(f"- {_code(p.name)}: rename it \"Artist - Title (ver N){p.suffix}\", as Guitar Pro pages "
+    for name, link, regular in entries:
+        suffix = Path(name).suffix
+        if link:
+            items.append(f"- {_code(name)}: a symbolic link; tabarr files only regular files. Put the file "
+                         "itself there.")
+        elif not regular:
+            continue
+        elif suffix.lower() in GP_EXTENSIONS:
+            items.append(f"- {_code(name)}: rename it \"Artist - Title (ver N){suffix}\", as Guitar Pro pages "
                          "to click names the song and the version")
         else:
-            items.append(f"- {_code(p.name)}: not a Guitar Pro or Power Tab file ({', '.join(GP_EXTENSIONS)}), "
+            items.append(f"- {_code(name)}: not a Guitar Pro or Power Tab file ({', '.join(GP_EXTENSIONS)}), "
                          "so tabarr leaves it there")
     return items
 

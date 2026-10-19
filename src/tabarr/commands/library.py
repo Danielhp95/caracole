@@ -60,4 +60,7 @@ def register(app: typer.Typer) -> None:
         inbox = file_inbox(conn, cfg.library_dir)
         files = "file" if music.seen == 1 else "files"
         typer.echo(f"Music: {music.seen} {files}, {music.matched} linked, {len(music.unmatched)} unmatched")
-        typer.echo(f"Inbox: {len(inbox.filed)} filed, {len(inbox.duplicates)} duplicates, {len(inbox.unmatched)} left")
+        refused = len(inbox.refused)  # links, never read: the to-do page names them
+        links = f", {refused} symbolic link{'s' if refused != 1 else ''} refused" if refused else ""
+        typer.echo(f"Inbox: {len(inbox.filed)} filed, {len(inbox.duplicates)} duplicates, "
+                   f"{len(inbox.unmatched)} left{links}")

@@ -317,6 +317,37 @@ def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
     assert "`notes.pdf`: not a Guitar Pro or Power Tab file" in section
 
 
+def test_inbox_lists_a_link_as_refused_never_as_a_file_to_rename(conn, cfg):
+    # Anyone who can write to the library can put a link in the inbox; tabarr files only regular files.
+    private = cfg.state_dir / "spotify-token.json"
+    private.parent.mkdir(parents=True, exist_ok=True)
+    private.write_text("{}", encoding="utf-8")
+    inbox = cfg.library_dir / "_inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "Soda Stereo - Signos.gp5").symlink_to(private)
+    (inbox / "gone.gp5").symlink_to(cfg.state_dir / "nothing")
+    (inbox / "a folder").mkdir()
+    section = section_of(todo(conn, cfg), "Inbox: files tabarr couldn't place")
+    refused = ": a symbolic link; tabarr files only regular files. Put the file itself there."
+    assert section.startswith(" (2)\n")
+    assert f"- `Soda Stereo - Signos.gp5`{refused}" in section and f"- `gone.gp5`{refused}" in section
+    assert "rename it" not in section and "a folder" not in section
+
+
+def test_a_linked_inbox_lists_nothing_of_what_it_points_at(conn, cfg):
+    # A link in place of _inbox/ would list the folder it points at: the credentials' names, say.
+    private = cfg.state_dir / "credentials"
+    private.mkdir(parents=True)
+    (private / "spotify_client_secret").write_text("x", encoding="utf-8")
+    cfg.library_dir.mkdir(parents=True)
+    (cfg.library_dir / "_inbox").symlink_to(private)
+    text = todo(conn, cfg)
+    assert "spotify_client_secret" not in text
+    section = section_of(text, "Inbox: files tabarr couldn't place")
+    assert "- `_inbox` is a symbolic link, so this page doesn't list what it points at. Make `_inbox` a folder " \
+           "of its own." in section
+
+
 def test_missing_lyrics(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马斑马")
     update_song(conn, s.id, lyrics_status="missing")

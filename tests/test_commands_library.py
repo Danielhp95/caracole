@@ -161,6 +161,16 @@ def test_scan_reports_music_and_inbox(tmp_path):
     assert "Inbox: 0 filed, 0 duplicates, 1 left" in result.output
 
 
+def test_scan_counts_the_links_it_refused(tmp_path):
+    seed(tmp_path)
+    inbox = tmp_path / "lib" / "_inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "宋冬野 - 斑马斑马.gp5").symlink_to(tmp_path / "state" / "tabarr.sqlite")
+    result = run(tmp_path, "scan")
+    assert result.exit_code == 0, result.output
+    assert "Inbox: 0 filed, 0 duplicates, 0 left, 1 symbolic link refused" in result.output
+
+
 def test_bad_config_is_a_clean_error(tmp_path):
     p = tmp_path / "bad.toml"
     p.write_text("libary_dir = 1\n", encoding="utf-8")
