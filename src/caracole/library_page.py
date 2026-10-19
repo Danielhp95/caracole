@@ -472,7 +472,7 @@ _STYLE = BASE_STYLE + """
 .hue-6 { color: var(--h6); background: var(--h6-bg); }
 .hue-7 { color: var(--h7); background: var(--h7-bg); }
 .names { flex: 1; min-width: 0; }
-.card h3 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
+.card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
 .artist { display: inline; margin: 2px 0 0; padding: 0; border: 0; background: none; color: var(--muted); font: inherit;
   font-size: .9rem; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .artist:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
@@ -615,6 +615,7 @@ _SCRIPT = r"""
     form.appendChild(hidden("song", Number(s.id)));
     const go = el("button", "btn primary", "Fetch now");
     go.type = "submit";
+    go.setAttribute("aria-label", "Fetch " + String(s.title) + " by " + String(s.artist) + " now");
     go.title = "Ask Ultimate Guitar for this song now, politely";
     form.appendChild(go);
     return form;
@@ -624,13 +625,14 @@ _SCRIPT = r"""
   const makeCard = (s) => {
     const card = el("article", "card");
     card.dataset.status = String(s.status);
+    card.tabIndex = -1;  // the A-Z strip moves the focus to it
     const head = el("div", "head");
     const hue = Number.isInteger(s.hue) && s.hue >= 0 && s.hue < 8 ? s.hue : 0;
     const mono = el("span", "mono hue-" + hue, s.monogram || "");
     mono.setAttribute("aria-hidden", "true");
     head.appendChild(mono);
     const names = el("div", "names");
-    names.appendChild(el("h3", null, s.title));
+    names.appendChild(el("h2", null, s.title));
     const artists = listOf(s.artists);
     const who = el("button", "artist", artists.length > 1 ? artists.join(", ") : s.artist);
     who.type = "button";
@@ -782,7 +784,10 @@ _SCRIPT = r"""
       const to = el("button", null, letter);
       to.type = "button";
       to.setAttribute("aria-label", "Jump to " + letter);
-      to.addEventListener("click", () => card.scrollIntoView({ block: "start", behavior: smooth() }));
+      to.addEventListener("click", () => {
+        card.scrollIntoView({ block: "start", behavior: smooth() });
+        card.focus({ preventScroll: true });  // so the next Tab goes on from this card
+      });
       jump.appendChild(to);
     }
     jump.hidden = firsts.size < 2;
@@ -947,8 +952,8 @@ _REQUEST = """<details class="request">
       <label class="f">Title<input name="title" required maxlength="300" autocomplete="off"></label>
       <label class="f"><span>Album <em>(optional)</em></span><input name="album" maxlength="300"
         autocomplete="off"></label>
-      <label class="f"><span>Length <em>(optional, m:ss)</em></span><input name="duration" maxlength="12"
-        inputmode="numeric" autocomplete="off" placeholder="3:45"></label>
+      <label class="f"><span>Length <em>(optional: m:ss or seconds)</em></span><input name="duration"
+        maxlength="12" autocomplete="off" placeholder="3:45"></label>
     </div>
     <div class="request-row">
       <label class="check"><input type="checkbox" name="fetch" value="1" checked>Fetch it now</label>

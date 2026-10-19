@@ -148,6 +148,9 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     for name in ("artist", "title", "album", "duration", "fetch"):
         assert f'name="{name}"' in form.group(1), name
     assert '<input type="hidden" name="csrf" value="t0k&quot;&lt;en">' in form.group(1)
+    # A phone's digits-only keypad has no ":", so the length field gets the full keyboard.
+    duration = re.search(r'<input name="duration"[^>]*>', form.group(1), re.S).group(0)
+    assert "inputmode" not in duration and "m:ss or seconds" in form.group(1)
     assert 'href="/jobs"' in shell
     assert "form-action 'self'" in csp_of(html) and "form-action 'none'" not in csp_of(html)
     assert data_of(html)["server"] == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2}
@@ -552,3 +555,39 @@ def test_the_served_page_offers_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
     # The song caracole fetch would refuse until it's reviewed says so instead of offering a fetch.
     card = re.search(r"<article[^>]*>(?:(?!</article>).)*Bohemian Rhapsody.*?</article>", shown, re.S).group(0)
     assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", card) and "/fetch" not in card
+
+
+def with_script(html: str, script: str) -> str:
+    """The page with a test's script after its own, allowed by its hash."""
+    csp = csp_of(html)
+    html = html.replace(csp, csp.replace("script-src ", f"script-src {sha(script)} "))
+    return html.replace("</body>", f"<script>{script}</script>\n</body>")
+
+
+# Clicks the A-Z strip's "R" and notes which card has the focus then.
+JUMP = """
+(() => {
+  const r = Array.from(document.querySelectorAll("#jump button")).find((b) => b.textContent === "R");
+  r.click();
+  const card = document.activeElement.closest("article");
+  document.body.setAttribute("data-focus", card ? card.querySelector("h2").textContent : "none");
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_screen_reader_hears_each_cards_song_and_a_jump_moves_the_focus(conn, cfg, tmp_path):
+    from caracole.library_page import WebControls
+
+    add_song(conn, "The Beatles", "Yesterday")
+    add_song(conn, "Radiohead", "Creep")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    path = write_library_page(cfg.library_dir, with_script(html, JUMP))
+    dom = dump_dom(path, tmp_path)
+    shown = listing(dom)
+    # The cards' titles are headings under the page's h1, and each button names its song.
+    assert re.findall(r"<h2>([^<]+)</h2>", shown) == ["Yesterday", "Creep"] and "<h3" not in shown
+    assert 'aria-label="Fetch Creep by Radiohead now"' in shown
+    assert 'aria-label="Fetch Yesterday by The Beatles now"' in shown
+    # After a jump, the next Tab goes on from the card jumped to, not from the strip.
+    assert re.search(r'<body[^>]*data-focus="Creep"', dom), dom[-1500:]
