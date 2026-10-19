@@ -115,3 +115,11 @@ Currently we have a "gallery view" for songs. I would also like to have a row-st
 ## Songbooks
 
 bundle in a songbook app too. I want the ability to "make songbook" so that i select different songs and a songbook is generated from them
+
+## Allow for disambiguation on the browser
+
+It's great that the cli allows for disambiguation by having differnet alternatives and then selecitng number, surface this in the browser too
+
+## Allow for disambiguation on the browser
+
+It's great that the cli allows for disambiguation by having differnet alternatives and then selecitng number, surface this in the browser too
