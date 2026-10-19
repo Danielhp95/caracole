@@ -818,10 +818,16 @@ request:
   see [caracole match](#caracole-match---dry-run)) is also scored on its title
   alone, with and without words such as "the musical", so
   `caracole search epic not sorry for loving you` finds
-  `misc-musicals/epic-the-musical-not-sorry-for-loving-you` first. Its hit says
-  that its artist is a catch-all: added with UG's names, the song's artist
-  would be "Misc Musicals". To keep the show's or the singer's name, add the
-  song as you know it, and pick that hit in `caracole review`.
+  `misc-musicals/epic-the-musical-not-sorry-for-loving-you` first. Its hit has
+  no `caracole add` line: added with UG's names, the song's artist would be
+  "Misc Musicals". It says instead that its artist is a catch-all, to add the
+  song as you know it and pick that hit in `caracole review`:
+
+      1. Misc Musicals - Epic The Musical Not Sorry For Loving You · chords×1
+         https://tabs.ultimate-guitar.com/tab/misc-musicals/epic-the-musical-not-sorry-for-loving-you-chords-4742072
+         misc-musicals is UG's catch-all artist, no one's name: add the song as you know it,
+         then pick this hit in `caracole review`:
+           caracole add "<the show or singer>" "<the song>"
 
 QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
@@ -829,7 +835,8 @@ compares Chinese as pinyin. `--limit N` (or `-n N`) shows up to N hits from
 each place, 10 by default. `--add N` adds UG hit N to wanted.txt and syncs it,
 the same way `caracole add` does. N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another
-name is left alone. When nothing matches well, or the query has accented or
+name is left alone. A hit under a catch-all artist is refused (exit 2, nothing
+written), with the same advice as its hit. When nothing matches well, or the query has accented or
 non-Latin letters, the command also explains bare ids and prints the
 `[artist_url]` line to paste, for the artist's page or one of their tab pages,
 with the table's header only while overrides.toml has no `[artist_url]`

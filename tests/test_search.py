@@ -591,10 +591,24 @@ def test_cli_says_a_hit_is_under_ugs_catch_all_artist(tmp_path):
     ug = result.output.partition("On Ultimate Guitar (offline index)")[2]
     first, second = ug.split("\n  2. ", 1)
     assert "1. Misc Musicals - Epic The Musical Not Sorry For Loving You" in first
-    assert 'caracole add "Misc Musicals" "Epic The Musical Not Sorry For Loving You"' in first
-    assert ("misc-musicals is UG's catch-all artist: to keep the show's or the singer's name, add the song as "
-            "you know it, then pick this hit in `caracole review`") in " ".join(first.split())
-    assert "catch-all" not in second
+    # Added under UG's names, the song's artist would be "Misc Musicals": no line to paste does that.
+    assert 'caracole add "Misc Musicals"' not in first
+    assert ("misc-musicals is UG's catch-all artist, no one's name: add the song as you know it, then pick "
+            "this hit in `caracole review`:") in " ".join(first.split())
+    assert '\n       caracole add "<the show or singer>" "<the song>"\n' in first + "\n"
+    assert "catch-all" not in second and 'caracole add "Bill Fox"' in second
+
+
+def test_cli_add_refuses_a_catch_all_hit_and_says_how_to_add_the_song(tmp_path):
+    conn = seed(tmp_path, rows=ROWS + [EPIC, NEAR_EPIC])
+    result = run(tmp_path, "search", "epic", "not", "sorry", "for", "loving", "you", "--add", "1")
+    assert result.exit_code == 2, result.output
+    out = " ".join(result.output.split())
+    assert "misc-musicals is UG's catch-all artist, no one's name" in out
+    assert 'caracole add "<the show or singer>" "<the song>"' in out
+    assert "misc-musicals/epic-the-musical-not-sorry-for-loving-you in `caracole review`" in out
+    assert not (tmp_path / "lib" / "wanted.txt").exists()
+    assert find_song(conn, "misc-musicals/epic-the-musical-not-sorry-for-loving-you") is None
 
 
 def test_a_catch_all_hit_is_scored_on_its_title_alone(conn):

@@ -4,7 +4,9 @@ Nothing here touches the network: the library is the SQLite file, and the UG
 index is the table ``caracole index build`` filled from UG's sitemaps. Each UG
 hit comes with the ``caracole add`` line to paste, and ``--add N`` adds hit N
 through ``caracole add``'s own path (``sources.add_song``): appended to
-wanted.txt, which is then synced.
+wanted.txt, which is then synced. A hit under a catch-all artist
+(``misc-musicals``…) has no such line, and ``--add`` refuses it: under UG's
+names, the song's artist would be "Misc Musicals".
 """
 
 from __future__ import annotations
@@ -128,14 +130,23 @@ def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]]) -> str:
     in_library = (hit.artist_key, hit.song_key) in known or tuple(
         identity_key(hit.artist, hit.title).split("/", 1)
     ) in known
-    action = "in your library" if in_library else f"caracole add {_quote(hit.artist)} {_quote(hit.title)}"
-    lines = f"  {n}. {hit.artist} - {hit.title} · {counts}\n     {hit.url}\n     {action}"
-    if hit.catch_all:
-        lines += "\n" + textwrap.fill(
-            f"{hit.artist_key} is UG's catch-all artist: to keep the show's or the singer's name, add the song "
-            "as you know it, then pick this hit in `caracole review`.", 88, initial_indent=" " * 5,
-            subsequent_indent=" " * 5, break_long_words=False, break_on_hyphens=False)
-    return lines
+    head = f"  {n}. {hit.artist} - {hit.title} · {counts}\n     {hit.url}"
+    if in_library:
+        return f"{head}\n     in your library"
+    if hit.catch_all:  # added under UG's names, the song's artist would be "Misc Musicals"
+        return f"{head}\n{_catch_all_note(hit, 'this hit')}"
+    return f"{head}\n     caracole add {_quote(hit.artist)} {_quote(hit.title)}"
+
+
+_ADD_AS_YOU_KNOW_IT = 'caracole add "<the show or singer>" "<the song>"'
+
+
+def _catch_all_note(hit: IndexHit, which: str, *, head: str = "", indent: int = 5) -> str:
+    """How to add the song of a catch-all hit: as you know it, never under UG's names."""
+    return textwrap.fill(
+        f"{head}{hit.artist_key} is UG's catch-all artist, no one's name: add the song as you know it, then "
+        f"pick {which} in `caracole review`:", 88, initial_indent=" " * indent, subsequent_indent=" " * indent,
+        break_long_words=False, break_on_hyphens=False) + f"\n{' ' * (indent + 2)}{_ADD_AS_YOU_KNOW_IT}"
 
 
 # Only these decisions make a song's matched UG song its own; a review's keys are a candidate's,
@@ -220,6 +231,9 @@ def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -
         found = f"only {len(hits)} hit{'s' if len(hits) != 1 else ''}" if hits else "nothing"
         fail(f"--add {n}: Ultimate Guitar has {found} for {text!r}", 2)
     hit = hits[n - 1]
+    if hit.catch_all:  # under UG's names, the song's artist would be the catch-all, as "Misc Musicals"
+        fail(_catch_all_note(hit, f"{hit.artist_key}/{hit.song_key}", head=f"--add {n} adds nothing: ",
+                             indent=0), 2)
     # The hit's own song first: add_song says where it is already. Then another spelling of it.
     other = None if _listed(cfg, conn, hit) else _matched_elsewhere(conn, hit)
     if other is not None:  # adding it would make a second record of the same song
