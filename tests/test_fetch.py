@@ -1245,6 +1245,22 @@ def test_a_stale_artist_page_is_no_answer_once_the_budget_is_spent(conn, tmp_pat
     assert [s.id for s in songs_to_fetch(conn, PASTED, LATER)] == [song.id]
 
 
+def test_a_cached_list_of_unknown_age_is_no_answer_once_the_budget_is_spent(conn, tmp_path):
+    # PoliteClient counts a cached copy without its fetch time as stale, and so does the fetch.
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+    for meta in (tmp_path / "cache" / "http" / "ug").rglob("*.json"):
+        record = json.loads(meta.read_text(encoding="utf-8"))
+        if record["url"] == artist_list(BANMA_ARTIST):
+            del record["fetched_at"]
+            meta.write_text(json.dumps(record), encoding="utf-8")
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache", budget=0), tmp_path, PASTED),
+                        [get_song(conn, song.id)])
+
+    assert stats.budget_exhausted and ug.requests == []
+
+
 def test_a_recheck_cut_short_by_the_page_cap_resumes_next_run(conn, tmp_path):
     ug = FakeUG()
     song = banma_found(conn, ug, tmp_path)

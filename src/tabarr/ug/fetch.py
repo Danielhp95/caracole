@@ -253,10 +253,11 @@ def _get_page[P: (UGTabPage, UGArtistPage)](
 
 
 def _stale(resp: Response, now: datetime, max_age: timedelta) -> bool:
-    """Whether a response is a cached copy older than ``max_age`` at ``now``."""
-    if not resp.from_cache or not resp.fetched_at:
+    """Whether a response is a cached copy older than ``max_age`` at ``now`` (or of unknown age,
+    which PoliteClient counts as stale too)."""
+    if not resp.from_cache:
         return False
-    return now - _parse_iso(resp.fetched_at) > max_age
+    return not resp.fetched_at or now - _parse_iso(resp.fetched_at) > max_age
 
 
 def _upsert(run: _SongRun, v: UGVersion) -> int:
