@@ -1075,10 +1075,33 @@ do:
   waits for `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
   overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for
   the nightly run.
-- **Requests**, the page at `/jobs`, lists each request, the commands it
-  runs and what each printed (the newest request's output open), and
-  refreshes itself every 10 seconds while one waits or runs. Stop refreshing
-  keeps it still, so an output stays open to read.
+- **How it goes, on the page.** A request leaves you where you are. The
+  song's card, or for a song new to the library a card of its own under the
+  form ("Just requested"), says on one line how its request goes: "Queued…"
+  (or "Queued behind 2 requests…"), then what runs ("Adding to the
+  library…", "Looking it up…", "Fetching from Ultimate Guitar…", "Rendering
+  the sheet…"), then how it ended:
+  - **Ready · Open sheet**, and the card shows the song's files;
+  - **Not found · see the to-do page**, when Ultimate Guitar had no sheet;
+  - **Needs review · see the to-do page**;
+  - **Not fetched yet: it waits for the next run**, when a block, a spent
+    budget or an error stopped the fetch: an error is never a miss;
+  - **Added: the nightly run looks for it**, for a request without Fetch it
+    now;
+  - or, when a command failed, its error in one sentence, with a **Details**
+    link to what it printed.
+
+  Two requests or more also show as one short list in a corner, a line per
+  song, which folds up or closes. A screen reader hears each card's line as
+  it changes. The page asks the server how its requests go every 1.5 seconds
+  while one waits or runs (`/jobs.json`), less often in a background tab.
+- **Requests**, the page at `/jobs`, has one line per request, the same as
+  its card's, with the commands it ran and what each printed folded away
+  under it (they run at `-v`, so that is the whole story). A card's Details
+  link opens that request's output. It refreshes itself every 10 seconds while
+  one waits or runs; Stop refreshing keeps it still.
+- **Without JavaScript**, the forms still work: a request sends you to its
+  line on `/jobs`, its output open.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
@@ -1106,7 +1129,12 @@ Who can reach it:
 - Every form must come from the server's own page: it carries a token the
   server makes when it starts, and a request from another site is refused
   (403). A form posted from a page older than the server's last start is
-  refused too; reload the page.
+  refused too; reload the page. `/jobs.json`, which the page's script reads,
+  is refused the same way, and needs the same token in an
+  `X-Caracole-Form-Token` header: a card then says the server has restarted.
+  Only the served page may ask the server anything from its script (its
+  Content-Security-Policy has `connect-src 'self'`); `index.html` on disk asks
+  nothing of anyone.
 - `--token-file FILE` asks each browser once for the access token in FILE (16
   characters or more, such as `openssl rand -base64 24`), then remembers it in
   a cookie. Without the option, a `web_token` credential from systemd

@@ -1,7 +1,10 @@
 """The routes of ``caracole serve``, as one function from a request to a response.
 
     GET  /, /index.html   the library page, with its forms (library_page, WebControls)
-    GET  /jobs            the requests, and what each command printed (?refresh=0: no reloading)
+    GET  /jobs            the requests, a line each, and what each command printed
+                          (?job=N: its output open; ?refresh=0: no reloading)
+    GET  /jobs.json       the requests, a line each, for the page's script (?cards=N,M: with the
+                          cards of those jobs' songs, once the jobs are over)
     GET  /<file>          a file of the library (files.py)
     POST /request         a song for wanted.txt; with ``fetch``, fetched now too
     POST /fetch           fetch a song of the library now, unless it needs review first
@@ -9,33 +12,39 @@
 
 Every request must name the server by a name it answers to (421 otherwise).
 Every POST must pass the cross-origin check and carry the form token (403),
-be a form (415) and be small (413). With an access token, nothing but the
+be a form (415) and be small (413). /jobs.json, which no form asks for, must
+pass the same cross-origin check and carry the form token in an
+``X-Caracole-Form-Token`` header (403). With an access token, nothing but the
 sign-in page is served before signing in (401).
 
 A request is written to wanted.txt at once, with ``wanted.append_wanted``, the
 function ``caracole add`` writes it with, and before the database: the line is
 there even when the queue is full or the server stops. A request and a fetch
-then queue their commands (jobs.py), and the answer sends the browser to the
-requests page.
+then queue their commands (jobs.py). Without JavaScript, the answer sends the
+browser to the request on /jobs. The page's script asks for JSON (``Accept:
+application/json``) and gets the job, as /jobs.json gives it, so it stays on the
+page and shows the song's progress on its card; a refusal is then
+``{"error": "one sentence"}``, with the same status.
 """
 
 from __future__ import annotations
 
+import json
 import secrets
 import sqlite3
 import threading
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from caracole import db
 from caracole.config import Config
 from caracole.web import pages
 from caracole.web.files import NotServed, read_library_file
-from caracole.web.jobs import JobQueue, QueueFull, add_steps, fetch_steps
+from caracole.web.jobs import Job, JobQueue, QueueFull, add_steps, fetch_steps
 from caracole.web.security import (
     SESSION_COOKIE,
     answers_to,
@@ -45,12 +54,15 @@ from caracole.web.security import (
     session_cookie,
     session_value,
 )
+from caracole.web.status import SongFacts, details_href, job_line
 
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
     from caracole.songs import Song
 
 MAX_BODY = 16 * 1024
+TOKEN_HEADER = "x-caracole-form-token"  # /jobs.json's form token
+MAX_CARDS = 50  # cards one /jobs.json answer holds
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
 _COMMON_HEADERS = [
     ("X-Content-Type-Options", "nosniff"),
@@ -74,9 +86,12 @@ class Request:
 
 @dataclass
 class Response:
+    """``data``: the answer as JSON, for the page's script (``Accept: application/json``), if it has one."""
+
     status: int
     body: bytes = b""
     headers: list[tuple[str, str]] = field(default_factory=list)
+    data: dict[str, Any] | None = None
 
 
 def _html(status: int, html: str, *, csp: str = pages.PAGE_CSP) -> Response:
@@ -84,11 +99,22 @@ def _html(status: int, html: str, *, csp: str = pages.PAGE_CSP) -> Response:
 
 
 def _message(status: int, title: str, message: str) -> Response:
-    return _html(status, pages.message_page(title, message))
+    response = _html(status, pages.message_page(title, message))
+    response.data = {"error": message}
+    return response
 
 
 def _redirect(location: str, *extra: tuple[str, str]) -> Response:
     return Response(303, b"", [("Location", location), *extra])
+
+
+def _json(status: int, data: dict[str, Any]) -> Response:
+    body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return Response(status, body, [("Content-Type", "application/json; charset=utf-8")])
+
+
+def _wants_json(request: Request) -> bool:
+    return "application/json" in request.headers.get("accept", "").lower()
 
 
 class WebApp:
@@ -104,7 +130,10 @@ class WebApp:
         self._wanted = threading.Lock()  # one append to wanted.txt at a time, of the server's threads
 
     def handle(self, request: Request) -> Response:
-        return self.finish(self._route(request))
+        response = self._route(request)
+        if response.data is not None and _wants_json(request):  # the page's script: no redirect, no page
+            response = _json(200 if response.status == 303 else response.status, response.data)
+        return self.finish(response)
 
     @staticmethod
     def finish(response: Response) -> Response:
@@ -130,14 +159,17 @@ class WebApp:
             if method == "POST" and path == "/login":
                 return self._sign_in(request)
             if method in ("GET", "HEAD"):
-                return _html(401, pages.sign_in_page(self.csrf))
+                signed_out = _html(401, pages.sign_in_page(self.csrf))
+                signed_out.data = {"error": "Sign in again: reload the page."}
+                return signed_out
             return _message(401, "Sign in first", "Sign in with the access token first.")
         if method in ("GET", "HEAD"):
             if path in ("/", "/index.html"):
                 return self._library()
             if path == "/jobs":
-                still = parse_qs(urlsplit(request.target).query).get("refresh") == ["0"]
-                return _html(200, pages.jobs_page(self.queue.snapshot(), refresh=not still))
+                return self._jobs_page(parse_qs(urlsplit(request.target).query))
+            if path == "/jobs.json":
+                return self._jobs_json(request)
             if path == "/login":
                 return _redirect("/")
             return self._file(path)
@@ -199,17 +231,117 @@ class WebApp:
                             f"overrides.toml can't be read: {e}. Fix it, then reload this page.")
         from caracole.songs import list_songs
 
+        jobs = self.queue.snapshot()
         try:
             with closing(self._connect()) as conn:
                 busy = _song_ids(conn, self.queue.fetching_keys())
                 held = frozenset(s.id for s in list_songs(conn) if review_first(s, overrides))
-                controls = WebControls(self.csrf, busy, self.queue.active_count(), held)
+                active = tuple(self._views(conn, overrides, jobs, only=[j for j in jobs if j.active]))
+                controls = WebControls(self.csrf, busy, self.queue.active_count(), held, active)
                 html = build_library_page(conn, self.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
                                           controls=controls)
         except (sqlite3.Error, OSError) as e:  # DatabaseTooNew is an sqlite3.DatabaseError
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
         # The page's own CSP is in its meta tag; a header CSP would apply on top of it.
         return _html(200, html, csp=_FRAMES)
+
+    # --- the requests --------------------------------------------------------------------------
+
+    def _jobs_page(self, query: dict[str, list[str]]) -> Response:
+        """Every request, a line each, its output open only when asked for (``?job=N``)."""
+        try:
+            opened = int(query.get("job", [""])[0])
+        except ValueError:
+            opened = None
+        jobs = self.queue.snapshot()
+        facts: dict[int, SongFacts | None] = {}
+        try:
+            overrides = _overrides_or_none(self.cfg)
+            with closing(self._connect()) as conn:
+                due = _due_songs(conn, overrides)
+                facts = {job.id: self._song_of(conn, overrides, job, due)[1] for job in jobs}
+        except (sqlite3.Error, OSError):  # the lines say only how the jobs went, then
+            pass
+        lines = {job.id: job_line(job, facts.get(job.id), ahead=_ahead(jobs, job)) for job in jobs}
+        still = query.get("refresh") == ["0"]
+        return _html(200, pages.jobs_page(jobs, lines, opened=opened, refresh=not still))
+
+    def _jobs_json(self, request: Request) -> Response:
+        """The requests for the page's script; refused to anything else, as a write would be."""
+        if not cross_origin_ok("POST", request.headers, request.headers.get("host")):  # checked as a write
+            return _message(403, "Refused", "This came from another site, so caracole refused it.")
+        if not same_token(request.headers.get(TOKEN_HEADER), self.csrf):
+            return _message(403, "Refused", "caracole serve has restarted since this page was opened: reload it.")
+        wanted: set[int] = set()
+        for part in parse_qs(urlsplit(request.target).query).get("cards", [""])[0].split(","):
+            if part.strip().isdigit() and len(wanted) < MAX_CARDS:
+                wanted.add(int(part))
+        from caracole.overrides import OverridesError, load_overrides
+
+        try:
+            overrides = load_overrides(self.cfg.overrides_file)
+        except OverridesError as e:
+            return _message(503, "overrides.toml can't be read",
+                            f"overrides.toml can't be read: {e}. Fix it, then reload this page.")
+        jobs = self.queue.snapshot()
+        try:
+            with closing(self._connect()) as conn:
+                views = self._views(conn, overrides, jobs, cards=frozenset(wanted))
+        except (sqlite3.Error, OSError) as e:
+            return _message(503, "The database can't be read", f"The database can't be read: {e}")
+        return _json(200, {"active": sum(j.active for j in jobs), "jobs": views})
+
+    def _views(self, conn: sqlite3.Connection, overrides: Overrides | None, jobs: list[Job], *,
+               only: list[Job] | None = None, cards: frozenset[int] = frozenset()) -> list[dict[str, Any]]:
+        """Each job (of ``only``, else every one) as the page's script reads it: its song, its line and,
+        for a job in ``cards`` that is over, its song's card as the page draws it now.
+
+        ``jobs`` is the whole queue, newest first, for the jobs ahead of a queued one;
+        ``overrides`` None (overrides.toml unreadable) leaves the cards out.
+        """
+        from caracole.library_page import song_cards
+
+        views = []
+        due = _due_songs(conn, overrides)
+        for job in jobs if only is None else only:
+            song, facts = self._song_of(conn, overrides, job, due)
+            view = _view(job, jobs, song, facts)
+            if job.id in cards and not job.active and song is not None and overrides is not None:
+                card = song_cards(conn, self.cfg, overrides, datetime.now(UTC).replace(microsecond=0), [song])[0]
+                card["fetchable"] = not review_first(song, overrides)
+                view["card"] = card
+            views.append(view)
+        return views
+
+    def _song_of(self, conn: sqlite3.Connection, overrides: Overrides | None, job: Job,
+                 due: Callable[[], frozenset[int]]) -> tuple[Song | None, SongFacts | None]:
+        """The job's song, and what its line needs to know of it; None while the library has no such song.
+
+        A fetch that is over and left no sheet asks ``due`` whether the nightly fetch would still
+        fetch the song: then it waits (a block, a spent budget, an error), and isn't missing.
+        """
+        from caracole.library_page import sheet_href
+        from caracole.songs import find_song
+
+        song = find_song(conn, job.song_key)
+        if song is None:
+            return None, None
+        ignored = song.status == "ignored" or (overrides is not None and song.key in overrides.ignore)
+        sheet = sheet_href(self.cfg.library_dir, song)
+        to_fetch = job.state == "done" and job.fetching and not sheet and song.id in due()
+        return song, SongFacts(sheet=sheet, review=bool(song.review), to_fetch=to_fetch, ignored=ignored)
+
+    def _queued(self, job: Job) -> Response:
+        """A request queued: to the browser, its line on /jobs; to the page's script, the job itself."""
+        response = _redirect(f"/{details_href(job.id)}")
+        jobs = self.queue.snapshot()
+        job = next((j for j in jobs if j.id == job.id), job)
+        try:
+            with closing(self._connect()) as conn:
+                response.data = {"job": self._views(conn, _overrides_or_none(self.cfg), jobs, only=[job])[0]}
+        except (sqlite3.Error, OSError):  # the job is queued all the same
+            response.data = {"job": _view(job, jobs, None, None)}
+        return response
 
     def _file(self, path: str) -> Response:
         try:
@@ -263,12 +395,12 @@ class WebApp:
             steps += fetch_steps(display)
         try:
             job, _ = self.queue.submit(f"{'Fetch' if fetch else 'Add'} {display}", line.identity, steps,
-                                       fetching=fetch, note=note)
+                                       fetching=fetch, note=note, display=display)
         except QueueFull:
             return _message(503, "The queue is full",
                             f"{note} The queue is full, so nothing else was queued: the nightly run looks for "
                             "the song, or request it again once the queue empties.")
-        return _redirect(f"/jobs#job-{job.id}")
+        return self._queued(job)
 
     def _fetch(self, form: dict[str, str]) -> Response:
         """Fetch a song of the library now."""
@@ -298,10 +430,10 @@ class WebApp:
                             "fetch it yet: run caracole review, or settle it in overrides.toml, then fetch it.")
         try:
             job, _ = self.queue.submit(f"Fetch {song.display}", song.key, fetch_steps(song.display),
-                                       fetching=True)
+                                       fetching=True, display=song.display)
         except QueueFull:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
-        return _redirect(f"/jobs#job-{job.id}")
+        return self._queued(job)
 
 
 def review_first(song: Song, overrides: Overrides) -> bool:
@@ -316,6 +448,43 @@ def review_first(song: Song, overrides: Overrides) -> bool:
     if song.match_decision != "review" or needs_artist_page(song):
         return False
     return not any(song.key in table for table in (overrides.match, overrides.pin, overrides.reject))
+
+
+def _ahead(jobs: list[Job], job: Job) -> int:
+    """How many jobs wait or run before a queued one."""
+    return sum(1 for j in jobs if j.active and j.id < job.id)
+
+
+def _view(job: Job, jobs: list[Job], song: Song | None, facts: SongFacts | None) -> dict[str, Any]:
+    """A job as /jobs.json gives it; ``jobs`` is the whole queue."""
+    return {"id": job.id, "display": job.display or job.title, "songId": song.id if song else None,
+            "state": job.state, "fetching": job.fetching,
+            "line": job_line(job, facts, ahead=_ahead(jobs, job)).as_json(), "details": details_href(job.id)}
+
+
+def _due_songs(conn: sqlite3.Connection, overrides: Overrides | None) -> Callable[[], frozenset[int]]:
+    """The songs the nightly fetch would fetch (``songs_to_fetch``), worked out once, when first asked."""
+    found: list[frozenset[int]] = []
+
+    def due() -> frozenset[int]:
+        if not found:
+            from caracole.overrides import Overrides
+            from caracole.ug.fetch import songs_to_fetch
+
+            songs = songs_to_fetch(conn, overrides or Overrides(), datetime.now(UTC).replace(microsecond=0))
+            found.append(frozenset(s.id for s in songs))
+        return found[0]
+
+    return due
+
+
+def _overrides_or_none(cfg: Config) -> Overrides | None:
+    from caracole.overrides import OverridesError, load_overrides
+
+    try:
+        return load_overrides(cfg.overrides_file)
+    except OverridesError:
+        return None
 
 
 def _song_ids(conn: sqlite3.Connection, keys: set[str]) -> frozenset[int]:

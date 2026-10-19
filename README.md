@@ -36,7 +36,7 @@ server.
 
 Then open `~/Tabs/_todo.md`, or `~/Tabs/index.html` to browse. `caracole serve`
 serves that page at `http://127.0.0.1:8737/`, with a form to request a song and
-fetch it now. Settings go in `~/.config/caracole/caracole.toml`, and none are
+fetch it now; the song's card says how it goes, on one line. Settings go in `~/.config/caracole/caracole.toml`, and none are
 needed to start. Commands, settings and overrides are explained in
 [docs/usage.md](docs/usage.md).
 

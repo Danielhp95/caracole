@@ -1,5 +1,6 @@
 """caracole/web/app.py: the routes of caracole serve, without a socket."""
 
+import json
 import re
 from pathlib import Path
 from urllib.parse import urlencode
@@ -8,6 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from caracole.cli import build_app
+from caracole.library import song_dir
 from caracole.songs import update_song
 from caracole.web.app import Request, WebApp
 from caracole.web.jobs import JobQueue
@@ -60,6 +62,21 @@ def text(response):
     return response.body.decode("utf-8")
 
 
+JSON = "application/json"
+
+
+def get_json(app, path, *, token="tok", **headers):
+    """A request from the page's script: JSON, the page's form token in a header, from its own origin."""
+    sent = {"accept": JSON, "sec-fetch-site": "same-origin"} | (
+        {"x-caracole-form-token": token} if token is not None else {}) | headers
+    return get(app, path, **sent)
+
+
+def answer(response):
+    assert header(response, "content-type") == "application/json; charset=utf-8", response.body[:300]
+    return json.loads(response.body)
+
+
 def shown(response):
     """The page's text as a reader sees it, entities decoded."""
     import html
@@ -98,6 +115,9 @@ def test_the_busy_songs_and_the_queue_show_on_the_page(app, conn, queue):
     body = text(get(app, "/"))
     assert f'"busy":[{creep.id}]' in body and '"active":1' in body
     assert 'Requests<span class="n">1</span>' in body
+    # The requests waiting or running, each with its line, so the cards show it at once.
+    server = json.loads(JSON_BLOCK.search(body).group(1))["server"]
+    assert [(j["id"], j["songId"], j["line"]["text"]) for j in server["jobs"]] == [(1, creep.id, "Queued…")]
 
 
 def test_a_name_the_server_doesnt_answer_to_is_refused(app, conn):
@@ -137,7 +157,7 @@ def test_a_request_is_written_to_wanted_txt_exactly_as_caracole_add_writes_it(ap
     fields = {"artist": "  Soda   Stereo ", "title": "De Música | Ligera #1", "album": "Canción Animal",
               "duration": "3:33", "fetch": "1"}
     response = post(app, "/request", fields)
-    assert response.status == 303 and header(response, "location") == "/jobs#job-1"
+    assert response.status == 303 and header(response, "location") == "/jobs?job=1#job-1"
 
     other = tmp_path / "other"
     result = CliRunner().invoke(build_app(), ["--config", str(config_file(other)), "-v", "add", "  Soda   Stereo ",
@@ -169,7 +189,7 @@ def test_fetch_it_now_on_a_song_whose_add_still_waits_fetches_it_too(app, queue)
     # The queue is busy (another song's fetch, a nightly run holding the lock): the add waits.
     assert post(app, "/request", {"artist": "Radiohead", "title": "Creep"}).status == 303
     again = post(app, "/request", {"artist": "Radiohead", "title": "Creep", "fetch": "1"})
-    assert again.status == 303 and header(again, "location") == "/jobs#job-1"
+    assert again.status == 303 and header(again, "location") == "/jobs?job=1#job-1"
     job = queue.snapshot()[0]
     assert job.fetching and job.title == "Fetch Radiohead - Creep"
     queue.run_pending()
@@ -233,7 +253,7 @@ def test_a_full_queue_still_keeps_the_song_in_wanted_txt(app, cfg, queue):
 def test_fetch_now_queues_match_fetch_and_render_for_that_song(app, conn, queue):
     creep = add_song(conn, "Radiohead", "Creep")
     response = post(app, "/fetch", {"song": str(creep.id)})
-    assert response.status == 303 and header(response, "location") == "/jobs#job-1"
+    assert response.status == 303 and header(response, "location") == "/jobs?job=1#job-1"
     job = queue.snapshot()[0]
     assert [s.args for s in job.steps] == [("match",), ("fetch", "--song=Radiohead - Creep"), ("render",)]
     assert job.fetching and job.song_key == creep.key
@@ -285,6 +305,118 @@ def test_fetch_now_of_a_song_ignored_in_overrides_toml_is_refused(app, conn, cfg
     assert queue.snapshot() == []
 
 
+# --- from the page's script, without leaving the page ----------------------------------------------
+
+
+def test_a_request_from_the_pages_script_is_answered_with_its_job_not_a_redirect(app, queue):
+    response = post(app, "/request", {"artist": " Radiohead ", "title": "Creep", "fetch": "1"}, accept=JSON)
+    assert response.status == 200 and header(response, "location") is None
+    assert answer(response) == {"job": {
+        "id": 1, "display": "Radiohead - Creep", "songId": None, "state": "queued", "fetching": True,
+        "line": {"tone": "queued", "text": "Queued…", "link": None}, "details": "jobs?job=1#job-1"}}
+    assert queue.snapshot()[0].display == "Radiohead - Creep"
+
+
+def test_a_fetch_from_the_pages_script_names_its_song_and_its_place_in_the_queue(app, conn, queue):
+    creep = add_song(conn, "Radiohead", "Creep")
+    oasis = add_song(conn, "Oasis", "Wonderwall")
+    post(app, "/fetch", {"song": str(oasis.id)})
+    job = answer(post(app, "/fetch", {"song": str(creep.id)}, accept=JSON))["job"]
+    assert (job["id"], job["songId"], job["display"]) == (2, creep.id, "Radiohead - Creep")
+    assert job["line"]["text"] == "Queued behind 1 request…"
+
+
+def test_a_refusal_to_the_pages_script_is_one_sentence_of_json(app, conn, queue):
+    response = post(app, "/request", {"artist": "", "title": "Creep"}, accept=JSON)
+    assert response.status == 400 and answer(response) == {"error": "A song needs an artist and a title."}
+    response = post(app, "/request", {"artist": "Radiohead", "title": "Creep"}, csrf="old", accept=JSON)
+    assert response.status == 403 and "reload the library" in answer(response)["error"]
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="review", match_candidates=REVIEW, review=True)
+    response = post(app, "/fetch", {"song": str(creep.id)}, accept=JSON)
+    assert response.status == 409 and "caracole review" in answer(response)["error"]
+    assert queue.snapshot() == []
+
+
+def test_the_status_endpoint_gives_each_requests_line_newest_first(app, conn, queue):
+    creep = add_song(conn, "Radiohead", "Creep")
+    post(app, "/fetch", {"song": str(creep.id)})
+    post(app, "/request", {"artist": "Oasis", "title": "Wonderwall", "fetch": "1"})
+    response = get_json(app, "/jobs.json")
+    assert response.status == 200
+    data = answer(response)
+    assert data["active"] == 2
+    assert [(j["id"], j["display"], j["songId"], j["line"]["text"]) for j in data["jobs"]] == [
+        (2, "Oasis - Wonderwall", None, "Queued behind 1 request…"), (1, "Radiohead - Creep", creep.id, "Queued…")]
+    assert all("card" not in j for j in data["jobs"])
+
+
+def test_a_done_requests_line_and_card_say_what_the_library_has_now(app, conn, cfg, queue):
+    creep = add_song(conn, "Radiohead", "Creep")
+    post(app, "/fetch", {"song": str(creep.id)})
+    queue.run_pending()
+    # What the fetch did: a sheet in the song's folder.
+    folder = song_dir(cfg.library_dir, creep)
+    folder.mkdir(parents=True)
+    (folder / "sheet.pdf").write_bytes(b"%PDF")
+    update_song(conn, creep.id, status="found", ug_dirty=False)
+    job = answer(get_json(app, "/jobs.json?cards=1,x,99"))["jobs"][0]
+    assert job["state"] == "done"
+    assert job["line"] == {"tone": "ready", "text": "Ready",
+                           "link": {"label": "Open sheet", "href": "Radiohead/Creep/sheet.pdf"}}
+    # Asked for, the card its song has now, as the page would draw it.
+    card = job["card"]
+    assert (card["id"], card["status"], card["fetchable"]) == (creep.id, "found", True)
+    assert [f["href"] for f in card["files"]] == ["Radiohead/Creep/sheet.pdf"]
+    assert "card" not in answer(get_json(app, "/jobs.json"))["jobs"][0]
+
+
+def test_a_done_fetch_without_a_sheet_is_not_found_unless_it_still_waits(app, conn, queue):
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    post(app, "/fetch", {"song": str(creep.id)})
+    queue.run_pending()
+    # Still to fetch, as the nightly run would: UG blocked it, say, and the command exited 0.
+    assert answer(get_json(app, "/jobs.json"))["jobs"][0]["line"]["tone"] == "waiting"
+    update_song(conn, creep.id, ug_dirty=False)
+    assert answer(get_json(app, "/jobs.json"))["jobs"][0]["line"] == {
+        "tone": "missing", "text": "Not found", "link": {"label": "see the to-do page", "href": "_todo.md"}}
+    # A song not found in the index, whose artist's page has nothing more to say for now, is not found too.
+    update_song(conn, creep.id, match_decision="not_found", ug_dirty=True)
+    assert answer(get_json(app, "/jobs.json"))["jobs"][0]["line"]["tone"] == "missing"
+
+
+def test_a_failed_requests_line_is_its_error_with_a_link_to_its_output(cfg, conn):
+    def runner(args, emit):
+        if args[0] == "fetch":
+            emit("Ultimate Guitar GET https://tabs.ultimate-guitar.com/tab/1 → 200 OK in 0.40 s (1 of 60 requests)")
+            emit("error: The page under [artist_url] for Radiohead, UG answers 404 for it. Put another there.")
+            return 1
+        return 0
+
+    queue = JobQueue(runner)
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    creep = add_song(conn, "Radiohead", "Creep")
+    post(app, "/fetch", {"song": str(creep.id)})
+    queue.run_pending()
+    job = answer(get_json(app, "/jobs.json"))["jobs"][0]
+    assert job["state"] == "failed" and job["line"] == {
+        "tone": "failed", "text": "The page under [artist_url] for Radiohead, UG answers 404 for it.",
+        "link": {"label": "Details", "href": "jobs?job=1#job-1"}}
+
+
+@pytest.mark.parametrize("token,headers", [
+    (None, {"sec-fetch-site": "same-origin"}),  # no form token
+    ("wrong", {"sec-fetch-site": "same-origin"}),
+    ("tok", {"sec-fetch-site": "cross-site"}),
+    ("tok", {"origin": "http://evil.example"}),
+])
+def test_the_status_endpoint_answers_only_the_pages_own_script(app, token, headers):
+    sent = {"host": HOST, "accept": JSON} | ({"x-caracole-form-token": token} if token else {}) | headers
+    response = app.handle(Request("GET", "/jobs.json", sent))
+    assert response.status == 403 and "error" in answer(response)
+
+
 # --- what every write must carry --------------------------------------------------------------
 
 
@@ -322,16 +454,42 @@ def test_other_methods_and_paths_are_refused(app):
 # --- the requests page ---------------------------------------------------------------------------
 
 
-def test_the_requests_page_lists_each_job_and_its_output(app, queue):
+JOB_ITEM = re.compile(r'<li class="job[^"]*" id="job-(\d+)">(.*?)</li>\n', re.S)
+
+
+def test_the_requests_page_has_one_line_per_request_its_output_collapsed(app, conn, cfg, queue):
     post(app, "/request", {"artist": "Evil", "title": "<script>alert(1)</script>", "fetch": "1"})
     body = text(get(app, "/jobs"))
     assert '<meta http-equiv="refresh" content="10">' in body  # while one waits or runs
-    assert 'id="job-1"' in body and "Queued" in body
     assert "<script>alert" not in body and "&lt;script&gt;alert(1)&lt;/script&gt;" in body
+    (job_id, item), = JOB_ITEM.findall(body)
+    assert job_id == "1" and "Queued…" in item
     queue.run_pending()
+    creep = add_song(conn, "Radiohead", "Creep")
+    post(app, "/fetch", {"song": str(creep.id)})
+    queue.run_pending()
+    folder = song_dir(cfg.library_dir, creep)
+    folder.mkdir(parents=True)
+    (folder / "sheet.pdf").write_bytes(b"%PDF")
     body = text(get(app, "/jobs"))
     assert 'http-equiv="refresh"' not in body
-    assert "Done" in body and "Fetch from Ultimate Guitar" in body and "<pre>ok" in body
+    items = dict(JOB_ITEM.findall(body))
+    assert list(items) == ["2", "1"]  # newest first
+    newest = items["2"]
+    line = re.search(r'<p class="line">(.*?)</p>', newest, re.S).group(1)
+    assert "Radiohead - Creep" in line and "Ready" in line and 'href="Radiohead/Creep/sheet.pdf"' in line
+    # The commands and what each printed are there, folded away.
+    assert '<details class="output">' in newest and "<details open" not in body
+    assert "Fetching from Ultimate Guitar" in newest and "<pre>ok" in newest and "Done" in newest
+
+
+def test_a_requests_output_opens_when_its_details_link_asks_for_it(app, queue):
+    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
+    post(app, "/request", {"artist": "Oasis", "title": "Wonderwall"})
+    queue.run_pending()
+    items = dict(JOB_ITEM.findall(text(get(app, "/jobs?job=1"))))
+    assert '<details class="output" open>' in items["1"] and "<details class=\"output\" open>" not in items["2"]
+    assert '<details class="output" open>' not in text(get(app, "/jobs?job=x"))
 
 
 def test_the_requests_page_can_stop_refreshing_so_an_output_can_be_read(app, queue):
@@ -341,17 +499,9 @@ def test_the_requests_page_can_stop_refreshing_so_an_output_can_be_read(app, que
     still = text(get(app, "/jobs?refresh=0"))
     assert 'http-equiv="refresh"' not in still and 'href="/jobs"' in still
     assert 'href="/jobs?refresh=0"' not in still
-
-
-def test_the_newest_requests_output_is_open_and_the_older_ones_closed(app, queue):
-    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
-    queue.run_pending()
-    post(app, "/request", {"artist": "Oasis", "title": "Wonderwall"})
-    queue.run_pending()
-    body = text(get(app, "/jobs"))
-    newest, older = re.findall(r'<article class="job" id="job-\d+">.*?</article>', body, re.S)
-    assert "Oasis" in newest and "<details open>" in newest
-    assert "Radiohead" in older and "<details>" in older and "<details open>" not in older
+    # A request's output stays open either way.
+    assert 'href="/jobs?job=1&amp;refresh=0"' in text(get(app, "/jobs?job=1"))
+    assert 'href="/jobs?job=1"' in text(get(app, "/jobs?job=1&refresh=0"))
 
 
 def test_the_requests_page_with_nothing_queued(app):
@@ -415,6 +565,11 @@ def test_with_an_access_token_nothing_is_shown_before_signing_in(locked, conn):
         assert response.status == 401 and b"Radiohead" not in response.body
         assert 'action="/login"' in text(response)
     assert post(locked, "/request", {"artist": "A", "title": "B"}).status == 401
+    # The page's script is told to sign in again, in JSON.
+    response = get_json(locked, "/jobs.json")
+    assert response.status == 401 and "Sign in" in answer(response)["error"]
+    response = post(locked, "/request", {"artist": "A", "title": "B"}, accept=JSON)
+    assert response.status == 401 and "Sign in" in answer(response)["error"]
 
 
 def test_signing_in_sets_a_cookie_that_opens_the_library(locked, conn):

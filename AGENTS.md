@@ -57,9 +57,13 @@ and `search --key`).
   The logic of `caracole review` and `caracole search` is in review.py and search.py.
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed), jobs.py (the queue: each
-  request runs the `caracole` CLI in a child process, one command at a time), app.py (the
-  routes), pages.py, server.py (`http.server`). The page is library_page.py's, with
-  `WebControls`.
+  request runs the `caracole` CLI at `-v` in a child process, one command at a time),
+  status.py (the one line a request shows on its card and on /jobs, read from the job's
+  steps and, once it is over, from the song's state, never from which commands ran: a
+  step's label is that line while it runs, "Fetching from Ultimate Guitar…"), app.py (the
+  routes; `/jobs.json` and the forms answer the page's script in JSON), pages.py,
+  server.py (`http.server`). The page is library_page.py's, with `WebControls`; its script
+  posts the forms with fetch() and asks /jobs.json how they go.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
@@ -98,7 +102,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html` in a real browser (test_library_page.py) | neither |
+| `chromium` on PATH | `index.html` in a real browser (test_library_page.py), and served by a real `caracole serve` (test_web_page.py) | neither |
 
 Before a change is done:
 

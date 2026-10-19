@@ -591,7 +591,8 @@ Make the token with `openssl rand -base64 24` and store it with
 - **Politeness.** The server sends no request of its own. Fetch now runs
   `caracole match`, `caracole fetch --song` and `caracole render`, which wait
   behind a nightly run, keep the pauses between requests and the budgets, and
-  leave a site alone while it cools down.
+  leave a site alone while it cools down. The song's card says how it goes,
+  on one line; `/jobs` keeps what each command printed, at `-v`.
 
 ## Logs
 
@@ -659,8 +660,9 @@ No secret reaches the journal, at any priority (see
 - **The web page doesn't load:** `journalctl -u caracole-web.service -e`.
   "can't listen on" names the address and why; "421" in a browser means it
   reached the server under a name it doesn't answer to: add the name to
-  `web.allowedHosts`. A form refused as "older than the server" was opened
-  before the unit last restarted: reload the page.
+  `web.allowedHosts`. A form refused as "older than the server", or a card
+  that says "caracole serve has restarted since this page was opened", was
+  opened before the unit last restarted: reload the page.
 - **Nothing ran last night:** `systemctl list-timers caracole.timer`. A missed
   start runs at the next boot, because the timer is persistent.
 - **The hardening, scored:** `systemd-analyze security caracole.service` gives

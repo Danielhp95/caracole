@@ -38,14 +38,27 @@ class FakeRunner:
 
 
 def test_a_request_is_caracole_add_and_a_fetch_is_match_fetch_render():
-    assert add_steps("Radiohead", "Creep") == [("Add to the library", ("add", "--", "Radiohead", "Creep"))]
+    # Each label is what the song's card says while the step runs: "Fetching from Ultimate Guitar…".
+    assert add_steps("Radiohead", "Creep") == [("Adding to the library", ("add", "--", "Radiohead", "Creep"))]
     assert add_steps("-rf", "--help", album="OK Computer", duration_ms=239000) == [
-        ("Add to the library", ("add", "--album=OK Computer", "--duration=3:59", "--", "-rf", "--help"))]
+        ("Adding to the library", ("add", "--album=OK Computer", "--duration=3:59", "--", "-rf", "--help"))]
     assert fetch_steps("Radiohead - Creep") == [
-        ("Match against the index", ("match",)),
-        ("Fetch from Ultimate Guitar", ("fetch", "--song=Radiohead - Creep")),
-        ("Render the PDF", ("render",)),
+        ("Looking it up", ("match",)),
+        ("Fetching from Ultimate Guitar", ("fetch", "--song=Radiohead - Creep")),
+        ("Rendering the sheet", ("render",)),
     ]
+
+
+def test_a_job_keeps_the_song_it_is_for():
+    queue = JobQueue(FakeRunner())
+    add, _ = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"),
+                          display="Radiohead - Creep")
+    assert add.display == "Radiohead - Creep"
+    fetch, _ = queue.submit("Fetch Radiohead - Creep", "radiohead|creep", fetch_steps("Radiohead - Creep"),
+                            fetching=True, display="Radiohead - Creep")
+    assert fetch.id == add.id and fetch.display == "Radiohead - Creep"
+    other, _ = queue.submit("Add Oasis - Wonderwall", "oasis|wonderwall", add_steps("Oasis", "Wonderwall"))
+    assert other.display == "Add Oasis - Wonderwall"  # none given: its title
 
 
 def test_jobs_run_their_steps_in_order_one_job_at_a_time():
