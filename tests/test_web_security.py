@@ -35,6 +35,13 @@ def test_the_server_answers_to_its_own_names_and_those_you_add():
     assert {"localhost", "127.0.0.1", "::1", "nuc", "nuc.example.ts.net", "music.lan"} == hosts
 
 
+def test_a_name_given_with_a_port_is_the_name_and_a_name_that_isnt_one_is_refused():
+    assert "nuc" in allowed_hosts("127.0.0.1", extra=["nuc:8737"])
+    assert "fd7a::7" in allowed_hosts("127.0.0.1", extra=["[fd7a::7]"])
+    with pytest.raises(ValueError, match="'my nuc' isn't a host name"):
+        allowed_hosts("127.0.0.1", extra=["my nuc"])
+
+
 def test_a_specific_address_is_a_name_and_a_wildcard_is_not():
     assert "100.64.0.7" in allowed_hosts("100.64.0.7", hostname="nuc")
     assert "fd7a::7" in allowed_hosts("[fd7a::7]", hostname="nuc")

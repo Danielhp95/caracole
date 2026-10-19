@@ -48,15 +48,21 @@ def host_name(header: str | None) -> str | None:
 
 
 def allowed_hosts(address: str, *, hostname: str = "", extra: Iterable[str] = ()) -> frozenset[str]:
-    """The names the server answers to: loopback, ``address`` unless it's a wildcard, ``hostname``, ``extra``."""
+    """The names the server answers to: loopback, ``address`` unless it's a wildcard, ``hostname``, ``extra``.
+
+    A name in ``extra`` may come with a port, which goes; ValueError for one that isn't a host name.
+    """
     names = set(LOOPBACK)
     bound = address.strip().strip("[]").lower()
     if bound not in WILDCARDS:
         names.add(bound)
-    for name in (hostname, *extra):
-        name = name.strip().lower().rstrip(".")
-        if name:
-            names.add(name)
+    if hostname.strip():
+        names.add(hostname.strip().lower().rstrip("."))
+    for given in extra:
+        name = host_name(given)
+        if name is None:
+            raise ValueError(f"{given.strip()!r} isn't a host name")
+        names.add(name)
     return frozenset(names)
 
 

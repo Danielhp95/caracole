@@ -81,6 +81,12 @@ def test_a_short_or_missing_token_is_refused(tmp_path, started):
     assert result.exit_code == 2 and "can't read" in result.output and not started
 
 
+def test_a_host_name_that_isnt_one_exits_2(tmp_path, started):
+    result = invoke(tmp_path, "--allow-host", "my nuc")
+    assert result.exit_code == 2 and "--allow-host: 'my nuc' isn't a host name" in result.output
+    assert not started
+
+
 def test_listening_beyond_this_machine_without_a_token_warns(tmp_path, started):
     result = invoke(tmp_path, "--address", "0.0.0.0")
     assert result.exit_code == 0

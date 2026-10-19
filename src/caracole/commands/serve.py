@@ -15,10 +15,14 @@ import logging
 import os
 import socket
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
 from caracole.commands._common import fail, load_cfg
+
+if TYPE_CHECKING:
+    from caracole.config import Config
 
 DEFAULT_PORT = 8737
 MIN_TOKEN = 16  # characters
@@ -66,7 +70,7 @@ def _access_token(token_file: Path | None) -> str | None:
     return token
 
 
-def _serve(cfg, config_path: Path | None, address: str, port: int, allow_host: list[str],
+def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow_host: list[str],
            token_file: Path | None) -> None:
     from caracole.web import server
     from caracole.web.app import WebApp
@@ -75,7 +79,10 @@ def _serve(cfg, config_path: Path | None, address: str, port: int, allow_host: l
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     token = _access_token(token_file)
-    hosts = allowed_hosts(address, hostname=socket.gethostname(), extra=allow_host)
+    try:
+        hosts = allowed_hosts(address, hostname=socket.gethostname(), extra=allow_host)
+    except ValueError as e:
+        fail(f"--allow-host: {e}", 2)
     app = WebApp(cfg, JobQueue(CaracoleRunner(config_path)), allowed=hosts, access_token=token)
     if address.strip("[]") not in _LOOPBACK and token is None:
         typer.secho(f"Listening on {address}: anyone who can reach it can read the library and request "
