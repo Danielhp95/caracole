@@ -848,7 +848,7 @@ already, as the to-do page's lines say. An unknown table, a key other than
 `songs` in `[ignore]` or `tab_ids` in `[block]`, or a malformed entry is an
 error that names the table and the entry:
 
-    overrides: /home/you/Tabs/overrides.toml: [reject] 'Creep': expected "Artist - Title", got 'Creep'
+    error: overrides: /home/you/Tabs/overrides.toml: [reject] 'Creep': expected "Artist - Title", got 'Creep'
 
 A table declared twice ends with `; merge the two [match] sections into one`.
 The file must be a regular file: a symbolic link or a folder there is refused
