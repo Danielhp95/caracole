@@ -5,6 +5,11 @@ same song liked on Spotify and listed in ``wanted.txt`` (or a remaster next to
 the original) becomes one record that remembers every source id. A source id
 it already has finds it first, so a track Spotify retitles stays one song.
 
+Its album, duration, ISRC and variant are what its sources say now, not what
+the first one said: the latest word of each source is kept, and each field
+comes from the first source that gives it, your wanted.txt line before
+Spotify's tracks (:func:`upsert_song`).
+
 The stored keys follow the normalizer: when its rules change
 (``normalize.KEY_VERSION``), every key is recomputed once, before the songs are
 next read or added, and songs that now share a key become one
@@ -26,6 +31,14 @@ _JSON_COLUMNS = {"artists", "source_ids", "match_candidates", "lyrics_json"}
 _BOOL_COLUMNS = {"review", "ug_dirty"}
 SHEET_FILE_NAMES = ("sheet.txt", "sheet (auto).txt")
 KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored keys were made with
+# What each source id last said of its song's album, duration, ISRC and variant (_remember),
+# as JSON under this prefix + "<source>:<source id>", e.g. "songs:fields:spotify:<track id>".
+SOURCE_FIELDS_KV = "songs:fields:"
+_SOURCE_FIELDS = ("album", "duration_ms", "isrc", "variant")
+# Whose word a field takes first: wanted.txt is your own (plan, Amendment A2), then Spotify's
+# tracks (wanted.SOURCE, spotify.SOURCE). A source not named here comes after them.
+_WANTED = "wanted"
+_PRECEDENCE = (_WANTED, "spotify")
 # What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py).
 # It goes with a song merged into another: SQLite may give that id to the next new song.
 _PER_SONG_KV = ("render:", "ug:artist_page_checked:", "autochords:failed:")
@@ -139,15 +152,22 @@ def upsert_song(
     """Insert a song or merge it into the existing record; return ``(song_id, created)``.
 
     The existing record is the one that has this source id already, else the
-    one with the song's identity key. Merging keeps the newest ``added_at``,
-    fills fields that were empty, and adds the source id. The display artist
-    and title of the first source are kept, and so is its key.
+    one with the song's identity key. Merging keeps the newest ``added_at``
+    and adds the source id. The display artist and title of the first source
+    are kept, and so is its key.
+
+    The album, duration, ISRC and variant (read from the title) given here are
+    this source id's word now, kept in kv (``SOURCE_FIELDS_KV``); the song
+    then takes each field from the first of its sources that gives it
+    (:func:`_resolve`). So a wanted.txt line you correct corrects the song at
+    the next sync, and a value you take off the line gives way to Spotify's.
     """
     names = [a.strip() for a in artists if a and a.strip()]
     if not names:
         raise ValueError("a song needs at least one artist")
     title = title.strip()
     key = identity_key(names[0], title)
+    said = {"album": album, "duration_ms": duration_ms, "isrc": isrc, "variant": title_variant(title)}
     now = utc_now_iso()
     ensure_current_keys(conn)
     row = _with_source_id(conn, source, source_id)
@@ -160,10 +180,11 @@ def upsert_song(
             (
                 key, names[0], title, json.dumps(names, ensure_ascii=False), album, duration_ms, isrc,
                 json.dumps({source: [source_id]}, ensure_ascii=False), added_at,
-                title_variant(title), now, now,
+                said["variant"], now, now,
             ),
         )
         assert cur.lastrowid is not None
+        _remember(conn, source, source_id, said)
         return cur.lastrowid, True
 
     existing = _from_row(row)
@@ -171,16 +192,72 @@ def upsert_song(
     bucket = ids.setdefault(source, [])
     if source_id not in bucket:
         bucket.append(source_id)
+    _remember(conn, source, source_id, said)
+    fields = _resolve(conn, ids, existing)
     conn.execute(
-        "UPDATE songs SET source_ids = ?, added_at = ?, album = COALESCE(album, ?), "
-        "duration_ms = COALESCE(duration_ms, ?), isrc = COALESCE(isrc, ?), "
-        "variant = COALESCE(variant, ?), updated_at = ? WHERE id = ?",
+        "UPDATE songs SET source_ids = ?, added_at = ?, album = ?, duration_ms = ?, isrc = ?, "
+        "variant = ?, updated_at = ? WHERE id = ?",
         (
-            json.dumps(ids, ensure_ascii=False), max(existing.added_at, added_at), album, duration_ms,
-            isrc, title_variant(title), now, existing.id,
+            json.dumps(ids, ensure_ascii=False), max(existing.added_at, added_at), fields["album"],
+            fields["duration_ms"], fields["isrc"], fields["variant"], now, existing.id,
         ),
     )
     return existing.id, False
+
+
+def _fields_key(source: str, source_id: str) -> str:
+    return f"{SOURCE_FIELDS_KV}{source}:{source_id}"
+
+
+def _remember(conn: sqlite3.Connection, source: str, source_id: str, said: dict[str, Any]) -> None:
+    """Keep what a source id says of its song's fields; unchanged, nothing is written.
+
+    A wanted.txt line is your whole word: what you take off it, it no longer
+    says. A field another source leaves out (a Spotify track without an ISRC
+    tonight) is no news, so its earlier word on it stands.
+    """
+    key = _fields_key(source, source_id)
+    before = kv_get(conn, key)
+    if before is not None and source != _WANTED:
+        old = json.loads(before)
+        said = {name: old.get(name) if value is None else value for name, value in said.items()}
+    value = json.dumps(said, ensure_ascii=False)
+    if before != value:
+        kv_set(conn, key, value)
+
+
+def _resolve(conn: sqlite3.Connection, source_ids: dict[str, list[str]], song: Song) -> dict[str, Any]:
+    """The album, duration, ISRC and variant a song's sources give it now.
+
+    Each field comes from the first source that gives one: the wanted.txt
+    line, then Spotify's tracks in the order the song gained them (so a
+    remaster and the original don't take turns), then any other source.
+
+    A source id with no word kept was last heard by a tabarr that kept none
+    and merged first come, first served, so whose value the song holds is
+    unknown. Such an id is taken, once, to have said what the song holds and
+    no source heard since says the same: a track you no longer like keeps its
+    album, and a duration the line says now stays the line's to take back.
+    """
+    rank = {name: i for i, name in enumerate(_PRECEDENCE)}
+    words: dict[str, dict[str, Any] | None] = {}
+    for source in sorted(source_ids, key=lambda s: rank.get(s, len(rank))):
+        for source_id in source_ids[source]:
+            value = kv_get(conn, _fields_key(source, source_id))
+            words[_fields_key(source, source_id)] = None if value is None else json.loads(value)
+    heard = [w for w in words.values() if w is not None]
+    held = {
+        name: None if any(w.get(name) == getattr(song, name) for w in heard) else getattr(song, name)
+        for name in _SOURCE_FIELDS
+    }
+    for key, word in words.items():
+        if word is None:
+            kv_set(conn, key, json.dumps(held, ensure_ascii=False))
+            words[key] = held
+    return {
+        name: next((w[name] for w in words.values() if w and w.get(name) is not None), None)
+        for name in _SOURCE_FIELDS
+    }
 
 
 def _with_source_id(conn: sqlite3.Connection, source: str, source_id: str) -> sqlite3.Row | None:
@@ -328,8 +405,10 @@ def _merge(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
 
 
 def _follow_wanted(conn: sqlite3.Connection, song_id: int, old_keys: set[str], key: str) -> None:
-    """A wanted.txt line's source id is its key, and so is the kv key of its first-seen time
-    (``wanted.sync_wanted``): both move from the song's old keys to its new one."""
+    """A wanted.txt line's source id is its key, and so are the kv keys of its first-seen time
+    (``wanted.sync_wanted``) and of its word on the song's fields (``_remember``): all move
+    from the song's old keys to its new one. Of several lines' words, one is kept, until the
+    next sync says it again."""
     from tabarr.wanted import FIRST_SEEN_KEY, SOURCE  # a source of songs: imported on use
 
     ids = get_song(conn, song_id).source_ids
@@ -342,3 +421,11 @@ def _follow_wanted(conn: sqlite3.Connection, song_id: int, old_keys: set[str], k
             current = kv_get(conn, FIRST_SEEN_KEY + key)
             kv_set(conn, FIRST_SEEN_KEY + key, min(seen, current) if current else seen)
             kv_delete(conn, FIRST_SEEN_KEY + old)
+    said = kv_get(conn, _fields_key(SOURCE, key))
+    for old in sorted(old_keys):
+        old_said = kv_get(conn, _fields_key(SOURCE, old))
+        if old_said is not None:
+            if said is None:
+                said = old_said
+                kv_set(conn, _fields_key(SOURCE, key), said)
+            kv_delete(conn, _fields_key(SOURCE, old))

@@ -306,3 +306,122 @@ def test_keys_are_re_keyed_once_per_normalizer_version(conn):
     conn.execute("UPDATE songs SET key = 'stale/key'")  # keys of this version aren't read again
     assert ensure_current_keys(conn) == 0
     assert [s.key for s in list_songs(conn)] == ["stale/key"]
+
+
+# --- album, duration, ISRC and variant: what the sources say now ---------------------------
+
+LINE = "radiohead/creep"  # a wanted.txt line's source id is its identity key
+
+
+def line(conn, title="Creep", *, album=None, duration_ms=None):
+    """Radiohead's Creep as its wanted.txt line hands it over (sync_wanted)."""
+    return upsert_song(conn, artists=["Radiohead"], title=title, album=album,
+                       duration_ms=duration_ms, isrc=None, source="wanted", source_id=LINE,
+                       added_at="2026-10-01T00:00:00Z")
+
+
+def track(conn, track_id="tCreep", title="Creep", *, album="Pablo Honey", duration_ms=238000,
+          isrc="GBAYE9200070"):
+    """Radiohead's Creep as a liked Spotify track hands it over (sync_spotify)."""
+    return upsert_song(conn, artists=["Radiohead"], title=title, album=album,
+                       duration_ms=duration_ms, isrc=isrc, source="spotify", source_id=track_id,
+                       added_at="2026-10-02T00:00:00Z")
+
+
+def fields(conn):
+    (song,) = list_songs(conn)
+    return song.album, song.duration_ms, song.isrc, song.variant
+
+
+def test_a_corrected_wanted_line_replaces_what_it_said(conn):
+    # "| 3:13" written for a song of 3:58: the sync after the fix stores the line's new values.
+    line(conn, album="Pablo Honey (Deluxe)", duration_ms=193000)
+    line(conn, album="Pablo Honey", duration_ms=238000)
+    assert fields(conn) == ("Pablo Honey", 238000, None, None)
+
+
+def test_what_comes_off_a_wanted_line_comes_off_the_song(conn):
+    line(conn, "Creep - Acoustic", album="Pablo Honey", duration_ms=193000)
+    line(conn)
+    assert fields(conn) == (None, None, None, None)
+
+
+def test_the_wanted_line_outranks_spotify_which_fills_in_what_it_leaves_out(conn):
+    # wanted.txt is your own word (plan, Amendment A2): the album version you bought, say,
+    # where Spotify has the single edit. Liked first or not, Spotify's track doesn't win.
+    track(conn)
+    line(conn, "Creep - Acoustic", duration_ms=253000)
+    track(conn)  # the next night
+    assert fields(conn) == ("Pablo Honey", 253000, "GBAYE9200070", "acoustic")
+    line(conn)  # the duration and the variant taken off the line: Spotify's take their place
+    assert fields(conn) == ("Pablo Honey", 238000, "GBAYE9200070", None)
+
+
+def test_a_spotify_track_that_changes_changes_the_song(conn):
+    line(conn)
+    track(conn)
+    track(conn, album="Pablo Honey (Remastered)", duration_ms=238640, isrc="GBAYE9200071")
+    assert fields(conn) == ("Pablo Honey (Remastered)", 238640, "GBAYE9200071", None)
+
+
+def test_two_tracks_of_one_song_dont_take_turns(conn):
+    # A remaster and the original are one song: the track first seen gives what it has, every
+    # night, and the other one only what the first lacks.
+    for _ in range(2):
+        track(conn, "tRemaster", "Creep - Remastered 2009", album=None, duration_ms=239000,
+              isrc="GBAYE0900001")
+        track(conn, "tOriginal", duration_ms=238000, isrc=None)
+    assert fields(conn) == ("Pablo Honey", 239000, "GBAYE0900001", None)
+
+
+def test_a_value_stored_before_sources_were_heard_gives_way_once_they_are(conn):
+    # A database from before tabarr kept what each source says: nothing tells whose value
+    # this duration is, so it stays until each of the song's sources has spoken.
+    both = older_song(conn, "Radiohead", "Creep", LINE, source="wanted", source_id=LINE)
+    update_song(conn, both, source_ids={"wanted": [LINE], "spotify": ["tCreep"]},
+                duration_ms=193000)
+    line(conn)
+    assert get_song(conn, both).duration_ms == 193000
+    track(conn)
+    assert get_song(conn, both).duration_ms == 238000
+
+
+def test_a_value_stored_before_goes_when_the_only_source_no_longer_gives_it(conn):
+    only = older_song(conn, "Radiohead", "Creep", LINE, source="wanted", source_id=LINE)
+    update_song(conn, only, album="Pablo Honey", duration_ms=193000)
+    line(conn)
+    assert (get_song(conn, only).album, get_song(conn, only).duration_ms) == (None, None)
+
+
+def test_a_source_never_heard_again_keeps_only_what_no_other_source_said(conn):
+    # A track since taken off your Learn playlist is never read again. What the song has that
+    # no source heard since gives is taken for its word (the album here); what the line still
+    # says is the line's (the duration), and comes off the song when it comes off the line.
+    song_id = older_song(conn, "Radiohead", "Creep", LINE, source="wanted", source_id=LINE)
+    update_song(conn, song_id, source_ids={"wanted": [LINE], "spotify": ["tGone"]},
+                album="Pablo Honey", duration_ms=193000)
+    line(conn, duration_ms=193000)
+    line(conn)
+    assert (get_song(conn, song_id).album, get_song(conn, song_id).duration_ms) == (
+        "Pablo Honey", None)
+
+
+def test_re_keying_carries_what_a_wanted_line_said(conn):
+    # Said under the key an older normalizer gave the line; it still outranks Spotify after.
+    from tabarr.songs import SOURCE_FIELDS_KV
+
+    song_id = older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
+                         source="wanted", source_id=OLD_LIVE_KEY)
+    said = {"album": "Comfort y Música Para Volar", "duration_ms": 300000, "isrc": None,
+            "variant": "live"}
+    db.kv_set_json(conn, f"{SOURCE_FIELDS_KV}wanted:{OLD_LIVE_KEY}", said)
+    ensure_current_keys(conn)
+    new_key = "soda-stereo/persiana-americana"
+    assert db.kv_get_json(conn, f"{SOURCE_FIELDS_KV}wanted:{new_key}") == said
+    assert db.kv_get(conn, f"{SOURCE_FIELDS_KV}wanted:{OLD_LIVE_KEY}") is None
+    upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana", album="Signos",
+                duration_ms=250000, isrc="ARX1", source="spotify", source_id="sp1",
+                added_at="2026-10-01T00:00:00Z")
+    song = get_song(conn, song_id)
+    assert (song.album, song.duration_ms, song.isrc, song.variant) == (
+        "Comfort y Música Para Volar", 300000, "ARX1", "live")
