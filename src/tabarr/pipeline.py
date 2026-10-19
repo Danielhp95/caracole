@@ -11,6 +11,10 @@ is always rewritten.
   is a failure, and neither ever marks a song "not found".
 - Anything else is a bug: it's recorded, the remaining steps still run, and
   the run exits non-zero so systemd's OnFailure fires.
+- An overrides.toml that can't be read stops the run before its first step
+  (every step reads it); the to-do page is still rewritten, leading with why.
+- A provider counts as working (``record_ok``) only when it answered at least
+  one of the run's requests: a run of nothing but errors is no success.
 """
 
 from __future__ import annotations
@@ -125,12 +129,17 @@ def _plural(n: int, word: str) -> str:
 
 def _match(ctx: StepContext) -> str:
     from tabarr.match import match_all
-    from tabarr.ug.index import index_count
+    from tabarr.ug.index import index_state
 
-    if index_count(ctx.conn) == 0:
+    state = index_state(ctx.conn)
+    if state == "empty":
         # Matching against an empty index would mark every song not found (and put it on the
         # buy list); errors are not misses, and a missing index is not evidence of absence.
         return "skipped: the index is empty; run `tabarr index build` once"
+    if state == "partial":
+        # Nor is an index a build left half-done: the songs in the sitemaps it didn't read would
+        # be marked not found. Stored decisions stay; the index step's refresh reads the rest.
+        return "skipped: the index is incomplete; the next refresh, or `tabarr index build`, reads the rest"
     changes = match_all(ctx.conn, ctx.overrides, ctx.cfg.match)
     changed = [c for c in changes if c.old != c.new.decision]
     return f"{len(changed)} decisions changed"
@@ -157,6 +166,8 @@ def _fetch(ctx: StepContext) -> str:
         library_dir=ctx.cfg.library_dir, now=ctx.now,
     )
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
+    if s.songs_failed:
+        record_error(ctx.conn, "ug", ctx.now, f"{_plural(s.songs_failed, 'song')} failed this run")
     scored = f", {_plural(rescored, 'kept sheet')} rescored" if rescored else ""
     tail = " (budget spent)" if s.budget_exhausted else ""
     sheets = f"{_plural(s.sheets_done, 'sheet')} settled, " if s.sheets_done else ""
@@ -193,14 +204,29 @@ def _render(ctx: StepContext) -> str:
 
 
 def _todo(ctx: StepContext) -> str:
-    from tabarr.library_page import build_library_page, write_library_page
-    from tabarr.todo import build_todo, write_todo
+    from tabarr.todo import write_pages
 
     ctx.report.requests = _requests(ctx.services)
+    _record_ok(ctx.conn, ctx.report, ctx.now)  # before the page, so its provider health shows this run
     kv_set_json(ctx.conn, "run:last", _report_json(ctx.report))
-    write_todo(ctx.cfg.library_dir, build_todo(ctx.conn, ctx.cfg, ctx.overrides, ctx.now))
-    write_library_page(ctx.cfg.library_dir, build_library_page(ctx.conn, ctx.cfg, ctx.overrides, ctx.now))
+    write_pages(ctx.conn, ctx.cfg, ctx.overrides, ctx.now)
     return "ok"
+
+
+def _todo_for_broken_overrides(cfg: Config, conn: sqlite3.Connection, now: datetime, error: str,
+                               report: RunReport) -> None:
+    """No step can run, but the page you read still says why: it leads with the error.
+
+    index.html is left as it was: built without your overrides it would lose your
+    transpositions and ignored songs.
+    """
+    from tabarr.todo import build_todo, write_todo
+
+    try:
+        write_todo(cfg.library_dir, build_todo(conn, cfg, Overrides(), now, overrides_error=error))
+    except Exception as e:  # a bug, or a library folder that can't be written; the run fails anyway
+        log.error("the to-do page could not be written:\n%s", traceback.format_exc())
+        report.errors.append(f"todo: {type(e).__name__}: {e}")
 
 
 def default_steps() -> list[Step]:
@@ -244,6 +270,30 @@ def _requests(services: Services) -> dict[str, int]:
     return {p: int(getattr(c, "requests_made", 0)) for p, c in services.clients.items()}
 
 
+def _answered(conn: sqlite3.Connection, run_id: str, provider: str, requests: int) -> bool:
+    """Whether the provider answered at least one of this run's requests.
+
+    Every request a PoliteClient sends is logged to ``events`` as answered
+    (``ok``, ``not_modified``), an ``error`` or a ``blocked``; a client that
+    logs nothing counts as answered.
+    """
+    failed = conn.execute(
+        "SELECT COUNT(*) FROM events WHERE run = ? AND provider = ? AND decision IN ('error', 'blocked')",
+        (run_id, provider),
+    ).fetchone()[0]
+    return requests > failed
+
+
+def _record_ok(conn: sqlite3.Connection, report: RunReport, now: datetime) -> None:
+    """A provider that answered this run without a block had a good run: clear its cooldown, note the time.
+
+    A run whose every request failed (UG answering 502, say) is no success.
+    """
+    for p, n in report.requests.items():
+        if n and p not in report.blocked and _answered(conn, report.run_id, p, n):
+            record_ok(conn, p, now)
+
+
 def _report_json(report: RunReport) -> dict[str, Any]:
     return {
         "run_id": report.run_id, "started": report.started, "finished": report.finished,
@@ -270,6 +320,7 @@ def run_pipeline(
     except OverridesError as e:
         report.errors.append(f"overrides.toml: {e}")
         report.steps["overrides"] = f"failed: {e}"
+        _todo_for_broken_overrides(cfg, conn, now, str(e), report)
         services.notifier.send("tabarr run failed", f"overrides.toml could not be read: {e}", priority="high",
                                tags=["rotating_light"])
         return report
@@ -307,9 +358,7 @@ def run_pipeline(
             report.steps[step.name] = f"failed: {type(e).__name__}: {e}"
 
     report.requests = _requests(services)
-    for p, n in report.requests.items():
-        if n and p not in report.blocked:
-            record_ok(conn, p, now)
+    _record_ok(conn, report, now)
     report.finished = run_id if clock_given else _iso(datetime.now(UTC))
     kv_set_json(conn, "run:last", _report_json(report))
     title = "tabarr run" if report.ok else "tabarr run failed"

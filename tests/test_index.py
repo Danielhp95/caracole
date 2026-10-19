@@ -351,3 +351,64 @@ def test_index_stats_report_builds_and_refreshes(conn, tmp_path):
     assert stats["built_at"] == "2026-10-18T03:30:00Z"
     assert stats["refreshed_at"] == "2026-10-19T03:30:00Z"
     assert stats["sitemaps"] == 3
+
+
+# --- a build stopped part-way ----------------------------------------------------------------
+
+
+class BlockingUG(FakeUG):
+    """UG answering 403 for the sitemaps in ``blocked``."""
+
+    def __init__(self, files, blocked):
+        super().__init__(files)
+        self.blocked = set(blocked)
+
+    def handler(self, request):
+        if request.url.path.lstrip("/") in self.blocked:
+            self.requests.append((request.url.path.lstrip("/"), None))
+            return httpx.Response(403, content=b"blocked")
+        return super().handler(request)
+
+
+def test_a_build_stopped_by_a_block_leaves_the_index_partial(conn, tmp_path):
+    from tabarr.http import ProviderBlocked
+    from tabarr.ug.index import index_state
+
+    assert index_state(conn) == "empty"
+    ug = BlockingUG(site().files, blocked={"sitemap2.xml"})
+    with pytest.raises(ProviderBlocked):
+        build_index(conn, ug.client(tmp_path / "cache"), NOW)
+    assert index_count(conn) == 4  # sitemap1 was stored before the block
+    assert index_state(conn) == "partial"
+    assert index_stats(conn)["built_at"] is None
+
+
+def test_a_refresh_that_reads_what_a_stopped_build_left_completes_the_index(conn, tmp_path):
+    from tabarr.ug.index import index_state
+
+    blocked = BlockingUG(site().files, blocked={"sitemap2.xml"})
+    with pytest.raises(ProviderError):
+        build_index(conn, blocked.client(tmp_path / "cache"), NOW)
+    # The refresh reads every numbered sitemap never indexed, so sitemap2 too.
+    refresh_index(conn, site().client(tmp_path / "cache"), LATER)
+    assert index_state(conn) == "complete"
+    assert index_stats(conn)["built_at"] == "2026-10-19T03:30:00Z"
+
+
+def test_a_refresh_cut_short_leaves_the_index_partial(conn, tmp_path):
+    from tabarr.http import BudgetExhausted
+    from tabarr.ug.index import index_state
+
+    blocked = BlockingUG(site().files, blocked={"sitemap2.xml"})
+    with pytest.raises(ProviderError):
+        build_index(conn, blocked.client(tmp_path / "cache"), NOW)
+    with pytest.raises(BudgetExhausted):
+        refresh_index(conn, site().client(tmp_path / "cache", budget=1), LATER)  # the sitemap index only
+    assert index_state(conn) == "partial"
+
+
+def test_a_build_that_finishes_is_complete(conn, tmp_path):
+    from tabarr.ug.index import index_state
+
+    build_index(conn, site().client(tmp_path / "cache"), NOW)
+    assert index_state(conn) == "complete"

@@ -35,7 +35,7 @@ from tabarr.library import song_dir, write_atomic
 from tabarr.normalize import clean_title, fold, has_han, romanize, slug_key
 from tabarr.overrides import Overrides
 from tabarr.songs import Song, list_songs
-from tabarr.todo import search_links
+from tabarr.todo import search_links, songs_to_buy
 
 PAGE_NAME = "index.html"
 
@@ -68,7 +68,10 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     """The whole page: every song, its files, and the links to find what's missing."""
     keys = _sheet_keys(conn)
     pages = _guitar_pro_pages(conn)
-    songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, [])) for s in list_songs(conn)]
+    library = list_songs(conn)
+    to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
+    songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy)
+             for s in library]
     data = {
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "fold": {c: fold(c) for c in _TRANSLITERATED},
@@ -94,7 +97,8 @@ def write_library_page(library_dir: Path, html: str) -> Path:
 
 
 def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
-          guitar_pro: list[dict[str, str]]) -> dict[str, Any]:
+          guitar_pro: list[dict[str, str]], for_buying: bool) -> dict[str, Any]:
+    """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``)."""
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
     names = _file_names(song_dir(library_dir, song))
@@ -104,8 +108,9 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
     if not has_sheet and status != "ignored":
         found = search_links(song.artist, song.title)
         links = [{"label": "Chordify", "href": found["chordify"]}, {"label": "YouTube", "href": found["youtube"]}]
-        buy = [{"label": label, "href": found[name]}
-               for label, name in (("Bandcamp", "bandcamp"), ("Qobuz", "qobuz"), ("iTunes", "itunes"))]
+        if for_buying:  # not while tabarr may still find a sheet, nor once you have the audio
+            buy = [{"label": label, "href": found[name]}
+                   for label, name in (("Bandcamp", "bandcamp"), ("Qobuz", "qobuz"), ("iTunes", "itunes"))]
     return {
         "id": song.id,
         "artist": song.artist,

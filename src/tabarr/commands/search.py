@@ -50,7 +50,7 @@ def register(app: typer.Typer) -> None:
             if add is None:
                 _search(cfg, conn, text, limit)
             else:
-                _add(cfg, conn, text, add, max(limit, add))
+                _add(cfg, conn, text, add, limit)
 
 
 def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int) -> None:
@@ -108,15 +108,20 @@ def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]]) -> str:
     return f"  {n}. {hit.artist} - {hit.title} · {counts}\n     {hit.url}\n     {action}"
 
 
+# Only these decisions make a song's matched UG song its own; a review's keys are a candidate's,
+# often a cover by another artist. A [match] override is an accept.
+_MATCHED = "match_decision IN ('accept', 'pinned')"
+
+
 def _library_keys(conn: sqlite3.Connection) -> set[tuple[str, str]]:
     """Each library song as (artist key, song key): its identity, and the UG song it matched."""
     keys: set[tuple[str, str]] = set()
-    for key, artist_key, song_key in conn.execute(
-        "SELECT key, match_artist_key, match_song_key FROM songs"
+    for key, artist_key, song_key, matched in conn.execute(
+        f"SELECT key, match_artist_key, match_song_key, {_MATCHED} FROM songs"
     ):
         artist, _, title = key.partition("/")
         keys.add((artist, title))
-        if artist_key and song_key:
+        if matched and artist_key and song_key:
             keys.add((artist_key, song_key))
     return keys
 
@@ -127,10 +132,25 @@ def _matched_elsewhere(conn: sqlite3.Connection, hit: IndexHit) -> Song | None:
     from tabarr.songs import get_song
 
     row = conn.execute(
-        "SELECT id FROM songs WHERE match_artist_key = ? AND match_song_key = ? AND key != ? ORDER BY id LIMIT 1",
+        f"SELECT id FROM songs WHERE {_MATCHED} AND match_artist_key = ? AND match_song_key = ? AND key != ? "
+        "ORDER BY id LIMIT 1",
         (hit.artist_key, hit.song_key, identity_key(hit.artist, hit.title)),
     ).fetchone()
     return get_song(conn, row[0]) if row else None
+
+
+def _listed(cfg: Config, conn: sqlite3.Connection, hit: IndexHit) -> bool:
+    """Whether the hit's own song is in the library or in wanted.txt already."""
+    from tabarr.normalize import identity_key
+    from tabarr.songs import find_song
+    from tabarr.wanted import find_wanted
+
+    if find_song(conn, identity_key(hit.artist, hit.title)) is not None:
+        return True
+    try:
+        return find_wanted(cfg.wanted_file, hit.artist, hit.title) is not None
+    except OSError:  # add_song reports a file it can't read
+        return False
 
 
 def _wrap(text: str, width: int = 88) -> str:
@@ -152,18 +172,26 @@ def _index_built(conn: sqlite3.Connection) -> bool:
 
 
 def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -> None:
-    """Add UG hit ``n`` of the search the way ``tabarr add`` adds a song, and say what happened."""
+    """Add UG hit ``n`` of the search the way ``tabarr add`` adds a song, and say what happened.
+
+    Only a hit the same search shows can be added: ``n`` up to ``limit``.
+    """
     from tabarr.search import search_index
     from tabarr.wanted import format_line
 
     if not _index_built(conn):
         fail(f"--add {n}: {_EMPTY_INDEX}", 2)
+    if n > limit:  # a hit you never saw, such as --add 12 typed for --add 2
+        shown = "the first hit is" if limit == 1 else f"the first {limit} hits are"
+        fail(f"--add {n}: only {shown} shown; see hit {n} with --limit {n} first, then add it with "
+             f"--limit {n} --add {n}", 2)
     hits = search_index(conn, text, limit)
     if not 1 <= n <= len(hits):
         found = f"only {len(hits)} hit{'s' if len(hits) != 1 else ''}" if hits else "nothing"
         fail(f"--add {n}: Ultimate Guitar has {found} for {text!r}", 2)
     hit = hits[n - 1]
-    other = _matched_elsewhere(conn, hit)
+    # The hit's own song first: add_song says where it is already. Then another spelling of it.
+    other = None if _listed(cfg, conn, hit) else _matched_elsewhere(conn, hit)
     if other is not None:  # adding it would make a second record of the same song
         typer.echo(f"Already in your library as {other.display} ({_status(other)}); wanted.txt is unchanged.")
         return

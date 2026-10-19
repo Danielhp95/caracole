@@ -177,6 +177,14 @@ def test_cli_index_other_errors_exit_1_and_are_recorded(tmp_path, ug):
     assert "500" in (state.last_error or "") and state.cooldown_until is None
 
 
+def test_cli_index_build_whose_every_request_failed_is_no_success(tmp_path, ug):
+    ug.status["sitemap.xml"] = 502
+    result = run(tmp_path, "index", "build")
+    assert result.exit_code == 1
+    state = get_state(connect(tmp_path), "ug")
+    assert "502" in (state.last_error or "") and state.last_ok is None
+
+
 # --- tabarr index refresh -------------------------------------------------------------------------
 
 
@@ -230,8 +238,15 @@ def test_cli_index_stats(tmp_path):
 # --- tabarr match ---------------------------------------------------------------------------------
 
 
-def seed(tmp_path: Path):
-    """An index and three songs: one exact, one with a close rival title, one not on UG."""
+def seed(tmp_path: Path, *, built: bool = True):
+    """An index and three songs: one exact, one with a close rival title, one not on UG.
+
+    ``built=False`` leaves the index as a build stopped part-way would.
+    """
+    from datetime import UTC, datetime
+
+    from tabarr.ug.index import mark_built
+
     conn = connect(tmp_path)
     conn.executemany(
         "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
@@ -240,6 +255,8 @@ def seed(tmp_path: Path):
             (1, "radiohead", "creep", "chords"), (2, "radiohead", "creep-acoustic", "chords"),
             (3, "oasis", "wonderwall", "chords"), (4, "oasis", "wonderwalls", "chords"))],
     )
+    if built:
+        mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
     songs = [add_song(conn, "Radiohead", "Creep", added_at="2026-10-03T00:00:00Z"),
              add_song(conn, "Oasis", "Wonderwal", added_at="2026-10-02T00:00:00Z"),
              add_song(conn, "Joaquín Sabina", "19 Días y 500 Noches", added_at="2026-10-01T00:00:00Z")]
@@ -291,6 +308,34 @@ def test_cli_match_needs_a_built_index(tmp_path):
     assert result.exit_code == 1
     assert "tabarr index build" in result.output
     assert get_song(conn, 1).match_decision is None
+
+
+def test_cli_match_rewrites_the_pages_it_points_to(tmp_path):
+    seed(tmp_path)
+    todo, page = tmp_path / "lib" / "_todo.md", tmp_path / "lib" / "index.html"
+    dry = run(tmp_path, "match", "--dry-run")
+    assert dry.exit_code == 0, dry.output
+    assert not todo.exists() and not page.exists()  # a dry run saves nothing, pages included
+    result = run(tmp_path, "match")
+    assert result.exit_code == 0, result.output
+    assert "on _todo.md" in result.output
+    assert todo.is_file(), result.output
+    assert "### Oasis - Wonderwal" in todo.read_text(encoding="utf-8")  # the review it points to
+    assert "Oasis - Wonderwal" in page.read_text(encoding="utf-8")
+    assert f"Wrote {todo} and {page}" in result.output
+
+
+def test_cli_match_refuses_to_save_against_an_incomplete_index(tmp_path):
+    # A build stopped part-way: the songs in the sitemaps it didn't read would be saved as not found.
+    conn, songs = seed(tmp_path, built=False)
+    result = run(tmp_path, "match")
+    assert all(get_song(conn, s.id).match_decision is None for s in songs), result.output
+    assert result.exit_code == 1
+    assert "incomplete" in result.output and "tabarr index build" in result.output
+    dry = run(tmp_path, "match", "--dry-run")
+    assert dry.exit_code == 0, dry.output
+    assert "Dry run: nothing was saved." in dry.output
+    assert "incomplete" in dry.output.splitlines()[-1]
 
 
 def test_cli_match_without_songs(tmp_path):

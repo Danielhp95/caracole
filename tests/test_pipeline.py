@@ -156,6 +156,23 @@ def test_unreadable_overrides_stop_the_run_with_an_alert(conn, cfg):
     assert out.sent[-1][0] == "tabarr run failed" and "pins" in out.sent[-1][1]
 
 
+def test_unreadable_overrides_still_rewrite_the_todo_page_with_the_error_first(conn, cfg):
+    # Two [artist_url] blocks pasted one after the other, as the page used to show them.
+    from tabarr.pipeline import default_steps
+
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(
+        '[artist_url]\n"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/joaquin_sabina_1"\n\n'
+        '[artist_url]\n"宋冬野" = "https://www.ultimate-guitar.com/artist/song_dongye_2"\n', encoding="utf-8")
+    (cfg.library_dir / "_todo.md").write_text("# tabarr to-do\n\n_Updated 2026-10-17 03:30 UTC_\n", encoding="utf-8")
+    report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=default_steps(), now=NOW)
+    assert not report.ok and list(report.steps) == ["overrides"]
+    page = todo_page(cfg)
+    assert "_Updated 2026-10-18 03:30 UTC" in page
+    setup = page.split("\n## ", 1)[1].split("\n## ", 1)[0]
+    assert setup.startswith("Setup problems") and "Cannot declare ('artist_url',) twice" in setup
+
+
 def test_run_command_exit_codes(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
@@ -185,6 +202,29 @@ def test_default_match_step_skips_while_the_index_is_empty(conn, cfg):
                       report=RunReport(run_id="r", started="r"))
     assert _match(ctx).startswith("skipped: the index is empty")
     assert conn.execute("SELECT match_decision FROM songs").fetchone()[0] is None
+
+
+def test_default_match_step_waits_for_an_index_a_build_left_half_done(conn, cfg):
+    # A build stopped part-way (a block, the budget, Ctrl-C) indexed one sitemap: Radiohead's tabs are in
+    # one it never read. Creep must not become not_found, and the stored decision stays as it is.
+    from conftest import add_song
+
+    from tabarr.overrides import Overrides
+    from tabarr.pipeline import StepContext, _match
+    from tabarr.songs import get_song, update_song
+    from tabarr.ug.index import upsert_rows
+
+    upsert_rows(conn, [(1001, "oasis", "wonderwall", "chords", "oasis/wonderwall-chords-1001")], "1", NOW)
+    creep = add_song(conn, "Radiohead", "Creep")
+    wall = add_song(conn, "Oasis", "Wonderwall")
+    update_song(conn, wall.id, match_decision="accept", match_step="exact", match_artist_key="oasis",
+                match_song_key="wonderwall", match_score=100.0)
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
+                      report=RunReport(run_id="r", started="r"))
+    summary = _match(ctx)
+    assert get_song(conn, creep.id).match_decision is None, summary
+    assert summary.startswith("skipped: the index is incomplete")
+    assert get_song(conn, wall.id).match_decision == "accept"
 
 
 def keep_sheet_before_lyrics(conn, cfg, song, content):
@@ -265,3 +305,81 @@ def test_fetch_summary_counts_settled_sheets(conn, cfg, monkeypatch):
     ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
                       report=RunReport(run_id="r", started="r"))
     assert _fetch(ctx) == "2 sheets settled, 1 song done, 0 failed (budget spent)"
+
+
+# --- provider health on the to-do page ------------------------------------------------------
+
+
+def todo_page(cfg):
+    return (cfg.library_dir / "_todo.md").read_text(encoding="utf-8")
+
+
+def todo_step():
+    from tabarr.pipeline import default_steps
+
+    return [s for s in default_steps() if s.name == "todo"]
+
+
+def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
+    # The page is written before the run ends; a first run must not say "never" after 75 good requests.
+    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5), steps=todo_step(),
+                 now=NOW)
+    page = todo_page(cfg)
+    assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
+    assert "| lrclib | OK | 2026-10-18 03:30 UTC |  | 10 |" in page
+    assert "never" not in page.split("## Provider health", 1)[1]
+
+
+def health_row(cfg, provider):
+    return next(line for line in todo_page(cfg).splitlines() if line.startswith(f"| {provider} |"))
+
+
+def test_ug_fetch_errors_reach_provider_health_and_an_all_error_run_is_no_success(conn, cfg):
+    # Every UG request answers 502, so the fetch fails every song: an error for the page, and no success.
+    from conftest import add_song
+
+    from tabarr.config import ProviderPolicy
+    from tabarr.health import EventLog
+    from tabarr.http import PoliteClient
+    from tabarr.pipeline import default_steps
+    from tabarr.songs import update_song
+
+    for n in range(5):
+        conn.execute(
+            "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+            "VALUES (?, 'radiohead', ?, 'chords', '1', 'x', ?)",
+            (100 + n, f"song-{n}", f"radiohead/song-{n}-chords-{100 + n}"),
+        )
+        s = add_song(conn, "Radiohead", f"Song {n}")
+        update_song(conn, s.id, match_decision="accept", match_step="exact", match_artist_key="radiohead",
+                    match_song_key=f"song-{n}")
+    ug = PoliteClient("ug", ProviderPolicy(budget=60, delay=(0.0, 0.0)), cfg.cache_dir, user_agent="tabarr-test",
+                      transport=httpx.MockTransport(lambda request: httpx.Response(502, text="bad gateway")),
+                      sleep=lambda s: None, on_event=EventLog(conn, "2026-10-18T03:30:00Z"))
+    svc = Services(clients={"ug": ug, "lrclib": FakeClient(), "lacuerda": FakeClient()}, spotify=None,
+                   notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name in ("fetch", "todo")]
+
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+
+    assert report.steps["fetch"] == "0 songs done, 5 failed"
+    state = get_state(conn, "ug")
+    assert state.last_error == "5 songs failed this run" and state.last_error_at == NOW
+    assert state.last_ok is None
+    row = health_row(cfg, "ug")
+    assert row.startswith("| ug | errors | never | 5 songs failed this run (2026-10-18 03:30 UTC) |"), row
+
+
+def test_a_run_with_some_good_answers_still_counts_as_a_success(conn, cfg):
+    # One 502 among good answers: the provider works, and its error is shown beside the success.
+    from tabarr.health import EventLog
+    from tabarr.http import Event
+
+    log = EventLog(conn, "2026-10-18T03:30:00Z")
+    log(Event("ug", "https://tabs.ultimate-guitar.com/tab/1", 200, "ok"))
+    log(Event("ug", "https://tabs.ultimate-guitar.com/tab/2", 502, "error", "HTTP 502"))
+    steps = [step("fetch", provider="ug", result=ProviderError("ug", "u", 502, "HTTP 502")), *todo_step()]
+    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=2), steps=steps, now=NOW)
+    assert get_state(conn, "ug").last_ok == NOW
+    row = health_row(cfg, "ug")
+    assert row.startswith("| ug | OK | 2026-10-18 03:30 UTC | ug: 502: u: HTTP 502"), row

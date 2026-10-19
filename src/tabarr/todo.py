@@ -17,11 +17,16 @@ from urllib.parse import quote
 from tabarr.config import Config
 from tabarr.db import kv_get_json
 from tabarr.health import get_state
+from tabarr.inbox import GP_EXTENSIONS
+from tabarr.lacuerda import artist_slug_candidates, looks_spanish
 from tabarr.library import write_atomic
-from tabarr.normalize import clean_title, display_key, has_han, identity_key, romanize, slug_key
+from tabarr.lyrics import song_lyrics
+from tabarr.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from tabarr.overrides import Overrides
 from tabarr.songs import Song, list_songs
-from tabarr.ug.lookup import artist_known, learned_artist_url, song_tabs
+from tabarr.ug.fetch import artist_is_known, needs_artist_page, songs_to_fetch
+from tabarr.ug.index import index_state
+from tabarr.ug.lookup import song_tabs
 
 PROVIDERS = ("ug", "lrclib", "lacuerda")
 GUITAR_KINDS = ("guitar-pro", "power", "tabs")
@@ -73,12 +78,34 @@ def _section(title: str, items: list[str], intro: str | None = None, count: int 
     return out + items + [""]
 
 
-def _review(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:
+def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due: set[int]) -> str | None:
+    """What to do when no candidate is right, for a review whose candidates are all other artists'
+    songs of the title: the index has nothing of the song's own artist, and its UG page may (A6)."""
+    if song.match_decision != "review" or not needs_artist_page(song):
+        return None
+    head, artist = "Only other artists' songs with this title (probably covers)", md(song.artist)
+    if song.status == "found":  # a cover's [match] would bring that artist's guitar parts, and no better sheet
+        head += ", and the song has a sheet already: nothing is lost by leaving this"
+    if not artist_is_known(conn, song, overrides):
+        return (f"{head}. If none is the song you want, UG probably lists {artist} only by bare ids: find the "
+                "artist page (see Artists to find below) and paste it under `[artist_url]`, and tabarr looks "
+                "for the song there.")
+    if song.id in due:
+        return (f"{head}. tabarr looks for it on {artist}'s UG page in the next run: wait for that before "
+                "you pick one.")
+    return (f"{head}. tabarr didn't find it on {artist}'s UG page either. Pick one only if it is the "
+            "version you want; if none is, leave it: tabarr looks at the artist page again after 30 days.")
+
+
+def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, due: set[int]) -> list[str]:
     items: list[str] = []
     for s in songs:
         if not s.review or s.status == "ignored":
             continue
         items.append(f"### {md(s.display)}")
+        note = _covers_note(conn, s, overrides, due)
+        if note:
+            items += ["", note, ""]
         for cand in (s.match_candidates or [])[:5]:
             akey, skey = cand.get("artist_key"), cand.get("song_key")
             if not akey or not skey:
@@ -90,9 +117,11 @@ def _review(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:
             links = " · ".join(_link(_KIND_NAMES.get(k, k), url) for k, url in first.items())
             step = cand.get("step") or ""
             items.append(f"- {float(cand.get('score') or 0):.0f} · `{akey}/{skey}` ({step}) · {links}".rstrip(" ·"))
-            lines = ["[match]", f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}"]
+            # No table headers: overrides.toml may hold [match] and [alias] already (`tabarr review`
+            # writes them), and a table declared twice makes the whole file unreadable.
+            lines = [f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}  # under [match]"]
             if step != "title_only" and slug_key(s.artist) != akey:
-                lines += ["[alias]", f"{_toml_str(s.artist)} = {_toml_str(akey)}"]
+                lines.append(f"{_toml_str(s.artist)} = {_toml_str(akey)}  # under [alias]")
             items += _paste(lines)
         items.append("")
     return items
@@ -116,51 +145,78 @@ def _partial_sheets(conn: sqlite3.Connection, cfg: Config, songs_by_id: dict[int
     return items
 
 
-def _artist_candidates(artist: str) -> set[str]:
-    keys = {slug_key(artist)}
-    if has_han(artist):
-        keys.add(slug_key(romanize(artist)))
-    return keys
-
-
 def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides) -> tuple[list[str], int]:
     wanted: dict[str, list[Song]] = {}
     for s in songs:
-        if s.status == "ignored" or s.match_decision != "not_found":
-            continue
-        keys = _artist_candidates(s.artist)
-        if any(artist_known(conn, k) or k in overrides.artist_url or learned_artist_url(conn, k) for k in keys):
+        # Not found, or reviewed on its title alone (only covers), by an artist whose UG page the
+        # fetch can't find: the index has no slugged tab of theirs, and no address was pasted or learned.
+        if s.status == "ignored" or not needs_artist_page(s) or artist_is_known(conn, s, overrides):
             continue
         wanted.setdefault(s.artist, []).append(s)
     items = []
     for artist, group in sorted(wanted.items()):
         n = len(group)
         search = f"https://www.ultimate-guitar.com/search.php?search_type=band&value={quote(artist)}"
-        items.append(
-            f"- **{md(artist)}** ({n} song{'s' if n != 1 else ''}): {_link('search Ultimate Guitar', search)}, "
-            "open the artist page, and paste its address:"
-        )
-        items += _paste(["[artist_url]", f'{_toml_str(artist)} = "https://www.ultimate-guitar.com/artist/<name>_<id>"'])
+        items.append(f"- **{md(artist)}** ({n} song{'s' if n != 1 else ''}): {_link('search Ultimate Guitar', search)}")
+    if wanted:
+        # One block for every artist, with the table's header only when the file has no such table:
+        # a table declared twice makes overrides.toml unreadable, and the nightly run stops.
+        lines = [f'{_toml_str(a)} = "https://www.ultimate-guitar.com/artist/<name>_<id>"' for a in sorted(wanted)]
+        if overrides.artist_url:
+            how = ("Then add these lines under the `[artist_url]` table your overrides.toml already has (a second "
+                   "`[artist_url]` header would make the file unreadable)")
+        else:
+            how, lines = "Then paste this block into overrides.toml", ["[artist_url]", *lines]
+        items += ["", f"{how}, with each artist's address in place of `<name>_<id>`:", *_paste(lines)]
     return items, len(wanted)
 
 
-def _buy_list(songs: list[Song]) -> tuple[list[str], int]:
-    items, waiting = [], 0
+def _lacuerda_due(song: Song) -> bool:
+    """Whether LaCuerda is still to be asked for a song with no sheet (``lacuerda_fetch``'s rule):
+    it looks Spanish, an artist slug can be built from its name, and LaCuerda never answered for it."""
+    if song.lacuerda_checked_at is not None:
+        return False
+    lyrics = song_lyrics(song)
+    return looks_spanish(clean_title(song.title), lyrics.plain if lyrics is not None else None) and bool(
+        artist_slug_candidates(song.artists[0]))
+
+
+def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides,
+                 now: datetime) -> tuple[list[Song], int]:
+    """The wanted songs whose next step is buying the track, and how many wait for tabarr first.
+
+    A song is for buying once nothing tabarr will still do may find it a human
+    sheet: its UG match was fetched, or UG doesn't have it; no fetch, artist
+    page or LaCuerda check is due for it (those songs are the waiting ones);
+    and, for a song not found, the index is complete. Songs not matched yet,
+    reviews and songs whose audio you have are neither.
+    """
+    due = {s.id for s in songs_to_fetch(conn, overrides, now)}
+    partial = index_state(conn) == "partial"
+    buy, waiting = [], 0
     for s in songs:
-        if s.status != "wanted" or s.audio_path:
+        if s.status != "wanted" or s.audio_path or s.key in overrides.ignore:
             continue
-        settled = s.match_decision == "not_found" or (s.match_decision in ("accept", "pinned") and s.ug_checked_at)
-        if not settled:
-            if s.match_decision in ("accept", "pinned"):
-                waiting += 1
+        if s.match_decision not in ("accept", "pinned", "not_found"):
             continue
+        unfetched = s.match_decision != "not_found" and not s.ug_checked_at
+        if s.id in due or unfetched or _lacuerda_due(s):
+            waiting += 1
+        elif not (partial and s.match_decision == "not_found"):  # see _setup
+            buy.append(s)
+    return buy, waiting
+
+
+def _buy_list(songs: list[Song]) -> list[str]:
+    items = []
+    for s in songs:
         L = search_links(s.artist, s.title)
         items.append(
             f"- **{md(s.display)}** · buy: {_link('Bandcamp', L['bandcamp'])} · {_link('Qobuz', L['qobuz'])}"
             f" · {_link('iTunes', L['itunes'])} · check first: {_link('Chordify', L['chordify'])}"
             f" · {_link('Songsterr', L['songsterr'])} · {_link('YouTube', L['youtube'])}"
         )
-    return items, waiting
+    return items
 
 
 def _code(s: str) -> str:
@@ -231,8 +287,15 @@ def _inbox(cfg: Config) -> list[str]:
     inbox = cfg.library_dir / "_inbox"
     if not inbox.is_dir():
         return []
-    names = sorted(p.name for p in inbox.iterdir() if p.is_file() and not p.name.startswith("."))
-    return [f"- `{n}`: rename it to \"Artist - Title.ext\", or move it into the song's folder" for n in names]
+    items = []
+    for p in sorted(p for p in inbox.iterdir() if p.is_file() and not p.name.startswith(".")):
+        if p.suffix.lower() in GP_EXTENSIONS:
+            items.append(f"- {_code(p.name)}: rename it \"Artist - Title (ver N){p.suffix}\", as Guitar Pro pages "
+                         "to click names the song and the version")
+        else:
+            items.append(f"- {_code(p.name)}: not a Guitar Pro or Power Tab file ({', '.join(GP_EXTENSIONS)}), "
+                         "so tabarr leaves it there")
+    return items
 
 
 def _suggestions(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:
@@ -309,6 +372,8 @@ def _health(conn: sqlite3.Connection, now: datetime) -> list[str]:
         if s.cooldown_until and now < s.cooldown_until:
             blocks = f"{s.strikes} block{'s' if s.strikes != 1 else ''}"
             status = f"cooling down until {_fmt(s.cooldown_until)} ({blocks})"
+        elif s.last_error_at and (s.last_ok is None or s.last_ok < s.last_error_at):
+            status = "errors"  # nothing has worked since the last error
         else:
             status = "OK"
         err = md(s.last_error) if s.last_error else ""
@@ -318,8 +383,51 @@ def _health(conn: sqlite3.Connection, now: datetime) -> list[str]:
     return out + [""]
 
 
-def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> str:
+_NUC_BUILD = "`tabarr index build` (on the NUC: `sudo tabarr-admin index build`)"
+
+
+def _wanted_errors(conn: sqlite3.Connection) -> int:
+    """How many wanted.txt lines the last sync couldn't read (listed under Sources)."""
+    w = kv_get_json(conn, "source:wanted", default=None)
+    errors = w.get("errors") if isinstance(w, dict) else None
+    return len(errors) if isinstance(errors, list) else 0
+
+
+def _setup(index: str, overrides_error: str | None, unreadable_lines: int) -> list[str]:
+    """What stops tabarr from doing its job until you act, for the section at the top."""
+    items = []
+    if overrides_error:
+        items.append(
+            "- **overrides.toml can't be read**, so the nightly run stops before its first step: nothing is "
+            "synced, matched or fetched until the file is fixed, and this page was built without your "
+            f"overrides. {_code(overrides_error)}. Fix the file, then run `tabarr run` or wait for the next "
+            "night. A table such as `[match]` may appear only once in the file: when the error says one is "
+            "declared twice, merge the two into one."
+        )
+    if index == "empty":
+        items.append(
+            "- **The Ultimate Guitar index isn't built**, so no song is matched yet, and none is looked for on "
+            f"UG. Run {_NUC_BUILD} once: about 42 requests, 10 minutes."
+        )
+    elif index == "partial":
+        items.append(
+            "- **The Ultimate Guitar index is incomplete**: a build stopped before it read every sitemap. Until "
+            "the rest are read, tabarr matches no song and suggests buying none, so nothing UG has is taken for "
+            f"missing. The nightly refresh reads them as its budget allows, or run {_NUC_BUILD}."
+        )
+    if unreadable_lines:
+        lines = f"{unreadable_lines} line{'s' if unreadable_lines != 1 else ''}"
+        items.append(f"- **wanted.txt has {lines} tabarr couldn't read**, so those songs aren't looked for; "
+                     "the other lines still count. Sources, below, says what is wrong with each.")
+    return items
+
+
+def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
+               overrides_error: str | None = None) -> str:
+    """The whole page. ``overrides_error`` is why overrides.toml couldn't be read; the page then
+    leads with it (``overrides`` are empty then)."""
     songs = list_songs(conn)
+    index = index_state(conn)
     by_id = {s.id: s for s in songs}
     counts = {st: sum(1 for s in songs if s.status == st) for st in ("found", "wanted", "ignored")}
     n = len(songs)
@@ -332,34 +440,46 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         "Browse or search every song: [index.html](index.html)",
         "",
     ]
-    buy, waiting = _buy_list(songs)
+    to_buy, waiting = songs_to_buy(conn, songs, overrides, now)
     if waiting:
         out += [f"{waiting} song{'s' if waiting != 1 else ''} waiting for the nightly fetch.", ""]
+    setup = _setup(index, overrides_error, _wanted_errors(conn))
+    if setup:
+        out += _section("Setup problems", setup)
 
-    review = _review(conn, songs)
+    review = _review(conn, songs, overrides, {s.id for s in songs_to_fetch(conn, overrides, now)})
     if review:
         # The count is of songs, not lines, so the header is built here rather than by _section.
         out += [f"## Review ({sum(1 for s in songs if s.review and s.status != 'ignored')})", "",
-                "tabarr wasn't sure about these matches. Paste the line for the right candidate into "
-                "overrides.toml, or run `tabarr review`.", "", *review]
+                "tabarr wasn't sure about these matches. Run `tabarr review` to settle them one by one, or add "
+                "the right candidate's lines to overrides.toml yourself, each under the table its comment "
+                "names. The file holds each table once: write a table's header (`[match]`, `[alias]`) only "
+                "if the file doesn't have that table yet.", "", *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
     for title, items, intro, count in (
         ("Partial sheets", _partial_sheets(conn, cfg, by_id),
-         f"These sheets cover less than {cfg.rank.coverage_threshold:.0%} of the lyrics.", None),
+         f"These sheets cover less than {cfg.rank.coverage_threshold:.0%} of the lyrics. tabarr keeps "
+         "looking, and a more complete sheet takes a partial one's place when one turns up. To use another "
+         "Ultimate Guitar version now, pin its page under `[pin]` in overrides.toml: "
+         '`"Artist - Title" = ["https://tabs.ultimate-guitar.com/tab/…"]`.', None),
         ("Artists to find on Ultimate Guitar", artists,
          "UG's sitemaps list these artists only by bare ids (usually because of accents or non-Latin "
-         "letters), so tabarr can't see their tabs. Find the artist page once and paste it.", n_artists),
-        ("Buy list", buy,
-         "No human sheet exists. Buy the track (DRM-free), drop it into Music/, and tabarr will "
-         "generate an auto sheet.", None),
+         "letters), so tabarr can't see their tabs. Find each artist's page once: search Ultimate Guitar, "
+         "open the artist page and copy its address.", n_artists),
+        ("Buy list", _buy_list(to_buy),
+         "No human sheet found yet. Buy the track (DRM-free), drop it into Music/, and tabarr will "
+         "generate an auto sheet; a human sheet found later takes its place.", None),
         ("Auto-chords couldn't read these purchases", unread, unread_intro, None),
         ("Guitar Pro pages to click", gp_pages,
          "Download each file with the page's Download button and drop it into `_inbox/`; tabarr "
          "files it under the right song.", n_pages),
         ("Guitar parts not found", _guitar_parts_not_found(conn, songs), None, None),
-        ("Inbox: files tabarr couldn't place", _inbox(cfg), None, None),
+        ("Inbox: files tabarr couldn't place", _inbox(cfg),
+         "tabarr files a download by its name, for a version listed under Guitar Pro pages to click: the "
+         "next run, or `tabarr scan`, makes it the song's guitar-N file. Don't move one into a song's folder "
+         "yourself: tabarr wouldn't know it is there.", None),
         ("Missing lyrics", [f"- {md(s.display)}" for s in songs
                             if s.lyrics_status == "missing" and s.status != "ignored"],
          "LRCLIB has no lyrics for these yet.", None),
@@ -378,3 +498,14 @@ def write_todo(library_dir: Path, text: str) -> Path:
     path = library_dir / "_todo.md"
     write_atomic(path, text.encode("utf-8"))
     return path
+
+
+def write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> tuple[Path, Path]:
+    """Rewrite ``_todo.md`` and ``index.html`` from the database (no requests); return their paths.
+
+    Whatever changes what the pages show calls this, so they never point at a stale state.
+    """
+    from tabarr.library_page import build_library_page, write_library_page  # it imports this module
+
+    todo = write_todo(cfg.library_dir, build_todo(conn, cfg, overrides, now))
+    return todo, write_library_page(cfg.library_dir, build_library_page(conn, cfg, overrides, now))

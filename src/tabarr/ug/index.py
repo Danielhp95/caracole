@@ -14,6 +14,11 @@ Each sitemap is stored in one transaction: its rows, the songs its new tabs
 make dirty, and its entry in ``kv['ug:sitemaps']`` (the validators of the
 indexed copy, when, and how many rows). A failure later in the run loses
 nothing already stored.
+
+A build that stops part-way (a block, the budget, Ctrl-C) leaves the index
+partial until a refresh reads the sitemaps it left, or another build
+finishes: only then is ``kv['ug:index:built_at']`` set. Songs are matched
+only against a complete index (``index_state``).
 """
 
 from __future__ import annotations
@@ -268,7 +273,7 @@ def build_index(conn: sqlite3.Connection, client: Client | None, now: datetime, 
         if client is None:
             raise ValueError("build_index needs a client unless from_dir is given")
         stats = _index_sitemaps(conn, client, _tab_sitemap_urls(client), now, progress)
-    kv_set(conn, _BUILT_KEY, _iso(now))
+    mark_built(conn, now)
     return stats
 
 
@@ -277,7 +282,9 @@ def refresh_index(conn: sqlite3.Connection, client: Client, now: datetime, *,
     """Revalidate the sitemaps where new tabs appear: ``sitemap_last``, the highest-numbered
     sitemap, and any numbered sitemap this database has never indexed.
 
-    ``progress`` is called after each sitemap. Errors propagate as in ``build_index``.
+    The last of those are what a stopped build left: once every tab sitemap is
+    indexed, the build counts as finished (``mark_built``). ``progress`` is
+    called after each sitemap. Errors propagate as in ``build_index``.
     """
     urls = _tab_sitemap_urls(client)
     indexed = _indexed(conn)
@@ -286,7 +293,28 @@ def refresh_index(conn: sqlite3.Connection, client: Client, now: datetime, *,
     wanted = [u for u in urls if sitemap_name(u) == "last" or u == highest or sitemap_name(u) not in indexed]
     stats = _index_sitemaps(conn, client, wanted, now, progress)
     kv_set(conn, _REFRESHED_KEY, _iso(now))
+    if kv_get(conn, _BUILT_KEY) is None:
+        done = _indexed(conn)
+        if all(sitemap_name(u) in done for u in urls):
+            mark_built(conn, now)
     return stats
+
+
+def mark_built(conn: sqlite3.Connection, now: datetime) -> None:
+    """Record that the index holds every tab sitemap: a build finished, or a refresh read what one left."""
+    kv_set(conn, _BUILT_KEY, _iso(now))
+
+
+def index_state(conn: sqlite3.Connection) -> str:
+    """``"empty"`` (never built), ``"partial"`` (a build stopped part-way) or ``"complete"``.
+
+    Nothing may be matched against a partial index: a song whose tabs are in the
+    sitemaps not read yet would be marked not found (and put on the buy list), and
+    an incomplete index is no more evidence of absence than an empty one.
+    """
+    if conn.execute("SELECT 1 FROM ug_index LIMIT 1").fetchone() is None:
+        return "empty"
+    return "complete" if kv_get(conn, _BUILT_KEY) is not None else "partial"
 
 
 def index_count(conn: sqlite3.Connection) -> int:

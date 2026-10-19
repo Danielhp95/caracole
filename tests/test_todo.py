@@ -1,10 +1,12 @@
+import re
 from datetime import UTC, datetime
 from urllib.parse import quote
 
-from tabarr.db import kv_set_json
+from tabarr.db import kv_set, kv_set_json
 from tabarr.health import record_block
 from tabarr.library import keep_file
-from tabarr.overrides import Overrides
+from tabarr.normalize import slug_key
+from tabarr.overrides import Overrides, load_overrides
 from tabarr.songs import update_song
 from tabarr.todo import build_todo, search_links, write_todo
 from tabarr.versions import set_coverage, set_picks, upsert_version
@@ -56,8 +58,8 @@ def test_review_item_has_links_and_paste_line(conn, cfg):
     assert "82" in text
     assert "https://tabs.ultimate-guitar.com/tab/1081460" in text
     assert "https://tabs.ultimate-guitar.com/tab/1081462" in text
-    assert '[match]\n"Soda - Persiana Americana" = "soda-stereo/persiana-americana"' in text
-    assert '[alias]\n"Soda" = "soda-stereo"' in text
+    assert '"Soda - Persiana Americana" = "soda-stereo/persiana-americana"  # under [match]' in text
+    assert '"Soda" = "soda-stereo"  # under [alias]' in text
 
 
 def test_review_links_use_the_slugged_url(conn, cfg):
@@ -80,8 +82,75 @@ def test_title_only_candidate_gets_no_alias_line(conn, cfg):
         {"artist_key": "jeff-buckley", "song_key": "hallelujah", "score": 100.0, "step": "title_only"},
     ])
     text = todo(conn, cfg)
-    assert '"Someone - Hallelujah" = "jeff-buckley/hallelujah"' in text
-    assert "[alias]" not in text
+    assert '"Someone - Hallelujah" = "jeff-buckley/hallelujah"  # under [match]' in text
+    assert "# under [alias]" not in text
+
+
+def covers_only(conn, artist, title, *covers):
+    """A song reviewed on its title alone: its only candidates are other artists' songs (covers)."""
+    s = add_song(conn, artist, title)
+    song_key = slug_key(title)
+    index(conn, [(500 + i, a, song_key, "chords") for i, a in enumerate(covers)])
+    update_song(conn, s.id, review=True, match_decision="review", match_step="title_only", match_score=100.0,
+                match_artist_key=covers[0], match_song_key=song_key, match_candidates=[
+                    {"artist_key": a, "song_key": song_key, "score": 100.0, "step": "title_only"} for a in covers])
+    return s
+
+
+def review_item(text, display):
+    return text.split(f"### {display}\n", 1)[1].split("\n### ", 1)[0].split("\n## ", 1)[0]
+
+
+def test_title_only_review_of_an_artist_ug_lists_by_bare_ids_asks_for_its_artist_page(conn, cfg):
+    # UG lists Maná only by bare ids: the index has covers of the title, and nothing of Maná's.
+    from tabarr.ug.fetch import songs_to_fetch
+
+    s = covers_only(conn, "Maná", "Rayando el Sol", "ana-gabriel", "pablo-alboran")
+    text = todo(conn, cfg)
+    assert "## Artists to find on Ultimate Guitar (1)" in text
+    assert "**Maná** (1 song)" in text
+    item = review_item(text, "Maná - Rayando el Sol")
+    assert "other artists' songs with this title (probably covers)" in item
+    assert "[artist_url]" in item and "Artists to find" in item
+    # Once the page is pasted, the next fetch looks for the song there.
+    o = Overrides(artist_url={"mana": "https://www.ultimate-guitar.com/artist/mana_1234"})
+    assert [x.id for x in songs_to_fetch(conn, o, NOW)] == [s.id]
+    text = todo(conn, cfg, o)
+    assert "## Artists to find" not in text
+    assert "tabarr looks for it on Maná's UG page in the next run" in review_item(text, "Maná - Rayando el Sol")
+
+
+def test_title_only_review_of_an_indexed_artist_says_its_page_is_checked_first(conn, cfg):
+    index(conn, [(1, "soda-stereo", "persiana-americana", "chords")])
+    s = covers_only(conn, "Soda Stereo", "De Música Ligera", "os-paralamas-do-sucesso", "ana-mena", "pereza")
+    text = todo(conn, cfg)
+    assert "## Artists to find" not in text
+    item = review_item(text, "Soda Stereo - De Música Ligera")
+    assert "other artists' songs with this title (probably covers)" in item
+    assert "tabarr looks for it on Soda Stereo's UG page in the next run" in item
+    # The page was read and doesn't list it: say so, and that it is read again.
+    kv_set(conn, f"ug:artist_page_checked:{s.id}", "2026-10-18T03:35:00Z")
+    item = review_item(todo(conn, cfg), "Soda Stereo - De Música Ligera")
+    assert "tabarr didn't find it on Soda Stereo's UG page either" in item and "after 30 days" in item
+
+
+def test_title_only_review_of_a_song_with_a_sheet_says_nothing_is_lost_by_leaving_it(conn, cfg):
+    # The live smoke: De Música Ligera had a 100% LaCuerda sheet and still offered three covers to pick.
+    index(conn, [(1, "soda-stereo", "persiana-americana", "chords")])
+    s = covers_only(conn, "Soda Stereo", "De Música Ligera", "os-paralamas-do-sucesso", "pereza")
+    update_song(conn, s.id, status="found")
+    item = review_item(todo(conn, cfg), "Soda Stereo - De Música Ligera")
+    assert "probably covers" in item and "has a sheet already" in item
+
+
+def test_a_review_with_a_candidate_by_the_songs_own_artist_gets_no_covers_note(conn, cfg):
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    s = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"},
+        {"artist_key": "stone-temple-pilots", "song_key": "creep", "score": 80.0, "step": "title_only"},
+    ])
+    assert "probably covers" not in todo(conn, cfg)
 
 
 def test_partial_sheet_listed_with_percent(conn, cfg):
@@ -93,6 +162,43 @@ def test_partial_sheet_listed_with_percent(conn, cfg):
     assert "## Partial sheets (1)" in text
     assert "Soda Stereo - De Música Ligera" in text and "45%" in text
     assert "https://tabs.ultimate-guitar.com/tab/85053" in text
+
+
+def first_section(text):
+    return text.split("\n## ", 1)[1].split("\n## ", 1)[0]
+
+
+def test_setup_problems_say_the_index_isnt_built_before_anything_else(conn, cfg):
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"}])
+    setup = first_section(todo(conn, cfg))
+    assert setup.startswith("Setup problems")
+    assert "The Ultimate Guitar index isn't built" in setup
+    assert "`tabarr index build`" in setup and "`sudo tabarr-admin index build`" in setup
+
+
+def test_setup_problems_count_the_wanted_lines_tabarr_couldnt_read(conn, cfg):
+    from tabarr.ug.index import mark_built
+
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    mark_built(conn, NOW)
+    assert "## Setup problems" not in todo(conn, cfg)
+    kv_set_json(conn, "source:wanted", {"at": "2026-10-18T03:30:00Z", "lines": 12, "new": 0,
+                                        "errors": [[3, "expected \"Artist - Title\""], [7, "bad duration"]]})
+    setup = first_section(todo(conn, cfg))
+    assert setup.startswith("Setup problems")
+    assert "wanted.txt has 2 lines tabarr couldn't read" in setup and "Sources" in setup
+
+
+def test_partial_sheets_say_how_to_choose_another_version(conn, cfg):
+    s = add_song(conn)
+    v = version(conn, s, 85053)
+    set_coverage(conn, v, 0.45)
+    keep_file(conn, cfg.library_dir, song=s, version_id=v, name="sheet.txt", data=b"x", rank=1)
+    section = section_of(todo(conn, cfg), "Partial sheets")
+    assert "pin its page under `[pin]`" in section
+    assert '`"Artist - Title" = ["https://tabs.ultimate-guitar.com/tab/…"]`' in section
 
 
 def test_buy_list_links(conn, cfg):
@@ -114,6 +220,45 @@ def test_buy_list_excludes_found_and_songs_with_audio(conn, cfg):
     s2 = add_song(conn, "B", "Found")
     update_song(conn, s2.id, status="found", match_decision="accept")
     assert "## Buy list" not in todo(conn, cfg)
+
+
+def test_buy_list_waits_while_the_index_is_incomplete(conn, cfg):
+    # A build stopped part-way: UG may have sheets for a song marked not found against it.
+    from tabarr.ug.index import mark_built
+
+    index(conn, [(1001, "oasis", "wonderwall", "chords")])
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, match_decision="not_found")
+    text = todo(conn, cfg)
+    assert "## Buy list" not in text
+    assert "The Ultimate Guitar index is incomplete" in text.split("\n## Review", 1)[0]
+    mark_built(conn, NOW)
+    text = todo(conn, cfg)
+    assert "## Buy list (1)" in text and "index is incomplete" not in text
+
+
+def test_buy_list_waits_for_a_due_artist_page_check(conn, cfg):
+    # You just pasted the artist page: the next fetch looks for the song there before anything is bought.
+    s = add_song(conn, "宋冬野", "斑马斑马")
+    update_song(conn, s.id, match_decision="not_found")
+    o = Overrides(artist_url={"宋冬野": "https://www.ultimate-guitar.com/artist/song_dongye_1234567"})
+    text = todo(conn, cfg, o)
+    assert "## Buy list" not in text
+    assert "1 song waiting for the nightly fetch" in text
+    # Once the page has been read for the song (and didn't list it), buying is the next step.
+    kv_set(conn, f"ug:artist_page_checked:{s.id}", "2026-10-18T03:35:00Z")
+    assert "## Buy list (1)" in todo(conn, cfg, o)
+
+
+def test_buy_list_waits_for_lacuerda_to_be_asked(conn, cfg):
+    s = add_song(conn, "Joaquín Sabina", "Y Nos Dieron las Diez")
+    update_song(conn, s.id, match_decision="not_found")
+    text = todo(conn, cfg)
+    assert "## Buy list" not in text and "1 song waiting for the nightly fetch" in text
+    update_song(conn, s.id, lacuerda_checked_at="2026-10-18T03:36:00Z")  # LaCuerda had none
+    text = todo(conn, cfg)
+    assert "## Buy list (1)" in text and "No human sheet found yet" in text
+    assert "No human sheet exists" not in text
 
 
 def test_buy_list_waits_for_pending_fetches(conn, cfg):
@@ -157,6 +302,20 @@ def test_inbox_unmatched_files_listed(conn, cfg):
     assert "mystery.gp5" in text and ".hidden" not in text
 
 
+def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
+    # A file moved into a song's folder by hand gets no record: index.html never lists it, and its
+    # Guitar Pro page stays on the list to click.
+    inbox = cfg.library_dir / "_inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "Radiohead - Creep live bootleg.gp5").write_bytes(b"x")
+    (inbox / "notes.pdf").write_bytes(b"x")
+    section = section_of(todo(conn, cfg), "Inbox: files tabarr couldn't place")
+    assert "move it into the song's folder" not in section
+    assert '`Radiohead - Creep live bootleg.gp5`: rename it "Artist - Title (ver N).gp5"' in section
+    assert "Guitar Pro pages to click" in section
+    assert "`notes.pdf`: not a Guitar Pro or Power Tab file" in section
+
+
 def test_missing_lyrics(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马斑马")
     update_song(conn, s.id, lyrics_status="missing")
@@ -173,6 +332,74 @@ def test_find_artist_on_ug(conn, cfg):
     # Known artist page (override): no longer asked for.
     o = Overrides(artist_url={"joaquin-sabina": "https://www.ultimate-guitar.com/artist/joaquin_sabina_1"})
     assert "## Artists to find" not in todo(conn, cfg, o)
+
+
+def toml_blocks(text):
+    return re.findall(r"```toml\n(.*?)```", text, re.S)
+
+
+def section_of(text, title):
+    return text.split(f"## {title}", 1)[1].split("\n## ", 1)[0]
+
+
+def test_the_artist_lines_pasted_as_shown_keep_overrides_readable(conn, cfg):
+    # Two artists to find: pasting every block of the section, one after the other, must still load.
+    for artist, title in (("Joaquín Sabina", "19 Días y 500 Noches"), ("宋冬野", "斑马斑马")):
+        s = add_song(conn, artist, title)
+        update_song(conn, s.id, match_decision="not_found")
+    section = section_of(todo(conn, cfg), "Artists to find")
+    pasted = "".join(toml_blocks(section)).replace("<name>_<id>", "someone_123")
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(pasted, encoding="utf-8")
+    assert set(load_overrides(cfg.overrides_file).artist_url) == {"joaquin-sabina", "宋冬野"}
+
+
+def test_artist_lines_for_a_file_with_the_table_already_leave_its_header_out(conn, cfg):
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text('[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_1"\n',
+                                  encoding="utf-8")
+    s = add_song(conn, "宋冬野", "斑马斑马")
+    update_song(conn, s.id, match_decision="not_found")
+    section = section_of(todo(conn, cfg, load_overrides(cfg.overrides_file)), "Artists to find")
+    lines = "".join(toml_blocks(section)).replace("<name>_<id>", "song_dongye_2")
+    assert "[artist_url]" not in lines and "under the `[artist_url]` table" in section
+    text = cfg.overrides_file.read_text(encoding="utf-8").replace("[artist_url]\n", "[artist_url]\n" + lines, 1)
+    cfg.overrides_file.write_text(text, encoding="utf-8")
+    assert set(load_overrides(cfg.overrides_file).artist_url) == {"mana", "宋冬野"}
+
+
+def test_review_lines_paste_under_the_tables_tabarr_review_wrote(conn, cfg):
+    from tabarr.overrides import add_alias, add_match
+
+    # `tabarr review` settled another song: overrides.toml has [match] and [alias] already.
+    add_match(cfg.overrides_file, "Soda - Persiana Americana", "soda-stereo/persiana-americana")
+    add_alias(cfg.overrides_file, "Soda", "soda-stereo")
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    s = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"}])
+    [block] = toml_blocks(review_item(todo(conn, cfg, load_overrides(cfg.overrides_file)), "Radio Head - Crep"))
+    assert not [line for line in block.splitlines() if line.startswith("[")], f"a header would repeat a table:\n{block}"
+    # Each line goes under the table its comment names, as the section says.
+    text = cfg.overrides_file.read_text(encoding="utf-8")
+    for line in block.splitlines():
+        table = re.search(r"# under (\[\w+\])$", line).group(1)
+        text = text.replace(f"{table}\n", f"{table}\n{line}\n", 1)
+    cfg.overrides_file.write_text(text, encoding="utf-8")
+    o = load_overrides(cfg.overrides_file)
+    assert o.match["radio-head/crep"] == ("radiohead", "creep") and o.alias["radio-head"] == ("radiohead",)
+    assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
+
+
+def test_an_unreadable_overrides_file_leads_the_page(conn, cfg):
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, match_decision="accept")
+    error = "/lib/overrides.toml: Cannot declare ('artist_url',) twice (at line 4, column 12)"
+    text = build_todo(conn, cfg, Overrides(), NOW, overrides_error=error)
+    first = text.split("\n## ", 1)[1]
+    assert first.startswith("Setup problems")
+    setup = first.split("\n## ", 1)[0]
+    assert "overrides.toml can't be read" in setup and error in setup and "merge" in setup
 
 
 def test_find_artist_skips_artists_in_index(conn, cfg):

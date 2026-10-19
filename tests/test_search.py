@@ -362,6 +362,41 @@ def test_cli_add_skips_a_hit_your_library_has_under_another_name(tmp_path):
     assert find_song(conn, "stone-temple-pilots/creep") is None
 
 
+PARALAMAS = (9201, "os-paralamas-do-sucesso", "de-musica-ligera", "chords")
+
+
+def test_cli_a_review_candidate_is_not_a_song_in_your_library(tmp_path):
+    # De Música Ligera is reviewed on its title alone: its only candidate is a Portuguese cover.
+    conn = seed(tmp_path, rows=ROWS + [PARALAMAS])
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    update_song(conn, soda.id, review=True, match_decision="review", match_step="title_only",
+                match_artist_key="os-paralamas-do-sucesso", match_song_key="de-musica-ligera", match_candidates=[
+                    {"artist_key": "os-paralamas-do-sucesso", "song_key": "de-musica-ligera", "score": 100.0,
+                     "step": "title_only"}])
+    listed = run(tmp_path, "search", "os paralamas de musica ligera").output
+    assert 'tabarr add "Os Paralamas Do Sucesso" "De Musica Ligera"' in listed, listed
+    result = run(tmp_path, "search", "os", "paralamas", "de", "musica", "ligera", "--add", "1")
+    assert result.exit_code == 0, result.output
+    assert "Soda Stereo" not in result.output
+    assert find_song(conn, "os-paralamas-do-sucesso/de-musica-ligera") is not None
+
+
+def test_cli_add_names_the_hits_own_song_before_a_misspelled_review(tmp_path):
+    conn = seed(tmp_path)  # Radiohead - Creep is in the library, accepted
+    creep = find_song(conn, "radiohead/creep")
+    update_song(conn, creep.id, match_decision="accept", match_step="exact", match_artist_key="radiohead",
+                match_song_key="creep")
+    (tmp_path / "lib" / "wanted.txt").write_text("Radiohead - Creep\n", encoding="utf-8")
+    typo = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, typo.id, review=True, match_decision="review", match_step="fuzzy_title",
+                match_artist_key="radiohead", match_song_key="creep", match_candidates=[
+                    {"artist_key": "radiohead", "song_key": "creep", "score": 88.9, "step": "fuzzy_title"}])
+    result = run(tmp_path, "search", "creep", "--add", "1")
+    assert result.exit_code == 0, result.output
+    assert "Radio Head - Crep" not in result.output
+    assert "Radiohead - Creep is already in" in result.output
+
+
 def test_cli_add_keeps_the_line_when_the_database_cannot_be_updated(tmp_path, monkeypatch):
     seed(tmp_path)
 
@@ -383,6 +418,29 @@ def test_cli_add_out_of_range_is_a_usage_error(tmp_path):
     assert result.exit_code == 2
     assert "9" in result.output
     assert not (tmp_path / "lib" / "wanted.txt").exists()
+
+
+def test_cli_add_a_hit_beyond_those_shown_is_refused(tmp_path):
+    # `--limit 1` shows one hit: hit 2 was never seen (a typo such as --add 12 for --add 2 does the same).
+    seed(tmp_path)
+    result = run(tmp_path, "search", "creep", "--limit", "1", "--add", "2")
+    assert not (tmp_path / "lib" / "wanted.txt").exists(), result.output
+    assert result.exit_code == 2
+    assert "only the first hit is shown" in result.output and "--limit 2" in result.output
+    shown = run(tmp_path, "search", "creep", "--limit", "2", "--add", "2")
+    assert shown.exit_code == 0, shown.output
+    assert "Stone Temple Pilots - Creep" in (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
+
+
+def test_cli_add_12_for_add_2_with_the_default_limit_is_refused(tmp_path):
+    covers = [(8100 + i, f"cover-band-{i:02d}", "creep", "chords") for i in range(12)]
+    seed(tmp_path, rows=ROWS + covers)
+    listed = run(tmp_path, "search", "creep").output
+    assert "10. " in listed and "11. " not in listed  # ten hits shown
+    result = run(tmp_path, "search", "creep", "--add", "12")
+    assert not (tmp_path / "lib" / "wanted.txt").exists(), result.output
+    assert result.exit_code == 2
+    assert "only the first 10 hits are shown" in result.output and "--limit 12" in result.output
 
 
 def test_cli_chinese_query_points_to_artist_url(tmp_path):
