@@ -486,7 +486,7 @@ def test_provider_health_shows_cooldown(conn, cfg):
     record_block(conn, "ug", NOW, "HTTP 403 on https://tabs.ultimate-guitar.com/tab/1")
     text = todo(conn, cfg)
     assert "## Provider health" in text
-    assert "cooling down until 2026-10-19 03:41 UTC" in text
+    assert "cooling down until 2026-10-19 05:41 UTC" in text
     assert "HTTP 403" in text
 
 
