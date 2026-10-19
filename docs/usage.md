@@ -507,7 +507,8 @@ and cache.
   `Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)`,
   or `nothing kept`. `--song` fetches that one song now, even when nothing
   about it changed; the song must be in the library and matched, or not found
-  or reviewed on its title alone with its artist page known. A cooldown, a
+  or reviewed on its title alone or on names that aren't quite UG's, with its
+  artist page known. A cooldown, a
   block or a spent budget exits 0.
 - **`caracole lacuerda`** looks on LaCuerda for Spanish songs (judged by their
   lyrics, or by their title until there are lyrics) that have no complete
