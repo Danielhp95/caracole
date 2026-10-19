@@ -32,7 +32,7 @@ import json
 import logging
 import sqlite3
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -87,13 +87,19 @@ SHEET_DOCS = ("sheet.json", HUMAN_SHEET)  # what keeping a sheet writes, in that
 
 @dataclass
 class LaCuerdaStats:
-    """What one ``lacuerda_sheets`` pass did. ``tried`` counts misses and errors too."""
+    """What one ``lacuerda_sheets`` pass did. ``tried`` counts misses and errors too.
+
+    ``failures`` names the songs a provider error left for the next run, each with
+    its error: the ``errors`` counted, then the songs not asked about once the
+    client gave up on LaCuerda for the run (``ProviderUnavailable``).
+    """
 
     tried: int = 0
     kept: int = 0
     missing: int = 0
     errors: int = 0
     budget_exhausted: bool = False
+    failures: list[tuple[Song, ProviderError]] = field(default_factory=list, compare=False, repr=False)
 
 
 def lacuerda_sheets(
@@ -119,7 +125,8 @@ def lacuerda_sheets(
     stats = LaCuerdaStats()
     stamp = _stamp(now)
     fetched: set[str] = set()  # URLs fetched from LaCuerda in this pass
-    for song in _songs_to_try(conn, library_dir, rank, now, overrides):
+    songs = _songs_to_try(conn, library_dir, rank, now, overrides)
+    for i, song in enumerate(songs):
         try:
             sheet = _find_sheet(client, song.artists[0], song.title, now, fetched)
         except ProviderBlocked:
@@ -129,10 +136,12 @@ def lacuerda_sheets(
             break
         except ProviderUnavailable as e:
             log.warning("LaCuerda is unavailable for the rest of this run: %s", e)
+            stats.failures += [(left, e) for left in songs[i:]]
             break
         except ProviderError as e:
             stats.tried += 1
             stats.errors += 1
+            stats.failures.append((song, e))
             log.warning("LaCuerda for %s: %s", song.display, e)
             continue
         stats.tried += 1

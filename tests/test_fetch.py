@@ -712,6 +712,18 @@ def test_parse_error_is_not_a_miss(conn, tmp_path, status, body):
     assert get_song(conn, other.id).status == "found"
 
 
+def test_a_song_an_error_left_is_named_with_its_error(conn, tmp_path):
+    # For the run's summary, which says why in words, and counts the songs of each cause.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.add(slugged(101), "Internal Server Error", status=500)
+    other = signos(conn, ug)
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song, other])
+    [(failed, error)] = stats.failures
+    assert (failed.id, error.provider, error.status) == (song.id, "ug", 500)
+
+
 def test_block_is_reraised_and_leaves_the_song_dirty(conn, tmp_path):
     song = accepted(conn)
     index(conn, (101, "soda-stereo", "persiana-americana", "chords"))

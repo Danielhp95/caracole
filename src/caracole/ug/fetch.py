@@ -190,6 +190,8 @@ class FetchStats:
     songs_failed: int = 0
     budget_exhausted: bool = False
     sheets_done: int = 0
+    # The songs counted in songs_failed, each with its error, for the run's summary.
+    failures: list[tuple[Song, ProviderError]] = field(default_factory=list, compare=False, repr=False)
 
 
 @dataclass
@@ -1387,6 +1389,7 @@ def fetch_songs(
         except ProviderError as e:
             log.warning("UG fetch failed for %s: %s", song.display, e)
             stats.songs_failed += 1
+            stats.failures.append((song, e))
             continue
         if outcome.settled:
             stats.sheets_done += 1
@@ -1406,6 +1409,7 @@ def fetch_songs(
         except ProviderError as e:
             log.warning("UG fetch failed for %s: %s", song.display, e)
             stats.songs_failed += 1
+            stats.failures.append((song, e))
             continue
         stats.songs_done += 1
         if on_song is not None:
