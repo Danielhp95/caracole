@@ -304,10 +304,13 @@ always rewritten. Until the index is built, the index and match steps are
 skipped.
 
 **The budget.** A run sends Ultimate Guitar at most 60 requests, the index
-refresh included, 10–20 seconds apart and one at a time. A matched song costs
-about 3–6 requests. A long list therefore fills in over a few nights, newest
-songs first, and a song the budget cut off half-way resumes from the cache the
-next night.
+refresh included, 10–20 seconds apart and one at a time. It settles the sheet
+of every waiting song first, newest songs first: a few requests a song, for
+its versions pages and then up to three sheets scored against the lyrics. What
+is left goes to guitar parts, about a page per type (Guitar Pro, Power Tab,
+tabs) a song. Before sheets came first, a live run spent 8–12 requests a song.
+A long list therefore fills in over a few nights, and a song the budget cut
+off half-way resumes from the cache the next night.
 
 **Errors are never misses.** A block (HTTP 403, 429 or a challenge page)
 stops that site for the rest of the run, cools it down for 24 hours (twice as
@@ -372,18 +375,28 @@ and cache.
 - **`tabarr search QUERY [--limit N] [--add N]`** searches your library and
   the offline UG index (see [tabarr search](#tabarr-search)).
 - **`tabarr autochords`** writes `sheet (auto).txt` from audio you bought, for
-  songs with no human sheet (see [the worked example](#a-worked-example)). It
-  needs the flake's `packages.autochords`, with torch, librosa and beat_this;
-  the default package says so and exits 1. It exits 1 too when a song failed,
-  which is tried again next time.
+  songs with no human sheet (see [the worked example](#a-worked-example)), then
+  rewrites `_todo.md` and `index.html`. It needs the flake's
+  `packages.autochords`, with torch, librosa and beat_this; the default package
+  says so and exits 1. A purchase it can't read fails that song alone: it
+  exits 0, the to-do page lists the file, and the song is tried again once the
+  file changes. It exits 1 when auto-chords can't work at all: the model files
+  missing or unusable, or a sheet it can't write into the library.
+
+The commands that send requests (`run`, `index build` and `refresh`, `lyrics`,
+`fetch`, `lacuerda`) and `autochords` take tabarr's lock, `tabarr.lock` in the
+state folder, so they never run beside another tabarr doing the same: a second
+one waits for the first and says which it is. A command also waits out the
+pause after the last request to the same site, even one another tabarr sent, so
+the budget and the pauses hold for the machine, not per process.
 
 ## The to-do page
 
 `Library/_todo.md` lists only what needs you, with the links to do it and the
-exact lines to paste. Each run rewrites it, and so does `tabarr todo`. It
-starts with a summary (songs found, wanted and ignored), a link to
-`index.html`, and how many songs are waiting for the nightly fetch. Then each
-of these sections, when it has something in it:
+exact lines to paste. Each run rewrites it, and so do `tabarr todo` and
+`tabarr autochords`. It starts with a summary (songs found, wanted and
+ignored), a link to `index.html`, and how many songs are waiting for the
+nightly fetch. Then each of these sections, when it has something in it:
 
 - **Review.** Matches tabarr wasn't sure about. Each candidate has its score,
   the UG song, the step that found it and links to its pages by type, then the
@@ -409,6 +422,9 @@ of these sections, when it has something in it:
   iTunes Store) and to check the song first (Chordify, Songsterr, a YouTube
   lesson search). Drop the purchase into Music/, and auto-chords writes a sheet
   from it. Songs whose audio you have are left off.
+- **Auto-chords couldn't read these purchases.** Each file auto-chords failed
+  on, with the error. Re-download it, or convert it (to FLAC, say) and replace
+  the original: a changed file is tried again on the next run.
 - **Guitar Pro pages to click.** The Guitar Pro and Power Tab versions tabarr
   picked for each song, best first, with version, rating and votes. Open each
   page, click its Download button, and drop the file into `_inbox/`; the next
@@ -433,10 +449,12 @@ of these sections, when it has something in it:
 
 ### Review
 
-`tabarr review` asks about each song to review in turn:
+`tabarr review` asks about each song to review in turn. It lists up to five
+candidates, each with its score, the UG song, the step that found it and the
+page of that song's oldest tab, whatever its type:
 
     [1/1] Radio Head - Crep
-      1) 89  radiohead/creep (fuzzy_title)  https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169
+      1) 89  radiohead/creep (fuzzy_title)  https://tabs.ultimate-guitar.com/tab/radiohead/creep-tabs-4119
     Pick 1-1, (p)in a URL, (i)gnore, (s)kip, (q)uit:
 
 - **A number** accepts that candidate. It writes
@@ -457,7 +475,7 @@ to paste, if you'd rather edit the file.
 
 ### Library/index.html
 
-`index.html` sits next to `_todo.md`, and each run rewrites it. Open it from
+`index.html` sits next to `_todo.md`, and is rewritten with it. Open it from
 the synced folder, in a browser on the laptop or the phone. It needs no server
 and loads nothing from the network. It shows every song with its status, its
 key or transposition, and links to its files, the PDF first. A song without a
@@ -638,8 +656,10 @@ with a comma, it is the same song to tabarr.
     $ tabarr match --dry-run
     not_found      -  -             宋冬野 - 斑马斑马 → -  CHANGED unmatched → not_found
 
-The to-do page then lists 宋冬野 under "Artists to find on Ultimate Guitar",
-with a link to search UG, and puts the song on the buy list. Either way works:
+`--dry-run` saves nothing. After the next `tabarr run` (or `tabarr match`,
+then `tabarr todo`), the to-do page lists 宋冬野 under "Artists to find on
+Ultimate Guitar", with a link to search UG, and puts the song on the buy list.
+Either way works:
 
 - **Paste the artist's page.** Search UG in your browser, open 宋冬野's artist
   page, and paste its address into overrides.toml:

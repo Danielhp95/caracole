@@ -121,8 +121,9 @@ Static secrets reach tabarr through systemd's `LoadCredential`: systemd reads
 each file as root and hands the unit a private copy in
 `$CREDENTIALS_DIRECTORY`. The secret files can stay root-only, which is
 agenix's default. tabarr reads two credentials, `spotify_client_secret` and
-`ntfy_token`. The Spotify token itself is not a static secret: it lives in
-`/var/lib/tabarr`, written by `tabarr auth spotify`.
+`ntfy_token`; the nightly unit and `tabarr-admin` get them, and the auto-chords
+unit, which reads neither, gets none. The Spotify token itself is not a static
+secret: it lives in `/var/lib/tabarr`, written by `tabarr auth spotify`.
 
 Add agenix, which the flake registry already knows as `agenix`:
 
@@ -289,8 +290,10 @@ sudo install -o tabarr -g tabarr -m 0600 \
 sudo systemctl start tabarr.timer
 ```
 
-The cache in `/var/cache/tabarr` is left out. Losing it costs one
-`tabarr index build` and some re-fetching, within the nightly budget.
+The cache in `/var/cache/tabarr` is left out. Losing it costs only requests:
+the index lives in the database, so nothing needs building again, and the
+pages tabarr had cached are fetched again as songs need them, within the
+nightly budget.
 
 ## 5. The first run
 
@@ -363,10 +366,21 @@ exhausted budget is not a failure: the run exits 0 and the song stays pending.
 Only an unexpected error fails the unit, and that sends the ntfy message.
 
 **`tabarr-admin`** runs any command as the units run it: a transient unit as
-user `tabarr`, with the same state and cache directories, the same credentials
-and the generated config. Use it for `auth spotify`, `index build`,
-`match --dry-run` and the like. It needs sudo, and a file you pass it must be
-readable by the `tabarr` user.
+user `tabarr`, with the same state and cache directories, the same credentials,
+library and music paths, the generated config, and the units' sandbox. Only
+the network stays open, which `auth spotify` and `index build` need. Use it
+for `auth spotify`, `index build`, `match --dry-run` and the like. It needs
+sudo. A file you pass it must be readable by the `tabarr` user and sit where
+the sandbox shows it: not under `/home`, `/root` or `/tmp`, which it hides, so
+`index build --from` reads sitemaps from somewhere like `/srv/sitemaps`.
+
+**One tabarr at a time.** A command that sends requests or writes the library
+waits while another one does, and says which (`Another tabarr is running (pid
+…: run); waiting for it to finish.`): a `tabarr-admin fetch` started during the
+nightly run waits for it, and the run waits for a `tabarr-admin index build`.
+So the request budget and the 10–20 second pauses hold for the machine, not
+per process. The lock is `/var/lib/tabarr/tabarr.lock`; it goes with the
+process holding it, whatever ends it.
 
 ## 6. Auto-chords
 
@@ -381,8 +395,9 @@ folder on the laptop, and let a local model write `sheet (auto).txt`:
 `tabarr-autochords.service` then starts after every successful
 `tabarr.service` run (`OnSuccess=`). It runs `tabarr --config … autochords`
 with the `autochords` package (torch, beat-this, librosa) as the same user, in
-the same sandbox, except that it has no network at all (`PrivateNetwork`) and
-may generate code (`MemoryDenyWriteExecute` off, because PyTorch's CPU kernels
+the same sandbox, except that it has no network at all (`PrivateNetwork`), no
+credentials (it reads no secret), and may generate code
+(`MemoryDenyWriteExecute` off, because PyTorch's CPU kernels
 and librosa's numba compile at run time: with it on, every song fails, BTC with
 "cannot allocate executable memory" as numba loads, and beat_this with "could
 not create a primitive"). numba caches what it compiles in
@@ -393,7 +408,10 @@ as the nightly run does, then writes an auto sheet for every song that has its
 audio file, has no human sheet (`sheet.txt`), isn't ignored, and whose audio
 changed since its last auto sheet. A sheet made before the song's lyrics
 arrived is made once more when they do. Everything else is left alone, so a
-night with no new purchases loads no model.
+night with no new purchases loads no model. Then it rewrites `_todo.md` and
+`index.html`, which the nightly run wrote before it, so both show its sheets
+and the purchases it couldn't read the same night. The PDF of a new auto
+sheet comes with the next night's render.
 
 BTC finds the chords and beat_this the beats and bars. The chords then go over
 LRCLIB's timed lyrics when LRCLIB's duration matches the file's within 2
@@ -437,13 +455,18 @@ sudo systemctl start tabarr-autochords.service
 journalctl -u tabarr-autochords.service -e
 ```
 
-The command's last line is a count such as `auto-chords: 1 generated,
-4 skipped, 0 failed`. A song that fails, say because its file won't decode,
-is named in the journal with the reason and tried again the next night; the
-unit then exits 1, so ntfy tells you. Missing model files fail every song due,
-and the journal says so once. `sudo tabarr-admin autochords` runs the same
-command with the `autochords` package when auto-chords is enabled; the default
-package has no torch, and says so if asked.
+The command prints a count such as `auto-chords: 1 generated, 4 skipped,
+0 failed`. A purchase it can't read, say because its file won't decode, fails
+that song alone: the journal names it with the reason, the to-do page lists it
+under "Auto-chords couldn't read these purchases", and it is tried again once
+the file changes. The unit still exits 0, so a file that will never decode
+doesn't alert you every night. Only a setup problem exits 1, so that ntfy
+tells you: the model packages or model files missing, a model failing its test
+tone, or a sheet that can't be written into the library. Missing model files
+fail every song due, and the journal says so once. `sudo tabarr-admin
+autochords` runs the same command with the `autochords` package when
+auto-chords is enabled; the default package has no torch, and says so if
+asked.
 
 On the laptop, `nix develop .#autochords -c pytest -m autochords` runs the
 model tests against the same model files. `nix flake check` builds both
@@ -473,9 +496,10 @@ or build the package with `tabarr.override { cjkFont = "…"; }`.
 
 - **ntfy says a unit failed:** `journalctl -u tabarr.service -e` (or
   `tabarr-autochords.service`).
-- **Auto-chords keeps failing on one song:** its file is named in
-  `journalctl -u tabarr-autochords.service`. Replace the file (or remove it),
-  and the next run tries again.
+- **Auto-chords can't read a purchase:** the to-do page lists it, with the
+  error, and `journalctl -u tabarr-autochords.service` names it too.
+  Re-download the file, or convert it (to FLAC, say) and replace the original:
+  a changed file is tried again on the next run.
 - **Syncthing reports "permission denied":** check that `ls -ld /srv/tabs`
   shows `drwxrwsr-x tabarr tabarr`, and that `id syncthing` lists `tabarr`.
   Restart Syncthing after the group change, and check that the folder has
