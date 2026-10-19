@@ -1,7 +1,8 @@
 """``tabarr fetch``: fetch, rank and keep UG sheets and guitar parts, within the request budget.
 
 The nightly ``tabarr run`` does this as one of its steps; the command runs it
-on its own, or for one song with ``--song``. A block or a spent budget is
+on its own, or for one song with ``--song``, and like the run it first scores
+the sheets kept before their lyrics arrived. A block or a spent budget is
 expected behaviour, not a failure, so both exit 0. Every command module is
 imported on every start, so the fetch code is imported inside the command.
 """
@@ -50,7 +51,7 @@ def register(app: typer.Typer) -> None:
 def _fetch(cfg: Config, display: str | None) -> None:
     from tabarr.health import get_state, is_cooling, record_block, record_ok
     from tabarr.http import ProviderBlocked
-    from tabarr.ug.fetch import FetchContext, fetch_songs, songs_to_fetch
+    from tabarr.ug.fetch import FetchContext, fetch_songs, rescore_kept_sheets, songs_to_fetch
 
     now = utcnow()
     overrides = load_ovr(cfg)
@@ -59,6 +60,11 @@ def _fetch(cfg: Config, display: str | None) -> None:
             until = _when(get_state(conn, PROVIDER).cooldown_until)
             typer.echo(f"Ultimate Guitar is cooling down after a block until {until}; nothing fetched.")
             return
+        # As in the nightly run: sheets kept before their lyrics are scored first, with no request,
+        # and a partial one sends its song back to have its sheets ranked again.
+        rescored = rescore_kept_sheets(conn, cfg.library_dir, cfg.rank)
+        if rescored:
+            typer.echo(f"Scored {_count(rescored, 'kept sheet')} against lyrics that came later.")
         songs = [_one_song(conn, display, overrides)] if display else songs_to_fetch(conn, overrides, now)
         if not songs:
             typer.echo("Nothing to fetch.")

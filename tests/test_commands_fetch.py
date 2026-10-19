@@ -20,6 +20,7 @@ from typer.testing import CliRunner
 from tabarr import db
 from tabarr.cli import build_app
 from tabarr.health import get_state, record_block
+from tabarr.lyrics import Lyrics
 from tabarr.songs import find_song, get_song, update_song, upsert_song
 from tabarr.ug.artist import artist_page_url
 from tabarr.ug.lookup import remember_artist_url
@@ -174,6 +175,30 @@ def test_a_page_ug_cannot_serve_fails_that_song_only(tmp_path, ug):
     assert result.exit_code == 0, result.output
     assert "1 song done, 1 failed, 2 UG requests." in result.output
     assert get_song(conn, persiana).ug_dirty is True and get_song(conn, signos).status == "found"
+
+
+def kept_sheet_coverage(conn, song_id):
+    return conn.execute(
+        "SELECT v.coverage FROM files f JOIN versions v ON v.id = f.version_id WHERE f.song_id = ? AND f.name = ?",
+        (song_id, "sheet.txt"),
+    ).fetchone()[0]
+
+
+def test_fetch_first_scores_sheets_kept_before_their_lyrics(tmp_path, ug):
+    # As the nightly run does, without a request: a partial sheet then shows on the to-do page.
+    conn, persiana, _ = two_songs(tmp_path, ug)
+    assert run(tmp_path).exit_code == 0  # both sheets kept while LRCLIB had no lyrics for them
+    assert kept_sheet_coverage(conn, persiana) is None
+    record = {"id": 1, "plainLyrics": "walking down the river road tonight\ncounting every lantern on the shore",
+              "syncedLyrics": None, "instrumental": False, "duration": 213.0}
+    update_song(conn, persiana, lyrics_status="found", lyrics_json=Lyrics.from_record(record).to_json())
+    ug.requests.clear()
+
+    result = run(tmp_path)
+
+    assert result.exit_code == 0, result.output
+    assert "Scored 1 kept sheet against lyrics that came later." in result.output and ug.requests == []
+    assert kept_sheet_coverage(conn, persiana) == 0.5
 
 
 def test_song_option_fetches_that_song_even_when_nothing_changed(tmp_path, ug):
