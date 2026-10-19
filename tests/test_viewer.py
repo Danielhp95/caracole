@@ -335,6 +335,28 @@ window.addEventListener("load", () => {
 """
 
 
+def run_in_page(html: str, tmp_path: Path, body: str, fragment: str = ""):
+    """What ``body`` (JavaScript, after the page's own script ran) gives as ``out``, in Chromium."""
+    script = ("<script>\nwindow.addEventListener(\"load\", () => {\n"
+              "const q = (s) => document.querySelector(s);\nlet out;\n" + body
+              + "\ndocument.body.dataset.result = JSON.stringify(out);\n});\n</script>\n")
+    html = re.sub(r'<meta http-equiv="Content-Security-Policy"[^>]*>\n', "", html)
+    dom = dump_dom(html.replace("</body>", script + "</body>"), tmp_path, fragment)
+    found = re.search(r'data-result="([^"]*)"', dom)
+    assert found, "the harness didn't run"
+    return json.loads(found.group(1).replace("&quot;", '"').replace("&amp;", "&"))
+
+
+@in_chromium
+def test_a_capo_no_longer_on_offer_goes_before_the_chords_are_named(tmp_path):
+    out = run_in_page(build_viewer(UG_CHO), tmp_path, """
+      q("#up").click();  // Bb to B: capo 1 more, with A shapes, is no longer offered
+      out = [q('#sheet .c[data-c="0"]').textContent, q("#facts").textContent, q("#fab").textContent];
+    """, "#t=3&shapes=1")
+    chord, facts, fab = out
+    assert chord == "B" and "A shapes" not in facts and fab == "Key B · +4"
+
+
 @in_chromium
 def test_tapping_through_the_controls(tmp_path):
     html = re.sub(r'<meta http-equiv="Content-Security-Policy"[^>]*>\n', "", build_viewer(UG_CHO))

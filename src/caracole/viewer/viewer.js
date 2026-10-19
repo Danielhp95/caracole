@@ -165,13 +165,15 @@
   };
 
   const render = () => {
+    // A capo no longer on offer (after a transposition or a mode change) goes before the
+    // chords are named: they are named for the shapes played with it.
+    if (!capoHints().some((h) => h[0] === state.shapes)) state.shapes = 0;
     for (const el of chordEls) {
       const i = el.dataset.c;
       el.textContent = label(i, current(i));
       el.classList.toggle("changed", choice(i) >= 0);
     }
     doc.style.setProperty("--fs", state.fs + "px");
-    if (!capoHints().some((h) => h[0] === state.shapes)) state.shapes = 0;
 
     const shapes = state.shapes ? capoHints().find((h) => h[0] === state.shapes) : null;
     fab.textContent = key ? "Key " + keyName(state.t) + (state.t ? " · " + signed(state.t) : "")
