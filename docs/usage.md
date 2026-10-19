@@ -697,12 +697,16 @@ the PDF first. A song without a sheet also gets buy and search links.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
-"banma" finds 斑马斑马. It finds keys too: "a minor", or "minor" for every
-song in a minor key. The buttons show all songs, or only those found, wanted
-or needing review; the Key menu, there once a song has a key, shows only the
-songs in one key, with how many each key has; and you can sort by artist or by
-when songs were added. When nothing in the library matches, the page shows the
-`caracole search` line to run.
+"banma" finds 斑马斑马. It finds keys too, however a sheet spells them: "a
+minor", "F# major", "bbm", and "gb minor", which also finds the songs in F#
+minor; or "minor" for every song in a minor key. A key written as a chord, such
+as "am", also finds the names with "am" in them ("I Am the Walrus"). The
+buttons show all songs, or only those found, wanted or needing review; the Key
+menu, there once a song has a key, shows only the songs in one key, with how
+many each key has, and puts the spellings of one key together ("F# / Gb
+minor"); and you can sort by artist or by when songs were added. When nothing
+in the library matches, the page shows the `caracole search` line to run,
+unless you searched for a key, which the offline index doesn't know.
 
 Each song's entry in the page's data (the `<script type="application/json"
 id="songs">` block) has the same `key` and `key_source` as its info.json.

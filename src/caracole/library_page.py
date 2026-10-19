@@ -16,6 +16,9 @@ Each song carries a search string: its artist, title and display name folded
 (accents stripped, lowercase), the same without punctuation ("acdc"), and
 pinyin for Chinese ("ban ma ban ma", "banma"). The page folds what you type the
 same way, so "musica" finds "Música" and "ban ma" finds 斑马，斑马.
+Of a song's key, the string holds only the mode ("minor"): the script reads a
+key typed in the box ("a minor", "f#m") and compares it, as the Key menu does,
+by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
 """
 
 from __future__ import annotations
@@ -135,8 +138,10 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "buy": buy,
         "sortArtist": _sort_key(song.artist),
         "sortTitle": _sort_key(title),
+        # Only the key's mode, so that "minor" finds every minor song: the script finds a typed key
+        # ("a minor", "f#m") by its pitch class instead, which a substring of "a minor" can't do.
         "search": _haystack([song.artist, *song.artists, title, song.display,
-                             *([key_name(key.key)] if key else [])]),  # "a minor", "c major"
+                             *([key_name(key.key).rpartition(" ")[2]] if key else [])]),
     }
 
 
@@ -374,8 +379,8 @@ _SCRIPT = r"""
   // name without punctuation too). Other punctuation is only trimmed off the ends of a word.
   const APOSTROPHES = /['’‘`´ʼ]/g;
   const EDGES = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
-  const terms = (query) => fold(query).split(/\s+/)
-    .map((w) => w.replace(APOSTROPHES, "").replace(EDGES, "")).filter(Boolean);
+  const term = (word) => word.replace(APOSTROPHES, "").replace(EDGES, "");
+  const terms = (folded) => folded.split(/\s+/).map(term).filter(Boolean);
   const shellQuote = (text) => '"' + text.replace(/(["\\$`])/g, "\\$1") + '"';
   const hay = songs.map((s) => String(s.search || ""));
   const listOf = (value) => (Array.isArray(value) ? value : []);
@@ -396,10 +401,52 @@ _SCRIPT = r"""
   const keyName = (key) => (/ minor$/.test(key) ? key : key + " major");
   const keyText = (s) => "Key " + keyName(String(s.key)) +
     (label(KEY_SOURCES, s.key_source) ? " (" + label(KEY_SOURCES, s.key_source) + ")" : "");
-  const keyCounts = new Map();
-  for (const s of songs) if (typeof s.key === "string" && s.key) keyCounts.set(s.key, (keyCounts.get(s.key) || 0) + 1);
+  // Which key a spelling names, as keys.same_key compares them: the tonic's pitch class and the mode, so
+  // "F# minor" and "Gb minor" are one key. It reads keys as keys.py writes them, and as typed: "f#m", "bb major".
+  const PITCH = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+  const SHIFT = { "": 0, "#": 1, "♯": 1, b: -1, "♭": -1 };
+  const MINOR = ["m", "min", "minor"];
+  const KEY = /^([a-g])([#♯b♭]?)\s*(m|min|minor|maj|major)?$/i;
+  const keyId = (text) => {
+    const m = KEY.exec(String(text || "").trim());
+    if (!m) return "";
+    const pitch = (PITCH[m[1].toLowerCase()] + SHIFT[m[2].toLowerCase()] + 12) % 12;
+    return pitch + (MINOR.indexOf((m[3] || "").toLowerCase()) >= 0 ? " minor" : " major");
+  };
+  // A key typed in the search box: a letter, maybe a sharp or a flat, then the mode ("a minor", "F# major",
+  // "bbm"). Its words leave the text search, and it keeps the songs in that key, however they spell it.
+  // Written as a chord ("am", "f#m"), it is a word too, so "am" also finds "I Am the Walrus".
+  const TYPED_KEY = /(^|[^\p{L}\p{N}])([a-g][#♯b♭]?)(?:\s*(major|minor|maj|min)|(m))(?![\p{L}\p{N}#♯♭])/gu;
+  const parseQuery = (query) => {
+    const keys = [];
+    const either = [];
+    const rest = fold(query).replace(TYPED_KEY, (all, before, tonic, mode, chord) => {
+      if (chord) either.push({ key: keyId(tonic + chord), word: term(tonic + chord) });
+      else keys.push(keyId(tonic + " " + mode));
+      return before + " ";
+    });
+    return { keys, either, words: terms(rest) };
+  };
+  const songKeys = songs.map((s) => keyId(s.key));
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  // The Key menu: one entry per key the library has, its spellings together ("F# / Gb minor"), with how
+  // many songs it has. Its commonest spelling stands for it in the menu and in the address.
+  const keyGroups = new Map();
+  songs.forEach((s, i) => {
+    if (!songKeys[i]) return;
+    const group = keyGroups.get(songKeys[i]) || { spellings: new Map(), n: 0 };
+    group.spellings.set(String(s.key), (group.spellings.get(String(s.key)) || 0) + 1);
+    group.n += 1;
+    keyGroups.set(songKeys[i], group);
+  });
+  for (const [id, group] of keyGroups) {
+    const spelled = Array.from(group.spellings.keys())
+      .sort((a, b) => group.spellings.get(b) - group.spellings.get(a) || compare(a, b));
+    group.value = spelled[0];
+    group.name = spelled.map((k) => k.replace(/ minor$/, "")).join(" / ") + id.replace(/^\d+/, "");
+  }
+  const keyGroup = (spelling) => keyGroups.get(keyId(spelling));
   const order = songs.map((_, i) => i);
   const byArtist = order.slice().sort((i, j) =>
     compare(String(songs[i].sortArtist), String(songs[j].sortArtist)) ||
@@ -489,18 +536,17 @@ _SCRIPT = r"""
     state.q = params.get("q") || "";
     if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
-    if (keyCounts.has(params.get("key"))) state.key = params.get("key");
+    if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
   } catch (err) {
     // A malformed address: start from the defaults.
   }
-  // The key filter lists the keys the library has, each with its count.
   const keySelect = byId("key");
-  for (const k of Array.from(keyCounts.keys()).sort((a, b) => compare(keyName(a), keyName(b)))) {
-    const option = el("option", null, keyName(k) + " · " + keyCounts.get(k));
-    option.value = k;
+  for (const group of Array.from(keyGroups.values()).sort((a, b) => compare(a.name, b.name))) {
+    const option = el("option", null, group.name + " · " + group.n);
+    option.value = group.value;
     keySelect.appendChild(option);
   }
-  byId("keys").hidden = keyCounts.size === 0;
+  byId("keys").hidden = keyGroups.size === 0;
   const save = () => {
     const params = new URLSearchParams();
     if (state.q) params.set("q", state.q);
@@ -529,9 +575,13 @@ _SCRIPT = r"""
   };
 
   const render = () => {
-    const words = terms(state.q);
-    const matching = (state.sort === "recent" ? byRecent : byArtist)
-      .filter((i) => (!state.key || songs[i].key === state.key) && words.every((w) => hay[i].indexOf(w) >= 0));
+    const query = parseQuery(state.q);
+    const inKey = keyId(state.key);
+    const matching = (state.sort === "recent" ? byRecent : byArtist).filter((i) =>
+      (!inKey || songKeys[i] === inKey) &&
+      query.keys.every((k) => songKeys[i] === k) &&
+      query.either.every((e) => songKeys[i] === e.key || (e.word && hay[i].indexOf(e.word) >= 0)) &&
+      query.words.every((w) => hay[i].indexOf(w) >= 0));
     const tally = { all: matching.length, found: 0, wanted: 0, review: 0 };
     for (const i of matching) {
       for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
@@ -599,7 +649,7 @@ _SCRIPT = r"""
       list.appendChild(all);
     } else if (!shown.length && state.key) {
       // The key filter hides them: offer every key.
-      list.appendChild(el("p", "empty", "No songs in " + keyName(state.key) +
+      list.appendChild(el("p", "empty", "No songs in " + keyGroup(state.key).name +
         (state.q ? " match “" + state.q + "”." : ".")));
       const any = el("button", "btn", "Any key");
       any.type = "button";
@@ -611,9 +661,11 @@ _SCRIPT = r"""
       list.appendChild(any);
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
-      const hint = el("p", "empty-hint", "To look in the offline Ultimate Guitar index, run ");
-      hint.appendChild(el("code", null, "caracole search " + shellQuote(state.q)));
-      list.appendChild(hint);
+      if (!query.keys.length) {  // the offline index has no keys
+        const hint = el("p", "empty-hint", "To look in the offline Ultimate Guitar index, run ");
+        hint.appendChild(el("code", null, "caracole search " + shellQuote(state.q)));
+        list.appendChild(hint);
+      }
     } else if (!shown.length) {
       list.appendChild(el("p", "empty", state.show === "review" ? "Nothing needs review." : "No songs here."));
     }
@@ -655,7 +707,7 @@ _SCRIPT = r"""
     save();
   });
   keySelect.addEventListener("change", () => {
-    state.key = keyCounts.has(keySelect.value) ? keySelect.value : "";
+    state.key = keyGroup(keySelect.value) ? keyGroup(keySelect.value).value : "";
     render();
     save();
   });
@@ -713,7 +765,7 @@ _BODY = """<body>
 <div class="searchbar" role="search">
   <label class="visually-hidden" for="q">Search your songs</label>
   <div class="field">
-    <input id="q" type="search" placeholder="Search artist, title or pinyin" autocomplete="off"
+    <input id="q" type="search" placeholder="Search artist, title, pinyin or key" autocomplete="off"
       autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
     <button type="button" id="clear" class="clear" aria-label="Clear the search" hidden>×</button>
   </div>

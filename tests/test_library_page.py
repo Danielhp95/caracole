@@ -116,7 +116,10 @@ def test_without_ugs_key_the_page_has_the_key_estimated_from_the_chords(conn, cf
     keep_sheet_json(conn, cfg, s, AM_F_C_G)
     soda = songs_of(page(conn, cfg))[s.display]
     assert (soda["key"], soda["key_source"]) == ("A minor", "chords")
-    assert "a minor" in soda["search"]  # the search box finds songs by key
+    # The page's script finds a typed key by its pitch class; the search text keeps only the mode,
+    # so "a minor" can't match any minor song with an "a" in its name.
+    words = soda["search"].split(" | ")
+    assert "minor" in words and not any(w in words for w in ("a minor", "aminor"))
 
 
 def test_a_song_in_the_ignore_override_shows_as_ignored(conn, cfg):
@@ -466,3 +469,57 @@ def test_keys_show_with_their_source_and_filter_in_a_real_browser(conn, cfg, tmp
 
     shown = listing(dump_dom(path, tmp_path, "#q=" + quote("a minor")))
     assert shown.count("<article") == 1 and "De Música Ligera" in shown
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_key_typed_in_the_search_box_finds_that_key_only_in_a_real_browser(conn, cfg, tmp_path):
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet_json(conn, cfg, soda, AM_F_C_G)
+    keyed = {("Radiohead", "Paranoid Android"): "Em", ("Muse", "Hysteria"): "F#m",
+             ("Daft Punk", "Get Lucky"): "Fm", ("Queen", "Bohemian Rhapsody"): "Bb"}
+    for tab_id, ((artist, title), key) in enumerate(keyed.items(), start=2):
+        keep_sheet_json(conn, cfg, add_song(conn, artist, title), "Words\n", raw={"tonality_name": key},
+                        tab_id=tab_id)
+    add_song(conn, "The Beatles", "I Am the Walrus")  # no key, "am" in its name
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+
+    def found(query):
+        shown = listing(dump_dom(path, tmp_path, "#q=" + quote(query)))
+        return sorted(re.findall(r"<h3>(.*?)</h3>", shown))
+
+    # Paranoid Android is in a minor key and has an "a" in its name: still not A minor.
+    assert found("a minor") == found("A Minor") == found("aminor") == ["De Música Ligera"]
+    assert found("f# minor") == found("gb minor") == found("f#m") == found("F♯ minor") == ["Hysteria"]
+    assert found("f minor") == found("fm") == ["Get Lucky"]
+    assert found("bb major") == found("a# major") == ["Bohemian Rhapsody"]
+    assert found("e minor android") == ["Paranoid Android"] and found("e minor lucky") == []
+    assert found("minor") == ["De Música Ligera", "Get Lucky", "Hysteria", "Paranoid Android"]
+    # A key written as a chord is a word too: "am" finds A minor and the names with "am" in them.
+    assert found("am") == ["De Música Ligera", "I Am the Walrus"]
+    shown = listing(dump_dom(path, tmp_path, "#q=" + quote("c major")))
+    assert "No songs match" in shown and "caracole search" not in shown  # the index has no keys
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_key_menu_puts_the_spellings_of_one_key_together_in_a_real_browser(conn, cfg, tmp_path):
+    keyed = {("Muse", "Hysteria"): "F#m", ("Radiohead", "Lucky"): "Gbm", ("Daft Punk", "Get Lucky"): "Fm",
+             ("Queen", "Bohemian Rhapsody"): "Bb", ("Oasis", "Wonderwall"): "A#"}
+    for tab_id, ((artist, title), key) in enumerate(keyed.items(), start=1):
+        keep_sheet_json(conn, cfg, add_song(conn, artist, title), "Words\n", raw={"tonality_name": key},
+                        tab_id=tab_id)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+
+    dom = dump_dom(path, tmp_path)
+    menu = re.search(r'<select id="key">(.*?)</select>', dom, re.S).group(1)
+    options = re.findall(r'<option value="([^"]*)"[^>]*>([^<]*)</option>', menu)
+    assert options == [("", "Any"), ("A#", "A# / Bb major · 2"), ("F minor", "F minor · 1"),
+                       ("F# minor", "F# / Gb minor · 2")]
+    # Each song keeps its own spelling.
+    shown = listing(dom)
+    assert "Key Gb minor (from the tab)" in shown and "Key F# minor (from the tab)" in shown
+
+    for spelling in ("F# minor", "Gb minor"):  # an address with either spelling selects the key
+        shown = listing(dump_dom(path, tmp_path, "#key=" + quote(spelling)))
+        assert sorted(re.findall(r"<h3>(.*?)</h3>", shown)) == ["Hysteria", "Lucky"], spelling
+    shown = listing(dump_dom(path, tmp_path, "#key=" + quote("F#") + "&q=lucky"))
+    assert "No songs in F# major match" not in shown and shown.count("<article") == 2  # no such key: any
