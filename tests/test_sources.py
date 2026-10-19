@@ -90,8 +90,10 @@ class OneTrackSpotify:
 
     def __init__(self, error=None):
         self.error = error
+        self.calls = 0
 
     def current_user_saved_tracks(self, limit=20, offset=0, market=None):
+        self.calls += 1
         if self.error:
             raise self.error
         creep = {
@@ -238,6 +240,32 @@ def test_summary_says_how_to_authorize_spotify():
     assert report.summary() == (
         "wanted.txt 3 songs, 0 new; Spotify needs authorization (run `tabarr auth spotify`)"
     )
+
+
+def test_a_long_retry_after_keeps_spotify_unasked_until_then(tmp_path, wanted):
+    # Spotify asks an app over its limits to wait; asking again is how it stays there.
+    repo = Repo()
+    cfg = config(tmp_path, client_id="cid", client_secret="secret")
+    limited = SpotifyException(
+        429, -1, "https://api.spotify.com/v1/me/tracks:\n API rate limit exceeded",
+        headers={"Retry-After": "3600"},
+    )
+    spotify = OneTrackSpotify(error=limited)
+    report = run(cfg, repo, spotify)
+    assert report.spotify_state == "error" and "HTTP 429" in report.spotify_message
+    assert repo.kv["spotify:retry_after_until"] == "2026-10-18T04:30:00Z"
+
+    def sync_at(minutes):
+        return sync_sources(CONN, cfg, NOW + timedelta(minutes=minutes), spotify=spotify,
+                            upsert=repo.upsert, kv_get=repo.kv_get, kv_set=repo.kv_set)
+
+    later = sync_at(30)
+    assert spotify.calls == 1  # not asked again within the hour
+    assert later.spotify_state == "error" and "2026-10-18T04:30:00Z" in later.spotify_message
+    assert repo.record("source:spotify")["message"] == later.spotify_message
+    assert later.wanted.seen == 2  # wanted.txt syncs all the same
+    spotify.error = None
+    assert sync_at(61).spotify_state == "ok" and spotify.calls == 2
 
 
 def test_sync_sources_reports_spotify_problems_as_errors(tmp_path, wanted):

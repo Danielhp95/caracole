@@ -13,10 +13,16 @@ Spotify's February 2026 changes for Development Mode apps, as handled here:
 - a playlist you neither own nor collaborate on comes back without ``items``, so
   it is reported as missing instead of being read as empty;
 - ``external_ids`` (the ISRC) is back, and kept when present.
+
+An HTTP 429 that outlasts the session's few retries, or that asks for a wait
+longer than MAX_RETRY_AFTER, stops the sync (``SpotifyRateLimited``): Spotify
+sends long waits only to an app already over its limits, and asking again is
+how it stays there.
 """
 
 from __future__ import annotations
 
+import email.utils
 import json
 import logging
 import re
@@ -24,7 +30,7 @@ import sqlite3
 import unicodedata
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, NoReturn, Protocol
 
@@ -33,6 +39,7 @@ import spotipy
 from requests.adapters import HTTPAdapter
 from spotipy.cache_handler import CacheFileHandler
 from spotipy.exceptions import SpotifyException, SpotifyOauthError
+from urllib3.exceptions import MaxRetryError, ResponseError
 from urllib3.util.retry import Retry
 
 from tabarr.config import Config, SpotifyConfig
@@ -110,6 +117,19 @@ class PlaylistUnavailable(SpotifySourceError):
         self.ref = ref
         self.reason = reason
         super().__init__(f"Spotify playlist {ref!r}: {reason}", status=status)
+
+
+class SpotifyRateLimited(SpotifySourceError):
+    """HTTP 429 that the session didn't retry away: stop asking Spotify.
+
+    ``retry_after`` is the wait Spotify asked for, in seconds, when it gave one.
+    """
+
+    def __init__(self, what: str, retry_after: float | None, detail: str = ""):
+        self.retry_after = retry_after
+        wait = f"; it asked tabarr to wait {retry_after:.0f} s" if retry_after is not None else ""
+        super().__init__(f"Spotify {what}: HTTP 429" + (f": {detail}" if detail else "") + wait,
+                         status=429)
 
 
 @dataclass(frozen=True)
@@ -231,14 +251,48 @@ def no_client_error(cfg: Config) -> SpotifyAuthError:
     return SpotifyAuthError("the Spotify client couldn't be created")
 
 
+def _retry_after_seconds(value: str | None) -> float | None:
+    """A Retry-After header in seconds, uncapped: a number of seconds or an HTTP date."""
+    if value is None:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return float(value)
+    try:
+        when = email.utils.parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return max(0.0, (when - datetime.now(UTC)).total_seconds())
+
+
+class _ShortWaitRetry(Retry):
+    """urllib3's Retry, except that a Retry-After over MAX_RETRY_AFTER ends the retries.
+
+    urllib3 would cut such a wait to ``retry_after_max`` and ask again, up to
+    ``total`` times. Instead the response goes back as it is, and spotipy raises
+    it as an HTTP 429 with Spotify's Retry-After (``raise_on_status`` is off).
+    """
+
+    def increment(self, method=None, url=None, response=None, error=None, _pool=None,
+                  _stacktrace=None):
+        header = response.headers.get("Retry-After") if response is not None else None
+        wait = _retry_after_seconds(header)
+        if wait is not None and wait > MAX_RETRY_AFTER:
+            raise MaxRetryError(_pool, url, ResponseError(f"Retry-After {wait:.0f} s"))
+        return super().increment(method, url, response, error, _pool, _stacktrace)
+
+
 def _api_session() -> requests.Session:
     """A session that retries briefly and never sits out a long Retry-After.
 
     spotipy's own session honours Retry-After up to urllib3's six-hour cap, which
-    could hold the nightly run for hours. Here a wait is cut to MAX_RETRY_AFTER,
-    and after a few tries the request fails, so the sync moves on.
+    could hold the nightly run for hours. Here a wait of up to MAX_RETRY_AFTER
+    is waited out, a longer one is not retried at all, and after a few tries
+    the request fails with the last response, so the sync can stop asking.
     """
-    retry = Retry(
+    retry = _ShortWaitRetry(
         total=3,
         connect=3,
         read=False,
@@ -248,6 +302,7 @@ def _api_session() -> requests.Session:
         allowed_methods=frozenset({"GET"}),
         respect_retry_after_header=True,
         retry_after_max=MAX_RETRY_AFTER,
+        raise_on_status=False,
     )
     session = requests.Session()
     adapter = HTTPAdapter(max_retries=retry)
@@ -509,6 +564,10 @@ def _call(what: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         if e.http_status == 401:
             raise SpotifyAuthError("the access token was refused (HTTP 401)") from e
         detail = _short(str(e.msg).strip().splitlines()[-1] if e.msg else "")
+        if e.http_status == 429:
+            headers = e.headers or {}
+            wait = next((v for k, v in headers.items() if k.lower() == "retry-after"), None)
+            raise SpotifyRateLimited(what, _retry_after_seconds(wait), detail) from e
         raise SpotifySourceError(
             f"Spotify {what}: HTTP {e.http_status}" + (f": {detail}" if detail else ""),
             status=e.http_status,
@@ -537,13 +596,15 @@ def sync_spotify(
     that date empty on some very old playlists; such a track counts as added
     at ``UNDATED``, the Unix epoch, so it goes last and stays put. Stamping it
     with the run's time instead would move it to the front of the queue every
-    night, ahead of songs you just added; ``now`` is kept for symmetry with the
-    other sources, and no date is taken from it.
+    night, ahead of songs you just added; ``now`` dates no track, only the end
+    of a rate limit's wait.
 
     A playlist that can't be read is listed in ``stats.missing_playlists``. Any
     other failure of one source lands in ``stats.errors`` and the other sources
-    still sync. A SpotifyAuthError is raised: nothing can be read without
-    authorization.
+    still sync, except a rate limit (HTTP 429): nothing more is asked, the
+    tracks read so far are kept, and when Spotify said how long to wait,
+    ``stats.retry_after_until`` says until when. A SpotifyAuthError is raised:
+    nothing can be read without authorization.
 
     With ``cfg.suggest_top_tracks``, the top tracks are stored as a JSON list under
     ``kv["spotify:top_tracks"]`` for the to-do page. They never become songs.
@@ -553,6 +614,15 @@ def sync_spotify(
     newest: dict[str, SpotifyTrack] = {}
     refs: list[str | None] = [None] if cfg.liked_songs else []
     refs += [ref for ref in cfg.playlists if ref.strip()]
+    limited: SpotifyRateLimited | None = None
+
+    def stop(e: SpotifyRateLimited) -> None:
+        nonlocal limited
+        limited = e
+        stats.errors.append(str(e))
+        if e.retry_after is not None:
+            stats.retry_after_until = utc_stamp(now + timedelta(seconds=e.retry_after))
+
     for ref in refs:
         tracks = iter_saved_tracks(sp) if ref is None else iter_playlist_tracks(sp, ref)
         try:
@@ -563,6 +633,9 @@ def sync_spotify(
         except PlaylistUnavailable as e:
             log.warning("%s", e)
             stats.missing_playlists.append(e.ref)
+        except SpotifyRateLimited as e:
+            stop(e)
+            break
         except SpotifySourceError as e:
             stats.errors.append(str(e))
 
@@ -581,9 +654,11 @@ def sync_spotify(
         stats.seen += 1
         stats.new += int(created)
 
-    if cfg.suggest_top_tracks:
+    if cfg.suggest_top_tracks and limited is None:
         try:
             suggestions = [_suggestion(t) for t in top_tracks(sp)]
+        except SpotifyRateLimited as e:
+            stop(e)
         except SpotifySourceError as e:
             stats.errors.append(str(e))
         else:

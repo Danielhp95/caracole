@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 # Where sync_sources records how each source went, as JSON, for the to-do page.
 WANTED_STATUS_KEY = "source:wanted"
 SPOTIFY_STATUS_KEY = "source:spotify"
+# Until when Spotify asked tabarr to wait after an HTTP 429 (ISO 8601 UTC); not asked before.
+SPOTIFY_RETRY_KEY = "spotify:retry_after_until"
 
 
 @dataclass
@@ -34,6 +36,8 @@ class SyncStats:
     ``errors`` are messages for the run report; nothing in them is fatal.
     ``line_errors`` repeats wanted.txt's bad lines as ``(line_no, message)``.
     ``missing_playlists`` lists configured Spotify playlists that couldn't be read.
+    ``retry_after_until`` is when Spotify's rate limit lets tabarr ask again
+    (ISO 8601 UTC), when a sync stopped at one that said how long to wait.
     """
 
     seen: int = 0
@@ -41,6 +45,7 @@ class SyncStats:
     errors: list[str] = field(default_factory=list)
     missing_playlists: list[str] = field(default_factory=list)
     line_errors: list[tuple[int, str]] = field(default_factory=list)
+    retry_after_until: str | None = None
 
 
 class Upsert(Protocol):
@@ -151,10 +156,13 @@ def sync_sources(
     ``spotify`` is the client from ``spotify.client_from_config``, or None when
     there is none. wanted.txt always syncs, and no Spotify failure raises: it
     becomes the report's ``spotify_state``. Each source's outcome is stored as
-    JSON in the kv table under "source:wanted" and "source:spotify".
+    JSON in the kv table under "source:wanted" and "source:spotify". After a
+    rate limit that said how long to wait, Spotify isn't asked until then
+    (kv ``spotify:retry_after_until``).
     """
     from tabarr.wanted import sync_wanted
 
+    kv_get = kv_get or default_kv_get()
     kv_set = kv_set or default_kv_set()
     stamp = utc_stamp(now)
     wanted = sync_wanted(conn, cfg.wanted_file, now, upsert=upsert, kv_get=kv_get, kv_set=kv_set)
@@ -182,8 +190,15 @@ def sync_sources(
         state = "setup_needed" if isinstance(e, SpotifySetupError) else "auth_needed"
         return state, _sentence(e.problem)
 
+    wait_until = kv_get(conn, SPOTIFY_RETRY_KEY)
     if spotify is None:
         report.spotify_state, report.spotify_message = needs(no_client_error(cfg))
+    elif wait_until and stamp < wait_until:
+        report.spotify = SyncStats()
+        report.spotify_state = "error"
+        report.spotify_message = (
+            f"Spotify asked tabarr to wait until {wait_until} (HTTP 429); not asked before then"
+        )
     else:
         try:
             report.spotify = sync_spotify(
@@ -194,6 +209,8 @@ def sync_sources(
         except SpotifyError as e:
             report.spotify_state, report.spotify_message = "error", str(e)
         else:
+            if report.spotify.retry_after_until:
+                kv_set(conn, SPOTIFY_RETRY_KEY, report.spotify.retry_after_until)
             problems = list(report.spotify.errors)
             if missing := report.spotify.missing_playlists:
                 names = ", ".join(repr(ref) for ref in missing)

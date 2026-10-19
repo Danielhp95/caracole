@@ -205,6 +205,11 @@ expires the refresh token about six months after you authorize: run
 Development Mode reads only playlists you own or collaborate on, so
 editorial playlists don't work. A playlist that can't be read is reported.
 
+When Spotify says tabarr is asking too often (HTTP 429), a wait of up to 30
+seconds is waited out a few times; a longer one isn't. The sync then stops
+asking, keeps the songs it has read, and doesn't ask Spotify again until the
+wait is over, so an app over its limits isn't kept there.
+
 ## The first run
 
 With some songs listed:

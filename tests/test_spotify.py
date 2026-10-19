@@ -1,5 +1,7 @@
 import json
+import threading
 from datetime import UTC, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from itertools import pairwise
 
 import pytest
@@ -18,9 +20,11 @@ from tabarr.spotify import (
     UNDATED,
     PlaylistUnavailable,
     SpotifyAuthError,
+    SpotifyRateLimited,
     SpotifySetupError,
     SpotifySourceError,
     SpotifyTrack,
+    _api_session,
     authorize,
     client_from_config,
     iter_playlist_tracks,
@@ -592,6 +596,90 @@ def test_malformed_items_are_reported_and_good_tracks_kept():
     stats, up, _ = sync(sp, spotify(suggest_top_tracks=False))
     assert [c["source_id"] for c in up.calls] == ["tSoda"]
     assert len(stats.errors) == 1 and "3 items" in stats.errors[0]
+
+
+def rate_limit(seconds="3600"):
+    return SpotifyException(
+        429, -1, "https://api.spotify.com/v1/x:\n API rate limit exceeded",
+        headers={"Retry-After": seconds},
+    )
+
+
+def test_a_rate_limit_stops_the_sync_and_keeps_what_was_read():
+    sp = FakeSpotify(
+        saved=[saved(SODA)],
+        items={LEARN: [entry(CREEP)], ROAD: [entry(WONDER)]},
+        fail={f"items:{LEARN}": rate_limit()},
+    )
+    stats, up, kv = sync(sp, spotify(playlists=(LEARN, ROAD), suggest_top_tracks=True))
+    assert [c["source_id"] for c in up.calls] == ["tSoda"]  # read before Spotify said stop
+    assert f"items:{ROAD}" not in sp.calls and "top" not in sp.calls  # nothing more asked
+    assert len(stats.errors) == 1 and "HTTP 429" in stats.errors[0]
+    assert stats.retry_after_until == "2026-10-18T04:30:00Z"
+    assert TOP_TRACKS_KEY not in kv
+
+
+def test_a_rate_limit_without_a_wait_still_stops_the_sync():
+    sp = FakeSpotify(saved=[saved(SODA)], items={LEARN: [entry(CREEP)]},
+                     fail={"saved": SpotifyException(429, -1, "x:\n Too many requests")})
+    stats, up, _ = sync(sp, spotify(playlists=(LEARN,)))
+    assert up.calls == [] and sp.calls == ["saved"]
+    assert stats.retry_after_until is None and "HTTP 429" in stats.errors[0]
+
+
+class TooManyRequests(BaseHTTPRequestHandler):
+    """A local stand-in for api.spotify.com that answers every request 429 with Retry-After."""
+
+    retry_after = "3600"
+    hits: list[str] = []
+
+    def do_GET(self):
+        type(self).hits.append(self.path)
+        body = b'{"error": {"status": 429, "message": "API rate limit exceeded"}}'
+        self.send_response(429)
+        self.send_header("Retry-After", type(self).retry_after)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def too_many_requests():
+    """An API client with tabarr's own session, pointed at TooManyRequests on 127.0.0.1."""
+    handler = type("Handler", (TooManyRequests,), {"hits": []})
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    sp = spotipy.Spotify(auth="AT", requests_session=_api_session(), requests_timeout=REQUEST_TIMEOUT)
+    sp.prefix = f"http://127.0.0.1:{server.server_port}/v1/"
+    yield sp, handler
+    server.shutdown()
+    server.server_close()
+
+
+def test_a_long_retry_after_is_neither_cut_short_nor_retried(too_many_requests, monkeypatch):
+    sp, handler = too_many_requests
+    slept = []
+    monkeypatch.setattr("urllib3.util.retry.time.sleep", slept.append)
+    with pytest.raises(SpotifyRateLimited) as raised:
+        list(iter_saved_tracks(sp))
+    assert len(handler.hits) == 1 and slept == []  # asked once, and no 30-second wait
+    assert raised.value.retry_after == 3600 and raised.value.status == 429
+
+
+def test_a_short_retry_after_is_waited_out_and_retried(too_many_requests, monkeypatch):
+    sp, handler = too_many_requests
+    handler.retry_after = "2"
+    slept = []
+    monkeypatch.setattr("urllib3.util.retry.time.sleep", slept.append)
+    with pytest.raises(SpotifyRateLimited) as raised:
+        list(iter_saved_tracks(sp))
+    assert len(handler.hits) == 4 and slept == [2, 2, 2]  # three retries, then it gives up
+    assert raised.value.retry_after == 2
 
 
 # --- authorization --------------------------------------------------------------------------
