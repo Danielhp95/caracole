@@ -243,6 +243,9 @@ def make_artist_page_html(
     *,
     page: int = 1,
     pages: int = 1,
+    path: str | None = None,
+    stripped: str | None = None,
+    types: list[str] | None = None,
 ) -> str:
     """One page of an artist's tab list: ``tabs`` become ``data.other_tabs``, in the order given.
 
@@ -250,17 +253,25 @@ def make_artist_page_html(
     app as entries without a ``type`` key; append raw dicts such as
     ``{"id": 1806686, "song_name": "X", "marketing_type": "TabPro", "rating": 4.8, "votes": 21}``
     to test that they are skipped. ``page`` and ``pages`` fill ``data.pagination``,
-    and ``data.filters.types`` lists ``all`` plus one filter per type present in ``tabs``.
+    and ``data.filters.types`` lists ``all`` plus one filter per type present in ``tabs``,
+    or per UG type in ``types``: a filtered list's bar still offers every type the artist has.
+
+    ``path`` is the page's own path, which every link on it uses: by default
+    ``artist_path`` (``/artist/soda_stereo_2946``). UG addresses some artists by
+    their number alone, as ``/artist/634073`` (Song Dongye (宋冬野), checked live):
+    pass that ``path``, and ``stripped`` for ``name_stripped`` (by default made
+    from ``name``).
     """
-    path = artist_path(artist_id, name)
+    path = path or artist_path(artist_id, name)
+    stripped = name_stripped(name) if stripped is None else stripped
     typed = [t for t in tabs if "type" in t]
     filters = [{"name": "all", "url": path, "count": len(typed)}]
     for ug_type, (label, value) in ARTIST_FILTERS.items():
         count = sum(1 for t in typed if t["type"] == ug_type)
-        if count:
+        if count or (types is not None and ug_type in types):
             filters.append({"name": label, "url": f"{path}?filter={value}", "count": count})
     data = {
-        "artist": {"id": artist_id, "name": name, "name_stripped": name_stripped(name)},
+        "artist": {"id": artist_id, "name": name, "name_stripped": stripped},
         "other_tabs": list(tabs),
         "current_page": page,
         "pagination": {
@@ -275,3 +286,62 @@ def make_artist_page_html(
     return store_page_html(
         data, title=f"{name} Chords & Tabs for Guitar, Ukulele, Bass, Drums at Ultimate-Guitar"
     )
+
+
+# --- the live case: 宋冬野 - 斑马斑马 ------------------------------------------------------------
+#
+# What two polite requests through caracole's own client read from UG on 2026-10-19: the tab page
+# /tab/4180894 and the artist page /artist/634073?filter=chords. The fakes below keep their JSON
+# fields and values. UG names the song and the artist in two scripts, links every tab of the artist
+# as a bare /tab/<id>, and addresses the artist page by its number alone. Ratings, votes, the tabs
+# list and every sheet line are made up: none of the song's lyrics are in the repository.
+
+SONG_DONGYE_ID = 634073
+SONG_DONGYE = "Song Dongye (宋冬野)"
+SONG_DONGYE_URL = f"{WWW}/artist/{SONG_DONGYE_ID}"
+BANMA_UG = "斑马 斑马 Banma Banma Zebra Zebra"
+# 宋冬野's chords list, in UG's order: (tab id, song_name, version).
+SONG_DONGYE_CHORDS = (
+    (6613886, "与我交谈 Speak With Me", 1),
+    (4180894, BANMA_UG, 1),
+    (4689017, BANMA_UG, 2),
+    (4041916, "莉莉安 Lilian", 1),
+    (3016223, "董小姐", 1),
+    (3204647, "董小姐", 2),
+    (3392735, "郭源潮", 1),
+)
+# Made-up lines, in Traditional characters as the live sheet (and LRCLIB's records) write them.
+BANMA_TRADITIONAL_LINES = ("河邊的小路通向遠方", "我在窗前數星星", "秋天的風吹過山崗",
+                           "舊信封裡有一個夏天", "火車開往沒有名字的城", "燈光照亮回家的橋")
+DONG_XIAOJIE_LINES = ("黃昏的站台空無一人", "她把吉他放在窗邊", "風裡還有昨天的歌",
+                      "我們在沙漠裡等雨", "誰也沒有說再見")
+
+
+def song_dongye_tab(tab_id: int, song: str, *, version: int = 1, type: str = "Chords",
+                    **extra: Any) -> dict[str, Any]:
+    """A tab of 宋冬野's as UG lists it: names in two scripts, at the bare /tab/{id}, of artist 634073."""
+    extra.setdefault("artist_url", SONG_DONGYE_URL)
+    return version_dict(tab_id, type=type, version=version, song=song, artist=SONG_DONGYE,
+                        artist_id=SONG_DONGYE_ID, **extra)
+
+
+def song_dongye_chords(**ratings: tuple[float, int]) -> list[dict[str, Any]]:
+    """宋冬野's chords list as UG showed it; ``ratings`` give a tab (``t4180894=(4.8, 120)``) a rating
+    and a vote count."""
+    return [song_dongye_tab(t, song, version=n, **_rated(ratings.get(f"t{t}")))
+            for t, song, n in SONG_DONGYE_CHORDS]
+
+
+def _rated(rating: tuple[float, int] | None) -> dict[str, Any]:
+    return {} if rating is None else {"rating": rating[0], "votes": rating[1]}
+
+
+def song_dongye_page_html(tabs: list[dict[str, Any]]) -> str:
+    """One list of 宋冬野's artist page, at /artist/634073: one page, with filters for chords and tabs."""
+    return make_artist_page_html(SONG_DONGYE_ID, SONG_DONGYE, tabs, path=f"/artist/{SONG_DONGYE_ID}",
+                                 stripped="", types=["Chords", "Tabs"])
+
+
+def song_dongye_sheet(lines: tuple[str, ...]) -> str:
+    """A chords-over-lyrics sheet in UG markup, laid out as the live one: chords, then a line."""
+    return "\n".join(f"[tab][ch]C[/ch] [ch]D[/ch] [ch]Bm[/ch] [ch]Em[/ch]\n{line}[/tab]" for line in lines)

@@ -47,14 +47,13 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import sqlite3
 from collections.abc import Callable, Iterable, Sequence
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit
 
 from rapidfuzz import fuzz
 
@@ -72,8 +71,8 @@ from caracole.http import (
 )
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
 from caracole.lyrics import song_lyrics
-from caracole.normalize import clean_title, compact, has_han, romanize, slug_key
-from caracole.overrides import Overrides
+from caracole.normalize import clean_title, compact, name_forms, slug_key
+from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from caracole.songs import Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
@@ -131,7 +130,6 @@ ARTIST_PAGE_KINDS = ("chords", "guitar-pro", "power", "tabs")  # the sheet's lis
 TITLE_MATCH = 90  # rapidfuzz ratio of title keys, the matcher's accept score
 TITLE_MARGIN = 8  # a fuzzy title must lead the next different title by this much
 LEARN_TRIES = 3  # slugged tabs read at most to learn an artist's page
-_ARTIST_PATH = re.compile(r"/artist/[^/?#]+_\d+")
 
 # A tab page that won't parse, even fetched again, is asked for again after a week, then after
 # twice as long each time it still won't.
@@ -229,11 +227,10 @@ def _slot(kind: str) -> str:
 
 
 def _name_keys(name: str) -> list[str]:
-    """A name's keys: its slug key, plus its pinyin key when it is Chinese."""
-    keys = [slug_key(name)]
-    if has_han(name):
-        keys.append(slug_key(romanize(name)))
-    return [k for k in dict.fromkeys(keys) if k]
+    """A name's keys, its slug key first (``normalize.name_forms``): its pinyin key when it is Chinese,
+    and each part of a name UG writes in two scripts, as "Song Dongye (宋冬野)" or
+    "斑马 斑马 Banma Banma Zebra Zebra"."""
+    return list(name_forms(name))
 
 
 def artist_keys(song: Song, overrides: Overrides) -> list[str]:
@@ -246,11 +243,18 @@ def artist_keys(song: Song, overrides: Overrides) -> list[str]:
 
 
 def artist_is_known(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> bool:
-    """Whether the song's artist page can be found: pasted in [artist_url], learned, or in the index."""
-    return any(
-        k in overrides.artist_url or learned_artist_url(conn, k) or artist_known(conn, k)
-        for k in artist_keys(song, overrides)
-    )
+    """Whether the song's artist page can be found: pasted in [artist_url] (a tab page there counts
+    until reading it shows it leads to no artist page), learned, or in the index."""
+    keys = artist_keys(song, overrides)
+    if artist_url_entry(overrides, keys) is not None and _failed_paste(conn, keys, overrides) is None:
+        return True
+    return any(learned_artist_url(conn, k) or artist_known(conn, k) for k in keys)
+
+
+def pasted_page_problem(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> tuple[str, str] | None:
+    """The tab page you pasted under [artist_url] for the song's artist and what is wrong with it, when
+    reading it gave no artist page (``PASTE_GONE``, ``PASTE_CLOSED``, ``PASTE_NO_ARTIST``); else None."""
+    return _failed_paste(conn, artist_keys(song, overrides), overrides)
 
 
 # --- pages and versions ---------------------------------------------------------------------------
@@ -424,21 +428,20 @@ def _mark_gone(run: _SongRun, tab_id: int, url: str, kind: str | None) -> None:
 
 
 def _artist_page_base(url: str | None) -> str | None:
-    """A UG artist page address (``https://www.ultimate-guitar.com/artist/<name>_<id>``), else None."""
+    """The UG artist page a link of UG's points to (``https://www.ultimate-guitar.com/artist/<name>_<id>``
+    or ``…/artist/<id>``, ``overrides.artist_page_address``), else None. A relative link is UG's own."""
     if not url:
         return None
     try:
-        parts = urlsplit(urljoin(WWW + "/", url.strip()))
+        return artist_page_address(urljoin(WWW + "/", url.strip()))
     except ValueError:  # a link urllib can't parse ("Invalid IPv6 URL"): no artist page
         return None
-    path = parts.path.rstrip("/")
-    if parts.netloc != urlsplit(WWW).netloc or not _ARTIST_PATH.fullmatch(path):
-        return None
-    return urlunsplit(("https", parts.netloc, path, "", ""))
 
 
 def _same_artist(key: str, name: str) -> bool:
-    return compact(key) in {compact(k) for k in _name_keys(name)}
+    """Whether the artist UG names ``name`` is the one filed under ``key``: they share a form, hyphens
+    aside, as "宋冬野" and "Song Dongye (宋冬野)" do."""
+    return not {compact(k) for k in _name_keys(key)}.isdisjoint(compact(k) for k in _name_keys(name))
 
 
 def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[str] = ()) -> str | None:
@@ -835,14 +838,87 @@ def _best_title(hits: list[_Hit]) -> list[_Hit]:
 
 
 def _known_artist_page(conn: sqlite3.Connection, keys: list[str], overrides: Overrides) -> str | None:
-    """The artist page you pasted under [artist_url], else one learned from a tab page."""
-    for key in keys:
-        if key in overrides.artist_url:
-            return overrides.artist_url[key]
+    """The artist page you pasted under [artist_url] (or the one the tab page you pasted there links
+    to, once read), else one learned from a tab page."""
+    entry = artist_url_entry(overrides, keys)
+    if entry is not None and (page := _pasted_page(conn, entry[1])) is not None:
+        return page
     for key in keys:
         if url := learned_artist_url(conn, key):
             return url
     return None
+
+
+# What reading a tab page you pasted under [artist_url] can find instead of an artist page (the
+# to-do page says it, and asks for another page).
+PASTE_GONE = "UG answers 404 for it"
+PASTE_CLOSED = "robots.txt closes it to caracole"
+PASTE_NO_ARTIST = "it doesn't link to its artist's page"
+
+
+def _pasted_key(tab_id: int) -> str:
+    return f"ug:pasted_tab:{tab_id}"
+
+
+def _pasted_record(conn: sqlite3.Connection, url: str) -> dict | None:
+    """What reading the tab page at an [artist_url] address found, once it was read: the artist page
+    it links to (``artist_url``), or what is wrong with it (``problem``). None for an artist page."""
+    tab_id = pasted_tab_id(url)
+    record = kv_get_json(conn, _pasted_key(tab_id)) if tab_id is not None else None
+    return record if isinstance(record, dict) else None
+
+
+def _pasted_page(conn: sqlite3.Connection, url: str) -> str | None:
+    """The artist page an [artist_url] address gives: itself, or the one the tab page there links to,
+    once that page is read (``_read_pasted_tab_page``)."""
+    if pasted_tab_id(url) is None:
+        return url
+    page = (_pasted_record(conn, url) or {}).get("artist_url")
+    return page if isinstance(page, str) and page else None
+
+
+def _failed_paste(conn: sqlite3.Connection, keys: list[str], overrides: Overrides) -> tuple[str, str] | None:
+    """Your [artist_url] address for an artist with these keys and what is wrong with it, when it is a
+    tab page that reading showed leads to no artist page."""
+    entry = artist_url_entry(overrides, keys)
+    problem = (_pasted_record(conn, entry[1]) or {}).get("problem") if entry is not None else None
+    return (entry[1], problem) if entry is not None and isinstance(problem, str) and problem else None
+
+
+def _read_pasted_tab_page(run: _SongRun, keys: list[str]) -> None:
+    """Read the tab page you pasted under [artist_url] for the song's artist, once, for the artist page
+    it links to, and remember what it said (kv ``ug:pasted_tab:<tab id>``).
+
+    It is a request like any other (budget, pause, robots.txt, block, the cache), and an error leaves
+    it to be read next run. A bare ``/tab/{id}`` of a slugged tab is read at the index's slugged path,
+    where UG serves it. The artist page is filed under UG's names for the artist and under your entry's
+    key. A page that gives none (gone, closed to caracole, or linking nowhere) is remembered as such:
+    the to-do page asks for another one.
+    """
+    entry = artist_url_entry(run.ctx.overrides, keys)
+    if entry is None:
+        return
+    key, url = entry
+    tab_id = pasted_tab_id(url)
+    if tab_id is None or _pasted_record(run.conn, url) is not None:
+        return
+    target = url if _slugged_url(url, tab_id) else tab_url_for(run.conn, tab_id)
+    artist, problem = None, PASTE_CLOSED  # unless read: robots.txt closes it, or where UG sends it
+    if not _closed(target):
+        try:
+            page, _ = _get_page(run.ctx.client, target, parse_tab_page)
+        except RobotsClosed:
+            page = None
+        else:
+            if page is None:
+                problem = PASTE_GONE
+            elif (artist := _learn_artist_url(run.conn, page, [key])) is None:
+                problem = PASTE_NO_ARTIST
+            else:
+                problem = None
+    if problem is not None:
+        log.warning("UG tab page %s, under [artist_url] for %s: %s", url, run.song.artist, problem)
+    kv_set_json(run.conn, _pasted_key(tab_id), {"artist_url": artist, "problem": problem, "at": _iso(run.ctx.now)})
 
 
 def _learn_artist_page(run: _SongRun, keys: list[str]) -> str | None:
@@ -1022,15 +1098,22 @@ def _artist_page_route(run: _SongRun) -> bool:
     """Look a not-found song up on its artist's UG page (A6); True when it was found and accepted.
 
     The page lists bare-id tabs the sitemap index can't see. Its address
-    comes from [artist_url], a learned address, or a slugged tab of the
-    artist. The chords list is read first; its filter bar tells which guitar
-    lists the artist has. A list cut short by the page cap leaves the song as
-    it was, for the next run; otherwise the check is recorded, found or not.
-    Not found, the song loses what an undone match kept (``_drop_undone``).
+    comes from [artist_url] (the artist's page, or one of their tab pages,
+    read once for the page it links to), a learned address, or a slugged tab
+    of the artist. The chords list is read first; its filter bar tells which
+    guitar lists the artist has. A list cut short by the page cap leaves the
+    song as it was, for the next run; otherwise the check is recorded, found
+    or not. Not found, the song loses what an undone match kept
+    (``_drop_undone``). A tab page you pasted that leads to no artist page
+    records no check: the song wasn't looked for, and the to-do page asks
+    for another page.
     """
     keys = artist_keys(run.song, run.ctx.overrides)
+    _read_pasted_tab_page(run, keys)
     base = _known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_artist_page(run, keys)
     if base is None:
+        if _failed_paste(run.conn, keys, run.ctx.overrides) is not None:
+            return False
         return _not_on_artist_page(run)
     listing = _read_artist_page(run, base, ARTIST_PAGE_KINDS, _name_keys(clean_title(run.song.title)))
     if not listing.complete:
@@ -1118,6 +1201,7 @@ def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[I
     """
     update_song(run.conn, run.song.id, ug_dirty=True)
     keys = _matched_artist_keys(run)
+    _read_pasted_tab_page(run, keys)
     base = (_known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_from_own_tabs(run, own, keys)
             or _learn_artist_page(run, keys))
     if base is not None:

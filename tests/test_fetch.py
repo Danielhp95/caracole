@@ -20,9 +20,16 @@ import pytest
 from conftest import add_song
 from helpers.ug_pages import (
     ARTIST_FILTERS,
+    BANMA_UG,
+    DONG_XIAOJIE_LINES,
+    SONG_DONGYE_URL,
     artist_path,
     make_tab_page_html,
     name_stripped,
+    song_dongye_chords,
+    song_dongye_page_html,
+    song_dongye_sheet,
+    song_dongye_tab,
     store_page_html,
     version_dict,
 )
@@ -42,7 +49,9 @@ from caracole.ug.fetch import (
     FetchContext,
     FetchStats,
     SongFetchOutcome,
+    artist_is_known,
     fetch_songs,
+    pasted_page_problem,
     process_song,
     rescore_kept_sheets,
     songs_to_fetch,
@@ -1092,6 +1101,36 @@ def test_artist_url_learned_from_every_tab_page(conn, tmp_path):
     assert learned_artist_url(conn, "soda-stereo") == SODA_URL
 
 
+@pytest.mark.parametrize("linked", [
+    "https://www.ultimate-guitar.com/artist/2946",
+    "https://www.ultimate-guitar.com/artist/2946/?filter=chords#top",
+    "/artist/2946",
+])
+def test_an_artist_page_addressed_by_its_number_alone_is_learned(conn, tmp_path, linked):
+    # UG links some tabs to /artist/<id> alone, as 宋冬野's tabs to /artist/634073 (checked live).
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES), artist_url=linked)
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert learned_artist_url(conn, "soda-stereo") == "https://www.ultimate-guitar.com/artist/2946"
+
+
+@pytest.mark.parametrize("linked", ["https://www.ultimate-guitar.com/artist/soda_stereo",
+                                    "https://www.ultimate-guitar.com/artist/_2946"])
+def test_an_artist_link_without_a_number_teaches_nothing(conn, tmp_path, linked):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES), artist_url=linked)
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert learned_artist_url(conn, "soda-stereo") is None
+
+
 def test_another_artists_page_is_not_learned_for_the_song(conn, tmp_path):
     # A pinned cover: its artist page belongs to the cover's artist, not to Soda Stereo.
     song = accepted(conn)
@@ -1164,13 +1203,14 @@ BANMA_TRADITIONAL = "\n".join(BANMA_TRADITIONAL_LINES)
 KIND_TYPES = {"chords": "Chords", "tabs": "Tabs", "guitar-pro": "Pro", "power": "Power"}
 
 
-def artist_page(artist_id, name, tabs, *, page=1, pages=1, kinds=("chords",)):
+def artist_page(artist_id, name, tabs, *, page=1, pages=1, kinds=("chords",), path=None):
     """One page of an artist's filtered tab list: ``tabs`` are this page's entries, in UG's order.
 
     UG's filter bar offers a filter per type the artist has, whichever filter is
-    showing; ``kinds`` are those types.
+    showing; ``kinds`` are those types. ``path`` is the page's own, as UG's links
+    write it: ``/artist/<name>_<id>`` by default, or the bare ``/artist/<id>``.
     """
-    path = artist_path(artist_id, name)
+    path = path or artist_path(artist_id, name)
     types = [{"name": "all", "url": path, "count": len(tabs)}]
     for kind in kinds:
         label, value = ARTIST_FILTERS[KIND_TYPES[kind]]
@@ -1216,6 +1256,21 @@ def serve_banma(ug, entries, *, pages=None, kinds=("chords",)):
     ug.tab(best, [other], content=sheet("sheet 2001234", BANMA_LINES), artist_url=BANMA_ARTIST)
     ug.tab(other, [best], content=sheet("sheet 2001235", BANMA_LINES[:3]), artist_url=BANMA_ARTIST)
     return best, other
+
+
+def test_a_pasted_artist_page_addressed_by_its_number_alone_is_read(conn, tmp_path):
+    song = banma(conn)
+    base = "https://www.ultimate-guitar.com/artist/634073"
+    ug = FakeUG()
+    best = banma_tab(2001234, rating=4.7, votes=50)
+    ug.add(artist_list(base), artist_page(634073, "宋冬野", [best], path="/artist/634073"))
+    ug.tab(best, content=sheet("sheet 2001234", BANMA_LINES), artist_url=base)
+    pasted = Overrides(artist_url={"宋冬野": base})
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, pasted), song)
+
+    assert ug.requests == [f"{base}?filter=chords", f"{TAB}2001234"]
+    assert out.sheet == 2001234 and get_song(conn, song.id).status == "found"
 
 
 def test_banma_found_on_its_artist_page_once_its_url_is_pasted(conn, tmp_path):
@@ -1373,6 +1428,236 @@ def test_titles_match_across_scripts_and_in_pinyin(conn, tmp_path, listed):
     ug.tab(entry, content=sheet("sheet 2001234", BANMA_LINES), artist_url=BANMA_ARTIST)
 
     assert process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, PASTED), song).sheet == 2001234
+
+
+LIVE_PASTED = Overrides(artist_url={"宋冬野": SONG_DONGYE_URL})
+
+
+def serve_song_dongye(ug, *, lines=BANMA_TRADITIONAL_LINES):
+    """宋冬野's chords list as UG showed it live (/artist/634073?filter=chords), and the sheets of its
+    two 斑马斑马 versions and its two 董小姐 ones."""
+    ug.add(artist_list(SONG_DONGYE_URL), song_dongye_page_html(
+        song_dongye_chords(t4180894=(4.8, 120), t4689017=(4.6, 40), t3016223=(4.7, 90), t3204647=(4.1, 9))))
+    for tab_id, version in ((4180894, 1), (4689017, 2)):
+        other = song_dongye_tab(4689017 if version == 1 else 4180894, BANMA_UG, version=3 - version)
+        ug.tab(song_dongye_tab(tab_id, BANMA_UG, version=version), [other],
+               content=song_dongye_sheet(lines), artist_url=SONG_DONGYE_URL)
+    for tab_id, version in ((3016223, 1), (3204647, 2)):
+        ug.tab(song_dongye_tab(tab_id, "董小姐", version=version), [],
+               content=song_dongye_sheet(DONG_XIAOJIE_LINES), artist_url=SONG_DONGYE_URL)
+
+
+def song_by_song_dongye(conn, title, lines=BANMA_TRADITIONAL_LINES, *, decision="not_found"):
+    """A song of 宋冬野's with LRCLIB lyrics; the matcher found it nowhere in the index, unless pinned."""
+    song = add_song(conn, "宋冬野", title, added_at="2026-10-18T00:00:00Z")
+    step = "pin" if decision == "pinned" else None
+    update_song(conn, song.id, match_decision=decision, match_step=step, lyrics_status="found",
+                lyrics_json=lyrics_json("\n".join(lines)))
+    return get_song(conn, song.id)
+
+
+@pytest.mark.parametrize("title", ["斑马斑马", "斑马，斑马", "斑馬斑馬", "Banma Banma", "Ban Ma Ban Ma"])
+def test_the_live_artist_page_lists_banma_in_two_scripts_and_a_translation(conn, tmp_path, title):
+    # UG lists it as "斑马 斑马 Banma Banma Zebra Zebra": the original, its pinyin, a translation.
+    song = song_by_song_dongye(conn, title)
+    ug = FakeUG()
+    serve_song_dongye(ug)
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, LIVE_PASTED), song)
+
+    assert {int(r.tab_id) for r in song_versions(conn, song.id)} == {4180894, 4689017}
+    done = get_song(conn, song.id)
+    assert (done.match_step, done.match_artist_key, done.match_song_key) == (
+        "artist_page", "song-dongye-宋冬野", "斑马斑马-banma-banma-zebra-zebra")
+    assert out.sheet == 4180894 and done.status == "found"
+    assert coverages(conn, song) == {4180894: 1.0, 4689017: 1.0}
+
+
+@pytest.mark.parametrize("title,ids", [
+    ("莉莉安", {4041916}), ("Lilian", {4041916}), ("与我交谈", {6613886}), ("Speak With Me", {6613886}),
+    ("董小姐", {3016223, 3204647}),
+])
+def test_an_original_title_meets_its_listing_with_a_translation(conn, tmp_path, title, ids):
+    song = song_by_song_dongye(conn, title)
+    ug = FakeUG()
+    serve_song_dongye(ug)
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, LIVE_PASTED), song)
+
+    assert {int(r.tab_id) for r in song_versions(conn, song.id, include_gone=True)} == ids
+    assert get_song(conn, song.id).match_step == "artist_page"
+
+
+def test_a_title_the_live_artist_page_doesnt_list_stays_not_found(conn, tmp_path):
+    # The page's other songs, in either script, never stand in for 安和桥北.
+    song = song_by_song_dongye(conn, "安和桥北")
+    ug = FakeUG()
+    serve_song_dongye(ug)
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, LIVE_PASTED), song)
+
+    assert song_versions(conn, song.id, include_gone=True) == []
+    assert get_song(conn, song.id).match_decision == "not_found"
+
+
+def test_a_tab_page_of_the_artist_in_two_scripts_teaches_the_page_under_the_songs_artist(conn, tmp_path):
+    # UG's "Song Dongye (宋冬野)" is 宋冬野, so a pin of its tab page files the page under the song's
+    # artist too: the artist's other songs are then looked for there.
+    song = song_by_song_dongye(conn, "斑马斑马", decision="pinned")
+    ug = FakeUG()
+    serve_song_dongye(ug)
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, Overrides(pin={song.key: (4180894,)})), song)
+
+    for key in ("宋冬野", "song-dong-ye", "song-dongye", "song-dongye-宋冬野"):
+        assert learned_artist_url(conn, key) == SONG_DONGYE_URL, key
+
+
+def test_a_tab_page_of_another_artist_in_two_scripts_teaches_nothing_for_the_song(conn, tmp_path):
+    song = song_by_song_dongye(conn, "斑马斑马", decision="pinned")
+    cover = version_dict(777, song=BANMA_UG, artist="Li Zhi (李志)")
+    ug = FakeUG()
+    ug.tab(cover, content=song_dongye_sheet(BANMA_TRADITIONAL_LINES),
+           artist_url="https://www.ultimate-guitar.com/artist/99")
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, Overrides(pin={song.key: (777,)})), song)
+
+    assert learned_artist_url(conn, "宋冬野") is None
+    assert learned_artist_url(conn, "李志") == "https://www.ultimate-guitar.com/artist/99"
+
+
+# --- a tab page pasted under [artist_url] --------------------------------------------------------
+
+FOUND_TAB = f"{TAB}4180894"  # the page the user found on UG for 宋冬野 - 斑马斑马 (2026-10-19)
+TAB_PASTED = Overrides(artist_url={"宋冬野": FOUND_TAB})
+
+
+def test_a_tab_page_pasted_under_artist_url_is_read_once_for_its_artist_page(conn, tmp_path):
+    song = song_by_song_dongye(conn, "斑马斑马")
+    later = song_by_song_dongye(conn, "董小姐", DONG_XIAOJIE_LINES)
+    ug = FakeUG()
+    serve_song_dongye(ug)
+    assert {s.id for s in songs_to_fetch(conn, TAB_PASTED, NOW)} == {song.id, later.id}  # the artist is known
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, TAB_PASTED), song)
+
+    # The tab page is one request, through the run's client; the sheet slot reads it from the cache.
+    assert ug.requests == [FOUND_TAB, artist_list(SONG_DONGYE_URL), artist_list(SONG_DONGYE_URL, "tabs"),
+                           f"{TAB}4689017"]
+    assert out.sheet == 4180894 and get_song(conn, song.id).status == "found"
+    assert learned_artist_url(conn, "宋冬野") == SONG_DONGYE_URL
+    ug.requests.clear()
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, TAB_PASTED), later)
+
+    # Remembered: the artist's other songs cost no request for the tab page, nor for the lists.
+    assert ug.requests == [f"{TAB}3016223", f"{TAB}3204647"]
+    assert get_song(conn, later.id).status == "found"
+
+
+@pytest.mark.parametrize("linked", ["", "https://www.ultimate-guitar.com/artist/song_dongye", "https://example.com/a/1"])
+def test_a_pasted_tab_page_without_an_artist_page_is_no_crash_and_no_miss(conn, tmp_path, linked):
+    song = song_by_song_dongye(conn, "斑马斑马")
+    ug = FakeUG()
+    ug.tab(song_dongye_tab(4180894, BANMA_UG, artist_url=linked), content=song_dongye_sheet(BANMA_TRADITIONAL_LINES),
+           artist_url=None)
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, TAB_PASTED), [song])
+
+    assert ug.requests == [FOUND_TAB] and (stats.songs_done, stats.songs_failed) == (1, 0)
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None  # never looked for: not a miss
+    assert get_song(conn, song.id).match_decision == "not_found"
+    assert pasted_page_problem(conn, song, TAB_PASTED) == (FOUND_TAB, "it doesn't link to its artist's page")
+    assert not artist_is_known(conn, song, TAB_PASTED)
+    assert songs_to_fetch(conn, TAB_PASTED, NOW + timedelta(days=1)) == []  # until you paste another page
+    other = Overrides(artist_url={"宋冬野": SONG_DONGYE_URL})
+    assert [s.id for s in songs_to_fetch(conn, other, NOW + timedelta(days=1))] == [song.id]
+
+
+def test_a_pasted_tab_page_ug_answers_404_for_says_so(conn, tmp_path):
+    song = song_by_song_dongye(conn, "斑马斑马")
+    ug = FakeUG()  # UG's 404 page for everything
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, TAB_PASTED), song)
+
+    assert ug.requests == [FOUND_TAB]
+    assert pasted_page_problem(conn, song, TAB_PASTED) == (FOUND_TAB, "UG answers 404 for it")
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None
+
+
+def test_a_pasted_tab_page_robots_txt_closes_is_never_asked_for(conn, tmp_path):
+    song = song_by_song_dongye(conn, "斑马斑马")
+    closed = Overrides(artist_url={"宋冬野": CLOSED})
+    ug = FakeUG()
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, closed), song)
+
+    assert ug.requests == []
+    assert pasted_page_problem(conn, song, closed) == (CLOSED, "robots.txt closes it to caracole")
+
+
+def test_a_pasted_bare_tab_url_of_a_slugged_tab_is_read_at_its_slugged_url(conn, tmp_path):
+    # UG answers 404 for a slugged tab at its bare /tab/{id}: the index's path is where it is.
+    index(conn, (1081462, "soda-stereo", "persiana-americana", "tabs"))
+    song = soda_dml(conn)
+    ug = FakeUG()
+    ug.tab(v(1081462, "tabs"), content=riff("persiana riff"))
+    serve_dml(ug)
+    pasted = Overrides(artist_url={"soda-stereo": f"{TAB}1081462"})
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, pasted), song)
+
+    assert ug.requests[:2] == [slugged(1081462, "tabs"), artist_list(SODA_URL)]
+    assert get_song(conn, song.id).match_step == "artist_page"
+
+
+def test_a_pasted_tab_page_waits_for_the_budget_like_any_page(conn, tmp_path):
+    song = song_by_song_dongye(conn, "斑马斑马")
+    ug = FakeUG()
+    serve_song_dongye(ug)
+
+    first = fetch_songs(context(conn, ug.client(tmp_path / "cache", budget=0), tmp_path, TAB_PASTED), [song])
+
+    assert first.budget_exhausted and ug.requests == []
+    assert pasted_page_problem(conn, song, TAB_PASTED) is None and artist_is_known(conn, song, TAB_PASTED)
+    assert get_song(conn, song.id).match_decision == "not_found"
+    fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, TAB_PASTED), [get_song(conn, song.id)])
+    assert get_song(conn, song.id).status == "found"
+
+
+def test_a_block_on_a_pasted_tab_page_is_a_block(conn, tmp_path):
+    song = song_by_song_dongye(conn, "斑马斑马")
+    ug = FakeUG()
+    ug.add(FOUND_TAB, "Too many requests", status=429)
+
+    with pytest.raises(ProviderBlocked):
+        fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, TAB_PASTED), [song])
+
+    assert pasted_page_problem(conn, song, TAB_PASTED) is None  # tried again once the cooldown is over
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None
+
+
+def test_bare_id_chords_with_a_tab_page_you_pasted(conn, tmp_path):
+    ug = FakeUG()
+    song = persiana_with_bare_chords(conn, ug)
+    pasted = Overrides(artist_url={"soda-stereo": slugged(1081462, "tabs")})
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, pasted), song)
+
+    assert ug.requests == [slugged(1081462, "tabs"), artist_list(SODA_URL), f"{TAB}1601640", f"{TAB}1601641"]
+    assert out.sheet == 1601640
+
+
+def test_an_entry_written_as_ug_names_the_artist_serves_the_songs_artist(conn, tmp_path):
+    # Copied from UG: "Song Dongye (宋冬野)" = …, for songs of 宋冬野's.
+    song = song_by_song_dongye(conn, "斑马斑马")
+    ug = FakeUG()
+    serve_song_dongye(ug)
+    pasted = Overrides(artist_url={"song-dongye-宋冬野": SONG_DONGYE_URL})
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, pasted), song)
+
+    assert out.sheet == 4180894
 
 
 @pytest.mark.parametrize("listed,found", [

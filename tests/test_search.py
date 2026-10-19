@@ -192,9 +192,22 @@ def test_hint_says_the_paste_lines_key_is_the_artist():
 
 
 def test_hint_paste_line_names_the_artist():
-    assert '"宋冬野" = "https://www.ultimate-guitar.com/artist/<name>_<id>"' in bare_id_hint(
-        "宋冬野 斑马", [], artist="宋冬野")
+    hint = bare_id_hint("宋冬野 斑马", [], artist="宋冬野")
+    assert '"宋冬野" = "https://www.ultimate-guitar.com/artist/…"' in hint and "<name>" not in hint
     assert '"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/' in bare_id_hint("Joaquín Sabina", [])
+
+
+def test_hint_takes_a_tab_page_of_the_artist_too():
+    for hint in (bare_id_hint("宋冬野", []), bare_id_hint("Persiana Américana", [], artist="Soda Stereo")):
+        assert "or one of their tab pages" in hint
+
+
+def test_hint_knows_an_entry_written_as_ug_names_the_artist():
+    from caracole.overrides import Overrides
+
+    o = Overrides(artist_url={"song-dongye-宋冬野": "https://tabs.ultimate-guitar.com/tab/4180894"})
+    hint = bare_id_hint("宋冬野", [], overrides=o)
+    assert "overrides.toml has 宋冬野's page already (https://tabs.ultimate-guitar.com/tab/4180894)" in hint
 
 
 MANA = '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n'
@@ -472,7 +485,7 @@ def paste_hint(output: str, overrides: Path) -> None:
     """The hint's lines, pasted into overrides.toml as it says: a block with its header at the end,
     lines without one under the [artist_url] table the file has."""
     block = re.findall(r"^    (\S.*)$", output, re.M)
-    lines = "".join(f"{line}\n" for line in block).replace("<name>_<id>", "joaquin_sabina_1234")
+    lines = "".join(f"{line}\n" for line in block).replace("…", "joaquin_sabina_1234")
     text = overrides.read_text(encoding="utf-8")
     if block[0] == "[artist_url]":
         text += "\n" + lines

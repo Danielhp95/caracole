@@ -204,6 +204,37 @@ updated, the line is kept all the same, a warning says why, and the next sync
 adds the song. The first `caracole add` creates the file, with a header that
 explains the format.
 
+### Names in other scripts
+
+Write a song as you know it, in its own script or in Latin letters:
+`宋冬野 - 斑马斑马`, `宋冬野 - 斑馬斑馬` and `Song Dongye - Banma Banma` all
+work. Caracole compares Chinese as pinyin too, and Traditional characters as
+Simplified ones.
+
+Ultimate Guitar often writes a non-Latin name in two scripts at once: the
+original, a romanization and a translation, in any order, in brackets, after
+" / " or " - ", or with nothing between them. 宋冬野's artist page calls him
+"Song Dongye (宋冬野)", and the song "斑马 斑马 Banma Banma Zebra Zebra".
+Each part counts as a name of its own when caracole compares UG's names with
+yours, so `宋冬野 - 斑马斑马` finds that song there, and so would "Banma Banma",
+"Ban Ma Ban Ma" or "Zebra Zebra". Japanese, Korean and Cyrillic names come in
+the same patterns ("打上花火 (Uchiage Hanabi)", "봄날 (Spring Day)",
+"Кино (Kino)"). Caracole has no romanizer for those, so they meet on the part
+in their own script, or on the Latin one.
+
+The same goes wherever caracole meets a name it didn't write: a song you
+wrote in two scripts against the index (UG's sitemaps write names in Latin
+letters only, so `DAOKO - 打上花火 (Uchiage Hanabi)` meets
+`daoko/uchiage-hanabi`), a purchase tagged that way, and a Guitar Pro download
+UG named so.
+
+A part that only names a version or a part, such as "Live", "Acoustic",
+"Remix" or "Intro", or that is a number, a single letter or fewer than three
+Latin letters, never makes a match on its own. Another song of the artist never
+stands in for yours either: 董小姐 is no 斑马斑马, in any script. A name with
+two non-Latin parts, as a duet's "Joey Yung (容祖儿) & Eason Chan (陈奕迅)", is
+taken whole: it is neither singer.
+
 ### caracole sync
 
 `caracole sync` reads wanted.txt, then Spotify when it's set up, and prints a
@@ -288,8 +319,8 @@ about 22 seconds and make a 303 MB database.
 About a tenth of UG's tabs are listed by a bare id (`/tab/1234567`, with no
 artist or song in the address), and the index can't see those. They include
 every tab of an artist with an accented or non-Latin name, such as Joaquín
-Sabina, Maná or 宋冬野. The to-do page asks you for those artists' pages once
-(see [the to-do page](#the-to-do-page)).
+Sabina, Maná or 宋冬野. The to-do page asks you for those artists' pages once,
+or for any of their tab pages (see [the to-do page](#the-to-do-page)).
 
 **`caracole index refresh`** re-reads `sitemap_last`, the highest-numbered
 sitemap and any numbered one not indexed yet, whether new or left by a stopped
@@ -549,12 +580,13 @@ when it has something in it:
   non-Latin names only by bare ids (Joaquín Sabina, Maná, 宋冬野), so caracole
   can't see their tabs. For each such artist with a song not found, or
   reviewed on its title alone, the page links a UG search. Open the artist's
-  page once, by hand, and paste its address into the one block the page gives
-  for all of them:
+  page once, by hand, or any of their tab pages, and paste its address, as
+  your browser shows it, into the one block the page gives for all of them,
+  in place of `https://www.ultimate-guitar.com/artist/…`:
 
   ```toml
   [artist_url]
-  "宋冬野" = "https://www.ultimate-guitar.com/artist/<name>_<id>"
+  "宋冬野" = "https://www.ultimate-guitar.com/artist/634073"
   ```
 
   The block has the `[artist_url]` header only while overrides.toml has no
@@ -562,6 +594,12 @@ when it has something in it:
   under the table. The artist page lists all of the artist's tabs, bare ids
   included. The next run reads it, finds your songs on it by title, and
   fetches them like any matched song. That's once per artist, not per song.
+  A tab page you pasted is read first, once, for the artist page it links to.
+  When it leads to none (UG answers 404 for it, robots.txt closes it, or it
+  doesn't link to its artist's page), the artist stays on the list, with the
+  page you pasted and what is wrong with it, and no new line: put the
+  artist's page, or another of their tab pages, in its place. The song isn't
+  taken for missing meanwhile.
 - **Buy list.** No human sheet found yet, and nothing caracole will still do may
   find one: the song's UG fetch is done (or UG doesn't have it), no fetch,
   artist page or LaCuerda check is due for it, and, for a song not found, the
@@ -694,9 +732,10 @@ the same way `caracole add` does. N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another
 name is left alone. When nothing matches well, or the query has accented or
 non-Latin letters, the command also explains bare ids and prints the
-`[artist_url]` line to paste, with the table's header only while
-overrides.toml has no `[artist_url]` entries. For an artist whose page
-overrides.toml has already, it gives no line and says so. The search reads
+`[artist_url]` line to paste, for the artist's page or one of their tab pages,
+with the table's header only while overrides.toml has no `[artist_url]`
+entries. For an artist whose page overrides.toml has already, under any form
+of their name, it gives no line and says so. The search reads
 overrides.toml for this hint alone, and still works when the file can't be
 read.
 
@@ -715,7 +754,7 @@ the tables:
 "Soda - Persiana Americana" = "soda-stereo/persiana-americana"
 
 [artist_url]   # artists UG lists only by bare ids -> their UG artist page
-"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/<name>_<id>"
+"宋冬野" = "https://www.ultimate-guitar.com/artist/634073"
 
 [pin]          # always use exactly these tab pages for a song
 "Soda Stereo - De Música Ligera" = ["https://tabs.ultimate-guitar.com/tab/85053"]
@@ -747,12 +786,22 @@ tab_ids = [1601668]
   and Guitar Pro picks from the new one. When the new one has no sheet, the
   old sheet goes all the same, and the next render takes its `sheet.cho` and
   `sheet.pdf` along.
-- **`[artist_url]`** is keyed by the artist's name as your songs write it. The
-  value is the artist's page on UG, whose address ends in an underscore and a
-  number (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`, say).
+- **`[artist_url]`** is keyed by the artist's name as your songs write it, or
+  as UG writes it: an entry for "Song Dongye (宋冬野)" or "Song Dongye" serves
+  songs by 宋冬野 too (see [names in other scripts](#names-in-other-scripts)).
+  The value is the artist's page on UG, whose address ends in the artist's
+  number: UG writes some with the name before it
+  (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`) and some with the
+  number alone (宋冬野's is `https://www.ultimate-guitar.com/artist/634073`).
   Paste it as your browser shows it, even after you clicked a filter or
   another page (`?filter=chords`, `?page=2`, `?sort=date`): caracole drops the
-  query.
+  query. An address without the number (`/artist/joaquin_sabina`) is an error:
+  UG answers it with "page not found". Any tab page of the artist works too,
+  bare or slugged (`https://tabs.ultimate-guitar.com/tab/4180894`): the next
+  fetch reads it once, a request like any other within the night's budget,
+  and remembers the artist page it links to, for every song by the artist. A
+  tab page that leads to no artist page is listed on the to-do page, and its
+  songs wait for another address.
 - **`[pin]`** takes tab page addresses: paste them as your browser shows them,
   a query or a fragment included. Pinned tabs replace the candidates of their
   kind (sheet, Guitar Pro, tab), in the order given. A pin whose page is
@@ -913,34 +962,74 @@ Traditional characters, as some releases write it.
 
 `--dry-run` saves nothing. After the next `caracole run` (or `caracole match`),
 the to-do page lists 宋冬野 under "Artists to find on Ultimate Guitar", with a
-link to search UG, and puts the song on the buy list. Either way works:
+link to search UG and the line to paste, and puts the song on the buy list
+meanwhile:
 
-- **Paste the artist's page.** Search UG in your browser, open 宋冬野's artist
-  page, and paste its address into overrides.toml:
+```toml
+[artist_url]
+"宋冬野" = "https://www.ultimate-guitar.com/artist/…"
+```
+
+**3. Tell caracole where 宋冬野 is on UG.** Search UG in your browser, and
+paste what you find into overrides.toml, as your browser shows it. Any one of
+these does:
+
+- **His artist page.** UG writes it with his number alone, and no name:
 
   ```toml
   [artist_url]
-  "宋冬野" = "https://www.ultimate-guitar.com/artist/<name>_<id>"
+  "宋冬野" = "https://www.ultimate-guitar.com/artist/634073"
   ```
 
-  The next run reads that page, finds 斑马斑马 on it by its title (in either
-  script, or in pinyin), and fetches its versions like any matched song;
-  `caracole fetch --song "宋冬野 - 斑马斑马"` does it now. A chords version
-  becomes `sheet.txt`, and the song is found.
-- **Buy the track**, from the buy list's links, for an auto sheet (step 4).
+  A click on a filter adds `?filter=chords` to the address; caracole drops it.
+- **Any of his tab pages**, such as the one UG's search finds for the song:
 
-**3. The lyrics come from LRCLIB, plain.** LRCLIB has the song with plain
+  ```toml
+  [artist_url]
+  "宋冬野" = "https://tabs.ultimate-guitar.com/tab/4180894"
+  ```
+
+  The next run reads that page once, within the night's budget, for the
+  artist page it links to (`/artist/634073`), and remembers it. A tab page
+  that leads to no artist page stays on the to-do page, with what is wrong
+  with it, until you paste another one.
+- **A pin of the song's tab page**, which takes that very version:
+
+  ```toml
+  [pin]
+  "宋冬野 - 斑马斑马" = ["https://tabs.ultimate-guitar.com/tab/4180894"]
+  ```
+
+  Reading it teaches caracole 宋冬野's artist page too, so his other songs
+  in wanted.txt (`宋冬野 - 董小姐`, say) are found there the next night with
+  nothing more to paste.
+
+**4. The next run finds it.** With his artist page known, the run reads its
+chords list, then its tabs list. UG names him "Song Dongye (宋冬野)" there,
+and the song "斑马 斑马 Banma Banma Zebra Zebra", in two versions: the
+original, its pinyin and a translation, run together. Each part counts as a
+name of its own (see [names in other scripts](#names-in-other-scripts)), so
+斑马斑马 matches both versions, and none of his other songs (与我交谈 Speak
+With Me, 莉莉安 Lilian, 董小姐, 郭源潮). Both versions are scored against the
+lyrics, the better one becomes `sheet.txt`, and the song is found; 宋冬野
+leaves the to-do page. That takes four requests: the two lists and the two
+versions (or the tab page you pasted, the lists and the other version).
+`caracole fetch --song "宋冬野 - 斑马斑马"` does it at once.
+
+**5. The lyrics come from LRCLIB, plain.** LRCLIB has the song with plain
 lyrics only, and no timings, so its folder gets `lyrics.txt` and no
-`lyrics.lrc`. The lyrics are in Traditional characters (斑馬), while sheets
-are usually in Simplified ones (斑马). Caracole compares Chinese text as pinyin
-when it checks how much of the lyrics a sheet covers, so a complete sheet
-still counts as complete.
+`lyrics.lrc`. Its lyrics are in Traditional characters (斑馬), as UG's sheet
+of the song is; many sheets are in Simplified ones (斑马). Caracole compares
+Chinese text as pinyin when it checks how much of the lyrics a sheet covers,
+so a complete sheet counts as complete either way.
 
-**4. Buy it, drop it into Music/, and run `caracole autochords`.** The command
-needs the flake's `packages.autochords` (`nix shell .#autochords` on the
-laptop; on the NUC, the `caracole-autochords` unit runs it after each nightly
-run, see [deploy.md](deploy.md#6-auto-chords)). It links the new file to the
-song by its tags and duration, finds the chords and the beats, and writes
+**6. No human sheet anywhere? Buy it, drop it into Music/, and run
+`caracole autochords`.** The buy list links the stores. The command needs the
+flake's `packages.autochords` (`nix shell .#autochords` on the laptop; on the
+NUC, the `caracole-autochords` unit runs it after each nightly run, see
+[deploy.md](deploy.md#6-auto-chords)). It links the new file to the song by
+its tags and duration (tags in two scripts, such as "Song Dongye (宋冬野)",
+work too), finds the chords and the beats, and writes
 `sheet (auto).txt`. With no timed lyrics to lay the chords over, the sheet is
 a chord chart by bars followed by the plain lyrics. It starts with
 "auto-generated, unverified", the song counts as found, and the next render

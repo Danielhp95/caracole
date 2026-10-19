@@ -159,16 +159,21 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `page_url` and ug/lookup.py `IndexTab.url` and `tab_url_for` build it. **Bare-id tabs**
   (a tenth of UG's, and every tab of an artist with an accented or non-Latin name) are
   found on the artist's UG page (ug/artist.py, the `artist_page` route in ug/fetch.py),
-  its URL from `[artist_url]` or learned from a tab page into kv `ug:artist_url:<artist key>`
-  (`test_fetch.py::test_slugged_tabs_fetched_at_their_slugged_url`,
-  `::test_bare_id_chords_of_a_matched_song_come_from_its_artist_page`).
+  `/artist/<name>_<id>` or `/artist/<id>` (`overrides.artist_page_address`), its URL from
+  `[artist_url]` or learned from a tab page into kv `ug:artist_url:<artist key>`. An
+  `[artist_url]` tab page is read once, through the run's client, for the page it links to:
+  kv `ug:pasted_tab:<tab id>` (`test_fetch.py::test_slugged_tabs_fetched_at_their_slugged_url`,
+  `::test_bare_id_chords_of_a_matched_song_come_from_its_artist_page`, tests/test_live_banma.py).
 - **Guitar Pro is assisted only.** config.py refuses any `guitar_pro_mode` but "assisted";
   ug/fetch.py picks Guitar Pro and Power Tab versions and downloads none; the to-do page
   lists them, and inbox.py files what the user drops into `_inbox/`. Official and
   non-public versions are never used.
 - **Chinese is compared as pinyin** (`normalize.romanize`, with pypinyin) in match.py,
   coverage.py, music.py, search.py, library_page.py and ug/fetch.py; identity keys also fold
-  Traditional characters to Simplified. A change to `clean_title`, `slug_key` or
+  Traditional characters to Simplified. Where a name caracole didn't write meets yours (UG's
+  artist pages and slugs, purchases' tags, downloads), it is compared by `normalize.name_forms`,
+  which also gives the parts of a name in two scripts ("Song Dongye (宋冬野)"); forms are for
+  comparing and never make a key. A change to `clean_title`, `slug_key` or
   `identity_key` that can change a key bumps `normalize.KEY_VERSION`:
   `songs.ensure_current_keys`, run before songs are looked up, listed or added, then re-keys
   them once and merges those that now share a key. It re-keys `songs` only; `ug_index` keys

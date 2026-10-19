@@ -6,16 +6,20 @@ For each song, in order:
 2. For each of the song's artists, the UG artist keys it may go by: its
    ``[alias]`` first, then its own key, then any UG key that is the same once
    hyphens are removed (``ac-dc`` → ``acdc``). A Chinese name also tries its
-   pinyin (宋冬野 → ``song-dong-ye``, which meets ``song-dongye`` the same way).
-   Under those artists an exact title accepts at once. Otherwise every title
-   is scored with rapidfuzz ``ratio``, the best of UG's full key and its base
-   key, so ``creep-acoustic`` and ``creep-intro`` count as ``creep``.
+   pinyin (宋冬野 → ``song-dong-ye``, which meets ``song-dongye`` the same way),
+   and a name written in two scripts each of its parts (``normalize.name_forms``):
+   UG's sitemaps write names in Latin letters only, so "打上花火 (Uchiage
+   Hanabi)" meets ``uchiage-hanabi``. Under those artists an exact title
+   accepts at once. Otherwise every title is scored with rapidfuzz ``ratio``,
+   the best of UG's full key and its base key, so ``creep-acoustic`` and
+   ``creep-intro`` count as ``creep``.
 3. The nearest other artist key at or above ``artist_gate``, then step 2 under
    it, scored as the lower of the artist and title scores. A Chinese name's
    pinyin is compared with and without hyphens.
 4. The title alone, across every artist (covers and misfiled tabs). These are
    always reviews. Here a Chinese title's pinyin must match exactly, hyphens
-   aside: across every artist, short syllables fuzz-match unrelated titles.
+   aside: across every artist, short syllables fuzz-match unrelated titles. So
+   must the parts of a title written in two scripts.
 
 At every step, the UG songs you rejected for the song (``[reject]``, "none of
 these" in ``caracole review``) are dropped, so they never come back; the others
@@ -41,7 +45,7 @@ from typing import Any
 from rapidfuzz import fuzz, process
 
 from caracole.config import MatchPolicy
-from caracole.normalize import clean_title, compact, has_han, romanize, slug_key, split_variant
+from caracole.normalize import clean_title, compact, has_han, name_forms, romanize, slug_key, split_variant
 from caracole.overrides import Overrides
 from caracole.songs import Song, list_songs, refresh_status, update_song, utc_now_iso
 from caracole.ug.index import index_state
@@ -212,20 +216,23 @@ class _Hit:
 
 @dataclass(frozen=True)
 class _Forms:
-    """A name or title as keys: its own key, and its pinyin key when it has Chinese characters."""
+    """A name or title as keys: its own key, its pinyin key when it has Chinese characters, and its
+    other forms (``normalize.name_forms``), such as each part of a name written in two scripts."""
 
     own: tuple[str, ...]
     pinyin: tuple[str, ...] = ()
+    parts: tuple[str, ...] = ()
 
     @property
     def keys(self) -> tuple[str, ...]:
-        return self.own + self.pinyin
+        return self.own + self.pinyin + self.parts
 
 
 def _forms(text: str) -> _Forms:
     own = slug_key(text)
     pinyin = slug_key(romanize(text)) if has_han(text) else ""
-    return _Forms(tuple(k for k in (own,) if k), tuple(k for k in (pinyin,) if k and k != own))
+    parts = tuple(f for f in name_forms(text) if f not in (own, pinyin))
+    return _Forms(tuple(k for k in (own,) if k), tuple(k for k in (pinyin,) if k and k != own), parts)
 
 
 # Spanish leading articles are part of some UG artist slugs and not of the source's name, or the
@@ -336,8 +343,9 @@ def _title_only(index: IndexView, title: _Forms, policy: MatchPolicy) -> list[_H
                                            limit=_TITLE_ONLY_TITLES):
             scores[titles[i]] = max(scores.get(titles[i], 0.0), score)
     # Across every artist, pinyin counts only when it matches exactly (hyphens aside): short
-    # syllables fuzz-match unrelated titles ("banmabanma" scores 80 against "banaobanao").
-    for query in title.pinyin:
+    # syllables fuzz-match unrelated titles ("banmabanma" scores 80 against "banaobanao"). So do the
+    # parts of a title written in two scripts, whose romanizations are just as short.
+    for query in title.pinyin + title.parts:
         for key in index.titles_reading(compact(query)):
             scores[key] = 100.0
     hits = []

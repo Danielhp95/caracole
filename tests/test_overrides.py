@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from caracole.normalize import name_forms, slug_key
 from caracole.overrides import (
     Overrides,
     OverridesError,
@@ -13,6 +14,7 @@ from caracole.overrides import (
     add_match,
     add_pin,
     add_reject,
+    artist_url_entry,
     load_overrides,
     override_key,
     tab_id_from_url,
@@ -119,11 +121,27 @@ def test_artist_url_takes_the_artist_pages_own_links(tmp_path, pasted):
     assert o.artist_url["soda-stereo"] == "https://www.ultimate-guitar.com/artist/soda_stereo_2946"
 
 
+@pytest.mark.parametrize("pasted", [
+    "https://www.ultimate-guitar.com/artist/634073",
+    "https://www.ultimate-guitar.com/artist/634073/",
+    "https://www.ultimate-guitar.com/artist/634073?filter=chords",
+    "https://www.ultimate-guitar.com/artist/634073?filter=chords&page=2",
+    "https://www.ultimate-guitar.com/artist/634073#tabs",
+])
+def test_artist_url_takes_an_artist_page_addressed_by_its_number_alone(tmp_path, pasted):
+    # UG writes some artist pages without the name: 宋冬野's is /artist/634073 (checked live).
+    o = load_overrides(write(tmp_path, f'[artist_url]\n"宋冬野" = "{pasted}"\n'))
+    assert o.artist_url["宋冬野"] == "https://www.ultimate-guitar.com/artist/634073"
+
+
 def test_add_artist_url_writes_the_page_without_its_query(tmp_path):
     p = tmp_path / "overrides.toml"
     add_artist_url(p, "Soda Stereo", "https://www.ultimate-guitar.com/artist/soda_stereo_2946?filter=chords")
+    add_artist_url(p, "宋冬野", "https://www.ultimate-guitar.com/artist/634073?filter=chords")
     assert "?filter" not in p.read_text(encoding="utf-8")
-    assert load_overrides(p).artist_url["soda-stereo"] == "https://www.ultimate-guitar.com/artist/soda_stereo_2946"
+    o = load_overrides(p)
+    assert o.artist_url["soda-stereo"] == "https://www.ultimate-guitar.com/artist/soda_stereo_2946"
+    assert o.artist_url["宋冬野"] == "https://www.ultimate-guitar.com/artist/634073"
 
 
 def test_a_bad_artist_url_shows_what_was_pasted(tmp_path):
@@ -132,9 +150,62 @@ def test_a_bad_artist_url_shows_what_was_pasted(tmp_path):
     with pytest.raises(OverridesError) as e:
         load_overrides(p)
     assert str(e.value) == (
-        f"{p}: [artist_url] 'Joaquín Sabina': expected https://www.ultimate-guitar.com/artist/<name>_<id>, "
+        f"{p}: [artist_url] 'Joaquín Sabina': expected the artist's page "
+        "(https://www.ultimate-guitar.com/artist/…) or one of their tab pages "
+        "(https://tabs.ultimate-guitar.com/tab/…), as your browser shows it, "
         "got 'https://www.ultimate-guitar.com/artist/joaquin_sabina'"
     )
+    assert "<name>" not in str(e.value)
+
+
+@pytest.mark.parametrize("pasted,page", [
+    # The page the user found for 宋冬野 (2026-10-19), and the shapes a browser shows tab pages in.
+    ("https://tabs.ultimate-guitar.com/tab/4180894", "https://tabs.ultimate-guitar.com/tab/4180894"),
+    ("https://tabs.ultimate-guitar.com/tab/4180894/?ref=artist#comments",
+     "https://tabs.ultimate-guitar.com/tab/4180894"),
+    ("https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-1081460?app=1",
+     "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-1081460"),
+])
+def test_artist_url_takes_a_tab_page_of_the_artist(tmp_path, pasted, page):
+    o = load_overrides(write(tmp_path, f'[artist_url]\n"宋冬野" = "{pasted}"\n'))
+    assert o.artist_url["宋冬野"] == page
+
+
+@pytest.mark.parametrize("pasted", [
+    "4180894",  # a number could be the artist's or a tab's
+    "https://tabs.ultimate-guitar.com/tab/download?id=4180894",  # pages caracole never asks for
+    "https://tabs.ultimate-guitar.com/tab/print?id=4180894",
+    "https://www.ultimate-guitar.com/search.php?value=宋冬野",
+])
+def test_artist_url_refuses_what_is_no_artist_or_tab_page(tmp_path, pasted):
+    with pytest.raises(OverridesError, match=r"\[artist_url\] '宋冬野': expected the artist's page"):
+        load_overrides(write(tmp_path, f'[artist_url]\n"宋冬野" = "{pasted}"\n'))
+
+
+def test_add_artist_url_takes_a_tab_page(tmp_path):
+    p = tmp_path / "overrides.toml"
+    add_artist_url(p, "宋冬野", "https://tabs.ultimate-guitar.com/tab/4180894?ref=search")
+    assert load_overrides(p).artist_url["宋冬野"] == "https://tabs.ultimate-guitar.com/tab/4180894"
+    with pytest.raises(OverridesError):
+        add_artist_url(p, "宋冬野", "https://tabs.ultimate-guitar.com/tab/download?id=4180894")
+
+
+@pytest.mark.parametrize("entry,artist", [
+    ("宋冬野", "宋冬野"),
+    ("Song Dongye (宋冬野)", "宋冬野"),  # the entry written as UG names the artist
+    ("宋冬野", "Song Dongye (宋冬野)"),
+    ("Song Dongye", "宋冬野"),
+])
+def test_an_artist_url_entry_is_found_by_any_form_of_the_artists_name(tmp_path, entry, artist):
+    o = load_overrides(write(tmp_path, f'[artist_url]\n"{entry}" = "https://www.ultimate-guitar.com/artist/634073"\n'))
+    assert artist_url_entry(o, name_forms(artist)) == (slug_key(entry), "https://www.ultimate-guitar.com/artist/634073")
+
+
+def test_an_artist_url_entry_under_the_artists_own_key_comes_first():
+    o = Overrides(artist_url={"song-dongye": "https://www.ultimate-guitar.com/artist/1",
+                              "宋冬野": "https://www.ultimate-guitar.com/artist/634073"})
+    assert artist_url_entry(o, name_forms("宋冬野")) == ("宋冬野", "https://www.ultimate-guitar.com/artist/634073")
+    assert artist_url_entry(o, name_forms("Li Zhi (李志)")) is None
 
 
 def test_pins_take_addresses_with_a_query_or_fragment(tmp_path):

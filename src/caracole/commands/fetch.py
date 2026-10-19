@@ -109,7 +109,7 @@ def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> S
     """
     from caracole.overrides import OverridesError, override_key
     from caracole.songs import find_song
-    from caracole.ug.fetch import artist_is_known, needs_artist_page
+    from caracole.ug.fetch import artist_is_known, needs_artist_page, pasted_page_problem
 
     try:
         key = override_key(display)
@@ -124,9 +124,14 @@ def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> S
     if song.match_decision == "review" and not artist_page:
         fail(f'"{song.display}" needs review first: run `caracole review`.')
     if artist_page and not artist_is_known(conn, song, overrides):
+        pasted = pasted_page_problem(conn, song, overrides)
+        if pasted is not None:
+            fail(f"The page under [artist_url] for {song.artist}, {pasted[0]}: {pasted[1]}. Put the artist's "
+                 "page, or another of their tab pages, in its place in overrides.toml.")
         fail(
             f"Ultimate Guitar lists {song.artist} only by bare tab ids, which caracole can't see. "
-            "Find the artist's page on UG and paste it under [artist_url] in overrides.toml."
+            "Find the artist's page on UG, or one of their tab pages, and paste its address under "
+            "[artist_url] in overrides.toml."
         )
     if song.match_decision not in ("accept", "pinned") and not artist_page:
         fail(f'"{song.display}" isn\'t matched yet: run `caracole match` first.')

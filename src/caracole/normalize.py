@@ -234,6 +234,127 @@ def romanize(s: str) -> str:
     return re.sub(r"\s+", " ", " ".join(words)).strip()
 
 
+# --- a name's forms --------------------------------------------------------------------------
+
+# A part of a name made only of these words, numbers and single letters names a version or a part
+# of a song, never the song or its artist, so it is no form of the name (name_forms).
+GENERIC_WORDS = frozenset({
+    *VARIANT_TOKENS, "remix", "mix", "version", "ver", "edit", "demo", "cover", "instrumental", "karaoke",
+    "remaster", "remastered", "mono", "stereo", "ost", "tv", "size", "short", "full", "feat", "ft",
+    "official", "original", "chords", "tab", "tabs", "guitar", "bass", "ukulele", "piano", "mv", "part",
+    "pt", "english", "chinese", "mandarin", "cantonese", "japanese", "korean", "russian", "translation",
+    "romanized", "lyrics",
+})
+# Where a name written in two scripts breaks into its parts, besides each change of script: brackets
+# of every width ("Song Dongye (宋冬野)", "【斑马斑马】Zebra Zebra") and a spaced " / " or " - ".
+_PART_BREAK = re.compile(r"\s+[-–—/|]\s+|[()\[\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]")
+_LATIN, _CJK_SCRIPT, _OTHER = "latin", "cjk", "other"
+
+
+@functools.lru_cache(maxsize=8192)
+def name_forms(name: str) -> tuple[str, ...]:
+    """The keys a name is compared by wherever a name caracole didn't write meets yours: UG's
+    artist pages and sitemap slugs, the artist pages learned from UG's tab pages, purchases'
+    tags, UG's names for a download, and your ``[artist_url]`` keys. Forms are for comparing;
+    no key is made from them.
+
+    First come the keys a name always had: its slug key, then, for Chinese, its pinyin key and
+    its Simplified one. A Latin name has its slug key alone, and a name in one other script
+    these keys alone.
+
+    UG writes many non-Latin names in two scripts, each part a name on its own: the original,
+    a romanization, a translation, in any order, bracketed, after " / " or " - ", or with
+    nothing between them ("斑马 斑马 Banma Banma Zebra Zebra", "Song Dongye (宋冬野)",
+    "与我交谈 Speak With Me", "봄날 (Spring Day)", "Кино (Kino)"). Each part of such a name is
+    a form too, with its pinyin and its Simplified key when it is Chinese, so "宋冬野" meets
+    "Song Dongye (宋冬野)" and "Song Dong Ye" meets "Song Dongye". A Latin part that starts or
+    ends with the pinyin of the Chinese part also gives the romanization and the rest (a
+    translation) apart: "banma-banma" and "zebra-zebra". Scripts without a romanizer here
+    (Japanese, Korean, Cyrillic) meet on their original part, or on the Latin one.
+
+    A part that is only words such as "Live", "Acoustic" or "Remix" (``GENERIC_WORDS``),
+    numbers, single letters or fewer than three Latin letters is no form: it never makes a
+    match on its own. Nor is a name with two non-Latin parts split ("A (甲) & B (乙)", two
+    singers): its parts would be other artists' names.
+    """
+    forms = [slug_key(name)]
+    if has_han(name):
+        forms += [slug_key(romanize(name)), slug_key(_simplified(name))]
+    parts = _parts(name)
+    for part in parts:
+        forms += _part_forms(part, parts)
+    return tuple(f for f in dict.fromkeys(forms) if f)
+
+
+def _script(c: str) -> str | None:
+    """A letter's script as name forms tell parts apart (CJK, Latin or other); None for a non-letter.
+    A Latin letter that folds to no ASCII one (ŋ, ə) is Latin all the same."""
+    if not c.isalpha():
+        return None
+    if _CJK.match(c):
+        return _CJK_SCRIPT
+    return _LATIN if fold(c).isascii() or "LATIN" in unicodedata.name(c, "") else _OTHER
+
+
+def _runs(text: str) -> list[str]:
+    """The text cut wherever its letters change script; what isn't a letter goes with the run it ends."""
+    runs, current, script = [], "", None
+    for c in text:
+        s = _script(c)
+        if s is not None and script is not None and s != script:
+            runs.append(current)
+            current = ""
+        current += c
+        script = s or script
+    return [*runs, current]
+
+
+def _parts(name: str) -> list[str]:
+    """The parts of a name written in two scripts or more, with one non-Latin part; else none."""
+    text = _APOSTROPHES.sub("", name)
+    if len({s for c in text if (s := _script(c)) is not None}) < 2:
+        return []
+    parts = [run for piece in _PART_BREAK.split(text) for run in _runs(piece) if slug_key(run)]
+    foreign = [p for p in parts if any(_script(c) in (_CJK_SCRIPT, _OTHER) for c in p)]
+    return parts if len(foreign) == 1 else []
+
+
+def _part_forms(part: str, parts: list[str]) -> list[str]:
+    """One part's forms: its key, then its Simplified and pinyin keys (Chinese), or the romanization
+    of the name's Chinese part it holds and the rest apart (Latin)."""
+    key = slug_key(part)
+    if _generic(key):
+        return []
+    forms = [key]
+    if has_han(part):
+        forms += [slug_key(_simplified(part)), slug_key(romanize(part))]
+    else:
+        for other in parts:
+            if has_han(other):
+                forms += _romanized(key, compact(slug_key(romanize(other))))
+    return [f for f in forms if not _generic(f)]
+
+
+def _romanized(key: str, syllables: str) -> list[str]:
+    """A Latin part's key split where the romanization ``syllables`` (compact pinyin) starts or ends
+    it: ``banma-banma-zebra-zebra`` with ``banmabanma`` gives ``banma-banma`` and ``zebra-zebra``."""
+    words = key.split("-")
+    for n in range(1, len(words)):
+        if "".join(words[:n]) == syllables:
+            return ["-".join(words[:n]), "-".join(words[n:])]
+        if "".join(words[-n:]) == syllables:
+            return ["-".join(words[-n:]), "-".join(words[:-n])]
+    return []
+
+
+def _generic(key: str) -> bool:
+    """Whether a key names no song or artist on its own (see ``name_forms``)."""
+    words = [w for w in key.split("-") if w and w not in GENERIC_WORDS and not w.isdigit()]
+    if any(_CJK.search(w) for w in words):
+        return False
+    return sum(len(w) for w in words) < 3
+
+
 # Traditional -> Simplified, one character for one, for identity keys: each pair is a
 # Traditional character and its Simplified form. Derived from OpenCC 1.4.1's
 # TSCharacters dictionary (https://github.com/BYVoid/OpenCC, Apache License 2.0):

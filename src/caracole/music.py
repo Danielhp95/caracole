@@ -5,7 +5,9 @@ song you already want, by tags (or the file name) and duration.
 
 A file that is the song by identity (its artist and title keys) is the
 song's. Only failing one, a file whose names come close may be: names are
-compared as slugs, and Chinese ones as pinyin too, so 斑馬斑馬 meets 斑马斑马.
+compared as slugs, and Chinese ones as pinyin too, so 斑馬斑馬 meets 斑马斑马;
+a name tagged in two scripts also by each of its parts, so "Song Dongye
+(宋冬野)" meets 宋冬野 (``normalize.name_forms``).
 Such a fuzzy match must lead the next candidate clearly, both ways: of the
 file's songs, and of the song's titles. Album siblings ("Pt. 1" and "Pt. 2")
 score alike, so they cancel out instead of the first one on disk winning.
@@ -25,7 +27,7 @@ import mutagen
 from rapidfuzz import fuzz
 
 from caracole.lyrics import song_lyrics
-from caracole.normalize import clean_title, has_han, identity_key, romanize, slug_key
+from caracole.normalize import clean_title, identity_key, name_forms
 from caracole.songs import Song, list_songs, update_song
 
 AUDIO_EXTENSIONS = (
@@ -139,17 +141,15 @@ def _expected_seconds(song: Song) -> float | None:
 
 @dataclass(frozen=True)
 class _Names:
-    """An artist's and a title's keys: slugs, plus pinyin slugs for Chinese names."""
+    """An artist's and a title's keys: slugs, plus pinyin slugs for Chinese names, and each part of a
+    name tagged in two scripts (``normalize.name_forms``)."""
 
     artists: tuple[str, ...]
     titles: tuple[str, ...]
 
 
 def _forms(text: str) -> tuple[str, ...]:
-    keys = [slug_key(text)]
-    if has_han(text):
-        keys.append(slug_key(romanize(text)))
-    return tuple(k for k in dict.fromkeys(keys) if k)
+    return name_forms(text)
 
 
 def _names(artist: str, title: str) -> _Names:

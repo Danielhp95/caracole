@@ -221,3 +221,24 @@ def test_traditional_tags_link_to_the_simplified_song(conn, tmp_path):
     make_wav(tmp_path / "music" / "banma.wav", artist="宋冬野", title="斑馬斑馬")
     scan_music(conn, tmp_path / "music")
     assert get_song(conn, s.id).audio_path.endswith("banma.wav")
+
+
+def test_tags_in_two_scripts_link_to_the_song_written_in_one(conn, tmp_path):
+    # Stores tag non-Latin music the way UG names it: the original, a romanization, a translation.
+    banma = add_song(conn, "宋冬野", "斑马斑马", duration_ms=None)
+    other = add_song(conn, "宋冬野", "董小姐", duration_ms=None)
+    make_wav(tmp_path / "music" / "a.wav", artist="Song Dongye (宋冬野)", title="斑马 斑马 Banma Banma Zebra Zebra")
+    make_wav(tmp_path / "music" / "b.wav", artist="Song Dongye", title="董小姐 Miss Dong")
+
+    stats = scan_music(conn, tmp_path / "music")
+
+    assert stats.matched == 2
+    assert get_song(conn, banma.id).audio_path.endswith("a.wav")
+    assert get_song(conn, other.id).audio_path.endswith("b.wav")
+
+
+def test_a_generic_part_of_a_tag_links_nothing(conn, tmp_path):
+    s = add_song(conn, "宋冬野", "Remix", duration_ms=None)
+    make_wav(tmp_path / "music" / "a.wav", artist="宋冬野", title="斑马斑马 Remix")
+    scan_music(conn, tmp_path / "music")
+    assert get_song(conn, s.id).audio_path is None
