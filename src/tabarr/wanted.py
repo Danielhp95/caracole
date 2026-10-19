@@ -21,10 +21,14 @@ the library folder, so Syncthing carries it to your phone. One song per line:
   ("John Lennon - \#9 Dream") and ``\|`` for a ``|``.
 - Deleting a line doesn't delete the song from tabarr, just as unliking a track
   on Spotify doesn't.
+- The file must be a regular file. Others can write to the library, so a
+  symbolic link is refused rather than followed (it could point at tabarr's
+  credentials, and a bad line is quoted on the to-do page).
 """
 
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 import unicodedata
@@ -32,6 +36,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
+from tabarr.library import NotRegularFile, open_regular, read_regular
 from tabarr.normalize import identity_key
 from tabarr.sources import (
     KvGet,
@@ -191,7 +196,8 @@ def append_wanted(
     A missing file is created with a header that explains the format. A song
     already listed (same identity key) is not added twice; its existing line is
     returned. The file's newline style is kept. Raises ValueError for a song the
-    format can't hold, such as an artist whose name contains " - ".
+    format can't hold, such as an artist whose name contains " - ", and
+    NotRegularFile (an OSError) when the file is a symbolic link.
     """
     path = Path(path)
     text, wanted = _checked_line(artist, title, album, duration_ms)
@@ -210,7 +216,8 @@ def append_wanted(
             return line
     newline = "\r\n" if "\r\n" in existing else "\n"
     lead = newline if existing and not existing.endswith("\n") else ""
-    with path.open("a", encoding="utf-8", newline="") as f:
+    # Opened anew without following a link, in case one was swapped in since the read.
+    with open(open_regular(path, os.O_WRONLY | os.O_APPEND), "a", encoding="utf-8", newline="") as f:
         f.write(lead + text + newline)
     return replace(wanted, line_no=(existing + lead).count("\n") + 1)
 
@@ -228,7 +235,8 @@ def sync_wanted(
 
     The source id is the song's identity key. A missing file is an empty source,
     not an error, and bad lines go to ``stats.errors`` and ``stats.line_errors``:
-    this never raises for anything in the file.
+    this never raises for anything in the file. A symbolic link is refused
+    unread, with an error that doesn't quote it.
 
     ``added_at`` is the time a song was first seen in the file (``now`` for a
     new line), remembered in the kv table. Passing ``now`` every night would let
@@ -238,8 +246,11 @@ def sync_wanted(
     path = Path(path)
     stats = SyncStats()
     try:
-        data = path.read_bytes()
+        data = read_regular(path)
     except FileNotFoundError:
+        return stats
+    except NotRegularFile as e:
+        stats.errors.append(f"{path.name}: not read: {path} is {e.strerror}; put the file itself there")
         return stats
     except OSError as e:
         stats.errors.append(f"{path.name}: can't read {path}: {e.strerror or e}")
@@ -296,8 +307,9 @@ def _checked_line(
 
 
 def _read_text(path: Path) -> str | None:
+    """The file's text; None when it doesn't exist, NotRegularFile for a symbolic link."""
     try:
-        data = path.read_bytes()
+        data = read_regular(path)
     except FileNotFoundError:
         return None
     return _decode(data)[0]

@@ -449,6 +449,71 @@ def test_sync_of_an_unreadable_path_is_an_error_not_a_crash(tmp_path):
     assert len(stats.errors) == 1 and "wanted.txt" in stats.errors[0]
 
 
+@pytest.fixture
+def secret(tmp_path):
+    """A credential of tabarr's: wanted.txt sits in the library, which others can write to."""
+    path = tmp_path / "credentials" / "ntfy_token"
+    path.parent.mkdir()
+    path.write_text("tk_abcdefghijklmnopqrstuvwxyz012\n", encoding="utf-8")
+    return path
+
+
+def test_sync_refuses_a_symlinked_file_without_quoting_it(tmp_path, secret):
+    path = tmp_path / "wanted.txt"
+    path.symlink_to(secret)
+    stats, up = sync(path)
+    assert "tk_abc" not in repr(stats)
+    assert up.calls == [] and stats.line_errors == []
+    assert len(stats.errors) == 1 and stats.errors[0].startswith("wanted.txt: ")
+    assert "symbolic link" in stats.errors[0]
+
+
+def test_sync_refuses_a_symlink_even_to_a_list_of_songs(tmp_path):
+    real = tmp_path / "elsewhere.txt"
+    real.write_text("Oasis - Wonderwall\n", encoding="utf-8")
+    path = tmp_path / "wanted.txt"
+    path.symlink_to(real)
+    stats, up = sync(path)
+    assert up.calls == [] and "symbolic link" in stats.errors[0]
+
+
+def test_append_and_find_refuse_a_symlinked_file(tmp_path, secret):
+    path = tmp_path / "wanted.txt"
+    path.symlink_to(secret)
+    with pytest.raises(OSError, match="symbolic link"):
+        append_wanted(path, "Oasis", "Wonderwall")
+    with pytest.raises(OSError, match="symbolic link"):
+        find_wanted(path, "Oasis", "Wonderwall")
+    assert secret.read_text(encoding="utf-8") == "tk_abcdefghijklmnopqrstuvwxyz012\n"
+
+
+def test_append_refuses_a_dangling_symlink(tmp_path):
+    path = tmp_path / "wanted.txt"
+    path.symlink_to(tmp_path / "state" / "missing.txt")
+    with pytest.raises(OSError, match="symbolic link"):
+        append_wanted(path, "Oasis", "Wonderwall")
+    assert not (tmp_path / "state").exists()
+
+
+def test_append_never_writes_through_a_link_swapped_in_after_the_read(tmp_path, secret, monkeypatch):
+    import tabarr.wanted as wanted
+
+    path = tmp_path / "wanted.txt"
+    path.write_text("Soda Stereo - De Música Ligera\n", encoding="utf-8")
+    read = wanted._read_text
+
+    def read_then_swap(p):
+        text = read(p)
+        p.unlink()
+        p.symlink_to(secret)
+        return text
+
+    monkeypatch.setattr(wanted, "_read_text", read_then_swap)
+    with pytest.raises(OSError):
+        append_wanted(path, "Oasis", "Wonderwall")
+    assert secret.read_text(encoding="utf-8") == "tk_abcdefghijklmnopqrstuvwxyz012\n"
+
+
 def test_sync_reads_a_file_written_by_append(tmp_path):
     path = tmp_path / "Tabs" / "wanted.txt"
     append_wanted(path, "宋冬野", "斑马斑马", album="安和桥北", duration_ms=253000)

@@ -114,6 +114,27 @@ def test_unmatched_stays(conn, cfg):
     assert sorted(stats.unmatched) == sorted([a, b]) and a.exists() and b.exists()
 
 
+def test_a_symlink_in_the_inbox_is_refused_and_left_alone(conn, cfg, tmp_path):
+    # Anyone who can write to the library could point a link at tabarr's credentials,
+    # under a name the to-do page lists ("Guitar Pro pages to click").
+    s = add_song(conn)
+    v = pick(conn, s, 555890)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
+    secret = tmp_path / "credentials" / "spotify_client_secret"
+    secret.parent.mkdir()
+    secret.write_text("f00dfeedcafe0123456789abcdef0123\n")
+    inbox = cfg.library_dir / "_inbox"
+    inbox.mkdir(parents=True)
+    gp, other = inbox / "Soda Stereo - De Musica Ligera.gp5", inbox / "notes.txt"
+    gp.symlink_to(secret)
+    other.symlink_to(secret)
+    stats = file_inbox(conn, cfg.library_dir)
+    assert kept_files(conn, s.id) == []
+    assert not song_dir(cfg.library_dir, s).exists()
+    assert gp.is_symlink() and other.is_symlink()
+    assert stats.refused == [gp, other] and stats.filed == [] and stats.unmatched == []
+
+
 def test_no_inbox_is_fine(conn, cfg):
     stats = file_inbox(conn, cfg.library_dir)
     assert stats.filed == [] and stats.unmatched == []

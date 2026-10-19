@@ -4,6 +4,9 @@ UG's download endpoint is disallowed for bots, so tabarr never downloads
 Guitar Pro or Power Tab files. It lists the pages it picked on the to-do page;
 you click Download and drop the files into ``Library/_inbox/``; this module
 files each one under its song as ``guitar-<rank>.<ext>``.
+
+Anyone who can write to the library can put a symbolic link in the inbox, so
+only regular files are read; a link is refused and left where it is.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from pathlib import Path
 
 from rapidfuzz import fuzz
 
-from tabarr.library import keep_file, song_dir
+from tabarr.library import NotRegularFile, keep_file, read_regular, song_dir
 from tabarr.normalize import clean_title, identity_key, slug_key
 from tabarr.songs import Song, get_song
 from tabarr.versions import VersionRow, picks
@@ -33,6 +36,7 @@ class InboxStats:
     filed: list[Path] = field(default_factory=list)
     duplicates: list[Path] = field(default_factory=list)
     unmatched: list[Path] = field(default_factory=list)
+    refused: list[Path] = field(default_factory=list)  # symbolic links and the like, never read
 
 
 def parse_download_name(name: str) -> tuple[str | None, str, int | None]:
@@ -107,12 +111,21 @@ def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
     inbox = library_dir / "_inbox"
     if not inbox.is_dir():
         return stats
-    for path in sorted(p for p in inbox.iterdir() if p.is_file() and not p.name.startswith(".")):
+    for path in sorted(p for p in inbox.iterdir() if not p.name.startswith(".")):
+        if path.is_symlink():
+            stats.refused.append(path)
+            continue
+        if not path.is_file():
+            continue
         ext = path.suffix.lower()
         if ext not in GP_EXTENSIONS:
             stats.unmatched.append(path)
             continue
-        data = path.read_bytes()
+        try:
+            data = read_regular(path)
+        except NotRegularFile:  # swapped for a link since it was listed
+            stats.refused.append(path)
+            continue
         sha = hashlib.sha256(data).hexdigest()
         if conn.execute("SELECT 1 FROM files WHERE sha256 = ? LIMIT 1", (sha,)).fetchone():
             path.unlink()

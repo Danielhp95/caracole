@@ -12,12 +12,14 @@ path separator or a reserved character, so a song can't escape the library.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import re
 import secrets
 import sqlite3
+import stat
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,6 +71,39 @@ def write_atomic(path: Path, data: bytes) -> str:
         tmp.unlink(missing_ok=True)
         raise
     return hashlib.sha256(data).hexdigest()
+
+
+class NotRegularFile(OSError):
+    """A path tabarr won't read: a symbolic link, a directory, a FIFO or a device."""
+
+
+def open_regular(path: Path, flags: int = os.O_RDONLY) -> int:
+    """A descriptor for the regular file at ``path``, never opened through a symbolic link.
+
+    The library is writable by the Syncthing group and every synced device, so a
+    link planted there could point at tabarr's private files (the database, the
+    Spotify token, the credentials): read, they would be copied into the
+    library; written, they would be destroyed. The file is opened without
+    following a link and without waiting on a FIFO, then checked on the open
+    descriptor, so it can't be swapped in between. Raises NotRegularFile,
+    FileNotFoundError when nothing is there, or another OSError.
+    """
+    try:
+        fd = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError as e:
+        if e.errno == errno.ELOOP:  # O_NOFOLLOW's answer for a link
+            raise NotRegularFile(e.errno, "a symbolic link, which tabarr doesn't follow", str(path)) from None
+        raise
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise NotRegularFile(errno.EINVAL, "not a regular file", str(path))
+    return fd
+
+
+def read_regular(path: Path) -> bytes:
+    """The bytes of the regular file at ``path``, never read through a symbolic link (see ``open_regular``)."""
+    with open(open_regular(path), "rb") as f:
+        return f.read()
 
 
 @dataclass

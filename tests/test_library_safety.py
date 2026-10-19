@@ -6,7 +6,7 @@ import stat
 
 import pytest
 
-from tabarr.library import write_atomic
+from tabarr.library import NotRegularFile, read_regular, write_atomic
 
 
 @pytest.fixture
@@ -54,3 +54,43 @@ def test_a_failed_write_atomic_leaves_no_temporary_file(tmp_path):
     with pytest.raises(OSError):
         write_atomic(tmp_path / "sheet.txt", b"x")
     assert [p.name for p in tmp_path.iterdir()] == ["sheet.txt"]
+
+
+# --- reading -------------------------------------------------------------------------
+
+
+def test_read_regular_reads_a_regular_file(tmp_path):
+    (tmp_path / "wanted.txt").write_bytes(b"Oasis - Wonderwall\n")
+    assert read_regular(tmp_path / "wanted.txt") == b"Oasis - Wonderwall\n"
+
+
+def test_read_regular_refuses_a_symbolic_link(tmp_path, state):
+    link = tmp_path / "wanted.txt"
+    link.symlink_to(state / "spotify_token.json")
+    with pytest.raises(NotRegularFile, match="symbolic link") as e:
+        read_regular(link)
+    assert isinstance(e.value, OSError) and e.value.filename == str(link)
+
+
+def test_read_regular_refuses_a_dangling_link(tmp_path):
+    link = tmp_path / "wanted.txt"
+    link.symlink_to(tmp_path / "nowhere")
+    with pytest.raises(NotRegularFile, match="symbolic link"):
+        read_regular(link)
+
+
+def test_read_regular_refuses_a_directory(tmp_path):
+    (tmp_path / "wanted.txt").mkdir()
+    with pytest.raises(NotRegularFile, match="not a regular file"):
+        read_regular(tmp_path / "wanted.txt")
+
+
+def test_read_regular_refuses_a_fifo_without_waiting_for_a_writer(tmp_path):
+    os.mkfifo(tmp_path / "wanted.txt")
+    with pytest.raises(NotRegularFile, match="not a regular file"):
+        read_regular(tmp_path / "wanted.txt")
+
+
+def test_read_regular_of_nothing_is_file_not_found(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        read_regular(tmp_path / "wanted.txt")
