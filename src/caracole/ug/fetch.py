@@ -161,6 +161,8 @@ class FetchContext:
     guitar_pages_per_group: int = 1
     artist_page_max_age: timedelta = ARTIST_PAGE_MAX_AGE
     artist_pages_per_kind: int = 3
+    # overrides.toml read again, for ``fetch_songs`` once its client handed caracole's lock to a lookup.
+    reload_overrides: Callable[[], Overrides] | None = None
 
 
 @dataclass(frozen=True)
@@ -1471,21 +1473,82 @@ def songs_to_fetch(
       sheet or a tab that match found: unless their artist's page finds them
       again, those go (``process_song``).
     """
-    out = []
-    for song in list_songs(conn):
-        if _ignored(song, overrides):
-            continue
-        matched = song.match_decision in ("accept", "pinned")
-        dirty = matched and (song.ug_dirty or _block_changed(conn, song, overrides.block))
-        due = (
-            needs_artist_page(song)
-            and not _checked_within(conn, song.id, now, artist_page_max_age)
-            and artist_is_known(conn, song, overrides)
-        )
-        undone = not matched and _undone(conn, song.id)
-        if dirty or due or undone or _recheck_due(conn, song, overrides, now, artist_page_max_age):
-            out.append(song)
-    return out
+    return [song for song in list_songs(conn) if _due(conn, song, overrides, now, artist_page_max_age)]
+
+
+def _due(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime, artist_page_max_age: timedelta) -> bool:
+    """Whether the song is one ``songs_to_fetch`` lists."""
+    if _ignored(song, overrides):
+        return False
+    matched = song.match_decision in ("accept", "pinned")
+    dirty = matched and (song.ug_dirty or _block_changed(conn, song, overrides.block))
+    due = (
+        needs_artist_page(song)
+        and not _checked_within(conn, song.id, now, artist_page_max_age)
+        and artist_is_known(conn, song, overrides)
+    )
+    undone = not matched and _undone(conn, song.id)
+    return dirty or due or undone or _recheck_due(conn, song, overrides, now, artist_page_max_age)
+
+
+# --- a lookup while the nightly run waits ---------------------------------------------------------------
+
+_LOOKED_UP = "lookup:songs"  # the last songs ``caracole get`` fetched, newest last
+_LOOKED_UP_KEPT = 50
+
+
+def note_looked_up(conn: sqlite3.Connection, song_id: int) -> None:
+    """Note that a lookup (``caracole get``) fetched the song, for bulk work that handed it the lock."""
+    ids = [i for i in kv_get_json(conn, _LOOKED_UP, default=[]) or [] if i != song_id]
+    kv_set_json(conn, _LOOKED_UP, [*ids, song_id][-_LOOKED_UP_KEPT:])
+
+
+def _looked_up(conn: sqlite3.Connection) -> set[int]:
+    return set(kv_get_json(conn, _LOOKED_UP, default=[]) or [])
+
+
+class _Handoffs:
+    """What a fetch run must know once its client handed caracole's lock to a lookup (commands/_common.py).
+
+    The lookup may have fetched songs this run listed, or pinned one in
+    overrides.toml: after a handoff, overrides.toml is read again
+    (``FetchContext.reload_overrides``), and each song is read again before its
+    turn and skipped when nothing is left to do for it. A song the lookup
+    fetched while this run was in the middle of it goes back to be fetched
+    next run, since what this run kept was decided on what it had read before.
+    """
+
+    def __init__(self, ctx: FetchContext):
+        self.ctx = ctx
+        self.seen = self.count()
+        self.since = False  # whether the lock was handed over during this run
+
+    def count(self) -> int:
+        return int(getattr(self.ctx.client, "handoffs", 0) or 0)
+
+    def current(self, song: Song) -> Song | None:
+        """The song to fetch now: itself, or after a handoff as it is now; None when there's nothing to do."""
+        count = self.count()
+        if count != self.seen:
+            self.seen, self.since = count, True
+            if self.ctx.reload_overrides is not None:
+                try:
+                    self.ctx.overrides = self.ctx.reload_overrides()
+                except Exception as e:  # noqa: BLE001 (a file you are editing: the one read at the start stays)
+                    log.info("overrides.toml couldn't be read again (%s); the fetch goes on with what it read.", e)
+        if not self.since:
+            return song
+        try:
+            fresh = get_song(self.ctx.conn, song.id)
+        except KeyError:  # merged into another song meanwhile
+            return None
+        ctx = self.ctx
+        return fresh if _due(ctx.conn, fresh, ctx.overrides, ctx.now, ctx.artist_page_max_age) else None
+
+    def after(self, song: Song, before: int) -> None:
+        """A song a lookup fetched during this run's turn for it goes back to be fetched next run."""
+        if self.count() != before and song.id in _looked_up(self.ctx.conn):
+            update_song(self.ctx.conn, song.id, ug_dirty=True)
 
 
 def fetch_songs(
@@ -1504,12 +1567,20 @@ def fetch_songs(
     A block is re-raised (the caller cools the provider down). Any other
     provider error, a page that can't be parsed included, skips that song: it
     stays dirty and is never marked not found.
+
+    Once the client hands caracole's lock to a lookup in one of its pauses,
+    each song is read again before its turn (``_Handoffs``).
     """
     stats = FetchStats()
+    handed = _Handoffs(ctx)
     settled: list[tuple[Song, int]] = []  # with the requests its sheet pass cost
     # Once the budget is spent each song still runs until its first uncached request, so
     # songs whose pages are cached are settled (and finished) for free.
-    for song in songs:
+    for listed in songs:
+        song = handed.current(listed)
+        if song is None:
+            continue
+        before = handed.count()
         try:
             outcome = process_song(ctx, song, guitar=False)
         except BudgetExhausted:
@@ -1522,6 +1593,7 @@ def fetch_songs(
             stats.songs_failed += 1
             stats.failures.append((song, e))
             continue
+        handed.after(song, before)
         if outcome.settled:
             stats.sheets_done += 1
             settled.append((song, outcome.requests))
@@ -1529,9 +1601,13 @@ def fetch_songs(
             stats.songs_done += 1  # nothing more to do this run (not on its artist page, say)
             if on_song is not None:
                 on_song(song, outcome)
-    for song, sheet_requests in settled:
+    for listed, sheet_requests in settled:
+        song = handed.current(get_song(ctx.conn, listed.id))
+        if song is None:
+            continue
+        before = handed.count()
         try:
-            outcome = process_song(ctx, get_song(ctx.conn, song.id))
+            outcome = process_song(ctx, song)
         except BudgetExhausted:
             stats.budget_exhausted = True
             continue
@@ -1542,6 +1618,7 @@ def fetch_songs(
             stats.songs_failed += 1
             stats.failures.append((song, e))
             continue
+        handed.after(song, before)
         stats.songs_done += 1
         if on_song is not None:
             on_song(song, replace(outcome, requests=outcome.requests + sheet_requests))

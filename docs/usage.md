@@ -64,6 +64,9 @@ suggest_top_tracks = true         # list your top tracks on the to-do page; neve
 [providers.ug]                    # Ultimate Guitar
 budget = 60                       # requests per run
 delay = [10, 20]                  # seconds between two requests, chosen at random
+lookup_delay = [0.5, 1.5]         # the same, for a song you look up now (caracole get); [0, 0]: none
+lookup_requests = 6               # requests to the site for that one song, at most
+lookup_per_hour = 60              # requests to the site for every lookup of an hour, together
 [providers.lrclib]                # lyrics
 budget = 200
 delay = [1, 2]
@@ -135,7 +138,20 @@ else the file `client_secret_file` names, else
 
 **Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs` and
 `musescore`. Any other `[providers.…]` table is an error, like any other
-unknown key. Only gtptabs.com and MuseScore can be turned off: with
+unknown key. Each has the three `lookup_` keys too, with the defaults above.
+
+**Two paces.** Bulk work, the nightly run, `caracole index build` and every
+command but `caracole get`, keeps `budget` and `delay`: 10–20 seconds between
+two requests to Ultimate Guitar, whichever caracole sends them. A lookup
+(`caracole get`, and the lookups of `caracole serve`) is one song you asked
+for just now, so it keeps `lookup_delay` instead, about a second, and stops
+after `lookup_requests` requests to a site; every lookup of the last hour
+shares `lookup_per_hour`, so a script or a stuck button can't turn lookups
+into a crawl. What a lookup leaves undone waits for the nightly run. Either
+pace sends one request at a time to a site, never less than its robots.txt's
+`Crawl-delay` apart (none of the sites caracole reads sets one for every
+robot), and keeps everything else below: robots.txt, the cache, the blocks and
+cooldowns. Only gtptabs.com and MuseScore can be turned off: with
 `enabled = false` under `[providers.gtptabs]` or `[providers.musescore]`,
 caracole sends that site nothing, the nightly run skips its step, and the to-do
 page's Provider health says it is off. The other three are what caracole is
@@ -781,6 +797,15 @@ never wait. A command that waited reads the sites' cooldowns once it has the
 lock: if the caracole it waited for was blocked, it sends that site nothing and
 exits 0. Its first request to a site also waits out the pause after the last
 request any caracole sent there, so the pauses hold whichever caracole sends.
+
+A lookup (`caracole get`) never waits behind a whole run: it says
+`Another caracole is running (pid 4242: run); it lets a lookup go first at its
+next pause.`, and the run, which spends most of its time in its 10–20 second
+pauses, lets go of the lock in the pause it is in, takes it back once the
+lookup is done, and waits a whole pause again before its next request. The
+run then reads each song again before its turn, and overrides.toml too, so a
+song the lookup fetched isn't fetched twice, and a tab it pinned is the one
+kept.
 
 ## The to-do page
 

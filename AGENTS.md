@@ -154,17 +154,29 @@ Traps:
 
 Each names where it is enforced. Don't weaken one to make a test pass.
 
-- **Politeness** (http.py, health.py, commands/_common.py).
-  - Budgets per run: `ug` 60, `lrclib` 200, `lacuerda` 30, `gtptabs` 20, `musescore` 10
-    requests (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100
-    (`BUILD_BUDGET`, commands/index.py). Then `BudgetExhausted`. Only a provider in
-    `config.SWITCHABLE` (`gtptabs`, `musescore`) can be turned off (`enabled = false`):
-    then it gets no client and its step is skipped.
-  - One request at a time (a synchronous client, and the lock below), with a random pause
-    from the provider's `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore, 1–2 s
-    for LRCLIB) between any two, redirect hops included: `PoliteClient` paces its own
-    requests, and `_common._pause_after_last_request` its first after the last one any
-    caracole sent.
+- **Politeness** (http.py, health.py, commands/_common.py), at two paces
+  (`config.ProviderPolicy`; `_common.make_client` picks one).
+  - **Bulk work**: the nightly run (its index refresh included), `caracole index build`
+    and every command but `caracole get`. Budgets per run: `ug` 60, `lrclib` 200,
+    `lacuerda` 30, `gtptabs` 20, `musescore` 10 requests (`config.DEFAULT_PROVIDERS`);
+    `caracole index build` at least 100 (`BUILD_BUDGET`, commands/index.py). Then
+    `BudgetExhausted`. Between any two requests to a provider, a random pause from its
+    `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore, 1–2 s for LRCLIB).
+  - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
+    lookups run it). Its clients are `make_client(..., interactive=True)`: a random gap from
+    `lookup_delay` (default 0.5–1.5 s; `[0, 0]` allowed) between two requests to a provider,
+    a budget of `lookup_requests` (6) requests to it for the song, and at most
+    `lookup_per_hour` (60) for every lookup of the last hour together (`_common.lookup_policy`,
+    counting the `events` of runs named `lookup:…`). Then `BudgetExhausted`: the rest waits for
+    the nightly run. Nothing else is looser for a lookup.
+  - Either pace: one request at a time per provider (a synchronous client, and the lock
+    below), redirect hops included. `PoliteClient` paces its own requests, and
+    `_common._pause_after_last_request` its first after the last one any caracole sent
+    (kv `http:last_request:<provider>`, to the fraction of a second, else `events`). No gap
+    is shorter than the host's robots.txt `Crawl-delay` (`http.ROBOTS_CRAWL_DELAY`, from
+    the same `User-agent: *` groups as the rules below: none has one today).
+  - Only a provider in `config.SWITCHABLE` (`gtptabs`, `musescore`) can be turned off
+    (`enabled = false`): then it gets no client and its step is skipped.
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
     more that run, `health.record_block` cools the provider down for 24 h × 2^(k−1) + 2 h after
     the k-th block in a row (so the next nightly run is always skipped), and nothing retries or works around it (no proxies).
@@ -254,6 +266,16 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `search`, `match --dry-run` and `index stats` only read and never wait. `review` takes it
   only after its questions (commands/library.py), so the nightly run never waits for an
   answer (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`).
+  A lookup never waits behind a whole nightly run, and still never writes beside it:
+  `exclusive(..., interactive=True)` announces it in `state_dir/caracole.lock.waiting/` (a
+  file per waiting process, dropped once it holds the lock or its process is gone), and
+  bulk work's clients spend each pause looking for one (`_common.hand_over`, every
+  `HANDOFF_SLICE` s; never inside a transaction): they let go of the flock, take it back
+  once the lookup is done, then pause a whole `delay` again. A bulk caller holding state
+  across a pause re-reads it after one: ug/fetch.py `fetch_songs` reads each song and
+  overrides.toml again (`_Handoffs`; a song a lookup fetched mid-turn is fetched again next
+  run), and gtptabs_fetch.py checks a song still has no file before its turn
+  (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause`).
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
   runs every other change as a `caracole` command in a child process, one at a time
   (web/jobs.py), since the lock is re-entrant within a process and its threads would share it.

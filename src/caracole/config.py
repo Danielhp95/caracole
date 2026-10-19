@@ -29,9 +29,22 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class ProviderPolicy:
+    """A site's two paces.
+
+    Bulk work (the nightly run, ``caracole index build``, every command but
+    ``caracole get``) sends ``budget`` requests at most per run, a random pause
+    from ``delay`` apart. An interactive lookup, one song asked for just now
+    (``caracole get``, or caracole serve's lookups), sends ``lookup_requests`` at
+    most, a random gap from ``lookup_delay`` apart, and every lookup of an hour
+    together ``lookup_per_hour``.
+    """
+
     budget: int
     delay: tuple[float, float]
     enabled: bool = True  # only a provider in SWITCHABLE can be off
+    lookup_delay: tuple[float, float] = (0.5, 1.5)
+    lookup_requests: int = 6
+    lookup_per_hour: int = 60
 
 
 DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
@@ -150,7 +163,7 @@ _SPOTIFY_KEYS = {
     "client_id", "client_secret_file", "redirect_uri", "liked_songs", "playlists",
     "suggest_top_tracks",
 }
-_PROVIDER_KEYS = {"budget", "delay"}
+_PROVIDER_KEYS = {"budget", "delay", "lookup_delay", "lookup_requests", "lookup_per_hour"}
 _NTFY_KEYS = {"url", "token_file"}
 _AUTOCHORDS_KEYS = {"btc_weights", "beat_checkpoint", "device"}
 
@@ -265,7 +278,7 @@ def _read_secret(
     return value.strip() if value else None
 
 
-def _delay(value: Any, where: str) -> tuple[float, float]:
+def _delay(value: Any, where: str, key: str = "delay") -> tuple[float, float]:
     if (
         not isinstance(value, (list, tuple))
         or len(value) != 2
@@ -274,8 +287,14 @@ def _delay(value: Any, where: str) -> tuple[float, float]:
         or value[0] < 0
         or value[1] < value[0]
     ):
-        raise ConfigError(f"{where}.delay must be [min, max] seconds, not {_shown(value)}")
+        raise ConfigError(f"{where}.{key} must be [min, max] seconds, not {_shown(value)}")
     return (float(value[0]), float(value[1]))
+
+
+def _count(value: Any, where: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ConfigError(f"{where} must be a non-negative integer, not {_shown(value)}")
+    return value
 
 
 def _default_config_path(paths: _Paths) -> Path | None:
@@ -366,15 +385,17 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
             raise ConfigError(f"[providers.{name}] must be a table")
         keys = _PROVIDER_KEYS | ({"enabled"} if name in SWITCHABLE else set())
         _check_keys(table, keys, f"[providers.{name}]")
-        base = providers[name]
-        budget = table.get("budget", base.budget)
-        if isinstance(budget, bool) or not isinstance(budget, int) or budget < 0:
-            raise ConfigError(
-                f"[providers.{name}].budget must be a non-negative integer, not {_shown(budget)}"
-            )
-        delay = _delay(table["delay"], f"[providers.{name}]") if "delay" in table else base.delay
-        enabled = _bool(table.get("enabled", base.enabled), f"[providers.{name}].enabled")
-        providers[name] = ProviderPolicy(budget=budget, delay=delay, enabled=enabled)
+        base, where = providers[name], f"[providers.{name}]"
+        budget = _count(table.get("budget", base.budget), f"{where}.budget")
+        delay = _delay(table["delay"], where) if "delay" in table else base.delay
+        enabled = _bool(table.get("enabled", base.enabled), f"{where}.enabled")
+        lookup_delay = (_delay(table["lookup_delay"], where, "lookup_delay") if "lookup_delay" in table
+                        else base.lookup_delay)
+        providers[name] = ProviderPolicy(
+            budget=budget, delay=delay, enabled=enabled, lookup_delay=lookup_delay,
+            lookup_requests=_count(table.get("lookup_requests", base.lookup_requests), f"{where}.lookup_requests"),
+            lookup_per_hour=_count(table.get("lookup_per_hour", base.lookup_per_hour), f"{where}.lookup_per_hour"),
+        )
 
     match = MatchPolicy(**_numbers(_table(data, "match"), _MATCH_RANGES, "[match]"))
     if match.review > match.accept:

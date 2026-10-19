@@ -55,6 +55,7 @@ def register(app: typer.Typer) -> None:
 def _fetch(cfg: Config, display: str | None) -> None:
     from caracole.health import get_state, is_cooling, record_block, record_ok
     from caracole.http import ProviderBlocked
+    from caracole.overrides import load_overrides
     from caracole.ug.fetch import FetchContext, fetch_songs, rescore_kept_sheets, songs_to_fetch
 
     overrides = load_ovr(cfg)
@@ -78,7 +79,8 @@ def _fetch(cfg: Config, display: str | None) -> None:
             return
         client = make_client(cfg, conn, PROVIDER, run_id_for(now))
         ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank,
-                           library_dir=cfg.library_dir, now=now)
+                           library_dir=cfg.library_dir, now=now,
+                           reload_overrides=lambda: load_overrides(cfg.overrides_file))
         try:
             stats = fetch_songs(ctx, songs, on_song=lambda song, outcome: typer.echo(_line(song, outcome)))
         except ProviderBlocked as e:

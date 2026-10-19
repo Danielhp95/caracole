@@ -261,6 +261,8 @@ def _fetch(ctx: StepContext) -> StepResult:
     fctx = FetchContext(
         conn=ctx.conn, client=ctx.services.client("ug"), overrides=ctx.overrides, rank=ctx.cfg.rank,
         library_dir=ctx.cfg.library_dir, now=ctx.now,
+        # A lookup the run lets go first, in a pause, may pin a song: read again after one (_Handoffs).
+        reload_overrides=lambda: load_overrides(ctx.cfg.overrides_file),
     )
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
     if s.songs_failed:
