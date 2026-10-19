@@ -81,6 +81,37 @@ def test_a_long_or_unsized_form_is_refused_unread(served):
         conn.close()
 
 
+def test_sigterm_stops_caracole_serve_cleanly(tmp_path):
+    """How systemd stops the unit: the server closes, the queue stops, and it exits 0."""
+    import signal
+    import socket
+    import subprocess
+
+    src = Path(__file__).resolve().parents[1] / "src"
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'library_dir = "{tmp_path / "lib"}"\nstate_dir = "{tmp_path / "state"}"\n'
+                      f'cache_dir = "{tmp_path / "cache"}"\n', encoding="utf-8")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    env = {"PYTHONPATH": subprocess_pythonpath(src), "HOME": str(tmp_path)}
+    process = subprocess.Popen([sys.executable, "-m", "caracole", "--config", str(config), "serve", "--port",
+                                str(port)], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        for _ in range(200):
+            try:
+                socket.create_connection(("127.0.0.1", port), timeout=1).close()
+                break
+            except OSError:
+                time.sleep(0.05)
+        process.send_signal(signal.SIGTERM)
+        out, _ = process.communicate(timeout=15)
+    finally:
+        process.kill()
+    assert process.returncode == 0, out
+    assert f"http://127.0.0.1:{port}/" in out
+
+
 def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
     src = Path(__file__).resolve().parents[1] / "src"
     monkeypatch.setenv("PYTHONPATH", subprocess_pythonpath(src))
