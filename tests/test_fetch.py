@@ -2382,7 +2382,7 @@ def test_versions_recorded_where_robots_txt_closes_never_compete(conn, tmp_path)
 
 def test_an_artist_page_robots_txt_closes_is_never_asked_for(conn, tmp_path, monkeypatch):
     # robots.txt leaves artist pages open today. Should it close them, a song is looked up there without a
-    # request, and checked with nothing found: never failed, never dirty.
+    # request, and checked with nothing found: never failed.
     www = "www.ultimate-guitar.com"
     monkeypatch.setitem(tabarr.http._ROBOTS, www, [*tabarr.http._ROBOTS[www], ("/artist/", re.compile("/artist/"))])
     song = banma(conn)
