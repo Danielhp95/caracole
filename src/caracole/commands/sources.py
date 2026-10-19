@@ -10,6 +10,7 @@ the source modules are imported inside the commands.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from contextlib import closing, nullcontext
 from dataclasses import dataclass
@@ -45,8 +46,10 @@ On NixOS, set services.caracole.settings.spotify and credentials.spotify_client_
 instead (docs/deploy.md, section 5)."""
 _DEFAULT_CONFIG = "caracole.toml (~/.config/caracole/caracole.toml, unless --config names another)"
 
+log = logging.getLogger(__name__)
+
 # How `caracole add` describes a song the library already had, by its status.
-_KNOWN = {"wanted": "no sheet yet", "found": "has a sheet", "ignored": "ignored by overrides.toml"}
+_KNOWN = {"wanted": "with no sheet yet", "found": "with a sheet", "ignored": "ignored by overrides.toml"}
 
 
 def register(app: typer.Typer) -> None:
@@ -248,28 +251,35 @@ def _write_pages(conn: sqlite3.Connection, cfg: Config) -> None:
 
 
 def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None) -> None:
-    """Add the song with ``add_song``, then print its line and what the library knows of it."""
+    """Add the song with ``add_song``, then say in a line what was done and what the library has of it.
+
+    -v adds its line in wanted.txt, where the file is, and the song's key.
+    """
     from caracole.wanted import format_line
 
     added = add_song(cfg, artist, title, album, duration_ms)
     line, path = added.line, cfg.wanted_file
-    typer.echo(f"{'Already in' if added.listed else 'Added to'} {path}, line {line.line_no}:")
-    typer.echo(f"  {format_line(line.artist, line.title, line.album, line.duration_ms)}")
-    if added.listed and _would_change(line, album, duration_ms):
-        typer.echo("That line stays as it is: edit it to change the album or the duration.")
+    name = f"{line.artist} - {line.title}"
+    done = f"{name} is in wanted.txt already" if added.listed else f"Added {name} to wanted.txt"
+    log.info("wanted.txt line %d (%s): %s", line.line_no, path,
+             format_line(line.artist, line.title, line.album, line.duration_ms))
     if added.db_error is not None:
-        typer.echo(f"Song {line.identity}")
+        typer.echo(f"{done}.")
+        log.info("Song %s", line.identity)
         _warn(
             f"The song is in wanted.txt, but the database couldn't be updated ({added.db_error}); "
             "the next `caracole sync` or `caracole run` adds it."
         )
         return
     if added.known is None:
-        state = "new; the next `caracole run` looks for it"
+        state, known = "the next `caracole run` looks for it", "new"
     else:
         status = (added.song or added.known).status
-        state = f"already known, {_KNOWN.get(status, status)}"
-    typer.echo(f"Song {line.identity}: {state}")
+        state, known = f"the library has it, {_KNOWN.get(status, status)}", f"already known, {status}"
+    typer.echo(f"{done}; {state}.")
+    if added.listed and _would_change(line, album, duration_ms):
+        typer.echo("Its line stays as it is: edit it to change the album or the duration.")
+    log.info("Song %s: %s", line.identity, known)
     for problem in added.problems:
         _warn(problem)
 

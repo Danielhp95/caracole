@@ -140,7 +140,7 @@ def test_a_request_is_written_to_wanted_txt_exactly_as_caracole_add_writes_it(ap
     assert response.status == 303 and header(response, "location") == "/jobs#job-1"
 
     other = tmp_path / "other"
-    result = CliRunner().invoke(build_app(), ["--config", str(config_file(other)), "add", "  Soda   Stereo ",
+    result = CliRunner().invoke(build_app(), ["--config", str(config_file(other)), "-v", "add", "  Soda   Stereo ",
                                               "De Música | Ligera #1", "--album", "Canción Animal",
                                               "--duration", "3:33"])
     assert result.exit_code == 0, result.output
@@ -148,7 +148,7 @@ def test_a_request_is_written_to_wanted_txt_exactly_as_caracole_add_writes_it(ap
 
     job = queue.snapshot()[0]
     assert job.title == "Fetch Soda Stereo - De Música | Ligera #1" and job.fetching
-    line_no = re.search(r"Added to .*, line (\d+):", result.output).group(1)
+    line_no = re.search(r"wanted\.txt line (\d+)", result.output).group(1)
     assert job.note == f"Added to wanted.txt, line {line_no}."
     assert [s.args for s in job.steps] == [
         ("add", "--album=Canción Animal", "--duration=3:33", "--", "Soda Stereo", "De Música | Ligera #1"),

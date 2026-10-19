@@ -79,8 +79,9 @@ def ug(monkeypatch):
     return site
 
 
-def run(tmp_path, *args, budget=60):
-    return CliRunner().invoke(build_app(), ["--config", str(write_config(tmp_path, budget=budget)), "fetch", *args])
+def run(tmp_path, *args, budget=60, root=()):
+    config = str(write_config(tmp_path, budget=budget))
+    return CliRunner().invoke(build_app(), ["--config", config, *root, "fetch", *args])
 
 
 def connect(tmp_path):
@@ -220,8 +221,47 @@ def test_song_option_fetches_that_song_even_when_nothing_changed(tmp_path, ug):
 
     assert result.exit_code == 0, result.output
     assert ug.requests == [SIGNOS]
-    assert "Soda Stereo - Signos: sheet 201 (1 request)" in result.output
+    assert result.output == "Soda Stereo - Signos: sheet 201\n"  # one line for one song
     assert get_song(conn, persiana).ug_dirty is True
+
+
+def test_song_option_says_the_rest_at_v(tmp_path, ug):
+    conn, _, _ = two_songs(tmp_path, ug)
+
+    result = run(tmp_path, "--song", "Soda Stereo - Signos", root=("-v",))
+
+    assert result.exit_code == 0, result.output
+    assert "Soda Stereo - Signos: sheet 201\n" in result.output
+    assert f"Ultimate Guitar GET {SIGNOS} → 200" in result.output  # a line per request
+    assert "1 song done, 0 failed, 1 UG request." in result.output
+
+
+def test_song_option_says_in_a_line_why_nothing_came(tmp_path, ug):
+    conn, persiana, _ = two_songs(tmp_path, ug)
+    ug.pages[PERSIANA] = (200, "<html><body>maintenance</body></html>")  # no js-store: an error, no miss
+
+    result = run(tmp_path, "--song", "Soda Stereo - Persiana Americana")
+
+    assert result.exit_code == 0, result.output
+    [line] = result.output.splitlines()
+    assert line.startswith("Soda Stereo - Persiana Americana: not fetched (") and line.endswith(
+        "); it waits for the next run.")
+    assert get_song(conn, persiana).ug_dirty is True
+
+
+def test_song_option_says_when_the_budget_ran_out_first(tmp_path, ug):
+    conn, _, signos = two_songs(tmp_path, ug)
+    other = f"{TAB}soda-stereo/signos-chords-202"
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+                 "VALUES (202, 'soda-stereo', 'signos', 'chords', 'last', '2026-10-01T00:00:00Z', ?)",
+                 ("soda-stereo/signos-chords-202",))
+    ug.pages[other] = tab_page(202, "Signos", other)
+
+    result = run(tmp_path, "--song", "Soda Stereo - Signos", budget=1)
+
+    assert result.exit_code == 0, result.output
+    assert result.output == ("Soda Stereo - Signos: not fetched; the UG budget of 1 request is spent, "
+                             "so it waits for the next run.\n")
 
 
 @pytest.mark.parametrize("decision,message", [

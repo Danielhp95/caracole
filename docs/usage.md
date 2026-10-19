@@ -237,12 +237,23 @@ for you, then syncs the file at once and rewrites `_todo.md` and
 `index.html`:
 
     $ caracole add 宋冬野 斑马斑马 --album 安和桥北 --duration 4:13
-    Added to /home/you/Tabs/wanted.txt, line 16:
-      宋冬野 - 斑马斑马 | 安和桥北 | 4:13
-    Song 宋冬野/斑马斑马: new; the next `caracole run` looks for it
+    Added 宋冬野 - 斑马斑马 to wanted.txt; the next `caracole run` looks for it.
 
-A song that is already listed isn't added twice, and its line stays as it is:
-edit the line to change its album or duration, and the next sync changes the
+It says in one line what it did and what the library has of the song: "is in
+wanted.txt already" for a song listed before, and "the library has it, with a
+sheet" (or "with no sheet yet", or "ignored by overrides.toml") for a song the
+library knew, from Spotify, say. `caracole -v add …` also prints the song's
+line in wanted.txt, with its number and the file's path, and the song's key in
+the library:
+
+    $ caracole -v add 宋冬野 斑马斑马 --album 安和桥北 --duration 4:13
+    wanted.txt line 16 (/home/you/Tabs/wanted.txt): 宋冬野 - 斑马斑马 | 安和桥北 | 4:13
+    Added 宋冬野 - 斑马斑马 to wanted.txt; the next `caracole run` looks for it.
+    Song 宋冬野/斑马斑马: new
+
+A song that is already listed isn't added twice, and its line stays as it is
+(a second line says so when you gave another album or duration): edit the line
+to change its album or duration, and the next sync changes the
 song. The file is the source of truth, so the line is written first, before
 `caracole add` waits for any other caracole to finish. When the database can't be
 updated, the line is kept all the same, a warning says why, and the next sync
@@ -648,10 +659,13 @@ and cache.
   page before, and songs whose chords the index can't offer (bare ids, or
   pages robots.txt closes). Per song it prints what it kept, as
   `Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)`,
-  or `nothing kept`. `--song` fetches that one song now, even when nothing
-  about it changed; the song must be in the library and matched, or not found
-  or reviewed on its title alone with its artist page known. A cooldown, a
-  block or a spent budget exits 0.
+  or `nothing kept`, then the totals. `--song` fetches that one song now, even
+  when nothing about it changed; the song must be in the library and matched,
+  or not found or reviewed on its title alone with its artist page known. It
+  prints that song's line alone, without the count (`Artist - Title: sheet
+  101`), or why nothing came: `not fetched (the error); it waits for the next
+  run`, or that the budget was spent first. `-v` adds the requests, the count
+  and the totals. A cooldown, a block or a spent budget exits 0.
 - **`caracole lacuerda`** looks on LaCuerda for Spanish songs (judged by their
   lyrics, or by their title until there are lyrics) that have no complete
   sheet, at most once in 30 days per song. Like `caracole fetch`, it first
@@ -1356,9 +1370,7 @@ lyrics without timings.
 **1. Add it.**
 
     $ caracole add 宋冬野 斑马斑马 --album 安和桥北 --duration 4:13
-    Added to /home/you/Tabs/wanted.txt, line 16:
-      宋冬野 - 斑马斑马 | 安和桥北 | 4:13
-    Song 宋冬野/斑马斑马: new; the next `caracole run` looks for it
+    Added 宋冬野 - 斑马斑马 to wanted.txt; the next `caracole run` looks for it.
 
 The album and duration make the lyrics lookup exact. Written "斑马，斑马",
 with a comma, it is the same song to caracole, and so is 斑馬斑馬, in

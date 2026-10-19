@@ -136,7 +136,8 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
             time.sleep(0.05)
         assert job.state == "done", [s.output for s in job.steps]
         # The server wrote the line; caracole add found it there and synced it into the database.
-        assert job.steps[0].output[0].startswith("Already in "), job.steps[0].output
+        output = job.steps[0].output
+        assert "Radiohead - Creep is in wanted.txt already; the next `caracole run` looks for it." in output, output
         conn = db.connect(cfg.db_path)
         try:
             assert [tuple(r) for r in conn.execute("SELECT artist, title FROM songs")] == [("Radiohead", "Creep")]

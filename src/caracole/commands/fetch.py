@@ -7,10 +7,14 @@ expected behaviour, not a failure, so both exit 0. Then it rewrites _todo.md
 and index.html, unless it did nothing (a cooldown, or nothing to fetch or
 score). Every command module is imported on every start, so the fetch code is
 imported inside the command.
+
+It prints a line per song and the totals; for one song (``--song``), that
+song's line alone, which says why when nothing came, and -v adds the rest.
 """
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from contextlib import closing
 from datetime import datetime
@@ -37,6 +41,7 @@ if TYPE_CHECKING:
     from caracole.ug.fetch import FetchStats, SongFetchOutcome
 
 PROVIDER = "ug"
+log = logging.getLogger(__name__)
 
 
 def register(app: typer.Typer) -> None:
@@ -69,7 +74,11 @@ def _fetch(cfg: Config, display: str | None) -> None:
         # and a partial one sends its song back to have its sheets ranked again.
         rescored = rescore_kept_sheets(conn, cfg.library_dir, cfg.rank)
         if rescored:
-            typer.echo(f"Scored {_count(rescored, 'kept sheet')} against lyrics that came later.")
+            scored = f"Scored {_count(rescored, 'kept sheet')} against lyrics that came later."
+            if display:  # not about the song asked for
+                log.info(scored)
+            else:
+                typer.echo(scored)
         songs = [_one_song(conn, display, overrides)] if display else songs_to_fetch(conn, overrides, now)
         if not songs:
             typer.echo("Nothing to fetch.")
@@ -79,8 +88,13 @@ def _fetch(cfg: Config, display: str | None) -> None:
         client = make_client(cfg, conn, PROVIDER, run_id_for(now))
         ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank,
                            library_dir=cfg.library_dir, now=now)
+        one = display is not None
+
+        def said(song: Song, outcome: SongFetchOutcome) -> None:
+            typer.echo(_line(song, outcome, requests=not one))
+
         try:
-            stats = fetch_songs(ctx, songs, on_song=lambda song, outcome: typer.echo(_line(song, outcome)))
+            stats = fetch_songs(ctx, songs, on_song=said)
         except ProviderBlocked as e:
             state = record_block(conn, e.provider, now, str(e))
             typer.echo(
@@ -94,9 +108,14 @@ def _fetch(cfg: Config, display: str | None) -> None:
         if client.requests_made:
             record_ok(conn, PROVIDER, now)
         write_pages(conn, cfg, overrides, utcnow())
+    budget = cfg.provider(PROVIDER).budget
+    if one:
+        log.info(_totals(stats, client.requests_made))
+        if stats.failures or (stats.budget_exhausted and not stats.songs_done):
+            typer.echo(_not_done(songs[0], stats, budget))
+        return
     typer.echo(_totals(stats, client.requests_made))
     if stats.budget_exhausted:
-        budget = cfg.provider(PROVIDER).budget
         typer.echo(f"The UG budget of {_count(budget, 'request')} is spent; the rest waits for the next run.")
 
 
@@ -142,8 +161,9 @@ def _count(n: int, noun: str) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
-def _line(song: Song, outcome: SongFetchOutcome) -> str:
-    """One song's result, as ``Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)``."""
+def _line(song: Song, outcome: SongFetchOutcome, *, requests: bool = True) -> str:
+    """One song's result, as ``Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)``;
+    without ``requests``, the count is left to -v."""
     parts = []
     if outcome.sheet is not None:
         parts.append(f"sheet {outcome.sheet}")
@@ -151,7 +171,24 @@ def _line(song: Song, outcome: SongFetchOutcome) -> str:
         parts.append("Guitar Pro " + ", ".join(str(t) for t in outcome.guitar_pro))
     if outcome.tab is not None:
         parts.append(f"tab {outcome.tab}")
-    return f"{song.display}: {' · '.join(parts) or 'nothing kept'} ({_count(outcome.requests, 'request')})"
+    line = f"{song.display}: {' · '.join(parts) or 'nothing kept'}"
+    if not requests:
+        log.info("%s: %s", song.display, _count(outcome.requests, "UG request"))
+        return line
+    return f"{line} ({_count(outcome.requests, 'request')})"
+
+
+def _not_done(song: Song, stats: FetchStats, budget: int) -> str:
+    """Why ``--song``'s song got no line of its own: an error, or the budget, before it was done.
+    Neither is a miss, so it waits for the next run; a sheet the first pass kept stays."""
+    spent = f"the UG budget of {_count(budget, 'request')} is spent"
+    if stats.sheets_done:
+        if stats.failures:
+            return f"{song.display}: sheet kept; its guitar parts wait for the next run ({stats.failures[0][1]})."
+        return f"{song.display}: sheet kept; {spent}, so its guitar parts wait for the next run."
+    if stats.failures:
+        return f"{song.display}: not fetched ({stats.failures[0][1]}); it waits for the next run."
+    return f"{song.display}: not fetched; {spent}, so it waits for the next run."
 
 
 def _totals(stats: FetchStats, requests: int) -> str:
