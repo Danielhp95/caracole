@@ -399,7 +399,7 @@ def _render_song(
 
     if human is not None:
         render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id))
-        if auto is None:
+        if auto is None and done[-1].outcome != "no font":  # its PDF is in place
             for name in AUTO_OUTPUTS:
                 (folder / name).unlink(missing_ok=True)
             kv_delete(conn, _state_key(song.id, auto=True))

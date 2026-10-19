@@ -263,6 +263,20 @@ def test_auto_outputs_stay_until_the_human_pdf_replaces_them(conn, cfg):
     assert not (folder / "sheet (auto).pdf").exists()
 
 
+def test_auto_outputs_stay_while_the_human_sheet_waits_for_a_font(conn, cfg):
+    assert cfg.cjk_font is None
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    render(conn, cfg)
+    vid = human_sheet(conn, cfg, song, f"[ch]G[/ch]\nUna can{chr(0x434)}ión de prueba\n")  # д
+    set_coverage(conn, vid, 1.0)
+    drop_file(conn, cfg.library_dir, song=song, name="sheet (auto).txt")
+    stats = render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    assert stats.font_error is not None and not (folder / "sheet.pdf").exists()
+    assert (folder / "sheet (auto).pdf").is_file()  # still the song's only PDF
+
+
 def test_a_partial_human_sheet_keeps_the_auto_pdf_beside_it(conn, cfg):
     # The fetch step keeps 'sheet (auto).txt' until a complete human sheet arrives, so
     # both are rendered: the auto sheet still has every verse.
