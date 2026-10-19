@@ -294,3 +294,7 @@ def test_lacuerda_style_sheet():
         "[ch]Sim[/ch]      [ch]Sol[/ch]\nPalabras de prueba aqui"
     )
     assert body(content) == ["Intro:", "", "[Bm] [G] [D] [A] [*(4)]", "", "[Bm]Palabras [G]de prueba aqui"]
+
+
+def test_marker_only_lines_leave_no_blank_lines():
+    assert body("[tab]\n[ch]G[/ch]\nHello\n[/tab]\nNext") == ["[G]Hello", "Next"]

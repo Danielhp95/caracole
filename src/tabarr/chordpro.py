@@ -157,7 +157,9 @@ def _runs(lines: list[str]) -> list[tuple[bool, list[str]]]:
             if run:
                 runs.append((False, run))
             run, in_block = [], True
-        run.append(_TAB_MARK.sub("", raw))
+        line = _TAB_MARK.sub("", raw)
+        if line.strip() or line == raw:  # a line holding only markers is no blank line
+            run.append(line)
         if "[/tab]" in raw and in_block:
             runs.append((True, run))
             run, in_block = [], False
