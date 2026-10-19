@@ -2211,6 +2211,28 @@ def test_a_match_you_reject_for_a_review_loses_its_sheet_without_a_request(conn,
     assert ug.requests == [] and songs_to_fetch(conn, overrides, NOW) == []
 
 
+def test_a_lacuerda_sheet_stays_when_a_rejected_match_takes_its_tab(conn, tmp_path):
+    from tabarr.ug.index import mark_built
+
+    song = accepted(conn)
+    index(conn, (401, "soda-stereo", "persiana-americana", "tabs"))
+    mark_built(conn, NOW)
+    keep_other_sheet(conn, tmp_path, song, provider="lacuerda", kind="acordes", name="sheet.txt", coverage=1.0)
+    ug = FakeUG()
+    ug.tab(v(401, "tabs"), content=riff("tab 401"))
+    soda_chords(ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert names(conn, song) == {"sheet.txt", "tab.txt", "tab.json"}
+    overrides = overrides_from(tmp_path, '[reject]\n"Soda Stereo - Persiana Americana" = "soda-stereo/persiana-americana"\n')
+    match_all(conn, overrides, MatchPolicy())
+
+    fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides),
+                songs_to_fetch(conn, overrides, NOW))
+
+    assert names(conn, song) == {"sheet.txt"} and read(tmp_path, song, "sheet.txt") == "lacuerda sheet"
+    assert (get_song(conn, song.id).match_decision, get_song(conn, song.id).status) == ("not_found", "found")
+
+
 def test_a_rejected_match_leaves_a_song_without_any_sheet_wanted(conn, tmp_path):
     ug = FakeUG()
     song = dml_found_on_its_artist_page(conn, tmp_path, ug)
