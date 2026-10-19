@@ -114,7 +114,9 @@ same way from `$CACHE_DIRECTORY`, `$XDG_CACHE_HOME/caracole` or
 and `caracole.lock`: back it up, but don't sync it. The cache keeps every
 response caracole has received, so it rarely asks for a page twice; deleting it
 costs only requests. PDFs are made in it too, each in a private folder that
-goes when the PDF is done, so caracole must be able to write there.
+goes when the PDF is done, so caracole must be able to write there. Its
+`icons` folder holds each site's icon, for `index.html` (see
+[Where each file came from](#where-each-file-came-from)).
 
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
 to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
@@ -508,19 +510,22 @@ are never offered again; other candidates still can be.
 `caracole run` is what the nightly timer starts. Its steps, in order:
 
 1. **sync**: wanted.txt, then Spotify.
-2. **index**: refresh the index, and mark the songs that have new tabs.
-3. **match**: match every song again, locally.
-4. **lyrics**: ask LRCLIB for the songs that have no lyrics yet.
-5. **fetch**: rank and keep Ultimate Guitar sheets and guitar parts.
-6. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet.
-7. **scan**: link purchases in Music/, and file Guitar Pro downloads.
-8. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
+2. **icons**: fetch the icon of each site the library has something from, once
+   (see [Where each file came from](#where-each-file-came-from)). It comes
+   before the steps that can spend a site's budget.
+3. **index**: refresh the index, and mark the songs that have new tabs.
+4. **match**: match every song again, locally.
+5. **lyrics**: ask LRCLIB for the songs that have no lyrics yet.
+6. **fetch**: rank and keep Ultimate Guitar sheets and guitar parts.
+7. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet.
+8. **scan**: link purchases in Music/, and file Guitar Pro downloads.
+9. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
    has none. It comes after the scan, so a file you dropped into `_inbox/` is
    filed first, and that song gets none from gtptabs.com.
-9. **musescore**: read MuseScore's song sitemaps into a local index, for the
-   to-do page's links to its pages. It downloads nothing.
-10. **render**: write ChordPro files and PDFs.
-11. **todo**: rewrite `_todo.md` and `index.html`.
+10. **musescore**: read MuseScore's song sitemaps into a local index, for the
+    to-do page's links to its pages. It downloads nothing.
+11. **render**: write ChordPro files and PDFs.
+12. **todo**: rewrite `_todo.md` and `index.html`.
 
 Every step runs even when an earlier one failed, so the to-do page is always
 rewritten. Until the index is built, the index and match steps are skipped;
@@ -743,6 +748,14 @@ and cache.
   writes the `.cho` again; the next `caracole run` writes `sheet.json` again
   before it renders.
 - **`caracole todo`** rewrites `_todo.md` and `index.html` from the database.
+- **`caracole icons`** fetches the icon of each site `index.html` has none for
+  yet, now, then rewrites `_todo.md` and `index.html`. It prints a line a site:
+  `Ultimate Guitar: icon fetched`, `LaCuerda: kept already`, `LRCLIB: no icon
+  there; its badge stands in`, or why it asked nothing (turned off, cooling
+  down). Unlike the run's icons step, it also asks a site that gave no icon less
+  than a week ago, and YouTube, which has no provider of its own: at most 4
+  requests, at the usual 10–20 s pace. A block cools that site down, as any
+  block does, and the others are still asked. A block or an error exits 0.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
 - **`caracole search [QUERY]... [--limit N] [--add N] [--key KEY]`** searches
@@ -987,6 +1000,39 @@ id="songs">` block) has the same `key` and `key_source` as its info.json.
 On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
 opens the file directly, works.
+
+### Where each file came from
+
+Each source has a mark: the site's own icon for Ultimate Guitar, LaCuerda,
+LRCLIB (lyrics), gtptabs.com, MuseScore and YouTube, a ♪ for a sheet the
+audio model wrote (auto-chords), and a ↓ for a file you filed from `_inbox/`.
+A site's mark is named for screen readers ("from Ultimate Guitar").
+
+A site's icon is its favicon. The nightly run's icons step asks each site for
+it once, from the first night the library has something from that site (a
+sheet, a Guitar Pro page to click, lyrics, MuseScore's pages), with that
+site's own polite client: its robots.txt, budget, pauses and cooldown, and
+every answer cached forever. It asks for `/favicon.ico`
+first; when that gives no icon, the home page, for an `<link rel="icon">` or
+`apple-touch-icon` on the same site (two at most, never an SVG). The icon is
+kept in the cache folder, as `icons/<site>.png`, small and cleaned:
+
+- only a PNG or an ICO is read, by its bytes, up to 256 KB;
+- a PNG keeps its image chunks alone, with no text, metadata or animation,
+  once each chunk and its pixels check out;
+- an ICO gives its image nearest 32 pixels, turned into a PNG;
+- anything else, an SVG too, is refused;
+- a kept icon is at most 256 pixels a side and 16 KB.
+
+The page inlines each icon (a `data:` URI), so it still loads nothing from the
+network. A site whose icon can't be had (it blocked caracole, robots.txt closes
+it, it has none, or it wasn't asked yet) shows a small lettered badge instead:
+UG, LC, LR, GT, MS, YT. A site that gave no icon, or failed, is asked again a
+week later; a spent budget or a cooldown leaves it for the next run. YouTube
+has no provider of its own, so the nightly run doesn't ask it.
+`caracole icons` asks now (see [One step at a time](#one-step-at-a-time)), and
+deleting `icons/` in the cache folder makes caracole fetch them again, from its
+cache of the answers.
 
 ### caracole search
 
