@@ -1,4 +1,4 @@
-from tabarr.overrides import load_overrides
+from tabarr.overrides import load_overrides, override_key
 from tabarr.review import ReviewIO, review_songs
 from tabarr.songs import get_song, update_song
 
@@ -40,6 +40,21 @@ def test_accept_writes_match_and_alias(conn, cfg):
     assert get_song(conn, s.id).review is False
     assert any("Soda - Persiana Americana" in line for line in script.out)
     assert any("soda-stereo/persiana-americana" in line for line in script.out)
+
+
+def test_accept_keeps_the_aliases_you_curated(conn, cfg):
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(
+        '[alias]\n# UG files them under two names\n'
+        '"Bob Marley & The Wailers" = ["bob-marley", "bob-marley-the-wailers"]\n', encoding="utf-8")
+    review_song(conn, "Bob Marley & The Wailers", "Is This Love", cands=[
+        {"artist_key": "bob-marley", "song_key": "is-this-love", "score": 88.0, "step": "fuzzy_title"}])
+    stats = review_songs(conn, cfg, Script("1").io())
+    o = load_overrides(cfg.overrides_file)
+    assert stats.accepted == 1
+    assert o.match[override_key("Bob Marley & The Wailers - Is This Love")] == ("bob-marley", "is-this-love")
+    assert o.alias["bob-marley-the-wailers"] == ("bob-marley", "bob-marley-the-wailers")
+    assert "# UG files them under two names" in cfg.overrides_file.read_text(encoding="utf-8")
 
 
 def test_title_only_accept_writes_match_without_alias(conn, cfg):

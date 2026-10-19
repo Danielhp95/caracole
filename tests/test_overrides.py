@@ -254,6 +254,27 @@ def test_writers_preserve_comments_and_roundtrip(tmp_path):
     assert sorted(o.block) == [1601668]
 
 
+def test_add_alias_keeps_the_artists_other_aliases(tmp_path):
+    p = write(tmp_path, (
+        "[alias]\n"
+        '"Soda" = "soda-stereo"  # mine\n'
+        '"Bob Marley and the Wailers" = [\n  "bob-marley",  # UG files them under two names\n'
+        '  "bob-marley-the-wailers",\n]\n'
+    ))
+    add_alias(p, "Soda", "soda-stereo-ar")  # a single slug becomes a list
+    add_alias(p, "Bob Marley & The Wailers", "wailers")  # the same artist, written another way
+    before, inode = p.read_text(encoding="utf-8"), p.stat().st_ino
+    add_alias(p, "Bob Marley & The Wailers", "bob-marley")  # already one of them: nothing is written
+    add_alias(p, "Soda", "Soda-Stereo")
+    text = p.read_text(encoding="utf-8")
+    assert text == before and p.stat().st_ino == inode
+    assert "# mine" in text and "# UG files them under two names" in text
+    assert "Bob Marley & The Wailers" not in text
+    o = load_overrides(p)
+    assert o.alias["soda"] == ("soda-stereo", "soda-stereo-ar")
+    assert o.alias["bob-marley-the-wailers"] == ("bob-marley", "bob-marley-the-wailers", "wailers")
+
+
 def test_writer_creates_missing_file(tmp_path):
     p = tmp_path / "sub" / "overrides.toml"
     add_ignore(p, "A - B")

@@ -205,14 +205,18 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
 
 
 def _edit(path: Path, change) -> None:
+    old = path.read_text(encoding="utf-8") if path.is_file() else None
     try:
-        doc = tomlkit.parse(path.read_text(encoding="utf-8")) if path.is_file() else tomlkit.document()
+        doc = tomlkit.document() if old is None else tomlkit.parse(old)
     except TOMLKitError as e:
         raise OverridesError(f"{path}: {e}") from e
     change(doc)
+    text = tomlkit.dumps(doc)
+    if text == old:
+        return  # nothing changed: the file is left alone
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(tomlkit.dumps(doc), encoding="utf-8")
+    tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
 
 
@@ -223,7 +227,28 @@ def _table_of(doc, name: str):
 
 
 def add_alias(path: Path, source_artist: str, ug_artist: str) -> None:
-    _edit(path, lambda doc: _table_of(doc, "alias").__setitem__(source_artist, ug_artist))
+    """Add ``ug_artist`` to the artist's aliases, keeping the ones already there.
+
+    The artist's entry is found by its key, as aliases are matched, so the same artist
+    written another way grows its own entry. A slug already among them changes nothing.
+    """
+    artist, slug = slug_key(source_artist), ug_slug_key(ug_artist)
+
+    def change(doc) -> None:
+        t = _table_of(doc, "alias")
+        key = next((k for k in reversed(list(t)) if slug_key(k) == artist), None)  # the last one counts
+        if key is None:
+            t[source_artist] = ug_artist
+            return
+        current = t[key]
+        if any(ug_slug_key(s) == slug for s in _strings(current, f"[alias] {key!r}")):
+            return
+        if isinstance(current, str):
+            t[key] = [str(current), ug_artist]
+        else:
+            current.append(ug_artist)
+
+    _edit(path, change)
 
 
 def add_match(path: Path, display: str, ug_ref: str) -> None:
