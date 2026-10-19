@@ -3,6 +3,12 @@
 torch, librosa and beat_this exist only in the flake's ``packages.autochords``.
 Every command module is imported on every start, so this one never imports
 them; it only asks whether they could be imported.
+
+The command exits 1 only when auto-chords can't work here: those packages are
+missing, the model files are missing or unusable, or a sheet can't be kept in
+the library. A purchase it can't read fails the song alone, with exit 0: the
+to-do page lists it, and it is tried again once its file changes, so a file
+that will never decode doesn't fail the unit (and alert you) every night.
 """
 
 from __future__ import annotations
@@ -44,5 +50,5 @@ def register(app: typer.Typer) -> None:
         typer.echo(f"Music: {music.seen} {files}, {music.matched} linked")
         stats = autochords_pending(conn, cfg, overrides=overrides)
         typer.echo(f"auto-chords: {stats.summary()}")
-        if stats.failed:
+        if stats.errors:  # the setup's problems; stats.failures are listed on the to-do page
             raise typer.Exit(1)
