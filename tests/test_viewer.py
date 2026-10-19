@@ -404,6 +404,33 @@ def run_in_page(html: str, tmp_path: Path, body: str, fragment: str = ""):
 
 
 @in_chromium
+def test_a_chord_is_easy_to_tap(tmp_path):
+    # WCAG 2.5.8: a target of 24 by 24 CSS px at least; a one-letter chord is about 12 by 20.
+    size, box, own, fits = run_in_page(build_viewer(UG_CHO), tmp_path, """
+      const tapped = (x, y) => { const t = document.elementFromPoint(x, y); return t && t.closest(".c"); };
+      const el = document.querySelectorAll('#sheet .c[data-c="0"]')[1];  // the G over "Tiny"
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const box = [[cx - 12, cy], [cx + 12, cy], [cx, cy - 12], [cx, cy + 12]].map(([x, y]) => tapped(x, y) === el);
+      const fab = q("#fab").getBoundingClientRect();
+      const inView = [...document.querySelectorAll("#sheet .c")].filter((c) => {
+        const b = c.getBoundingClientRect();
+        return b.top > 0 && b.bottom < innerHeight && !(b.right > fab.left && b.bottom > fab.top);
+      });
+      // a neighbour's larger target never covers a chord's own name
+      const own = inView.length > 5 && inView.every((c) => {
+        const b = c.getBoundingClientRect();
+        return tapped(b.left + b.width / 2, b.top + b.height / 2) === c;
+      });
+      out = [[Math.round(r.width), Math.round(r.height)], box, own,
+             document.documentElement.scrollWidth <= innerWidth];
+    """)
+    assert size[0] < 24  # the name alone is too small a target...
+    assert box == [True] * 4  # ...but a tap 12 px from its centre still reaches it
+    assert own and fits  # and the larger targets make the page no wider
+
+
+@in_chromium
 def test_a_capo_no_longer_on_offer_goes_before_the_chords_are_named(tmp_path):
     out = run_in_page(build_viewer(UG_CHO), tmp_path, """
       q("#up").click();  // Bb to B: capo 1 more, with A shapes, is no longer offered

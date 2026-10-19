@@ -71,8 +71,12 @@ a { color: inherit; }
 .y, .w { white-space: pre-wrap; }
 .y:empty::after { content: "\00a0"; }
 .w { display: inline-block; vertical-align: bottom; padding-top: 1.25em; }
-.c { color: var(--accent); font-weight: 700; border-radius: 4px; cursor: pointer;
+.c { position: relative; color: var(--accent); font-weight: 700; border-radius: 4px; cursor: pointer;
   -webkit-tap-highlight-color: transparent; }
+/* A larger target than the name, for a thumb (WCAG 2.5.8: 24 by 24 px at least), that moves
+   nothing on the sheet. Where two chords are close, the later one's target reaches into the
+   gap, never over the earlier one's name. */
+.c::after { content: ""; position: absolute; inset: -10px -8px; }
 .c:hover { background: var(--accent-soft); }
 .c.on { background: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
 .c.changed { text-decoration: underline dotted; text-underline-offset: 3px; }
