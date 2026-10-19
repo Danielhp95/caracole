@@ -1,12 +1,12 @@
 """The nightly ``caracole run`` (plan §6).
 
 Steps, in order: sync → index → match → lyrics → fetch → lacuerda → scan →
-gtptabs → render → todo. Each step runs even if an earlier one failed, so the
-to-do page is always rewritten.
+gtptabs → musescore → render → todo. Each step runs even if an earlier one
+failed, so the to-do page is always rewritten.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
-  the run once it blocks. So is gtptabs when caracole.toml turns it off: it gets no
-  client then. A block records a cooldown (24 h, doubling) and sends
+  the run once it blocks. So are gtptabs and musescore when caracole.toml turns one
+  off: it gets no client then. A block records a cooldown (24 h, doubling) and sends
   one ntfy message; it is expected behaviour, not a failed run.
 - An exhausted budget or a provider error ends that step for this run; neither
   is a failure, and neither ever marks a song "not found".
@@ -37,7 +37,7 @@ from caracole.overrides import Overrides, OverridesError, load_overrides
 from caracole.songs import ensure_current_keys
 
 log = logging.getLogger(__name__)
-PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs")
+PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs", "musescore")
 
 
 @dataclass
@@ -208,6 +208,18 @@ def _gtptabs(ctx: StepContext) -> str:
             f"{_plural(s.errors, 'error')}{tail}")
 
 
+def _musescore(ctx: StepContext) -> str:
+    from caracole.musescore_fetch import index_size, musescore_index
+
+    s = musescore_index(ctx.conn, ctx.services.client("musescore"), ctx.now, overrides=ctx.overrides)
+    if s.errors:
+        record_error(ctx.conn, "musescore", ctx.now, f"{_plural(s.errors, 'error')} this run")
+    read = f"{_plural(s.sitemaps, 'sitemap')} indexed, " if s.sitemaps else ""
+    errors = f", {_plural(s.errors, 'error')}" if s.errors else ""
+    tail = " (budget spent)" if s.budget_exhausted else ""
+    return f"{read}{_plural(index_size(ctx.conn), 'song page')} in the index{errors}{tail}"
+
+
 def _scan(ctx: StepContext) -> str:
     from caracole.inbox import file_inbox
     from caracole.music import scan_music
@@ -264,6 +276,7 @@ def default_steps() -> list[Step]:
         Step("scan", _scan),
         # After the scan: a file you dropped into _inbox/ is filed first, so its song gets no other.
         Step("gtptabs", _gtptabs, provider="gtptabs"),
+        Step("musescore", _musescore, provider="musescore"),
         Step("render", _render),
         Step("todo", _todo),
     ]

@@ -84,3 +84,8 @@ def songs_wanting_pages(conn: sqlite3.Connection, overrides: Overrides | None) -
     """The songs the to-do page and index.html may list MuseScore pages for: all but the ignored."""
     ignored = overrides.ignore if overrides is not None else frozenset()
     return [s for s in list_songs(conn) if s.status != "ignored" and s.key not in ignored]
+
+
+def index_size(conn: sqlite3.Connection) -> int:
+    """How many song pages the index holds."""
+    return conn.execute("SELECT COUNT(*) FROM musescore_index").fetchone()[0]

@@ -45,7 +45,10 @@ robots.txt, never uses a site's search, never logs in, and stops for at least a
 day when a site pushes back. It downloads Guitar Pro files only where
 robots.txt allows it: from gtptabs.com, with at most 20 requests a night, one
 file for each song that has none. Ultimate Guitar's robots.txt closes its
-downloads to bots, so its Guitar Pro pages are yours to click.
+downloads to bots, so its Guitar Pro pages are yours to click. From MuseScore it
+reads only the song sitemaps its robots.txt lists, for links to its pages, and
+downloads nothing: a download there needs a login. A Cloudflare challenge, which
+is what MuseScore answered caracole with in October 2026, counts as a block.
 
 ## Development
 

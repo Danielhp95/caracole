@@ -331,6 +331,12 @@ of its 20 requests, and from then on each run downloads Guitar Pro files for
 the songs that have none. To leave gtptabs.com out, set
 `settings.providers.gtptabs.enabled = false;` in `services.caracole`.
 
+MuseScore's song sitemaps are read the same way, ten requests a night, for the
+to-do page's links to its pages. Its Cloudflare protection may answer with a
+challenge, as it did in October 2026: that is a block, so ntfy says so once and
+caracole leaves MuseScore alone for a day or more, doubling with each block in
+a row. To leave MuseScore out, set `settings.providers.musescore.enabled = false;`.
+
 **Say what you want to learn.** `wanted.txt` sits in the library, so you can
 edit it on the laptop or the phone. One song per line, as `Artist - Title`,
 optionally followed by ` | Album` and/or ` | m:ss`; `#` starts a comment:

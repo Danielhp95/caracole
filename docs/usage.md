@@ -377,15 +377,18 @@ are never offered again; other candidates still can be.
 8. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
    has none. It comes after the scan, so a file you dropped into `_inbox/` is
    filed first, and that song gets none from gtptabs.com.
-9. **render**: write ChordPro files and PDFs.
-10. **todo**: rewrite `_todo.md` and `index.html`.
+9. **musescore**: read MuseScore's song sitemaps into a local index, for the
+   to-do page's links to its pages. It downloads nothing.
+10. **render**: write ChordPro files and PDFs.
+11. **todo**: rewrite `_todo.md` and `index.html`.
 
 It prints one line per step and the requests made, and sends that summary to
-ntfy. With gtptabs.com turned off, its line is
-`gtptabs: skipped: gtptabs is off ([providers.gtptabs] enabled = false)`. Every step runs even when an earlier one failed, so the to-do page is
-always rewritten. Until the index is built, the index and match steps are
-skipped; after a build that stopped part-way, the match step is skipped until
-the index step's refresh has read the rest.
+ntfy. A site turned off has a line such as
+`gtptabs: skipped: gtptabs is off ([providers.gtptabs] enabled = false)`. Every
+step runs even when an earlier one failed, so the to-do page is always
+rewritten. Until the index is built, the index and match steps are skipped;
+after a build that stopped part-way, the match step is skipped until the index
+step's refresh has read the rest.
 
 **The budget.** A run sends Ultimate Guitar at most 60 requests, the index
 refresh included, 10–20 seconds apart and one at a time. It settles the sheet
@@ -401,6 +404,15 @@ run spends seven on its sitemap index and six sitemaps, and reads them again
 after 30 days, when each unchanged one costs a request. Then each song costs
 its artist's page, which serves every song by that artist for 30 days, and a
 download for its file.
+
+MuseScore gets at most 10 requests a run, 10–20 seconds apart, all for its song
+sitemaps: an index and 18 files of about 40,000 song pages each, read over two
+nights, the second going on where the first stopped, then again each month with
+conditional requests. They name each song's title, never its artist. When
+caracole first asked for them, on 19 October 2026, MuseScore's Cloudflare
+protection answered with a challenge: caracole takes that as a block, like a
+403, and lists what it read before, if anything (see
+[the to-do page](#the-to-do-page)).
 
 **Errors are never misses.** A block (HTTP 403, 429 or a challenge page)
 stops that site for the rest of the run and sends one ntfy message, which
@@ -421,7 +433,9 @@ meanwhile the song is filled from its other versions.
 Nor does caracole ask for a page robots.txt closes to bots, or follow a
 redirect to one: UG's search, download and print pages, and a few tab pages
 (`/tab/track/…`); gtptabs.com's search, its Russian copy of every page
-(`/ru/`) and each artist's "Download all" archive (`/storage/`). A tab at such a page, or at a page UG redirects to one, is
+(`/ru/`) and each artist's "Download all" archive (`/storage/`); MuseScore's
+search, downloads, oEmbed endpoint and `/api/jmuse`, which serves a score's
+pages, audio and MIDI. A tab at such a page, or at a page UG redirects to one, is
 no candidate, and neither is a link in UG's data that isn't a valid address:
 the song is filled from its other versions.
 

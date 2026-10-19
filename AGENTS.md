@@ -35,6 +35,7 @@ an earlier one failed:
 | lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the step) |
 | scan | music.py (Music/), inbox.py (Guitar Pro files in `_inbox/`) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
+| musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 

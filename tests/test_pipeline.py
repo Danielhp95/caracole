@@ -135,7 +135,7 @@ def test_unexpected_error_marks_the_run_failed_but_later_steps_still_run(conn, c
 def test_report_summary_mentions_requests(conn, cfg):
     out = Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out, ug=7, lrclib=3), steps=[step("todo")], now=NOW)
-    assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0, "gtptabs": 0}
+    assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0, "gtptabs": 0, "musescore": 0}
     assert "ug 7" in report.summary() and "lrclib 3" in report.summary()
 
 
@@ -145,10 +145,10 @@ def test_default_steps_are_in_plan_order():
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "render", "todo",
+        "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "musescore", "render", "todo",
     ]
     providers = {s.name: s.provider for s in default_steps()}
-    assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs"
+    assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs" and providers["musescore"] == "musescore"
 
 
 def gtptabs_context(conn, cfg, client=None, overrides=None):
@@ -197,7 +197,7 @@ def test_gtptabs_turned_off_is_skipped_and_gets_no_client(conn, cfg, tmp_path):
     off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
     made = make_services(off, conn, "2026-10-19T03:30:00Z")
     try:
-        assert set(made.clients) == {"ug", "lrclib", "lacuerda"}
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "musescore"}
     finally:
         made.close()
     steps = [s for s in default_steps() if s.name == "gtptabs"]
@@ -205,12 +205,12 @@ def test_gtptabs_turned_off_is_skipped_and_gets_no_client(conn, cfg, tmp_path):
     assert report.ok and report.steps["gtptabs"] == "skipped: gtptabs is off ([providers.gtptabs] enabled = false)"
 
 
-def test_the_run_makes_a_gtptabs_client_when_it_is_on(conn, cfg):
+def test_the_run_makes_a_client_for_every_provider_turned_on(conn, cfg):
     from caracole.pipeline import make_services
 
     made = make_services(cfg, conn, "2026-10-19T03:30:00Z")
     try:
-        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs"}
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs", "musescore"}
     finally:
         made.close()
 
@@ -231,6 +231,78 @@ def test_a_gtptabs_block_cools_it_down_and_marks_no_song(conn, cfg, tmp_path):
     assert report.steps["gtptabs"].startswith("blocked")
     assert is_cooling(conn, "gtptabs", NOW + timedelta(hours=25))
     assert kv_get_json(conn, f"gtptabs:checked:{song.id}") is None
+
+
+def musescore_run(conn, cfg, site, *, budget=10, now=NOW, config=None):
+    """One run of the musescore step alone, against a fake MuseScore."""
+    from caracole.pipeline import default_steps
+
+    client = site.client(cfg.cache_dir, budget=budget, now=now)
+    svc = Services(clients={"musescore": client}, spotify=None, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "musescore"]
+    return run_pipeline(config or cfg, conn=conn, services=svc, steps=steps, now=now)
+
+
+def test_the_musescore_step_says_what_it_read_and_what_the_index_holds(conn, cfg):
+    from conftest import add_song
+    from helpers.musescore_site import FakeMuseScore
+
+    add_song(conn, "Oasis", "Wonderwall")
+    site = FakeMuseScore()
+    report = musescore_run(conn, cfg, site)
+    assert report.ok and report.steps["musescore"] == "2 sitemaps indexed, 19 song pages in the index"
+    again = musescore_run(conn, cfg, site, now=NOW + timedelta(days=1))
+    assert again.steps["musescore"] == "19 song pages in the index"
+
+
+def test_the_musescore_step_says_when_its_budget_is_spent(conn, cfg):
+    from conftest import add_song
+    from helpers.musescore_site import FakeMuseScore
+
+    add_song(conn, "Oasis", "Wonderwall")
+    report = musescore_run(conn, cfg, FakeMuseScore(), budget=2)
+    assert report.ok and report.steps["musescore"] == "1 sitemap indexed, 12 song pages in the index (budget spent)"
+
+
+def test_musescore_errors_reach_provider_health_and_are_no_failure(conn, cfg):
+    from conftest import add_song
+    from helpers.musescore_site import INDEX, FakeMuseScore
+
+    add_song(conn, "Oasis", "Wonderwall")
+    site = FakeMuseScore(pages={INDEX: (502, "Bad gateway", {"Content-Type": "text/html"})})
+    report = musescore_run(conn, cfg, site)
+    assert report.ok and report.steps["musescore"] == "0 song pages in the index, 1 error"
+    assert get_state(conn, "musescore").last_error == "1 error this run"
+
+
+def test_a_musescore_challenge_cools_it_down_and_keeps_the_index(conn, cfg):
+    # What Cloudflare answers caracole: a block like any other, with one ntfy message.
+    from conftest import add_song
+    from helpers.musescore_site import INDEX, FakeMuseScore, challenge
+
+    add_song(conn, "Oasis", "Wonderwall")
+    site = FakeMuseScore()
+    musescore_run(conn, cfg, site)
+    site.pages[INDEX] = challenge()
+    report = musescore_run(conn, cfg, site, now=NOW + timedelta(days=31))
+    assert report.ok and report.blocked == ["musescore"]
+    assert report.steps["musescore"].startswith("blocked")
+    assert is_cooling(conn, "musescore", NOW + timedelta(days=31, hours=25))
+    assert conn.execute("SELECT COUNT(*) FROM musescore_index").fetchone()[0] == 19
+
+
+def test_musescore_turned_off_is_skipped(conn, cfg):
+    import dataclasses
+
+    from helpers.musescore_site import FakeMuseScore
+
+    from caracole.config import ProviderPolicy
+
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
+    site = FakeMuseScore()
+    report = musescore_run(conn, cfg, site, config=off)
+    assert report.steps["musescore"] == "skipped: musescore is off ([providers.musescore] enabled = false)"
+    assert site.requests == []
 
 
 def test_unreadable_overrides_stop_the_run_with_an_alert(conn, cfg):
