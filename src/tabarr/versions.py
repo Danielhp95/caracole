@@ -1,0 +1,129 @@
+"""The ``versions`` table: every sheet, tab or Guitar Pro version seen for a song.
+
+A version belongs to a slot ("sheet" or "guitar") and has a kind (chords,
+acordes, auto; tabs, guitar-pro, power). ``pick_rank`` marks the versions
+currently chosen for a slot: 1 is the best. In assisted mode a Guitar Pro pick
+has no file until you download it into the inbox.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from dataclasses import dataclass
+from typing import Any, Iterable, Mapping, Sequence
+
+
+@dataclass
+class VersionRow:
+    id: int
+    provider: str
+    tab_id: str
+    song_id: int
+    slot: str
+    kind: str
+    rating: float
+    votes: int
+    version: int
+    label: str | None
+    coverage: float | None
+    url: str
+    raw: dict[str, Any]
+    fetched_at: str
+    pick_rank: int | None
+    gone: bool
+
+
+def _row(r: sqlite3.Row) -> VersionRow:
+    d = dict(r)
+    d["raw"] = json.loads(d["raw"] or "{}")
+    d["gone"] = bool(d["gone"])
+    return VersionRow(**d)
+
+
+def upsert_version(
+    conn: sqlite3.Connection,
+    *,
+    provider: str,
+    tab_id: str,
+    song_id: int,
+    slot: str,
+    kind: str,
+    rating: float,
+    votes: int,
+    version: int,
+    label: str | None,
+    url: str,
+    raw: Mapping[str, Any],
+    now: str,
+) -> int:
+    """Insert or refresh a version (unique per provider, tab id and song); return its id."""
+    conn.execute(
+        "INSERT INTO versions (provider, tab_id, song_id, slot, kind, rating, votes, version, label, url, raw, fetched_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(provider, tab_id, song_id) DO UPDATE SET slot = excluded.slot, kind = excluded.kind, "
+        "rating = excluded.rating, votes = excluded.votes, version = excluded.version, label = excluded.label, "
+        "url = excluded.url, raw = excluded.raw, fetched_at = excluded.fetched_at, gone = 0",
+        (provider, str(tab_id), song_id, slot, kind, float(rating or 0), int(votes or 0), int(version or 1),
+         label, url, json.dumps(raw, ensure_ascii=False), now),
+    )
+    row = conn.execute(
+        "SELECT id FROM versions WHERE provider = ? AND tab_id = ? AND song_id = ?", (provider, str(tab_id), song_id)
+    ).fetchone()
+    return int(row[0])
+
+
+def get_version(conn: sqlite3.Connection, version_id: int) -> VersionRow:
+    row = conn.execute("SELECT * FROM versions WHERE id = ?", (version_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"no version with id {version_id}")
+    return _row(row)
+
+
+def song_versions(
+    conn: sqlite3.Connection,
+    song_id: int,
+    *,
+    slot: str | None = None,
+    kinds: Iterable[str] | None = None,
+    include_gone: bool = False,
+) -> list[VersionRow]:
+    sql = "SELECT * FROM versions WHERE song_id = ?"
+    args: list[Any] = [song_id]
+    if slot is not None:
+        sql += " AND slot = ?"
+        args.append(slot)
+    if kinds is not None:
+        kinds = list(kinds)
+        sql += f" AND kind IN ({','.join('?' for _ in kinds)})"
+        args.extend(kinds)
+    if not include_gone:
+        sql += " AND gone = 0"
+    return [_row(r) for r in conn.execute(sql + " ORDER BY id", args)]
+
+
+def set_coverage(conn: sqlite3.Connection, version_id: int, value: float | None) -> None:
+    conn.execute("UPDATE versions SET coverage = ? WHERE id = ?", (value, version_id))
+
+
+def mark_gone(conn: sqlite3.Connection, version_id: int) -> None:
+    """The provider no longer has this version (it answered 404)."""
+    conn.execute("UPDATE versions SET gone = 1, pick_rank = NULL WHERE id = ?", (version_id,))
+
+
+def set_picks(conn: sqlite3.Connection, song_id: int, kinds: Sequence[str], version_ids: Sequence[int]) -> None:
+    """Make ``version_ids`` the picks for these kinds, ranked 1..n in order; clear older picks."""
+    marks = ",".join("?" for _ in kinds)
+    with conn:
+        conn.execute(f"UPDATE versions SET pick_rank = NULL WHERE song_id = ? AND kind IN ({marks})", (song_id, *kinds))
+        for rank, vid in enumerate(version_ids, start=1):
+            conn.execute("UPDATE versions SET pick_rank = ? WHERE id = ? AND song_id = ?", (rank, vid, song_id))
+
+
+def picks(conn: sqlite3.Connection, song_id: int, kinds: Sequence[str]) -> list[VersionRow]:
+    marks = ",".join("?" for _ in kinds)
+    rows = conn.execute(
+        f"SELECT * FROM versions WHERE song_id = ? AND kind IN ({marks}) AND pick_rank IS NOT NULL ORDER BY pick_rank",
+        (song_id, *kinds),
+    )
+    return [_row(r) for r in rows]
