@@ -78,11 +78,10 @@ def _build(cfg: Config, from_dir: Path | None) -> None:
             policy = ProviderPolicy(budget=max(BUILD_BUDGET, ug.budget), delay=ug.delay)
             typer.echo("Reading Ultimate Guitar's sitemap index, then each tab sitemap, one request at a time, "
                        f"{ug.delay[0]:g}-{ug.delay[1]:g} s apart.")
-            done = _with_ug(conn, cfg, now, policy,
-                            lambda client: build_index(conn, client, now, progress=_progress))
-            if done is None:
-                return
-            stats = done
+            stats = _with_ug(conn, cfg, now, policy,
+                             lambda client: build_index(conn, client, now, progress=_progress))
+        if stats is None:
+            return
         typer.echo(f"Index built: {_read(stats)}; {_count(len(stats.new_tab_ids), 'new tab')}. "
                    f"The index holds {_count(index_count(conn), 'tab')}.")
 
@@ -159,7 +158,7 @@ def _with_ug(conn: sqlite3.Connection, cfg: Config, now: datetime, policy: Provi
                 "and the next refresh reads the sitemaps not read yet.")
     except ProviderError as e:
         record_error(conn, "ug", now, str(e))
-        failure = f"Ultimate Guitar failed: {e}. {_KEPT[0].upper()}{_KEPT[1:]}."
+        failure = f"Ultimate Guitar failed: {e}. The sitemaps read so far are kept."
     finally:
         client.close()
     if client.requests_made:
