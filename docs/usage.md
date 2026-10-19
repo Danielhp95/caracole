@@ -1033,21 +1033,23 @@ lyrics without timings.
     Added to /home/you/Tabs/wanted.txt, line 16:
       宋冬野 - 斑马斑马 | 安和桥北 | 4:13
     Song 宋冬野/斑马斑马: new; the next `caracole run` looks for it
+    Not in the offline Ultimate Guitar index under this name: `caracole search` with a few of its words looks wider.
 
 The album and duration make the lyrics lookup exact. Written "斑马，斑马",
 with a comma, it is the same song to caracole, and so is 斑馬斑馬, in
 Traditional characters, as some releases write it.
 
 **2. It isn't found on Ultimate Guitar.** UG's sitemaps list every tab of
-宋冬野 by a bare id, so the local index has none of them:
+宋冬野 by a bare id, so the local index has none of them, as `caracole add`
+said, and `caracole match` says too:
 
     $ caracole match --dry-run
-    not_found      -  -             宋冬野 - 斑马斑马 → -  CHANGED unmatched → not_found
+    not_found      -  -             宋冬野 - 斑马斑马 → -
 
-`--dry-run` saves nothing. After the next `caracole run` (or `caracole match`),
-the to-do page lists 宋冬野 under "Artists to find on Ultimate Guitar", with a
-link to search UG and the line to paste, and puts the song on the buy list
-meanwhile:
+`--dry-run` saves nothing; `caracole add` saved that match already, so the
+to-do page it rewrote lists 宋冬野 under "Artists to find on Ultimate
+Guitar", with a link to search UG and the line to paste, and puts the song on
+the buy list meanwhile:
 
 ```toml
 [artist_url]
