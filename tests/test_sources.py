@@ -8,6 +8,7 @@ from spotipy.exceptions import SpotifyException
 
 from tabarr.config import Config, SpotifyConfig
 from tabarr.sources import (
+    SourcesReport,
     SyncStats,
     default_kv_get,
     default_kv_set,
@@ -172,7 +173,7 @@ def test_sync_sources_with_spotify(tmp_path, wanted):
     assert ("spotify", "tCreep") in repo.songs and ("wanted", "宋冬野/斑马斑马") in repo.songs
     record = repo.record("source:spotify")
     assert (record["state"], record["at"], record["new"]) == ("ok", "2026-10-18T03:30:00Z", 1)
-    assert "Spotify 1 songs, 1 new" in report.summary()
+    assert report.summary() == "wanted.txt 2 songs, 2 new, 1 problem; Spotify 1 song, 1 new"
 
 
 def test_sync_sources_needs_authorization_without_a_client(tmp_path, wanted):
@@ -197,6 +198,28 @@ def test_sync_sources_turns_a_refused_token_into_auth_needed(tmp_path, wanted):
     assert report.spotify_state == "auth_needed"
     assert "tabarr auth spotify" not in report.spotify_message  # the caller adds the advice
     assert repo.record("source:spotify")["state"] == "auth_needed"
+
+
+def test_summary_counts_read_as_english():
+    one = SourcesReport(wanted=SyncStats(seen=1, new=1, errors=["wanted.txt line 2: x"]))
+    assert one.summary() == "wanted.txt 1 song, 1 new, 1 problem; Spotify off"
+    two = SourcesReport(
+        wanted=SyncStats(seen=2, new=0, errors=["a", "b"]),
+        spotify=SyncStats(seen=0, new=0),
+        spotify_state="ok",
+    )
+    assert two.summary() == "wanted.txt 2 songs, 0 new, 2 problems; Spotify 0 songs, 0 new"
+
+
+def test_summary_says_how_to_authorize_spotify():
+    report = SourcesReport(
+        wanted=SyncStats(seen=3, new=0),
+        spotify_state="auth_needed",
+        spotify_message="The access token was refused (HTTP 401).",
+    )
+    assert report.summary() == (
+        "wanted.txt 3 songs, 0 new; Spotify needs authorization (run `tabarr auth spotify`)"
+    )
 
 
 def test_sync_sources_reports_spotify_problems_as_errors(tmp_path, wanted):

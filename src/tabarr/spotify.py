@@ -42,6 +42,9 @@ log = logging.getLogger(__name__)
 SCOPES = "user-library-read playlist-read-private playlist-read-collaborative user-top-read"
 SOURCE = "spotify"
 TOP_TRACKS_KEY = "spotify:top_tracks"
+# The added_at of a track Spotify gives no date: fixed, so a nightly sync never
+# moves the song, and the earliest possible, so the song goes last.
+UNDATED = "1970-01-01T00:00:00Z"
 TOKEN_FILE = "spotify_token.json"
 PAGE_SIZE = 50  # the most Spotify returns per page
 REQUEST_TIMEOUT = 20  # seconds, for API and token requests alike
@@ -521,7 +524,10 @@ def sync_spotify(
     ``cfg.playlists``. A track found in several of them is upserted once, with
     the newest date it was added, and tracks go newest first. Spotify leaves
     that date empty on some very old playlists; such a track counts as added
-    ``now``.
+    at ``UNDATED``, the Unix epoch, so it goes last and stays put. Stamping it
+    with the run's time instead would move it to the front of the queue every
+    night, ahead of songs you just added; ``now`` is kept for symmetry with the
+    other sources, and no date is taken from it.
 
     A playlist that can't be read is listed in ``stats.missing_playlists``. Any
     other failure of one source lands in ``stats.errors`` and the other sources
@@ -549,8 +555,7 @@ def sync_spotify(
         except SpotifySourceError as e:
             stats.errors.append(str(e))
 
-    stamp = utc_stamp(now)
-    for track in sorted(newest.values(), key=lambda t: t.added_at or stamp, reverse=True):
+    for track in sorted(newest.values(), key=lambda t: t.added_at or UNDATED, reverse=True):
         _, created = upsert(
             conn,
             artists=list(track.artists),
@@ -560,7 +565,7 @@ def sync_spotify(
             isrc=track.isrc,
             source=SOURCE,
             source_id=track.id,
-            added_at=track.added_at or stamp,
+            added_at=track.added_at or UNDATED,
         )
         stats.seen += 1
         stats.new += int(created)

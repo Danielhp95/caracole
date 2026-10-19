@@ -108,19 +108,23 @@ class SourcesReport:
     spotify_message: str | None = None
 
     def summary(self) -> str:
-        """One line for the run report."""
+        """One line for the run report and ``tabarr sync``; the lines' problems aren't in it."""
         w = self.wanted
-        line = f"wanted.txt {w.seen} songs, {w.new} new"
+        line = f"wanted.txt {_count(w.seen, 'song')}, {w.new} new"
         if w.errors:
-            line += f", {len(w.errors)} {'problem' if len(w.errors) == 1 else 'problems'}"
+            line += f", {_count(len(w.errors), 'problem')}"
         parts = [line]
         if self.spotify_state == "off":
             parts.append("Spotify off")
         elif self.spotify_state == "auth_needed":
-            parts.append("Spotify needs authorization")
+            parts.append("Spotify needs authorization (run `tabarr auth spotify`)")
         else:
             s = self.spotify
-            line = f"Spotify {s.seen} songs, {s.new} new" if s is not None else "Spotify failed"
+            line = (
+                f"Spotify {_count(s.seen, 'song')}, {s.new} new"
+                if s is not None
+                else "Spotify failed"
+            )
             if self.spotify_state == "error" and self.spotify_message:
                 line += f" ({self.spotify_message})"
             parts.append(line)
@@ -201,6 +205,10 @@ def sync_sources(
         },
     )
     return report
+
+
+def _count(n: int, noun: str) -> str:
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
 def _record(kv_set: KvSet, conn: sqlite3.Connection, key: str, value: Any) -> None:

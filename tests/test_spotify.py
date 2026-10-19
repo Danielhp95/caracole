@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 
 import pytest
@@ -15,6 +15,7 @@ from tabarr.spotify import (
     REQUEST_TIMEOUT,
     SCOPES,
     TOP_TRACKS_KEY,
+    UNDATED,
     PlaylistUnavailable,
     SpotifyAuthError,
     SpotifySourceError,
@@ -385,15 +386,35 @@ def test_the_same_song_under_two_track_ids_reaches_the_repository_with_both():
     assert stats.seen == 2
 
 
-def test_a_track_without_added_at_counts_as_added_now():
+def test_a_track_without_added_at_counts_as_added_at_the_epoch_and_goes_last():
     sp = FakeSpotify(
         saved=[saved(SODA, "2026-01-01T00:00:00Z")],
-        items={LEARN: [entry(SODA, None), entry(CREEP, None)]},
+        items={
+            LEARN: [entry(SODA, None), entry(CREEP, None), entry(BANMA, "2025-05-01T00:00:00Z")]
+        },
     )
     _, up, _ = sync(sp, spotify(playlists=(LEARN,), suggest_top_tracks=False))
     assert [(c["source_id"], c["added_at"]) for c in up.calls] == [
-        ("tCreep", "2026-10-18T03:30:00Z"),
         ("tSoda", "2026-01-01T00:00:00Z"),
+        ("tBanma", "2025-05-01T00:00:00Z"),
+        ("tCreep", UNDATED),
+    ]
+    assert UNDATED == "1970-01-01T00:00:00Z"
+
+
+def test_a_track_without_added_at_is_not_restamped_by_later_runs(conn):
+    from tabarr.songs import list_songs
+
+    sp = FakeSpotify(
+        saved=[saved(SODA, "2026-01-01T00:00:00Z")], items={LEARN: [entry(CREEP, None)]}
+    )
+    cfg = spotify(playlists=(LEARN,), suggest_top_tracks=False)
+    for night in (NOW, NOW + timedelta(days=1), NOW + timedelta(days=2)):
+        sync_spotify(conn, sp, cfg, night)
+    # The undated track keeps its date, so it never jumps ahead of a song added since.
+    assert [(s.title, s.added_at) for s in list_songs(conn)] == [
+        ("De Música Ligera", "2026-01-01T00:00:00Z"),
+        ("Creep", "1970-01-01T00:00:00Z"),
     ]
 
 
