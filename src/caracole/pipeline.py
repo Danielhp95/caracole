@@ -1,11 +1,12 @@
 """The nightly ``caracole run`` (plan §6).
 
 Steps, in order: sync → index → match → lyrics → fetch → lacuerda → scan →
-render → todo. Each step runs even if an earlier one failed, so the to-do page
-is always rewritten.
+gtptabs → musescore → render → todo. Each step runs even if an earlier one
+failed, so the to-do page is always rewritten.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
-  the run once it blocks. A block records a cooldown (24 h, doubling) and sends
+  the run once it blocks. So are gtptabs and musescore when caracole.toml turns one
+  off: it gets no client then. A block records a cooldown (24 h, doubling) and sends
   one ntfy message; it is expected behaviour, not a failed run.
 - An exhausted budget or a provider error ends that step for this run; neither
   is a failure, and neither ever marks a song "not found".
@@ -65,7 +66,7 @@ from caracole.report import (
 from caracole.songs import ensure_current_keys
 
 log = logging.getLogger(__name__)
-PROVIDERS = ("ug", "lrclib", "lacuerda")
+PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs", "musescore")
 clock = time.monotonic  # what the run's duration is measured with; tests replace it
 
 
@@ -298,6 +299,50 @@ def _lacuerda(ctx: StepContext) -> StepResult:
     )
 
 
+def _gtptabs(ctx: StepContext) -> StepResult:
+    from caracole.gtptabs_fetch import gtptabs_files
+
+    s = gtptabs_files(ctx.conn, ctx.services.client("gtptabs"), ctx.cfg.library_dir, ctx.now,
+                      overrides=ctx.overrides)
+    if s.errors:
+        record_error(ctx.conn, "gtptabs", ctx.now, f"{plural(s.errors, 'error')} this run")
+    index = f"{plural(s.sitemaps, 'sitemap')} indexed, " if s.sitemaps else ""
+    tail = " (budget spent)" if s.budget_exhausted else ""
+    result = StepResult(
+        title="gtptabs.com",
+        done=_counted((s.kept, "Guitar Pro file downloaded" if s.kept == 1 else "Guitar Pro files downloaded"),
+                      _songs(s.missing, "not there")),
+        spent=["gtptabs"] if s.budget_exhausted else [],
+        status=(f"{index}{s.tried} tried, {plural(s.kept, 'Guitar Pro file')} kept, {s.missing} not on gtptabs.com, "
+                f"{plural(s.errors, 'error')}{tail}"),
+    )
+    if s.errors:
+        result.problems.append(Problem(f"gtptabs.com failed {plural(s.errors, 'time')} this run; those songs are "
+                                       "tried again on the next run, and the log says why."))
+    return result
+
+
+def _musescore(ctx: StepContext) -> StepResult:
+    from caracole.musescore_fetch import index_size, musescore_index
+
+    s = musescore_index(ctx.conn, ctx.services.client("musescore"), ctx.now, overrides=ctx.overrides)
+    if s.errors:
+        record_error(ctx.conn, "musescore", ctx.now, f"{plural(s.errors, 'error')} this run")
+    read = f"{plural(s.sitemaps, 'sitemap')} indexed, " if s.sitemaps else ""
+    errors = f", {plural(s.errors, 'error')}" if s.errors else ""
+    tail = " (budget spent)" if s.budget_exhausted else ""
+    result = StepResult(
+        title="MuseScore",
+        done=_counted((s.sitemaps, "song sitemap read" if s.sitemaps == 1 else "song sitemaps read")),
+        spent=["musescore"] if s.budget_exhausted else [],
+        status=f"{read}{plural(index_size(ctx.conn), 'song page')} in the index{errors}{tail}",
+    )
+    if s.errors:
+        result.problems.append(Problem("MuseScore's song sitemaps couldn't be read this run; they are asked for "
+                                       "again on the next run, and the log says why."))
+    return result
+
+
 def _scan(ctx: StepContext) -> StepResult:
     from caracole.inbox import file_inbox
     from caracole.music import scan_music
@@ -380,6 +425,9 @@ def default_steps() -> list[Step]:
         Step("fetch", _fetch, provider="ug"),
         Step("lacuerda", _lacuerda, provider="lacuerda"),
         Step("scan", _scan),
+        # After the scan: a file you dropped into _inbox/ is filed first, so its song gets no other.
+        Step("gtptabs", _gtptabs, provider="gtptabs"),
+        Step("musescore", _musescore, provider="musescore"),
         Step("render", _render),
         Step("todo", _todo),
     ]
@@ -389,7 +437,7 @@ def default_steps() -> list[Step]:
 
 
 def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Services:
-    """Real clients for a run: one polite client per provider, Spotify if configured.
+    """Real clients for a run: one polite client per provider turned on, Spotify if configured.
 
     The clients are the commands' own (``commands._common.make_client``): each
     holds caracole's lock until it is closed, and its first request keeps the
@@ -400,7 +448,8 @@ def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Service
     clients: dict[str, Any] = {}
     try:
         for p in PROVIDERS:
-            clients[p] = make_client(cfg, conn, p, run_id)
+            if cfg.provider(p).enabled:
+                clients[p] = make_client(cfg, conn, p, run_id)
     except BaseException:  # Ctrl-C during a pause, say: the clients made let go of the lock
         for client in clients.values():
             client.close()
@@ -492,9 +541,12 @@ def run_pipeline(
         services.close()
 
 
-def _skipped(conn: sqlite3.Connection, report: RunReport, step: Step, now: datetime) -> StepResult | None:
-    """Why a step of a provider that blocked this run, or is cooling down, doesn't run, if it doesn't."""
+def _skipped(cfg: Config, conn: sqlite3.Connection, report: RunReport, step: Step,
+             now: datetime) -> StepResult | None:
+    """Why a step doesn't run, if it doesn't: its provider is turned off, blocked this run, or cooling down."""
     p = step.provider
+    if p and not cfg.provider(p).enabled:
+        return StepResult(status=f"skipped: {p} is off ([providers.{p}] enabled = false)")
     if p and p in report.blocked:  # the block's own line says it
         return StepResult(status=f"skipped: {p} blocked this run")
     if p and is_cooling(conn, p, now):
@@ -544,7 +596,7 @@ def _run(cfg: Config, conn: sqlite3.Connection, services: Services, steps: list[
                       report=report)
 
     for step in steps if steps is not None else default_steps():
-        result = _skipped(conn, report, step, now)
+        result = _skipped(cfg, conn, report, step, now)
         report.record(step.name, result if result is not None else _run_step(ctx, step))
         log.info("%s: %s", step.name, report.steps[step.name])
 

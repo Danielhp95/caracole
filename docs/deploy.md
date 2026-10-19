@@ -193,8 +193,9 @@ music, while the state and the cache, mode 0700, stay caracole's. The setgid bit
 keeps everything created in the library in group `caracole`, and caracole writes
 with umask 0007, so its files are group-writable. Syncthing joins that group
 and writes the same way.
-Both directions then work: you drop Guitar Pro files into `_inbox/` on the
-laptop and caracole files them, and you edit `wanted.txt` on the phone.
+Both directions then work: you drop Guitar Pro files and MuseScore scores into
+`_inbox/` on the laptop and caracole files them, and you edit `wanted.txt` on
+the phone.
 
 ```nix
   services.syncthing = {
@@ -326,6 +327,17 @@ only the newest ones.
 sudo caracole-admin index build
 ```
 
+gtptabs.com needs no build: the first nightly run reads its sitemaps, seven
+of its 20 requests, and from then on each run downloads Guitar Pro files for
+the songs that have none. To leave gtptabs.com out, set
+`settings.providers.gtptabs.enabled = false;` in `services.caracole`.
+
+MuseScore's song sitemaps are read the same way, ten requests a night, for the
+to-do page's links to its pages. Its Cloudflare protection may answer with a
+challenge, as it did in October 2026: that is a block, so ntfy says so once and
+caracole leaves MuseScore alone for a day or more, doubling with each block in
+a row. To leave MuseScore out, set `settings.providers.musescore.enabled = false;`.
+
 **Say what you want to learn.** `wanted.txt` sits in the library, so you can
 edit it on the laptop or the phone. One song per line, as `Artist - Title`,
 optionally followed by ` | Album` and/or ` | m:ss`; `#` starts a comment:
@@ -379,8 +391,10 @@ journalctl -u caracole.service -e           # what it did
 ```
 
 Then read `_todo.md` in the library: setup problems first, if any, then
-review items, partial sheets, the buy list, Guitar Pro pages to download by
-hand, and provider health. A block or an exhausted budget is not a failure:
+review items, partial sheets, the buy list, the Guitar Pro files gtptabs.com
+gave this week, Guitar Pro pages to download by hand, MuseScore pages to open
+(or that MuseScore is blocking caracole), and provider health. A block or an
+exhausted budget is not a failure:
 the run exits 0 and the song stays pending. After a block, ntfy says until
 when caracole leaves that site alone: the next night's run skips it, the next
 two after a second block in a row, the next four after a third

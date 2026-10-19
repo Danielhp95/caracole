@@ -7,7 +7,7 @@ from caracole.db import kv_get_json
 from caracole.health import get_state, is_cooling, record_block
 from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
 from caracole.notify import Notifier
-from caracole.pipeline import RunReport, Services, Step, run_pipeline
+from caracole.pipeline import PROVIDERS, RunReport, Services, Step, run_pipeline
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
 
@@ -33,8 +33,9 @@ class Outbox:
 
 
 def services(outbox, **requests):
+    """A client for every provider, as ``make_services`` makes them, each having made ``requests[p]``."""
     return Services(
-        clients={p: FakeClient(requests.get(p, 0)) for p in ("ug", "lrclib", "lacuerda")},
+        clients={p: FakeClient(requests.get(p, 0)) for p in PROVIDERS},
         spotify=None,
         notifier=outbox.notifier(),
     )
@@ -140,8 +141,9 @@ def test_unexpected_error_marks_the_run_failed_but_later_steps_still_run(conn, c
 def test_report_summary_mentions_requests(conn, cfg):
     out = Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out, ug=7, lrclib=3), steps=[step("todo")], now=NOW)
-    assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0}
-    assert "Requests: Ultimate Guitar 7, LRCLIB 3, LaCuerda 0." in report.summary().splitlines()
+    assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0, "gtptabs": 0, "musescore": 0}
+    assert ("Requests: Ultimate Guitar 7, LRCLIB 3, LaCuerda 0, gtptabs.com 0, MuseScore 0."
+            in report.summary().splitlines())
 
 
 def test_requests_are_counted_against_each_clients_budget(conn, cfg):
@@ -169,7 +171,7 @@ def test_a_step_plugs_into_the_summary_by_returning_a_result(conn, cfg):
     assert report.steps == {"gtptabs": "2 kept, 1 error"}
     lines = report.summary().splitlines()
     assert "GtpTabs: 2 sheets kept." in lines
-    assert "gtptabs didn't answer (HTTP 503), so 1 song will be tried again on the next run." in lines
+    assert "gtptabs.com didn't answer (HTTP 503), so 1 song will be tried again on the next run." in lines
     assert out.sent[-1] == ("caracole run", report.summary())  # ntfy gets the same words
 
 
@@ -214,12 +216,198 @@ def test_a_bug_is_logged_with_its_traceback_behind_one_line(conn, cfg, caplog):
 
 
 def test_default_steps_are_in_plan_order():
+    # gtptabs after the scan: a Guitar Pro file you dropped into _inbox/ is filed first, and the
+    # song then gets no second one.
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "render", "todo",
+        "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "musescore", "render", "todo",
     ]
-    assert {s.name: s.provider for s in default_steps()}["fetch"] == "ug"
+    providers = {s.name: s.provider for s in default_steps()}
+    assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs" and providers["musescore"] == "musescore"
+
+
+def gtptabs_context(conn, cfg, client=None, overrides=None):
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext
+
+    svc = Services(clients={"gtptabs": client or FakeClient()}, spotify=None, notifier=Outbox().notifier())
+    return StepContext(cfg=cfg, conn=conn, overrides=overrides or Overrides(), now=NOW, run_id="r", services=svc,
+                       report=RunReport(run_id="r", started="r"))
+
+
+def test_default_gtptabs_step_passes_overrides_and_reports_errors(conn, cfg, monkeypatch):
+    import caracole.gtptabs_fetch as gf
+    from caracole.overrides import Overrides
+    from caracole.pipeline import _gtptabs
+
+    seen = {}
+
+    def fake(conn_, client, library_dir, now, *, overrides=None):
+        seen.update(overrides=overrides, library_dir=library_dir)
+        return gf.GtpTabsStats(sitemaps=2, tried=3, kept=1, missing=1, errors=1)
+
+    monkeypatch.setattr(gf, "gtptabs_files", fake)
+    o = Overrides(ignore=frozenset({"blur/song-2"}))
+    result = _gtptabs(gtptabs_context(conn, cfg, overrides=o))
+    assert seen == {"overrides": o, "library_dir": cfg.library_dir}
+    assert result.status == "2 sitemaps indexed, 3 tried, 1 Guitar Pro file kept, 1 not on gtptabs.com, 1 error"
+    assert result.title == "gtptabs.com" and result.done == ["1 Guitar Pro file downloaded", "1 song not there"]
+    assert [p.text for p in result.problems] == [
+        "gtptabs.com failed 1 time this run; those songs are tried again on the next run, and the log says why."]
+    assert get_state(conn, "gtptabs").last_error == "1 error this run"
+
+
+def test_the_gtptabs_step_says_when_its_budget_is_spent(conn, cfg, monkeypatch):
+    import caracole.gtptabs_fetch as gf
+    from caracole.pipeline import _gtptabs
+
+    monkeypatch.setattr(gf, "gtptabs_files", lambda *a, **k: gf.GtpTabsStats(tried=2, kept=2, budget_exhausted=True))
+    result = _gtptabs(gtptabs_context(conn, cfg))
+    assert result.status == "2 tried, 2 Guitar Pro files kept, 0 not on gtptabs.com, 0 errors (budget spent)"
+    assert result.done == ["2 Guitar Pro files downloaded"] and result.spent == ["gtptabs"]
+
+
+def test_a_new_sites_steps_say_what_they_did_in_the_runs_summary(conn, cfg, monkeypatch):
+    import caracole.gtptabs_fetch as gf
+    import caracole.musescore_fetch as mf
+    from caracole.pipeline import default_steps
+
+    monkeypatch.setattr(gf, "gtptabs_files", lambda *a, **k: gf.GtpTabsStats(tried=3, kept=2, missing=1))
+    monkeypatch.setattr(mf, "musescore_index", lambda *a, **k: mf.MuseScoreStats(sitemaps=2))
+    steps = [s for s in default_steps() if s.name in ("gtptabs", "musescore")]
+    lines = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=steps, now=NOW).summary().splitlines()
+    assert "gtptabs.com: 2 Guitar Pro files downloaded, 1 song not there." in lines
+    assert "MuseScore: 2 song sitemaps read." in lines
+
+
+def test_a_new_sites_steps_say_nothing_when_they_did_nothing(conn, cfg, monkeypatch):
+    import caracole.gtptabs_fetch as gf
+    import caracole.musescore_fetch as mf
+    from caracole.pipeline import default_steps
+
+    monkeypatch.setattr(gf, "gtptabs_files", lambda *a, **k: gf.GtpTabsStats())
+    monkeypatch.setattr(mf, "musescore_index", lambda *a, **k: mf.MuseScoreStats())
+    steps = [s for s in default_steps() if s.name in ("gtptabs", "musescore")]
+    summary = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=steps, now=NOW).summary()
+    assert "gtptabs.com:" not in summary and "MuseScore:" not in summary
+
+
+def test_gtptabs_turned_off_is_skipped_and_gets_no_client(conn, cfg, tmp_path):
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+    from caracole.pipeline import default_steps, make_services
+
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    made = make_services(off, conn, "2026-10-19T03:30:00Z")
+    try:
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "musescore"}
+    finally:
+        made.close()
+    steps = [s for s in default_steps() if s.name == "gtptabs"]
+    report = run_pipeline(off, conn=conn, services=services(Outbox()), steps=steps, now=NOW)
+    assert report.ok and report.steps["gtptabs"] == "skipped: gtptabs is off ([providers.gtptabs] enabled = false)"
+
+
+def test_the_run_makes_a_client_for_every_provider_turned_on(conn, cfg):
+    from caracole.pipeline import make_services
+
+    made = make_services(cfg, conn, "2026-10-19T03:30:00Z")
+    try:
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs", "musescore"}
+    finally:
+        made.close()
+
+
+def test_a_gtptabs_block_cools_it_down_and_marks_no_song(conn, cfg, tmp_path):
+    from conftest import add_song
+    from helpers.gtptabs_site import HTML, FakeGtpTabs
+
+    from caracole.pipeline import default_steps
+
+    song = add_song(conn, "Blur", "Beetlebum")
+    site = FakeGtpTabs(pages={"https://gtptabs.com/sitemapGoogle.xml": (403, "Forbidden", HTML)})
+    client = site.client(cfg.cache_dir, now=NOW)
+    svc = Services(clients={"gtptabs": client}, spotify=None, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "gtptabs"]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert report.ok and report.blocked == ["gtptabs"]
+    assert report.steps["gtptabs"].startswith("blocked")
+    assert is_cooling(conn, "gtptabs", NOW + timedelta(hours=25))
+    assert kv_get_json(conn, f"gtptabs:checked:{song.id}") is None
+
+
+def musescore_run(conn, cfg, site, *, budget=10, now=NOW, config=None):
+    """One run of the musescore step alone, against a fake MuseScore."""
+    from caracole.pipeline import default_steps
+
+    client = site.client(cfg.cache_dir, budget=budget, now=now)
+    svc = Services(clients={"musescore": client}, spotify=None, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "musescore"]
+    return run_pipeline(config or cfg, conn=conn, services=svc, steps=steps, now=now)
+
+
+def test_the_musescore_step_says_what_it_read_and_what_the_index_holds(conn, cfg):
+    from conftest import add_song
+    from helpers.musescore_site import FakeMuseScore
+
+    add_song(conn, "Oasis", "Wonderwall")
+    site = FakeMuseScore()
+    report = musescore_run(conn, cfg, site)
+    assert report.ok and report.steps["musescore"] == "2 sitemaps indexed, 19 song pages in the index"
+    again = musescore_run(conn, cfg, site, now=NOW + timedelta(days=1))
+    assert again.steps["musescore"] == "19 song pages in the index"
+
+
+def test_the_musescore_step_says_when_its_budget_is_spent(conn, cfg):
+    from conftest import add_song
+    from helpers.musescore_site import FakeMuseScore
+
+    add_song(conn, "Oasis", "Wonderwall")
+    report = musescore_run(conn, cfg, FakeMuseScore(), budget=2)
+    assert report.ok and report.steps["musescore"] == "1 sitemap indexed, 12 song pages in the index (budget spent)"
+
+
+def test_musescore_errors_reach_provider_health_and_are_no_failure(conn, cfg):
+    from conftest import add_song
+    from helpers.musescore_site import INDEX, FakeMuseScore
+
+    add_song(conn, "Oasis", "Wonderwall")
+    site = FakeMuseScore(pages={INDEX: (502, "Bad gateway", {"Content-Type": "text/html"})})
+    report = musescore_run(conn, cfg, site)
+    assert report.ok and report.steps["musescore"] == "0 song pages in the index, 1 error"
+    assert get_state(conn, "musescore").last_error == "1 error this run"
+
+
+def test_a_musescore_challenge_cools_it_down_and_keeps_the_index(conn, cfg):
+    # What Cloudflare answers caracole: a block like any other, with one ntfy message.
+    from conftest import add_song
+    from helpers.musescore_site import INDEX, FakeMuseScore, challenge
+
+    add_song(conn, "Oasis", "Wonderwall")
+    site = FakeMuseScore()
+    musescore_run(conn, cfg, site)
+    site.pages[INDEX] = challenge()
+    report = musescore_run(conn, cfg, site, now=NOW + timedelta(days=31))
+    assert report.ok and report.blocked == ["musescore"]
+    assert report.steps["musescore"].startswith("blocked")
+    assert is_cooling(conn, "musescore", NOW + timedelta(days=31, hours=25))
+    assert conn.execute("SELECT COUNT(*) FROM musescore_index").fetchone()[0] == 19
+
+
+def test_musescore_turned_off_is_skipped(conn, cfg):
+    import dataclasses
+
+    from helpers.musescore_site import FakeMuseScore
+
+    from caracole.config import ProviderPolicy
+
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
+    site = FakeMuseScore()
+    report = musescore_run(conn, cfg, site, config=off)
+    assert report.steps["musescore"] == "skipped: musescore is off ([providers.musescore] enabled = false)"
+    assert site.requests == []
 
 
 def test_unreadable_overrides_stop_the_run_with_an_alert(conn, cfg):
@@ -553,12 +741,14 @@ def todo_step():
 
 
 def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
-    # The page is written before the run ends; a first run must not say "never" after 75 good requests.
-    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5), steps=todo_step(),
-                 now=NOW)
+    # The page is written before the run ends; a first run must not say "never" after 80 good requests.
+    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5, gtptabs=3, musescore=2),
+                 steps=todo_step(), now=NOW)
     page = todo_page(cfg)
     assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
     assert "| lrclib | OK | 2026-10-18 03:30 UTC |  | 10 |" in page
+    assert "| gtptabs | OK | 2026-10-18 03:30 UTC |  | 3 |" in page
+    assert "| musescore | OK | 2026-10-18 03:30 UTC |  | 2 |" in page
     assert "never" not in page.split("## Provider health", 1)[1]
 
 

@@ -1,0 +1,24 @@
+User-agent: Yandex
+
+Disallow: /profile/
+Disallow: /search/
+Disallow: /storage/
+Disallow: /index.php
+Disallow: /tabs/upload.html
+Disallow: /advertisement.html
+Disallow: /message/
+
+Sitemap: http://gtptabs.com/sitemapYandex.xml
+Host: gtptabs.com
+
+User-Agent: *
+Disallow: /ru/
+Disallow: /profile/
+Disallow: /search/
+Disallow: /storage/
+Disallow: /index.php
+Disallow: /tabs/upload.html
+Disallow: /advertisement.html
+Disallow: /message/
+
+Sitemap: http://gtptabs.com/sitemapGoogle.xml

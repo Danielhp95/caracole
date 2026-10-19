@@ -535,7 +535,8 @@ def test_nothing_to_do_leaves_the_pages_alone(tmp_path, sites, command):
 def test_registering_the_commands_imports_neither_pass(tmp_path):
     # Every command module is imported on every start; the passes wait for their command.
     src = Path(__file__).resolve().parents[1] / "src"
-    passes = ("caracole.lyrics", "caracole.lacuerda", "caracole.lacuerda_fetch")
+    passes = ("caracole.lyrics", "caracole.lacuerda", "caracole.lacuerda_fetch", "caracole.gtptabs",
+              "caracole.gtptabs_fetch", "caracole.musescore", "caracole.musescore_fetch")
     code = (
         "import sys, typer\n"
         "from caracole.commands import lyrics\n"

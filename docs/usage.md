@@ -45,7 +45,7 @@ music_dir = "~/Music"             # tracks you bought; read only, used only for 
 # overrides_file = "..."          # default: overrides.toml in library_dir
 # wanted_file = "..."             # default: wanted.txt in library_dir
 user_agent = "caracole/0.1 (personal tab library)"
-guitar_pro_mode = "assisted"      # the only mode: caracole never downloads Guitar Pro files
+guitar_pro_mode = "assisted"      # UG's mode, the only one: you click its Guitar Pro pages
 chordpro_bin = "chordpro"         # the program that renders PDFs
 # cjk_font = "/path/to/font.ttf"  # or $CARACOLE_CJK_FONT; see "Fonts for Chinese sheets"
 
@@ -69,6 +69,14 @@ budget = 200
 delay = [1, 2]
 [providers.lacuerda]              # Spanish chord sheets
 budget = 30
+delay = [10, 20]
+[providers.gtptabs]               # Guitar Pro files, downloaded for you
+enabled = true                    # false: caracole asks gtptabs.com nothing
+budget = 20
+delay = [10, 20]
+[providers.musescore]             # MuseScore's song sitemaps, for links to its pages
+enabled = true                    # false: caracole asks MuseScore nothing
+budget = 10
 delay = [10, 20]
 
 [match]                           # how sure a match must be, on a 0-100 score
@@ -111,7 +119,7 @@ goes when the PDF is done, so caracole must be able to write there.
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
 to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
-status 2: `database: … is at schema version 2, but this caracole knows up to 1:
+status 2: `database: … is at schema version 4, but this caracole knows up to 3:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
 when there is one. A state folder caracole can't use ends a command with status
 1 and `can't open the database …` (or `can't open …/caracole.lock: …`).
@@ -125,8 +133,20 @@ else the file `client_secret_file` names, else
 `$CREDENTIALS_DIRECTORY/ntfy_token`, else `token_file`, else
 `$CARACOLE_NTFY_TOKEN`.
 
-**Providers** are exactly `ug`, `lrclib` and `lacuerda`. Any other
-`[providers.…]` table is an error, like any other unknown key.
+**Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs` and
+`musescore`. Any other `[providers.…]` table is an error, like any other
+unknown key. Only gtptabs.com and MuseScore can be turned off: with
+`enabled = false` under `[providers.gtptabs]` or `[providers.musescore]`,
+caracole sends that site nothing, the nightly run skips its step, and the to-do
+page's Provider health says it is off. The other three are what caracole is
+built on, so `enabled` in their tables is an unknown key.
+
+**Guitar Pro files** come two ways. Ultimate Guitar's robots.txt closes its
+download endpoint to bots, so its Guitar Pro pages are yours to click:
+`guitar_pro_mode` is Ultimate Guitar's, and takes only `"assisted"` (any other
+value is an error). gtptabs.com's robots.txt leaves its downloads open, so
+caracole downloads a file there for each song that has none (`caracole gtptabs`,
+in [One step at a time](#one-step-at-a-time)).
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
@@ -477,8 +497,13 @@ are never offered again; other candidates still can be.
 5. **fetch**: rank and keep Ultimate Guitar sheets and guitar parts.
 6. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet.
 7. **scan**: link purchases in Music/, and file Guitar Pro downloads.
-8. **render**: write ChordPro files and PDFs.
-9. **todo**: rewrite `_todo.md` and `index.html`.
+8. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
+   has none. It comes after the scan, so a file you dropped into `_inbox/` is
+   filed first, and that song gets none from gtptabs.com.
+9. **musescore**: read MuseScore's song sitemaps into a local index, for the
+   to-do page's links to its pages. It downloads nothing.
+10. **render**: write ChordPro files and PDFs.
+11. **todo**: rewrite `_todo.md` and `index.html`.
 
 Every step runs even when an earlier one failed, so the to-do page is always
 rewritten. Until the index is built, the index and match steps are skipped;
@@ -499,6 +524,9 @@ overloaded, it reads:
     Requests: Ultimate Guitar 0 of 60, LRCLIB 2 of 200, LaCuerda 0 of 30.
     Took 3 s.
 
+(gtptabs.com and MuseScore were turned off that night; when they're on, as
+they are by default, the Requests line lists them too.)
+
 - **First** comes the one thing that unblocks the rest, when there is one, said
   once however many steps wait for it: build or finish the index, fix
   overrides.toml or wanted.txt, authorize Spotify again.
@@ -514,7 +542,9 @@ all `caracole run` prints on stdout; on a terminal, what needs you and what
 went wrong are coloured. Its log, on stderr, shows only the problems the
 summary doesn't already say: nothing, that night above. `caracole -v run`
 adds a line per step and per request there, and `caracole -q run` prints only
-the lines that need you or went wrong.
+the lines that need you or went wrong. A site turned off
+(`[providers.gtptabs] enabled = false`, say) has no line; `caracole -v run`
+shows its step as skipped.
 
 **The budget.** A run sends Ultimate Guitar at most 60 requests, the index
 refresh included, 10–20 seconds apart and one at a time. It settles the sheet
@@ -524,6 +554,21 @@ is left goes to guitar parts, about a page per type (Guitar Pro, Power Tab,
 tabs) a song. Before sheets came first, a live run spent 8–12 requests a song.
 A long list therefore fills in over a few nights, and a song the budget cut
 off half-way resumes from the cache the next night.
+
+gtptabs.com gets at most 20 requests a run, 10–20 seconds apart. The first
+run spends seven on its sitemap index and six sitemaps, and reads them again
+after 30 days, when each unchanged one costs a request. Then each song costs
+its artist's page, which serves every song by that artist for 30 days, and a
+download for its file.
+
+MuseScore gets at most 10 requests a run, 10–20 seconds apart, all for its song
+sitemaps: an index and 18 files of about 40,000 song pages each, read over two
+nights, the second going on where the first stopped, then again each month with
+conditional requests. They name each song's title, never its artist. When
+caracole first asked for them, on 19 October 2026, MuseScore's Cloudflare
+protection answered with a challenge: caracole takes that as a block, like a
+403, and lists what it read before, if anything (see
+[the to-do page](#the-to-do-page)).
 
 **Errors are never misses.** A block (HTTP 403, 429 or a challenge page)
 stops that site for the rest of the run and sends one ntfy message, which
@@ -543,7 +588,10 @@ meanwhile the song is filled from its other versions.
 
 Nor does caracole ask for a page robots.txt closes to bots, or follow a
 redirect to one: UG's search, download and print pages, and a few tab pages
-(`/tab/track/…`). A tab at such a page, or at a page UG redirects to one, is
+(`/tab/track/…`); gtptabs.com's search, its Russian copy of every page
+(`/ru/`) and each artist's "Download all" archive (`/storage/`); MuseScore's
+search, downloads, oEmbed endpoint and `/api/jmuse`, which serves a score's
+pages, audio and MIDI. A tab at such a page, or at a page UG redirects to one, is
 no candidate, and neither is a link in UG's data that isn't a valid address:
 the song is filled from its other versions.
 
@@ -598,6 +646,37 @@ and cache.
   pass, whatever the date, usually from the cache. An artist LaCuerda doesn't
   have gets an almost empty page, with HTTP 200; caracole reads that as "not on
   LaCuerda". A cooldown, a block or a spent budget exits 0.
+- **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
+  song that has no Guitar Pro or Power Tab file, newest songs first. It reads
+  gtptabs.com's sitemaps into a local index when it never has, or last did 30
+  days ago, and finds each song's artist there: under the artist's name, or
+  as the site files people, last name first (`john-elton`) and "The" last
+  (`beatles-the`). It never uses the site's search. The artist's page, cached
+  for 30 days, lists the song's uploads, newer ones than the 2015 sitemaps
+  included. Those with a guitar part (or no instrument listed), in a Guitar
+  Pro or Power Tab format and under 5 MB are tried, most stars first, at most
+  three a song a run. A download is kept only if its first bytes are a Guitar
+  Pro (3 to 7) or Power Tab file's: as the song's `guitar-N`, with the
+  extension those bytes say, N the lowest number no file of the song holds.
+  Anything else, such as a page served in its place, is thrown away, and that
+  upload waits 30 days. A song its artist's page doesn't list is asked about
+  again after 30 days; a song with an error, next run. It prints
+  `gtptabs.com: 3 tried, 2 Guitar Pro files kept, 1 not on gtptabs.com, 0 errors`,
+  after `Index: 6 sitemaps read.` when it read them. Three downloads in a row
+  answered with a page instead of a file end the pass as an error, so a site
+  that started asking for a login costs three requests. With gtptabs.com
+  turned off it asks nothing and says so. A cooldown, a block or a spent
+  budget exits 0.
+- **`caracole musescore`** reads MuseScore's song sitemaps into the local index
+  the to-do page's MuseScore links come from, when it never has, or last did 30
+  days ago; it asks for nothing else, and downloads nothing. It prints
+  `Index: 2 sitemaps read.` and `MuseScore: 80000 song pages in the index.`, or
+  `MuseScore's index is up to date: 720000 song pages.` when nothing was due. A
+  spent budget leaves the rest of the sitemaps for the next run, which goes on
+  where this one stopped. A Cloudflare challenge is a block: the command says
+  `MuseScore blocked caracole: …`, sends one ntfy message, and caracole leaves
+  MuseScore alone until the cooldown ends. With MuseScore turned off it asks
+  nothing and says so. A cooldown, a block or a spent budget exits 0.
 - **`caracole scan`** links the audio files in Music/ to your songs, by their
   tags (or an "Artist - Title" file name) and their duration, give or take 3
   seconds. It never adds a song. A file named as the song wins over one whose
@@ -611,7 +690,14 @@ and cache.
   Guitar Pro and Power Tab files you dropped into `_inbox/`, by their names: a
   file named `Soda Stereo - De Musica Ligera (ver 2).gp5` becomes that song's
   `guitar-N.gp5`, where N is the rank caracole gave version 2, or the lowest
-  free number when another file already holds guitar-N. A file the library
+  free number when another file already holds guitar-N. It files scores too,
+  such as MuseScore's downloads (`.mscz`, `.mxl`, `.musicxml`, `.pdf`, `.mid`,
+  `.midi`): one named `Oasis - Wonderwall.mscz`, or `Wonderwall.mscz` when only
+  one song has that title, becomes that song's `score-N.mscz`, N the lowest
+  number no score of that format holds, so the formats of one score share it.
+  A MusicXML file is also placed by the title and composer its header gives,
+  when exactly one song has both. A score is never `sheet.pdf`, which caracole
+  renders itself. A file the library
   already has is removed from the inbox; a file it can't place stays there,
   and so does a symbolic link, which is never read:
   `Inbox: 0 filed, 0 duplicates, 0 left, 1 symbolic link refused`. If
@@ -654,17 +740,19 @@ and cache.
 **The pages.** A command that changes what `_todo.md` and `index.html` show
 rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
 `todo`, `add`, `search --add`, `sync` and `autochords`; `review` when an
-answer changed something; and `fetch`, `lyrics` and `lacuerda` when they did
-something or were blocked, so that Provider health shows the cooldown. A page
-caracole can't write ends the command with status 1 and
+answer changed something; and `fetch`, `lyrics`, `lacuerda`, `gtptabs` and
+`musescore` when they did something or were blocked, so that Provider health
+shows the cooldown.
+A page caracole can't write ends the command with status 1 and
 `can't write …/_todo.md: Permission denied`, its own work saved first; for
 `add`, `search --add` and `sync` that is only a warning.
 
 **One caracole at a time.** The commands that ask the sites for pages or write
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
-`index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `render`,
-`match`, `scan`, `todo`, `sync`, `add`, `search --add` and `autochords`. A
+`index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
+`musescore`, `render`, `match`, `scan`, `todo`, `sync`, `add`, `search --add`
+and `autochords`. A
 second one waits for the first, and says which it is:
 `Another caracole is running (pid 4242: run); waiting for it to finish.`
 `caracole review` takes the lock only after your answers, never while it waits
@@ -740,6 +828,10 @@ when it has something in it:
 - **Auto-chords couldn't read these purchases.** Each file auto-chords failed
   on, with the error. Re-download it, or convert it (to FLAC, say) and replace
   the original: a changed file is tried again on the next run.
+- **New Guitar Pro files from gtptabs.com.** The files caracole downloaded in
+  the last 7 days, one for each song that had none, each with a link to its
+  page on gtptabs.com. Open each in Guitar Pro or TuxGuitar: if it isn't the
+  version you want, any Ultimate Guitar page below is still there to click.
 - **Guitar Pro pages to click.** The Guitar Pro and Power Tab versions caracole
   picked for each song, best first, with version, rating and votes. Each is
   labelled with its rank, as `guitar-1`: the name its file gets, unless a file
@@ -747,12 +839,29 @@ when it has something in it:
   Open each page, click its Download button, and drop the file into
   `_inbox/`; the next run, or `caracole scan`, files it under its song. Caracole
   never downloads these itself: UG's robots.txt closes its download endpoint
-  to bots.
-- **Guitar parts not found.** Songs UG has no guitar part for, with Songsterr
-  and YouTube links.
+  to bots. A song with a file from gtptabs.com says so, as
+  `(guitar-1.gpx came from gtptabs.com)`: its UG pages stay in case you want
+  another version.
+- **Scores on MuseScore.** For each song with no score filed, up to three
+  MuseScore song pages with its title, oldest first, each a possible match:
+  MuseScore's sitemaps give titles only, never the artist. Open one, pick a
+  score, and click its Download button (MuseScore asks you to log in, and most
+  scores need a Pro account). Save the file under the name the line gives, such
+  as `Oasis - Wonderwall.mscz`, with its own extension, and drop it into
+  `_inbox/`: the next run files it as the song's `score-N`. Caracole never
+  downloads these itself. When MuseScore is blocking caracole (its Cloudflare
+  protection answered with a challenge, as it did in October 2026), the section
+  says so first, with the last answer and until when caracole leaves MuseScore
+  alone, even when it has nothing to list: the pages listed then come from the
+  sitemaps read before, and with none read, you can still find a score on
+  musescore.com yourself and drop it into `_inbox/` named the same way.
+- **Guitar parts not found.** Songs UG has no guitar part for, and with no
+  Guitar Pro or Power Tab file kept (from `_inbox/` or gtptabs.com), with
+  Songsterr and YouTube links.
 - **Inbox: files caracole couldn't place.** Rename such a file
   "Artist - Title (ver N).ext", as Guitar Pro pages to click names the song
-  and the version, and the next run files it. Don't move it into the song's
+  and the version, or a score "Artist - Title.ext", the song as caracole names
+  it, and the next run files it. Don't move it into the song's
   folder yourself: caracole wouldn't know it is there. A symbolic link in
   `_inbox/` is listed too: caracole files only regular files. If `_inbox` is a
   link itself, the page lists nothing from it, and says to make it a folder;
@@ -767,9 +876,10 @@ when it has something in it:
   secret missing, say), or needs `caracole auth spotify`, and how many songs
   wanted.txt has, with the lines it couldn't read; for a wanted.txt it
   couldn't read at all, the error, as `wanted.txt: error at <time>: …`.
-- **Provider health.** For Ultimate Guitar, LRCLIB and LaCuerda: OK, errors
-  (nothing has worked since the last error), or cooling down until when; the
-  last success; the last error; the requests of the last run.
+- **Provider health.** For Ultimate Guitar, LRCLIB, LaCuerda, gtptabs.com and
+  MuseScore: OK, errors (nothing has worked since the last error), cooling down
+  until when, or off (`[providers.gtptabs] enabled = false`, and the same for
+  `musescore`); the last success; the last error; the requests of the last run.
 
 ### Review
 
@@ -818,7 +928,11 @@ overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
 loads nothing from the network. It shows every song with its status, its key
-or transposition, and links to its files, the PDF first. A song without a
+or transposition, and links to its files, the PDF first. A Guitar Pro file
+caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`, and a
+score its format, as `Score 1 (MuseScore)`; a score's PDF is never the card's
+main link, which is the sheet's. Under "Scores on MuseScore", a song has its
+MuseScore pages, each a possible match, as on the to-do page. A song without a
 sheet also gets buy and search links.
 
 The search box filters as you type. It ignores case and accents, so "musica"
@@ -1019,7 +1133,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   index.html                browse and search the library
   wanted.txt                your songs
   overrides.toml            your decisions
-  _inbox/                   Guitar Pro downloads waiting to be filed
+  _inbox/                   Guitar Pro and MuseScore downloads waiting to be filed
   宋冬野/
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
@@ -1027,7 +1141,8 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key
       lyrics.txt            the lyrics, from LRCLIB
       lyrics.lrc            the timed lyrics, when LRCLIB has them
-      guitar-1.gp5          Guitar Pro or Power Tab downloads, by rank when filed
+      guitar-1.gp5          Guitar Pro or Power Tab files: filed by rank, or from gtptabs.com
+      score-1.mscz          scores you downloaded (MuseScore, MusicXML, PDF, MIDI), filed
       tab.txt  tab.json     the best text tab
       sheet (auto).txt      made from audio you bought, when no human sheet exists;
       sheet (auto).cho      it stays, with its ChordPro and PDF, beside a partial
@@ -1060,8 +1175,10 @@ file still as caracole wrote it is never written again, so Syncthing has
 nothing to sync. Keep your own edits and annotations in a copy under another
 name: caracole leaves alone the files it doesn't track. A lost
 `sheet (auto).txt`, `lyrics.txt` or `lyrics.lrc` isn't written again, nor is
-a Guitar Pro file, which caracole never downloads: put one you lost back in the
-song's folder under its name.
+a Guitar Pro file: a song that has had one, filed from `_inbox/` or
+downloaded from gtptabs.com, gets no other from gtptabs.com, even after you
+delete it. Nor is a score, which caracole never downloads. Put one you lost
+back in the song's folder under its name.
 
 Keep the library private. The sheets and lyrics are other people's work, and
 a personal offline copy is the closest thing to the sites' personal-use terms.

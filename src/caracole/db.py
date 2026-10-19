@@ -4,6 +4,8 @@ Tables (plan §5, plus ``kv``):
 
 - ``songs``: what you want to learn, and where each song stands.
 - ``ug_index``: the local Ultimate Guitar index, built from sitemaps.
+- ``gtptabs_index``: the pages gtptabs.com's sitemaps list, its artists and songs (schema 2).
+- ``musescore_index``: the song pages MuseScore's sitemaps list, by title (schema 3).
 - ``versions``: every sheet, tab or Guitar Pro version seen for a song.
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
@@ -18,7 +20,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -120,9 +122,39 @@ CREATE TABLE IF NOT EXISTS kv (
 );
 """
 
+# gtptabs.com's sitemaps, read by gtptabs_fetch.py: one row per artist or song page, keyed
+# by its path ("tabs/2/blur/song-2-2.html"). An artist page has no title: '' in both title
+# columns. base_key is title_key without a trailing version number ("song-2" for "song-2-2").
+_SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS gtptabs_index (
+  path TEXT PRIMARY KEY,
+  artist_path TEXT NOT NULL,
+  artist_key TEXT NOT NULL,
+  title_key TEXT NOT NULL,
+  base_key TEXT NOT NULL,
+  sitemap TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS gtptabs_index_artist ON gtptabs_index(artist_key);
+CREATE INDEX IF NOT EXISTS gtptabs_index_sitemap ON gtptabs_index(sitemap);
+"""
+
+# MuseScore's song sitemaps, read by musescore_fetch.py: one row per song page, keyed by
+# MuseScore's id, the number ending its path ("song/wonderwall-1524"). The sitemaps name
+# the title alone, so title_key is all there is to match on.
+_SCHEMA_V3 = """
+CREATE TABLE IF NOT EXISTS musescore_index (
+  page_id INTEGER PRIMARY KEY,
+  path TEXT NOT NULL,
+  title_key TEXT NOT NULL,
+  sitemap TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS musescore_index_title ON musescore_index(title_key);
+CREATE INDEX IF NOT EXISTS musescore_index_sitemap ON musescore_index(sitemap);
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
-_MIGRATIONS = {1: _SCHEMA_V1}
+_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

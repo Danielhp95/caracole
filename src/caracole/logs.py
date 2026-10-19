@@ -47,6 +47,8 @@ PROVIDER_NAMES: Mapping[str, str] = {
     "ug": "Ultimate Guitar",
     "lrclib": "LRCLIB",
     "lacuerda": "LaCuerda",
+    "gtptabs": "gtptabs.com",
+    "musescore": "MuseScore",
     "spotify": "Spotify",
 }
 

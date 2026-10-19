@@ -73,10 +73,10 @@ def lines(r: RunReport, **kw) -> list[str]:
 
 
 def test_providers_go_by_their_own_names():
-    assert [provider_name(p) for p in ("ug", "lrclib", "lacuerda", "spotify")] == [
-        "Ultimate Guitar", "LRCLIB", "LaCuerda", "Spotify",
+    assert [provider_name(p) for p in ("ug", "lrclib", "lacuerda", "gtptabs", "musescore", "spotify")] == [
+        "Ultimate Guitar", "LRCLIB", "LaCuerda", "gtptabs.com", "MuseScore", "Spotify",
     ]
-    assert provider_name("gtptabs") == "gtptabs"  # a provider the report doesn't know yet
+    assert provider_name("newsite") == "newsite"  # a provider the report doesn't know yet
 
 
 def test_a_song_is_artist_en_dash_clean_title():

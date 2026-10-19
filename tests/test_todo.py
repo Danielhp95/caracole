@@ -331,6 +331,54 @@ def test_guitar_parts_not_found(conn, cfg):
     assert search_links("Radiohead", "Creep")["songsterr"] in text
 
 
+def gtptabs_file(conn, cfg, song, tab_id, name, *, at="2026-10-17T03:30:00Z", page="tabs/2/blur/song-2.html"):
+    """A file the gtptabs step downloaded for the song, on ``at``."""
+    vid = upsert_version(conn, provider="gtptabs", tab_id=str(tab_id), song_id=song.id, slot="guitar",
+                         kind="power" if name.endswith(".ptb") else "guitar-pro", rating=4, votes=0, version=1,
+                         label=None, url=f"https://gtptabs.com/{page}",
+                         raw={"download": f"https://gtptabs.com/tabs/download/{tab_id}.html"}, now=at)
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=name, data=b"gp" + name.encode(), rank=1)
+    return vid
+
+
+def test_a_song_with_a_file_from_gtptabs_has_its_guitar_part(conn, cfg):
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, match_decision="accept", ug_checked_at="2026-10-18T03:35:00Z")
+    gtptabs_file(conn, cfg, s, 77, "guitar-1.gp5", page="tabs/18/radiohead/creep.html")
+    assert "## Guitar parts not found" not in todo(conn, cfg)
+
+
+def test_files_downloaded_from_gtptabs_this_week_are_listed_with_their_page(conn, cfg):
+    s = add_song(conn, "Blur", "Song 2")
+    gtptabs_file(conn, cfg, s, 12, "guitar-1.gpx")
+    section = section_of(todo(conn, cfg), "New Guitar Pro files from gtptabs.com")
+    assert section.startswith(" (1)\n")
+    assert ("- **Blur - Song 2**: [guitar-1.gpx](Blur/Song%202/guitar-1.gpx) · "
+            "[its page](https://gtptabs.com/tabs/2/blur/song-2.html)") in section
+    week_later = build_todo(conn, cfg, Overrides(), datetime(2026, 10, 25, 3, 41, tzinfo=UTC))
+    assert "New Guitar Pro files from gtptabs.com" not in week_later
+
+
+def test_guitar_pro_pages_to_click_say_which_songs_have_a_file_from_gtptabs(conn, cfg):
+    # UG's pages stay to click: one may be a better version. The line says the song has a file.
+    s = add_song(conn)
+    v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", rating=4.2, votes=5, ver=1)
+    set_picks(conn, s.id, ["guitar-pro"], [v1])
+    gtptabs_file(conn, cfg, s, 31, "guitar-1.gp4", page="tabs/19/soda-stereo/de-musica-ligera.html")
+    section = section_of(todo(conn, cfg), "Guitar Pro pages to click")
+    assert "- **Soda Stereo - De Música Ligera** (guitar-1.gp4 came from gtptabs.com): [guitar-1" in section
+
+
+def test_provider_health_has_gtptabs_and_says_when_it_is_off(conn, cfg):
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+
+    assert "| gtptabs | OK | never |  |  |" in todo(conn, cfg)
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    assert "| gtptabs | off ([providers.gtptabs] enabled = false) | never |  |  |" in todo(conn, off)
+
+
 def test_inbox_unmatched_files_listed(conn, cfg):
     inbox = cfg.library_dir / "_inbox"
     inbox.mkdir(parents=True)
@@ -348,11 +396,13 @@ def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
     inbox.mkdir(parents=True)
     (inbox / "Radiohead - Creep live bootleg.gp5").write_bytes(b"x")
     (inbox / "notes.pdf").write_bytes(b"x")
+    (inbox / "notes.txt").write_bytes(b"x")
     section = section_of(todo(conn, cfg), "Inbox: files caracole couldn't place")
     assert "move it into the song's folder" not in section
     assert '`Radiohead - Creep live bootleg.gp5`: rename it "Artist - Title (ver N).gp5"' in section
     assert "Guitar Pro pages to click" in section
-    assert "`notes.pdf`: not a Guitar Pro or Power Tab file" in section
+    assert '`notes.pdf`: a score? Rename it "Artist - Title.pdf", the song as caracole names it' in section
+    assert "`notes.txt`: not a Guitar Pro, Power Tab or score file" in section
 
 
 def test_inbox_lists_a_link_as_refused_never_as_a_file_to_rename(conn, cfg):
@@ -745,3 +795,102 @@ def test_autochords_section_copes_with_a_bad_timestamp(conn, cfg):
     text = todo(conn, cfg)
     assert f"{AUTOCHORDS} (1)" in text and "- **A - T**: `/music/x.wav` · EOFError" in text
     assert "nonsense" not in text and "B - U" not in text
+
+
+# --- MuseScore: links and the inbox -------------------------------------------------------------
+
+MS = "https://musescore.com"
+SCORES = "Scores on MuseScore"
+CHALLENGED = "musescore: 403: https://musescore.com/sitemaps/song-index.xml: challenge page"
+
+
+def musescore_index(conn, *paths):
+    from caracole.musescore import parse_song_url
+
+    conn.executemany("INSERT INTO musescore_index (page_id, path, title_key, sitemap) VALUES (?, ?, ?, '18')",
+                     [parse_song_url(f"{MS}/{p}") for p in paths])
+
+
+def test_scores_on_musescore_lists_each_songs_pages_as_possible_matches(conn, cfg):
+    musescore_index(conn, "song/wonderwall-680101", "song/creep-680102", "song/creep-680877")
+    add_song(conn, "Oasis", "Wonderwall")
+    add_song(conn, "Radiohead", "Creep - Remastered")
+    add_song(conn, "Soda Stereo", "Persiana Americana")  # no page with its title
+    section = section_of(todo(conn, cfg), SCORES)
+    assert section.startswith(" (3)\n")
+    assert "MuseScore's song sitemaps give titles only" in section
+    assert (f"- **Oasis - Wonderwall** (possible match): [wonderwall-680101]({MS}/song/wonderwall-680101) · "
+            "save as `Oasis - Wonderwall.mscz`") in section
+    assert (f"- **Radiohead - Creep** (possible matches): [creep-680102]({MS}/song/creep-680102) · "
+            f"[creep-680877]({MS}/song/creep-680877) · save as `Radiohead - Creep.mscz`") in section
+    assert "Persiana" not in section
+
+
+def test_scores_on_musescore_come_right_after_the_guitar_pro_pages(conn, cfg):
+    musescore_index(conn, "song/de_musica_ligera-680203")
+    s = add_song(conn)
+    v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
+    set_picks(conn, s.id, ["guitar-pro"], [v])
+    after = todo(conn, cfg).split("## Guitar Pro pages to click", 1)[1]
+    assert after.split("\n## ", 1)[1].startswith(SCORES)
+
+
+def test_a_song_with_a_score_filed_or_ignored_leaves_the_list(conn, cfg):
+    musescore_index(conn, "song/wonderwall-680101", "song/creep-680102")
+    filed = add_song(conn, "Oasis", "Wonderwall")
+    vid = upsert_version(conn, provider="inbox", tab_id="score", song_id=filed.id, slot="guitar", kind="score",
+                         rating=0, votes=0, version=1, label=None, url="", raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=filed, version_id=vid, name="score-1.mscz", data=b"PK", rank=1)
+    ignored = add_song(conn, "Radiohead", "Creep")
+    assert SCORES not in todo(conn, cfg, Overrides(ignore=frozenset({ignored.key})))
+
+
+def test_musescore_blocking_caracole_is_said_plainly_even_with_nothing_to_list(conn, cfg):
+    add_song(conn, "Oasis", "Wonderwall")
+    record_block(conn, "musescore", datetime(2026, 10, 18, 3, 35, tzinfo=UTC), CHALLENGED)
+    section = section_of(todo(conn, cfg), SCORES)
+    assert "**MuseScore is blocking caracole.**" in section
+    assert "challenge page" in section and "2026-10-19 05:35 UTC" in section  # 24 h + 2 h after the block
+    assert "caracole has read none of MuseScore's song sitemaps" in section
+    assert "drop it into `_inbox/` named as the song is in caracole, such as `Oasis - Wonderwall.mscz`" in section
+
+
+def test_musescore_blocking_caracole_keeps_the_pages_read_before(conn, cfg):
+    musescore_index(conn, "song/wonderwall-680101")
+    add_song(conn, "Oasis", "Wonderwall")
+    record_block(conn, "musescore", datetime(2026, 10, 18, 3, 35, tzinfo=UTC), CHALLENGED)
+    section = section_of(todo(conn, cfg), SCORES)
+    assert "**MuseScore is blocking caracole.**" in section and "from the sitemaps read before" in section
+    assert f"[wonderwall-680101]({MS}/song/wonderwall-680101)" in section
+
+
+def test_a_run_musescore_answered_ends_the_blocking_notice(conn, cfg):
+    from caracole.health import record_ok
+
+    musescore_index(conn, "song/wonderwall-680101")
+    add_song(conn, "Oasis", "Wonderwall")
+    record_block(conn, "musescore", datetime(2026, 10, 15, 3, 35, tzinfo=UTC), CHALLENGED)
+    record_ok(conn, "musescore", datetime(2026, 10, 17, 3, 35, tzinfo=UTC))
+    assert "MuseScore is blocking caracole" not in todo(conn, cfg)
+
+
+def test_musescore_turned_off_lists_nothing_and_says_so_in_provider_health(conn, cfg):
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+
+    musescore_index(conn, "song/wonderwall-680101")
+    add_song(conn, "Oasis", "Wonderwall")
+    assert "| musescore | OK | never |  |  |" in todo(conn, cfg)
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
+    text = todo(conn, off)
+    assert SCORES not in text
+    assert "| musescore | off ([providers.musescore] enabled = false) | never |  |  |" in text
+
+
+def test_the_inbox_section_says_how_a_score_is_named(conn, cfg):
+    inbox = cfg.library_dir / "_inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "score.mscz").write_bytes(b"PK")
+    section = section_of(todo(conn, cfg), "Inbox: files caracole couldn't place")
+    assert "a score (.mscz, .mxl, .musicxml, .pdf, .mid, .midi) as `Artist - Title.mscz`" in section

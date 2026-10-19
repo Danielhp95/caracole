@@ -39,9 +39,10 @@ _SOURCE_FIELDS = ("album", "duration_ms", "isrc", "variant")
 # tracks (wanted.SOURCE, spotify.SOURCE). A source not named here comes after them.
 _WANTED = "wanted"
 _PRECEDENCE = (_WANTED, "spotify")
-# What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py).
-# It goes with a song merged into another: SQLite may give that id to the next new song.
-_PER_SONG_KV = ("render:", "ug:artist_page_checked:", "autochords:failed:")
+# What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py,
+# gtptabs_fetch.py). It goes with a song merged into another: SQLite may give that id to the
+# next new song.
+_PER_SONG_KV = ("render:", "ug:artist_page_checked:", "autochords:failed:", "gtptabs:checked:")
 
 
 def utc_now_iso() -> str:

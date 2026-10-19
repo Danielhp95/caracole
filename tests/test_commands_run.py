@@ -29,7 +29,7 @@ SONG = "epic - I'm not sorry for loving you"
 
 class Sites:
     """LRCLIB answers every request with ``lrclib`` (503: overloaded, as live); UG and LaCuerda
-    must not be asked at all; ntfy takes every post."""
+    must not be asked at all, and gtptabs.com and MuseScore are turned off; ntfy takes every post."""
 
     def __init__(self, lrclib: int = 503):
         self.lrclib = lrclib
@@ -75,6 +75,8 @@ def write_config(tmp_path: Path, *, ntfy: bool = False) -> Path:
     ]
     for provider in ("ug", "lrclib", "lacuerda"):
         lines += [f"[providers.{provider}]", "delay = [0, 0]"]
+    for provider in ("gtptabs", "musescore"):  # sites these tests leave out
+        lines += [f"[providers.{provider}]", "enabled = false"]
     if ntfy:
         lines += ["[ntfy]", f'url = "{NTFY}"']
     path = tmp_path / "caracole.toml"
