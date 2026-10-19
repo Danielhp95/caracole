@@ -6,7 +6,8 @@ a provider cooling down after a block is left alone, and a block starts (or
 extends) its cooldown and sends one ntfy alert. Neither is a failure, and
 neither is a spent budget: each prints what happened and exits 0, as
 ``tabarr fetch`` and ``tabarr index`` do, and the songs left wait for the
-next run.
+next run. Then each rewrites _todo.md and index.html, which read
+overrides.toml, unless it did nothing (a cooldown, or no song to ask about).
 
 Every command module is imported on every start, so the passes are imported
 inside the commands.
@@ -32,6 +33,7 @@ from tabarr.commands._common import (
     open_db,
     run_id_for,
     utcnow,
+    write_pages,
 )
 from tabarr.health import get_state, is_cooling, record_block, record_ok
 from tabarr.http import ProviderBlocked
@@ -39,6 +41,9 @@ from tabarr.http import ProviderBlocked
 if TYPE_CHECKING:
     from tabarr.config import Config
     from tabarr.http import Client
+    from tabarr.lacuerda_fetch import LaCuerdaStats
+    from tabarr.lyrics import LyricsStats
+    from tabarr.overrides import Overrides
 
 _NAMES = {"lrclib": "LRCLIB", "lacuerda": "LaCuerda"}
 _COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda"}  # each provider's command, for the lock
@@ -60,13 +65,18 @@ def _lyrics(cfg: Config) -> None:
     """Look up every song still waiting for lyrics, and old misses, then print the counts."""
     from tabarr.lyrics import fetch_pending_lyrics
 
+    overrides = load_ovr(cfg)  # for the pages
+
     def run(conn: sqlite3.Connection, client: Client, now: datetime):
         return fetch_pending_lyrics(conn, client, cfg.library_dir, now)
 
-    s = _provider_pass(cfg, "lrclib", run)
+    def ran(s: LyricsStats) -> bool:
+        return bool(s.found or s.missing or s.instrumental or s.errors or s.budget_exhausted)
+
+    s = _provider_pass(cfg, "lrclib", run, overrides, ran)
     if s is None:
         return
-    if not (s.found or s.missing or s.instrumental or s.errors or s.budget_exhausted):
+    if not ran(s):
         typer.echo("No song is waiting for lyrics.")
         return
     counts = f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental"
@@ -83,14 +93,19 @@ def _lacuerda(cfg: Config) -> None:
     from tabarr.ug.fetch import rescore_kept_sheets
 
     overrides = load_ovr(cfg)
+    rescored = 0
 
     def run(conn: sqlite3.Connection, client: Client, now: datetime):
+        nonlocal rescored
         # As the run does before its fetch: a sheet kept before its lyrics is scored first (no
         # request), or no partial LaCuerda sheet could replace it, and a complete one is left be.
-        rescore_kept_sheets(conn, cfg.library_dir, cfg.rank)
+        rescored = rescore_kept_sheets(conn, cfg.library_dir, cfg.rank)
         return lacuerda_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides)
 
-    s = _provider_pass(cfg, "lacuerda", run)
+    def ran(s: LaCuerdaStats) -> bool:
+        return bool(rescored or s.tried or s.budget_exhausted)
+
+    s = _provider_pass(cfg, "lacuerda", run, overrides, ran)
     if s is None:
         return
     if not (s.tried or s.budget_exhausted):
@@ -105,7 +120,11 @@ def _lacuerda(cfg: Config) -> None:
 
 
 def _provider_pass[T](
-    cfg: Config, provider: str, run: Callable[[sqlite3.Connection, Client, datetime], T]
+    cfg: Config,
+    provider: str,
+    run: Callable[[sqlite3.Connection, Client, datetime], T],
+    overrides: Overrides,
+    ran: Callable[[T], bool],
 ) -> T | None:
     """Run one provider's pass as the nightly run does; None after a cooldown or a block.
 
@@ -113,7 +132,8 @@ def _provider_pass[T](
     Requests are logged to ``events`` under a run id of their own. A pass that
     made requests without a block clears the provider's strikes, as a run does.
     It holds tabarr's lock throughout, so the cooldown it reads is the one a
-    tabarr it waited for left.
+    tabarr it waited for left. After a block, or a pass that did something
+    (``ran``), it rewrites _todo.md and index.html.
     """
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     name = _NAMES[provider]
@@ -135,11 +155,14 @@ def _provider_pass[T](
             )
             _alert(cfg, f"tabarr: {provider} blocked", message)
             typer.echo(f"{name} blocked tabarr: {message}")
+            write_pages(conn, cfg, overrides, utcnow())  # with the cooldown
             return None
         finally:
             client.close()
         if client.requests_made:
             record_ok(conn, provider, now)
+        if ran(result):
+            write_pages(conn, cfg, overrides, utcnow())
     return result
 
 

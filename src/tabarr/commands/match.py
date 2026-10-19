@@ -3,29 +3,34 @@
 It prints one line per song (decision, score, step, "Artist - Title" → the
 UG song), marks each decision or UG song that changed since the last match,
 and ends with totals, then rewrites _todo.md and index.html for the new
-decisions. ``--dry-run`` prints the same and saves nothing, so a change to the
-normalizer or the thresholds can be checked against the whole library in
-seconds. Nothing is saved against an index a build left half-done. The matcher
-is imported inside the command, because every command module is imported on
-every start.
+decisions (a page it can't write exits 1, the decisions saved). ``--dry-run``
+prints the same and saves nothing, so a change to the normalizer or the
+thresholds can be checked against the whole library in seconds. Nothing is
+saved against an index a build left half-done. The matcher is imported inside
+the command, because every command module is imported on every start.
 """
 
 from __future__ import annotations
 
-import sqlite3
 from collections import Counter
 from contextlib import closing, nullcontext
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import typer
 
-from tabarr.commands._common import exclusive, fail, load_cfg, load_ovr, open_db, utcnow
+from tabarr.commands._common import (
+    exclusive,
+    fail,
+    load_cfg,
+    load_ovr,
+    open_db,
+    utcnow,
+    write_pages,
+)
 
 if TYPE_CHECKING:
     from tabarr.config import Config
     from tabarr.match import MatchChange, MatchResult
-    from tabarr.overrides import Overrides
 
 _ORDER = ("accept", "pinned", "review", "not_found", "ignored")
 _PARTIAL = "The UG index is incomplete (a build stopped before it read every sitemap)"
@@ -57,7 +62,7 @@ def _match(cfg: Config, dry_run: bool) -> None:
                  "so nothing was saved. Finish it with `tabarr index build` (the nightly refresh reads the rest "
                  "too); `tabarr match --dry-run` shows what it matches so far.")
         changes = match_all(conn, overrides, cfg.match, dry_run=dry_run)
-        pages = _write_pages(conn, cfg, overrides) if changes and not dry_run else None
+        pages = write_pages(conn, cfg, overrides, utcnow()) if changes and not dry_run else None
     if not changes:
         typer.echo("No songs yet: add some to wanted.txt, or run `tabarr sync`.")
         return
@@ -68,22 +73,10 @@ def _match(cfg: Config, dry_run: bool) -> None:
         typer.echo(f"{_PARTIAL}: a song whose tabs are in the sitemaps not read yet shows as not_found.")
     reviews = sum(1 for c in changes if c.new.decision == "review")
     if reviews and not dry_run:
-        where = "on _todo.md" if pages else "on _todo.md once `tabarr todo` rewrites it"
         typer.echo(f"Settle the {'review' if reviews == 1 else f'{reviews} reviews'} with `tabarr review`, "
-                   f"or {where}.")
+                   "or on _todo.md.")
     if pages:
         typer.echo(f"Wrote {pages[0]} and {pages[1]}")
-
-
-def _write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> tuple[Path, Path] | None:
-    """The to-do page and index.html, rewritten for the new decisions; None (and a warning) if they can't be."""
-    from tabarr.todo import write_pages
-
-    try:
-        return write_pages(conn, cfg, overrides, utcnow())
-    except OSError as e:  # the decisions are saved; the pages wait for `tabarr todo` or the next run
-        typer.secho(f"_todo.md and index.html couldn't be rewritten: {e}", err=True, fg=typer.colors.YELLOW)
-        return None
 
 
 def _key(artist_key: str | None, song_key: str | None) -> str | None:

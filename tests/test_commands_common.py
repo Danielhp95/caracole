@@ -161,6 +161,26 @@ def test_a_library_tabarr_cant_write_names_the_page(tmp_path, cfg, conn, capsys)
     assert f"can't write {cfg.library_dir / '_todo.md'}" in capsys.readouterr().err
 
 
+def test_write_pages_writes_what_the_to_do_module_writes(cfg, conn, monkeypatch):
+    # One way to write the pages: the commands' is todo.write_pages, with a message on failure.
+    import tabarr.todo
+
+    calls = []
+    monkeypatch.setattr(tabarr.todo, "write_pages", lambda *args: calls.append(args) or ("t", "i"))
+    now = datetime(2026, 10, 19, tzinfo=UTC)
+    overrides = Overrides()
+    assert write_pages(conn, cfg, overrides, now) == ("t", "i")
+    assert calls == [(conn, cfg, overrides, now)]
+
+
+def test_a_page_tabarr_cant_replace_is_named(cfg, conn, capsys):
+    (cfg.library_dir / "_todo.md").mkdir(parents=True)  # a folder where the page goes (root too)
+    with pytest.raises(typer.Exit) as raised:
+        write_pages(conn, cfg, Overrides(), datetime(2026, 10, 19, tzinfo=UTC))
+    assert raised.value.exit_code == 1
+    assert f"can't write {cfg.library_dir / '_todo.md'}: Is a directory" in capsys.readouterr().err
+
+
 def test_write_pages_writes_the_todo_page_and_the_index(cfg, conn):
     add_song(conn, "宋冬野", "斑马斑马")
     todo, index = write_pages(conn, cfg, Overrides(), datetime(2026, 10, 19, tzinfo=UTC))

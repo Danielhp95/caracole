@@ -325,6 +325,16 @@ def test_cli_match_rewrites_the_pages_it_points_to(tmp_path):
     assert f"Wrote {todo} and {page}" in result.output
 
 
+def test_cli_match_names_a_page_it_cant_write(tmp_path):
+    # As every command that writes the pages: the decisions are saved, and the page is named.
+    conn, (creep, _, _) = seed(tmp_path)
+    (tmp_path / "lib" / "_todo.md").mkdir(parents=True)  # a folder where the page goes (root too)
+    result = run(tmp_path, "match")
+    assert result.exit_code == 1, result.output
+    assert f"can't write {tmp_path / 'lib' / '_todo.md'}: Is a directory" in result.output
+    assert get_song(conn, creep.id).match_decision == "accept"
+
+
 def test_cli_match_refuses_to_save_against_an_incomplete_index(tmp_path):
     # A build stopped part-way: the songs in the sitemaps it didn't read would be saved as not found.
     conn, songs = seed(tmp_path, built=False)

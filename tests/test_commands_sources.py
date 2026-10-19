@@ -396,6 +396,75 @@ def test_sync_when_the_spotify_client_cannot_be_made(tmp_path, monkeypatch):
     assert len(songs(tmp_path)) == 2
 
 
+# --- the pages ------------------------------------------------------------------------------
+
+STALE = "as an earlier run left it\n"
+PAGES = ("_todo.md", "index.html")
+BROKEN_OVERRIDES = '[artist_url]\n"Maná" = "x"\n\n[artist_url]\n"宋冬野" = "y"\n'  # pasted twice
+
+
+def stale_pages(tmp_path):
+    lib = tmp_path / "lib"
+    lib.mkdir(parents=True, exist_ok=True)
+    for name in PAGES:
+        (lib / name).write_text(STALE, encoding="utf-8")
+
+
+def pages(tmp_path):
+    return [(tmp_path / "lib" / name).read_text(encoding="utf-8") for name in PAGES]
+
+
+@pytest.mark.parametrize("args", [("add", "宋冬野", "斑马斑马"), ("sync",)], ids=["add", "sync"])
+def test_add_and_sync_rewrite_the_pages(tmp_path, args):
+    wanted_file(tmp_path, "宋冬野 - 斑马斑马 | 安和桥北 | 4:13\n")
+    stale_pages(tmp_path)
+    result = run(tmp_path, *args)
+    assert result.exit_code == 0, result.output
+    todo, index = pages(tmp_path)
+    assert "1 song: 0 found, 1 wanted" in todo
+    assert "斑马斑马" in index
+
+
+def test_search_add_rewrites_the_pages_too(tmp_path):
+    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn.execute(
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (5001, 'stone-temple-pilots', 'creep', 'chords', '1', 'x', ?)",
+        ("stone-temple-pilots/creep-chords-5001",),
+    )
+    conn.close()
+    stale_pages(tmp_path)
+    result = run(tmp_path, "search", "stone temple pilots creep", "--add", "1")
+    assert result.exit_code == 0, result.output
+    assert "Stone Temple Pilots - Creep" in pages(tmp_path)[1]
+
+
+@pytest.mark.parametrize("args", [("add", "Radiohead", "Creep"), ("sync",)], ids=["add", "sync"])
+def test_a_broken_overrides_file_leaves_the_pages_but_not_the_songs(tmp_path, args):
+    # wanted.txt always works: the songs are synced; only the pages, which need the file, wait.
+    wanted_file(tmp_path, "Radiohead - Creep\n")
+    (tmp_path / "lib" / "overrides.toml").write_text(BROKEN_OVERRIDES, encoding="utf-8")
+    stale_pages(tmp_path)
+    result = run(tmp_path, *args)
+    assert result.exit_code == 0, result.output
+    assert [s.key for s in songs(tmp_path)] == ["radiohead/creep"]
+    assert "overrides: " in result.output and "artist_url" in result.output
+    assert "_todo.md and index.html" in result.output
+    assert pages(tmp_path) == [STALE, STALE]
+
+
+@pytest.mark.parametrize("args", [("add", "Radiohead", "Creep"), ("sync",)], ids=["add", "sync"])
+def test_a_page_it_cant_write_is_a_warning_and_the_songs_are_synced(tmp_path, args):
+    wanted_file(tmp_path, "Radiohead - Creep\n")
+    (tmp_path / "lib" / "_todo.md").mkdir()  # a folder where the page goes (root too)
+    result = run(tmp_path, *args)
+    assert result.exit_code == 0, result.output
+    assert f"can't write {tmp_path / 'lib' / '_todo.md'}: Is a directory" in result.output
+    assert [s.key for s in songs(tmp_path)] == ["radiohead/creep"]
+    said = "Song radiohead/creep: new" if args[0] == "add" else "wanted.txt 1 song, 1 new"
+    assert said in result.output
+
+
 # --- tabarr auth spotify --------------------------------------------------------------------
 
 REDIRECT = "http://127.0.0.1:8888/callback"

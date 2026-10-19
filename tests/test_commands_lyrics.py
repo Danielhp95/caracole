@@ -340,8 +340,8 @@ def ug_sheet_kept_before_its_lyrics(tmp_path, song_id: int, markup: str) -> int:
                              raw={"id": 101}, now="2026-10-01T00:00:00Z")
         files = {"sheet.json": json.dumps({"content": markup, "url": url}), "sheet.txt": markup}
         for name, text in files.items():
-            keep_file(conn, tmp_path / "lib", song=get_song(conn, song_id), version_id=vid, name=name,
-                      data=text.encode(), rank=1)
+            keep_file(conn, tmp_path / "lib", song=get_song(conn, song_id), version_id=vid,
+                      name=name, data=text.encode(), rank=1)
         refresh_status(conn, song_id, ignored=False)
     finally:
         conn.close()
@@ -448,6 +448,85 @@ def test_lacuerda_spent_budget_is_no_failure(tmp_path, sites):
     assert result.exit_code == 0, result.output
     assert "budget of 1 request" in result.stdout and "next run" in result.stdout
     assert song(tmp_path, song_id).lacuerda_checked_at is None
+
+
+# --- the pages -----------------------------------------------------------------------------
+
+STALE = "as an earlier run left it\n"
+PAGES = ("_todo.md", "index.html")
+
+
+def stale_pages(tmp_path):
+    lib = tmp_path / "lib"
+    lib.mkdir(parents=True, exist_ok=True)
+    for name in PAGES:
+        (lib / name).write_text(STALE, encoding="utf-8")
+
+
+def pages(tmp_path):
+    return [(tmp_path / "lib" / name).read_text(encoding="utf-8") for name in PAGES]
+
+
+def test_lyrics_rewrites_the_pages(tmp_path, sites):
+    sites.lrclib.records.append(hit_record())
+    seed(tmp_path, ("Soda Stereo", "De Música Ligera"))
+    stale_pages(tmp_path)
+    result = run(tmp_path, "lyrics")
+    assert result.exit_code == 0, result.output
+    todo, index = pages(tmp_path)
+    assert "1 song: 0 found, 1 wanted" in todo
+    assert "lyrics.txt" in index  # the lyrics it just found
+
+
+def test_lacuerda_rewrites_the_pages(tmp_path, sites):
+    sites.lacuerda.pages.update(soda_pages())
+    spanish_song(tmp_path)
+    stale_pages(tmp_path)
+    result = run(tmp_path, "lacuerda")
+    assert result.exit_code == 0, result.output
+    todo, index = pages(tmp_path)
+    assert "1 song: 1 found, 0 wanted" in todo  # the sheet it just kept
+    assert "sheet.txt" in index
+
+
+@pytest.mark.parametrize("command,provider", [("lyrics", "lrclib"), ("lacuerda", "lacuerda")])
+def test_a_block_rewrites_the_pages_with_the_cooldown(tmp_path, sites, command, provider):
+    getattr(sites, provider).status = 429
+    spanish_song(tmp_path)
+    conn = open_db(tmp_path)
+    try:
+        update_song(conn, 1, lyrics_status="pending")
+    finally:
+        conn.close()
+    stale_pages(tmp_path)
+    result = run(tmp_path, command)
+    assert result.exit_code == 0, result.output
+    todo, _ = pages(tmp_path)
+    assert f"| {provider} | cooling down until " in todo
+
+
+@pytest.mark.parametrize("command,provider", [("lyrics", "lrclib"), ("lacuerda", "lacuerda")])
+def test_a_cooldown_leaves_the_pages_alone(tmp_path, sites, command, provider):
+    spanish_song(tmp_path)
+    conn = open_db(tmp_path)
+    try:
+        update_song(conn, 1, lyrics_status="pending")
+        record_block(conn, provider, datetime.now(UTC), f"{provider}: 403: HTTP 403")
+    finally:
+        conn.close()
+    stale_pages(tmp_path)
+    result = run(tmp_path, command)
+    assert "cooling down" in result.stdout, result.output
+    assert pages(tmp_path) == [STALE, STALE]
+
+
+@pytest.mark.parametrize("command", ["lyrics", "lacuerda"])
+def test_nothing_to_do_leaves_the_pages_alone(tmp_path, sites, command):
+    stale_pages(tmp_path)
+    result = run(tmp_path, command)
+    assert result.exit_code == 0, result.output
+    assert "No song" in result.stdout
+    assert pages(tmp_path) == [STALE, STALE]
 
 
 # --- start-up ------------------------------------------------------------------------------

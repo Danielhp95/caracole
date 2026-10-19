@@ -258,22 +258,38 @@ def make_client(
 
 
 def write_pages(
-    conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime
-) -> tuple[Path, Path]:
-    """Rewrite Library/_todo.md and Library/index.html; a library tabarr can't write exits 1."""
-    from tabarr.library_page import PAGE_NAME, build_library_page, write_library_page
-    from tabarr.todo import build_todo, write_todo
+    conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
+    fatal: bool = True,
+) -> tuple[Path, Path] | None:
+    """Rewrite Library/_todo.md and Library/index.html (``todo.write_pages``), the way every
+    command does, and return their paths.
 
-    todo_text = build_todo(conn, cfg, overrides, now)
-    page_html = build_library_page(conn, cfg, overrides, now)
-    written = []
-    for name, write in (
-        ("_todo.md", lambda: write_todo(cfg.library_dir, todo_text)),
-        (PAGE_NAME, lambda: write_library_page(cfg.library_dir, page_html)),
-    ):
-        try:
-            written.append(write())
-        except OSError as e:
-            fail(f"can't write {cfg.library_dir / name}: {_reason(e)}")
-    todo, page = written
-    return todo, page
+    A library tabarr can't write exits 1, naming the page; ``fatal=False`` only
+    warns, and returns None, for a command whose own work is done and must
+    still say so (``tabarr add`` and ``tabarr sync``).
+    """
+    from tabarr import todo
+
+    try:
+        return todo.write_pages(conn, cfg, overrides, now)
+    except OSError as e:
+        message = f"can't write {_page_named(e, cfg.library_dir)}: {_reason(e)}"
+        if fatal:
+            fail(message)
+        typer.secho(message, err=True, fg=typer.colors.YELLOW)
+        return None
+
+
+def _page_named(e: OSError, library_dir: Path) -> Path:
+    """The page an error writing the pages is about, else the library folder.
+
+    Each page is written through a temporary file beside it, named after it
+    (``library.write_atomic``), so the error names one or the other.
+    """
+    from tabarr.library_page import PAGE_NAME
+
+    names = [Path(f).name for f in (e.filename, e.filename2) if f]
+    return next(
+        (library_dir / page for page in ("_todo.md", PAGE_NAME) for name in names if page in name),
+        library_dir,
+    )
