@@ -402,7 +402,9 @@ How a song is matched, in order:
      artists whose names are a letter or two away, then step 2 under them:
      `Coldplya - Yellow` meets `coldplay/yellow`. One letter for a name of
      four to seven letters, two from eight, none for a shorter name; two
-     letters swapped count as one.
+     letters swapped count as one. Of those, the five nearest, then those
+     with the most tabs, come first: `Tolo` meets `tool` before `colo`,
+     `lolo`, `molo`, `polo` and `solo`.
    - `catch_all`: UG files the songs of musicals, films, TV shows, games and
      cartoons under catch-all artists (`misc-musicals`, `misc-soundtrack`,
      `misc-television`, `misc-computer-games`, `misc-cartoons`, and every

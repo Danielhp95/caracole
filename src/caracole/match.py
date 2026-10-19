@@ -155,6 +155,7 @@ class IndexView:
         self._by_compact: dict[str, tuple[str, ...]] = {}
         self._compact_artists: list[str] | None = None
         self._songs: dict[str, list[IndexSong]] = {}
+        self._tabs: dict[str, int] = {}
         self._titles: list[str] | None = None
         self._compact_titles: list[str] | None = None
         self._catch_all: list[tuple[str, str, int]] | None = None
@@ -185,6 +186,14 @@ class IndexView:
         if self._compact_artists is None:
             self._compact_artists = [compact(a) for a in self.artist_keys()]
         return self._compact_artists
+
+    def artist_tabs(self, artist_key: str) -> int:
+        """How many tabs the index lists under the artist."""
+        n = self._tabs.get(artist_key)
+        if n is None:
+            row = self.conn.execute("SELECT COUNT(*) FROM ug_index WHERE artist_key = ?", (artist_key,)).fetchone()
+            n = self._tabs[artist_key] = row[0]
+        return n
 
     def songs_for_artist(self, artist_key: str) -> list[IndexSong]:
         """The artist's songs, one per song key (variant keys such as ``x-acoustic`` are their own)."""
@@ -494,6 +503,8 @@ def _typo_artists(song: Song, index: IndexView, tried: set[str]) -> list[str]:
 
     One edit for a name of four to seven letters, two from eight; names are compared without hyphens.
     Only Latin names: a romanization's syllables are too short to tell a typo from another name.
+    Nearest first, then the most tabs: "Tolo" has five neighbours an edit away, and the one it
+    misspells is ``tool``, last of them in the alphabet and first by its tabs.
     """
     artists, compacts = index.artist_keys(), index.compact_artist_keys()
     found: dict[str, None] = {}
@@ -504,9 +515,11 @@ def _typo_artists(song: Song, index: IndexView, tried: set[str]) -> list[str]:
             if len(query) < 4:
                 continue
             edits = 1 if len(query) < 8 else 2
-            near = process.extract(query, compacts, scorer=OSA.distance, score_cutoff=edits,
-                                   limit=_TYPO_ARTISTS + len(tried) + len(found))
-            found.update((artists[i], None) for _, _, i in near if artists[i] not in tried)
+            # Every neighbour (few, an edit or two away), not the first in the alphabet.
+            near = process.extract(query, compacts, scorer=OSA.distance, score_cutoff=edits, limit=None)
+            keys = [(d, artists[i]) for _, d, i in near if artists[i] not in tried and artists[i] not in found]
+            keys.sort(key=lambda dk: (dk[0], -index.artist_tabs(dk[1]), dk[1]))
+            found.update((key, None) for _, key in keys[:_TYPO_ARTISTS])
     return list(found)
 
 

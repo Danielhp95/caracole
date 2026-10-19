@@ -442,6 +442,17 @@ def test_an_artist_ug_does_not_know_matches_a_name_a_letter_off_as_a_review(conn
     assert summary(match(conn, "Metalicca", "One"))[:2] == ("review", "typo_artist")  # two edits, 8+ letters
 
 
+def test_a_misspelt_artist_is_found_past_its_alphabetically_earlier_neighbours(conn):
+    # The real index: "Tolo" is an edit from colo, lolo, molo, polo and solo, and from tool, which has
+    # the most tabs by far. One of them has a "Schism" of its own.
+    index(conn, *((10 + i, a, "song", "chords") for i, a in enumerate(("lolo", "molo", "polo", "solo"))),
+          (20, "colo", "schism", "chords"),
+          *((100 + i, "tool", "schism", "tabs") for i in range(30)), (200, "tool", "lateralus", "tabs"))
+    r = match(conn, "Tolo", "Schism")
+    assert summary(r) == ("review", "typo_artist", 100.0, "tool", "schism")
+    assert candidate_keys(r)[:2] == [("tool", "schism"), ("colo", "schism")]
+
+
 def test_no_typo_route_for_an_artist_ug_knows_or_a_name_too_short(conn):
     index(conn, (1, "muse", "uprising", "chords"), (2, "fuse", "hysteria", "chords"),
           (3, "u2", "one", "chords"))
