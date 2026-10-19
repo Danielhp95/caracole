@@ -1,5 +1,6 @@
 import random
 import socket
+import sqlite3
 import time
 from pathlib import Path
 
@@ -359,6 +360,21 @@ def test_cli_add_skips_a_hit_your_library_has_under_another_name(tmp_path):
     assert "Stone Temple Pilot - Creep" in result.output
     assert not (tmp_path / "lib" / "wanted.txt").exists()
     assert find_song(conn, "stone-temple-pilots/creep") is None
+
+
+def test_cli_add_keeps_the_line_when_the_database_cannot_be_updated(tmp_path, monkeypatch):
+    seed(tmp_path)
+
+    def locked(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr("tabarr.wanted.sync_wanted", locked)
+    result = run(tmp_path, "search", "creep", "--add", "2")
+    assert result.exit_code == 0, result.output
+    wanted = (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
+    assert wanted.endswith("\nStone Temple Pilots - Creep\n")  # the file is the source of truth
+    assert "The database couldn't be updated (database is locked)" in result.output
+    assert "`tabarr sync`" in result.output
 
 
 def test_cli_add_out_of_range_is_a_usage_error(tmp_path):
