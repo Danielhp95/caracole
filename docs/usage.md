@@ -407,14 +407,19 @@ How a song is matched, in order:
      `lolo`, `molo`, `polo` and `solo`.
    - `catch_all`: UG files the songs of musicals, films, TV shows, games and
      cartoons under catch-all artists (`misc-musicals`, `misc-soundtrack`,
-     `misc-television`, `misc-computer-games`, `misc-cartoons`, and every
-     other `misc-…` but `misc-mashups`, whose titles hold two songs), with
-     the show's name inside the title. `epic - I'm not sorry for loving you`
+     `misc-television`, `misc-computer-games`, `misc-cartoons`), with the
+     show's name inside the title. `epic - I'm not sorry for loving you`
      meets `misc-musicals/epic-the-musical-not-sorry-for-loving-you`, scored
      94: a catch-all title that holds the artist's name is scored on what is
      left of it, less words such as "the musical" next to the name. One that
      doesn't hold it but ends in your title of two words or more scores 90,
-     for a show's song your source credits to its composer.
+     for a show's song your source credits to its composer. `misc-originals`
+     and `misc-unsigned-bands` file a song as "performer - title"
+     (`misc-originals/ray-porter-red-sarah`): there the artist's name must
+     start the title, and no ending counts. The other `misc-…` artists
+     (`misc-praise-songs`, `misc-traditional`, `misc-christmas`,
+     `misc-children`) file the bare title, which step 5 finds;
+     `misc-mashups` titles hold two songs, neither the one you want.
 5. The title alone, across all artists: always a review.
 
 A review keeps its five best candidates, but the best `catch_all` and the
@@ -640,7 +645,9 @@ when it has something in it:
   bare ids: …
   ```
 
-  A candidate under a catch-all artist gets no `[alias]` line. When some
+  For a candidate under `misc-originals` or `misc-unsigned-bands`, it says
+  instead that the performer's name starts the title. A candidate under a
+  catch-all artist gets no `[alias]` line. When some
   candidates come from names that aren't quite UG's, the section's
   introduction says what each of their steps (`catch_all`, `typo_artist`,
   `word_title`) means.

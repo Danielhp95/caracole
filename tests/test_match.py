@@ -425,6 +425,31 @@ def test_only_artists_named_misc_are_catch_alls(conn):
     assert [c.artist_key for c in match(conn, "Frozen", "Let It Go").candidates] == ["misc-soundtrack"]
 
 
+def test_performers_catch_alls_hold_the_performers_name_at_the_start_of_the_title(conn):
+    # misc-originals and misc-unsigned-bands file "performer-title": a name elsewhere in the title is
+    # a word of the song's, and leaves a word such as "you" to score 80 and more against yours.
+    index(conn, (1, "kiss", "i-was-made-for-lovin-you", "chords"),
+          (2, "misc-originals", "robert-muecke-kiss-you", "chords"),
+          (3, "misc-unsigned-bands", "suzie-clark-aint-gonna-kiss-you", "chords"),
+          (4, "misc-originals", "ray-porter-red-sarah", "chords"))
+    r = match(conn, "Kiss", "I Was Made For Loving You Baby")
+    assert r.decision == "review"
+    assert [k for k in candidate_keys(r) if k[0].startswith("misc-")] == []
+    r = match(conn, "Ray Porter", "Red Sarah")
+    assert summary(r) == ("review", "catch_all", 100.0, "misc-originals", "ray-porter-red-sarah")
+    # Nor does a performer's title end in a show's song: no ending rule there.
+    assert match(conn, "Jorge Rivera-Herrans", "Red Sarah").decision == "not_found"
+
+
+def test_catch_alls_that_file_the_bare_title_are_left_to_the_title_alone(conn):
+    # misc-praise-songs, misc-traditional, misc-christmas and misc-children hold no one's name.
+    index(conn, (1, "misc-praise-songs", "how-great-is-our-god", "chords"),
+          (2, "misc-christmas", "silent-night", "chords"))
+    r = match(conn, "Chris Tomlin", "Great Is Our God")
+    assert summary(r)[:2] == ("review", "title_only")
+    assert summary(match(conn, "Traditional", "Silent Night"))[:2] == ("review", "title_only")
+
+
 def test_mashups_are_no_catch_all_two_songs_in_one_are_neither(conn):
     index(conn, (1, "misc-mashups", "radiohead-creep-mitski-my-love-mine-all-mine", "chords"),
           (2, "misc-mashups", "taylor-swift-love-story-mitski-my-love-mine-all-mine", "chords"))

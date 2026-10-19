@@ -136,6 +136,20 @@ def test_a_review_of_names_not_quite_ugs_says_what_they_are(conn, cfg):
     assert "`typo_artist`" not in intro and "`word_title`" not in intro  # no candidate came from those
 
 
+def test_a_performers_catch_all_candidate_is_called_one(conn, cfg):
+    # misc-originals files "performer-title": no show's name there.
+    index(conn, [(1, "misc-originals", "ray-porter-red-sarah", "chords")])
+    s = add_song(conn, "Ray Porter", "Red Sarah")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "misc-originals", "song_key": "ray-porter-red-sarah", "score": 100.0, "step": "catch_all"}])
+    text = todo(conn, cfg)
+    item = review_item(text, "Ray Porter - Red Sarah")
+    assert item.lstrip().startswith(
+        "Only songs UG files under `misc-originals` with the performer's name at the start of the title")
+    assert "show's name" not in item
+    assert "`misc-originals`" in review_intro(text)
+
+
 def review_intro(text):
     return text.split("\n## Review (", 1)[1].split("\n### ", 1)[0]
 

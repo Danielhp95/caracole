@@ -27,17 +27,21 @@ For each song, in order:
      artist keys an edit or so away (one for a name of four to seven letters,
      two from eight; two letters swapped count as one), so "Coldplya" meets
      ``coldplay``. Its titles are scored as in step 2, or as a ``word_title``.
-   - ``catch_all``: UG's catch-all artists, ``misc-musicals``,
-     ``misc-soundtrack``, ``misc-cartoons`` and every other ``misc-…`` key,
-     file a song under a title that holds its show's name: "epic" - "I'm Not
-     Sorry for Loving You" is ``misc-musicals/
-     epic-the-musical-not-sorry-for-loving-you``. A catch-all title that holds
-     one of the artist's names as whole words is scored by what is left of it
-     (less the words such as "the musical" next to the name), as in step 2
-     or as a ``word_title``. One that doesn't, but ends in your title of two
-     words or more, scores 90: Spotify credits EPIC's songs to their
-     composer, whose name UG's title doesn't hold. ``misc-mashups`` is no
-     catch-all: its titles hold two songs, neither the one you want.
+   - ``catch_all``: UG's catch-all artists for shows (``SHOW_CATCH_ALLS``:
+     ``misc-musicals``, ``misc-soundtrack``, ``misc-cartoons``,
+     ``misc-television``, ``misc-computer-games``) file a song under a title
+     that holds its show's name: "epic" - "I'm Not Sorry for Loving You" is
+     ``misc-musicals/epic-the-musical-not-sorry-for-loving-you``. A catch-all
+     title that holds one of the artist's names as whole words is scored by
+     what is left of it (less the words such as "the musical" next to the
+     name), as in step 2 or as a ``word_title``. A show's title that doesn't,
+     but ends in your title of two words or more, scores 90: Spotify credits
+     EPIC's songs to their composer, whose name UG's title doesn't hold.
+     ``misc-originals`` and ``misc-unsigned-bands`` (``PERFORMER_CATCH_ALLS``)
+     file "performer-title": there the name must start the title, and no
+     ending counts. The other ``misc-…`` keys file the bare title, which
+     step 5 finds; ``misc-mashups`` titles hold two songs, neither the one
+     you want.
 
 5. The title alone, across every artist (covers and misfiled tabs), for a song
    still not found: always reviews, ranked with step 4's. Here a Chinese
@@ -101,9 +105,15 @@ NO_ALIAS_STEPS = ("catch_all", "title_only")
 ARTIST_PAGE = "artist_page"  # the fetch step's matches on UG artist pages (A6)
 CATCH_ALL_PREFIX = "misc-"  # misc-musicals, misc-soundtrack, misc-cartoons, misc-television…
 NOT_CATCH_ALL = frozenset({"misc-mashups"})  # two songs in one title: neither is the one you want
-CATCH_ALL_ENDING = 90.0  # a catch-all title that ends in yours: "hamilton-my-shot" for "My Shot"
-# The keys that start with it, as a range the artist_key index serves: "misc-" up to "misc.".
-_CATCH_ALL_RANGE = (CATCH_ALL_PREFIX, CATCH_ALL_PREFIX[:-1] + chr(ord(CATCH_ALL_PREFIX[-1]) + 1))
+# The catch-alls step 4 reads, by how they file a song. A show's holds the show's name, anywhere in
+# the title: misc-musicals/epic-the-musical-not-sorry-for-loving-you, misc-cartoons/frozen-let-it-go.
+SHOW_CATCH_ALLS = frozenset({"misc-musicals", "misc-soundtrack", "misc-cartoons", "misc-television",
+                             "misc-computer-games"})
+# A performer's starts with the performer's name: misc-originals/ray-porter-red-sarah.
+PERFORMER_CATCH_ALLS = frozenset({"misc-originals", "misc-unsigned-bands"})
+# The other misc-… keys (misc-praise-songs, misc-traditional, misc-christmas, misc-children) file the
+# bare title, which step 5 finds.
+CATCH_ALL_ENDING = 90.0  # a show's catch-all title that ends in yours: "hamilton-my-shot" for "My Shot"
 MAX_CANDIDATES = 5
 # A review keeps the best hit of each among its MAX_CANDIDATES, however many others score more.
 KEPT_STEPS = ("catch_all", "typo_artist")
@@ -117,7 +127,8 @@ SHOW_WORDS = frozenset({
 
 
 def is_catch_all(artist_key: str) -> bool:
-    """Whether UG files songs of many artists under this key, with their show's name in the title."""
+    """Whether UG files songs of many artists under this key, which is no one's name: every ``misc-…``
+    key but ``misc-mashups``. Step 4 reads only ``SHOW_CATCH_ALLS`` and ``PERFORMER_CATCH_ALLS``."""
     return artist_key.startswith(CATCH_ALL_PREFIX) and artist_key not in NOT_CATCH_ALL
 
 
@@ -237,19 +248,22 @@ class IndexView:
         return out
 
     def catch_all_songs(self) -> list[tuple[str, str, int]]:
-        """(artist key, base key, tabs) of every song of UG's catch-all artists (``misc-…``, but
-        ``NOT_CATCH_ALL``): about 100,000, variant keys such as ``x-acoustic`` counted with their song."""
+        """(artist key, base key, tabs) of every song of the catch-all artists step 4 reads
+        (``SHOW_CATCH_ALLS``, ``PERFORMER_CATCH_ALLS``): about 90,000, variant keys such as
+        ``x-acoustic`` counted with their song."""
         if self._catch_all is None:
+            keys = sorted(SHOW_CATCH_ALLS | PERFORMER_CATCH_ALLS)
+            marks = ", ".join("?" * len(keys))
             rows = self.conn.execute(
-                "SELECT artist_key, song_key, COUNT(*) FROM ug_index WHERE artist_key >= ? AND artist_key < ? "
+                f"SELECT artist_key, song_key, COUNT(*) FROM ug_index WHERE artist_key IN ({marks}) "
                 "GROUP BY artist_key, song_key",
-                _CATCH_ALL_RANGE,
+                keys,
             )
             tabs: dict[tuple[str, str], int] = {}
             for artist_key, song_key, n in rows:
                 key = (artist_key, split_variant(song_key)[0])
                 tabs[key] = tabs.get(key, 0) + n
-            self._catch_all = sorted((a, s, n) for (a, s), n in tabs.items() if is_catch_all(a))
+            self._catch_all = sorted((a, s, n) for (a, s), n in tabs.items())
         return self._catch_all
 
     def tab_keys(self, tab_id: int) -> tuple[str, str] | None:
@@ -547,22 +561,29 @@ def _catch_all_hits(song: Song, index: IndexView, title: _Forms, rank: int) -> l
     """The songs of UG's catch-all artists whose titles name the song's artist and hold its title.
 
     A title that holds one of the artist's names as whole words scores what is left of it as step 2
-    does, or as a ``word_title``. One that doesn't, but ends in a title of two words or more that
-    names something, scores ``CATCH_ALL_ENDING``: what comes before is the show's name, which tells
-    nothing against you, so it leads near titles of other artists, and stays behind exact ones.
+    does, or as a ``word_title``; under a performer's catch-all (``PERFORMER_CATCH_ALLS``) the name
+    must start the title. A show's title (``SHOW_CATCH_ALLS``) that doesn't hold it, but ends in a
+    title of two words or more that names something, scores ``CATCH_ALL_ENDING``: what comes before
+    is the show's name, which tells nothing against you, so it leads near titles of other artists,
+    and stays behind exact ones.
     """
     names = [n for a in (song.artists or [song.artist]) for n in _forms(a).keys if _names_something(n.split("-"))]
     endings = [k for k in title.own if k.count("-") >= 1 and _names_something(k.split("-"))]
     hits = []
     for artist_key, base, tabs in index.catch_all_songs():
         padded = f"-{base}-"  # a cheap test first: a few thousand titles per song
-        held = [n for n in names if f"-{n}-" in padded]
+        if artist_key in PERFORMER_CATCH_ALLS:  # "performer-title": a name elsewhere is a word of the title
+            held = [n for n in names if padded.startswith(f"-{n}-")]
+        else:
+            held = [n for n in names if f"-{n}-" in padded]
         if held:
             words = base.split("-")
             rests = [r for n in held for r in _rests(words, n.split("-"))]
             score = max((_title_score(title, "-".join(r)) for r in rests), default=0.0)
-        else:
+        elif artist_key in SHOW_CATCH_ALLS:
             score = CATCH_ALL_ENDING if any(padded.endswith(f"-{e}-") and e != base for e in endings) else 0.0
+        else:
+            score = 0.0
         if score:
             hits.append(_Hit(MatchCandidate(artist_key, base, round(score, 1), "catch_all"), rank, tabs))
     return hits

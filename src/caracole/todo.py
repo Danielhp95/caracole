@@ -22,7 +22,7 @@ from caracole.inbox import GP_EXTENSIONS
 from caracole.lacuerda import artist_slug_candidates, looks_spanish
 from caracole.library import write_atomic
 from caracole.lyrics import song_lyrics
-from caracole.match import NO_ALIAS_STEPS
+from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, Overrides
 from caracole.songs import Song, list_songs
@@ -34,6 +34,7 @@ PROVIDERS = ("ug", "lrclib", "lacuerda")
 GUITAR_KINDS = ("guitar-pro", "power", "tabs")
 _MD_SPECIAL = "\\`*_[]<>|"
 _KIND_NAMES = {"guitar-pro": "Guitar Pro", "power": "Power Tab", "tabs": "Tab", "chords": "Chords"}
+PERFORMER = "catch_all:performer"  # a catch_all candidate under misc-originals or misc-unsigned-bands
 
 
 def md(s: str) -> str:
@@ -84,6 +85,8 @@ def _section(title: str, items: list[str], intro: str | None = None, count: int 
 # (match.REVIEW_ONLY_STEPS); "{artists}" is filled with the catch-all artists among them.
 _NEAR_NAMES = {
     "catch_all": "songs UG files under a catch-all artist ({artists}) with the show's name in the title",
+    # A catch_all candidate under match.PERFORMER_CATCH_ALLS, which files "performer-title".
+    PERFORMER: "songs UG files under {artists} with the performer's name at the start of the title",
     "typo_artist": "songs of artists whose names are a letter or two off this one's",
     "word_title": "the artist's titles that hold this one word for word or that it holds",
     "title_only": "other artists' songs with this title (probably covers)",
@@ -92,9 +95,17 @@ _NEAR_NAMES = {
 _NEAR_NAME_STEPS = {
     "catch_all": "`catch_all`: a song UG files under a catch-all artist such as `misc-musicals`, with the "
                  "show's name in its title.",
+    PERFORMER: "`catch_all` under `misc-originals` or `misc-unsigned-bands`: a song UG files with its "
+               "performer's name at the start of its title.",
     "typo_artist": "`typo_artist`: a song of an artist whose name is a letter or two off yours.",
     "word_title": "`word_title`: a title of the artist's that holds yours word for word, or that yours holds.",
 }
+
+
+def _kind(cand: dict[str, Any]) -> str | None:
+    """A candidate's step, or ``PERFORMER`` for a catch_all one under a performer's catch-all."""
+    step = cand.get("step")
+    return PERFORMER if step == "catch_all" and cand.get("artist_key") in PERFORMER_CATCH_ALLS else step
 
 
 def _and(parts: list[str]) -> str:
@@ -104,10 +115,11 @@ def _and(parts: list[str]) -> str:
 def _what_candidates_are(song: Song) -> str:
     """"Only …": what a review's candidates are, when every one comes from a step that never accepts."""
     cands = song.match_candidates or []
-    steps = [st for st in dict.fromkeys(c.get("step") for c in cands) if st in _NEAR_NAMES]
-    catch_alls = ", ".join(f"`{a}`" for a in dict.fromkeys(
-        c.get("artist_key") for c in cands if c.get("step") == "catch_all"))
-    return "Only " + _and([_NEAR_NAMES[st].format(artists=catch_alls) for st in steps])
+    kinds = [k for k in dict.fromkeys(_kind(c) for c in cands) if k in _NEAR_NAMES]
+
+    def artists(kind: str) -> str:
+        return ", ".join(f"`{a}`" for a in dict.fromkeys(c.get("artist_key") for c in cands if _kind(c) == kind))
+    return "Only " + _and([_NEAR_NAMES[k].format(artists=artists(k)) for k in kinds])
 
 
 def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due: set[int]) -> str | None:
@@ -137,7 +149,7 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
 def _near_names_intro(songs: list[Song]) -> list[str]:
     """The Review section's word on the candidates of names that aren't quite UG's, for the steps the
     candidates listed come from (none, when no candidate does)."""
-    steps = {c.get("step") for s in songs if s.review and s.status != "ignored"
+    steps = {_kind(c) for s in songs if s.review and s.status != "ignored"
              for c in (s.match_candidates or [])[:5]}
     named = [text for step, text in _NEAR_NAME_STEPS.items() if step in steps]
     if not named:
