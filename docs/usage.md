@@ -903,12 +903,47 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       sheet (auto).txt      made from audio you bought, when no human sheet exists;
       sheet (auto).cho      it stays, with its ChordPro and PDF, beside a partial
       sheet (auto).pdf      human sheet, until a complete one replaces it
-      info.json             where everything came from
+      info.json             where everything came from, and the song's key
 Music/                      music_dir: the tracks you bought (caracole only reads it)
 ```
 
 Folder names keep their accents and scripts, but never contain a path
 separator or a character file systems reserve: `AC/DC` becomes `AC-DC`.
+
+### The song's key
+
+caracole gives each song with a sheet a musical key, and says where it came
+from. It takes the first of these that gives one:
+
+1. **From the tab**: the key Ultimate Guitar gives the kept version, or a key
+   the sheet states before its first chords: a ChordPro `{key: Am}`, or a note
+   such as `Key: G`, `Key of Bb`, or LaCuerda's `Tono: La menor`.
+2. **Estimated from the chords** of the human sheet: which key's notes its
+   chords fit best, and whether it starts and ends on that key's home chord.
+   Chords that fit no key give no estimate.
+3. **From the audio**, for a sheet auto-chords wrote: the key of the chords
+   the model heard.
+
+The key is the key of the chords as the sheet writes them, the shapes you
+play: with a capo, the song sounds higher. It is the sheet's key before any
+`[transpose]`.
+
+`info.json` holds it in two fields, for anything that reads the library:
+
+```json
+"key": "A minor",
+"key_source": "tab",
+"identity_key": "soda-stereo/de-musica-ligera",
+```
+
+- `key` is the tonic, a capital letter with `#` or `b` as the source spells
+  it, followed by ` minor` for a minor key: `"A minor"`, `"C"`, `"F#"`,
+  `"Bb minor"`. A major key is the tonic alone. `null` when no source gives one.
+- `key_source` is `"tab"`, `"chords"` or `"audio"`, as in the list above, and
+  `null` with no key.
+- `identity_key` is caracole's own key for the song, which info.json called
+  `key` before. The first command that rewrites the pages after an upgrade
+  rewrites every song's info.json once, with these fields.
 
 Others can write to the library: Syncthing, and every device it syncs with. A
 symbolic link planted there could point at caracole's private files, so caracole

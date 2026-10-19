@@ -6,6 +6,21 @@ the source's ("Gb" stays "Gb"); ``same_key`` compares keys by sound. It is the
 key of the chords as the sheet writes them, the shapes you play: with a capo,
 the song sounds higher, as ChordPro's ``{key}`` has it.
 
+``song_key`` gives a song's key and where it came from, its ``source``, from
+the sheets the library keeps, most trusted first:
+
+- ``"tab"``: the human sheet's own word. UG's key for the version
+  (``tonality_name``), else a key the sheet states (``key_in_text``): a
+  ChordPro ``{key: Am}``, or a note such as "Key: G" or LaCuerda's
+  "Tono: La menor".
+- ``"chords"``: estimated from the human sheet's chords (``estimate_key``).
+- ``"audio"``: for an auto-chords sheet, the key of the chords the model heard,
+  weighted by how long each sounds, which auto-chords records with the sheet
+  (``raw["key"]`` of its version); else estimated from the sheet it wrote.
+
+``library.write_info`` writes it into the song's info.json as ``key`` and
+``key_source``, and ``index.html`` embeds the same two fields.
+
 ``estimate_key`` finds the key of a chord progression, offline and with the
 standard library: every chord's notes (root, third, fifth and, at half weight,
 a seventh) make a histogram of the 12 pitch classes, weighted by how often or
@@ -19,12 +34,31 @@ correlation under ``MIN_FIT``) give no estimate.
 
 from __future__ import annotations
 
+import json
+import logging
 import math
 import re
+import sqlite3
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from caracole.chordpro import is_chord_line, normalize_chord
+from caracole.db import kv_get_json, kv_set_json
+from caracole.library import KeptFile, kept_files, read_regular, write_info
+from caracole.songs import Song, list_songs
+from caracole.versions import get_version
+
+log = logging.getLogger(__name__)
+
+INFO_VERSION = 1  # what refresh_info_keys last brought every info.json up to
+INFO_VERSION_KEY = "keys:info_version"  # kv
+HUMAN_SHEET = "sheet.txt"
+SHEET_DOC = "sheet.json"  # the human sheet's markup, beside it
+AUTO_SHEET = "sheet (auto).txt"
+SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio": "from the audio"}
 
 _LETTERS = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 _SOLFEGE = {"do": "C", "re": "D", "mi": "E", "fa": "F", "sol": "G", "la": "A", "si": "B"}
@@ -156,6 +190,109 @@ def estimate_key(chords: Iterable[str | tuple[str, float]]) -> str | None:
     else:
         name = (_MINOR_NAMES if minor else _MAJOR_NAMES)[tonic]
     return f"{name} minor" if minor else name
+
+
+# --- a song's key ------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SongKey:
+    """A song's key ("A minor", "C") and where it came from: one of ``SOURCES``."""
+
+    key: str
+    source: str
+
+    def describe(self) -> str:
+        """For people: "A minor (from the tab)", "C major (estimated from the chords)"."""
+        return f"{key_name(self.key)} ({SOURCES[self.source]})"
+
+
+def song_key(conn: sqlite3.Connection, library_dir: Path, song: Song) -> SongKey | None:
+    """The song's key from the sheets it keeps, and its source (see the module's notes); None
+    without a sheet, or when no source gives one.
+
+    Sheets are read from the library only as regular files (``library.read_regular``): one
+    that can't be read, isn't UTF-8 or isn't JSON gives nothing, and the next source is tried.
+    """
+    kept = {f.name: f for f in kept_files(conn, song.id)}
+    human = kept.get(HUMAN_SHEET)
+    if human is not None:
+        tab = _tonality(get_version(conn, human.version_id).raw)
+        if tab is not None:
+            return SongKey(tab, "tab")
+        markup = _markup(library_dir, kept.get(SHEET_DOC), human)
+        if markup is not None:
+            stated = key_in_text(markup)
+            if stated is not None:
+                return SongKey(stated, "tab")
+            estimated = estimate_key(chords_in_sheet(markup))
+            if estimated is not None:
+                return SongKey(estimated, "chords")
+    auto = kept.get(AUTO_SHEET)
+    if auto is not None:
+        heard = _tonality(get_version(conn, auto.version_id).raw, "key")
+        if heard is not None:
+            return SongKey(heard, "audio")
+        text = _text(library_dir / auto.path)
+        estimated = estimate_key(chords_in_sheet(text)) if text is not None else None
+        if estimated is not None:
+            return SongKey(estimated, "audio")
+    return None
+
+
+def refresh_info_keys(conn: sqlite3.Connection, library_dir: Path) -> int:
+    """Rewrite the info.json of every song that keeps files, once per ``INFO_VERSION``; return how
+    many were written.
+
+    An info.json changes whenever its song's files do, so this only brings those an older
+    caracole wrote up to date: their ``key`` was the song's identity key, and they had no
+    ``key_source``. Bump ``INFO_VERSION`` when what ``song_key`` gives can change for files that
+    haven't (a better estimate, say). An info.json that can't be written is logged and tried
+    again next time; the pages go on.
+    """
+    if kv_get_json(conn, INFO_VERSION_KEY) == INFO_VERSION:
+        return 0
+    written, failed = 0, False
+    for song in list_songs(conn):
+        if not kept_files(conn, song.id):
+            continue
+        try:
+            write_info(conn, library_dir, song)
+        except OSError as e:
+            log.warning("%s: can't write info.json: %s", song.display, e)
+            failed = True
+            continue
+        written += 1
+    if not failed:
+        kv_set_json(conn, INFO_VERSION_KEY, INFO_VERSION)
+    return written
+
+
+def _tonality(raw: Mapping[str, Any], field: str = "tonality_name") -> str | None:
+    """The key a version's data gives (UG's ``tonality_name``, often empty), if it is a key."""
+    value = raw.get(field)
+    return parse_key(value) if isinstance(value, str) else None
+
+
+def _markup(library_dir: Path, doc: KeptFile | None, sheet: KeptFile) -> str | None:
+    """The human sheet's markup: the ``content`` of the sheet.json kept with it."""
+    if doc is None or doc.version_id != sheet.version_id:
+        return None
+    text = _text(library_dir / doc.path)
+    try:
+        data = json.loads(text) if text is not None else None
+    except ValueError:
+        return None
+    content = data.get("content") if isinstance(data, dict) else None
+    return content if isinstance(content, str) else None
+
+
+def _text(path: Path) -> str | None:
+    """A library file as UTF-8 text, never read through a link; None if it can't be read so."""
+    try:
+        return read_regular(path).decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 # --- helpers -----------------------------------------------------------------------------

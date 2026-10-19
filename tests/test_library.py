@@ -257,3 +257,23 @@ def test_write_info_lists_kept_versions(conn, tmp_path):
     assert info["artist"] == "宋冬野" and info["title"] == "斑马，斑马"
     assert info["files"][0]["name"] == "sheet.txt"
     assert info["files"][0]["url"] == "https://tabs.ultimate-guitar.com/tab/99"
+
+
+def test_write_info_gives_the_songs_key_and_where_it_came_from(conn, tmp_path):
+    lib = tmp_path / "Library"
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    v = upsert_version(conn, provider="ug", tab_id="99", song_id=s.id, slot="sheet", kind="chords",
+                       rating=4.5, votes=10, version=1, label=None, url="https://tabs.ultimate-guitar.com/tab/99",
+                       raw={"tonality_name": "Am"}, now="2026-10-18T03:30:00Z")
+    keep_file(conn, lib, song=s, version_id=v, name="sheet.txt", data=b"x", rank=1)
+    info = json.loads(write_info(conn, lib, s).read_text(encoding="utf-8"))
+    assert (info["key"], info["key_source"]) == ("A minor", "tab")
+    assert info["identity_key"] == s.key  # the song's identity, which "key" held before
+
+
+def test_write_info_of_a_song_whose_key_is_unknown(conn, tmp_path):
+    lib = tmp_path / "Library"
+    s = add_song(conn)
+    keep_file(conn, lib, song=s, version_id=_version(conn, s, 99), name="sheet.txt", data=b"x", rank=1)
+    info = json.loads(write_info(conn, lib, s).read_text(encoding="utf-8"))
+    assert (info["key"], info["key_source"]) == (None, None)

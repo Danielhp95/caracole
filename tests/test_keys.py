@@ -2,9 +2,26 @@
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
+
 import pytest
 
-from caracole.keys import chords_in_sheet, estimate_key, key_in_text, key_name, parse_key, same_key
+from caracole.keys import (
+    SongKey,
+    chords_in_sheet,
+    estimate_key,
+    key_in_text,
+    key_name,
+    parse_key,
+    refresh_info_keys,
+    same_key,
+    song_key,
+)
+from caracole.library import keep_file, song_dir
+from caracole.versions import upsert_version
+
+from conftest import add_song
 
 
 @pytest.mark.parametrize(
@@ -160,3 +177,167 @@ def test_the_estimate_weighs_each_chord_by_its_duration():
 )
 def test_no_estimate_without_chords_or_from_chords_that_fit_no_key(chords):
     assert estimate_key(chords) is None
+
+
+# --- a song's key ------------------------------------------------------------------------
+
+AM_F_C_G = "[Verse]\n[ch]Am[/ch]  [ch]F[/ch]  [ch]C[/ch]  [ch]G[/ch]\nWords go here\n" * 4
+AUTO_SHEET = (
+    "auto-generated, unverified\nA - T\n\n[Chords]\n| [ch]Em[/ch] | [ch]C[/ch] | [ch]G[/ch] | [ch]D[/ch] |\n"
+)
+
+
+def keep_sheet(conn, cfg, song, *, content=AM_F_C_G, raw=None, provider="ug", tab_id="85053"):
+    """A human sheet as the fetch steps keep it: sheet.json with the markup, then sheet.txt."""
+    url = f"https://example.invalid/{tab_id}"
+    vid = upsert_version(conn, provider=provider, tab_id=tab_id, song_id=song.id, slot="sheet",
+                         kind="chords" if provider == "ug" else "acordes", rating=4.5, votes=10,
+                         version=1, label=None, url=url, raw=raw or {}, now="2026-10-18T00:00:00Z")
+    doc = {"version": raw or {}, "content": content, "url": url}
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.json",
+              data=json.dumps(doc).encode(), rank=1)
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt",
+              data=content.replace("[ch]", "").replace("[/ch]", "").encode(), rank=1)
+    return vid
+
+
+def keep_auto_sheet(conn, cfg, song, *, raw=None):
+    vid = upsert_version(conn, provider="auto", tab_id=str(song.id), song_id=song.id, slot="sheet",
+                         kind="auto", rating=0, votes=0, version=1, label=None, url="file:///x.flac",
+                         raw=raw if raw is not None else {"model": "btc_large_voca"},
+                         now="2026-10-18T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet (auto).txt",
+              data=AUTO_SHEET.encode(), rank=1)
+    return vid
+
+
+def test_ugs_key_for_the_kept_version_is_the_tabs(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "Bm"})
+    assert song_key(conn, cfg.library_dir, s) == SongKey("B minor", "tab")
+
+
+def test_a_key_the_sheet_states_is_the_tabs(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, content="Key: G\n\n" + AM_F_C_G)
+    assert song_key(conn, cfg.library_dir, s) == SongKey("G", "tab")
+
+
+def test_a_lacuerda_sheets_tono_is_the_tabs(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, provider="lacuerda", content="Tono: Re\n\n" + AM_F_C_G)
+    assert song_key(conn, cfg.library_dir, s) == SongKey("D", "tab")
+
+
+def test_without_the_tabs_word_the_key_is_estimated_from_the_chords(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": ""})
+    assert song_key(conn, cfg.library_dir, s) == SongKey("A minor", "chords")
+
+
+def test_a_key_ug_gives_that_is_no_key_is_passed_over(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "Standard"})
+    assert song_key(conn, cfg.library_dir, s) == SongKey("A minor", "chords")
+
+
+def test_an_auto_sheet_has_the_key_the_audio_model_heard(conn, cfg):
+    s = add_song(conn)
+    keep_auto_sheet(conn, cfg, s, raw={"model": "btc_large_voca", "key": "B minor"})
+    assert song_key(conn, cfg.library_dir, s) == SongKey("B minor", "audio")
+
+
+def test_an_older_auto_sheet_has_the_key_of_its_chords_which_came_from_the_audio(conn, cfg):
+    s = add_song(conn)
+    keep_auto_sheet(conn, cfg, s)
+    assert song_key(conn, cfg.library_dir, s) == SongKey("E minor", "audio")
+
+
+def test_a_human_sheet_with_no_chords_leaves_the_key_to_the_audio(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, content="Just the words\nand no chords\n")
+    keep_auto_sheet(conn, cfg, s, raw={"key": "C"})
+    assert song_key(conn, cfg.library_dir, s) == SongKey("C", "audio")
+
+
+def test_the_human_sheet_wins_over_the_audio(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s)
+    keep_auto_sheet(conn, cfg, s, raw={"key": "C"})
+    assert song_key(conn, cfg.library_dir, s) == SongKey("A minor", "chords")
+
+
+def test_a_song_without_a_sheet_has_no_key(conn, cfg):
+    assert song_key(conn, cfg.library_dir, add_song(conn)) is None
+
+
+def test_a_link_in_place_of_sheet_json_is_never_read(conn, cfg, tmp_path):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s)
+    elsewhere = tmp_path / "private.json"
+    elsewhere.write_text(json.dumps({"content": "Key: G\n\n[ch]G[/ch]\n"}))
+    sheet_json = song_dir(cfg.library_dir, s) / "sheet.json"
+    sheet_json.unlink()
+    sheet_json.symlink_to(elsewhere)
+    assert song_key(conn, cfg.library_dir, s) is None
+
+
+def test_a_sheet_json_that_is_no_json_gives_no_estimate_but_ugs_key_still_counts(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "F"})
+    (song_dir(cfg.library_dir, s) / "sheet.json").write_text("{not json")
+    assert song_key(conn, cfg.library_dir, s) == SongKey("F", "tab")
+    other = add_song(conn, "Radiohead", "Creep")
+    keep_sheet(conn, cfg, other, tab_id="1")
+    (song_dir(cfg.library_dir, other) / "sheet.json").write_text("[1, 2]")
+    assert song_key(conn, cfg.library_dir, other) is None
+
+
+def test_info_json_written_before_keys_gets_them_once(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "Bm"})
+    info = song_dir(cfg.library_dir, s) / "info.json"
+    info.write_text(json.dumps({"key": s.key}))  # as an older caracole wrote it: the song's identity
+    assert refresh_info_keys(conn, cfg.library_dir) == 1
+    assert json.loads(info.read_text())["key"] == "B minor"
+    info.write_text("{}")
+    assert refresh_info_keys(conn, cfg.library_dir) == 0
+    assert info.read_text() == "{}"
+
+
+def test_refreshing_makes_no_folder_for_a_song_without_files(conn, cfg):
+    s = add_song(conn)
+    assert refresh_info_keys(conn, cfg.library_dir) == 0
+    assert not song_dir(cfg.library_dir, s).exists()
+
+
+def test_an_info_json_that_cant_be_written_is_tried_again_next_time(conn, cfg, monkeypatch, caplog):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s)
+
+    def refuse(*args, **kwargs):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr("caracole.keys.write_info", refuse)
+    assert refresh_info_keys(conn, cfg.library_dir) == 0
+    assert "Permission denied" in caplog.text
+    monkeypatch.undo()
+    assert refresh_info_keys(conn, cfg.library_dir) == 1
+    info = json.loads((song_dir(cfg.library_dir, s) / "info.json").read_text())
+    assert (info["key"], info["key_source"]) == ("A minor", "chords")
+
+
+def test_the_pages_bring_info_json_up_to_date(conn, cfg):
+    from caracole.overrides import Overrides
+    from caracole.todo import write_pages
+
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "G"})
+    write_pages(conn, cfg, Overrides(), datetime(2026, 10, 19, tzinfo=UTC))
+    assert json.loads((song_dir(cfg.library_dir, s) / "info.json").read_text())["key"] == "G"
+
+
+def test_a_song_key_reads_as_its_source_says():
+    assert SongKey("A minor", "tab").describe() == "A minor (from the tab)"
+    assert SongKey("C", "chords").describe() == "C major (estimated from the chords)"
+    assert SongKey("F#", "audio").describe() == "F# major (from the audio)"

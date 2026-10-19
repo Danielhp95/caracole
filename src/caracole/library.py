@@ -215,7 +215,15 @@ def drop_file(conn: sqlite3.Connection, library_dir: Path, *, song: Song, name: 
 
 
 def write_info(conn: sqlite3.Connection, library_dir: Path, song: Song) -> Path:
-    """Write info.json: the song, where it came from, and what was kept or picked."""
+    """Write info.json: the song, where it came from, and what was kept or picked.
+
+    ``key`` is the song's musical key ("A minor", "C") and ``key_source`` where it
+    came from ("tab", "chords" or "audio"), both null when unknown (``keys.song_key``);
+    ``identity_key`` is caracole's key for the song itself.
+    """
+    from caracole.keys import song_key  # it reads the library through this module
+
+    musical = song_key(conn, library_dir, song)
     files = []
     for f in kept_files(conn, song.id):
         v = get_version(conn, f.version_id)
@@ -239,7 +247,9 @@ def write_info(conn: sqlite3.Connection, library_dir: Path, song: Song) -> Path:
         "album": song.album,
         "duration_ms": song.duration_ms,
         "isrc": song.isrc,
-        "key": song.key,
+        "identity_key": song.key,
+        "key": musical.key if musical else None,
+        "key_source": musical.source if musical else None,
         "status": song.status,
         "sources": song.source_ids,
         "lyrics": song.lyrics_status,
