@@ -268,6 +268,14 @@ def test_a_long_retry_after_keeps_spotify_unasked_until_then(tmp_path, wanted):
     assert sync_at(61).spotify_state == "ok" and spotify.calls == 2
 
 
+def test_a_garbled_wait_does_not_keep_spotify_unasked(tmp_path, wanted):
+    repo = Repo()
+    repo.kv["spotify:retry_after_until"] = "someday"
+    spotify = OneTrackSpotify()
+    report = run(config(tmp_path, client_id="cid", client_secret="secret"), repo, spotify)
+    assert report.spotify_state == "ok" and spotify.calls == 1
+
+
 def test_sync_sources_reports_spotify_problems_as_errors(tmp_path, wanted):
     repo = Repo()
     cfg = config(tmp_path, client_id="cid", client_secret="secret", playlists=("Learn", LEARN))

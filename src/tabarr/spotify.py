@@ -57,6 +57,7 @@ TOKEN_FILE = "spotify_token.json"
 PAGE_SIZE = 50  # the most Spotify returns per page
 REQUEST_TIMEOUT = 20  # seconds, for API and token requests alike
 MAX_RETRY_AFTER = 30  # seconds; Spotify's rate limit works over a rolling 30-second window
+MAX_WAIT = 7 * 24 * 3600  # seconds; a longer Retry-After is taken as a week
 
 # OAuth error codes (RFC 6749 §4.1.2.1 and §5.2) that mean the authorization itself is bad.
 # Anything else spotipy reports as an OAuth error is a failing accounts service.
@@ -621,7 +622,8 @@ def sync_spotify(
         limited = e
         stats.errors.append(str(e))
         if e.retry_after is not None:
-            stats.retry_after_until = utc_stamp(now + timedelta(seconds=e.retry_after))
+            wait = timedelta(seconds=min(e.retry_after, MAX_WAIT))
+            stats.retry_after_until = utc_stamp(now + wait)
 
     for ref in refs:
         tracks = iter_saved_tracks(sp) if ref is None else iter_playlist_tracks(sp, ref)

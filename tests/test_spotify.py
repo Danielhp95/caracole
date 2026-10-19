@@ -620,6 +620,12 @@ def test_a_rate_limit_stops_the_sync_and_keeps_what_was_read():
     assert TOP_TRACKS_KEY not in kv
 
 
+def test_an_absurd_retry_after_is_waited_out_for_a_week_at_most():
+    sp = FakeSpotify(saved=[saved(SODA)], fail={"saved": rate_limit("99999999999999999")})
+    stats, _, _ = sync(sp, spotify())
+    assert stats.retry_after_until == "2026-10-25T03:30:00Z"
+
+
 def test_a_rate_limit_without_a_wait_still_stops_the_sync():
     sp = FakeSpotify(saved=[saved(SODA)], items={LEARN: [entry(CREEP)]},
                      fail={"saved": SpotifyException(429, -1, "x:\n Too many requests")})

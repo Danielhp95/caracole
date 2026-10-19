@@ -190,7 +190,7 @@ def sync_sources(
         state = "setup_needed" if isinstance(e, SpotifySetupError) else "auth_needed"
         return state, _sentence(e.problem)
 
-    wait_until = kv_get(conn, SPOTIFY_RETRY_KEY)
+    wait_until = _stamp_or_none(kv_get(conn, SPOTIFY_RETRY_KEY))
     if spotify is None:
         report.spotify_state, report.spotify_message = needs(no_client_error(cfg))
     elif wait_until and stamp < wait_until:
@@ -240,6 +240,15 @@ def sync_sources(
 
 def _count(n: int, noun: str) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
+def _stamp_or_none(value: str | None) -> str | None:
+    """``value`` when it is a ``utc_stamp``, so it compares in time order as a string."""
+    try:
+        datetime.strptime(value or "", "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
+    return value
 
 
 def _record(kv_set: KvSet, conn: sqlite3.Connection, key: str, value: Any) -> None:
