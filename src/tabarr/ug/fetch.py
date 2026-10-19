@@ -25,6 +25,10 @@ For each song (plan §3, Task 15, amendment A6):
 4. Only when every slot is done is the song marked checked and clean, so a
    song interrupted by the budget resumes from the HTTP cache next run.
 
+A run settles the sheet of every waiting song before it spends anything on
+guitar parts (``fetch_songs``), and rates each guitar group from one page:
+live, filling every slot song by song cost 8-12 requests a song.
+
 A kept file is replaced only when another version outranks it, and is not
 rewritten when it wins again.
 
@@ -40,7 +44,8 @@ import logging
 import re
 import sqlite3
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from collections import Counter
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -120,7 +125,8 @@ class FetchContext:
 
     ``artist_pages_per_kind`` caps the artist-page list pages one song may
     fetch from UG per kind per run; cached pages don't count, so a long list
-    is read over several runs.
+    is read over several runs. ``max_pages_per_group`` caps the pages read to
+    rate the chords group, ``guitar_pages_per_group`` each guitar group.
     """
 
     conn: sqlite3.Connection
@@ -130,6 +136,7 @@ class FetchContext:
     library_dir: Path
     now: datetime
     max_pages_per_group: int = 3
+    guitar_pages_per_group: int = 1
     artist_page_max_age: timedelta = ARTIST_PAGE_MAX_AGE
     artist_pages_per_kind: int = 3
 
@@ -139,6 +146,7 @@ class SongFetchOutcome:
     """What one song's fetch kept: UG tab ids of the sheet, the Guitar Pro picks and the text tab.
 
     ``requests`` counts the requests sent to UG for the song (cache hits are free).
+    ``settled`` says the sheet slot was decided (the guitar slots may still wait).
     """
 
     song_id: int
@@ -146,24 +154,29 @@ class SongFetchOutcome:
     guitar_pro: tuple[int, ...]
     tab: int | None
     requests: int
+    settled: bool = False
 
 
 @dataclass
 class FetchStats:
-    """A fetch run: songs finished, songs skipped after a provider error, and whether the budget ran out."""
+    """A fetch run: sheets settled, songs finished, songs skipped after a provider error, and
+    whether the budget ran out."""
 
     songs_done: int = 0
     songs_failed: int = 0
     budget_exhausted: bool = False
+    sheets_done: int = 0
 
 
 @dataclass
 class _SongRun:
-    """One song's fetch: the song, and the tab pages already read for it this run."""
+    """One song's fetch: the song, the tab pages already read for it this run, and how many
+    pages of each UG type were fetched from UG (cache hits are free)."""
 
     ctx: FetchContext
     song: Song
     pages: dict[int, UGTabPage | None] = field(default_factory=dict)
+    fetched: Counter[str] = field(default_factory=Counter)
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -370,6 +383,8 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
         return run.pages[tab_id]
     page, fresh = _get_page(run.ctx.client, url, parse_tab_page)
     run.pages[tab_id] = page
+    if fresh:
+        run.fetched[(page.tab.kind if page is not None else None) or kind or "?"] += 1
     if page is None:
         _mark_gone(run, tab_id, url, kind)
         return None
@@ -386,12 +401,21 @@ def _seen_ids(run: _SongRun) -> set[int]:
     return {int(r.tab_id) for r in song_versions(run.conn, run.song.id, include_gone=True) if r.provider == PROVIDER}
 
 
-def _rate_group(run: _SongRun, tabs: list[IndexTab]) -> None:
-    """Read the page of the lowest unrated id until all are rated or the page cap is reached."""
+def _rate_group(run: _SongRun, tabs: list[IndexTab], pages: int) -> None:
+    """Read the page of the lowest unrated id until all are rated, or until ``pages`` pages of
+    this type were fetched from UG this run (earlier steps' fetches count, cached pages don't).
+
+    Tabs whose slug names no part (intro, solo, ...) go first: a page lists its own (type,
+    part) group, so the full song's page rates the versions worth keeping.
+    """
     tried: set[int] = set()
-    for _ in range(run.ctx.max_pages_per_group):
+    kinds = {t.type for t in tabs}
+    while sum(run.fetched[k] for k in kinds) < pages:
         seen = _seen_ids(run)
-        todo = sorted((t for t in tabs if t.tab_id not in seen and t.tab_id not in tried), key=lambda t: t.tab_id)
+        todo = sorted(
+            (t for t in tabs if t.tab_id not in seen and t.tab_id not in tried),
+            key=lambda t: (t.label is not None, t.tab_id),
+        )
         if not todo:
             return
         tried.add(todo[0].tab_id)
@@ -918,7 +942,7 @@ def _live_chords(conn: sqlite3.Connection, song: Song, tabs: list[IndexTab]) -> 
 # --- one song, and a run ---------------------------------------------------------------------------
 
 
-def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
+def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongFetchOutcome:
     """Fetch, rank and keep one song's UG versions, one slot at a time.
 
     A not-found song is first looked up on its artist's UG page (A6), and goes
@@ -946,7 +970,9 @@ def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
 
     def rated(group: tuple[str, ...]) -> list[int] | None:
         if group not in pinned:
-            _rate_group(run, [t for t in tabs if t.type in group])
+            pages = ctx.max_pages_per_group if group == CHORDS_KINDS else ctx.guitar_pages_per_group
+            for kind in group:  # UG lists versions per type: a Guitar Pro page never rates a Power Tab
+                _rate_group(run, [t for t in tabs if t.type == kind], pages)
         return pinned.get(group)
 
     sheet_pins = rated(CHORDS_KINDS)
@@ -955,10 +981,13 @@ def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
         if not _artist_page_versions(run, CHORDS_KINDS, own):
             return unfinished()
     sheet = _sheet_slot(run, sheet_pins)
+    if not guitar:
+        # The sheet pass of fetch_songs: the song stays dirty until its guitar slots are done.
+        return SongFetchOutcome(song.id, sheet, (), None, ctx.client.requests_made - start, settled=True)
     guitar_pro = _guitar_pro_slot(run, rated(GUITAR_PRO_KINDS))
     tab = _tab_slot(run, rated(TAB_KINDS))
     _finish(run)
-    return SongFetchOutcome(song.id, sheet, guitar_pro, tab, ctx.client.requests_made - start)
+    return SongFetchOutcome(song.id, sheet, guitar_pro, tab, ctx.client.requests_made - start, settled=True)
 
 
 def _finish(run: _SongRun) -> None:
@@ -1057,19 +1086,46 @@ def fetch_songs(
     *,
     on_song: Callable[[Song, SongFetchOutcome], None] | None = None,
 ) -> FetchStats:
-    """Process songs in order until the budget is spent; ``on_song`` hears about each song done.
+    """Fetch songs in order until the budget is spent; ``on_song`` hears about each song done.
+
+    Two passes: first the sheet of every song (what a singer needs most), then,
+    with what's left of the budget, the guitar slots of the songs whose sheet
+    was settled. The second pass re-reads the sheet pages from the HTTP cache,
+    so it pays only for guitar parts.
 
     A block is re-raised (the caller cools the provider down). Any other
     provider error, a page that can't be parsed included, skips that song: it
     stays dirty and is never marked not found.
     """
     stats = FetchStats()
+    settled: list[tuple[Song, int]] = []  # with the requests its sheet pass cost
+    # Once the budget is spent each song still runs until its first uncached request, so
+    # songs whose pages are cached are settled (and finished) for free.
     for song in songs:
         try:
-            outcome = process_song(ctx, song)
+            outcome = process_song(ctx, song, guitar=False)
         except BudgetExhausted:
             stats.budget_exhausted = True
-            break
+            continue
+        except ProviderBlocked:
+            raise
+        except ProviderError as e:
+            log.warning("UG fetch failed for %s: %s", song.display, e)
+            stats.songs_failed += 1
+            continue
+        if outcome.settled:
+            stats.sheets_done += 1
+            settled.append((song, outcome.requests))
+        else:
+            stats.songs_done += 1  # nothing more to do this run (not on its artist page, say)
+            if on_song is not None:
+                on_song(song, outcome)
+    for song, sheet_requests in settled:
+        try:
+            outcome = process_song(ctx, get_song(ctx.conn, song.id))
+        except BudgetExhausted:
+            stats.budget_exhausted = True
+            continue
         except ProviderBlocked:
             raise
         except ProviderError as e:
@@ -1078,7 +1134,7 @@ def fetch_songs(
             continue
         stats.songs_done += 1
         if on_song is not None:
-            on_song(song, outcome)
+            on_song(song, replace(outcome, requests=outcome.requests + sheet_requests))
     return stats
 
 

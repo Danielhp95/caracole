@@ -251,3 +251,17 @@ def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, mo
     assert seen["overrides"] is o
     assert "1 error" in summary
     assert get_state(conn, "lacuerda").last_error is not None
+
+
+def test_fetch_summary_counts_settled_sheets(conn, cfg, monkeypatch):
+    import tabarr.ug.fetch as fetch
+    from tabarr.overrides import Overrides
+    from tabarr.pipeline import StepContext, _fetch
+
+    monkeypatch.setattr(fetch, "songs_to_fetch", lambda *a, **k: [])
+    monkeypatch.setattr(fetch, "rescore_kept_sheets", lambda *a, **k: 0)
+    monkeypatch.setattr(fetch, "fetch_songs", lambda *a, **k: fetch.FetchStats(
+        songs_done=1, songs_failed=0, budget_exhausted=True, sheets_done=2))
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
+                      report=RunReport(run_id="r", started="r"))
+    assert _fetch(ctx) == "2 sheets settled, 1 song done, 0 failed (budget spent)"

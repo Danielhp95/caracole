@@ -335,9 +335,9 @@ def test_guitar_pro_picks_with_penalty_no_download(conn, tmp_path):
     # Unpenalized, the solo (4.83) would lead; the 0.5 penalty puts it behind both.
     assert pick_ids(conn, song, "guitar-pro", "power") == [301, 303]
     assert out.guitar_pro == (301, 303)
-    assert sorted(ug.requests) == sorted(
-        [slugged(301, "guitar-pro"), artist_list(SODA_URL), slugged(302, "guitar-pro"), slugged(303, "power")]
-    )
+    # One ratings page per UG type: the full-song Guitar Pro page and the Power Tab page. The solo's
+    # page (another part group, penalized anyway) is beyond the one-page cap.
+    assert sorted(ug.requests) == sorted([slugged(301, "guitar-pro"), artist_list(SODA_URL), slugged(303, "power")])
     assert not list((tmp_path / "lib").rglob("guitar-*"))
 
 
@@ -608,7 +608,7 @@ def test_parse_error_is_not_a_miss(conn, tmp_path, status, body):
 
     stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song, other])
 
-    assert stats == FetchStats(songs_done=1, songs_failed=1, budget_exhausted=False)
+    assert stats == FetchStats(songs_done=1, songs_failed=1, budget_exhausted=False, sheets_done=1)
     failed = get_song(conn, song.id)  # neither found nor not found: dirty, accepted, never checked
     assert (failed.status, failed.ug_dirty, failed.ug_checked_at, failed.match_decision) == (
         "wanted", True, None, "accept")
@@ -1808,3 +1808,48 @@ def test_a_sheet_rescored_complete_retires_the_auto_sheet(conn, tmp_path, lines,
     assert ("auto" in sheet_kinds_picked(conn, song)) is not retired
     info = json.loads(read(tmp_path, song, "info.json"))
     assert ("sheet (auto).txt" in {f["name"] for f in info["files"]}) is not retired
+
+
+# --- throughput: sheets first, one ratings page per guitar group --------------------------------
+
+
+def test_sheets_for_every_song_before_any_guitar_part(conn, tmp_path):
+    # Live, 8-12 requests per song bought six songs a night. A singer needs the sheet most, so
+    # every waiting song's sheet is settled before the budget goes to guitar parts.
+    ug = FakeUG()
+    persiana = accepted(conn, added_at="2026-10-10T00:00:00Z")
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (401, "soda-stereo", "persiana-americana", "tabs"))
+    ug.tab(v(101, rating=4.8, votes=40), content=sheet("sheet 101", LINES))
+    ug.tab(v(401, "tabs"), content=riff("tab 401"))
+    older = signos(conn, ug)
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache", budget=2), tmp_path), [persiana, older])
+
+    assert ug.requests == [slugged(101), slugged(901, song="signos")]
+    assert "sheet 101" in read(tmp_path, persiana, "sheet.txt")
+    assert "sheet 901" in read(tmp_path, older, "sheet.txt")
+    # Signos has no guitar parts to rate, so it finishes from the cache; Persiana's tab waits.
+    assert (stats.sheets_done, stats.songs_done, stats.budget_exhausted) == (2, 1, True)
+    assert get_song(conn, persiana.id).ug_dirty and not get_song(conn, older.id).ug_dirty
+
+
+def test_guitar_groups_read_one_ratings_page_starting_with_the_full_song(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (401, "soda-stereo", "persiana-americana-intro", "tabs"),
+          (403, "soda-stereo", "persiana-americana", "tabs"),
+          (404, "soda-stereo", "persiana-americana", "tabs"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    intro = v(401, "tabs", part="intro", tab_url=slugged(401, "tabs", song="persiana-americana-intro"))
+    full = v(403, "tabs", rating=4.8, votes=60)
+    other = v(404, "tabs", version=2, rating=4.1, votes=5)
+    ug.tab(intro, content=riff("tab 401"))
+    ug.tab(full, [other], content=riff("tab 403"))
+    ug.tab(other, [full], content=riff("tab 404"))
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert [u for u in ug.requests if "-tabs-" in u] == [slugged(403, "tabs")]
+    assert "tab 403" in read(tmp_path, song, "tab.txt")

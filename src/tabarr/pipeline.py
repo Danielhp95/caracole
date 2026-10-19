@@ -159,7 +159,8 @@ def _fetch(ctx: StepContext) -> str:
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
     scored = f", {_plural(rescored, 'kept sheet')} rescored" if rescored else ""
     tail = " (budget spent)" if s.budget_exhausted else ""
-    return f"{_plural(s.songs_done, 'song')} done, {s.songs_failed} failed{scored}{tail}"
+    sheets = f"{_plural(s.sheets_done, 'sheet')} settled, " if s.sheets_done else ""
+    return f"{sheets}{_plural(s.songs_done, 'song')} done, {s.songs_failed} failed{scored}{tail}"
 
 
 def _lacuerda(ctx: StepContext) -> str:
