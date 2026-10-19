@@ -22,6 +22,7 @@ from caracole.inbox import GP_EXTENSIONS
 from caracole.lacuerda import artist_slug_candidates, looks_spanish
 from caracole.library import write_atomic
 from caracole.lyrics import song_lyrics
+from caracole.match import NO_ALIAS_STEPS
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, Overrides
 from caracole.songs import Song, list_songs
@@ -79,16 +80,50 @@ def _section(title: str, items: list[str], intro: str | None = None, count: int 
     return out + items + [""]
 
 
+# What a review's candidates are, by the step that found them, for the steps that never accept
+# (match.REVIEW_ONLY_STEPS); "{artists}" is filled with the catch-all artists among them.
+_NEAR_NAMES = {
+    "catch_all": "songs UG files under a catch-all artist ({artists}) with the show's name in the title",
+    "typo_artist": "songs of artists whose names are a letter or two off this one's",
+    "word_title": "the artist's titles that hold this one word for word or that it holds",
+    "title_only": "other artists' songs with this title (probably covers)",
+}
+# The Review section's word on each step of names that aren't quite UG's (match.TOLERANT_STEPS).
+_NEAR_NAME_STEPS = {
+    "catch_all": "`catch_all`: a song UG files under a catch-all artist such as `misc-musicals`, with the "
+                 "show's name in its title.",
+    "typo_artist": "`typo_artist`: a song of an artist whose name is a letter or two off yours.",
+    "word_title": "`word_title`: a title of the artist's that holds yours word for word, or that yours holds.",
+}
+
+
+def _and(parts: list[str]) -> str:
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _what_candidates_are(song: Song) -> str:
+    """"Only …": what a review's candidates are, when every one comes from a step that never accepts."""
+    cands = song.match_candidates or []
+    steps = [st for st in dict.fromkeys(c.get("step") for c in cands) if st in _NEAR_NAMES]
+    catch_alls = ", ".join(f"`{a}`" for a in dict.fromkeys(
+        c.get("artist_key") for c in cands if c.get("step") == "catch_all"))
+    return "Only " + _and([_NEAR_NAMES[st].format(artists=catch_alls) for st in steps])
+
+
 def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due: set[int]) -> str | None:
-    """What to do when no candidate is right, for a review whose candidates are all other artists'
-    songs of the title: the index has nothing of the song's own artist, and its UG page may (A6)."""
+    """What to do when no candidate is right, for a review whose candidates all come from steps that
+    never accept: other artists' songs of the title (probably covers), and names that aren't quite
+    UG's. The index has nothing surer of the song's own artist, and its UG page may (A6)."""
     if song.match_decision != "review" or not needs_artist_page(song):
         return None
-    head, artist = "Only other artists' songs with this title (probably covers)", md(song.artist)
+    head, artist = _what_candidates_are(song), md(song.artist)
     if song.status == "found":  # a cover's [match] would bring that artist's guitar parts, and no better sheet
         head += ", and the song has a sheet already: nothing is lost by leaving this"
     if not artist_is_known(conn, song, overrides):
-        return (f"{head}. If none is the song you want, UG probably lists {artist} only by bare ids: find the "
+        steps = {c.get("step") for c in song.match_candidates or []}
+        spelt = f" and {artist} is spelt right" if "typo_artist" in steps else ""
+        lists = "probably lists" if steps == {"title_only"} else "may list"
+        return (f"{head}. If none is the song you want{spelt}, UG {lists} {artist} only by bare ids: find the "
                 "artist's page, or one of their tab pages (see Artists to find below), and paste its address "
                 "under `[artist_url]`, and caracole looks for the song there.")
     if song.id in due:
@@ -97,6 +132,18 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
     return (f"{head}. caracole didn't find it on {artist}'s UG page either. Pick one only if it is the "
             "version you want; if none is, dismiss them all (below): caracole looks at the artist page again "
             "after 30 days.")
+
+
+def _near_names_intro(songs: list[Song]) -> list[str]:
+    """The Review section's word on the candidates of names that aren't quite UG's, for the steps the
+    candidates listed come from (none, when no candidate does)."""
+    steps = {c.get("step") for s in songs if s.review and s.status != "ignored"
+             for c in (s.match_candidates or [])[:5]}
+    named = [text for step, text in _NEAR_NAME_STEPS.items() if step in steps]
+    if not named:
+        return []
+    return ["Some candidates come from names that aren't quite UG's, and are never accepted without you:", "",
+            *(f"- {text}" for text in named), ""]
 
 
 def _dismissal(song: Song, refs: list[str], overrides: Overrides) -> list[str]:
@@ -153,7 +200,7 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, d
             # No table headers: overrides.toml may hold [match] and [alias] already (`caracole review`
             # writes them), and a table declared twice makes the whole file unreadable.
             lines = [f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}  # under [match]"]
-            if step != "title_only" and slug_key(s.artist) != akey:
+            if step not in NO_ALIAS_STEPS and slug_key(s.artist) != akey:
                 lines += _alias_line(s.artist, akey, overrides)
             items += _paste(lines)
         if refs:
@@ -538,7 +585,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                 "the right candidate's lines (or, when none is right, the `[reject]` line) to overrides.toml "
                 "yourself, each under the table its comment names. The file holds each table once: write a "
                 "table's header (`[match]`, `[alias]`, `[reject]`) only if the file doesn't have that table yet.",
-                "", *review]
+                "", *_near_names_intro(songs), *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)

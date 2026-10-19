@@ -593,9 +593,22 @@ when it has something in it:
   `# in place of the artist's line under [alias]`. After the candidates
   comes the `[reject]` line that dismisses them all; for a song with a
   `[reject]` line already, the whole line to put in its place (see
-  [Review](#review)). When the candidates are only other artists' songs of
-  the title, probably covers, the item says so, and whether caracole has looked
-  on the artist's own UG page yet.
+  [Review](#review)). When the candidates come only from the steps that never
+  accept (other artists' songs of the title, probably covers, and names that
+  aren't quite UG's), the item says what they are, and whether caracole has
+  looked on the artist's own UG page yet:
+
+  ```
+  Only songs UG files under a catch-all artist (`misc-musicals`) with the
+  show's name in the title and other artists' songs with this title
+  (probably covers). If none is the song you want, UG may list epic only by
+  bare ids: …
+  ```
+
+  A candidate under a catch-all artist gets no `[alias]` line. When some
+  candidates come from names that aren't quite UG's, the section's
+  introduction says what each of their steps (`catch_all`, `typo_artist`,
+  `word_title`) means.
 - **Partial sheets.** The best sheet covers less than 80% of the lyrics: the
   percentage, the sheet and its source page. A more complete sheet takes its
   place when one turns up; to use another UG version now, pin it under
@@ -603,7 +616,8 @@ when it has something in it:
 - **Artists to find on Ultimate Guitar.** UG lists artists with accented or
   non-Latin names only by bare ids (Joaquín Sabina, Maná, 宋冬野), so caracole
   can't see their tabs. For each such artist with a song not found, or
-  reviewed on its title alone, the page links a UG search. Open the artist's
+  reviewed on its title alone or on names that aren't quite UG's, the page
+  links a UG search. Open the artist's
   page once, by hand, or any of their tab pages, and paste its address, as
   your browser shows it, into the one block the page gives for all of them,
   in place of `https://www.ultimate-guitar.com/artist/…`:
