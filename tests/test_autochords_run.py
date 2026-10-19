@@ -24,6 +24,7 @@ from tabarr.autochords import ChordSegment
 from tabarr.autochords.run import AUTO_SHEET, AutoStats, autochords_pending
 from tabarr.cli import build_app
 from tabarr.config import AutochordsConfig
+from tabarr.db import kv_get, kv_get_json
 from tabarr.library import keep_file, kept_files, song_dir
 from tabarr.lyrics import Lyrics
 from tabarr.overrides import Overrides
@@ -124,6 +125,49 @@ def run(conn, cfg, recognizer=None, beats=None, **kw) -> AutoStats:
 def auto_sheet(cfg, conn, song) -> str:
     return (song_dir(cfg.library_dir, get_song(conn, song.id)) / AUTO_SHEET).read_text(
         encoding="utf-8"
+    )
+
+
+STATUS = "autochords:status"
+
+
+def failed_key(song) -> str:
+    return f"autochords:failed:{song.id}"
+
+
+def failures(stats: AutoStats) -> list[tuple[str, str, str]]:
+    """The purchases a run couldn't read, as (song, error, audio)."""
+    return [(f.song, f.error, f.audio) for f in stats.failures]
+
+
+def unreadable(path) -> str:
+    """The error FakeRecognizer raises for a file it fails on, as the to-do page shows it."""
+    return f"RuntimeError: Error opening {Path(path).name!r}: Format not recognised."
+
+
+def model_files(tmp_path: Path) -> dict[str, Path]:
+    """Model files that exist, for fakes of the default models: nothing reads them."""
+    files = {"btc_weights": tmp_path / "btc.pt", "beat_checkpoint": tmp_path / "final0.ckpt"}
+    for path in files.values():
+        path.write_bytes(b"model")
+    return files
+
+
+def with_model_files(cfg, tmp_path):
+    return replace(cfg, autochords=AutochordsConfig(**model_files(tmp_path)))
+
+
+def fake_default_models(monkeypatch, *, fail_on: tuple[str, ...] = ()) -> None:
+    """Fakes for BTCRecognizer and detect_beats, which the default models are built from."""
+    import tabarr.autochords.run as ac_run
+
+    class Recognizer(FakeRecognizer):
+        def __init__(self, weights, *, device="cpu"):
+            super().__init__(fail_on=fail_on)
+
+    monkeypatch.setattr(ac_run, "BTCRecognizer", Recognizer)
+    monkeypatch.setattr(
+        ac_run, "detect_beats", lambda path, checkpoint, device="cpu": (BEATS, DOWNBEATS)
     )
 
 
@@ -383,7 +427,70 @@ def test_default_models_are_built_once_from_the_config(conn, cfg, tmp_path, monk
 
     assert autochords_pending(conn, cfg).generated == 2
     assert built == [(weights, "cuda:1")]
-    assert sorted(tracked) == sorted((Path(s.audio_path), checkpoint, "cuda:1") for s in songs)
+    # A test tone first (test_default_models_first_read_a_test_tone), then each song.
+    tone, *rest = tracked
+    assert tone[1:] == (checkpoint, "cuda:1")
+    assert sorted(rest) == sorted((Path(s.audio_path), checkpoint, "cuda:1") for s in songs)
+
+
+def test_default_models_first_read_a_test_tone(conn, cfg, tmp_path, monkeypatch):
+    import tabarr.autochords.run as ac_run
+
+    heard = []
+
+    def hear(model, path):
+        with wave.open(str(path)) as w:
+            heard.append((model, Path(path), w.getnframes() / w.getframerate()))
+
+    class Recognizer(FakeRecognizer):
+        def __init__(self, weights, *, device="cpu"):
+            super().__init__()
+
+        def recognize(self, path):
+            hear("BTC", path)
+            return super().recognize(path)
+
+    def detect_beats(path, checkpoint, *, device="cpu"):
+        hear("beat_this", path)
+        return BEATS, DOWNBEATS
+
+    monkeypatch.setattr(ac_run, "BTCRecognizer", Recognizer)
+    monkeypatch.setattr(ac_run, "detect_beats", detect_beats)
+    s = with_audio(conn, tmp_path, add_song(conn, "A", "T"), seconds=10.0)
+    assert autochords_pending(conn, with_model_files(cfg, tmp_path)).generated == 1
+    tone = heard[0][1]
+    assert sorted(heard[:2]) == [("BTC", tone, 2.0), ("beat_this", tone, 2.0)]
+    assert heard[2:] == [("BTC", Path(s.audio_path), 10.0), ("beat_this", Path(s.audio_path), 10.0)]
+    assert not tone.exists()
+
+
+def test_models_that_cannot_read_a_test_tone_are_a_setup_problem(conn, cfg, tmp_path, monkeypatch):
+    # As under a sandbox that stops them (MemoryDenyWriteExecute, docs/deploy.md): every
+    # file would fail, so none is blamed, and the purchase is made once the setup is fixed.
+    import tabarr.autochords.run as ac_run
+
+    class Recognizer(FakeRecognizer):
+        def __init__(self, weights, *, device="cpu"):
+            super().__init__()
+
+        def recognize(self, path):
+            super().recognize(path)
+            raise RuntimeError(f"could not create a primitive for {str(path)!r}")
+
+    monkeypatch.setattr(ac_run, "BTCRecognizer", Recognizer)
+    monkeypatch.setattr(
+        ac_run, "detect_beats", lambda path, checkpoint, device="cpu": (BEATS, DOWNBEATS)
+    )
+    s = with_audio(conn, tmp_path, add_song(conn, "A", "T"))
+    stats = autochords_pending(conn, with_model_files(cfg, tmp_path))
+    assert (stats.generated, stats.failed, stats.failures) == (0, 1, [])
+    assert stats.errors == [
+        "BTC fails on a test tone: RuntimeError: could not create a primitive for 'test-tone.wav'"
+    ]
+    assert kv_get(conn, failed_key(s)) is None and kv_get_json(conn, STATUS)["failed"] == []
+
+    rec = FakeRecognizer()
+    assert run(conn, cfg, rec).generated == 1 and rec.calls == [Path(s.audio_path)]
 
 
 # --- failures --------------------------------------------------------------------------------
@@ -433,18 +540,185 @@ def test_missing_beat_checkpoint_is_reported_once(conn, cfg, tmp_path):
 def test_a_file_that_will_not_decode_fails_alone(conn, cfg, tmp_path, caplog):
     bad = with_audio(conn, tmp_path, add_song(conn, "A", "Broken Download"), name="bad.wav")
     good = with_audio(conn, tmp_path, add_song(conn, "A", "Fine"), name="good.wav")
-    with caplog.at_level(logging.ERROR, logger="tabarr.autochords.run"):
+    with caplog.at_level(logging.INFO, logger="tabarr.autochords.run"):
         stats = run(conn, cfg, FakeRecognizer(fail_on=("bad.wav",)))
-    assert (stats.generated, stats.failed) == (1, 1)
-    assert len(stats.errors) == 1 and stats.errors[0].startswith("A - Broken Download: ")
-    assert "Format not recognised" in caplog.text
+    assert (stats.generated, stats.failed, stats.errors) == (1, 1, [])
+    assert failures(stats) == [("A - Broken Download", unreadable(bad.audio_path), bad.audio_path)]
+    # Named in the journal, as a warning: the purchase's problem, not tabarr's.
+    named = [r.levelname for r in caplog.records if "Format not recognised" in r.getMessage()]
+    assert named == ["WARNING"]
     song = get_song(conn, bad.id)
     assert (song.status, song.autochords_mtime, kept_files(conn, bad.id)) == ("wanted", None, [])
     assert get_song(conn, good.id).status == "found"
-    # Still pending: the next run tries again.
+
+
+@pytest.mark.parametrize("change", ["downloaded again", "converted"])
+def test_a_file_that_failed_is_tried_again_only_once_it_changes(conn, cfg, tmp_path, change):
+    bad = with_audio(conn, tmp_path, add_song(conn, "A", "Broken Download"), name="bad.wav")
+    run(conn, cfg, FakeRecognizer(fail_on=("bad.wav",)))
+
+    # The same file on the nights after: not decoded again, and still listed.
+    for _ in range(2):
+        rec = FakeRecognizer(fail_on=("bad.wav",))
+        stats = run(conn, cfg, rec)
+        assert rec.calls == []
+        assert (stats.generated, stats.skipped, stats.failed, stats.errors) == (0, 0, 1, [])
+        assert failures(stats) == [
+            ("A - Broken Download", unreadable(bad.audio_path), bad.audio_path)
+        ]
+
+    # What scan_music records when the file changes.
+    if change == "downloaded again":  # under the same name, so only its mtime changes
+        update_song(conn, bad.id, audio_mtime=get_song(conn, bad.id).audio_mtime + 60)
+    else:  # converted to another file, and the original removed
+        Path(bad.audio_path).unlink()
+        flac = make_wav(tmp_path / "music" / "bad.flac")
+        update_song(conn, bad.id, audio_path=str(flac), audio_mtime=os.stat(flac).st_mtime)
     rec = FakeRecognizer()
-    run(conn, cfg, rec)
-    assert rec.calls == [Path(bad.audio_path)]
+    stats = run(conn, cfg, rec)
+    song = get_song(conn, bad.id)
+    assert rec.calls == [Path(song.audio_path)]
+    assert (stats.generated, stats.failed, failures(stats)) == (1, 0, [])
+    assert song.status == "found" and kv_get(conn, failed_key(bad)) is None
+
+
+def test_a_replacement_that_fails_too_is_listed_with_its_own_error(conn, cfg, tmp_path):
+    bad = with_audio(conn, tmp_path, add_song(conn, "A", "Broken Download"), name="bad.wav")
+    run(conn, cfg, FakeRecognizer(fail_on=("bad.wav",)))
+    m4a = make_wav(tmp_path / "music" / "bad.m4a")
+    update_song(conn, bad.id, audio_path=str(m4a), audio_mtime=os.stat(m4a).st_mtime)
+    rec = FakeRecognizer(fail_on=("bad.m4a",))
+    stats = run(conn, cfg, rec)
+    assert rec.calls == [m4a]
+    assert failures(stats) == [("A - Broken Download", unreadable(m4a), str(m4a))]
+    rec = FakeRecognizer(fail_on=("bad.m4a",))
+    assert (run(conn, cfg, rec).failed, rec.calls) == (1, [])
+
+
+def test_each_run_records_its_outcome_for_the_to_do_page(conn, cfg, tmp_path):
+    bad = with_audio(conn, tmp_path, add_song(conn, "宋冬野", "斑马斑马"), name="斑马斑马.m4a")
+    with_audio(conn, tmp_path, add_song(conn, "A", "Fine"), name="fine.wav")
+    keep_human_sheet(conn, cfg, with_audio(conn, tmp_path, add_song(conn, "A", "Charted")))
+    add_song(conn, "A", "Not Bought")
+    night = datetime(2026, 10, 18, 4, 12, tzinfo=UTC)
+    run(conn, cfg, FakeRecognizer(fail_on=("斑马斑马.m4a",)), now=night)
+    failed = [
+        {"song": "宋冬野 - 斑马斑马", "error": unreadable(bad.audio_path), "audio": bad.audio_path}
+    ]
+    assert kv_get_json(conn, STATUS) == {
+        "at": "2026-10-18T04:12:00Z",
+        "generated": 1,
+        "skipped": 1,
+        "failed": failed,
+    }
+    # The next night: one sheet up to date, one human sheet, the same unreadable file.
+    run(conn, cfg, now=night.replace(day=19))
+    assert kv_get_json(conn, STATUS) == {
+        "at": "2026-10-19T04:12:00Z",
+        "generated": 0,
+        "skipped": 2,
+        "failed": failed,
+    }
+
+
+@pytest.mark.parametrize(
+    ("error", "listed"),
+    [
+        (
+            lambda path: RuntimeError("Could not open input\nffmpeg version 8.0\n…"),
+            "RuntimeError: Could not open input",
+        ),
+        (lambda path: EOFError(), "EOFError"),
+        (lambda path: ValueError("x" * 500), "ValueError: " + "x" * 287 + "…"),
+        # The page shows where the file is, so the message only names it (torchcodec's, in full).
+        (
+            lambda path: RuntimeError(
+                f"Failed to create AudioDecoder for {path}: SingleStreamDecoder, /build/source/src/"
+                f"torchcodec/_core/SingleStreamDecoder.cpp:41, Could not open input file: {path} "
+                "Invalid data found when processing input"
+            ),
+            (
+                "RuntimeError: Failed to create AudioDecoder for 斑马斑马.mp3: SingleStreamDecoder, "
+                "/build/source/src/torchcodec/_core/SingleStreamDecoder.cpp:41, Could not open "
+                "input file: 斑马斑马.mp3 Invalid data found when processing input"
+            ),
+        ),
+    ],
+)
+def test_the_listed_error_is_one_short_line(conn, cfg, tmp_path, error, listed):
+    class Failing(FakeRecognizer):
+        def recognize(self, path):
+            raise error(path)
+
+    folder = tmp_path / "Music" / "宋冬野" / "安和桥北"  # a long path, repeated in the message
+    with_audio(conn, folder, add_song(conn, "A", "T"), name="斑马斑马.mp3")
+    [(_, message, _)] = failures(run(conn, cfg, Failing()))
+    assert message == listed
+
+
+def test_a_failure_is_listed_only_while_the_song_still_needs_an_auto_sheet(conn, cfg, tmp_path):
+    charted = with_audio(conn, tmp_path, add_song(conn, "A", "Charted Since"), name="a.wav")
+    ignored = with_audio(conn, tmp_path, add_song(conn, "A", "Ignored Since"), name="b.wav")
+    removed = with_audio(conn, tmp_path, add_song(conn, "A", "Removed Since"), name="c.wav")
+    assert run(conn, cfg, FakeRecognizer(fail_on=("a.wav", "b.wav", "c.wav"))).failed == 3
+
+    keep_human_sheet(conn, cfg, charted)
+    update_song(conn, ignored.id, status="ignored")
+    Path(removed.audio_path).unlink()
+    update_song(conn, removed.id, audio_path=None, audio_mtime=None)  # as scan_music does
+    stats = run(conn, cfg)
+    assert (stats.skipped, stats.failed, stats.failures) == (2, 0, [])
+    assert kv_get_json(conn, STATUS)["failed"] == []
+    assert kv_get(conn, failed_key(removed)) is None  # the file is gone, and its failure with it
+
+    # Wanted again, with the same file: still not worth decoding again.
+    update_song(conn, ignored.id, status="wanted")
+    rec = FakeRecognizer()
+    stats = run(conn, cfg, rec)
+    assert rec.calls == []
+    assert failures(stats) == [
+        ("A - Ignored Since", unreadable(ignored.audio_path), ignored.audio_path)
+    ]
+
+
+def test_missing_models_blame_no_purchase(conn, cfg, tmp_path):
+    bad = with_audio(conn, tmp_path, add_song(conn, "A", "Broken Download"), name="bad.wav")
+    run(conn, cfg, FakeRecognizer(fail_on=("bad.wav",)))
+    new = with_audio(conn, tmp_path, add_song(conn, "A", "New Purchase"), name="new.wav")
+
+    broken = replace(cfg, autochords=AutochordsConfig(btc_weights=tmp_path / "nope.pt"))
+    stats = autochords_pending(conn, broken, beats_fn=FakeBeats())
+    assert (stats.generated, stats.failed) == (0, 2)
+    assert len(stats.errors) == 1 and "BTC weights not found" in stats.errors[0]
+    # The file that failed on its own stays listed; the new one only waits for the models.
+    assert failures(stats) == [("A - Broken Download", unreadable(bad.audio_path), bad.audio_path)]
+    assert [f["song"] for f in kv_get_json(conn, STATUS)["failed"]] == ["A - Broken Download"]
+    assert kv_get(conn, failed_key(new)) is None
+
+    rec = FakeRecognizer(fail_on=("bad.wav",))
+    assert run(conn, cfg, rec).generated == 1
+    assert rec.calls == [Path(new.audio_path)]
+
+
+def test_a_sheet_that_cannot_be_kept_is_not_blamed_on_the_purchase(
+    conn, cfg, tmp_path, monkeypatch
+):
+    import tabarr.autochords.run as ac_run
+
+    s = with_audio(conn, tmp_path, add_song(conn, "A", "T"))
+
+    def disk_full(*args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    with monkeypatch.context() as m:
+        m.setattr(ac_run, "keep_file", disk_full)
+        stats = run(conn, cfg)
+    assert (stats.generated, stats.failed, stats.failures) == (0, 1, [])
+    assert stats.errors == ["A - T: OSError: [Errno 28] No space left on device"]
+    assert kv_get_json(conn, STATUS)["failed"] == [] and kv_get(conn, failed_key(s)) is None
+    # With space again, the same file is tried again.
+    rec = FakeRecognizer()
+    assert run(conn, cfg, rec).generated == 1 and rec.calls == [Path(s.audio_path)]
 
 
 def test_nothing_pending_loads_no_model(conn, cfg, tmp_path):
@@ -537,21 +811,74 @@ def test_command_scans_music_then_generates(tmp_path, monkeypatch, models_import
     assert (tmp_path / "lib" / "宋冬野" / "斑马斑马" / AUTO_SHEET).is_file()
 
 
-def test_command_fails_when_a_song_failed(tmp_path, models_importable):
+def bought(tmp_path: Path):
+    """The database, with a song whose purchase was dropped into Music/ after the night's run."""
     from tabarr import db
 
     conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
     add_song(conn, "Nobody", "River Road", duration_ms=None)
     make_wav(tmp_path / "music" / "Nobody - River Road.wav", 3.0)
+    return conn
+
+
+def test_command_exits_0_when_a_purchase_cannot_be_read(tmp_path, monkeypatch, models_importable):
+    # A file that will never decode is listed on the to-do page, not an alert every night.
+    fake_default_models(monkeypatch, fail_on=("Nobody - River Road.wav",))
+    conn = bought(tmp_path)
+    config = write_config(tmp_path, **model_files(tmp_path))
+    for _ in range(2):
+        result = invoke(config)
+        assert result.exit_code == 0, result.output
+        assert "auto-chords: 0 generated, 0 skipped, 1 failed" in result.output
+        failed = kv_get_json(conn, STATUS, {}).get("failed")
+        assert [f["song"] for f in failed or []] == ["Nobody - River Road"]
+
+
+def test_command_exits_1_when_the_weights_are_missing(tmp_path, models_importable):
+    conn = bought(tmp_path)
     result = invoke(write_config(tmp_path, btc_weights=tmp_path / "missing.pt"))
     assert result.exit_code == 1, result.output
     assert "auto-chords: 0 generated, 0 skipped, 1 failed" in result.output
+    assert kv_get_json(conn, STATUS, {}).get("failed") == []  # no purchase is blamed
+
+
+def test_command_exits_1_when_the_beat_checkpoint_is_missing(
+    tmp_path, monkeypatch, models_importable
+):
+    fake_default_models(monkeypatch)
+    files = model_files(tmp_path)
+    files["beat_checkpoint"].unlink()
+    conn = bought(tmp_path)
+    result = invoke(write_config(tmp_path, **files))
+    assert result.exit_code == 1, result.output
+    assert "auto-chords: 0 generated, 0 skipped, 1 failed" in result.output
+    assert kv_get_json(conn, STATUS, {}).get("failed") == []
+
+
+def test_command_exits_1_when_the_models_fail_on_a_test_tone(
+    tmp_path, monkeypatch, models_importable
+):
+    import tabarr.autochords.run as ac_run
+
+    def broken(path, checkpoint, device="cpu"):
+        raise RuntimeError("could not create a primitive")
+
+    fake_default_models(monkeypatch)
+    monkeypatch.setattr(ac_run, "detect_beats", broken)
+    conn = bought(tmp_path)
+    result = invoke(write_config(tmp_path, **model_files(tmp_path)))
+    assert result.exit_code == 1, result.output
+    assert kv_get_json(conn, STATUS, {}).get("failed") == []
 
 
 def test_command_with_nothing_to_do(tmp_path, models_importable):
+    from tabarr import db
+
     result = invoke(write_config(tmp_path))
     assert result.exit_code == 0, result.output
     assert "auto-chords: 0 generated, 0 skipped, 0 failed" in result.output
+    status = kv_get_json(db.connect(tmp_path / "state" / "tabarr.sqlite"), STATUS, {})
+    assert (status.get("generated"), status.get("skipped"), status.get("failed")) == (0, 0, [])
 
 
 MODEL_PACKAGES = {"torch", "torchaudio", "librosa", "beat_this", "numpy", "soundfile"}
