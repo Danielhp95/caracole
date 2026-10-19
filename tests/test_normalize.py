@@ -370,13 +370,30 @@ def test_another_song_of_the_artist_never_shares_a_form(ug):
     ("斑马斑马 (Intro)", "Intro", "斑马斑马"),
     ("斑马斑马 (Live Version)", "Live Version", "斑马斑马"),
     ("斑马斑马 2", "2", "斑马斑马 2"),
-    ("斑马斑马 B", "B", "斑马斑马"),
-    ("爱 Ai", "Ai", "爱"),  # under three Latin letters
+    ("斑马斑马 B", "B", "斑马斑马"),  # a single Latin letter
     ("Кино (Live)", "Live", "Кино"),
 ])
 def test_a_generic_part_never_makes_a_match_on_its_own(ug, generic, own):
     assert not shares_a_form(ug, generic)
     assert shares_a_form(ug, own)  # the rest of the name still matches
+
+
+@pytest.mark.parametrize("ug,wanted", [
+    # An original in any script is a name at any length, as a Chinese one always was.
+    ("Ты (Ty)", "Ты"),
+    ("Σε (Se)", "Σε"),
+    ("לב (Lev)", "לב"),
+    ("حب (Hob)", "حب"),
+    ("ใจ (Jai)", "ใจ"),
+    ("Я (Ya)", "Я"),
+    ("Би-2 (Bi-2)", "Би-2"),
+    # Two Latin letters are a name too: a romanization, or a stage name.
+    ("爱 Ai", "Ai"),
+    ("IU (아이유)", "IU"),
+    ("Би-2 (Bi-2)", "Bi-2"),
+])
+def test_a_short_part_is_a_name_of_its_own(ug, wanted):
+    assert shares_a_form(ug, wanted)
 
 
 def test_two_names_with_their_own_scripts_are_no_bilingual_name():

@@ -246,9 +246,6 @@ def test_w7_8_an_unreadable_pasted_tab_page_is_not_asked_for_by_every_song_every
 # --- misses: formats of N3 the fix doesn't read --------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-9: an original part under three letters in a script with no "
-                          "romanizer (Cyrillic, Greek, Hebrew, Arabic, Thai) is dropped as generic")
 @pytest.mark.parametrize("artist,title,listed", [
     ("Звери", "Ты", "Ты (Ty)"),
     ("Αντώνης Ρέμος", "Σε", "Σε (Se)"),
@@ -316,9 +313,6 @@ def test_w7_12_a_download_named_after_ugs_artist_in_two_scripts_is_filed(conn, c
     assert [f.name for f in kept_files(conn, s.id)] == ["guitar-1.gp5"]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-13: a Latin or Cyrillic part under three letters is no form, so UG's "
-                          "'IU (아이유)' and 'Би-2 (Bi-2)' are never the song's IU and Би-2")
 @pytest.mark.parametrize("artist,ug_name", [("IU", "IU (아이유)"), ("Би-2", "Би-2 (Bi-2)")])
 def test_w7_13_a_short_artist_name_meets_ugs_name_in_two_scripts(conn, tmp_path, artist, ug_name):
     song = wanted(conn, artist, "Some Song", decision="pinned")

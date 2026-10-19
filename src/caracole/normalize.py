@@ -293,9 +293,10 @@ def name_forms(name: str) -> tuple[str, ...]:
     (``without_featuring``) gives its keys and its parts.
 
     A part that is only words such as "Live", "Acoustic" or "Remix" (``GENERIC_WORDS``),
-    numbers, single letters or fewer than three Latin letters is no form: it never makes a
-    match on its own. Nor is a name with two non-Latin parts split ("A (甲) & B (乙)", two
-    singers): its parts would be other artists' names.
+    numbers or a single Latin letter is no form: it never makes a match on its own. Two Latin
+    letters are a name ("爱 Ai", "IU (아이유)"), and an original in another script is one at any
+    length ("Ты (Ty)", "ใจ (Jai)"). Nor is a name with two non-Latin parts split ("A (甲) & B
+    (乙)", two singers): its parts would be other artists' names.
     """
     core = without_featuring(name)
     forms = _own_keys(name)
@@ -386,11 +387,12 @@ def _romanized(key: str, syllables: str) -> list[str]:
 
 
 def _generic(key: str) -> bool:
-    """Whether a key names no song or artist on its own (see ``name_forms``)."""
+    """Whether a key names no song or artist on its own (see ``name_forms``): letters of a script other
+    than Latin name one at any length ("爱", "Ты", "ใจ"), Latin ones from two letters ("Ai", "IU")."""
     words = [w for w in key.split("-") if w and w not in GENERIC_WORDS and not w.isdigit()]
-    if any(_CJK.search(w) for w in words):
+    if any(_foreign(c) for w in words for c in w):
         return False
-    return sum(len(w) for w in words) < 3
+    return sum(len(w) for w in words) < 2
 
 
 # Traditional -> Simplified, one character for one, for identity keys: each pair is a
