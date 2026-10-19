@@ -27,35 +27,42 @@ Two kinds of font come out wrong, so ``render_pdf`` refuses them up front:
 (every glyph record has an even length). A CFF-flavoured ``.otf`` works too;
 PDF::API2 embeds those whole, so the PDFs are larger.
 
-``render_all`` gives every kept sheet in the library a ChordPro file and a PDF
-beside it:
+``render_all`` gives every kept sheet in the library a ChordPro file, a PDF and
+a viewer (a phone-friendly page, see caracole/viewer) beside it:
 
 - a human sheet (``sheet.txt``, from UG or LaCuerda) is rendered from the
   ``content`` of the ``sheet.json`` next to it, with the key UG gives the
-  version (``tonality_name``) and the capo in ``meta``, to ``sheet.cho`` and
-  ``sheet.pdf``;
+  version (``tonality_name``) and the capo in ``meta``, to ``sheet.cho``,
+  ``sheet.pdf`` and ``sheet.html``;
 - an auto-chords sheet (``sheet (auto).txt``) is rendered to
-  ``sheet (auto).cho`` and ``sheet (auto).pdf``, so a human sheet never
-  collides with them. The fetch steps keep the auto sheet until a complete
-  human sheet arrives, so beside a partial human sheet it is rendered too.
-  Once they retire it, its outputs are removed as soon as the human sheet's
-  PDF is in place.
+  ``sheet (auto).cho``, ``sheet (auto).pdf`` and ``sheet (auto).html``, so a
+  human sheet never collides with them. The fetch steps keep the auto sheet
+  until a complete human sheet arrives, so beside a partial human sheet it is
+  rendered too. Once they retire it, its outputs are removed as soon as the
+  human sheet's PDF is in place.
+
+The viewer is made from the .cho, needs no font, and is written at every pass
+when it has changed (a new key in info.json, a PDF now there to link), and
+when the PDF could not be rendered too. It takes the song's musical key from
+the "key" and "key_source" of its info.json, read before the pass rewrites it
+and never through a link.
 
 A human sheet the song no longer keeps (the fetch drops one whose UG match was
-undone when nothing replaces it) takes the ``sheet.cho`` and ``sheet.pdf``
-rendered from it along, at the next pass. Only what the record below says
-caracole rendered goes: files of yours by those names stay.
+undone when nothing replaces it) takes the ``sheet.cho``, ``sheet.pdf`` and
+``sheet.html`` rendered from it along, at the next pass. Only what the record
+below says caracole rendered goes: files of yours by those names stay.
 
-The PDFs are transposed by the song's ``[transpose]`` override. kv
-``render:<song id>`` keeps what the song's PDF was made from (the SHA-256 of
-the .cho, the transposition, the font and the PDF's name) and what was
+The PDFs take caracole's look (``STYLE_FILE``, a ChordPro config) and are
+transposed by the song's ``[transpose]`` override. kv ``render:<song id>``
+keeps what the song's PDF was made from (the SHA-256 of the .cho, the
+transposition, the font, the SHA-256 of the style and the PDF's name) and what was
 written (the PDF's length and SHA-256): its human sheet's, else its auto
 sheet's. ``render:<song id>:auto`` does the same for an auto sheet's PDF
 beside a human one. A PDF is rendered again only when one of those changes,
 when it is missing or no longer what was written (cut short by a power cut,
 changed on a synced device, a link in its place), or when forced: its length
 is compared, then, when that matches, its SHA-256. A sheet whose letters the
-built-in fonts lack gets its .cho but no PDF until a usable CJK font is set:
+built-in fonts lack gets its .cho and viewer but no PDF until a usable CJK font is set:
 one font error for the pass, naming each sheet's first such letter, not a
 failure per song. A font that is set but unusable (a collection, a missing
 file) counts as none. Cyrillic and Greek letters that look like Latin ones,
@@ -65,7 +72,7 @@ the sheet keeps the built-in fonts.
 
 Others can write to the library (the Syncthing group, every synced device), so
 no sheet there is read through a symbolic link: a link or a FIFO in the place of
-``sheet.json``, ``sheet (auto).txt`` or a .cho fails that song. chordpro reads a
+``sheet.json``, ``sheet (auto).txt``, a .cho or a viewer fails that song. chordpro reads a
 copy of the .cho and writes the PDF in a private directory under the cache
 directory, and the PDF then goes into the song's folder in one rename.
 """
@@ -107,31 +114,31 @@ from caracole.overrides import Overrides
 from caracole.songs import Song, list_songs
 from caracole.ug.page import json_int
 from caracole.versions import get_version
+from caracole.viewer import build_viewer, info_key
 
 log = logging.getLogger(__name__)
 
 HUMAN_SHEET = "sheet.txt"  # rendered to the HUMAN_OUTPUTS
-HUMAN_OUTPUTS = ("sheet.cho", "sheet.pdf")
+HUMAN_OUTPUTS = ("sheet.cho", "sheet.pdf", "sheet.html")
 AUTO_SHEET = "sheet (auto).txt"  # rendered to the AUTO_OUTPUTS
-AUTO_OUTPUTS = ("sheet (auto).cho", "sheet (auto).pdf")
+AUTO_OUTPUTS = ("sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html")
 STATUS_KEY = "render:status"  # kv: the last pass, for the to-do page
 FONT_HINT = "set cjk_font or CARACOLE_CJK_FONT"
 
 TIMEOUT = 120  # seconds; a sheet renders in about one
 
 # Every other text element (subtitle, comments, chorus, footer, ...) derives its
-# font from "text". Chords and tablature keep their own fonts: chord names are
-# ASCII, and tablature needs the monospaced Courier.
+# font file from "text". Chords and tablature keep their own fonts: chord names
+# are ASCII, and tablature needs the monospaced Courier.
 FONT_ELEMENTS = ("text", "title")
 
-# ChordPro prints neither {artist} nor {capo} by default; a capo the guitarist
-# can't see means playing in the wrong key. The line under the title shows the
-# key (transposed along with the chords), the artist and the capo.
-LAYOUT = (
-    "--define=pdf.formats.title.subtitle.0=%{key|Key: %{}}",
-    "--define=pdf.formats.title.subtitle.1=%{artist}",
-    "--define=pdf.formats.title.subtitle.2=%{capo|Capo: %{}}",
-)
+# How the PDFs look (a ChordPro config): Helvetica, bold chords in caracole's rust,
+# the chord diagrams above the song, section names on a light band, and under the
+# title the artist, the key (transposed along with the chords) and the capo, which
+# ChordPro doesn't print by default: a capo the guitarist can't see means playing
+# in the wrong key. Its SHA-256 is in each PDF's record, so a new look renders
+# every PDF once more.
+STYLE_FILE = Path(__file__).with_name("chordpro-style.json")
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -217,15 +224,30 @@ def write_chordpro(
     """
     path = Path(cho_path)
     text = _as_latin(to_chordpro(markup, title=title, artist=artist, key=key, capo=capo, auto=auto))
+    _write_if_changed(path, text.encode("utf-8"))
+    return path
+
+
+def _write_if_changed(path: Path, data: bytes) -> None:
+    """Write ``data`` to ``path`` (``write_atomic``) unless the file holds it already.
+
+    The old file is read only to compare, never through a link: RenderError when
+    something other than a regular file is in its place.
+    """
     try:
-        if read_regular(path).decode("utf-8") == text:
-            return path
+        if read_regular(path) == data:
+            return
     except NotRegularFile as e:
         raise RenderError(f"cannot read {path}: {e}") from e
-    except (OSError, UnicodeDecodeError):
+    except OSError:
         pass
-    write_atomic(path, text.encode("utf-8"))
-    return path
+    write_atomic(path, data)
+
+
+@lru_cache(maxsize=1)
+def _style() -> str:
+    """The SHA-256 of the PDF style (STYLE_FILE), which each PDF's record keeps."""
+    return hashlib.sha256(STYLE_FILE.read_bytes()).hexdigest()
 
 
 def render_pdf(
@@ -242,7 +264,7 @@ def render_pdf(
     Raises RenderError when the binary is missing, exits non-zero, times out
     or writes no PDF.
     """
-    cmd = [chordpro_bin, "--nodefaultconfigs", *LAYOUT]
+    cmd = [chordpro_bin, "--nodefaultconfigs", f"--config={STYLE_FILE}"]
     if transpose:
         cmd.append(f"--transpose={transpose}")
     if font_file is not None:
@@ -413,10 +435,11 @@ def _render_song(
     human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
     folder = song_dir(cfg.library_dir, song)
     done: list[_Done] = []
+    key = _info_key(folder) if human or auto else (None, None)
 
     def render(kept: KeptFile, sheet: _Sheet, state_key: str) -> None:
         done.append(_render_sheet(conn, cfg, overrides, song, folder, kept, sheet, state_key,
-                                  cjk_font=cjk_font, runner=runner, force=force))
+                                  cjk_font=cjk_font, runner=runner, force=force, key=key))
 
     if human is not None:
         render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id))
@@ -445,8 +468,11 @@ def _render_sheet(
     cjk_font: Path | None,
     runner: Runner,
     force: bool,
+    key: tuple[str | None, str | None] = (None, None),
 ) -> _Done:
-    """Write one sheet's .cho, and render its PDF unless kv ``state_key`` says it is up to date."""
+    """Write one sheet's .cho, render its PDF unless kv ``state_key`` says it is up to date,
+    then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a sheet
+    waiting for a CJK font, still gets one. ``key`` is info.json's (``_info_key``)."""
     stem = Path(kept.name).stem
     cho = write_chordpro(
         sheet.markup,
@@ -458,16 +484,41 @@ def _render_sheet(
         auto=sheet.auto,
     )
     text = _read_text(cho)
+    pdf = folder / f"{stem}.pdf"
+    transpose = overrides.transpose.get(song.key, 0)
+    try:
+        done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, transpose,
+                                 cjk_font=cjk_font, runner=runner, force=force)
+    except RenderError:
+        _write_viewer(text, folder / f"{stem}.html", pdf, key=key, transpose=transpose)
+        raise
+    _write_viewer(text, folder / f"{stem}.html", pdf, key=key, transpose=transpose)
+    return done
+
+
+def _render_sheet_pdf(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    song: Song,
+    text: str,
+    pdf: Path,
+    state_key: str,
+    transpose: int,
+    *,
+    cjk_font: Path | None,
+    runner: Runner,
+    force: bool,
+) -> _Done:
+    """Render the ChordPro ``text`` to ``pdf`` unless kv ``state_key`` says it is up to date."""
     need = _font_need(text)
     font = cjk_font if need else None
     if need == "letters" and font is None:
         return _Done("no font", missing=_first_lost_letter(text))
-    pdf = folder / f"{stem}.pdf"
-    transpose = overrides.transpose.get(song.key, 0)
     state = {
         "source_sha": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "transpose": transpose,
         "font": str(font) if font else None,
+        "style": _style(),
         "pdf": pdf.name,
     }
     if not force and _up_to_date(pdf, kv_get_json(conn, state_key), state):
@@ -477,6 +528,29 @@ def _render_sheet(
     kv_set_json(conn, state_key, {**state, "pdf_sha256": sha, "pdf_size": size})
     write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
     return _Done("rendered")
+
+
+def _write_viewer(text: str, page: Path, pdf: Path, *, key: tuple[str | None, str | None],
+                  transpose: int) -> None:
+    """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
+    there is one. It starts in the song's ``[transpose]``, as the PDF does, and takes its key
+    from info.json when that names one. A viewer that hasn't changed isn't written again."""
+    linked = pdf.name if pdf.is_file() and not pdf.is_symlink() else None
+    html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, pdf=linked)
+    _write_if_changed(page, html.encode("utf-8"))
+
+
+def _info_key(folder: Path) -> tuple[str | None, str | None]:
+    """The musical key in the song's info.json and where it came from (``viewer.info_key``).
+
+    (None, None) when info.json is missing, unreadable, or not a regular file: like every file in
+    the library, it is never read through a link.
+    """
+    try:
+        info = json.loads(read_regular(folder / "info.json").decode("utf-8"))
+    except (OSError, ValueError):  # NotRegularFile is an OSError; ValueError: not JSON, not UTF-8
+        return None, None
+    return info_key(info)
 
 
 def _up_to_date(pdf: Path, record: Any, state: Mapping[str, Any]) -> bool:

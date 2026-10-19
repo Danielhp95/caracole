@@ -254,7 +254,7 @@ regular files and folders on every device. Whoever can write to the library
 could point a symbolic link at caracole's private files, so caracole refuses a
 link there instead of following it, and the to-do page or the journal says
 so; through an `_inbox` that is a link, nothing is filed or deleted. The
-sheets, tabs and PDFs caracole keeps are its own: one deleted, edited or
+sheets, tabs, PDFs and sheet viewers caracole keeps are its own: one deleted, edited or
 replaced on a device is written again at the next run, so keep your
 annotations in a copy under another name.
 
@@ -523,7 +523,9 @@ points `CARACOLE_CJK_FONT` at lxgw-fusionkai's `FusionKaiJ-Regular.ttf`, a Kai
 FusionKaiJ has no odd-length records and gives PDFs of a few hundred KB. To
 use another font, set `settings.cjk_font` to a single `.ttf` that passes the
 same check, or to a CFF-based `.otf` (embedded whole, so the PDFs are larger),
-or build the package with `caracole.override { cjkFont = "…"; }`.
+or build the package with `caracole.override { cjkFont = "…"; }`. The sheet
+viewers (`sheet.html`) need no font file: the phone's browser draws them with
+its own fonts, so a Chinese sheet has one even while its PDF waits for a font.
 
 ## When something is wrong
 

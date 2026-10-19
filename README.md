@@ -2,7 +2,7 @@
 
 caracole builds a folder of chord sheets for the songs you want to learn on
 guitar. You give it a list of songs. Every night it finds a chord sheet with
-the lyrics, saves the lyrics, and makes a PDF.
+the lyrics, saves the lyrics, and makes a PDF and a page for your phone.
 
     ~/Tabs/
     ├── wanted.txt              your songs, one "Artist - Title" per line
@@ -10,6 +10,8 @@ the lyrics, saves the lyrics, and makes a PDF.
     ├── index.html              browse and search everything
     └── Oasis/Wonderwall/
         ├── sheet.pdf           chords over lyrics
+        ├── sheet.html          the same on a phone: tap a chord for its shapes,
+        │                       transpose, capo, other chords and modes in the key
         ├── lyrics.txt
         └── tab.txt             a guitar tab, when there is one
 
