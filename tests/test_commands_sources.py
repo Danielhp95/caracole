@@ -244,6 +244,40 @@ def test_add_keeps_the_line_when_the_database_is_out_of_reach(tmp_path):
     assert "`tabarr sync`" in result.output  # the next sync adds it to the database
 
 
+def test_add_and_search_add_go_through_one_add_path(tmp_path, monkeypatch):
+    from tabarr.commands import sources
+
+    real = sources.add_song
+    calls = []
+
+    def add_song(cfg, artist, title, album=None, duration_ms=None, **kwargs):
+        calls.append((artist, title, album, duration_ms))
+        return real(cfg, artist, title, album, duration_ms, **kwargs)
+
+    monkeypatch.setattr(sources, "add_song", add_song)
+    added = run(
+        tmp_path, "add", "Radiohead", "Creep", "--album", "Pablo Honey", "--duration", "3:58"
+    )
+    assert added.exit_code == 0, added.output
+    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn.execute(
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (5001, 'stone-temple-pilots', 'creep', 'chords', '1', 'x', ?)",
+        ("stone-temple-pilots/creep-chords-5001",),
+    )
+    conn.close()
+    found = run(tmp_path, "search", "stone temple pilots creep", "--add", "1")
+    assert found.exit_code == 0, found.output
+    assert calls == [
+        ("Radiohead", "Creep", "Pablo Honey", 238000),
+        ("Stone Temple Pilots", "Creep", None, None),
+    ]
+    assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith(
+        "\nRadiohead - Creep | Pablo Honey | 3:58\nStone Temple Pilots - Creep\n"
+    )
+    assert {s.key for s in songs(tmp_path)} == {"radiohead/creep", "stone-temple-pilots/creep"}
+
+
 # --- tabarr sync ----------------------------------------------------------------------------
 
 TWO_SONGS_AND_A_TYPO = (

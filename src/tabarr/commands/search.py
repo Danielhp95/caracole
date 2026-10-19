@@ -2,8 +2,9 @@
 
 Nothing here touches the network: the library is the SQLite file, and the UG
 index is the table ``tabarr index build`` filled from UG's sitemaps. Each UG
-hit comes with the ``tabarr add`` line to paste, and ``--add N`` appends hit N
-to wanted.txt and syncs it, as ``tabarr add`` does.
+hit comes with the ``tabarr add`` line to paste, and ``--add N`` adds hit N
+through ``tabarr add``'s own path (``sources.add_song``): appended to
+wanted.txt, which is then synced.
 """
 
 from __future__ import annotations
@@ -16,7 +17,8 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from tabarr.commands._common import fail, load_cfg, open_db, utcnow
+from tabarr.commands import sources
+from tabarr.commands._common import fail, load_cfg, open_db
 
 if TYPE_CHECKING:
     from tabarr.config import Config
@@ -150,10 +152,9 @@ def _index_built(conn: sqlite3.Connection) -> bool:
 
 
 def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -> None:
-    """Append UG hit ``n`` of the search to wanted.txt, then sync wanted.txt into the library."""
+    """Add UG hit ``n`` of the search the way ``tabarr add`` adds a song, and say what happened."""
     from tabarr.search import search_index
-    from tabarr.songs import find_song
-    from tabarr.wanted import append_wanted, find_wanted, format_line, sync_wanted
+    from tabarr.wanted import format_line
 
     if not _index_built(conn):
         fail(f"--add {n}: {_EMPTY_INDEX}", 2)
@@ -166,31 +167,23 @@ def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -
     if other is not None:  # adding it would make a second record of the same song
         typer.echo(f"Already in your library as {other.display} ({_status(other)}); wanted.txt is unchanged.")
         return
-    path = cfg.wanted_file
-    try:
-        listed = find_wanted(path, hit.artist, hit.title)
-        line = append_wanted(path, hit.artist, hit.title)
-    except ValueError as e:  # a name wanted.txt can't hold
-        fail(f"can't add this song: {e}", 2)
-    except OSError as e:
-        fail(f"can't update {path}: {e.strerror or e}")
+    added = sources.add_song(cfg, hit.artist, hit.title, conn=conn)
+    line, path = added.line, cfg.wanted_file
     written = format_line(line.artist, line.title, line.album, line.duration_ms)
-    if listed:
+    if added.listed:
         typer.echo(f"{written} is already in {path}, line {line.line_no}.")
     else:
         typer.echo(f"Added to {path}, line {line.line_no}:\n  {written}")
-    try:
-        known = find_song(conn, line.identity)
-        stats = sync_wanted(conn, path, utcnow())
-    except sqlite3.Error as e:  # the line is in the file, which is the source of truth
+    if added.db_error is not None:  # the line is in the file, which is the source of truth
         typer.secho(
-            f"The database couldn't be updated ({e}); the next `tabarr sync` or `tabarr run` adds it.",
+            f"The database couldn't be updated ({added.db_error}); "
+            "the next `tabarr sync` or `tabarr run` adds it.",
             err=True, fg=typer.colors.YELLOW,
         )
         return
-    if known is None:
+    if added.known is None:
         typer.echo(f"Song {line.identity}: new; the next `tabarr run` looks for it.")
     else:
-        typer.echo(f"Song {line.identity}: already in your library ({_status(known)}).")
-    for problem in stats.errors:
+        typer.echo(f"Song {line.identity}: already in your library ({_status(added.known)}).")
+    for problem in added.problems:
         typer.secho(problem, err=True, fg=typer.colors.YELLOW)

@@ -1,14 +1,17 @@
 """Source commands: ``tabarr add``, ``tabarr sync`` and ``tabarr auth spotify``.
 
 wanted.txt is the source that always works. Spotify is optional, and no Spotify
-failure makes ``tabarr sync`` fail. Every command module is imported on every
-start, so spotipy and the source modules are imported inside the commands.
+failure makes ``tabarr sync`` fail. ``add_song`` is the one way a command adds
+a song: ``tabarr add`` and ``tabarr search --add`` both call it, and each says
+in its own words what it did. Every command module is imported on every start,
+so spotipy and the source modules are imported inside the commands.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from contextlib import closing
+from contextlib import closing, nullcontext
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import typer
@@ -19,6 +22,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from tabarr.config import Config
+    from tabarr.songs import Song
     from tabarr.spotify import SpotifyAPI
     from tabarr.wanted import WantedLine
 
@@ -159,23 +163,88 @@ def _duration_ms(text: str | None) -> int | None:
     return ms
 
 
-def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None) -> None:
-    """Append the song to wanted.txt unless it's listed, print its line, and sync the file."""
-    from tabarr.wanted import append_wanted, find_wanted, format_line
+@dataclass(frozen=True)
+class AddedSong:
+    """What ``add_song`` did, for the command to put in its own words.
+
+    ``line`` is the song's line as wanted.txt now holds it, and ``listed`` says
+    the file had it already and was left as it was. ``known`` is the library's
+    record of the song before the sync (None for a song new to the library) and
+    ``song`` the record after it. ``problems`` are the lines of wanted.txt the
+    sync couldn't read. ``db_error`` says why the database couldn't be updated;
+    the line is in the file all the same, and the next sync adds the song.
+    """
+
+    line: WantedLine
+    listed: bool
+    known: Song | None = None
+    song: Song | None = None
+    problems: tuple[str, ...] = ()
+    db_error: Exception | None = None
+
+
+def add_song(
+    cfg: Config,
+    artist: str,
+    title: str,
+    album: str | None = None,
+    duration_ms: int | None = None,
+    *,
+    conn: sqlite3.Connection | None = None,
+) -> AddedSong:
+    """Append a song to wanted.txt unless it's listed, then sync wanted.txt into the library.
+
+    A song the file can't hold exits with status 2, and a file that can't be
+    written with status 1. The file is the source of truth, so a database that
+    can't be opened or updated is no failure: it's reported in ``db_error``.
+    ``conn`` is the caller's open database; without one, it's opened here.
+    """
+    from tabarr.songs import find_song
+    from tabarr.wanted import append_wanted, find_wanted, sync_wanted
 
     path = cfg.wanted_file
     try:
-        listed = find_wanted(path, artist, title)
+        listed = find_wanted(path, artist, title) is not None
         line = append_wanted(path, artist, title, album, duration_ms)
     except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
         fail(f"can't add this song: {e}", 2)
     except OSError as e:
         fail(f"can't update {path}: {e.strerror or e}")
-    typer.echo(f"{'Already in' if listed else 'Added to'} {path}, line {line.line_no}:")
+    try:
+        with (nullcontext(conn) if conn is not None else closing(open_db(cfg))) as conn:
+            known = find_song(conn, line.identity)
+            stats = sync_wanted(conn, path, utcnow())
+            song = find_song(conn, line.identity)
+    except (sqlite3.Error, OSError) as e:
+        return AddedSong(line, listed, db_error=e)
+    return AddedSong(line, listed, known, song, tuple(stats.errors))
+
+
+def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None) -> None:
+    """Add the song with ``add_song``, then print its line and what the library knows of it."""
+    from tabarr.wanted import format_line
+
+    added = add_song(cfg, artist, title, album, duration_ms)
+    line, path = added.line, cfg.wanted_file
+    typer.echo(f"{'Already in' if added.listed else 'Added to'} {path}, line {line.line_no}:")
     typer.echo(f"  {format_line(line.artist, line.title, line.album, line.duration_ms)}")
-    if listed and _would_change(line, album, duration_ms):
+    if added.listed and _would_change(line, album, duration_ms):
         typer.echo("That line stays as it is: edit it to change the album or the duration.")
-    _sync_wanted_song(cfg, line)
+    if added.db_error is not None:
+        typer.echo(f"Song {line.identity}")
+        _warn(
+            f"The song is in wanted.txt, but the database couldn't be updated ({added.db_error}); "
+            "the next `tabarr sync` or `tabarr run` adds it."
+        )
+        return
+    if added.known is None:
+        state = "new; the next `tabarr run` looks for it"
+    else:
+        status = (added.song or added.known).status
+        state = f"already known, {_KNOWN.get(status, status)}"
+    typer.echo(f"Song {line.identity}: {state}")
+    for problem in added.problems:
+        _warn(problem)
 
 
 def _would_change(line: WantedLine, album: str | None, duration_ms: int | None) -> bool:
@@ -189,37 +258,6 @@ def _would_change(line: WantedLine, album: str | None, duration_ms: int | None) 
         line.duration_ms if duration_ms is None else duration_ms,
     )
     return asked != format_line(line.artist, line.title, line.album, line.duration_ms)
-
-
-def _sync_wanted_song(cfg: Config, line: WantedLine) -> None:
-    """Sync wanted.txt into the database, then say what the library knows of the line's song.
-
-    The line is already in the file, which is the source of truth, so a database
-    that can't be opened is a warning: the next sync adds the song.
-    """
-    from tabarr.songs import find_song
-    from tabarr.wanted import sync_wanted
-
-    try:
-        with closing(open_db(cfg)) as conn:
-            known = find_song(conn, line.identity)
-            stats = sync_wanted(conn, cfg.wanted_file, utcnow())
-            song = find_song(conn, line.identity)
-    except (sqlite3.Error, OSError) as e:
-        typer.echo(f"Song {line.identity}")
-        _warn(
-            f"The song is in wanted.txt, but the database couldn't be updated ({e}); "
-            "the next `tabarr sync` or `tabarr run` adds it."
-        )
-        return
-    if known is None:
-        state = "new; the next `tabarr run` looks for it"
-    else:
-        status = (song or known).status
-        state = f"already known, {_KNOWN.get(status, status)}"
-    typer.echo(f"Song {line.identity}: {state}")
-    for problem in stats.errors:
-        _warn(problem)
 
 
 def _warn(message: str) -> None:
