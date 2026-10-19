@@ -4,6 +4,9 @@ A version belongs to a slot ("sheet" or "guitar") and has a kind (chords,
 acordes, auto; tabs, guitar-pro, power). ``pick_rank`` marks the versions
 currently chosen for a slot: 1 is the best. In assisted mode a Guitar Pro pick
 has no file until you download it into the inbox.
+
+The sheet slot keeps one sheet, whichever site it comes from, so the rule for
+replacing a kept sheet lives here too (``replaces_sheet``).
 """
 
 from __future__ import annotations
@@ -12,6 +15,10 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
+
+# Every kind the sheet slot holds: UG chords, LaCuerda acordes, auto-chords. A kept
+# sheet becomes the slot's only pick, so picks are cleared across all of them.
+SHEET_KINDS = ("chords", "acordes", "auto")
 
 
 @dataclass
@@ -127,3 +134,27 @@ def picks(conn: sqlite3.Connection, song_id: int, kinds: Sequence[str]) -> list[
         (song_id, *kinds),
     )
     return [_row(r) for r in rows]
+
+
+def _complete(coverage: float | None, threshold: float) -> bool:
+    return coverage is not None and coverage >= threshold
+
+
+def replaces_sheet(new: float | None, kept: float | None, threshold: float) -> bool:
+    """Whether a sheet covering ``new`` of the lyrics replaces a kept sheet covering ``kept``.
+
+    Ratings can't be compared across sites, so a sheet from one site meets a
+    sheet from another on lyric coverage alone (None: unknown, the song had no
+    lyrics to compare with):
+
+    - a complete sheet (coverage at or above ``threshold``) beats an incomplete one;
+    - of two incomplete sheets, the one that covers more wins;
+    - unknown coverage never displaces a known partial or complete sheet, and a
+      partial sheet never displaces one of unknown coverage, which may be complete;
+    - a tie keeps the kept sheet.
+    """
+    if _complete(kept, threshold):
+        return False
+    if _complete(new, threshold):
+        return True
+    return new is not None and kept is not None and new > kept

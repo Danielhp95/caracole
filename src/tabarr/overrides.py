@@ -8,7 +8,9 @@ Tables:
   correction that still picks up new tabs.
 - ``[artist_url]``: artist → UG artist page, for artists UG's sitemaps list
   only by bare ids (accented names, Chinese names).
-- ``[pin]``: "Artist - Title" → tab page URLs to always use.
+- ``[pin]``: "Artist - Title" → tab page URLs to always use. Each pin keeps its
+  tab id (``pin``) and the address you pasted (``pin_urls``): UG serves a
+  slugged tab only at its slugged URL.
 - ``[transpose]``: "Artist - Title" → semitones, applied when sheets are rendered.
 - ``[ignore] songs``: songs to skip.
 - ``[block] tab_ids``: tabs never to use.
@@ -25,12 +27,14 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+from urllib.parse import urlsplit
 
 import tomlkit
 
 from tabarr.normalize import identity_key, slug_key, ug_slug_key
 
 _TAB_URL = re.compile(r"^https?://tabs\.ultimate-guitar\.com/tab/(?:[^/?#]+/)?(?:[^/?#]*-)?(\d+)/?$")
+_TAB_HOST = "https://tabs.ultimate-guitar.com"
 _ARTIST_URL = re.compile(r"^https://www\.ultimate-guitar\.com/artist/[^/?#]+_\d+/?$")
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block"}
 
@@ -41,6 +45,8 @@ class OverridesError(Exception):
 
 @dataclass(frozen=True)
 class Overrides:
+    """overrides.toml, canonicalized. ``pin_urls`` holds each pin's address, in ``pin``'s order."""
+
     alias: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     match: Mapping[str, tuple[str, str]] = field(default_factory=dict)
     artist_url: Mapping[str, str] = field(default_factory=dict)
@@ -48,6 +54,7 @@ class Overrides:
     transpose: Mapping[str, int] = field(default_factory=dict)
     ignore: frozenset[str] = frozenset()
     block: frozenset[int] = frozenset()
+    pin_urls: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def override_key(display: str) -> str:
@@ -66,6 +73,15 @@ def tab_id_from_url(url: str | int) -> int:
     if not m:
         raise OverridesError(f"not an Ultimate Guitar tab URL: {url!r}")
     return int(m.group(1))
+
+
+def _pin_url(value: str) -> str:
+    """A pinned page's address: the URL as pasted, over https and without a trailing slash;
+    for a bare tab id, the bare ``/tab/{id}`` page. ``value`` passed ``tab_id_from_url``."""
+    text = value.strip()
+    if text.isdigit():
+        return f"{_TAB_HOST}/tab/{int(text)}"
+    return _TAB_HOST + urlsplit(text).path.rstrip("/")
 
 
 def _ug_ref(value: Any, where: str) -> tuple[str, str]:
@@ -119,9 +135,13 @@ def load_overrides(path: Path) -> Overrides:
         artist_url[slug_key(artist)] = url.strip().rstrip("/")
 
     pin: dict[str, tuple[int, ...]] = {}
+    pin_urls: dict[str, tuple[str, ...]] = {}
     for k, v in table("pin").items():
         try:
-            pin[override_key(k)] = tuple(tab_id_from_url(u) for u in _strings(v, f"[pin] {k!r}"))
+            pasted = _strings(v, f"[pin] {k!r}")
+            ident = override_key(k)
+            pin[ident] = tuple(tab_id_from_url(u) for u in pasted)
+            pin_urls[ident] = tuple(_pin_url(u) for u in pasted)
         except OverridesError as e:
             raise OverridesError(f"[pin] {k!r}: {e}") from e
 
@@ -141,7 +161,7 @@ def load_overrides(path: Path) -> Overrides:
 
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
-        ignore=ignore, block=frozenset(tab_ids),
+        ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls,
     )
 
 
