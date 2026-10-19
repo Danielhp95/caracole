@@ -1,6 +1,6 @@
 import pytest
 
-from caracole.inbox import GP_EXTENSIONS, file_inbox, parse_download_name
+from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS, file_inbox, parse_download_name
 from caracole.library import keep_file, kept_files, song_dir
 from caracole.versions import set_picks, upsert_version
 
@@ -291,3 +291,113 @@ def test_an_inbox_that_is_a_file_is_no_inbox(conn, cfg):
 
 def test_extensions():
     assert {".gp3", ".gp4", ".gp5", ".gpx", ".gp", ".ptb"} == set(GP_EXTENSIONS)
+
+
+# --- scores: MuseScore downloads --------------------------------------------------------------
+
+
+def score_kept(conn, song):
+    from caracole.versions import get_version
+
+    return [(f.name, get_version(conn, f.version_id).provider, get_version(conn, f.version_id).kind)
+            for f in kept_files(conn, song.id)]
+
+
+def test_a_score_named_as_the_song_is_filed_as_its_score(conn, cfg):
+    # Any song, with or without picks: MuseScore's pages are listed for every song.
+    s = add_song(conn, "Oasis", "Wonderwall")
+    src = drop(cfg, "Oasis - Wonderwall.mscz", b"PK-MSCZ")
+    stats = file_inbox(conn, cfg.library_dir)
+    dest = song_dir(cfg.library_dir, s) / "score-1.mscz"
+    assert stats.filed == [dest] and not src.exists() and dest.read_bytes() == b"PK-MSCZ"
+    assert score_kept(conn, s) == [("score-1.mscz", "inbox", "score")]
+
+
+def test_every_format_musescore_downloads_is_a_score(conn, cfg):
+    s = add_song(conn, "Oasis", "Wonderwall")
+    for ext in SCORE_EXTENSIONS:
+        drop(cfg, f"Oasis - Wonderwall{ext}", f"data{ext}".encode())
+    file_inbox(conn, cfg.library_dir)
+    assert sorted(name for name, _, _ in score_kept(conn, s)) == sorted(f"score-1{ext}" for ext in SCORE_EXTENSIONS)
+
+
+def test_a_score_pdf_never_takes_the_place_of_the_sheet_pdf(conn, cfg):
+    # caracole renders sheet.pdf itself: a PDF from MuseScore is a score beside it.
+    s = add_song(conn, "Oasis", "Wonderwall")
+    folder = song_dir(cfg.library_dir, s)
+    folder.mkdir(parents=True)
+    (folder / "sheet.pdf").write_bytes(b"rendered")
+    drop(cfg, "Oasis - Wonderwall.pdf", b"%PDF-score")
+    file_inbox(conn, cfg.library_dir)
+    assert (folder / "sheet.pdf").read_bytes() == b"rendered"
+    assert (folder / "score-1.pdf").read_bytes() == b"%PDF-score"
+
+
+def test_another_score_of_a_format_takes_the_next_free_number(conn, cfg):
+    s = add_song(conn, "Oasis", "Wonderwall")
+    drop(cfg, "Oasis - Wonderwall.pdf", b"%PDF-one")
+    file_inbox(conn, cfg.library_dir)
+    (song_dir(cfg.library_dir, s) / "score-2.pdf").write_bytes(b"yours")
+    drop(cfg, "Oasis - Wonderwall.pdf", b"%PDF-two")
+    file_inbox(conn, cfg.library_dir)
+    assert (song_dir(cfg.library_dir, s) / "score-2.pdf").read_bytes() == b"yours"
+    assert [name for name, _, _ in score_kept(conn, s)] == ["score-1.pdf", "score-3.pdf"]
+
+
+def test_a_score_kept_already_is_a_duplicate(conn, cfg):
+    add_song(conn, "Oasis", "Wonderwall")
+    drop(cfg, "Oasis - Wonderwall.mid", b"MThd-same")
+    file_inbox(conn, cfg.library_dir)
+    again = drop(cfg, "Oasis - Wonderwall (1).mid", b"MThd-same")
+    stats = file_inbox(conn, cfg.library_dir)
+    assert stats.duplicates == [again] and not again.exists()
+
+
+def test_a_score_named_by_its_title_alone_needs_the_only_song_of_that_title(conn, cfg):
+    oasis = add_song(conn, "Oasis", "Wonderwall")
+    drop(cfg, "Wonderwall.pdf", b"%PDF-one")
+    file_inbox(conn, cfg.library_dir)
+    assert [name for name, _, _ in score_kept(conn, oasis)] == ["score-1.pdf"]
+    add_song(conn, "Ryan Adams", "Wonderwall")
+    left = drop(cfg, "Wonderwall.mid", b"MThd")
+    assert file_inbox(conn, cfg.library_dir).unmatched == [left]
+
+
+def test_a_musicxml_file_is_filed_by_the_title_and_creator_inside(conn, cfg):
+    from helpers.scores import musicxml, mxl
+
+    oasis = add_song(conn, "Oasis", "Wonderwall")
+    ryan = add_song(conn, "Ryan Adams", "Wonderwall")
+    drop(cfg, "score.musicxml", musicxml("Wonderwall", "Oasis"))
+    drop(cfg, "export.mxl", mxl(musicxml("Wonderwall (Live)", "Ryan Adams")))
+    stats = file_inbox(conn, cfg.library_dir)
+    assert len(stats.filed) == 2 and stats.unmatched == []
+    assert score_kept(conn, oasis) == [("score-1.musicxml", "inbox", "score")]
+    assert score_kept(conn, ryan) == [("score-1.mxl", "inbox", "score")]
+
+
+def test_a_musicxml_file_whose_creator_is_no_artist_of_the_song_stays(conn, cfg):
+    from helpers.scores import musicxml
+
+    add_song(conn, "Oasis", "Wonderwall")
+    left = drop(cfg, "score.musicxml", musicxml("Wonderwall", "Noel Gallagher"))
+    assert file_inbox(conn, cfg.library_dir).unmatched == [left] and left.exists()
+
+
+def test_a_musicxml_file_that_wont_read_stays(conn, cfg):
+    add_song(conn, "Oasis", "Wonderwall")
+    left = drop(cfg, "export.mxl", b"not a zip")
+    assert file_inbox(conn, cfg.library_dir).unmatched == [left] and left.exists()
+
+
+def test_an_ignored_song_gets_no_score(conn, cfg):
+    from caracole.songs import update_song
+
+    s = add_song(conn, "Oasis", "Wonderwall")
+    update_song(conn, s.id, status="ignored")
+    left = drop(cfg, "Oasis - Wonderwall.pdf", b"%PDF")
+    assert file_inbox(conn, cfg.library_dir).unmatched == [left]
+
+
+def test_score_extensions():
+    assert set(SCORE_EXTENSIONS) == {".mscz", ".mxl", ".musicxml", ".pdf", ".mid", ".midi"}

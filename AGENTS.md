@@ -33,7 +33,7 @@ an earlier one failed:
 | lyrics | lyrics.py |
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), rank.py, coverage.py, versions.py |
 | lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the step) |
-| scan | music.py (Music/), inbox.py (Guitar Pro files in `_inbox/`) |
+| scan | music.py (Music/), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs) |
@@ -193,6 +193,13 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `gtptabs`). It never replaces or deletes a file
   (`test_gtptabs_fetch.py::test_a_song_with_a_guitar_pro_file_gets_no_other`,
   `::test_a_number_a_file_in_the_folder_holds_is_never_reused`).
+- **MuseScore is links and the inbox.** musescore_fetch.py asks MuseScore for its song
+  sitemaps alone: never a song page, a score, a download or `/api/jmuse`, and never logged
+  in (`test_musescore_fetch.py::test_caracole_asks_for_the_sitemaps_alone`). Its Cloudflare
+  challenge is a block like a 403. Every match is on the title alone, a possible match
+  (`musescore.song_pages`). inbox.py files what the user downloads (`SCORE_EXTENSIONS`) as
+  `score-N.<ext>`, never as `sheet.pdf`, under the song's one `inbox` version of kind
+  `score`; a MusicXML header is read with `musicxml.header`, up to the part list only.
 - **Chinese is compared as pinyin** (`normalize.romanize`, with pypinyin) in match.py,
   coverage.py, music.py, search.py, library_page.py and ug/fetch.py; identity keys also fold
   Traditional characters to Simplified. A change to `clean_title`, `slug_key` or

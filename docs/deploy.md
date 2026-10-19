@@ -193,8 +193,9 @@ music, while the state and the cache, mode 0700, stay caracole's. The setgid bit
 keeps everything created in the library in group `caracole`, and caracole writes
 with umask 0007, so its files are group-writable. Syncthing joins that group
 and writes the same way.
-Both directions then work: you drop Guitar Pro files into `_inbox/` on the
-laptop and caracole files them, and you edit `wanted.txt` on the phone.
+Both directions then work: you drop Guitar Pro files and MuseScore scores into
+`_inbox/` on the laptop and caracole files them, and you edit `wanted.txt` on
+the phone.
 
 ```nix
   services.syncthing = {

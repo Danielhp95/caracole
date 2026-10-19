@@ -527,7 +527,14 @@ and cache.
   Guitar Pro and Power Tab files you dropped into `_inbox/`, by their names: a
   file named `Soda Stereo - De Musica Ligera (ver 2).gp5` becomes that song's
   `guitar-N.gp5`, where N is the rank caracole gave version 2, or the lowest
-  free number when another file already holds guitar-N. A file the library
+  free number when another file already holds guitar-N. It files scores too,
+  such as MuseScore's downloads (`.mscz`, `.mxl`, `.musicxml`, `.pdf`, `.mid`,
+  `.midi`): one named `Oasis - Wonderwall.mscz`, or `Wonderwall.mscz` when only
+  one song has that title, becomes that song's `score-N.mscz`, N the lowest
+  number no score of that format holds, so the formats of one score share it.
+  A MusicXML file is also placed by the title and composer its header gives,
+  when exactly one song has both. A score is never `sheet.pdf`, which caracole
+  renders itself. A file the library
   already has is removed from the inbox; a file it can't place stays there,
   and so does a symbolic link, which is never read:
   `Inbox: 0 filed, 0 duplicates, 0 left, 1 symbolic link refused`. If
@@ -928,7 +935,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   index.html                browse and search the library
   wanted.txt                your songs
   overrides.toml            your decisions
-  _inbox/                   Guitar Pro downloads waiting to be filed
+  _inbox/                   Guitar Pro and MuseScore downloads waiting to be filed
   宋冬野/
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
@@ -937,6 +944,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       lyrics.txt            the lyrics, from LRCLIB
       lyrics.lrc            the timed lyrics, when LRCLIB has them
       guitar-1.gp5          Guitar Pro or Power Tab files: filed by rank, or from gtptabs.com
+      score-1.mscz          scores you downloaded (MuseScore, MusicXML, PDF, MIDI), filed
       tab.txt  tab.json     the best text tab
       sheet (auto).txt      made from audio you bought, when no human sheet exists;
       sheet (auto).cho      it stays, with its ChordPro and PDF, beside a partial
@@ -971,7 +979,8 @@ name: caracole leaves alone the files it doesn't track. A lost
 `sheet (auto).txt`, `lyrics.txt` or `lyrics.lrc` isn't written again, nor is
 a Guitar Pro file: a song that has had one, filed from `_inbox/` or
 downloaded from gtptabs.com, gets no other from gtptabs.com, even after you
-delete it. Put one you lost back in the song's folder under its name.
+delete it. Nor is a score, which caracole never downloads. Put one you lost
+back in the song's folder under its name.
 
 Keep the library private. The sheets and lyrics are other people's work, and
 a personal offline copy is the closest thing to the sites' personal-use terms.
