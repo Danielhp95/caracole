@@ -20,12 +20,12 @@ from tabarr.health import get_state
 from tabarr.lacuerda import artist_slug_candidates, looks_spanish
 from tabarr.library import write_atomic
 from tabarr.lyrics import song_lyrics
-from tabarr.normalize import clean_title, display_key, has_han, identity_key, romanize, slug_key
+from tabarr.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from tabarr.overrides import Overrides
 from tabarr.songs import Song, list_songs
-from tabarr.ug.fetch import songs_to_fetch
+from tabarr.ug.fetch import artist_is_known, needs_artist_page, songs_to_fetch
 from tabarr.ug.index import index_state
-from tabarr.ug.lookup import artist_known, learned_artist_url, song_tabs
+from tabarr.ug.lookup import song_tabs
 
 PROVIDERS = ("ug", "lrclib", "lacuerda")
 GUITAR_KINDS = ("guitar-pro", "power", "tabs")
@@ -77,12 +77,32 @@ def _section(title: str, items: list[str], intro: str | None = None, count: int 
     return out + items + [""]
 
 
-def _review(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:
+def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due: set[int]) -> str | None:
+    """What to do when no candidate is right, for a review whose candidates are all other artists'
+    songs of the title: the index has nothing of the song's own artist, and its UG page may (A6)."""
+    if song.match_decision != "review" or not needs_artist_page(song):
+        return None
+    head, artist = "Only other artists' songs with this title (probably covers)", md(song.artist)
+    if not artist_is_known(conn, song, overrides):
+        return (f"{head}. If none is the song you want, UG probably lists {artist} only by bare ids: find the "
+                "artist page (see Artists to find below) and paste it under `[artist_url]`, and tabarr looks "
+                "for the song there.")
+    if song.id in due:
+        return (f"{head}. tabarr looks for it on {artist}'s UG page in the next run: wait for that before "
+                "you pick one.")
+    return (f"{head}, and tabarr didn't find it on {artist}'s UG page either. Pick one only if it is the "
+            "version you want; if none is, leave it: tabarr looks at the artist page again after 30 days.")
+
+
+def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, due: set[int]) -> list[str]:
     items: list[str] = []
     for s in songs:
         if not s.review or s.status == "ignored":
             continue
         items.append(f"### {md(s.display)}")
+        note = _covers_note(conn, s, overrides, due)
+        if note:
+            items += ["", note, ""]
         for cand in (s.match_candidates or [])[:5]:
             akey, skey = cand.get("artist_key"), cand.get("song_key")
             if not akey or not skey:
@@ -120,20 +140,12 @@ def _partial_sheets(conn: sqlite3.Connection, cfg: Config, songs_by_id: dict[int
     return items
 
 
-def _artist_candidates(artist: str) -> set[str]:
-    keys = {slug_key(artist)}
-    if has_han(artist):
-        keys.add(slug_key(romanize(artist)))
-    return keys
-
-
 def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides) -> tuple[list[str], int]:
     wanted: dict[str, list[Song]] = {}
     for s in songs:
-        if s.status == "ignored" or s.match_decision != "not_found":
-            continue
-        keys = _artist_candidates(s.artist)
-        if any(artist_known(conn, k) or k in overrides.artist_url or learned_artist_url(conn, k) for k in keys):
+        # Not found, or reviewed on its title alone (only covers), by an artist whose UG page the
+        # fetch can't find: the index has no slugged tab of theirs, and no address was pasted or learned.
+        if s.status == "ignored" or not needs_artist_page(s) or artist_is_known(conn, s, overrides):
             continue
         wanted.setdefault(s.artist, []).append(s)
     items = []
@@ -390,7 +402,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     if setup:
         out += _section("Setup problems", setup)
 
-    review = _review(conn, songs)
+    review = _review(conn, songs, overrides, {s.id for s in songs_to_fetch(conn, overrides, now)})
     if review:
         # The count is of songs, not lines, so the header is built here rather than by _section.
         out += [f"## Review ({sum(1 for s in songs if s.review and s.status != 'ignored')})", "",

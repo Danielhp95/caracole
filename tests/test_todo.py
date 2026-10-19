@@ -4,6 +4,7 @@ from urllib.parse import quote
 from tabarr.db import kv_set, kv_set_json
 from tabarr.health import record_block
 from tabarr.library import keep_file
+from tabarr.normalize import slug_key
 from tabarr.overrides import Overrides
 from tabarr.songs import update_song
 from tabarr.todo import build_todo, search_links, write_todo
@@ -82,6 +83,64 @@ def test_title_only_candidate_gets_no_alias_line(conn, cfg):
     text = todo(conn, cfg)
     assert '"Someone - Hallelujah" = "jeff-buckley/hallelujah"' in text
     assert "[alias]" not in text
+
+
+def covers_only(conn, artist, title, *covers):
+    """A song reviewed on its title alone: its only candidates are other artists' songs (covers)."""
+    s = add_song(conn, artist, title)
+    song_key = slug_key(title)
+    index(conn, [(500 + i, a, song_key, "chords") for i, a in enumerate(covers)])
+    update_song(conn, s.id, review=True, match_decision="review", match_step="title_only", match_score=100.0,
+                match_artist_key=covers[0], match_song_key=song_key, match_candidates=[
+                    {"artist_key": a, "song_key": song_key, "score": 100.0, "step": "title_only"} for a in covers])
+    return s
+
+
+def review_item(text, display):
+    return text.split(f"### {display}\n", 1)[1].split("\n### ", 1)[0].split("\n## ", 1)[0]
+
+
+def test_title_only_review_of_an_artist_ug_lists_by_bare_ids_asks_for_its_artist_page(conn, cfg):
+    # UG lists Maná only by bare ids: the index has covers of the title, and nothing of Maná's.
+    from tabarr.ug.fetch import songs_to_fetch
+
+    s = covers_only(conn, "Maná", "Rayando el Sol", "ana-gabriel", "pablo-alboran")
+    text = todo(conn, cfg)
+    assert "## Artists to find on Ultimate Guitar (1)" in text
+    assert "**Maná** (1 song)" in text
+    item = review_item(text, "Maná - Rayando el Sol")
+    assert "other artists' songs with this title (probably covers)" in item
+    assert "[artist_url]" in item and "Artists to find" in item
+    # Once the page is pasted, the next fetch looks for the song there.
+    o = Overrides(artist_url={"mana": "https://www.ultimate-guitar.com/artist/mana_1234"})
+    assert [x.id for x in songs_to_fetch(conn, o, NOW)] == [s.id]
+    text = todo(conn, cfg, o)
+    assert "## Artists to find" not in text
+    assert "tabarr looks for it on Maná's UG page in the next run" in review_item(text, "Maná - Rayando el Sol")
+
+
+def test_title_only_review_of_an_indexed_artist_says_its_page_is_checked_first(conn, cfg):
+    index(conn, [(1, "soda-stereo", "persiana-americana", "chords")])
+    s = covers_only(conn, "Soda Stereo", "De Música Ligera", "os-paralamas-do-sucesso", "ana-mena", "pereza")
+    text = todo(conn, cfg)
+    assert "## Artists to find" not in text
+    item = review_item(text, "Soda Stereo - De Música Ligera")
+    assert "other artists' songs with this title (probably covers)" in item
+    assert "tabarr looks for it on Soda Stereo's UG page in the next run" in item
+    # The page was read and doesn't list it: say so, and that it is read again.
+    kv_set(conn, f"ug:artist_page_checked:{s.id}", "2026-10-18T03:35:00Z")
+    item = review_item(todo(conn, cfg), "Soda Stereo - De Música Ligera")
+    assert "tabarr didn't find it on Soda Stereo's UG page either" in item and "after 30 days" in item
+
+
+def test_a_review_with_a_candidate_by_the_songs_own_artist_gets_no_covers_note(conn, cfg):
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    s = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"},
+        {"artist_key": "stone-temple-pilots", "song_key": "creep", "score": 80.0, "step": "title_only"},
+    ])
+    assert "probably covers" not in todo(conn, cfg)
 
 
 def test_partial_sheet_listed_with_percent(conn, cfg):
