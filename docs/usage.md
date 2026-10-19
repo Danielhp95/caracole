@@ -934,43 +934,6 @@ Music/                      music_dir: the tracks you bought (caracole only read
 Folder names keep their accents and scripts, but never contain a path
 separator or a character file systems reserve: `AC/DC` becomes `AC-DC`.
 
-### The song's key
-
-caracole gives each song with a sheet a musical key, and says where it came
-from. It takes the first of these that gives one:
-
-1. **From the tab**: the key Ultimate Guitar gives the kept version, or a key
-   the sheet states before its first chords: a ChordPro `{key: Am}`, or a note
-   such as `Key: G`, `Key of Bb`, or LaCuerda's `Tono: La menor`.
-2. **Estimated from the chords** of the human sheet: which key's notes its
-   chords fit best, and whether it starts and ends on that key's home chord.
-   Chords that fit no key give no estimate.
-3. **From the audio**, for a sheet auto-chords wrote: the key of the chords
-   the model heard, each weighed by how long it sounds. Auto-chords records
-   it with the sheet; for a sheet made before it did, the key is estimated
-   from the chords the sheet shows.
-
-The key is the key of the chords as the sheet writes them, the shapes you
-play: with a capo, the song sounds higher. It is the sheet's key before any
-`[transpose]`.
-
-`info.json` holds it in two fields, for anything that reads the library:
-
-```json
-"key": "A minor",
-"key_source": "tab",
-"identity_key": "soda-stereo/de-musica-ligera",
-```
-
-- `key` is the tonic, a capital letter with `#` or `b` as the source spells
-  it, followed by ` minor` for a minor key: `"A minor"`, `"C"`, `"F#"`,
-  `"Bb minor"`. A major key is the tonic alone. `null` when no source gives one.
-- `key_source` is `"tab"`, `"chords"` or `"audio"`, as in the list above, and
-  `null` with no key.
-- `identity_key` is caracole's own key for the song, which info.json called
-  `key` before. The first command that rewrites the pages after an upgrade
-  rewrites every song's info.json once, with these fields.
-
 Others can write to the library: Syncthing, and every device it syncs with. A
 symbolic link planted there could point at caracole's private files, so caracole
 never reads or writes a file there through a link. A link in the place of
@@ -997,6 +960,43 @@ song's folder under its name.
 
 Keep the library private. The sheets and lyrics are other people's work, and
 a personal offline copy is the closest thing to the sites' personal-use terms.
+
+### The song's key
+
+caracole gives each song with a sheet a musical key, and says where it came
+from. It takes the first of these that gives one:
+
+1. **From the tab**: the key Ultimate Guitar gives the kept version, or a key
+   the sheet states before its first chords: a ChordPro `{key: Am}`, or a note
+   such as `Key: G`, `Key of Bb`, or LaCuerda's `Tono: La menor`.
+2. **Estimated from the chords** of the human sheet: which key's notes its
+   chords fit best, and whether it starts and ends on that key's home chord.
+   Chords that fit no key give no estimate.
+3. **From the audio**, for a sheet auto-chords wrote: the key of the chords
+   the model heard, each weighed by how long it sounds. Auto-chords records
+   it with the sheet; for a sheet made before it did, the key is estimated
+   from the chords the sheet shows.
+
+An estimate is the key of the chords as the sheet writes them, the shapes you
+play: with a capo, the song sounds higher. A key from the tab is as its
+transcriber gives it. Either is the sheet's key before any `[transpose]`.
+
+`info.json` holds it in two fields, for anything that reads the library:
+
+```json
+"key": "A minor",
+"key_source": "tab",
+"identity_key": "soda-stereo/de-musica-ligera",
+```
+
+- `key` is the tonic, a capital letter with `#` or `b` as the source spells
+  it, followed by ` minor` for a minor key: `"A minor"`, `"C"`, `"F#"`,
+  `"Bb minor"`. A major key is the tonic alone. `null` when no source gives one.
+- `key_source` is `"tab"`, `"chords"` or `"audio"`, as in the list above, and
+  `null` with no key.
+- `identity_key` is caracole's own key for the song, which info.json called
+  `key` before. The first command that rewrites the pages after an upgrade
+  rewrites every song's info.json once, with these fields.
 
 ## A worked example
 

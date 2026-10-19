@@ -2,9 +2,10 @@
 
 A key is written as its tonic, a letter with ``#`` or ``b``, followed by
 " minor" for a minor key: "A minor", "C", "F#", "Bb minor". The spelling is
-the source's ("Gb" stays "Gb"); ``same_key`` compares keys by sound. It is the
-key of the chords as the sheet writes them, the shapes you play: with a capo,
-the song sounds higher, as ChordPro's ``{key}`` has it.
+the source's ("Gb" stays "Gb"); ``same_key`` compares keys by sound. An
+estimate is the key of the chords as the sheet writes them, the shapes you
+play: with a capo, the song sounds higher, as ChordPro's ``{key}`` has it. A
+tab's own key is as its transcriber gives it.
 
 ``song_key`` gives a song's key and where it came from, its ``source``, from
 the sheets the library keeps, most trusted first:
