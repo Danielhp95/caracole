@@ -198,7 +198,7 @@ def test_cli_index_build_from_a_dir_with_a_broken_file_keeps_the_files_before_it
     assert lines[-3:] == [
         "The index is partial: 1 tab sitemap indexed, so no song is matched against it yet.",
         f"To finish, run `caracole index build --from {d}` again: it reads every file again, with no request.",
-        f"index build: {d / 'sitemap2.xml'}: not a sitemap (no <loc> entries)",
+        f"error: index build: {d / 'sitemap2.xml'}: not a sitemap (no <loc> entries)",
     ]
 
 
