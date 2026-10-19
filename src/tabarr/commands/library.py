@@ -18,7 +18,15 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from tabarr.commands._common import exclusive, fail, load_cfg, load_ovr, open_db, utcnow, write_pages
+from tabarr.commands._common import (
+    exclusive,
+    fail,
+    load_cfg,
+    load_ovr,
+    open_db,
+    utcnow,
+    write_pages,
+)
 from tabarr.overrides import Overrides, OverridesError, load_overrides
 
 if TYPE_CHECKING:

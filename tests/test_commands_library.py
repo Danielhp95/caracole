@@ -184,16 +184,15 @@ def test_review_reports_overrides_broken_while_it_waits(tmp_path, monkeypatch):
     assert get_song(conn, sid).review is True
 
 
-def index_covers(conn, *, built=True):
-    """The index has only a cover of 斑马斑马, by 李志; ``built`` marks the build finished."""
+def index_covers(conn):
+    """A finished index whose only 斑马斑马 is a cover, by 李志."""
     from datetime import UTC, datetime
 
     from tabarr.ug.index import mark_built
 
     conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
                  "(1, 'li-zhi', 'ban-ma-ban-ma', 'chords', '1', 'x', 'li-zhi/ban-ma-ban-ma-chords-1')")
-    if built:
-        mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
 
 
 COVER = {"artist_key": "li-zhi", "song_key": "ban-ma-ban-ma", "score": 100.0, "step": "title_only"}
