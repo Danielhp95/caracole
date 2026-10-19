@@ -232,10 +232,16 @@ def child_env(base: Mapping[str, str] | None = None) -> dict[str, str]:
 
 
 class CaracoleRunner:
-    """Runs ``python -m caracole [--config FILE] ARGS…`` and hands each line it prints to ``emit``."""
+    """Runs ``python -P -m caracole [--config FILE] ARGS…`` and hands each line it prints to ``emit``.
+
+    ``-m`` alone would put the working directory first on the child's
+    ``sys.path``, which the ``caracole`` script never does: started from the
+    synced library, the server would run any ``typer.py`` a device dropped
+    there. ``-P`` (Python 3.11) leaves it out.
+    """
 
     def __init__(self, config_path: Path | None, *, python: str = sys.executable):
-        self._argv = [python, "-m", "caracole", *(["--config", str(config_path)] if config_path else [])]
+        self._argv = [python, "-P", "-m", "caracole", *(["--config", str(config_path)] if config_path else [])]
         self._env = child_env()
         self._lock = threading.Lock()
         self._process: subprocess.Popen[str] | None = None

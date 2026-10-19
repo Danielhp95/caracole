@@ -190,3 +190,17 @@ def test_the_runner_runs_the_caracole_command_line(tmp_path, monkeypatch):
     lines.clear()
     assert runner(["fetch", "--song=Nobody - Nothing"], lines.append) == 1
     assert any("No song" in line for line in lines), lines
+
+
+def test_the_child_never_imports_a_module_from_the_folder_it_runs_in(tmp_path, monkeypatch):
+    # `cd ~/Tabs && caracole serve`: a typer.py dropped into the synced library must not run.
+    planted = tmp_path / "planted"
+    planted.mkdir()
+    (planted / "typer.py").write_text("import sys\nprint('PLANTED typer.py RAN')\nsys.exit(7)\n", encoding="utf-8")
+    src = Path(__file__).resolve().parents[1] / "src"
+    monkeypatch.setenv("PYTHONPATH", subprocess_pythonpath(src))
+    monkeypatch.chdir(planted)
+    runner = CaracoleRunner(None, python=sys.executable)
+    lines = []
+    assert runner(["--version"], lines.append) == 0, lines
+    assert lines == ["caracole 0.1.0"]
