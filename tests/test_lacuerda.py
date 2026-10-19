@@ -4,9 +4,12 @@ import pytest
 
 from tabarr.lacuerda import (
     BASE_URL,
+    LCSong,
     artist_slug,
     artist_slug_candidates,
     artist_url,
+    best_acordes_version,
+    parse_lcd,
     version_url,
 )
 
@@ -107,3 +110,66 @@ def test_version_url():
 def test_version_url_refuses_bad_arguments(artist, song, n):
     with pytest.raises(ValueError):
         version_url(artist, song, n)
+
+
+# --- lcd codes and the best acordes version --------------------------------
+
+
+def _song(lcd: str, slug: str = "cancion", title: str = "Canción") -> LCSong:
+    types, ranking = parse_lcd(lcd)
+    return LCSong(slug=slug, title=title, types=types, ranking=ranking)
+
+
+def test_parse_lcd():
+    assert parse_lcd("RHRTTTDTB-314865972") == ("RHRTTTDTB", (3, 1, 4, 8, 6, 5, 9, 7, 2))
+
+
+def test_parse_lcd_reads_more_than_nine_versions_as_base36():
+    # No real page listed more than nine versions, so base 36 is an assumption.
+    assert parse_lcd("RTRTRTRTRTR-a1b23456789") == (
+        "RTRTRTRTRTR",
+        (10, 1, 11, 2, 3, 4, 5, 6, 7, 8, 9),
+    )
+    assert parse_lcd("RTRTRTRTRTR-A1B23456789")[1][:3] == (10, 1, 11)
+
+
+@pytest.mark.parametrize(
+    "lcd,expected",
+    [
+        ("RTRTRTRTRTR-1011123456789", ("RTRTRTRTRTR", tuple(range(1, 12)))),  # lengths disagree
+        ("RT-1", ("RT", (1, 2))),
+        ("RRR-113", ("RRR", (1, 2, 3))),  # not one rank per version
+        ("RR-01", ("RR", (1, 2))),  # there is no version 0
+        ("RR-1?", ("RR", (1, 2))),  # not a digit
+        ("RT", ("RT", (1, 2))),  # no ranking at all
+        ("", ("", ())),
+    ],
+)
+def test_parse_lcd_falls_back_to_version_order(lcd, expected):
+    assert parse_lcd(lcd) == expected
+
+
+def test_parse_lcd_tolerates_case_and_spaces():
+    assert parse_lcd(" rht-312 ") == ("RHT", (3, 1, 2))
+
+
+def test_best_acordes_version():
+    assert best_acordes_version(_song("RHRTTTDTB-314865972")) == 3
+
+
+def test_best_acordes_version_reads_letters_by_version_number():
+    # Letter n is the type of version n (the real version page lists them as
+    # trcal.push(['R',0,0,1]), (['H',0,0,2]), ...), and the ranking holds version
+    # numbers. Reading the letters in rank order instead would pick version 1 here.
+    assert best_acordes_version(_song("BR-21")) == 2
+    assert best_acordes_version(_song("TBTRTRRT-46783512")) == 4
+
+
+def test_best_acordes_version_is_none_without_acordes():
+    assert best_acordes_version(_song("T-1")) is None
+    assert best_acordes_version(_song("TT-21")) is None
+    assert best_acordes_version(_song("")) is None
+
+
+def test_best_acordes_version_skips_ranks_with_no_version():
+    assert best_acordes_version(LCSong("cancion", "Canción", "TR", (5, 2, 1))) == 2

@@ -14,10 +14,66 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import dataclass
 
 from tabarr.normalize import fold
 
 BASE_URL = "https://acordes.lacuerda.net"
+
+ACORDES = "R"
+# Version types by lcd letter, labelled as the song page labels them. The artist
+# page's filter bar also offers K, which no captured page labelled.
+TYPE_NAMES = {
+    "R": "Letra y Acordes",
+    "T": "Tablatura",
+    "B": "Tab p/Bajo",
+    "D": "Batería",
+    "H": "Armónica",
+}
+
+
+@dataclass(frozen=True)
+class LCSong:
+    """A song on a LaCuerda artist page.
+
+    ``types`` has one letter per version, version 1 first ("RHRTTTDTB": version
+    2 is a harmonica part). ``ranking`` lists the version numbers in LaCuerda's
+    order, which groups them by type and puts the best first within a type.
+    """
+
+    slug: str
+    title: str
+    types: str
+    ranking: tuple[int, ...]
+
+
+def parse_lcd(lcd: str) -> tuple[str, tuple[int, ...]]:
+    """Split an ``lcd`` code such as "RHRTTTDTB-314865972" into types and ranking.
+
+    Each ranking character is read as a base-36 digit, so a tenth version would
+    be "a" (no real page showed more than nine). A ranking that isn't one rank
+    per version falls back to version order.
+    """
+    letters, _, digits = lcd.strip().partition("-")
+    letters = letters.upper()
+    in_order = tuple(range(1, len(letters) + 1))
+    if len(digits) != len(letters):
+        return letters, in_order
+    try:
+        ranking = tuple(int(c, 36) for c in digits)
+    except ValueError:
+        return letters, in_order
+    if sorted(ranking) != list(in_order):
+        return letters, in_order
+    return letters, ranking
+
+
+def best_acordes_version(song: LCSong) -> int | None:
+    """The best-ranked "Letra y Acordes" version of a song, or None if it has none."""
+    for n in song.ranking:
+        if 1 <= n <= len(song.types) and song.types[n - 1] == ACORDES:
+            return n
+    return None
 
 _ARTICLES = frozenset({"el", "la", "los", "las", "the"})
 _NOT_SLUG = re.compile(r"[^a-z0-9 ]")
