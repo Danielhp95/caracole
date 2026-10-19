@@ -216,7 +216,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   the cache (render.py). tests/test_library_safety.py.
 - **One caracole at a time**: `_common.exclusive` holds an flock on `state_dir/caracole.lock`,
   re-entrant within a process, and the clients of `make_client` hold it until closed.
-  Every command that asks UG, LRCLIB or LaCuerda for pages or writes the library takes it;
+  Every command that asks UG, LRCLIB, LaCuerda or gtptabs.com for pages or writes the
+  library takes it;
   `search`, `match --dry-run` and `index stats` only read and never wait. `review` takes it
   only after its questions (commands/library.py), so the nightly run never waits for an
   answer (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`).

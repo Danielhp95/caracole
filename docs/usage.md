@@ -464,6 +464,27 @@ and cache.
   pass, whatever the date, usually from the cache. An artist LaCuerda doesn't
   have gets an almost empty page, with HTTP 200; caracole reads that as "not on
   LaCuerda". A cooldown, a block or a spent budget exits 0.
+- **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
+  song that has no Guitar Pro or Power Tab file, newest songs first. It reads
+  gtptabs.com's sitemaps into a local index when it never has, or last did 30
+  days ago, and finds each song's artist there: under the artist's name, or
+  as the site files people, last name first (`john-elton`) and "The" last
+  (`beatles-the`). It never uses the site's search. The artist's page, cached
+  for 30 days, lists the song's uploads, newer ones than the 2015 sitemaps
+  included. Those with a guitar part (or no instrument listed), in a Guitar
+  Pro or Power Tab format and under 5 MB are tried, most stars first, at most
+  three a song a run. A download is kept only if its first bytes are a Guitar
+  Pro (3 to 7) or Power Tab file's: as the song's `guitar-N`, with the
+  extension those bytes say, N the lowest number no file of the song holds.
+  Anything else, such as a page served in its place, is thrown away, and that
+  upload waits 30 days. A song its artist's page doesn't list is asked about
+  again after 30 days; a song with an error, next run. It prints
+  `gtptabs.com: 3 tried, 2 Guitar Pro files kept, 1 not on gtptabs.com, 0 errors`,
+  after `Index: 6 sitemaps read.` when it read them. Three downloads in a row
+  answered with a page instead of a file end the pass as an error, so a site
+  that started asking for a login costs three requests. With gtptabs.com
+  turned off it asks nothing and says so. A cooldown, a block or a spent
+  budget exits 0.
 - **`caracole scan`** links the audio files in Music/ to your songs, by their
   tags (or an "Artist - Title" file name) and their duration, give or take 3
   seconds. It never adds a song. A file named as the song wins over one whose
@@ -520,16 +541,16 @@ and cache.
 **The pages.** A command that changes what `_todo.md` and `index.html` show
 rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
 `todo`, `add`, `search --add`, `sync` and `autochords`; `review` when an
-answer changed something; and `fetch`, `lyrics` and `lacuerda` when they did
-something or were blocked, so that Provider health shows the cooldown. A page
-caracole can't write ends the command with status 1 and
+answer changed something; and `fetch`, `lyrics`, `lacuerda` and `gtptabs` when
+they did something or were blocked, so that Provider health shows the cooldown.
+A page caracole can't write ends the command with status 1 and
 `can't write …/_todo.md: Permission denied`, its own work saved first; for
 `add`, `search --add` and `sync` that is only a warning.
 
 **One caracole at a time.** The commands that ask the sites for pages or write
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
-`index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `render`,
+`index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`, `render`,
 `match`, `scan`, `todo`, `sync`, `add`, `search --add` and `autochords`. A
 second one waits for the first, and says which it is:
 `Another caracole is running (pid 4242: run); waiting for it to finish.`

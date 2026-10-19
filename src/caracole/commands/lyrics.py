@@ -1,4 +1,4 @@
-"""``caracole lyrics`` and ``caracole lacuerda``: one step of the nightly run, by hand.
+"""``caracole lyrics``, ``lacuerda`` and ``gtptabs``: one step of the nightly run, by hand.
 
 Each makes the same pass as its ``caracole run`` step, with a client of its own:
 this run's budget, and the HTTP cache the nightly run uses too. As in the run,
@@ -8,6 +8,8 @@ neither is a spent budget: each prints what happened and exits 0, as
 ``caracole fetch`` and ``caracole index`` do, and the songs left wait for the
 next run. Then each rewrites _todo.md and index.html, which read
 overrides.toml, unless it did nothing (a cooldown, or no song to ask about).
+``caracole gtptabs`` with gtptabs.com turned off in caracole.toml says so and
+asks nothing.
 
 Every command module is imported on every start, so the passes are imported
 inside the commands.
@@ -40,13 +42,15 @@ from caracole.http import ProviderBlocked
 
 if TYPE_CHECKING:
     from caracole.config import Config
+    from caracole.gtptabs_fetch import GtpTabsStats
     from caracole.http import Client
     from caracole.lacuerda_fetch import LaCuerdaStats
     from caracole.lyrics import LyricsStats
     from caracole.overrides import Overrides
 
-_NAMES = {"lrclib": "LRCLIB", "lacuerda": "LaCuerda"}
-_COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda"}  # each provider's command, for the lock
+_NAMES = {"lrclib": "LRCLIB", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com"}
+# Each provider's command, for the lock.
+_COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs"}
 
 
 def register(app: typer.Typer) -> None:
@@ -59,6 +63,11 @@ def register(app: typer.Typer) -> None:
     def lacuerda_cmd(ctx: typer.Context) -> None:
         """Look for LaCuerda chord sheets for Spanish songs without a complete one."""
         _lacuerda(load_cfg(ctx))
+
+    @app.command("gtptabs")
+    def gtptabs_cmd(ctx: typer.Context) -> None:
+        """Download a Guitar Pro file from gtptabs.com for each song that has none."""
+        _gtptabs(load_cfg(ctx))
 
 
 def _lyrics(cfg: Config) -> None:
@@ -117,6 +126,37 @@ def _lacuerda(cfg: Config) -> None:
         typer.echo("Songs with an error are tried again next run.")
     if s.budget_exhausted:
         _budget_spent(cfg, "lacuerda")
+
+
+def _gtptabs(cfg: Config) -> None:
+    """Read gtptabs.com's sitemaps when due, download what the songs need, then print the counts."""
+    from caracole.gtptabs_fetch import gtptabs_files
+
+    if not cfg.provider("gtptabs").enabled:
+        typer.echo("gtptabs.com is off ([providers.gtptabs] enabled = false); nothing was asked.")
+        return
+    overrides = load_ovr(cfg)
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime):
+        return gtptabs_files(conn, client, cfg.library_dir, now, overrides=overrides)
+
+    def ran(s: GtpTabsStats) -> bool:
+        return bool(s.sitemaps or s.tried or s.errors or s.budget_exhausted)
+
+    s = _provider_pass(cfg, "gtptabs", run, overrides, ran)
+    if s is None:
+        return
+    if not ran(s):
+        typer.echo("No song to look up on gtptabs.com.")
+        return
+    if s.sitemaps:
+        typer.echo(f"Index: {_count(s.sitemaps, 'sitemap')} read.")
+    counts = f"{s.tried} tried, {_count(s.kept, 'Guitar Pro file')} kept, {s.missing} not on gtptabs.com"
+    typer.echo(f"gtptabs.com: {counts}, {_count(s.errors, 'error')}")
+    if s.errors:
+        typer.echo("Songs with an error are tried again next run.")
+    if s.budget_exhausted:
+        _budget_spent(cfg, "gtptabs")
 
 
 def _provider_pass[T](

@@ -76,7 +76,7 @@ def config(tmp_path) -> Path:
     folders = (("library_dir", "lib"), ("music_dir", "music"), ("state_dir", "state"),
                ("cache_dir", "cache"))
     lines = [f'{key} = "{tmp_path / name}"' for key, name in folders]
-    for provider in ("ug", "lrclib", "lacuerda"):
+    for provider in ("ug", "lrclib", "lacuerda", "gtptabs"):
         lines += [f"[providers.{provider}]", "delay = [0, 0]"]
     path = tmp_path / "caracole.toml"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -159,6 +159,13 @@ def a_spanish_song(tmp_path, sites, conn) -> None:
     update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json())
 
 
+def a_song_without_a_guitar_pro_file(tmp_path, sites, conn) -> None:
+    add_song(conn, "Blur", "Beetlebum")
+    sites.routes["gtptabs.com/sitemapGoogle.xml"] = (
+        200, '<?xml version="1.0" encoding="UTF-8"?><sitemapindex><sitemap>'
+             "<loc>http://gtptabs.com/sitemapGoogle1.xml</loc></sitemap></sitemapindex>")
+
+
 def sitemap_files(tmp_path, sites, conn) -> None:
     folder = tmp_path / "sitemaps"
     folder.mkdir()
@@ -237,6 +244,7 @@ WRITERS = [
     Case(("fetch", "--song", "Soda Stereo - Persiana Americana"), a_song_to_fetch, requested),
     Case(("lyrics",), a_song_waiting_for_lyrics, requested),
     Case(("lacuerda",), a_spanish_song, requested),
+    Case(("gtptabs",), a_song_without_a_guitar_pro_file, requested),
     Case(("render",), nothing, rendered),
     Case(("sync",), a_wanted_line, has_songs),
     Case(("add", "Radiohead", "Creep"), nothing, has_songs),
@@ -283,6 +291,7 @@ ASKERS = [
     pytest.param(("fetch",), a_song_to_fetch, "ug", id="fetch"),
     pytest.param(("lyrics",), a_song_waiting_for_lyrics, "lrclib", id="lyrics"),
     pytest.param(("lacuerda",), a_spanish_song, "lacuerda", id="lacuerda"),
+    pytest.param(("gtptabs",), a_song_without_a_guitar_pro_file, "gtptabs", id="gtptabs"),
     pytest.param(("index", "refresh"), an_index_to_refresh, "ug", id="index refresh"),
 ]
 
