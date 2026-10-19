@@ -53,6 +53,8 @@ SYNC_TOLERANCE_S = 2.0  # LRCLIB's own tolerance when it matches a duration
 
 
 class Recognizer(Protocol):
+    """Timed chords from an audio file, like ``btc.BTCRecognizer``."""
+
     def recognize(self, audio_path: Path | str) -> list[ChordSegment]: ...
 
 
@@ -73,6 +75,7 @@ class AutoStats:
     errors: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
+        """One line for the journal or a notification: "1 generated, 4 skipped, 0 failed"."""
         return f"{self.generated} generated, {self.skipped} skipped, {self.failed} failed"
 
 
