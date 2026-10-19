@@ -170,11 +170,13 @@ def _render(ctx: StepContext) -> str:
 
 
 def _todo(ctx: StepContext) -> str:
+    from tabarr.library_page import build_library_page, write_library_page
     from tabarr.todo import build_todo, write_todo
 
     ctx.report.requests = _requests(ctx.services)
     kv_set_json(ctx.conn, "run:last", _report_json(ctx.report))
     write_todo(ctx.cfg.library_dir, build_todo(ctx.conn, ctx.cfg, ctx.overrides, ctx.now))
+    write_library_page(ctx.cfg.library_dir, build_library_page(ctx.conn, ctx.cfg, ctx.overrides, ctx.now))
     return "ok"
 
 
