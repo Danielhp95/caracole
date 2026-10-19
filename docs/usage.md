@@ -752,7 +752,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 
 The viewer remembers its settings for each song in the browser. The key is the
 one info.json gives as `key` (and where it came from, `key_source`, such as
-the tab or the audio), else the one the sheet's tab gives, else it is guessed
+the tab or the audio), else the one the sheet's tab gives, else it is estimated
 from the chords, and the page says which. A key heard in the audio is the
 auto sheet's alone, and any other key the human sheet's: beside a human
 sheet, `sheet (auto).html` keeps to the chords the model heard, which may be

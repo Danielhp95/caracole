@@ -63,8 +63,8 @@ CREDIT_URL = "https://github.com/tombatossals/chords-db"
 _SOURCES = {
     "tab": "from the tab", "ug": "from the tab", "sheet": "from the tab", "lacuerda": "from the tab",
     "model": "from the audio", "autochords": "from the audio", "audio": "from the audio",
-    "estimate": "guessed from the chords", "estimated": "guessed from the chords",
-    "chords": "guessed from the chords",
+    "estimate": "estimated from the chords", "estimated": "estimated from the chords",
+    "chords": "estimated from the chords",
 }
 
 
@@ -106,7 +106,7 @@ def build_viewer(
     """The page for a ChordPro sheet (as caracole writes it).
 
     The key comes from ``key`` (info.json's, with ``key_source``), else from the
-    sheet's own ``{key}``, else it is guessed from the chords. ``transpose`` is where
+    sheet's own ``{key}``, else it is estimated from the chords. ``transpose`` is where
     the viewer starts; ``pdf`` names the PDF beside the page, linked when given.
     """
     sheet = parse_sheet(cho)
@@ -167,7 +167,7 @@ def _song_key(sheet: Sheet, chords: list[Chord | None], key: str | None,
         return found, "from the sheet"
     played = [chords[i] for i in _played(sheet) if chords[i] is not None]
     found = estimate_key(played)
-    return found, "guessed from the chords" if found else None
+    return found, "estimated from the chords" if found else None
 
 
 def _origin(source: str | None) -> str:

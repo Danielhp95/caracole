@@ -141,10 +141,10 @@ def test_then_the_key_the_sheet_gives():
     assert data["key"] == {"tonic": 7, "mode": "ionian", "from": "from the sheet"}
 
 
-def test_then_a_key_guessed_from_the_chords():
+def test_then_a_key_estimated_from_the_chords():
     cho = UG_CHO.replace("{key: G}\n", "")
     data = data_of(build_viewer(cho, key="soda stereo|de musica ligera", key_source=None))
-    assert data["key"] == {"tonic": 7, "mode": "ionian", "from": "guessed from the chords"}
+    assert data["key"] == {"tonic": 7, "mode": "ionian", "from": "estimated from the chords"}
 
 
 def test_a_sheet_without_chords_has_no_key():
@@ -155,7 +155,8 @@ def test_a_sheet_without_chords_has_no_key():
 @pytest.mark.parametrize(
     ("source", "label"),
     [("tab", "from the tab"), ("model", "from the audio"), ("autochords", "from the audio"),
-     ("estimate", "guessed from the chords"), ("Musicbrainz", "from Musicbrainz"), (None, "from info.json")],
+     ("estimate", "estimated from the chords"), ("chords", "estimated from the chords"),
+     ("Musicbrainz", "from Musicbrainz"), (None, "from info.json")],
 )
 def test_where_the_key_came_from_is_said_in_words(source, label):
     assert data_of(build_viewer(UG_CHO, key="G", key_source=source))["key"]["from"] == label
