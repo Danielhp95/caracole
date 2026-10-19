@@ -703,6 +703,17 @@ def test_a_page_that_still_does_not_parse_costs_one_request_a_run(conn, tmp_path
     assert_untouched(conn, song, tmp_path)
 
 
+def test_a_page_that_does_not_parse_is_fetched_again_at_most_once_a_run(conn, tmp_path):
+    # Two songs share their artist's page: one more request a run for it, not one per song.
+    site = FakeLaCuerda({SODA: (200, MAINTENANCE)})
+    spanish_song(conn, title="De Música Ligera", added_at="2026-10-02T00:00:00Z")
+    spanish_song(conn, title="Persiana Americana", added_at="2026-10-01T00:00:00Z")
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=2, errors=2)
+    assert site.requests == [SODA]
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=2, errors=2)
+    assert site.requests == [SODA, SODA]
+
+
 def test_a_cached_bad_page_that_is_gone_when_fetched_again_is_a_miss(conn, tmp_path):
     site = FakeLaCuerda()
     site.pages[DML_3] = (200, MAINTENANCE)
