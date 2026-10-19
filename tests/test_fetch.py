@@ -856,6 +856,87 @@ def test_kept_sheet_stays_when_not_outranked(conn, tmp_path):
     assert (path.stat().st_ino, kept_version(conn, song, "sheet.txt")) == before  # not even rewritten
 
 
+# --- kept files the library lost ---------------------------------------------------------------------
+
+
+def damage(path, how):
+    """What the library may do to a kept file between two runs."""
+    data = path.read_bytes()
+    if how == "deleted":  # on a synced device, say
+        path.unlink()
+    elif how == "emptied":  # the rename of a write a power cut caught, with no data behind it
+        path.write_bytes(b"")
+    elif how == "same-size":
+        path.write_bytes(bytes(len(data)))
+    elif how == "linked":  # to a file with the very bytes kept, which is no reason to trust it
+        twin = path.with_name("elsewhere")
+        twin.write_bytes(data)
+        path.unlink()
+        path.symlink_to(twin)
+
+
+def fetched_persiana(conn, tmp_path):
+    """Persiana Americana fetched, kept and clean: sheet 101 and tab 401."""
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"), (401, "soda-stereo", "persiana-americana", "tabs"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    ug.tab(v(401, "tabs"), content=riff("tab 401"))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    ug.requests.clear()
+    return get_song(conn, song.id), ug
+
+
+@pytest.mark.parametrize("how", ["deleted", "emptied", "same-size", "linked"])
+def test_a_kept_file_the_library_lost_is_written_again_and_no_other(conn, tmp_path, how):
+    song, ug = fetched_persiana(conn, tmp_path)
+    folder = song_dir(tmp_path / "lib", song)
+    kept = (folder / "sheet.json").read_bytes()
+    others = {name: (folder / name).stat().st_ino for name in ("sheet.txt", "tab.txt", "tab.json")}
+    damage(folder / "sheet.json", how)
+    update_song(conn, song.id, ug_dirty=True)
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+
+    assert not (folder / "sheet.json").is_symlink() and (folder / "sheet.json").read_bytes() == kept
+    assert {name: (folder / name).stat().st_ino for name in others} == others  # still kept: not rewritten
+    assert ug.requests == []
+
+
+@pytest.mark.parametrize("how", ["deleted", "emptied", "same-size", "linked"])
+@pytest.mark.parametrize("name", ["sheet.txt", "sheet.json", "tab.txt", "tab.json"])
+def test_a_clean_song_whose_kept_file_the_library_lost_is_fetched_again_at_the_next_run(conn, tmp_path, name, how):
+    # The docs' case: a link planted at sheet.json removed, and the song's render failing every night.
+    song, ug = fetched_persiana(conn, tmp_path)
+    folder = song_dir(tmp_path / "lib", song)
+    rescore_kept_sheets(conn, tmp_path / "lib", RankPolicy())  # what the nightly fetch step does first
+    assert songs_to_fetch(conn, Overrides(), NOW) == []  # all there: nothing to do
+    kept = (folder / name).read_bytes()
+    damage(folder / name, how)
+
+    rescore_kept_sheets(conn, tmp_path / "lib", RankPolicy())
+    assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW)] == [song.id]
+    fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), songs_to_fetch(conn, Overrides(), NOW))
+
+    assert (folder / name).read_bytes() == kept and ug.requests == []  # from the HTTP cache
+    rescore_kept_sheets(conn, tmp_path / "lib", RankPolicy())
+    assert songs_to_fetch(conn, Overrides(), NOW) == []
+
+
+def test_a_guitar_pro_file_you_filed_and_deleted_sends_nothing_back(conn, tmp_path):
+    # tabarr never downloads Guitar Pro files (assisted mode), so it can't write one again.
+    song, _ = fetched_persiana(conn, tmp_path)
+    gp = upsert_version(conn, provider="ug", tab_id="301", song_id=song.id, slot="guitar", kind="guitar-pro",
+                        rating=4.5, votes=20, version=1, label=None, url=slugged(301, "guitar-pro"), raw={},
+                        now="2026-10-18T03:30:00Z")
+    keep_file(conn, tmp_path / "lib", song=song, version_id=gp, name="guitar-1.gp5", data=b"GP5 bytes", rank=1)
+    (song_dir(tmp_path / "lib", song) / "guitar-1.gp5").unlink()
+
+    rescore_kept_sheets(conn, tmp_path / "lib", RankPolicy())
+
+    assert songs_to_fetch(conn, Overrides(), NOW) == []
+
+
 # --- a corrected match ------------------------------------------------------------------------------
 
 

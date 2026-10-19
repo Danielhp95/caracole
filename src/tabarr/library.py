@@ -60,16 +60,28 @@ def write_atomic(path: Path, data: bytes) -> str:
     replaces a link at ``path`` itself rather than its target. open(..., "x")
     rather than mkstemp: mkstemp makes 0600 files, which would hide the library
     from Syncthing reading it through the group.
+
+    The data reaches the disk before the rename, and the rename before this
+    returns (the folder is synced too): a power cut during the nightly run then
+    leaves the old file or the new one, never an empty file that the database,
+    committed after, says is kept.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{secrets.token_hex(4)}.tmp")
     try:
         with open(tmp, "xb") as f:
             f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, path)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
+    folder = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(folder)
+    finally:
+        os.close(folder)
     return hashlib.sha256(data).hexdigest()
 
 
@@ -107,6 +119,25 @@ def read_regular(path: Path) -> bytes:
         return f.read()
 
 
+def holds(path: Path, sha256: str, size: int | None = None) -> bool:
+    """Whether the regular file at ``path`` holds the bytes whose SHA-256 is ``sha256``.
+
+    How tabarr tells that a file it wrote is still in the library as written: not
+    deleted (on a synced device, say), not cut short (by a power cut), not
+    replaced by a link or anything else (``open_regular``). The test is cheap:
+    with ``size``, the length of those bytes, a file of another length fails
+    unread, and only one of that length is hashed.
+    """
+    try:
+        fd = open_regular(path)
+    except OSError:
+        return False
+    with open(fd, "rb") as f:
+        if size is not None and os.fstat(f.fileno()).st_size != size:
+            return False
+        return hashlib.file_digest(f, "sha256").hexdigest() == sha256
+
+
 @dataclass
 class KeptFile:
     id: int
@@ -124,6 +155,20 @@ def kept_files(conn: sqlite3.Connection, song_id: int) -> list[KeptFile]:
         (song_id,),
     )
     return [KeptFile(**dict(r)) for r in rows]
+
+
+def kept_already(
+    conn: sqlite3.Connection, library_dir: Path, *, song: Song, version_id: int, name: str, data: bytes
+) -> bool:
+    """Whether this version's ``data`` is the song's kept ``name`` already: so the files table says,
+    and so the file in the library still is (``holds``). Then it needn't be written again, and
+    isn't, for each rewrite is one more sync on every device."""
+    sha = hashlib.sha256(data).hexdigest()
+    return any(
+        f.name == name and f.version_id == version_id and f.sha256 == sha
+        and holds(library_dir / f.path, sha, len(data))
+        for f in kept_files(conn, song.id)
+    )
 
 
 def keep_file(

@@ -33,16 +33,18 @@ guitar parts (``fetch_songs``), and rates each guitar group from one page:
 live, filling every slot song by song cost 8-12 requests a song.
 
 A kept file is replaced only when another version outranks it, and is not
-rewritten when it wins again.
+rewritten when it wins again, unless the library lost it (deleted on a synced
+device, cut short by a power cut, a link in its place): then it is written
+again, and only it.
 
 ``rescore_kept_sheets`` scores the sheets kept before their song had lyrics,
 without a request, and sends a song whose kept sheet proves partial back to
-have its sheets ranked again; the nightly run calls it before fetching.
+have its sheets ranked again; the nightly run calls it before fetching. It
+also sends back a song whose kept sheet or tab the library lost.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
@@ -68,7 +70,7 @@ from tabarr.http import (
     RobotsClosed,
     robots_disallows,
 )
-from tabarr.library import drop_file, keep_file, kept_files, read_regular, write_info
+from tabarr.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.normalize import clean_title, compact, has_han, romanize, slug_key
 from tabarr.overrides import Overrides
@@ -95,6 +97,7 @@ from tabarr.ug.page import (
     strip_markup,
 )
 from tabarr.versions import (
+    LIVE,
     SHEET_KINDS,
     STALE,
     VersionRow,
@@ -644,10 +647,10 @@ def _first_with_text(
 
 
 def _keep(run: _SongRun, version_id: int, name: str, data: bytes) -> None:
-    """Keep one file, unless this version's identical bytes are kept already (no churn for Syncthing)."""
-    sha = hashlib.sha256(data).hexdigest()
-    if any(f.name == name and f.version_id == version_id and f.sha256 == sha
-           for f in kept_files(run.conn, run.song.id)):
+    """Keep one file, unless this version's identical bytes are kept already, in the files table and
+    in the library (``library.kept_already``): no churn for Syncthing, and a file the library lost is
+    written again."""
+    if kept_already(run.conn, run.ctx.library_dir, song=run.song, version_id=version_id, name=name, data=data):
         return
     keep_file(run.conn, run.ctx.library_dir, song=run.song, version_id=version_id, name=name, data=data, rank=1)
 
@@ -1372,7 +1375,11 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
     A sheet that proves partial was chosen on rating alone, so its song is
     marked dirty when it has UG sheets that coverage never ranked: the next
     fetch ranks them again, from the cached pages.
+
+    First, as the nightly run calls this before fetching, a song whose kept UG
+    sheet or tab the library lost is sent back to the fetch (``_send_back_lost``).
     """
+    _send_back_lost(conn, library_dir)
     rows = conn.execute(
         "SELECT f.song_id, f.version_id FROM files f JOIN versions v ON v.id = f.version_id "
         "WHERE f.name = ? AND v.coverage IS NULL ORDER BY f.song_id",
@@ -1394,6 +1401,29 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
         write_info(conn, library_dir, song)
         scored += 1
     return scored
+
+
+def _send_back_lost(conn: sqlite3.Connection, library_dir: Path) -> None:
+    """Mark dirty each clean, accepted or pinned song whose kept UG sheet or tab the library lost.
+
+    That is a file no longer as kept (``library.holds``): deleted on a synced
+    device, cut short by a power cut, or a link in its place. The database alone
+    would have the fetch skip it forever; this way the next fetch writes it
+    again (``_keep``), from the cached page. Only a live version's file counts,
+    as only its page can give it back, and never a Guitar Pro file, which is
+    yours to download (assisted mode). Each file is hashed; the files table
+    keeps no length to compare first.
+    """
+    names = (*SHEET_FILES, *TAB_FILES)
+    marks = ",".join("?" for _ in names)
+    rows = conn.execute(
+        "SELECT f.song_id, f.path, f.sha256 FROM files f JOIN versions v ON v.id = f.version_id "
+        f"JOIN songs s ON s.id = f.song_id WHERE v.provider = ? AND v.gone = {LIVE} AND f.name IN ({marks}) "
+        "AND s.match_decision IN ('accept', 'pinned') AND s.ug_dirty = 0 AND s.status != 'ignored'",
+        (PROVIDER, *names),
+    ).fetchall()
+    for song_id in sorted({r["song_id"] for r in rows if not holds(library_dir / r["path"], r["sha256"])}):
+        update_song(conn, song_id, ug_dirty=True)
 
 
 def _unranked_rivals(conn: sqlite3.Connection, song_id: int, kept_id: int) -> bool:

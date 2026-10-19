@@ -43,10 +43,13 @@ beside it:
 
 The PDFs are transposed by the song's ``[transpose]`` override. kv
 ``render:<song id>`` keeps what the song's PDF was made from (the SHA-256 of
-the .cho, the transposition, the font and the PDF's name): its human sheet's,
-else its auto sheet's. ``render:<song id>:auto`` does the same for an auto
-sheet's PDF beside a human one. A PDF is rendered again only when one of those
-changes, when it is missing, or when forced. A sheet whose letters the
+the .cho, the transposition, the font and the PDF's name) and what was
+written (the PDF's length and SHA-256): its human sheet's, else its auto
+sheet's. ``render:<song id>:auto`` does the same for an auto sheet's PDF
+beside a human one. A PDF is rendered again only when one of those changes,
+when it is missing or no longer what was written (cut short by a power cut,
+changed on a synced device, a link in its place), or when forced: its length
+is compared, then, when that matches, its SHA-256. A sheet whose letters the
 built-in fonts lack gets its .cho but no PDF until a usable CJK font is set:
 one font error for the pass, naming each sheet's first such letter, not a
 failure per song. A font that is set but unusable (a collection, a missing
@@ -87,6 +90,7 @@ from tabarr.db import kv_delete, kv_get_json, kv_set_json
 from tabarr.library import (
     KeptFile,
     NotRegularFile,
+    holds,
     kept_files,
     read_regular,
     song_dir,
@@ -456,13 +460,23 @@ def _render_sheet(
         "font": str(font) if font else None,
         "pdf": pdf.name,
     }
-    if not force and pdf.is_file() and kv_get_json(conn, state_key) == state:
+    if not force and _up_to_date(pdf, kv_get_json(conn, state_key), state):
         return _Done("skipped")
-    _render_into(text, pdf, work_dir=cfg.cache_dir, transpose=transpose,
-                 chordpro_bin=cfg.chordpro_bin, font_file=font, runner=runner)
-    kv_set_json(conn, state_key, state)
+    sha, size = _render_into(text, pdf, work_dir=cfg.cache_dir, transpose=transpose,
+                             chordpro_bin=cfg.chordpro_bin, font_file=font, runner=runner)
+    kv_set_json(conn, state_key, {**state, "pdf_sha256": sha, "pdf_size": size})
     write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
     return _Done("rendered")
+
+
+def _up_to_date(pdf: Path, record: Any, state: Mapping[str, Any]) -> bool:
+    """Whether the kv ``record`` says the PDF was rendered from ``state``, and the PDF is still what was
+    written: its length, then its SHA-256 (``library.holds``). A record without those predates them,
+    and its PDF is rendered once more."""
+    if not isinstance(record, Mapping) or any(record.get(k) != v for k, v in state.items()):
+        return False
+    sha, size = record.get("pdf_sha256"), record.get("pdf_size")
+    return isinstance(sha, str) and isinstance(size, int) and holds(pdf, sha, size)
 
 
 def _state_key(song_id: int, *, auto: bool = False) -> str:
@@ -548,8 +562,9 @@ def _render_into(
     chordpro_bin: str,
     font_file: Path | None,
     runner: Runner,
-) -> None:
-    """``render_pdf`` of the ChordPro ``text`` in a private directory, then the PDF to ``pdf``.
+) -> tuple[str, int]:
+    """``render_pdf`` of the ChordPro ``text`` in a private directory, then the PDF to ``pdf``; return
+    the SHA-256 and the length of the PDF written.
 
     chordpro opens its input and its output by name and follows symbolic links, and
     others can write to the song's folder: either file could be swapped for a link
@@ -567,7 +582,8 @@ def _render_into(
         cho.write_bytes(text.encode("utf-8"))
         render_pdf(cho, out, transpose=transpose, chordpro_bin=chordpro_bin, font_file=font_file,
                    runner=runner)
-        write_atomic(pdf, out.read_bytes())
+        data = out.read_bytes()
+        return write_atomic(pdf, data), len(data)
 
 
 _INVISIBLE = frozenset({"Cc", "Cf"})  # controls, zero-width spaces, byte-order marks
