@@ -16,15 +16,43 @@ import typer
 from tabarr.commands._common import fail, load_cfg, open_db, utcnow
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from tabarr.config import Config
     from tabarr.spotify import SpotifyAPI
     from tabarr.wanted import WantedLine
+
+# What `tabarr auth spotify` says when there's no client id (docs/usage.md, section 2).
+_SPOTIFY_SETUP = """\
+Spotify isn't set up. It's optional: wanted.txt works without it.
+To add your Liked Songs and playlists:
+1. Create an app at https://developer.spotify.com/dashboard, with the redirect URI
+   {redirect}
+2. Add its client id to {config}:
+     [spotify]
+     client_id = "your-app-client-id"
+     playlists = ["Learn"]   # names, ids or links of playlists you own
+3. Give tabarr the app's client secret: $CREDENTIALS_DIRECTORY/spotify_client_secret,
+   a file named by [spotify] client_secret_file, or $TABARR_SPOTIFY_CLIENT_SECRET.
+4. Run `tabarr auth spotify` again.
+On NixOS, set services.tabarr.settings.spotify and credentials.spotify_client_secret
+instead (docs/deploy.md, section 5)."""
+_DEFAULT_CONFIG = "tabarr.toml (~/.config/tabarr/tabarr.toml, unless --config names another)"
 
 # How `tabarr add` describes a song the library already had, by its status.
 _KNOWN = {"wanted": "no sheet yet", "found": "has a sheet", "ignored": "ignored"}
 
 
 def register(app: typer.Typer) -> None:
+    auth = typer.Typer(help="Authorize tabarr to read an account of yours.", no_args_is_help=True)
+    app.add_typer(auth, name="auth")
+
+    @auth.command("spotify")
+    def auth_spotify_cmd(ctx: typer.Context) -> None:
+        """Let tabarr read your Spotify Liked Songs and playlists (optional)."""
+        config_path = ctx.obj.config_path if ctx.obj is not None else None
+        _auth_spotify(load_cfg(ctx), config_path)
+
     @app.command("add")
     def add_cmd(
         ctx: typer.Context,
@@ -48,6 +76,32 @@ def register(app: typer.Typer) -> None:
     def sync_cmd(ctx: typer.Context) -> None:
         """Add new songs from wanted.txt and, when it's set up, from Spotify."""
         _sync(load_cfg(ctx))
+
+
+# --- tabarr auth spotify --------------------------------------------------------------------
+
+
+def _auth_spotify(cfg: Config, config_path: Path | None) -> None:
+    """Authorize by pasting back the redirect, or say how to set Spotify up; exit 1 on failure."""
+    if not cfg.spotify.enabled:
+        setup = _SPOTIFY_SETUP.format(
+            redirect=cfg.spotify.redirect_uri, config=config_path or _DEFAULT_CONFIG
+        )
+        typer.echo(setup, err=True)
+        raise typer.Exit(1)
+    from tabarr.spotify import SpotifyAuthError, SpotifyError, authorize, make_auth
+
+    try:
+        authorize(
+            make_auth(cfg.spotify, cfg.state_dir),
+            read=lambda prompt: typer.prompt(prompt, prompt_suffix=""),
+            write=typer.echo,
+        )
+    except SpotifyAuthError as e:  # its message says to run this very command: leave that out
+        fail(f"Spotify authorization failed: {e.problem.rstrip('.')}.")
+    except SpotifyError as e:
+        fail(str(e))
+    typer.echo("Run `tabarr sync` to read your Spotify songs now, or leave it to the nightly run.")
 
 
 # --- tabarr sync ----------------------------------------------------------------------------

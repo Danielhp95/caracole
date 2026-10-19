@@ -307,3 +307,123 @@ def test_sync_when_the_spotify_client_cannot_be_made(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "Spotify unavailable: RuntimeError: the token cache is unreadable" in result.output
     assert len(songs(tmp_path)) == 2
+
+
+# --- tabarr auth spotify --------------------------------------------------------------------
+
+REDIRECT = "http://127.0.0.1:8888/callback"
+
+
+class FakeResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self.payload
+
+
+class FakeTokenSession:
+    """Stands in for the session a real SpotifyOAuth posts the code exchange with."""
+
+    def __init__(self, error=None):
+        self.error = error
+        self.posts = []
+
+    def post(self, url, data=None, headers=None, **kwargs):
+        self.posts.append((url, data))
+        if self.error:
+            raise self.error
+        token = {
+            "access_token": "AT",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "refresh_token": "RT",
+            "scope": "user-library-read playlist-read-private",
+        }
+        return FakeResponse(token)
+
+
+def token_session(monkeypatch, session):
+    """Have the real OAuth manager that ``make_auth`` builds post through ``session``."""
+    import tabarr.spotify
+
+    real = tabarr.spotify.make_auth
+
+    def make_auth(cfg, state_dir):
+        auth = real(cfg, state_dir)
+        auth._session = session
+        return auth
+
+    monkeypatch.setattr(tabarr.spotify, "make_auth", make_auth)
+
+
+def test_auth_spotify_without_a_client_id_says_how_to_set_it_up(tmp_path, monkeypatch):
+    monkeypatch.setattr("tabarr.spotify.make_auth", lambda *a: pytest.fail("Spotify is off"))
+    result = run(tmp_path, "auth", "spotify")
+    assert result.exit_code == 1, result.output
+    out = result.output
+    assert "optional" in out and "wanted.txt" in out
+    assert "developer.spotify.com" in out and REDIRECT in out
+    assert str(tmp_path / "tabarr.toml") in out
+    assert "[spotify]" in out and 'client_id = "' in out
+    assert "spotify_client_secret" in out
+
+
+def test_auth_spotify_saves_the_token_and_says_where(tmp_path, monkeypatch):
+    session = FakeTokenSession()
+    token_session(monkeypatch, session)
+    result = run(
+        tmp_path,
+        "auth",
+        "spotify",
+        config=spotify_config(tmp_path),
+        input=f"{REDIRECT}?code=AQDcode-123\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert "https://accounts.spotify.com/authorize?" in result.output
+    assert "Address: " in result.output and "Address: :" not in result.output
+    [(url, data)] = session.posts
+    assert url == "https://accounts.spotify.com/api/token" and data["code"] == "AQDcode-123"
+    token = tmp_path / "state" / "spotify_token.json"
+    assert '"refresh_token": "RT"' in token.read_text(encoding="utf-8")
+    assert f"the token is in {token}" in result.output
+    assert "`tabarr sync`" in result.output
+
+
+def test_auth_spotify_refused_in_the_browser_exits_1(tmp_path, monkeypatch):
+    session = FakeTokenSession()
+    token_session(monkeypatch, session)
+    result = run(
+        tmp_path,
+        "auth",
+        "spotify",
+        config=spotify_config(tmp_path),
+        input=f"{REDIRECT}?error=access_denied\n",
+    )
+    assert result.exit_code == 1, result.output
+    assert "access was refused in the browser (access_denied)" in result.output
+    assert "Run `tabarr auth spotify`" not in result.output  # that's what was just run
+    assert session.posts == []
+    assert not (tmp_path / "state" / "spotify_token.json").exists()
+
+
+def test_auth_spotify_without_the_client_secret_exits_1(tmp_path):
+    result = run(tmp_path, "auth", "spotify", config=spotify_config(tmp_path, secret=False))
+    assert result.exit_code == 1, result.output
+    assert "client secret is missing" in result.output
+
+
+def test_auth_spotify_when_spotify_cannot_be_reached_exits_1(tmp_path, monkeypatch):
+    token_session(monkeypatch, FakeTokenSession(error=requests.ConnectionError("no route")))
+    result = run(
+        tmp_path,
+        "auth",
+        "spotify",
+        config=spotify_config(tmp_path),
+        input=f"{REDIRECT}?code=AQDcode\n",
+    )
+    assert result.exit_code == 1, result.output
+    assert "couldn't reach accounts.spotify.com" in result.output
