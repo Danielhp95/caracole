@@ -4,9 +4,10 @@ For each song (plan §3, Task 15, amendment A6):
 
 1. **Candidates.** The song's tabs in the local index, fetched at their
    slugged URLs (UG answers 404 for a slugged tab at the bare ``/tab/{id}``),
-   and its pins, which replace the kind group they belong to. Blocked ids
-   never compete. A not-found song is looked up on its artist's UG page,
-   which also lists the bare-id tabs the index can't see (A6).
+   and its pins, which replace the kind group they belong to and are fetched
+   at the slugged address you pasted, if you pasted one. Blocked ids never
+   compete. A not-found song is looked up on its artist's UG page, which also
+   lists the bare-id tabs the index can't see (A6).
 2. **Ratings.** A tab page lists the other versions of its type and part, so
    for each kind group (chords; Guitar Pro and Power Tab; tabs) tabarr reads
    the page of the lowest id it has no rating for, up to
@@ -374,17 +375,46 @@ def _rate_group(run: _SongRun, tabs: list[IndexTab]) -> None:
         _page(run, todo[0].tab_id, todo[0].url, todo[0].type)
 
 
-def _fetch_pins(run: _SongRun, pins: tuple[int, ...]) -> dict[tuple[str, ...], list[int]]:
+def _pins(overrides: Overrides, song: Song) -> list[tuple[int, str | None]]:
+    """The song's pins you haven't blocked, in pinned order, each with the address you pasted."""
+    urls = overrides.pin_urls.get(song.key, ())
+    return [
+        (tab_id, urls[i] if i < len(urls) else None)
+        for i, tab_id in enumerate(overrides.pin.get(song.key, ()))
+        if tab_id not in overrides.block
+    ]
+
+
+def _slugged_url(url: str, tab_id: int) -> bool:
+    """Whether a tab page URL is the slugged ``/tab/{artist}/{song}-{type}-{id}`` of ``tab_id``."""
+    segments = urlsplit(url).path.split("/")
+    return len(segments) == 4 and segments[3].endswith(f"-{tab_id}")
+
+
+def _pinned_url(run: _SongRun, tab_id: int, pasted: str | None, row: VersionRow | None) -> str:
+    """Where a pinned tab's page is.
+
+    UG serves a slugged tab only at its slugged URL, so the slugged address you
+    pasted comes first, unless robots.txt closes it. A bare ``/tab/{id}`` you
+    pasted adds nothing: then UG's own link to the tab, else the index's path,
+    else the bare page.
+    """
+    if pasted is not None and _tab_page_url(pasted) and _slugged_url(pasted, tab_id):
+        return pasted
+    return row.url if row is not None else tab_url_for(run.conn, tab_id)
+
+
+def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple[str, ...], list[int]]:
     """Read every pinned page; return the pinned ids of each kind group, in pinned order.
 
     A pin's kind comes from its page. A pin whose page is gone, Official or not
     public pins nothing.
     """
     groups: dict[tuple[str, ...], list[int]] = {}
-    for tab_id in pins:
+    for tab_id, pasted in pins:
         row = _version_row(run, tab_id)
         known = index_tab(run.conn, tab_id)
-        url = row.url if row is not None else tab_url_for(run.conn, tab_id)
+        url = _pinned_url(run, tab_id, pasted, row)
         kind = row.kind if row is not None else known.type if known is not None else None
         page = _page(run, tab_id, url, kind)
         if page is None or not _usable(run, page.tab):
@@ -780,7 +810,7 @@ def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
     block = ctx.overrides.block
     tabs = song_tabs(ctx.conn, song.match_artist_key, song.match_song_key) if song.match_song_key else []
     tabs = [t for t in tabs if t.tab_id not in block]
-    pinned = _fetch_pins(run, tuple(t for t in ctx.overrides.pin.get(song.key, ()) if t not in block))
+    pinned = _fetch_pins(run, _pins(ctx.overrides, song))
 
     def rated(group: tuple[str, ...]) -> list[int] | None:
         if group not in pinned:

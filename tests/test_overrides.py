@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tabarr.overrides import (
+    Overrides,
     OverridesError,
     add_alias,
     add_artist_url,
@@ -47,9 +48,42 @@ def test_loads_plan_example(tmp_path):
     assert 1601668 in o.block
 
 
+def test_plan_example_keeps_the_pinned_url(tmp_path):
+    o = load_overrides(write(tmp_path, PLAN_EXAMPLE))
+    assert o.pin_urls["soda-stereo/de-musica-ligera"] == ("https://tabs.ultimate-guitar.com/tab/85053",)
+
+
+def test_pin_urls_keep_the_pasted_addresses_in_pin_order(tmp_path):
+    # UG serves a slugged tab only at its slugged URL, so the address you pasted is kept.
+    o = load_overrides(write(tmp_path, '''
+[pin]
+"Soda Stereo - Persiana Americana" = [
+  "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-1081460",
+  " http://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-guitar-pro-6571406/ ",
+  "85053",
+]
+"宋冬野 - 斑马，斑马" = "https://tabs.ultimate-guitar.com/tab/2001234"
+'''))
+    assert o.pin["soda-stereo/persiana-americana"] == (1081460, 6571406, 85053)
+    assert o.pin_urls["soda-stereo/persiana-americana"] == (
+        "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-1081460",
+        "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-guitar-pro-6571406",
+        "https://tabs.ultimate-guitar.com/tab/85053",  # a bare id is the bare page
+    )
+    assert o.pin["宋冬野/斑马斑马"] == (2001234,)
+    assert o.pin_urls["宋冬野/斑马斑马"] == ("https://tabs.ultimate-guitar.com/tab/2001234",)
+
+
+def test_overrides_without_pin_urls_still_work():
+    # Built by hand (as tests and callers do), the pins carry no URLs.
+    o = Overrides(pin={"soda-stereo/de-musica-ligera": (85053,)})
+    assert o.pin_urls == {} and o.pin["soda-stereo/de-musica-ligera"] == (85053,)
+
+
 def test_missing_file_is_empty(tmp_path):
     o = load_overrides(tmp_path / "nope.toml")
     assert not o.alias and not o.pin and not o.ignore and not o.block and not o.match and not o.artist_url
+    assert not o.pin_urls
 
 
 def test_alias_accepts_list_and_canonicalizes(tmp_path):
@@ -123,6 +157,7 @@ def test_writers_preserve_comments_and_roundtrip(tmp_path):
     assert o.match["soda-stereo/persiana-americana"] == ("soda-stereo", "persiana-americana")
     assert o.artist_url["宋冬野"].endswith("song_dongye_99")
     assert o.pin["soda-stereo/de-musica-ligera"] == (85053,)
+    assert o.pin_urls["soda-stereo/de-musica-ligera"] == ("https://tabs.ultimate-guitar.com/tab/85053",)
     assert text.count("Some Artist - Some Interlude") == 1
     assert sorted(o.block) == [1601668]
 

@@ -27,7 +27,7 @@ from tabarr.db import kv_get, kv_set
 from tabarr.http import PoliteClient, ProviderBlocked
 from tabarr.library import keep_file, kept_files, song_dir
 from tabarr.lyrics import Lyrics
-from tabarr.overrides import Overrides
+from tabarr.overrides import Overrides, load_overrides
 from tabarr.songs import get_song, update_song
 from tabarr.ug.artist import artist_page_url
 from tabarr.ug.fetch import (
@@ -439,6 +439,69 @@ def test_pinned_tab_outside_the_index_is_fetched_bare(conn, tmp_path):
     out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, Overrides(pin={song.key: (85053,)})), song)
 
     assert out.sheet == 85053 and ug.requests == [f"{TAB}85053"]
+
+
+def pins_from_toml(tmp_path, display, *urls):
+    """Overrides read from an overrides.toml that pins ``urls`` for the song ``display``."""
+    path = tmp_path / "overrides.toml"
+    path.write_text(f"[pin]\n{json.dumps(display)} = {json.dumps(list(urls))}\n", encoding="utf-8")
+    return load_overrides(path)
+
+
+def test_a_pinned_slugged_tab_outside_the_index_is_fetched_at_the_url_you_pasted(conn, tmp_path):
+    # Live: a slugged tab answers 404 at its bare /tab/{id}. Tonight's sitemaps don't list it yet.
+    song = accepted(conn)
+    url = slugged(1081460)
+    ug = FakeUG()
+    ug.tab(v(1081460, rating=4.6, votes=12), content=sheet("sheet 1081460", LINES))
+    overrides = pins_from_toml(tmp_path, "Soda Stereo - Persiana Americana", url)
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), song)
+
+    assert out.sheet == 1081460 and "sheet 1081460" in read(tmp_path, song, "sheet.txt")
+    assert ug.requests == [url]  # never the bare /tab/1081460
+    assert [(r.tab_id, r.gone) for r in song_versions(conn, song.id, include_gone=True)] == [("1081460", False)]
+
+
+def test_a_pasted_bare_url_of_a_slugged_tab_is_fetched_at_its_slugged_url(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (1081460, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(1081460), content=sheet("sheet 1081460", LINES))
+    overrides = pins_from_toml(tmp_path, "Soda Stereo - Persiana Americana", f"{TAB}1081460")
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), song)
+
+    assert out.sheet == 1081460 and ug.requests == [slugged(1081460)]
+
+
+@pytest.mark.parametrize("closed", ["download", "print"])
+def test_a_pasted_url_under_a_closed_path_is_never_requested(conn, tmp_path, closed):
+    # robots.txt closes /tab/download and /tab/print; the pin falls back to the tab's own page.
+    song = accepted(conn, "Soda Stereo", "De Música Ligera", "soda-stereo", "de-musica-ligera")
+    pinned = version_dict(85053, version=2, rating=4.54, votes=7, song="De Música Ligera", artist="Soda Stereo")
+    ug = FakeUG()
+    ug.tab(pinned, content=sheet("sheet 85053", LINES))
+    overrides = pins_from_toml(tmp_path, "Soda Stereo - De Música Ligera", f"{TAB}{closed}/85053")
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), song)
+
+    assert out.sheet == 85053 and ug.requests == [f"{TAB}85053"]
+
+
+def test_pins_keep_their_urls_in_pinned_order_around_blocked_ones(conn, tmp_path):
+    song = accepted(conn)
+    ug = FakeUG()
+    ug.tab(v(1081460, rating=4.0, votes=5), content=sheet("sheet 1081460", LINES))
+    ug.tab(v(1081470, rating=4.9, votes=90), content=sheet("sheet 1081470", LINES))
+    toml = pins_from_toml(tmp_path, "Soda Stereo - Persiana Americana",
+                          slugged(1081450), slugged(1081460), slugged(1081470))
+    overrides = Overrides(pin=toml.pin, pin_urls=toml.pin_urls, block=frozenset({1081450}))
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), song)
+
+    assert out.sheet == 1081460  # the first pin you haven't blocked, at its own URL
+    assert ug.requests == [slugged(1081460), slugged(1081470)]
 
 
 def test_blocked_ids_excluded(conn, tmp_path):
