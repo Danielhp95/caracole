@@ -86,6 +86,61 @@ url = "https://ntfy.sh/tabarr-test"
     assert cfg.ntfy.url == "https://ntfy.sh/tabarr-test"
 
 
+def test_data_dir_holds_the_library_music_state_and_cache(tmp_path):
+    p = write(tmp_path, 'data_dir = "/data/tabarr"\n')
+    cfg = load_config(p, env={"HOME": str(tmp_path / "home")})
+    assert cfg.library_dir == Path("/data/tabarr/library")
+    assert cfg.music_dir == Path("/data/tabarr/music")
+    assert cfg.state_dir == Path("/data/tabarr/state")
+    assert cfg.cache_dir == Path("/data/tabarr/cache")
+    assert cfg.overrides_file == Path("/data/tabarr/library/overrides.toml")
+    assert cfg.wanted_file == Path("/data/tabarr/library/wanted.txt")
+    assert cfg.db_path == Path("/data/tabarr/state/tabarr.sqlite")
+
+
+def test_explicit_folders_win_over_data_dir(tmp_path):
+    p = write(tmp_path, """
+data_dir = "/data/tabarr"
+library_dir = "/srv/tabs"
+cache_dir = "/var/cache/tabarr"
+""")
+    cfg = load_config(p, env={"HOME": str(tmp_path / "home")})
+    assert cfg.library_dir == Path("/srv/tabs")
+    assert cfg.wanted_file == Path("/srv/tabs/wanted.txt")
+    assert cfg.cache_dir == Path("/var/cache/tabarr")
+    assert cfg.music_dir == Path("/data/tabarr/music")
+    assert cfg.state_dir == Path("/data/tabarr/state")
+
+
+def test_data_dir_wins_over_the_systemd_and_xdg_directories(tmp_path):
+    env = {
+        "HOME": str(tmp_path / "home"), "XDG_STATE_HOME": "/x/state", "XDG_CACHE_HOME": "/x/cache",
+        "STATE_DIRECTORY": "/var/lib/tabarr", "CACHE_DIRECTORY": "/var/cache/tabarr",
+    }
+    cfg = load_config(write(tmp_path, 'data_dir = "/data/tabarr"\n'), env=env)
+    assert cfg.state_dir == Path("/data/tabarr/state")
+    assert cfg.cache_dir == Path("/data/tabarr/cache")
+
+
+def test_data_dir_tilde_and_relative_paths(tmp_path):
+    home = tmp_path / "home"
+    cfg = load_config(write(tmp_path, 'data_dir = "~/tabarr"\n'), env={"HOME": str(home)})
+    assert cfg.library_dir == home / "tabarr/library"
+    assert cfg.state_dir == home / "tabarr/state"
+    cfg = load_config(write(tmp_path, 'data_dir = "data"\n'), env={"HOME": str(home)})
+    assert cfg.music_dir == tmp_path / "data/music"
+    assert cfg.cache_dir == tmp_path / "data/cache"
+
+
+def test_an_empty_data_dir_leaves_the_defaults(tmp_path):
+    home = tmp_path / "home"
+    cfg = load_config(write(tmp_path, 'data_dir = ""\n'), env={"HOME": str(home)})
+    assert cfg.library_dir == home / "Tabs"
+    assert cfg.music_dir == home / "Music"
+    assert cfg.state_dir == home / ".local/state/tabarr"
+    assert cfg.cache_dir == home / ".cache/tabarr"
+
+
 def test_credentials_directory_secret_is_stripped(tmp_path):
     creds = tmp_path / "creds"
     creds.mkdir()
@@ -165,6 +220,7 @@ def load(tmp_path, text):
 @pytest.mark.parametrize(
     "toml,named",
     [
+        ('data_dir = ["/data/tabarr"]\n', "data_dir"),
         ("library_dir = 5\n", "library_dir"),
         ("music_dir = true\n", "music_dir"),
         ('state_dir = ["/srv/state"]\n', "state_dir"),
