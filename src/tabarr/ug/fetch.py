@@ -527,8 +527,9 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     set_picks(run.conn, run.song.id, SHEET_KINDS, [c.version_id])
     if other is not None:
         set_picks(run.conn, run.song.id, (other.kind,), [])
-    if is_complete(c, policy):
+    if is_complete(c, policy) and (auto := _kept_version(run, AUTO_SHEET)) is not None:
         drop_file(run.conn, run.ctx.library_dir, song=run.song, name=AUTO_SHEET)
+        set_picks(run.conn, run.song.id, (auto.kind,), [])
     return int(c.tab_id)
 
 

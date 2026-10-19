@@ -1079,6 +1079,7 @@ def test_auto_sheet_dropped_when_a_complete_human_sheet_arrives(conn, tmp_path, 
     assert "sheet.txt" in names(conn, song)
     assert ("sheet (auto).txt" not in names(conn, song)) is dropped
     assert (song_dir(tmp_path / "lib", song) / "sheet (auto).txt").exists() is not dropped
+    assert len(picks(conn, song.id, ("auto",))) == (0 if dropped else 1)
 
 
 @pytest.mark.parametrize("lacuerda,ug_lines,replaced", [
