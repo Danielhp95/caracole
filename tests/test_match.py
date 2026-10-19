@@ -1,7 +1,10 @@
+from datetime import UTC, datetime
+
 from tabarr.config import MatchPolicy
 from tabarr.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
 from tabarr.overrides import Overrides
 from tabarr.songs import get_song, update_song
+from tabarr.ug.index import mark_built
 from tabarr.versions import picks, set_picks, song_versions, upsert_version
 
 from conftest import add_song
@@ -9,13 +12,16 @@ from conftest import add_song
 POLICY = MatchPolicy()
 
 
-def index(conn, *rows):
-    """Index rows (tab_id, artist_key, song_key, type), inserted directly."""
+def index(conn, *rows, built=True):
+    """Index rows (tab_id, artist_key, song_key, type), inserted directly, in an index a build
+    finished; ``built=False`` leaves it partial, as a build stopped part-way does."""
     conn.executemany(
         "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
         "VALUES (?, ?, ?, ?, '1', 'x', ?)",
         [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows],
     )
+    if built:
+        mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
 
 
 def match(conn, artist, title, overrides=None, artists=None):
@@ -390,12 +396,37 @@ def test_an_empty_index_keeps_what_the_ladder_found(conn):
     before = columns(conn, creep.id)
     conn.execute("DELETE FROM ug_index")
     hotel = add_song(conn, "Eagles", "Hotel California")
+    newcomer = add_song(conn, "Soda Stereo", "Signos")
     changes = match_all(conn, Overrides(match={hotel.key: ("eagles", "hotel-california")}), POLICY)
     assert columns(conn, creep.id) == before and get_song(conn, creep.id).ug_dirty is False
+    # The ignore you took out comes off; a song matched never isn't saved as a miss, and shows as one.
     assert {c.song.id: (c.old, c.new.decision) for c in changes} == {
-        creep.id: ("accept", "accept"), wonderwall.id: ("ignored", "not_found"), hotel.id: (None, "accept")}
+        creep.id: ("accept", "accept"), wonderwall.id: ("ignored", "not_found"), hotel.id: (None, "accept"),
+        newcomer.id: (None, "not_found")}
     assert get_song(conn, wonderwall.id).status == "wanted"
     assert get_song(conn, hotel.id).match_step == "override"
+    assert get_song(conn, newcomer.id).match_decision is None
+
+
+def test_a_partial_index_keeps_what_the_ladder_found_and_saves_no_new_miss(conn):
+    # A build stopped part-way: a song whose tabs are in the sitemaps it didn't read isn't missing from
+    # UG. match_all holds this for every caller, `tabarr review`'s rematch among them.
+    index(conn, (1, "radiohead", "creep", "chords"), (2, "oasis", "wonderwall", "chords"), built=False)
+    earlier = add_song(conn, "Eagles", "Hotel California")  # matched before, in a sitemap not read yet
+    update_song(conn, earlier.id, match_decision="accept", match_step="exact", match_score=100.0,
+                match_artist_key="eagles", match_song_key="hotel-california", ug_dirty=False,
+                match_candidates=[{"artist_key": "eagles", "song_key": "hotel-california", "score": 100.0,
+                                   "step": "exact"}])
+    before = columns(conn, earlier.id)
+    creep = add_song(conn, "Radiohead", "Creep")
+    missing = add_song(conn, "Soda Stereo", "Signos")
+    pinned = add_song(conn, "Joaquín Sabina", "Contigo")
+    changes = match_all(conn, Overrides(pin={pinned.key: (85053,)}), POLICY)
+    assert columns(conn, earlier.id) == before and get_song(conn, earlier.id).ug_dirty is False
+    assert get_song(conn, creep.id).match_decision == "accept"  # what the index has is still found
+    assert get_song(conn, missing.id).match_decision is None  # not looked up yet, rather than a miss
+    assert get_song(conn, pinned.id).match_decision == "pinned"  # and your overrides apply
+    assert {c.song.id: c.new.decision for c in changes}[missing.id] == "not_found"  # as `match --dry-run` shows
 
 
 def test_ignored_songs_get_status_ignored_and_come_back(conn):

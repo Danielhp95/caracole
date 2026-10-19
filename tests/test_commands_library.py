@@ -104,6 +104,22 @@ def test_review_reports_overrides_broken_while_it_waits(tmp_path, monkeypatch):
     assert get_song(conn, sid).review is True
 
 
+def test_review_on_a_partial_index_saves_no_song_as_not_found(tmp_path):
+    # A build stopped part-way: the rematch after your answers mustn't take the songs in the sitemaps
+    # not read yet for misses.
+    conn, sid = seed(tmp_path)
+    update_song(conn, sid, review=True, match_decision="review", match_step="fuzzy_title",
+                match_candidates=[CANDIDATE])
+    other, _ = upsert_song(conn, artists=["Soda Stereo"], title="Signos", album=None, duration_ms=None,
+                           isrc=None, source="wanted", source_id="y", added_at="2026-10-18T00:00:00Z")
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(1, 'song-dongye', 'ban-ma-ban-ma', 'chords', '1', 'x', 'song-dongye/ban-ma-ban-ma-chords-1')")
+    result = run(tmp_path, "review", input="1\n")  # the index was never marked built: it is partial
+    assert result.exit_code == 0, result.output
+    assert get_song(conn, sid).match_decision == "accept"  # your answer is kept
+    assert get_song(conn, other).match_decision is None
+
+
 def test_scan_reports_music_and_inbox(tmp_path):
     seed(tmp_path)
     (tmp_path / "music").mkdir()

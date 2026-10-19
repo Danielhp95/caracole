@@ -22,8 +22,9 @@ different title; review from ``review``; otherwise not found.
 
 ``match_all`` never replaces a match the fetch step made on a UG artist page
 (step ``artist_page``, amendment A6): the index can't see those bare-id tabs,
-so only your overrides can. Nor does an empty index (never built, or emptied)
-undo what the ladder found before: an index that can't be searched is not a miss.
+so only your overrides can. Nor does an index that isn't complete (empty:
+never built, or emptied; partial: a build stopped part-way) undo what the
+ladder found before, or record a miss: it is no evidence that UG lacks a song.
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ from tabarr.config import MatchPolicy
 from tabarr.normalize import clean_title, compact, has_han, romanize, slug_key, split_variant
 from tabarr.overrides import Overrides
 from tabarr.songs import Song, list_songs, refresh_status, update_song, utc_now_iso
+from tabarr.ug.index import index_state
 from tabarr.versions import mark_stale
 
 DECISIONS = ("accept", "review", "not_found", "pinned", "ignored")
@@ -87,10 +89,6 @@ class IndexView:
         self._songs: dict[str, list[IndexSong]] = {}
         self._titles: list[str] | None = None
         self._compact_titles: list[str] | None = None
-
-    def empty(self) -> bool:
-        """Whether the index has no rows at all: never built, or emptied."""
-        return self.conn.execute("SELECT 1 FROM ug_index LIMIT 1").fetchone() is None
 
     def artist_keys(self) -> list[str]:
         """Every artist key in the index, sorted."""
@@ -433,18 +431,21 @@ def _needs_fetch(song: Song, new: MatchResult) -> bool:
     return new.decision == "pinned" and _pins_of(song) != list(new.pinned)
 
 
-def _keeps_stored(song: Song, new: MatchResult, *, empty: bool) -> bool:
+def _keeps_stored(song: Song, new: MatchResult, *, complete: bool) -> bool:
     """Whether a song keeps its stored match instead of ``new``.
 
     Your overrides always win. Otherwise a match the fetch step made on a UG
-    artist page stays (A6), and so does what the ladder found before while
-    the index is empty.
+    artist page stays (A6). While the index isn't complete, so does what the
+    ladder found before, and a song it misses now keeps what it had (a song
+    never matched stays unmatched); only an override you took out still comes off.
     """
     if new.step in ("override", "pin"):
         return False
     if song.match_step == ARTIST_PAGE:
         return True
-    return empty and song.match_step in LADDER_STEPS
+    if complete:
+        return False
+    return song.match_step in LADDER_STEPS or (song.match_step is None and new.decision == "not_found")
 
 
 def _stored(song: Song) -> MatchResult:
@@ -505,16 +506,18 @@ def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolic
     status ``ignored``; songs no longer ignored get their status back.
 
     A song matched on a UG artist page (A6) keeps that match unless an
-    override applies, and while the index is empty so does any song the ladder
-    matched before. Returns one change per song; a kept song's ``new`` is its
-    stored match.
+    override applies. While the index is empty or partial (``index_state``)
+    so does any song the ladder matched before, and a miss is never saved: a
+    song never matched stays unmatched (only an override you took out comes
+    off). Returns one change per song; a kept song's ``new`` is its stored
+    match (not found, for one never matched).
     """
     index = IndexView(conn)
-    empty = index.empty()
+    complete = index_state(conn) == "complete"
     changes, kept = [], set()
     for song in list_songs(conn):
         new = match_song(song, index, overrides, policy)
-        if _keeps_stored(song, new, empty=empty):
+        if _keeps_stored(song, new, complete=complete):
             new = _stored(song)
             kept.add(song.id)
         changes.append(MatchChange(song, song.match_decision, new))
