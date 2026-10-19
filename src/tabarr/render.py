@@ -26,19 +26,62 @@ Two kinds of font come out wrong, so ``render_pdf`` refuses them up front:
 ``FusionKaiJ-Regular.ttf`` from nixpkgs' ``lxgw-fusionkai`` passes both checks
 (every glyph record has an even length). A CFF-flavoured ``.otf`` works too;
 PDF::API2 embeds those whole, so the PDFs are larger.
+
+``render_all`` gives every kept sheet in the library a ChordPro file and a PDF
+beside it:
+
+- a human sheet (``sheet.txt``, from UG or LaCuerda) is rendered from the
+  ``content`` of the ``sheet.json`` next to it, with the key UG gives the
+  version (``tonality_name``) and the capo in ``meta``, to ``sheet.cho`` and
+  ``sheet.pdf``;
+- otherwise an auto-chords sheet (``sheet (auto).txt``) is rendered to
+  ``sheet (auto).cho`` and ``sheet (auto).pdf``, so a human sheet found later
+  never collides with them. They are removed once the human sheet's PDF exists.
+
+The PDF is transposed by the song's ``[transpose]`` override. kv
+``render:<song id>`` keeps what each PDF was made from (the SHA-256 of the
+.cho, the transposition, the font and the PDF's name), so a PDF is rendered
+again only when one of those changes, when it is missing, or when forced.
+A sheet whose letters the built-in fonts lack gets its .cho but no PDF until a
+CJK font is set: one font error for the pass, not a failure per song.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 import os
+import sqlite3
 import struct
 import subprocess
-from collections.abc import Callable
+import unicodedata
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from functools import lru_cache
 from itertools import pairwise
 from pathlib import Path
+from typing import Any, Literal
 
+from tabarr.autochords.merge import AUTO_MARKER
 from tabarr.chordpro import to_chordpro
+from tabarr.config import Config
+from tabarr.db import kv_get_json, kv_set_json
+from tabarr.library import KeptFile, kept_files, song_dir, write_info
+from tabarr.normalize import clean_title
+from tabarr.overrides import Overrides
+from tabarr.songs import Song, list_songs
+from tabarr.ug.page import json_int
+from tabarr.versions import get_version
+
+log = logging.getLogger(__name__)
+
+HUMAN_SHEET = "sheet.txt"  # rendered to sheet.cho and sheet.pdf
+AUTO_SHEET = "sheet (auto).txt"  # rendered to the AUTO_OUTPUTS
+AUTO_OUTPUTS = ("sheet (auto).cho", "sheet (auto).pdf")
+STATUS_KEY = "render:status"  # kv: the last pass, for the to-do page
+FONT_HINT = "set cjk_font or TABARR_CJK_FONT"
 
 TIMEOUT = 120  # seconds; a sheet renders in about one
 
@@ -195,3 +238,229 @@ def _font_problem(path: str, size: int, mtime_ns: int) -> str | None:
             "lxgw-fusionkai, or a CFF-based .otf"
         )
     return None
+
+
+# --- the library ---------------------------------------------------------------------
+
+Outcome = Literal["rendered", "skipped", "no font"]
+
+
+@dataclass
+class RenderStats:
+    """What one pass over the library did.
+
+    ``rendered`` PDFs were written, ``skipped`` ones were already up to date and
+    ``failed`` songs could not be rendered. ``font_error`` says, once for the
+    pass, which sheets have no PDF for want of a CJK font.
+    """
+
+    rendered: int = 0
+    skipped: int = 0
+    failed: int = 0
+    font_error: str | None = None
+
+
+def render_all(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    overrides: Overrides,
+    *,
+    runner: Runner = subprocess.run,
+    force: bool = False,
+    now: datetime | None = None,
+) -> RenderStats:
+    """Write every kept sheet as ChordPro and render it to a PDF in the song's key.
+
+    Ignored songs are left alone. A song that fails (a ``RenderError``, or a
+    file that can't be read or written) is logged and counted, and the others
+    go on. The pass is recorded in kv ``render:status`` for the to-do page:
+    ``{"at", "rendered", "failed": [display keys], "font_error"}``.
+    """
+    stats = RenderStats()
+    failed: list[str] = []
+    no_font: list[str] = []
+    for song in list_songs(conn):
+        if song.status == "ignored" or song.key in overrides.ignore:
+            continue
+        try:
+            outcome = _render_song(conn, cfg, overrides, song, runner=runner, force=force)
+        except (RenderError, OSError) as e:
+            log.warning("no PDF for %s: %s", song.display, e)
+            failed.append(song.display)
+            continue
+        if outcome == "rendered":
+            stats.rendered += 1
+        elif outcome == "skipped":
+            stats.skipped += 1
+        elif outcome == "no font":
+            no_font.append(song.display)
+    stats.failed = len(failed)
+    if no_font:
+        stats.font_error = _font_error(no_font)
+        log.warning("%s", stats.font_error)
+    at = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    kv_set_json(conn, STATUS_KEY, {
+        "at": at, "rendered": stats.rendered, "failed": failed, "font_error": stats.font_error,
+    })
+    return stats
+
+
+def _render_song(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    overrides: Overrides,
+    song: Song,
+    *,
+    runner: Runner,
+    force: bool,
+) -> Outcome | None:
+    """Render one song's sheet; None when it has none."""
+    files = {f.name: f for f in kept_files(conn, song.id)}
+    if (kept := files.get(HUMAN_SHEET)) is not None:
+        sheet = _human_sheet(conn, cfg.library_dir, kept)
+    elif (kept := files.get(AUTO_SHEET)) is not None:
+        sheet = _auto_sheet(cfg.library_dir, kept)
+    else:
+        return None
+    folder = song_dir(cfg.library_dir, song)
+    stem = Path(kept.name).stem
+    cho = write_chordpro(
+        sheet.markup,
+        folder / f"{stem}.cho",
+        title=clean_title(song.title),
+        artist=song.artist,
+        key=sheet.key,
+        capo=sheet.capo,
+        auto=sheet.auto,
+    )
+    text = cho.read_text(encoding="utf-8")
+    need = _font_need(text)
+    font = cfg.cjk_font if need else None
+    if need == "letters" and font is None:
+        return "no font"
+    pdf = folder / f"{stem}.pdf"
+    transpose = overrides.transpose.get(song.key, 0)
+    state = {
+        "source_sha": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "transpose": transpose,
+        "font": str(font) if font else None,
+        "pdf": pdf.name,
+    }
+    outcome: Outcome
+    if not force and pdf.is_file() and kv_get_json(conn, _state_key(song.id)) == state:
+        outcome = "skipped"
+    else:
+        _render_into(cho, pdf, transpose=transpose, chordpro_bin=cfg.chordpro_bin, font_file=font,
+                     runner=runner)
+        kv_set_json(conn, _state_key(song.id), state)
+        write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
+        outcome = "rendered"
+    if not sheet.auto:
+        # The human sheet's PDF is in place, so the auto sheet's outputs are stale.
+        for name in AUTO_OUTPUTS:
+            (folder / name).unlink(missing_ok=True)
+    return outcome
+
+
+def _state_key(song_id: int) -> str:
+    """kv: what the song's PDF was made from (written here, read by ``library.write_info``)."""
+    return f"render:{song_id}"
+
+
+# --- where a sheet comes from ----------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Sheet:
+    """What a song's ChordPro file is made from."""
+
+    markup: str
+    key: str | None = None
+    capo: int | None = None
+    auto: bool = False
+
+
+def _human_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) -> _Sheet:
+    """The sheet the fetch step kept: the markup in sheet.json, the key UG gives the version."""
+    path = (library_dir / kept.path).with_name("sheet.json")
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:  # ValueError: not UTF-8, or not JSON
+        raise RenderError(f"cannot read {path}: {e}") from e
+    content = doc.get("content") if isinstance(doc, Mapping) else None
+    if not isinstance(content, str) or not content.strip():
+        raise RenderError(f"{path} holds no sheet content")
+    raw = get_version(conn, kept.version_id).raw
+    return _Sheet(content, key=_key(raw), capo=_capo(doc.get("meta")))
+
+
+def _key(raw: Mapping[str, Any]) -> str | None:
+    """The key UG gives a version (``tonality_name``, often empty)."""
+    value = raw.get("tonality_name")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def _capo(meta: Any) -> int | None:
+    """The capo fret in UG's ``tab_view.meta``: a number or a digit string, else no capo."""
+    value = meta.get("capo") if isinstance(meta, Mapping) else None
+    fret = None if isinstance(value, bool) else json_int(value)
+    return fret if fret is not None and fret > 0 else None
+
+
+def _auto_sheet(library_dir: Path, kept: KeptFile) -> _Sheet:
+    """An auto-chords sheet without its two header lines, which to_chordpro writes as directives."""
+    path = library_dir / kept.path
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, ValueError) as e:
+        raise RenderError(f"cannot read {path}: {e}") from e
+    if lines and lines[0].strip() == AUTO_MARKER:
+        lines = lines[2:]  # the marker, then "Artist - Title"
+    return _Sheet("\n".join(lines), auto=True)
+
+
+# --- the PDF ---------------------------------------------------------------------------
+
+
+def _render_into(
+    cho: Path,
+    pdf: Path,
+    *,
+    transpose: int,
+    chordpro_bin: str,
+    font_file: Path | None,
+    runner: Runner,
+) -> None:
+    """``render_pdf`` through a temporary file: a failed run leaves the last good PDF in place."""
+    tmp = pdf.with_name(f".{pdf.stem}.tmp.pdf")  # chordpro picks its backend by the extension
+    try:
+        render_pdf(cho, tmp, transpose=transpose, chordpro_bin=chordpro_bin, font_file=font_file,
+                   runner=runner)
+        os.replace(tmp, pdf)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+_INVISIBLE = frozenset({"Cc", "Cf"})  # controls, zero-width spaces, byte-order marks
+
+
+def _font_need(text: str) -> Literal["letters", "symbols"] | None:
+    """What ChordPro's built-in fonts would lose of ``text``.
+
+    Invisible characters don't count, as there is nothing to lose. Lost letters
+    (Chinese lyrics, say) leave a sheet unsingable; a lost symbol, such as a
+    music note, only blemishes it.
+    """
+    lost = {unicodedata.category(ch) for ch in set(text) if needs_font_file(ch)} - _INVISIBLE
+    if any(category.startswith("L") for category in lost):
+        return "letters"
+    return "symbols" if lost else None
+
+
+def _font_error(songs: list[str], shown: int = 3) -> str:
+    """One line for every sheet that has no PDF for want of a CJK font."""
+    names = ", ".join(songs[:shown])
+    more = f" and {len(songs) - shown} more" if len(songs) > shown else ""
+    return f"{FONT_HINT} to render {names}{more}"
