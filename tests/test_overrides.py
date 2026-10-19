@@ -120,6 +120,42 @@ def test_unknown_table_is_error(tmp_path):
         load_overrides(write(tmp_path, '[pins]\n"A - B" = []\n'))
 
 
+@pytest.mark.parametrize("text, table, named, shape", [
+    ('[ignore]\nsong = ["Maná - Rayando el Sol"]\n', "[ignore]", "'song'", "songs = ["),
+    # The shape every other table uses:
+    ('[ignore]\n"Maná - Rayando el Sol" = true\n', "[ignore]", "'Maná - Rayando el Sol'", "songs = ["),
+    ('[ignore]\nsongs = ["A - B"]\nsong = ["C - D"]\n', "[ignore]", "'song'", "songs = ["),
+    ("[block]\ntab_id = [1601668]\n", "[block]", "'tab_id'", "tab_ids = ["),
+])
+def test_unknown_keys_in_ignore_and_block_are_errors(tmp_path, text, table, named, shape):
+    # Dropped, the typo would keep the song fetched, or the rejected tab in use.
+    p = write(tmp_path, text)
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    message = str(e.value)
+    assert message.startswith(f"{p}: ") and table in message and named in message and shape in message
+
+
+@pytest.mark.parametrize("text, where", [
+    ('[match]\n"Creep" = "radiohead/creep"\n', "[match] 'Creep'"),
+    ('[transpose]\n"Creep" = 2\n', "[transpose] 'Creep'"),
+    ('[ignore]\nsongs = ["Creep"]\n', "[ignore] songs"),
+    ('[pin]\n"Creep" = "85053"\n', "[pin] 'Creep'"),
+])
+def test_a_malformed_song_key_names_its_table_and_file(tmp_path, text, where):
+    p = write(tmp_path, text)
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == f"{p}: {where}: expected \"Artist - Title\", got 'Creep'"
+
+
+def test_a_malformed_pin_value_names_the_pin_once(tmp_path):
+    p = write(tmp_path, '[pin]\n"A - B" = 85053\n')
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == f"{p}: [pin] 'A - B': expected a string or a list of strings"
+
+
 def test_invalid_toml_is_error(tmp_path):
     with pytest.raises(OverridesError):
         load_overrides(write(tmp_path, "[alias\n"))

@@ -103,17 +103,36 @@ def _strings(value: Any, where: str) -> list[str]:
     raise OverridesError(f"{where}: expected a string or a list of strings")
 
 
+def _song_key(display: str, where: str) -> str:
+    """``override_key`` for an entry of a table, whose error names the entry."""
+    try:
+        return override_key(display)
+    except OverridesError as e:
+        raise OverridesError(f"{where}: {e}") from e
+
+
+def _only_key(t: Mapping[str, Any], name: str, key: str, shape: str) -> None:
+    """``[ignore]`` and ``[block]`` hold one list each: any other key is a typo, never dropped."""
+    unknown = [k for k in t if k != key]
+    if unknown:
+        listed = ", ".join(map(repr, unknown))
+        raise OverridesError(f"unknown key(s) in [{name}]: {listed}; expected {key} = {shape}")
+
+
 def load_overrides(path: Path) -> Overrides:
-    """Read overrides.toml; a missing file means no overrides."""
+    """Read overrides.toml; a missing file means no overrides. Every error names the file."""
     if not path.is_file():
         return Overrides()
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as e:
+        return _parse(tomllib.loads(path.read_text(encoding="utf-8")))
+    except (tomllib.TOMLDecodeError, OverridesError) as e:
         raise OverridesError(f"{path}: {e}") from e
+
+
+def _parse(data: Mapping[str, Any]) -> Overrides:
     unknown = sorted(set(data) - _TABLES)
     if unknown:
-        raise OverridesError(f"{path}: unknown table(s): {', '.join(unknown)}")
+        raise OverridesError(f"unknown table(s): {', '.join(unknown)}")
 
     def table(name: str) -> Mapping[str, Any]:
         value = data.get(name, {})
@@ -125,7 +144,7 @@ def load_overrides(path: Path) -> Overrides:
         slug_key(artist): tuple(ug_slug_key(s) for s in _strings(v, f"[alias] {artist!r}"))
         for artist, v in table("alias").items()
     }
-    match = {override_key(k): _ug_ref(v, repr(k)) for k, v in table("match").items()}
+    match = {_song_key(k, f"[match] {k!r}"): _ug_ref(v, repr(k)) for k, v in table("match").items()}
 
     artist_url: dict[str, str] = {}
     for artist, url in table("artist_url").items():
@@ -138,8 +157,8 @@ def load_overrides(path: Path) -> Overrides:
     pin: dict[str, tuple[int, ...]] = {}
     pin_urls: dict[str, tuple[str, ...]] = {}
     for k, v in table("pin").items():
+        pasted = _strings(v, f"[pin] {k!r}")
         try:
-            pasted = _strings(v, f"[pin] {k!r}")
             ident = override_key(k)
             pin[ident] = tuple(tab_id_from_url(u) for u in pasted)
             pin_urls[ident] = tuple(_pin_url(u) for u in pasted)
@@ -150,12 +169,15 @@ def load_overrides(path: Path) -> Overrides:
     for k, v in table("transpose").items():
         if not isinstance(v, int) or isinstance(v, bool) or not -11 <= v <= 11:
             raise OverridesError(f"[transpose] {k!r}: expected semitones between -11 and 11")
-        transpose[override_key(k)] = v
+        transpose[_song_key(k, f"[transpose] {k!r}")] = v
 
     ignore_t = table("ignore")
-    ignore = frozenset(override_key(s) for s in _strings(ignore_t.get("songs", []), "[ignore] songs"))
+    _only_key(ignore_t, "ignore", "songs", '["Artist - Title", ...]')
+    songs = _strings(ignore_t.get("songs", []), "[ignore] songs")
+    ignore = frozenset(_song_key(s, "[ignore] songs") for s in songs)
 
     block_t = table("block")
+    _only_key(block_t, "block", "tab_ids", "[<tab id>, ...]")
     tab_ids = block_t.get("tab_ids", [])
     if not isinstance(tab_ids, list) or not all(isinstance(t, int) for t in tab_ids):
         raise OverridesError("[block] tab_ids must be a list of integers")
