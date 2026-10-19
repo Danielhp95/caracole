@@ -14,13 +14,15 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
+from rapidfuzz import fuzz
 from selectolax.lexbor import LexborHTMLParser, LexborNode
 
 from tabarr.http import ProviderError
-from tabarr.normalize import fold
+from tabarr.normalize import clean_title, fold, slug_key, ug_slug_key
 
 BASE_URL = "https://acordes.lacuerda.net"
 PROVIDER = "lacuerda"
@@ -187,3 +189,29 @@ def _link_title(link: LexborNode) -> str:
     if nodes and nodes[-1].tag == "em":
         nodes.pop()
     return " ".join("".join(n.text(deep=True) for n in nodes).split())
+
+
+def match_title(songs: Iterable[LCSong], title: str, *, cutoff: float = 90) -> LCSong | None:
+    """The song on an artist page that is ``title``, or None.
+
+    Compares slug keys of the cleaned title with each song's title and, as a
+    second form, its slug, because a slug sometimes keeps what the title drops
+    ("Algun día" is ``algun_diasomeday``). An exact key wins; otherwise the best
+    rapidfuzz ratio, if it reaches ``cutoff``. On a tie, a song with an acordes
+    version beats one without, then the first on the page wins.
+    """
+    query = slug_key(clean_title(title))
+    if not query:
+        return None
+    best: LCSong | None = None
+    best_key: tuple[float, bool] = (-1.0, False)
+    for song in songs:
+        score = max(fuzz.ratio(query, form) for form in _title_forms(song))
+        key = (score, best_acordes_version(song) is not None)
+        if key > best_key:
+            best, best_key = song, key
+    return best if best_key[0] >= cutoff else None
+
+
+def _title_forms(song: LCSong) -> tuple[str, str]:
+    return slug_key(song.title), ug_slug_key(song.slug.replace("_", "-"))

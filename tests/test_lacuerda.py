@@ -12,6 +12,7 @@ from tabarr.lacuerda import (
     artist_slug_candidates,
     artist_url,
     best_acordes_version,
+    match_title,
     parse_artist_page,
     parse_lcd,
     version_url,
@@ -261,3 +262,57 @@ def test_a_page_without_the_song_list_is_a_parse_error():
     assert isinstance(err.value, ProviderError)
     assert err.value.provider == "lacuerda"
     assert err.value.url == url
+
+
+# --- matching a title against the artist page ------------------------------
+
+
+def test_match_title_exact(artist_songs):
+    assert match_title(artist_songs, "De Música Ligera").slug == "de_musica_ligera"
+
+
+def test_match_title_cleans_spotify_suffixes(artist_songs):
+    assert match_title(artist_songs, "De Música Ligera - Remasterizado 2007").slug == "de_musica_ligera"
+    assert match_title(artist_songs, "Cuando Pase El Temblor - MTV Unplugged").slug == (
+        "cuando_pase_el_temblor"
+    )
+
+
+def test_match_title_ignores_accents_and_case(artist_songs):
+    assert match_title(artist_songs, "de musica ligera").slug == "de_musica_ligera"
+    assert match_title(artist_songs, "ÁNGEL ELÉCTRICO").slug == "angel_electrico"
+
+
+def test_match_title_uses_the_slug_as_a_second_form(artist_songs):
+    # The page titles this one "Algun día"; its slug kept the "(Someday)".
+    assert match_title(artist_songs, "Algún Día (Someday)").slug == "algun_diasomeday"
+    assert match_title(artist_songs, "Picnic en el 4º B").slug == "picnic_en_el_4o_b"
+
+
+def test_match_title_fuzzy_above_the_cutoff(artist_songs):
+    assert match_title(artist_songs, "Persiana Americanna").slug == "persiana_americana"
+
+
+def test_match_title_below_the_cutoff_is_none(artist_songs):
+    assert match_title(artist_songs, "Hotel California") is None
+    assert match_title(artist_songs, "Persiana") is None
+    assert match_title(artist_songs, "斑马斑马") is None
+
+
+def test_match_title_cutoff_is_adjustable(artist_songs):
+    assert match_title(artist_songs, "Persiana", cutoff=60).slug == "persiana_americana"
+
+
+def test_match_title_prefers_a_song_with_acordes_on_a_tie():
+    songs = [LCSong("la_flaca_tab", "La Flaca", "T", (1,)), LCSong("la_flaca", "La Flaca", "TR", (2, 1))]
+    assert match_title(songs, "La Flaca").slug == "la_flaca"
+
+
+def test_match_title_first_on_the_page_wins_a_full_tie():
+    songs = [LCSong("la_flaca", "La Flaca", "R", (1,)), LCSong("la_flaca_2", "La flaca", "R", (1,))]
+    assert match_title(songs, "La Flaca").slug == "la_flaca"
+
+
+def test_match_title_with_nothing_to_match():
+    assert match_title([], "De Música Ligera") is None
+    assert match_title([LCSong("ecos", "Ecos", "R", (1,))], "!!!") is None
