@@ -10,6 +10,15 @@ Before I trie to add a song `"caracole add "epic" "I'm not sorry for loving you"
 
 I believe this system to be powerful enough. But there may be better ways of being fault tolerant in this sense
 
+**Done in [97a2c3f](https://github.com/Danielhp95/caracole/commit/97a2c3f).** Names that aren't quite UG's are now matched offline, with no web search. When nothing matches exactly, a new matching step suggests candidates, and only ever for review, never accepted on its own. It looks for three kinds:
+- **word_title:** a title of the artist's that holds yours word for word.
+- **typo_artist:** an artist one or two letters off ("Coldplya" finds coldplay).
+- **catch_all:** UG's catch-all artists (misc-musicals, misc-soundtrack, misc-cartoons, misc-television, misc-computer-games), whose titles hold the show's name.
+
+`caracole add "epic" "I'm not sorry for loving you"` now prints "Did you mean: … misc-musicals/epic-the-musical-not-sorry-for-loving-you" right away. Settle it with `caracole review` or on the to-do page. `caracole search` shows a review's first candidates under the song.
+
+A fallback through an official web-search API, using your own key (Brave Search API or your own SearXNG), is designed in docs/web-search.md but not built. No search engine's result pages are ever scraped.
+
 ## Key information
 
 - Add key for each song. That's added, denote whether the key comes from running a model locally or extracted fro the information on the tab itself.
@@ -58,6 +67,18 @@ On NixOS, `services.caracole.web.enable = true` runs it as `caracole-web.service
 - Allowing for transpositions (i.e adding or substracting semitones to each chord)
 - Chord alternatives. If we have the key of a song. we can propose different chords to change the "feel" of the song while remaining in key
 - Mode changes. If we have the key (say, C minor) we can change it to C major. Allow this for all modes.
+
+**Done in [13eb592](https://github.com/Danielhp95/caracole/commit/13eb592).**
+- **The PDFs** have caracole's own look: Helvetica, bold rust-coloured chords, chord diagrams at the top, section names on a light band, and one line under the title ("Soda Stereo · Key Bm · Capo 2").
+- **The phone page:** beside every PDF there is now a `sheet.html`, which opens from the synced folder with no server and loads nothing. It has:
+  - chords highlighted over the lyrics, never split from their syllable;
+  - tap a chord for its fingerings (from chords-db, MIT) and for chords to play instead that stay in the key;
+  - the Key button: transpose by semitones, capo suggestions, and a mode change on the same tonic (major, minor, dorian…: each chord moves to the same scale degree);
+  - text size, a strip with every chord shape, and autoscroll.
+- **Its key** is the song's key, from the key work, so the viewer, info.json and index.html agree.
+- **index.html** links each viewer first.
+
+Opening it through `caracole serve` is being added now. Until then, open `sheet.html` from the library folder.
 
 ## yt-dlp for downloading songs
 
