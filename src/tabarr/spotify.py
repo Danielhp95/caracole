@@ -375,7 +375,8 @@ def iter_playlist_tracks(sp: SpotifyAPI, ref: str) -> Iterator[SpotifyTrack]:
         first = _call(what, sp.playlist_items, playlist_id, limit=PAGE_SIZE)
     except SpotifySourceError as e:
         if e.status in (400, 403, 404):
-            raise PlaylistUnavailable(ref, f"Spotify refused it: {e}", status=e.status) from e
+            answer = str(e).removeprefix(f"Spotify {what}: ")  # "HTTP 403: Forbidden"
+            raise PlaylistUnavailable(ref, f"Spotify refused it ({answer})", status=e.status) from e
         raise
     if isinstance(first, Mapping):
         items, total = first.get("items"), first.get("total")
@@ -589,7 +590,10 @@ def _suggestion(track: SpotifyTrack) -> dict[str, Any]:
 
 
 def _text(value: Any) -> str | None:
-    return value.strip() or None if isinstance(value, str) else None
+    """A non-empty stripped string, or None."""
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
 
 
 def _utc(value: Any) -> str | None:

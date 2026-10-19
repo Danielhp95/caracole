@@ -15,6 +15,7 @@ from tabarr.spotify import (
     REQUEST_TIMEOUT,
     SCOPES,
     TOP_TRACKS_KEY,
+    PlaylistUnavailable,
     SpotifyAuthError,
     SpotifySourceError,
     SpotifyTrack,
@@ -454,6 +455,15 @@ def test_playlists_spotify_refuses_are_missing():
     assert stats.missing_playlists == [gone, forbidden, emptied]
     assert stats.errors == []
     assert "playlists" not in sp.calls  # all three were read as ids, not looked up by name
+
+
+def test_a_refused_playlist_says_why_once():
+    sp = FakeSpotify(fail={f"items:{LEARN}": SpotifyException(403, -1, "x:\n Forbidden")})
+    with pytest.raises(PlaylistUnavailable) as caught:
+        list(iter_playlist_tracks(sp, LEARN))
+    assert (
+        str(caught.value) == f"Spotify playlist {LEARN!r}: Spotify refused it (HTTP 403: Forbidden)"
+    )
 
 
 def test_top_tracks_stored_as_suggestions_not_songs():
