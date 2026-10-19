@@ -26,6 +26,9 @@ _JSON_COLUMNS = {"artists", "source_ids", "match_candidates", "lyrics_json"}
 _BOOL_COLUMNS = {"review", "ug_dirty"}
 SHEET_FILE_NAMES = ("sheet.txt", "sheet (auto).txt")
 KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored keys were made with
+# What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py).
+# It goes with a song merged into another: SQLite may give that id to the next new song.
+_PER_SONG_KV = ("render:", "ug:artist_page_checked:", "autochords:failed:")
 
 
 def utc_now_iso() -> str:
@@ -319,6 +322,8 @@ def _merge(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
         (keep.id, keep.id, other.id, keep.id),
     )
     conn.execute("DELETE FROM songs WHERE id = ?", (other.id,))
+    for prefix in _PER_SONG_KV:
+        kv_delete(conn, f"{prefix}{other.id}")
     refresh_status(conn, keep.id, ignored=keep.status == "ignored")
 
 

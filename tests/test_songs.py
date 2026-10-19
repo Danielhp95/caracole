@@ -274,6 +274,21 @@ def test_songs_an_older_normalizer_kept_apart_are_merged(conn, tmp_path):
     assert all((lib / f.path).is_file() for f in kept.values())
 
 
+def test_a_merged_songs_own_state_goes_with_it(conn):
+    # SQLite hands the next new song the id of the newest row once that row is gone.
+    older_song(conn, "Los Enanitos Verdes", "Lamento Boliviano",
+               "los-enanitos-verdes/lamento-boliviano", source="spotify", source_id="sp9")
+    newer = older_song(conn, "Enanitos Verdes", "Lamento Boliviano",
+                       "enanitos-verdes/lamento-boliviano", source="wanted", source_id="x")
+    own = [f"render:{newer}", f"ug:artist_page_checked:{newer}", f"autochords:failed:{newer}"]
+    for key in own:
+        db.kv_set(conn, key, '"2026-10-18T03:30:00Z"')
+    ensure_current_keys(conn)
+    fresh = add_song(conn, "Soda Stereo", "Signos")
+    assert fresh.id == newer
+    assert [db.kv_get(conn, key) for key in own] == [None, None, None]
+
+
 def test_keys_that_change_hands_are_re_keyed_without_a_clash(conn):
     # One song's new key is another's old one: keys are unique, so neither may wait for the other.
     moving = older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
