@@ -257,7 +257,9 @@ def add_song(
     return AddedSong(line, listed, known, song, tuple(stats.errors), match=match)
 
 
-def _match_added(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides | None) -> AddedMatch | None:
+def _match_added(
+    conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides | None
+) -> AddedMatch | None:
     """Match the song just added against the offline index, and save it, as the nightly match step would.
 
     Nothing is matched without overrides.toml (None), nor against an empty index. A partial

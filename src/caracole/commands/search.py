@@ -105,8 +105,10 @@ def _library_line(cfg: Config, hit: LibraryHit) -> str:
     candidates = did_you_mean(song)
     if candidates:
         lines.append("     Did you mean (`caracole review` settles it):")
-        lines += [f"       {float(c.get('score') or 0):.0f}  {c['artist_key']}/{c['song_key']} ({c.get('step', '')})"
-                  for c in candidates]
+        lines += [
+            f"       {float(c.get('score') or 0):.0f}  {c['artist_key']}/{c['song_key']} ({c.get('step', '')})"
+            for c in candidates
+        ]
     return "\n".join(lines)
 
 
