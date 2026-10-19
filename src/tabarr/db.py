@@ -157,7 +157,9 @@ def _migrate(conn: sqlite3.Connection, path: Path) -> None:
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     if current > SCHEMA_VERSION:
         backup = path.with_name(f"{path.name}.v{SCHEMA_VERSION}.bak")
-        restore = f", or restore {backup.name}, the copy saved before it was migrated" if backup.exists() else ""
+        restore = ""
+        if backup.exists():
+            restore = f", or restore {backup.name}, the copy saved before it was migrated"
         raise DatabaseTooNew(
             f"{path} is at schema version {current}, but this tabarr knows up to {SCHEMA_VERSION}: "
             f"a newer tabarr migrated it. Run that tabarr{restore}."
@@ -170,9 +172,10 @@ def _migrate(conn: sqlite3.Connection, path: Path) -> None:
     for version in pending:
         # executescript adds no transaction of its own: without this one, each
         # statement would commit alone and a failure would leave half a migration.
+        script = _MIGRATIONS[version]
         try:
             conn.executescript(
-                f"BEGIN IMMEDIATE;\n{_MIGRATIONS[version]}\nPRAGMA user_version = {version};\nCOMMIT;"
+                f"BEGIN IMMEDIATE;\n{script}\nPRAGMA user_version = {version};\nCOMMIT;"
             )
         except BaseException:
             if conn.in_transaction:

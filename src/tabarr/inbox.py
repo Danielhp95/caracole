@@ -98,7 +98,7 @@ def _match(artist: str | None, title: str, candidates: list[tuple[Song, list[Ver
 
 
 def _choose_pick(open_picks: list[VersionRow], version: int | None, ext: str) -> VersionRow:
-    """The pick of the file's kind with its version number, else the first of its kind, else the first.
+    """The pick of the file's kind and version number, else the first of its kind, else the first.
 
     UG numbers versions within each type, so a song's Guitar Pro and Power Tab
     picks are often both "ver 1": the number alone can't tell them apart.

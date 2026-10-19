@@ -74,7 +74,7 @@ def write_atomic(path: Path, data: bytes) -> str:
 
 
 class NotRegularFile(OSError):
-    """A path tabarr won't read: a symbolic link, a directory, a FIFO or a device."""
+    """A path tabarr won't open: a symbolic link, a directory, a FIFO or a device."""
 
 
 def open_regular(path: Path, flags: int = os.O_RDONLY) -> int:
@@ -92,7 +92,8 @@ def open_regular(path: Path, flags: int = os.O_RDONLY) -> int:
         fd = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError as e:
         if e.errno == errno.ELOOP:  # O_NOFOLLOW's answer for a link
-            raise NotRegularFile(e.errno, "a symbolic link, which tabarr doesn't follow", str(path)) from None
+            link = "a symbolic link, which tabarr doesn't follow"
+            raise NotRegularFile(e.errno, link, str(path)) from None
         raise
     if not stat.S_ISREG(os.fstat(fd).st_mode):
         os.close(fd)
@@ -101,7 +102,7 @@ def open_regular(path: Path, flags: int = os.O_RDONLY) -> int:
 
 
 def read_regular(path: Path) -> bytes:
-    """The bytes of the regular file at ``path``, never read through a symbolic link (see ``open_regular``)."""
+    """The bytes of the regular file at ``path``, never read through a link (``open_regular``)."""
     with open(open_regular(path), "rb") as f:
         return f.read()
 

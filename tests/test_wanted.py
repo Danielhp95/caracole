@@ -495,8 +495,8 @@ def test_append_refuses_a_dangling_symlink(tmp_path):
     assert not (tmp_path / "state").exists()
 
 
-def test_append_never_writes_through_a_link_swapped_in_after_the_read(tmp_path, secret, monkeypatch):
-    import tabarr.wanted as wanted
+def test_append_never_writes_through_a_link_swapped_in_later(tmp_path, secret, monkeypatch):
+    from tabarr import wanted
 
     path = tmp_path / "wanted.txt"
     path.write_text("Soda Stereo - De Música Ligera\n", encoding="utf-8")

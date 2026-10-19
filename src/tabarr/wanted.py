@@ -217,7 +217,8 @@ def append_wanted(
     newline = "\r\n" if "\r\n" in existing else "\n"
     lead = newline if existing and not existing.endswith("\n") else ""
     # Opened anew without following a link, in case one was swapped in since the read.
-    with open(open_regular(path, os.O_WRONLY | os.O_APPEND), "a", encoding="utf-8", newline="") as f:
+    fd = open_regular(path, os.O_WRONLY | os.O_APPEND)
+    with open(fd, "a", encoding="utf-8", newline="") as f:
         f.write(lead + text + newline)
     return replace(wanted, line_no=(existing + lead).count("\n") + 1)
 
@@ -250,7 +251,9 @@ def sync_wanted(
     except FileNotFoundError:
         return stats
     except NotRegularFile as e:
-        stats.errors.append(f"{path.name}: not read: {path} is {e.strerror}; put the file itself there")
+        stats.errors.append(
+            f"{path.name}: not read: {path} is {e.strerror}; put the file itself there"
+        )
         return stats
     except OSError as e:
         stats.errors.append(f"{path.name}: can't read {path}: {e.strerror or e}")

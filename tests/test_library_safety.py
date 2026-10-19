@@ -40,7 +40,7 @@ def test_write_atomic_replaces_a_link_at_the_name_itself(tmp_path, state):
 
 
 def test_write_atomic_keeps_the_group_bits_of_the_umask(tmp_path):
-    # Syncthing reads the library through the group (UMask 0007), so a 0600 file would be hidden from it.
+    # Syncthing reads the library through the group (UMask 0007): a 0600 file is hidden from it.
     old = os.umask(0o007)
     try:
         write_atomic(tmp_path / "sheet.txt", b"x")

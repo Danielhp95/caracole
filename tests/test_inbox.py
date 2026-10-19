@@ -101,7 +101,8 @@ def test_a_new_top_pick_never_overwrites_the_file_of_the_old_one(conn, cfg):
     stats = file_inbox(conn, cfg.library_dir)
     folder = song_dir(cfg.library_dir, s)
     assert (folder / "guitar-1.gp5").read_bytes() == b"A's file"
-    assert stats.filed == [folder / "guitar-2.gp5"] and (folder / "guitar-2.gp5").read_bytes() == b"B's file"
+    assert stats.filed == [folder / "guitar-2.gp5"]
+    assert (folder / "guitar-2.gp5").read_bytes() == b"B's file"
     kept = kept_files(conn, s.id)
     assert [(f.name, f.version_id) for f in kept] == [("guitar-1.gp5", a), ("guitar-2.gp5", b)]
     assert [f.kept_rank for f in kept] == [1, 1]  # each version's rank when it was filed

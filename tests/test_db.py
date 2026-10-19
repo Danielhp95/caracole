@@ -1,4 +1,4 @@
-"""Migrations: each one applies whole or not at all, after a backup, and a newer database is refused."""
+"""Migrations apply whole or not at all, after a backup; a newer database is refused."""
 
 import sqlite3
 
@@ -29,9 +29,11 @@ def v2(monkeypatch):
 
 
 def columns(path, table):
+    """The table's column names and the database's user_version."""
     c = sqlite3.connect(path)
     try:
-        return [r[1] for r in c.execute(f"PRAGMA table_info({table})")], c.execute("PRAGMA user_version").fetchone()[0]
+        names = [r[1] for r in c.execute(f"PRAGMA table_info({table})")]
+        return names, c.execute("PRAGMA user_version").fetchone()[0]
     finally:
         c.close()
 
@@ -69,13 +71,14 @@ def test_a_database_newer_than_this_tabarr_is_refused(v1):
     c = sqlite3.connect(v1)
     c.execute(f"PRAGMA user_version = {db.SCHEMA_VERSION + 1}")
     c.close()
-    with pytest.raises(db.DatabaseTooNew, match=r"schema version 2.*this tabarr knows up to 1") as e:
+    with pytest.raises(db.DatabaseTooNew, match=r"schema version 2.*tabarr knows up to 1") as e:
         db.connect(v1)
-    assert isinstance(e.value, sqlite3.DatabaseError)  # `tabarr add` reports it and keeps wanted.txt
+    # A DatabaseError: `tabarr add` reports it and keeps the line in wanted.txt.
+    assert isinstance(e.value, sqlite3.DatabaseError)
     assert columns(v1, "kv")[1] == 2
 
 
-def test_after_a_rollback_the_refusal_names_the_copy_saved_before_the_migration(v1, v2, monkeypatch):
+def test_after_a_rollback_the_refusal_names_the_copy_saved_before(v1, v2, monkeypatch):
     v2("ALTER TABLE kv ADD COLUMN at TEXT;")
     db.connect(v1).close()
     monkeypatch.setattr(db, "SCHEMA_VERSION", 1)  # the older tabarr runs again
