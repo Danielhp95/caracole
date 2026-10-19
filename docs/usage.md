@@ -1041,6 +1041,23 @@ you, so the nightly run never waits for an answer. The to-do page's Review
 section has the same `[match]`, `[alias]` and `[reject]` lines, ready to
 paste, if you'd rather edit the file.
 
+`caracole review --song "ARTIST - TITLE"` asks about that song alone. Given an
+answer too, it asks nothing, and writes what that answer writes:
+
+    caracole review --song "Radio Head - Crep" --pick 1
+    caracole review --song "Radio Head - Crep" --pick radiohead/creep
+    caracole review --song "Radio Head - Crep" --none
+
+`--pick` takes a candidate's number, as the list numbers it, or its UG song as
+the list shows it; `--none` rejects every candidate listed, or, with one
+`--seen ARTIST/SONG` for each, only those: the ones you saw, should the
+nightly run have found others since. It holds caracole's lock while it
+answers, matches again and rewrites the pages, then says where the song
+stands: matched (and how to fetch it now), still in review, or not found,
+which caracole goes on looking for. A song that doesn't need review, a number
+or a UG song the list hasn't, exits 1 and writes nothing. This is what the
+picker of `caracole serve` runs (see [caracole serve](#caracole-serve)).
+
 ## Browse and search
 
 ### Library/index.html
