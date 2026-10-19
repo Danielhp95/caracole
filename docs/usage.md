@@ -149,8 +149,19 @@ For example:
 
 - The album and the duration are optional. Either one makes the lyrics lookup
   exact. A duration is `m:ss`, `h:mm:ss` or whole seconds.
+- The line's album and duration win over Spotify's. Edit them, and the next
+  sync changes the song, and the duration the scan checks a purchase
+  against; take one off the line, and Spotify's takes its place, if Spotify
+  has the song.
 - The artist ends at the first " - " (an en or em dash works too), so a title
   may contain " - " but an artist can't.
+- A version after the title, as in `Radiohead - Creep - Acoustic` or
+  `Soda Stereo - Té Para Tres (En Vivo)`, is still the same song, and asks
+  for that version: UG versions labelled the same way rank higher
+  (`variant_bonus`). Change it or take it off, and the next sync changes the
+  song.
+- A song on two lines is the first line's: a later line only fills in an
+  album or a duration the first leaves out.
 - `#` starts a comment, at the start of a line or after a space. Write `\#`
   for a `#` that is part of a name (`John Lennon - \#9 Dream`) and `\|` for a
   `|`.
@@ -158,12 +169,12 @@ For example:
   `Adele - Someone Like You | 21 |`.
 - A line tabarr can't read is reported, and the other lines still count.
 - Deleting a line doesn't delete the song from tabarr, just as unliking a
-  track on Spotify doesn't. To drop a song, put it under `[ignore]` in
-  overrides.toml.
+  track on Spotify doesn't, and the song keeps the album and the duration the
+  line gave it. To drop a song, put it under `[ignore]` in overrides.toml.
 - The file must be a regular file. A symbolic link there is refused, not
   followed: the sync says `wanted.txt: not read: … is a symbolic link, which
-  tabarr doesn't follow; put the file itself there`, and the to-do page lists
-  that under Sources as `line 0`.
+  tabarr doesn't follow; put the file itself there`, and the to-do page says
+  that wanted.txt can't be read, under Setup problems and Sources.
 
 Songs are handled newest first, so a song you add today is looked for
 tonight. A line keeps its place when an upgrade changes how tabarr keys
@@ -182,11 +193,12 @@ for you, then syncs the file at once and rewrites `_todo.md` and
     Song 宋冬野/斑马斑马: new; the next `tabarr run` looks for it
 
 A song that is already listed isn't added twice, and its line stays as it is:
-edit the line to change its album or duration. The file is the source of
-truth, so the line is written first, before `tabarr add` waits for any other
-tabarr to finish. When the database can't be updated, the line is kept all
-the same, a warning says why, and the next sync adds the song. The first
-`tabarr add` creates the file, with a header that explains the format.
+edit the line to change its album or duration, and the next sync changes the
+song. The file is the source of truth, so the line is written first, before
+`tabarr add` waits for any other tabarr to finish. When the database can't be
+updated, the line is kept all the same, a warning says why, and the next sync
+adds the song. The first `tabarr add` creates the file, with a header that
+explains the format.
 
 ### tabarr sync
 
@@ -205,7 +217,11 @@ the pages as they were.
 Your Liked Songs and the playlists you name join wanted.txt as sources. A
 dedicated "Learn" playlist that you add to from your phone works best. A song
 that comes from several sources, or a remaster next to the original, is one
-song in the library.
+song in the library. Where they disagree, the album and the duration come
+from your wanted.txt line, and Spotify fills in what the line leaves out.
+Each sync takes what the sources say that night, so a change Spotify makes
+to a track's album or duration reaches the song, unless your line says
+otherwise.
 
 1. Create an app at developer.spotify.com. In Development Mode the app's owner
    needs Spotify Premium. Add the redirect URI `http://127.0.0.1:8888/callback`
@@ -319,8 +335,9 @@ How a song is matched, in order:
 3. The nearest other artist name, at 90 or more, then step 2 under it.
 4. The title alone, across all artists: always a review.
 
-At steps 2 to 4, the UG songs you rejected for the song under `[reject]` are
-passed over, so they are never offered again; other candidates still can be.
+At steps 2 to 4, the matcher passes over the UG songs you rejected for the
+song under `[reject]`, and so does the fetch on the artist's UG page, so they
+are never offered again; other candidates still can be.
 
 ### tabarr run
 
@@ -352,18 +369,26 @@ A long list therefore fills in over a few nights, and a song the budget cut
 off half-way resumes from the cache the next night.
 
 **Errors are never misses.** A block (HTTP 403, 429 or a challenge page)
-stops that site for the rest of the run, cools it down for 24 hours (twice as
-long after each further block), and sends one ntfy message. Neither a block,
-nor a spent budget, nor any other error from a site marks a song not found or
-its lyrics missing: the song waits for the next run. Tabarr never works around
-a block: no proxies, no retries from elsewhere. A tab page UG keeps serving
-without its data is asked for again after 7 days, then twice as long each
-time, up to 90 days; meanwhile the song is filled from its other versions.
+stops that site for the rest of the run and sends one ntfy message, which
+says until when tabarr leaves the site alone. That cooldown counts from the
+start of the blocked run: 24 hours, doubled for each further block in a row,
+plus 2 hours, so 26 hours after a first block, 50 after a second and 98 after
+a third. However late the timer starts them, the nightly runs then leave that
+site out for the next night after a first block, the next two after a second,
+and the next four after a third. A block in a command counts the same way,
+from when the command started. A run or a command the site answers without a
+block starts the count again. Neither a block, nor a spent budget, nor any
+other error from a site marks a song not found or its lyrics missing: the
+song waits for the next run. Tabarr never works around a block: no proxies,
+no retries from elsewhere. A tab page UG keeps serving without its data is
+asked for again after 7 days, then twice as long each time, up to 90 days;
+meanwhile the song is filled from its other versions.
 
 Nor does tabarr ask for a page robots.txt closes to bots, or follow a
 redirect to one: UG's search, download and print pages, and a few tab pages
-(`/tab/track/…`). A tab at such a page is no candidate: the song is filled
-from its other versions.
+(`/tab/track/…`). A tab at such a page, or at a page UG redirects to one, is
+no candidate, and neither is a link in UG's data that isn't a valid address:
+the song is filled from its other versions.
 
 The run exits 1 for an unexpected error (a bug), after all the steps have
 run, so that systemd's `OnFailure` can tell you. Blocks and a spent budget
@@ -384,17 +409,20 @@ and cache.
 - **`tabarr fetch [--song "ARTIST - TITLE"]`** first scores the sheets kept
   before their lyrics arrived, with no request, as the nightly run does. Then
   it fetches and ranks the UG versions of the songs that need it: new
-  matches, songs with new tabs or a changed `[block]`, and songs a run left
-  half-done. Songs the index can't settle are looked up on their artist's UG
-  page, when it is known, at most once in 30 days: songs not found, songs
-  reviewed on their title alone (only other artists' songs of it), songs
-  found on that page before, and songs whose chords the index can't offer
-  (bare ids, or pages robots.txt closes). Per song it prints what it kept, as
-  `Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)`.
-  `--song` fetches that one song now, even when nothing about it changed; the
-  song must be in the library and matched, or not found or reviewed on its
-  title alone with its artist page known. A cooldown, a block or a spent
-  budget exits 0.
+  matches, songs with new tabs or a changed `[block]`, songs a run left
+  half-done, and songs whose kept sheet or tab the library lost (see
+  [the library folder](#the-library-folder)). A song whose UG match was
+  undone (by `[reject]`, say) loses the sheet and the tab that match kept.
+  Songs the index can't settle are looked up on their artist's UG page, when
+  it is known, at most once in 30 days: songs not found, songs reviewed on
+  their title alone (only other artists' songs of it), songs found on that
+  page before, and songs whose chords the index can't offer (bare ids, or
+  pages robots.txt closes). Per song it prints what it kept, as
+  `Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)`,
+  or `nothing kept`. `--song` fetches that one song now, even when nothing
+  about it changed; the song must be in the library and matched, or not found
+  or reviewed on its title alone with its artist page known. A cooldown, a
+  block or a spent budget exits 0.
 - **`tabarr lacuerda`** looks on LaCuerda for Spanish songs (judged by their
   lyrics, or by their title until there are lyrics) that have no complete
   sheet, at most once in 30 days per song. Like `tabarr fetch`, it first
@@ -402,9 +430,10 @@ and cache.
   every song by that artist. LaCuerda's sheet is kept when there is no sheet
   yet, when it is complete and the kept one isn't, or when neither is
   complete and it covers more of the lyrics, but never in place of a sheet you
-  pinned. An artist LaCuerda doesn't have gets an almost empty page, with HTTP
-  200; tabarr reads that as "not on LaCuerda". A cooldown, a block or a spent
-  budget exits 0.
+  pinned. A LaCuerda sheet the library lost is written again at the next
+  pass, whatever the date, usually from the cache. An artist LaCuerda doesn't
+  have gets an almost empty page, with HTTP 200; tabarr reads that as "not on
+  LaCuerda". A cooldown, a block or a spent budget exits 0.
 - **`tabarr scan`** links the audio files in Music/ to your songs, by their
   tags (or an "Artist - Title" file name) and their duration, give or take 3
   seconds. It never adds a song. A file named as the song wins over one whose
@@ -421,17 +450,29 @@ and cache.
   free number when another file already holds guitar-N. A file the library
   already has is removed from the inbox; a file it can't place stays there,
   and so does a symbolic link, which is never read:
-  `Inbox: 0 filed, 0 duplicates, 0 left, 1 symbolic link refused`.
+  `Inbox: 0 filed, 0 duplicates, 0 left, 1 symbolic link refused`. If
+  `_inbox` is a link itself, it is refused the same way, and nothing in the
+  folder it points at is read, filed or deleted. The nightly run's scan line
+  ends with the same count (`, 1 symbolic link refused`).
 - **`tabarr render [--force]`** writes `sheet.cho` and `sheet.pdf` next to
   every kept sheet, transposed as `[transpose]` says, with the key, the artist
   and the capo under the title. A PDF is made again only when its sheet, its
-  transposition or the font changes; `--force` makes them all again. chordpro
-  works on a copy, in a private folder in the cache, and the new PDF replaces
-  the old one in one rename, so a failed render leaves the last good PDF in
-  place. It exits 1 when a sheet couldn't be rendered, and the log says why,
-  as `no PDF for Artist - Title: …` (chordpro's own messages name the copy in
-  the cache). A symbolic link, a FIFO or a folder in the place of a sheet's
-  files fails that song alone: tabarr reads no sheet through a link.
+  transposition or the font changes, or when it is no longer the PDF tabarr
+  wrote: deleted, cut short, edited, or a link in its place. So annotate a
+  copy, not `sheet.pdf`. `--force` makes them all again. After an upgrade
+  from a tabarr that didn't record what it wrote, the first render makes
+  every PDF once more. A song that no longer keeps its human sheet (its UG
+  match was undone, say) loses the `sheet.cho` and `sheet.pdf` made from it;
+  a `sheet.cho` or `sheet.pdf` you put where tabarr never rendered one stays.
+  chordpro works on a copy, in a private folder in the cache, and the new PDF
+  replaces the old one in one rename, so a failed render leaves the last good
+  PDF in place. It exits 1 when a sheet couldn't be rendered, and the log
+  says why, as `no PDF for Artist - Title: …` (chordpro's own messages name
+  the copy in the cache). A symbolic link, a FIFO or a folder in the place of
+  `sheet.json`, `sheet (auto).txt` or a `.cho` file fails that song alone:
+  tabarr reads no sheet through a link. Remove the link, and the next render
+  writes the `.cho` again; the next `tabarr run` writes `sheet.json` again
+  before it renders.
 - **`tabarr todo`** rewrites `_todo.md` and `index.html` from the database.
 - **`tabarr review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
@@ -481,11 +522,16 @@ when it has something in it:
 - **Setup problems.** What stops tabarr until you act: an overrides.toml it
   can't read (the nightly run then stops before its first step, and the page,
   built without your overrides, leads with the error), a UG index that isn't
-  built or is incomplete, and lines of wanted.txt it can't read.
+  built or is incomplete, a wanted.txt it can't read at all (the songs it
+  read before are still looked for), and lines of wanted.txt it can't read.
 - **Review.** Matches tabarr wasn't sure about. Each candidate has its score,
   the UG song, the step that found it and links to its pages by type, then its
   lines for overrides.toml. They come without table headers: each line ends
-  with the table it goes under, as in `# under [match]`. After the candidates
+  with the table it goes under, as in `# under [match]`. A candidate under
+  another UG name for the artist also gets an `[alias]` line, unless
+  overrides.toml has that alias already; for an artist with aliases, the
+  line is the artist's whole list with the new one, marked
+  `# in place of the artist's line under [alias]`. After the candidates
   comes the `[reject]` line that dismisses them all; for a song with a
   `[reject]` line already, the whole line to put in its place (see
   [Review](#review)). When the candidates are only other artists' songs of
@@ -508,10 +554,10 @@ when it has something in it:
   ```
 
   The block has the `[artist_url]` header only while overrides.toml has no
-  such table; after that the page gives the lines alone, to add under the
-  table. The artist page lists all of the artist's tabs, bare ids included.
-  The next run reads it, finds your songs on it by title, and fetches them
-  like any matched song. That's once per artist, not per song.
+  `[artist_url]` entries; after that the page gives the lines alone, to add
+  under the table. The artist page lists all of the artist's tabs, bare ids
+  included. The next run reads it, finds your songs on it by title, and
+  fetches them like any matched song. That's once per artist, not per song.
 - **Buy list.** No human sheet found yet, and nothing tabarr will still do may
   find one: the song's UG fetch is done (or UG doesn't have it), no fetch,
   artist page or LaCuerda check is due for it, and, for a song not found, the
@@ -538,7 +584,8 @@ when it has something in it:
   and the version, and the next run files it. Don't move it into the song's
   folder yourself: tabarr wouldn't know it is there. A symbolic link in
   `_inbox/` is listed too: tabarr files only regular files. If `_inbox` is a
-  link itself, the page lists nothing from it, and says to make it a folder.
+  link itself, the page lists nothing from it, and says to make it a folder;
+  until then the scan files nothing.
 - **Missing lyrics.** LRCLIB has none for these yet; tabarr asks again after
   30 days.
 - **Suggestions from your Spotify top tracks**, with `suggest_top_tracks`.
@@ -547,8 +594,8 @@ when it has something in it:
   problem if there is one, and the sheets that failed.
 - **Sources.** Whether Spotify is off, synced, not fully set up (the client
   secret missing, say), or needs `tabarr auth spotify`, and how many songs
-  wanted.txt has, with the lines it couldn't read. `line 0` is the file
-  itself, one tabarr couldn't read at all.
+  wanted.txt has, with the lines it couldn't read; for a wanted.txt it
+  couldn't read at all, the error, as `wanted.txt: error at <time>: …`.
 - **Provider health.** For Ultimate Guitar, LRCLIB and LaCuerda: OK, errors
   (nothing has worked since the last error), or cooling down until when; the
   last success; the last error; the requests of the last run.
@@ -572,8 +619,9 @@ page of that song's oldest tab, whatever its type:
 - **n** says none of them is the song. It writes them all under `[reject]`,
   as `"Radio Head - Crep" = ["radiohead/creep"]`, and clears the review
   without ignoring the song: the rematch leaves those candidates out for good,
-  and tabarr goes on looking for the song, on its artist's UG page too. A song
-  without candidates isn't offered `n`: its prompt starts at `(p)in a URL`.
+  and tabarr goes on looking for the song, on its artist's UG page too, where
+  it passes over them as well. A song without candidates isn't offered `n`:
+  its prompt starts at `(p)in a URL`.
 - **p** asks for a UG tab address, and writes it under `[pin]`; Enter there
   skips the song.
 - **i** ignores the song: it goes under `[ignore]`.
@@ -583,10 +631,12 @@ Each answer goes into overrides.toml, with your comments kept, so it survives
 a lost database. When an answer changed something, tabarr matches again at
 the end and rewrites `_todo.md` and `index.html`. It ends with the count, as
 `accepted 1, pinned 0, ignored 0, rejected 0, skipped 0`. A broken
-overrides.toml stops it before its first question, with status 2. It never
-holds tabarr's lock while it waits for you, so the nightly run never waits
-for an answer. The to-do page's Review section has the same `[match]`,
-`[alias]` and `[reject]` lines, ready to paste, if you'd rather edit the file.
+overrides.toml stops it with status 2: before its first question, or, if the
+file breaks while it waits for you, at the answer it can't write, which
+leaves the file untouched. It never holds tabarr's lock while it waits for
+you, so the nightly run never waits for an answer. The to-do page's Review
+section has the same `[match]`, `[alias]` and `[reject]` lines, ready to
+paste, if you'd rather edit the file.
 
 ## Browse and search
 
@@ -640,7 +690,11 @@ the same way `tabarr add` does. N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another
 name is left alone. When nothing matches well, or the query has accented or
 non-Latin letters, the command also explains bare ids and prints the
-`[artist_url]` line to paste.
+`[artist_url]` line to paste, with the table's header only while
+overrides.toml has no `[artist_url]` entries. For an artist whose page
+overrides.toml has already, it gives no line and says so. The search reads
+overrides.toml for this hint alone, and still works when the file can't be
+read.
 
 ## overrides.toml: your decisions
 
@@ -686,7 +740,9 @@ tab_ids = [1601668]
 - **`[match]`** points one song at one UG song. Unlike a pin, it still picks
   up tabs added to that song later. Correct a `[match]` or a `[pin]`, and
   what the old one brought goes: the next fetch takes the song's sheet, tab
-  and Guitar Pro picks from the new one.
+  and Guitar Pro picks from the new one. When the new one has no sheet, the
+  old sheet goes all the same, and the next render takes its `sheet.cho` and
+  `sheet.pdf` along.
 - **`[artist_url]`** is keyed by the artist's name as your songs write it. The
   value is the artist's page on UG, whose address ends in an underscore and a
   number (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`, say).
@@ -697,7 +753,8 @@ tab_ids = [1601668]
   a query or a fragment included. Pinned tabs replace the candidates of their
   kind (sheet, Guitar Pro, tab), in the order given. A pin whose page is
   gone, is Official, or is closed to bots by robots.txt (UG's `/tab/track/`
-  pages) pins nothing, and the song's other versions compete for that kind.
+  pages), or redirects to such a page, pins nothing, and the song's other
+  versions compete for that kind.
 - **`[transpose]`** shifts the chords and the key in the PDF. `sheet.txt`
   stays as the source wrote it.
 - **`[ignore]`** takes only `songs = [...]`. It stops all work on a song: no
@@ -705,13 +762,20 @@ tab_ids = [1601668]
   the song comes back.
 - **`[block]`** takes only `tab_ids = [...]`, and keeps those tabs out of
   every ranking. A tab you block, or take out of `[block]`, reaches the songs
-  fetched already at the next fetch.
+  fetched already at the next fetch. A kept sheet you block that nothing
+  replaces goes, and the next render takes its `sheet.cho` and `sheet.pdf`
+  along.
 - **`[reject]`** names, for a song, the UG songs that are not it, as
   `"artist-slug/song-slug"` like `[match]`: one string, or a list. The
-  matcher passes over them at every step, so they are never offered again,
-  while other candidates still can be; a `[match]` for the song still wins. A
-  match tabarr made on the artist's UG page is undone at the next match when
-  `[reject]` names it. `n` in `tabarr review` writes this table.
+  matcher passes over them at every step, and so does the fetch on the
+  artist's UG page, so they are never offered again, while other candidates
+  still can be; a `[match]` for the song still wins. A match tabarr made on
+  the artist's UG page is undone at the next match when `[reject]` names it.
+  A song whose match `[reject]` undoes loses the sheet and the tab that match
+  kept at the next fetch, unless its artist's page finds the song again, and
+  their `sheet.cho` and `sheet.pdf` at the next render; it stays found only
+  if a LaCuerda or auto sheet is left. Guitar Pro files you filed, and files
+  tabarr doesn't track, stay. `n` in `tabarr review` writes this table.
 
 Each table may appear only once in the file: add lines under a table it has
 already, as the to-do page's lines say. An unknown table, a key other than
@@ -723,7 +787,11 @@ error that names the table and the entry:
 A table declared twice ends with `; merge the two [match] sections into one`.
 The file must be a regular file: a symbolic link or a folder there is refused
 unread (`a symbolic link, which tabarr doesn't follow; put the file itself
-there`), while a missing file means no overrides.
+there`), while a missing file means no overrides. A file tabarr may not read,
+or one saved in an encoding other than UTF-8, is an error too:
+`can't read it: Permission denied`, or
+`line 3 is not valid UTF-8 (save the file as UTF-8)`, naming the first such
+line.
 
 While the file can't be read, the commands that need it exit with status 2,
 and the nightly run stops before its first step (ntfy tells you). The run,
@@ -791,11 +859,27 @@ separator or a character file systems reserve: `AC/DC` becomes `AC-DC`.
 
 Others can write to the library: Syncthing, and every device it syncs with. A
 symbolic link planted there could point at tabarr's private files, so tabarr
-never reads or writes a file there through a link: a link in the place of
-wanted.txt, overrides.toml, a sheet's files or a download in `_inbox/` is
-refused, and the command or the to-do page says so. A file tabarr replaces
-there arrives through a temporary file beside it, named
-`.<name>.<8 hex digits>.tmp`, renamed into place.
+never reads or writes a file there through a link. A link in the place of
+wanted.txt, overrides.toml, `_inbox` or a download in it is refused, and the
+command or the to-do page says so; one in the place of `sheet.json`,
+`sheet (auto).txt` or a `.cho` file fails that song's render. A file tabarr
+replaces there arrives through a temporary file beside it, named
+`.<name>.<8 hex digits>.tmp`, and reaches the disk before it is renamed into
+place, so a power cut during the nightly run leaves the old file or the new
+one, never an empty one.
+
+**The files tabarr keeps are its own.** One that is no longer as tabarr wrote
+it, deleted (on the laptop, say), cut short or edited, is written again, and
+only it: `sheet.txt`, `sheet.json`, `tab.txt` and `tab.json` at the next
+`tabarr run` or `tabarr fetch` (a LaCuerda sheet at the next LaCuerda pass),
+from the cache, usually with no request; the `.cho` files and the PDFs at the
+next render. So is a link in the place of one of them, except a `.cho`. A
+file still as tabarr wrote it is never written again, so Syncthing has
+nothing to sync. Keep your own edits and annotations in a copy under another
+name: tabarr leaves alone the files it doesn't track. A lost
+`sheet (auto).txt`, `lyrics.txt` or `lyrics.lrc` isn't written again, nor is
+a Guitar Pro file, which tabarr never downloads: put one you lost back in the
+song's folder under its name.
 
 Keep the library private. The sheets and lyrics are other people's work, and
 a personal offline copy is the closest thing to the sites' personal-use terms.

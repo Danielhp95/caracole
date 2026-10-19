@@ -240,10 +240,14 @@ there.
 The state directory is not synced, and should not be: it holds the Spotify
 token.
 
-Keep `wanted.txt`, `overrides.toml` and the downloads in `_inbox/` regular
-files on every device. Whoever can write to the library could point a
-symbolic link at tabarr's private files, so tabarr refuses a link there
-instead of following it, and the to-do page or the journal says so.
+Keep `wanted.txt`, `overrides.toml`, `_inbox/` and the downloads in it
+regular files and folders on every device. Whoever can write to the library
+could point a symbolic link at tabarr's private files, so tabarr refuses a
+link there instead of following it, and the to-do page or the journal says
+so; through an `_inbox` that is a link, nothing is filed or deleted. The
+sheets, tabs and PDFs tabarr keeps are its own: one deleted, edited or
+replaced on a device is written again at the next run, so keep your
+annotations in a copy under another name.
 
 ## 4. Backups with restic
 
@@ -368,7 +372,10 @@ journalctl -u tabarr.service -e           # what it did
 Then read `_todo.md` in the library: setup problems first, if any, then
 review items, partial sheets, the buy list, Guitar Pro pages to download by
 hand, and provider health. A block or an exhausted budget is not a failure:
-the run exits 0 and the song stays pending. Only an unexpected error, an
+the run exits 0 and the song stays pending. After a block, ntfy says until
+when tabarr leaves that site alone: the next night's run skips it, the next
+two after a second block in a row, the next four after a third
+([usage.md](usage.md#tabarr-run)). Only an unexpected error, an
 `overrides.toml` tabarr can't read, or a database it can't open fails the
 unit, and that sends the ntfy message.
 
@@ -515,8 +522,19 @@ or build the package with `tabarr.override { cjkFont = "…"; }`.
   `tabarr-autochords.service`).
 - **`_todo.md` leads with "overrides.toml can't be read":** the nightly run
   stopped before its first step. The error names the table and the entry; a
-  table declared twice says to merge the two sections. Fix the file, then
-  `sudo systemctl start tabarr.service`, or wait for the next night.
+  table declared twice says to merge the two sections.
+  `can't read it: Permission denied` means the `tabarr` user may not read the
+  file: give it group `tabarr` and `chmod g+rw`. `line N is not valid UTF-8`
+  means an editor saved it in another encoding: save it as UTF-8. Fix the
+  file, then `sudo systemctl start tabarr.service`, or wait for the next
+  night.
+- **ntfy says a site blocked tabarr** ("tabarr: ug blocked"): nothing to do,
+  and nothing to work around. The message says until when tabarr leaves the
+  site alone, and the to-do page's Provider health shows it too. Nothing was
+  marked not found: the songs wait for a run after that.
+- **A power cut during the night:** nothing to clean up. A file tabarr was
+  replacing is the old one or the new one, never an empty one, and the next
+  run writes again any sheet, tab or PDF that isn't as tabarr wrote it.
 - **A command says the database "is at schema version N, but this tabarr
   knows up to M":** a newer tabarr migrated it, and an older one runs now,
   after a rollback say. Switch back to the newer tabarr, or restore the copy
