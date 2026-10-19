@@ -368,19 +368,34 @@
   });
 
   // --- the sheets that slide up ------------------------------------------------------------------
+  // Each is a modal dialog: it takes the focus (its heading), the page behind is out of reach
+  // (inert) while it is open, and closing it gives the focus back to what opened it.
+  const pageEl = document.querySelector(".page");
+  let opener = null;
   const open = (which) => {
+    if (panel.hidden && card.hidden) opener = document.activeElement;
     for (const other of [panel, card]) if (other !== which) other.hidden = true;
     which.hidden = false;
     scrim.hidden = false;
+    pageEl.inert = true;
+    fab.inert = true;
     fab.setAttribute("aria-expanded", which === panel ? "true" : "false");
     stopScroll();
+    which.querySelector("h2").focus({ preventScroll: true });
   };
   const close = () => {
+    const wasOpen = !(panel.hidden && card.hidden);
     panel.hidden = true;
     card.hidden = true;
     scrim.hidden = true;
+    pageEl.inert = false;
+    fab.inert = false;
     fab.setAttribute("aria-expanded", "false");
     for (const el of chordEls) el.classList.remove("on");
+    if (wasOpen && opener && opener !== document.body && opener.isConnected) {
+      opener.focus({ preventScroll: true });
+    }
+    opener = null;
   };
   scrim.addEventListener("click", close);
   for (const x of document.querySelectorAll("[data-close]")) x.addEventListener("click", close);

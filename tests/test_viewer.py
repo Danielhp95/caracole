@@ -357,7 +357,7 @@ def test_tapping_a_chord_shows_its_shapes_and_alternatives(tmp_path):
     dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#chord=0")
     card = re.search(r'<section class="sheet-ui card" id="card"([^>]*)>(.*?)</section>', dom, re.S)
     assert "hidden" not in card.group(1)
-    assert '<h2 id="card-name">G</h2>' in card.group(2)
+    assert '<h2 id="card-name" tabindex="-1">G</h2>' in card.group(2)
     assert "<svg" in card.group(2) and card.group(2).count('class="dg-dot"') == 3  # 320003
     assert ">Gmaj7</button>" in card.group(2) and ">Em</button>" in card.group(2)
 
@@ -401,6 +401,27 @@ def run_in_page(html: str, tmp_path: Path, body: str, fragment: str = ""):
     found = re.search(r'data-result="([^"]*)"', dom)
     assert found, "the harness didn't run"
     return json.loads(found.group(1).replace("&quot;", '"').replace("&amp;", "&"))
+
+
+@in_chromium
+def test_the_card_and_the_settings_take_the_focus_and_give_it_back(tmp_path):
+    card, panel = run_in_page(build_viewer(UG_CHO), tmp_path, """
+      const press = (el, key) => el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+      const visit = (opener, dialog, how) => {
+        opener.focus();
+        how();
+        const seen = [q(dialog).contains(document.activeElement), q(".page").inert, q("#fab").inert,
+                      q(dialog).getAttribute("aria-modal")];
+        press(document.activeElement, "Escape");
+        return seen.concat([q(dialog).hidden, document.activeElement === opener, q(".page").inert]);
+      };
+      const chord = q('#sheet .c[data-c="1"]');
+      out = [visit(chord, "#card", () => press(chord, "Enter")),
+             visit(q("#fab"), "#panel", () => q("#fab").click())];
+    """)
+    # focus inside, the page behind out of reach, a modal dialog; then closed, focus back, page back
+    assert card == [True, True, True, "true", True, True, False]
+    assert panel == [True, True, True, "true", True, True, False]
 
 
 @in_chromium

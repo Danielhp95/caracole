@@ -353,8 +353,8 @@ def _words(text: str) -> list[str]:
 # The settings sheet and the chord card the script fills in; hidden until it runs.
 _CONTROLS = """<button type="button" class="fab" id="fab" hidden aria-controls="panel" aria-expanded="false">Key</button>
 <div class="scrim" id="scrim" hidden></div>
-<section class="sheet-ui panel" id="panel" hidden role="dialog" aria-labelledby="panel-title">
-<header class="ui-head"><h2 id="panel-title">Key <span id="key-now"></span></h2>
+<section class="sheet-ui panel" id="panel" hidden role="dialog" aria-modal="true" aria-labelledby="panel-title">
+<header class="ui-head"><h2 id="panel-title" tabindex="-1">Key <span id="key-now"></span></h2>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="row"><span class="lab">Transpose</span>
 <span class="stepper"><button type="button" id="down" aria-label="Down a semitone">−</button>
@@ -374,8 +374,8 @@ _CONTROLS = """<button type="button" class="fab" id="fab" hidden aria-controls="
 <input type="range" id="speed" min="1" max="10" value="3" aria-label="Scroll speed"></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
 </section>
-<section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
-<header class="ui-head"><h2 id="card-name"></h2>
+<section class="sheet-ui card" id="card" hidden role="dialog" aria-modal="true" aria-labelledby="card-name">
+<header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="shape"><button type="button" class="round" id="prev" aria-label="Previous shape">‹</button>
 <div class="diagram" id="diagram"></div>

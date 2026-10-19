@@ -120,6 +120,7 @@ a { color: inherit; }
   border-radius: 18px 18px 0 0; background: var(--surface); box-shadow: 0 -6px 28px rgb(0 0 0 / .2); }
 .ui-head { display: flex; align-items: center; gap: 8px; }
 .ui-head h2 { margin: 0; font-size: 1.15rem; }
+.ui-head h2:focus { outline: none; }  /* where focus lands as it opens; not a control */
 .x { flex: none; margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
   color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0;
