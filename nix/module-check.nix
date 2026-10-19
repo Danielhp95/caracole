@@ -298,6 +298,15 @@ else
       autochordsUnit = unitText nucAutochords "tabarr-autochords.service";
     }
     ''
+      # Fails the build when the file has the text: `! grep` would not, since
+      # set -e ignores a command whose status is inverted.
+      lacks() {
+        if grep -q -- "$1" "$2"; then
+          echo "$2 has $1" >&2
+          exit 1
+        fi
+      }
+
       # The generated file must load with tabarr's own strict loader, with the
       # directories systemd hands the unit.
       PYTHONPATH=${loader}/src python3 - "$configFile" <<'EOF'
@@ -345,13 +354,13 @@ else
         grep -q -- "'--property=$property'" "$adminScript" \
           || { echo "tabarr-admin lacks --property=$property" >&2; exit 1; }
       done
-      ! grep -q -- "PrivateNetwork" "$adminScript"
+      lacks PrivateNetwork "$adminScript"
       # With the auto-chords package, as in its unit, torch may generate code.
       grep -q -- "'--property=MemoryDenyWriteExecute=no'" "$adminAutochordsScript"
-      ! grep -q -- "MemoryDenyWriteExecute=yes" "$adminAutochordsScript"
+      lacks MemoryDenyWriteExecute=yes "$adminAutochordsScript"
 
       # The auto-chords unit holds no secret.
-      ! grep -q -- "LoadCredential" "$autochordsUnitPath"
+      lacks LoadCredential "$autochordsUnitPath"
       grep -q -- "LoadCredential=ntfy_token:/run/agenix/ntfy_token" "$runUnitPath"
 
       mkdir -p $out
