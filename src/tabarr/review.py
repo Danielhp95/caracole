@@ -6,6 +6,9 @@ can live in git:
 - choosing a candidate writes ``[match]``, plus an ``[alias]`` when the artist
   differs, so every other song by that artist is fixed too (but never for a
   title-only match: that's usually a cover by someone else);
+- ``n`` (none of these) writes every candidate shown under ``[reject]``: they
+  never come back, and the song is still looked for, on its artist's UG page
+  too, without being ignored;
 - ``p`` pins a UG tab page you paste;
 - ``i`` ignores the song.
 """
@@ -18,7 +21,15 @@ from typing import Callable
 
 from tabarr.config import Config
 from tabarr.normalize import slug_key
-from tabarr.overrides import OverridesError, add_alias, add_ignore, add_match, add_pin, tab_id_from_url
+from tabarr.overrides import (
+    OverridesError,
+    add_alias,
+    add_ignore,
+    add_match,
+    add_pin,
+    add_reject,
+    tab_id_from_url,
+)
 from tabarr.songs import list_songs, update_song
 from tabarr.ug.lookup import song_tabs
 
@@ -35,10 +46,11 @@ class ReviewStats:
     ignored: int = 0
     pinned: int = 0
     skipped: int = 0
+    rejected: int = 0  # songs answered "none of these"
 
     @property
     def changed(self) -> bool:
-        return bool(self.accepted or self.ignored or self.pinned)
+        return bool(self.accepted or self.ignored or self.pinned or self.rejected)
 
 
 def review_songs(
@@ -61,7 +73,7 @@ def review_songs(
             tabs = song_tabs(conn, c["artist_key"], c["song_key"])
             url = f"  {tabs[0].url}" if tabs else ""
             io.write(f"  {n}) {float(c.get('score') or 0):.0f}  {c['artist_key']}/{c['song_key']} ({c.get('step', '')}){url}")
-        choices = f"1-{len(cands)}, " if cands else ""
+        choices = f"1-{len(cands)}, (n)one of these, " if cands else ""
         answer = io.read(f"Pick {choices}(p)in a URL, (i)gnore, (s)kip, (q)uit: ").strip().lower()
         if answer == "q":
             break
@@ -72,6 +84,10 @@ def review_songs(
                 add_alias(cfg.overrides_file, s.artist, c["artist_key"])
             update_song(conn, s.id, review=False)
             stats.accepted += 1
+        elif answer == "n" and cands:
+            add_reject(cfg.overrides_file, s.display, [f"{c['artist_key']}/{c['song_key']}" for c in cands])
+            update_song(conn, s.id, review=False)  # the rematch makes it not found, or a review of the rest
+            stats.rejected += 1
         elif answer == "i":
             add_ignore(cfg.overrides_file, s.display)
             update_song(conn, s.id, review=False, status="ignored")

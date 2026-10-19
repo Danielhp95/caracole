@@ -132,6 +132,7 @@ def test_title_only_review_of_an_indexed_artist_says_its_page_is_checked_first(c
     kv_set(conn, f"ug:artist_page_checked:{s.id}", "2026-10-18T03:35:00Z")
     item = review_item(todo(conn, cfg), "Soda Stereo - De Música Ligera")
     assert "tabarr didn't find it on Soda Stereo's UG page either" in item and "after 30 days" in item
+    assert "if none is, dismiss them all (below)" in item and "leave it" not in item
 
 
 def test_title_only_review_of_a_song_with_a_sheet_says_nothing_is_lost_by_leaving_it(conn, cfg):
@@ -316,6 +317,37 @@ def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
     assert "`notes.pdf`: not a Guitar Pro or Power Tab file" in section
 
 
+def test_inbox_lists_a_link_as_refused_never_as_a_file_to_rename(conn, cfg):
+    # Anyone who can write to the library can put a link in the inbox; tabarr files only regular files.
+    private = cfg.state_dir / "spotify-token.json"
+    private.parent.mkdir(parents=True, exist_ok=True)
+    private.write_text("{}", encoding="utf-8")
+    inbox = cfg.library_dir / "_inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "Soda Stereo - Signos.gp5").symlink_to(private)
+    (inbox / "gone.gp5").symlink_to(cfg.state_dir / "nothing")
+    (inbox / "a folder").mkdir()
+    section = section_of(todo(conn, cfg), "Inbox: files tabarr couldn't place")
+    refused = ": a symbolic link; tabarr files only regular files. Put the file itself there."
+    assert section.startswith(" (2)\n")
+    assert f"- `Soda Stereo - Signos.gp5`{refused}" in section and f"- `gone.gp5`{refused}" in section
+    assert "rename it" not in section and "a folder" not in section
+
+
+def test_a_linked_inbox_lists_nothing_of_what_it_points_at(conn, cfg):
+    # A link in place of _inbox/ would list the folder it points at: the credentials' names, say.
+    private = cfg.state_dir / "credentials"
+    private.mkdir(parents=True)
+    (private / "spotify_client_secret").write_text("x", encoding="utf-8")
+    cfg.library_dir.mkdir(parents=True)
+    (cfg.library_dir / "_inbox").symlink_to(private)
+    text = todo(conn, cfg)
+    assert "spotify_client_secret" not in text
+    section = section_of(text, "Inbox: files tabarr couldn't place")
+    assert "- `_inbox` is a symbolic link, so this page doesn't list what it points at. Make `_inbox` a folder " \
+           "of its own." in section
+
+
 def test_missing_lyrics(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马斑马")
     update_song(conn, s.id, lyrics_status="missing")
@@ -378,8 +410,11 @@ def test_review_lines_paste_under_the_tables_tabarr_review_wrote(conn, cfg):
     s = add_song(conn, "Radio Head", "Crep")
     update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
         {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"}])
-    [block] = toml_blocks(review_item(todo(conn, cfg, load_overrides(cfg.overrides_file)), "Radio Head - Crep"))
-    assert not [line for line in block.splitlines() if line.startswith("[")], f"a header would repeat a table:\n{block}"
+    blocks = toml_blocks(review_item(todo(conn, cfg, load_overrides(cfg.overrides_file)), "Radio Head - Crep"))
+    for block in blocks:
+        assert not [line for line in block.splitlines() if line.startswith("[")], f"a header would repeat:\n{block}"
+    block, dismiss = blocks  # the candidate's lines, then the [reject] line for none of them
+    assert dismiss.endswith("  # under [reject]\n")
     # Each line goes under the table its comment names, as the section says.
     text = cfg.overrides_file.read_text(encoding="utf-8")
     for line in block.splitlines():
@@ -389,6 +424,44 @@ def test_review_lines_paste_under_the_tables_tabarr_review_wrote(conn, cfg):
     o = load_overrides(cfg.overrides_file)
     assert o.match["radio-head/crep"] == ("radiohead", "creep") and o.alias["radio-head"] == ("radiohead",)
     assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
+
+
+def test_a_review_says_how_to_dismiss_every_candidate(conn, cfg):
+    index(conn, [(1081460, "soda-stereo", "persiana-americana", "chords")])
+    s = add_song(conn, "Soda", "Persiana Americana")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "soda-stereo", "song_key": "persiana-americana", "score": 82.0, "step": "fuzzy_artist"},
+        {"artist_key": "soda-stereo", "song_key": "persiana", "score": 76.0, "step": "fuzzy_artist"},
+    ])
+    text = todo(conn, cfg)
+    assert "(`[match]`, `[alias]`, `[reject]`)" in section_of(text, "Review")
+    item = review_item(text, "Soda - Persiana Americana")
+    assert "None of these? Answer `n` in `tabarr review`, or add this line under `[reject]`" in item
+    *_, block = toml_blocks(item)
+    assert block == ('"Soda - Persiana Americana" = ["soda-stereo/persiana-americana", "soda-stereo/persiana"]'
+                     "  # under [reject]\n")
+    # Pasted under the table its comment names, it drops both, and the file still loads.
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text("[reject]\n" + block, encoding="utf-8")
+    assert load_overrides(cfg.overrides_file).reject[s.key] == frozenset({
+        ("soda-stereo", "persiana-americana"), ("soda-stereo", "persiana")})
+
+
+def test_a_song_rejected_before_gets_its_whole_reject_line_to_put_in_place(conn, cfg):
+    # More covers turned up after you dismissed the first ones. A second line for the same song under
+    # [reject] would make overrides.toml unreadable, so the page gives the song's whole line instead.
+    from tabarr.overrides import add_reject
+
+    add_reject(cfg.overrides_file, "Maná - Rayando el Sol", ["ana-gabriel/rayando-el-sol"])
+    s = covers_only(conn, "Maná", "Rayando el Sol", "pablo-alboran")
+    item = review_item(todo(conn, cfg, load_overrides(cfg.overrides_file)), "Maná - Rayando el Sol")
+    assert "or put this line in place of the song's line under `[reject]`" in item
+    *_, block = toml_blocks(item)
+    text = cfg.overrides_file.read_text(encoding="utf-8")
+    [old] = [line for line in text.splitlines() if line.startswith('"Maná - Rayando el Sol"')]
+    cfg.overrides_file.write_text(text.replace(old + "\n", block), encoding="utf-8")
+    assert load_overrides(cfg.overrides_file).reject[s.key] == frozenset({
+        ("ana-gabriel", "rayando-el-sol"), ("pablo-alboran", "rayando-el-sol")})
 
 
 def test_an_unreadable_overrides_file_leads_the_page(conn, cfg):

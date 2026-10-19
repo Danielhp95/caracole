@@ -11,6 +11,7 @@ from tabarr.overrides import (
     add_ignore,
     add_match,
     add_pin,
+    add_reject,
     load_overrides,
     override_key,
     tab_id_from_url,
@@ -217,6 +218,22 @@ def test_invalid_toml_is_error(tmp_path):
         load_overrides(write(tmp_path, "[alias\n"))
 
 
+def test_a_table_declared_twice_says_to_merge_the_two(tmp_path):
+    # As pasting two blocks that each start with the table's header makes it.
+    p = write(tmp_path, (
+        '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n\n'
+        '[artist_url]\n"宋冬野" = "https://www.ultimate-guitar.com/artist/song_dongye_99"\n'
+    ))
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == (f"{p}: Cannot declare ('artist_url',) twice (at line 4, column 12); "
+                            "merge the two [artist_url] sections into one")
+    other = write(tmp_path, '[match]\n"A - B" = "a/b"\n"A - B" = "a/c"\n')  # a key twice: no such hint
+    with pytest.raises(OverridesError) as e:
+        load_overrides(other)
+    assert "merge" not in str(e.value)
+
+
 def test_override_key():
     assert override_key("Soda Stereo - De Música Ligera") == "soda-stereo/de-musica-ligera"
     assert override_key("宋冬野 - 斑马，斑马") == "宋冬野/斑马斑马"
@@ -254,6 +271,58 @@ def test_writers_preserve_comments_and_roundtrip(tmp_path):
     assert sorted(o.block) == [1601668]
 
 
+def test_reject_lists_the_ug_songs_that_are_not_the_song(tmp_path):
+    o = load_overrides(write(tmp_path, '''
+[reject]   # "none of these" in tabarr review
+"Soda - Persiana Americana" = ["Soda-Stereo/Persiana-Americana", "soda-stereo/persiana"]
+"soda - persiana americana" = "soda-stereo-ar/persiana-americana"  # the same song, written another way
+"宋冬野 - 斑马，斑马" = ["li-zhi/ban-ma-ban-ma"]
+'''))
+    assert o.reject == {
+        "soda/persiana-americana": frozenset({("soda-stereo", "persiana-americana"), ("soda-stereo", "persiana"),
+                                              ("soda-stereo-ar", "persiana-americana")}),
+        "宋冬野/斑马斑马": frozenset({("li-zhi", "ban-ma-ban-ma")}),
+    }
+    assert Overrides().reject == {}
+
+
+@pytest.mark.parametrize("text, where, expected", [
+    ('[reject]\n"Creep" = ["radiohead/creep"]\n', "[reject] 'Creep'", "expected \"Artist - Title\", got 'Creep'"),
+    ('[reject]\n"A - B" = ["no-slash"]\n', "[reject] 'A - B'", "expected \"ug-artist/ug-song\", got 'no-slash'"),
+    ('[reject]\n"A - B" = 5\n', "[reject] 'A - B'", "expected a string or a list of strings"),
+])
+def test_a_malformed_reject_names_its_entry(tmp_path, text, where, expected):
+    p = write(tmp_path, text)
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == f"{p}: {where}: {expected}"
+
+
+def test_add_reject_adds_to_the_songs_list_and_keeps_your_comments(tmp_path):
+    p = write(tmp_path, '# mine\n[reject]\n"Soda - Persiana Americana" = "soda-stereo/persiana"  # a cover\n')
+    add_reject(p, "soda - persiana americana", ["soda-stereo/persiana", "soda-stereo/persiana-americana"])
+    add_reject(p, "Maná - Rayando el Sol", ["ana-gabriel/rayando-el-sol"])
+    before, inode = p.read_text(encoding="utf-8"), p.stat().st_ino
+    add_reject(p, "Soda - Persiana Americana", ["Soda-Stereo/Persiana"])  # rejected already: nothing is written
+    add_reject(p, "Maná - Rayando el Sol", [])
+    text = p.read_text(encoding="utf-8")
+    assert text == before and p.stat().st_ino == inode
+    assert "# mine" in text and "# a cover" in text and "soda - persiana americana" not in text
+    o = load_overrides(p)
+    assert o.reject["soda/persiana-americana"] == frozenset({("soda-stereo", "persiana"),
+                                                             ("soda-stereo", "persiana-americana")})
+    assert o.reject["mana/rayando-el-sol"] == frozenset({("ana-gabriel", "rayando-el-sol")})
+
+
+def test_add_reject_checks_what_it_writes(tmp_path):
+    p = tmp_path / "overrides.toml"
+    with pytest.raises(OverridesError, match="Artist - Title"):
+        add_reject(p, "Creep", ["radiohead/creep"])
+    with pytest.raises(OverridesError, match=r"\[reject\] 'Radiohead - Creep': expected \"ug-artist/ug-song\""):
+        add_reject(p, "Radiohead - Creep", ["radiohead"])
+    assert not p.exists()
+
+
 def test_add_alias_keeps_the_artists_other_aliases(tmp_path):
     p = write(tmp_path, (
         "[alias]\n"
@@ -281,18 +350,75 @@ def test_writer_creates_missing_file(tmp_path):
     assert load_overrides(p).ignore == frozenset({"a/b"})
 
 
-def test_writers_report_a_broken_file_as_an_overrides_error(tmp_path):
-    broken = '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n[artist_url]\n'
-    p = write(tmp_path, broken)
-    writers = [
+SECRET = '[ignore]\nsongs = ["Private - Token"]\n'  # a private file that happens to parse as overrides
+
+
+def all_writers(p: Path):
+    return [
         lambda: add_alias(p, "Maná", "mana"),
         lambda: add_match(p, "Maná - Rayando el Sol", "mana/rayando-el-sol"),
         lambda: add_artist_url(p, "宋冬野", "https://www.ultimate-guitar.com/artist/song_dongye_99"),
         lambda: add_pin(p, "Maná - Rayando el Sol", ["https://tabs.ultimate-guitar.com/tab/85053"]),
         lambda: add_ignore(p, "Maná - Rayando el Sol"),
         lambda: add_block(p, 1601668),
+        lambda: add_reject(p, "Maná - Rayando el Sol", ["ana-gabriel/rayando-el-sol"]),
     ]
-    for add in writers:
+
+
+def planted(tmp_path: Path, kind: str) -> tuple[Path, Path]:
+    """overrides.toml in the library as something other than a file: a link (to a private file, or
+    to nothing) or a folder. Returns it and the private file."""
+    secret = tmp_path / "private" / "secret.toml"
+    secret.parent.mkdir()
+    secret.write_text(SECRET, encoding="utf-8")
+    p = tmp_path / "lib" / "overrides.toml"
+    p.parent.mkdir()
+    if kind == "link":
+        p.symlink_to(secret)
+    elif kind == "dangling link":
+        p.symlink_to(tmp_path / "private" / "gone.toml")
+    else:
+        p.mkdir()
+    return p, secret
+
+
+LINK = "a symbolic link, which tabarr doesn't follow"
+
+
+@pytest.mark.parametrize("kind, said", [
+    ("link", LINK), ("dangling link", LINK), ("folder", "not a regular file"),
+])
+def test_overrides_that_arent_a_file_are_refused_unread(tmp_path, kind, said):
+    # The library is writable by every synced device: a link planted as overrides.toml could point at
+    # tabarr's private files, which would then be read, or copied into the library by a writer.
+    p, secret = planted(tmp_path, kind)
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == f"{p}: {said}; put the file itself there"
+    for add in all_writers(p):
+        with pytest.raises(OverridesError) as e:
+            add()
+        assert str(e.value) == f"{p}: {said}; put the file itself there"
+    assert p.is_symlink() == ("link" in kind) and secret.read_text(encoding="utf-8") == SECRET
+    copied = [f for f in (tmp_path / "lib").rglob("*") if f.is_file() and not f.is_symlink()]
+    assert copied == []  # nothing of the private file reached the library
+
+
+def test_writers_never_write_through_a_link_at_a_temporary_name(tmp_path):
+    p = write(tmp_path, "[ignore]\nsongs = []\n")
+    victim = tmp_path / "victim.txt"
+    victim.write_text("precious", encoding="utf-8")
+    for name in ("overrides.toml.tmp", ".overrides.toml.tmp"):
+        (tmp_path / name).symlink_to(victim)
+    add_ignore(p, "A - B")
+    assert victim.read_text(encoding="utf-8") == "precious"
+    assert not p.is_symlink() and load_overrides(p).ignore == frozenset({"a/b"})
+
+
+def test_writers_report_a_broken_file_as_an_overrides_error(tmp_path):
+    broken = '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n[artist_url]\n'
+    p = write(tmp_path, broken)
+    for add in all_writers(p):
         with pytest.raises(OverridesError, match=r"overrides\.toml: .*artist_url"):
             add()
     assert p.read_text(encoding="utf-8") == broken
