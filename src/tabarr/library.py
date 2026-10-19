@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import sqlite3
 import unicodedata
 from dataclasses import dataclass
@@ -49,11 +50,24 @@ def song_dir(library_dir: Path, song: Song) -> Path:
 
 
 def write_atomic(path: Path, data: bytes) -> str:
-    """Write through a temporary file and rename; return the SHA-256 of the data."""
+    """Write through a temporary file and rename; return the SHA-256 of the data.
+
+    Anyone who can write to the library can plant a symbolic link there, so the
+    temporary file gets a random name and is created exclusively (O_EXCL): a
+    link waiting at a predictable name is never written through. The rename
+    replaces a link at ``path`` itself rather than its target. open(..., "x")
+    rather than mkstemp: mkstemp makes 0600 files, which would hide the library
+    from Syncthing reading it through the group.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(4)}.tmp")
+    try:
+        with open(tmp, "xb") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     return hashlib.sha256(data).hexdigest()
 
 
