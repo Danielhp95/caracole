@@ -187,6 +187,50 @@ def test_default_match_step_skips_while_the_index_is_empty(conn, cfg):
     assert conn.execute("SELECT match_decision FROM songs").fetchone()[0] is None
 
 
+def keep_sheet_before_lyrics(conn, cfg, song, content):
+    """A UG sheet kept while the song's lyrics were pending: sheet.txt and sheet.json, no coverage."""
+    import json
+
+    from tabarr.library import keep_file
+    from tabarr.ug.page import strip_markup
+    from tabarr.versions import upsert_version
+
+    url = "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-101"
+    vid = upsert_version(conn, provider="ug", tab_id="101", song_id=song.id, slot="sheet", kind="chords",
+                         rating=4.5, votes=20, version=1, label=None, url=url, raw={"id": 101},
+                         now="2026-10-01T00:00:00Z")
+    files = {"sheet.txt": strip_markup(content), "sheet.json": json.dumps({"content": content, "url": url})}
+    for name, text in files.items():
+        keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=name, data=text.encode(), rank=1)
+    return vid
+
+
+def test_default_fetch_step_scores_sheets_kept_before_their_lyrics(conn, cfg):
+    # The lyrics step has since found the song's lyrics: the sheet covers half of them.
+    from conftest import add_song
+
+    from tabarr.lyrics import Lyrics
+    from tabarr.pipeline import default_steps
+    from tabarr.songs import update_song
+    from tabarr.versions import get_version
+
+    song = add_song(conn, "Soda Stereo", "Persiana Americana")
+    content = "[Verso]\n[ch]Am[/ch]      [ch]F[/ch]\nwalking down the river road tonight\n"
+    vid = keep_sheet_before_lyrics(conn, cfg, song, content)
+    plain = "walking down the river road tonight\ncounting every lantern on the shore\n"
+    lyrics = Lyrics(plain=plain, synced=None, instrumental=False, duration=None, lrclib_id=1)
+    update_song(conn, song.id, status="found", lyrics_status="found", lyrics_json=lyrics.to_json())
+    out = Outbox()
+    steps = [s for s in default_steps() if s.name in ("fetch", "todo")]
+
+    report = run_pipeline(cfg, conn=conn, services=services(out), steps=steps, now=NOW)
+
+    assert report.steps["fetch"] == "0 songs done, 0 failed, 1 kept sheet rescored"
+    assert get_version(conn, vid).coverage == 0.5
+    todo = (cfg.library_dir / "_todo.md").read_text(encoding="utf-8")
+    assert "**Soda Stereo - Persiana Americana**: 50% of the lyrics" in todo
+
+
 def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, monkeypatch):
     import tabarr.lacuerda_fetch as lf
     from tabarr.overrides import Overrides

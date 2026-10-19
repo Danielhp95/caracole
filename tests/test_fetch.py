@@ -30,7 +30,14 @@ from tabarr.lyrics import Lyrics
 from tabarr.overrides import Overrides
 from tabarr.songs import get_song, update_song
 from tabarr.ug.artist import artist_page_url
-from tabarr.ug.fetch import FetchContext, FetchStats, fetch_songs, process_song, songs_to_fetch
+from tabarr.ug.fetch import (
+    FetchContext,
+    FetchStats,
+    fetch_songs,
+    process_song,
+    rescore_kept_sheets,
+    songs_to_fetch,
+)
 from tabarr.ug.lookup import (
     IndexTab,
     artist_tabs,
@@ -39,7 +46,15 @@ from tabarr.ug.lookup import (
     remember_artist_url,
     tab_url_for,
 )
-from tabarr.versions import picks, set_coverage, set_picks, song_versions, upsert_version
+from tabarr.ug.page import strip_markup
+from tabarr.versions import (
+    get_version,
+    picks,
+    set_coverage,
+    set_picks,
+    song_versions,
+    upsert_version,
+)
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
 TAB = "https://tabs.ultimate-guitar.com/tab/"
@@ -1226,3 +1241,137 @@ def test_title_only_review_resolved_on_the_artist_page(conn, tmp_path):
     done = get_song(conn, song.id)
     assert (done.match_decision, done.match_step, done.review) == ("accept", "artist_page", False)
     assert "sheet 85042" in read(tmp_path, song, "sheet.txt")
+
+
+# --- sheets kept before their lyrics -------------------------------------------------------------
+
+
+def keep_sheet(conn, tmp_path, song, content, *, coverage=None):
+    """A LaCuerda sheet as its step keeps it: sheet.json (with the markup) and sheet.txt."""
+    url = "https://acordes.lacuerda.net/soda_stereo/persiana_americana-2.shtml"
+    vid = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/persiana_americana-2", song_id=song.id,
+                         slot="sheet", kind="acordes", rating=0, votes=0, version=2, label=None, url=url,
+                         raw={}, now="2026-10-01T00:00:00Z")
+    set_coverage(conn, vid, coverage)
+    doc = {"provider": "lacuerda", "url": url, "content": content, "version": 2}
+    files = {"sheet.json": json.dumps(doc, ensure_ascii=False), "sheet.txt": strip_markup(content)}
+    for name, text in files.items():
+        keep_file(conn, tmp_path / "lib", song=song, version_id=vid, name=name, data=text.encode(), rank=1)
+    set_picks(conn, song.id, ("acordes",), [vid])
+    return vid
+
+
+def rescore(conn, tmp_path, **policy):
+    return rescore_kept_sheets(conn, tmp_path / "lib", RankPolicy(**policy))
+
+
+def sheet_kinds_picked(conn, song):
+    return [r.kind for r in picks(conn, song.id, ("chords", "acordes", "auto"))]
+
+
+def test_a_sheet_kept_before_its_lyrics_is_scored_once_they_arrive(conn, tmp_path):
+    song = accepted(conn, plain=None)  # LRCLIB hadn't answered when the sheet was kept
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES[:3]))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert coverages(conn, song) == {101: None}
+
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics_json(LYRICS))
+    assert rescore(conn, tmp_path) == 1  # no client: nothing is asked of any site
+
+    assert coverages(conn, song) == {101: pytest.approx(0.3)}
+    info = json.loads(read(tmp_path, song, "info.json"))
+    assert {f["name"]: f["coverage"] for f in info["files"]}["sheet.txt"] == pytest.approx(0.3)
+    assert rescore(conn, tmp_path) == 0  # scored once
+
+
+def test_banma_kept_before_its_lyrics_is_scored_in_pinyin(conn, tmp_path):
+    # LRCLIB's 斑马斑马 has plain lyrics only, in Traditional characters; UG's sheet is Simplified.
+    song = banma(conn)
+    update_song(conn, song.id, lyrics_status="pending", lyrics_json=None)
+    ug = FakeUG()
+    serve_banma(ug, [banma_tab(2001234, rating=4.7, votes=50)])
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, PASTED), get_song(conn, song.id))
+    assert coverages(conn, song) == {2001234: None, 2001235: None}
+
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics_json(BANMA_TRADITIONAL))
+    assert rescore(conn, tmp_path) == 1
+
+    assert coverages(conn, song) == {2001234: 1.0, 2001235: None}  # only the kept sheet is scored
+
+
+@pytest.mark.parametrize("status,plain", [("pending", None), ("instrumental", "")])
+def test_rescore_leaves_sheets_whose_song_has_no_lyrics(conn, tmp_path, status, plain):
+    song = accepted(conn, plain=None)
+    update_song(conn, song.id, lyrics_status=status, lyrics_json=None if plain is None else lyrics_json(plain))
+    vid = keep_sheet(conn, tmp_path, song, sheet("lacuerda sheet", LINES))
+    assert rescore(conn, tmp_path) == 0
+    assert get_version(conn, vid).coverage is None
+
+
+def test_rescore_leaves_sheets_already_scored(conn, tmp_path):
+    song = accepted(conn)
+    vid = keep_sheet(conn, tmp_path, song, sheet("lacuerda sheet", LINES), coverage=0.4)
+    assert rescore(conn, tmp_path) == 0
+    assert get_version(conn, vid).coverage == 0.4
+
+
+def test_rescore_reads_the_markup_any_site_kept_in_sheet_json(conn, tmp_path):
+    song = accepted(conn)
+    vid = keep_sheet(conn, tmp_path, song, sheet("lacuerda sheet", LINES[:5]))
+    assert rescore(conn, tmp_path) == 1
+    assert get_version(conn, vid).coverage == 0.5
+
+
+@pytest.mark.parametrize("line_match,expected", [(85, 1.0), (100, 0.9)])
+def test_rescore_follows_the_rank_policy(conn, tmp_path, line_match, expected):
+    # Demanding exact lines, a typo in the sheet ("waitin") no longer covers its lyric line.
+    song = accepted(conn)
+    content = sheet("lacuerda sheet", [*LINES[:9], "where the paper boats are waitin still"])
+    vid = keep_sheet(conn, tmp_path, song, content)
+    assert rescore(conn, tmp_path, line_match=line_match) == 1
+    assert get_version(conn, vid).coverage == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("damage", ["corrupt", "missing", "no content"])
+def test_rescore_skips_a_sheet_json_it_cannot_read(conn, tmp_path, damage):
+    song = accepted(conn)
+    vid = keep_sheet(conn, tmp_path, song, sheet("lacuerda sheet", LINES))
+    doc = song_dir(tmp_path / "lib", song) / "sheet.json"
+    if damage == "corrupt":
+        doc.write_text("{not json", encoding="utf-8")
+    elif damage == "missing":
+        doc.unlink()
+    else:
+        doc.write_text(json.dumps({"provider": "lacuerda"}), encoding="utf-8")
+    assert rescore(conn, tmp_path) == 0
+    assert get_version(conn, vid).coverage is None
+
+
+def test_rescore_never_scores_one_versions_text_for_another(conn, tmp_path):
+    # sheet.json belongs to another version than sheet.txt (a keep cut short): no grounds to score.
+    song = accepted(conn)
+    vid = keep_sheet(conn, tmp_path, song, sheet("lacuerda sheet", LINES))
+    other = upsert_version(conn, provider="ug", tab_id="101", song_id=song.id, slot="sheet", kind="chords",
+                           rating=4.5, votes=20, version=1, label=None, url=slugged(101), raw={},
+                           now="2026-10-01T00:00:00Z")
+    keep_file(conn, tmp_path / "lib", song=song, version_id=other, name="sheet.json",
+              data=json.dumps({"content": sheet("sheet 101", LINES)}).encode(), rank=1)
+    assert rescore(conn, tmp_path) == 0
+    assert get_version(conn, vid).coverage is None
+
+
+@pytest.mark.parametrize("lines,retired", [(LINES, True), (LINES[:3], False)])
+def test_a_sheet_rescored_complete_retires_the_auto_sheet(conn, tmp_path, lines, retired):
+    song = accepted(conn)
+    keep_other_sheet(conn, tmp_path, song, provider="auto", kind="auto", name="sheet (auto).txt")
+    keep_sheet(conn, tmp_path, song, sheet("lacuerda sheet", lines))
+
+    assert rescore(conn, tmp_path) == 1
+
+    assert ("sheet (auto).txt" in names(conn, song)) is not retired
+    assert (song_dir(tmp_path / "lib", song) / "sheet (auto).txt").exists() is not retired
+    assert ("auto" in sheet_kinds_picked(conn, song)) is not retired
+    info = json.loads(read(tmp_path, song, "info.json"))
+    assert ("sheet (auto).txt" in {f["name"] for f in info["files"]}) is not retired

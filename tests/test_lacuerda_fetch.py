@@ -341,7 +341,7 @@ so here I am, it's late again
 BANMA_LYRICS = "範例歌詞 第一行\n範例歌詞 第二行\n你是一匹斑馬 我是一匹斑馬\n"
 
 
-def keep_ug_sheet(conn, tmp_path, song, value):
+def keep_ug_sheet(conn, tmp_path, song, value, *, lib=None):
     """A UG sheet kept by the fetch step (sheet.txt and sheet.json), covering ``value``."""
     url = "https://tabs.ultimate-guitar.com/tab/85053"
     raw = {"id": 85053, "type": "Chords"}
@@ -354,8 +354,8 @@ def keep_ug_sheet(conn, tmp_path, song, value):
     doc = {"version": raw, "content": content, "url": url}
     files = {"sheet.txt": strip_markup(content), "sheet.json": json.dumps(doc)}
     for name, text in files.items():
-        keep_file(conn, tmp_path / "lib", song=song, version_id=vid, name=name, data=text.encode(),
-                  rank=1)
+        keep_file(conn, lib or tmp_path / "lib", song=song, version_id=vid, name=name,
+                  data=text.encode(), rank=1)
     set_picks(conn, song.id, ("chords",), [vid])
     refresh_status(conn, song.id, ignored=False)
     return vid
@@ -775,6 +775,33 @@ def test_the_nightly_lacuerda_step_reports_the_counts(conn, cfg, tmp_path):
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
     assert report.steps == {"lacuerda": "2 tried, 1 sheet kept, 1 not on LaCuerda, 0 errors"}
     assert (cfg.library_dir / "Soda Stereo" / "De Música Ligera" / "sheet.txt").is_file()
+
+
+def test_a_kept_sheet_scored_tonight_gives_lacuerda_its_chance(conn, cfg, tmp_path):
+    # Kept before the song had lyrics, the UG sheet's coverage was unknown, and a partial
+    # sheet never displaces one of unknown coverage. The fetch step scores it first: it
+    # covers 1 line in 16, and LaCuerda's sheet covers half.
+    from tabarr.notify import Notifier
+    from tabarr.pipeline import Services, default_steps, run_pipeline
+
+    def no_ug(request):
+        raise AssertionError(f"unexpected UG request: {request.url}")
+
+    song = spanish_song(conn, plain=HALF_LYRICS)
+    keep_ug_sheet(conn, tmp_path, song, None, lib=cfg.library_dir)
+    ug = PoliteClient("ug", ProviderPolicy(budget=10, delay=(0.0, 0.0)), tmp_path / "cache",
+                      user_agent="tabarr-test", transport=httpx.MockTransport(no_ug),
+                      sleep=lambda seconds: None)
+    clients = {"ug": ug, "lacuerda": FakeLaCuerda().client(tmp_path / "cache")}
+    services = Services(clients=clients, spotify=None, notifier=Notifier(None, None))
+    steps = [s for s in default_steps() if s.name in ("fetch", "lacuerda")]
+
+    report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
+
+    assert report.steps == {"fetch": "0 songs done, 0 failed, 1 kept sheet rescored",
+                            "lacuerda": "1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors"}
+    (v,) = lacuerda_versions(conn, song)
+    assert v.coverage == 0.5 and files_of(conn, song)["sheet.txt"] == v.id
 
 
 def test_tonights_lyrics_score_tonights_lacuerda_sheet(conn, cfg, tmp_path):

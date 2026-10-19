@@ -147,15 +147,19 @@ def _lyrics(ctx: StepContext) -> str:
 
 
 def _fetch(ctx: StepContext) -> str:
-    from tabarr.ug.fetch import FetchContext, fetch_songs, songs_to_fetch
+    from tabarr.ug.fetch import FetchContext, fetch_songs, rescore_kept_sheets, songs_to_fetch
 
+    # Sheets kept before their lyrics arrived are scored first (no requests), so a partial one
+    # shows on the to-do page and the fetch and LaCuerda can tell it from a complete one.
+    rescored = rescore_kept_sheets(ctx.conn, ctx.cfg.library_dir, ctx.cfg.rank)
     fctx = FetchContext(
         conn=ctx.conn, client=ctx.services.client("ug"), overrides=ctx.overrides, rank=ctx.cfg.rank,
         library_dir=ctx.cfg.library_dir, now=ctx.now,
     )
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
+    scored = f", {_plural(rescored, 'kept sheet')} rescored" if rescored else ""
     tail = " (budget spent)" if s.budget_exhausted else ""
-    return f"{_plural(s.songs_done, 'song')} done, {s.songs_failed} failed{tail}"
+    return f"{_plural(s.songs_done, 'song')} done, {s.songs_failed} failed{scored}{tail}"
 
 
 def _lacuerda(ctx: StepContext) -> str:

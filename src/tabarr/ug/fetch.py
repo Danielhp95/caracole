@@ -26,6 +26,9 @@ For each song (plan §3, Task 15, amendment A6):
 
 A kept file is replaced only when another version outranks it, and is not
 rewritten when it wins again.
+
+``rescore_kept_sheets`` scores the sheets kept before their song had lyrics,
+without a request; the nightly run calls it before fetching.
 """
 
 from __future__ import annotations
@@ -884,3 +887,52 @@ def fetch_songs(
         if on_song is not None:
             on_song(song, outcome)
     return stats
+
+
+# --- sheets kept before their lyrics ---------------------------------------------------------------
+
+
+def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankPolicy) -> int:
+    """Score the kept sheets that have no coverage because their song had no lyrics yet; return how many.
+
+    A sheet kept before LRCLIB answered has an unknown coverage forever
+    otherwise: it never shows as partial on the to-do page, and only a complete
+    sheet may replace it. Once its song has lyrics, the sheet's markup (the
+    ``content`` of the ``sheet.json`` kept beside it, from UG or LaCuerda) is
+    scored as the fetch would have scored it. No request is made. A sheet that
+    proves complete retires the auto-chords sheet, as it would have on keeping.
+    """
+    rows = conn.execute(
+        "SELECT f.song_id, f.version_id FROM files f JOIN versions v ON v.id = f.version_id "
+        "WHERE f.name = ? AND v.coverage IS NULL ORDER BY f.song_id",
+        (SHEET_FILES[0],),
+    ).fetchall()
+    scored = 0
+    for row in rows:
+        song = get_song(conn, row["song_id"])
+        lines = _lyric_lines(song)
+        content = _kept_markup(conn, library_dir, song, row["version_id"]) if lines else None
+        if content is None:
+            continue
+        value = coverage.coverage(content, lines, line_match=rank.line_match)
+        set_coverage(conn, row["version_id"], value)
+        if value is not None and value >= rank.coverage_threshold:
+            _retire_auto_sheet(conn, library_dir, song)
+        write_info(conn, library_dir, song)
+        scored += 1
+    return scored
+
+
+def _kept_markup(conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int) -> str | None:
+    """The markup in the song's kept ``sheet.json``, if it is that version's and can be read."""
+    doc_file = next((f for f in kept_files(conn, song.id) if f.name == SHEET_FILES[1]), None)
+    if doc_file is None or doc_file.version_id != version_id:
+        return None
+    path = library_dir / doc_file.path
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:  # ValueError: not UTF-8, or not JSON
+        log.warning("cannot score %s: %s", path, e)
+        return None
+    content = doc.get("content") if isinstance(doc, dict) else None
+    return content if isinstance(content, str) else None
