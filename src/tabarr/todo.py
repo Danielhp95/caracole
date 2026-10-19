@@ -113,6 +113,21 @@ def _dismissal(song: Song, refs: list[str], overrides: Overrides) -> list[str]:
             *_paste([f"{_toml_str(song.display)} = [{listed}]  # under [reject]"])]
 
 
+def _alias_line(artist: str, akey: str, overrides: Overrides) -> list[str]:
+    """The ``[alias]`` line that adds ``akey`` to the artist's UG names, as ``tabarr review`` adds it.
+
+    No line when it is one of them already; for an artist with aliases, the whole line, theirs included,
+    to put in place of the one it has: a second line for the artist would make overrides.toml unreadable.
+    """
+    have = overrides.alias.get(slug_key(artist), ())
+    if akey in have:
+        return []
+    if not have:
+        return [f"{_toml_str(artist)} = {_toml_str(akey)}  # under [alias]"]
+    listed = ", ".join(_toml_str(a) for a in (*have, akey))
+    return [f"{_toml_str(artist)} = [{listed}]  # in place of the artist's line under [alias]"]
+
+
 def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, due: set[int]) -> list[str]:
     items: list[str] = []
     for s in songs:
@@ -139,7 +154,7 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, d
             # writes them), and a table declared twice makes the whole file unreadable.
             lines = [f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}  # under [match]"]
             if step != "title_only" and slug_key(s.artist) != akey:
-                lines.append(f"{_toml_str(s.artist)} = {_toml_str(akey)}  # under [alias]")
+                lines += _alias_line(s.artist, akey, overrides)
             items += _paste(lines)
         if refs:
             items += _dismissal(s, refs, overrides)

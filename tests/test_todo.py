@@ -426,6 +426,60 @@ def test_review_lines_paste_under_the_tables_tabarr_review_wrote(conn, cfg):
     assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
 
 
+def paste_as_commented(text, block):
+    """overrides.toml's text with each line of a paste block put where its comment says: under the
+    table it names, or in place of the line the file has for the same key (tomlkit writes it bare)."""
+    for line in block.splitlines():
+        table = re.search(r"under (\[\w+\])$", line).group(1)
+        if "# in place of" in line:
+            key = line.split(" = ", 1)[0]
+            bare = key.strip('"')
+            [old] = [k for k in text.splitlines() if k.startswith((f"{key} = ", f"{bare} = "))]
+            text = text.replace(old, line, 1)
+        else:
+            text = text.replace(f"{table}\n", f"{table}\n{line}\n", 1)
+    return text
+
+
+def review_blocks_with_an_alias(conn, cfg, alias, step):
+    """The paste blocks of a review of Soda - Persiana Americana, whose candidate is under UG's
+    soda-stereo, with overrides.toml holding [match] for another song and ``alias`` for Soda."""
+    from tabarr.overrides import add_alias, add_match
+
+    add_match(cfg.overrides_file, "Soda - Signos", "soda-stereo/signos")
+    for slug in alias:
+        add_alias(cfg.overrides_file, "Soda", slug)
+    index(conn, [(1081460, "soda-stereo", "persiana-americana", "chords")])
+    s = add_song(conn, "Soda", "Persiana Americana")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "soda-stereo", "song_key": "persiana-americana", "score": 82.0, "step": step}])
+    text = todo(conn, cfg, load_overrides(cfg.overrides_file))
+    return toml_blocks(review_item(text, "Soda - Persiana Americana"))
+
+
+def test_an_alias_line_for_an_artist_with_aliases_replaces_its_line_and_keeps_them(conn, cfg):
+    # Soda has an alias already: a second "Soda" key under [alias] would make overrides.toml unreadable
+    # ("Cannot overwrite a value"), so the page gives Soda's whole line, its other UG name included.
+    block, _ = review_blocks_with_an_alias(conn, cfg, ["soda-stereo-ar"], "fuzzy_artist")
+    assert '"Soda" = ["soda-stereo-ar", "soda-stereo"]  # in place of the artist\'s line under [alias]' in block
+    text = paste_as_commented(cfg.overrides_file.read_text(encoding="utf-8"), block)
+    cfg.overrides_file.write_text(text, encoding="utf-8")
+    o = load_overrides(cfg.overrides_file)
+    assert o.alias["soda"] == ("soda-stereo-ar", "soda-stereo")
+    assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
+
+
+def test_no_alias_line_for_an_artist_whose_aliases_name_the_candidates_artist(conn, cfg):
+    # Matched under its alias, on a fuzzy title: the alias is there already, so only [match] is new.
+    block, _ = review_blocks_with_an_alias(conn, cfg, ["soda-stereo-ar", "soda-stereo"], "fuzzy_title")
+    assert block == '"Soda - Persiana Americana" = "soda-stereo/persiana-americana"  # under [match]\n'
+    text = paste_as_commented(cfg.overrides_file.read_text(encoding="utf-8"), block)
+    cfg.overrides_file.write_text(text, encoding="utf-8")
+    o = load_overrides(cfg.overrides_file)
+    assert o.alias["soda"] == ("soda-stereo-ar", "soda-stereo")
+    assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
+
+
 def test_a_review_says_how_to_dismiss_every_candidate(conn, cfg):
     index(conn, [(1081460, "soda-stereo", "persiana-americana", "chords")])
     s = add_song(conn, "Soda", "Persiana Americana")
