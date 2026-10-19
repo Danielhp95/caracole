@@ -46,6 +46,7 @@ class FakeRunner:
 
 def sfnt(glyph_lengths=(10, 12), *, short_loca: bool = False, cff: bool = False) -> bytes:
     """A skeletal font: only the tables render.py's font check reads."""
+
     def head(loca_format: int) -> bytes:
         return bytes(50) + struct.pack(">hh", loca_format, 0)
 
@@ -164,14 +165,18 @@ def test_non_font_rejected(cho, tmp_path):
 
 def test_missing_font_file_rejected(cho, tmp_path):
     with pytest.raises(RenderError, match="font file not found"):
-        render_pdf(cho, tmp_path / "sheet.pdf", font_file=tmp_path / "gone.ttf", runner=FakeRunner())
+        render_pdf(
+            cho, tmp_path / "sheet.pdf", font_file=tmp_path / "gone.ttf", runner=FakeRunner()
+        )
 
 
 # --- failures -------------------------------------------------------------------------
 
 
 def test_nonzero_exit_raises_with_stderr(cho, tmp_path):
-    run = FakeRunner(returncode=2, stderr='No font found for "text"\nUnhandled fonts detected -- aborted\n')
+    run = FakeRunner(
+        returncode=2, stderr='No font found for "text"\nUnhandled fonts detected -- aborted\n'
+    )
     with pytest.raises(RenderError) as err:
         render_pdf(cho, tmp_path / "sheet.pdf", runner=run)
     assert "Unhandled fonts detected" in err.value.stderr
@@ -199,7 +204,9 @@ def test_success_without_pdf_raises(cho, tmp_path):
 # --- when a sheet needs font_file -------------------------------------------------------
 
 
-@pytest.mark.parametrize("text", ["De Música Ligera, señorita", "Hold \u2039b> note \u00d72", "Smart “quotes” — dash"])
+@pytest.mark.parametrize(
+    "text", ["De Música Ligera, señorita", "Hold \u2039b> note \u00d72", "Smart “quotes” — dash"]
+)
 def test_core_fonts_cover_latin_text(text):
     assert not needs_font_file(text)
 
@@ -214,7 +221,11 @@ def test_text_beyond_winansi_needs_font_file(text):
 
 def test_write_chordpro(tmp_path):
     path = write_chordpro(
-        "[ch]G[/ch]\nHello", tmp_path / "Artist" / "Song" / "sheet.cho", title="T", artist="A", key="G"
+        "[ch]G[/ch]\nHello",
+        tmp_path / "Artist" / "Song" / "sheet.cho",
+        title="T",
+        artist="A",
+        key="G",
     )
     assert path == tmp_path / "Artist" / "Song" / "sheet.cho"
     assert path.read_text(encoding="utf-8") == "{title: T}\n{artist: A}\n{key: G}\n[G]Hello\n"
@@ -232,9 +243,20 @@ def test_write_chordpro_leaves_unchanged_file_alone(tmp_path):
 # --- the real binary ----------------------------------------------------------------------
 
 CORE_FONTS = {
-    "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic", "Helvetica", "Helvetica-Bold",
-    "Helvetica-Oblique", "Helvetica-BoldOblique", "Courier", "Courier-Bold", "Courier-Oblique",
-    "Courier-BoldOblique", "Symbol", "ZapfDingbats",
+    "Times-Roman",
+    "Times-Bold",
+    "Times-Italic",
+    "Times-BoldItalic",
+    "Helvetica",
+    "Helvetica-Bold",
+    "Helvetica-Oblique",
+    "Helvetica-BoldOblique",
+    "Courier",
+    "Courier-Bold",
+    "Courier-Oblique",
+    "Courier-BoldOblique",
+    "Symbol",
+    "ZapfDingbats",
 }
 
 
@@ -252,7 +274,7 @@ def pdf_runs(path: Path) -> tuple[list[tuple[str, str, list[int]]], dict[str, by
     """
     data = path.read_bytes()
     objects: dict[int, tuple[bytes, bytes | None]] = {}
-    for m in re.finditer(rb"(\d+) 0 obj(.*?)endobj", data, re.S):
+    for m in re.finditer(rb"(\d+) 0 obj(.*?)endobj", data, re.DOTALL):
         head, _, rest = m.group(2).partition(b"stream")
         stream = None
         if rest:
@@ -278,14 +300,17 @@ def pdf_runs(path: Path) -> tuple[list[tuple[str, str, list[int]]], dict[str, by
         if to_unicode := re.search(rb"/ToUnicode (\d+) 0 R", head):
             cmap = _parse_cmap(objects[int(to_unicode.group(1))][1] or b"")
         fonts[name.group(1).decode()] = (base.group(1).decode(), cmap)
-        if (cid := ref(head, b"DescendantFonts")) and (desc := ref(objects[cid][0], b"FontDescriptor")):
-            if (prog := ref(objects[desc][0], b"FontFile2")) is not None:
-                programs[base.group(1).decode()] = objects[prog][1] or b""
+        cid = ref(head, b"DescendantFonts")
+        desc = ref(objects[cid][0], b"FontDescriptor") if cid else None
+        prog = ref(objects[desc][0], b"FontFile2") if desc else None
+        if prog is not None:
+            programs[base.group(1).decode()] = objects[prog][1] or b""
 
     shown: list[tuple[str, str, list[int]]] = []
     token = re.compile(
-        rb"/([^\s/\[\]()<>]+)\s+[\d.]+\s+Tf|\[((?:\((?:\\.|[^\\)])*\)|<[0-9A-Fa-f]*>|[^\]])*)\]\s*TJ"
-        rb"|(\((?:\\.|[^\\)])*\)|<[0-9A-Fa-f]*>)\s*Tj"
+        rb"/([^\s/\[\]()<>]+)\s+[\d.]+\s+Tf"  # font switch
+        rb"|\[((?:\((?:\\.|[^\\)])*\)|<[0-9A-Fa-f]*>|[^\]])*)\]\s*TJ"  # string array
+        rb"|(\((?:\\.|[^\\)])*\)|<[0-9A-Fa-f]*>)\s*Tj"  # single string
     )
     for _, stream in objects.values():
         if not stream or b" Tf" not in stream:
@@ -335,7 +360,9 @@ def _decode(part: bytes, cmap: dict[int, str] | None) -> str:
     if part.startswith(b"<"):
         raw = bytes.fromhex(part[1:-1].decode())
         if cmap is not None:
-            return "".join(cmap.get(int.from_bytes(raw[i : i + 2]), "") for i in range(0, len(raw), 2))
+            return "".join(
+                cmap.get(int.from_bytes(raw[i : i + 2]), "") for i in range(0, len(raw), 2)
+            )
         return raw.decode("cp1252", "replace")
     escapes = {b"n": b"\n", b"r": b"\r", b"t": b"\t", b"b": b"\b", b"f": b"\f"}
 
@@ -343,7 +370,9 @@ def _decode(part: bytes, cmap: dict[int, str] | None) -> str:
         code = m.group(1)
         return bytes([int(code, 8) & 0xFF]) if code[:1].isdigit() else escapes.get(code, code)
 
-    return re.sub(rb"\\([0-7]{1,3}|.)", unescape, part[1:-1], flags=re.S).decode("cp1252", "replace")
+    return re.sub(rb"\\([0-7]{1,3}|.)", unescape, part[1:-1], flags=re.DOTALL).decode(
+        "cp1252", "replace"
+    )
 
 
 def pdf_text(path: Path) -> str:
@@ -354,14 +383,25 @@ def pdf_text(path: Path) -> str:
 @real_chordpro
 def test_render_real_chordpro_binary(tmp_path):
     cho = write_chordpro(
-        fixture("ug_sheet.txt"), tmp_path / "sheet.cho",
-        title="Synthetic Test Song", artist="The Placeholders", key="G", capo=2,
+        fixture("ug_sheet.txt"),
+        tmp_path / "sheet.cho",
+        title="Synthetic Test Song",
+        artist="The Placeholders",
+        key="G",
+        capo=2,
     )
     pdf = tmp_path / "sheet.pdf"
     render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
     assert pdf.read_bytes().startswith(b"%PDF")
     text = pdf_text(pdf)
-    for shown in ["Synthetic Test Song", "The Placeholders", "Key: G", "Capo: 2", "Verse 1", "Tiny test"]:
+    for shown in [
+        "Synthetic Test Song",
+        "The Placeholders",
+        "Key: G",
+        "Capo: 2",
+        "Verse 1",
+        "Tiny test",
+    ]:
         assert shown in text
     assert "e|-----0---0---|" in text
 
@@ -370,8 +410,11 @@ def test_render_real_chordpro_binary(tmp_path):
 @real_chordpro
 def test_render_real_transposes_chords_and_key(tmp_path):
     cho = write_chordpro(
-        "[ch]C#m7[/ch]     [ch]A[/ch]\nSome words to sing", tmp_path / "sheet.cho",
-        title="T", artist="A", key="E",
+        "[ch]C#m7[/ch]     [ch]A[/ch]\nSome words to sing",
+        tmp_path / "sheet.cho",
+        title="T",
+        artist="A",
+        key="E",
     )
     pdf = tmp_path / "sheet.pdf"
     render_pdf(cho, pdf, transpose=-2, chordpro_bin=CHORDPRO)
@@ -384,22 +427,29 @@ def test_render_real_transposes_chords_and_key(tmp_path):
 @real_chordpro
 def test_render_real_shows_escaped_text_as_written(tmp_path):
     bs = "\\"
-    markup = "\n".join([
-        "Sing it again [x2]",
-        "#1 in my heart",
-        "{softly}",
-        "Worth 100%{title} of it",
-        "Hold <b>this</b> note",
-        f"Ends with {bs}",
-        "Next line",
-    ])
+    markup = "\n".join(
+        [
+            "Sing it again [x2]",
+            "#1 in my heart",
+            "{softly}",
+            "Worth 100%{title} of it",
+            "Hold <b>this</b> note",
+            f"Ends with {bs}",
+            "Next line",
+        ]
+    )
     cho = write_chordpro(markup, tmp_path / "sheet.cho", title="Escapes", artist="A")
     pdf = tmp_path / "sheet.pdf"
     render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
     lines = [text.strip() for _, text in pdf_strings(pdf)]
     for shown in [
-        "Sing it again (x2)", "#1 in my heart", "(softly)", "Worth 100%(title) of it",
-        "Hold ‹b>this‹/b> note", f"Ends with {bs}", "Next line",
+        "Sing it again (x2)",
+        "#1 in my heart",
+        "(softly)",
+        "Worth 100%(title) of it",
+        "Hold ‹b>this‹/b> note",
+        f"Ends with {bs}",
+        "Next line",
     ]:
         assert shown in lines
 
@@ -425,14 +475,25 @@ def test_render_real_failure_carries_stderr(tmp_path):
 @real_chordpro
 @cjk_font
 def test_render_real_chinese_sheet_with_cjk_font(tmp_path):
-    cho = write_chordpro(fixture("zh_sheet.txt"), tmp_path / "sheet.cho", title="斑马斑马", artist="宋冬野")
+    cho = write_chordpro(
+        fixture("zh_sheet.txt"), tmp_path / "sheet.cho", title="斑马斑马", artist="宋冬野"
+    )
     pdf = tmp_path / "sheet.pdf"
     render_pdf(cho, pdf, chordpro_bin=CHORDPRO, font_file=Path(CJK_FONT))
     runs, programs = pdf_runs(pdf)
     # PDF::API2 maps a glyph the font shares between a Kangxi radical and an
     # ideograph to the radical (一 comes out as U+2F00); NFKC maps it back.
     shown = [(font, unicodedata.normalize("NFKC", text)) for font, text, _ in runs]
-    for phrase in ["斑马斑马", "宋冬野", "这是一个", "合成的例子", "测试歌词第二", "和弦", "只为检查", "对齐"]:
+    for phrase in [
+        "斑马斑马",
+        "宋冬野",
+        "这是一个",
+        "合成的例子",
+        "测试歌词第二",
+        "和弦",
+        "只为检查",
+        "对齐",
+    ]:
         fonts = {font for font, text in shown if phrase in text}
         assert fonts, f"{phrase} is not drawn"
         assert not fonts & CORE_FONTS
@@ -440,14 +501,18 @@ def test_render_real_chinese_sheet_with_cjk_font(tmp_path):
     # whose embedded subset is corrupt, which viewers show with glyphs missing.
     (embedded,) = {font for font, _, codes in runs if codes and font in programs}
     gids = {g for font, _, codes in runs if font == embedded for g in codes}
-    assert glyph_records(programs[embedded], gids) == glyph_records(Path(CJK_FONT).read_bytes(), gids)
+    assert glyph_records(programs[embedded], gids) == glyph_records(
+        Path(CJK_FONT).read_bytes(), gids
+    )
 
 
 @pytest.mark.chordpro
 @real_chordpro
 def test_chinese_glyphs_lost_with_core_fonts(tmp_path):
     """Why font_file exists: ChordPro's default PDF core fonts have no CJK glyphs."""
-    cho = write_chordpro(fixture("zh_sheet.txt"), tmp_path / "sheet.cho", title="斑马斑马", artist="宋冬野")
+    cho = write_chordpro(
+        fixture("zh_sheet.txt"), tmp_path / "sheet.cho", title="斑马斑马", artist="宋冬野"
+    )
     pdf = tmp_path / "sheet.pdf"
     render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
     text = pdf_text(pdf)

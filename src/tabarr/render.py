@@ -33,9 +33,10 @@ from __future__ import annotations
 import os
 import struct
 import subprocess
+from collections.abc import Callable
 from functools import lru_cache
+from itertools import pairwise
 from pathlib import Path
-from typing import Callable
 
 from tabarr.chordpro import to_chordpro
 
@@ -130,7 +131,9 @@ def render_pdf(
         cmd += _font_options(Path(font_file))
     cmd += [f"--output={pdf}", str(cho)]
     try:
-        result = runner(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=TIMEOUT)
+        result = runner(
+            cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=TIMEOUT
+        )
     except FileNotFoundError as e:
         raise RenderError(f"chordpro not found: {chordpro_bin}") from e
     except subprocess.TimeoutExpired as e:
@@ -183,7 +186,7 @@ def _font_problem(path: str, size: int, mtime_ns: int) -> str | None:
     except (OSError, KeyError, struct.error) as e:
         return f"cannot be read as a TrueType/OpenType font ({e})"
     offsets = struct.unpack(f">{len(loca) // 4}I", loca[: len(loca) // 4 * 4])
-    odd = sum((end - start) & 1 for start, end in zip(offsets, offsets[1:]))
+    odd = sum((end - start) & 1 for start, end in pairwise(offsets))
     if odd:
         return (
             f"has {odd} odd-length glyph records; PDF::API2 2.045 (ChordPro's PDF library) "
