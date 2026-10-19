@@ -382,9 +382,10 @@ folder on the laptop, and let a local model write `sheet (auto).txt`:
 `tabarr.service` run (`OnSuccess=`). It runs `tabarr --config … autochords`
 with the `autochords` package (torch, beat-this, librosa) as the same user, in
 the same sandbox, except that it has no network at all (`PrivateNetwork`) and
-may generate code (`MemoryDenyWriteExecute` off: PyTorch's CPU kernels and
-librosa's numba compile at run time, and with it on every song fails with
-"cannot allocate executable memory"). numba caches what it compiles in
+may generate code (`MemoryDenyWriteExecute` off, because PyTorch's CPU kernels
+and librosa's numba compile at run time: with it on, every song fails, BTC with
+"cannot allocate executable memory" as numba loads, and beat_this with "could
+not create a primitive"). numba caches what it compiles in
 `/var/cache/tabarr/numba`, since the unit's home is read-only.
 
 **What a run does.** It links new files in the music folder to your songs,
@@ -400,8 +401,10 @@ seconds; otherwise the sheet is a chord chart by bars followed by the plain
 lyrics, which is what 斑马斑马 gets (LRCLIB has no timed lyrics for it). The
 sheet starts with "auto-generated, unverified", and the song counts as found.
 Once a human sheet is kept for the song, auto-chords no longer touches it.
-Expect about half a minute per four-minute song on a NUC-class CPU, most of it
-beat tracking (estimated from timings on the laptop).
+WAV, FLAC, Ogg and MP3 files are read with libsndfile, anything else (such as
+the AAC in an iTunes Store `.m4a`) with torchaudio's FFmpeg. Expect about half
+a minute per four-minute song on a NUC-class CPU, most of it beat tracking (an
+estimate: on the laptop it takes about 7 seconds, 6 of them beat tracking).
 
 **The model files ship with the package.** `nix/autochords.nix` fetches them
 when the package is built, as fixed-output downloads:
@@ -443,7 +446,9 @@ command with the `autochords` package when auto-chords is enabled; the default
 package has no torch, and says so if asked.
 
 On the laptop, `nix develop .#autochords -c pytest -m autochords` runs the
-model tests against the same model files.
+model tests against the same model files. `nix flake check` builds both
+packages, each running the test suite (the model tests aside) and then
+`tabarr autochords` on the wrapped program, and evaluates the module.
 
 ## 7. Chinese sheets in the PDFs
 
