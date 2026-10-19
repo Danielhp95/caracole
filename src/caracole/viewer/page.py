@@ -21,7 +21,8 @@ written ``\\u003c``:
 - for each mode of the key's tonic: ``mapped`` chords (``theory.map_chord``),
   their ``alts`` (``theory.alternatives``), ``names`` (each pitch class's name in
   that mode on each tonic, ``theory.spelling``), ``keyNames``, and ``capo`` hints
-  for each transposition (``theory.capo_hints``);
+  for each transposition (``theory.capo_hints``: the fret the capo goes on, 0 for
+  none, which may be below the sheet's own, and the shapes' key);
 - ``voicings``: the fingerings of every chord the page can show, on every root.
 """
 
@@ -227,7 +228,8 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
             data["names"][mode] = [" ".join(spelling(Key(t, mode))) for t in range(12)]
             data["keyNames"][mode] = [key_name(Key(t, mode)) for t in range(12)]
             data["capo"][mode] = [
-                [[fret, key_name(shapes)] for fret, shapes in capo_hints(Key((key.tonic + t) % 12, mode))]
+                [[fret, key_name(shapes)]
+                 for fret, shapes in capo_hints(Key((key.tonic + t) % 12, mode), capo=sheet.capo or 0)]
                 for t in range(12)
             ]
     data["voicings"] = page_voicings(needed)

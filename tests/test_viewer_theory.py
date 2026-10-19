@@ -397,3 +397,21 @@ def test_a_chord_gets_an_inversion_and_a_slash_chord_its_root_position():
 )
 def test_a_capo_hint_offers_open_chord_shapes_for_an_awkward_key(key, hints):
     assert [(capo, key_name(shapes)) for capo, shapes in capo_hints(key)] == hints
+
+
+@pytest.mark.parametrize(
+    ("shapes", "capo", "hints"),
+    [
+        # G shapes with capo 2 (A), transposed down two: F shapes, sounding G
+        (Key(5, "ionian"), 2, [(0, "G"), (3, "E")]),
+        # down one: Gb shapes, sounding Ab
+        (Key(6, "ionian"), 2, [(1, "G"), (4, "E")]),
+        # up three: Bb shapes, sounding C
+        (Key(10, "ionian"), 2, [(0, "C"), (3, "A")]),
+        (Key(7, "ionian"), 2, []),  # G shapes: open already
+        (Key(10, "ionian"), 0, [(1, "A"), (3, "G")]),  # no capo on the sheet: as before
+    ],
+)
+def test_a_capo_hint_may_lower_or_take_off_the_sheets_capo(shapes, capo, hints):
+    # The frets are where the capo goes (0: none), from the key the song sounds in.
+    assert [(fret, key_name(k)) for fret, k in capo_hints(shapes, capo=capo)] == hints

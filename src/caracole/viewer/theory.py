@@ -504,13 +504,18 @@ def _open(key: Key) -> bool:
     return relative in _OPEN_NOTES
 
 
-def capo_hints(key: Key, limit: int = 2) -> list[tuple[int, Key]]:
-    """Where to put a capo to play a song in ``key`` with open chord shapes: (fret, shapes' key).
+def capo_hints(key: Key, limit: int = 2, *, capo: int = 0) -> list[tuple[int, Key]]:
+    """Where to put a capo to play chords in ``key`` with open shapes: (fret, shapes' key).
 
-    Nothing when the key's chords are open shapes already; otherwise up to ``limit`` frets,
-    lowest first, up to the fifth.
+    ``key`` is the key of the chords as played with the capo on fret ``capo`` (the sheet's
+    own, 0 for none), so the song sounds ``capo`` semitones higher. The fret is where the capo
+    goes then, 0 for no capo: up to MAX_CAPO above the sheet's, or lower, down to none (G
+    shapes with capo 2, transposed down two, play with no capo). Nothing when the chords are
+    open shapes already; otherwise up to ``limit`` frets, lowest first.
     """
     if _open(key):
         return []
-    hints = [(fret, Key((key.tonic - fret) % 12, key.mode)) for fret in range(1, MAX_CAPO + 1)]
+    sounding = key.tonic + capo
+    hints = [(fret, Key((sounding - fret) % 12, key.mode))
+             for fret in range(capo + MAX_CAPO + 1) if fret != capo]
     return [(fret, shapes) for fret, shapes in hints if _open(shapes)][:limit]

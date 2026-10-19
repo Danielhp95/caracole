@@ -737,7 +737,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   key, **Capo** offers frets where open shapes play it (Bb: capo 1 with A
   shapes, capo 3 with G shapes); tap one, and the chords show the shapes to
   play with the capo on. The sheet's own capo counts: the fret shown is where
-  the capo goes.
+  the capo goes, and it may be lower than the sheet's, or no capo at all (a
+  sheet in G shapes with capo 2, transposed down two: no capo, G shapes).
 - **Instead, in the key**: the chord's card also lists chords to play in its
   place that keep to the key: colours on the same root (a seventh, add9, sus2,
   a sixth), an inversion, and chords that share most of its notes (Am or Em

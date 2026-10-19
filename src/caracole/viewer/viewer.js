@@ -29,13 +29,16 @@
   const FS = { min: 13, max: 30, step: 2 };
 
   // --- the state: where the song is played, kept per page ------------------------------------
-  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, shapes: 0, fs: 18, strip: false };
+  // capo: the fret chosen among the hints (0 for no capo), or null to play the sheet's shapes.
+  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null, fs: 18, strip: false };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
   const sheetChords = Object.keys(written).map((i) => written[i]).join("|");
   const validMode = (m) => Boolean(key) && data.modes.indexOf(m) >= 0;
   const clampT = (t) => Math.max(-11, Math.min(11, Math.round(Number(t) || 0)));
+  const fretOf = (v) => (v === null || v === undefined || v === "" || !(Number(v) >= 0) ? null
+    : Math.round(Number(v)));
   try {
     const saved = JSON.parse(localStorage.getItem(store) || "null");
     if (saved && typeof saved === "object") {
@@ -44,13 +47,13 @@
       if (saved.alt && typeof saved.alt === "object" && saved.chords === sheetChords) state.alt = saved.alt;
       if (Number(saved.fs) >= FS.min && Number(saved.fs) <= FS.max) state.fs = Number(saved.fs);
       state.strip = saved.strip === true;
-      state.shapes = Math.max(0, Number(saved.shapes) || 0);
+      state.capo = fretOf(saved.capo);
     }
   } catch (err) { /* no storage: the page still works */ }
   const hash = new URLSearchParams(location.hash.slice(1));
   if (hash.has("t")) state.t = clampT(hash.get("t"));
   if (validMode(hash.get("mode"))) state.mode = hash.get("mode");
-  if (hash.has("shapes")) state.shapes = Math.max(0, Number(hash.get("shapes")) || 0);
+  if (hash.has("capo")) state.capo = fretOf(hash.get("capo"));
   const save = () => {
     try {
       localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose, chords: sheetChords }, state)));
@@ -60,7 +63,9 @@
   // --- naming chords -------------------------------------------------------------------------
   const modeNow = () => (key ? state.mode || key.mode : "");
   const asWritten = () => !state.mode || (key && state.mode === key.mode);
-  const shift = () => state.t - state.shapes;
+  const sheetCapo = Number(data.capoSheet) || 0;
+  // The chords are named for the shapes played: with another capo, as many semitones off.
+  const shift = () => state.t - (state.capo === null ? 0 : state.capo - sheetCapo);
   const names = (s) => (key ? data.names[modeNow()][mod12(key.tonic + s)] : data.names[""]).split(" ");
   const keyName = (s) => (key ? data.keyNames[modeNow()][mod12(key.tonic + s)] : "");
   const choices = () => state.alt[modeNow()] || {};
@@ -88,7 +93,6 @@
     return nameOf(rep, shift());
   };
   const capoHints = () => (key ? data.capo[modeNow()][mod12(state.t)] : []);
-  const capoTotal = (fret) => (Number(data.capoSheet) || 0) + fret;
 
   // --- chord diagrams --------------------------------------------------------------------------
   const NS = "http://www.w3.org/2000/svg";
@@ -175,7 +179,7 @@
   const render = () => {
     // A capo no longer on offer (after a transposition or a mode change) goes before the
     // chords are named: they are named for the shapes played with it.
-    if (!capoHints().some((h) => h[0] === state.shapes)) state.shapes = 0;
+    if (state.capo !== null && !capoHints().some((h) => h[0] === state.capo)) state.capo = null;
     for (const el of chordEls) {
       const i = el.dataset.c;
       el.textContent = label(i, current(i));
@@ -183,15 +187,16 @@
     }
     doc.style.setProperty("--fs", state.fs + "px");
 
-    const shapes = state.shapes ? capoHints().find((h) => h[0] === state.shapes) : null;
+    const shapes = state.capo === null ? null : capoHints().find((h) => h[0] === state.capo);
     fab.textContent = key ? "Key " + keyName(state.t) + (state.t ? " · " + signed(state.t) : "")
       : state.t ? "Transpose " + signed(state.t) : "Transpose";
     $("key-now").textContent = key ? keyName(state.t) : "";
     $("panel-title").firstChild.textContent = key ? "Key " : "Transpose";
     const facts = [];
     if (key) facts.push(["Key ", keyName(state.t), state.t ? " (" + signed(state.t) + ")" : "", key.from]);
-    const capo = shapes ? capoTotal(shapes[0]) : Number(data.capoSheet) || 0;
-    if (capo) facts.push(["Capo ", String(capo), shapes ? ", " + shapes[1] + " shapes" : "", ""]);
+    if (shapes && shapes[0]) facts.push(["Capo ", String(shapes[0]), ", " + shapes[1] + " shapes", ""]);
+    else if (shapes) facts.push(["", "No capo", ", " + shapes[1] + " shapes", ""]);
+    else if (sheetCapo) facts.push(["Capo ", String(sheetCapo), "", ""]);
     const box = $("facts");
     box.textContent = "";
     facts.forEach((f, n) => {
@@ -217,13 +222,16 @@
     const capoBox = $("capo");
     capoBox.textContent = "";
     for (const [fret, shapesKey] of hints) {
-      capoBox.appendChild(button("Capo " + capoTotal(fret), state.shapes === fret, () => {
-        state.shapes = state.shapes === fret ? 0 : fret;
+      capoBox.appendChild(button(fret ? "Capo " + fret : "No capo", state.capo === fret, () => {
+        state.capo = state.capo === fret ? null : fret;
         render();
       }, shapesKey + " shapes"));
     }
     $("capo-hint").textContent = hints.length
-      ? (state.shapes ? "The chords show the shapes to play with the capo on." : "Easier shapes with a capo: tap one to show them.")
+      ? (state.capo === null
+        ? (sheetCapo ? "Easier shapes with the capo elsewhere: tap one to show them."
+          : "Easier shapes with a capo: tap one to show them.")
+        : "The chords show the shapes to play " + (state.capo ? "with the capo on." : "with no capo."))
       : "";
 
     $("mode-row").hidden = !key;
@@ -335,7 +343,8 @@
     }
     $("prev").disabled = shown.at <= 0;
     $("next").disabled = shown.at >= shapes.list.length - 1;
-    const note = shapes.note + (state.shapes ? " With the capo on fret " + capoTotal(state.shapes) + "." : "");
+    const capoNote = state.capo === null ? "" : state.capo ? " With the capo on fret " + state.capo + "." : " With no capo.";
+    const note = shapes.note + capoNote;
     $("shape-note").textContent = note.trim();
 
     const altBox = $("alts");
@@ -429,12 +438,12 @@
   };
   $("down").addEventListener("click", () => step(state.t - 1));
   $("up").addEventListener("click", () => step(state.t + 1));
-  $("reset-t").addEventListener("click", () => { state.shapes = 0; step(data.transpose); });
+  $("reset-t").addEventListener("click", () => { state.capo = null; step(data.transpose); });
   $("smaller").addEventListener("click", () => { state.fs = Math.max(FS.min, state.fs - FS.step); render(); });
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
   $("reset-all").addEventListener("click", () => {
-    Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, shapes: 0 });
+    Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null });
     render();
   });
 

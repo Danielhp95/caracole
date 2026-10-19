@@ -249,10 +249,12 @@ def test_without_a_key_one_spelling_serves_every_transposition():
 
 
 def test_capo_hints_are_given_for_each_transposition():
-    data = data_of(build_viewer(UG_CHO))  # in G
+    data = data_of(build_viewer(UG_CHO))  # G shapes, capo 2
+    assert data["capoSheet"] == 2
     assert data["capo"]["ionian"][0] == []  # G: open chords already
-    assert data["capo"]["ionian"][3] == [[1, "A"], [3, "G"]]  # up three: Bb
-    assert data["capoSheet"] == 2  # the sheet's own capo, which a hint adds to
+    # each hint is the fret the capo goes on, 0 for none, and the shapes then played
+    assert data["capo"]["ionian"][3] == [[0, "C"], [3, "A"]]  # up three: Bb shapes, sounding C
+    assert data["capo"]["ionian"][10] == [[0, "G"], [3, "E"]]  # down two: F shapes, sounding G
 
 
 # --- in a real browser ---------------------------------------------------------------------------
@@ -341,9 +343,21 @@ def test_transposing_renames_every_chord(tmp_path):
 
 @in_chromium
 def test_a_capo_shows_the_shapes_to_play(tmp_path):
-    dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=3&shapes=1")  # Bb, capo 1 more: A shapes
+    dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=3&capo=3")  # Bb shapes; capo 3: A shapes
     assert chord_texts(dom)["0"] == "A"
-    assert "Capo <b>3</b>, A shapes" in dom  # the sheet's capo 2, and 1 more
+    assert "Capo <b>3</b>, A shapes" in dom
+
+
+@in_chromium
+def test_a_capo_may_come_off(tmp_path):
+    out = run_in_page(build_viewer(UG_CHO), tmp_path, """
+      const chips = [...document.querySelectorAll("#capo .chip")].map((b) => b.textContent);
+      [...document.querySelectorAll("#capo .chip")][0].click();
+      out = [chips, q('#sheet .c[data-c="0"]').textContent, q("#facts").textContent];
+    """, "#t=-2")  # G shapes with capo 2, down two: F shapes, sounding G
+    chips, chord, facts = out
+    assert chips == ["No capoG shapes", "Capo 3E shapes"]
+    assert chord == "G" and "No capo, G shapes" in facts
 
 
 @in_chromium
@@ -490,9 +504,9 @@ def test_a_chord_is_easy_to_tap(tmp_path):
 @in_chromium
 def test_a_capo_no_longer_on_offer_goes_before_the_chords_are_named(tmp_path):
     out = run_in_page(build_viewer(UG_CHO), tmp_path, """
-      q("#up").click();  // Bb to B: capo 1 more, with A shapes, is no longer offered
+      q("#up").click();  // Bb to B: capo 3, with A shapes, is no longer offered
       out = [q('#sheet .c[data-c="0"]').textContent, q("#facts").textContent, q("#fab").textContent];
-    """, "#t=3&shapes=1")
+    """, "#t=3&capo=3")
     chord, facts, fab = out
     assert chord == "B" and "A shapes" not in facts and fab == "Key B · +4"
 
