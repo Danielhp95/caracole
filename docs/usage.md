@@ -1036,7 +1036,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - Text size, every chord's shape in a strip above the song, and scrolling by
   itself (with the screen kept on, where the browser allows it).
 
-The viewer remembers its settings for each song in the browser. Its key is
+The viewer remembers its settings for each song in the browser, except when
+`caracole serve` sends it (see [caracole serve](#caracole-serve)). Its key is
 its sheet's, found as for info.json (see [The song's key](#the-songs-key)):
 the human sheet's from the tab, or estimated from its chords, and the auto
 sheet's heard in the audio; the page says which. Beside a human sheet,
@@ -1136,6 +1137,21 @@ loses no song. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
 and Guitar Pro files as downloads, never through a symbolic link, never a
 hidden file, and never the database, the token or the cache.
+
+Of the HTML pages in the library, the server sends only the sheet viewers
+(`sheet.html`, `sheet (auto).html`; see [The sheet viewer](#the-sheet-viewer)),
+and each only while it is still the page caracole last wrote for that song:
+caracole records each viewer's SHA-256 and length when it writes it. Any other
+page answers 404 Not found, and so does a viewer edited on a synced device, a
+symbolic link in a viewer's place, and a viewer in a folder that is no song's
+in the database. The next `caracole render` writes an edited viewer again. The
+server sends a viewer in a sandbox (its Content-Security-Policy header): the
+page runs its own script and style and nothing else, in an origin of its own,
+with no cookie and no way to ask the server for anything. It works as it does
+from the folder, but it can't remember its settings. With an access token, its
+links to the PDF and back to the library open the sign-in page, because the
+sandboxed page sends no cookie: use the card's PDF link and the browser's Back
+button instead.
 
 Who can reach it:
 

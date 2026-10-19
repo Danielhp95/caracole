@@ -2,7 +2,8 @@
 
     GET  /, /index.html   the library page, with its forms (library_page, WebControls)
     GET  /jobs            the requests, and what each command printed (?refresh=0: no reloading)
-    GET  /<file>          a file of the library (files.py)
+    GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as
+                          a sheet viewer, while it is as written (``written_pages``), in a sandbox
     POST /request         a song for wanted.txt; with ``fetch``, fetched now too
     POST /fetch           fetch a song of the library now, unless it needs review first
     GET, POST /login      the sign-in page, with an access token
@@ -24,17 +25,18 @@ from __future__ import annotations
 import secrets
 import sqlite3
 import threading
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from caracole import db
 from caracole.config import Config
 from caracole.web import pages
-from caracole.web.files import NotServed, read_library_file
+from caracole.web.files import NotServed, read_library_file, read_written_page
 from caracole.web.jobs import JobQueue, QueueFull, add_steps, fetch_steps
 from caracole.web.security import (
     SESSION_COOKIE,
@@ -215,6 +217,9 @@ class WebApp:
         try:
             if not path.startswith("/"):
                 raise NotServed(path)
+            page = written_pages().get(path.rsplit("/", 1)[-1])
+            if page is not None:
+                return self._written_page(path[1:], page)
             data, kind, download = read_library_file(self.cfg.library_dir, path[1:],
                                                      hidden=(self.cfg.state_dir, self.cfg.cache_dir))
         except NotServed:
@@ -223,6 +228,19 @@ class WebApp:
         if download:
             headers.append(("Content-Disposition", "attachment"))
         return Response(200, data, headers)
+
+    def _written_page(self, path: str, page: WrittenPage) -> Response:
+        """A page caracole wrote into the library, while it is still as written
+        (``files.read_written_page``), with its kind's Content-Security-Policy; NotServed otherwise."""
+        library_dir = self.cfg.library_dir
+        try:
+            with closing(self._connect()) as conn:
+                data = read_written_page(library_dir, path, lambda parts: page.written(conn, library_dir, parts),
+                                         hidden=(self.cfg.state_dir, self.cfg.cache_dir))
+        except (sqlite3.Error, OSError) as e:  # DatabaseTooNew is an sqlite3.DatabaseError
+            return _message(503, "The database can't be read", f"The database can't be read: {e}")
+        csp = f"{page.csp()}; {_FRAMES}"
+        return Response(200, data, [("Content-Type", _HTML), ("Content-Security-Policy", csp)])
 
     # --- the forms ------------------------------------------------------------------------------
 
@@ -316,6 +334,49 @@ def review_first(song: Song, overrides: Overrides) -> bool:
     if song.match_decision != "review" or needs_artist_page(song):
         return False
     return not any(song.key in table for table in (overrides.match, overrides.pin, overrides.reject))
+
+
+@dataclass(frozen=True)
+class WrittenPage:
+    """A kind of page caracole writes into the library, which the server serves only while it is
+    still the page caracole wrote (``files.read_written_page``).
+
+    ``written`` is its record: given the database, the library folder and a path's parts,
+    the SHA-256 and the length of each such page caracole wrote there, [] for none.
+    ``csp`` gives the Content-Security-Policy it is served with, which ``frame-ancestors
+    'none'`` joins.
+    """
+
+    written: Callable[[sqlite3.Connection, Path, tuple[str, ...]], list[tuple[str, int]]]
+    csp: Callable[[], str]
+
+
+def written_pages() -> dict[str, WrittenPage]:
+    """The pages caracole writes into the library, by file name: each song's sheet viewers
+    (render.py), served in a sandbox (``viewer.viewer_csp``). A new kind of page joins here
+    with its own record."""
+    from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS
+    from caracole.viewer import viewer_csp
+
+    viewer = WrittenPage(_viewers_written, viewer_csp)
+    return {HUMAN_OUTPUTS[2]: viewer, AUTO_OUTPUTS[2]: viewer}  # "sheet.html", "sheet (auto).html"
+
+
+def _viewers_written(conn: sqlite3.Connection, library_dir: Path, parts: tuple[str, ...]) -> list[tuple[str, int]]:
+    """The viewer ``parts`` names, as caracole last wrote it (``render.written_file``) for each song
+    whose folder (``library.song_dir``, where render.py writes it) the path is in."""
+    from caracole.library import song_dir
+    from caracole.render import written_file
+    from caracole.songs import list_songs
+
+    *folder, name = parts
+    found = []
+    for song in list_songs(conn):
+        if song_dir(library_dir, song).relative_to(library_dir).parts == tuple(folder):
+            record = written_file(conn, song.id, name)
+            if record is not None:
+                found.append(record)
+    return found
 
 
 def _song_ids(conn: sqlite3.Connection, keys: set[str]) -> frozenset[int]:

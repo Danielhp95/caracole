@@ -1,11 +1,12 @@
-"""caracole/web/server.py: the app on a real socket, and a request run by the real command line."""
+"""caracole/web/server.py: the app on a real socket, a request run by the real command line, and a
+sheet viewer it serves, in Chromium."""
 
 import http.client
 import sys
 import threading
 import time
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import pytest
 
@@ -17,6 +18,8 @@ from caracole.web.security import allowed_hosts
 from caracole.web.server import make_server
 
 from conftest import subprocess_pythonpath
+from helpers.chromium import Chromium
+from helpers.rendered import rendered_song
 
 
 class Recorder:
@@ -146,5 +149,33 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
         assert status == 200 and b"Add Radiohead - Creep" in page and b"Done" in page
     finally:
         queue.stop()
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_served_viewer_works_in_its_sandbox(cfg, conn, tmp_path):
+    # The server sends viewer_csp() with the page: its own script and style by their hashes, in a
+    # sandbox, so no other script runs there, a test's included; Chromium is driven from outside.
+    rendered_song(conn, cfg)  # a sheet in G, its viewer as caracole wrote it
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    url = f"http://127.0.0.1:{server.server_address[1]}/" + quote("Soda Stereo/De Música Ligera/sheet.html")
+    chord = "document.querySelector('#sheet .c[data-c=\"0\"]').textContent"
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(url)
+            tab.wait_for("document.documentElement.dataset.ready === '1'")  # its script ran
+            assert tab.eval("origin") == "null"  # in an origin of its own: the sandbox
+            asked = "fetch('/', {mode: 'no-cors'}).then(() => 'reached', () => 'refused')"
+            assert tab.eval(asked) == "refused"  # no way to ask the server for anything
+            assert tab.eval("(() => { try { return document.cookie; } catch { return 'none'; } })()") == "none"
+            assert tab.eval("document.querySelector('#panel').hidden") is True
+            assert tab.eval(chord) == "G"
+            tab.click("#fab")  # the Key button
+            assert tab.eval("document.querySelector('#panel').hidden") is False  # opens the settings
+            tab.click("#up")  # Transpose: up a semitone, twice
+            tab.click("#up")
+            assert tab.eval(chord) == "A"
+            assert tab.eval("document.querySelector('#fab').textContent") == "Key A · +2"
+    finally:
         server.shutdown()
         server.server_close()
