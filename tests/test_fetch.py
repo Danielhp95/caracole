@@ -8,7 +8,7 @@ the way the live site does: a slugged tab only at its slugged URL, and UG's
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -16,18 +16,20 @@ from helpers.ug_pages import make_tab_page_html, version_dict
 
 from conftest import add_song
 from tabarr.config import ProviderPolicy, RankPolicy
+from tabarr.db import kv_set
 from tabarr.http import PoliteClient, ProviderBlocked
 from tabarr.library import kept_files, song_dir
 from tabarr.lyrics import Lyrics
 from tabarr.overrides import Overrides
 from tabarr.songs import get_song, update_song
-from tabarr.ug.fetch import FetchContext, FetchStats, fetch_songs, process_song
-from tabarr.ug.lookup import IndexTab, artist_tabs, index_tab, tab_url_for
+from tabarr.ug.fetch import FetchContext, FetchStats, fetch_songs, process_song, songs_to_fetch
+from tabarr.ug.lookup import IndexTab, artist_tabs, index_tab, remember_artist_url, tab_url_for
 from tabarr.versions import picks, song_versions
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
 TAB = "https://tabs.ultimate-guitar.com/tab/"
 SODA_URL = "https://www.ultimate-guitar.com/artist/soda_stereo_2946"
+BANMA_ARTIST = "https://www.ultimate-guitar.com/artist/song_dongye_1234567"
 NOT_FOUND = (
     '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>Oops! We couldn\'t find that page.</title>'
     "</head><body><h1>Oops!</h1></body></html>\n"
@@ -574,3 +576,49 @@ def test_kept_sheet_stays_when_not_outranked(conn, tmp_path):
 
     assert out.sheet == 101 and pick_ids(conn, song, "chords") == [101]
     assert (path.stat().st_ino, kept_version(conn, song, "sheet.txt")) == before  # not even rewritten
+
+
+# --- which songs a run fetches ------------------------------------------------------------------
+
+
+def matched(conn, artist, title, decision, *, added_at, dirty=True, **fields):
+    song = add_song(conn, artist, title, added_at=added_at)
+    update_song(conn, song.id, match_decision=decision, ug_dirty=dirty, **fields)
+    return get_song(conn, song.id)
+
+
+def test_songs_to_fetch_dirty_accepted_and_pinned_newest_first(conn):
+    old = matched(conn, "Soda Stereo", "Signos", "accept", added_at="2026-09-01T00:00:00Z")
+    pinned = matched(conn, "Soda Stereo", "Ameba", "pinned", added_at="2026-09-15T00:00:00Z")
+    new = matched(conn, "Soda Stereo", "Persiana Americana", "accept", added_at="2026-10-10T00:00:00Z")
+    matched(conn, "Soda Stereo", "Cae El Sol", "accept", added_at="2026-10-11T00:00:00Z", dirty=False)
+    matched(conn, "Soda Stereo", "Zoom", "review", added_at="2026-10-12T00:00:00Z")
+    matched(conn, "Soda Stereo", "Ella Uso Mi Cabeza", "accept", added_at="2026-10-13T00:00:00Z", status="ignored")
+    skipped = matched(conn, "Soda Stereo", "Coral", "accept", added_at="2026-10-14T00:00:00Z")
+
+    songs = songs_to_fetch(conn, Overrides(ignore=frozenset({skipped.key})), NOW)
+
+    assert [s.id for s in songs] == [new.id, pinned.id, old.id]
+
+
+def test_songs_to_fetch_not_found_whose_artist_is_known(conn):
+    # A6: the index can't see bare-id tabs, but the artist's UG page lists them.
+    index(conn, (7, "soda-stereo", "signos", "chords"))
+    indexed = matched(conn, "Soda Stereo", "De Música Ligera", "not_found", added_at="2026-10-05T00:00:00Z")
+    pasted = matched(conn, "宋冬野", "斑马，斑马", "not_found", added_at="2026-10-04T00:00:00Z")
+    learned = matched(conn, "Joaquín Sabina", "19 Días y 500 Noches", "not_found", added_at="2026-10-03T00:00:00Z")
+    matched(conn, "Héroes del Silencio", "Entre Dos Tierras", "not_found", added_at="2026-10-02T00:00:00Z")
+    remember_artist_url(conn, "joaquin-sabina", "https://www.ultimate-guitar.com/artist/joaquin_sabina_12345")
+    overrides = Overrides(artist_url={"宋冬野": BANMA_ARTIST})
+
+    songs = songs_to_fetch(conn, overrides, NOW)
+
+    assert [s.id for s in songs] == [indexed.id, pasted.id, learned.id]
+
+
+def test_artist_page_checks_wait_thirty_days(conn):
+    index(conn, (7, "soda-stereo", "signos", "chords"))
+    song = matched(conn, "Soda Stereo", "De Música Ligera", "not_found", added_at="2026-10-05T00:00:00Z")
+    kv_set(conn, f"ug:artist_page_checked:{song.id}", "2026-09-20T03:30:00Z")
+    assert songs_to_fetch(conn, Overrides(), NOW) == []
+    assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW + timedelta(days=2))] == [song.id]

@@ -29,8 +29,10 @@ from tabarr.library import keep_file, kept_files, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.overrides import Overrides
 from tabarr.rank import Candidate, rank_by_rating, rank_guitar, rank_sheets
-from tabarr.songs import Song, get_song, refresh_status, update_song
-from tabarr.ug.lookup import IndexTab, index_tab, song_tabs, tab_url_for
+from tabarr.db import kv_get
+from tabarr.normalize import has_han, romanize, slug_key
+from tabarr.songs import Song, get_song, list_songs, refresh_status, update_song
+from tabarr.ug.lookup import IndexTab, artist_known, index_tab, learned_artist_url, song_tabs, tab_url_for
 from tabarr.ug.page import PageParseError, UGTabPage, UGVersion, parse_tab_page, strip_markup
 from tabarr.versions import (
     VersionRow, get_version, mark_gone, set_coverage, set_picks, song_versions, upsert_version,
@@ -45,6 +47,7 @@ GUITAR_PRO_KINDS = ("guitar-pro", "power")
 TAB_KINDS = ("tabs",)
 _GROUPS = (SHEET_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)
 _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
+ARTIST_PAGE_MAX_AGE = timedelta(days=30)
 
 
 @dataclass
@@ -58,7 +61,7 @@ class FetchContext:
     library_dir: Path
     now: datetime
     max_pages_per_group: int = 3
-    artist_page_max_age: timedelta = timedelta(days=30)
+    artist_page_max_age: timedelta = ARTIST_PAGE_MAX_AGE
 
 
 @dataclass(frozen=True)
@@ -388,6 +391,78 @@ def _finish(run: _SongRun) -> None:
     refresh_status(run.conn, run.song.id, ignored=False)
     update_song(run.conn, run.song.id, ug_dirty=False, ug_checked_at=_iso(run.ctx.now))
     write_info(run.conn, run.ctx.library_dir, get_song(run.conn, run.song.id))
+
+
+# --- which songs a run fetches -------------------------------------------------------------
+
+
+def _name_keys(name: str) -> list[str]:
+    """A name's keys: its slug key, plus its pinyin key when it is Chinese."""
+    keys = [slug_key(name)]
+    if has_han(name):
+        keys.append(slug_key(romanize(name)))
+    return [k for k in dict.fromkeys(keys) if k]
+
+
+def artist_keys(song: Song, overrides: Overrides) -> list[str]:
+    """The UG artist keys a song may be listed under: [alias] first, then each artist's own keys."""
+    keys: list[str] = []
+    for name in song.artists or [song.artist]:
+        keys += overrides.alias.get(slug_key(name), ())
+        keys += _name_keys(name)
+    return [k for k in dict.fromkeys(keys) if k]
+
+
+def artist_is_known(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> bool:
+    """Whether the song's artist page can be found: pasted in [artist_url], learned, or in the index."""
+    return any(
+        k in overrides.artist_url or learned_artist_url(conn, k) or artist_known(conn, k)
+        for k in artist_keys(song, overrides)
+    )
+
+
+def _checked_key(song_id: int) -> str:
+    return f"ug:artist_page_checked:{song_id}"
+
+
+def _checked_within(conn: sqlite3.Connection, song_id: int, now: datetime, max_age: timedelta) -> bool:
+    value = kv_get(conn, _checked_key(song_id))
+    if value is None:
+        return False
+    checked = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    return now - checked < max_age
+
+
+def _ignored(song: Song, overrides: Overrides) -> bool:
+    return song.status == "ignored" or song.match_decision == "ignored" or song.key in overrides.ignore
+
+
+def songs_to_fetch(
+    conn: sqlite3.Connection,
+    overrides: Overrides,
+    now: datetime,
+    *,
+    artist_page_max_age: timedelta = ARTIST_PAGE_MAX_AGE,
+) -> list[Song]:
+    """The songs this run should fetch, newest first.
+
+    - Accepted or pinned songs that are dirty (new match, new tabs, or a run
+      that stopped half-way).
+    - Not-found songs whose artist is known (A6), so that its UG artist page,
+      which lists bare-id tabs the index can't see, is searched for the
+      title, at most once per ``artist_page_max_age``.
+    """
+    out = []
+    for song in list_songs(conn):
+        if _ignored(song, overrides):
+            continue
+        if song.match_decision in ("accept", "pinned"):
+            if song.ug_dirty:
+                out.append(song)
+        elif song.match_decision == "not_found":
+            if not _checked_within(conn, song.id, now, artist_page_max_age) and artist_is_known(conn, song, overrides):
+                out.append(song)
+    return out
 
 
 def fetch_songs(ctx: FetchContext, songs: Iterable[Song]) -> FetchStats:
