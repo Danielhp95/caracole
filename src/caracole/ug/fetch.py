@@ -47,14 +47,13 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import sqlite3
 from collections.abc import Callable, Iterable, Sequence
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit
 
 from rapidfuzz import fuzz
 
@@ -73,7 +72,7 @@ from caracole.http import (
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title, compact, has_han, romanize, slug_key
-from caracole.overrides import Overrides
+from caracole.overrides import Overrides, artist_page_address
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from caracole.songs import Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
@@ -131,7 +130,6 @@ ARTIST_PAGE_KINDS = ("chords", "guitar-pro", "power", "tabs")  # the sheet's lis
 TITLE_MATCH = 90  # rapidfuzz ratio of title keys, the matcher's accept score
 TITLE_MARGIN = 8  # a fuzzy title must lead the next different title by this much
 LEARN_TRIES = 3  # slugged tabs read at most to learn an artist's page
-_ARTIST_PATH = re.compile(r"/artist/[^/?#]+_\d+")
 
 # A tab page that won't parse, even fetched again, is asked for again after a week, then after
 # twice as long each time it still won't.
@@ -424,17 +422,14 @@ def _mark_gone(run: _SongRun, tab_id: int, url: str, kind: str | None) -> None:
 
 
 def _artist_page_base(url: str | None) -> str | None:
-    """A UG artist page address (``https://www.ultimate-guitar.com/artist/<name>_<id>``), else None."""
+    """The UG artist page a link of UG's points to (``https://www.ultimate-guitar.com/artist/<name>_<id>``
+    or ``…/artist/<id>``, ``overrides.artist_page_address``), else None. A relative link is UG's own."""
     if not url:
         return None
     try:
-        parts = urlsplit(urljoin(WWW + "/", url.strip()))
+        return artist_page_address(urljoin(WWW + "/", url.strip()))
     except ValueError:  # a link urllib can't parse ("Invalid IPv6 URL"): no artist page
         return None
-    path = parts.path.rstrip("/")
-    if parts.netloc != urlsplit(WWW).netloc or not _ARTIST_PATH.fullmatch(path):
-        return None
-    return urlunsplit(("https", parts.netloc, path, "", ""))
 
 
 def _same_artist(key: str, name: str) -> bool:

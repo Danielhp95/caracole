@@ -397,7 +397,8 @@ def test_find_artist_on_ug(conn, cfg):
     update_song(conn, s.id, match_decision="not_found")
     text = todo(conn, cfg)
     assert "## Artists to find on Ultimate Guitar (1)" in text
-    assert '[artist_url]\n"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/' in text
+    assert '[artist_url]\n"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/…"' in text
+    assert "<name>" not in text  # an artist page's address, as your browser shows it, may have no name
     assert "search.php" in text  # a link for you to click; caracole itself never requests search.php
     # Known artist page (override): no longer asked for.
     o = Overrides(artist_url={"joaquin-sabina": "https://www.ultimate-guitar.com/artist/joaquin_sabina_1"})
@@ -418,7 +419,7 @@ def test_the_artist_lines_pasted_as_shown_keep_overrides_readable(conn, cfg):
         s = add_song(conn, artist, title)
         update_song(conn, s.id, match_decision="not_found")
     section = section_of(todo(conn, cfg), "Artists to find")
-    pasted = "".join(toml_blocks(section)).replace("<name>_<id>", "someone_123")
+    pasted = "".join(toml_blocks(section)).replace("…", "634073")
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
     cfg.overrides_file.write_text(pasted, encoding="utf-8")
     assert set(load_overrides(cfg.overrides_file).artist_url) == {"joaquin-sabina", "宋冬野"}
@@ -431,7 +432,7 @@ def test_artist_lines_for_a_file_with_the_table_already_leave_its_header_out(con
     s = add_song(conn, "宋冬野", "斑马斑马")
     update_song(conn, s.id, match_decision="not_found")
     section = section_of(todo(conn, cfg, load_overrides(cfg.overrides_file)), "Artists to find")
-    lines = "".join(toml_blocks(section)).replace("<name>_<id>", "song_dongye_2")
+    lines = "".join(toml_blocks(section)).replace("…", "song_dongye_2")
     assert "[artist_url]" not in lines and "under the `[artist_url]` table" in section
     text = cfg.overrides_file.read_text(encoding="utf-8").replace("[artist_url]\n", "[artist_url]\n" + lines, 1)
     cfg.overrides_file.write_text(text, encoding="utf-8")

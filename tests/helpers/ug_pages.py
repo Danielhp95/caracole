@@ -243,6 +243,8 @@ def make_artist_page_html(
     *,
     page: int = 1,
     pages: int = 1,
+    path: str | None = None,
+    stripped: str | None = None,
 ) -> str:
     """One page of an artist's tab list: ``tabs`` become ``data.other_tabs``, in the order given.
 
@@ -251,8 +253,15 @@ def make_artist_page_html(
     ``{"id": 1806686, "song_name": "X", "marketing_type": "TabPro", "rating": 4.8, "votes": 21}``
     to test that they are skipped. ``page`` and ``pages`` fill ``data.pagination``,
     and ``data.filters.types`` lists ``all`` plus one filter per type present in ``tabs``.
+
+    ``path`` is the page's own path, which every link on it uses: by default
+    ``artist_path`` (``/artist/soda_stereo_2946``). UG addresses some artists by
+    their number alone, as ``/artist/634073`` (Song Dongye (宋冬野), checked live):
+    pass that ``path``, and ``stripped`` for ``name_stripped`` (by default made
+    from ``name``).
     """
-    path = artist_path(artist_id, name)
+    path = path or artist_path(artist_id, name)
+    stripped = name_stripped(name) if stripped is None else stripped
     typed = [t for t in tabs if "type" in t]
     filters = [{"name": "all", "url": path, "count": len(typed)}]
     for ug_type, (label, value) in ARTIST_FILTERS.items():
@@ -260,7 +269,7 @@ def make_artist_page_html(
         if count:
             filters.append({"name": label, "url": f"{path}?filter={value}", "count": count})
     data = {
-        "artist": {"id": artist_id, "name": name, "name_stripped": name_stripped(name)},
+        "artist": {"id": artist_id, "name": name, "name_stripped": stripped},
         "other_tabs": list(tabs),
         "current_page": page,
         "pagination": {

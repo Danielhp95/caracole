@@ -549,12 +549,13 @@ when it has something in it:
   non-Latin names only by bare ids (Joaquín Sabina, Maná, 宋冬野), so caracole
   can't see their tabs. For each such artist with a song not found, or
   reviewed on its title alone, the page links a UG search. Open the artist's
-  page once, by hand, and paste its address into the one block the page gives
-  for all of them:
+  page once, by hand, and paste its address, as your browser shows it, into
+  the one block the page gives for all of them, in place of
+  `https://www.ultimate-guitar.com/artist/…`:
 
   ```toml
   [artist_url]
-  "宋冬野" = "https://www.ultimate-guitar.com/artist/<name>_<id>"
+  "宋冬野" = "https://www.ultimate-guitar.com/artist/634073"
   ```
 
   The block has the `[artist_url]` header only while overrides.toml has no
@@ -715,7 +716,7 @@ the tables:
 "Soda - Persiana Americana" = "soda-stereo/persiana-americana"
 
 [artist_url]   # artists UG lists only by bare ids -> their UG artist page
-"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/<name>_<id>"
+"宋冬野" = "https://www.ultimate-guitar.com/artist/634073"
 
 [pin]          # always use exactly these tab pages for a song
 "Soda Stereo - De Música Ligera" = ["https://tabs.ultimate-guitar.com/tab/85053"]
@@ -748,11 +749,14 @@ tab_ids = [1601668]
   old sheet goes all the same, and the next render takes its `sheet.cho` and
   `sheet.pdf` along.
 - **`[artist_url]`** is keyed by the artist's name as your songs write it. The
-  value is the artist's page on UG, whose address ends in an underscore and a
-  number (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`, say).
+  value is the artist's page on UG, whose address ends in the artist's number:
+  UG writes some with the name before it
+  (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`) and some with the
+  number alone (宋冬野's is `https://www.ultimate-guitar.com/artist/634073`).
   Paste it as your browser shows it, even after you clicked a filter or
   another page (`?filter=chords`, `?page=2`, `?sort=date`): caracole drops the
-  query.
+  query. An address without the number (`/artist/joaquin_sabina`) is an error:
+  UG answers it with "page not found".
 - **`[pin]`** takes tab page addresses: paste them as your browser shows them,
   a query or a fragment included. Pinned tabs replace the candidates of their
   kind (sheet, Guitar Pro, tab), in the order given. A pin whose page is
@@ -920,7 +924,7 @@ link to search UG, and puts the song on the buy list. Either way works:
 
   ```toml
   [artist_url]
-  "宋冬野" = "https://www.ultimate-guitar.com/artist/<name>_<id>"
+  "宋冬野" = "https://www.ultimate-guitar.com/artist/634073"
   ```
 
   The next run reads that page, finds 斑马斑马 on it by its title (in either

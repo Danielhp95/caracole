@@ -49,8 +49,11 @@ _TAB_URL = re.compile(
     r"^https?://tabs\.ultimate-guitar\.com/tab/(?:[^/?#]+/)?(?:[^/?#]*-)?(\d+)/?(?:[?#].*)?$"
 )
 _TAB_HOST = "https://tabs.ultimate-guitar.com"
-_ARTIST_URL = re.compile(r"^https://www\.ultimate-guitar\.com/artist/[^/?#]+_\d+/?(?:[?#].*)?$")
+# An artist page is /artist/<name>_<id> (/artist/soda_stereo_2946) or, for some artists, /artist/<id>
+# alone (宋冬野's /artist/634073); /artist/<name> without the number answers 404.
+_ARTIST_PATH = re.compile(r"/artist/(?:[^/?#]+_)?\d+")
 _ARTIST_HOST = "https://www.ultimate-guitar.com"
+ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"  # how messages and the to-do page write an artist page
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject"}
 _TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
 
@@ -103,12 +106,28 @@ def _pin_url(value: str) -> str:
     return _TAB_HOST + urlsplit(text).path.rstrip("/")
 
 
-def _artist_page(url: Any) -> str | None:
-    """A UG artist page's address, without its query, fragment and trailing slash; None if
-    ``url`` isn't one."""
-    if not isinstance(url, str) or not _ARTIST_URL.match(url.strip()):
+def artist_page_address(url: Any) -> str | None:
+    """A UG artist page's address, over https and without its query, fragment and trailing slash;
+    None if ``url`` isn't one.
+
+    Both of UG's shapes are artist pages: ``/artist/<name>_<id>`` and ``/artist/<id>``. The
+    query and fragment of the page's own links (``?filter=chords``, ``?page=2``, ``#…``) go:
+    caracole asks for the bare page.
+    """
+    if not isinstance(url, str):
         return None
-    return _ARTIST_HOST + urlsplit(url.strip()).path.rstrip("/")
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:  # a link urllib can't parse ("Invalid IPv6 URL"): no artist page
+        return None
+    path = parts.path.rstrip("/")
+    if parts.scheme not in ("http", "https") or parts.netloc != "www.ultimate-guitar.com":
+        return None
+    return _ARTIST_HOST + path if _ARTIST_PATH.fullmatch(path) else None
+
+
+def _artist_page(url: Any) -> str | None:
+    return artist_page_address(url)
 
 
 def _ug_ref(value: Any, where: str) -> tuple[str, str]:
@@ -211,8 +230,8 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         page = _artist_page(url)
         if page is None:
             raise OverridesError(
-                f"[artist_url] {artist!r}: expected https://www.ultimate-guitar.com/artist/<name>_<id>, "
-                f"got {url!r}"
+                f"[artist_url] {artist!r}: expected the artist's page, {ARTIST_PAGE_SHAPE} as your browser "
+                f"shows it, got {url!r}"
             )
         artist_url[slug_key(artist)] = page
 

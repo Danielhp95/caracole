@@ -1092,6 +1092,36 @@ def test_artist_url_learned_from_every_tab_page(conn, tmp_path):
     assert learned_artist_url(conn, "soda-stereo") == SODA_URL
 
 
+@pytest.mark.parametrize("linked", [
+    "https://www.ultimate-guitar.com/artist/2946",
+    "https://www.ultimate-guitar.com/artist/2946/?filter=chords#top",
+    "/artist/2946",
+])
+def test_an_artist_page_addressed_by_its_number_alone_is_learned(conn, tmp_path, linked):
+    # UG links some tabs to /artist/<id> alone, as 宋冬野's tabs to /artist/634073 (checked live).
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES), artist_url=linked)
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert learned_artist_url(conn, "soda-stereo") == "https://www.ultimate-guitar.com/artist/2946"
+
+
+@pytest.mark.parametrize("linked", ["https://www.ultimate-guitar.com/artist/soda_stereo",
+                                    "https://www.ultimate-guitar.com/artist/_2946"])
+def test_an_artist_link_without_a_number_teaches_nothing(conn, tmp_path, linked):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES), artist_url=linked)
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert learned_artist_url(conn, "soda-stereo") is None
+
+
 def test_another_artists_page_is_not_learned_for_the_song(conn, tmp_path):
     # A pinned cover: its artist page belongs to the cover's artist, not to Soda Stereo.
     song = accepted(conn)
@@ -1164,13 +1194,14 @@ BANMA_TRADITIONAL = "\n".join(BANMA_TRADITIONAL_LINES)
 KIND_TYPES = {"chords": "Chords", "tabs": "Tabs", "guitar-pro": "Pro", "power": "Power"}
 
 
-def artist_page(artist_id, name, tabs, *, page=1, pages=1, kinds=("chords",)):
+def artist_page(artist_id, name, tabs, *, page=1, pages=1, kinds=("chords",), path=None):
     """One page of an artist's filtered tab list: ``tabs`` are this page's entries, in UG's order.
 
     UG's filter bar offers a filter per type the artist has, whichever filter is
-    showing; ``kinds`` are those types.
+    showing; ``kinds`` are those types. ``path`` is the page's own, as UG's links
+    write it: ``/artist/<name>_<id>`` by default, or the bare ``/artist/<id>``.
     """
-    path = artist_path(artist_id, name)
+    path = path or artist_path(artist_id, name)
     types = [{"name": "all", "url": path, "count": len(tabs)}]
     for kind in kinds:
         label, value = ARTIST_FILTERS[KIND_TYPES[kind]]
@@ -1216,6 +1247,21 @@ def serve_banma(ug, entries, *, pages=None, kinds=("chords",)):
     ug.tab(best, [other], content=sheet("sheet 2001234", BANMA_LINES), artist_url=BANMA_ARTIST)
     ug.tab(other, [best], content=sheet("sheet 2001235", BANMA_LINES[:3]), artist_url=BANMA_ARTIST)
     return best, other
+
+
+def test_a_pasted_artist_page_addressed_by_its_number_alone_is_read(conn, tmp_path):
+    song = banma(conn)
+    base = "https://www.ultimate-guitar.com/artist/634073"
+    ug = FakeUG()
+    best = banma_tab(2001234, rating=4.7, votes=50)
+    ug.add(artist_list(base), artist_page(634073, "宋冬野", [best], path="/artist/634073"))
+    ug.tab(best, content=sheet("sheet 2001234", BANMA_LINES), artist_url=base)
+    pasted = Overrides(artist_url={"宋冬野": base})
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, pasted), song)
+
+    assert ug.requests == [f"{base}?filter=chords", f"{TAB}2001234"]
+    assert out.sheet == 2001234 and get_song(conn, song.id).status == "found"
 
 
 def test_banma_found_on_its_artist_page_once_its_url_is_pasted(conn, tmp_path):

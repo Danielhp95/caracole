@@ -192,8 +192,8 @@ def test_hint_says_the_paste_lines_key_is_the_artist():
 
 
 def test_hint_paste_line_names_the_artist():
-    assert '"宋冬野" = "https://www.ultimate-guitar.com/artist/<name>_<id>"' in bare_id_hint(
-        "宋冬野 斑马", [], artist="宋冬野")
+    hint = bare_id_hint("宋冬野 斑马", [], artist="宋冬野")
+    assert '"宋冬野" = "https://www.ultimate-guitar.com/artist/…"' in hint and "<name>" not in hint
     assert '"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/' in bare_id_hint("Joaquín Sabina", [])
 
 
@@ -472,7 +472,7 @@ def paste_hint(output: str, overrides: Path) -> None:
     """The hint's lines, pasted into overrides.toml as it says: a block with its header at the end,
     lines without one under the [artist_url] table the file has."""
     block = re.findall(r"^    (\S.*)$", output, re.M)
-    lines = "".join(f"{line}\n" for line in block).replace("<name>_<id>", "joaquin_sabina_1234")
+    lines = "".join(f"{line}\n" for line in block).replace("…", "joaquin_sabina_1234")
     text = overrides.read_text(encoding="utf-8")
     if block[0] == "[artist_url]":
         text += "\n" + lines

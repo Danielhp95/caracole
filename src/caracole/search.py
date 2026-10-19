@@ -34,7 +34,7 @@ from typing import Mapping, Sequence
 from rapidfuzz import fuzz
 
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key, split_variant
-from caracole.overrides import Overrides
+from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides
 from caracole.songs import Song, list_songs
 from caracole.ug.lookup import IndexTab, song_tabs
 
@@ -170,7 +170,7 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = N
         return (f"{lead} overrides.toml has {shown}'s page already ({page}): the nightly run looks "
                 "there for the songs you add by them.")
     name = shown.replace("\\", "\\\\").replace('"', '\\"')
-    line = f'"{name}" = "https://www.ultimate-guitar.com/artist/<name>_<id>"'
+    line = f'"{name}" = "{ARTIST_PAGE_SHAPE}"'
     if overrides is not None and overrides.artist_url:
         where = (", under the [artist_url] table it has already (a second [artist_url] header would make "
                  "the file unreadable)")
@@ -180,11 +180,12 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = N
     if strong:
         return (
             f"{lead} If the one you want isn't above, find their page on ultimate-guitar.com and paste "
-            f"its address into overrides.toml{where}:\n\n{block}"
+            f"its address, as your browser shows it, into overrides.toml{where}:\n\n{block}"
         )
     return (
-        f"{lead} Find the artist's page on ultimate-guitar.com once and paste "
-        f"its address into overrides.toml{where}:\n\n{block}\n\n"
+        f"{lead} Find the artist's page on ultimate-guitar.com once and paste its address, as your "
+        f"browser shows it (it ends in the artist's number, as …/artist/634073 does), into "
+        f"overrides.toml{where}:\n\n{block}\n\n"
         "The key is the artist's name as your songs write it, so take any title words out of it. "
         "Then add the song with `caracole add`; the nightly run looks for its tabs on that page."
     )

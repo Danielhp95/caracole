@@ -131,6 +131,23 @@ def test_url_from_name_and_id_without_links_or_page_url():
     )
 
 
+@pytest.mark.parametrize("stripped", [{"name_stripped": ""}, {}])
+def test_url_from_the_id_alone_without_a_stripped_name(stripped):
+    # UG addresses some artists by their number alone (/artist/634073), never as /artist/_634073.
+    data = {"artist": {"id": 634073, "name": "Song Dongye (宋冬野)", **stripped}, "other_tabs": []}
+    assert parse_artist_page(store_page_html(data)).url == "https://www.ultimate-guitar.com/artist/634073"
+
+
+def test_an_artist_page_addressed_by_its_number_alone():
+    # 宋冬野's page, as read live on 2026-10-19: UG's own links are bare /artist/634073 ones.
+    tabs = [version_dict(4180894, song="斑马 斑马 Banma Banma Zebra Zebra", artist="Song Dongye (宋冬野)")]
+    html = make_artist_page_html(634073, "Song Dongye (宋冬野)", tabs, path="/artist/634073", stripped="")
+    page = parse_artist_page(html, url="https://www.ultimate-guitar.com/artist/634073?filter=chords")
+    base = "https://www.ultimate-guitar.com/artist/634073"
+    assert (page.artist_id, page.name, page.url, page.pages) == (634073, "Song Dongye (宋冬野)", base, 1)
+    assert page.filters == {"chords": base + "?filter=chords"}
+
+
 def test_single_page_without_pagination():
     data = {"artist": {"id": 3, "name": "X", "name_stripped": "x"}, "other_tabs": [version_dict(1)]}
     page = parse_artist_page(store_page_html(data))

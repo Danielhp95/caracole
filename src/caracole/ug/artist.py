@@ -10,7 +10,8 @@ The page keeps its data where tab pages do (``store.page.data``):
 ``data.artist`` (id, name, ``name_stripped``), ``data.other_tabs`` (tab dicts
 shaped like a tab page's versions, mixed with links to UG's paid app, which
 have no ``type``), ``data.pagination`` and ``data.filters.types``. Their links
-are relative, such as ``/artist/soda_stereo_2946?filter=chords``.
+are relative, such as ``/artist/soda_stereo_2946?filter=chords``, or
+``/artist/634073?filter=chords`` for an artist UG addresses by its number alone.
 """
 
 from __future__ import annotations
@@ -82,7 +83,9 @@ def parse_artist_page(html: str | bytes, *, url: str | None = None) -> UGArtistP
     """Parse an artist page. ``url`` is the page's address; UG's relative links resolve against it.
 
     The artist's ``url`` is taken from the path UG's own links use, else from
-    ``url``, else built from ``name_stripped`` and the id.
+    ``url``, else built from ``name_stripped`` and the id: ``/artist/<name>_<id>``,
+    or ``/artist/<id>`` alone for an artist without one, as UG writes some
+    (宋冬野's is ``/artist/634073``).
     """
     data = read_page_data(html, url=url)
     artist = _mapping(data.get("artist"))
@@ -100,8 +103,10 @@ def parse_artist_page(html: str | bytes, *, url: str | None = None) -> UGArtistP
         artist_url = _without_query(urljoin(base, links[0]))
     elif url:
         artist_url = _without_query(url)
+    elif stripped := str(artist.get("name_stripped") or ""):
+        artist_url = f"{WWW}/artist/{stripped}_{artist_id}"
     else:
-        artist_url = f"{WWW}/artist/{artist.get('name_stripped') or ''}_{artist_id}"
+        artist_url = f"{WWW}/artist/{artist_id}"
 
     page = json_int(pagination.get("current")) or json_int(data.get("current_page")) or 1
     listed = [json_int(e.get("page")) for e in page_entries]

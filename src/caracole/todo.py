@@ -23,7 +23,7 @@ from caracole.lacuerda import artist_slug_candidates, looks_spanish
 from caracole.library import write_atomic
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
-from caracole.overrides import Overrides
+from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides
 from caracole.songs import Song, list_songs
 from caracole.ug.fetch import artist_is_known, needs_artist_page, songs_to_fetch
 from caracole.ug.index import index_state
@@ -196,13 +196,15 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
     if wanted:
         # One block for every artist, with the table's header only when the file has no such table:
         # a table declared twice makes overrides.toml unreadable, and the nightly run stops.
-        lines = [f'{_toml_str(a)} = "https://www.ultimate-guitar.com/artist/<name>_<id>"' for a in sorted(wanted)]
+        lines = [f"{_toml_str(a)} = {_toml_str(ARTIST_PAGE_SHAPE)}" for a in sorted(wanted)]
         if overrides.artist_url:
             how = ("Then add these lines under the `[artist_url]` table your overrides.toml already has (a second "
                    "`[artist_url]` header would make the file unreadable)")
         else:
             how, lines = "Then paste this block into overrides.toml", ["[artist_url]", *lines]
-        items += ["", f"{how}, with each artist's address in place of `<name>_<id>`:", *_paste(lines)]
+        items += ["", f"{how}, with each artist page's address, as your browser shows it, in place of "
+                      f"`{ARTIST_PAGE_SHAPE}` (it ends in the artist's number, as "
+                      "`https://www.ultimate-guitar.com/artist/634073` does):", *_paste(lines)]
     return items, len(wanted)
 
 
