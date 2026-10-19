@@ -163,6 +163,144 @@ def test_after_a_block_no_more_requests_this_run(tmp_path):
     assert len(rec.requests) == 1
 
 
+TABS = "https://tabs.ultimate-guitar.com"
+WWW = "https://www.ultimate-guitar.com"
+# Each closed by a Disallow line of its host's robots.txt (User-agent: *), as captured in the spike.
+ROBOTS_CLOSED = [
+    TABS + "/tab/print?id=1",  # /tab/print?
+    TABS + "/tab/download?id=1",  # /tab/download
+    TABS + "/tab/download-kids-worship/shine-your-light-chords-4818770",  # /tab/download, a prefix (real index row)
+    TABS + "/tab/track/se-que-es-tarde-chords-1126580",  # /tab/track/ (real index row)
+    TABS + "/tab/applicature/transpose?id=1",  # /tab/applicature/transpose
+    TABS + "/download/public/1234",  # /download/public/
+    WWW + "/search.php?search_type=title&value=x",  # /search.php
+    WWW + "/tab-pro/download?id=1",  # /tab-pro/download
+    WWW + "/artist/soda_stereo_2946?no_takeover",  # /*?no_takeover
+]
+READ_BY_TABARR = [
+    TABS + "/tab/soda-stereo/persiana-americana-tabs-1081462",
+    TABS + "/tab/85053",
+    WWW + "/artist/soda_stereo_2946?filter=chords&page=2",
+    WWW + "/sitemap_last.xml",
+    "https://lrclib.net/api/search?track_name=%E6%96%91%E9%A9%AC%E6%96%91%E9%A9%AC&artist_name=x",
+    "https://acordes.lacuerda.net/soda_stereo/",
+]
+
+
+@pytest.mark.parametrize("url", ROBOTS_CLOSED)
+def test_urls_robots_txt_closes_are_never_requested(tmp_path, url):
+    client, rec = make_client(tmp_path, ok())
+    with pytest.raises(ProviderError) as e:
+        client.get(url)
+    assert not isinstance(e.value, (ProviderBlocked, ProviderUnavailable))
+    assert rec.requests == [] and client.requests_made == 0
+
+
+@pytest.mark.parametrize("url", READ_BY_TABARR)
+def test_urls_tabarr_reads_are_open(tmp_path, url):
+    client, rec = make_client(tmp_path, ok())
+    assert client.get(url).status == 200 and len(rec.requests) == 1
+
+
+def test_robots_disallows_names_the_rule_for_other_modules():
+    from tabarr.http import robots_disallows
+
+    assert robots_disallows(TABS + "/tab/track/ave-fenix-guitar-pro-1149792") == "/tab/track/"
+    assert [u for u in READ_BY_TABARR if robots_disallows(u)] == []
+
+
+def test_robots_refusals_are_not_provider_failures(tmp_path):
+    # No request is sent, so the breaker neither counts a refusal nor resets on one.
+    client, rec = make_client(tmp_path, ok(b"boom", status=502), max_consecutive_errors=3)
+    refused = [f"{TABS}/tab/print?id={i}" for i in range(3)]
+    for url in [TABS + "/tab/1", *refused, TABS + "/tab/2", TABS + "/tab/3"]:
+        with pytest.raises(ProviderError) as e:
+            client.get(url)
+        assert not isinstance(e.value, ProviderUnavailable)
+    with pytest.raises(ProviderUnavailable):  # /tab/1, /tab/2 and /tab/3 failed in a row
+        client.get(TABS + "/tab/4")
+    assert len(rec.requests) == 3
+
+
+OLD = TABS + "/tab/a/old-chords-1"
+NEW = TABS + "/tab/a/new-chords-1"
+
+
+def moved(location, *, status=301, frm=OLD):
+    """A site where ``frm`` redirects to ``location`` and every other URL answers 200."""
+    def handler(request):
+        if str(request.url) == frm:
+            return httpx.Response(status, headers={"Location": location})
+        return httpx.Response(200, content=b"page")
+    return handler
+
+
+def test_each_redirect_hop_is_counted_and_paced(tmp_path):
+    sleeps: list[float] = []
+    client, rec = make_client(tmp_path, moved("/tab/a/new-chords-1"), sleeps=sleeps)
+    assert client.get(OLD).content == b"page"
+    assert [str(r.url) for r in rec.requests] == [OLD, NEW]
+    assert client.requests_made == 2
+    assert len(sleeps) == 1 and 10.0 <= sleeps[0] <= 20.0
+
+
+def test_each_redirect_hop_is_an_event(tmp_path):
+    events = []
+    client, _ = make_client(tmp_path, moved(NEW, status=302), events=events)
+    client.get(OLD)
+    assert [(e.url, e.status, e.decision) for e in events] == [(OLD, 302, "redirect"), (NEW, 200, "ok")]
+
+
+def test_a_redirected_answer_is_cached_under_the_url_asked(tmp_path):
+    client, rec = make_client(tmp_path, moved(NEW))
+    assert client.get(OLD).url == OLD
+    again = client.get(OLD)
+    assert again.from_cache and again.content == b"page" and len(rec.requests) == 2
+
+
+def test_a_redirect_hop_needs_budget(tmp_path):
+    client, rec = make_client(tmp_path, moved(NEW), budget=1)
+    with pytest.raises(BudgetExhausted):
+        client.get(OLD)
+    assert len(rec.requests) == 1
+
+
+def test_a_redirect_loop_stops_after_three_hops(tmp_path):
+    # Old PHP sites (LaCuerda) can redirect to themselves; httpx alone would follow 20 hops.
+    sleeps: list[float] = []
+    client, rec = make_client(tmp_path, lambda r: httpx.Response(302, headers={"Location": str(r.url)}),
+                              sleeps=sleeps, max_consecutive_errors=3)
+    for i in range(3):
+        with pytest.raises(ProviderError) as e:
+            client.get(f"https://acordes.lacuerda.net/artist_{i}/")
+        assert not isinstance(e.value, ProviderUnavailable)
+    with pytest.raises(ProviderUnavailable):
+        client.get("https://acordes.lacuerda.net/artist_9/")
+    assert len(rec.requests) == client.requests_made == 12  # each: the request and 3 hops
+    assert len(sleeps) == 11
+
+
+def test_a_redirect_robots_txt_closes_is_not_followed(tmp_path):
+    client, rec = make_client(tmp_path, moved("/tab/print?id=1", status=302))
+    with pytest.raises(ProviderError) as e:
+        client.get(OLD)
+    assert not isinstance(e.value, ProviderBlocked)
+    assert [str(r.url) for r in rec.requests] == [OLD]
+
+
+def test_a_redirect_to_another_site_is_not_followed(tmp_path):
+    client, rec = make_client(tmp_path, moved("https://accounts.example.com/login?next=/tab/a", status=302))
+    with pytest.raises(ProviderError):
+        client.get(OLD)
+    assert [str(r.url) for r in rec.requests] == [OLD]
+
+
+def test_a_redirect_between_the_hosts_of_one_site_is_followed(tmp_path):
+    client, rec = make_client(tmp_path, moved(WWW + "/artist/a_1"))
+    assert client.get(OLD).status == 200
+    assert [str(r.url) for r in rec.requests] == [OLD, WWW + "/artist/a_1"]
+
+
 def test_500_is_error_and_not_cached(tmp_path):
     client, rec = make_client(tmp_path, ok(b"boom", status=500))
     with pytest.raises(ProviderError) as e:
@@ -195,6 +333,26 @@ def test_unaccepted_404_raises_provider_error(tmp_path):
     with pytest.raises(ProviderError) as e:
         client.get("https://x.test/1")
     assert e.value.status == 404
+
+
+def test_a_404_the_caller_rejects_is_not_cached(tmp_path):
+    client, rec = make_client(tmp_path, ok(b"<html>Not Found</html>", status=404))
+    with pytest.raises(ProviderError):
+        client.get("https://lrclib.net/api/search?track_name=x")  # accepts only 200
+    assert not client.get("https://lrclib.net/api/search?track_name=x", accept=(200, 404)).from_cache
+    assert len(rec.requests) == 2
+
+
+def test_a_cached_answer_the_caller_rejects_is_asked_again(tmp_path):
+    # A 404 stored by a caller that accepted it (or by an older tabarr) is no answer
+    # for one that doesn't: replaying it would fail the song every night without asking.
+    statuses = iter([404, 200])
+    client, rec = make_client(tmp_path, lambda r: httpx.Response(next(statuses), content=b"[]"))
+    assert client.get("https://lrclib.net/api/search?track_name=x", accept=(200, 404)).status == 404
+    again = client.get("https://lrclib.net/api/search?track_name=x")
+    assert again.status == 200 and not again.from_cache
+    assert len(rec.requests) == 2 and client.requests_made == 2
+    assert client.get("https://lrclib.net/api/search?track_name=x").from_cache
 
 
 def test_accepted_503_is_returned_not_cached(tmp_path):
@@ -245,6 +403,35 @@ def test_success_resets_error_count(tmp_path):
         except ProviderError as e:
             results.append(type(e).__name__)
     assert results == ["ProviderError", "ProviderError", 200, "ProviderError", "ProviderError", 200]
+
+
+def lrclib_outage(get_status):
+    """LRCLIB with /api/get answering ``get_status`` and /api/search failing with 503."""
+    return lambda r: httpx.Response(get_status if r.url.path == "/api/get" else 503, content=b"ServerOverloaded")
+
+
+def test_an_accepted_503_does_not_reset_the_error_count(tmp_path):
+    # /api/get accepts 503 (LRCLIB's answer to a miss); in an outage it must not hide
+    # /api/search's errors from the breaker.
+    client, rec = make_client(tmp_path, lrclib_outage(503), max_consecutive_errors=3)
+    for i in range(3):
+        assert client.get(f"https://lrclib.net/api/get?n={i}", accept=(200, 404, 503)).status == 503
+        with pytest.raises(ProviderError):
+            client.get(f"https://lrclib.net/api/search?n={i}")
+    with pytest.raises(ProviderUnavailable):
+        client.get("https://lrclib.net/api/get?n=3", accept=(200, 404, 503))
+    assert len(rec.requests) == 6
+
+
+def test_an_accepted_404_resets_the_error_count(tmp_path):
+    client, rec = make_client(tmp_path, lrclib_outage(404), max_consecutive_errors=3)
+    for i in range(3):
+        assert client.get(f"https://lrclib.net/api/get?n={i}", accept=(200, 404, 503)).status == 404
+        with pytest.raises(ProviderError) as e:
+            client.get(f"https://lrclib.net/api/search?n={i}")
+        assert not isinstance(e.value, ProviderUnavailable)
+    assert client.get("https://lrclib.net/api/get?n=3", accept=(200, 404, 503)).status == 404
+    assert len(rec.requests) == 7
 
 
 def test_events_reported(tmp_path):
