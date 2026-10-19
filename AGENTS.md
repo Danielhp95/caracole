@@ -51,8 +51,11 @@ pinyin), overrides.py, library.py (song folders, safe file access), notify.py (n
   `test_commands_*.py` for the CLI. conftest.py has the `conn` and `cfg` fixtures (every
   directory under `tmp_path`), `add_song` and `subprocess_pythonpath`. helpers/ug_pages.py
   builds fake UG tab and artist pages, escaped the way UG escapes them
-  (`from helpers.ug_pages import ...`). fixtures/ holds UG, LaCuerda, LRCLIB and ChordPro
-  samples: real response shapes, synthetic lyrics and sheets.
+  (`from helpers.ug_pages import ...`). helpers/gtptabs_site.py is `FakeGtpTabs`, a fake
+  gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7
+  and Power Tab files (a format's magic header, then filler). fixtures/ holds UG,
+  LaCuerda, LRCLIB, gtptabs.com and ChordPro samples: real response shapes, trimmed, and
+  synthetic lyrics, sheets and files.
 - `nix/`: package.nix (`buildPythonApplication`; the wrapper puts `chordpro` on PATH and
   defaults `CARACOLE_CJK_FONT`; `withAutochords` adds the extra and the model files),
   autochords.nix (the model files, fixed-output), module.nix (`services.caracole`: units,
@@ -109,10 +112,11 @@ Traps:
 ## How work is done here
 
 - Test first: a test that fails (on the missing name or an assertion), then the code.
-- Never a live request in a test: not to ultimate-guitar.com, lrclib.net, lacuerda.net or
-  Spotify. Give `PoliteClient` an `httpx.MockTransport` as `transport=`; CLI tests
-  monkeypatch `caracole.commands._common.transport_for` (and `_common.sleep`); pipeline tests
-  pass `Services` with fake clients; Spotify tests use `FakeSpotify` (test_spotify.py) or
+- Never a live request in a test: not to ultimate-guitar.com, lrclib.net, lacuerda.net,
+  gtptabs.com or Spotify. Give `PoliteClient` an `httpx.MockTransport` as `transport=`;
+  CLI tests monkeypatch `caracole.commands._common.transport_for` (and `_common.sleep`);
+  pipeline tests pass `Services` with fake clients (`FakeGtpTabs.client` makes a real
+  one for gtptabs.com); Spotify tests use `FakeSpotify` (test_spotify.py) or
   patch `caracole.spotify.client_from_config`. Nothing blocks the network for the whole
   suite; only the package build's sandbox has none.
 - `load_config` takes `env=`, and unit tests pass it. CLI tests read the real environment:
