@@ -287,9 +287,18 @@ def test_the_soft_404_body_is_a_missing_artist():
     assert is_missing_artist_page(SOFT_404 + "\n")
 
 
-def test_a_small_page_without_a_song_list_is_a_missing_artist():
-    assert is_missing_artist_page("")
-    assert is_missing_artist_page("<html><body>No encontrado</body></html>")
+def test_a_small_page_without_a_song_list_is_not_a_soft_404():
+    # A PHP or database error page is a server error, which must never read as "no such
+    # artist": parse_artist_page reports it, and the next run asks again.
+    assert not is_missing_artist_page("")
+    assert not is_missing_artist_page("<html><body>No encontrado</body></html>")
+    assert not is_missing_artist_page(
+        "<html><body><b>Warning</b>: mysqli_connect(): Too many connections</body></html>"
+    )
+
+
+def test_a_full_page_that_starts_like_the_soft_404_is_not_one():
+    assert not is_missing_artist_page(SOFT_404 + "\n" + _fixture("song.html"))
 
 
 def test_a_page_with_a_song_list_is_not_missing(artist_songs):

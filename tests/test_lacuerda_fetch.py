@@ -637,6 +637,19 @@ def test_an_artist_page_without_its_song_list_is_an_error(conn, tmp_path):
     assert_untouched(conn, song, tmp_path)
 
 
+def test_a_small_error_page_for_an_artist_is_an_error_not_a_miss(conn, tmp_path):
+    # Only LaCuerda's "aqui llega:" body means "no such artist"; a database error page
+    # must not keep the artist's songs off LaCuerda for 30 days.
+    error_page = "<html><body><b>Warning</b>: mysqli_connect(): Too many connections</body></html>"
+    site = FakeLaCuerda({SODA: (200, error_page), DML_3: (200, fixture("version.html"))})
+    song = spanish_song(conn)
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, errors=1)
+    assert_untouched(conn, song, tmp_path)
+
+    site.pages[SODA] = (200, fixture("artist.html"))
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, kept=1)
+
+
 def test_a_version_page_without_a_sheet_is_an_error(conn, tmp_path):
     site = FakeLaCuerda()
     site.pages[DML_3] = (200, fixture("song.html"))
