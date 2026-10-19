@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -74,25 +75,32 @@ LC_PAGE = (
 ZWSP, BOM, NOTE = chr(0x200B), chr(0xFEFF), chr(0x266A)
 
 
+def output_of(cmd) -> Path:
+    """The PDF a chordpro command line writes: its --output= option."""
+    return Path(next(a.split("=", 1)[1] for a in cmd if a.startswith("--output=")))
+
+
 class FakeChordPro:
-    """Stands in for subprocess.run: records each command and writes a PDF holding its options.
+    """Stands in for subprocess.run: records each command and writes a PDF holding its options,
+    then the sheet it prints. Like chordpro, it opens both files by name.
 
     The options in the PDF let a test tell one rendering from another by the file alone.
     """
 
     def __init__(self, fail: tuple[str, ...] = ()):
         self.calls: list[list[str]] = []
-        self.fail = fail  # a .cho path containing one of these fails, after writing half a PDF
+        self.fail = fail  # a .cho whose name or text holds one of these fails, after half a PDF
 
     def __call__(self, cmd, **kwargs):
         cmd = list(cmd)
         self.calls.append(cmd)
-        out = Path(next(a.split("=", 1)[1] for a in cmd if a.startswith("--output=")))
-        if any(part in cmd[-1] for part in self.fail):
+        cho, out = Path(cmd[-1]), output_of(cmd)
+        sheet = cho.read_text(encoding="utf-8")
+        if any(part in cho.name or part in sheet for part in self.fail):
             out.write_bytes(b"%PDF-1.4 half")
             stderr = "Unhandled fonts detected -- aborted\n"
             return subprocess.CompletedProcess(cmd, 2, stdout="", stderr=stderr)
-        out.write_bytes(b"%PDF-1.4 fake\n" + "\n".join(cmd[1:-1]).encode("utf-8"))
+        out.write_bytes(b"%PDF-1.4 fake\n" + "\n".join([*cmd[1:-1], sheet]).encode("utf-8"))
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
 
@@ -627,6 +635,116 @@ def test_unreadable_auto_sheet_fails_that_song_only(conn, cfg, caplog, data):
     assert "sheet (auto).txt" in caplog.text
 
 
+# --- others writing to the library -----------------------------------------------------------
+#
+# The library is writable by the Syncthing group and every synced device. A symbolic link
+# planted there must not copy tabarr's private files into a .cho or a PDF, nor have one
+# written over; a FIFO must not hold up the pass.
+
+SECRET = "refresh-token-s3cr3t"
+
+
+@pytest.fixture
+def private_file(cfg) -> Path:
+    """A file only tabarr may read, in its state directory. It is shaped like sheet.json, so a
+    sheet read through a link to it would carry the secret into the .cho and the PDF."""
+    path = cfg.state_dir / "credentials.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"content": SECRET}), encoding="utf-8")
+    return path
+
+
+def library_bytes(cfg) -> bytes:
+    """The bytes of every regular file in the library, links not followed."""
+    return b"".join(
+        p.read_bytes() for p in cfg.library_dir.rglob("*") if not p.is_symlink() and p.is_file()
+    )
+
+
+@pytest.mark.parametrize("planted", ["link", "fifo"])
+@pytest.mark.parametrize("name", ["sheet (auto).txt", "sheet.json", "sheet.cho"])
+def test_a_link_or_fifo_in_place_of_a_sheet_fails_that_song_only(
+    conn, cfg, caplog, private_file, name, planted
+):
+    bad = add_song(conn, "Placeholder Band", "Synthetic Song")
+    if name == "sheet (auto).txt":
+        auto_sheet(conn, cfg, bad)
+    else:
+        human_sheet(conn, cfg, bad, tab_id=1)
+    path = song_dir(cfg.library_dir, bad) / name
+    path.unlink(missing_ok=True)
+    if planted == "link":
+        path.symlink_to(private_file)
+    else:
+        os.mkfifo(path)  # opened to read, it waits for a writer
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    stats = render(conn, cfg)
+    assert SECRET.encode() not in library_bytes(cfg)
+    assert (stats.rendered, stats.failed) == (1, 1)
+    assert name in caplog.text
+    assert ("symbolic link" if planted == "link" else "not a regular file") in caplog.text
+    assert private_file.read_text(encoding="utf-8") == json.dumps({"content": SECRET})
+
+
+class Watcher(FakeChordPro):
+    """Also notes the mode of the directory chordpro opens its files in, while it runs."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.modes: list[int] = []
+
+    def __call__(self, cmd, **kwargs):
+        self.modes.append(stat.S_IMODE(Path(cmd[-1]).parent.stat().st_mode))
+        return super().__call__(cmd, **kwargs)
+
+
+def test_chordpro_opens_files_only_in_a_private_directory(conn, cfg):
+    # chordpro opens its input and its output by name and follows links: in the song's
+    # folder, either could be swapped for a link while it runs.
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=1)
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, bad, tab_id=2)
+    run = Watcher(fail=("Persiana",))
+    assert render(conn, cfg, runner=run) == RenderStats(rendered=1, failed=1)
+    assert len(run.calls) == 2
+    for cmd in run.calls:
+        cho, out = Path(cmd[-1]), output_of(cmd)
+        assert cho.parent == out.parent and cho.parent.parent == cfg.cache_dir
+        assert (cho.name, out.name) == ("sheet.cho", "sheet.pdf")
+    assert run.modes == [0o700, 0o700]  # only tabarr can enter it
+    assert list(cfg.cache_dir.iterdir()) == []  # and it is gone, after a failure too
+    assert pdf_of(cfg, good).read_bytes().startswith(b"%PDF-1.4 fake")
+
+
+class Intruder(FakeChordPro):
+    """chordpro, raced by someone else who can write to the song's folder: each file it is to
+    open there is a link to ``target`` by the time it opens it."""
+
+    def __init__(self, library: Path, target: Path):
+        super().__init__()
+        self.library, self.target = library, target
+
+    def __call__(self, cmd, **kwargs):
+        for path in (Path(cmd[-1]), output_of(cmd)):
+            if path.is_relative_to(self.library):
+                path.unlink(missing_ok=True)
+                path.symlink_to(self.target)
+        return super().__call__(cmd, **kwargs)
+
+
+def test_files_swapped_for_links_while_chordpro_runs_are_not_followed(conn, cfg, private_file):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    assert render(conn, cfg, runner=Intruder(cfg.library_dir, private_file)).rendered == 1
+    assert private_file.read_text(encoding="utf-8") == json.dumps({"content": SECRET})
+    pdf = pdf_of(cfg, song)
+    assert not pdf.is_symlink()
+    assert "{title: De Música Ligera}" in pdf.read_bytes().decode("utf-8")  # tabarr's own sheet
+    assert SECRET.encode() not in library_bytes(cfg)
+
+
 # --- what the pass records -------------------------------------------------------------------
 
 
@@ -687,13 +805,15 @@ def test_info_json_keeps_the_render_entry_when_another_step_rewrites_it(conn, cf
 # --- tabarr render ---------------------------------------------------------------------------
 
 # A stand-in for the chordpro program, run as one: it writes a PDF naming its options,
-# and fails on a sheet whose path holds "Persiana".
+# and fails on a sheet whose text holds "Persiana".
 FAKE_CHORDPRO = """\
 #!{python}
 import sys
 
 out = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--output="))
-if "Persiana" in sys.argv[-1]:
+with open(sys.argv[-1], encoding="utf-8") as f:
+    sheet = f.read()
+if "Persiana" in sheet:
     sys.exit("Unhandled fonts detected -- aborted")
 with open(out, "w", encoding="utf-8") as f:
     f.write("%PDF-1.4 fake " + " ".join(sys.argv[1:-1]))
