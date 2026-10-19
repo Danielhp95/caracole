@@ -871,6 +871,52 @@ def test_command_exits_1_when_the_models_fail_on_a_test_tone(
     assert kv_get_json(conn, STATUS, {}).get("failed") == []
 
 
+def test_command_rewrites_the_todo_page_and_the_index(tmp_path, monkeypatch, models_importable):
+    # tabarr-autochords runs after the nightly run has written both pages: they must not
+    # wait a night to show its sheets.
+    fake_default_models(monkeypatch)
+    bought(tmp_path)
+    result = invoke(write_config(tmp_path, **model_files(tmp_path)))
+    assert result.exit_code == 0, result.output
+    todo = (tmp_path / "lib" / "_todo.md").read_text(encoding="utf-8")
+    assert "1 song: 1 found, 0 wanted" in todo
+    assert "Auto sheet text" in (tmp_path / "lib" / "index.html").read_text(encoding="utf-8")
+
+
+def test_command_lists_a_purchase_it_cant_read_on_the_todo_page_at_once(
+    tmp_path, monkeypatch, models_importable
+):
+    fake_default_models(monkeypatch, fail_on=("Nobody - River Road.wav",))
+    bought(tmp_path)
+    result = invoke(write_config(tmp_path, **model_files(tmp_path)))
+    assert result.exit_code == 0, result.output
+    todo = (tmp_path / "lib" / "_todo.md").read_text(encoding="utf-8")
+    assert "## Auto-chords couldn't read these purchases" in todo and "Nobody - River Road" in todo
+
+
+def test_command_waits_for_another_tabarr(tmp_path, monkeypatch, models_importable):
+    import fcntl
+    import threading
+
+    fake_default_models(monkeypatch)
+    bought(tmp_path)
+    config = write_config(tmp_path, **model_files(tmp_path))
+    lock = tmp_path / "state" / "tabarr.lock"
+    fd = os.open(lock, os.O_RDWR | os.O_CREAT)
+    fcntl.flock(fd, fcntl.LOCK_EX)  # the nightly run, say, still writing the library
+    results = []
+    thread = threading.Thread(target=lambda: results.append(invoke(config)))
+    try:
+        thread.start()
+        thread.join(0.5)
+        assert thread.is_alive() and not (tmp_path / "lib" / "_todo.md").exists()
+    finally:
+        os.close(fd)
+    thread.join(10)
+    assert results and results[0].exit_code == 0, results and results[0].output
+    assert "auto-chords: 1 generated" in results[0].output
+
+
 def test_command_with_nothing_to_do(tmp_path, models_importable):
     from tabarr import db
 
