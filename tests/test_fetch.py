@@ -8,6 +8,7 @@ the way the live site does: a slugged tab only at its slugged URL, and UG's
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import UTC, datetime, timedelta
 
@@ -2104,6 +2105,26 @@ def test_rescore_skips_a_sheet_json_it_cannot_read(conn, tmp_path, damage):
         doc.unlink()
     else:
         doc.write_text(json.dumps({"provider": "lacuerda"}), encoding="utf-8")
+    assert rescore(conn, tmp_path) == 0
+    assert get_version(conn, vid).coverage is None
+
+
+@pytest.mark.parametrize("planted", ["link", "fifo"])
+def test_rescore_reads_nothing_through_a_sheet_json_planted_in_the_library(conn, tmp_path, planted):
+    # Every synced device can write to the library: a sheet.json swapped for a link to a private file
+    # (the database, the Spotify token) must not be read, nor a FIFO left to hang the run. Either is
+    # no sheet, as a missing one is.
+    song = accepted(conn)
+    vid = keep_sheet(conn, tmp_path, song, sheet("lacuerda sheet", LINES))
+    doc = song_dir(tmp_path / "lib", song) / "sheet.json"
+    private = tmp_path / "private.json"
+    private.write_text(doc.read_text(encoding="utf-8"), encoding="utf-8")  # it would score as the sheet
+    doc.unlink()
+    if planted == "link":
+        doc.symlink_to(private)
+    else:
+        os.mkfifo(doc)
+
     assert rescore(conn, tmp_path) == 0
     assert get_version(conn, vid).coverage is None
 

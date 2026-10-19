@@ -66,7 +66,7 @@ from tabarr.http import (
     Response,
     robots_disallows,
 )
-from tabarr.library import drop_file, keep_file, kept_files, write_info
+from tabarr.library import drop_file, keep_file, kept_files, read_regular, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.normalize import clean_title, compact, has_han, romanize, slug_key
 from tabarr.overrides import Overrides
@@ -1381,13 +1381,17 @@ def _unranked_rivals(conn: sqlite3.Connection, song_id: int, kept_id: int) -> bo
 
 
 def _kept_markup(conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int) -> str | None:
-    """The markup in the song's kept ``sheet.json``, if it is that version's and can be read."""
+    """The markup in the song's kept ``sheet.json``, if it is that version's and can be read.
+
+    It is read only as a regular file, never through a link (``library.read_regular``):
+    whatever another device planted there instead is no sheet, as a missing one is.
+    """
     doc_file = next((f for f in kept_files(conn, song.id) if f.name == SHEET_FILES[1]), None)
     if doc_file is None or doc_file.version_id != version_id:
         return None
     path = library_dir / doc_file.path
     try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
+        doc = json.loads(read_regular(path).decode("utf-8"))
     except (OSError, ValueError) as e:  # ValueError: not UTF-8, or not JSON
         log.warning("cannot score %s: %s", path, e)
         return None
