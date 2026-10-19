@@ -566,8 +566,16 @@ with an error instead of writing a PDF with blank text:
 
 A CFF-based `.otf` works too; it is embedded whole, so its PDFs are larger.
 Until a usable font is set, a Chinese sheet still gets its `.cho` file, and
-the to-do page's PDFs section names the sheets waiting for a font. Section 7 of
-[deploy.md](deploy.md#7-chinese-sheets-in-the-pdfs) has the details.
+the to-do page's PDFs section names the sheets waiting for a font, each with
+the first letter it needs the font for, such as `宋冬野 - 斑马斑马 (斑 U+6591)`.
+Section 7 of [deploy.md](deploy.md#7-chinese-sheets-in-the-pdfs) has the
+details.
+
+The font is used only for sheets that need it. Some transcribers type a
+Cyrillic or Greek letter that looks Latin, such as the Cyrillic х in a repeat
+mark "(х2)": when those are a sheet's only such letters, they are written as
+the Latin ones, so the sheet keeps ChordPro's built-in fonts and needs no font
+file.
 
 ## The library folder
 

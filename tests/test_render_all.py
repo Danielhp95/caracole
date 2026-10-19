@@ -453,6 +453,56 @@ def test_a_stray_symbol_uses_the_font_when_there_is_one(conn, cfg, tmp_path):
     assert f"--define=pdf.fonts.text.file={font}".encode() in pdf_of(cfg, song).read_bytes()
 
 
+# UG's Hotel California sheet writes its repeat as "(х2)", with a Cyrillic х (U+0445).
+HOTEL = (
+    f"[Intro] ({chr(0x445)}2)\n"
+    "[ch]Bm[/ch]    [ch]F#[/ch]\n"
+    "\n"
+    "[Verse 1]\n"
+    "[tab][ch]Bm[/ch]               [ch]F#[/ch]\n"
+    "On a dark desert highway[/tab]\n"
+)
+
+
+def test_a_stray_letter_that_looks_latin_needs_no_font(conn, cfg):
+    assert cfg.cjk_font is None
+    song = add_song(conn, "Eagles", "Hotel California")
+    human_sheet(conn, cfg, song, HOTEL, tonality="Bm")
+    stats = render(conn, cfg)
+    assert stats.rendered == 1 and stats.font_error is None
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    assert "(Intro) (x2)" in cho and chr(0x445) not in cho
+
+
+def test_a_stray_letter_that_looks_latin_keeps_the_built_in_fonts(conn, cfg, tmp_path):
+    # With a CJK font set, the whole English sheet would be set in the Kai brush face.
+    cfg = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
+    song = add_song(conn, "Eagles", "Hotel California")
+    human_sheet(conn, cfg, song, HOTEL, tonality="Bm")
+    render(conn, cfg)
+    assert b"pdf.fonts" not in pdf_of(cfg, song).read_bytes()
+
+
+def test_letters_that_look_latin_stay_beside_letters_that_dont(conn, cfg, tmp_path):
+    # Only a sheet whose every such letter has a Latin twin is rewritten.
+    cfg = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, song, ZH_SHEET + f"({chr(0x445)}2)\n", tonality="")
+    render(conn, cfg)
+    assert f"({chr(0x445)}2)" in (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+
+
+def test_the_font_error_names_the_letter_each_sheet_needs(conn, cfg):
+    assert cfg.cjk_font is None
+    hotel = add_song(conn, "Eagles", "Hotel California")
+    human_sheet(conn, cfg, hotel, HOTEL.replace("desert", f"{chr(0x434)}esert"), tab_id=1)  # д
+    zh = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, zh, ZH_SHEET, tab_id=2, tonality="")
+    stats = render(conn, cfg)
+    assert f"Eagles - Hotel California ({chr(0x434)} U+0434)" in stats.font_error
+    assert "宋冬野 - 斑马斑马 (斑 U+6591)" in stats.font_error
+
+
 @pytest.mark.parametrize(
     "data,problem",
     [(b"ttcf" + bytes(60), "font collection"), (None, "font file not found")],
@@ -799,6 +849,18 @@ def test_real_lacuerda_sheet_with_solfege(conn, real):
             assert shown in text
         assert set(CHORD.findall(text)) == {"Am", "F", "C", "G", "G7", "Dm", "Em"}
         assert SOLFEGE.findall(text) == []
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_real_english_sheet_with_a_cyrillic_x_keeps_the_built_in_fonts(conn, real):
+    song = add_song(conn, "Eagles", "Hotel California")
+    human_sheet(conn, real, song, HOTEL, tonality="Bm")
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    pdf = pdf_of(real, song)
+    assert_built_in_fonts(real, pdf)  # not the CJK font, even when one is set
+    if (text := pdf_text(pdf)) is not None:
+        assert "(x2)" in text and "On a dark desert highway" in text
 
 
 @pytest.mark.chordpro

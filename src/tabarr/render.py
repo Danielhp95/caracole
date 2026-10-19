@@ -48,8 +48,12 @@ else its auto sheet's. ``render:<song id>:auto`` does the same for an auto
 sheet's PDF beside a human one. A PDF is rendered again only when one of those
 changes, when it is missing, or when forced. A sheet whose letters the
 built-in fonts lack gets its .cho but no PDF until a usable CJK font is set:
-one font error for the pass, not a failure per song. A font that is set but
-unusable (a collection, a missing file) counts as none.
+one font error for the pass, naming each sheet's first such letter, not a
+failure per song. A font that is set but unusable (a collection, a missing
+file) counts as none. Cyrillic and Greek letters that look like Latin ones,
+which UG transcribers type now and then ("(х2)" with a Cyrillic х), are
+written as those Latin letters when they are a sheet's only such letters, so
+the sheet keeps the built-in fonts.
 """
 
 from __future__ import annotations
@@ -130,6 +134,44 @@ def needs_font_file(text: str) -> bool:
     return False
 
 
+# Cyrillic and Greek letters drawn exactly like Latin ones, by code point: written out, they
+# would look like the Latin letters here too.
+_LATIN_LOOKALIKES = str.maketrans({
+    # Cyrillic capitals, then small letters
+    0x0410: "A", 0x0412: "B", 0x0415: "E", 0x041A: "K", 0x041C: "M", 0x041D: "H", 0x041E: "O",
+    0x0420: "P", 0x0421: "C", 0x0422: "T", 0x0425: "X", 0x0405: "S", 0x0406: "I", 0x0408: "J",
+    0x0430: "a", 0x0435: "e", 0x043E: "o", 0x0440: "p", 0x0441: "c", 0x0443: "y", 0x0445: "x",
+    0x0455: "s", 0x0456: "i", 0x0458: "j", 0x0501: "d", 0x04BB: "h",
+    # Greek capitals, then small omicron
+    0x0391: "A", 0x0392: "B", 0x0395: "E", 0x0396: "Z", 0x0397: "H", 0x0399: "I", 0x039A: "K",
+    0x039C: "M", 0x039D: "N", 0x039F: "O", 0x03A1: "P", 0x03A4: "T", 0x03A5: "Y", 0x03A7: "X",
+    0x03BF: "o",
+})
+
+
+def _lost_letter(ch: str) -> bool:
+    """Whether ``ch`` is a letter ChordPro's built-in fonts would lose."""
+    return unicodedata.category(ch).startswith("L") and needs_font_file(ch)
+
+
+def _first_lost_letter(text: str) -> str | None:
+    """The letter a font file is needed for: the first lost one with no Latin twin, if any."""
+    lost = [ch for ch in text if _lost_letter(ch)]
+    return next((ch for ch in lost if ord(ch) not in _LATIN_LOOKALIKES), lost[0] if lost else None)
+
+
+def _as_latin(text: str) -> str:
+    """``text`` with its look-alike letters written in Latin, when they are its only lost letters.
+
+    A stray "х2" in an English sheet then needs no font file. Text with other
+    such letters (a Russian or a Chinese sheet) is left as written.
+    """
+    lost = {ch for ch in set(text) if _lost_letter(ch)}
+    if lost and all(ord(ch) in _LATIN_LOOKALIKES for ch in lost):
+        return text.translate(_LATIN_LOOKALIKES)
+    return text
+
+
 def write_chordpro(
     markup: str,
     cho_path: Path,
@@ -143,10 +185,11 @@ def write_chordpro(
     """Convert UG sheet markup and write it to ``cho_path``.
 
     An existing file with the same content is left alone, so Syncthing has
-    nothing to sync; otherwise the file is replaced in one rename.
+    nothing to sync; otherwise the file is replaced in one rename. Stray
+    letters that only look foreign are written in Latin (``_as_latin``).
     """
     path = Path(cho_path)
-    text = to_chordpro(markup, title=title, artist=artist, key=key, capo=capo, auto=auto)
+    text = _as_latin(to_chordpro(markup, title=title, artist=artist, key=key, capo=capo, auto=auto))
     try:
         if path.read_text(encoding="utf-8") == text:
             return path
@@ -301,8 +344,8 @@ def render_all(
             continue
         stats.rendered += sum(1 for d in done if d.outcome == "rendered")
         stats.skipped += sum(1 for d in done if d.outcome == "skipped")
-        if any(d.outcome == "no font" for d in done):
-            no_font.append(song.display)
+        if missing := next((d.missing for d in done if d.outcome == "no font"), None):
+            no_font.append(f"{song.display} ({missing} U+{ord(missing):04X})")
     stats.failed = len(failed)
     if no_font:
         stats.font_error = _font_error(no_font, font_problem)
@@ -316,9 +359,10 @@ def render_all(
 
 @dataclass(frozen=True)
 class _Done:
-    """One sheet's pass."""
+    """One sheet's pass; for "no font", ``missing`` is its first letter the built-in fonts lack."""
 
     outcome: Outcome
+    missing: str | None = None
 
 
 def _render_song(
@@ -386,7 +430,7 @@ def _render_sheet(
     need = _font_need(text)
     font = cjk_font if need else None
     if need == "letters" and font is None:
-        return _Done("no font")
+        return _Done("no font", missing=_first_lost_letter(text))
     pdf = folder / f"{stem}.pdf"
     transpose = overrides.transpose.get(song.key, 0)
     state = {
