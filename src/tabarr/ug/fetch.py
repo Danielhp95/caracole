@@ -6,8 +6,10 @@ For each song (plan §3, Task 15, amendment A6):
    slugged URLs (UG answers 404 for a slugged tab at the bare ``/tab/{id}``),
    and its pins, which replace the kind group they belong to and are fetched
    at the slugged address you pasted, if you pasted one. Blocked ids never
-   compete. A not-found song is looked up on its artist's UG page, which also
-   lists the bare-id tabs the index can't see (A6).
+   compete, and neither does a tab at a URL robots.txt closes
+   (``tabarr.http.robots_disallows``): such a URL is never asked for. A
+   not-found song is looked up on its artist's UG page, which also lists the
+   bare-id tabs the index can't see (A6).
 2. **Ratings.** A tab page lists the other versions of its type and part, so
    for each kind group (chords; Guitar Pro and Power Tab; tabs) tabarr reads
    the page of the lowest id it has no rating for, up to
@@ -56,7 +58,14 @@ from rapidfuzz import fuzz
 from tabarr import coverage
 from tabarr.config import RankPolicy
 from tabarr.db import kv_delete, kv_get, kv_get_json, kv_set, kv_set_json
-from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError, Response
+from tabarr.http import (
+    BudgetExhausted,
+    Client,
+    ProviderBlocked,
+    ProviderError,
+    Response,
+    robots_disallows,
+)
 from tabarr.library import drop_file, keep_file, kept_files, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.normalize import clean_title, compact, has_han, romanize, slug_key
@@ -109,7 +118,6 @@ SHEET_FILES = ("sheet.txt", "sheet.json")
 TAB_FILES = ("tab.txt", "tab.json")
 AUTO_SHEET = "sheet (auto).txt"
 _TAB_HOST = urlsplit(TAB_BASE_URL).netloc
-_CLOSED_TAB_PATHS = frozenset({"download", "print"})  # robots.txt on the tabs host
 
 # The artist-page route (A6).
 ARTIST_PAGE = "artist_page"  # the match step of a song found on its artist's page
@@ -298,14 +306,26 @@ def _upsert(run: _SongRun, v: UGVersion) -> int:
     )
 
 
-def _tab_page_url(url: str) -> bool:
-    """Whether a link from UG's JSON is a plain tab page; robots.txt closes /tab/download and /tab/print."""
+def _closed(url: str) -> bool:
+    """Whether robots.txt closes ``url`` (``robots_disallows``): tabarr never asks for it, and a tab
+    there is no candidate (neither gone nor unreadable: the song goes on with its other versions)."""
+    return robots_disallows(url) is not None
+
+
+def _on_tab_host(url: str) -> bool:
+    """Whether a link points under ``/tab/`` on the tabs host, where UG's tab pages are."""
     parts = urlsplit(url)
     segments = parts.path.split("/")
     return (
         parts.scheme in ("http", "https") and parts.netloc == _TAB_HOST
-        and len(segments) > 2 and segments[1] == "tab" and segments[2] not in _CLOSED_TAB_PATHS
+        and len(segments) > 2 and segments[1] == "tab"
     )
+
+
+def _tab_page_url(url: str) -> bool:
+    """Whether a link from UG's JSON is a tab page tabarr may read: on the tabs host, and open in
+    robots.txt, which closes /tab/download, /tab/print?, /tab/track/ and more (``ROBOTS_DISALLOW``)."""
+    return _on_tab_host(url) and not _closed(url)
 
 
 def _wanted(run: _SongRun, v: UGVersion) -> bool:
@@ -314,8 +334,14 @@ def _wanted(run: _SongRun, v: UGVersion) -> bool:
 
 
 def _usable(run: _SongRun, v: UGVersion) -> bool:
-    """A version tabarr wants, at a tab page."""
+    """A version tabarr wants, at a tab page it may read."""
     return _wanted(run, v) and _tab_page_url(v.url)
+
+
+def _links_a_tab_page(v: UGVersion) -> bool:
+    """Whether a version links to a tab page: one tabarr may read, or its own slugged page, which
+    robots.txt may close (UG files every tab of the band Track under /tab/track/)."""
+    return _tab_page_url(v.url) or (_on_tab_host(v.url) and _slugged_url(v.url, v.tab_id))
 
 
 def _check_links(run: _SongRun, versions: Iterable[UGVersion], url: str) -> None:
@@ -323,10 +349,11 @@ def _check_links(run: _SongRun, versions: Iterable[UGVersion], url: str) -> None
 
     Some links go elsewhere (robots.txt closes /tab/download); all of them
     going elsewhere means UG's links changed shape, which is an error, never
-    "no versions".
+    "no versions". Versions at their own slugged pages, which robots.txt
+    closes, are no change of shape: only versions tabarr may not use.
     """
     wanted = [v for v in versions if _wanted(run, v)]
-    if wanted and not any(_tab_page_url(v.url) for v in wanted):
+    if wanted and not any(_links_a_tab_page(v) for v in wanted):
         raise PageParseError(PROVIDER, url, None, "no version on the page links to a tab page")
 
 
@@ -449,10 +476,13 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
     remembered as gone. Every page also teaches tabarr its artist's UG page,
     filed under the song's artist only when the tab is by that artist. A page
     that won't parse even fetched again is left alone until it is due
-    (``UNREADABLE_RETRY``).
+    (``UNREADABLE_RETRY``). A page robots.txt closes is None without a request,
+    and is neither gone nor unreadable.
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
+    if _closed(url):
+        return None
     if _waits(run, tab_id):
         _unreadable(run, tab_id, kind)
         return None
@@ -526,11 +556,12 @@ def _pinned_url(run: _SongRun, tab_id: int, pasted: str | None, row: VersionRow 
     """Where a pinned tab's page is.
 
     UG serves a slugged tab only at its slugged URL, so the slugged address you
-    pasted comes first, unless robots.txt closes it. A bare ``/tab/{id}`` you
-    pasted adds nothing: then UG's own link to the tab, else the index's path,
-    else the bare page.
+    pasted comes first, even one robots.txt closes: the tab is then nowhere
+    tabarr may read it (its bare page would answer 404). A bare ``/tab/{id}``
+    you pasted adds nothing: then UG's own link to the tab, else the index's
+    path, else the bare page.
     """
-    if pasted is not None and _tab_page_url(pasted) and _slugged_url(pasted, tab_id):
+    if pasted is not None and _on_tab_host(pasted) and _slugged_url(pasted, tab_id):
         return pasted
     return row.url if row is not None else tab_url_for(run.conn, tab_id)
 
@@ -539,7 +570,7 @@ def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple
     """Read every pinned page; return the pinned ids of each kind group, in pinned order.
 
     A pin's kind comes from its page. A pin whose page is gone, Official or not
-    public pins nothing.
+    public pins nothing, and so does one whose page robots.txt closes.
     """
     groups: dict[tuple[str, ...], list[int]] = {}
     for tab_id, pasted in pins:
@@ -558,11 +589,12 @@ def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple
 
 
 def _rows(run: _SongRun, kinds: tuple[str, ...]) -> list[VersionRow]:
-    """The song's live UG versions of these kinds; blocked ids never compete, even if seen earlier."""
+    """The song's live UG versions of these kinds; blocked ids never compete, even if seen earlier,
+    and neither does a version at a URL robots.txt closes (one recorded before tabarr checked)."""
     block = run.ctx.overrides.block
     return [
         r for r in song_versions(run.conn, run.song.id, kinds=kinds)
-        if r.provider == PROVIDER and int(r.tab_id) not in block
+        if r.provider == PROVIDER and int(r.tab_id) not in block and not _closed(r.url)
     ]
 
 
@@ -800,9 +832,12 @@ def _learn_artist_page(run: _SongRun, keys: list[str]) -> str | None:
     """Read a slugged tab of the artist, from the index, for the artist page it links to.
 
     The tab is another song's, so none of its versions are recorded for this song.
+    A tab whose page robots.txt closes is passed over.
     """
     for key in keys:
         for tab in artist_tabs(run.conn, key, limit=LEARN_TRIES):
+            if _closed(tab.url):
+                continue
             page, _ = _get_page(run.ctx.client, tab.url, parse_tab_page)
             if page is not None and (url := _learn_artist_url(run.conn, page, [key])):
                 return url
@@ -816,7 +851,8 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
     run's page cap stopped it), and the list's first page (None when UG
     answered 404). Lists are sorted by title, so the title's entries are
     consecutive: reading stops once they end, and goes on to the next page
-    only when they reach the end of this one.
+    only when they reach the end of this one. A page robots.txt closes ends
+    the list, unread.
     """
     ctx = run.ctx
     hits: list[_Hit] = []
@@ -826,6 +862,8 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
         if fetched >= ctx.artist_pages_per_kind:
             return hits, False, first
         url = artist_page_url(base, kind=kind, page=number)
+        if _closed(url):
+            break
         page, fresh = _get_page(ctx.client, url, parse_artist_page, max_age=ctx.artist_page_max_age, now=ctx.now)
         fetched += fresh
         if page is None:
@@ -843,8 +881,12 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
 
 
 def _offered_kinds(run: _SongRun, base: str) -> set[str] | None:
-    """The kinds of list the artist page offers, read from its unfiltered first page; None when it's gone."""
-    page, _ = _get_page(run.ctx.client, artist_page_url(base), parse_artist_page,
+    """The kinds of list the artist page offers, read from its unfiltered first page; None when it's
+    gone, and none when robots.txt closes it."""
+    url = artist_page_url(base)
+    if _closed(url):
+        return set()
+    page, _ = _get_page(run.ctx.client, url, parse_artist_page,
                         max_age=run.ctx.artist_page_max_age, now=run.ctx.now)
     if page is None:
         return None
@@ -1018,9 +1060,10 @@ def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[I
 
 
 def _song_index_tabs(conn: sqlite3.Connection, song: Song, block: frozenset[int]) -> list[IndexTab]:
-    """The song's tabs in the index, under its match's keys; blocked ones left out."""
+    """The song's tabs in the index, under its match's keys; blocked ones left out, and ones whose
+    page robots.txt closes."""
     tabs = song_tabs(conn, song.match_artist_key, song.match_song_key) if song.match_song_key else []
-    return [t for t in tabs if t.tab_id not in block]
+    return [t for t in tabs if t.tab_id not in block and not _closed(t.url)]
 
 
 def _live_chords(conn: sqlite3.Connection, song: Song, tabs: list[IndexTab]) -> list[IndexTab]:

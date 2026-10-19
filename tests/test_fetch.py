@@ -8,6 +8,7 @@ the way the live site does: a slugged tab only at its slugged URL, and UG's
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -22,6 +23,7 @@ from helpers.ug_pages import (
     version_dict,
 )
 
+import tabarr.http
 from tabarr.config import MatchPolicy, ProviderPolicy, RankPolicy
 from tabarr.db import kv_get, kv_set
 from tabarr.http import PoliteClient, ProviderBlocked
@@ -2177,3 +2179,197 @@ def test_guitar_groups_read_one_ratings_page_starting_with_the_full_song(conn, t
 
     assert [u for u in ug.requests if "-tabs-" in u] == [slugged(403, "tabs")]
     assert "tab 403" in read(tmp_path, song, "tab.txt")
+
+
+# --- pages robots.txt closes -------------------------------------------------------------------------
+
+# robots.txt on the tabs host closes /tab/track/ and every path that starts with /tab/download, so the
+# pages UG files under the band Track's slug (or Download Kids Worship's) may never be read. The live
+# index held four such tabs.
+TRACK_ARTIST = "https://www.ultimate-guitar.com/artist/track_4242"
+CLOSED = f"{TAB}track/se-que-es-tarde-chords-1126580"
+OPEN = f"{TAB}the-track/se-que-es-tarde-chords-2000001"  # The Track's: the index files it as track/ too
+
+
+def index_at(conn, *rows):
+    """Insert ug_index rows ``(tab_id, artist_key, song_key, type, url)``: a page the keys don't spell."""
+    conn.executemany(
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (?, ?, ?, ?, 'last', '2026-10-01T00:00:00Z', ?)",
+        [(t, a, s, k, url.removeprefix(TAB)) for t, a, s, k, url in rows],
+    )
+
+
+def track_tab(url, kind="chords", song="Se Que Es Tarde", **kw):
+    """A tab by Track as UG lists it, at the slugged ``url`` its id ends."""
+    tab_id = int(url.rsplit("-", 1)[1])
+    return version_dict(tab_id, type=UG_TYPES[kind], song=song, artist="Track", tab_url=url, **kw)
+
+
+def se_que_es_tarde(conn):
+    """Track - Se Que Es Tarde, accepted under the UG keys track/se-que-es-tarde."""
+    return accepted(conn, "Track", "Se Que Es Tarde", "track", "se-que-es-tarde")
+
+
+def test_a_candidate_robots_txt_closes_gives_way_to_the_songs_other_versions(conn, tmp_path):
+    # The review's repro: the song failed every night ("robots.txt disallows it (/tab/track/)") and
+    # stayed dirty, without ever trying the version it could read.
+    song = se_que_es_tarde(conn)
+    index_at(conn, (1126580, "track", "se-que-es-tarde", "chords", CLOSED),
+             (2000001, "track", "se-que-es-tarde", "chords", OPEN))
+    ug = FakeUG()
+    ug.tab(track_tab(OPEN), content=sheet("sheet 2000001", LINES))
+    client = Recording(ug.client(tmp_path / "cache"))
+
+    stats = fetch_songs(context(conn, client, tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0)
+    assert ug.requests == [OPEN] and CLOSED not in {url for url, _ in client.calls}  # not even asked of the client
+    assert "sheet 2000001" in read(tmp_path, song, "sheet.txt")
+    done = get_song(conn, song.id)
+    assert (done.status, done.ug_dirty, done.ug_checked_at) == ("found", False, "2026-10-18T03:30:00Z")
+
+
+def test_a_version_ug_links_where_robots_txt_closes_is_no_candidate(conn, tmp_path):
+    # The page tabarr reads lists the best-rated version at its closed address.
+    song = se_que_es_tarde(conn)
+    index_at(conn, (2000001, "track", "se-que-es-tarde", "chords", OPEN))
+    ug = FakeUG()
+    ug.tab(track_tab(OPEN, rating=4.0, votes=5), [track_tab(CLOSED, version=2, rating=4.9, votes=300)],
+           content=sheet("sheet 2000001", LINES))
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == [OPEN]
+    assert [r.tab_id for r in song_versions(conn, song.id, include_gone=True)] == ["2000001"]
+    assert "sheet 2000001" in read(tmp_path, song, "sheet.txt")
+
+
+def test_a_pin_pasted_where_robots_txt_closes_pins_nothing(conn, tmp_path):
+    # UG serves a slugged tab only at its slugged URL, so the pinned page can't be read anywhere: neither
+    # there nor at the bare /tab/1126580, a 404 for a slugged tab. The song's other versions compete.
+    song = se_que_es_tarde(conn)
+    index_at(conn, (2000001, "track", "se-que-es-tarde", "chords", OPEN))
+    ug = FakeUG()
+    ug.tab(track_tab(OPEN), content=sheet("sheet 2000001", LINES))
+    overrides = pins_from_toml(tmp_path, "Track - Se Que Es Tarde", CLOSED)
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == [OPEN]
+    assert "sheet 2000001" in read(tmp_path, song, "sheet.txt")
+
+
+def test_a_pin_whose_indexed_page_robots_txt_closes_pins_nothing(conn, tmp_path):
+    song = se_que_es_tarde(conn)
+    index_at(conn, (1126580, "track", "se-que-es-tarde", "chords", CLOSED),
+             (2000001, "track", "se-que-es-tarde", "chords", OPEN))
+    ug = FakeUG()
+    ug.tab(track_tab(OPEN), content=sheet("sheet 2000001", LINES))
+    overrides = Overrides(pin={song.key: (1126580,)})
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == [OPEN]
+    assert "sheet 2000001" in read(tmp_path, song, "sheet.txt")
+
+
+def test_a_song_whose_every_candidate_robots_txt_closes_is_done_without_a_request(conn, tmp_path):
+    # The live index lists Track's "Ave Fénix" only under /tab/track/: two Guitar Pro files and no
+    # chords, so its own tabs can't name the artist page either.
+    song = accepted(conn, "Track", "Ave Fénix", "track", "ave-fenix")
+    index_at(conn, (1149792, "track", "ave-fenix", "guitar-pro", f"{TAB}track/ave-fenix-guitar-pro-1149792"),
+             (1765760, "track", "ave-fenix", "guitar-pro", f"{TAB}track/ave-fenix-guitar-pro-1765760"))
+    ug = FakeUG()
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == []
+    done = get_song(conn, song.id)  # checked and clean, so not fetched again every night
+    assert (done.status, done.ug_dirty, done.ug_checked_at) == ("wanted", False, "2026-10-18T03:30:00Z")
+    assert songs_to_fetch(conn, Overrides(), NOW + timedelta(days=1)) == []
+
+
+def test_an_artist_page_is_learned_past_a_tab_robots_txt_closes(conn, tmp_path):
+    # A not-found song by Track: the oldest of the artist's indexed tabs is closed; the next names the page.
+    index_at(conn, (1126580, "track", "se-que-es-tarde", "chords", CLOSED),
+             (2000001, "track", "se-que-es-tarde", "chords", OPEN))
+    song = matched(conn, "Track", "Ave Fénix", "not_found", added_at="2026-10-17T00:00:00Z")
+    ug = FakeUG()
+    ug.tab(track_tab(OPEN), content=sheet("sheet 2000001", LINES), artist_url=TRACK_ARTIST)
+    bare = version_dict(3000001, song="Ave Fénix", artist="Track", rating=4.5, votes=9)
+    ug.add(artist_list(TRACK_ARTIST), artist_page(4242, "Track", [bare]))
+    ug.tab(bare, content=sheet("sheet 3000001", LINES), artist_url=TRACK_ARTIST)
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0)
+    assert ug.requests == [OPEN, artist_list(TRACK_ARTIST), f"{TAB}3000001"]
+    assert get_song(conn, song.id).match_step == "artist_page"
+    assert "sheet 3000001" in read(tmp_path, song, "sheet.txt")
+
+
+def test_an_artist_page_that_links_every_tab_where_robots_txt_closes_lists_nothing_to_use(conn, tmp_path):
+    # No change of shape (an error): the links are the tabs' own pages, which tabarr may not read.
+    song = matched(conn, "Track", "Se Que Es Tarde", "not_found", added_at="2026-10-17T00:00:00Z")
+    ug = FakeUG()
+    ug.add(artist_list(TRACK_ARTIST), artist_page(4242, "Track", [track_tab(CLOSED, rating=4.9, votes=80)]))
+    overrides = Overrides(artist_url={"track": TRACK_ARTIST})
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == [artist_list(TRACK_ARTIST)]
+    assert get_song(conn, song.id).match_decision == "not_found"
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") == "2026-10-18T03:30:00Z"  # again in thirty days
+
+
+def test_a_song_whose_indexed_chords_robots_txt_closes_finds_its_sheet_on_its_artist_page(conn, tmp_path):
+    # Closed chords are no chords: the artist's chords list may hold a bare-id version tabarr can read.
+    song = se_que_es_tarde(conn)
+    index_at(conn, (1126580, "track", "se-que-es-tarde", "chords", CLOSED))
+    remember_artist_url(conn, "track", TRACK_ARTIST)
+    ug = FakeUG()
+    bare = version_dict(3000002, song="Se Que Es Tarde", artist="Track", rating=4.5, votes=9)
+    ug.add(artist_list(TRACK_ARTIST), artist_page(4242, "Track", [track_tab(CLOSED, rating=4.9, votes=80), bare]))
+    ug.tab(bare, content=sheet("sheet 3000002", LINES), artist_url=TRACK_ARTIST)
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert out.sheet == 3000002 and "sheet 3000002" in read(tmp_path, song, "sheet.txt")
+    assert ug.requests == [artist_list(TRACK_ARTIST), f"{TAB}3000002"]
+
+
+def test_versions_recorded_where_robots_txt_closes_never_compete(conn, tmp_path):
+    # Recorded before tabarr checked robots.txt (an artist page listed them): no slot asks for or picks one.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (301, "soda-stereo", "persiana-americana", "guitar-pro"))
+    for tab_id, kind, slot in ((1126580, "chords", "sheet"), (1149792, "guitar-pro", "guitar")):
+        upsert_version(conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot=slot, kind=kind, rating=5.0,
+                       votes=900, version=9, label=None, url=f"{TAB}track/persiana-americana-{kind}-{tab_id}",
+                       raw={}, now="2026-10-01T00:00:00Z")
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    ug.tab(v(301, "guitar-pro"), meta={"fileExtension": ".gp5"})
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0)
+    assert pick_ids(conn, song, "chords") == [101] and pick_ids(conn, song, "guitar-pro", "power") == [301]
+    assert ug.requests == [slugged(101), slugged(301, "guitar-pro")]
+
+
+def test_an_artist_page_robots_txt_closes_is_never_asked_for(conn, tmp_path, monkeypatch):
+    # robots.txt leaves artist pages open today. Should it close them, a song is looked up there without a
+    # request, and checked with nothing found: never failed, never dirty.
+    www = "www.ultimate-guitar.com"
+    monkeypatch.setitem(tabarr.http._ROBOTS, www, [*tabarr.http._ROBOTS[www], ("/artist/", re.compile("/artist/"))])
+    song = banma(conn)
+    ug = FakeUG()
+    serve_banma(ug, [banma_tab(2001234, rating=4.7, votes=50)])
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, PASTED), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == []
+    assert get_song(conn, song.id).match_decision == "not_found"
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") == "2026-10-18T03:30:00Z"
