@@ -13,8 +13,8 @@ Ultimate Guitar's URL slugs, so the two sides meet in one key space:
 
 A song's identity key folds more than that, because it only has to meet other
 spellings of the same song, never UG's slugs: Traditional Chinese becomes
-Simplified, "y" goes the way of "and", number words become digits, and a
-leading Spanish article is dropped from the artist (:func:`identity_key`).
+Simplified, number words become digits, and an artist's "y" goes the way of
+"and", as does a leading Spanish article (:func:`identity_key`).
 """
 
 from __future__ import annotations
@@ -62,7 +62,8 @@ _DASH_SUFFIX = re.compile(
     r"|radio\s+(?:edit|version)|single\s+(?:edit|version)|album\s+version|edit"
     r"|demo(?:\s+version)?|bonus\s+track"
     r"|mono|stereo|(?:\d{4}\s+)?(?:stereo|mono)\s+(?:mix|version)|\d{4}\s+mix"
-    r"|recorded\s+(?:live\s+)?at\s.*|[^-–—]*\bsessions?|from\s.*\bsoundtrack\b.*|from\s+[\"“].*"
+    r"|recorded\s+(?:live\s+)?at\s.*|[^-–—]*\bsessions?"
+    r"|from\s.*\bsoundtrack\b.*|from\s+[\"“].*"
     r")\s*$",
     re.IGNORECASE,
 )
