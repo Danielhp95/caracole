@@ -16,7 +16,7 @@ from helpers.ug_pages import make_tab_page_html, version_dict
 
 from conftest import add_song
 from tabarr.config import ProviderPolicy, RankPolicy
-from tabarr.http import PoliteClient
+from tabarr.http import PoliteClient, ProviderBlocked
 from tabarr.library import song_dir
 from tabarr.lyrics import Lyrics
 from tabarr.overrides import Overrides
@@ -455,3 +455,65 @@ def test_budget_exhausted_mid_song_resumes(conn, tmp_path):
     done = get_song(conn, song.id)
     assert (done.status, done.ug_dirty) == ("found", False)
     assert "sheet 102" in read(tmp_path, song, "sheet.txt") and "tab 402" in read(tmp_path, song, "tab.txt")
+
+
+BROKEN = "<!DOCTYPE html>\n<html><head><title>Ultimate-Guitar.Com</title></head><body><div id=\"app\"></div></body></html>\n"
+
+
+def signos(conn, ug, *, added_at="2026-09-01T00:00:00Z"):
+    """A second accepted song, older than Persiana Americana, with one complete sheet (tab 901)."""
+    song = accepted(conn, "Soda Stereo", "Signos", "soda-stereo", "signos", added_at=added_at)
+    index(conn, (901, "soda-stereo", "signos", "chords"))
+    ug.tab(version_dict(901, song="Signos", artist="Soda Stereo", tab_url=slugged(901, song="signos")),
+           content=sheet("sheet 901", LINES))
+    return song
+
+
+@pytest.mark.parametrize("status,body", [(200, BROKEN), (500, "Internal Server Error")])
+def test_parse_error_is_not_a_miss(conn, tmp_path, status, body):
+    # A page whose js-store is gone (layout drift, a maintenance page) or a server error: provider errors.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.add(slugged(101), body, status=status)
+    other = signos(conn, ug)
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song, other])
+
+    assert stats == FetchStats(songs_done=1, songs_failed=1, budget_exhausted=False)
+    failed = get_song(conn, song.id)  # neither found nor not found: dirty, accepted, never checked
+    assert (failed.status, failed.ug_dirty, failed.ug_checked_at, failed.match_decision) == (
+        "wanted", True, None, "accept")
+    assert get_song(conn, other.id).status == "found"
+
+
+def test_block_is_reraised_and_leaves_the_song_dirty(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.add(slugged(101), "<html><body>Forbidden</body></html>", status=403)
+    other = signos(conn, ug)
+
+    with pytest.raises(ProviderBlocked):
+        fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song, other])
+
+    assert ug.requests == [slugged(101)]  # nothing more is asked of UG this run
+    assert (get_song(conn, song.id).ug_dirty, get_song(conn, song.id).match_decision) == (True, "accept")
+    assert get_song(conn, other.id).ug_dirty is True
+
+
+def test_broken_cached_page_is_fetched_again(conn, tmp_path):
+    # Every 200 is cached forever, so a broken body would otherwise fail the song on every run.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.add(slugged(101), BROKEN)
+    assert fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song]).songs_failed == 1
+
+    ug.requests.clear()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))  # UG serves the page properly again
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [get_song(conn, song.id)])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0)
+    assert ug.requests == [slugged(101)]
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")

@@ -23,14 +23,14 @@ from pathlib import Path
 
 from tabarr import coverage
 from tabarr.config import RankPolicy
-from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
+from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError, Response
 from tabarr.library import keep_file, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.overrides import Overrides
 from tabarr.rank import Candidate, rank_by_rating, rank_guitar, rank_sheets
 from tabarr.songs import Song, get_song, refresh_status, update_song
 from tabarr.ug.lookup import IndexTab, index_tab, song_tabs, tab_url_for
-from tabarr.ug.page import UGTabPage, UGVersion, parse_tab_page, strip_markup
+from tabarr.ug.page import PageParseError, UGTabPage, UGVersion, parse_tab_page, strip_markup
 from tabarr.versions import (
     VersionRow, get_version, mark_gone, set_coverage, set_picks, song_versions, upsert_version,
 )
@@ -146,22 +146,40 @@ def _mark_gone(run: _SongRun, tab_id: int, url: str, kind: str | None) -> None:
     mark_gone(run.conn, version_id)
 
 
-def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTabPage | None:
-    """A tab page, from this song's pages, the HTTP cache or UG; None when UG says it's gone.
+def _parsed(resp: Response, url: str) -> UGTabPage | None:
+    # UG's 404 page has no js-store, so the status is checked before parsing.
+    return None if resp.status == 404 else parse_tab_page(resp.content, url=url)
 
-    UG's 404 page has no js-store, so the status is checked before parsing.
+
+def _load(client: Client, url: str) -> UGTabPage | None:
+    """A tab page from the HTTP cache or UG; None when UG answers 404.
+
+    Every 200 is cached forever, so a cached body that no longer parses (a
+    truncated page, a maintenance page) is fetched once more instead of failing
+    the song on every run.
+    """
+    resp = client.get(url, accept=_PAGE_ACCEPT)
+    try:
+        return _parsed(resp, url)
+    except PageParseError:
+        if not resp.from_cache:
+            raise
+    return _parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False), url)
+
+
+def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTabPage | None:
+    """A tab page of this song, read once per run; None when UG says it's gone.
+
     ``kind`` (the index's type) lets a deleted tab that was never rated be
     remembered as gone.
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
-    resp = run.ctx.client.get(url, accept=_PAGE_ACCEPT)
-    if resp.status == 404:
-        _mark_gone(run, tab_id, url, kind)
-        run.pages[tab_id] = None
-        return None
-    page = parse_tab_page(resp.content, url=url)
+    page = _load(run.ctx.client, url)
     run.pages[tab_id] = page
+    if page is None:
+        _mark_gone(run, tab_id, url, kind)
+        return None
     _record_page(run, page)
     return page
 
