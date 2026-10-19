@@ -17,8 +17,10 @@ For each song, in order:
    always reviews. Here a Chinese title's pinyin must match exactly, hyphens
    aside: across every artist, short syllables fuzz-match unrelated titles.
 
-Decision: accept at ``accept`` or more with a lead of ``margin`` over the next
-different title; review from ``review``; otherwise not found.
+At every step, the UG songs you rejected for the song (``[reject]``, "none of
+these" in ``tabarr review``) are dropped, so they never come back; the others
+still can. Decision: accept at ``accept`` or more with a lead of ``margin`` over
+the next different title; review from ``review``; otherwise not found.
 
 ``match_all`` never replaces a match the fetch step made on a UG artist page
 (step ``artist_page``, amendment A6): the index can't see those bare-id tabs,
@@ -347,6 +349,11 @@ def _title_only(index: IndexView, title: _Forms, policy: MatchPolicy) -> list[_H
     return _ranked(hits)
 
 
+def _allowed(hits: Iterable[_Hit], rejected: frozenset[tuple[str, str]]) -> list[_Hit]:
+    """The hits that aren't UG songs you rejected for the song."""
+    return [h for h in hits if (h.cand.artist_key, h.cand.song_key) not in rejected]
+
+
 def _result(decision: str, hits: list[_Hit]) -> MatchResult:
     best = hits[0].cand
     return MatchResult(decision, best.step, best.score, best.artist_key, best.song_key,
@@ -378,10 +385,12 @@ def match_song(song: Song, index: IndexView, overrides: Overrides, policy: Match
     title = _forms(clean_title(song.title))
     if not title.keys:
         return MatchResult("not_found", None, None, None, None)
+    rejected = overrides.reject.get(ident, frozenset())
     own = _own_artists(song, index, overrides)
     hits: list[_Hit] = []
     for rank, (artist_key, via_alias) in enumerate(own):
-        hits += _title_hits(index, artist_key, title, rank, exact_step="alias" if via_alias else "exact")
+        step = "alias" if via_alias else "exact"
+        hits += _allowed(_title_hits(index, artist_key, title, rank, exact_step=step), rejected)
     ranked = _ranked(hits)
     exact = next((h for h in ranked if h.cand.step in ("exact", "alias")), None)
     if exact is not None:
@@ -391,14 +400,14 @@ def match_song(song: Song, index: IndexView, overrides: Overrides, policy: Match
     if decision != "accept":
         tried = {a for a, _ in own}
         for i, (artist_key, score) in enumerate(_nearest_artists(song, index, tried, policy.artist_gate)):
-            hits += _title_hits(index, artist_key, title, len(own) + i, exact_step="fuzzy_artist",
-                                fuzzy_step="fuzzy_artist", cap=score)
+            hits += _allowed(_title_hits(index, artist_key, title, len(own) + i, exact_step="fuzzy_artist",
+                                         fuzzy_step="fuzzy_artist", cap=score), rejected)
         ranked = _ranked(hits)
         decision = _decide(ranked, policy)
     if decision != "not_found":
         return _result(decision, ranked)
 
-    by_title = _title_only(index, title, policy)
+    by_title = _allowed(_title_only(index, title, policy), rejected)
     if by_title:
         return _result("review", by_title)
     return MatchResult("not_found", None, ranked[0].cand.score if ranked else None, None, None,
@@ -431,18 +440,20 @@ def _needs_fetch(song: Song, new: MatchResult) -> bool:
     return new.decision == "pinned" and _pins_of(song) != list(new.pinned)
 
 
-def _keeps_stored(song: Song, new: MatchResult, *, complete: bool) -> bool:
+def _keeps_stored(song: Song, new: MatchResult, rejected: frozenset[tuple[str, str]], *,
+                  complete: bool) -> bool:
     """Whether a song keeps its stored match instead of ``new``.
 
     Your overrides always win. Otherwise a match the fetch step made on a UG
-    artist page stays (A6). While the index isn't complete, so does what the
-    ladder found before, and a song it misses now keeps what it had (a song
-    never matched stays unmatched); only an override you took out still comes off.
+    artist page stays (A6), unless you rejected that UG song for it. While the
+    index isn't complete, so does what the ladder found before, and a song it
+    misses now keeps what it had (a song never matched stays unmatched); only an
+    override you took out still comes off.
     """
     if new.step in ("override", "pin"):
         return False
     if song.match_step == ARTIST_PAGE:
-        return True
+        return (song.match_artist_key, song.match_song_key) not in rejected
     if complete:
         return False
     return song.match_step in LADDER_STEPS or (song.match_step is None and new.decision == "not_found")
@@ -506,18 +517,18 @@ def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolic
     status ``ignored``; songs no longer ignored get their status back.
 
     A song matched on a UG artist page (A6) keeps that match unless an
-    override applies. While the index is empty or partial (``index_state``)
-    so does any song the ladder matched before, and a miss is never saved: a
-    song never matched stays unmatched (only an override you took out comes
-    off). Returns one change per song; a kept song's ``new`` is its stored
-    match (not found, for one never matched).
+    override applies or ``[reject]`` names it. While the index is empty or
+    partial (``index_state``) so does any song the ladder matched before, and a
+    miss is never saved: a song never matched stays unmatched (only an override
+    you took out comes off). Returns one change per song; a kept song's ``new``
+    is its stored match (not found, for one never matched).
     """
     index = IndexView(conn)
     complete = index_state(conn) == "complete"
     changes, kept = [], set()
     for song in list_songs(conn):
         new = match_song(song, index, overrides, policy)
-        if _keeps_stored(song, new, complete=complete):
+        if _keeps_stored(song, new, overrides.reject.get(song.key, frozenset()), complete=complete):
             new = _stored(song)
             kept.add(song.id)
         changes.append(MatchChange(song, song.match_decision, new))
