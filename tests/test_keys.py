@@ -9,6 +9,7 @@ import pytest
 
 from caracole.keys import (
     SongKey,
+    _chord,
     chords_in_sheet,
     estimate_key,
     key_in_text,
@@ -168,10 +169,48 @@ def test_estimate_key_from_well_known_progressions(progression, key):
         (["Em", "Am", "B7#9", "Em"], "E minor"),
         (["D", "Dsus2", "G/D", "A7sus4", "D"], "D"),
         (["AmMaj7", "Am", "Dm", "E7", "Am"], "A minor"),
+        (["Cmaj9", "Am7", "Dm9", "G13", "Cmaj9"], "C"),
+        (["C7M", "Am7", "Dm7", "G7", "C7M"], "C"),  # LaCuerda's Cmaj7
     ],
 )
 def test_estimate_key_reads_extended_slash_and_suspended_chords(chords, key):
+    assert all(_chord(c) is not None for c in chords)
     assert estimate_key(chords) == key
+
+
+@pytest.mark.parametrize(
+    ("name", "triad", "notes"),
+    [
+        ("C", "major", {0, 4, 7}),
+        ("C7", "major", {0, 4, 7, 10}),
+        ("C9", "major", {0, 4, 7, 10}),
+        ("Cmaj7", "major", {0, 4, 7, 11}),
+        ("Cmaj9", "major", {0, 4, 7, 11}),
+        ("Cmaj13", "major", {0, 4, 7, 11}),
+        ("CMaj7", "major", {0, 4, 7, 11}),
+        ("CM9", "major", {0, 4, 7, 11}),
+        ("CΔ", "major", {0, 4, 7, 11}),
+        ("C7M", "major", {0, 4, 7, 11}),  # Spanish and Portuguese sheets' Cmaj7
+        ("C7M(9)", "major", {0, 4, 7, 11}),
+        ("Cmaj", "major", {0, 4, 7}),
+        ("Am7", "minor", {9, 0, 4, 7}),
+        ("AmMaj7", "minor", {9, 0, 4, 8}),  # BTC's minmaj7
+        ("Am(maj7)", "minor", {9, 0, 4, 8}),
+        ("Am7M", "minor", {9, 0, 4, 8}),
+        ("Asus4", "open", {9, 2, 4}),
+        ("A7sus4", "open", {9, 2, 4, 7}),
+        ("A9sus4", "open", {9, 2, 4, 7}),
+        ("A7sus2", "open", {9, 11, 4, 7}),
+        ("Cº", None, {0, 3, 6}),
+        ("Cº7", None, {0, 3, 6, 9}),
+        ("Cdim7", None, {0, 3, 6, 9}),
+        ("Cadd9", "major", {0, 4, 7}),
+    ],
+)
+def test_chord_names_give_their_triad_and_notes(name, triad, notes):
+    root, _, got_triad, tones = _chord(name)
+    assert got_triad == triad
+    assert {(root + interval) % 12 for interval, _ in tones} == notes
 
 
 def test_the_estimate_spells_the_tonic_as_the_chords_do():

@@ -82,9 +82,12 @@ _CHORD_TAG = re.compile(r"\[ch\](.*?)\[/ch\]")
 
 # A chord name: a root, a quality and an optional bass ("F#m7b5", "C/G", "Fadd9").
 _CHORD = re.compile(r"\s*([A-G])([#♯b♭]?)([^/\s]*)(?:/\S*)?\s*")
-_QUALITY = re.compile(r"(?:maj|min|dim|aug|sus|add|alt|m|M|°|o|ø|Δ|\+|-|\d|[#b♯♭()^,.])*")
+_QUALITY = re.compile(r"(?:maj|Maj|min|dim|aug|sus|add|alt|m|M|°|º|o|ø|Δ|\+|-|\d|[#b♯♭()^,.])*")
 _ADDED = re.compile(r"add\d+")
 _EXTENDED = re.compile(r"7|9|11|13")
+# A major seventh: "maj7", "M9", "Maj13", "Δ", and Spanish and Portuguese sheets' "7M".
+_MAJOR_SEVENTH = re.compile(r"(?:maj|Maj|M|Δ)(?:7|9|11|13)|7M|Δ")
+_DIMINISHED = ("dim", "°", "º", "o")
 
 # Krumhansl and Kessler's probe-tone ratings, from the tonic up by semitones.
 _PROFILES = {
@@ -333,6 +336,8 @@ def _chord(name: str) -> tuple[int, str, str | None, list[tuple[int, float]]] | 
 
     The triad is "major", "minor", "open" (a power chord or a sus chord, with no
     third) or None (diminished, augmented). A bass note under a slash is left out.
+    A "sus" anywhere replaces the third ("A7sus4"); "7M" is a major seventh, as Spanish and
+    Portuguese sheets write Cmaj7.
     """
     m = _CHORD.fullmatch(normalize_chord(name.strip()))
     if not m or not _QUALITY.fullmatch(m.group(3)):
@@ -343,18 +348,18 @@ def _chord(name: str) -> tuple[int, str, str | None, list[tuple[int, float]]] | 
     triad: str | None
     if q.startswith(("m7b5", "m7-5", "ø")):
         triad, third, fifth = None, 3, 6
+    elif "sus2" in q:
+        triad, third, fifth = "open", 2, 7
+    elif "sus" in q:
+        triad, third, fifth = "open", 5, 7
     elif quality.startswith(("maj", "M", "Δ")):
         triad, third, fifth = "major", 4, 7
     elif q.startswith(("min", "m", "-")):
         triad, third, fifth = "minor", 3, 7
-    elif q.startswith(("dim", "°", "o")):
+    elif q.startswith(_DIMINISHED):
         triad, third, fifth = None, 3, 6
     elif q.startswith(("aug", "+")):
         triad, third, fifth = None, 4, 8
-    elif q.startswith("sus2"):
-        triad, third, fifth = "open", 2, 7
-    elif q.startswith("sus"):
-        triad, third, fifth = "open", 5, 7
     elif q.startswith("5"):
         triad, third, fifth = "open", None, 7
     else:
@@ -363,9 +368,9 @@ def _chord(name: str) -> tuple[int, str, str | None, list[tuple[int, float]]] | 
     if third is not None:
         tones.append((third, 1.0))
     extended = _ADDED.sub("", quality)
-    if "maj7" in extended.lower() or "M7" in extended or "Δ" in extended:
+    if _MAJOR_SEVENTH.search(extended):
         tones.append((11, 0.5))
-    elif q.startswith(("dim", "°", "o")) and "7" in extended:
+    elif q.startswith(_DIMINISHED) and "7" in extended:
         tones.append((9, 0.5))
     elif _EXTENDED.search(extended):
         tones.append((10, 0.5))
