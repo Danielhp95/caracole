@@ -197,6 +197,7 @@ def _todo(ctx: StepContext) -> str:
     from tabarr.todo import build_todo, write_todo
 
     ctx.report.requests = _requests(ctx.services)
+    _record_ok(ctx.conn, ctx.report, ctx.now)  # before the page, so its provider health shows this run
     kv_set_json(ctx.conn, "run:last", _report_json(ctx.report))
     write_todo(ctx.cfg.library_dir, build_todo(ctx.conn, ctx.cfg, ctx.overrides, ctx.now))
     write_library_page(ctx.cfg.library_dir, build_library_page(ctx.conn, ctx.cfg, ctx.overrides, ctx.now))
@@ -242,6 +243,13 @@ def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Service
 
 def _requests(services: Services) -> dict[str, int]:
     return {p: int(getattr(c, "requests_made", 0)) for p, c in services.clients.items()}
+
+
+def _record_ok(conn: sqlite3.Connection, report: RunReport, now: datetime) -> None:
+    """A provider used this run without a block had a good run: clear its cooldown, note the time."""
+    for p, n in report.requests.items():
+        if n and p not in report.blocked:
+            record_ok(conn, p, now)
 
 
 def _report_json(report: RunReport) -> dict[str, Any]:
@@ -307,9 +315,7 @@ def run_pipeline(
             report.steps[step.name] = f"failed: {type(e).__name__}: {e}"
 
     report.requests = _requests(services)
-    for p, n in report.requests.items():
-        if n and p not in report.blocked:
-            record_ok(conn, p, now)
+    _record_ok(conn, report, now)
     report.finished = run_id if clock_given else _iso(datetime.now(UTC))
     kv_set_json(conn, "run:last", _report_json(report))
     title = "tabarr run" if report.ok else "tabarr run failed"

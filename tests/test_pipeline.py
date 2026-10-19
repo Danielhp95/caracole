@@ -265,3 +265,26 @@ def test_fetch_summary_counts_settled_sheets(conn, cfg, monkeypatch):
     ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
                       report=RunReport(run_id="r", started="r"))
     assert _fetch(ctx) == "2 sheets settled, 1 song done, 0 failed (budget spent)"
+
+
+# --- provider health on the to-do page ------------------------------------------------------
+
+
+def todo_page(cfg):
+    return (cfg.library_dir / "_todo.md").read_text(encoding="utf-8")
+
+
+def todo_step():
+    from tabarr.pipeline import default_steps
+
+    return [s for s in default_steps() if s.name == "todo"]
+
+
+def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
+    # The page is written before the run ends; a first run must not say "never" after 75 good requests.
+    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5), steps=todo_step(),
+                 now=NOW)
+    page = todo_page(cfg)
+    assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
+    assert "| lrclib | OK | 2026-10-18 03:30 UTC |  | 10 |" in page
+    assert "never" not in page.split("## Provider health", 1)[1]
