@@ -165,8 +165,14 @@ def test_after_a_block_no_more_requests_this_run(tmp_path):
 
 TABS = "https://tabs.ultimate-guitar.com"
 WWW = "https://www.ultimate-guitar.com"
+GTP = "https://gtptabs.com"
 # Each closed by a Disallow line of its host's robots.txt (User-agent: *), as captured in the spike.
 ROBOTS_CLOSED = [
+    GTP + "/storage/archive/blur.zip",  # /storage/: an artist page's "Download all" link
+    GTP + "/tabs/upload.html?artistId=1593",  # /tabs/upload.html: its "Add a tab" link
+    GTP + "/ru/tabs/2/blur/country-house.html",  # /ru/: half of every sitemap
+    GTP + "/search/go.html?q=blur",  # /search/: the site's search form
+    "http://gtptabs.com/advertisement.html",  # /advertisement.html, as sitemap 1 lists it
     TABS + "/tab/print?id=1",  # /tab/print?
     TABS + "/tab/download?id=1",  # /tab/download
     TABS + "/tab/download-kids-worship/shine-your-light-chords-4818770",  # /tab/download, a prefix (real index row)
@@ -184,6 +190,9 @@ READ_BY_CARACOLE = [
     WWW + "/sitemap_last.xml",
     "https://lrclib.net/api/search?track_name=%E6%96%91%E9%A9%AC%E6%96%91%E9%A9%AC&artist_name=x",
     "https://acordes.lacuerda.net/soda_stereo/",
+    GTP + "/sitemapGoogle.xml",
+    GTP + "/tabs/2/blur.html",
+    GTP + "/tabs/download/58155.html",
 ]
 
 
@@ -207,6 +216,27 @@ def test_robots_disallows_names_the_rule_for_other_modules():
 
     assert robots_disallows(TABS + "/tab/track/ave-fenix-guitar-pro-1149792") == "/tab/track/"
     assert [u for u in READ_BY_CARACOLE if robots_disallows(u)] == []
+
+
+def test_gtptabs_rules_are_the_user_agent_star_group_of_its_robots_txt():
+    # tests/fixtures/gtptabs/robots.txt is the live file of 19 October 2026. Its Yandex group
+    # leaves /ru/ open, so the group read must be the one for every other crawler.
+    from pathlib import Path
+
+    from caracole.http import ROBOTS_DISALLOW
+
+    text = (Path(__file__).parent / "fixtures" / "gtptabs" / "robots.txt").read_text(encoding="utf-8")
+    groups: dict[str, list[str]] = {}
+    agent = None
+    for line in text.splitlines():
+        field, _, value = line.partition(":")
+        if field.strip().lower() == "user-agent":
+            agent = value.strip()
+            groups[agent] = []
+        elif field.strip().lower() == "disallow" and agent is not None:
+            groups[agent].append(value.strip())
+    assert "/ru/" not in groups["Yandex"]
+    assert ROBOTS_DISALLOW["gtptabs.com"] == tuple(groups["*"])
 
 
 def test_robots_refusals_are_not_provider_failures(tmp_path):

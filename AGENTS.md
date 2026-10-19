@@ -146,7 +146,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     the k-th block in a row (so the next nightly run is always skipped), and nothing retries or works around it (no proxies).
   - No URL robots.txt closes is asked for, or followed to (`http.ROBOTS_DISALLOW`,
     `robots_disallows`): not UG's `/search.php` (matching is local, against the sitemap
-    index), `/tab/download`, `/tab/print?` or `/download/public/`.
+    index), `/tab/download`, `/tab/print?` or `/download/public/`, nor gtptabs.com's
+    `/ru/` (half of its sitemaps), `/search/` or `/storage/` (an artist's "Download all"
+    archive). A host's rules are the `User-agent: *` group of its live robots.txt
+    (tests/fixtures/gtptabs/robots.txt for gtptabs.com).
   - Every accepted 200 and 404 is cached forever, in `cache_dir/http/<provider>/`.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
   that won't parse (`PageParseError`) never makes a song not found or its lyrics missing:

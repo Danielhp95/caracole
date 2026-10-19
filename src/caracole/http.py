@@ -156,9 +156,15 @@ def _header(headers: Mapping[str, str], name: str) -> str | None:
 
 
 # The Disallow lines of the "User-agent: *" group of each host's robots.txt, as fetched
-# on 2026-10-18 (docs/spike-2026-10-18.md). LaCuerda's robots.txt is empty and LRCLIB is
-# an API, so their hosts have none.
+# on 2026-10-18 (docs/spike-2026-10-18.md), gtptabs.com's on 2026-10-19
+# (tests/fixtures/gtptabs/robots.txt). LaCuerda's robots.txt is empty and LRCLIB is an
+# API, so their hosts have none.
 ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
+    # /storage/ holds each artist's "Download all" archive; /ru/ is half of every sitemap.
+    "gtptabs.com": (
+        "/ru/", "/profile/", "/search/", "/storage/", "/index.php", "/tabs/upload.html",
+        "/advertisement.html", "/message/",
+    ),
     "www.ultimate-guitar.com": (
         "/search.php", "/forum/showthread.php?p=", "/forum/showpost.php", "/guitar/", "/tabmanager/",
         "/follow_me.php", "/goto.php", "/show.php", "/show", "/analytics/tracker/", "/updates/?filter=",
