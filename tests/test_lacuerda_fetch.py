@@ -767,6 +767,15 @@ def test_an_error_does_not_end_the_pass(conn, tmp_path):
     assert run(site, conn, tmp_path) == LaCuerdaStats(tried=2, kept=1, errors=1)
 
 
+def test_the_pass_names_each_song_an_error_left_with_its_error(conn, tmp_path):
+    # For the run's summary, which says why in words, and counts the songs of each cause.
+    site = FakeLaCuerda()
+    site.pages[DML_3] = (500, "Internal Server Error")
+    song = spanish_song(conn)
+    [(failed, error)] = run(site, conn, tmp_path).failures
+    assert (failed.id, error.provider, error.status) == (song.id, "lacuerda", 500)
+
+
 def test_a_block_propagates_and_marks_nothing(conn, tmp_path):
     site = FakeLaCuerda({SODA: (403, "Forbidden")})
     song = spanish_song(conn)
@@ -794,8 +803,11 @@ def test_three_errors_in_a_row_end_the_pass(conn, tmp_path):
         spanish_song(conn, name, "Canción de Prueba", added_at=f"2026-10-0{i + 1}T00:00:00Z")
         for i, name in enumerate(names)
     ]
-    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=3, errors=3)
+    stats = run(site, conn, tmp_path)
+    assert stats == LaCuerdaStats(tried=3, errors=3)
     assert len(site.requests) == 3
+    # The two songs LaCuerda wasn't asked about are named too, for the run's summary.
+    assert [type(e).__name__ for _, e in stats.failures] == ["ProviderError"] * 3 + ["ProviderUnavailable"] * 2
     assert {get_song(conn, s.id).lacuerda_checked_at for s in songs} == {None}
 
 

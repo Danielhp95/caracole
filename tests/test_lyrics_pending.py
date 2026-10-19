@@ -248,6 +248,28 @@ def test_three_errors_in_a_row_end_the_pass(conn, tmp_path):
     assert {get_song(conn, s.id).lyrics_status for s in songs} == {"pending"}
 
 
+def test_the_pass_names_each_song_an_error_left_with_its_error(conn, tmp_path):
+    # For the run's summary, which says why in words, and counts the songs of each cause.
+    lrclib = FakeLrclib([load("get_hit.json")], broken={"Artista Roto": 500})
+    broken = add_song(conn, "Artista Roto", "Canción Rota", added_at="2026-10-02T00:00:00Z")
+    add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-01T00:00:00Z")
+    [(song, error)] = run(lrclib, conn, tmp_path).failures
+    assert (song.id, error.provider, error.status) == (broken.id, "lrclib", 500)
+
+
+def test_the_songs_left_once_lrclib_is_given_up_on_are_named_too(conn, tmp_path):
+    names = ["Uno", "Dos", "Tres", "Cuatro", "Cinco"]
+    lrclib = FakeLrclib(broken={name: 500 for name in names})
+    for i, name in enumerate(names):
+        add_song(conn, name, "Canción", added_at=f"2026-10-0{i + 1}T00:00:00Z")
+    stats = run(lrclib, conn, tmp_path)
+    assert stats == LyricsStats(errors=3)  # the songs never asked about are no errors
+    assert [(song.artist, type(error).__name__) for song, error in stats.failures] == [
+        ("Cinco", "ProviderError"), ("Cuatro", "ProviderError"), ("Tres", "ProviderError"),
+        ("Dos", "ProviderUnavailable"), ("Uno", "ProviderUnavailable"),
+    ]
+
+
 # --- which songs ----------------------------------------------------------------
 
 

@@ -36,13 +36,18 @@ an earlier one failed:
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 
+Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
+left, with the error; what needs the user), which report.py turns into the run's summary on
+stdout and ntfy: a new step plugs in by returning one. The log goes to stderr, set up once
+by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities, redacted secrets).
+
 Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`),
 http.py (`PoliteClient`, robots rules), health.py (cooldowns, `events`), normalize.py (keys,
 pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy).
 
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
-  `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `write_pages`, `fail`.
+  `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `write_pages`, `fail`, `warn`.
   The logic of `caracole review` and `caracole search` is in review.py and search.py.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and

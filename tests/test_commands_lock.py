@@ -360,4 +360,4 @@ def test_the_nightly_run_waits_for_another_caracole_process(tmp_path, config):
     out, err = run.communicate(timeout=60)
     assert run.returncode == 0, err[-3000:]
     assert WAITING in err
-    assert todo.is_file() and "todo: ok" in out
+    assert todo.is_file() and f"to-do page needs you: {todo}" in out  # the summary names it

@@ -15,7 +15,6 @@ inside the commands.
 
 from __future__ import annotations
 
-import logging
 import sqlite3
 from collections.abc import Callable
 from contextlib import closing
@@ -135,7 +134,6 @@ def _provider_pass[T](
     caracole it waited for left. After a block, or a pass that did something
     (``ran``), it rewrites _todo.md and index.html.
     """
-    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     name = _NAMES[provider]
     with exclusive(cfg, _COMMANDS[provider]), closing(open_db(cfg)) as conn:
         now = utcnow()

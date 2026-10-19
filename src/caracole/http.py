@@ -19,6 +19,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import logging
 import os
 import random
 import re
@@ -26,11 +27,15 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Callable, Collection, Mapping, Protocol, runtime_checkable
 
 import httpx
 
 from caracole.config import ProviderPolicy
+from caracole.logs import request_line
+
+log = logging.getLogger(__name__)  # a line per request, at information (-v)
 
 
 class ProviderError(Exception):
@@ -227,6 +232,12 @@ def _redirect_problem(origin: str, target: str, hops: int) -> str | None:
     return None
 
 
+def _status_line(status: int) -> str:
+    """"503 Service Unavailable"."""
+    reason = httpx.codes.get_reason_phrase(status)
+    return f"{status} {reason}" if reason else str(status)
+
+
 def _site(url: str) -> str:
     """A URL's site: the last two labels of its host (each provider is on a plain .com or .net domain)."""
     return ".".join(httpx.URL(url).host.split(".")[-2:])
@@ -321,9 +332,10 @@ class PoliteClient:
         if cached is not None and cached.status not in accept:
             cached = None  # an answer the caller rejects is no answer: ask again
         stale = cached is not None and max_age is not None and self._older_than(cached, max_age)
-        if cache and cached is not None and not conditional and not stale:
-            return cached
-        if stale and self.requests_made >= self.policy.budget:
+        if (cache and cached is not None and not conditional and not stale) or (
+            stale and self.requests_made >= self.policy.budget
+        ):
+            self._log_request("GET", full, _status_line(cached.status), cached=True)
             return cached
 
         if rule is not None:  # nothing is sent, so the error breaker doesn't count it either
@@ -415,11 +427,15 @@ class PoliteClient:
         self._pause()
         self.requests_made += 1
         self._last_request = self._clock()
+        sent = perf_counter()
         try:
             resp = self._http.send(request)
         except httpx.HTTPError as e:
+            self._log_request(request.method, str(request.url), type(e).__name__, seconds=perf_counter() - sent)
             self._fail(url, None, f"{type(e).__name__}: {e}")
             raise AssertionError("unreachable")  # pragma: no cover
+        self._log_request(request.method, str(request.url), _status_line(resp.status_code),
+                          seconds=perf_counter() - sent)
 
         status, body = resp.status_code, resp.content
         if status in (403, 429) or is_challenge(status, resp.headers, body):
@@ -443,6 +459,12 @@ class PoliteClient:
             self._unavailable = True
         self._event(url, status, "error", message)
         raise ProviderError(self.provider, url, status, message)
+
+    def _log_request(self, method: str, url: str, answer: str, *, cached: bool = False,
+                     seconds: float | None = None) -> None:
+        if log.isEnabledFor(logging.INFO):
+            log.info("%s", request_line(self.provider, method, url, answer, cached=cached, seconds=seconds,
+                                        used=self.requests_made, budget=self.policy.budget))
 
     def _event(self, url: str, status: int | None, decision: str, message: str | None) -> None:
         if self._on_event is not None:

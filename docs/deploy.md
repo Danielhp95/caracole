@@ -525,6 +525,33 @@ use another font, set `settings.cjk_font` to a single `.ttf` that passes the
 same check, or to a CFF-based `.otf` (embedded whole, so the PDFs are larger),
 or build the package with `caracole.override { cjkFont = "…"; }`.
 
+## Logs
+
+The units write to the journal: the run's summary from stdout, the log from
+stderr. caracole starts each line of both with its syslog priority, which
+journald files the line under, and adds no timestamp, as the journal keeps
+its own:
+
+| Priority | Lines |
+|---|---|
+| 3, `err` | an error a command stops on; a bug, its traceback included, and its line in the summary |
+| 4, `warning` | a problem: a site that failed, a file caracole couldn't read; and the summary's lines that need you or say what went wrong |
+| 6, `info` | the rest of the summary: what each step did, the requests, the time; with `-v`, caracole's information |
+| 7, `debug` | with `-vv`: debugging, and the libraries' own logs |
+
+```sh
+journalctl -u caracole -p warning     # only what needs you or went wrong
+journalctl -u caracole -b -o cat      # the lines as caracole wrote them, the summary among them
+sudo caracole-admin -v run            # a run now, a line per request, on the terminal
+```
+
+The run exits 0 after a block, a cooldown or a spent budget, and 1 for a bug
+(the unit fails, and its `OnFailure` sends the ntfy alert); see
+[usage.md](usage.md#caracole-run) for every status.
+
+No secret reaches the journal, at any priority (see
+[usage.md](usage.md#what-caracole-prints)).
+
 ## When something is wrong
 
 - **ntfy says a unit failed:** `journalctl -u caracole.service -e` (or
@@ -537,7 +564,7 @@ or build the package with `caracole.override { cjkFont = "…"; }`.
   means an editor saved it in another encoding: save it as UTF-8. Fix the
   file, then `sudo systemctl start caracole.service`, or wait for the next
   night.
-- **ntfy says a site blocked caracole** ("caracole: ug blocked"): nothing to do,
+- **ntfy says a site blocked caracole** ("caracole: Ultimate Guitar blocked"): nothing to do,
   and nothing to work around. The message says until when caracole leaves the
   site alone, and the to-do page's Provider health shows it too. Nothing was
   marked not found: the songs wait for a run after that.

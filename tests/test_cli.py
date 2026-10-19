@@ -1,9 +1,10 @@
 import sys
 import types
 
+import pytest
 from typer.testing import CliRunner
 
-from caracole import cli
+from caracole import cli, logs
 
 
 def test_version_option():
@@ -51,3 +52,134 @@ def test_config_option_is_stored_on_context(tmp_path):
         del sys.modules["caracole.commands.zz_ctx"]
     assert result.exit_code == 0, result.output
     assert seen["path"] == cfg
+
+
+# --- the log, set up once for every command by the root callback ------------------------------
+
+SECRET, TOKEN = "spotify-client-s3cret", "tk_ntfy-s3cret-token"
+
+
+def command(name: str, body) -> list[str]:
+    """A command module named ``caracole.commands.zz_<name>`` whose command runs ``body(ctx)``."""
+    import typer
+
+    module = types.ModuleType(f"caracole.commands.zz_{name}")
+
+    def register(app: typer.Typer) -> None:
+        @app.command(f"zz-{name}")
+        def run(ctx: typer.Context) -> None:
+            body(ctx)
+
+    module.register = register
+    sys.modules[module.__name__] = module
+    return [module.__name__]
+
+
+def chatter(ctx) -> None:
+    """What a command and the libraries it uses may log, at each level."""
+    import logging
+
+    import typer
+
+    for name in ("caracole.zz", "httpx", "httpcore.connection", "spotipy.client"):
+        logging.getLogger(name).debug("%s debug", name)
+        logging.getLogger(name).info("%s info", name)
+        logging.getLogger(name).warning("%s warning", name)
+    typer.echo("the report")
+
+
+def invoke(*args: str, body=chatter):
+    modules = command("chatter", body)
+    try:
+        app = cli.build_app(extra_modules=modules)
+        return CliRunner().invoke(app, [*args, "zz-chatter"])
+    finally:
+        del sys.modules[modules[0]]
+
+
+def test_every_command_logs_problems_only_by_default_on_stderr_alone():
+    result = invoke()
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "the report\n"  # the log never reaches stdout
+    assert result.stderr.splitlines() == [
+        "warning: caracole.zz warning", "warning: httpx warning", "warning: httpcore.connection warning",
+        "warning: spotipy.client warning",
+    ]
+
+
+def test_verbose_adds_caracoles_own_information_and_very_verbose_everything():
+    verbose = invoke("-v").stderr.splitlines()
+    assert "caracole.zz info" in verbose
+    assert not [line for line in verbose if "debug" in line or line in ("httpx info", "spotipy.client info")]
+    very = invoke("-vv").stderr.splitlines()
+    assert "debug: caracole.zz: caracole.zz debug" in very
+    assert "httpx: httpx info" in very and "debug: httpcore.connection: httpcore.connection debug" in very
+
+
+def test_quiet_keeps_the_problems_and_tells_the_command():
+    seen = {}
+
+    def body(ctx):
+        seen["verbosity"] = ctx.obj.verbosity
+        chatter(ctx)
+
+    result = invoke("-q", body=body)
+    assert seen["verbosity"] == logs.QUIET
+    assert "warning: caracole.zz warning" in result.stderr.splitlines() and "info" not in result.stderr
+    assert invoke("--quiet", body=body).exit_code == 0 and invoke("--verbose", "--verbose").exit_code == 0
+
+
+def test_the_logging_a_command_found_is_back_once_it_ends():
+    import logging
+
+    root = logging.getLogger()
+    before = (list(root.handlers), root.level, logging.getLogger("httpx").level)
+    invoke("-vv")
+    assert (list(root.handlers), root.level, logging.getLogger("httpx").level) == before
+
+
+def test_the_secrets_the_config_read_never_reach_the_log(tmp_path, monkeypatch):
+    # Even at -vv, and even when a library would print them.
+    import logging
+
+    from caracole.commands._common import load_cfg
+
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    monkeypatch.setenv("CARACOLE_SPOTIFY_CLIENT_SECRET", SECRET)
+    monkeypatch.setenv("CARACOLE_NTFY_TOKEN", TOKEN)
+    path = tmp_path / "caracole.toml"
+    path.write_text(f'data_dir = "{tmp_path}"\n[spotify]\nclient_id = "abc"\n[ntfy]\nurl = "https://ntfy.example/t"\n',
+                    encoding="utf-8")
+
+    def body(ctx):
+        cfg = load_cfg(ctx)
+        assert (cfg.spotify.client_secret, cfg.ntfy.token) == (SECRET, TOKEN)
+        for name in ("caracole.zz", "spotipy.oauth2"):
+            logging.getLogger(name).debug("client_secret %s, ntfy %s", SECRET, TOKEN)
+            logging.getLogger(name).error("client_secret %s, ntfy %s", SECRET, TOKEN)
+
+    result = invoke("--config", str(path), "-vv", body=body)
+    assert result.exit_code == 0, result.output
+    assert SECRET not in result.stderr and TOKEN not in result.stderr
+    assert result.stderr.count("[redacted]") == 8
+
+
+def test_a_bug_exits_1_with_one_line_that_says_so_then_its_traceback(monkeypatch, capsys):
+    def body(ctx):
+        raise KeyError("boom")
+
+    modules = command("boom", body)
+    try:
+        monkeypatch.setattr(cli, "app", cli.build_app(extra_modules=modules))
+        monkeypatch.setattr(sys, "argv", ["caracole", "zz-boom"])
+        with pytest.raises(SystemExit) as exit_:
+            cli.main()
+    finally:
+        del sys.modules[modules[0]]
+    assert exit_.value.code == 1
+    out, err = capsys.readouterr()
+    first, second, *rest = err.splitlines()
+    assert out == ""
+    assert first == ("error: caracole stopped on an unexpected error: KeyError: 'boom'. That's a bug in caracole; "
+                     "its traceback follows.")
+    assert second == "Traceback (most recent call last):" and rest[-1] == "KeyError: 'boom'"

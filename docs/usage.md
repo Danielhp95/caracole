@@ -11,6 +11,7 @@ up as a nightly service on a NixOS host, with secrets, Syncthing and backups.
 `caracole --help` and `caracole COMMAND --help` list every command and option.
 
 - [Configure](#configure)
+- [What caracole prints](#what-caracole-prints)
 - [Say what you want to learn](#say-what-you-want-to-learn)
 - [The first run](#the-first-run)
 - [One step at a time](#one-step-at-a-time)
@@ -130,6 +131,30 @@ else the file `client_secret_file` names, else
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
 files it ships, so you only set these to use other files.
+
+## What caracole prints
+
+Every command writes its report, what it did and what needs you, on stdout,
+and its log, the diagnostics, on stderr, so `caracole run > night.txt` keeps
+the report alone. Like `--config`, the options that set how much the log
+says come before the command (`caracole -v run`):
+
+| Option | The log on stderr |
+|---|---|
+| none | the problems: warnings and errors |
+| `-q`, `--quiet` | the problems too; `caracole run` also cuts its summary down to what needs you and what went wrong |
+| `-v`, `--verbose` | caracole's own information too, such as a line per request: `LRCLIB GET https://lrclib.net/api/get?… → 503 Service Unavailable in 0.21 s (1 of 200 requests)`, or `→ 200 OK from the cache` for an answer it sent no request for |
+| `-vv` | debugging lines too, each with the name of its logger, and the logs of the libraries caracole uses (httpx, httpcore, urllib3, spotipy, and numba or torch under auto-chords), which otherwise show only their warnings and errors |
+
+A warning starts with `warning:` and an error with `error:`, coloured on a
+terminal unless `$NO_COLOR` is set; nothing is coloured when the output isn't
+a terminal. Under systemd, each line starts with its priority for the journal
+instead (see [deploy.md](deploy.md#logs)). No secret reaches the log, at any
+level: not the Spotify client secret, the ntfy token, an Authorization header
+or an OAuth token.
+
+An unexpected error, a bug in caracole, ends the command with exit status 1:
+one line that says so, then its traceback, on stderr.
 
 ## Say what you want to learn
 
@@ -455,11 +480,41 @@ are never offered again; other candidates still can be.
 8. **render**: write ChordPro files and PDFs.
 9. **todo**: rewrite `_todo.md` and `index.html`.
 
-It prints one line per step and the requests made, and sends that summary to
-ntfy. Every step runs even when an earlier one failed, so the to-do page is
-always rewritten. Until the index is built, the index and match steps are
-skipped; after a build that stopped part-way, the match step is skipped until
-the index step's refresh has read the rest.
+Every step runs even when an earlier one failed, so the to-do page is always
+rewritten. Until the index is built, the index and match steps are skipped;
+after a build that stopped part-way, the match step is skipped until the index
+step's refresh has read the rest.
+
+The run ends with a short summary, and sends the same words to ntfy. On a first
+night, with one song in wanted.txt, the index not built yet and LRCLIB
+overloaded, it reads:
+
+    First, build the index once: caracole index build (about 10 minutes).
+    Until then, no song is matched or looked for on Ultimate Guitar.
+
+    Songs: 1 in wanted.txt, 1 new.
+
+    1 thing on your to-do page needs you: /home/you/Tabs/_todo.md
+    LRCLIB didn't answer (HTTP 503), so the lyrics of 1 song will be tried again on the next run.
+    Requests: Ultimate Guitar 0 of 60, LRCLIB 2 of 200, LaCuerda 0 of 30.
+    Took 3 s.
+
+- **First** comes the one thing that unblocks the rest, when there is one, said
+  once however many steps wait for it: build or finish the index, fix
+  overrides.toml or wanted.txt, authorize Spotify again.
+- **Then a line for each step that did something**, its counts without the
+  zeros ("Lyrics: 3 found, 1 missing."). A step with nothing to do has none.
+- **Last**: how many things on the to-do page need you, and where it is; the
+  problems, a site at a time, with its cooldown and until when, and the songs
+  one cause left for the next run counted on one line; the requests against
+  each site's budget; and how long the run took.
+
+A block's ntfy message is that block's line of the summary. The summary is
+all `caracole run` prints on stdout; on a terminal, what needs you and what
+went wrong are coloured. Its log, on stderr, shows only the problems the
+summary doesn't already say: nothing, that night above. `caracole -v run`
+adds a line per step and per request there, and `caracole -q run` prints only
+the lines that need you or went wrong.
 
 **The budget.** A run sends Ultimate Guitar at most 60 requests, the index
 refresh included, 10–20 seconds apart and one at a time. It settles the sheet
@@ -492,11 +547,18 @@ redirect to one: UG's search, download and print pages, and a few tab pages
 no candidate, and neither is a link in UG's data that isn't a valid address:
 the song is filled from its other versions.
 
-The run exits 1 for an unexpected error (a bug), after all the steps have
-run, so that systemd's `OnFailure` can tell you. Blocks and a spent budget
-exit 0. A broken overrides.toml stops the run before its first step (exit 1,
-with an ntfy message), because every step reads it. The to-do page is still
-rewritten, leading with the error, and index.html is left as it was.
+**Exit status.**
+
+| Status | When |
+|---|---|
+| 0 | the run did what it could: a block, a cooldown, a spent budget or a site's errors included, as the songs wait for the next run |
+| 1 | a bug, after all the steps have run, so that systemd's `OnFailure` can tell you: the summary says which step failed, and the log has its traceback behind a one-line summary; or an overrides.toml caracole can't read; or a database it can't open |
+| 2 | a caracole.toml it can't read, or a database a newer caracole migrated |
+
+A broken overrides.toml stops the run before its first step (with an ntfy
+message, which is the summary leading with the error), because every step
+reads it. The to-do page is still rewritten, leading with the error, and
+index.html is left as it was.
 
 ## One step at a time
 
@@ -902,7 +964,7 @@ already, as the to-do page's lines say. An unknown table, a key other than
 `songs` in `[ignore]` or `tab_ids` in `[block]`, or a malformed entry is an
 error that names the table and the entry:
 
-    overrides: /home/you/Tabs/overrides.toml: [reject] 'Creep': expected "Artist - Title", got 'Creep'
+    error: overrides: /home/you/Tabs/overrides.toml: [reject] 'Creep': expected "Artist - Title", got 'Creep'
 
 A table declared twice ends with `; merge the two [match] sections into one`.
 The file must be a regular file: a symbolic link or a folder there is refused

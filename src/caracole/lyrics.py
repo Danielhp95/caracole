@@ -427,13 +427,19 @@ def write_lyrics(song_dir: Path, lyrics: Lyrics) -> list[Path]:
 
 @dataclass
 class LyricsStats:
-    """What one ``fetch_pending_lyrics`` pass did."""
+    """What one ``fetch_pending_lyrics`` pass did.
+
+    ``failures`` names the songs a provider error left pending, each with its
+    error: the ``errors`` counted, then the songs not asked about once the client
+    gave up on LRCLIB for the run (``ProviderUnavailable``).
+    """
 
     found: int = 0
     missing: int = 0
     instrumental: int = 0
     errors: int = 0
     budget_exhausted: bool = False
+    failures: list[tuple[Song, ProviderError]] = field(default_factory=list, compare=False, repr=False)
 
 
 RECHECK_MISSING_AFTER = timedelta(days=30)
@@ -502,7 +508,8 @@ def fetch_pending_lyrics(
     """
     stats = LyricsStats()
     stamp = _stamp(now)
-    for song, recheck in _songs_to_look_up(conn, now, recheck_missing_after):
+    songs = _songs_to_look_up(conn, now, recheck_missing_after)
+    for i, (song, recheck) in enumerate(songs):
         try:
             result = fetch_lyrics(
                 client, artist=song.artists[0], title=song.title, album=song.album,
@@ -514,11 +521,13 @@ def fetch_pending_lyrics(
             stats.budget_exhausted = True
             break
         except ProviderUnavailable as e:
-            log.warning("LRCLIB is unavailable for the rest of this run: %s", e)
+            log.info("LRCLIB is unavailable for the rest of this run: %s", e)
+            stats.failures += [(left, e) for left, _ in songs[i:]]
             break
         except ProviderError as e:
             stats.errors += 1
-            log.warning("lyrics for %s: %s", song.display, e)
+            stats.failures.append((song, e))
+            log.debug("lyrics for %s: %s", song.display, e)
             continue
         _record(conn, library_dir, song, result, stamp)
         if result.status == "found":
