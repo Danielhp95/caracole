@@ -14,6 +14,7 @@ For each matched song (plan §3, Task 15):
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -22,7 +23,7 @@ from pathlib import Path
 
 from tabarr import coverage
 from tabarr.config import RankPolicy
-from tabarr.http import Client
+from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
 from tabarr.library import keep_file, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.overrides import Overrides
@@ -33,6 +34,8 @@ from tabarr.ug.page import UGTabPage, UGVersion, parse_tab_page, strip_markup
 from tabarr.versions import (
     VersionRow, get_version, mark_gone, set_coverage, set_picks, song_versions, upsert_version,
 )
+
+log = logging.getLogger(__name__)
 
 PROVIDER = "ug"
 _PAGE_ACCEPT = (200, 404)
@@ -314,19 +317,27 @@ def _tab_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
 
 
 def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
-    """Fetch, rank and keep one song's UG versions."""
+    """Fetch, rank and keep one song's UG versions, one slot at a time.
+
+    Each kind group is rated and its slot filled before the next group is
+    touched, so the sheet a singer needs most is settled before the budget
+    goes to guitar parts.
+    """
     start = ctx.client.requests_made
     run = _SongRun(ctx, song)
     block = ctx.overrides.block
     tabs = song_tabs(ctx.conn, song.match_artist_key, song.match_song_key) if song.match_song_key else []
     tabs = [t for t in tabs if t.tab_id not in block]
     pinned = _fetch_pins(run, tuple(t for t in ctx.overrides.pin.get(song.key, ()) if t not in block))
-    for group in _GROUPS:
+
+    def rated(group: tuple[str, ...]) -> list[int] | None:
         if group not in pinned:
             _rate_group(run, [t for t in tabs if t.type in group])
-    sheet = _sheet_slot(run, pinned.get(SHEET_KINDS))
-    guitar_pro = _guitar_pro_slot(run, pinned.get(GUITAR_PRO_KINDS))
-    tab = _tab_slot(run, pinned.get(TAB_KINDS))
+        return pinned.get(group)
+
+    sheet = _sheet_slot(run, rated(SHEET_KINDS))
+    guitar_pro = _guitar_pro_slot(run, rated(GUITAR_PRO_KINDS))
+    tab = _tab_slot(run, rated(TAB_KINDS))
     _finish(run)
     return SongFetchOutcome(song.id, sheet, guitar_pro, tab, ctx.client.requests_made - start)
 
@@ -336,3 +347,27 @@ def _finish(run: _SongRun) -> None:
     refresh_status(run.conn, run.song.id, ignored=False)
     update_song(run.conn, run.song.id, ug_dirty=False, ug_checked_at=_iso(run.ctx.now))
     write_info(run.conn, run.ctx.library_dir, get_song(run.conn, run.song.id))
+
+
+def fetch_songs(ctx: FetchContext, songs: Iterable[Song]) -> FetchStats:
+    """Process songs in order until the budget is spent.
+
+    A block is re-raised (the caller cools the provider down). Any other
+    provider error, a page that can't be parsed included, skips that song: it
+    stays dirty and is never marked not found.
+    """
+    stats = FetchStats()
+    for song in songs:
+        try:
+            process_song(ctx, song)
+        except BudgetExhausted:
+            stats.budget_exhausted = True
+            break
+        except ProviderBlocked:
+            raise
+        except ProviderError as e:
+            log.warning("UG fetch failed for %s: %s", song.display, e)
+            stats.songs_failed += 1
+            continue
+        stats.songs_done += 1
+    return stats
