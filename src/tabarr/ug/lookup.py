@@ -92,3 +92,10 @@ def artist_tabs(conn: sqlite3.Connection, artist_key: str, limit: int = 5) -> li
         (artist_key, limit),
     )
     return [_index_tab(r) for r in rows]
+
+
+def forget_artist_url(conn: sqlite3.Connection, artist_key: str) -> None:
+    """Drop a learned artist page (UG no longer serves it), so it is learned again."""
+    from tabarr.db import kv_delete  # imported here to keep this block self-contained
+
+    kv_delete(conn, _artist_url_key(artist_key))

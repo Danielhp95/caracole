@@ -24,19 +24,22 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
+from rapidfuzz import fuzz
+
 from tabarr import coverage
 from tabarr.config import RankPolicy
+from tabarr.db import kv_get, kv_set
 from tabarr.http import BudgetExhausted, Client, ProviderBlocked, ProviderError, Response
 from tabarr.library import keep_file, kept_files, write_info
 from tabarr.lyrics import song_lyrics
+from tabarr.normalize import clean_title, compact, has_han, romanize, slug_key
 from tabarr.overrides import Overrides
 from tabarr.rank import Candidate, rank_by_rating, rank_guitar, rank_sheets
-from tabarr.db import kv_get
-from tabarr.normalize import compact, has_han, romanize, slug_key
 from tabarr.songs import Song, get_song, list_songs, refresh_status, update_song
-from tabarr.ug.artist import WWW
+from tabarr.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
 from tabarr.ug.lookup import (
-    IndexTab, artist_known, index_tab, learned_artist_url, remember_artist_url, song_tabs, tab_url_for,
+    IndexTab, artist_known, artist_tabs, forget_artist_url, index_tab, learned_artist_url,
+    remember_artist_url, song_tabs, tab_url_for,
 )
 from tabarr.ug.page import PageParseError, UGTabPage, UGVersion, parse_tab_page, strip_markup
 from tabarr.versions import (
@@ -52,13 +55,25 @@ GUITAR_PRO_KINDS = ("guitar-pro", "power")
 TAB_KINDS = ("tabs",)
 _GROUPS = (SHEET_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)
 _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
+
+# The artist-page route (A6).
+ARTIST_PAGE = "artist_page"  # the match step of a song found on its artist's page
 ARTIST_PAGE_MAX_AGE = timedelta(days=30)
+ARTIST_PAGE_KINDS = ("chords", "guitar-pro", "power", "tabs")  # the sheet's list first
+TITLE_MATCH = 90  # rapidfuzz ratio of title keys, as the matcher's accept score
+TITLE_MARGIN = 8  # a fuzzy title must lead the next different title by this much
+LEARN_TRIES = 3  # slugged tabs read at most to learn an artist's page
 _ARTIST_PATH = re.compile(r"/artist/[^/?#]+_\d+")
 
 
 @dataclass
 class FetchContext:
-    """Everything one fetch run needs. ``client`` is the run's UG client."""
+    """Everything one fetch run needs. ``client`` is the run's UG client.
+
+    ``artist_pages_per_kind`` caps the artist-page list pages one song may
+    fetch from UG per kind per run; cached pages don't count, so a long list
+    is read over several runs.
+    """
 
     conn: sqlite3.Connection
     client: Client
@@ -68,6 +83,7 @@ class FetchContext:
     now: datetime
     max_pages_per_group: int = 3
     artist_page_max_age: timedelta = ARTIST_PAGE_MAX_AGE
+    artist_pages_per_kind: int = 3
 
 
 @dataclass(frozen=True)
@@ -398,15 +414,190 @@ def _tab_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     return None
 
 
+# --- the artist-page route (A6) ----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Hit:
+    """A tab whose listed title is the song's, on an artist page."""
+
+    tab: UGVersion
+    key: str  # the listed title's key
+    score: float
+    fresh: bool  # read from UG this run, not from the cache
+
+
+def _title_score(forms: list[str], listed: list[str]) -> float:
+    """100 for the same title (in either script, in pinyin, or once hyphens go), else rapidfuzz ratio."""
+    best = 0.0
+    for a in forms:
+        for b in listed:
+            if a == b or compact(a) == compact(b):
+                return 100.0
+            best = max(best, fuzz.ratio(a, b))
+    return best
+
+
+def _title_hit(tab: UGVersion, forms: list[str], fresh: bool) -> _Hit | None:
+    listed = _name_keys(clean_title(tab.song_name))
+    if not listed or not forms:
+        return None
+    score = _title_score(forms, listed)
+    return _Hit(tab, listed[0], score, fresh) if score >= TITLE_MATCH else None
+
+
+def _best_title(hits: list[_Hit]) -> list[_Hit]:
+    """The hits of the song's title: every exact one, else the best fuzzy title when it leads clearly."""
+    exact = [h for h in hits if h.score >= 100]
+    if exact or not hits:
+        return exact
+    scores: dict[str, float] = {}
+    for h in hits:
+        scores[h.key] = max(scores.get(h.key, 0.0), h.score)
+    (key, best), *rest = sorted(scores.items(), key=lambda kv: -kv[1])
+    if rest and best - rest[0][1] < TITLE_MARGIN:
+        return []
+    return [h for h in hits if h.key == key]
+
+
+def _known_artist_page(conn: sqlite3.Connection, keys: list[str], overrides: Overrides) -> str | None:
+    """The artist page you pasted under [artist_url], else one learned from a tab page."""
+    for key in keys:
+        if key in overrides.artist_url:
+            return overrides.artist_url[key]
+    for key in keys:
+        if url := learned_artist_url(conn, key):
+            return url
+    return None
+
+
+def _learn_artist_page(run: _SongRun, keys: list[str]) -> str | None:
+    """Read a slugged tab of the artist, from the index, for the artist page it links to.
+
+    The tab is another song's, so none of its versions are recorded for this song.
+    """
+    for key in keys:
+        for tab in artist_tabs(run.conn, key, limit=LEARN_TRIES):
+            page, _ = _load(run.ctx.client, tab.url)
+            if page is not None and (url := _learn_artist_url(run.conn, page, [key])):
+                return url
+    return None
+
+
+def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[list[_Hit], bool, UGArtistPage | None]:
+    """The song's entries in the artist's list of one kind.
+
+    Returns the hits, whether the list was read far enough (False when this
+    run's page cap stopped it), and the list's first page (None when UG
+    answered 404). Lists are sorted by title, so the title's entries are
+    consecutive: reading stops once they end, and goes on to the next page
+    only when they reach the end of this one.
+    """
+    ctx = run.ctx
+    hits: list[_Hit] = []
+    first: UGArtistPage | None = None
+    fetched, number, last = 0, 1, 1
+    while number <= last:
+        if fetched >= ctx.artist_pages_per_kind:
+            return hits, False, first
+        url = artist_page_url(base, kind=kind, page=number)
+        resp = ctx.client.get(url, accept=_PAGE_ACCEPT, max_age=ctx.artist_page_max_age)
+        fetched += not resp.from_cache
+        if resp.status == 404:
+            break
+        page = parse_artist_page(resp.content, url=url)
+        first = first or page
+        last = max(last, page.pages)
+        listed = [t for t in page.tabs if t.kind == kind]
+        found = [h for t in listed if (h := _title_hit(t, forms, not resp.from_cache)) is not None]
+        hits += found
+        if hits and not (found and found[-1].tab is listed[-1]):
+            break
+        number += 1
+    return hits, True, first
+
+
+def _mark_checked(run: _SongRun) -> None:
+    kv_set(run.conn, _checked_key(run.song.id), _iso(run.ctx.now))
+
+
+def _forget_learned(run: _SongRun, keys: list[str], base: str) -> None:
+    for key in keys:
+        if learned_artist_url(run.conn, key) == base:
+            forget_artist_url(run.conn, key)
+
+
+def _accept_artist_page_match(run: _SongRun, hits: list[_Hit], artist_name: str) -> None:
+    """Record the matching tabs as the song's versions, and the match itself (step ``artist_page``)."""
+    _record(run, (h.tab for h in hits if h.fresh), fresh=True)
+    _record(run, (h.tab for h in hits if not h.fresh), fresh=False)
+    best = max(hits, key=lambda h: h.score)
+    artist_key = slug_key(artist_name) or slug_key(best.tab.artist_name) or run.artist_key
+    song_key = slug_key(clean_title(best.tab.song_name)) or slug_key(clean_title(run.song.title))
+    update_song(
+        run.conn, run.song.id, match_decision="accept", match_step=ARTIST_PAGE, match_score=best.score,
+        match_artist_key=artist_key, match_song_key=song_key, review=False, matched_at=_iso(run.ctx.now),
+        match_candidates=[{"artist_key": artist_key, "song_key": song_key, "score": best.score, "step": ARTIST_PAGE}],
+        ug_dirty=True,
+    )
+    run.song = get_song(run.conn, run.song.id)
+
+
+def _artist_page_route(run: _SongRun) -> bool:
+    """Look a not-found song up on its artist's UG page (A6); True when it was found and accepted.
+
+    The page lists bare-id tabs the sitemap index can't see. Its address
+    comes from [artist_url], a learned address, or a slugged tab of the
+    artist. The chords list is read first; its filter bar tells which guitar
+    lists the artist has. A list cut short by the page cap leaves the song as
+    it was, for the next run; otherwise the check is recorded, found or not.
+    """
+    keys = artist_keys(run.song, run.ctx.overrides)
+    base = _known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_artist_page(run, keys)
+    if base is None:
+        _mark_checked(run)
+        return False
+    forms = _name_keys(clean_title(run.song.title))
+    hits: list[_Hit] = []
+    name = ""
+    offered: set[str] | None = None
+    for kind in ARTIST_PAGE_KINDS:
+        if offered is not None and kind not in offered:
+            continue
+        found, complete, first = _read_list(run, base, kind, forms)
+        if not complete:
+            return False
+        if first is None and kind == ARTIST_PAGE_KINDS[0]:
+            log.warning("UG artist page %s answered 404; check [artist_url] for %s", base, run.song.artist)
+            _forget_learned(run, keys, base)
+            _mark_checked(run)
+            return False
+        if first is not None:
+            name = name or first.name
+            offered = offered if offered is not None or not first.filters else set(first.filters)
+        hits += found
+    _mark_checked(run)
+    best = [h for h in _best_title(hits) if _usable(run, h.tab)]
+    if not best:
+        return False
+    _accept_artist_page_match(run, best, name)
+    return True
+
+
 def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
     """Fetch, rank and keep one song's UG versions, one slot at a time.
 
-    Each kind group is rated and its slot filled before the next group is
-    touched, so the sheet a singer needs most is settled before the budget
-    goes to guitar parts.
+    A not-found song is first looked up on its artist's UG page (A6), and goes
+    on only when it is found there. Each kind group is rated and its slot
+    filled before the next group is touched, so the sheet a singer needs most
+    is settled before the budget goes to guitar parts.
     """
     start = ctx.client.requests_made
     run = _SongRun(ctx, song)
+    if song.match_decision == "not_found":
+        if not _artist_page_route(run):
+            return SongFetchOutcome(song.id, None, (), None, ctx.client.requests_made - start)
+        song = run.song
     block = ctx.overrides.block
     tabs = song_tabs(ctx.conn, song.match_artist_key, song.match_song_key) if song.match_song_key else []
     tabs = [t for t in tabs if t.tab_id not in block]
