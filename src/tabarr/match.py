@@ -41,6 +41,7 @@ from tabarr.config import MatchPolicy
 from tabarr.normalize import clean_title, compact, has_han, romanize, slug_key, split_variant
 from tabarr.overrides import Overrides
 from tabarr.songs import Song, list_songs, refresh_status, update_song, utc_now_iso
+from tabarr.versions import mark_stale
 
 DECISIONS = ("accept", "review", "not_found", "pinned", "ignored")
 STEPS = ("override", "pin", "exact", "alias", "fuzzy_title", "fuzzy_artist", "title_only")
@@ -468,6 +469,9 @@ def _save(conn: sqlite3.Connection, song: Song, new: MatchResult, now: str) -> N
     if any(getattr(song, name) != value for name, value in values.items()):
         if _needs_fetch(song, new):
             values["ug_dirty"] = True
+            # The UG versions found so far are the old match's: none competes, or stays a pick,
+            # until the new match's pages (from the cache, mostly) list it again.
+            mark_stale(conn, song.id, "ug")
         update_song(conn, song.id, **values, matched_at=now)
     if new.decision == "ignored" and song.status != "ignored":
         update_song(conn, song.id, status="ignored")
@@ -495,7 +499,9 @@ def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolic
     (dicts with ``artist_key``, ``song_key``, ``score`` and ``step``, best
     first; a pin's one row also lists its ``tab_ids``), ``matched_at`` and the
     review flag, for songs whose match changed. Sets ``ug_dirty`` when a song
-    becomes accepted or pinned, or its keys or pins change. Ignored songs get
+    becomes accepted or pinned, or its keys or pins change, and then marks the
+    UG versions found under the old match stale (``versions.mark_stale``), so
+    they leave every slot until the new match lists them. Ignored songs get
     status ``ignored``; songs no longer ignored get their status back.
 
     A song matched on a UG artist page (A6) keeps that match unless an

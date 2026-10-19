@@ -5,6 +5,8 @@ import pytest
 from tabarr.library import drop_file, keep_file, kept_files, safe_name, song_dir, write_atomic, write_info
 from tabarr.versions import (
     SHEET_KINDS,
+    mark_gone,
+    mark_stale,
     picks,
     replaces_sheet,
     set_coverage,
@@ -86,6 +88,28 @@ def test_song_versions_filters(conn):
     _version(conn, s, 3, slot="guitar", kind="tabs")
     assert [v.tab_id for v in song_versions(conn, s.id, slot="guitar")] == ["2", "3"]
     assert [v.tab_id for v in song_versions(conn, s.id, kinds=["tabs"])] == ["3"]
+
+
+def test_stale_versions_are_out_of_the_running_until_recorded_again(conn):
+    # A corrected match: what UG listed under the old one is another song's, until the new one lists it.
+    s = add_song(conn)
+    sheet, gone = _version(conn, s, 1), _version(conn, s, 3)
+    gp = _version(conn, s, 2, slot="guitar", kind="guitar-pro")
+    lacuerda = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/signos-1", song_id=s.id, slot="sheet",
+                              kind="acordes", rating=0, votes=0, version=1, label=None,
+                              url="https://acordes.lacuerda.net/soda_stereo/signos.shtml", raw={},
+                              now="2026-10-18T03:30:00Z")
+    set_picks(conn, s.id, ["guitar-pro"], [gp])
+    mark_gone(conn, gone)
+
+    assert mark_stale(conn, s.id, "ug") == 2
+
+    assert [v.id for v in song_versions(conn, s.id)] == [lacuerda]
+    rows = {v.id: (v.stale, v.gone, v.pick_rank) for v in song_versions(conn, s.id, include_gone=True)}
+    assert rows == {sheet: (True, False, None), gp: (True, False, None), gone: (False, True, None),
+                    lacuerda: (False, False, None)}
+    assert _version(conn, s, 1) == sheet  # listed again under the new match
+    assert [v.id for v in song_versions(conn, s.id)] == [sheet, lacuerda]
 
 
 def test_set_coverage(conn):

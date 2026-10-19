@@ -7,6 +7,12 @@ has no file until you download it into the inbox.
 
 The sheet slot keeps one sheet, whichever site it comes from, so the rule for
 replacing a kept sheet lives here too (``replaces_sheet``).
+
+Only live versions compete (``song_versions`` lists only those unless asked).
+The ``gone`` column says why one doesn't: ``GONE`` when the provider answered
+404 for it (``mark_gone``), ``STALE`` when it was found under an earlier match
+of its song (``mark_stale``) and the current match hasn't listed it since.
+Recording a version again (``upsert_version``) makes it live.
 """
 
 from __future__ import annotations
@@ -19,6 +25,9 @@ from typing import Any, Iterable, Mapping, Sequence
 # Every kind the sheet slot holds: UG chords, LaCuerda acordes, auto-chords. A kept
 # sheet becomes the slot's only pick, so picks are cleared across all of them.
 SHEET_KINDS = ("chords", "acordes", "auto")
+
+# ``versions.gone``: a live version, one the provider says is gone, one an earlier match found.
+LIVE, GONE, STALE = 0, 1, 2
 
 
 @dataclass
@@ -38,14 +47,15 @@ class VersionRow:
     raw: dict[str, Any]
     fetched_at: str
     pick_rank: int | None
-    gone: bool
+    gone: bool  # the provider answered 404 for it
+    stale: bool = False  # found under an earlier match of the song, and not listed since
 
 
 def _row(r: sqlite3.Row) -> VersionRow:
     d = dict(r)
     d["raw"] = json.loads(d["raw"] or "{}")
-    d["gone"] = bool(d["gone"])
-    return VersionRow(**d)
+    state = d.pop("gone")
+    return VersionRow(**d, gone=state == GONE, stale=state == STALE)
 
 
 def upsert_version(
@@ -64,13 +74,13 @@ def upsert_version(
     raw: Mapping[str, Any],
     now: str,
 ) -> int:
-    """Insert or refresh a version (unique per provider, tab id and song); return its id."""
+    """Insert or refresh a version (unique per provider, tab id and song), live; return its id."""
     conn.execute(
         "INSERT INTO versions (provider, tab_id, song_id, slot, kind, rating, votes, version, label, url, raw, fetched_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(provider, tab_id, song_id) DO UPDATE SET slot = excluded.slot, kind = excluded.kind, "
         "rating = excluded.rating, votes = excluded.votes, version = excluded.version, label = excluded.label, "
-        "url = excluded.url, raw = excluded.raw, fetched_at = excluded.fetched_at, gone = 0",
+        f"url = excluded.url, raw = excluded.raw, fetched_at = excluded.fetched_at, gone = {LIVE}",
         (provider, str(tab_id), song_id, slot, kind, float(rating or 0), int(votes or 0), int(version or 1),
          label, url, json.dumps(raw, ensure_ascii=False), now),
     )
@@ -104,8 +114,8 @@ def song_versions(
         kinds = list(kinds)
         sql += f" AND kind IN ({','.join('?' for _ in kinds)})"
         args.extend(kinds)
-    if not include_gone:
-        sql += " AND gone = 0"
+    if not include_gone:  # live versions only: neither gone nor stale
+        sql += f" AND gone = {LIVE}"
     return [_row(r) for r in conn.execute(sql + " ORDER BY id", args)]
 
 
@@ -115,7 +125,20 @@ def set_coverage(conn: sqlite3.Connection, version_id: int, value: float | None)
 
 def mark_gone(conn: sqlite3.Connection, version_id: int) -> None:
     """The provider no longer has this version (it answered 404)."""
-    conn.execute("UPDATE versions SET gone = 1, pick_rank = NULL WHERE id = ?", (version_id,))
+    conn.execute("UPDATE versions SET gone = ?, pick_rank = NULL WHERE id = ?", (GONE, version_id))
+
+
+def mark_stale(conn: sqlite3.Connection, song_id: int, provider: str) -> int:
+    """The song's match changed: its live versions from ``provider`` were found under the old one.
+
+    They compete for no slot, and are no picks, until the new match lists
+    them again (``upsert_version``). Returns how many there were.
+    """
+    cur = conn.execute(
+        "UPDATE versions SET gone = ?, pick_rank = NULL WHERE song_id = ? AND provider = ? AND gone = ?",
+        (STALE, song_id, provider, LIVE),
+    )
+    return cur.rowcount
 
 
 def set_picks(conn: sqlite3.Connection, song_id: int, kinds: Sequence[str], version_ids: Sequence[int]) -> None:

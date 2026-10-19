@@ -22,11 +22,12 @@ from helpers.ug_pages import (
     version_dict,
 )
 
-from tabarr.config import ProviderPolicy, RankPolicy
+from tabarr.config import MatchPolicy, ProviderPolicy, RankPolicy
 from tabarr.db import kv_get, kv_set
 from tabarr.http import PoliteClient, ProviderBlocked
 from tabarr.library import keep_file, kept_files, song_dir
 from tabarr.lyrics import Lyrics
+from tabarr.match import match_all
 from tabarr.overrides import Overrides, load_overrides
 from tabarr.songs import get_song, update_song
 from tabarr.ug.artist import artist_page_url
@@ -611,7 +612,8 @@ def test_a_kept_sheet_blocked_after_the_fetch_sends_its_song_back_and_unblocking
 def test_a_guitar_pro_pick_blocked_after_the_fetch_sends_its_song_back(conn, tmp_path):
     song = accepted(conn)
     index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
-          (301, "soda-stereo", "persiana-americana", "guitar-pro"), (302, "soda-stereo", "persiana-americana", "guitar-pro"))
+          (301, "soda-stereo", "persiana-americana", "guitar-pro"),
+          (302, "soda-stereo", "persiana-americana", "guitar-pro"))
     ug = FakeUG()
     ug.tab(v(101), content=sheet("sheet 101", LINES))
     best, other = v(301, "guitar-pro", rating=4.8, votes=30), v(302, "guitar-pro", version=2, rating=4.2, votes=10)
@@ -732,7 +734,8 @@ def unreadable_11(conn, ug):
     """Persiana Americana: UG keeps serving chords tab 11 with HTTP 200 and no js-store (a removed-tab
     notice, say); tab 12 is a good sheet."""
     song = accepted(conn)
-    index(conn, (11, "soda-stereo", "persiana-americana", "chords"), (12, "soda-stereo", "persiana-americana", "chords"))
+    index(conn, (11, "soda-stereo", "persiana-americana", "chords"),
+          (12, "soda-stereo", "persiana-americana", "chords"))
     ug.add(slugged(11), BROKEN)
     ug.tab(v(12), content=sheet("sheet 12", LINES))
     return song
@@ -841,6 +844,89 @@ def test_kept_sheet_stays_when_not_outranked(conn, tmp_path):
 
     assert out.sheet == 101 and pick_ids(conn, song, "chords") == [101]
     assert (path.stat().st_ino, kept_version(conn, song, "sheet.txt")) == before  # not even rewritten
+
+
+# --- a corrected match ------------------------------------------------------------------------------
+
+
+def signos_tab(tab_id, kind="chords", **kw):
+    """A tab of Soda Stereo's "Signos": another song than Persiana Americana."""
+    kw.setdefault("tab_url", slugged(tab_id, kind, song="signos"))
+    return version_dict(tab_id, type=UG_TYPES[kind], song="Signos", artist="Soda Stereo", **kw)
+
+
+def correct_to(conn, tmp_path, song_key):
+    """You correct Persiana Americana's match in overrides.toml (as the to-do page tells you), then match."""
+    path = tmp_path / "overrides.toml"
+    path.write_text(f'[match]\n"Soda Stereo - Persiana Americana" = "soda-stereo/{song_key}"\n', encoding="utf-8")
+    overrides = load_overrides(path)
+    match_all(conn, overrides, MatchPolicy())
+    assert get_song(conn, 1).match_song_key == song_key
+    return overrides
+
+
+@pytest.mark.parametrize("plain", [None, LYRICS])
+def test_a_corrected_match_leaves_the_old_songs_sheets_out_of_the_running(conn, tmp_path, plain):
+    # Persiana Americana was wrongly accepted as "Signos", whose 901 is rated 4.9 from 200 votes. Without
+    # lyrics it wins on rating; with them it covers nothing, but so does no complete sheet.
+    song = accepted(conn, akey="soda-stereo", skey="signos", plain=plain)
+    index(conn, (901, "soda-stereo", "signos", "chords"), (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(signos_tab(901, rating=4.9, votes=200), content=sheet("sheet 901", ["completely other words here"]))
+    ug.tab(v(101, rating=4.0, votes=10), content=sheet("sheet 101", LINES[:5]))  # half the lyrics
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 901" in read(tmp_path, song, "sheet.txt")
+
+    overrides = correct_to(conn, tmp_path, "persiana-americana")
+    assert [s.id for s in songs_to_fetch(conn, overrides, NOW)] == [song.id]
+    ug.requests.clear()
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), get_song(conn, song.id))
+
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt") and pick_ids(conn, song, "chords") == [101]
+    assert [r.tab_id for r in song_versions(conn, song.id)] == ["101"] and ug.requests == [slugged(101)]
+
+
+def test_a_corrected_match_leaves_the_old_songs_guitar_parts_out_of_the_running(conn, tmp_path):
+    song = accepted(conn, akey="soda-stereo", skey="signos")
+    index(conn, (901, "soda-stereo", "signos", "chords"), (911, "soda-stereo", "signos", "guitar-pro"),
+          (921, "soda-stereo", "signos", "tabs"), (101, "soda-stereo", "persiana-americana", "chords"),
+          (301, "soda-stereo", "persiana-americana", "guitar-pro"))
+    ug = FakeUG()
+    ug.tab(signos_tab(901), content=sheet("sheet 901", LINES))
+    ug.tab(signos_tab(911, "guitar-pro", rating=4.9, votes=300), meta={"fileExtension": ".gp5"})
+    ug.tab(signos_tab(921, "tabs"), content=riff("tab 921"))
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    ug.tab(v(301, "guitar-pro", rating=4.2, votes=12), meta={"fileExtension": ".gp5"})
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert pick_ids(conn, song, "guitar-pro", "power") == [911] and "tab 921" in read(tmp_path, song, "tab.txt")
+
+    overrides = correct_to(conn, tmp_path, "persiana-americana")
+    assert pick_ids(conn, song, "guitar-pro", "power") == []  # off the to-do page's pages to click at once
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), get_song(conn, song.id))
+
+    assert pick_ids(conn, song, "guitar-pro", "power") == [301]
+    assert names(conn, song) == {"sheet.txt", "sheet.json"}  # Persiana Americana has no tab: Signos's goes
+    assert not (song_dir(tmp_path / "lib", song) / "tab.txt").exists()
+
+
+def test_versions_the_old_and_new_match_share_come_back_from_the_cache(conn, tmp_path):
+    # The match covered the variant slug "persiana-americana-acoustic"; you narrow it to that variant.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (102, "soda-stereo", "persiana-americana-acoustic", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101, rating=4.9, votes=100), content=sheet("sheet 101", LINES))
+    ug.tab(v(102, version=2, rating=4.0, votes=10, tab_url=slugged(102, song="persiana-americana-acoustic")),
+           content=sheet("sheet 102", LINES))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+    overrides = correct_to(conn, tmp_path, "persiana-americana-acoustic")
+    ug.requests.clear()
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), get_song(conn, song.id))
+
+    assert ug.requests == []
+    assert "sheet 102" in read(tmp_path, song, "sheet.txt") and coverages(conn, song) == {102: 1.0}
 
 
 # --- learning artist pages ------------------------------------------------------------------------

@@ -85,6 +85,7 @@ from tabarr.ug.page import (
 )
 from tabarr.versions import (
     SHEET_KINDS,
+    STALE,
     VersionRow,
     get_version,
     mark_gone,
@@ -330,8 +331,10 @@ def _check_links(run: _SongRun, versions: Iterable[UGVersion], url: str) -> None
 
 
 def _known(run: _SongRun, tab_id: int) -> bool:
+    """Whether the song has the version on record under its current match (a stale one isn't)."""
     return run.conn.execute(
-        "SELECT 1 FROM versions WHERE provider = ? AND tab_id = ? AND song_id = ?", (PROVIDER, str(tab_id), run.song.id)
+        "SELECT 1 FROM versions WHERE provider = ? AND tab_id = ? AND song_id = ? AND gone != ?",
+        (PROVIDER, str(tab_id), run.song.id, STALE),
     ).fetchone() is not None
 
 
@@ -475,7 +478,11 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
 
 
 def _seen_ids(run: _SongRun) -> set[int]:
-    return {int(r.tab_id) for r in song_versions(run.conn, run.song.id, include_gone=True) if r.provider == PROVIDER}
+    """The tabs rated (or found gone) under the song's current match; a stale one is read again."""
+    return {
+        int(r.tab_id) for r in song_versions(run.conn, run.song.id, include_gone=True)
+        if r.provider == PROVIDER and not r.stale
+    }
 
 
 def _rate_group(run: _SongRun, tabs: list[IndexTab], pages: int) -> None:
@@ -628,10 +635,13 @@ def _retire_auto_sheet(conn: sqlite3.Connection, library_dir: Path, song: Song) 
         set_picks(conn, song.id, (auto.kind,), [])
 
 
-def _drop_if_blocked(run: _SongRun, names: tuple[str, str]) -> None:
-    """Files kept from a UG version you have blocked since go, even when nothing replaces them."""
+def _drop_left_over(run: _SongRun, names: tuple[str, str]) -> None:
+    """Files kept from a UG version you have blocked since, or that an earlier match found (another
+    song's, by your correction), go even when nothing replaces them."""
     kept = _kept_version(run.conn, run.song.id, names[0])
-    if kept is not None and kept.provider == PROVIDER and int(kept.tab_id) in run.ctx.overrides.block:
+    if kept is None or kept.provider != PROVIDER:
+        return
+    if kept.stale or int(kept.tab_id) in run.ctx.overrides.block:
         for name in names:
             drop_file(run.conn, run.ctx.library_dir, song=run.song, name=name)
 
@@ -681,7 +691,7 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     best = _first_with_text(run, ranked, rows, pages)
     if best is None:
         set_picks(run.conn, run.song.id, CHORDS_KINDS, [])
-        _drop_if_blocked(run, SHEET_FILES)
+        _drop_left_over(run, SHEET_FILES)
         return None
     c, page = best
     assert c.version_id is not None
@@ -720,7 +730,7 @@ def _tab_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     best = _first_with_text(run, ranked, rows, {})
     if best is None:
         set_picks(run.conn, run.song.id, TAB_KINDS, [])
-        _drop_if_blocked(run, TAB_FILES)
+        _drop_left_over(run, TAB_FILES)
         return None
     c, page = best
     assert c.version_id is not None
