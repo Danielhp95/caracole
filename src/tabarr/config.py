@@ -1,9 +1,11 @@
 """tabarr.toml: settings, directories and secrets.
 
 Directories resolve in this order: an explicit key in the TOML file, then the
-systemd-provided ``$STATE_DIRECTORY`` / ``$CACHE_DIRECTORY``, then the XDG base
-directories, then ``~``. Secrets come from ``$CREDENTIALS_DIRECTORY`` (systemd
-``LoadCredential``), then a ``*_file`` key, then an environment variable.
+``library``, ``music``, ``state`` or ``cache`` folder in ``data_dir`` when that
+key is set, then the systemd-provided ``$STATE_DIRECTORY`` /
+``$CACHE_DIRECTORY``, then the XDG base directories, then ``~``. Secrets come
+from ``$CREDENTIALS_DIRECTORY`` (systemd ``LoadCredential``), then a ``*_file``
+key, then an environment variable.
 Unknown keys are errors, and so are values of the wrong type or out of range,
 so a typo never silently falls back to a default or turns into another value.
 """
@@ -131,7 +133,8 @@ class Config:
 
 
 _TOP_KEYS = {
-    "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file", "wanted_file",
+    "data_dir", "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file",
+    "wanted_file",
     "user_agent", "guitar_pro_mode", "chordpro_bin", "cjk_font",
     "spotify", "providers", "match", "rank", "ntfy", "autochords",
 }
@@ -295,10 +298,19 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         value = _optional_string(data, key, key)
         return paths.resolve(value) if value else default
 
-    library_dir = dir_value("library_dir", paths.home / "Tabs")
-    music_dir = dir_value("music_dir", paths.home / "Music")
-    state_dir = dir_value("state_dir", paths.xdg("STATE_DIRECTORY", "XDG_STATE_HOME", ".local/state"))
-    cache_dir = dir_value("cache_dir", paths.xdg("CACHE_DIRECTORY", "XDG_CACHE_HOME", ".cache"))
+    data_value = _optional_string(data, "data_dir", "data_dir")
+    data_dir = paths.resolve(data_value) if data_value else None
+
+    def default_dir(name: str, fallback: Path) -> Path:
+        """The folder ``name`` in data_dir when that is set, else ``fallback``."""
+        return data_dir / name if data_dir is not None else fallback
+
+    xdg_state = paths.xdg("STATE_DIRECTORY", "XDG_STATE_HOME", ".local/state")
+    xdg_cache = paths.xdg("CACHE_DIRECTORY", "XDG_CACHE_HOME", ".cache")
+    library_dir = dir_value("library_dir", default_dir("library", paths.home / "Tabs"))
+    music_dir = dir_value("music_dir", default_dir("music", paths.home / "Music"))
+    state_dir = dir_value("state_dir", default_dir("state", xdg_state))
+    cache_dir = dir_value("cache_dir", default_dir("cache", xdg_cache))
     overrides_file = dir_value("overrides_file", library_dir / "overrides.toml")
     wanted_file = dir_value("wanted_file", library_dir / "wanted.txt")
 

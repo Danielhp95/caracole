@@ -10,10 +10,14 @@ gives the machine:
 | `tabarr-autochords.service` | Optional. After each successful run, writes `sheet (auto).txt` from audio you bought, with no network at all |
 | `tabarr-notify-failure.service` | POSTs to your ntfy topic when either unit fails |
 | `tabarr-admin` | Runs any `tabarr` command as the units do: `sudo tabarr-admin auth spotify` |
-| `/var/lib/tabarr` | The database, the Spotify token and tabarr's lock, readable by `tabarr` alone |
-| `/var/cache/tabarr` | Every raw HTTP response, kept forever, and the private folders PDFs are made in |
-| `/srv/tabs` | The library: sheets, lyrics, guitar parts, `_todo.md`, `wanted.txt`, `overrides.toml` |
-| `/srv/music` | Audio you bought, read-only, for auto-chords |
+| `/var/lib/tabarr/state` | The database, the Spotify token and tabarr's lock, readable by `tabarr` alone |
+| `/var/lib/tabarr/cache` | Every raw HTTP response, kept forever, and the private folders PDFs are made in |
+| `/var/lib/tabarr/library` | The library: sheets, lyrics, guitar parts, `_todo.md`, `wanted.txt`, `overrides.toml` |
+| `/var/lib/tabarr/music` | Audio you bought, read-only, for auto-chords |
+
+The four folders sit in `services.tabarr.dataDir`, `/var/lib/tabarr` unless
+you set it, say to `/data/tabarr` on a data disk. `stateDir`, `cacheDir`,
+`libraryDir` and `musicDir` each put one elsewhere.
 
 The rest of this page sets that up in `/etc/nixos`, which has no NUC host
 yet. The snippets follow that repository's conventions: a module is on because
@@ -89,9 +93,10 @@ in
 
   services.tabarr = {
     enable = true;
-    # Defaults: libraryDir = "/srv/tabs"; musicDir = "/srv/music";
-    # schedule = "*-*-* 03:30". Keep both directories out of /home: the
-    # units' sandbox hides it, and the module refuses such a path.
+    # Defaults: dataDir = "/var/lib/tabarr", with the library, music, state
+    # and cache in it; schedule = "*-*-* 03:30". Keep the folders out of
+    # /home and /tmp: the units' sandbox hides both, and the module refuses
+    # such a path.
     settings = {
       # A long random topic: anyone who knows it can read it.
       ntfy.url = "https://ntfy.sh/tabarr-change-me";
@@ -109,11 +114,12 @@ It refers to the `tabarr-ntfy` secret, so it evaluates once section 2 has
 declared the secrets.
 
 `settings` is `tabarr.toml`, as `src/tabarr/config.py` reads it, and unknown
-keys are fatal there. The module adds `library_dir` and `music_dir` from its
-options. State and cache always live in `/var/lib/tabarr` and
-`/var/cache/tabarr`, the only places the sandbox lets tabarr write besides the
-library; the module rejects `settings.state_dir` and `settings.cache_dir`.
-`systemctl cat tabarr` shows the generated file's store path.
+keys are fatal there. The module adds `library_dir`, `music_dir`, `state_dir`
+and `cache_dir` from its options: the library, the state and the cache are the
+only places the sandbox lets tabarr write, and the music the only other one it
+reads. The module rejects those keys and `data_dir` in `settings`, and names
+the option to set instead. `systemctl cat tabarr` shows the generated file's
+store path.
 
 ## 2. Secrets with agenix
 
@@ -123,7 +129,7 @@ each file as root and hands the unit a private copy in
 agenix's default. tabarr reads two credentials, `spotify_client_secret` and
 `ntfy_token`; the nightly unit and `tabarr-admin` get them, and the auto-chords
 unit, which reads neither, gets none. The Spotify token itself is not a static
-secret: it lives in `/var/lib/tabarr`, written by `tabarr auth spotify`.
+secret: it lives in the state folder, written by `tabarr auth spotify`.
 
 Add agenix, which the flake registry already knows as `agenix`:
 
@@ -180,10 +186,13 @@ bearer token when `credentials.ntfy_token` is set, and when
 
 ## 3. Syncthing for the library and the music
 
-The library is shared through the `tabarr` group. The module creates
-`/srv/tabs` as `tabarr:tabarr`, mode 2775. The setgid bit keeps everything
-created inside in group `tabarr`, and tabarr writes with umask 0007, so its
-files are group-writable. Syncthing joins that group and writes the same way.
+The library is shared through the `tabarr` group. The module creates the
+library as `tabarr:tabarr`, mode 2775, and `dataDir`, if it is missing, as
+`tabarr:tabarr`, mode 0710: the group gets through to the library and the
+music, while the state and the cache, mode 0700, stay tabarr's. The setgid bit
+keeps everything created in the library in group `tabarr`, and tabarr writes
+with umask 0007, so its files are group-writable. Syncthing joins that group
+and writes the same way.
 Both directions then work: you drop Guitar Pro files into `_inbox/` on the
 laptop and tabarr files them, and you edit `wanted.txt` on the phone.
 
@@ -258,17 +267,17 @@ SQLite's online backup, and that copy is what gets backed up:
     repository = "/mnt/backup/restic/tabarr";
     passwordFile = config.age.secrets.restic-password.path;
     paths = [
-      "/var/lib/tabarr"
+      tabarr.stateDir
       tabarr.libraryDir
       tabarr.musicDir
     ];
     # The live database; tabarr-backup.sqlite stands in for it.
-    exclude = [ "/var/lib/tabarr/tabarr.sqlite*" ];
+    exclude = [ "${tabarr.stateDir}/tabarr.sqlite*" ];
     # Guarded: before the first run there is no database, and sqlite3 would
     # create an empty, root-owned one that tabarr could not open.
     backupPrepareCommand = ''
-      if [ -f /var/lib/tabarr/tabarr.sqlite ]; then
-        ${lib.getExe' pkgs.sqlite "sqlite3"} /var/lib/tabarr/tabarr.sqlite ".backup /var/lib/tabarr/tabarr-backup.sqlite"
+      if [ -f ${tabarr.stateDir}/tabarr.sqlite ]; then
+        ${lib.getExe' pkgs.sqlite "sqlite3"} ${tabarr.stateDir}/tabarr.sqlite ".backup ${tabarr.stateDir}/tabarr-backup.sqlite"
       fi
     '';
     # After the nightly run (03:30, up to 45 minutes late, about 30 long).
@@ -287,15 +296,15 @@ SQLite's online backup, and that copy is what gets backed up:
 
 To restore, stop the timer (`sudo systemctl stop tabarr.timer`), restore the
 three paths with `restic-tabarr restore latest --target /`, then put the
-database back:
+database back (here in the default state folder):
 
 ```sh
 sudo install -o tabarr -g tabarr -m 0600 \
-  /var/lib/tabarr/tabarr-backup.sqlite /var/lib/tabarr/tabarr.sqlite
+  /var/lib/tabarr/state/tabarr-backup.sqlite /var/lib/tabarr/state/tabarr.sqlite
 sudo systemctl start tabarr.timer
 ```
 
-The cache in `/var/cache/tabarr` is left out. Losing it costs only requests:
+The cache is left out. Losing it costs only requests:
 the index lives in the database, so nothing needs building again, and the
 pages tabarr had cached are fetched again as songs need them, within the
 nightly budget.
@@ -354,7 +363,7 @@ silently, so you can add it any time:
    Open the URL it prints on the laptop and log in. The browser then fails to
    load `http://127.0.0.1:8888/callback?code=…`, which is expected: copy that
    whole URL from the address bar and paste it back. The token is saved in
-   `/var/lib/tabarr`. Refresh tokens expire after about six months; tabarr then
+   the state folder. Refresh tokens expire after about six months; tabarr then
    sends an ntfy message, and you run this step again.
 
 **Check the timer, and run once now:**
@@ -381,8 +390,8 @@ sudo. A file you pass it must be readable by the `tabarr` user and sit where
 the sandbox shows it: not under `/home`, `/root` or `/tmp`, which it hides, so
 `index build --from` reads sitemaps from somewhere like `/srv/sitemaps`.
 
-**One tabarr at a time.** The nightly run holds tabarr's lock,
-`/var/lib/tabarr/tabarr.lock`, from start to end, and every command that asks
+**One tabarr at a time.** The nightly run holds tabarr's lock, `tabarr.lock`
+in the state folder, from start to end, and every command that asks
 the sites for pages or writes the library holds it while it works. One
 started meanwhile waits, and says which it waits for (`Another tabarr is
 running (pid …: run); waiting for it to finish.`): a `tabarr-admin fetch`
@@ -415,8 +424,8 @@ credentials (it reads no secret), and may generate code
 (`MemoryDenyWriteExecute` off, because PyTorch's CPU kernels
 and librosa's numba compile at run time: with it on, every song fails, BTC with
 "cannot allocate executable memory" as numba loads, and beat_this with "could
-not create a primitive"). numba caches what it compiles in
-`/var/cache/tabarr/numba`, since the unit's home is read-only.
+not create a primitive"). numba caches what it compiles in `numba` in the
+cache folder, since the unit's home is read-only.
 
 **What a run does.** It links new files in the music folder to your songs,
 as the nightly run does, then writes an auto sheet for every song that has its
@@ -520,19 +529,20 @@ or build the package with `tabarr.override { cjkFont = "…"; }`.
 - **A command says the database "is at schema version N, but this tabarr
   knows up to M":** a newer tabarr migrated it, and an older one runs now,
   after a rollback say. Switch back to the newer tabarr, or restore the copy
-  saved before the migration, `/var/lib/tabarr/tabarr.sqlite.vM.bak`, which
-  the message names when it is there. Until then the commands that use the
-  database exit 2, and so does the nightly unit.
+  saved before the migration, `tabarr.sqlite.vM.bak` in the state folder,
+  which the message names when it is there. Until then the commands that use
+  the database exit 2, and so does the nightly unit.
 - **A command waits with "Another tabarr is running":** the message names the
   process and what it is doing; the nightly run takes about half an hour.
 - **Auto-chords can't read a purchase:** the to-do page lists it, with the
   error, and `journalctl -u tabarr-autochords.service` names it too.
   Re-download the file, or convert it (to FLAC, say) and replace the original:
   a changed file is tried again on the next run.
-- **Syncthing reports "permission denied":** check that `ls -ld /srv/tabs`
-  shows `drwxrwsr-x tabarr tabarr`, and that `id syncthing` lists `tabarr`.
-  Restart Syncthing after the group change, and check that the folder has
-  `ignorePerms`.
+- **Syncthing reports "permission denied":** check that
+  `ls -ld /var/lib/tabarr/library` (or your `libraryDir`) shows
+  `drwxrwsr-x tabarr tabarr`, that the folders above it let group `tabarr`
+  through, and that `id syncthing` lists `tabarr`. Restart Syncthing after the
+  group change, and check that the folder has `ignorePerms`.
 - **Nothing ran last night:** `systemctl list-timers tabarr.timer`. A missed
   start runs at the next boot, because the timer is persistent.
 - **The hardening, scored:** `systemd-analyze security tabarr.service` gives
