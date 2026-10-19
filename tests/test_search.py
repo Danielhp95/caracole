@@ -551,3 +551,57 @@ def test_cli_never_touches_the_network(tmp_path, monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", no_network)
     result = run(tmp_path, "search", "creep", "--add", "1")
     assert result.exit_code == 0, result.output
+
+
+# --- names that aren't quite UG's ------------------------------------------------------------
+
+EPIC = (4742072, "misc-musicals", "epic-the-musical-not-sorry-for-loving-you", "chords")
+NEAR_EPIC = (1066803, "bill-fox", "im-not-over-loving-you", "chords")
+
+
+def epic_review(conn):
+    """The matcher's review of "epic - I'm not sorry for loving you": a catch-all artist's song first."""
+    s = add_song(conn, "epic", "I'm not sorry for loving you")
+    update_song(conn, s.id, review=True, match_decision="review", match_step="catch_all", match_score=94.1,
+                match_artist_key="misc-musicals", match_song_key=EPIC[2], match_candidates=[
+                    {"artist_key": "misc-musicals", "song_key": EPIC[2], "score": 94.1, "step": "catch_all"},
+                    {"artist_key": "bill-fox", "song_key": NEAR_EPIC[2], "score": 81.6, "step": "title_only"},
+                    *({"artist_key": f"cover-{i}", "song_key": "for-loving-you", "score": 76.0, "step": "title_only"}
+                      for i in range(3))])
+    return s
+
+
+def test_cli_shows_a_reviews_first_candidates_under_its_song(tmp_path):
+    epic_review(seed(tmp_path, rows=ROWS + [EPIC, NEAR_EPIC]))
+    result = run(tmp_path, "search", "epic")
+    assert result.exit_code == 0, result.output
+    library = result.output.partition("On Ultimate Guitar (offline index)")[0]
+    assert ("  epic - I'm not sorry for loving you · wanted, needs review · no folder yet\n"
+            "     Did you mean (`caracole review` settles it):\n"
+            "       94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)\n"
+            "       82  bill-fox/im-not-over-loving-you (title_only)\n"
+            "       76  cover-0/for-loving-you (title_only)\n") in library
+    assert "cover-1" not in library  # three at most: `caracole review` and the to-do page have them all
+
+
+def test_cli_says_a_hit_is_under_ugs_catch_all_artist(tmp_path):
+    seed(tmp_path, rows=ROWS + [EPIC, NEAR_EPIC])
+    result = run(tmp_path, "search", "epic", "not", "sorry", "for", "loving", "you")
+    assert result.exit_code == 0, result.output
+    ug = result.output.partition("On Ultimate Guitar (offline index)")[2]
+    first, second = ug.split("\n  2. ", 1)
+    assert "1. Misc Musicals - Epic The Musical Not Sorry For Loving You" in first
+    assert 'caracole add "Misc Musicals" "Epic The Musical Not Sorry For Loving You"' in first
+    assert ("misc-musicals is UG's catch-all artist: to keep the show's or the singer's name, add the song as "
+            "you know it, then pick this hit in `caracole review`") in " ".join(first.split())
+    assert "catch-all" not in second
+
+
+def test_a_catch_all_hit_is_scored_on_its_title_alone(conn):
+    # misc-musicals is no one's name: the query is the show's name and the song's, both in UG's title.
+    index(conn, ROWS + [EPIC, NEAR_EPIC, (77, "misc-musicals", "hamilton-my-shot", "chords")])
+    for query in ("epic not sorry for loving you", "EPIC the musical - Not Sorry for Loving You"):
+        hits = search_index(conn, query)
+        assert keys(hits)[0] == ("misc-musicals", EPIC[2]) and hits[0].score >= 95, (query, hits)
+        assert bare_id_hint(query, hits) is None  # a strong hit: no word of artists UG can't see
+    assert keys(search_index(conn, "hamilton my shot"))[0] == ("misc-musicals", "hamilton-my-shot")

@@ -105,10 +105,15 @@ MAX_CANDIDATES = 5
 _TITLE_ONLY_TITLES = 10  # nearest titles expanded into candidates, per title form
 _TYPO_ARTISTS = 5  # nearest artist keys within the typo distance, per name
 # Words a catch-all title may put next to a show's name: "epic-the-musical-not-sorry-for-loving-you".
-_SHOW_WORDS = frozenset({
+SHOW_WORDS = frozenset({
     "the", "musical", "soundtrack", "ost", "movie", "film", "show", "series", "tv", "theme", "from",
     "original", "cast", "broadway", "game", "anime", "opening", "ending",
 })
+
+
+def is_catch_all(artist_key: str) -> bool:
+    """Whether UG files songs of many artists under this key, with their show's name in the title."""
+    return artist_key.startswith(CATCH_ALL_PREFIX) and artist_key not in NOT_CATCH_ALL
 
 
 @dataclass(frozen=True)
@@ -230,7 +235,7 @@ class IndexView:
             for artist_key, song_key, n in rows:
                 key = (artist_key, split_variant(song_key)[0])
                 tabs[key] = tabs.get(key, 0) + n
-            self._catch_all = sorted((a, s, n) for (a, s), n in tabs.items() if a not in NOT_CATCH_ALL)
+            self._catch_all = sorted((a, s, n) for (a, s), n in tabs.items() if is_catch_all(a))
         return self._catch_all
 
     def tab_keys(self, tab_id: int) -> tuple[str, str] | None:
@@ -503,16 +508,16 @@ def _typo_artists(song: Song, index: IndexView, tried: set[str]) -> list[str]:
 def _rests(words: list[str], name: list[str]) -> list[list[str]]:
     """What a catch-all title holds besides the name, wherever the name runs in it: the words after it,
     before it, or both, each also without the words next to the name that only say what the name is
-    (``_SHOW_WORDS``: "the musical", "from", "soundtrack")."""
+    (``SHOW_WORDS``: "the musical", "from", "soundtrack")."""
     i = _find(words, name)
     if i is None:
         return []
     before, after = words[:i], words[i + len(name):]
     bare_before = list(before)
-    while bare_before and bare_before[-1] in _SHOW_WORDS:
+    while bare_before and bare_before[-1] in SHOW_WORDS:
         bare_before.pop()
     bare_after = list(after)
-    while bare_after and bare_after[0] in _SHOW_WORDS:
+    while bare_after and bare_after[0] in SHOW_WORDS:
         bare_after.pop(0)
     parts = [after, bare_after, before, bare_before]
     if before and after:

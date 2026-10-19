@@ -94,12 +94,20 @@ def _overrides(cfg: Config) -> Overrides | None:
 
 
 def _library_line(cfg: Config, hit: LibraryHit) -> str:
+    """The song, its status and its folder; for a song in review, its first candidates too."""
     from caracole.library import song_dir
+    from caracole.search import did_you_mean
 
     song = hit.song
     folder = song_dir(cfg.library_dir, song)
     where = str(folder) if folder.is_dir() else "no folder yet"
-    return f"  {song.display} · {_status(song)} · {where}"
+    lines = [f"  {song.display} · {_status(song)} · {where}"]
+    candidates = did_you_mean(song)
+    if candidates:
+        lines.append("     Did you mean (`caracole review` settles it):")
+        lines += [f"       {float(c.get('score') or 0):.0f}  {c['artist_key']}/{c['song_key']} ({c.get('step', '')})"
+                  for c in candidates]
+    return "\n".join(lines)
 
 
 def _status(song: Song) -> str:
@@ -119,7 +127,13 @@ def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]]) -> str:
         identity_key(hit.artist, hit.title).split("/", 1)
     ) in known
     action = "in your library" if in_library else f"caracole add {_quote(hit.artist)} {_quote(hit.title)}"
-    return f"  {n}. {hit.artist} - {hit.title} · {counts}\n     {hit.url}\n     {action}"
+    lines = f"  {n}. {hit.artist} - {hit.title} · {counts}\n     {hit.url}\n     {action}"
+    if hit.catch_all:
+        lines += "\n" + textwrap.fill(
+            f"{hit.artist_key} is UG's catch-all artist: to keep the show's or the singer's name, add the song "
+            "as you know it, then pick this hit in `caracole review`.", 88, initial_indent=" " * 5,
+            subsequent_indent=" " * 5, break_long_words=False, break_on_hyphens=False)
+    return lines
 
 
 # Only these decisions make a song's matched UG song its own; a review's keys are a candidate's,

@@ -783,9 +783,25 @@ request:
          https://tabs.ultimate-guitar.com/tab/stone-temple-pilots/creep-chords-5001
          caracole add "Stone Temple Pilots" "Creep"
 
-- **In your library**: every song, whatever its status, with its folder.
+- **In your library**: every song, whatever its status, with its folder. A
+  song in review also shows its first three candidates, as the matcher found
+  them:
+
+      epic - I'm not sorry for loving you · wanted, needs review · no folder yet
+         Did you mean (`caracole review` settles it):
+           94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)
+           82  bill-fox/im-not-over-loving-you (title_only)
+
 - **On Ultimate Guitar**: numbered hits from the offline index, each with its
-  tabs per type, one of its pages, and the `caracole add` line to paste.
+  tabs per type, one of its pages, and the `caracole add` line to paste. A
+  song of one of UG's catch-all artists (`misc-musicals`, `misc-soundtrack`…,
+  see [caracole match](#caracole-match---dry-run)) is also scored on its title
+  alone, with and without words such as "the musical", so
+  `caracole search epic not sorry for loving you` finds
+  `misc-musicals/epic-the-musical-not-sorry-for-loving-you` first. Its hit says
+  that its artist is a catch-all: added with UG's names, the song's artist
+  would be "Misc Musicals". To keep the show's or the singer's name, add the
+  song as you know it, and pick that hit in `caracole review`.
 
 QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
