@@ -17,11 +17,13 @@ error: callers must never take it to mean "this song has no versions".
 
 from __future__ import annotations
 
+
 import json
 import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from html import unescape as decode_entities
 from typing import Any
 
 from selectolax.lexbor import LexborHTMLParser
@@ -232,6 +234,10 @@ def parse_tab_page(html: str | bytes, *, url: str | None = None) -> UGTabPage:
         content = None
         if tab.kind in _TEXT_KINDS:
             raise PageParseError("ug", url, None, f"{tab.type} page without wiki_tab.content")
+    else:
+        # UG keeps the sheet text HTML-escaped inside its JSON ("&amp;"), on top of the
+        # attribute's own escaping, so it needs one more decoding pass.
+        content = decode_entities(content)
     meta = view.get("meta")
     return UGTabPage(
         tab=tab,

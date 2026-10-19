@@ -309,3 +309,14 @@ def test_page_url_uses_the_slugged_path_when_known():
     assert page_url(1081462, "soda-stereo/persiana-americana-tabs-1081462") == (
         "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-tabs-1081462"
     )
+
+
+def test_sheet_text_html_entities_are_decoded():
+    # UG stores sheet text HTML-escaped inside its JSON (live: Wonderwall's "...&amp;feature=related"),
+    # so one more decoding pass is needed after the attribute itself is decoded.
+    from helpers.ug_pages import make_tab_page_html, version_dict
+
+    from tabarr.ug.page import parse_tab_page
+
+    html_ = make_tab_page_html(version_dict(1), [], content="Tom &amp; Jerry&#039;s [ch]G[/ch] &lt;3")
+    assert parse_tab_page(html_).content == "Tom & Jerry's [ch]G[/ch] <3"
