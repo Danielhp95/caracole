@@ -38,7 +38,8 @@ an earlier one failed:
 
 Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`),
 http.py (`PoliteClient`, robots rules), health.py (cooldowns, `events`), normalize.py (keys,
-pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy).
+pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy),
+keys.py (a song's musical key and its source, for info.json, `index.html` and `search --key`).
 
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:

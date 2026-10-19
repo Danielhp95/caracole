@@ -159,6 +159,21 @@ def test_estimate_key_from_well_known_progressions(progression, key):
     assert estimate_key(progression.split()) == key
 
 
+@pytest.mark.parametrize(
+    ("chords", "key"),
+    [
+        (["Cmaj7", "Am7", "Dm7", "G7", "Cmaj7"], "C"),
+        (["Bm7b5", "E7", "Am", "Am/G", "F", "E7", "Am"], "A minor"),
+        (["C(add9)", "Fadd9", "G6", "Gsus4", "G", "C"], "C"),
+        (["Em", "Am", "B7#9", "Em"], "E minor"),
+        (["D", "Dsus2", "G/D", "A7sus4", "D"], "D"),
+        (["AmMaj7", "Am", "Dm", "E7", "Am"], "A minor"),
+    ],
+)
+def test_estimate_key_reads_extended_slash_and_suspended_chords(chords, key):
+    assert estimate_key(chords) == key
+
+
 def test_the_estimate_spells_the_tonic_as_the_chords_do():
     assert estimate_key("C#m A E B C#m A E B".split()) == "C# minor"
     assert estimate_key("Gb Db Ebm Cb Gb Db Ebm Cb".split()) == "Gb"
