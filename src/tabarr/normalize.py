@@ -25,6 +25,12 @@ import unicodedata
 
 VARIANT_TOKENS = ("intro", "solo", "outro", "riff", "lesson", "acoustic", "live", "unplugged")
 
+# The version of the rules that make identity keys. Bump it with any change to
+# clean_title, slug_key or identity_key that can change a key: songs.py then
+# re-keys the stored songs once (songs.ensure_current_keys). Version 1 had no
+# Spanish live or acoustic suffixes and no identity folding (October 2026).
+KEY_VERSION = 2
+
 _TRANSLIT = str.maketrans(
     {
         "ø": "o", "Ø": "o", "æ": "ae", "Æ": "ae", "œ": "oe", "Œ": "oe", "ß": "ss",
