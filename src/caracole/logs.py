@@ -107,6 +107,11 @@ def add_secrets(*values: str | None) -> None:
     _secrets.update(v for v in values if v and len(v) >= 4)
 
 
+def forget_secrets() -> None:
+    """Forget the values ``add_secrets`` named (for tests, which run many commands in one process)."""
+    _secrets.clear()
+
+
 def redact(text: str) -> str:
     """``text`` without the known secrets, credentials in headers, or OAuth tokens and codes."""
     for secret in sorted(_secrets, key=len, reverse=True):
@@ -202,6 +207,20 @@ def setup(level: int, *, stream: IO[str] | None = None, env: Mapping[str, str] |
         logging.getLogger(name).setLevel(logging.NOTSET if level >= DEBUG else logging.WARNING)
     root.addHandler(handler)
     _handler = handler
+    _current[:] = [(level, stream, env)]
+
+
+def at_least(level: int) -> None:
+    """Raise the verbosity to ``level``, unless ``-q`` asked for problems only, for a command whose
+    progress is its report (``caracole autochords``: a line per song, minutes apart). Never lowers it."""
+    if not _current:
+        return
+    current, stream, env = _current[0]
+    if current != QUIET and current < level:
+        setup(level, stream=stream, env=env)
+
+
+_current: list[tuple[int, IO[str] | None, Mapping[str, str] | None]] = []  # what setup was last asked for
 
 
 def teardown() -> None:
@@ -214,12 +233,16 @@ def teardown() -> None:
     for name, level in _saved.items():
         logging.getLogger(name).setLevel(level)
     _saved.clear()
+    _current.clear()
 
 
-def say(level: int, message: str, *, env: Mapping[str, str] | None = None) -> None:
+def say(level: int, message: str, *, env: Mapping[str, str] | None = None,
+        exc_info: BaseException | None = None) -> None:
     """Write one line on stderr as the log would, outside the logging machinery: a command's last
-    word as it exits (``commands._common.fail``), which must show however logging is set up."""
-    record = logging.LogRecord("caracole", level, __file__, 0, message, None, None)
+    word as it exits (``commands._common.fail``), which must show however logging is set up, or a
+    bug's, with its traceback (``exc_info``) after it (``cli.main``)."""
+    exc = (type(exc_info), exc_info, exc_info.__traceback__) if exc_info is not None else None
+    record = logging.LogRecord("caracole", level, __file__, 0, message, None, exc)
     formatter = _handler.formatter if _handler is not None and env is None else None
     formatter = formatter or _style(sys.stderr, env, NORMAL)
     sys.stderr.write(formatter.format(record) + "\n")

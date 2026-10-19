@@ -6,7 +6,6 @@ failed, and index.html, which links them.
 
 from __future__ import annotations
 
-import logging
 from contextlib import closing
 
 import typer
@@ -28,7 +27,6 @@ def register(app: typer.Typer) -> None:
         """
         from caracole.render import render_all
 
-        logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
         cfg = load_cfg(ctx)
         overrides = load_ovr(cfg)
         with exclusive(cfg, "render"), closing(open_db(cfg)) as conn:

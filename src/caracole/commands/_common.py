@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import logging
 import os
 import random
 import sqlite3
@@ -16,7 +17,7 @@ from typing import NoReturn
 import httpx
 import typer
 
-from caracole import db
+from caracole import db, logs
 from caracole.config import Config, ConfigError, ProviderPolicy, load_config
 from caracole.health import EventLog
 from caracole.http import Event, PoliteClient
@@ -27,16 +28,25 @@ sleep = time.sleep  # tests replace it
 
 
 def fail(message: str, code: int = 1) -> NoReturn:
-    typer.secho(message, err=True, fg=typer.colors.RED)
+    """A command's last word, an error on stderr, then exit ``code``."""
+    logs.say(logging.ERROR, message)
     raise typer.Exit(code)
 
 
+def warn(message: str) -> None:
+    """A warning on stderr, the way the log writes one, for a command that carries on."""
+    logs.say(logging.WARNING, message)
+
+
 def load_cfg(ctx: typer.Context) -> Config:
+    """The config, the one way a command reads it; its secrets are kept out of the log from then on."""
     path = ctx.obj.config_path if ctx.obj is not None else None
     try:
-        return load_config(path)
+        cfg = load_config(path)
     except ConfigError as e:
         fail(f"config: {e}", 2)
+    logs.add_secrets(cfg.spotify.client_secret, cfg.ntfy.token)
+    return cfg
 
 
 def _reason(e: OSError | sqlite3.Error) -> str:
@@ -107,8 +117,7 @@ def _acquire(cfg: Config, what: str, *, fatal: bool = True) -> Path:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            typer.secho(f"Another caracole is running ({_holder(fd)}); waiting for it to finish.",
-                        err=True, fg=typer.colors.YELLOW)
+            warn(f"Another caracole is running ({_holder(fd)}); waiting for it to finish.")
             fcntl.flock(fd, fcntl.LOCK_EX)
         os.ftruncate(fd, 0)
         os.pwrite(fd, f"{os.getpid()} {what}\n".encode(), 0)
@@ -276,7 +285,7 @@ def write_pages(
         message = f"can't write {_page_named(e, cfg.library_dir)}: {_reason(e)}"
         if fatal:
             fail(message)
-        typer.secho(message, err=True, fg=typer.colors.YELLOW)
+        warn(message)
         return None
 
 

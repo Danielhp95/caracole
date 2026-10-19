@@ -11,6 +11,7 @@ up as a nightly service on a NixOS host, with secrets, Syncthing and backups.
 `caracole --help` and `caracole COMMAND --help` list every command and option.
 
 - [Configure](#configure)
+- [What caracole prints](#what-caracole-prints)
 - [Say what you want to learn](#say-what-you-want-to-learn)
 - [The first run](#the-first-run)
 - [One step at a time](#one-step-at-a-time)
@@ -130,6 +131,30 @@ else the file `client_secret_file` names, else
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
 files it ships, so you only set these to use other files.
+
+## What caracole prints
+
+Every command writes its report, what it did and what needs you, on stdout,
+and its log, the diagnostics, on stderr, so `caracole run > night.txt` keeps
+the report alone. Like `--config`, the options that set how much the log
+says come before the command (`caracole -v run`):
+
+| Option | The log on stderr |
+|---|---|
+| none | the problems: warnings and errors |
+| `-q`, `--quiet` | the problems too |
+| `-v`, `--verbose` | caracole's own information too |
+| `-vv` | debugging lines too, each with the name of its logger, and the logs of the libraries caracole uses (httpx, httpcore, urllib3, spotipy, and numba or torch under auto-chords), which otherwise show only their warnings and errors |
+
+A warning starts with `warning:` and an error with `error:`, coloured on a
+terminal unless `$NO_COLOR` is set; nothing is coloured when the output isn't
+a terminal. Under systemd, each line starts with its priority for the journal
+instead (see [deploy.md](deploy.md#logs)). No secret reaches the log, at any
+level: not the Spotify client secret, the ntfy token, an Authorization header
+or an OAuth token.
+
+An unexpected error, a bug in caracole, ends the command with exit status 1:
+one line that says so, then its traceback, on stderr.
 
 ## Say what you want to learn
 

@@ -18,11 +18,11 @@ library (a ``caracole-admin`` command, say).
 
 from __future__ import annotations
 
-import logging
 from importlib.util import find_spec
 
 import typer
 
+from caracole import logs
 from caracole.commands._common import (
     exclusive,
     fail,
@@ -52,7 +52,7 @@ def register(app: typer.Typer) -> None:
         from caracole.autochords.run import autochords_pending
         from caracole.music import scan_music
 
-        logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+        logs.at_least(logs.VERBOSE)  # a line per song: its progress, minutes apart
         cfg = load_cfg(ctx)
         overrides = load_ovr(cfg)
         conn = open_db(cfg)

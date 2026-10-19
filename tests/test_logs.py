@@ -238,3 +238,20 @@ def test_say_writes_one_line_the_way_the_log_would(tmp_path, monkeypatch):
         logs.say(logging.ERROR, "can't open the database", env=env)
         f.seek(0)
         assert f.read() == "<3>can't open the database\n"
+
+
+def test_a_command_whose_progress_is_its_report_can_ask_for_at_least_verbose(log_to):
+    # caracole autochords: a line per song, minutes apart, unless -q asked for problems only.
+    out = log_to(logs.NORMAL)
+    logs.at_least(logs.VERBOSE)
+    logging.getLogger("caracole.autochords.run").info("A – B: auto sheet written")
+    logging.getLogger("httpx").info("still quiet")
+    assert out.getvalue() == "A – B: auto sheet written\n"
+    quiet = log_to(logs.QUIET)
+    logs.at_least(logs.VERBOSE)
+    logging.getLogger("caracole.autochords.run").info("A – B: auto sheet written")
+    assert quiet.getvalue() == ""
+    debug = log_to(logs.DEBUG)
+    logs.at_least(logs.VERBOSE)  # never lowers it
+    logging.getLogger("caracole.autochords.run").debug("details")
+    assert "details" in debug.getvalue()
