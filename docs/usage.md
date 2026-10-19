@@ -695,8 +695,9 @@ overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
 loads nothing from the network. It shows every song with its status, its key
-or transposition, and links to its files, the PDF first. A song without a
-sheet also gets buy and search links.
+or transposition, and links to its files: the sheet viewer first (see
+[The sheet viewer](#the-sheet-viewer)), then the PDF. A song without a sheet
+also gets buy and search links.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or

@@ -120,6 +120,21 @@ def test_links_to_kept_files_are_relative_percent_encoded_and_in_order(conn, cfg
     assert [f["primary"] for f in files] == [True] + [False] * 8
 
 
+def test_the_sheet_viewer_is_the_first_link_for_the_phone(conn, cfg):
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    put(cfg, s, "sheet.pdf", "sheet.html", "sheet.txt", "sheet (auto).html", "sheet (auto).pdf")
+    files = songs_of(page(conn, cfg))[s.display]["files"]
+    assert [(f["name"], f["label"], f["primary"]) for f in files] == [
+        ("sheet.html", "Sheet viewer", True), ("sheet.pdf", "Sheet PDF", False),
+        ("sheet (auto).html", "Auto sheet viewer", False), ("sheet (auto).pdf", "Auto sheet PDF", False),
+        ("sheet.txt", "Sheet text", False)]
+    auto = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, auto, "sheet (auto).pdf", "sheet (auto).html")
+    files = songs_of(page(conn, cfg))[auto.display]["files"]
+    assert [(f["name"], f["primary"]) for f in files] == [("sheet (auto).html", True), ("sheet (auto).pdf", False)]
+    assert files[0]["href"].endswith("/sheet%20%28auto%29.html")
+
+
 def test_only_files_that_exist_are_linked(conn, cfg):
     s = add_song(conn, "Radiohead", "Creep")
     v = version(conn, s, 4169)

@@ -40,10 +40,13 @@ from caracole.todo import search_links, songs_to_buy
 PAGE_NAME = "index.html"
 
 # Kept files, in the order a card shows them; guitar-N.* goes between the two groups.
-_FIRST = ("sheet.pdf", "sheet (auto).pdf", "sheet.txt", "sheet.cho", "lyrics.txt", "lyrics.lrc")
+_FIRST = ("sheet.html", "sheet.pdf", "sheet (auto).html", "sheet (auto).pdf", "sheet.txt", "sheet.cho",
+          "lyrics.txt", "lyrics.lrc")
 _LAST = ("tab.txt", "sheet (auto).txt", "sheet (auto).cho", "info.json")
 _GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
 _LABELS = {
+    "sheet.html": "Sheet viewer",  # caracole/viewer: the sheet for the phone
+    "sheet (auto).html": "Auto sheet viewer",
     "sheet.pdf": "Sheet PDF",
     "sheet (auto).pdf": "Auto sheet PDF",
     "sheet.txt": "Sheet text",
@@ -147,7 +150,7 @@ def _files(library_dir: Path, song: Song, names: set[str]) -> list[dict[str, Any
     ordered = [n for n in _FIRST if n in names] + [n for _, n in guitar] + [n for n in _LAST if n in names]
     folder = song_dir(library_dir, song).relative_to(library_dir)
     base = "/".join(quote(part, safe="") for part in folder.parts)
-    primary = next((n for n in ordered if n.endswith(".pdf")), None) or next(
+    primary = next((n for n in ordered if n.endswith((".html", ".pdf"))), None) or next(
         (n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None)
     return [
         {"name": n, "label": _label(n), "href": f"{base}/{quote(n, safe='')}", "primary": n == primary}
