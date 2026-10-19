@@ -173,19 +173,36 @@ _ROBOTS = {
 }
 
 
+# What robots_disallows answers for a string httpx can't parse as a URL.
+NOT_A_URL = "not a valid URL"
+
+
 def robots_disallows(url: str) -> str | None:
     """The robots.txt rule (``ROBOTS_DISALLOW``) that closes ``url``, or None when it is open.
 
     A rule matches the start of the URL's path and query, and ``*`` stands for any
     run of characters (RFC 9309). ``PoliteClient`` never requests a closed URL;
     other modules can use this to skip one before asking for it.
+
+    A string httpx can't parse as a URL (a control character, more than 64 KiB, a
+    broken host) can't be asked for either, so it is closed too, by ``NOT_A_URL``:
+    one such link in UG's JSON or a sitemap is skipped, and never ends the run.
     """
-    u = httpx.URL(url)
-    target = u.raw_path.decode("ascii")
-    for rule, pattern in _ROBOTS.get(u.host, ()):
+    try:
+        u = httpx.URL(url)
+        host, target = u.host, u.raw_path.decode("ascii")
+    except (httpx.InvalidURL, ValueError):  # ValueError: a lone surrogate, a broken IDNA label
+        return NOT_A_URL
+    for rule, pattern in _ROBOTS.get(host, ()):
         if pattern.match(target):
             return rule
     return None
+
+
+def _not_a_url(provider: str, url: str) -> ProviderError:
+    """The error for a string httpx can't parse as a URL, which shows its start, escaped, for the log."""
+    shown = url if len(url) <= 120 else url[:120] + "..."
+    return ProviderError(provider, None, None, f"{NOT_A_URL}: {shown!r}")
 
 
 _MAX_REDIRECTS = 3  # hops followed for one request; httpx alone would follow 20
@@ -220,7 +237,8 @@ class PoliteClient:
       time in ``policy.delay``, minus the time already elapsed.
     - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
     - A URL robots.txt disallows (``robots_disallows``) is never requested: when
-      no cached answer is served, ``ProviderError``.
+      no cached answer is served, ``ProviderError``. Nor is a string httpx can't
+      parse as a URL, which is a ``ProviderError`` at once.
     - Redirects are followed one hop at a time, at most three. Each hop is a
       request like any other (budget, pause, event) and must stay on the site
       asked for and be open in robots.txt, or ``ProviderError``. The final answer
@@ -283,7 +301,13 @@ class PoliteClient:
     ) -> Response:
         """GET ``url``; see the class docstring. ``max_age`` refetches cached copies older than it,
         but serves the stale copy when this run's budget is spent."""
-        full = str(httpx.URL(url, params=params)) if params else url
+        try:
+            full = str(httpx.URL(url, params=params)) if params else url
+        except (httpx.InvalidURL, ValueError):
+            raise _not_a_url(self.provider, url) from None
+        rule = robots_disallows(full)
+        if rule == NOT_A_URL:  # nothing is sent, so the error breaker doesn't count it either
+            raise _not_a_url(self.provider, full)
         key = hashlib.sha256(full.encode("utf-8")).hexdigest()
         cached = self._read_cache(key) if (cache or conditional) else None
         if cached is not None and cached.status not in accept:
@@ -294,7 +318,6 @@ class PoliteClient:
         if stale and self.requests_made >= self.policy.budget:
             return cached
 
-        rule = robots_disallows(full)
         if rule is not None:  # nothing is sent, so the error breaker doesn't count it either
             raise ProviderError(self.provider, full, None, f"robots.txt disallows it ({rule})")
         headers: dict[str, str] = {}

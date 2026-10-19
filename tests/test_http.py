@@ -222,6 +222,37 @@ def test_robots_refusals_are_not_provider_failures(tmp_path):
     assert len(rec.requests) == 3
 
 
+# Strings httpx refuses as URLs, as UG's JSON or a sitemap could carry them. Built with chr() so
+# no editor or tool turns them into invisible literals.
+NOT_URLS = {
+    "control-character": TABS + "/tab/a/b" + chr(0) + "-chords-1",
+    "newline": TABS + "/tab/a/b" + chr(10) + "-chords-1",
+    "over-64-KiB": TABS + "/tab/a/" + "x" * 70_000 + "-chords-1",
+    "lone-surrogate": TABS + "/tab/a/b" + chr(0xD800) + "-chords-1",
+    "broken-host": "https://[::zz]/tab/1",
+}
+
+
+@pytest.mark.parametrize("url", NOT_URLS.values(), ids=NOT_URLS.keys())
+def test_robots_disallows_counts_a_string_that_isnt_a_url_as_closed(url):
+    # Never httpx.InvalidURL: fetch.py asks it of every candidate, index.py of indexed paths.
+    from tabarr.http import robots_disallows
+
+    assert robots_disallows(url) is not None
+
+
+@pytest.mark.parametrize("url", NOT_URLS.values(), ids=NOT_URLS.keys())
+def test_a_string_that_isnt_a_url_is_a_provider_error_and_never_sent(tmp_path, url):
+    # One song fails, not the run. Nothing is sent, so the breaker doesn't count it either.
+    client, rec = make_client(tmp_path, ok(), max_consecutive_errors=1)
+    with pytest.raises(ProviderError) as e:
+        client.get(url)
+    assert not isinstance(e.value, (ProviderBlocked, ProviderUnavailable))
+    assert "not a valid URL" in str(e.value) and len(str(e.value)) < 300  # a line for the log
+    assert rec.requests == [] and client.requests_made == 0
+    assert client.get(TABS + "/tab/1").status == 200
+
+
 OLD = TABS + "/tab/a/old-chords-1"
 NEW = TABS + "/tab/a/new-chords-1"
 

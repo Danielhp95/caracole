@@ -313,8 +313,12 @@ def _closed(url: str) -> bool:
 
 
 def _on_tab_host(url: str) -> bool:
-    """Whether a link points under ``/tab/`` on the tabs host, where UG's tab pages are."""
-    parts = urlsplit(url)
+    """Whether a link points under ``/tab/`` on the tabs host, where UG's tab pages are (one urllib
+    can't parse points nowhere: UG's JSON is data, and one broken link never ends the run)."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:  # "Invalid IPv6 URL", say
+        return False
     segments = parts.path.split("/")
     return (
         parts.scheme in ("http", "https") and parts.netloc == _TAB_HOST
@@ -418,7 +422,10 @@ def _artist_page_base(url: str | None) -> str | None:
     """A UG artist page address (``https://www.ultimate-guitar.com/artist/<name>_<id>``), else None."""
     if not url:
         return None
-    parts = urlsplit(urljoin(WWW + "/", url.strip()))
+    try:
+        parts = urlsplit(urljoin(WWW + "/", url.strip()))
+    except ValueError:  # a link urllib can't parse ("Invalid IPv6 URL"): no artist page
+        return None
     path = parts.path.rstrip("/")
     if parts.netloc != urlsplit(WWW).netloc or not _ARTIST_PATH.fullmatch(path):
         return None

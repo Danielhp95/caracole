@@ -2394,3 +2394,59 @@ def test_an_artist_page_robots_txt_closes_is_never_asked_for(conn, tmp_path, mon
     assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == []
     assert get_song(conn, song.id).match_decision == "not_found"
     assert kv_get(conn, f"ug:artist_page_checked:{song.id}") == "2026-10-18T03:30:00Z"
+
+
+# --- strings that aren't URLs -------------------------------------------------------------------
+#
+# UG's JSON and the sitemaps are data: one link httpx or urllib can't parse costs that version,
+# never the night's fetch (which an httpx.InvalidURL or a ValueError would end). Built with chr()
+# so no editor or tool turns them into invisible literals.
+
+BROKEN_LINKS = {
+    "control-character": f"{TAB}soda-stereo/persiana-americana{chr(0)}-chords-102",
+    "over-64-KiB": f"{TAB}soda-stereo/{'x' * 70_000}-chords-102",
+    "broken-host": "https://[tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-102",
+}
+
+
+@pytest.mark.parametrize("tab_url", BROKEN_LINKS.values(), ids=BROKEN_LINKS.keys())
+def test_a_version_ug_links_at_a_string_that_isnt_a_url_is_no_candidate(conn, tmp_path, tab_url):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101, rating=3.0, votes=10), [v(102, rating=5.0, votes=500, tab_url=tab_url)],
+           content=sheet("sheet 101", LINES))
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == [slugged(101)]
+    assert [r.tab_id for r in song_versions(conn, song.id, include_gone=True)] == ["101"]
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+
+def test_an_indexed_path_that_isnt_a_url_is_no_candidate(conn, tmp_path):
+    # A sitemap <loc> may hold a control character: the index keeps whatever its pattern matches.
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    index_at(conn, (102, "soda-stereo", "persiana-americana", "chords",
+                    f"{TAB}soda-stereo/persiana{chr(1)}-americana-chords-102"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0) and ug.requests == [slugged(101)]
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+
+def test_a_tab_page_whose_artist_link_isnt_a_url_teaches_nothing(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES), artist_url="https://[www.ultimate-guitar.com/artist/x_1")
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])
+
+    assert (stats.songs_done, stats.songs_failed) == (1, 0)
+    assert learned_artist_url(conn, "soda-stereo") is None
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
