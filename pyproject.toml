@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-autochords = ["torch", "beat-this", "librosa", "numpy", "scipy", "soundfile", "pyyaml"]
+autochords = ["torch", "torchaudio", "beat-this", "librosa", "numpy", "scipy", "soundfile", "pyyaml"]
 
 [project.scripts]
 tabarr = "tabarr.cli:main"

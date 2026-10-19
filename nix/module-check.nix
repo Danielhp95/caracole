@@ -71,6 +71,25 @@ let
     beatCheckpoint = "/models/beat_this.ckpt";
   };
 
+  # What the packages' wrappers must default to: the fetched models, and the one
+  # CJK font ChordPro 6.050.7 renders correctly (see src/tabarr/render.py).
+  models = pkgs.callPackage ./autochords.nix { };
+  fusionKai = "${pkgs.lxgw-fusionkai}/share/fonts/truetype/FusionKaiJ-Regular.ttf";
+
+  # Whether makeWrapperArgs holds `--set-default NAME VALUE`.
+  setsDefault =
+    package: name: value:
+    let
+      args = package.makeWrapperArgs;
+    in
+    lib.any (
+      i:
+      lib.elemAt args i == "--set-default"
+      && lib.elemAt args (i + 1) == name
+      && lib.elemAt args (i + 2) == value
+    ) (lib.range 0 (lib.length args - 3));
+  setsAny = package: name: lib.elem name package.makeWrapperArgs;
+
   bare = evalSystem [ stubbed ];
   nuc = evalSystem [
     stubbed
@@ -80,6 +99,12 @@ let
     stubbed
     configured
     autochordsOn
+  ];
+  # Auto-chords on, with the model files left to the package.
+  nucModelsFromPackage = evalSystem [
+    stubbed
+    configured
+    { services.tabarr.autochords.enable = true; }
   ];
   defaults = evalSystem [ ];
   # nix/module.nix imported on its own, without the flake's wrapper.
@@ -110,6 +135,7 @@ let
   notify = nuc.systemd.services.tabarr-notify-failure;
   autochords = nucAutochords.systemd.services.tabarr-autochords;
   autochordsSc = autochords.serviceConfig;
+  autochordsPackageModels = nucModelsFromPackage.systemd.services.tabarr-autochords;
   libraryRule = nuc.systemd.tmpfiles.settings.tabarr."/srv/tabs".d;
   admin = lib.findFirst (p: lib.getName p == "tabarr-admin") null nuc.environment.systemPackages;
 
@@ -182,6 +208,10 @@ let
     "tabarr-autochords.service exists only when enabled" = !(nuc.systemd.services ? tabarr-autochords);
     "tabarr-autochords.service has PrivateNetwork and no MemoryDenyWriteExecute" =
       autochordsSc.PrivateNetwork == true && autochordsSc.MemoryDenyWriteExecute == false;
+    # btc.py and librosa's numba need a writable cache; HOME is read-only.
+    "tabarr-autochords.service has the tabarr cache directory, with numba's cache in it" =
+      autochordsSc.CacheDirectory == "tabarr"
+      && lib.hasPrefix "/var/cache/tabarr/" autochords.environment.NUMBA_CACHE_DIR;
     "tabarr-autochords.service runs `tabarr --config <generated tabarr.toml> autochords`" =
       autochordsSc.ExecStart == "${lib.getExe stub} --config ${configFile} autochords";
     "tabarr-autochords.service runs as tabarr with the same paths" = sameUserAndPaths autochordsSc;
@@ -190,6 +220,20 @@ let
     "tabarr-autochords.service gets the model paths" =
       autochords.environment.TABARR_BTC_WEIGHTS == "/models/btc.pt"
       && autochords.environment.TABARR_BEAT_CHECKPOINT == "/models/beat_this.ckpt";
+    # Unset, so the package wrapper's --set-default values apply.
+    "tabarr-autochords.service leaves the model paths to the package when the options are null" =
+      !(autochordsPackageModels.environment ? TABARR_BTC_WEIGHTS)
+      && !(autochordsPackageModels.environment ? TABARR_BEAT_CHECKPOINT)
+      && failedAssertions nucModelsFromPackage == [ ];
+    "the auto-chords package points at the fetched BTC weights and beat_this checkpoint" =
+      setsDefault autochordsPackage "TABARR_BTC_WEIGHTS" "${models.btcWeights}"
+      && setsDefault autochordsPackage "TABARR_BEAT_CHECKPOINT" "${models.beatThisCheckpoint}";
+    "the default package carries no model files" =
+      !(setsAny defaultPackage "TABARR_BTC_WEIGHTS")
+      && !(setsAny defaultPackage "TABARR_BEAT_CHECKPOINT");
+    "both packages default TABARR_CJK_FONT to lxgw-fusionkai's FusionKaiJ-Regular.ttf" =
+      setsDefault defaultPackage "TABARR_CJK_FONT" fusionKai
+      && setsDefault autochordsPackage "TABARR_CJK_FONT" fusionKai;
     "tabarr-autochords.service follows a successful run and notifies on failure" =
       nucAutochords.systemd.services.tabarr.onSuccess == [ "tabarr-autochords.service" ]
       && autochords.onFailure == [ "tabarr-notify-failure.service" ];

@@ -7,7 +7,7 @@ gives the machine:
 |---|---|
 | `tabarr.timer` | Starts the nightly run at 03:30, give or take 45 minutes, and catches up after downtime |
 | `tabarr.service` | `tabarr --config <generated tabarr.toml> run`, a hardened oneshot as user `tabarr` |
-| `tabarr-autochords.service` | Optional. Runs after each successful run, with no network at all |
+| `tabarr-autochords.service` | Optional. After each successful run, writes `sheet (auto).txt` from audio you bought, with no network at all |
 | `tabarr-notify-failure.service` | POSTs to your ntfy topic when either unit fails |
 | `tabarr-admin` | Runs any `tabarr` command as the units do: `sudo tabarr-admin auth spotify` |
 | `/var/lib/tabarr` | The database and the Spotify token, readable by `tabarr` alone |
@@ -370,8 +370,9 @@ readable by the `tabarr` user.
 
 ## 6. Auto-chords
 
-For a song nobody has charted, buy the track, drop it into the music folder
-on the laptop, and let a local model write `sheet (auto).txt`:
+For a song nobody has charted, buy the track (DRM-free: the buy list on the
+to-do page links Bandcamp, Qobuz and the iTunes Store), drop it into the music
+folder on the laptop, and let a local model write `sheet (auto).txt`:
 
 ```nix
   services.tabarr.autochords.enable = true;
@@ -381,27 +382,100 @@ on the laptop, and let a local model write `sheet (auto).txt`:
 `tabarr.service` run (`OnSuccess=`). It runs `tabarr --config … autochords`
 with the `autochords` package (torch, beat-this, librosa) as the same user, in
 the same sandbox, except that it has no network at all (`PrivateNetwork`) and
-may generate code (`MemoryDenyWriteExecute` off, for PyTorch's CPU kernels).
-It only touches songs whose audio is new.
+may generate code (`MemoryDenyWriteExecute` off, because PyTorch's CPU kernels
+and librosa's numba compile at run time: with it on, every song fails, BTC with
+"cannot allocate executable memory" as numba loads, and beat_this with "could
+not create a primitive"). numba caches what it compiles in
+`/var/cache/tabarr/numba`, since the unit's home is read-only.
 
-The flake's `autochords` package is meant to point at the model files itself
-(fixed-output downloads, `nix/autochords.nix`). To use other files, or until
-it does, set `services.tabarr.autochords.btcWeights` and `beatCheckpoint`
-(and `btcConfig` if needed). They become `TABARR_BTC_WEIGHTS`,
-`TABARR_BEAT_CHECKPOINT` and `TABARR_BTC_CONFIG`, and `settings.autochords`
-still overrides them.
+**What a run does.** It links new files in the music folder to your songs,
+as the nightly run does, then writes an auto sheet for every song that has its
+audio file, has no human sheet (`sheet.txt`), isn't ignored, and whose audio
+changed since its last auto sheet. A sheet made before the song's lyrics
+arrived is made once more when they do. Everything else is left alone, so a
+night with no new purchases loads no model.
 
-To run it now, without waiting for the night:
+BTC finds the chords and beat_this the beats and bars. The chords then go over
+LRCLIB's timed lyrics when LRCLIB's duration matches the file's within 2
+seconds; otherwise the sheet is a chord chart by bars followed by the plain
+lyrics, which is what 斑马斑马 gets (LRCLIB has no timed lyrics for it). The
+sheet starts with "auto-generated, unverified", and the song counts as found.
+Once a human sheet is kept for the song, auto-chords no longer touches it.
+WAV, FLAC, Ogg and MP3 files are read with libsndfile, anything else (such as
+the AAC in an iTunes Store `.m4a`) with torchaudio's FFmpeg. Expect about half
+a minute per four-minute song on a NUC-class CPU, most of it beat tracking (an
+estimate: on the laptop it takes about 7 seconds, 6 of them beat tracking).
+
+**The model files ship with the package.** `nix/autochords.nix` fetches them
+when the package is built, as fixed-output downloads:
+
+- the BTC large-vocabulary weights (170 chord classes; MIT), from the
+  BTC-ISMIR19 repository at a pinned commit;
+- beat_this's `final0` checkpoint (MIT), from JKU's server, pinned by hash.
+
+The `autochords` package's wrapper points `TABARR_BTC_WEIGHTS` and
+`TABARR_BEAT_CHECKPOINT` at them, as defaults. To use other files, set
+`services.tabarr.autochords.btcWeights` or `beatCheckpoint`, which go into the
+unit's environment and win over the wrapper; `settings.autochords.btc_weights`
+and `beat_checkpoint` win over both.
+
+JKU publishes the checkpoint at an unversioned URL. If it ever moves, a machine
+that already has the file in its store keeps building; elsewhere, add a copy of
+the file under its store name, and Nix finds it by its hash:
+
+```sh
+cp final0.ckpt beat_this-final0.ckpt
+nix-store --add-fixed sha256 beat_this-final0.ckpt
+# /nix/store/vvm1q1xipnvz4a0yxh68nxd5zvf1s095-beat_this-final0.ckpt
+```
+
+To run it now, without waiting for the night, for instance right after
+dropping in a purchase:
 
 ```sh
 sudo systemctl start tabarr-autochords.service
 journalctl -u tabarr-autochords.service -e
 ```
 
+The command's last line is a count such as `auto-chords: 1 generated,
+4 skipped, 0 failed`. A song that fails, say because its file won't decode,
+is named in the journal with the reason and tried again the next night; the
+unit then exits 1, so ntfy tells you. Missing model files fail every song due,
+and the journal says so once. `sudo tabarr-admin autochords` runs the same
+command with the `autochords` package when auto-chords is enabled; the default
+package has no torch, and says so if asked.
+
+On the laptop, `nix develop .#autochords -c pytest -m autochords` runs the
+model tests against the same model files. `nix flake check` builds both
+packages, each running the test suite (the model tests aside) and then
+`tabarr autochords` on the wrapped program, and evaluates the module.
+
+## 7. Chinese sheets in the PDFs
+
+ChordPro's built-in PDF fonts have no Chinese glyphs, so the packages' wrapper
+points `TABARR_CJK_FONT` at lxgw-fusionkai's `FusionKaiJ-Regular.ttf`, a Kai
+(brush-style) face. The choice is narrow with ChordPro 6.050.7:
+
+- it cannot open `.ttc` collections, which is all nixpkgs ships of Noto CJK
+  and Source Han Sans;
+- its PDF library corrupts the glyph subsets it embeds from TrueType fonts
+  with odd-length glyph records, which most CJK TTFs have (LXGW Neo XiHei and
+  WenKai among them): the PDF shows blank glyphs, although its text can still
+  be copied. tabarr refuses such a font with an error instead of writing that
+  PDF.
+
+FusionKaiJ has no odd-length records and gives PDFs of a few hundred KB. To
+use another font, set `settings.cjk_font` to a single `.ttf` that passes the
+same check, or to a CFF-based `.otf` (embedded whole, so the PDFs are larger),
+or build the package with `tabarr.override { cjkFont = "…"; }`.
+
 ## When something is wrong
 
 - **ntfy says a unit failed:** `journalctl -u tabarr.service -e` (or
   `tabarr-autochords.service`).
+- **Auto-chords keeps failing on one song:** its file is named in
+  `journalctl -u tabarr-autochords.service`. Replace the file (or remove it),
+  and the next run tries again.
 - **Syncthing reports "permission denied":** check that `ls -ld /srv/tabs`
   shows `drwxrwsr-x tabarr tabarr`, and that `id syncthing` lists `tabarr`.
   Restart Syncthing after the group change, and check that the folder has

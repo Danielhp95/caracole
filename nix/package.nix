@@ -1,11 +1,13 @@
 # tabarr as a Python application built from nixpkgs dependencies only. The
 # wrapper puts `chordpro` on PATH for sheet PDFs, and points TABARR_CJK_FONT at
-# a font with Chinese glyphs, so a song like 斑马斑马 renders.
+# a font with Chinese glyphs, so a song like 斑马斑马 renders. The `autochords`
+# variant's wrapper also points at the model files the offline unit needs.
 {
   lib,
+  callPackage,
   python3Packages,
   perl5Packages,
-  lxgw-neoxihei,
+  lxgw-fusionkai,
 
   # `chordpro`, without its wxWidgets GUI: the full package pulls GTK, WebKit
   # and GStreamer (about 1 GiB) into a closure that only ever runs headless.
@@ -16,19 +18,25 @@
     '';
   }),
 
-  # The CJK font for sheets, as one static .ttf or .otf file. ChordPro's text
-  # layer opens only those two as font files and takes any other name for a PDF
-  # core font, so a .ttc collection (noto-fonts-cjk-sans-static, source-han-sans)
-  # does not work. LXGW Neo XiHei is a single 7 MB sans TTF (simplified Chinese).
-  cjkFont ? "${lxgw-neoxihei}/share/fonts/truetype/LXGWNeoXiHei.ttf",
+  # The CJK font for sheets, as one static .ttf or .otf file. ChordPro 6.050.7
+  # opens only those as font files, so a .ttc collection (noto-fonts-cjk-sans,
+  # source-han-sans) does not work. And its PDF library corrupts the glyph
+  # subsets it embeds from TrueType fonts with odd-length glyph records, which
+  # most CJK TTFs have (LXGW Neo XiHei and WenKai among them); src/tabarr/render.py
+  # refuses those. FusionKaiJ, a Kai (brush) face, has none, and renders with
+  # normal subsetting: about 0.4 MB per Chinese sheet.
+  cjkFont ? "${lxgw-fusionkai}/share/fonts/truetype/FusionKaiJ-Regular.ttf",
 
   # The `autochords` extra: torch, beat-this, librosa and friends.
   withAutochords ? false,
-  # Model files the auto-chords wrapper points at by default (the NixOS module's
-  # options, and settings.autochords, still win). Null leaves them unset.
-  btcWeights ? null,
+  # The model files the auto-chords variant's wrapper sets by default
+  # (TABARR_BTC_WEIGHTS, TABARR_BEAT_CHECKPOINT): the fixed-output downloads in
+  # ./autochords.nix, because the unit has no network. The NixOS module's
+  # options, then settings.autochords, win over them. Null leaves one unset.
+  models ? callPackage ./autochords.nix { },
+  btcWeights ? models.btcWeights,
   btcConfig ? null,
-  beatCheckpoint ? null,
+  beatCheckpoint ? models.beatThisCheckpoint,
 }:
 
 let
@@ -81,6 +89,8 @@ python3Packages.buildPythonApplication (finalAttrs: {
 
   optional-dependencies.autochords = with python3Packages; [
     torch
+    # btc.py decodes .m4a (AAC) through it; beat-this pulls it in too.
+    torchaudio
     beat-this
     librosa
     numpy
@@ -114,7 +124,8 @@ python3Packages.buildPythonApplication (finalAttrs: {
   '';
 
   # After the tests, on the wrapped program: the font exists, and the wrapper
-  # sets it and finds chordpro.
+  # sets it and finds chordpro. The auto-chords variant finds its models and
+  # their packages; the default one says where to get them.
   postCheck = ''
     if [ ! -f ${lib.escapeShellArg cjkFont} ]; then
       echo "CJK font not found: ${cjkFont}" >&2
@@ -123,7 +134,26 @@ python3Packages.buildPythonApplication (finalAttrs: {
     grep -qF -- ${lib.escapeShellArg cjkFont} $out/bin/tabarr
     grep -qF -- ${lib.escapeShellArg "${chordpro}/bin"} $out/bin/tabarr
     $out/bin/tabarr --version | grep -qFx "tabarr ${finalAttrs.version}"
-  '';
+  ''
+  + (
+    if withAutochords then
+      lib.concatMapStrings (file: ''
+        test -f ${lib.escapeShellArg file}
+        grep -qF -- ${lib.escapeShellArg file} $out/bin/tabarr
+      '') (lib.attrValues modelFiles)
+      + ''
+        $out/bin/tabarr autochords > autochords.out
+        grep -qFx "auto-chords: 0 generated, 0 skipped, 0 failed" autochords.out
+      ''
+    else
+      ''
+        if $out/bin/tabarr autochords 2> autochords.err; then
+          echo "tabarr autochords ran without torch, librosa and beat_this" >&2
+          exit 1
+        fi
+        grep -qF "packages.autochords" autochords.err
+      ''
+  );
 
   pythonImportsCheck = [
     "tabarr"
@@ -131,7 +161,13 @@ python3Packages.buildPythonApplication (finalAttrs: {
   ];
 
   passthru = {
-    inherit chordpro cjkFont withAutochords;
+    inherit
+      chordpro
+      cjkFont
+      withAutochords
+      btcWeights
+      beatCheckpoint
+      ;
   };
 
   meta = {
