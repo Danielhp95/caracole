@@ -1,0 +1,24 @@
+{title: Synthetic Test Song}
+{artist: The Placeholders}
+{key: G}
+{capo: 2}
+{comment: Intro}
+[G] [D] [Em] [C] [*x2]
+
+{comment: Verse 1}
+[G]Tiny test [D]words go here
+Made [Em]up only for a [C]parser
+
+{comment: Chorus}
+[C]Sing it out [G/B](softly) [Am]now
+[F] [C]
+
+{comment: Riff}
+{start_of_tab}
+e|-----0---0---|
+B|---1---1---1-|
+G|-2-----------|
+{end_of_tab}
+
+{comment: Outro}
+[G] [D] [C] [*(x4)]

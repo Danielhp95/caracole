@@ -1,0 +1,9 @@
+[Verse]
+[tab][ch]C[/ch]       [ch]G[/ch]
+这是一个合成的例子[/tab]
+[tab][ch]Am[/ch]          [ch]F[/ch]
+测试歌词第二行[/tab]
+
+[Chorus]
+[tab][ch]F[/ch]   [ch]C[/ch]       [ch]G[/ch]
+和弦只为检查对齐[/tab]
