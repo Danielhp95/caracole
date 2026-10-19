@@ -767,8 +767,10 @@ Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
 caracole's lock (behind a nightly run, it waits), keeps the pause after the
 last request any caracole sent, and keeps the budgets and cooldowns. The
-queue holds 20 requests and one per song; a request is in wanted.txt as soon as
-it's made, so a full queue or a restart loses no song. The page links each
+queue holds 20 requests and one per song: asking again for a song gives its
+request, and Fetch it now on a song whose request only adds it fetches it too.
+A request is in wanted.txt as soon as it's made, so a full queue or a restart
+loses no song. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
 and Guitar Pro files as downloads, never through a symbolic link, never a
 hidden file, and never the database, the token or the cache.

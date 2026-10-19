@@ -159,6 +159,26 @@ def test_a_request_without_fetch_only_adds(app, queue):
     assert job.title == "Add Radiohead - Creep"
 
 
+def test_fetch_it_now_on_a_song_whose_add_still_waits_fetches_it_too(app, queue):
+    # The queue is busy (another song's fetch, a nightly run holding the lock): the add waits.
+    assert post(app, "/request", {"artist": "Radiohead", "title": "Creep"}).status == 303
+    again = post(app, "/request", {"artist": "Radiohead", "title": "Creep", "fetch": "1"})
+    assert again.status == 303 and header(again, "location") == "/jobs#job-1"
+    job = queue.snapshot()[0]
+    assert job.fetching and job.title == "Fetch Radiohead - Creep"
+    queue.run_pending()
+    assert queue._runner.calls == [["add", "--", "Radiohead", "Creep"], ["match"],
+                                   ["fetch", "--song=Radiohead - Creep"], ["render"]]
+
+
+def test_the_cards_fetch_now_on_a_song_whose_add_still_waits_fetches_it_too(app, conn, queue):
+    creep = add_song(conn, "Radiohead", "Creep")
+    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
+    assert post(app, "/fetch", {"song": str(creep.id)}).status == 303
+    queue.run_pending()
+    assert [c[0] for c in queue._runner.calls] == ["add", "match", "fetch", "render"]
+
+
 def test_a_song_listed_already_is_left_as_it_is(app, cfg, queue):
     post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
     queue.run_pending()

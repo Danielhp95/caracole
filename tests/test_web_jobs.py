@@ -97,6 +97,50 @@ def test_one_job_per_song_at_a_time():
     assert new_later and later.id != job.id  # the first one is done
 
 
+def test_a_fetch_joins_a_waiting_add_of_the_same_song():
+    queue = JobQueue(FakeRunner())
+    add, _ = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"),
+                          note="Added to wanted.txt, line 3.")
+    fetch, new = queue.submit("Fetch Radiohead - Creep", "radiohead|creep",
+                              add_steps("Radiohead", "Creep") + fetch_steps("Radiohead - Creep"), fetching=True)
+    assert not new and fetch.id == add.id
+    assert fetch.title == "Fetch Radiohead - Creep" and fetch.fetching and fetch.note == "Added to wanted.txt, line 3."
+    assert [s.args[0] for s in fetch.steps] == ["add", "match", "fetch", "render"]  # the add once
+    assert queue.fetching_keys() == {"radiohead|creep"} and queue.active_count() == 1
+
+
+def test_an_add_never_replaces_a_fetch_of_the_same_song():
+    queue = JobQueue(FakeRunner())
+    fetch, _ = queue.submit("Fetch Radiohead - Creep", "radiohead|creep", fetch_steps("Radiohead - Creep"),
+                            fetching=True)
+    add, new = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"))
+    assert not new and add.id == fetch.id and add.title == "Fetch Radiohead - Creep"
+    assert [s.args[0] for s in add.steps] == ["match", "fetch", "render"]
+
+
+def test_a_fetch_asked_for_while_the_songs_add_runs_comes_after_it():
+    asked = []
+    calls = []
+
+    def runner(args, emit):  # requests that arrive while `caracole add` runs
+        if args[0] == "add" and not asked:
+            asked.append(queue.submit("Fetch Radiohead - Creep", "radiohead|creep",
+                                      add_steps("Radiohead", "Creep") + fetch_steps("Radiohead - Creep"),
+                                      fetching=True))
+            asked.append(queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep")))
+        calls.append(args[0])
+        return 0
+
+    queue = JobQueue(runner)
+    first, _ = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"))
+    queue.run_pending()
+    (fetch, new), (again, new_again) = asked
+    assert new and fetch.id != first.id and fetch.fetching
+    assert not new_again and again.id == fetch.id  # it joins the fetch, which does more
+    assert calls == ["add", "add", "match", "fetch", "render"]
+    assert [j.state for j in queue.snapshot()] == ["done", "done"]
+
+
 def test_the_queue_holds_a_limited_number_of_requests():
     queue = JobQueue(FakeRunner(), limit=2)
     queue.submit("Add A - 1", "a|1", add_steps("A", "1"))

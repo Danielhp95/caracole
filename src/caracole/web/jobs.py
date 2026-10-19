@@ -10,7 +10,8 @@ a terminal. One worker thread runs the jobs in order, so the server never runs
 two commands at once: it can be no more aggressive than someone typing them.
 
 A step that exits non-zero fails its job, and the job's other steps are
-skipped. The queue holds ``limit`` jobs waiting or running, one per song, and
+skipped. The queue holds ``limit`` jobs waiting or running, one per song (a
+fetch joins the song's waiting add, or follows it once it runs), and
 remembers the last ``keep`` finished ones, in memory only: a request is in
 wanted.txt from the moment it's made, so a restart loses no song, only the
 fetch that would have come before the nightly run.
@@ -107,14 +108,28 @@ class JobQueue:
 
     def submit(self, title: str, song_key: str, steps: Sequence[tuple[str, Sequence[str]]], *,
                fetching: bool = False, note: str = "") -> tuple[Job, bool]:
-        """Queue a job, and say whether it is new: a song with a job waiting or running keeps that one.
+        """Queue a job, and say whether it is new: one per song, unless a fetch must come after an add.
 
-        Raises QueueFull when ``limit`` jobs are waiting or running.
+        A song's waiting or running job that does as much (a fetch, or the new
+        job fetches nothing) is the answer. A fetch joins a song's add that
+        still waits: the add gets the fetch's other steps. One asked for while
+        the add runs comes after it, as a job of its own. Raises QueueFull when
+        ``limit`` jobs are waiting or running.
         """
         with self._lock:
-            for job in self._jobs:
-                if job.active and job.song_key == song_key:
-                    return copy.deepcopy(job), False
+            mine = [job for job in self._jobs if job.active and job.song_key == song_key]
+            enough = next((job for job in mine if job.fetching), None)  # a fetch does the most
+            if enough is None and not fetching and mine:
+                enough = mine[0]
+            if enough is not None:
+                return copy.deepcopy(enough), False
+            waiting = next((job for job in mine if job.state == "queued"), None)
+            if waiting is not None:
+                has = {step.args for step in waiting.steps}
+                waiting.steps += [Step(label, tuple(args)) for label, args in steps if tuple(args) not in has]
+                waiting.title, waiting.fetching = title, True
+                waiting.note = waiting.note or note
+                return copy.deepcopy(waiting), False
             if sum(job.active for job in self._jobs) >= self._limit:
                 raise QueueFull(f"{self._limit} requests are waiting already")
             job = Job(self._next_id, title, song_key, [Step(label, tuple(args)) for label, args in steps],
