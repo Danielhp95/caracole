@@ -1,0 +1,41 @@
+[
+  {
+    "id": 25077405,
+    "name": "斑马斑马",
+    "trackName": "斑马斑马",
+    "artistName": "宋冬野",
+    "albumName": "民谣精选聆听【十倍音质】",
+    "duration": 253.1004,
+    "instrumental": false,
+    "hasWordSync": false,
+    "plainLyrics": "範例歌詞 第一行 這是測試用的句子\n範例歌詞 第二行 沒有真正的歌詞\n範例歌詞 第三行 只用來檢查格式\n範例歌詞 第一行 這是測試用的句子\n範例歌詞 第四行 結束",
+    "syncedLyrics": null,
+    "lyricsfile": "version: '1.0'\nmetadata:\n  title: 斑马斑马\n  artist: 宋冬野\n  album: 民谣精选聆听【十倍音质】\n  duration_ms: 253100\n  instrumental: false\nlines: []\nplain: |-\n  範例歌詞 第一行 這是測試用的句子\n  範例歌詞 第二行 沒有真正的歌詞\n  範例歌詞 第三行 只用來檢查格式\n  範例歌詞 第一行 這是測試用的句子\n  範例歌詞 第四行 結束\n"
+  },
+  {
+    "id": 27538104,
+    "name": "斑马斑马",
+    "trackName": "斑马斑马",
+    "artistName": "宋冬野",
+    "albumName": "在线热搜（华语）系列51",
+    "duration": 253.44,
+    "instrumental": false,
+    "hasWordSync": false,
+    "plainLyrics": "範例歌詞 第一行 這是測試用的句子\n範例歌詞 第二行 沒有真正的歌詞\n範例歌詞 第三行 只用來檢查格式\n範例歌詞 第一行 這是測試用的句子\n範例歌詞 第四行 結束",
+    "syncedLyrics": null,
+    "lyricsfile": "version: '1.0'\nmetadata:\n  title: 斑马斑马\n  artist: 宋冬野\n  album: 在线热搜（华语）系列51\n  duration_ms: 253440\n  instrumental: false\nlines: []\nplain: |-\n  範例歌詞 第一行 這是測試用的句子\n  範例歌詞 第二行 沒有真正的歌詞\n  範例歌詞 第三行 只用來檢查格式\n  範例歌詞 第一行 這是測試用的句子\n  範例歌詞 第四行 結束\n"
+  },
+  {
+    "id": 29499942,
+    "name": "斑马斑马",
+    "trackName": "斑马斑马",
+    "artistName": "宋冬野",
+    "albumName": "安和桥北",
+    "duration": 253.0,
+    "instrumental": false,
+    "hasWordSync": false,
+    "plainLyrics": "範例歌詞 第一行 這是測試用的句子\n範例歌詞 第二行 沒有真正的歌詞\n範例歌詞 第三行 只用來檢查格式\n範例歌詞 第一行 這是測試用的句子\n範例歌詞 第四行 結束",
+    "syncedLyrics": null,
+    "lyricsfile": "version: '1.0'\nmetadata:\n  title: 斑马斑马\n  artist: 宋冬野\n  album: 安和桥北\n  duration_ms: 253000\n  instrumental: false\nlines: []\nplain: |-\n  範例歌詞 第一行 這是測試用的句子\n  範例歌詞 第二行 沒有真正的歌詞\n  範例歌詞 第三行 只用來檢查格式\n  範例歌詞 第一行 這是測試用的句子\n  範例歌詞 第四行 結束\n"
+  }
+]
