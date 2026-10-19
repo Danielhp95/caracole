@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from tabarr.spotify import SpotifyAPI
     from tabarr.wanted import WantedLine
 
-# What `tabarr auth spotify` says when there's no client id (docs/usage.md, section 2).
+# What `tabarr auth spotify` says when there's no client id (docs/usage.md, "Spotify (optional)").
 _SPOTIFY_SETUP = """\
 Spotify isn't set up. It's optional: wanted.txt works without it.
 To add your Liked Songs and playlists:
