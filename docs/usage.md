@@ -194,7 +194,9 @@ song in the library.
 4. Run `tabarr sync`, or leave it to the nightly run.
 
 Without a client id, Spotify is skipped silently, and `tabarr auth spotify`
-prints these steps instead. Spotify never fails a sync or a run. When the
+prints these steps instead. Spotify never fails a sync or a run. With a client
+id but no client secret, the sync says that Spotify isn't fully set up and
+where the secret goes; authorizing can't help until it is there. When the
 token is missing or has expired, the run carries on with wanted.txt, the to-do
 page says that Spotify needs authorization, and ntfy tells you once. Spotify
 expires the refresh token about six months after you authorize: run
@@ -417,8 +419,9 @@ of these sections, when it has something in it:
   Add the ones you want to learn to your Learn playlist or to wanted.txt.
 - **PDFs.** The last render: how many PDFs were made or failed, a font
   problem if there is one, and the sheets that failed.
-- **Sources.** Whether Spotify is off, synced, or needs `tabarr auth spotify`,
-  and how many songs wanted.txt has, with the lines it couldn't read.
+- **Sources.** Whether Spotify is off, synced, not fully set up (the client
+  secret missing, say), or needs `tabarr auth spotify`, and how many songs
+  wanted.txt has, with the lines it couldn't read.
 - **Provider health.** For Ultimate Guitar, LRCLIB and LaCuerda: OK, or
   cooling down until when; the last success; the last error; the requests of
   the last run.

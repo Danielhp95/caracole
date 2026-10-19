@@ -18,6 +18,7 @@ from tabarr.spotify import (
     UNDATED,
     PlaylistUnavailable,
     SpotifyAuthError,
+    SpotifySetupError,
     SpotifySourceError,
     SpotifyTrack,
     authorize,
@@ -788,8 +789,12 @@ def test_make_auth_settings(tmp_path):
 
 def test_make_auth_needs_the_client_secret_from_tabarr_config(tmp_path, monkeypatch):
     monkeypatch.setenv("SPOTIPY_CLIENT_SECRET", "from-spotipy-env")
-    with pytest.raises(SpotifyAuthError, match="client secret"):
+    with pytest.raises(SpotifySetupError, match="client secret") as raised:
         make_auth(spotify(), tmp_path / "state")
+    # Authorizing can't help until the secret is there, and on NixOS it's a module option.
+    assert "tabarr auth spotify" not in str(raised.value)
+    assert "services.tabarr.credentials.spotify_client_secret" in raised.value.problem
+    assert isinstance(raised.value, SpotifyAuthError)  # what callers catch still covers it
 
 
 def test_client_from_config_is_none_without_spotify_or_token(tmp_path):

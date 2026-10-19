@@ -186,9 +186,27 @@ def test_sync_sources_needs_authorization_without_a_client(tmp_path, wanted):
 
 
 def test_sync_sources_says_when_the_client_secret_is_missing(tmp_path, wanted):
-    report = run(config(tmp_path, client_id="cid"), Repo(), None)
-    assert report.spotify_state == "auth_needed"
+    # `tabarr auth spotify` would fail the same way: the advice is to give the secret.
+    repo = Repo()
+    report = run(config(tmp_path, client_id="cid"), repo, None)
+    assert report.spotify_state == "setup_needed"
     assert "client secret" in report.spotify_message
+    assert "services.tabarr.credentials.spotify_client_secret" in report.spotify_message
+    assert repo.record("source:spotify")["state"] == "setup_needed"
+    summary = report.summary()
+    assert "Spotify isn't fully set up (The client secret is missing" in summary
+    assert "authoriz" not in summary
+
+
+def test_summary_says_spotify_isnt_fully_set_up():
+    report = SourcesReport(
+        wanted=SyncStats(seen=3, new=0),
+        spotify_state="setup_needed",
+        spotify_message="The client secret is missing.",
+    )
+    assert report.summary() == (
+        "wanted.txt 3 songs, 0 new; Spotify isn't fully set up (The client secret is missing.)"
+    )
 
 
 def test_sync_sources_turns_a_refused_token_into_auth_needed(tmp_path, wanted):

@@ -97,9 +97,11 @@ def utc_stamp(now: datetime) -> str:
 class SourcesReport:
     """How one ``sync_sources`` went.
 
-    ``spotify_state`` is "off" (not configured), "ok", "auth_needed" or "error".
-    ``spotify_message`` says what went wrong; it leaves out the advice to run
-    ``tabarr auth spotify``, which callers add where they show it.
+    ``spotify_state`` is "off" (not configured), "ok", "setup_needed" (configured
+    in part, such as without its client secret), "auth_needed" or "error".
+    ``spotify_message`` says what went wrong; for "auth_needed" it leaves out the
+    advice to run ``tabarr auth spotify``, which callers add where they show it.
+    For "setup_needed" that advice would not help: the message says what to set.
     """
 
     wanted: SyncStats
@@ -118,6 +120,9 @@ class SourcesReport:
             parts.append("Spotify off")
         elif self.spotify_state == "auth_needed":
             parts.append("Spotify needs authorization (run `tabarr auth spotify`)")
+        elif self.spotify_state == "setup_needed":
+            line = "Spotify isn't fully set up"
+            parts.append(f"{line} ({self.spotify_message})" if self.spotify_message else line)
         else:
             s = self.spotify
             line = (
@@ -165,18 +170,27 @@ def sync_sources(
     if not cfg.spotify.enabled:
         return report
 
-    from tabarr.spotify import SpotifyAuthError, SpotifyError, no_client_error, sync_spotify
+    from tabarr.spotify import (
+        SpotifyAuthError,
+        SpotifyError,
+        SpotifySetupError,
+        no_client_error,
+        sync_spotify,
+    )
+
+    def needs(e: SpotifyAuthError) -> tuple[str, str]:
+        state = "setup_needed" if isinstance(e, SpotifySetupError) else "auth_needed"
+        return state, _sentence(e.problem)
 
     if spotify is None:
-        report.spotify_state = "auth_needed"
-        report.spotify_message = _sentence(no_client_error(cfg).problem)
+        report.spotify_state, report.spotify_message = needs(no_client_error(cfg))
     else:
         try:
             report.spotify = sync_spotify(
                 conn, spotify, cfg.spotify, now, upsert=upsert, kv_set=kv_set
             )
         except SpotifyAuthError as e:
-            report.spotify_state, report.spotify_message = "auth_needed", _sentence(e.problem)
+            report.spotify_state, report.spotify_message = needs(e)
         except SpotifyError as e:
             report.spotify_state, report.spotify_message = "error", str(e)
         else:

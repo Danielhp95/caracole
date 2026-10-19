@@ -2,9 +2,10 @@
 
 Spotify is never make-or-break. Without a ``client_id`` it is off, and without a
 saved token ``client_from_config`` returns None. Every failure is raised as
-``SpotifyAuthError`` (run ``tabarr auth spotify``) or ``SpotifySourceError``,
-which the nightly run reports and moves past. Nothing here prompts, except
-``authorize``, which ``tabarr auth spotify`` drives.
+``SpotifyAuthError`` (run ``tabarr auth spotify``), its ``SpotifySetupError``
+(the client secret is missing, say: authorizing can't help yet) or
+``SpotifySourceError``, which the nightly run reports and moves past. Nothing
+here prompts, except ``authorize``, which ``tabarr auth spotify`` drives.
 
 Spotify's February 2026 changes for Development Mode apps, as handled here:
 
@@ -78,11 +79,20 @@ class SpotifyError(Exception):
 
 
 class SpotifyAuthError(SpotifyError):
-    """Spotify needs authorizing: no usable token, an expired or revoked one, a 401, no secret."""
+    """Spotify needs authorizing: no usable token, an expired or revoked one, a 401."""
+
+    _message = "Spotify: {problem}. Run `tabarr auth spotify`."
 
     def __init__(self, problem: str):
         self.problem = problem
-        super().__init__(f"Spotify: {problem}. Run `tabarr auth spotify`.")
+        super().__init__(self._message.format(problem=problem))
+
+
+class SpotifySetupError(SpotifyAuthError):
+    """Spotify is set up only in part: no client secret, say. ``tabarr auth spotify`` would
+    fail the same way, so the advice is what to set, not to authorize."""
+
+    _message = "Spotify isn't fully set up: {problem}."
 
 
 class SpotifySourceError(SpotifyError):
@@ -167,17 +177,18 @@ def make_auth(cfg: SpotifyConfig, state_dir: Path) -> spotipy.SpotifyOAuth:
 
     It never opens a browser and never prompts. The client id, secret and
     redirect URI come from tabarr's config only (spotipy's ``SPOTIPY_*``
-    variables are not consulted); a missing one raises SpotifyAuthError.
+    variables are not consulted); a missing one raises SpotifySetupError.
     """
     if not cfg.client_id:
-        raise SpotifyAuthError("no client id: set [spotify] client_id in tabarr.toml")
+        raise SpotifySetupError("no client id: set [spotify] client_id in tabarr.toml")
     if not cfg.client_secret:
-        raise SpotifyAuthError(
-            "the client secret is missing: put it in $CREDENTIALS_DIRECTORY/spotify_client_secret, "
-            "a [spotify] client_secret_file, or TABARR_SPOTIFY_CLIENT_SECRET"
+        raise SpotifySetupError(
+            "the client secret is missing; put it in $CREDENTIALS_DIRECTORY/spotify_client_secret, "
+            "a [spotify] client_secret_file or $TABARR_SPOTIFY_CLIENT_SECRET, or on NixOS set "
+            "services.tabarr.credentials.spotify_client_secret"
         )
     if not cfg.redirect_uri:
-        raise SpotifyAuthError("no redirect URI: set [spotify] redirect_uri in tabarr.toml")
+        raise SpotifySetupError("no redirect URI: set [spotify] redirect_uri in tabarr.toml")
     state = Path(state_dir)
     state.mkdir(mode=0o700, parents=True, exist_ok=True)
     return _NoPromptOAuth(
@@ -194,7 +205,7 @@ def make_auth(cfg: SpotifyConfig, state_dir: Path) -> spotipy.SpotifyOAuth:
 def client_from_config(cfg: Config) -> spotipy.Spotify | None:
     """A Spotify client using the saved token; None when Spotify is off or not authorized yet.
 
-    It never prompts. It raises SpotifyAuthError when a token is saved but the
+    It never prompts. It raises SpotifySetupError when a token is saved but the
     client secret is missing.
     """
     if not cfg.spotify.enabled or not token_path(cfg.state_dir).is_file():
