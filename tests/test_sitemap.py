@@ -5,9 +5,11 @@ import pytest
 
 from caracole.ug.sitemap import (
     IndexRow,
+    classify_tab_url,
     iter_locs,
     parse_sitemap_index,
     parse_tab_url,
+    sitemap_label,
     sitemap_name,
     tab_sitemaps,
 )
@@ -213,3 +215,39 @@ def test_parse_tab_url_keeps_the_raw_path():
     row = parse_tab_url("https://tabs.ultimate-guitar.com/tab/the-rifles/the-general-guitar-pro-6228251")
     assert (row.artist_key, row.song_key) == ("rifles", "general")
     assert row.path == "the-rifles/the-general-guitar-pro-6228251"
+
+
+def test_sitemap_label_is_the_file_name_in_the_url():
+    for url in (WWW + "sitemap40.xml", WWW + "sitemap_last.xml"):
+        assert sitemap_label(sitemap_name(url)) == url.rsplit("/", 1)[1]
+
+
+# --- why a tab URL has no index row ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("url", "kind"),
+    [
+        (TAB + "6571181", "bare"),
+        ("http://tabs.ultimate-guitar.com/tab/85053", "bare"),
+        (TAB + "china-crisis/arizona-sky-bass-6228233", "bass"),
+        (TAB + "rainbow/man-on-the-silver-mountain-ukulele-6573122", "ukulele"),
+        (TAB + "green-day/wake-me-up-when-september-ends-drums-1045015", "drums"),
+        (TAB + "nat-adderley/work-song-musescore-5955137", "musescore"),
+        (TAB + "some-artist/some-song-123", "unrecognized"),  # no type
+        (TAB + "/autosmile-chords-65163", "unrecognized"),  # no artist
+        (TAB + "some-artist/chords-123", "unrecognized"),  # no song once canonicalized
+        ("https://www.ultimate-guitar.com/tab/queen/the-miracle-power-1041631", "unrecognized"),
+        ("https://www.ultimate-guitar.com/tab/1041631", "unrecognized"),  # bare, but not on the tabs host
+    ],
+)
+def test_classify_tab_url_says_why_a_url_has_no_row(url, kind):
+    # Bare ids matter apart from the rest: they are tabs, reachable only through artist pages.
+    assert classify_tab_url(url) == kind
+
+
+def test_classify_tab_url_gives_the_row_parse_tab_url_gives():
+    url = TAB + "soda-stereo/de-musica-ligera-chords-85053"
+    assert classify_tab_url(url) == parse_tab_url(url) == IndexRow(
+        85053, "soda-stereo", "de-musica-ligera", "chords", "soda-stereo/de-musica-ligera-chords-85053"
+    )

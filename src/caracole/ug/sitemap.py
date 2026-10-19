@@ -35,9 +35,14 @@ TYPE_TOKENS = (
     "drums",
 )
 
+# Why a tab URL has no index row (``classify_tab_url``), besides an unkept type's token.
+BARE = "bare"  # /tab/{id}: no artist or song in the URL, so only the artist's page leads to it
+UNRECOGNIZED = "unrecognized"  # no type token, an empty artist or song key, or not a tab page
+
 _GZIP_MAGIC = b"\x1f\x8b"
 _LOC = re.compile(rb"<loc>([^<]*)</loc>")
 _TAB_URL = re.compile(r"https?://tabs\.ultimate-guitar\.com/tab/([^/]*)/([^/]*)-(\d+)")
+_BARE_TAB_URL = re.compile(r"https?://tabs\.ultimate-guitar\.com/tab/\d+")
 _TAB_SITEMAP = re.compile(r"/sitemap(\d+|_last)\.xml\Z")
 _XML_ENTITIES = {"&quot;": '"', "&apos;": "'"}
 
@@ -74,18 +79,29 @@ def parse_tab_url(url: str) -> IndexRow | None:
     None for: other hosts, bare ``/tab/{id}`` URLs, unknown or unkept types
     (bass, ukulele, official, video, musescore, drums), and an artist or song
     whose key is empty once canonicalized (``/tab//autosmile-chords-65163``).
+    ``classify_tab_url`` says which.
     """
+    row = classify_tab_url(url)
+    return row if isinstance(row, IndexRow) else None
+
+
+def classify_tab_url(url: str) -> IndexRow | str:
+    """The index row for a tab page URL, as ``parse_tab_url`` gives it, or why there is none:
+    ``BARE`` for a bare ``/tab/{id}``, the type for a type the index doesn't keep (``"bass"``),
+    or ``UNRECOGNIZED``."""
     m = _TAB_URL.fullmatch(url)
     if m is None:
-        return None
+        return BARE if _BARE_TAB_URL.fullmatch(url) else UNRECOGNIZED
     artist_slug, rest, tab_id = m.groups()
     peeled = _peel_type(rest)
-    if peeled is None or peeled[1] not in KEEP_TYPES:
-        return None
+    if peeled is None:
+        return UNRECOGNIZED
     song_slug, kind = peeled
+    if kind not in KEEP_TYPES:
+        return kind
     artist_key, song_key = ug_slug_key(artist_slug), ug_slug_key(song_slug)
     if not artist_key or not song_key:
-        return None
+        return UNRECOGNIZED
     return IndexRow(int(tab_id), artist_key, song_key, kind, url.split("/tab/", 1)[1])
 
 
@@ -127,3 +143,8 @@ def sitemap_name(url: str) -> str:
     if m is None:
         raise ValueError(f"not a tab sitemap: {url}")
     return m.group(1).lstrip("_")
+
+
+def sitemap_label(name: str) -> str:
+    """The file name of the tab sitemap with that short name: ``sitemap40.xml``, ``sitemap_last.xml``."""
+    return "sitemap_last.xml" if name == "last" else f"sitemap{name}.xml"

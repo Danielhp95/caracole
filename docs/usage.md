@@ -311,10 +311,65 @@ the band Track's tabs under `/tab/track/`, which it closes, and there are a
 few more), so no song is matched to a page caracole may not read. A build or a
 refresh also drops any such tab indexed earlier.
 
+**What it prints.** Before the first tab sitemap, the build says what it
+indexes, how many tab sitemaps the sitemap index lists, how many it must
+download and how many it has already (in the HTTP cache, or indexed: those are
+asked for again with a conditional request and skipped when unchanged), about
+how many tab URLs that is, and how long the pacing makes it. Then a line per
+sitemap: its URLs, the rows indexed (and how many are new, when not all), the
+bare ids, the tabs of types the index doesn't keep, those robots.txt closes,
+and how many sitemaps are left with the time they should take. That estimate
+starts from the pacing and moves to the pace measured. Last, what the index
+holds and the state it is in. A small example, five sitemaps where UG lists 41:
+
+    Indexing Ultimate Guitar's tab pages as rows of artist, title and type, to match your songs offline.
+    Only the sitemaps UG publishes for search engines are read: no tab itself is downloaded.
+    Reading the sitemap index...
+    The sitemap index lists 5 tab sitemaps (sitemap1.xml to sitemap4.xml and sitemap_last.xml): 5 to download.
+    About 250,000 tab URLs (up to 50,000 a sitemap). 5 requests, 10-20 s apart: about 1 min.
+    [1/5] sitemap1.xml  2,000 tabs: 1,574 indexed, 221 bare ids, 195 of other types, 10 closed by robots.txt  4 left, about 1 min
+    [2/5] sitemap2.xml  2,000 tabs: 1,591 indexed, 201 bare ids, 203 of other types, 5 closed by robots.txt  3 left, about 50 s
+    [3/5] sitemap3.xml  2,000 tabs: 1,595 indexed, 204 bare ids, 199 of other types, 2 closed by robots.txt  2 left, about 30 s
+    [4/5] sitemap4.xml  2,000 tabs: 1,577 indexed, 215 bare ids, 200 of other types, 8 closed by robots.txt  1 left, about 15 s
+    [5/5] sitemap_last.xml  600 tabs: 495 indexed, 58 bare ids, 47 of other types
+    Index built: 5 sitemaps read; 6,832 new tabs.
+      Indexed     6,832 tabs: chords 3,225, tabs 2,483, guitar-pro 772, power 352
+      Artists     1,488
+      Bare ids    899 of 8,600 tab URLs (10.5%): with no artist or title in the URL, only artist pages lead to them
+      Left out    844 of other types (bass 469, ukulele 224, drums 76, video 75)
+      robots.txt  25 tabs left out: robots.txt closes their pages
+      Requests    6 of a budget of 100
+      Duration    1 min 17 s
+    The index is complete: `caracole match` can now match your songs against it, and the nightly run keeps it up to date.
+
+On a terminal the sitemap lines share one line, rewritten in place, and the
+index's state is in color. In the journal, or piped, each sitemap is a line of
+its own, with no carriage return and no color; `NO_COLOR` turns color off on a
+terminal too. The bare-id, left-out and robots.txt counts cover the sitemaps
+indexed since caracole counts them, so after an upgrade they appear once a
+build has read the sitemaps again.
+
+**When it stops part-way**, on Ctrl-C (which exits 130), a block, a cooldown
+or a spent budget (which exit 0), or another error (which exits 1), it says
+why, sums up what it read, and says how to resume and where. Blocked at the
+13th of 41 sitemaps (small ones, in this example):
+
+    [12/41] sitemap12.xml  200 tabs: 159 indexed, 21 bare ids, 20 of other types  29 left, about 8 min
+    Ultimate Guitar blocked caracole (ug: 403: https://www.ultimate-guitar.com/sitemap13.xml: HTTP 403). No more requests to it until 2026-10-20 22:54 UTC (block #1); the sitemaps read so far are kept.
+    Index build stopped after 12 of 41 sitemaps; 1,891 new tabs.
+      ...
+      Requests    14 of a budget of 100
+      Duration    3 min 26 s
+    The index is partial: 12 of 41 tab sitemaps indexed, so no song is matched against it yet.
+    To resume, run `caracole index refresh` after 2026-10-20 22:54 UTC: it reads the 29 sitemaps left, sitemap13.xml to sitemap40.xml and sitemap_last.xml (30 requests, about 7 min). The nightly run does the same.
+
 **`caracole index build --from DIR`** builds the index offline, from sitemap
 files you already have: `sitemap1.xml` to `sitemap40.xml` and
 `sitemap_last.xml`, gzipped or not. It sends no requests. The 41 files take
-about 22 seconds and make a 303 MB database.
+about 22 seconds and make a 303 MB database. It prints the same, with the
+files it found in place of the sitemap index. A file that isn't a sitemap
+stops it, exiting 1: the files before it are kept, and running it again reads
+every file again.
 
 About a tenth of UG's tabs are listed by a bare id (`/tab/1234567`, with no
 artist or song in the address), and the index can't see those. They include
@@ -326,7 +381,19 @@ or for any of their tab pages (see [the to-do page](#the-to-do-page)).
 sitemap and any numbered one not indexed yet, whether new or left by a stopped
 build. These are conditional requests, which usually answer "unchanged". A
 new tab for a song you want marks that song to be fetched again. The nightly
-run does this; the command does it by hand.
+run does this; the command does it by hand. In the journal or piped, it
+prints a line for each sitemap that changed, then one line for it all (on a
+terminal, each sitemap shows on the live line while it is read, and only that
+last line stays):
+
+    Checking the sitemap index for new tabs...
+    [2/2] sitemap_last.xml  900 tabs: 726 indexed (231 new), 88 bare ids, 85 of other types, 1 closed by robots.txt
+    Index refreshed: 1 of 2 sitemaps changed (sitemap_last.xml): +231 tabs, no song to refetch. 3 requests, 45 s.
+
+When it reads sitemaps a stopped build left, it first says which, and how long
+they should take; once it has read them all, its last line ends with "the index
+is now complete". Stopped part-way, it says so as the build does, with how to
+resume.
 
 **`caracole index stats`** prints the number of tabs of each type, of artists
 and of sitemaps, the newest tab id, and when the index was built and last
