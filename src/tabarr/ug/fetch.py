@@ -33,7 +33,8 @@ A kept file is replaced only when another version outranks it, and is not
 rewritten when it wins again.
 
 ``rescore_kept_sheets`` scores the sheets kept before their song had lyrics,
-without a request; the nightly run calls it before fetching.
+without a request, and sends a song whose kept sheet proves partial back to
+have its sheets ranked again; the nightly run calls it before fetching.
 """
 
 from __future__ import annotations
@@ -1150,6 +1151,10 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
     ``content`` of the ``sheet.json`` kept beside it, from UG or LaCuerda) is
     scored as the fetch would have scored it. No request is made. A sheet that
     proves complete retires the auto-chords sheet, as it would have on keeping.
+
+    A sheet that proves partial was chosen on rating alone, so its song is
+    marked dirty when it has UG sheets that coverage never ranked: the next
+    fetch ranks them again, from the cached pages.
     """
     rows = conn.execute(
         "SELECT f.song_id, f.version_id FROM files f JOIN versions v ON v.id = f.version_id "
@@ -1167,9 +1172,19 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
         set_coverage(conn, row["version_id"], value)
         if value is not None and value >= rank.coverage_threshold:
             _retire_auto_sheet(conn, library_dir, song)
+        elif _unranked_rivals(conn, song.id, row["version_id"]):
+            update_song(conn, song.id, ug_dirty=True)
         write_info(conn, library_dir, song)
         scored += 1
     return scored
+
+
+def _unranked_rivals(conn: sqlite3.Connection, song_id: int, kept_id: int) -> bool:
+    """Whether the song has live UG sheets besides the kept one that lyric coverage hasn't ranked."""
+    return any(
+        r.provider == PROVIDER and r.id != kept_id and r.coverage is None
+        for r in song_versions(conn, song_id, kinds=CHORDS_KINDS)
+    )
 
 
 def _kept_markup(conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int) -> str | None:

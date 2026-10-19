@@ -1734,6 +1734,50 @@ def test_banma_kept_before_its_lyrics_is_scored_in_pinyin(conn, tmp_path):
     assert coverages(conn, song) == {2001234: 1.0, 2001235: None}  # only the kept sheet is scored
 
 
+def test_a_partial_sheet_kept_before_its_lyrics_sends_its_song_back_to_be_ranked(conn, tmp_path):
+    # LRCLIB failed the night the song was fetched, so its sheets were ranked on rating alone:
+    # 101, the best rated, charts only the first verse; 102 and 103 are complete, and cached.
+    song = accepted(conn, plain=None)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)])
+    ug = FakeUG()
+    three_chords(ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt") and get_song(conn, song.id).ug_dirty is False
+
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics_json(LYRICS))
+    assert rescore(conn, tmp_path) == 1
+    assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW + timedelta(days=1))] == [song.id]
+
+    ug.requests.clear()
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+
+    assert ug.requests == []  # ranked again from the cache
+    assert "sheet 102" in read(tmp_path, song, "sheet.txt") and pick_ids(conn, song, "chords") == [102]
+    assert coverages(conn, song) == {101: pytest.approx(0.3), 102: 1.0, 103: 1.0}
+    assert songs_to_fetch(conn, Overrides(), NOW + timedelta(days=1)) == []
+
+
+@pytest.mark.parametrize("contents", [
+    {101: LINES, 102: LINES[:3]},  # the kept sheet proves complete: no other sheet can beat it
+    {101: LINES[:3]},  # partial, but no other sheet to rank it against
+])
+def test_a_rescored_sheet_leaves_its_song_alone_when_ranking_again_cant_help(conn, tmp_path, contents):
+    song = accepted(conn, plain=None)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in contents])
+    ug = FakeUG()
+    tabs = {t: v(t, version=n, rating=4.9 - n / 10, votes=50) for n, t in enumerate(contents, start=1)}
+    for t, lines in contents.items():
+        ug.tab(tabs[t], [o for o in tabs.values() if o is not tabs[t]], content=sheet(f"sheet {t}", lines))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics_json(LYRICS))
+    assert rescore(conn, tmp_path) == 1
+
+    assert get_song(conn, song.id).ug_dirty is False
+    assert songs_to_fetch(conn, Overrides(), NOW + timedelta(days=1)) == []
+
+
 @pytest.mark.parametrize("status,plain", [("pending", None), ("instrumental", "")])
 def test_rescore_leaves_sheets_whose_song_has_no_lyrics(conn, tmp_path, status, plain):
     song = accepted(conn, plain=None)
