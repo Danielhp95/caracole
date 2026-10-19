@@ -133,10 +133,10 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, d
     for s in songs:
         if not s.review or s.status == "ignored":
             continue
-        items.append(f"### {md(s.display)}")
+        items += [f"### {md(s.display)}", ""]
         note = _covers_note(conn, s, overrides, due)
         if note:
-            items += ["", note, ""]
+            items += [note, ""]
         refs: list[str] = []
         for cand in (s.match_candidates or [])[:5]:
             akey, skey = cand.get("artist_key"), cand.get("song_key")

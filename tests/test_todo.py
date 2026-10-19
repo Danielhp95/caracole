@@ -62,6 +62,18 @@ def test_review_item_has_links_and_paste_line(conn, cfg):
     assert '"Soda" = "soda-stereo"  # under [alias]' in text
 
 
+def test_a_reviews_heading_is_set_off_from_its_first_candidate(conn, cfg):
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    s = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"}])
+    text = todo(conn, cfg)
+    assert "probably covers" not in text
+    assert "\n### Radio Head - Crep\n\n- 89 · `radiohead/creep` (fuzzy_title)" in text
+    covers_only(conn, "Maná", "Rayando el Sol", "ana-gabriel")  # with a note: one blank line each side
+    assert re.search(r"\n### Maná - Rayando el Sol\n\nOnly other artists' [^\n]*\n\n- 100 · ", todo(conn, cfg))
+
+
 def test_review_links_use_the_slugged_url(conn, cfg):
     conn.execute(
         "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
