@@ -745,8 +745,9 @@ and cache.
 - **`caracole todo`** rewrites `_todo.md` and `index.html` from the database.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
-- **`caracole search QUERY [--limit N] [--add N]`** searches your library and
-  the offline UG index (see [caracole search](#caracole-search)).
+- **`caracole search [QUERY]... [--limit N] [--add N] [--key KEY]`** searches
+  your library and the offline UG index; `--key` finds your songs in one key
+  (see [caracole search](#caracole-search)).
 - **`caracole autochords`** writes `sheet (auto).txt` from audio you bought, for
   songs with no human sheet (see [the worked example](#a-worked-example)), then
   rewrites `_todo.md` and `index.html`. It needs the flake's
@@ -951,19 +952,30 @@ overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
 loads nothing from the network. It shows every song with its status, its key
-or transposition, and links to its files, the PDF first. A Guitar Pro file
-caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`, and a
-score its format, as `Score 1 (MuseScore)`; a score's PDF is never the card's
-main link, which is the sheet's. Under "Scores on MuseScore", a song has its
-MuseScore pages, each a possible match, as on the to-do page. A song without a
-sheet also gets buy and search links.
+and where the key came from ("Key A minor (from the tab)", "Key C major
+(estimated from the chords)", "(from the audio)": see
+[The song's key](#the-songs-key)), its transposition, and links to its files,
+the PDF first. A Guitar Pro file caracole downloaded names its site, as
+`Guitar Pro 1 · gtptabs.com`, and a score its format, as `Score 1 (MuseScore)`;
+a score's PDF is never the card's main link, which is the sheet's. Under
+"Scores on MuseScore", a song has its MuseScore pages, each a possible match,
+as on the to-do page. A song without a sheet also gets buy and search links.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
-"banma" finds 斑马斑马. The buttons show all songs, or only those found,
-wanted or needing review, and you can sort by artist or by when songs were
-added. When nothing in the library matches, the page shows the
-`caracole search` line to run.
+"banma" finds 斑马斑马. It finds keys too, however a sheet spells them: "a
+minor", "F# major", "bbm", and "gb minor", which also finds the songs in F#
+minor; or "minor" for every song in a minor key. A key written as a chord, such
+as "am", also finds the names with "am" in them ("I Am the Walrus"). The
+buttons show all songs, or only those found, wanted or needing review; the Key
+menu, there once a song has a key, shows only the songs in one key, with how
+many each key has, and puts the spellings of one key together ("F# / Gb
+minor"); and you can sort by artist or by when songs were added. When nothing
+in the library matches, the page shows the `caracole search` line to run,
+unless you searched for a key, which the offline index doesn't know.
+
+Each song's entry in the page's data (the `<script type="application/json"
+id="songs">` block) has the same `key` and `key_source` as its info.json.
 
 On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
@@ -971,8 +983,8 @@ opens the file directly, works.
 
 ### caracole search
 
-`caracole search QUERY [--limit N] [--add N]` looks in two places, and sends no
-request:
+`caracole search [QUERY]... [--limit N] [--add N] [--key KEY]` looks in
+two places, and sends no request:
 
     $ caracole search creep
     In your library
@@ -986,7 +998,8 @@ request:
          https://tabs.ultimate-guitar.com/tab/stone-temple-pilots/creep-chords-5001
          caracole add "Stone Temple Pilots" "Creep"
 
-- **In your library**: every song, whatever its status, with its folder.
+- **In your library**: every song, whatever its status, with its key when it
+  has one (`Key G major (from the tab)`) and its folder.
 - **On Ultimate Guitar**: numbered hits from the offline index, each with its
   tabs per type, one of its pages, and the `caracole add` line to paste.
 
@@ -1004,6 +1017,23 @@ entries. For an artist whose page overrides.toml has already, under any form
 of their name, it gives no line and says so. The search reads
 overrides.toml for this hint alone, and still works when the file can't be
 read.
+
+`--key KEY` keeps only your songs in that key (see
+[The song's key](#the-songs-key)), with or without QUERY; without it, your
+songs in the key, by name. It lists up to `--limit` of them, and says how many
+more there are:
+
+    $ caracole search --key Am
+    In your library, in A minor
+      Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
+
+    The offline Ultimate Guitar index has no keys: search it without --key.
+
+KEY is written the way tabs write keys, in either case: `"A minor"`, `Am`,
+`am`, `F#`, `"Bb major"`, `bbm` (B flat minor), `"La menor"`; any spelling of
+the same key matches (`Gbm` finds F# minor). The
+offline index knows no keys, so `--key` leaves it out, and `--add` can't go
+with it. A KEY that is no key exits with status 2.
 
 ## overrides.toml: your decisions
 
@@ -1175,7 +1205,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       sheet (auto).txt      made from audio you bought, when no human sheet exists;
       sheet (auto).cho      it stays, with its ChordPro and PDF, beside a partial
       sheet (auto).pdf      human sheet, until a complete one replaces it
-      info.json             where everything came from
+      info.json             where everything came from, and the song's key
 Music/                      music_dir: the tracks you bought (caracole only reads it)
 ```
 
@@ -1210,6 +1240,45 @@ back in the song's folder under its name.
 
 Keep the library private. The sheets and lyrics are other people's work, and
 a personal offline copy is the closest thing to the sites' personal-use terms.
+
+### The song's key
+
+caracole gives each song with a sheet a musical key, and says where it came
+from. It takes the first of these that gives one:
+
+1. **From the tab**: the key Ultimate Guitar gives the kept version, or a key
+   the sheet states before its first chords: a ChordPro `{key: Am}`, or a note
+   such as `Key: G`, `Key of Bb`, or LaCuerda's `Tono: La menor`.
+2. **Estimated from the chords** of the human sheet: which key's notes its
+   chords fit best, and whether it starts and ends on that key's home chord.
+   Chords that fit no key give no estimate.
+3. **From the audio**, for a sheet auto-chords wrote: the key of the chords
+   the model heard, each weighed by how long it sounds. Auto-chords records
+   it with the sheet; for a sheet made before it did, the key is estimated
+   from the chords the sheet shows.
+
+An estimate is the key of the chords as the sheet writes them, the shapes you
+play: with a capo, the song sounds higher. A key from the tab is as its
+transcriber gives it. Either is the sheet's key before any `[transpose]`.
+
+`info.json` holds it in two fields, for anything that reads the library:
+
+```json
+"key": "A minor",
+"key_source": "tab",
+"identity_key": "soda-stereo/de-musica-ligera",
+```
+
+- `key` is the tonic, a capital letter with `#` or `b` as the source spells
+  it, followed by ` minor` for a minor key: `"A minor"`, `"C"`, `"F#"`,
+  `"Bb minor"`. A major key is the tonic alone. `null` when no source gives one.
+- `key_source` is `"tab"`, `"chords"` or `"audio"`, as in the list above, and
+  `null` with no key.
+- `identity_key` is caracole's own key for the song, which info.json called
+  `key` before. The first command that rewrites the pages after an upgrade
+  rewrites every song's info.json once, with these fields. caracole never
+  rewrites an info.json that holds the same text already, so Syncthing has
+  nothing to sync for it.
 
 ## A worked example
 

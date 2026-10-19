@@ -16,6 +16,9 @@ Each song carries a search string: its artist, title and display name folded
 (accents stripped, lowercase), the same without punctuation ("acdc"), and
 pinyin for Chinese ("ban ma ban ma", "banma"). The page folds what you type the
 same way, so "musica" finds "Música" and "ban ma" finds 斑马，斑马.
+Of a song's key, the string holds only the mode ("minor"): the script reads a
+key typed in the box ("a minor", "f#m") and compares it, as the Key menu does,
+by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from urllib.parse import quote
 
 from caracole.config import Config
 from caracole.inbox import SCORE_EXTENSIONS
+from caracole.keys import SongKey, key_name, song_key
 from caracole.library import song_dir, write_atomic
 from caracole.musescore import song_pages
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
@@ -72,10 +76,10 @@ _PUNCTUATION = re.compile(r"[\W_]+")
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> str:
     """The whole page: every song, its files, and the links to find what's missing."""
-    keys = _sheet_keys(conn)
     pages = _guitar_pro_pages(conn)
     sources = _downloaded(conn)
     library = list_songs(conn)
+    keys = {s.id: song_key(conn, cfg.library_dir, s) for s in library}
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
     musescore = cfg.provider("musescore").enabled
     songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
@@ -112,12 +116,15 @@ def _musescore_links(conn: sqlite3.Connection, song: Song, overrides: Overrides)
     return [{"label": f"{p.path.removeprefix('song/')} (possible match)", "href": p.url} for p in song_pages(conn, song)]
 
 
-def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
+def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | None,
           guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
           musescore: list[dict[str, str]]) -> dict[str, Any]:
     """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, and ``musescore``
-    the song's MuseScore pages."""
+    the song's MuseScore pages.
+
+    ``key`` and ``key_source`` are the song's key and where it came from, as in its info.json.
+    """
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
     names = _file_names(song_dir(library_dir, song))
@@ -139,7 +146,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
         "status": status,
         "review": bool(song.review) and status != "ignored",
         "added": song.added_at,
-        "key": key,
+        "key": key.key if key else None,
+        "key_source": key.source if key else None,
         "transpose": overrides.transpose.get(song.key, 0),
         "lyrics": song.lyrics_status,
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
@@ -150,7 +158,10 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: str | None,
         "buy": buy,
         "sortArtist": _sort_key(song.artist),
         "sortTitle": _sort_key(title),
-        "search": _haystack([song.artist, *song.artists, title, song.display]),
+        # Only the key's mode, so that "minor" finds every minor song: the script finds a typed key
+        # ("a minor", "f#m") by its pitch class instead, which a substring of "a minor" can't do.
+        "search": _haystack([song.artist, *song.artists, title, song.display,
+                             *([key_name(key.key).rpartition(" ")[2]] if key else [])]),
     }
 
 
@@ -199,22 +210,6 @@ def _downloaded(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
     for song_id, name in rows:
         found.setdefault(song_id, {})[name] = "gtptabs.com"
     return found
-
-
-def _sheet_keys(conn: sqlite3.Connection) -> dict[int, str]:
-    """The key UG gives each kept sheet's version (``tonality_name``), by song."""
-    keys: dict[int, str] = {}
-    rows = conn.execute(
-        "SELECT f.song_id, v.raw FROM files f JOIN versions v ON v.id = f.version_id WHERE f.name = 'sheet.txt'"
-    )
-    for song_id, raw in rows:
-        try:
-            value = json.loads(raw or "{}").get("tonality_name")
-        except (ValueError, AttributeError):
-            continue
-        if isinstance(value, str) and value.strip():
-            keys[song_id] = value.strip()
-    return keys
 
 
 def _guitar_pro_pages(conn: sqlite3.Connection) -> dict[int, list[dict[str, str]]]:
@@ -334,6 +329,7 @@ a { color: inherit; }
 .chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
 .sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: .9rem; }
+.controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 12px; margin-left: auto; }
 .sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
 .count { margin: 0; color: var(--muted); font-size: .85rem; }
@@ -422,8 +418,8 @@ _SCRIPT = r"""
   // name without punctuation too). Other punctuation is only trimmed off the ends of a word.
   const APOSTROPHES = /['’‘`´ʼ]/g;
   const EDGES = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
-  const terms = (query) => fold(query).split(/\s+/)
-    .map((w) => w.replace(APOSTROPHES, "").replace(EDGES, "")).filter(Boolean);
+  const term = (word) => word.replace(APOSTROPHES, "").replace(EDGES, "");
+  const terms = (folded) => folded.split(/\s+/).map(term).filter(Boolean);
   const shellQuote = (text) => '"' + text.replace(/(["\\$`])/g, "\\$1") + '"';
   const hay = songs.map((s) => String(s.search || ""));
   const listOf = (value) => (Array.isArray(value) ? value : []);
@@ -439,8 +435,57 @@ _SCRIPT = r"""
   };
   const CHIP_TEXT = { found: "found songs", wanted: "wanted songs", review: "songs that need review" };
   const SORTS = ["artist", "recent"];
+  // A key is "A minor" or "C" (keys.py); where it came from, as keys.SOURCES says.
+  const KEY_SOURCES = { tab: "from the tab", chords: "estimated from the chords", audio: "from the audio" };
+  const keyName = (key) => (/ minor$/.test(key) ? key : key + " major");
+  const keyText = (s) => "Key " + keyName(String(s.key)) +
+    (label(KEY_SOURCES, s.key_source) ? " (" + label(KEY_SOURCES, s.key_source) + ")" : "");
+  // Which key a spelling names, as keys.same_key compares them: the tonic's pitch class and the mode, so
+  // "F# minor" and "Gb minor" are one key. It reads keys as keys.py writes them, and as typed: "f#m", "bb major".
+  const PITCH = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+  const SHIFT = { "": 0, "#": 1, "♯": 1, b: -1, "♭": -1 };
+  const MINOR = ["m", "min", "minor"];
+  const KEY = /^([a-g])([#♯b♭]?)\s*(m|min|minor|maj|major)?$/i;
+  const keyId = (text) => {
+    const m = KEY.exec(String(text || "").trim());
+    if (!m) return "";
+    const pitch = (PITCH[m[1].toLowerCase()] + SHIFT[m[2].toLowerCase()] + 12) % 12;
+    return pitch + (MINOR.indexOf((m[3] || "").toLowerCase()) >= 0 ? " minor" : " major");
+  };
+  // A key typed in the search box: a letter, maybe a sharp or a flat, then the mode ("a minor", "F# major",
+  // "bbm"). Its words leave the text search, and it keeps the songs in that key, however they spell it.
+  // Written as a chord ("am", "f#m"), it is a word too, so "am" also finds "I Am the Walrus".
+  const TYPED_KEY = /(^|[^\p{L}\p{N}])([a-g][#♯b♭]?)(?:\s*(major|minor|maj|min)|(m))(?![\p{L}\p{N}#♯♭])/gu;
+  const parseQuery = (query) => {
+    const keys = [];
+    const either = [];
+    const rest = fold(query).replace(TYPED_KEY, (all, before, tonic, mode, chord) => {
+      if (chord) either.push({ key: keyId(tonic + chord), word: term(tonic + chord) });
+      else keys.push(keyId(tonic + " " + mode));
+      return before + " ";
+    });
+    return { keys, either, words: terms(rest) };
+  };
+  const songKeys = songs.map((s) => keyId(s.key));
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  // The Key menu: one entry per key the library has, its spellings together ("F# / Gb minor"), with how
+  // many songs it has. Its commonest spelling stands for it in the menu and in the address.
+  const keyGroups = new Map();
+  songs.forEach((s, i) => {
+    if (!songKeys[i]) return;
+    const group = keyGroups.get(songKeys[i]) || { spellings: new Map(), n: 0 };
+    group.spellings.set(String(s.key), (group.spellings.get(String(s.key)) || 0) + 1);
+    group.n += 1;
+    keyGroups.set(songKeys[i], group);
+  });
+  for (const [id, group] of keyGroups) {
+    const spelled = Array.from(group.spellings.keys())
+      .sort((a, b) => group.spellings.get(b) - group.spellings.get(a) || compare(a, b));
+    group.value = spelled[0];
+    group.name = spelled.map((k) => k.replace(/ minor$/, "")).join(" / ") + id.replace(/^\d+/, "");
+  }
+  const keyGroup = (spelling) => keyGroups.get(keyId(spelling));
   const order = songs.map((_, i) => i);
   const byArtist = order.slice().sort((i, j) =>
     compare(String(songs[i].sortArtist), String(songs[j].sortArtist)) ||
@@ -487,7 +532,7 @@ _SCRIPT = r"""
     card.appendChild(head);
 
     const facts = el("p", "facts");
-    if (s.key) facts.appendChild(el("span", "key", "Key " + s.key));
+    if (typeof s.key === "string" && s.key) facts.appendChild(el("span", "key", keyText(s)));
     const shift = Number(s.transpose) || 0;
     if (shift) {
       const t = el("span", "transpose", (shift > 0 ? "+" : "−") + Math.abs(shift));
@@ -525,20 +570,29 @@ _SCRIPT = r"""
     return cards.get(i);
   };
 
-  const state = { q: "", show: "all", sort: "artist" };
+  const state = { q: "", show: "all", sort: "artist", key: "" };
   try {
     const params = new URLSearchParams(location.hash.slice(1));
     state.q = params.get("q") || "";
     if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
+    if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
   } catch (err) {
     // A malformed address: start from the defaults.
   }
+  const keySelect = byId("key");
+  for (const group of Array.from(keyGroups.values()).sort((a, b) => compare(a.name, b.name))) {
+    const option = el("option", null, group.name + " · " + group.n);
+    option.value = group.value;
+    keySelect.appendChild(option);
+  }
+  byId("keys").hidden = keyGroups.size === 0;
   const save = () => {
     const params = new URLSearchParams();
     if (state.q) params.set("q", state.q);
     if (state.show !== "all") params.set("show", state.show);
     if (state.sort !== "artist") params.set("sort", state.sort);
+    if (state.key) params.set("key", state.key);
     try {
       history.replaceState(null, "", "#" + params.toString());
     } catch (err) {
@@ -561,9 +615,13 @@ _SCRIPT = r"""
   };
 
   const render = () => {
-    const words = terms(state.q);
-    const matching = (state.sort === "recent" ? byRecent : byArtist)
-      .filter((i) => words.every((w) => hay[i].indexOf(w) >= 0));
+    const query = parseQuery(state.q);
+    const inKey = keyId(state.key);
+    const matching = (state.sort === "recent" ? byRecent : byArtist).filter((i) =>
+      (!inKey || songKeys[i] === inKey) &&
+      query.keys.every((k) => songKeys[i] === k) &&
+      query.either.every((e) => songKeys[i] === e.key || (e.word && hay[i].indexOf(e.word) >= 0)) &&
+      query.words.every((w) => hay[i].indexOf(w) >= 0));
     const tally = { all: matching.length, found: 0, wanted: 0, review: 0 };
     for (const i of matching) {
       for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
@@ -574,6 +632,7 @@ _SCRIPT = r"""
       chip.querySelector(".n").textContent = String(tally[chip.dataset.show]);
     }
     sort.value = state.sort;
+    keySelect.value = state.key;
     clear.hidden = !state.q;
 
     list.textContent = "";
@@ -628,11 +687,25 @@ _SCRIPT = r"""
         save();
       });
       list.appendChild(all);
+    } else if (!shown.length && state.key) {
+      // The key filter hides them: offer every key.
+      list.appendChild(el("p", "empty", "No songs in " + keyGroup(state.key).name +
+        (state.q ? " match “" + state.q + "”." : ".")));
+      const any = el("button", "btn", "Any key");
+      any.type = "button";
+      any.addEventListener("click", () => {
+        state.key = "";
+        render();
+        save();
+      });
+      list.appendChild(any);
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
-      const hint = el("p", "empty-hint", "To look in the offline Ultimate Guitar index, run ");
-      hint.appendChild(el("code", null, "caracole search " + shellQuote(state.q)));
-      list.appendChild(hint);
+      if (!query.keys.length) {  // the offline index has no keys
+        const hint = el("p", "empty-hint", "To look in the offline Ultimate Guitar index, run ");
+        hint.appendChild(el("code", null, "caracole search " + shellQuote(state.q)));
+        list.appendChild(hint);
+      }
     } else if (!shown.length) {
       list.appendChild(el("p", "empty", state.show === "review" ? "Nothing needs review." : "No songs here."));
     }
@@ -670,6 +743,11 @@ _SCRIPT = r"""
   }
   sort.addEventListener("change", () => {
     state.sort = SORTS.indexOf(sort.value) >= 0 ? sort.value : "artist";
+    render();
+    save();
+  });
+  keySelect.addEventListener("change", () => {
+    state.key = keyGroup(keySelect.value) ? keyGroup(keySelect.value).value : "";
     render();
     save();
   });
@@ -727,7 +805,7 @@ _BODY = """<body>
 <div class="searchbar" role="search">
   <label class="visually-hidden" for="q">Search your songs</label>
   <div class="field">
-    <input id="q" type="search" placeholder="Search artist, title or pinyin" autocomplete="off"
+    <input id="q" type="search" placeholder="Search artist, title, pinyin or key" autocomplete="off"
       autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
     <button type="button" id="clear" class="clear" aria-label="Clear the search" hidden>×</button>
   </div>
@@ -740,12 +818,17 @@ _BODY = """<body>
 </div>
 <div class="toolbar">
   <p class="count" id="count" aria-live="polite"></p>
+  <div class="controls">
+  <label class="sort" id="keys" hidden>Key
+    <select id="key"><option value="">Any</option></select>
+  </label>
   <label class="sort">Sort
     <select id="sort">
       <option value="artist">Artist A–Z</option>
       <option value="recent">Recently added</option>
     </select>
   </label>
+  </div>
 </div>
 <main class="list grouped" id="list"></main>
 <noscript><p class="empty">This page needs JavaScript to list your songs. Each song's files are in its

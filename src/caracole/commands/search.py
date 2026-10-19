@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import sys
 import textwrap
 from contextlib import closing, nullcontext
 from typing import TYPE_CHECKING
@@ -22,6 +23,7 @@ from caracole.commands._common import exclusive, fail, load_cfg, open_db
 
 if TYPE_CHECKING:
     from caracole.config import Config
+    from caracole.keys import SongKey
     from caracole.overrides import Overrides
     from caracole.search import IndexHit, LibraryHit
     from caracole.songs import Song
@@ -34,37 +36,75 @@ def register(app: typer.Typer) -> None:
     @app.command("search")
     def search_cmd(
         ctx: typer.Context,
-        query: list[str] = typer.Argument(
-            ..., metavar="QUERY", help="Words of the artist, the title, or both."
+        query: list[str] | None = typer.Argument(
+            None, metavar="[QUERY]...", help="Words of the artist, the title, or both."
         ),
         limit: int = typer.Option(10, "--limit", "-n", min=1, help="Hits to show from each place."),
         add: int | None = typer.Option(
             None, "--add", metavar="N", min=1, help="Add Ultimate Guitar hit N to wanted.txt."
         ),
+        key: str | None = typer.Option(
+            None, "--key", metavar="KEY",
+            help='Only your songs in this key, in either case: "A minor", am, F#, "La menor". The offline index '
+                 "has no keys, so it isn't searched.",
+        ),
     ) -> None:
         """Search your library and the offline Ultimate Guitar index (no network)."""
-        text = " ".join(" ".join(query).split())
-        if not re.search(r"\w", text):
+        text = " ".join(" ".join(query or []).split())
+        if (text or key is None) and not re.search(r"\w", text):
             fail(f"nothing to search for in {text!r}", 2)
+        in_key = None if key is None else _wanted_key(key, add)
         cfg = load_cfg(ctx)
         # Only --add writes (wanted.txt, then the library), so only it waits for another caracole.
         lock = nullcontext() if add is None else exclusive(cfg, "search --add")
         with lock, closing(open_db(cfg)) as conn:
             if add is None:
-                _search(cfg, conn, text, limit)
+                _search(cfg, conn, text, limit, in_key)
             else:
                 _add(cfg, conn, text, add, limit)
 
 
-def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int) -> None:
+def _wanted_key(key: str, add: int | None) -> str:
+    """The key ``--key`` names, as caracole writes keys; a usage error if it names none.
+
+    The value is known to be a key, so its tonic may be lowercase ("am", "bbm", "f#"), which
+    ``parse_key`` refuses in tab text so that the word "am" is no key; a b after the letter is
+    still a flat.
+    """
+    from caracole.keys import parse_key
+
+    k = key.strip()
+    found = parse_key(k[:1].upper() + k[1:])
+    if found is None:
+        fail(f"--key: {key!r} is not a key; write one as A minor, Am, F#, Bb or La menor", 2)
+    if add is not None:
+        fail("--add adds an Ultimate Guitar hit, and the offline index has no keys: "
+             "search without --key to add one", 2)
+    return found
+
+
+def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int, key: str | None = None) -> None:
+    from caracole.keys import key_name, song_key
     from caracole.search import STRONG, bare_id_hint, search_index, search_library
 
-    library = search_library(conn, text, limit)
-    typer.echo("In your library")
-    for hit in library:
-        typer.echo(_library_line(cfg, hit))
+    more = 0  # songs in the key that --limit leaves out
+    if key is None:
+        typer.echo("In your library")
+        hits = search_library(conn, text, limit)
+        library = [(hit, song_key(conn, cfg.library_dir, hit.song)) for hit in hits]
+    else:
+        typer.echo(f"In your library, in {key_name(key)}")
+        in_key = _in_key(cfg, conn, text, key)
+        library, more = in_key[:limit], max(len(in_key) - limit, 0)
+    for hit, found in library:
+        typer.echo(_library_line(cfg, hit, found))
     if not library:
         typer.echo("  nothing matches")
+    elif more:
+        typer.echo(f"  … and {more} more: see them with --limit {limit + more}")
+    if key is not None:
+        typer.echo("\nThe offline Ultimate Guitar index has no keys: search it without --key.")
+        return
 
     typer.echo("\nOn Ultimate Guitar (offline index)")
     if not _index_built(conn):
@@ -76,7 +116,8 @@ def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int) -> Non
         typer.echo(_index_lines(n, hit, known))
     if not hits:
         typer.echo("  nothing matches")
-    artist = library[0].song.artist if library and library[0].score >= STRONG else None
+    best = library[0][0] if library else None
+    artist = best.song.artist if best is not None and best.score >= STRONG else None
     hint = bare_id_hint(text, hits, artist=artist, overrides=_overrides(cfg))
     if hint:
         typer.echo("\n" + _wrap(hint))
@@ -93,13 +134,37 @@ def _overrides(cfg: Config) -> Overrides | None:
         return None
 
 
-def _library_line(cfg: Config, hit: LibraryHit) -> str:
+def _in_key(
+    cfg: Config, conn: sqlite3.Connection, text: str, key: str
+) -> list[tuple[LibraryHit, SongKey]]:
+    """Your songs in ``key``, however it is spelled (``keys.same_key``): those that match ``text``,
+    best first, or with no text every one, by name. All of them, so the listing can say how many
+    ``--limit`` leaves out."""
+    from caracole.keys import same_key, song_key
+    from caracole.search import LibraryHit, search_library
+    from caracole.songs import list_songs
+
+    if text:
+        hits = search_library(conn, text, sys.maxsize)
+    else:
+        songs = sorted(list_songs(conn), key=lambda s: (s.display.casefold(), s.id))
+        hits = [LibraryHit(s, 100.0) for s in songs]
+    found = []
+    for hit in hits:
+        known = song_key(conn, cfg.library_dir, hit.song)
+        if known is not None and same_key(known.key, key):
+            found.append((hit, known))
+    return found
+
+
+def _library_line(cfg: Config, hit: LibraryHit, key: SongKey | None = None) -> str:
     from caracole.library import song_dir
 
     song = hit.song
     folder = song_dir(cfg.library_dir, song)
     where = str(folder) if folder.is_dir() else "no folder yet"
-    return f"  {song.display} · {_status(song)} · {where}"
+    known = f"Key {key.describe()} · " if key is not None else ""
+    return f"  {song.display} · {_status(song)} · {known}{where}"
 
 
 def _status(song: Song) -> str:

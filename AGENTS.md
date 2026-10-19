@@ -48,7 +48,8 @@ Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migratio
 http.py (`PoliteClient`, robots rules), health.py (cooldowns, `events`), normalize.py (keys,
 pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy),
 site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's and
-MuseScore's).
+MuseScore's), keys.py (a song's musical key and its source, for info.json, `index.html`
+and `search --key`).
 
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:

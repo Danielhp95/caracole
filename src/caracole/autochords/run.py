@@ -52,9 +52,10 @@ from typing import Protocol
 
 from caracole.autochords.beats import detect_beats
 from caracole.autochords.btc import BTCRecognizer
-from caracole.autochords.merge import ChordSegment, build_sheet
+from caracole.autochords.merge import NO_CHORD, ChordSegment, build_sheet
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
+from caracole.keys import estimate_key
 from caracole.library import keep_file, kept_files, write_info
 from caracole.lyrics import Lyrics, song_lyrics
 from caracole.music import read_audio
@@ -178,13 +179,13 @@ def autochords_pending(
             stats.failed += 1
             continue
         try:
-            text, used = _make_sheet(song, *models)
+            text, used, key = _make_sheet(song, *models)
         except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
             stats.failed += 1
             stats.failures.append(_unreadable(conn, song, e, stamp))
             continue
         try:
-            _keep(conn, cfg, song, text, used, stamp)
+            _keep(conn, cfg, song, text, used, key, stamp)
         except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
             _error(stats, song, e)
             continue
@@ -401,10 +402,18 @@ def _synced_for(lyrics: Lyrics | None, audio: Path) -> str | None:
     return lyrics.synced
 
 
-def _make_sheet(song: Song, recognizer: Recognizer, beats_fn: BeatsFn) -> tuple[str, str]:
-    """One song's auto sheet, and which lyrics it used; all of it comes from its audio file."""
+def _make_sheet(
+    song: Song, recognizer: Recognizer, beats_fn: BeatsFn
+) -> tuple[str, str, str | None]:
+    """One song's auto sheet, which lyrics it used, and the key of the chords heard (None when
+    they fit no key); all of it comes from its audio file.
+
+    The key is estimated from the chords as recognized, each weighed by how long it sounds,
+    before they are snapped to beats and laid out.
+    """
     audio = Path(song.audio_path or "")
     segments = recognizer.recognize(audio)
+    key = estimate_key((s.label, s.end - s.start) for s in segments if s.label != NO_CHORD)
     beats, downbeats = beats_fn(audio)
     lyrics = _sung_lyrics(song)
     synced = _synced_for(lyrics, audio)
@@ -418,7 +427,7 @@ def _make_sheet(song: Song, recognizer: Recognizer, beats_fn: BeatsFn) -> tuple[
         beats=beats,
         downbeats=downbeats,
     )
-    return text, "synced" if synced else "plain" if plain else "none"
+    return text, "synced" if synced else "plain" if plain else "none", key
 
 
 def _keep(
@@ -427,10 +436,17 @@ def _keep(
     song: Song,
     text: str,
     used: str,
+    key: str | None,
     stamp: str,
 ) -> None:
-    """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found."""
+    """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
+
+    The key heard goes into the version's ``raw``, for ``keys.song_key``.
+    """
     audio = Path(song.audio_path or "")
+    raw = {"audio": song.audio_path, "model": MODEL, "lyrics": used}
+    if key is not None:
+        raw["key"] = key
     version_id = upsert_version(
         conn,
         provider=PROVIDER,
@@ -443,7 +459,7 @@ def _keep(
         version=1,
         label=None,
         url="file://" + str(audio.absolute()),
-        raw={"audio": song.audio_path, "model": MODEL, "lyrics": used},
+        raw=raw,
         now=stamp,
     )
     keep_file(
