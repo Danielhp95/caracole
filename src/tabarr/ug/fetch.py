@@ -7,9 +7,10 @@ For each song (plan §3, Task 15, amendment A6):
    and its pins, which replace the kind group they belong to and are fetched
    at the slugged address you pasted, if you pasted one. Blocked ids never
    compete, and neither does a tab at a URL robots.txt closes
-   (``tabarr.http.robots_disallows``): such a URL is never asked for. A
-   not-found song is looked up on its artist's UG page, which also lists the
-   bare-id tabs the index can't see (A6).
+   (``tabarr.http.robots_disallows``): such a URL is never asked for. Nor does
+   one whose page UG redirects to such a URL (``tabarr.http.RobotsClosed``),
+   or one at a link that isn't a URL. A not-found song is looked up on its
+   artist's UG page, which also lists the bare-id tabs the index can't see (A6).
 2. **Ratings.** A tab page lists the other versions of its type and part, so
    for each kind group (chords; Guitar Pro and Power Tab; tabs) tabarr reads
    the page of the lowest id it has no rating for, up to
@@ -32,16 +33,18 @@ guitar parts (``fetch_songs``), and rates each guitar group from one page:
 live, filling every slot song by song cost 8-12 requests a song.
 
 A kept file is replaced only when another version outranks it, and is not
-rewritten when it wins again.
+rewritten when it wins again, unless the library lost it (deleted on a synced
+device, cut short by a power cut, a link in its place): then it is written
+again, and only it.
 
 ``rescore_kept_sheets`` scores the sheets kept before their song had lyrics,
 without a request, and sends a song whose kept sheet proves partial back to
-have its sheets ranked again; the nightly run calls it before fetching.
+have its sheets ranked again; the nightly run calls it before fetching. It
+also sends back a song whose kept sheet or tab the library lost.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
@@ -64,9 +67,10 @@ from tabarr.http import (
     ProviderBlocked,
     ProviderError,
     Response,
+    RobotsClosed,
     robots_disallows,
 )
-from tabarr.library import drop_file, keep_file, kept_files, read_regular, write_info
+from tabarr.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.normalize import clean_title, compact, has_han, romanize, slug_key
 from tabarr.overrides import Overrides
@@ -93,6 +97,7 @@ from tabarr.ug.page import (
     strip_markup,
 )
 from tabarr.versions import (
+    LIVE,
     SHEET_KINDS,
     STALE,
     VersionRow,
@@ -313,8 +318,12 @@ def _closed(url: str) -> bool:
 
 
 def _on_tab_host(url: str) -> bool:
-    """Whether a link points under ``/tab/`` on the tabs host, where UG's tab pages are."""
-    parts = urlsplit(url)
+    """Whether a link points under ``/tab/`` on the tabs host, where UG's tab pages are (one urllib
+    can't parse points nowhere: UG's JSON is data, and one broken link never ends the run)."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:  # "Invalid IPv6 URL", say
+        return False
     segments = parts.path.split("/")
     return (
         parts.scheme in ("http", "https") and parts.netloc == _TAB_HOST
@@ -418,7 +427,10 @@ def _artist_page_base(url: str | None) -> str | None:
     """A UG artist page address (``https://www.ultimate-guitar.com/artist/<name>_<id>``), else None."""
     if not url:
         return None
-    parts = urlsplit(urljoin(WWW + "/", url.strip()))
+    try:
+        parts = urlsplit(urljoin(WWW + "/", url.strip()))
+    except ValueError:  # a link urllib can't parse ("Invalid IPv6 URL"): no artist page
+        return None
     path = parts.path.rstrip("/")
     if parts.netloc != urlsplit(WWW).netloc or not _ARTIST_PATH.fullmatch(path):
         return None
@@ -477,7 +489,8 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
     filed under the song's artist only when the tab is by that artist. A page
     that won't parse even fetched again is left alone until it is due
     (``UNREADABLE_RETRY``). A page robots.txt closes is None without a request,
-    and is neither gone nor unreadable.
+    and is neither gone nor unreadable; so is one UG redirects to where
+    robots.txt closes (``RobotsClosed``), which isn't asked for again this run.
     """
     if tab_id in run.pages:
         return run.pages[tab_id]
@@ -490,6 +503,10 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
         page, fresh = _get_page(run.ctx.client, url, parse_tab_page)
     except UnreadablePage as e:
         _unreadable(run, tab_id, kind, e)
+        return None
+    except RobotsClosed:
+        run.fetched[kind or "?"] += 1  # the request UG answered with the redirect
+        run.pages[tab_id] = None
         return None
     kv_delete(run.conn, _unreadable_key(tab_id))
     run.pages[tab_id] = page
@@ -630,10 +647,10 @@ def _first_with_text(
 
 
 def _keep(run: _SongRun, version_id: int, name: str, data: bytes) -> None:
-    """Keep one file, unless this version's identical bytes are kept already (no churn for Syncthing)."""
-    sha = hashlib.sha256(data).hexdigest()
-    if any(f.name == name and f.version_id == version_id and f.sha256 == sha
-           for f in kept_files(run.conn, run.song.id)):
+    """Keep one file, unless this version's identical bytes are kept already, in the files table and
+    in the library (``library.kept_already``): no churn for Syncthing, and a file the library lost is
+    written again."""
+    if kept_already(run.conn, run.ctx.library_dir, song=run.song, version_id=version_id, name=name, data=data):
         return
     keep_file(run.conn, run.ctx.library_dir, song=run.song, version_id=version_id, name=name, data=data, rank=1)
 
@@ -832,13 +849,16 @@ def _learn_artist_page(run: _SongRun, keys: list[str]) -> str | None:
     """Read a slugged tab of the artist, from the index, for the artist page it links to.
 
     The tab is another song's, so none of its versions are recorded for this song.
-    A tab whose page robots.txt closes is passed over.
+    A tab whose page robots.txt closes, or redirects to where it does, is passed over.
     """
     for key in keys:
         for tab in artist_tabs(run.conn, key, limit=LEARN_TRIES):
             if _closed(tab.url):
                 continue
-            page, _ = _get_page(run.ctx.client, tab.url, parse_tab_page)
+            try:
+                page, _ = _get_page(run.ctx.client, tab.url, parse_tab_page)
+            except RobotsClosed:
+                continue
             if page is not None and (url := _learn_artist_url(run.conn, page, [key])):
                 return url
     return None
@@ -851,8 +871,8 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
     run's page cap stopped it), and the list's first page (None when UG
     answered 404). Lists are sorted by title, so the title's entries are
     consecutive: reading stops once they end, and goes on to the next page
-    only when they reach the end of this one. A page robots.txt closes ends
-    the list, unread.
+    only when they reach the end of this one. A page robots.txt closes, or
+    redirects to where it does, ends the list, unread.
     """
     ctx = run.ctx
     hits: list[_Hit] = []
@@ -864,7 +884,11 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
         url = artist_page_url(base, kind=kind, page=number)
         if _closed(url):
             break
-        page, fresh = _get_page(ctx.client, url, parse_artist_page, max_age=ctx.artist_page_max_age, now=ctx.now)
+        try:
+            page, fresh = _get_page(ctx.client, url, parse_artist_page, max_age=ctx.artist_page_max_age,
+                                    now=ctx.now)
+        except RobotsClosed:
+            break
         fetched += fresh
         if page is None:
             break
@@ -882,12 +906,15 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
 
 def _offered_kinds(run: _SongRun, base: str) -> set[str] | None:
     """The kinds of list the artist page offers, read from its unfiltered first page; None when it's
-    gone, and none when robots.txt closes it."""
+    gone, and none when robots.txt closes it (or the page redirects to where it does)."""
     url = artist_page_url(base)
     if _closed(url):
         return set()
-    page, _ = _get_page(run.ctx.client, url, parse_artist_page,
-                        max_age=run.ctx.artist_page_max_age, now=run.ctx.now)
+    try:
+        page, _ = _get_page(run.ctx.client, url, parse_artist_page,
+                            max_age=run.ctx.artist_page_max_age, now=run.ctx.now)
+    except RobotsClosed:
+        return set()
     if page is None:
         return None
     return set(page.filters) or set(ARTIST_PAGE_KINDS)
@@ -951,9 +978,24 @@ def _artist_page_gone(run: _SongRun, keys: list[str], base: str) -> None:
     _forget_learned(run, keys, base)
 
 
-def _usable_hits(run: _SongRun, hits: list[_Hit]) -> list[_Hit]:
-    """The hits of the song's title (see ``_best_title``) that tabarr may use."""
-    return [h for h in _best_title(hits) if _usable(run, h.tab)]
+def _listed_keys(run: _SongRun, tab: UGVersion, artist_name: str) -> tuple[str, str]:
+    """The UG keys of a tab on an artist's page: the page's artist (``artist_name``) and the tab's title,
+    as the match a hit makes stores them, and as ``[reject]`` names them."""
+    artist_key = slug_key(artist_name) or slug_key(tab.artist_name) or run.artist_key
+    song_key = slug_key(clean_title(tab.song_name)) or slug_key(clean_title(run.song.title))
+    return artist_key, song_key
+
+
+def _usable_hits(run: _SongRun, hits: list[_Hit], artist_name: str) -> list[_Hit]:
+    """The hits of the song's title (see ``_best_title``) that tabarr may use.
+
+    A UG song you rejected for the song (``[reject]``, "none of these" in
+    ``tabarr review``) drops out first, as it does in the matcher: never the
+    song, it hides none of the page's other titles either.
+    """
+    rejected = run.ctx.overrides.reject.get(run.song.key, frozenset())
+    allowed = [h for h in hits if _listed_keys(run, h.tab, artist_name) not in rejected]
+    return [h for h in _best_title(allowed) if _usable(run, h.tab)]
 
 
 def _record_hits(run: _SongRun, hits: list[_Hit]) -> None:
@@ -966,8 +1008,7 @@ def _accept_artist_page_match(run: _SongRun, hits: list[_Hit], artist_name: str)
     """Record the matching tabs as the song's versions, and the match itself (step ``artist_page``)."""
     _record_hits(run, hits)
     best = max(hits, key=lambda h: h.score)
-    artist_key = slug_key(artist_name) or slug_key(best.tab.artist_name) or run.artist_key
-    song_key = slug_key(clean_title(best.tab.song_name)) or slug_key(clean_title(run.song.title))
+    artist_key, song_key = _listed_keys(run, best.tab, artist_name)
     update_song(
         run.conn, run.song.id, match_decision="accept", match_step=ARTIST_PAGE, match_score=best.score,
         match_artist_key=artist_key, match_song_key=song_key, review=False, matched_at=_iso(run.ctx.now),
@@ -985,24 +1026,56 @@ def _artist_page_route(run: _SongRun) -> bool:
     artist. The chords list is read first; its filter bar tells which guitar
     lists the artist has. A list cut short by the page cap leaves the song as
     it was, for the next run; otherwise the check is recorded, found or not.
+    Not found, the song loses what an undone match kept (``_drop_undone``).
     """
     keys = artist_keys(run.song, run.ctx.overrides)
     base = _known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_artist_page(run, keys)
     if base is None:
-        _mark_checked(run)
-        return False
+        return _not_on_artist_page(run)
     listing = _read_artist_page(run, base, ARTIST_PAGE_KINDS, _name_keys(clean_title(run.song.title)))
     if not listing.complete:
         return False
-    _mark_checked(run)
     if listing.gone:
         _artist_page_gone(run, keys, base)
-        return False
-    best = _usable_hits(run, listing.hits)
+        return _not_on_artist_page(run)
+    best = _usable_hits(run, listing.hits, listing.name)
     if not best:
-        return False
+        return _not_on_artist_page(run)
+    _mark_checked(run)
     _accept_artist_page_match(run, best, listing.name)
     return True
+
+
+def _not_on_artist_page(run: _SongRun) -> bool:
+    """The artist's page settled it, for now: the song isn't there. The check is recorded (it is due
+    again after ``artist_page_max_age``), and an undone match's files go (``_drop_undone``). False."""
+    _mark_checked(run)
+    _drop_undone(run)
+    return False
+
+
+def _undone(conn: sqlite3.Connection, song_id: int) -> bool:
+    """Whether the song keeps a sheet or a tab from a UG version an earlier match found (``STALE``)."""
+    names = (*SHEET_FILES, *TAB_FILES)
+    marks = ",".join("?" for _ in names)
+    return conn.execute(
+        "SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id "
+        f"WHERE f.song_id = ? AND v.provider = ? AND v.gone = {STALE} AND f.name IN ({marks}) LIMIT 1",
+        (song_id, PROVIDER, *names),
+    ).fetchone() is not None
+
+
+def _drop_undone(run: _SongRun) -> None:
+    """A song that has no UG match now (you rejected it, say) loses the sheet and the tab an earlier match
+    kept, and their rows (``_drop_left_over``); its status then says what is left: a LaCuerda or an auto
+    sheet, or nothing. Guitar Pro files you filed, and files tabarr doesn't track, stay; so does every
+    file of an ignored song."""
+    if _ignored(run.song, run.ctx.overrides) or not _undone(run.conn, run.song.id):
+        return
+    _drop_left_over(run, SHEET_FILES)
+    _drop_left_over(run, TAB_FILES)
+    refresh_status(run.conn, run.song.id, ignored=False)
+    write_info(run.conn, run.ctx.library_dir, get_song(run.conn, run.song.id))
 
 
 def _matched_artist_keys(run: _SongRun) -> list[str]:
@@ -1054,7 +1127,7 @@ def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[I
         if listing.gone:
             _artist_page_gone(run, keys, base)
         else:
-            _record_hits(run, _usable_hits(run, listing.hits))
+            _record_hits(run, _usable_hits(run, listing.hits, listing.name))
     _mark_checked(run)
     return True
 
@@ -1087,7 +1160,9 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
     versions; a song whose index tabs hold no chords (bare ids) has its sheet
     candidates read from its artist's chords list. Each kind group is rated and
     its slot filled before the next group is touched, so the sheet a singer
-    needs most is settled before the budget goes to guitar parts.
+    needs most is settled before the budget goes to guitar parts. Any other
+    song without a match (a review of other UG songs) only loses what an
+    undone match kept (``_drop_undone``), with no request.
     """
     start = ctx.client.requests_made
     run = _SongRun(ctx, song)
@@ -1099,6 +1174,9 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
         if not _artist_page_route(run):
             return unfinished()
         song = run.song
+    elif song.match_decision not in ("accept", "pinned"):
+        _drop_undone(run)
+        return unfinished()
     elif song.match_step == ARTIST_PAGE and not _artist_page_versions(run, ARTIST_PAGE_KINDS):
         return unfinished()
     tabs = _song_index_tabs(ctx.conn, song, ctx.overrides.block)
@@ -1256,20 +1334,23 @@ def songs_to_fetch(
       songs accepted there, and the songs whose chords the index lists only
       as bare ids. No index refresh can make those dirty, so this is how they
       get fresh ratings and new versions.
+    - Songs whose UG match was undone (you rejected it, say) that still keep a
+      sheet or a tab that match found: unless their artist's page finds them
+      again, those go (``process_song``).
     """
     out = []
     for song in list_songs(conn):
         if _ignored(song, overrides):
             continue
-        dirty = song.match_decision in ("accept", "pinned") and (
-            song.ug_dirty or _block_changed(conn, song, overrides.block)
-        )
+        matched = song.match_decision in ("accept", "pinned")
+        dirty = matched and (song.ug_dirty or _block_changed(conn, song, overrides.block))
         due = (
             needs_artist_page(song)
             and not _checked_within(conn, song.id, now, artist_page_max_age)
             and artist_is_known(conn, song, overrides)
         )
-        if dirty or due or _recheck_due(conn, song, overrides, now, artist_page_max_age):
+        undone = not matched and _undone(conn, song.id)
+        if dirty or due or undone or _recheck_due(conn, song, overrides, now, artist_page_max_age):
             out.append(song)
     return out
 
@@ -1348,7 +1429,11 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
     A sheet that proves partial was chosen on rating alone, so its song is
     marked dirty when it has UG sheets that coverage never ranked: the next
     fetch ranks them again, from the cached pages.
+
+    First, as the nightly run calls this before fetching, a song whose kept UG
+    sheet or tab the library lost is sent back to the fetch (``_send_back_lost``).
     """
+    _send_back_lost(conn, library_dir)
     rows = conn.execute(
         "SELECT f.song_id, f.version_id FROM files f JOIN versions v ON v.id = f.version_id "
         "WHERE f.name = ? AND v.coverage IS NULL ORDER BY f.song_id",
@@ -1370,6 +1455,29 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
         write_info(conn, library_dir, song)
         scored += 1
     return scored
+
+
+def _send_back_lost(conn: sqlite3.Connection, library_dir: Path) -> None:
+    """Mark dirty each clean, accepted or pinned song whose kept UG sheet or tab the library lost.
+
+    That is a file no longer as kept (``library.holds``): deleted on a synced
+    device, cut short by a power cut, or a link in its place. The database alone
+    would have the fetch skip it forever; this way the next fetch writes it
+    again (``_keep``), from the cached page. Only a live version's file counts,
+    as only its page can give it back, and never a Guitar Pro file, which is
+    yours to download (assisted mode). Each file is hashed; the files table
+    keeps no length to compare first.
+    """
+    names = (*SHEET_FILES, *TAB_FILES)
+    marks = ",".join("?" for _ in names)
+    rows = conn.execute(
+        "SELECT f.song_id, f.path, f.sha256 FROM files f JOIN versions v ON v.id = f.version_id "
+        f"JOIN songs s ON s.id = f.song_id WHERE v.provider = ? AND v.gone = {LIVE} AND f.name IN ({marks}) "
+        "AND s.match_decision IN ('accept', 'pinned') AND s.ug_dirty = 0 AND s.status != 'ignored'",
+        (PROVIDER, *names),
+    ).fetchall()
+    for song_id in sorted({r["song_id"] for r in rows if not holds(library_dir / r["path"], r["sha256"])}):
+        update_song(conn, song_id, ug_dirty=True)
 
 
 def _unranked_rivals(conn: sqlite3.Connection, song_id: int, kept_id: int) -> bool:

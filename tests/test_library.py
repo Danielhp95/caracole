@@ -1,4 +1,6 @@
 import json
+import os
+import re
 
 import pytest
 
@@ -61,6 +63,49 @@ def test_write_atomic_returns_sha256(tmp_path):
     assert sha == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
     assert (tmp_path / "a" / "f.txt").read_bytes() == b"hello"
     assert not list((tmp_path / "a").glob("*.tmp"))
+
+
+def test_write_atomic_syncs_the_file_before_the_rename_and_the_folder_after(tmp_path, monkeypatch):
+    # A power cut during the 03:30 run must not leave an empty sheet that the database says is kept.
+    calls = []
+    fsync, replace = os.fsync, os.replace
+
+    def spy_fsync(fd):
+        calls.append(("fsync", os.readlink(f"/proc/self/fd/{fd}")))
+        fsync(fd)
+
+    def spy_replace(src, dst):
+        calls.append(("replace", os.fspath(dst)))
+        replace(src, dst)
+
+    monkeypatch.setattr(os, "fsync", spy_fsync)
+    monkeypatch.setattr(os, "replace", spy_replace)
+    folder = tmp_path / "lib" / "Soda Stereo" / "Signos"
+    write_atomic(folder / "sheet.txt", b"x")
+
+    assert [what for what, _ in calls] == ["fsync", "replace", "fsync"]
+    real = os.path.realpath(folder)
+    assert re.fullmatch(re.escape(real) + r"/\.sheet\.txt\.[0-9a-f]{8}\.tmp", calls[0][1])
+    assert calls[1][1] == str(folder / "sheet.txt") and calls[2][1] == real
+
+
+def test_holds_only_the_regular_file_with_those_bytes(tmp_path):
+    from tabarr.library import holds
+
+    path = tmp_path / "sheet.txt"
+    sha = write_atomic(path, b"sheet")
+    assert holds(path, sha) and holds(path, sha, size=5)
+    assert not holds(path, sha, size=4)  # another length: not even read
+    path.write_bytes(b"shoot")  # the same length, other bytes
+    assert not holds(path, sha, size=5)
+    path.unlink()
+    assert not holds(path, sha)  # deleted, on a synced device say
+    (tmp_path / "elsewhere.txt").write_bytes(b"sheet")
+    path.symlink_to(tmp_path / "elsewhere.txt")
+    assert not holds(path, sha)  # never read through a link
+    path.unlink()
+    path.mkdir()
+    assert not holds(path, sha)
 
 
 def _version(conn, song, tab_id, *, slot="sheet", kind="chords", rating=4.5, votes=10):

@@ -8,7 +8,8 @@ Rules this module enforces (plan §6, "Politeness"):
   redirect hops included;
 - one request at a time;
 - a URL its host's robots.txt disallows (``ROBOTS_DISALLOW``) is never requested,
-  nor followed to;
+  nor followed to: ``RobotsClosed``, a ``ProviderError`` that is no failure of the
+  provider, so a caller may pass that URL over as one it may not read;
 - a 403, a 429 or a challenge page raises ``ProviderBlocked``. Errors are never
   misses: callers must not turn any ``ProviderError`` into "not found".
 """
@@ -62,6 +63,12 @@ class ProviderBlocked(ProviderError):
 
 class ProviderUnavailable(ProviderError):
     """Too many consecutive errors this run; the provider is skipped until the next run."""
+
+
+class RobotsClosed(ProviderError):
+    """A URL robots.txt disallows (``robots_disallows``), asked for or redirected to: nothing is
+    requested there. No failure of the provider, and no miss: a caller can pass the URL over as
+    one tabarr may not read."""
 
 
 class BudgetExhausted(Exception):
@@ -173,33 +180,50 @@ _ROBOTS = {
 }
 
 
+# What robots_disallows answers for a string httpx can't parse as a URL.
+NOT_A_URL = "not a valid URL"
+
+
 def robots_disallows(url: str) -> str | None:
     """The robots.txt rule (``ROBOTS_DISALLOW``) that closes ``url``, or None when it is open.
 
     A rule matches the start of the URL's path and query, and ``*`` stands for any
     run of characters (RFC 9309). ``PoliteClient`` never requests a closed URL;
     other modules can use this to skip one before asking for it.
+
+    A string httpx can't parse as a URL (a control character, more than 64 KiB, a
+    broken host) can't be asked for either, so it is closed too, by ``NOT_A_URL``:
+    one such link in UG's JSON or a sitemap is skipped, and never ends the run.
     """
-    u = httpx.URL(url)
-    target = u.raw_path.decode("ascii")
-    for rule, pattern in _ROBOTS.get(u.host, ()):
+    try:
+        u = httpx.URL(url)
+        host, target = u.host, u.raw_path.decode("ascii")
+    except (httpx.InvalidURL, ValueError):  # ValueError: a lone surrogate, a broken IDNA label
+        return NOT_A_URL
+    for rule, pattern in _ROBOTS.get(host, ()):
         if pattern.match(target):
             return rule
     return None
+
+
+def _not_a_url(provider: str, url: str) -> ProviderError:
+    """The error for a string httpx can't parse as a URL, which shows its start, escaped, for the log."""
+    shown = url if len(url) <= 120 else url[:120] + "..."
+    return ProviderError(provider, None, None, f"{NOT_A_URL}: {shown!r}")
 
 
 _MAX_REDIRECTS = 3  # hops followed for one request; httpx alone would follow 20
 
 
 def _redirect_problem(origin: str, target: str, hops: int) -> str | None:
-    """Why the ``hops``-th redirect of a request for ``origin``, to ``target``, isn't followed, if it isn't."""
+    """Why the ``hops``-th redirect of a request for ``origin``, to ``target``, is an error, if it is.
+
+    A target robots.txt closes is no error (``RobotsClosed``), and is checked after these.
+    """
     if hops > _MAX_REDIRECTS:
         return f"more than {_MAX_REDIRECTS} redirects"
     if _site(target) != _site(origin):
         return f"redirect to another site: {target}"
-    rule = robots_disallows(target)
-    if rule is not None:
-        return f"redirect to {target}, which robots.txt disallows ({rule})"
     return None
 
 
@@ -220,11 +244,13 @@ class PoliteClient:
       time in ``policy.delay``, minus the time already elapsed.
     - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
     - A URL robots.txt disallows (``robots_disallows``) is never requested: when
-      no cached answer is served, ``ProviderError``.
+      no cached answer is served, ``RobotsClosed``. Nor is a string httpx can't
+      parse as a URL, which is a ``ProviderError`` at once.
     - Redirects are followed one hop at a time, at most three. Each hop is a
       request like any other (budget, pause, event) and must stay on the site
-      asked for and be open in robots.txt, or ``ProviderError``. The final answer
-      is cached under the URL asked for.
+      asked for, or ``ProviderError``. A hop robots.txt closes isn't followed:
+      ``RobotsClosed``, which the error breaker doesn't count (the site
+      answered). The final answer is cached under the URL asked for.
     - 403, 429 or a challenge page raise ``ProviderBlocked``, and no further
       requests are made this run.
     - After ``max_consecutive_errors`` other errors, ``ProviderUnavailable``. Only a
@@ -283,7 +309,13 @@ class PoliteClient:
     ) -> Response:
         """GET ``url``; see the class docstring. ``max_age`` refetches cached copies older than it,
         but serves the stale copy when this run's budget is spent."""
-        full = str(httpx.URL(url, params=params)) if params else url
+        try:
+            full = str(httpx.URL(url, params=params)) if params else url
+        except (httpx.InvalidURL, ValueError):
+            raise _not_a_url(self.provider, url) from None
+        rule = robots_disallows(full)
+        if rule == NOT_A_URL:  # nothing is sent, so the error breaker doesn't count it either
+            raise _not_a_url(self.provider, full)
         key = hashlib.sha256(full.encode("utf-8")).hexdigest()
         cached = self._read_cache(key) if (cache or conditional) else None
         if cached is not None and cached.status not in accept:
@@ -294,9 +326,8 @@ class PoliteClient:
         if stale and self.requests_made >= self.policy.budget:
             return cached
 
-        rule = robots_disallows(full)
         if rule is not None:  # nothing is sent, so the error breaker doesn't count it either
-            raise ProviderError(self.provider, full, None, f"robots.txt disallows it ({rule})")
+            raise RobotsClosed(self.provider, full, None, f"robots.txt disallows it ({rule})")
         headers: dict[str, str] = {}
         if conditional and cached is not None:
             etag = _header(cached.headers, "etag")
@@ -316,6 +347,11 @@ class PoliteClient:
             if problem is not None:
                 self._fail(at, resp.status_code, problem)
                 raise AssertionError("unreachable")  # pragma: no cover
+            closed = robots_disallows(target)
+            if closed is not None:  # the site answered, so the breaker neither counts this nor resets
+                message = f"redirect to {target}, which robots.txt disallows ({closed})"
+                self._event(at, resp.status_code, "redirect", f"not followed: {message}")
+                raise RobotsClosed(self.provider, at, resp.status_code, message)
             self._event(at, resp.status_code, "redirect", target)
             at, resp = target, self._send(target, resp.next_request)
 
