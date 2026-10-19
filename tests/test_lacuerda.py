@@ -1,3 +1,5 @@
+import html as htmllib
+import re
 import unicodedata
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from tabarr.lacuerda import (
     match_title,
     parse_artist_page,
     parse_lcd,
+    parse_version_page,
     version_url,
 )
 
@@ -316,3 +319,69 @@ def test_match_title_first_on_the_page_wins_a_full_tie():
 def test_match_title_with_nothing_to_match():
     assert match_title([], "De Música Ligera") is None
     assert match_title([LCSong("ecos", "Ecos", "R", (1,))], "!!!") is None
+
+
+# --- the version page ------------------------------------------------------
+
+
+def _sheet_page(pre: str) -> str:
+    return f"<html><body><div id=t_body><PRE>{pre}</PRE></div></body></html>"
+
+
+def test_parse_version_page_marks_chords():
+    lines = parse_version_page(_fixture("version.html")).splitlines()
+    assert lines[0] == "Intro:"
+    assert lines[2] == "[ch]Bm[/ch]-[ch]G[/ch]-[ch]D[/ch]-[ch]A[/ch]"
+    assert lines[3] == "[ch]Bm[/ch]-[ch]G[/ch]-[ch]D[/ch]-[ch]A[/ch](4)"
+    assert lines[5].startswith("[ch]Bm[/ch]          [ch]G[/ch] [ch]D[/ch]       [ch]A[/ch]")
+    assert lines[6] == "Cruzo la plaza,    con el café frío"
+    assert "CORO:" in lines
+
+
+def test_parse_version_page_keeps_the_line_structure_exactly():
+    page = _fixture("version.html")
+    raw = re.search(r"<PRE>(.*?)</PRE>", page, re.S).group(1)
+    shown = re.sub(r"\[/?ch\]", "", parse_version_page(page))
+    assert shown == htmllib.unescape(re.sub(r"<[^>]+>", "", raw))
+
+
+def test_parse_version_page_converts_a_small_sheet_exactly():
+    page = _sheet_page("Intro:\n\n<div></div><A>Am</A>   <A>Do</A>\nla luz del bar\n")
+    assert parse_version_page(page) == "Intro:\n\n[ch]Am[/ch]   [ch]Do[/ch]\nla luz del bar\n"
+
+
+def test_parse_version_page_keeps_solfege_chords():
+    page = _sheet_page("<A>Do</A> <A>Rem</A> <A>Sol7</A> <A>La#m</A>\n")
+    assert parse_version_page(page) == "[ch]Do[/ch] [ch]Rem[/ch] [ch]Sol7[/ch] [ch]La#m[/ch]\n"
+
+
+def test_parse_version_page_decodes_entities():
+    page = _sheet_page("Canci&oacute;n &amp; co&nbsp;<A>Fa&#35;m</A> &lt;x2&gt;\n")
+    assert parse_version_page(page) == "Canción & co [ch]Fa#m[/ch] <x2>\n"
+
+
+def test_parse_version_page_drops_other_tags_but_keeps_their_text():
+    page = _sheet_page(
+        "<b>CORO:</b>\n<em>e|--0--2--|</em>\n<span class=x><A>Em</A></span> fin<br>otra<!-- nota --> linea\n"
+    )
+    assert parse_version_page(page) == "CORO:\ne|--0--2--|\n[ch]Em[/ch] fin\notra linea\n"
+
+
+def test_parse_version_page_moves_spaces_out_of_a_chord():
+    page = _sheet_page("<A> Am </A>|<A></A>|<A>  </A>|\n")
+    assert parse_version_page(page) == " [ch]Am[/ch] ||  |\n"
+
+
+def test_a_page_without_a_sheet_is_a_parse_error():
+    # The song page has <pre> previews but no div#t_body: never take a preview for the sheet.
+    with pytest.raises(LaCuerdaParseError):
+        parse_version_page(_fixture("song.html"))
+    url = "https://acordes.lacuerda.net/soda_stereo/de_musica_ligera-3.shtml"
+    with pytest.raises(LaCuerdaParseError) as err:
+        parse_version_page(_fixture("artist.html"), url=url)
+    assert err.value.url == url
+
+
+def test_an_empty_sheet_is_a_parse_error():
+    with pytest.raises(LaCuerdaParseError):
+        parse_version_page(_sheet_page("  \n<div></div>\n"))

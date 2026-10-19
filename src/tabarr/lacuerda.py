@@ -215,3 +215,50 @@ def match_title(songs: Iterable[LCSong], title: str, *, cutoff: float = 90) -> L
 
 def _title_forms(song: LCSong) -> tuple[str, str]:
     return slug_key(song.title), ug_slug_key(song.slug.replace("_", "-"))
+
+
+def parse_version_page(html: str, *, url: str | None = None) -> str:
+    """The sheet on a version page, in UG markup, so UG's tools can read it.
+
+    ``<A>Bm</A>`` becomes ``[ch]Bm[/ch]``. Every other tag is dropped and its
+    text kept, ``<br>`` breaks the line, entities are decoded and non-breaking
+    spaces become spaces. The lines, and the spaces that align chords over the
+    lyrics, are kept exactly. Chord names stay as written, solfège included.
+
+    Raises :class:`LaCuerdaParseError` when there is no ``div#t_body > pre`` or
+    it holds no text.
+    """
+    pre = LexborHTMLParser(html).css_first("div#t_body > pre")
+    if pre is None:
+        raise LaCuerdaParseError("no sheet (div#t_body > pre)", url=url)
+    sheet = _ug_markup(pre).replace("\xa0", " ")
+    if not sheet.strip():
+        raise LaCuerdaParseError("empty sheet", url=url)
+    return sheet
+
+
+def _ug_markup(node: LexborNode) -> str:
+    out = []
+    for child in node.iter(include_text=True):
+        tag = child.tag
+        if tag == "-text":
+            out.append(child.text_content or "")
+        elif tag == "a":
+            out.append(_chord(child.text(deep=True)))
+        elif tag == "br":
+            out.append("\n")
+        elif tag.startswith("-") or tag in ("script", "style"):
+            continue  # comments and other non-text nodes
+        else:
+            out.append(_ug_markup(child))
+    return "".join(out)
+
+
+def _chord(text: str) -> str:
+    """``[ch]Am[/ch]``, with any padding moved outside so the column stays put."""
+    name = text.strip()
+    if not name:
+        return text
+    lead = text[: len(text) - len(text.lstrip())]
+    trail = text[len(text.rstrip()) :]
+    return f"{lead}[ch]{name}[/ch]{trail}"
