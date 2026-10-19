@@ -7,6 +7,11 @@ manager), and no request can reach the network.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 import requests
 from spotipy.exceptions import SpotifyException
@@ -71,6 +76,28 @@ def songs(tmp_path):
         return list_songs(conn)
     finally:
         conn.close()
+
+
+def test_registering_the_commands_imports_no_spotipy(tmp_path):
+    # Every command module is imported on every start, so spotipy waits for a command.
+    src = Path(__file__).resolve().parents[1] / "src"
+    code = (
+        "import sys, typer\n"
+        "from tabarr.commands import sources\n"
+        "sources.register(typer.Typer())\n"
+        "print([m for m in ('spotipy', 'tabarr.spotify') if m in sys.modules])\n"
+    )
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(src)}
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert result.stdout.strip() == "[]"
 
 
 def spotify_config(tmp_path, *, secret=True):
