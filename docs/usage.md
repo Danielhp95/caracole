@@ -792,7 +792,8 @@ Who can reach it:
   (`$CREDENTIALS_DIRECTORY/web_token`) does the same. Listening beyond this
   machine without a token, it warns.
 
-It runs until Ctrl-C.
+It runs until Ctrl-C. On the NUC, `services.caracole.web` runs it as a unit
+([deploy.md](deploy.md), section 8).
 
 ## overrides.toml: your decisions
 
@@ -1099,6 +1100,7 @@ tags match the song's line in wanted.txt.
 
 [deploy.md](deploy.md) sets caracole up as a nightly NixOS service: the timer,
 the hardened units, agenix secrets, Syncthing for the library and the music,
-restic backups, and the offline auto-chords unit. There, run any command as
-the service does with `sudo caracole-admin COMMAND`, for example
+restic backups, the offline auto-chords unit, and caracole-web, which serves
+the library page with its request form. There, run any command as the service
+does with `sudo caracole-admin COMMAND`, for example
 `sudo caracole-admin index build`.

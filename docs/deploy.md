@@ -8,7 +8,8 @@ gives the machine:
 | `caracole.timer` | Starts the nightly run at 03:30, up to 45 minutes late, and catches up after downtime |
 | `caracole.service` | `caracole --config <generated caracole.toml> run`, a hardened oneshot as user `caracole` |
 | `caracole-autochords.service` | Optional. After each successful run, writes `sheet (auto).txt` from audio you bought, with no network at all |
-| `caracole-notify-failure.service` | POSTs to your ntfy topic when either unit fails |
+| `caracole-web.service` | Optional. `caracole serve`: the library page over HTTP, with a form to request songs and fetch them now (section 8) |
+| `caracole-notify-failure.service` | POSTs to your ntfy topic when one of the units fails |
 | `caracole-admin` | Runs any `caracole` command as the units do: `sudo caracole-admin auth spotify` |
 | `/var/lib/caracole/state` | The database, the Spotify token and caracole's lock, readable by `caracole` alone |
 | `/var/lib/caracole/cache` | Every raw HTTP response, kept forever, and the private folders PDFs are made in |
@@ -126,9 +127,10 @@ store path.
 Static secrets reach caracole through systemd's `LoadCredential`: systemd reads
 each file as root and hands the unit a private copy in
 `$CREDENTIALS_DIRECTORY`. The secret files can stay root-only, which is
-agenix's default. caracole reads two credentials, `spotify_client_secret` and
-`ntfy_token`; the nightly unit and `caracole-admin` get them, and the auto-chords
-unit, which reads neither, gets none. The Spotify token itself is not a static
+agenix's default. caracole reads three credentials, `spotify_client_secret`,
+`ntfy_token` and `web_token` (caracole-web's access token, section 8); the
+nightly unit, caracole-web and `caracole-admin` get them, and the auto-chords
+unit, which reads none, gets none. The Spotify token itself is not a static
 secret: it lives in the state folder, written by `caracole auth spotify`.
 
 Add agenix, which the flake registry already knows as `agenix`:
@@ -525,6 +527,51 @@ use another font, set `settings.cjk_font` to a single `.ttf` that passes the
 same check, or to a CFF-based `.otf` (embedded whole, so the PDFs are larger),
 or build the package with `caracole.override { cjkFont = "…"; }`.
 
+## 8. The library page over HTTP
+
+`services.caracole.web` runs `caracole serve` as `caracole-web.service`: the
+library page, a form to request songs, and a Fetch now button on each wanted
+song ([usage.md](usage.md), "caracole serve"). A request runs caracole commands
+in the unit, one at a time and each under caracole's lock, so the unit has the
+nightly run's sandbox, folders, network and credentials. It starts at boot and
+restarts when it fails.
+
+On the tailnet, with an access token:
+
+```nix
+  services.caracole = {
+    web = {
+      enable = true;
+      # The NUC's tailnet address (tailscale ip -4). The default, 127.0.0.1,
+      # is the NUC alone: reach it with ssh -L 8737:127.0.0.1:8737 nuc.
+      address = "100.64.0.7";
+      # port = 8737;
+      # The full MagicDNS name, if you browse to it; the short one, the host's
+      # name, is allowed already.
+      allowedHosts = [ "nuc.example-tailnet.ts.net" ];
+    };
+    credentials.web_token = config.age.secrets.caracole-web-token.path;
+  };
+  age.secrets.caracole-web-token.file = ../../secrets/caracole-web-token.age;
+```
+
+Make the token with `openssl rand -base64 24` and store it with
+`nix run agenix -- -e caracole-web-token.age`, after adding that file to
+`secrets/secrets.nix`. Each browser asks for it once and remembers it.
+
+- **Who can reach it.** It answers only to the names it knows (localhost,
+  `address`, the host's name and `allowedHosts`), so no other site can reach it
+  under a name of its own, and a form is refused unless it comes from its own
+  page. A tailnet whose interface is trusted needs no firewall opening; for a
+  LAN address, set `web.openFirewall = true` and keep the token: anyone on
+  the LAN could otherwise read the library and request songs.
+- **At boot.** A tailnet address may not exist when the unit starts; it fails
+  and tries again every 10 seconds until it does.
+- **Politeness.** The server sends no request of its own. Fetch now runs
+  `caracole match`, `caracole fetch --song` and `caracole render`, which wait
+  behind a nightly run, keep the pauses between requests and the budgets, and
+  leave a site alone while it cools down.
+
 ## When something is wrong
 
 - **ntfy says a unit failed:** `journalctl -u caracole.service -e` (or
@@ -561,6 +608,11 @@ or build the package with `caracole.override { cjkFont = "…"; }`.
   `drwxrwsr-x caracole caracole`, that the folders above it let group `caracole`
   through, and that `id syncthing` lists `caracole`. Restart Syncthing after the
   group change, and check that the folder has `ignorePerms`.
+- **The web page doesn't load:** `journalctl -u caracole-web.service -e`.
+  "can't listen on" names the address and why; "421" in a browser means it
+  reached the server under a name it doesn't answer to: add the name to
+  `web.allowedHosts`. A form refused as "older than the server" was opened
+  before the unit last restarted: reload the page.
 - **Nothing ran last night:** `systemctl list-timers caracole.timer`. A missed
   start runs at the next boot, because the timer is persistent.
 - **The hardening, scored:** `systemd-analyze security caracole.service` gives

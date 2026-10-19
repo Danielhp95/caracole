@@ -1,6 +1,7 @@
 # services.caracole: a nightly `caracole run` as a hardened oneshot on a timer, an
-# optional auto-chords unit after it with no network, an ntfy message when
-# either fails, and `caracole-admin` for the interactive commands. Everything
+# optional auto-chords unit after it with no network, an optional caracole-web
+# (`caracole serve`: the library page and song requests), an ntfy message when
+# one fails, and `caracole-admin` for the interactive commands. Everything
 # caracole keeps sits in one folder, dataDir, unless an option moves a part.
 {
   config,
@@ -120,6 +121,21 @@ let
     CARACOLE_BTC_WEIGHTS = cfg.autochords.btcWeights;
     CARACOLE_BEAT_CHECKPOINT = cfg.autochords.beatCheckpoint;
   };
+
+  # `caracole serve`'s options, from services.caracole.web. Their types allow no
+  # whitespace or quote, so they need no quoting on the ExecStart line.
+  webArgs = lib.concatStringsSep " " (
+    [
+      "--address"
+      cfg.web.address
+      "--port"
+      (toString cfg.web.port)
+    ]
+    ++ lib.concatMap (host: [
+      "--allow-host"
+      host
+    ]) cfg.web.allowedHosts
+  );
 
   ntfyUrl = cfg.settings.ntfy.url or "";
 
@@ -310,10 +326,60 @@ in
       '';
       description = ''
         Files systemd passes to caracole through `LoadCredential`, by credential
-        name. caracole reads `spotify_client_secret` and `ntfy_token`. The files
-        are read as root, so they can stay root-only. The nightly run and
-        `caracole-admin` get them; the auto-chords unit, which reads none, doesn't.
+        name. caracole reads `spotify_client_secret`, `ntfy_token` and
+        `web_token` (the access token caracole-web asks each browser for). The
+        files are read as root, so they can stay root-only. The nightly run,
+        caracole-web and `caracole-admin` get them; the auto-chords unit, which
+        reads none, doesn't.
       '';
+    };
+
+    web = {
+      enable = lib.mkEnableOption ''
+        caracole-web: `caracole serve`, the library page over HTTP with a form to
+        request songs, each request run as caracole commands, one at a time,
+        under caracole's lock'';
+
+      address = lib.mkOption {
+        type = lib.types.strMatching "[^[:space:]\"'\\\\]+";
+        default = "127.0.0.1";
+        example = "100.64.0.7";
+        description = ''
+          Where caracole-web listens. 127.0.0.1, the default, is this machine
+          alone (reach it through `ssh -L` or a reverse proxy). The host's tailnet
+          or LAN address opens it to those networks, and 0.0.0.0 to every
+          network. Beyond this machine, set `credentials.web_token` so each
+          browser gives an access token once, and see `openFirewall`.
+        '';
+      };
+
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 8737;
+        description = "The port caracole-web listens on, 1024 or above: the unit has no capabilities.";
+      };
+
+      allowedHosts = lib.mkOption {
+        type = lib.types.listOf (lib.types.strMatching "[A-Za-z0-9._:-]+");
+        default = [ ];
+        example = [ "nuc.example-tailnet.ts.net" ];
+        description = ''
+          More names caracole-web answers to, such as its full tailnet name. It
+          answers to localhost, its address, and the host's name already, and
+          refuses every other name a browser sends, so that no other site can
+          reach it under a name of its own (DNS rebinding).
+        '';
+      };
+
+      openFirewall = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Open `port` in the firewall on every interface, for a LAN address. A
+          tailnet whose interface is in `networking.firewall.trustedInterfaces`
+          needs no opening.
+        '';
+      };
     };
 
     autochords = {
@@ -424,6 +490,13 @@ in
             services.caracole: the units' sandbox hides /home, /root and /run/user
             (ProtectHome) and /tmp and /var/tmp (PrivateTmp), so these must be
             elsewhere:${listed hidden}
+          '';
+        }
+        {
+          assertion = !cfg.web.enable || cfg.web.port >= 1024;
+          message = ''
+            services.caracole.web.port must be 1024 or above: caracole-web runs
+            without capabilities, so it can't listen on port ${toString cfg.web.port}.
           '';
         }
         {
@@ -540,6 +613,36 @@ in
           IOSchedulingClass = "idle";
         };
     };
+
+    # The library page, and song requests: `caracole serve`. A request runs
+    # caracole commands in this unit, one at a time, each under caracole's lock,
+    # so it has the nightly run's folders, network and credentials, and its
+    # sandbox.
+    systemd.services.caracole-web = lib.mkIf cfg.web.enable {
+      description = "caracole web: the library page and song requests";
+      wantedBy = [ "multi-user.target" ];
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ];
+      onFailure = [ "caracole-notify-failure.service" ];
+      unitConfig.RequiresMountsFor = writable;
+      environment = cacheEnv;
+      serviceConfig =
+        sandbox
+        // identity
+        // secrets
+        // paths
+        // {
+          Type = "exec";
+          ExecStart = "${lib.getExe cfg.package} --config ${configFile} serve ${webArgs}";
+          # A tailnet address may not exist yet at boot: try again until it does.
+          Restart = "on-failure";
+          RestartSec = "10s";
+        };
+    };
+
+    networking.firewall.allowedTCPPorts = lib.mkIf (cfg.web.enable && cfg.web.openFirewall) [
+      cfg.web.port
+    ];
 
     systemd.services.caracole-notify-failure = {
       description = "Tell ntfy that a caracole unit failed";
