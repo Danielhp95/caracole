@@ -723,25 +723,35 @@ and cache.
   `_inbox` is a link itself, it is refused the same way, and nothing in the
   folder it points at is read, filed or deleted. The nightly run's scan line
   ends with the same count (`, 1 symbolic link refused`).
-- **`caracole render [--force]`** writes `sheet.cho` and `sheet.pdf` next to
-  every kept sheet, transposed as `[transpose]` says, with the key, the artist
-  and the capo under the title. A PDF is made again only when its sheet, its
-  transposition or the font changes, or when it is no longer the PDF caracole
-  wrote: deleted, cut short, edited, or a link in its place. So annotate a
-  copy, not `sheet.pdf`. `--force` makes them all again. After an upgrade
-  from a caracole that didn't record what it wrote, the first render makes
-  every PDF once more. A song that no longer keeps its human sheet (its UG
-  match was undone, say) loses the `sheet.cho` and `sheet.pdf` made from it;
-  a `sheet.cho` or `sheet.pdf` you put where caracole never rendered one stays.
+- **`caracole render [--force]`** writes `sheet.cho`, `sheet.pdf` and
+  `sheet.html` next to every kept sheet, transposed as `[transpose]` says.
+  The PDF has the artist, the key and the capo on one line under the title
+  ("Soda Stereo · Key Bm · Capo 2"), the chord diagrams above the song, bold
+  chords in rust over the lyrics, and section names on a light band.
+  `sheet.html` is the sheet viewer, for the phone (see
+  [The sheet viewer](#the-sheet-viewer)). A PDF is made again only when its
+  sheet, its transposition, the font or caracole's PDF style changes, or when
+  it is no longer the PDF caracole wrote: deleted, cut short, edited, or a
+  link in its place. So annotate a copy, not `sheet.pdf`. `--force` makes them
+  all again. After an upgrade from a caracole that didn't record what it
+  wrote, or that drew its PDFs another way, the first render makes every PDF
+  once more. The viewer is written again whenever it would change, at every
+  render. A song that no longer keeps its human sheet (its UG match was
+  undone, say) loses the `sheet.cho`, `sheet.pdf` and `sheet.html` made from
+  it; one you put where caracole never rendered one stays. A sheet that never
+  got a PDF (waiting for a font, or chordpro failed on it) loses its
+  `sheet.cho` and `sheet.html` while they are still as caracole wrote them.
   chordpro works on a copy, in a private folder in the cache, and the new PDF
   replaces the old one in one rename, so a failed render leaves the last good
   PDF in place. It exits 1 when a sheet couldn't be rendered, and the log
   says why, as `no PDF for Artist - Title: …` (chordpro's own messages name
-  the copy in the cache). A symbolic link, a FIFO or a folder in the place of
-  `sheet.json`, `sheet (auto).txt` or a `.cho` file fails that song alone:
-  caracole reads no sheet through a link. Remove the link, and the next render
-  writes the `.cho` again; the next `caracole run` writes `sheet.json` again
-  before it renders.
+  the copy in the cache). A viewer that couldn't be made or written is logged
+  as `no viewer for Artist - Title: …` and counts the song as failed too, but
+  never costs it its PDFs. A symbolic link, a FIFO or a folder in the place of
+  `sheet.json`, `sheet (auto).txt`, a `.cho` file or a viewer fails that song
+  alone: caracole reads no sheet through a link. Remove the link, and the next
+  render writes the `.cho` and the viewer again; the next `caracole run` writes
+  `sheet.json` again before it renders.
 - **`caracole todo`** rewrites `_todo.md` and `index.html` from the database.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
@@ -955,8 +965,9 @@ loads nothing from the network. It shows every song as a card, in a grid as
 wide as the screen: one column on a phone, three or four on a laptop. A card
 has its status, its key and where the key came from ("Key A minor (from the
 tab)", "Key C major (estimated from the chords)", "(from the audio)": see
-[The song's key](#the-songs-key)), its transposition, and links to its files,
-the PDF first. A Guitar Pro file caracole downloaded names its site, as
+[The song's key](#the-songs-key)), its transposition, and links to its files:
+the sheet viewer first (see [The sheet viewer](#the-sheet-viewer)), then the
+PDF. A Guitar Pro file caracole downloaded names its site, as
 `Guitar Pro 1 · gtptabs.com`, and a score its format, as `Score 1 (MuseScore)`;
 a score's PDF is never the card's main link, which is the sheet's. Each
 artist's cards share a coloured monogram, and the artist's name under a title
@@ -983,6 +994,54 @@ to request songs (see below).
 
 Each song's entry in the page's data (the `<script type="application/json"
 id="songs">` block) has the same `key` and `key_source` as its info.json.
+
+### The sheet viewer
+
+Each sheet's `sheet.html` (`sheet (auto).html` for an auto sheet) is the sheet
+as a page for the phone. Like `index.html` it is one file that opens from the
+synced folder with no server, and loads nothing from the network. Don't serve
+the library folder as it is to other browsers: anyone with a synced device
+could put a page of their own there, which would run as your server's own.
+caracole records each viewer it writes, so that a server can tell its pages
+from anyone else's. It is made at render time from the song's own
+`.cho`, and stays in the song's folder: nothing of the sheet is copied
+anywhere else. It links back to `index.html` and to the PDF beside it.
+
+- **Chords over the lyrics**, in bold rust. A long line wraps between words,
+  never between a chord and its syllable, and a chord reaches over the words
+  after it, so the lyrics read without gaps.
+- **Tap a chord** for its fingerings: up to four shapes, with the fingers, the
+  barre and the fret they start on (swipe, or ‹ ›, for the next). Every place
+  the chord is played lights up while its card is open. The shapes come from
+  [chords-db](https://github.com/tombatossals/chords-db) by David Rubert (MIT
+  licence, whose notice is at the foot of every page); a chord it has no
+  shape for shows the closest one, saying so.
+- **The key button** (bottom right) opens the settings. **Transpose** moves
+  every chord, its shapes and the key by semitones; Reset goes back to the
+  song's `[transpose]`, where the viewer starts, like the PDF. In an awkward
+  key, **Capo** offers frets where open shapes play it (Bb: capo 1 with A
+  shapes, capo 3 with G shapes); tap one, and the chords show the shapes to
+  play with the capo on. The sheet's own capo counts: the fret shown is where
+  the capo goes, and it may be lower than the sheet's, or no capo at all (a
+  sheet in G shapes with capo 2, transposed down two: no capo, G shapes).
+- **Instead, in the key**: the chord's card also lists chords to play in its
+  place that keep to the key: colours on the same root (a seventh, add9, sus2,
+  a sixth), an inversion, and chords that share most of its notes (Am or Em
+  for C in C major). Tap one to see its shapes, then play it for every one of
+  those chords in the song; changed chords are underlined.
+- **Mode**: with C minor, switch to C major, or to any mode on C (Dorian,
+  Phrygian, Lydian, Mixolydian, Locrian). Each chord's notes move to the same
+  degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
+  the key, such as the G major chord's B in C minor, stays where it is.
+- Text size, every chord's shape in a strip above the song, and scrolling by
+  itself (with the screen kept on, where the browser allows it).
+
+The viewer remembers its settings for each song in the browser. Its key is
+its sheet's, found as for info.json (see [The song's key](#the-songs-key)):
+the human sheet's from the tab, or estimated from its chords, and the auto
+sheet's heard in the audio; the page says which. Beside a human sheet,
+`sheet (auto).html` keeps to the chords the model heard, which may be in
+another key than the tab (another transposition, or a capo).
 
 On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
@@ -1238,8 +1297,9 @@ with an error instead of writing a PDF with blank text:
   have (LXGW Neo XiHei and WenKai among them): their glyphs come out blank.
 
 A CFF-based `.otf` works too; it is embedded whole, so its PDFs are larger.
-Until a usable font is set, a Chinese sheet still gets its `.cho` file, and
-the to-do page's PDFs section names the sheets waiting for a font, each with
+Until a usable font is set, a Chinese sheet still gets its `.cho` file and its
+viewer (`sheet.html`, which the browser draws with its own fonts), and the
+to-do page's PDFs section names the sheets waiting for a font, each with
 the first letter it needs the font for, such as `宋冬野 - 斑马斑马 (斑 U+6591)`.
 Section 7 of [deploy.md](deploy.md#7-chinese-sheets-in-the-pdfs) has the
 details.
@@ -1264,14 +1324,16 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       sheet.txt             the chosen chord sheet, as plain text
       sheet.json            the same version as the source gave it
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key
+      sheet.html            the sheet viewer, for the phone
       lyrics.txt            the lyrics, from LRCLIB
       lyrics.lrc            the timed lyrics, when LRCLIB has them
       guitar-1.gp5          Guitar Pro or Power Tab files: filed by rank, or from gtptabs.com
       score-1.mscz          scores you downloaded (MuseScore, MusicXML, PDF, MIDI), filed
       tab.txt  tab.json     the best text tab
       sheet (auto).txt      made from audio you bought, when no human sheet exists;
-      sheet (auto).cho      it stays, with its ChordPro and PDF, beside a partial
-      sheet (auto).pdf      human sheet, until a complete one replaces it
+      sheet (auto).cho      it stays, with its ChordPro, PDF and viewer, beside a
+      sheet (auto).pdf      partial human sheet, until a complete one replaces it
+      sheet (auto).html
       info.json             where everything came from, and the song's key
 Music/                      music_dir: the tracks you bought (caracole only reads it)
 ```
@@ -1293,7 +1355,8 @@ symbolic link planted there could point at caracole's private files, so caracole
 never reads or writes a file there through a link. A link in the place of
 wanted.txt, overrides.toml, `_inbox` or a download in it is refused, and the
 command or the to-do page says so; one in the place of `sheet.json`,
-`sheet (auto).txt` or a `.cho` file fails that song's render. A file caracole
+`sheet (auto).txt`, a `.cho` file or a viewer fails that song's render, and
+`info.json` is not read through one. A file caracole
 replaces there arrives through a temporary file beside it, named
 `.<name>.<8 hex digits>.tmp`, and reaches the disk before it is renamed into
 place, so a power cut during the nightly run leaves the old file or the new
@@ -1303,8 +1366,9 @@ one, never an empty one.
 it, deleted (on the laptop, say), cut short or edited, is written again, and
 only it: `sheet.txt`, `sheet.json`, `tab.txt` and `tab.json` at the next
 `caracole run` or `caracole fetch` (a LaCuerda sheet at the next LaCuerda pass),
-from the cache, usually with no request; the `.cho` files and the PDFs at the
-next render. So is a link in the place of one of them, except a `.cho`. A
+from the cache, usually with no request; the `.cho` files, the PDFs and the
+viewers at the next render. So is a link in the place of one of them, except a
+`.cho` or a viewer. A
 file still as caracole wrote it is never written again, so Syncthing has
 nothing to sync. Keep your own edits and annotations in a copy under another
 name: caracole leaves alone the files it doesn't track. A lost

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import shutil
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from caracole.render import RenderError, needs_font_file, render_pdf, write_chordpro
+from caracole.render import STYLE_FILE, RenderError, needs_font_file, render_pdf, write_chordpro
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 CHORDPRO = os.environ.get("CARACOLE_CHORDPRO_BIN") or shutil.which("chordpro")
@@ -111,12 +112,26 @@ def test_default_configs_are_ignored(cho, tmp_path):
     assert "--nodefaultconfigs" in run.cmd
 
 
-def test_title_page_shows_key_artist_and_capo(cho, tmp_path):
+def test_the_pdf_takes_caracoles_style(cho, tmp_path):
     run = FakeRunner()
     render_pdf(cho, tmp_path / "sheet.pdf", runner=run)
-    assert "--define=pdf.formats.title.subtitle.0=%{key|Key: %{}}" in run.cmd
-    assert "--define=pdf.formats.title.subtitle.1=%{artist}" in run.cmd
-    assert "--define=pdf.formats.title.subtitle.2=%{capo|Capo: %{}}" in run.cmd
+    assert f"--config={STYLE_FILE}" in run.cmd
+    assert run.cmd.index("--nodefaultconfigs") < run.cmd.index(f"--config={STYLE_FILE}")
+
+
+def test_the_style_puts_key_and_capo_under_the_title_and_colours_the_chords():
+    pdf = json.loads(STYLE_FILE.read_text(encoding="utf-8"))["pdf"]
+    # ChordPro prints neither {artist} nor {capo} by default; a capo the guitarist can't see
+    # means playing in the wrong key. The key is transposed along with the chords.
+    assert pdf["formats"]["title"]["subtitle"] == ["", "%{artist}%{key| · Key %{}}%{capo| · Capo %{}}", ""]
+    assert pdf["fonts"]["chord"]["name"] == "Helvetica-Bold" and pdf["fonts"]["chord"]["color"] == "#b4441e"
+    assert pdf["diagrams"]["show"] == "top"  # the shapes before the song, not after it
+
+
+def test_the_style_leaves_every_text_element_to_the_cjk_font():
+    # An element naming a font file of its own would keep a Chinese sheet's font file from it.
+    fonts = json.loads(STYLE_FILE.read_text(encoding="utf-8"))["pdf"]["fonts"]
+    assert all("file" not in font for font in fonts.values())
 
 
 def test_font_file_used_for_lyrics_and_titles(cho, font, tmp_path):
@@ -413,14 +428,27 @@ def test_render_real_chordpro_binary(tmp_path):
     text = pdf_text(pdf)
     for shown in [
         "Synthetic Test Song",
-        "The Placeholders",
-        "Key: G",
-        "Capo: 2",
+        "The Placeholders · Key G · Capo 2",
         "Verse 1",
         "Tiny test",
     ]:
         assert shown in text
     assert "e|-----0---0---|" in text
+    strings = pdf_strings(pdf)
+    assert ("Helvetica-Bold", "Synthetic Test Song") in strings
+    assert any(font == "Helvetica" and "Tiny test" in shown for font, shown in strings)
+    assert {"G", "D", "Em", "C", "G/B", "Am", "F"} <= {s.strip() for f, s in strings if f == "Helvetica-Bold"}
+    assert b"0.705882 0.266667 0.117647 rg" in b"".join(_streams(pdf))  # the chords' colour, #b4441e
+
+
+def _streams(path: Path) -> list[bytes]:
+    out = []
+    for m in re.finditer(rb"stream\r?\n(.*?)endstream", path.read_bytes(), re.DOTALL):
+        try:
+            out.append(zlib.decompressobj().decompress(m.group(1)))
+        except zlib.error:
+            continue
+    return out
 
 
 @pytest.mark.chordpro
@@ -436,7 +464,7 @@ def test_render_real_transposes_chords_and_key(tmp_path):
     pdf = tmp_path / "sheet.pdf"
     render_pdf(cho, pdf, transpose=-2, chordpro_bin=CHORDPRO)
     text = pdf_text(pdf)
-    assert "Bm7" in text and "G" in text and "Key: D" in text
+    assert "Bm7" in text and "G" in text and "A · Key D" in text
     assert "C#m7" not in text
 
 

@@ -221,35 +221,50 @@ class SongKey:
 
 def song_key(conn: sqlite3.Connection, library_dir: Path, song: Song) -> SongKey | None:
     """The song's key from the sheets it keeps, and its source (see the module's notes); None
-    without a sheet, or when no source gives one.
+    without a sheet, or when no source gives one: the human sheet's key, else the auto sheet's.
 
     Sheets are read from the library only as regular files (``library.read_regular``): one
     that can't be read, isn't UTF-8 or isn't JSON gives nothing, and the next source is tried.
     """
+    human, auto = sheet_keys(conn, library_dir, song)
+    return human or auto
+
+
+def sheet_keys(conn: sqlite3.Connection, library_dir: Path, song: Song) -> tuple[SongKey | None, SongKey | None]:
+    """The key of each sheet the song keeps, as ``song_key`` finds it: (the human sheet's, the
+    auto sheet's). Each sheet's viewer takes its own (render.py): the chords the model heard may
+    be in another key than the tab, by a transposition or the capo."""
     kept = {f.name: f for f in kept_files(conn, song.id)}
+    return _human_key(conn, library_dir, kept), _auto_key(conn, library_dir, kept)
+
+
+def _human_key(conn: sqlite3.Connection, library_dir: Path, kept: Mapping[str, KeptFile]) -> SongKey | None:
     human = kept.get(HUMAN_SHEET)
-    if human is not None:
-        tab = _tonality(get_version(conn, human.version_id).raw)
-        if tab is not None:
-            return SongKey(tab, "tab")
-        markup = _markup(library_dir, kept.get(SHEET_DOC), human)
-        if markup is not None:
-            stated = key_in_text(markup)
-            if stated is not None:
-                return SongKey(stated, "tab")
-            estimated = estimate_key(chords_in_sheet(markup))
-            if estimated is not None:
-                return SongKey(estimated, "chords")
+    if human is None:
+        return None
+    tab = _tonality(get_version(conn, human.version_id).raw)
+    if tab is not None:
+        return SongKey(tab, "tab")
+    markup = _markup(library_dir, kept.get(SHEET_DOC), human)
+    if markup is None:
+        return None
+    stated = key_in_text(markup)
+    if stated is not None:
+        return SongKey(stated, "tab")
+    estimated = estimate_key(chords_in_sheet(markup))
+    return SongKey(estimated, "chords") if estimated is not None else None
+
+
+def _auto_key(conn: sqlite3.Connection, library_dir: Path, kept: Mapping[str, KeptFile]) -> SongKey | None:
     auto = kept.get(AUTO_SHEET)
-    if auto is not None:
-        heard = _tonality(get_version(conn, auto.version_id).raw, "key")
-        if heard is not None:
-            return SongKey(heard, "audio")
-        text = _text(library_dir / auto.path)
-        estimated = estimate_key(chords_in_sheet(text)) if text is not None else None
-        if estimated is not None:
-            return SongKey(estimated, "audio")
-    return None
+    if auto is None:
+        return None
+    heard = _tonality(get_version(conn, auto.version_id).raw, "key")
+    if heard is not None:
+        return SongKey(heard, "audio")
+    text = _text(library_dir / auto.path)
+    estimated = estimate_key(chords_in_sheet(text)) if text is not None else None
+    return SongKey(estimated, "audio") if estimated is not None else None
 
 
 def refresh_info_keys(conn: sqlite3.Connection, library_dir: Path) -> int:

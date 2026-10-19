@@ -20,13 +20,14 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from caracole import render as render_module
 from caracole.autochords import ChordSegment, build_sheet
 from caracole.cli import build_app
 from caracole.db import kv_get_json, kv_set_json
 from caracole.lacuerda import parse_version_page
 from caracole.library import drop_file, keep_file, song_dir, write_atomic, write_info
 from caracole.overrides import Overrides, load_overrides
-from caracole.render import RenderStats, render_all
+from caracole.render import STYLE_FILE, RenderStats, render_all, written_file
 from caracole.songs import get_song, update_song
 from caracole.ug.page import strip_markup
 from caracole.versions import set_coverage, upsert_version
@@ -122,9 +123,9 @@ def human_sheet(conn, cfg, song, content=UG_SHEET, *, tab_id=85053, tonality="Bm
     return vid
 
 
-def auto_sheet(conn, cfg, song):
+def auto_sheet(conn, cfg, song, *, key=None):
     """Keep an auto-chords sheet the way the autochords step does: 'sheet (auto).txt',
-    from a versions row with provider "auto"."""
+    from a versions row with provider "auto", whose raw data holds the ``key`` heard, if any."""
     text = build_sheet(
         [ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G")],
         title=song.title,
@@ -133,7 +134,8 @@ def auto_sheet(conn, cfg, song):
     )
     vid = upsert_version(
         conn, provider="auto", tab_id=f"auto-{song.id}", song_id=song.id, slot="sheet",
-        kind="auto", rating=0, votes=0, version=1, label=None, url="", raw={}, now=FETCHED,
+        kind="auto", rating=0, votes=0, version=1, label=None, url="", raw={"key": key} if key else {},
+        now=FETCHED,
     )
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet (auto).txt",
               data=text.encode("utf-8"), rank=1)
@@ -253,9 +255,10 @@ def test_a_complete_human_sheet_replaces_auto_outputs(conn, cfg):
     folder = song_dir(cfg.library_dir, song)
     assert stats.rendered == 1
     assert "[Bm]Una canción" in (folder / "sheet.cho").read_text(encoding="utf-8")
-    assert (folder / "sheet.pdf").is_file()
+    assert (folder / "sheet.pdf").is_file() and (folder / "sheet.html").is_file()
     assert not (folder / "sheet (auto).cho").exists()
     assert not (folder / "sheet (auto).pdf").exists()
+    assert not (folder / "sheet (auto).html").exists()
 
 
 def test_auto_outputs_stay_until_the_human_pdf_replaces_them(conn, cfg):
@@ -340,6 +343,8 @@ def test_the_cho_and_pdf_of_a_sheet_no_longer_kept_go(conn, cfg, auto):
     render(conn, cfg)
 
     assert not (folder / "sheet.cho").exists() and not (folder / "sheet.pdf").exists()
+    assert not (folder / "sheet.html").exists()
+    assert (folder / "sheet (auto).html").is_file() is auto
     record = kv_get_json(conn, f"render:{song.id}")  # the auto sheet's now, if there is one
     assert (record or {}).get("pdf") == ("sheet (auto).pdf" if auto else None)
     assert (folder / "sheet (auto).pdf").is_file() is auto
@@ -347,15 +352,44 @@ def test_the_cho_and_pdf_of_a_sheet_no_longer_kept_go(conn, cfg, auto):
     assert info_json(cfg, song)["render"] == ({"transpose": 0, "pdf": "sheet (auto).pdf"} if auto else None)
 
 
+@pytest.mark.parametrize("why", ["no font", "chordpro failed"])
+@pytest.mark.parametrize("yours", [False, True], ids=["as-written", "yours"])
+def test_the_cho_and_viewer_of_a_sheet_that_never_got_a_pdf_go_with_it(conn, cfg, why, yours):
+    assert cfg.cjk_font is None
+    if why == "no font":
+        song = add_song(conn, "宋冬野", "斑马斑马")
+        human_sheet(conn, cfg, song, ZH_SHEET, tonality="")
+        assert render(conn, cfg).font_error is not None
+    else:
+        song = add_song(conn, "Soda Stereo", "De Música Ligera")
+        human_sheet(conn, cfg, song)
+        assert render(conn, cfg, runner=FakeChordPro(fail=("Música",))).failed == 1
+    folder = song_dir(cfg.library_dir, song)
+    assert (folder / "sheet.cho").is_file() and (folder / "sheet.html").is_file()
+    assert not (folder / "sheet.pdf").exists() and kv_get_json(conn, f"render:{song.id}") is None
+    if yours:  # a page of your own, under that name
+        (folder / "sheet.html").write_bytes(b"yours")
+    drop_human_sheet(conn, cfg, song)
+
+    render(conn, cfg)
+
+    assert not (folder / "sheet.cho").exists()
+    assert (folder / "sheet.html").exists() is yours
+    if yours:
+        assert (folder / "sheet.html").read_bytes() == b"yours"
+    assert written_file(conn, song.id, "sheet.html") is None
+    assert written_file(conn, song.id, "sheet.cho") is None
+
+
 def test_a_sheet_pdf_caracole_never_rendered_stays(conn, cfg):
     # No render record names it, so it is yours: a song caracole found no sheet for, say.
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     folder = song_dir(cfg.library_dir, song)
     folder.mkdir(parents=True)
-    for name in ("sheet.cho", "sheet.pdf"):
+    for name in ("sheet.cho", "sheet.pdf", "sheet.html"):
         (folder / name).write_bytes(b"yours")
     render(conn, cfg)
-    assert [(folder / name).read_bytes() for name in ("sheet.cho", "sheet.pdf")] == [b"yours", b"yours"]
+    assert [(folder / name).read_bytes() for name in ("sheet.cho", "sheet.pdf", "sheet.html")] == [b"yours"] * 3
 
 
 def test_lacuerda_sheet_gets_letter_chords(conn, cfg):
@@ -387,6 +421,223 @@ def test_ignored_songs_are_not_rendered(conn, cfg):
     assert run.calls == [] and stats == RenderStats()
     for song in (listed, marked):
         assert not (song_dir(cfg.library_dir, song) / "sheet.cho").exists()
+
+
+# --- the sheet viewer -----------------------------------------------------------------------
+
+
+def viewer_of(cfg, song, name="sheet.html") -> str:
+    return (song_dir(cfg.library_dir, song) / name).read_text(encoding="utf-8")
+
+
+def viewer_data(html: str) -> dict:
+    return json.loads(re.search(r'<script type="application/json" id="song">(.*?)</script>', html, re.S).group(1))
+
+
+def test_every_sheet_gets_a_viewer_beside_its_pdf(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, meta={"capo": 2})
+    render(conn, cfg)
+    html = viewer_of(cfg, song)
+    assert "<h1>De Música Ligera</h1>" in html and 'href="sheet.pdf"' in html
+    assert "Una canción de prueba" not in html  # each word is a column of its own...
+    assert ">Una </span>" in html and ">canción </span>" in html  # ...in the song's own folder only
+    data = viewer_data(html)
+    assert data["key"] == {"tonic": 11, "mode": "aeolian", "from": "from the tab"}
+    assert data["capoSheet"] == 2 and data["transpose"] == 0
+
+
+def test_an_auto_sheet_gets_a_viewer_of_its_own(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    render(conn, cfg)
+    html = viewer_of(cfg, song, "sheet (auto).html")
+    assert 'href="sheet%20%28auto%29.pdf"' in html and "unverified" in html
+    assert not (song_dir(cfg.library_dir, song) / "sheet.html").exists()
+
+
+def test_a_viewer_needs_no_cjk_font(conn, cfg, tmp_path):
+    assert cfg.cjk_font is None
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, song, ZH_SHEET, tonality="")
+    assert render(conn, cfg).font_error is not None
+    html = viewer_of(cfg, song)
+    assert ">这</span>" in html and not re.search(r'href="[^"]*\.pdf"', html)  # no PDF to link yet
+    cfg = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
+    assert render(conn, cfg).rendered == 1
+    assert 'href="sheet.pdf"' in viewer_of(cfg, song)  # and now there is
+
+
+def test_the_viewer_starts_in_the_key_of_the_pdf(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg, overrides(cfg, '[transpose]\n"Soda Stereo - De Musica Ligera" = 3\n'))
+    assert viewer_data(viewer_of(cfg, song))["transpose"] == 3
+
+
+def test_the_viewer_and_info_json_agree_on_the_key_from_the_first_render(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)  # UG gives Bm
+    render(conn, cfg)
+    info = info_json(cfg, song)
+    assert (info["key"], info["key_source"]) == ("B minor", "tab")
+    assert viewer_data(viewer_of(cfg, song))["key"] == {"tonic": 11, "mode": "aeolian", "from": "from the tab"}
+
+
+def test_the_viewer_takes_the_songs_key(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, tonality="D")  # UG's key, not the sheet's own Bm
+    render(conn, cfg)
+    assert viewer_data(viewer_of(cfg, song))["key"] == {"tonic": 2, "mode": "ionian", "from": "from the tab"}
+
+
+def test_an_auto_sheet_takes_the_key_heard_in_the_audio(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song, key="D")  # C, then G
+    render(conn, cfg)
+    assert viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["key"] == {
+        "tonic": 2, "mode": "ionian", "from": "from the audio",
+    }
+
+
+@pytest.mark.parametrize("tonality", ["Bm", ""])
+def test_beside_a_human_sheet_each_viewer_takes_its_own_sheets_key(conn, cfg, tonality):
+    # The song's key is the human sheet's, which the auto sheet's chords, as the model heard
+    # them, may not be in: another transposition, or the capo.
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)  # C, then G
+    set_coverage(conn, human_sheet(conn, cfg, song, tonality=tonality), 0.3)  # in Bm
+    render(conn, cfg)
+    human = viewer_data(viewer_of(cfg, song))["key"]
+    auto = viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["key"]
+    assert (human["tonic"], human["mode"]) == (11, "aeolian")
+    assert (auto["tonic"], auto["mode"]) in [(0, "ionian"), (7, "ionian")]
+
+
+def test_a_human_sheet_never_takes_a_key_heard_in_the_audio(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song, key="D")
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)  # the tab says Bm
+    render(conn, cfg)
+    assert viewer_data(viewer_of(cfg, song))["key"] == {"tonic": 11, "mode": "aeolian", "from": "from the tab"}
+    assert viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["key"]["tonic"] == 2
+
+
+def test_info_json_is_never_read_through_a_link(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    elsewhere = cfg.state_dir / "elsewhere.json"
+    elsewhere.parent.mkdir(parents=True, exist_ok=True)
+    elsewhere.write_text(json.dumps({"key": "F#", "key_source": "not yours"}), encoding="utf-8")
+    info = song_dir(cfg.library_dir, song) / "info.json"
+    info.unlink(missing_ok=True)
+    info.symlink_to(elsewhere)
+    assert render(conn, cfg).rendered == 1
+    html = viewer_of(cfg, song)
+    assert viewer_data(html)["key"]["from"] == "from the tab" and "not yours" not in html
+
+
+def test_odd_chord_names_on_a_sheet_get_their_viewer(conn, cfg):
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    odd = add_song(conn, "Soda Stereo", "Persiana Americana")  # newer: rendered first
+    human_sheet(conn, cfg, odd, "[ch]E7+13[/ch]  [ch]Am7b11[/ch]  [ch]C7(#13)[/ch]\nuna prueba\n", tab_id=1)
+    stats = render(conn, cfg)
+    assert (stats.rendered, stats.failed) == (2, 0)
+    assert ">E7+13</b>" in viewer_of(cfg, odd) and ">Am7b11</b>" in viewer_of(cfg, odd)
+    assert "<h1>De Música Ligera</h1>" in viewer_of(cfg, good)
+
+
+def test_a_viewer_that_cant_be_built_never_costs_the_pdfs(conn, cfg, caplog, monkeypatch):
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")  # newer: rendered first
+    human_sheet(conn, cfg, bad, tab_id=1)
+    real = render_module.build_viewer
+
+    def build_viewer(cho, **kwargs):
+        if "Persiana" in cho:
+            raise ValueError("a bug in the viewer")
+        return real(cho, **kwargs)
+
+    monkeypatch.setattr(render_module, "build_viewer", build_viewer)
+    stats = render(conn, cfg)
+    assert (stats.rendered, stats.failed) == (2, 1)  # both PDFs; one song without its viewer
+    assert pdf_of(cfg, bad).is_file() and pdf_of(cfg, good).is_file()
+    assert not (song_dir(cfg.library_dir, bad) / "sheet.html").exists()
+    assert "<h1>De Música Ligera</h1>" in viewer_of(cfg, good)
+    assert "no viewer for Soda Stereo - Persiana Americana" in caplog.text
+    assert "Traceback" in caplog.text and "a bug in the viewer" in caplog.text
+    assert "no PDF for" not in caplog.text
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Persiana Americana"]
+
+
+def test_a_sheet_chordpro_fails_on_still_gets_its_viewer(conn, cfg, caplog):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    stats = render(conn, cfg, runner=FakeChordPro(fail=("Música",)))
+    assert stats.failed == 1 and not pdf_of(cfg, song).exists()
+    html = viewer_of(cfg, song)
+    assert "<h1>De Música Ligera</h1>" in html and not re.search(r'href="[^"]*\.pdf"', html)
+    assert "no PDF for Soda Stereo - De Música Ligera" in caplog.text
+
+
+def recorded(data: bytes) -> tuple[str, int]:
+    return hashlib.sha256(data).hexdigest(), len(data)
+
+
+def test_each_cho_and_viewer_written_is_recorded(conn, cfg):
+    # A server serves a viewer only while it is the page caracole wrote: anyone with a synced
+    # device could put a sheet.html of their own there, whose script would run as the server's.
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    for name in ("sheet.cho", "sheet.html", "sheet (auto).cho", "sheet (auto).html"):
+        assert written_file(conn, song.id, name) == recorded((folder / name).read_bytes()), name
+    assert written_file(conn, song.id, "sheet.pdf") is None  # the PDF has a record of its own
+    auto_sheet(conn, cfg, song, key="D")  # the key the model heard arrives
+    render(conn, cfg)  # a new key: the auto sheet's viewer changes, and its record with it
+    page = (folder / "sheet (auto).html").read_bytes()
+    assert b"from the audio" in page
+    assert written_file(conn, song.id, "sheet (auto).html") == recorded(page)
+
+
+def test_a_viewer_that_cant_be_written_is_not_recorded(conn, cfg, private_file):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    page = song_dir(cfg.library_dir, song) / "sheet.html"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.symlink_to(private_file)
+    assert render(conn, cfg).failed == 1
+    assert written_file(conn, song.id, "sheet.html") is None
+    assert written_file(conn, song.id, "sheet.cho") is not None
+
+
+def test_the_records_of_retired_auto_outputs_go_with_them(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    render(conn, cfg)
+    assert written_file(conn, song.id, "sheet (auto).html") is not None
+    complete_human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    assert written_file(conn, song.id, "sheet (auto).html") is None
+    assert written_file(conn, song.id, "sheet (auto).cho") is None
+    assert written_file(conn, song.id, "sheet.html") is not None
+
+
+def test_an_unchanged_viewer_is_not_written_again(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    page = song_dir(cfg.library_dir, song) / "sheet.html"
+    os.utime(page, ns=(1_000_000_000, 1_000_000_000))
+    render(conn, cfg)
+    assert page.stat().st_mtime_ns == 1_000_000_000  # one sync fewer on every device
+    human_sheet(conn, cfg, song, UG_SHEET.replace("[ch]G[/ch]", "[ch]Em[/ch]"))
+    render(conn, cfg)
+    assert '<b class="c" data-c="1" tabindex="0" role="button">Em</b>' in page.read_text(encoding="utf-8")
 
 
 # --- when a PDF is rendered again ------------------------------------------------------------
@@ -737,7 +988,7 @@ def library_bytes(cfg) -> bytes:
 
 
 @pytest.mark.parametrize("planted", ["link", "fifo"])
-@pytest.mark.parametrize("name", ["sheet (auto).txt", "sheet.json", "sheet.cho"])
+@pytest.mark.parametrize("name", ["sheet (auto).txt", "sheet.json", "sheet.cho", "sheet.html"])
 def test_a_link_or_fifo_in_place_of_a_sheet_fails_that_song_only(
     conn, cfg, caplog, private_file, name, planted
 ):
@@ -756,9 +1007,13 @@ def test_a_link_or_fifo_in_place_of_a_sheet_fails_that_song_only(
     human_sheet(conn, cfg, good, tab_id=2)
     stats = render(conn, cfg)
     assert SECRET.encode() not in library_bytes(cfg)
-    assert (stats.rendered, stats.failed) == (1, 1)
+    viewer = name == "sheet.html"  # then only the viewer can't be written: the PDF is
+    assert (stats.rendered, stats.failed) == ((2, 1) if viewer else (1, 1))
     assert name in caplog.text
     assert ("symbolic link" if planted == "link" else "not a regular file") in caplog.text
+    said = "no viewer for" if viewer else "no PDF for"
+    assert f"{said} Placeholder Band - Synthetic Song" in caplog.text
+    assert pdf_of(cfg, bad).is_file() is viewer
     assert private_file.read_text(encoding="utf-8") == json.dumps({"content": SECRET})
 
 
@@ -859,10 +1114,26 @@ def test_render_record_says_what_the_pdf_was_made_from(conn, cfg, tmp_path):
         "source_sha": hashlib.sha256(cho).hexdigest(),
         "transpose": 3,
         "font": str(font),
+        "style": hashlib.sha256(STYLE_FILE.read_bytes()).hexdigest(),  # the look of the PDF
         "pdf": "sheet.pdf",
         "pdf_sha256": hashlib.sha256(pdf).hexdigest(),  # what was written, to tell it is still there
         "pdf_size": len(pdf),
     }
+
+
+def test_a_new_pdf_style_rerenders_every_pdf_once(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    key = f"render:{song.id}"
+    record = kv_get_json(conn, key)
+    kv_set_json(conn, key, {**record, "style": "the look of an older caracole"})
+    assert render(conn, cfg).rendered == 1
+    record = kv_get_json(conn, key)
+    del record["style"]  # a caracole that didn't record it
+    kv_set_json(conn, key, record)
+    assert render(conn, cfg).rendered == 1
+    assert render(conn, cfg).skipped == 1
 
 
 def test_info_json_records_the_rendered_transposition(conn, cfg):
@@ -1026,7 +1297,7 @@ def font_name(font: Path) -> bytes:
 def assert_built_in_fonts(cfg, pdf: Path) -> None:
     """A Latin sheet keeps ChordPro's built-in fonts, even when a CJK font is set."""
     data = pdf.read_bytes()
-    assert data.startswith(b"%PDF") and b"/Times-Roman" in data
+    assert data.startswith(b"%PDF") and b"/Helvetica" in data
     if cfg.cjk_font is not None:
         assert font_name(cfg.cjk_font) not in data
 
@@ -1041,7 +1312,7 @@ def test_real_spanish_ug_sheet_transposed_then_skipped(conn, real):
     assert_built_in_fonts(real, pdf)
     assert {b"Bm", b"G", b"D", b"A"} <= drawn_strings(pdf)
     if (text := pdf_text(pdf)) is not None:
-        for shown in ("De Música Ligera", "Soda Stereo", "Key: Bm", "Capo: 2",
+        for shown in ("De Música Ligera", "Soda Stereo · Key Bm · Capo 2",
                       "Una canción de prueba", "solo para el analizador"):
             assert shown in text
         assert set(CHORD.findall(text)) == {"Bm", "G", "D", "A"}
@@ -1051,7 +1322,7 @@ def test_real_spanish_ug_sheet_transposed_then_skipped(conn, real):
     drawn = drawn_strings(pdf)
     assert {b"Am", b"F", b"C", b"G"} <= drawn and not {b"Bm", b"D", b"A"} & drawn
     if (text := pdf_text(pdf)) is not None:
-        assert "Key: Am" in text and "Capo: 2" in text
+        assert "Key Am · Capo 2" in text
         assert set(CHORD.findall(text)) == {"Am", "F", "C", "G"}
     assert info_json(real, song)["render"] == {"transpose": -2, "pdf": "sheet.pdf"}
 
