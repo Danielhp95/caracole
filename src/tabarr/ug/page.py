@@ -126,7 +126,8 @@ def _number(value: Any) -> float | None:
     return n if math.isfinite(n) else None
 
 
-def _whole(value: Any) -> int | None:
+def json_int(value: Any) -> int | None:
+    """A whole number from UG's JSON (a number or a digit string), else None."""
     n = _number(value)
     return int(n) if n is not None and n.is_integer() else None
 
@@ -143,21 +144,21 @@ def parse_version(d: Any) -> UGVersion | None:
     """
     if not isinstance(d, Mapping) or not d.get("type"):
         return None
-    tab_id = _whole(d.get("id"))
+    tab_id = json_int(d.get("id"))
     if tab_id is None:
         return None
     recording = d.get("recording")
     acoustic = recording.get("is_acoustic") if isinstance(recording, Mapping) else None
     return UGVersion(
         tab_id=tab_id,
-        song_id=_whole(d.get("song_id")),
+        song_id=json_int(d.get("song_id")),
         song_name=_text(d.get("song_name")),
         artist_name=_text(d.get("artist_name")),
         type=_text(d.get("type")),
         part=_text(d.get("part")),
-        version=_whole(d.get("version")) or 0,
+        version=json_int(d.get("version")) or 0,
         rating=_number(d.get("rating")) or 0.0,
-        votes=_whole(d.get("votes")) or 0,
+        votes=json_int(d.get("votes")) or 0,
         access=_text(d.get("tab_access_type")),
         url=_text(d.get("tab_url")) or page_url(tab_id),
         description=_text(d.get("version_description")) or None,
