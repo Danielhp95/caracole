@@ -211,6 +211,22 @@ def _todo(ctx: StepContext) -> str:
     return "ok"
 
 
+def _todo_for_broken_overrides(cfg: Config, conn: sqlite3.Connection, now: datetime, error: str,
+                               report: RunReport) -> None:
+    """No step can run, but the page you read still says why: it leads with the error.
+
+    index.html is left as it was: built without your overrides it would lose your
+    transpositions and ignored songs.
+    """
+    from tabarr.todo import build_todo, write_todo
+
+    try:
+        write_todo(cfg.library_dir, build_todo(conn, cfg, Overrides(), now, overrides_error=error))
+    except Exception as e:  # a bug, or a library folder that can't be written; the run fails anyway
+        log.error("the to-do page could not be written:\n%s", traceback.format_exc())
+        report.errors.append(f"todo: {type(e).__name__}: {e}")
+
+
 def default_steps() -> list[Step]:
     return [
         Step("sync", _sync),
@@ -302,6 +318,7 @@ def run_pipeline(
     except OverridesError as e:
         report.errors.append(f"overrides.toml: {e}")
         report.steps["overrides"] = f"failed: {e}"
+        _todo_for_broken_overrides(cfg, conn, now, str(e), report)
         services.notifier.send("tabarr run failed", f"overrides.toml could not be read: {e}", priority="high",
                                tags=["rotating_light"])
         return report

@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from urllib.parse import quote
 
@@ -5,7 +6,7 @@ from tabarr.db import kv_set, kv_set_json
 from tabarr.health import record_block
 from tabarr.library import keep_file
 from tabarr.normalize import slug_key
-from tabarr.overrides import Overrides
+from tabarr.overrides import Overrides, load_overrides
 from tabarr.songs import update_song
 from tabarr.todo import build_todo, search_links, write_todo
 from tabarr.versions import set_coverage, set_picks, upsert_version
@@ -57,8 +58,8 @@ def test_review_item_has_links_and_paste_line(conn, cfg):
     assert "82" in text
     assert "https://tabs.ultimate-guitar.com/tab/1081460" in text
     assert "https://tabs.ultimate-guitar.com/tab/1081462" in text
-    assert '[match]\n"Soda - Persiana Americana" = "soda-stereo/persiana-americana"' in text
-    assert '[alias]\n"Soda" = "soda-stereo"' in text
+    assert '"Soda - Persiana Americana" = "soda-stereo/persiana-americana"  # under [match]' in text
+    assert '"Soda" = "soda-stereo"  # under [alias]' in text
 
 
 def test_review_links_use_the_slugged_url(conn, cfg):
@@ -81,8 +82,8 @@ def test_title_only_candidate_gets_no_alias_line(conn, cfg):
         {"artist_key": "jeff-buckley", "song_key": "hallelujah", "score": 100.0, "step": "title_only"},
     ])
     text = todo(conn, cfg)
-    assert '"Someone - Hallelujah" = "jeff-buckley/hallelujah"' in text
-    assert "[alias]" not in text
+    assert '"Someone - Hallelujah" = "jeff-buckley/hallelujah"  # under [match]' in text
+    assert "# under [alias]" not in text
 
 
 def covers_only(conn, artist, title, *covers):
@@ -271,6 +272,74 @@ def test_find_artist_on_ug(conn, cfg):
     # Known artist page (override): no longer asked for.
     o = Overrides(artist_url={"joaquin-sabina": "https://www.ultimate-guitar.com/artist/joaquin_sabina_1"})
     assert "## Artists to find" not in todo(conn, cfg, o)
+
+
+def toml_blocks(text):
+    return re.findall(r"```toml\n(.*?)```", text, re.S)
+
+
+def section_of(text, title):
+    return text.split(f"## {title}", 1)[1].split("\n## ", 1)[0]
+
+
+def test_the_artist_lines_pasted_as_shown_keep_overrides_readable(conn, cfg):
+    # Two artists to find: pasting every block of the section, one after the other, must still load.
+    for artist, title in (("Joaquín Sabina", "19 Días y 500 Noches"), ("宋冬野", "斑马斑马")):
+        s = add_song(conn, artist, title)
+        update_song(conn, s.id, match_decision="not_found")
+    section = section_of(todo(conn, cfg), "Artists to find")
+    pasted = "".join(toml_blocks(section)).replace("<name>_<id>", "someone_123")
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(pasted, encoding="utf-8")
+    assert set(load_overrides(cfg.overrides_file).artist_url) == {"joaquin-sabina", "宋冬野"}
+
+
+def test_artist_lines_for_a_file_with_the_table_already_leave_its_header_out(conn, cfg):
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text('[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_1"\n',
+                                  encoding="utf-8")
+    s = add_song(conn, "宋冬野", "斑马斑马")
+    update_song(conn, s.id, match_decision="not_found")
+    section = section_of(todo(conn, cfg, load_overrides(cfg.overrides_file)), "Artists to find")
+    lines = "".join(toml_blocks(section)).replace("<name>_<id>", "song_dongye_2")
+    assert "[artist_url]" not in lines and "under the `[artist_url]` table" in section
+    text = cfg.overrides_file.read_text(encoding="utf-8").replace("[artist_url]\n", "[artist_url]\n" + lines, 1)
+    cfg.overrides_file.write_text(text, encoding="utf-8")
+    assert set(load_overrides(cfg.overrides_file).artist_url) == {"mana", "宋冬野"}
+
+
+def test_review_lines_paste_under_the_tables_tabarr_review_wrote(conn, cfg):
+    from tabarr.overrides import add_alias, add_match
+
+    # `tabarr review` settled another song: overrides.toml has [match] and [alias] already.
+    add_match(cfg.overrides_file, "Soda - Persiana Americana", "soda-stereo/persiana-americana")
+    add_alias(cfg.overrides_file, "Soda", "soda-stereo")
+    index(conn, [(1, "radiohead", "creep", "chords")])
+    s = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.0, "step": "fuzzy_title"}])
+    [block] = toml_blocks(review_item(todo(conn, cfg, load_overrides(cfg.overrides_file)), "Radio Head - Crep"))
+    assert not [line for line in block.splitlines() if line.startswith("[")], f"a header would repeat a table:\n{block}"
+    # Each line goes under the table its comment names, as the section says.
+    text = cfg.overrides_file.read_text(encoding="utf-8")
+    for line in block.splitlines():
+        table = re.search(r"# under (\[\w+\])$", line).group(1)
+        text = text.replace(f"{table}\n", f"{table}\n{line}\n", 1)
+    cfg.overrides_file.write_text(text, encoding="utf-8")
+    o = load_overrides(cfg.overrides_file)
+    assert o.match["radio-head/crep"] == ("radiohead", "creep") and o.alias["radio-head"] == ("radiohead",)
+    assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
+
+
+def test_an_unreadable_overrides_file_leads_the_page(conn, cfg):
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, match_decision="accept")
+    error = "/lib/overrides.toml: Cannot declare ('artist_url',) twice (at line 4, column 12)"
+    text = build_todo(conn, cfg, Overrides(), NOW, overrides_error=error)
+    first = text.split("\n## ", 1)[1]
+    assert first.startswith("Setup problems")
+    setup = first.split("\n## ", 1)[0]
+    assert "overrides.toml can't be read" in setup and error in setup and "merge" in setup
 
 
 def test_find_artist_skips_artists_in_index(conn, cfg):

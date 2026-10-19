@@ -114,9 +114,11 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, d
             links = " · ".join(_link(_KIND_NAMES.get(k, k), url) for k, url in first.items())
             step = cand.get("step") or ""
             items.append(f"- {float(cand.get('score') or 0):.0f} · `{akey}/{skey}` ({step}) · {links}".rstrip(" ·"))
-            lines = ["[match]", f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}"]
+            # No table headers: overrides.toml may hold [match] and [alias] already (`tabarr review`
+            # writes them), and a table declared twice makes the whole file unreadable.
+            lines = [f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}  # under [match]"]
             if step != "title_only" and slug_key(s.artist) != akey:
-                lines += ["[alias]", f"{_toml_str(s.artist)} = {_toml_str(akey)}"]
+                lines.append(f"{_toml_str(s.artist)} = {_toml_str(akey)}  # under [alias]")
             items += _paste(lines)
         items.append("")
     return items
@@ -152,11 +154,17 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
     for artist, group in sorted(wanted.items()):
         n = len(group)
         search = f"https://www.ultimate-guitar.com/search.php?search_type=band&value={quote(artist)}"
-        items.append(
-            f"- **{md(artist)}** ({n} song{'s' if n != 1 else ''}): {_link('search Ultimate Guitar', search)}, "
-            "open the artist page, and paste its address:"
-        )
-        items += _paste(["[artist_url]", f'{_toml_str(artist)} = "https://www.ultimate-guitar.com/artist/<name>_<id>"'])
+        items.append(f"- **{md(artist)}** ({n} song{'s' if n != 1 else ''}): {_link('search Ultimate Guitar', search)}")
+    if wanted:
+        # One block for every artist, with the table's header only when the file has no such table:
+        # a table declared twice makes overrides.toml unreadable, and the nightly run stops.
+        lines = [f'{_toml_str(a)} = "https://www.ultimate-guitar.com/artist/<name>_<id>"' for a in sorted(wanted)]
+        if overrides.artist_url:
+            how = ("Then add these lines under the `[artist_url]` table your overrides.toml already has (a second "
+                   "`[artist_url]` header would make the file unreadable)")
+        else:
+            how, lines = "Then paste this block into overrides.toml", ["[artist_url]", *lines]
+        items += ["", f"{how}, with each artist's address in place of `<name>_<id>`:", *_paste(lines)]
     return items, len(wanted)
 
 
@@ -368,9 +376,17 @@ def _health(conn: sqlite3.Connection, now: datetime) -> list[str]:
 _NUC_BUILD = "`tabarr index build` (on the NUC: `sudo tabarr-admin index build`)"
 
 
-def _setup(index: str) -> list[str]:
+def _setup(index: str, overrides_error: str | None) -> list[str]:
     """What stops tabarr from doing its job until you act, for the section at the top."""
     items = []
+    if overrides_error:
+        items.append(
+            "- **overrides.toml can't be read**, so the nightly run stops before its first step: nothing is "
+            "synced, matched or fetched until the file is fixed, and this page was built without your "
+            f"overrides. {_code(overrides_error)}. Fix the file, then run `tabarr run` or wait for the next "
+            "night. A table such as `[match]` may appear only once in the file: when the error says one is "
+            "declared twice, merge the two into one."
+        )
     if index == "partial":
         items.append(
             "- **The Ultimate Guitar index is incomplete**: a build stopped before it read every sitemap. Until "
@@ -380,7 +396,10 @@ def _setup(index: str) -> list[str]:
     return items
 
 
-def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> str:
+def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
+               overrides_error: str | None = None) -> str:
+    """The whole page. ``overrides_error`` is why overrides.toml couldn't be read; the page then
+    leads with it (``overrides`` are empty then)."""
     songs = list_songs(conn)
     index = index_state(conn)
     by_id = {s.id: s for s in songs}
@@ -398,7 +417,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     to_buy, waiting = songs_to_buy(conn, songs, overrides, now)
     if waiting:
         out += [f"{waiting} song{'s' if waiting != 1 else ''} waiting for the nightly fetch.", ""]
-    setup = _setup(index)
+    setup = _setup(index, overrides_error)
     if setup:
         out += _section("Setup problems", setup)
 
@@ -406,8 +425,10 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     if review:
         # The count is of songs, not lines, so the header is built here rather than by _section.
         out += [f"## Review ({sum(1 for s in songs if s.review and s.status != 'ignored')})", "",
-                "tabarr wasn't sure about these matches. Paste the line for the right candidate into "
-                "overrides.toml, or run `tabarr review`.", "", *review]
+                "tabarr wasn't sure about these matches. Run `tabarr review` to settle them one by one, or add "
+                "the right candidate's lines to overrides.toml yourself, each under the table its comment "
+                "names. The file holds each table once: write a table's header (`[match]`, `[alias]`) only "
+                "if the file doesn't have that table yet.", "", *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
@@ -416,7 +437,8 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
          f"These sheets cover less than {cfg.rank.coverage_threshold:.0%} of the lyrics.", None),
         ("Artists to find on Ultimate Guitar", artists,
          "UG's sitemaps list these artists only by bare ids (usually because of accents or non-Latin "
-         "letters), so tabarr can't see their tabs. Find the artist page once and paste it.", n_artists),
+         "letters), so tabarr can't see their tabs. Find each artist's page once: search Ultimate Guitar, "
+         "open the artist page and copy its address.", n_artists),
         ("Buy list", _buy_list(to_buy),
          "No human sheet found yet. Buy the track (DRM-free), drop it into Music/, and tabarr will "
          "generate an auto sheet; a human sheet found later takes its place.", None),

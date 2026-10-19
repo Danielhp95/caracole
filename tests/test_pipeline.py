@@ -156,6 +156,23 @@ def test_unreadable_overrides_stop_the_run_with_an_alert(conn, cfg):
     assert out.sent[-1][0] == "tabarr run failed" and "pins" in out.sent[-1][1]
 
 
+def test_unreadable_overrides_still_rewrite_the_todo_page_with_the_error_first(conn, cfg):
+    # Two [artist_url] blocks pasted one after the other, as the page used to show them.
+    from tabarr.pipeline import default_steps
+
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(
+        '[artist_url]\n"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/joaquin_sabina_1"\n\n'
+        '[artist_url]\n"宋冬野" = "https://www.ultimate-guitar.com/artist/song_dongye_2"\n', encoding="utf-8")
+    (cfg.library_dir / "_todo.md").write_text("# tabarr to-do\n\n_Updated 2026-10-17 03:30 UTC_\n", encoding="utf-8")
+    report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=default_steps(), now=NOW)
+    assert not report.ok and list(report.steps) == ["overrides"]
+    page = todo_page(cfg)
+    assert "_Updated 2026-10-18 03:30 UTC" in page
+    setup = page.split("\n## ", 1)[1].split("\n## ", 1)[0]
+    assert setup.startswith("Setup problems") and "Cannot declare ('artist_url',) twice" in setup
+
+
 def test_run_command_exit_codes(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
