@@ -1,0 +1,21 @@
+[Intro]
+[ch]G[/ch]  [ch]D[/ch]  [ch]Em[/ch]  [ch]C[/ch]  x2
+
+[Verse 1]
+[tab][ch]G[/ch]         [ch]D[/ch]
+Tiny test words go here[/tab]
+[tab]     [ch]Em[/ch]            [ch]C[/ch]
+Made up only for a parser[/tab]
+
+[Chorus]
+[tab][ch]C[/ch]           [ch]G/B[/ch]      [ch]Am[/ch]
+Sing it out [softly] now[/tab]
+[ch]F[/ch]   [ch]C[/ch]
+
+[Riff]
+[tab]e|-----0---0---|
+B|---1---1---1-|
+G|-2-----------|[/tab]
+
+[Outro]
+[ch]G[/ch] / / / | [ch]D[/ch] / / / | [ch]C[/ch] (x4)
