@@ -10,8 +10,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
+import sys
 import wave
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -135,7 +138,7 @@ def test_auto_sheet_kept_with_its_version_and_the_song_becomes_found(conn, cfg, 
         lyrics_status="found",
         lyrics_json=lyrics_json(plain="Walking down\nSinging on"),
     )
-    stats = run(conn, cfg)
+    stats = run(conn, cfg, now=datetime(2026, 10, 18, 4, 5, tzinfo=UTC))
     assert (stats.generated, stats.skipped, stats.failed, stats.errors) == (1, 0, 0, [])
 
     text = auto_sheet(cfg, conn, s)
@@ -159,6 +162,7 @@ def test_auto_sheet_kept_with_its_version_and_the_song_becomes_found(conn, cfg, 
     assert (v.rating, v.votes, v.version, v.label) == (0, 0, 1, None)
     assert v.url == "file://" + s.audio_path
     assert v.raw == {"audio": s.audio_path, "model": "btc_large_voca", "lyrics": "plain"}
+    assert v.fetched_at == "2026-10-18T04:05:00Z"
 
     song = get_song(conn, s.id)
     assert song.status == "found"
@@ -347,6 +351,41 @@ def test_build_sheet_gets_the_song_beats_and_lyrics(conn, cfg, tmp_path, monkeyp
     assert (seen["beats"], seen["downbeats"]) == (BEATS, DOWNBEATS)
 
 
+# --- the models ------------------------------------------------------------------------------
+
+
+def test_default_models_are_built_once_from_the_config(conn, cfg, tmp_path, monkeypatch):
+    import tabarr.autochords.run as ac_run
+
+    built, tracked = [], []
+
+    class Recognizer(FakeRecognizer):
+        def __init__(self, weights, *, device="cpu"):
+            super().__init__()
+            built.append((Path(weights), device))
+
+    def detect_beats(path, checkpoint, *, device="cpu"):
+        tracked.append((Path(path), Path(checkpoint), device))
+        return BEATS, DOWNBEATS
+
+    monkeypatch.setattr(ac_run, "BTCRecognizer", Recognizer)
+    monkeypatch.setattr(ac_run, "detect_beats", detect_beats)
+    weights, checkpoint = tmp_path / "btc.pt", tmp_path / "final0.ckpt"
+    weights.write_bytes(b"weights")
+    checkpoint.write_bytes(b"checkpoint")
+    cfg = replace(
+        cfg,
+        autochords=AutochordsConfig(
+            btc_weights=weights, beat_checkpoint=checkpoint, device="cuda:1"
+        ),
+    )
+    songs = [with_audio(conn, tmp_path, add_song(conn, "A", title)) for title in ("One", "Two")]
+
+    assert autochords_pending(conn, cfg).generated == 2
+    assert built == [(weights, "cuda:1")]
+    assert sorted(tracked) == sorted((Path(s.audio_path), checkpoint, "cuda:1") for s in songs)
+
+
 # --- failures --------------------------------------------------------------------------------
 
 
@@ -515,25 +554,85 @@ def test_command_with_nothing_to_do(tmp_path, models_importable):
     assert "auto-chords: 0 generated, 0 skipped, 0 failed" in result.output
 
 
+MODEL_PACKAGES = {"torch", "torchaudio", "librosa", "beat_this", "numpy", "soundfile"}
+
+
+def model_packages_after(code: str, tmp_path: Path, *args: str) -> list[str]:
+    """Run ``code`` in a fresh interpreter: its output lines, then the model packages imported."""
+    src = Path(__file__).resolve().parents[1] / "src"
+    # Keep the inherited PYTHONPATH: inside a Nix build, the dependencies are on it.
+    pythonpath = os.pathsep.join(p for p in (str(src), os.environ.get("PYTHONPATH")) if p)
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": pythonpath}
+    probe = f"\nprint(sorted({{m.split('.')[0] for m in sys.modules}} & {MODEL_PACKAGES!r}))\n"
+    result = subprocess.run(
+        [sys.executable, "-c", "import sys\n" + code + probe, *args],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    return result.stdout.strip().splitlines()
+
+
+def test_registering_the_command_imports_no_model_packages(tmp_path):
+    # Every command module is imported on every start, and the default package has no torch.
+    code = (
+        "import typer\nfrom tabarr.commands import autochords\nautochords.register(typer.Typer())"
+    )
+    assert model_packages_after(code, tmp_path) == ["[]"]
+
+
+def test_a_night_with_nothing_due_imports_no_model_packages(conn, cfg, tmp_path):
+    keep_human_sheet(conn, cfg, with_audio(conn, tmp_path, add_song(conn, "A", "Charted")))
+    # The cfg fixture's directories, and model files that would fail if anything loaded them.
+    code = (
+        "from pathlib import Path\n"
+        "from tabarr import db\n"
+        "from tabarr.autochords.run import autochords_pending\n"
+        "from tabarr.config import load_config\n"
+        "tmp = Path(sys.argv[1])\n"
+        "env = {'HOME': str(tmp / 'home'), 'STATE_DIRECTORY': str(tmp / 'state')}\n"
+        "env['TABARR_BTC_WEIGHTS'] = str(tmp / 'btc.pt')\n"
+        "env['TABARR_BEAT_CHECKPOINT'] = str(tmp / 'final0.ckpt')\n"
+        "cfg = load_config(None, env=env)\n"
+        "print(autochords_pending(db.connect(cfg.db_path), cfg).summary())"
+    )
+    assert model_packages_after(code, tmp_path, str(tmp_path)) == [
+        "0 generated, 1 skipped, 0 failed",
+        "[]",
+    ]
+
+
 # --- the real models ---------------------------------------------------------------------------
 
 
-@pytest.mark.autochords
-def test_real_models_put_chords_over_synced_lyrics(conn, cfg, tmp_path):
-    from test_autochords_models import BEAT_CHECKPOINT, BTC_WEIGHTS, HAVE_LIBS, _drums, _triads
+@pytest.fixture
+def real_models(cfg):
+    """The cfg with the real model files; skips without them or their packages."""
+    from test_autochords_models import BEAT_CHECKPOINT, BTC_WEIGHTS, HAVE_LIBS
 
     if not HAVE_LIBS or BTC_WEIGHTS is None or BEAT_CHECKPOINT is None:
         pytest.skip("needs torch, librosa, beat_this and both model files")
-    import soundfile as sf
+    return replace(
+        cfg, autochords=AutochordsConfig(btc_weights=BTC_WEIGHTS, beat_checkpoint=BEAT_CHECKPOINT)
+    )
 
-    # C major for 5 s, then G major, over a 120 BPM drum pattern.
+
+def synthetic_song(tmp_path: Path):
+    """C major for 5 s, then G major, over a 120 BPM drum pattern: (samples, sample rate)."""
+    import soundfile as sf
+    from test_autochords_models import _drums, _triads
+
     chords, sr = sf.read(_triads(tmp_path / "triads.wav"))
     drums, _ = sf.read(_drums(tmp_path / "drums.wav", seconds=10.0))
     mix = chords + 0.5 * drums[: len(chords)]
-    audio = tmp_path / "music" / "Nobody - River Road.wav"
-    audio.parent.mkdir()
-    sf.write(audio, 0.9 * mix / abs(mix).max(), sr)
+    return 0.9 * mix / abs(mix).max(), sr
 
+
+def assert_chords_over_synced_lyrics(conn, cfg, audio: Path) -> None:
+    """The real models on ``synthetic_song`` audio: C over the first timed line, then G."""
     s = add_song(conn, "Nobody", "River Road", duration_ms=10000)
     update_song(
         conn,
@@ -543,9 +642,6 @@ def test_real_models_put_chords_over_synced_lyrics(conn, cfg, tmp_path):
         lyrics_status="found",
         lyrics_json=lyrics_json(synced=SYNCED.replace("05.20", "05.10"), duration=10.0),
     )
-    cfg = replace(
-        cfg, autochords=AutochordsConfig(btc_weights=BTC_WEIGHTS, beat_checkpoint=BEAT_CHECKPOINT)
-    )
     stats = autochords_pending(conn, cfg)
     assert (stats.generated, stats.failed, stats.errors) == (1, 0, [])
     lines = auto_sheet(cfg, conn, s).splitlines()
@@ -553,4 +649,33 @@ def test_real_models_put_chords_over_synced_lyrics(conn, cfg, tmp_path):
     i = lines.index("Walking down the river road")
     j = lines.index("Singing to the morning light")
     assert lines[i - 1].startswith("[ch]C[/ch]") and lines[j - 1].startswith("[ch]G[/ch]")
+    # The synced lyrics were used, so the file's own duration was read and fits LRCLIB's.
+    [kept] = kept_files(conn, s.id)
+    assert get_version(conn, kept.version_id).raw["lyrics"] == "synced"
     assert get_song(conn, s.id).status == "found"
+
+
+@pytest.mark.autochords
+def test_real_models_put_chords_over_synced_lyrics(conn, real_models, tmp_path):
+    import soundfile as sf
+
+    samples, sr = synthetic_song(tmp_path)
+    audio = tmp_path / "music" / "Nobody - River Road.wav"
+    audio.parent.mkdir()
+    sf.write(audio, samples, sr)
+    assert_chords_over_synced_lyrics(conn, real_models, audio)
+
+
+@pytest.mark.autochords
+def test_real_models_read_an_itunes_m4a(conn, real_models, tmp_path):
+    # iTunes Store purchases are AAC in .m4a, which libsndfile can't read: both models
+    # fall back to torchaudio (FFmpeg), and mutagen reads the file's duration.
+    torch = pytest.importorskip("torch")
+    encoders = pytest.importorskip("torchcodec.encoders")
+
+    samples, sr = synthetic_song(tmp_path)
+    audio = tmp_path / "music" / "Nobody - River Road.m4a"
+    audio.parent.mkdir()
+    mono = torch.tensor(samples[None, :], dtype=torch.float32)
+    encoders.AudioEncoder(mono, sample_rate=sr).to_file(str(audio))
+    assert_chords_over_synced_lyrics(conn, real_models, audio)
