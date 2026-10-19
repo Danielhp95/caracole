@@ -1279,6 +1279,15 @@ Music/                      music_dir: the tracks you bought (caracole only read
 Folder names keep their accents and scripts, but never contain a path
 separator or a character file systems reserve: `AC/DC` becomes `AC-DC`.
 
+**The `.cho` files** are the sheet in ChordPro, a plain-text format that puts
+each chord in brackets before the syllable it falls on (`[Am]Yesterday`).
+caracole makes `sheet.cho` from `sheet.txt`, in your key (`[transpose]`), and
+renders the PDF from it. You don't need to open it: it is there for songbook
+apps that read ChordPro, such as SongbookPro (Android, iOS, Windows) or OnSong
+(iOS), which scroll, transpose and draw chord diagrams on a phone or tablet,
+and any text editor opens it. Don't edit it in place, as the next render
+writes it again; copy it under another name for a version of your own.
+
 Others can write to the library: Syncthing, and every device it syncs with. A
 symbolic link planted there could point at caracole's private files, so caracole
 never reads or writes a file there through a link. A link in the place of

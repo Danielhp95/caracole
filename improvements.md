@@ -62,3 +62,27 @@ On NixOS, `services.caracole.web.enable = true` runs it as `caracole-web.service
 ## yt-dlp for downloading songs
 
 Ignore all comments about "legally buying a song". If a song is not found, allow for a "download and extract chords" pipeline that will download the song from youtube via yt-dlp (as a build dependency)
+
+## faster songs lookups
+
+For UG, have the 10-20 second slow polling for when building the index, but remove it when we are searching. For la cuerda / muse score, don't wait until the end of the day to trigger a search. do it immediately. This tool will not be used simply as a library for me to have downloaded tabs. It will also be used to quickly look up tabs on the spot. As a replacement for ultimate guitar. So I need it to be fast and responsive. Design how to fasten this look-up process so that it feels as fast as looking up a tab in ultimate guitar
+
+## Better info when downlading
+
+When requesting a new song, having a full new page is a bit verbose when I normally just want one song downloaded. And even as a "bulk" it is a bit verbose. 
+
+## Remove button
+
+Have a button to remove the tab from caracole so that it's removed localy, when running `caracole run` it won't be redownloaded and essentially permantently removed from the system until it is requested again.
+
+## what to do with chord pro files?
+
+What do I do with those files? Should I open them with some specific program?
+
+**Answer.** You don't need to do anything with them. `sheet.cho` is the sheet in ChordPro, a plain-text format with each chord in brackets before its syllable (`[Am]Yesterday`). caracole writes it from `sheet.txt`, in your key (`[transpose]`), and then renders `sheet.pdf` from it with the `chordpro` program. It's the step between the tab and the PDF.
+
+It's also useful on its own: songbook apps import ChordPro directly and handle autoscroll, transposition and chord diagrams on a phone or tablet. Examples are SongbookPro (Android, iOS, Windows) and OnSong (iOS). Any text editor opens it too.
+
+Don't edit it in place, because the next render rewrites it. Copy it under another name for your own version, and use `[transpose]` in overrides.toml to change the key.
+
+Once the phone sheet viewer lands (`sheet.html`, in progress), it covers the same ground in the browser. This answer is also in docs/usage.md (the library folder section).
