@@ -285,6 +285,73 @@ def test_fetch_now_of_a_song_ignored_in_overrides_toml_is_refused(app, conn, cfg
     assert queue.snapshot() == []
 
 
+# --- removing a song -----------------------------------------------------------------------------
+
+
+def a_kept_song(conn, cfg):
+    from caracole.library import keep_file, song_dir
+    from caracole.versions import upsert_version
+
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("Radiohead - Creep\n", encoding="utf-8")
+    creep = add_song(conn, "Radiohead", "Creep", source="wanted", source_id="radiohead/creep")
+    vid = upsert_version(conn, provider="ug", tab_id="101", song_id=creep.id, slot="sheet", kind="chords",
+                         rating=4.5, votes=10, version=1, label=None, url="https://u/101", raw={},
+                         now="2026-10-01T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=creep, version_id=vid, name="sheet.txt", data=b"[Am]", rank=1)
+    (song_dir(cfg.library_dir, creep) / "notes <b>.md").write_text("capo 2", encoding="utf-8")
+    return creep
+
+
+def test_remove_asks_first_on_a_page_that_says_what_goes_and_what_stays(app, conn, cfg, queue):
+    creep = a_kept_song(conn, cfg)
+    response = post(app, "/remove", {"song": str(creep.id)})
+    assert response.status == 200 and queue.snapshot() == []
+    page = shown(response)
+    assert "Remove Radiohead - Creep?" in page
+    assert "its line in wanted.txt (line 1)" in page and "1 file caracole wrote in Radiohead/Creep/: sheet.txt" in page
+    assert "Radiohead/Creep/notes <b>.md: caracole didn't write it" in page and "<b>" not in text(response)
+    assert "until you ask for it again" in page
+    form = re.search(r'<form[^>]*action="/remove"[^>]*>(.*?)</form>', text(response), re.S)
+    assert form and 'method="post"' in form.group(0)
+    for name, value in (("csrf", "tok"), ("song", str(creep.id)), ("key", creep.key), ("confirm", "1")):
+        assert f'name="{name}" value="{value}"' in form.group(1), name
+    assert 'href="/"' in text(response)  # keep it
+    assert header(response, "content-security-policy").startswith("default-src 'none'")
+    assert cfg.wanted_file.read_text(encoding="utf-8") == "Radiohead - Creep\n"
+
+
+def test_confirming_queues_caracole_remove_for_that_song(app, conn, cfg, queue):
+    creep = a_kept_song(conn, cfg)
+    response = post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"})
+    assert response.status == 303 and header(response, "location") == "/jobs#job-1"
+    job = queue.snapshot()[0]
+    assert job.title == "Remove Radiohead - Creep" and not job.fetching
+    assert [s.args for s in job.steps] == [("remove", "--yes", "--", "Radiohead - Creep")]
+    assert f'"removing":[{creep.id}]' in text(get(app, "/"))
+    # Asked again while it waits, it is the same request.
+    assert post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"}).status == 303
+    assert [j.title for j in queue.snapshot()] == ["Remove Radiohead - Creep"]
+    queue.run_pending()
+    assert queue.snapshot()[0].state == "done"
+
+
+def test_a_removal_confirmed_for_another_song_than_the_id_now_names_is_refused(app, conn, cfg, queue):
+    creep = a_kept_song(conn, cfg)
+    response = post(app, "/remove", {"song": str(creep.id), "key": "oasis/wonderwall", "confirm": "1"})
+    assert response.status == 409 and queue.snapshot() == []
+    assert post(app, "/remove", {"song": "999"}).status == 404
+    assert post(app, "/remove", {"song": "x"}).status == 400
+
+
+@pytest.mark.parametrize("csrf,headers", [(None, {}), ("tok", {"sec-fetch-site": "cross-site"})])
+def test_a_removal_from_anywhere_but_the_page_is_refused(app, conn, cfg, queue, csrf, headers):
+    creep = a_kept_song(conn, cfg)
+    fields = {"song": str(creep.id), "key": creep.key, "confirm": "1"}
+    assert post(app, "/remove", fields, csrf=csrf, **headers).status == 403
+    assert queue.snapshot() == []
+
+
 # --- what every write must carry --------------------------------------------------------------
 
 

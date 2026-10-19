@@ -546,8 +546,9 @@ or build the package with `caracole.override { cjkFont = "…"; }`.
 ## 8. The library page over HTTP
 
 `services.caracole.web` runs `caracole serve` as `caracole-web.service`: the
-library page, a form to request songs, and a Fetch now button on each wanted
-song ([usage.md](usage.md), "caracole serve"). A request runs caracole commands
+library page, a form to request songs, a Fetch now button on each wanted
+song, and a Remove… button on each card, which asks first
+([usage.md](usage.md), "caracole serve"). A request runs caracole commands
 in the unit, one at a time and each under caracole's lock, so the unit has the
 nightly run's sandbox, folders and network. Of the credentials it gets
 `web_token` alone: neither the server nor the commands it runs read Spotify or

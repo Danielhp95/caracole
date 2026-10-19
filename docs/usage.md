@@ -310,7 +310,9 @@ say), nothing is removed and it exits 1.
 `caracole remove --list` lists the songs removed, the latest first, and when.
 `caracole remove` on a song removed already says when it was, and how to
 bring it back. Like `caracole review`, it asks before it takes caracole's lock,
-so the nightly run never waits for your answer; `--list` only reads.
+so the nightly run never waits for your answer; `--list` only reads. On the
+web page, each card's **Remove…** button does the same, after a page that
+says what goes and what stays ([caracole serve](#caracole-serve)).
 
 ### Names in other scripts
 
@@ -1114,7 +1116,7 @@ with it. A KEY that is no key exits with status 2.
 
 `caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
 [--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with three things the file on disk can't
+`http://127.0.0.1:8737/` by default, with four things the file on disk can't
 do:
 
 - **Request a song.** The form at the top takes an artist, a title and,
@@ -1129,6 +1131,12 @@ do:
   waits for `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
   overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for
   the nightly run.
+- **Remove a song.** Each card's Remove… button opens a page that says what
+  goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
+  it queues `caracole remove --yes "ARTIST - TITLE"`, and the card says
+  Removing… until it has run. Keep it goes back to the library, and nothing
+  changes. A page older than a change to the library (the song merged into
+  another since, say) removes nothing: reload the library.
 - **Requests**, the page at `/jobs`, lists each request, the commands it
   runs and what each printed (the newest request's output open), and
   refreshes itself every 10 seconds while one waits or runs. Stop refreshing

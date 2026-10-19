@@ -170,7 +170,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     wanted = add_song(conn, "Radiohead", "Creep")
     found = add_song(conn, "Soda Stereo", "De Música Ligera")
     update_song(conn, found.id, status="found")
-    controls = WebControls(csrf='t0k"<en', busy=frozenset({wanted.id}), active=2)
+    controls = WebControls(csrf='t0k"<en', busy=frozenset({wanted.id}), active=2, removing=frozenset({found.id}))
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
     shell = JSON_BLOCK.sub("", html)
     form = re.search(r'<form[^>]*action="/request"[^>]*>(.*?)</form>', shell, re.S)
@@ -183,7 +183,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     assert "inputmode" not in duration and "m:ss or seconds" in form.group(1)
     assert 'href="/jobs"' in shell
     assert "form-action 'self'" in csp_of(html) and "form-action 'none'" not in csp_of(html)
-    assert data_of(html)["server"] == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2}
+    assert data_of(html)["server"] == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id]}
     # Still one script and one style, each allowed by its hash.
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     styles = re.findall(r"<style>(.*?)</style>", html, re.S)
@@ -709,6 +709,31 @@ def test_the_served_page_offers_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
     # The song caracole fetch would refuse until it's reviewed says so instead of offering a fetch.
     card = re.search(r"<article[^>]*>(?:(?!</article>).)*Bohemian Rhapsody.*?</article>", shown, re.S).group(0)
     assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", card) and "/fetch" not in card
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_page_offers_a_remove_on_every_card(conn, cfg, tmp_path):
+    from caracole.library_page import WebControls
+
+    wanted = add_song(conn, "Radiohead", "Creep")
+    found = add_song(conn, "Soda Stereo", "De Música Ligera")
+    update_song(conn, found.id, status="found")
+    ignored = add_song(conn, "Queen", "Bohemian Rhapsody")
+    update_song(conn, ignored.id, status="ignored")
+    going = add_song(conn, "Oasis", "Wonderwall")
+    controls = WebControls(csrf="tok", removing=frozenset({going.id}))
+    path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW, controls=controls))
+    shown = listing(dump_dom(path, tmp_path))
+    forms = re.findall(r'<form[^>]*action="/remove"[^>]*>(.*?)</form>', shown, re.S)
+    assert sorted(re.search(r'name="song" value="(\d+)"', f).group(1) for f in forms) == sorted(
+        str(s.id) for s in (wanted, found, ignored))
+    assert all('name="csrf" value="tok"' in f and "Remove…" in f for f in forms)
+    assert 'aria-label="Remove Creep by Radiohead from caracole"' in shown
+    card = re.search(r"<article[^>]*>(?:(?!</article>).)*Wonderwall.*?</article>", shown, re.S).group(0)
+    assert "Removing…" in card and "/remove" not in card
+    # The page on disk has no server to remove anything.
+    path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW))
+    assert "/remove" not in listing(dump_dom(path, tmp_path))
 
 
 def with_script(html: str, script: str) -> str:
