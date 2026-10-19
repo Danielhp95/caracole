@@ -1,6 +1,6 @@
-from tabarr.overrides import load_overrides, override_key
-from tabarr.review import ReviewIO, review_songs
-from tabarr.songs import get_song, update_song
+from caracole.overrides import load_overrides, override_key
+from caracole.review import ReviewIO, review_songs
+from caracole.songs import get_song, update_song
 
 from conftest import add_song
 

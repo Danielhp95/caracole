@@ -2,14 +2,14 @@ import re
 from datetime import UTC, datetime
 from urllib.parse import quote
 
-from tabarr.db import kv_set, kv_set_json
-from tabarr.health import record_block
-from tabarr.library import keep_file
-from tabarr.normalize import slug_key
-from tabarr.overrides import Overrides, load_overrides
-from tabarr.songs import update_song
-from tabarr.todo import build_todo, md, search_links, write_todo
-from tabarr.versions import set_coverage, set_picks, upsert_version
+from caracole.db import kv_set, kv_set_json
+from caracole.health import record_block
+from caracole.library import keep_file
+from caracole.normalize import slug_key
+from caracole.overrides import Overrides, load_overrides
+from caracole.songs import update_song
+from caracole.todo import build_todo, md, search_links, write_todo
+from caracole.versions import set_coverage, set_picks, upsert_version
 
 from conftest import add_song
 
@@ -40,7 +40,7 @@ def test_summary_counts(conn, cfg):
     update_song(conn, s2.id, status="found")
     update_song(conn, s3.id, status="ignored")
     text = todo(conn, cfg)
-    assert text.startswith("# tabarr to-do")
+    assert text.startswith("# caracole to-do")
     assert "3 songs: 1 found, 1 wanted, 1 ignored" in text
     assert "2026-10-18 03:41 UTC" in text
 
@@ -115,7 +115,7 @@ def review_item(text, display):
 
 def test_title_only_review_of_an_artist_ug_lists_by_bare_ids_asks_for_its_artist_page(conn, cfg):
     # UG lists Maná only by bare ids: the index has covers of the title, and nothing of Maná's.
-    from tabarr.ug.fetch import songs_to_fetch
+    from caracole.ug.fetch import songs_to_fetch
 
     s = covers_only(conn, "Maná", "Rayando el Sol", "ana-gabriel", "pablo-alboran")
     text = todo(conn, cfg)
@@ -129,7 +129,7 @@ def test_title_only_review_of_an_artist_ug_lists_by_bare_ids_asks_for_its_artist
     assert [x.id for x in songs_to_fetch(conn, o, NOW)] == [s.id]
     text = todo(conn, cfg, o)
     assert "## Artists to find" not in text
-    assert "tabarr looks for it on Maná's UG page in the next run" in review_item(text, "Maná - Rayando el Sol")
+    assert "caracole looks for it on Maná's UG page in the next run" in review_item(text, "Maná - Rayando el Sol")
 
 
 def test_title_only_review_of_an_indexed_artist_says_its_page_is_checked_first(conn, cfg):
@@ -139,11 +139,11 @@ def test_title_only_review_of_an_indexed_artist_says_its_page_is_checked_first(c
     assert "## Artists to find" not in text
     item = review_item(text, "Soda Stereo - De Música Ligera")
     assert "other artists' songs with this title (probably covers)" in item
-    assert "tabarr looks for it on Soda Stereo's UG page in the next run" in item
+    assert "caracole looks for it on Soda Stereo's UG page in the next run" in item
     # The page was read and doesn't list it: say so, and that it is read again.
     kv_set(conn, f"ug:artist_page_checked:{s.id}", "2026-10-18T03:35:00Z")
     item = review_item(todo(conn, cfg), "Soda Stereo - De Música Ligera")
-    assert "tabarr didn't find it on Soda Stereo's UG page either" in item and "after 30 days" in item
+    assert "caracole didn't find it on Soda Stereo's UG page either" in item and "after 30 days" in item
     assert "if none is, dismiss them all (below)" in item and "leave it" not in item
 
 
@@ -188,11 +188,11 @@ def test_setup_problems_say_the_index_isnt_built_before_anything_else(conn, cfg)
     setup = first_section(todo(conn, cfg))
     assert setup.startswith("Setup problems")
     assert "The Ultimate Guitar index isn't built" in setup
-    assert "`tabarr index build`" in setup and "`sudo tabarr-admin index build`" in setup
+    assert "`caracole index build`" in setup and "`sudo caracole-admin index build`" in setup
 
 
-def test_setup_problems_count_the_wanted_lines_tabarr_couldnt_read(conn, cfg):
-    from tabarr.ug.index import mark_built
+def test_setup_problems_count_the_wanted_lines_caracole_couldnt_read(conn, cfg):
+    from caracole.ug.index import mark_built
 
     index(conn, [(1, "radiohead", "creep", "chords")])
     mark_built(conn, NOW)
@@ -201,13 +201,13 @@ def test_setup_problems_count_the_wanted_lines_tabarr_couldnt_read(conn, cfg):
                                         "errors": [[3, "expected \"Artist - Title\""], [7, "bad duration"]]})
     setup = first_section(todo(conn, cfg))
     assert setup.startswith("Setup problems")
-    assert "wanted.txt has 2 lines tabarr couldn't read" in setup and "Sources" in setup
+    assert "wanted.txt has 2 lines caracole couldn't read" in setup and "Sources" in setup
 
 
-def test_a_wanted_file_tabarr_cant_read_says_so_rather_than_count_a_bad_line(conn, cfg):
+def test_a_wanted_file_caracole_cant_read_says_so_rather_than_count_a_bad_line(conn, cfg):
     # The sync stores an error about the whole file, such as a link refused unread, as line 0.
-    from tabarr.sources import sync_sources
-    from tabarr.ug.index import mark_built
+    from caracole.sources import sync_sources
+    from caracole.ug.index import mark_built
 
     index(conn, [(1, "radiohead", "creep", "chords")])
     mark_built(conn, NOW)
@@ -218,11 +218,11 @@ def test_a_wanted_file_tabarr_cant_read_says_so_rather_than_count_a_bad_line(con
     cfg.wanted_file.symlink_to(private)
     sync_sources(conn, cfg, NOW, spotify=None)
     text = todo(conn, cfg)
-    why = (f"wanted.txt: not read: {cfg.wanted_file} is a symbolic link, which tabarr doesn't follow; put the "
+    why = (f"wanted.txt: not read: {cfg.wanted_file} is a symbolic link, which caracole doesn't follow; put the "
            "file itself there")
     setup = first_section(text)
     assert setup.startswith("Setup problems (1)")
-    assert ("- **wanted.txt can't be read**, so tabarr doesn't see the songs you add to it (those it read "
+    assert ("- **wanted.txt can't be read**, so caracole doesn't see the songs you add to it (those it read "
             f"before are still looked for): `{why}`.") in setup
     assert "couldn't read" not in setup and "line" not in setup
     sources = section_of(text, "Sources")
@@ -263,7 +263,7 @@ def test_buy_list_excludes_found_and_songs_with_audio(conn, cfg):
 
 def test_buy_list_waits_while_the_index_is_incomplete(conn, cfg):
     # A build stopped part-way: UG may have sheets for a song marked not found against it.
-    from tabarr.ug.index import mark_built
+    from caracole.ug.index import mark_built
 
     index(conn, [(1001, "oasis", "wonderwall", "chords")])
     s = add_song(conn, "Radiohead", "Creep")
@@ -337,7 +337,7 @@ def test_inbox_unmatched_files_listed(conn, cfg):
     (inbox / "mystery.gp5").write_bytes(b"x")
     (inbox / ".hidden").write_bytes(b"x")
     text = todo(conn, cfg)
-    assert "## Inbox: files tabarr couldn't place (1)" in text
+    assert "## Inbox: files caracole couldn't place (1)" in text
     assert "mystery.gp5" in text and ".hidden" not in text
 
 
@@ -348,7 +348,7 @@ def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
     inbox.mkdir(parents=True)
     (inbox / "Radiohead - Creep live bootleg.gp5").write_bytes(b"x")
     (inbox / "notes.pdf").write_bytes(b"x")
-    section = section_of(todo(conn, cfg), "Inbox: files tabarr couldn't place")
+    section = section_of(todo(conn, cfg), "Inbox: files caracole couldn't place")
     assert "move it into the song's folder" not in section
     assert '`Radiohead - Creep live bootleg.gp5`: rename it "Artist - Title (ver N).gp5"' in section
     assert "Guitar Pro pages to click" in section
@@ -356,7 +356,7 @@ def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
 
 
 def test_inbox_lists_a_link_as_refused_never_as_a_file_to_rename(conn, cfg):
-    # Anyone who can write to the library can put a link in the inbox; tabarr files only regular files.
+    # Anyone who can write to the library can put a link in the inbox; caracole files only regular files.
     private = cfg.state_dir / "spotify-token.json"
     private.parent.mkdir(parents=True, exist_ok=True)
     private.write_text("{}", encoding="utf-8")
@@ -365,8 +365,8 @@ def test_inbox_lists_a_link_as_refused_never_as_a_file_to_rename(conn, cfg):
     (inbox / "Soda Stereo - Signos.gp5").symlink_to(private)
     (inbox / "gone.gp5").symlink_to(cfg.state_dir / "nothing")
     (inbox / "a folder").mkdir()
-    section = section_of(todo(conn, cfg), "Inbox: files tabarr couldn't place")
-    refused = ": a symbolic link; tabarr files only regular files. Put the file itself there."
+    section = section_of(todo(conn, cfg), "Inbox: files caracole couldn't place")
+    refused = ": a symbolic link; caracole files only regular files. Put the file itself there."
     assert section.startswith(" (2)\n")
     assert f"- `Soda Stereo - Signos.gp5`{refused}" in section and f"- `gone.gp5`{refused}" in section
     assert "rename it" not in section and "a folder" not in section
@@ -381,7 +381,7 @@ def test_a_linked_inbox_lists_nothing_of_what_it_points_at(conn, cfg):
     (cfg.library_dir / "_inbox").symlink_to(private)
     text = todo(conn, cfg)
     assert "spotify_client_secret" not in text
-    section = section_of(text, "Inbox: files tabarr couldn't place")
+    section = section_of(text, "Inbox: files caracole couldn't place")
     assert "- `_inbox` is a symbolic link, so this page doesn't list what it points at. Make `_inbox` a folder " \
            "of its own." in section
 
@@ -398,7 +398,7 @@ def test_find_artist_on_ug(conn, cfg):
     text = todo(conn, cfg)
     assert "## Artists to find on Ultimate Guitar (1)" in text
     assert '[artist_url]\n"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/' in text
-    assert "search.php" in text  # a link for you to click; tabarr itself never requests search.php
+    assert "search.php" in text  # a link for you to click; caracole itself never requests search.php
     # Known artist page (override): no longer asked for.
     o = Overrides(artist_url={"joaquin-sabina": "https://www.ultimate-guitar.com/artist/joaquin_sabina_1"})
     assert "## Artists to find" not in todo(conn, cfg, o)
@@ -438,10 +438,10 @@ def test_artist_lines_for_a_file_with_the_table_already_leave_its_header_out(con
     assert set(load_overrides(cfg.overrides_file).artist_url) == {"mana", "宋冬野"}
 
 
-def test_review_lines_paste_under_the_tables_tabarr_review_wrote(conn, cfg):
-    from tabarr.overrides import add_alias, add_match
+def test_review_lines_paste_under_the_tables_caracole_review_wrote(conn, cfg):
+    from caracole.overrides import add_alias, add_match
 
-    # `tabarr review` settled another song: overrides.toml has [match] and [alias] already.
+    # `caracole review` settled another song: overrides.toml has [match] and [alias] already.
     add_match(cfg.overrides_file, "Soda - Persiana Americana", "soda-stereo/persiana-americana")
     add_alias(cfg.overrides_file, "Soda", "soda-stereo")
     index(conn, [(1, "radiohead", "creep", "chords")])
@@ -482,7 +482,7 @@ def paste_as_commented(text, block):
 def review_blocks_with_an_alias(conn, cfg, alias, step):
     """The paste blocks of a review of Soda - Persiana Americana, whose candidate is under UG's
     soda-stereo, with overrides.toml holding [match] for another song and ``alias`` for Soda."""
-    from tabarr.overrides import add_alias, add_match
+    from caracole.overrides import add_alias, add_match
 
     add_match(cfg.overrides_file, "Soda - Signos", "soda-stereo/signos")
     for slug in alias:
@@ -528,7 +528,7 @@ def test_a_review_says_how_to_dismiss_every_candidate(conn, cfg):
     text = todo(conn, cfg)
     assert "(`[match]`, `[alias]`, `[reject]`)" in section_of(text, "Review")
     item = review_item(text, "Soda - Persiana Americana")
-    assert "None of these? Answer `n` in `tabarr review`, or add this line under `[reject]`" in item
+    assert "None of these? Answer `n` in `caracole review`, or add this line under `[reject]`" in item
     *_, block = toml_blocks(item)
     assert block == ('"Soda - Persiana Americana" = ["soda-stereo/persiana-americana", "soda-stereo/persiana"]'
                      "  # under [reject]\n")
@@ -542,7 +542,7 @@ def test_a_review_says_how_to_dismiss_every_candidate(conn, cfg):
 def test_a_song_rejected_before_gets_its_whole_reject_line_to_put_in_place(conn, cfg):
     # More covers turned up after you dismissed the first ones. A second line for the same song under
     # [reject] would make overrides.toml unreadable, so the page gives the song's whole line instead.
-    from tabarr.overrides import add_reject
+    from caracole.overrides import add_reject
 
     add_reject(cfg.overrides_file, "Maná - Rayando el Sol", ["ana-gabriel/rayando-el-sol"])
     s = covers_only(conn, "Maná", "Rayando el Sol", "pablo-alboran")
@@ -596,18 +596,18 @@ def test_suggestions_exclude_songs_already_wanted(conn, cfg):
 def test_sources_status(conn, cfg):
     import dataclasses
 
-    from tabarr.config import SpotifyConfig
+    from caracole.config import SpotifyConfig
 
     text = todo(conn, cfg)
     assert "Spotify: not configured" in text
     cfg = dataclasses.replace(cfg, spotify=SpotifyConfig(client_id="abc"))
     assert "Spotify: not synced yet" in todo(conn, cfg)
     kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-18T03:30:00Z",
-                                         "message": "run `tabarr auth spotify`"})
+                                         "message": "run `caracole auth spotify`"})
     kv_set_json(conn, "source:wanted", {"at": "2026-10-18T03:30:00Z", "lines": 12, "new": 2,
                                         "errors": [[3, "expected \"Artist - Title\""]]})
     text = todo(conn, cfg)
-    assert "tabarr auth spotify" in text
+    assert "caracole auth spotify" in text
     assert "wanted.txt: 12 songs" in text and "line 3" in text
 
 
@@ -619,9 +619,9 @@ def test_markdown_special_characters_are_escaped(conn, cfg):
 
 
 def test_write_todo(cfg):
-    path = write_todo(cfg.library_dir, "# tabarr to-do\n")
+    path = write_todo(cfg.library_dir, "# caracole to-do\n")
     assert path == cfg.library_dir / "_todo.md"
-    assert path.read_text(encoding="utf-8") == "# tabarr to-do\n"
+    assert path.read_text(encoding="utf-8") == "# caracole to-do\n"
 
 
 def test_header_links_to_the_library_page(conn, cfg):
@@ -641,13 +641,13 @@ def test_render_status_line(conn, cfg):
 def test_render_failures_and_font_error_are_shown(conn, cfg):
     kv_set_json(conn, "render:status", {
         "at": "2026-10-18T03:40:00Z", "rendered": 3, "failed": ["Soda Stereo - Persiana Americana", "A_B - [C]"],
-        "font_error": "set cjk_font or TABARR_CJK_FONT to render 宋冬野 - 斑马斑马",
+        "font_error": "set cjk_font or CARACOLE_CJK_FONT to render 宋冬野 - 斑马斑马",
     })
     text = todo(conn, cfg)
     assert "## PDFs" in text
     pdfs = text.split("## PDFs", 1)[1].split("\n## ", 1)[0]
     assert "3 rendered, 2 failed" in pdfs
-    assert r"set cjk\_font or TABARR\_CJK\_FONT to render 宋冬野 - 斑马斑马" in pdfs
+    assert r"set cjk\_font or CARACOLE\_CJK\_FONT to render 宋冬野 - 斑马斑马" in pdfs
     assert "Soda Stereo - Persiana Americana" in pdfs and r"A\_B - \[C\]" in pdfs
 
 
@@ -668,13 +668,13 @@ def test_no_pdf_section_before_the_first_render_or_for_a_bad_record(conn, cfg):
 def test_spotify_auth_line_keeps_reason_and_advice(conn, cfg):
     import dataclasses
 
-    from tabarr.config import SpotifyConfig
+    from caracole.config import SpotifyConfig
 
     cfg = dataclasses.replace(cfg, spotify=SpotifyConfig(client_id="abc"))
     kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-18T03:30:00Z",
                                          "message": "the refresh token was revoked"})
     text = todo(conn, cfg)
-    assert "the refresh token was revoked" in text and "Run `tabarr auth spotify`." in text
+    assert "the refresh token was revoked" in text and "Run `caracole auth spotify`." in text
 
 
 AUTOCHORDS = "## Auto-chords couldn't read these purchases"

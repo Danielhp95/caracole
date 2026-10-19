@@ -1,7 +1,7 @@
-# services.tabarr: a nightly `tabarr run` as a hardened oneshot on a timer, an
+# services.caracole: a nightly `caracole run` as a hardened oneshot on a timer, an
 # optional auto-chords unit after it with no network, an ntfy message when
-# either fails, and `tabarr-admin` for the interactive commands. Everything
-# tabarr keeps sits in one folder, dataDir, unless an option moves a part.
+# either fails, and `caracole-admin` for the interactive commands. Everything
+# caracole keeps sits in one folder, dataDir, unless an option moves a part.
 {
   config,
   lib,
@@ -10,9 +10,9 @@
 }:
 
 let
-  cfg = config.services.tabarr;
+  cfg = config.services.caracole;
   toml = pkgs.formats.toml { };
-  configFile = toml.generate "tabarr.toml" cfg.settings;
+  configFile = toml.generate "caracole.toml" cfg.settings;
 
   credentials = lib.mapAttrsToList (name: path: "${name}:${path}") cfg.credentials;
 
@@ -24,7 +24,7 @@ let
     "cacheDir"
   ];
   dirs = [ "dataDir" ] ++ folders;
-  # The tabarr.toml key of each.
+  # The caracole.toml key of each.
   keys = {
     dataDir = "data_dir";
     libraryDir = "library_dir";
@@ -32,7 +32,7 @@ let
     stateDir = "state_dir";
     cacheDir = "cache_dir";
   };
-  # The folders as the generated tabarr.toml names them: the paths the units'
+  # The folders as the generated caracole.toml names them: the paths the units'
   # sandbox opens. Not data_dir, which these four would win over.
   dirSettings = lib.listToAttrs (map (name: lib.nameValuePair keys.${name} cfg.${name}) folders);
 
@@ -40,7 +40,7 @@ let
   # Options with their paths, one per line, for a message.
   listed = lib.concatMapStrings (name: "\n  ${name} = \"${cfg.${name}}\";");
 
-  # What tabarr writes. The hardened units may write there and nowhere else.
+  # What caracole writes. The hardened units may write there and nowhere else.
   writable = [
     cfg.libraryDir
     cfg.stateDir
@@ -48,7 +48,7 @@ let
   ];
 
   # Hardening every unit here shares: plan §6 plus the usual extras. RemoveIPC
-  # is left out because the tabarr units and tabarr-admin share one user.
+  # is left out because the caracole units and caracole-admin share one user.
   sandbox = {
     NoNewPrivileges = true;
     ProtectSystem = "strict";
@@ -82,18 +82,18 @@ let
     CapabilityBoundingSet = "";
   };
 
-  # Who tabarr runs as: both units and tabarr-admin.
+  # Who caracole runs as: both units and caracole-admin.
   identity = {
-    User = "tabarr";
-    Group = "tabarr";
-    # The files it writes are group-writable: Syncthing, in group tabarr, syncs
+    User = "caracole";
+    Group = "caracole";
+    # The files it writes are group-writable: Syncthing, in group caracole, syncs
     # the library both ways (the inbox, edits from a phone). The database and
-    # the Spotify token stay with the tabarr user alone, in a folder of mode
+    # the Spotify token stay with the caracole user alone, in a folder of mode
     # 0700.
     UMask = "0007";
   };
 
-  # The static secrets, for the nightly run and tabarr-admin (`auth spotify`,
+  # The static secrets, for the nightly run and caracole-admin (`auth spotify`,
   # `sync`). The auto-chords unit reads none, so it gets none.
   secrets.LoadCredential = credentials;
 
@@ -108,7 +108,7 @@ let
 
   # HOME (/var/empty) is read-only, and librosa's numba refuses to import
   # without a writable cache ("no locator available"); torch caches there too.
-  # tabarr's own cache is cache_dir in the generated file, which wins over these.
+  # caracole's own cache is cache_dir in the generated file, which wins over these.
   cacheEnv = {
     XDG_CACHE_HOME = cfg.cacheDir;
     NUMBA_CACHE_DIR = "${cfg.cacheDir}/numba";
@@ -117,28 +117,28 @@ let
   # The model files for auto-chords. Null ones stay unset, so the package
   # wrapper's --set-default values apply; settings.autochords wins over both.
   modelEnv = lib.filterAttrs (_: value: value != null) {
-    TABARR_BTC_WEIGHTS = cfg.autochords.btcWeights;
-    TABARR_BEAT_CHECKPOINT = cfg.autochords.beatCheckpoint;
+    CARACOLE_BTC_WEIGHTS = cfg.autochords.btcWeights;
+    CARACOLE_BEAT_CHECKPOINT = cfg.autochords.beatCheckpoint;
   };
 
   ntfyUrl = cfg.settings.ntfy.url or "";
 
   notifyFailure = pkgs.writeShellApplication {
-    name = "tabarr-notify-failure";
+    name = "caracole-notify-failure";
     runtimeInputs = [ pkgs.curl ];
     text = ''
       url=${lib.escapeShellArg ntfyUrl}
       if [ -z "$url" ]; then
-        echo "a tabarr unit failed; ntfy is not configured (services.tabarr.settings.ntfy.url), so nothing was sent"
+        echo "a caracole unit failed; ntfy is not configured (services.caracole.settings.ntfy.url), so nothing was sent"
         exit 0
       fi
 
       # systemd sets MONITOR_* for a unit started through OnFailure=.
-      unit=''${MONITOR_UNIT:-tabarr.service}
+      unit=''${MONITOR_UNIT:-caracole.service}
       result=''${MONITOR_SERVICE_RESULT:-failed}
       args=(
         --silent --show-error --fail-with-body --max-time 30 --retry 3
-        --header "Title: tabarr: $unit failed"
+        --header "Title: caracole: $unit failed"
         --header "Priority: high"
         --header "Tags: warning"
         --data-binary "$unit failed on ${config.networking.hostName} ($result). See: journalctl -u $unit"
@@ -155,15 +155,15 @@ let
     '';
   };
 
-  # tabarr as its units run it, for `auth spotify`, `index build` and one-off
-  # commands: a transient unit under the tabarr user, in the units' sandbox,
+  # caracole as its units run it, for `auth spotify`, `index build` and one-off
+  # commands: a transient unit under the caracole user, in the units' sandbox,
   # with the same folders, credentials and generated config. It keeps the
   # network (`auth spotify` and `index build` need it). With the auto-chords
-  # package when that is on, so `tabarr-admin autochords` works too, and then,
+  # package when that is on, so `caracole-admin autochords` works too, and then,
   # as in that unit, without MemoryDenyWriteExecute.
   adminPackage = if cfg.autochords.enable then cfg.autochords.package else cfg.package;
   adminEnv = {
-    TABARR_CONFIG = configFile;
+    CARACOLE_CONFIG = configFile;
   }
   // cacheEnv
   // lib.optionalAttrs cfg.autochords.enable modelEnv;
@@ -187,12 +187,12 @@ let
   adminArgs =
     lib.mapAttrsToList (name: value: "--setenv=${name}=${value}") adminEnv
     ++ lib.concatLists (lib.mapAttrsToList property adminProperties);
-  tabarrAdmin = pkgs.writeShellApplication {
-    name = "tabarr-admin";
+  caracoleAdmin = pkgs.writeShellApplication {
+    name = "caracole-admin";
     runtimeInputs = [ config.systemd.package ];
     text = ''
       if [ "$EUID" -ne 0 ]; then
-        echo "tabarr-admin starts a system unit as the tabarr user: run it with sudo" >&2
+        echo "caracole-admin starts a system unit as the caracole user: run it with sudo" >&2
         exit 1
       fi
       # --pty on a terminal (auth spotify asks for a pasted URL), --pipe otherwise.
@@ -203,28 +203,28 @@ let
   };
 in
 {
-  options.services.tabarr = {
-    enable = lib.mkEnableOption "tabarr, the nightly chord sheet, lyrics and guitar part library";
+  options.services.caracole = {
+    enable = lib.mkEnableOption "caracole, the nightly chord sheet, lyrics and guitar part library";
 
     package = lib.mkOption {
       type = lib.types.package;
       default = pkgs.callPackage ./package.nix { };
       defaultText = lib.literalExpression "pkgs.callPackage ./package.nix { }";
-      description = "The tabarr package. The flake's module sets it to the flake's build.";
+      description = "The caracole package. The flake's module sets it to the flake's build.";
     };
 
     dataDir = lib.mkOption {
       # A string, as are the folders below, so it is never copied to the store.
       type = lib.types.str;
-      default = "/var/lib/tabarr";
-      example = "/data/tabarr";
+      default = "/var/lib/caracole";
+      example = "/data/caracole";
       description = ''
-        The folder that holds everything tabarr keeps: `library`, `music`,
+        The folder that holds everything caracole keeps: `library`, `music`,
         `state` and `cache`, unless libraryDir, musicDir, stateDir or cacheDir
-        puts one elsewhere. When missing, it is created as `tabarr:tabarr`, mode
+        puts one elsewhere. When missing, it is created as `caracole:caracole`, mode
         0710, so that the group gets through to the library and the music. An
         existing folder keeps its owner and mode, so it can be one that other
-        things share, such as a disk's root; it must then let `tabarr` and its
+        things share, such as a disk's root; it must then let `caracole` and its
         group through.
       '';
     };
@@ -232,10 +232,10 @@ in
     libraryDir = lib.mkOption {
       type = lib.types.str;
       default = "${cfg.dataDir}/library";
-      defaultText = lib.literalExpression ''"''${config.services.tabarr.dataDir}/library"'';
+      defaultText = lib.literalExpression ''"''${config.services.caracole.dataDir}/library"'';
       description = ''
-        The library tabarr writes: sheets, lyrics, guitar parts, `_todo.md`,
-        `wanted.txt` and `overrides.toml`. It is created setgid, group `tabarr`,
+        The library caracole writes: sheets, lyrics, guitar parts, `_todo.md`,
+        `wanted.txt` and `overrides.toml`. It is created setgid, group `caracole`,
         mode 2775, so a Syncthing user in that group can share it.
       '';
     };
@@ -243,7 +243,7 @@ in
     musicDir = lib.mkOption {
       type = lib.types.str;
       default = "${cfg.dataDir}/music";
-      defaultText = lib.literalExpression ''"''${config.services.tabarr.dataDir}/music"'';
+      defaultText = lib.literalExpression ''"''${config.services.caracole.dataDir}/music"'';
       description = ''
         Purchased audio, read-only, for auto-chords. It may not exist yet:
         whoever fills it creates it.
@@ -253,20 +253,20 @@ in
     stateDir = lib.mkOption {
       type = lib.types.str;
       default = "${cfg.dataDir}/state";
-      defaultText = lib.literalExpression ''"''${config.services.tabarr.dataDir}/state"'';
+      defaultText = lib.literalExpression ''"''${config.services.caracole.dataDir}/state"'';
       description = ''
-        The database, the Spotify token and tabarr's lock: back it up, but don't
-        share it. It is created as `tabarr:tabarr`, mode 0700.
+        The database, the Spotify token and caracole's lock: back it up, but don't
+        share it. It is created as `caracole:caracole`, mode 0700.
       '';
     };
 
     cacheDir = lib.mkOption {
       type = lib.types.str;
       default = "${cfg.dataDir}/cache";
-      defaultText = lib.literalExpression ''"''${config.services.tabarr.dataDir}/cache"'';
+      defaultText = lib.literalExpression ''"''${config.services.caracole.dataDir}/cache"'';
       description = ''
         Every raw HTTP response, kept forever, the private folders PDFs are made
-        in, and numba's and torch's caches. It is created as `tabarr:tabarr`,
+        in, and numba's and torch's caches. It is created as `caracole:caracole`,
         mode 0700. Losing it costs only requests.
       '';
     };
@@ -274,7 +274,7 @@ in
     schedule = lib.mkOption {
       type = lib.types.str;
       default = "*-*-* 03:30";
-      description = "When `tabarr run` starts (systemd.time(7) calendar event), up to 45 minutes late.";
+      description = "When `caracole run` starts (systemd.time(7) calendar event), up to 45 minutes late.";
     };
 
     settings = lib.mkOption {
@@ -286,12 +286,12 @@ in
             client_id = "0123456789abcdef";
             playlists = [ "Learn" ];
           };
-          ntfy.url = "https://ntfy.sh/my-tabarr-topic";
+          ntfy.url = "https://ntfy.sh/my-caracole-topic";
           providers.ug.budget = 40;
         }
       '';
       description = ''
-        tabarr.toml, as src/tabarr/config.py reads it. Unknown keys are fatal
+        caracole.toml, as src/caracole/config.py reads it. Unknown keys are fatal
         there. `library_dir`, `music_dir`, `state_dir` and `cache_dir` come from
         the options above, the folders the units' sandbox opens: set those, not
         these keys or `data_dir`. Secrets go in `credentials`, not here.
@@ -304,28 +304,28 @@ in
       default = { };
       example = lib.literalExpression ''
         {
-          spotify_client_secret = config.age.secrets.tabarr-spotify.path;
-          ntfy_token = config.age.secrets.tabarr-ntfy.path;
+          spotify_client_secret = config.age.secrets.caracole-spotify.path;
+          ntfy_token = config.age.secrets.caracole-ntfy.path;
         }
       '';
       description = ''
-        Files systemd passes to tabarr through `LoadCredential`, by credential
-        name. tabarr reads `spotify_client_secret` and `ntfy_token`. The files
+        Files systemd passes to caracole through `LoadCredential`, by credential
+        name. caracole reads `spotify_client_secret` and `ntfy_token`. The files
         are read as root, so they can stay root-only. The nightly run and
-        `tabarr-admin` get them; the auto-chords unit, which reads none, doesn't.
+        `caracole-admin` get them; the auto-chords unit, which reads none, doesn't.
       '';
     };
 
     autochords = {
-      enable = lib.mkEnableOption "the tabarr-autochords unit, run after each successful tabarr run";
+      enable = lib.mkEnableOption "the caracole-autochords unit, run after each successful caracole run";
 
       package = lib.mkOption {
         type = lib.types.package;
         default = cfg.package.override { withAutochords = true; };
-        defaultText = lib.literalExpression "config.services.tabarr.package.override { withAutochords = true; }";
+        defaultText = lib.literalExpression "config.services.caracole.package.override { withAutochords = true; }";
         description = ''
-          tabarr with the autochords extra (torch, beat-this, librosa). Its
-          wrapper defaults TABARR_BTC_WEIGHTS and TABARR_BEAT_CHECKPOINT to the
+          caracole with the autochords extra (torch, beat-this, librosa). Its
+          wrapper defaults CARACOLE_BTC_WEIGHTS and CARACOLE_BEAT_CHECKPOINT to the
           model files fetched by nix/autochords.nix, so the offline unit needs
           nothing else.
         '';
@@ -335,7 +335,7 @@ in
         type = lib.types.nullOr lib.types.path;
         default = null;
         description = ''
-          Other BTC chord model weights, as TABARR_BTC_WEIGHTS. Null leaves the
+          Other BTC chord model weights, as CARACOLE_BTC_WEIGHTS. Null leaves the
           package's own; settings.autochords.btc_weights wins over both.
         '';
       };
@@ -344,7 +344,7 @@ in
         type = lib.types.nullOr lib.types.path;
         default = null;
         description = ''
-          Another beat_this checkpoint, as TABARR_BEAT_CHECKPOINT. Null leaves
+          Another beat_this checkpoint, as CARACOLE_BEAT_CHECKPOINT. Null leaves
           the package's own; settings.autochords.beat_checkpoint wins over both.
         '';
       };
@@ -354,7 +354,7 @@ in
   config = lib.mkIf cfg.enable {
     assertions =
       let
-        # The options whose tabarr.toml key settings sets to a path of its own.
+        # The options whose caracole.toml key settings sets to a path of its own.
         stray = lib.filter (
           name:
           let
@@ -404,8 +404,8 @@ in
         {
           assertion = stray == [ ];
           message = ''
-            services.tabarr: the units' sandbox opens the folders the options
-            name, and the generated tabarr.toml names them, so set the options
+            services.caracole: the units' sandbox opens the folders the options
+            name, and the generated caracole.toml names them, so set the options
             instead of their keys in settings:${
               lib.concatMapStrings (name: "\n  ${name}, not settings.${keys.${name}}") stray
             }
@@ -414,14 +414,14 @@ in
         {
           assertion = notPlain == [ ];
           message = ''
-            services.tabarr: these must be absolute paths without whitespace, a
-            trailing slash or a "." or ".." part, such as "/data/tabarr":${listed notPlain}
+            services.caracole: these must be absolute paths without whitespace, a
+            trailing slash or a "." or ".." part, such as "/data/caracole":${listed notPlain}
           '';
         }
         {
           assertion = hidden == [ ];
           message = ''
-            services.tabarr: the units' sandbox hides /home, /root and /run/user
+            services.caracole: the units' sandbox hides /home, /root and /run/user
             (ProtectHome) and /tmp and /var/tmp (PrivateTmp), so these must be
             elsewhere:${listed hidden}
           '';
@@ -429,9 +429,9 @@ in
         {
           assertion = tangles == [ ];
           message = ''
-            services.tabarr: libraryDir, musicDir, stateDir and cacheDir must be
+            services.caracole: libraryDir, musicDir, stateDir and cacheDir must be
             four folders, none inside another: the state and the cache are
-            tabarr's alone, while Syncthing writes the library and the music.${
+            caracole's alone, while Syncthing writes the library and the music.${
               lib.concatMapStrings (tangle: "\n  ${tangle}") tangles
             }
           '';
@@ -440,31 +440,31 @@ in
 
     # The generated file names the folders the sandbox opens. At default
     # priority, so that a value settings sets shows, for the assertion above.
-    services.tabarr.settings = lib.mapAttrs (_: lib.mkDefault) dirSettings;
+    services.caracole.settings = lib.mapAttrs (_: lib.mkDefault) dirSettings;
 
-    users.users.tabarr = {
+    users.users.caracole = {
       isSystemUser = true;
-      group = "tabarr";
-      description = "tabarr";
+      group = "caracole";
+      description = "caracole";
     };
-    users.groups.tabarr = { };
+    users.groups.caracole = { };
 
-    systemd.tmpfiles.settings.tabarr = {
-      # setgid, so whatever Syncthing or tabarr creates inside stays in group tabarr.
+    systemd.tmpfiles.settings.caracole = {
+      # setgid, so whatever Syncthing or caracole creates inside stays in group caracole.
       ${cfg.libraryDir}.d = {
-        user = "tabarr";
-        group = "tabarr";
+        user = "caracole";
+        group = "caracole";
         mode = "2775";
       };
       # The database, the Spotify token, the lock and every response.
       ${cfg.stateDir}.d = {
-        user = "tabarr";
-        group = "tabarr";
+        user = "caracole";
+        group = "caracole";
         mode = "0700";
       };
       ${cfg.cacheDir}.d = {
-        user = "tabarr";
-        group = "tabarr";
+        user = "caracole";
+        group = "caracole";
         mode = "0700";
       };
     }
@@ -473,20 +473,20 @@ in
     # only to a folder tmpfiles creates, so one that exists keeps its own.
     // lib.optionalAttrs (lib.any (name: inside cfg.dataDir cfg.${name}) folders) {
       ${cfg.dataDir}.d = {
-        user = ":tabarr";
-        group = ":tabarr";
+        user = ":caracole";
+        group = ":caracole";
         mode = ":0710";
       };
     };
 
-    systemd.services.tabarr = {
-      description = "tabarr nightly run: sync, match, fetch and write the library";
+    systemd.services.caracole = {
+      description = "caracole nightly run: sync, match, fetch and write the library";
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
-      onFailure = [ "tabarr-notify-failure.service" ];
+      onFailure = [ "caracole-notify-failure.service" ];
       # OnSuccess rather than Wants/After: auto-chords follows only a run that
       # finished, and can still be started on its own without starting a run.
-      onSuccess = lib.optional cfg.autochords.enable "tabarr-autochords.service";
+      onSuccess = lib.optional cfg.autochords.enable "caracole-autochords.service";
       # A switch never cuts a run short; the next run uses the new unit.
       restartIfChanged = false;
       unitConfig.RequiresMountsFor = writable;
@@ -506,8 +506,8 @@ in
         };
     };
 
-    systemd.timers.tabarr = {
-      description = "Nightly tabarr run";
+    systemd.timers.caracole = {
+      description = "Nightly caracole run";
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnCalendar = cfg.schedule;
@@ -516,10 +516,10 @@ in
       };
     };
 
-    systemd.services.tabarr-autochords = lib.mkIf cfg.autochords.enable {
-      description = "tabarr auto-chords: chord sheets from purchased audio, offline";
-      after = [ "tabarr.service" ];
-      onFailure = [ "tabarr-notify-failure.service" ];
+    systemd.services.caracole-autochords = lib.mkIf cfg.autochords.enable {
+      description = "caracole auto-chords: chord sheets from purchased audio, offline";
+      after = [ "caracole.service" ];
+      onFailure = [ "caracole-notify-failure.service" ];
       restartIfChanged = false;
       unitConfig.RequiresMountsFor = writable;
       environment = cacheEnv // modelEnv;
@@ -541,13 +541,13 @@ in
         };
     };
 
-    systemd.services.tabarr-notify-failure = {
-      description = "Tell ntfy that a tabarr unit failed";
+    systemd.services.caracole-notify-failure = {
+      description = "Tell ntfy that a caracole unit failed";
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
       serviceConfig = sandbox // {
         Type = "oneshot";
-        # Its own throwaway user: it needs nothing of tabarr's but the token.
+        # Its own throwaway user: it needs nothing of caracole's but the token.
         DynamicUser = true;
         ExecStart = lib.getExe notifyFailure;
         LoadCredential = lib.optional (
@@ -556,6 +556,6 @@ in
       };
     };
 
-    environment.systemPackages = [ tabarrAdmin ];
+    environment.systemPackages = [ caracoleAdmin ];
   };
 }

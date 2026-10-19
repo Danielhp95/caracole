@@ -27,18 +27,18 @@ from helpers.ug_pages import (
     version_dict,
 )
 
-import tabarr.http
-from tabarr.config import MatchPolicy, ProviderPolicy, RankPolicy
-from tabarr.db import kv_get, kv_set
-from tabarr.http import PoliteClient, ProviderBlocked
-from tabarr.library import drop_file, keep_file, kept_files, song_dir
-from tabarr.lyrics import Lyrics
-from tabarr.match import match_all
-from tabarr.overrides import Overrides, load_overrides
-from tabarr.render import render_all
-from tabarr.songs import get_song, update_song
-from tabarr.ug.artist import artist_page_url
-from tabarr.ug.fetch import (
+import caracole.http
+from caracole.config import MatchPolicy, ProviderPolicy, RankPolicy
+from caracole.db import kv_get, kv_set
+from caracole.http import PoliteClient, ProviderBlocked
+from caracole.library import drop_file, keep_file, kept_files, song_dir
+from caracole.lyrics import Lyrics
+from caracole.match import match_all
+from caracole.overrides import Overrides, load_overrides
+from caracole.render import render_all
+from caracole.songs import get_song, update_song
+from caracole.ug.artist import artist_page_url
+from caracole.ug.fetch import (
     FetchContext,
     FetchStats,
     SongFetchOutcome,
@@ -47,7 +47,7 @@ from tabarr.ug.fetch import (
     rescore_kept_sheets,
     songs_to_fetch,
 )
-from tabarr.ug.lookup import (
+from caracole.ug.lookup import (
     IndexTab,
     artist_tabs,
     index_tab,
@@ -55,8 +55,8 @@ from tabarr.ug.lookup import (
     remember_artist_url,
     tab_url_for,
 )
-from tabarr.ug.page import strip_markup
-from tabarr.versions import (
+from caracole.ug.page import strip_markup
+from caracole.versions import (
     get_version,
     picks,
     set_coverage,
@@ -150,7 +150,7 @@ class FakeUG:
     def client(self, cache_dir, budget=60, *, now=NOW):
         """A client for one run at ``now``, which is also the age the HTTP cache is judged by."""
         return PoliteClient("ug", ProviderPolicy(budget=budget, delay=(0.0, 0.0)), cache_dir,
-                            user_agent="tabarr-test", transport=httpx.MockTransport(self.handler),
+                            user_agent="caracole-test", transport=httpx.MockTransport(self.handler),
                             sleep=lambda s: None, wall_clock=lambda: now)
 
 
@@ -928,7 +928,7 @@ def test_a_clean_song_whose_kept_file_the_library_lost_is_fetched_again_at_the_n
 
 
 def test_a_guitar_pro_file_you_filed_and_deleted_sends_nothing_back(conn, tmp_path):
-    # tabarr never downloads Guitar Pro files (assisted mode), so it can't write one again.
+    # caracole never downloads Guitar Pro files (assisted mode), so it can't write one again.
     song, _ = fetched_persiana(conn, tmp_path)
     gp = upsert_version(conn, provider="ug", tab_id="301", song_id=song.id, slot="guitar", kind="guitar-pro",
                         rating=4.5, votes=20, version=1, label=None, url=slugged(301, "guitar-pro"), raw={},
@@ -1021,7 +1021,7 @@ def render_library(conn, cfg, tmp_path, overrides):
     '[pin]\n"Soda Stereo - Persiana Americana" = ["https://tabs.ultimate-guitar.com/tab/999"]\n',  # gone
 ], ids=["match", "pin"])
 def test_a_correction_whose_fetch_finds_no_sheet_leaves_none_of_the_old_ones(conn, cfg, tmp_path, correction):
-    # Persiana Americana was wrongly accepted as "Signos"; corrected, UG has no sheet of it tabarr can see.
+    # Persiana Americana was wrongly accepted as "Signos"; corrected, UG has no sheet of it caracole can see.
     song = accepted(conn, akey="soda-stereo", skey="signos")
     index(conn, (901, "soda-stereo", "signos", "chords"))
     ug = FakeUG()
@@ -1998,7 +1998,7 @@ def test_a_ug_sheet_meets_a_lacuerda_sheet_on_coverage_alone(conn, tmp_path, lac
 
 
 def test_a_ug_sheet_you_pinned_replaces_even_a_complete_lacuerda_sheet(conn, tmp_path):
-    # [pin] is your decision: the coverage rule only settles what tabarr chooses itself.
+    # [pin] is your decision: the coverage rule only settles what caracole chooses itself.
     song = accepted(conn)
     keep_other_sheet(conn, tmp_path, song, provider="lacuerda", kind="acordes", name="sheet.txt", coverage=1.0)
     index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
@@ -2102,7 +2102,7 @@ def overrides_from(tmp_path, toml):
 
 
 def test_a_ug_song_you_rejected_is_no_match_on_the_artist_page(conn, tmp_path):
-    # "None of these" in `tabarr review` leaves the song not found, and its artist's page is read for it.
+    # "None of these" in `caracole review` leaves the song not found, and its artist's page is read for it.
     index(conn, (1081462, "soda-stereo", "persiana-americana", "tabs"))
     song = soda_dml(conn)
     ug = FakeUG()
@@ -2138,7 +2138,7 @@ def test_the_artist_pages_other_titles_still_compete_once_you_reject_one(conn, t
 def dml_found_on_its_artist_page(conn, tmp_path, ug):
     """De Música Ligera accepted on Soda Stereo's artist page (A6): sheet 85042, which covers half the
     lyrics so the auto sheet stays beside it, and tab 85100. A Guitar Pro file you filed is there too,
-    and a file of yours tabarr doesn't track."""
+    and a file of yours caracole doesn't track."""
     song = soda_dml(conn)
     remember_artist_url(conn, "soda-stereo", SODA_URL)
     dml = {"song": "De Música Ligera", "artist": "Soda Stereo", "song_id": 67588}
@@ -2194,7 +2194,7 @@ def test_a_match_you_reject_takes_its_sheet_and_tab_with_it(conn, tmp_path):
 def test_a_match_you_reject_for_a_review_loses_its_sheet_without_a_request(conn, tmp_path):
     # What the matcher has left is a near title of the song's own artist, for you to review: nothing to
     # fetch, and the rejected UG song's sheet and tab are no sheet of this song.
-    from tabarr.ug.index import mark_built
+    from caracole.ug.index import mark_built
 
     song, ug = fetched_persiana(conn, tmp_path)
     index(conn, (102, "soda-stereo", "persiana-am", "chords"))  # 76 against persiana-americana
@@ -2212,7 +2212,7 @@ def test_a_match_you_reject_for_a_review_loses_its_sheet_without_a_request(conn,
 
 
 def test_a_lacuerda_sheet_stays_when_a_rejected_match_takes_its_tab(conn, tmp_path):
-    from tabarr.ug.index import mark_built
+    from caracole.ug.index import mark_built
 
     song = accepted(conn)
     index(conn, (401, "soda-stereo", "persiana-americana", "tabs"))
@@ -2539,7 +2539,7 @@ def test_a_candidate_robots_txt_closes_gives_way_to_the_songs_other_versions(con
 
 
 def test_a_version_ug_links_where_robots_txt_closes_is_no_candidate(conn, tmp_path):
-    # The page tabarr reads lists the best-rated version at its closed address.
+    # The page caracole reads lists the best-rated version at its closed address.
     song = se_que_es_tarde(conn)
     index_at(conn, (2000001, "track", "se-que-es-tarde", "chords", OPEN))
     ug = FakeUG()
@@ -2618,7 +2618,7 @@ def test_an_artist_page_is_learned_past_a_tab_robots_txt_closes(conn, tmp_path):
 
 
 def test_an_artist_page_that_links_every_tab_where_robots_txt_closes_lists_nothing_to_use(conn, tmp_path):
-    # No change of shape (an error): the links are the tabs' own pages, which tabarr may not read.
+    # No change of shape (an error): the links are the tabs' own pages, which caracole may not read.
     song = matched(conn, "Track", "Se Que Es Tarde", "not_found", added_at="2026-10-17T00:00:00Z")
     ug = FakeUG()
     ug.add(artist_list(TRACK_ARTIST), artist_page(4242, "Track", [track_tab(CLOSED, rating=4.9, votes=80)]))
@@ -2632,7 +2632,7 @@ def test_an_artist_page_that_links_every_tab_where_robots_txt_closes_lists_nothi
 
 
 def test_a_song_whose_indexed_chords_robots_txt_closes_finds_its_sheet_on_its_artist_page(conn, tmp_path):
-    # Closed chords are no chords: the artist's chords list may hold a bare-id version tabarr can read.
+    # Closed chords are no chords: the artist's chords list may hold a bare-id version caracole can read.
     song = se_que_es_tarde(conn)
     index_at(conn, (1126580, "track", "se-que-es-tarde", "chords", CLOSED))
     remember_artist_url(conn, "track", TRACK_ARTIST)
@@ -2648,7 +2648,7 @@ def test_a_song_whose_indexed_chords_robots_txt_closes_finds_its_sheet_on_its_ar
 
 
 def test_versions_recorded_where_robots_txt_closes_never_compete(conn, tmp_path):
-    # Recorded before tabarr checked robots.txt (an artist page listed them): no slot asks for or picks one.
+    # Recorded before caracole checked robots.txt (an artist page listed them): no slot asks for or picks one.
     song = accepted(conn)
     index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
           (301, "soda-stereo", "persiana-americana", "guitar-pro"))
@@ -2671,7 +2671,7 @@ def test_an_artist_page_robots_txt_closes_is_never_asked_for(conn, tmp_path, mon
     # robots.txt leaves artist pages open today. Should it close them, a song is looked up there without a
     # request, and checked with nothing found: never failed.
     www = "www.ultimate-guitar.com"
-    monkeypatch.setitem(tabarr.http._ROBOTS, www, [*tabarr.http._ROBOTS[www], ("/artist/", re.compile("/artist/"))])
+    monkeypatch.setitem(caracole.http._ROBOTS, www, [*caracole.http._ROBOTS[www], ("/artist/", re.compile("/artist/"))])
     song = banma(conn)
     ug = FakeUG()
     serve_banma(ug, [banma_tab(2001234, rating=4.7, votes=50)])

@@ -1,4 +1,4 @@
-"""The library is writable by the Syncthing group and every synced device, so tabarr
+"""The library is writable by the Syncthing group and every synced device, so caracole
 never writes or reads through a symbolic link planted there."""
 
 import os
@@ -6,12 +6,12 @@ import stat
 
 import pytest
 
-from tabarr.library import NotRegularFile, read_regular, write_atomic
+from caracole.library import NotRegularFile, read_regular, write_atomic
 
 
 @pytest.fixture
 def state(tmp_path):
-    """tabarr's private state directory, with a Spotify token in it."""
+    """caracole's private state directory, with a Spotify token in it."""
     d = tmp_path / "state"
     d.mkdir(mode=0o700)
     (d / "spotify_token.json").write_text('{"refresh_token": "secret"}', encoding="utf-8")

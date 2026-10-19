@@ -11,15 +11,15 @@ from urllib.parse import quote, unquote
 import pytest
 from typer.testing import CliRunner
 
-from tabarr import db
-from tabarr.cli import build_app
-from tabarr.library import keep_file, song_dir
-from tabarr.library_page import build_library_page, write_library_page
-from tabarr.normalize import fold
-from tabarr.overrides import Overrides
-from tabarr.songs import update_song
-from tabarr.todo import search_links
-from tabarr.versions import set_picks, upsert_version
+from caracole import db
+from caracole.cli import build_app
+from caracole.library import keep_file, song_dir
+from caracole.library_page import build_library_page, write_library_page
+from caracole.normalize import fold
+from caracole.overrides import Overrides
+from caracole.songs import update_song
+from caracole.todo import search_links
+from caracole.versions import set_picks, upsert_version
 
 from conftest import add_song
 
@@ -160,7 +160,7 @@ def test_path_unsafe_names_link_to_the_folder_the_library_uses(conn, cfg, artist
 
 def test_songs_without_a_sheet_get_buy_and_search_links(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马，斑马")
-    update_song(conn, s.id, match_decision="not_found")  # UG has nothing tabarr can see
+    update_song(conn, s.id, match_decision="not_found")  # UG has nothing caracole can see
     found = add_song(conn, "Radiohead", "Creep")
     update_song(conn, found.id, status="found")
     put(cfg, found, "sheet.txt")
@@ -176,9 +176,9 @@ def test_songs_without_a_sheet_get_buy_and_search_links(conn, cfg):
         assert song["links"] == [] and song["buy"] == []
 
 
-def test_songs_tabarr_will_still_look_for_get_no_buy_links(conn, cfg):
+def test_songs_caracole_will_still_look_for_get_no_buy_links(conn, cfg):
     # The to-do page's rule: no "buy the track" while a fetch, an artist page or LaCuerda is still to come.
-    from tabarr.db import kv_set
+    from caracole.db import kv_set
 
     waiting = add_song(conn, "Radiohead", "Creep")  # accepted, not fetched yet (33 UG tabs)
     update_song(conn, waiting.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
@@ -313,7 +313,7 @@ def test_write_library_page(cfg):
 
 
 def config(tmp_path: Path) -> Path:
-    p = tmp_path / "tabarr.toml"
+    p = tmp_path / "caracole.toml"
     p.write_text(
         f'library_dir = "{tmp_path / "lib"}"\nmusic_dir = "{tmp_path / "music"}"\n'
         f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n',
@@ -322,8 +322,8 @@ def config(tmp_path: Path) -> Path:
     return p
 
 
-def test_tabarr_todo_also_writes_index_html(tmp_path):
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+def test_caracole_todo_also_writes_index_html(tmp_path):
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     add_song(conn, "宋冬野", "斑马，斑马")
     result = CliRunner().invoke(build_app(), ["--config", str(config(tmp_path)), "todo"])
     assert result.exit_code == 0, result.output
@@ -333,8 +333,8 @@ def test_tabarr_todo_also_writes_index_html(tmp_path):
 
 
 def test_the_nightly_todo_step_also_writes_index_html(conn, cfg):
-    from tabarr.notify import Notifier
-    from tabarr.pipeline import Services, default_steps, run_pipeline
+    from caracole.notify import Notifier
+    from caracole.pipeline import Services, default_steps, run_pipeline
 
     add_song(conn, "Radiohead", "Creep")
     todo = [s for s in default_steps() if s.name == "todo"]
@@ -409,8 +409,8 @@ def test_apostrophes_and_empty_results_in_a_real_browser(conn, cfg, tmp_path):
     # A match hidden by the status filter is offered, not reported missing.
     shown = listing(dump_dom(path, tmp_path, "#show=found&q=creep"))
     assert shown.count("<article") == 0
-    assert "Show all 1 match" in shown and "tabarr search" not in shown
+    assert "Show all 1 match" in shown and "caracole search" not in shown
 
     # The suggested command is quoted for a shell.
     shown = listing(dump_dom(path, tmp_path, "#q=" + quote("guns n' roses")))
-    assert "tabarr search \"guns n' roses\"" in shown
+    assert "caracole search \"guns n' roses\"" in shown

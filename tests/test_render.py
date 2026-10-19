@@ -9,18 +9,18 @@ from pathlib import Path
 
 import pytest
 
-from tabarr.render import RenderError, needs_font_file, render_pdf, write_chordpro
+from caracole.render import RenderError, needs_font_file, render_pdf, write_chordpro
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
-CHORDPRO = os.environ.get("TABARR_CHORDPRO_BIN") or shutil.which("chordpro")
-CJK_FONT = os.environ.get("TABARR_CJK_FONT")
+CHORDPRO = os.environ.get("CARACOLE_CHORDPRO_BIN") or shutil.which("chordpro")
+CJK_FONT = os.environ.get("CARACOLE_CJK_FONT")
 
 real_chordpro = pytest.mark.skipif(
-    CHORDPRO is None, reason="chordpro not found on PATH or in TABARR_CHORDPRO_BIN"
+    CHORDPRO is None, reason="chordpro not found on PATH or in CARACOLE_CHORDPRO_BIN"
 )
 cjk_font = pytest.mark.skipif(
     not (CJK_FONT and Path(CJK_FONT).is_file()),
-    reason="set TABARR_CJK_FONT to a single-font CJK .ttf/.otf",
+    reason="set CARACOLE_CJK_FONT to a single-font CJK .ttf/.otf",
 )
 
 
@@ -243,7 +243,7 @@ def test_write_chordpro_leaves_unchanged_file_alone(tmp_path):
 @pytest.mark.parametrize("planted", ["link", "fifo"])
 def test_write_chordpro_refuses_what_is_not_a_regular_file(tmp_path, planted):
     # The old file is read only to compare, but anyone who can write to the library can
-    # plant a link there to any file tabarr can read, or a FIFO that never answers.
+    # plant a link there to any file caracole can read, or a FIFO that never answers.
     secret = tmp_path / "spotify_token.json"
     secret.write_text('{"refresh_token": "secret"}', encoding="utf-8")
     cho = tmp_path / "sheet.cho"

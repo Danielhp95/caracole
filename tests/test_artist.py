@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 from helpers.ug_pages import make_artist_page_html, store_page_html, version_dict
 
-from tabarr.ug.artist import artist_page_url, parse_artist_page
-from tabarr.ug.page import PageParseError
+from caracole.ug.artist import artist_page_url, parse_artist_page
+from caracole.ug.page import PageParseError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "ug"
 SODA = "https://www.ultimate-guitar.com/artist/soda_stereo_2946"

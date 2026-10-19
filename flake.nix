@@ -1,5 +1,5 @@
 {
-  description = "tabarr: a nightly builder of sing-along chord sheets, lyrics and guitar parts";
+  description = "caracole: a nightly builder of sing-along chord sheets, lyrics and guitar parts";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/55bfb4d7437bd4e09ab7cba58a43bd68eb310044";
 
@@ -14,16 +14,16 @@
       devPython = python.withPackages (ps: runtimeDeps ps ++ testDeps ps);
       devPythonAutochords = python.withPackages (ps: runtimeDeps ps ++ testDeps ps ++ autochordsDeps ps);
       devTools = [ pkgs.perl5Packages.AppMusicChordPro pkgs.ruff pkgs.sqlite ];
-      tabarr = pkgs.callPackage ./nix/package.nix { };
+      caracole = pkgs.callPackage ./nix/package.nix { };
       # The same program with the `autochords` extra (torch, beat-this, librosa),
       # its wrapper pointing at the model files from nix/autochords.nix.
-      tabarrAutochords = tabarr.override { withAutochords = true; };
+      caracoleAutochords = caracole.override { withAutochords = true; };
       # The font the packages render Chinese sheets with, so the CJK test runs here too.
-      fontEnv.TABARR_CJK_FONT = tabarr.cjkFont;
+      fontEnv.CARACOLE_CJK_FONT = caracole.cjkFont;
     in {
       packages.${system} = {
-        default = tabarr;
-        autochords = tabarrAutochords;
+        default = caracole;
+        autochords = caracoleAutochords;
         dev-python = devPython;
         dev-python-autochords = devPythonAutochords;
       };
@@ -36,13 +36,13 @@
         in {
           _file = ./flake.nix;
           imports = [ ./nix/module.nix ];
-          services.tabarr.package = lib.mkDefault packages.default;
-          services.tabarr.autochords.package = lib.mkDefault packages.autochords;
+          services.caracole.package = lib.mkDefault packages.default;
+          services.caracole.autochords.package = lib.mkDefault packages.autochords;
         };
 
       checks.${system} = {
         package = self.packages.${system}.default;
-        # The same tests with torch importable, and a `tabarr autochords` run on
+        # The same tests with torch importable, and a `caracole autochords` run on
         # the wrapped program with its packaged model files.
         autochords = self.packages.${system}.autochords;
         module = pkgs.callPackage ./nix/module-check.nix {
@@ -57,8 +57,8 @@
         # `pytest -m autochords` here runs the model tests on the packaged model files.
         autochords = pkgs.mkShell ({
           packages = [ devPythonAutochords ] ++ devTools;
-          TABARR_BTC_WEIGHTS = tabarrAutochords.btcWeights;
-          TABARR_BEAT_CHECKPOINT = tabarrAutochords.beatCheckpoint;
+          CARACOLE_BTC_WEIGHTS = caracoleAutochords.btcWeights;
+          CARACOLE_BEAT_CHECKPOINT = caracoleAutochords.beatCheckpoint;
         } // fontEnv);
       };
     };

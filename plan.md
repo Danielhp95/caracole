@@ -1,4 +1,4 @@
-# Tabarr, simplified
+# Caracole, simplified
 
 **Version 2.1 of the design, 18 October 2026.** This version is updated with your answers: you have Spotify Premium, you're learning guitar only, lyrics matter because you sing, and you can buy audio files.
 
@@ -20,12 +20,12 @@ The first design was a general-purpose music identity engine, with a lot of mach
 For one person on one NUC, most of that costs more than it returns. Four ideas make a much smaller design possible.
 
 1. **Ultimate Guitar publishes sitemaps of its tab pages, and its robots.txt disallows its search page.** So don't search UG song by song. Download the sitemaps once, build a local index of every tab URL (artist, song, type, id), and match your songs against it on the NUC.
-   - Tabarr sends no search requests at all.
+   - Caracole sends no search requests at all.
    - Re-searching a not-found song becomes a free local re-match.
    - New tabs show up in the newest sitemap, which works like the RSS feed Sonarr relies on.
 2. **One tab page lists every version of that song with its type, rating and vote count.** So each matched song costs one page fetch to rank all its versions, plus one fetch per file you keep.
 3. **Because you sing, every song gets two slots.**
-   - **A sing-along sheet** (chords plus full lyrics). Tabarr insists on this one.
+   - **A sing-along sheet** (chords plus full lyrics). Caracole insists on this one.
    - **An optional guitar part** (Guitar Pro or tab) for riffs, intros and solos.
 
    Lyrics come from LRCLIB for every song. They are saved on their own, and they are used to catch chord sheets with missing verses.
@@ -93,23 +93,23 @@ One choice is still yours: **assisted or automatic Guitar Pro downloads** (secti
 **Spotify**
 
 - **What to read:** Liked Songs (`GET /me/tracks`) plus the playlists you list in config. The best signal is a dedicated "Learn" playlist that you add to from your phone. Development Mode only returns the contents of playlists you own or collaborate on, so editorial playlists won't work ([migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide)).
-- **Top tracks:** optionally read `/me/top/tracks` to suggest songs. Have tabarr list these on the to-do page instead of fetching them automatically.
+- **Top tracks:** optionally read `/me/top/tracks` to suggest songs. Have caracole list these on the to-do page instead of fetching them automatically.
 - **Library:** use spotipy 2.26.0, which is in nixpkgs unstable and already follows the 2026 playlist `/items` rename.
 - **Auth:**
-  - `tabarr auth spotify` prints the authorize URL, and you paste back the URL you were redirected to.
+  - `caracole auth spotify` prints the authorize URL, and you paste back the URL you were redirected to.
   - Register `http://127.0.0.1:8888/callback` as the redirect URI; `localhost` is rejected ([redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri)).
   - The token lives in the state directory.
-  - Refresh tokens expire six months after issue, so expect to re-authorise twice a year. Tabarr sends an ntfy alert when a refresh fails ([refreshing tokens](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens)).
+  - Refresh tokens expire six months after issue, so expect to re-authorise twice a year. Caracole sends an ntfy alert when a refresh fails ([refreshing tokens](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens)).
 - **Premium:** a Development Mode app needs its owner to have Spotify Premium, which you have ([Spotify blog](https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security)).
 
 **Your music folder**
 
-- Tabarr reads a `Music/` folder of tracks you've bought. It uses this only as audio for auto-chords, never as a list of wanted songs.
-- If you later run Navidrome, point it at the same folder. Tabarr doesn't need Navidrome.
+- Caracole reads a `Music/` folder of tracks you've bought. It uses this only as audio for auto-chords, never as a list of wanted songs.
+- If you later run Navidrome, point it at the same folder. Caracole doesn't need Navidrome.
 
 **GDPR history export (optional)**
 
-- A one-off import: `tabarr import spotify-history <zip> --top 200`.
+- A one-off import: `caracole import spotify-history <zip> --top 200`.
 - Count only plays of at least 30 seconds that weren't skipped.
 
 **The song record**
@@ -129,13 +129,13 @@ One choice is still yours: **assisted or automatic Guitar Pro downloads** (secti
   - The type tokens seen were `tabs`, `chords`, `bass`, `guitar-pro` and `ukulele`. Some entries are a bare `/tab/{id}` with no artist or song in the URL.
   - `sitemap_last` holds the newest ids, with modification dates into October 2026 ([sitemap1](https://www.ultimate-guitar.com/sitemap1.xml); [sitemap40](https://www.ultimate-guitar.com/sitemap40.xml); [sitemap_last](https://www.ultimate-guitar.com/sitemap_last.xml)).
 
-**How tabarr uses it**
+**How caracole uses it**
 
-- **`tabarr index build`** fetches the child sitemaps once, slowly. It parses each URL into a row `ug_index(artist_slug, song_slug, type, tab_id)`.
+- **`caracole index build`** fetches the child sitemaps once, slowly. It parses each URL into a row `ug_index(artist_slug, song_slug, type, tab_id)`.
   - Peel the trailing `-{id}` first, then the type suffix. Try `guitar-pro` before the single-word types.
   - Keep only `chords`, `tabs` and `guitar-pro`, and skip bare ids.
   - The sitemap protocol caps each file at 50,000 URLs, so the tab sitemaps hold at most about two million entries. Expect a few hundred MB of XML once; I haven't measured it.
-- **`tabarr index refresh`** runs every night but re-fetches only `sitemap_last` and the highest-numbered sitemap. A new row matching a wanted song triggers a versions fetch for that song.
+- **`caracole index refresh`** runs every night but re-fetches only `sitemap_last` and the highest-numbered sitemap. A new row matching a wanted song triggers a versions fetch for that song.
 - **A full rebuild** can run monthly, or never.
 
 **The local matching ladder**, all offline:
@@ -161,7 +161,7 @@ Keep "acoustic" and "live" as a preference when ranking versions, not as a reaso
 - **Review** when it scores 75–90.
 - **Not found** otherwise.
 
-These thresholds are starting points. After the first run, `tabarr match --dry-run` prints every decision. Because matching is local, you can change the normalizer and re-check your whole library in seconds. Each review correction writes an alias, such as Spotify artist → UG artist slug, which fixes every song by that artist at once.
+These thresholds are starting points. After the first run, `caracole match --dry-run` prints every decision. Because matching is local, you can change the normalizer and re-check your whole library in seconds. Each review correction writes an alias, such as Spotify artist → UG artist slug, which fixes every song by that artist at once.
 
 ### 3. Fetch, rank and keep
 
@@ -172,7 +172,7 @@ These thresholds are starting points. After the first run, `tabarr match --dry-r
 | Sheet | Human chords over lyrics (UG Chords, LaCuerda acordes) → auto-chords with synced lyrics → lyrics only | Yes: a song is "found" only once it has a human or auto sheet | 1 |
 | Guitar part | Guitar Pro (.gp3–5, .gpx, .gp) or Power Tab → ASCII tab | No; it never blocks "found" | 2 Guitar Pro, 1 tab |
 
-**Lyrics for every song.** Before anything else, tabarr asks LRCLIB for the song's lyrics.
+**Lyrics for every song.** Before anything else, caracole asks LRCLIB for the song's lyrics.
 
 - **The lookup:** artist and title are required; album and duration are optional but make the match exact. LRCLIB's lookup accepts a duration within ±2 seconds ([LRCLIB source](https://github.com/tranxuanthang/lrclib)).
 - **The files:** it saves `lyrics.txt` (plain) and `lyrics.lrc` (timed by line).
@@ -197,9 +197,9 @@ These thresholds are starting points. After the first run, `tabarr match --dry-r
 UG's help centre says free user-submitted Guitar Pro files can be downloaded with the website's download button, and Official tabs can't ([UG Help](https://help.ultimate-guitar.com/en/articles/6749046-website-can-i-download-pro-tabs)). The endpoint behind that button, `/tab/download?id=`, is disallowed for bots in the tabs host's robots.txt. That leaves two modes, and the choice is yours:
 
 - **Assisted (the compliant default):**
-  1. The to-do page lists the Guitar Pro pages tabarr picked.
+  1. The to-do page lists the Guitar Pro pages caracole picked.
   2. You click Download on your laptop and drop the files into `Library/_inbox/`.
-  3. Tabarr files each one under the right song by matching the file name.
+  3. Caracole files each one under the right song by matching the file name.
 - **Automatic:**
   - httpx sends the request with cookies exported from your logged-in browser.
   - It makes at most about 10 downloads a night, 10–20 seconds apart.
@@ -207,7 +207,7 @@ UG's help centre says free user-submitted Guitar Pro files can be downloaded wit
 
 **Upgrades and dedupe**
 
-- **Upgrades:** when an index refresh adds a new tab id for a wanted song, tabarr re-fetches that song's versions and replaces a kept file only if the new version outranks it. An auto sheet is replaced as soon as a complete human sheet appears. Nothing else re-runs.
+- **Upgrades:** when an index refresh adds a new tab id for a wanted song, caracole re-fetches that song's versions and replaces a kept file only if the new version outranks it. An auto sheet is replaced as soon as a complete human sheet appears. Nothing else re-runs.
 - **Dedupe:** unique (provider, tab id), plus a SHA-256 of each downloaded file.
 
 **Later, only if ratings mislead:**
@@ -229,7 +229,7 @@ Work down this list:
 2. **Buy the audio, then generate the sheet.**
    1. The to-do page keeps a buy list: songs with no human sheet, each with search links to DRM-free download stores such as Bandcamp, Qobuz and the iTunes Store.
    2. Drop each purchase into `Music/`.
-   3. Tabarr matches the file to its song by tags and duration (mutagen).
+   3. Caracole matches the file to its song by tags and duration (mutagen).
    4. It runs auto-chords: BTC chord recognition, beat_this to snap chord changes to bars, then a merge with LRCLIB's timed lyrics into `sheet (auto).txt`.
 
    Expect a few seconds per song on CPU. The step runs as a separate unit with no network access, because the model weights ship with the package. The sheet is marked "auto-generated, unverified", and a human sheet replaces it as soon as one appears.
@@ -277,7 +277,7 @@ tab_ids = [1601668]
 **The library**, synced with Syncthing to your laptop (for TuxGuitar) and phone:
 
 ```
-Music/                      tracks you bought (read-only for tabarr)
+Music/                      tracks you bought (read-only for caracole)
 Library/
   _todo.md
   _inbox/                   Guitar Pro files you download in assisted mode
@@ -305,7 +305,7 @@ Library/
 
 ### 6. Running it on the NUC
 
-**One nightly `tabarr run`:**
+**One nightly `caracole run`:**
 
 1. Sync Spotify.
 2. Refresh the UG index from the newest sitemaps.
@@ -316,7 +316,7 @@ Library/
 7. Render sheets (from step 3 of the build order).
 8. Write `_todo.md` and send an ntfy summary.
 
-A separate `tabarr-autochords` unit runs after it and only touches songs whose audio is new.
+A separate `caracole-autochords` unit runs after it and only touches songs whose audio is new.
 
 **Politeness**
 
@@ -345,11 +345,11 @@ The auto-chords unit adds beat-this 1.1.0 and torch. For sheets, nixpkgs ships t
 ```nix
 { config, lib, pkgs, ... }:
 let
-  cfg = config.services.tabarr;
+  cfg = config.services.caracole;
   toml = pkgs.formats.toml { };
 in {
-  options.services.tabarr = {
-    enable = lib.mkEnableOption "tabarr";
+  options.services.caracole = {
+    enable = lib.mkEnableOption "caracole";
     package = lib.mkOption { type = lib.types.package; };
     libraryDir = lib.mkOption { type = lib.types.str; default = "/srv/tabs"; };   # str, so it is never copied to the store
     musicDir = lib.mkOption { type = lib.types.str; default = "/srv/music"; };
@@ -359,18 +359,18 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    users.users.tabarr = { isSystemUser = true; group = "tabarr"; };
-    users.groups.tabarr = { };
-    systemd.tmpfiles.rules = [ "d ${cfg.libraryDir} 2775 tabarr tabarr -" ];
+    users.users.caracole = { isSystemUser = true; group = "caracole"; };
+    users.groups.caracole = { };
+    systemd.tmpfiles.rules = [ "d ${cfg.libraryDir} 2775 caracole caracole -" ];
 
-    systemd.services.tabarr = {
+    systemd.services.caracole = {
       path = [ pkgs.perl5Packages.AppMusicChordPro ];   # `chordpro` for PDF sheets
-      onFailure = [ "tabarr-notify-failure.service" ];  # a tiny curl-to-ntfy unit
+      onFailure = [ "caracole-notify-failure.service" ];  # a tiny curl-to-ntfy unit
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${lib.getExe cfg.package} run --config ${toml.generate "tabarr.toml" cfg.settings}";
-        User = "tabarr"; Group = "tabarr";
-        StateDirectory = "tabarr"; CacheDirectory = "tabarr";
+        ExecStart = "${lib.getExe cfg.package} run --config ${toml.generate "caracole.toml" cfg.settings}";
+        User = "caracole"; Group = "caracole";
+        StateDirectory = "caracole"; CacheDirectory = "caracole";
         ReadWritePaths = [ cfg.libraryDir ];
         ReadOnlyPaths = [ "-${cfg.musicDir}" ];          # "-": don't fail if it doesn't exist yet
         LoadCredential = lib.mapAttrsToList (n: p: "${n}:${p}") cfg.credentials;
@@ -383,12 +383,12 @@ in {
       };
     };
 
-    systemd.timers.tabarr = {
+    systemd.timers.caracole = {
       wantedBy = [ "timers.target" ];
       timerConfig = { OnCalendar = cfg.schedule; Persistent = true; RandomizedDelaySec = "45m"; };
     };
 
-    # tabarr-autochords: same user and paths, ordered after tabarr.service,
+    # caracole-autochords: same user and paths, ordered after caracole.service,
     # PrivateNetwork = true, and MemoryDenyWriteExecute left off (see below).
   };
 }
@@ -402,8 +402,8 @@ in {
 **Everything else**
 
 - **Static secrets** (Spotify client secret, ntfy token) come from agenix or sops-nix through `LoadCredential`.
-- **Mutable credentials** (the Spotify token, your UG cookies) live in the state directory, written by `tabarr auth spotify` and `tabarr auth ug --cookies cookies.txt`.
-- **Backups:** restic covers `/var/lib/tabarr` (take a SQLite `.backup` first), the library and `Music/`.
+- **Mutable credentials** (the Spotify token, your UG cookies) live in the state directory, written by `caracole auth spotify` and `caracole auth ug --cookies cookies.txt`.
+- **Backups:** restic covers `/var/lib/caracole` (take a SQLite `.backup` first), the library and `Music/`.
 
 ## Build order
 
@@ -412,7 +412,7 @@ in {
 | **0. Spike (an evening)** | (1) Your Spotify app reads Liked Songs and your Learn playlist; (2) fetch `sitemap_last` and one numbered sitemap, parse them, and find 20 of your songs locally; (3) one tab page still has `js-store` with a versions list carrying ratings and votes; (4) LRCLIB returns lyrics for 10 of your songs, half of them Spanish; (5) one Guitar Pro download with your cookies works, or you choose assisted mode | You know which parts of this plan are real |
 | **1. MVP on the laptop** | Command line: `auth`, `index build` and `index refresh`, `sync`, `match --dry-run`, `run`; LRCLIB lyrics; UG sheets ranked by lyric coverage, then rating; Guitar Pro and tab parts; library and `_todo.md`; `overrides.toml`; SQLite | Every song in your Learn playlist has lyrics and a sheet with at least 80% lyric coverage, or a clear line on the to-do page |
 | **2. Move to the NUC** | Flake, module, timer, agenix, ntfy, Syncthing, restic | A week of nightly runs with no intervention |
-| **3. Sheets you can sing from** | ChordPro conversion (UG marks every chord with `[ch]`, so it's deterministic); PDF rendering with `chordpro`; per-song transposition from `overrides.toml`; LaCuerda for Spanish songs; a `tabarr review` TUI | Your phone shows a PDF of every sheet, in your key |
+| **3. Sheets you can sing from** | ChordPro conversion (UG marks every chord with `[ch]`, so it's deterministic); PDF rendering with `chordpro`; per-song transposition from `overrides.toml`; LaCuerda for Spanish songs; a `caracole review` TUI | Your phone shows a PDF of every sheet, in your key |
 | **4. The floor** | Buy list; `Music/` scan; the auto-chords unit merging timed chords with synced lyrics | Every song you bought has at least an auto sheet |
 | **Later, if needed** | Guitar Pro file introspection, MuseScore, Cifra Club, a web UI or player (It's MyTabs or TabVault), Navidrome as a source, GDPR import, Music.AI | — |
 

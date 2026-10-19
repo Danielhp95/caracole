@@ -1,4 +1,4 @@
-"""``tabarr render`` through the CLI: what it leaves beside the PDFs.
+"""``caracole render`` through the CLI: what it leaves beside the PDFs.
 
 How it renders, skips and fails is tested in test_render_all.py; here chordpro is a
 fake that writes a stand-in PDF, so no real PDF is made.
@@ -11,7 +11,7 @@ import sys
 import pytest
 from typer.testing import CliRunner
 
-from tabarr.cli import build_app
+from caracole.cli import build_app
 
 from conftest import add_song
 
@@ -36,14 +36,14 @@ def chordpro(tmp_path):
 
 
 def render(cfg, chordpro, *args):
-    toml = cfg.state_dir.parent / "tabarr.toml"
+    toml = cfg.state_dir.parent / "caracole.toml"
     toml.write_text(
         f'library_dir = "{cfg.library_dir}"\nstate_dir = "{cfg.state_dir}"\n'
         f'cache_dir = "{cfg.cache_dir}"\nchordpro_bin = "{chordpro}"\n',
         encoding="utf-8",
     )
     return CliRunner().invoke(
-        build_app(), ["--config", str(toml), "render", *args], env={"TABARR_CJK_FONT": None}
+        build_app(), ["--config", str(toml), "render", *args], env={"CARACOLE_CJK_FONT": None}
     )
 
 

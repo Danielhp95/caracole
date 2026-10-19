@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from tabarr.overrides import (
+from caracole.overrides import (
     Overrides,
     OverridesError,
     add_alias,
@@ -157,7 +157,7 @@ def test_pins_take_addresses_with_a_query_or_fragment(tmp_path):
     "https://tabs.ultimate-guitar.com/tab/download?id=85053",
     "https://www.ultimate-guitar.com/search.php?value=85053",
 ])
-def test_pages_tabarr_never_requests_are_not_tab_urls(url):
+def test_pages_caracole_never_requests_are_not_tab_urls(url):
     with pytest.raises(OverridesError, match="not an Ultimate Guitar tab URL"):
         tab_id_from_url(url)
 
@@ -274,7 +274,7 @@ def test_writers_preserve_comments_and_roundtrip(tmp_path):
 
 def test_reject_lists_the_ug_songs_that_are_not_the_song(tmp_path):
     o = load_overrides(write(tmp_path, '''
-[reject]   # "none of these" in tabarr review
+[reject]   # "none of these" in caracole review
 "Soda - Persiana Americana" = ["Soda-Stereo/Persiana-Americana", "soda-stereo/persiana"]
 "soda - persiana americana" = "soda-stereo-ar/persiana-americana"  # the same song, written another way
 "宋冬野 - 斑马，斑马" = ["li-zhi/ban-ma-ban-ma"]
@@ -383,7 +383,7 @@ def planted(tmp_path: Path, kind: str) -> tuple[Path, Path]:
     return p, secret
 
 
-LINK = "a symbolic link, which tabarr doesn't follow"
+LINK = "a symbolic link, which caracole doesn't follow"
 
 
 @pytest.mark.parametrize("kind, said", [
@@ -391,7 +391,7 @@ LINK = "a symbolic link, which tabarr doesn't follow"
 ])
 def test_overrides_that_arent_a_file_are_refused_unread(tmp_path, kind, said):
     # The library is writable by every synced device: a link planted as overrides.toml could point at
-    # tabarr's private files, which would then be read, or copied into the library by a writer.
+    # caracole's private files, which would then be read, or copied into the library by a writer.
     p, secret = planted(tmp_path, kind)
     with pytest.raises(OverridesError) as e:
         load_overrides(p)
@@ -417,7 +417,7 @@ def test_writers_never_write_through_a_link_at_a_temporary_name(tmp_path):
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads files it has no permission for")
-def test_a_file_tabarr_may_not_read_is_an_overrides_error(tmp_path):
+def test_a_file_caracole_may_not_read_is_an_overrides_error(tmp_path):
     # Every command, and the nightly run, reports an OverridesError cleanly; anything else is a traceback.
     p = write(tmp_path, '[ignore]\nsongs = ["A - B"]\n')
     p.chmod(0o200)

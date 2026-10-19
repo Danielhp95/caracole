@@ -16,7 +16,7 @@ Import from a test module (pytest puts ``tests/`` on ``sys.path``)::
 
     from helpers.ug_pages import make_artist_page_html, make_tab_page_html, version_dict
 
-A tab page, as ``tabarr.ug.page.parse_tab_page`` reads it::
+A tab page, as ``caracole.ug.page.parse_tab_page`` reads it::
 
     song = {"song": "De Música Ligera", "artist": "Soda Stereo"}
     tab = version_dict(85053, version=2, rating=4.54, votes=7, **song)
@@ -35,7 +35,7 @@ Serve it to code under test with ``httpx.MockTransport``::
     pages = {"https://tabs.ultimate-guitar.com/tab/85053": html}
     transport = httpx.MockTransport(lambda req: httpx.Response(200, text=pages[str(req.url)]))
 
-An artist page, as ``tabarr.ug.artist.parse_artist_page`` reads it, for the URL
+An artist page, as ``caracole.ug.artist.parse_artist_page`` reads it, for the URL
 ``artist_page_url("https://www.ultimate-guitar.com/artist/soda_stereo_2946", kind="chords")``::
 
     html = make_artist_page_html(2946, "Soda Stereo", [tab, *others], page=1, pages=1)
@@ -54,7 +54,7 @@ Shapes to keep in mind (they are UG's, not choices made here):
   and carries the file's details in ``tab_view.meta``, e.g.
   ``{"fileExtension": ".gp5", "duration": 14}``. UG writes an empty meta as ``[]``.
 - ``version_dict`` writes ``tab_url`` in its bare form,
-  ``https://tabs.ultimate-guitar.com/tab/{id}`` (``tabarr.ug.page.page_url``),
+  ``https://tabs.ultimate-guitar.com/tab/{id}`` (``caracole.ug.page.page_url``),
   so tests can route on it. On UG that is the ``tab_url`` of tabs without
   slugs; slugged tabs carry their slugged URL.
 """
@@ -67,7 +67,7 @@ import re
 from html.entities import codepoint2name
 from typing import Any
 
-from tabarr.normalize import fold
+from caracole.normalize import fold
 
 TAB_BASE = "https://tabs.ultimate-guitar.com/tab/"
 WWW = "https://www.ultimate-guitar.com"
@@ -204,7 +204,7 @@ def make_tab_page_html(
     leave it None for a Guitar Pro or Power Tab page, which has none. ``meta``
     is ``tab_view.meta``; None writes UG's empty ``[]``. ``artist_url`` sets
     ``data.tab.artist_url``, such as ``https://www.ultimate-guitar.com/artist/soda_stereo_2946``,
-    which is how tabarr learns an artist page's address.
+    which is how caracole learns an artist page's address.
     """
     tab = dict(tab)
     if artist_url is not None:

@@ -2,7 +2,7 @@ import email.header
 
 import httpx
 
-from tabarr.notify import Notifier
+from caracole.notify import Notifier
 
 
 def capture():
@@ -17,12 +17,12 @@ def capture():
 
 def test_send_posts_with_headers():
     seen, transport = capture()
-    n = Notifier("https://ntfy.sh/tabarr-test", "tk_1", transport=transport)
-    assert n.send("tabarr run", "3 new sheets", priority="high", tags=["guitar", "white_check_mark"])
+    n = Notifier("https://ntfy.sh/caracole-test", "tk_1", transport=transport)
+    assert n.send("caracole run", "3 new sheets", priority="high", tags=["guitar", "white_check_mark"])
     r = seen[0]
-    assert r.method == "POST" and str(r.url) == "https://ntfy.sh/tabarr-test"
+    assert r.method == "POST" and str(r.url) == "https://ntfy.sh/caracole-test"
     assert r.content == "3 new sheets".encode()
-    assert r.headers["title"] == "tabarr run"
+    assert r.headers["title"] == "caracole run"
     assert r.headers["priority"] == "high"
     assert r.headers["tags"] == "guitar,white_check_mark"
     assert r.headers["authorization"] == "Bearer tk_1"

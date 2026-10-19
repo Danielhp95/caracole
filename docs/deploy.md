@@ -1,22 +1,22 @@
-# Deploying tabarr on the NUC
+# Deploying caracole on the NUC
 
-tabarr ships a NixOS module (`nixosModules.default` in this flake). Enabled, it
+caracole ships a NixOS module (`nixosModules.default` in this flake). Enabled, it
 gives the machine:
 
 | What | Does |
 |---|---|
-| `tabarr.timer` | Starts the nightly run at 03:30, up to 45 minutes late, and catches up after downtime |
-| `tabarr.service` | `tabarr --config <generated tabarr.toml> run`, a hardened oneshot as user `tabarr` |
-| `tabarr-autochords.service` | Optional. After each successful run, writes `sheet (auto).txt` from audio you bought, with no network at all |
-| `tabarr-notify-failure.service` | POSTs to your ntfy topic when either unit fails |
-| `tabarr-admin` | Runs any `tabarr` command as the units do: `sudo tabarr-admin auth spotify` |
-| `/var/lib/tabarr/state` | The database, the Spotify token and tabarr's lock, readable by `tabarr` alone |
-| `/var/lib/tabarr/cache` | Every raw HTTP response, kept forever, and the private folders PDFs are made in |
-| `/var/lib/tabarr/library` | The library: sheets, lyrics, guitar parts, `_todo.md`, `wanted.txt`, `overrides.toml` |
-| `/var/lib/tabarr/music` | Audio you bought, read-only, for auto-chords |
+| `caracole.timer` | Starts the nightly run at 03:30, up to 45 minutes late, and catches up after downtime |
+| `caracole.service` | `caracole --config <generated caracole.toml> run`, a hardened oneshot as user `caracole` |
+| `caracole-autochords.service` | Optional. After each successful run, writes `sheet (auto).txt` from audio you bought, with no network at all |
+| `caracole-notify-failure.service` | POSTs to your ntfy topic when either unit fails |
+| `caracole-admin` | Runs any `caracole` command as the units do: `sudo caracole-admin auth spotify` |
+| `/var/lib/caracole/state` | The database, the Spotify token and caracole's lock, readable by `caracole` alone |
+| `/var/lib/caracole/cache` | Every raw HTTP response, kept forever, and the private folders PDFs are made in |
+| `/var/lib/caracole/library` | The library: sheets, lyrics, guitar parts, `_todo.md`, `wanted.txt`, `overrides.toml` |
+| `/var/lib/caracole/music` | Audio you bought, read-only, for auto-chords |
 
-The four folders sit in `services.tabarr.dataDir`, `/var/lib/tabarr` unless
-you set it, say to `/data/tabarr` on a data disk. `stateDir`, `cacheDir`,
+The four folders sit in `services.caracole.dataDir`, `/var/lib/caracole` unless
+you set it, say to `/data/caracole` on a data disk. `stateDir`, `cacheDir`,
 `libraryDir` and `musicDir` each put one elsewhere.
 
 The rest of this page sets that up in `/etc/nixos`, which has no NUC host
@@ -29,12 +29,12 @@ In `/etc/nixos/flake.nix`, add the input:
 
 ```nix
     # The chord sheet library; nixosModules.default runs it nightly (hosts/nuc).
-    tabarr.url = "github:Danielhp95/tabarr";
-    tabarr.inputs.nixpkgs.follows = "nixpkgs";
+    caracole.url = "github:Danielhp95/caracole";
+    caracole.inputs.nixpkgs.follows = "nixpkgs";
 ```
 
-Once the repository has a remote, point `tabarr.url` there instead. A commit
-in `~/Projects/tabarr` reaches a rebuild only after `nix flake update tabarr`.
+Once the repository has a remote, point `caracole.url` there instead. A commit
+in `~/Projects/caracole` reaches a rebuild only after `nix flake update caracole`.
 
 Then add the host to the list: `nixpkgs.lib.genAttrs [ "laptop" "nuc" ]`. The
 flake passes every host its `facts.nix`, so the NUC needs one, even an empty
@@ -45,12 +45,12 @@ headless NUC imports only what it needs:
 
 ```nix
 # hosts/nuc/default.nix
-# The NUC: headless, on the tailnet, running tabarr (./tabarr.nix).
+# The NUC: headless, on the tailnet, running caracole (./caracole.nix).
 { hostName, ... }:
 {
   imports = [
     ./hardware.nix # nixos-generate-config on the NUC
-    ./tabarr.nix
+    ./caracole.nix
     ../../nixos/tailscale.nix
     ../../nixos/locale.nix
   ];
@@ -72,8 +72,8 @@ headless NUC imports only what it needs:
 The module itself, with no Spotify yet (`wanted.txt` alone is enough):
 
 ```nix
-# hosts/nuc/tabarr.nix
-# tabarr (~/Projects/tabarr): the nightly chord sheet library, its secrets,
+# hosts/nuc/caracole.nix
+# caracole (~/Projects/caracole): the nightly chord sheet library, its secrets,
 # Syncthing for the library and the music, and restic.
 {
   config,
@@ -83,26 +83,26 @@ The module itself, with no Spotify yet (`wanted.txt` alone is enough):
   ...
 }:
 let
-  tabarr = config.services.tabarr;
+  caracole = config.services.caracole;
 in
 {
   imports = [
-    inputs.tabarr.nixosModules.default
+    inputs.caracole.nixosModules.default
     inputs.agenix.nixosModules.default
   ];
 
-  services.tabarr = {
+  services.caracole = {
     enable = true;
-    # Defaults: dataDir = "/var/lib/tabarr", with the library, music, state
+    # Defaults: dataDir = "/var/lib/caracole", with the library, music, state
     # and cache in it; schedule = "*-*-* 03:30". Keep the folders out of
     # /home and /tmp: the units' sandbox hides both, and the module refuses
     # such a path.
     settings = {
       # A long random topic: anyone who knows it can read it.
-      ntfy.url = "https://ntfy.sh/tabarr-change-me";
+      ntfy.url = "https://ntfy.sh/caracole-change-me";
     };
     credentials = {
-      ntfy_token = config.age.secrets.tabarr-ntfy.path;
+      ntfy_token = config.age.secrets.caracole-ntfy.path;
     };
   };
 
@@ -110,26 +110,26 @@ in
 }
 ```
 
-It refers to the `tabarr-ntfy` secret, so it evaluates once section 2 has
+It refers to the `caracole-ntfy` secret, so it evaluates once section 2 has
 declared the secrets.
 
-`settings` is `tabarr.toml`, as `src/tabarr/config.py` reads it, and unknown
+`settings` is `caracole.toml`, as `src/caracole/config.py` reads it, and unknown
 keys are fatal there. The module adds `library_dir`, `music_dir`, `state_dir`
 and `cache_dir` from its options: the library, the state and the cache are the
-only places the sandbox lets tabarr write, and the music the only other one it
+only places the sandbox lets caracole write, and the music the only other one it
 reads. The module rejects those keys and `data_dir` in `settings`, and names
-the option to set instead. `systemctl cat tabarr` shows the generated file's
+the option to set instead. `systemctl cat caracole` shows the generated file's
 store path.
 
 ## 2. Secrets with agenix
 
-Static secrets reach tabarr through systemd's `LoadCredential`: systemd reads
+Static secrets reach caracole through systemd's `LoadCredential`: systemd reads
 each file as root and hands the unit a private copy in
 `$CREDENTIALS_DIRECTORY`. The secret files can stay root-only, which is
-agenix's default. tabarr reads two credentials, `spotify_client_secret` and
-`ntfy_token`; the nightly unit and `tabarr-admin` get them, and the auto-chords
+agenix's default. caracole reads two credentials, `spotify_client_secret` and
+`ntfy_token`; the nightly unit and `caracole-admin` get them, and the auto-chords
 unit, which reads neither, gets none. The Spotify token itself is not a static
-secret: it lives in the state folder, written by `tabarr auth spotify`.
+secret: it lives in the state folder, written by `caracole auth spotify`.
 
 Add agenix, which the flake registry already knows as `agenix`:
 
@@ -150,27 +150,27 @@ let
   nuc = "ssh-ed25519 AAAA… root@nuc"; # ssh-keyscan -t ed25519 nuc
 in
 {
-  "tabarr-spotify.age".publicKeys = [ me nuc ];
-  "tabarr-ntfy.age".publicKeys = [ me nuc ];
+  "caracole-spotify.age".publicKeys = [ me nuc ];
+  "caracole-ntfy.age".publicKeys = [ me nuc ];
 }
 ```
 
-Write each one (your `$EDITOR` opens; a trailing newline is fine, since tabarr
+Write each one (your `$EDITOR` opens; a trailing newline is fine, since caracole
 strips it):
 
 ```sh
 cd /etc/nixos/secrets
-nix run agenix -- -e tabarr-ntfy.age          # the ntfy access token, tk_…
-nix run agenix -- -e tabarr-spotify.age       # only if you use Spotify (section 5)
+nix run agenix -- -e caracole-ntfy.age          # the ntfy access token, tk_…
+nix run agenix -- -e caracole-spotify.age       # only if you use Spotify (section 5)
 nix run agenix -- -e restic-password.age
 ```
 
-Then declare them in `hosts/nuc/tabarr.nix`:
+Then declare them in `hosts/nuc/caracole.nix`:
 
 ```nix
   age.secrets = {
-    tabarr-ntfy.file = ../../secrets/tabarr-ntfy.age;
-    tabarr-spotify.file = ../../secrets/tabarr-spotify.age;
+    caracole-ntfy.file = ../../secrets/caracole-ntfy.age;
+    caracole-spotify.file = ../../secrets/caracole-spotify.age;
     restic-password.file = ../../secrets/restic-password.age;
   };
 ```
@@ -180,21 +180,21 @@ Then declare them in `hosts/nuc/tabarr.nix`:
 `./token` would be copied into the world-readable store, so the module rejects
 it.
 
-The failure notice comes from `tabarr-notify-failure.service`. It adds the
+The failure notice comes from `caracole-notify-failure.service`. It adds the
 bearer token when `credentials.ntfy_token` is set, and when
 `settings.ntfy.url` is unset it logs that nothing was sent and succeeds.
 
 ## 3. Syncthing for the library and the music
 
-The library is shared through the `tabarr` group. The module creates the
-library as `tabarr:tabarr`, mode 2775, and `dataDir`, if it is missing, as
-`tabarr:tabarr`, mode 0710: the group gets through to the library and the
-music, while the state and the cache, mode 0700, stay tabarr's. The setgid bit
-keeps everything created in the library in group `tabarr`, and tabarr writes
+The library is shared through the `caracole` group. The module creates the
+library as `caracole:caracole`, mode 2775, and `dataDir`, if it is missing, as
+`caracole:caracole`, mode 0710: the group gets through to the library and the
+music, while the state and the cache, mode 0700, stay caracole's. The setgid bit
+keeps everything created in the library in group `caracole`, and caracole writes
 with umask 0007, so its files are group-writable. Syncthing joins that group
 and writes the same way.
 Both directions then work: you drop Guitar Pro files into `_inbox/` on the
-laptop and tabarr files them, and you edit `wanted.txt` on the phone.
+laptop and caracole files them, and you edit `wanted.txt` on the phone.
 
 ```nix
   services.syncthing = {
@@ -207,16 +207,16 @@ laptop and tabarr files them, and you edit `wanted.txt` on the phone.
       };
       folders = {
         tabs = {
-          path = tabarr.libraryDir;
+          path = caracole.libraryDir;
           devices = [ "laptop" "phone" ];
           # New files get 0666 and 0777 minus Syncthing's umask (0007, below)
           # instead of the sender's mode bits. The laptop's 0644 would drop
-          # the group write bit that tabarr needs to file the inbox and to
+          # the group write bit that caracole needs to file the inbox and to
           # rewrite wanted.txt and overrides.toml.
           ignorePerms = true;
         };
         music = {
-          path = tabarr.musicDir;
+          path = caracole.musicDir;
           devices = [ "laptop" ];
           ignorePerms = true;
         };
@@ -224,15 +224,15 @@ laptop and tabarr files them, and you edit `wanted.txt` on the phone.
     };
   };
 
-  # Syncthing writes into tabarr's group-owned folders...
-  users.users.syncthing.extraGroups = [ "tabarr" ];
+  # Syncthing writes into caracole's group-owned folders...
+  users.users.syncthing.extraGroups = [ "caracole" ];
   # ...as group-writable files: the unit's default umask is 0022.
   systemd.services.syncthing.serviceConfig.UMask = "0007";
 
-  # Syncthing fills the music folder, and tabarr reads it through the group.
-  systemd.tmpfiles.settings.tabarr-music.${tabarr.musicDir}.d = {
+  # Syncthing fills the music folder, and caracole reads it through the group.
+  systemd.tmpfiles.settings.caracole-music.${caracole.musicDir}.d = {
     user = "syncthing";
-    group = "tabarr";
+    group = "caracole";
     mode = "2770";
   };
 ```
@@ -251,10 +251,10 @@ token.
 
 Keep `wanted.txt`, `overrides.toml`, `_inbox/` and the downloads in it
 regular files and folders on every device. Whoever can write to the library
-could point a symbolic link at tabarr's private files, so tabarr refuses a
+could point a symbolic link at caracole's private files, so caracole refuses a
 link there instead of following it, and the to-do page or the journal says
 so; through an `_inbox` that is a link, nothing is filed or deleted. The
-sheets, tabs and PDFs tabarr keeps are its own: one deleted, edited or
+sheets, tabs and PDFs caracole keeps are its own: one deleted, edited or
 replaced on a device is written again at the next run, so keep your
 annotations in a copy under another name.
 
@@ -265,23 +265,23 @@ mid-write at any moment, so `backupPrepareCommand` takes a consistent copy with
 SQLite's online backup, and that copy is what gets backed up:
 
 ```nix
-  services.restic.backups.tabarr = {
+  services.restic.backups.caracole = {
     initialize = true;
     # Any restic repository: a local disk, sftp:host:/path, rclone:…, s3:…
-    repository = "/mnt/backup/restic/tabarr";
+    repository = "/mnt/backup/restic/caracole";
     passwordFile = config.age.secrets.restic-password.path;
     paths = [
-      tabarr.stateDir
-      tabarr.libraryDir
-      tabarr.musicDir
+      caracole.stateDir
+      caracole.libraryDir
+      caracole.musicDir
     ];
-    # The live database; tabarr-backup.sqlite stands in for it.
-    exclude = [ "${tabarr.stateDir}/tabarr.sqlite*" ];
+    # The live database; caracole-backup.sqlite stands in for it.
+    exclude = [ "${caracole.stateDir}/caracole.sqlite*" ];
     # Guarded: before the first run there is no database, and sqlite3 would
-    # create an empty, root-owned one that tabarr could not open.
+    # create an empty, root-owned one that caracole could not open.
     backupPrepareCommand = ''
-      if [ -f ${tabarr.stateDir}/tabarr.sqlite ]; then
-        ${lib.getExe' pkgs.sqlite "sqlite3"} ${tabarr.stateDir}/tabarr.sqlite ".backup ${tabarr.stateDir}/tabarr-backup.sqlite"
+      if [ -f ${caracole.stateDir}/caracole.sqlite ]; then
+        ${lib.getExe' pkgs.sqlite "sqlite3"} ${caracole.stateDir}/caracole.sqlite ".backup ${caracole.stateDir}/caracole-backup.sqlite"
       fi
     '';
     # After the nightly run (03:30, up to 45 minutes late, about 30 long).
@@ -298,19 +298,19 @@ SQLite's online backup, and that copy is what gets backed up:
   };
 ```
 
-To restore, stop the timer (`sudo systemctl stop tabarr.timer`), restore the
-three paths with `restic-tabarr restore latest --target /`, then put the
+To restore, stop the timer (`sudo systemctl stop caracole.timer`), restore the
+three paths with `restic-caracole restore latest --target /`, then put the
 database back (here in the default state folder):
 
 ```sh
-sudo install -o tabarr -g tabarr -m 0600 \
-  /var/lib/tabarr/state/tabarr-backup.sqlite /var/lib/tabarr/state/tabarr.sqlite
-sudo systemctl start tabarr.timer
+sudo install -o caracole -g caracole -m 0600 \
+  /var/lib/caracole/state/caracole-backup.sqlite /var/lib/caracole/state/caracole.sqlite
+sudo systemctl start caracole.timer
 ```
 
 The cache is left out. Losing it costs only requests:
 the index lives in the database, so nothing needs building again, and the
-pages tabarr had cached are fetched again as songs need them, within the
+pages caracole had cached are fetched again as songs need them, within the
 nightly budget.
 
 ## 5. The first run
@@ -323,7 +323,7 @@ seconds apart: about 70 MB and 10 minutes. After this, each night refreshes
 only the newest ones.
 
 ```sh
-sudo tabarr-admin index build
+sudo caracole-admin index build
 ```
 
 **Say what you want to learn.** `wanted.txt` sits in the library, so you can
@@ -337,7 +337,7 @@ Soda Stereo - De Música Ligera
 ```
 
 The album and duration are optional; they make the lyrics lookup exact.
-`sudo tabarr-admin add "宋冬野" "斑马斑马" --album "安和桥北" --duration 4:13`
+`sudo caracole-admin add "宋冬野" "斑马斑马" --album "安和桥北" --duration 4:13`
 appends the same line.
 
 **Spotify, optionally.** Liked Songs and the playlists you name join
@@ -347,68 +347,68 @@ silently, so you can add it any time:
 1. Create an app at developer.spotify.com (Development Mode; the owner needs
    Premium). Add the redirect URI `http://127.0.0.1:8888/callback` exactly:
    `localhost` is rejected.
-2. Put the client secret in `tabarr-spotify.age` (section 2), and add to
-   `services.tabarr`:
+2. Put the client secret in `caracole-spotify.age` (section 2), and add to
+   `services.caracole`:
 
    ```nix
    settings.spotify = {
      client_id = "…"; # not a secret
      playlists = [ "Learn" ];
    };
-   credentials.spotify_client_secret = config.age.secrets.tabarr-spotify.path;
+   credentials.spotify_client_secret = config.age.secrets.caracole-spotify.path;
    ```
 
 3. Switch, then authorize:
 
    ```sh
-   sudo tabarr-admin auth spotify
+   sudo caracole-admin auth spotify
    ```
 
    Open the URL it prints on the laptop and log in. The browser then fails to
    load `http://127.0.0.1:8888/callback?code=…`, which is expected: copy that
    whole URL from the address bar and paste it back. The token is saved in
-   the state folder. Refresh tokens expire after about six months; tabarr then
+   the state folder. Refresh tokens expire after about six months; caracole then
    sends an ntfy message, and you run this step again.
 
 **Check the timer, and run once now:**
 
 ```sh
-systemctl list-timers tabarr.timer        # the next start, 03:30 plus up to 45 min
-sudo systemctl start tabarr.service       # a full run now; returns when it ends
-journalctl -u tabarr.service -e           # what it did
+systemctl list-timers caracole.timer        # the next start, 03:30 plus up to 45 min
+sudo systemctl start caracole.service       # a full run now; returns when it ends
+journalctl -u caracole.service -e           # what it did
 ```
 
 Then read `_todo.md` in the library: setup problems first, if any, then
 review items, partial sheets, the buy list, Guitar Pro pages to download by
 hand, and provider health. A block or an exhausted budget is not a failure:
 the run exits 0 and the song stays pending. After a block, ntfy says until
-when tabarr leaves that site alone: the next night's run skips it, the next
+when caracole leaves that site alone: the next night's run skips it, the next
 two after a second block in a row, the next four after a third
-([usage.md](usage.md#tabarr-run)). Only an unexpected error, an
-`overrides.toml` tabarr can't read, or a database it can't open fails the
+([usage.md](usage.md#caracole-run)). Only an unexpected error, an
+`overrides.toml` caracole can't read, or a database it can't open fails the
 unit, and that sends the ntfy message.
 
-**`tabarr-admin`** runs any command as the units run it: a transient unit as
-user `tabarr`, with the same state and cache directories, the same credentials,
+**`caracole-admin`** runs any command as the units run it: a transient unit as
+user `caracole`, with the same state and cache directories, the same credentials,
 library and music paths, the generated config, and the units' sandbox. Only
 the network stays open, which `auth spotify` and `index build` need. Use it
 for `auth spotify`, `index build`, `match --dry-run` and the like. It needs
-sudo. A file you pass it must be readable by the `tabarr` user and sit where
+sudo. A file you pass it must be readable by the `caracole` user and sit where
 the sandbox shows it: not under `/home`, `/root` or `/tmp`, which it hides, so
 `index build --from` reads sitemaps from somewhere like `/srv/sitemaps`.
 
-**One tabarr at a time.** The nightly run holds tabarr's lock, `tabarr.lock`
+**One caracole at a time.** The nightly run holds caracole's lock, `caracole.lock`
 in the state folder, from start to end, and every command that asks
 the sites for pages or writes the library holds it while it works. One
-started meanwhile waits, and says which it waits for (`Another tabarr is
-running (pid …: run); waiting for it to finish.`): a `tabarr-admin fetch`
+started meanwhile waits, and says which it waits for (`Another caracole is
+running (pid …: run); waiting for it to finish.`): a `caracole-admin fetch`
 started during the nightly run waits for it, and the run waits for a
-`tabarr-admin index build`. `tabarr-admin review` takes the lock only after
+`caracole-admin index build`. `caracole-admin review` takes the lock only after
 your answers, so the run never waits for you, and `search`,
 `match --dry-run` and `index stats` never wait. A command that waited for a
 run that got blocked sends that site nothing: it is cooling down. Each
 process's first request to a site also waits out the pause after the last
-request any tabarr sent there, so a run that starts right after a command may
+request any caracole sent there, so a run that starts right after a command may
 pause up to 20 seconds per site, and the 10–20 second pauses hold for the
 machine, not per process. The lock goes with the process holding it, whatever
 ends it.
@@ -420,11 +420,11 @@ to-do page links Bandcamp, Qobuz and the iTunes Store), drop it into the music
 folder on the laptop, and let a local model write `sheet (auto).txt`:
 
 ```nix
-  services.tabarr.autochords.enable = true;
+  services.caracole.autochords.enable = true;
 ```
 
-`tabarr-autochords.service` then starts after every successful
-`tabarr.service` run (`OnSuccess=`). It runs `tabarr --config … autochords`
+`caracole-autochords.service` then starts after every successful
+`caracole.service` run (`OnSuccess=`). It runs `caracole --config … autochords`
 with the `autochords` package (torch, beat-this, librosa) as the same user, in
 the same sandbox, except that it has no network at all (`PrivateNetwork`), no
 credentials (it reads no secret), and may generate code
@@ -442,8 +442,8 @@ arrived is made once more when they do. Everything else is left alone, so a
 night with no new purchases loads no model. Then it rewrites `_todo.md` and
 `index.html`, which the nightly run wrote before it, so both show its sheets
 and the purchases it couldn't read the same night. The PDF of a new auto
-sheet comes with the next night's render. It holds tabarr's lock while it
-works, as the nightly run does, so a `tabarr-admin` command started meanwhile
+sheet comes with the next night's render. It holds caracole's lock while it
+works, as the nightly run does, so a `caracole-admin` command started meanwhile
 waits for it.
 
 BTC finds the chords and beat_this the beats and bars. The chords then go over
@@ -464,9 +464,9 @@ when the package is built, as fixed-output downloads:
   BTC-ISMIR19 repository at a pinned commit;
 - beat_this's `final0` checkpoint (MIT), from JKU's server, pinned by hash.
 
-The `autochords` package's wrapper points `TABARR_BTC_WEIGHTS` and
-`TABARR_BEAT_CHECKPOINT` at them, as defaults. To use other files, set
-`services.tabarr.autochords.btcWeights` or `beatCheckpoint`, which go into the
+The `autochords` package's wrapper points `CARACOLE_BTC_WEIGHTS` and
+`CARACOLE_BEAT_CHECKPOINT` at them, as defaults. To use other files, set
+`services.caracole.autochords.btcWeights` or `beatCheckpoint`, which go into the
 unit's environment and win over the wrapper; `settings.autochords.btc_weights`
 and `beat_checkpoint` win over both.
 
@@ -484,8 +484,8 @@ To run it now, without waiting for the night, for instance right after
 dropping in a purchase:
 
 ```sh
-sudo systemctl start tabarr-autochords.service
-journalctl -u tabarr-autochords.service -e
+sudo systemctl start caracole-autochords.service
+journalctl -u caracole-autochords.service -e
 ```
 
 The command prints a count such as `auto-chords: 1 generated, 4 skipped,
@@ -496,7 +496,7 @@ the file changes. The unit still exits 0, so a file that will never decode
 doesn't alert you every night. Only a setup problem exits 1, so that ntfy
 tells you: the model packages or model files missing, a model failing its test
 tone, or a sheet that can't be written into the library. Missing model files
-fail every song due, and the journal says so once. `sudo tabarr-admin
+fail every song due, and the journal says so once. `sudo caracole-admin
 autochords` runs the same command with the `autochords` package when
 auto-chords is enabled; the default package has no torch, and says so if
 asked.
@@ -504,12 +504,12 @@ asked.
 On the laptop, `nix develop .#autochords -c pytest -m autochords` runs the
 model tests against the same model files. `nix flake check` builds both
 packages, each running the test suite (the model tests aside) and then
-`tabarr autochords` on the wrapped program, and evaluates the module.
+`caracole autochords` on the wrapped program, and evaluates the module.
 
 ## 7. Chinese sheets in the PDFs
 
 ChordPro's built-in PDF fonts have no Chinese glyphs, so the packages' wrapper
-points `TABARR_CJK_FONT` at lxgw-fusionkai's `FusionKaiJ-Regular.ttf`, a Kai
+points `CARACOLE_CJK_FONT` at lxgw-fusionkai's `FusionKaiJ-Regular.ttf`, a Kai
 (brush-style) face. The choice is narrow with ChordPro 6.050.7:
 
 - it cannot open `.ttc` collections, which is all nixpkgs ships of Noto CJK
@@ -517,53 +517,53 @@ points `TABARR_CJK_FONT` at lxgw-fusionkai's `FusionKaiJ-Regular.ttf`, a Kai
 - its PDF library corrupts the glyph subsets it embeds from TrueType fonts
   with odd-length glyph records, which most CJK TTFs have (LXGW Neo XiHei and
   WenKai among them): the PDF shows blank glyphs, although its text can still
-  be copied. tabarr refuses such a font with an error instead of writing that
+  be copied. caracole refuses such a font with an error instead of writing that
   PDF.
 
 FusionKaiJ has no odd-length records and gives PDFs of a few hundred KB. To
 use another font, set `settings.cjk_font` to a single `.ttf` that passes the
 same check, or to a CFF-based `.otf` (embedded whole, so the PDFs are larger),
-or build the package with `tabarr.override { cjkFont = "…"; }`.
+or build the package with `caracole.override { cjkFont = "…"; }`.
 
 ## When something is wrong
 
-- **ntfy says a unit failed:** `journalctl -u tabarr.service -e` (or
-  `tabarr-autochords.service`).
+- **ntfy says a unit failed:** `journalctl -u caracole.service -e` (or
+  `caracole-autochords.service`).
 - **`_todo.md` leads with "overrides.toml can't be read":** the nightly run
   stopped before its first step. The error names the table and the entry; a
   table declared twice says to merge the two sections.
-  `can't read it: Permission denied` means the `tabarr` user may not read the
-  file: give it group `tabarr` and `chmod g+rw`. `line N is not valid UTF-8`
+  `can't read it: Permission denied` means the `caracole` user may not read the
+  file: give it group `caracole` and `chmod g+rw`. `line N is not valid UTF-8`
   means an editor saved it in another encoding: save it as UTF-8. Fix the
-  file, then `sudo systemctl start tabarr.service`, or wait for the next
+  file, then `sudo systemctl start caracole.service`, or wait for the next
   night.
-- **ntfy says a site blocked tabarr** ("tabarr: ug blocked"): nothing to do,
-  and nothing to work around. The message says until when tabarr leaves the
+- **ntfy says a site blocked caracole** ("caracole: ug blocked"): nothing to do,
+  and nothing to work around. The message says until when caracole leaves the
   site alone, and the to-do page's Provider health shows it too. Nothing was
   marked not found: the songs wait for a run after that.
-- **A power cut during the night:** nothing to clean up. A file tabarr was
+- **A power cut during the night:** nothing to clean up. A file caracole was
   replacing is the old one or the new one, never an empty one, and the next
-  run writes again any sheet, tab or PDF that isn't as tabarr wrote it.
-- **A command says the database "is at schema version N, but this tabarr
-  knows up to M":** a newer tabarr migrated it, and an older one runs now,
-  after a rollback say. Switch back to the newer tabarr, or restore the copy
-  saved before the migration, `tabarr.sqlite.vM.bak` in the state folder,
+  run writes again any sheet, tab or PDF that isn't as caracole wrote it.
+- **A command says the database "is at schema version N, but this caracole
+  knows up to M":** a newer caracole migrated it, and an older one runs now,
+  after a rollback say. Switch back to the newer caracole, or restore the copy
+  saved before the migration, `caracole.sqlite.vM.bak` in the state folder,
   which the message names when it is there. Until then the commands that use
   the database exit 2, and so does the nightly unit.
-- **A command waits with "Another tabarr is running":** the message names the
+- **A command waits with "Another caracole is running":** the message names the
   process and what it is doing; the nightly run takes about half an hour.
 - **Auto-chords can't read a purchase:** the to-do page lists it, with the
-  error, and `journalctl -u tabarr-autochords.service` names it too.
+  error, and `journalctl -u caracole-autochords.service` names it too.
   Re-download the file, or convert it (to FLAC, say) and replace the original:
   a changed file is tried again on the next run.
 - **Syncthing reports "permission denied":** check that
-  `ls -ld /var/lib/tabarr/library` (or your `libraryDir`) shows
-  `drwxrwsr-x tabarr tabarr`, that the folders above it let group `tabarr`
-  through, and that `id syncthing` lists `tabarr`. Restart Syncthing after the
+  `ls -ld /var/lib/caracole/library` (or your `libraryDir`) shows
+  `drwxrwsr-x caracole caracole`, that the folders above it let group `caracole`
+  through, and that `id syncthing` lists `caracole`. Restart Syncthing after the
   group change, and check that the folder has `ignorePerms`.
-- **Nothing ran last night:** `systemctl list-timers tabarr.timer`. A missed
+- **Nothing ran last night:** `systemctl list-timers caracole.timer`. A missed
   start runs at the next boot, because the timer is persistent.
-- **The hardening, scored:** `systemd-analyze security tabarr.service` gives
-  1.4 ("OK"), and 1.0 for `tabarr-autochords.service`. What is left open is
+- **The hardening, scored:** `systemd-analyze security caracole.service` gives
+  1.4 ("OK"), and 1.0 for `caracole-autochords.service`. What is left open is
   the network, which the run needs, and the group-writable umask, which
   Syncthing needs.

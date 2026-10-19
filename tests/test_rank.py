@@ -1,7 +1,7 @@
 import pytest
 
-from tabarr.config import RankPolicy
-from tabarr.rank import Candidate, bayes, prior_mean, rank_by_rating, rank_guitar, rank_sheets
+from caracole.config import RankPolicy
+from caracole.rank import Candidate, bayes, prior_mean, rank_by_rating, rank_guitar, rank_sheets
 
 P = RankPolicy()
 

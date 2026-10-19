@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 from helpers.ug_pages import make_tab_page_html, store_page_html, version_dict
 
-from tabarr.http import ProviderError
-from tabarr.ug.page import (
+from caracole.http import ProviderError
+from caracole.ug.page import (
     PageParseError,
     UGVersion,
     kind_of,
@@ -303,7 +303,7 @@ def test_helper_page_round_trip():
 
 
 def test_page_url_uses_the_slugged_path_when_known():
-    from tabarr.ug.page import page_url
+    from caracole.ug.page import page_url
 
     assert page_url(85053) == "https://tabs.ultimate-guitar.com/tab/85053"
     assert page_url(1081462, "soda-stereo/persiana-americana-tabs-1081462") == (
@@ -316,7 +316,7 @@ def test_sheet_text_html_entities_are_decoded():
     # so one more decoding pass is needed after the attribute itself is decoded.
     from helpers.ug_pages import make_tab_page_html, version_dict
 
-    from tabarr.ug.page import parse_tab_page
+    from caracole.ug.page import parse_tab_page
 
     html_ = make_tab_page_html(version_dict(1), [], content="Tom &amp; Jerry&#039;s [ch]G[/ch] &lt;3")
     assert parse_tab_page(html_).content == "Tom & Jerry's [ch]G[/ch] <3"

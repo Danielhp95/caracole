@@ -1,4 +1,4 @@
-"""render_all and ``tabarr render``: every kept sheet as ChordPro and as a PDF in your key."""
+"""render_all and ``caracole render``: every kept sheet as ChordPro and as a PDF in your key."""
 
 from __future__ import annotations
 
@@ -20,16 +20,16 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from tabarr.autochords import ChordSegment, build_sheet
-from tabarr.cli import build_app
-from tabarr.db import kv_get_json, kv_set_json
-from tabarr.lacuerda import parse_version_page
-from tabarr.library import drop_file, keep_file, song_dir, write_atomic, write_info
-from tabarr.overrides import Overrides, load_overrides
-from tabarr.render import RenderStats, render_all
-from tabarr.songs import get_song, update_song
-from tabarr.ug.page import strip_markup
-from tabarr.versions import set_coverage, upsert_version
+from caracole.autochords import ChordSegment, build_sheet
+from caracole.cli import build_app
+from caracole.db import kv_get_json, kv_set_json
+from caracole.lacuerda import parse_version_page
+from caracole.library import drop_file, keep_file, song_dir, write_atomic, write_info
+from caracole.overrides import Overrides, load_overrides
+from caracole.render import RenderStats, render_all
+from caracole.songs import get_song, update_song
+from caracole.ug.page import strip_markup
+from caracole.versions import set_coverage, upsert_version
 
 from conftest import add_song
 from helpers.ug_pages import version_dict
@@ -334,7 +334,7 @@ def test_the_cho_and_pdf_of_a_sheet_no_longer_kept_go(conn, cfg, auto):
     set_coverage(conn, human_sheet(conn, cfg, song), 0.3)
     render(conn, cfg)
     folder = song_dir(cfg.library_dir, song)
-    (folder / "notes.txt").write_text("yours", encoding="utf-8")  # untracked: never tabarr's to delete
+    (folder / "notes.txt").write_text("yours", encoding="utf-8")  # untracked: never caracole's to delete
     drop_human_sheet(conn, cfg, song)
 
     render(conn, cfg)
@@ -347,8 +347,8 @@ def test_the_cho_and_pdf_of_a_sheet_no_longer_kept_go(conn, cfg, auto):
     assert info_json(cfg, song)["render"] == ({"transpose": 0, "pdf": "sheet (auto).pdf"} if auto else None)
 
 
-def test_a_sheet_pdf_tabarr_never_rendered_stays(conn, cfg):
-    # No render record names it, so it is yours: a song tabarr found no sheet for, say.
+def test_a_sheet_pdf_caracole_never_rendered_stays(conn, cfg):
+    # No render record names it, so it is yours: a song caracole found no sheet for, say.
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     folder = song_dir(cfg.library_dir, song)
     folder.mkdir(parents=True)
@@ -465,7 +465,7 @@ def test_a_pdf_whose_record_predates_its_size_and_sha256_rerenders_once(conn, cf
     render(conn, cfg)
     key = f"render:{song.id}"
     old = {k: kv_get_json(conn, key)[k] for k in ("source_sha", "transpose", "font", "pdf")}
-    kv_set_json(conn, key, old)  # as a tabarr that didn't record what it wrote left it
+    kv_set_json(conn, key, old)  # as a caracole that didn't record what it wrote left it
     assert render(conn, cfg).rendered == 1
     assert render(conn, cfg).skipped == 1
 
@@ -495,7 +495,7 @@ def test_cjk_sheet_without_a_font_keeps_its_cho_and_reports_once(conn, cfg):
         assert not (folder / "sheet.pdf").exists()
     assert run.calls == []
     assert stats.rendered == 0 and stats.failed == 0
-    assert "cjk_font" in stats.font_error and "TABARR_CJK_FONT" in stats.font_error
+    assert "cjk_font" in stats.font_error and "CARACOLE_CJK_FONT" in stats.font_error
     assert "宋冬野 - 斑马斑马" in stats.font_error
 
 
@@ -622,7 +622,7 @@ def test_an_unusable_cjk_font_is_reported_once_like_a_missing_one(
     run = FakeChordPro()
     stats = render(conn, cfg, runner=run)
     assert (stats.rendered, stats.failed) == (1, 0)
-    assert problem in stats.font_error and "TABARR_CJK_FONT" in stats.font_error
+    assert problem in stats.font_error and "CARACOLE_CJK_FONT" in stats.font_error
     assert "宋冬野 - 斑马斑马" in stats.font_error and "宋冬野 - 安和桥" in stats.font_error
     for song in songs:
         assert (song_dir(cfg.library_dir, song) / "sheet.cho").is_file()
@@ -661,7 +661,7 @@ def test_a_failed_rerender_keeps_the_previous_pdf(conn, cfg):
 
 
 def test_another_writers_temporary_files_are_not_in_the_way(conn, cfg):
-    # Two tabarr processes rendering at once (the nightly run and `tabarr render`) shared one
+    # Two caracole processes rendering at once (the nightly run and `caracole render`) shared one
     # temporary name per file, so one's rename found the other's file gone, or in the way.
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     human_sheet(conn, cfg, song)
@@ -713,7 +713,7 @@ def test_unreadable_auto_sheet_fails_that_song_only(conn, cfg, caplog, data):
 # --- others writing to the library -----------------------------------------------------------
 #
 # The library is writable by the Syncthing group and every synced device. A symbolic link
-# planted there must not copy tabarr's private files into a .cho or a PDF, nor have one
+# planted there must not copy caracole's private files into a .cho or a PDF, nor have one
 # written over; a FIFO must not hold up the pass.
 
 SECRET = "refresh-token-s3cr3t"
@@ -721,7 +721,7 @@ SECRET = "refresh-token-s3cr3t"
 
 @pytest.fixture
 def private_file(cfg) -> Path:
-    """A file only tabarr may read, in its state directory. It is shaped like sheet.json, so a
+    """A file only caracole may read, in its state directory. It is shaped like sheet.json, so a
     sheet read through a link to it would carry the secret into the .cho and the PDF."""
     path = cfg.state_dir / "credentials.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -788,7 +788,7 @@ def test_chordpro_opens_files_only_in_a_private_directory(conn, cfg):
         cho, out = Path(cmd[-1]), output_of(cmd)
         assert cho.parent == out.parent and cho.parent.parent == cfg.cache_dir
         assert (cho.name, out.name) == ("sheet.cho", "sheet.pdf")
-    assert run.modes == [0o700, 0o700]  # only tabarr can enter it
+    assert run.modes == [0o700, 0o700]  # only caracole can enter it
     assert list(cfg.cache_dir.iterdir()) == []  # and it is gone, after a failure too
     assert pdf_of(cfg, good).read_bytes().startswith(b"%PDF-1.4 fake")
 
@@ -816,7 +816,7 @@ def test_files_swapped_for_links_while_chordpro_runs_are_not_followed(conn, cfg,
     assert private_file.read_text(encoding="utf-8") == json.dumps({"content": SECRET})
     pdf = pdf_of(cfg, song)
     assert not pdf.is_symlink()
-    assert "{title: De Música Ligera}" in pdf.read_bytes().decode("utf-8")  # tabarr's own sheet
+    assert "{title: De Música Ligera}" in pdf.read_bytes().decode("utf-8")  # caracole's own sheet
     assert SECRET.encode() not in library_bytes(cfg)
 
 
@@ -880,7 +880,7 @@ def test_info_json_keeps_the_render_entry_when_another_step_rewrites_it(conn, cf
     assert info_json(cfg, song).get("render") == {"transpose": 0, "pdf": "sheet (auto).pdf"}
 
 
-# --- tabarr render ---------------------------------------------------------------------------
+# --- caracole render ---------------------------------------------------------------------------
 
 # A stand-in for the chordpro program, run as one: it writes a PDF naming its options,
 # and fails on a sheet whose text holds "Persiana".
@@ -907,29 +907,29 @@ def fake_chordpro(tmp_path) -> Path:
     return path
 
 
-def tabarr_render(cfg, chordpro: Path, *args: str):
-    """Run ``tabarr render`` on the library and database of ``cfg``, with ``chordpro``."""
-    toml = cfg.state_dir.parent / "tabarr.toml"
+def caracole_render(cfg, chordpro: Path, *args: str):
+    """Run ``caracole render`` on the library and database of ``cfg``, with ``chordpro``."""
+    toml = cfg.state_dir.parent / "caracole.toml"
     toml.write_text(
         f'library_dir = "{cfg.library_dir}"\nstate_dir = "{cfg.state_dir}"\n'
         f'cache_dir = "{cfg.cache_dir}"\nchordpro_bin = "{chordpro}"\n',
         encoding="utf-8",
     )
     return CliRunner().invoke(
-        build_app(), ["--config", str(toml), "render", *args], env={"TABARR_CJK_FONT": None}
+        build_app(), ["--config", str(toml), "render", *args], env={"CARACOLE_CJK_FONT": None}
     )
 
 
 def test_render_command_renders_skips_and_forces(conn, cfg, fake_chordpro):
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     human_sheet(conn, cfg, song)
-    first = tabarr_render(cfg, fake_chordpro)
+    first = caracole_render(cfg, fake_chordpro)
     assert first.exit_code == 0, first.output
     assert "1 rendered, 0 up to date, 0 failed" in first.output
     assert pdf_of(cfg, song).read_bytes().startswith(b"%PDF")
-    again = tabarr_render(cfg, fake_chordpro)
+    again = caracole_render(cfg, fake_chordpro)
     assert "0 rendered, 1 up to date, 0 failed" in again.output
-    forced = tabarr_render(cfg, fake_chordpro, "--force")
+    forced = caracole_render(cfg, fake_chordpro, "--force")
     assert forced.exit_code == 0, forced.output
     assert "1 rendered, 0 up to date, 0 failed" in forced.output
 
@@ -939,7 +939,7 @@ def test_render_command_exits_1_when_a_sheet_fails(conn, cfg, fake_chordpro, cap
     human_sheet(conn, cfg, bad, tab_id=1)
     good = add_song(conn, "Soda Stereo", "De Música Ligera")
     human_sheet(conn, cfg, good, tab_id=2)
-    result = tabarr_render(cfg, fake_chordpro)
+    result = caracole_render(cfg, fake_chordpro)
     assert result.exit_code == 1
     assert "1 rendered, 0 up to date, 1 failed" in result.output
     # The warning says which song and why; the command then needs to add nothing.
@@ -950,28 +950,28 @@ def test_render_command_exits_1_when_a_sheet_fails(conn, cfg, fake_chordpro, cap
 def test_render_command_a_missing_font_is_no_failure(conn, cfg, fake_chordpro, caplog):
     song = add_song(conn, "宋冬野", "斑马斑马")
     human_sheet(conn, cfg, song, ZH_SHEET, tonality="")
-    result = tabarr_render(cfg, fake_chordpro)
+    result = caracole_render(cfg, fake_chordpro)
     assert result.exit_code == 0, result.output
     assert "0 rendered, 0 up to date, 0 failed" in result.output
-    assert "set cjk_font or TABARR_CJK_FONT to render 宋冬野 - 斑马斑马" in caplog.text
+    assert "set cjk_font or CARACOLE_CJK_FONT to render 宋冬野 - 斑马斑马" in caplog.text
 
 
 # --- the real chordpro -----------------------------------------------------------------------
 #
-# These run with chordpro 6.050.7 on PATH (or TABARR_CHORDPRO_BIN) and TABARR_CJK_FONT set to
+# These run with chordpro 6.050.7 on PATH (or CARACOLE_CHORDPRO_BIN) and CARACOLE_CJK_FONT set to
 # FusionKaiJ-Regular.ttf from nixpkgs lxgw-fusionkai. With poppler's pdftotext on PATH (or
-# TABARR_PDFTOTEXT) they also read each PDF's text: nix shell nixpkgs#poppler-utils.
+# CARACOLE_PDFTOTEXT) they also read each PDF's text: nix shell nixpkgs#poppler-utils.
 
-CHORDPRO = os.environ.get("TABARR_CHORDPRO_BIN") or shutil.which("chordpro")
-CJK_FONT = os.environ.get("TABARR_CJK_FONT")
-PDFTOTEXT = os.environ.get("TABARR_PDFTOTEXT") or shutil.which("pdftotext")
+CHORDPRO = os.environ.get("CARACOLE_CHORDPRO_BIN") or shutil.which("chordpro")
+CJK_FONT = os.environ.get("CARACOLE_CJK_FONT")
+PDFTOTEXT = os.environ.get("CARACOLE_PDFTOTEXT") or shutil.which("pdftotext")
 
 real_chordpro = pytest.mark.skipif(
-    CHORDPRO is None, reason="chordpro not found on PATH or in TABARR_CHORDPRO_BIN"
+    CHORDPRO is None, reason="chordpro not found on PATH or in CARACOLE_CHORDPRO_BIN"
 )
 real_cjk_font = pytest.mark.skipif(
     not (CJK_FONT and Path(CJK_FONT).is_file()),
-    reason="set TABARR_CJK_FONT to a single-font CJK .ttf/.otf, such as FusionKaiJ-Regular.ttf",
+    reason="set CARACOLE_CJK_FONT to a single-font CJK .ttf/.otf, such as FusionKaiJ-Regular.ttf",
 )
 
 # A chord name standing alone, as pdftotext lays out chord lines and chord diagrams.
@@ -981,7 +981,7 @@ SOLFEGE = re.compile(r"(?<!\S)(?:Do|Re|Mi|Fa|Sol|La|Si)[#b]?m?\d*(?!\S)")
 
 @pytest.fixture
 def real(cfg):
-    """The config with the real chordpro, and the CJK font when TABARR_CJK_FONT names one."""
+    """The config with the real chordpro, and the CJK font when CARACOLE_CJK_FONT names one."""
     font = Path(CJK_FONT) if CJK_FONT and Path(CJK_FONT).is_file() else None
     return replace(cfg, chordpro_bin=CHORDPRO, cjk_font=font)
 

@@ -1,8 +1,8 @@
-"""``tabarr fetch``, run through the CLI against a fake Ultimate Guitar.
+"""``caracole fetch``, run through the CLI against a fake Ultimate Guitar.
 
-Each test writes a tabarr.toml rooted in tmp_path, with no pause between
+Each test writes a caracole.toml rooted in tmp_path, with no pause between
 requests. UG is served by ``httpx.MockTransport`` through
-``tabarr.commands._common.transport_for``, so no request reaches the network.
+``caracole.commands._common.transport_for``, so no request reaches the network.
 """
 
 from __future__ import annotations
@@ -17,13 +17,13 @@ import pytest
 from helpers.ug_pages import make_artist_page_html, make_tab_page_html, version_dict
 from typer.testing import CliRunner
 
-from tabarr import db
-from tabarr.cli import build_app
-from tabarr.health import get_state, record_block
-from tabarr.lyrics import Lyrics
-from tabarr.songs import find_song, get_song, update_song, upsert_song
-from tabarr.ug.artist import artist_page_url
-from tabarr.ug.lookup import remember_artist_url
+from caracole import db
+from caracole.cli import build_app
+from caracole.health import get_state, record_block
+from caracole.lyrics import Lyrics
+from caracole.songs import find_song, get_song, update_song, upsert_song
+from caracole.ug.artist import artist_page_url
+from caracole.ug.lookup import remember_artist_url
 from conftest import subprocess_pythonpath
 
 TAB = "https://tabs.ultimate-guitar.com/tab/"
@@ -52,7 +52,7 @@ def tab_page(tab_id, song, url):
 
 
 def write_config(tmp_path, *, budget=60):
-    path = tmp_path / "tabarr.toml"
+    path = tmp_path / "caracole.toml"
     path.write_text(
         f'library_dir = "{tmp_path / "lib"}"\nmusic_dir = "{tmp_path / "music"}"\n'
         f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n'
@@ -65,7 +65,7 @@ def write_config(tmp_path, *, budget=60):
 @pytest.fixture
 def ug(monkeypatch):
     site = FakeUG()
-    monkeypatch.setattr("tabarr.commands._common.transport_for", lambda provider: httpx.MockTransport(site.handler))
+    monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(site.handler))
     return site
 
 
@@ -74,7 +74,7 @@ def run(tmp_path, *args, budget=60):
 
 
 def connect(tmp_path):
-    return db.connect(tmp_path / "state" / "tabarr.sqlite")
+    return db.connect(tmp_path / "state" / "caracole.sqlite")
 
 
 def accepted(conn, title, song_key, tab_id, *, added_at, dirty=True):
@@ -133,7 +133,7 @@ def test_a_block_cools_ug_down_and_exits_0(tmp_path, ug):
     result = run(tmp_path)
 
     assert result.exit_code == 0, result.output
-    assert "Ultimate Guitar blocked tabarr" in result.output
+    assert "Ultimate Guitar blocked caracole" in result.output
     assert "No more UG requests until 2026-10-" in result.output and "Nothing was marked not found." in result.output
     state = get_state(conn, "ug")
     assert state.strikes == 1 and state.cooldown_until is not None
@@ -142,7 +142,7 @@ def test_a_block_cools_ug_down_and_exits_0(tmp_path, ug):
 
 
 def test_a_cooling_provider_is_left_alone(tmp_path, ug):
-    from tabarr.commands._common import utcnow
+    from caracole.commands._common import utcnow
 
     conn, _, _ = two_songs(tmp_path, ug)
     record_block(conn, "ug", utcnow(), "HTTP 403")
@@ -214,8 +214,8 @@ def test_song_option_fetches_that_song_even_when_nothing_changed(tmp_path, ug):
 
 
 @pytest.mark.parametrize("decision,message", [
-    ("review", "needs review first: run `tabarr review`"),
-    (None, "isn't matched yet: run `tabarr match`"),
+    ("review", "needs review first: run `caracole review`"),
+    (None, "isn't matched yet: run `caracole match`"),
 ])
 def test_song_option_explains_what_is_missing(tmp_path, ug, decision, message):
     conn = connect(tmp_path)
@@ -334,7 +334,7 @@ def test_a_block_rewrites_the_pages_with_the_cooldown(tmp_path, ug):
 
 
 def test_a_cooldown_leaves_the_pages_alone(tmp_path, ug):
-    from tabarr.commands._common import utcnow
+    from caracole.commands._common import utcnow
 
     conn, _, _ = two_songs(tmp_path, ug)
     record_block(conn, "ug", utcnow(), "HTTP 403")
@@ -380,9 +380,9 @@ def test_registering_the_command_imports_no_fetch_code(tmp_path):
     src = Path(__file__).resolve().parents[1] / "src"
     code = (
         "import sys, typer\n"
-        "from tabarr.commands import fetch\n"
+        "from caracole.commands import fetch\n"
         "fetch.register(typer.Typer())\n"
-        "print([m for m in ('tabarr.ug.fetch', 'rapidfuzz', 'selectolax') if m in sys.modules])\n"
+        "print([m for m in ('caracole.ug.fetch', 'rapidfuzz', 'selectolax') if m in sys.modules])\n"
     )
     env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
     result = subprocess.run([sys.executable, "-c", code], env=env, cwd=tmp_path, capture_output=True, text=True,

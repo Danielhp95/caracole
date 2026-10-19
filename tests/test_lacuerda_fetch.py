@@ -19,15 +19,15 @@ import httpx
 import pytest
 from conftest import add_song
 
-from tabarr.config import ProviderPolicy, RankPolicy
-from tabarr.http import PoliteClient, ProviderBlocked
-from tabarr.lacuerda_fetch import LaCuerdaStats, lacuerda_sheets
-from tabarr.library import keep_file, kept_files
-from tabarr.lyrics import Lyrics
-from tabarr.overrides import Overrides
-from tabarr.songs import get_song, refresh_status, update_song
-from tabarr.ug.page import strip_markup
-from tabarr.versions import set_coverage, set_picks, song_versions, upsert_version
+from caracole.config import ProviderPolicy, RankPolicy
+from caracole.http import PoliteClient, ProviderBlocked
+from caracole.lacuerda_fetch import LaCuerdaStats, lacuerda_sheets
+from caracole.library import keep_file, kept_files
+from caracole.lyrics import Lyrics
+from caracole.overrides import Overrides
+from caracole.songs import get_song, refresh_status, update_song
+from caracole.ug.page import strip_markup
+from caracole.versions import set_coverage, set_picks, song_versions, upsert_version
 
 FIXTURES = Path(__file__).parent / "fixtures" / "lacuerda"
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
@@ -114,7 +114,7 @@ class FakeLaCuerda:
             "lacuerda",
             ProviderPolicy(budget=budget, delay=(0.0, 0.0)),
             cache_dir,
-            user_agent="tabarr-test",
+            user_agent="caracole-test",
             transport=httpx.MockTransport(self.handler),
             sleep=lambda seconds: None,
             wall_clock=lambda: now,
@@ -877,8 +877,8 @@ def test_songs_ignored_in_overrides_are_not_tried(conn, tmp_path):
 
 
 def test_the_nightly_lacuerda_step_reports_the_counts(conn, cfg, tmp_path):
-    from tabarr.notify import Notifier
-    from tabarr.pipeline import Services, default_steps, run_pipeline
+    from caracole.notify import Notifier
+    from caracole.pipeline import Services, default_steps, run_pipeline
 
     spanish_song(conn)
     spanish_song(conn, title="Canción Inexistente")
@@ -894,8 +894,8 @@ def test_a_kept_sheet_scored_tonight_gives_lacuerda_its_chance(conn, cfg, tmp_pa
     # Kept before the song had lyrics, the UG sheet's coverage was unknown, and a partial
     # sheet never displaces one of unknown coverage. The fetch step scores it first: it
     # covers 1 line in 16, and LaCuerda's sheet covers half.
-    from tabarr.notify import Notifier
-    from tabarr.pipeline import Services, default_steps, run_pipeline
+    from caracole.notify import Notifier
+    from caracole.pipeline import Services, default_steps, run_pipeline
 
     def no_ug(request):
         raise AssertionError(f"unexpected UG request: {request.url}")
@@ -903,7 +903,7 @@ def test_a_kept_sheet_scored_tonight_gives_lacuerda_its_chance(conn, cfg, tmp_pa
     song = spanish_song(conn, plain=HALF_LYRICS)
     keep_ug_sheet(conn, tmp_path, song, None, lib=cfg.library_dir)
     ug = PoliteClient("ug", ProviderPolicy(budget=10, delay=(0.0, 0.0)), tmp_path / "cache",
-                      user_agent="tabarr-test", transport=httpx.MockTransport(no_ug),
+                      user_agent="caracole-test", transport=httpx.MockTransport(no_ug),
                       sleep=lambda seconds: None)
     clients = {"ug": ug, "lacuerda": FakeLaCuerda().client(tmp_path / "cache")}
     services = Services(clients=clients, spotify=None, notifier=Notifier(None, None))
@@ -919,15 +919,15 @@ def test_a_kept_sheet_scored_tonight_gives_lacuerda_its_chance(conn, cfg, tmp_pa
 
 def test_tonights_lyrics_score_tonights_lacuerda_sheet(conn, cfg, tmp_path):
     # The lyrics step runs first, so a song added today is judged with its lyrics.
-    from tabarr.notify import Notifier
-    from tabarr.pipeline import Services, default_steps, run_pipeline
+    from caracole.notify import Notifier
+    from caracole.pipeline import Services, default_steps, run_pipeline
 
     hit = json.loads((FIXTURES.parent / "lrclib" / "get_hit.json").read_text(encoding="utf-8"))
     record = {**hit, "plainLyrics": SHEET_LYRICS, "syncedLyrics": None}
     answer = httpx.MockTransport(lambda request: httpx.Response(200, json=record))
     lrclib = PoliteClient(
         "lrclib", ProviderPolicy(budget=10, delay=(0.0, 0.0)), tmp_path / "cache",
-        user_agent="tabarr-test", transport=answer, sleep=lambda seconds: None,
+        user_agent="caracole-test", transport=answer, sleep=lambda seconds: None,
         wall_clock=lambda: NOW,
     )
     song = add_song(conn, "Soda Stereo", "De Música Ligera")

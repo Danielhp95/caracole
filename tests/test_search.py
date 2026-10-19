@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from tabarr import db
-from tabarr.cli import build_app
-from tabarr.search import bare_id_hint, display_from_keys, search_index, search_library
-from tabarr.songs import find_song, update_song
+from caracole import db
+from caracole.cli import build_app
+from caracole.search import bare_id_hint, display_from_keys, search_index, search_library
+from caracole.songs import find_song, update_song
 
 from conftest import add_song
 
@@ -203,7 +203,7 @@ MANA = '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"
 @pytest.mark.parametrize("query,hits", [("Joaquín Sabina", []), ("Persiana Américana", None)])
 def test_hint_leaves_the_header_out_when_overrides_has_the_table(conn, query, hits):
     # A second [artist_url] header would make overrides.toml unreadable, as on the to-do page.
-    from tabarr.overrides import Overrides
+    from caracole.overrides import Overrides
 
     index(conn, ROWS)
     hits = search_index(conn, query) if hits is None else hits
@@ -306,11 +306,11 @@ def test_library_search_without_a_match(conn):
     assert search_library(conn, "zzzz qqqq") == []
 
 
-# --- tabarr search -----------------------------------------------------------------
+# --- caracole search -----------------------------------------------------------------
 
 
 def config(tmp_path: Path) -> Path:
-    p = tmp_path / "tabarr.toml"
+    p = tmp_path / "caracole.toml"
     p.write_text(
         f'library_dir = "{tmp_path / "lib"}"\nmusic_dir = "{tmp_path / "music"}"\n'
         f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n',
@@ -324,7 +324,7 @@ def run(tmp_path, *args):
 
 
 def seed(tmp_path, rows=ROWS):
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     index(conn, rows)
     s = add_song(conn, "Radiohead", "Creep")
     update_song(conn, s.id, status="found")
@@ -345,7 +345,7 @@ def test_cli_prints_library_hits_and_numbered_index_hits(tmp_path):
     assert "chords×3 tabs×2 guitar-pro×1" in ug
     assert "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169" in ug
     assert "2. Stone Temple Pilots - Creep" in ug
-    assert 'tabarr add "Stone Temple Pilots" "Creep"' in ug
+    assert 'caracole add "Stone Temple Pilots" "Creep"' in ug
 
 
 def test_cli_add_appends_the_hit_to_wanted_and_syncs(tmp_path):
@@ -392,7 +392,7 @@ def test_cli_a_review_candidate_is_not_a_song_in_your_library(tmp_path):
                     {"artist_key": "os-paralamas-do-sucesso", "song_key": "de-musica-ligera", "score": 100.0,
                      "step": "title_only"}])
     listed = run(tmp_path, "search", "os paralamas de musica ligera").output
-    assert 'tabarr add "Os Paralamas Do Sucesso" "De Musica Ligera"' in listed, listed
+    assert 'caracole add "Os Paralamas Do Sucesso" "De Musica Ligera"' in listed, listed
     result = run(tmp_path, "search", "os", "paralamas", "de", "musica", "ligera", "--add", "1")
     assert result.exit_code == 0, result.output
     assert "Soda Stereo" not in result.output
@@ -421,13 +421,13 @@ def test_cli_add_keeps_the_line_when_the_database_cannot_be_updated(tmp_path, mo
     def locked(*args, **kwargs):
         raise sqlite3.OperationalError("database is locked")
 
-    monkeypatch.setattr("tabarr.wanted.sync_wanted", locked)
+    monkeypatch.setattr("caracole.wanted.sync_wanted", locked)
     result = run(tmp_path, "search", "creep", "--add", "2")
     assert result.exit_code == 0, result.output
     wanted = (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
     assert wanted.endswith("\nStone Temple Pilots - Creep\n")  # the file is the source of truth
     assert "The database couldn't be updated (database is locked)" in result.output
-    assert "`tabarr sync`" in result.output
+    assert "`caracole sync`" in result.output
 
 
 def test_cli_add_out_of_range_is_a_usage_error(tmp_path):
@@ -482,7 +482,7 @@ def paste_hint(output: str, overrides: Path) -> None:
 
 
 def test_cli_hint_pasted_as_shown_keeps_overrides_readable(tmp_path):
-    from tabarr.overrides import load_overrides
+    from caracole.overrides import load_overrides
 
     seed(tmp_path)
     overrides = tmp_path / "lib" / "overrides.toml"
@@ -497,7 +497,7 @@ def test_cli_hint_pasted_as_shown_keeps_overrides_readable(tmp_path):
 def test_cli_hint_for_an_artist_whose_page_overrides_has_gives_no_second_line(tmp_path):
     # The song is in your library, by an artist UG lists only by bare ids, whose page you pasted: a
     # second line for the artist under [artist_url] would make overrides.toml unreadable.
-    from tabarr.overrides import load_overrides
+    from caracole.overrides import load_overrides
 
     conn = seed(tmp_path)
     add_song(conn, "Joaquín Sabina", "19 Días y 500 Noches")
@@ -524,14 +524,14 @@ def test_cli_empty_index_says_how_to_build_it(tmp_path):
     seed(tmp_path, rows=[])
     result = run(tmp_path, "search", "creep")
     assert result.exit_code == 0, result.output
-    assert "tabarr index build" in result.output
+    assert "caracole index build" in result.output
 
 
 def test_cli_never_touches_the_network(tmp_path, monkeypatch):
     seed(tmp_path)
 
     def no_network(*args, **kwargs):
-        raise AssertionError("tabarr search made a network call")
+        raise AssertionError("caracole search made a network call")
 
     monkeypatch.setattr(socket, "create_connection", no_network)
     monkeypatch.setattr(socket, "getaddrinfo", no_network)

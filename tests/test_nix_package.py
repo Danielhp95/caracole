@@ -1,4 +1,4 @@
-"""The Nix files set only environment variables tabarr reads."""
+"""The Nix files set only environment variables caracole reads."""
 
 import re
 from pathlib import Path
@@ -14,15 +14,15 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_the_nix_files_set_only_variables_tabarr_reads():
-    # An option whose variable nothing reads (btcConfig, for TABARR_BTC_CONFIG) is a dead end.
+def test_the_nix_files_set_only_variables_caracole_reads():
+    # An option whose variable nothing reads (btcConfig, for CARACOLE_BTC_CONFIG) is a dead end.
     named = {
         name
         for path in NIX_FILES
-        for name in re.findall(r"\bTABARR_[A-Z0-9_]+\b", path.read_text(encoding="utf-8"))
+        for name in re.findall(r"\bCARACOLE_[A-Z0-9_]+\b", path.read_text(encoding="utf-8"))
     }
     source = "\n".join(
-        p.read_text(encoding="utf-8") for p in sorted((ROOT / "src" / "tabarr").rglob("*.py"))
+        p.read_text(encoding="utf-8") for p in sorted((ROOT / "src" / "caracole").rglob("*.py"))
     )
-    assert "TABARR_CJK_FONT" in named
+    assert "CARACOLE_CJK_FONT" in named
     assert sorted(name for name in named if f'"{name}"' not in source) == []

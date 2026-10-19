@@ -1,7 +1,7 @@
-"""``tabarr index build | refresh | stats`` and ``tabarr match``, run through the CLI.
+"""``caracole index build | refresh | stats`` and ``caracole match``, run through the CLI.
 
-Each test writes a tabarr.toml rooted in tmp_path, with no pause between UG
-requests. UG is a fake behind ``tabarr.commands._common.transport_for``, so no
+Each test writes a caracole.toml rooted in tmp_path, with no pause between UG
+requests. UG is a fake behind ``caracole.commands._common.transport_for``, so no
 request can reach the network.
 """
 
@@ -17,10 +17,10 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-from tabarr import db
-from tabarr.cli import build_app
-from tabarr.health import get_state
-from tabarr.songs import get_song, update_song
+from caracole import db
+from caracole.cli import build_app
+from caracole.health import get_state
+from caracole.songs import get_song, update_song
 
 from conftest import add_song, subprocess_pythonpath
 
@@ -76,12 +76,12 @@ def site() -> FakeUG:
 @pytest.fixture
 def ug(monkeypatch) -> FakeUG:
     fake = site()
-    monkeypatch.setattr("tabarr.commands._common.transport_for", lambda provider: httpx.MockTransport(fake.handler))
+    monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(fake.handler))
     return fake
 
 
 def run(tmp_path: Path, *args: str, budget: int = 60):
-    path = tmp_path / "tabarr.toml"
+    path = tmp_path / "caracole.toml"
     path.write_text(
         f'library_dir = "{tmp_path / "lib"}"\nmusic_dir = "{tmp_path / "music"}"\n'
         f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n'
@@ -92,7 +92,7 @@ def run(tmp_path: Path, *args: str, budget: int = 60):
 
 
 def connect(tmp_path: Path):
-    return db.connect(tmp_path / "state" / "tabarr.sqlite")
+    return db.connect(tmp_path / "state" / "caracole.sqlite")
 
 
 def sitemap_dir(tmp_path: Path) -> Path:
@@ -112,7 +112,7 @@ def tab_ids(tmp_path: Path) -> list[int]:
         conn.close()
 
 
-# --- tabarr index build ---------------------------------------------------------------------------
+# --- caracole index build ---------------------------------------------------------------------------
 
 
 def test_cli_index_build_from_dir_sends_no_requests(tmp_path, ug):
@@ -185,7 +185,7 @@ def test_cli_index_build_whose_every_request_failed_is_no_success(tmp_path, ug):
     assert "502" in (state.last_error or "") and state.last_ok is None
 
 
-# --- tabarr index refresh -------------------------------------------------------------------------
+# --- caracole index refresh -------------------------------------------------------------------------
 
 
 def test_cli_index_refresh_reports_new_tabs_and_songs_to_refetch(tmp_path, ug):
@@ -217,10 +217,10 @@ def test_cli_index_refresh_with_the_budget_spent_exits_0(tmp_path, ug):
 def test_cli_index_refresh_needs_a_built_index(tmp_path, ug):
     result = run(tmp_path, "index", "refresh")
     assert result.exit_code == 1
-    assert "tabarr index build" in result.output and ug.requests == []
+    assert "caracole index build" in result.output and ug.requests == []
 
 
-# --- tabarr index stats ---------------------------------------------------------------------------
+# --- caracole index stats ---------------------------------------------------------------------------
 
 
 def test_cli_index_stats(tmp_path):
@@ -235,7 +235,7 @@ def test_cli_index_stats(tmp_path):
     assert any(line.startswith("Built: 20") and line.endswith("refreshed: never") for line in lines)
 
 
-# --- tabarr match ---------------------------------------------------------------------------------
+# --- caracole match ---------------------------------------------------------------------------------
 
 
 def seed(tmp_path: Path, *, built: bool = True):
@@ -245,7 +245,7 @@ def seed(tmp_path: Path, *, built: bool = True):
     """
     from datetime import UTC, datetime
 
-    from tabarr.ug.index import mark_built
+    from caracole.ug.index import mark_built
 
     conn = connect(tmp_path)
     conn.executemany(
@@ -288,7 +288,7 @@ def test_cli_match_saves_then_marks_only_what_changed(tmp_path):
     first = run(tmp_path, "match")
     assert first.exit_code == 0, first.output
     assert get_song(conn, creep.id).match_decision == "accept" and get_song(conn, typo.id).review is True
-    assert "tabarr review" in first.output
+    assert "caracole review" in first.output
     again = run(tmp_path, "match")
     assert "CHANGED" not in again.output and "; 0 changed." in again.output
     # A [match] override moves Creep to another UG song: same decision, other keys.
@@ -306,7 +306,7 @@ def test_cli_match_needs_a_built_index(tmp_path):
     add_song(conn, "Radiohead", "Creep")
     result = run(tmp_path, "match")
     assert result.exit_code == 1
-    assert "tabarr index build" in result.output
+    assert "caracole index build" in result.output
     assert get_song(conn, 1).match_decision is None
 
 
@@ -341,7 +341,7 @@ def test_cli_match_refuses_to_save_against_an_incomplete_index(tmp_path):
     result = run(tmp_path, "match")
     assert all(get_song(conn, s.id).match_decision is None for s in songs), result.output
     assert result.exit_code == 1
-    assert "incomplete" in result.output and "tabarr index build" in result.output
+    assert "incomplete" in result.output and "caracole index build" in result.output
     dry = run(tmp_path, "match", "--dry-run")
     assert dry.exit_code == 0, dry.output
     assert "Dry run: nothing was saved." in dry.output
@@ -358,8 +358,8 @@ def test_cli_match_without_songs(tmp_path):
 
 
 def test_registering_the_commands_imports_neither_the_matcher_nor_the_index():
-    code = ("import sys; import tabarr.cli; "
-            "print(sorted(m for m in sys.modules if m.startswith(('rapidfuzz', 'tabarr.match', 'tabarr.ug'))))")
+    code = ("import sys; import caracole.cli; "
+            "print(sorted(m for m in sys.modules if m.startswith(('rapidfuzz', 'caracole.match', 'caracole.ug'))))")
     src = Path(__file__).resolve().parents[1] / "src"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          env={"PYTHONPATH": subprocess_pythonpath(src)})

@@ -2,8 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from tabarr.sources import SyncStats
-from tabarr.wanted import (
+from caracole.sources import SyncStats
+from caracole.wanted import (
     HEADER,
     WantedLine,
     append_wanted,
@@ -462,7 +462,7 @@ def test_sync_of_an_unreadable_path_is_an_error_not_a_crash(tmp_path):
 
 @pytest.fixture
 def secret(tmp_path):
-    """A credential of tabarr's: wanted.txt sits in the library, which others can write to."""
+    """A credential of caracole's: wanted.txt sits in the library, which others can write to."""
     path = tmp_path / "credentials" / "ntfy_token"
     path.parent.mkdir()
     path.write_text("tk_abcdefghijklmnopqrstuvwxyz012\n", encoding="utf-8")
@@ -507,7 +507,7 @@ def test_append_refuses_a_dangling_symlink(tmp_path):
 
 
 def test_append_never_writes_through_a_link_swapped_in_later(tmp_path, secret, monkeypatch):
-    from tabarr import wanted
+    from caracole import wanted
 
     path = tmp_path / "wanted.txt"
     path.write_text("Soda Stereo - De Música Ligera\n", encoding="utf-8")

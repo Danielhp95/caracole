@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
-from tabarr.config import ProviderPolicy
-from tabarr.http import PoliteClient, ProviderError
-from tabarr.songs import get_song, update_song
-from tabarr.ug.index import (
+from caracole.config import ProviderPolicy
+from caracole.http import PoliteClient, ProviderError
+from caracole.songs import get_song, update_song
+from caracole.ug.index import (
     IndexStats,
     build_index,
     index_count,
@@ -18,7 +18,7 @@ from tabarr.ug.index import (
     refresh_index,
     upsert_rows,
 )
-from tabarr.ug.sitemap import IndexRow
+from caracole.ug.sitemap import IndexRow
 
 from conftest import add_song
 
@@ -219,7 +219,7 @@ def test_build_from_dir_reports_each_file(conn, tmp_path):
 
 def test_a_304_for_a_sitemap_this_database_never_indexed_is_parsed(tmp_path):
     """A fresh database next to a warm HTTP cache (the state was deleted, the cache kept)."""
-    from tabarr import db
+    from caracole import db
 
     ug = site()
     first = db.connect(tmp_path / "a.sqlite")
@@ -371,8 +371,8 @@ class BlockingUG(FakeUG):
 
 
 def test_a_build_stopped_by_a_block_leaves_the_index_partial(conn, tmp_path):
-    from tabarr.http import ProviderBlocked
-    from tabarr.ug.index import index_state
+    from caracole.http import ProviderBlocked
+    from caracole.ug.index import index_state
 
     assert index_state(conn) == "empty"
     ug = BlockingUG(site().files, blocked={"sitemap2.xml"})
@@ -384,7 +384,7 @@ def test_a_build_stopped_by_a_block_leaves_the_index_partial(conn, tmp_path):
 
 
 def test_a_refresh_that_reads_what_a_stopped_build_left_completes_the_index(conn, tmp_path):
-    from tabarr.ug.index import index_state
+    from caracole.ug.index import index_state
 
     blocked = BlockingUG(site().files, blocked={"sitemap2.xml"})
     with pytest.raises(ProviderError):
@@ -396,8 +396,8 @@ def test_a_refresh_that_reads_what_a_stopped_build_left_completes_the_index(conn
 
 
 def test_a_refresh_cut_short_leaves_the_index_partial(conn, tmp_path):
-    from tabarr.http import BudgetExhausted
-    from tabarr.ug.index import index_state
+    from caracole.http import BudgetExhausted
+    from caracole.ug.index import index_state
 
     blocked = BlockingUG(site().files, blocked={"sitemap2.xml"})
     with pytest.raises(ProviderError):
@@ -408,7 +408,7 @@ def test_a_refresh_cut_short_leaves_the_index_partial(conn, tmp_path):
 
 
 def test_a_build_that_finishes_is_complete(conn, tmp_path):
-    from tabarr.ug.index import index_state
+    from caracole.ug.index import index_state
 
     build_index(conn, site().client(tmp_path / "cache"), NOW)
     assert index_state(conn) == "complete"
@@ -417,14 +417,14 @@ def test_a_build_that_finishes_is_complete(conn, tmp_path):
 # --- tabs robots.txt closes ------------------------------------------------------------------
 
 # robots.txt on the tabs host closes /tab/track/ and every path that starts with /tab/download, so
-# tabarr may never read these pages; the live sitemaps list four such tabs, these three among them.
+# caracole may never read these pages; the live sitemaps list four such tabs, these three among them.
 SE_QUE_ES_TARDE = "track/se-que-es-tarde-chords-1126580"
 AVE_FENIX = "track/ave-fenix-guitar-pro-1149792"
 SHINE = "download-kids-worship/shine-your-light-chords-4818770"
 
 
 def test_tabs_robots_txt_closes_are_left_out_of_the_index(conn, tmp_path):
-    # No song may match a tab tabarr may never read. "tracks/" is open; "./download…" is
+    # No song may match a tab caracole may never read. "tracks/" is open; "./download…" is
     # /tab/download… once the URL drops its dot segment.
     ug = site(**{"sitemap_last.xml": urlset("radiohead/creep-chords-2002", SE_QUE_ES_TARDE, AVE_FENIX, SHINE,
                                             "tracks/tracks-chords-3004", "./download-chords-3005")})
@@ -434,7 +434,7 @@ def test_tabs_robots_txt_closes_are_left_out_of_the_index(conn, tmp_path):
 
 
 def test_a_refresh_drops_the_indexed_tabs_robots_txt_closes(conn, tmp_path):
-    # Indexed before tabarr checked robots.txt, in sitemaps a refresh doesn't read again.
+    # Indexed before caracole checked robots.txt, in sitemaps a refresh doesn't read again.
     ug = site()
     build_index(conn, ug.client(tmp_path / "cache"), NOW)
     upsert_rows(conn, [IndexRow(1126580, "track", "se-que-es-tarde", "chords", SE_QUE_ES_TARDE),
@@ -465,7 +465,7 @@ def test_a_build_drops_the_indexed_tabs_robots_txt_closes(conn, tmp_path):
 def test_only_rows_a_rule_may_reach_are_checked_and_a_rule_that_may_reach_any_is_not_missed(monkeypatch):
     # The nightly drop reads the rows whose path starts as a rule's text does. A rule that starts
     # before /tab/ ends, such as the "/*?no_takeover" www has, may close any tab page: every row.
-    from tabarr.ug import index
+    from caracole.ug import index
 
     rules = ("/forum/", "/tab/track/", "/tab/print?", "/*?no_takeover")
     monkeypatch.setattr(index, "ROBOTS_DISALLOW", {"tabs.ultimate-guitar.com": rules})

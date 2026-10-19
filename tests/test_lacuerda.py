@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from tabarr.http import ProviderError
-from tabarr.lacuerda import (
+from caracole.http import ProviderError
+from caracole.lacuerda import (
     BASE_URL,
     LaCuerdaParseError,
     LCSong,

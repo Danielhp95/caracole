@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from tabarr.chordpro import is_chord_line, merge_chord_line, normalize_chord, to_chordpro
+from caracole.chordpro import is_chord_line, merge_chord_line, normalize_chord, to_chordpro
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 
@@ -393,7 +393,7 @@ def test_bracketed_note_before_lyrics_stays_a_lyric_line():
 
 # --- with the real chordpro 6.050.7 ------------------------------------------------
 
-CHORDPRO = os.environ.get("TABARR_CHORDPRO_BIN") or shutil.which("chordpro")
+CHORDPRO = os.environ.get("CARACOLE_CHORDPRO_BIN") or shutil.which("chordpro")
 real_chordpro = pytest.mark.skipif(CHORDPRO is None, reason="needs the chordpro binary")
 
 
@@ -415,9 +415,9 @@ def _png(path: Path, width: int, height: int) -> None:
 @real_chordpro
 @pytest.mark.parametrize("image", ["private.png", "missing.png"])
 def test_a_chord_name_cannot_embed_or_ask_for_a_local_image(tmp_path, image):
-    from tabarr.render import render_pdf
+    from caracole.render import render_pdf
 
-    _png(tmp_path / "private.png", 37, 11)  # stands for any image the tabarr user can read
+    _png(tmp_path / "private.png", 37, 11)  # stands for any image the caracole user can read
     cho = tmp_path / "sheet.cho"
     sheet = f'[ch]<img src="{image}"/>[/ch]\nHello world\n'
     cho.write_text(to_chordpro(sheet, title="T", artist="A"), encoding="utf-8")

@@ -1,4 +1,4 @@
-from tabarr.ug.lookup import IndexTab, artist_known, artist_tab_ids, learned_artist_url, remember_artist_url, song_tabs
+from caracole.ug.lookup import IndexTab, artist_known, artist_tab_ids, learned_artist_url, remember_artist_url, song_tabs
 
 
 def index(conn, rows):

@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from tabarr.http import (
+from caracole.http import (
     BudgetExhausted,
     Client,
     ProviderBlocked,
@@ -31,7 +31,7 @@ from tabarr.http import (
     ProviderUnavailable,
     Response,
 )
-from tabarr.lyrics import (
+from caracole.lyrics import (
     LRCLIB_API,
     Lyrics,
     LyricsResult,
@@ -77,7 +77,7 @@ class Call:
 
 
 class FakeClient:
-    """A ``tabarr.http.Client`` that answers each endpoint from a canned reply.
+    """A ``caracole.http.Client`` that answers each endpoint from a canned reply.
 
     A reply is ``(status, body)`` or an exception to raise. Like ``PoliteClient``, a
     status the caller did not accept raises ``ProviderError``. Every call is recorded.

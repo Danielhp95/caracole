@@ -1,6 +1,6 @@
 """The pure half of auto-chords: snapping, LRC parsing and sheet layout."""
 
-from tabarr.autochords.merge import ChordSegment, build_sheet, parse_lrc, snap_to_beats
+from caracole.autochords.merge import ChordSegment, build_sheet, parse_lrc, snap_to_beats
 
 # 120 BPM: a beat every 0.5 s, so a 4/4 bar lasts 2 s.
 BEATS = [i * 0.5 for i in range(121)]

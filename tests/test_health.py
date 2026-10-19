@@ -3,10 +3,10 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-from tabarr.health import EventLog, get_state, is_cooling, record_block, record_error, record_ok
-from tabarr.http import Event, ProviderBlocked
-from tabarr.notify import Notifier
-from tabarr.pipeline import Services, Step, run_pipeline
+from caracole.health import EventLog, get_state, is_cooling, record_block, record_error, record_ok
+from caracole.http import Event, ProviderBlocked
+from caracole.notify import Notifier
+from caracole.pipeline import Services, Step, run_pipeline
 
 T0 = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
 

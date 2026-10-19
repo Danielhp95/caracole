@@ -6,9 +6,9 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from tabarr import db
-from tabarr.cli import build_app
-from tabarr.songs import get_song, upsert_song, update_song
+from caracole import db
+from caracole.cli import build_app
+from caracole.songs import get_song, upsert_song, update_song
 
 needs_permissions = pytest.mark.skipif(os.geteuid() == 0, reason="root writes into read-only folders")
 
@@ -21,7 +21,7 @@ CANDIDATE = {"artist_key": "song-dongye", "song_key": "ban-ma-ban-ma", "score": 
 
 
 def config(tmp_path: Path) -> Path:
-    p = tmp_path / "tabarr.toml"
+    p = tmp_path / "caracole.toml"
     p.write_text(
         f'library_dir = "{tmp_path / "lib"}"\nmusic_dir = "{tmp_path / "music"}"\n'
         f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n',
@@ -35,15 +35,15 @@ def run(tmp_path, *args, input=None):
 
 
 def seed(tmp_path):
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     sid, _ = upsert_song(conn, artists=["宋冬野"], title="斑马斑马", album=None, duration_ms=253000, isrc=None,
                          source="wanted", source_id="x", added_at="2026-10-18T00:00:00Z")
     return conn, sid
 
 
 def free(tmp_path) -> bool:
-    """Whether another process could take tabarr's lock now (an open file of its own)."""
-    path = tmp_path / "state" / "tabarr.lock"
+    """Whether another process could take caracole's lock now (an open file of its own)."""
+    path = tmp_path / "state" / "caracole.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_RDWR | os.O_CREAT)
     try:
@@ -56,7 +56,7 @@ def free(tmp_path) -> bool:
 
 
 def spy(monkeypatch, module, name: str, tmp_path) -> list[bool]:
-    """Whether tabarr's lock was held each time ``module.name`` was called."""
+    """Whether caracole's lock was held each time ``module.name`` was called."""
     held, real = [], getattr(module, name)
 
     def wrapper(*args, **kwargs):
@@ -81,11 +81,11 @@ def test_todo_writes_page(tmp_path):
     assert "_todo.md" in result.output
 
 
-def test_todo_holds_tabarrs_lock_while_it_writes(tmp_path, monkeypatch):
-    import tabarr.todo
+def test_todo_holds_caracoles_lock_while_it_writes(tmp_path, monkeypatch):
+    import caracole.todo
 
     seed(tmp_path)
-    held = spy(monkeypatch, tabarr.todo, "build_todo", tmp_path)
+    held = spy(monkeypatch, caracole.todo, "build_todo", tmp_path)
     result = run(tmp_path, "todo")
     assert result.exit_code == 0, result.output
     assert held == [True] and free(tmp_path)  # and let go of it after
@@ -109,7 +109,7 @@ def test_todo_with_broken_overrides_writes_the_page_leading_with_why(tmp_path):
 
 @needs_permissions
 @pytest.mark.parametrize("broken, code", [(False, 1), (True, 2)])
-def test_todo_in_a_library_tabarr_cant_write_says_so(tmp_path, broken, code):
+def test_todo_in_a_library_caracole_cant_write_says_so(tmp_path, broken, code):
     seed(tmp_path)
     lib = tmp_path / "lib"
     lib.mkdir()
@@ -188,7 +188,7 @@ def index_covers(conn):
     """A finished index whose only 斑马斑马 is a cover, by 李志."""
     from datetime import UTC, datetime
 
-    from tabarr.ug.index import mark_built
+    from caracole.ug.index import mark_built
 
     conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
                  "(1, 'li-zhi', 'ban-ma-ban-ma', 'chords', '1', 'x', 'li-zhi/ban-ma-ban-ma-chords-1')")
@@ -214,7 +214,7 @@ def test_review_none_of_these_keeps_looking_for_the_song(tmp_path):
 
 def test_review_rewrites_the_pages_holding_the_lock_only_after_the_questions(tmp_path, monkeypatch):
     # Never while it waits for you: the nightly run may start meanwhile.
-    import tabarr.match
+    import caracole.match
 
     conn, sid = seed(tmp_path)
     update_song(conn, sid, review=True, match_decision="review", match_step="fuzzy_title",
@@ -226,7 +226,7 @@ def test_review_rewrites_the_pages_holding_the_lock_only_after_the_questions(tmp
         return "1"
 
     monkeypatch.setattr(typer, "prompt", answer)
-    matched = spy(monkeypatch, tabarr.match, "match_all", tmp_path)
+    matched = spy(monkeypatch, caracole.match, "match_all", tmp_path)
     result = run(tmp_path, "review")
     assert result.exit_code == 0, result.output
     assert asked == [False] and matched == [True] and free(tmp_path)
@@ -272,12 +272,12 @@ def test_scan_reports_music_and_inbox(tmp_path):
 
 
 def test_scan_rewrites_the_pages_holding_the_lock(tmp_path, monkeypatch):
-    import tabarr.music
+    import caracole.music
 
     conn, sid = seed(tmp_path)
     (tmp_path / "music").mkdir()
     (tmp_path / "music" / "宋冬野 - 斑马斑马.mp3").write_bytes(b"not audio")
-    held = spy(monkeypatch, tabarr.music, "scan_music", tmp_path)
+    held = spy(monkeypatch, caracole.music, "scan_music", tmp_path)
     result = run(tmp_path, "scan")
     assert result.exit_code == 0, result.output
     assert held == [True] and free(tmp_path)
@@ -315,7 +315,7 @@ def test_scan_counts_the_links_it_refused(tmp_path):
     seed(tmp_path)
     inbox = tmp_path / "lib" / "_inbox"
     inbox.mkdir(parents=True)
-    (inbox / "宋冬野 - 斑马斑马.gp5").symlink_to(tmp_path / "state" / "tabarr.sqlite")
+    (inbox / "宋冬野 - 斑马斑马.gp5").symlink_to(tmp_path / "state" / "caracole.sqlite")
     result = run(tmp_path, "scan")
     assert result.exit_code == 0, result.output
     assert "Inbox: 0 filed, 0 duplicates, 0 left, 1 symbolic link refused" in result.output

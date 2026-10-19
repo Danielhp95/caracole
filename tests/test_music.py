@@ -5,9 +5,9 @@ from pathlib import Path
 from mutagen.id3 import TALB, TIT2, TPE1
 from mutagen.wave import WAVE
 
-from tabarr.lyrics import Lyrics
-from tabarr.music import AUDIO_EXTENSIONS, read_audio, scan_music
-from tabarr.songs import get_song, update_song
+from caracole.lyrics import Lyrics
+from caracole.music import AUDIO_EXTENSIONS, read_audio, scan_music
+from caracole.songs import get_song, update_song
 
 from conftest import add_song
 

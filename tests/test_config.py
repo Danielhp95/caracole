@@ -2,11 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from tabarr.config import ConfigError, MatchPolicy, ProviderPolicy, RankPolicy, load_config
+from caracole.config import ConfigError, MatchPolicy, ProviderPolicy, RankPolicy, load_config
 
 
 def write(tmp_path: Path, text: str) -> Path:
-    p = tmp_path / "tabarr.toml"
+    p = tmp_path / "caracole.toml"
     p.write_text(text, encoding="utf-8")
     return p
 
@@ -15,12 +15,12 @@ def test_defaults(tmp_path):
     cfg = load_config(None, env={"HOME": str(tmp_path)})
     assert cfg.library_dir == tmp_path / "Tabs"
     assert cfg.music_dir == tmp_path / "Music"
-    assert cfg.state_dir == tmp_path / ".local/state/tabarr"
-    assert cfg.cache_dir == tmp_path / ".cache/tabarr"
+    assert cfg.state_dir == tmp_path / ".local/state/caracole"
+    assert cfg.cache_dir == tmp_path / ".cache/caracole"
     assert cfg.overrides_file == tmp_path / "Tabs/overrides.toml"
     assert cfg.wanted_file == tmp_path / "Tabs/wanted.txt"
-    assert cfg.db_path == tmp_path / ".local/state/tabarr/tabarr.sqlite"
-    assert cfg.user_agent == "tabarr/0.1 (personal tab library)"
+    assert cfg.db_path == tmp_path / ".local/state/caracole/caracole.sqlite"
+    assert cfg.user_agent == "caracole/0.1 (personal tab library)"
     assert cfg.guitar_pro_mode == "assisted"
     assert cfg.chordpro_bin == "chordpro"
     assert cfg.providers["ug"] == ProviderPolicy(budget=60, delay=(10.0, 20.0))
@@ -40,18 +40,18 @@ def test_defaults(tmp_path):
 def test_xdg_directories(tmp_path):
     env = {"HOME": str(tmp_path), "XDG_STATE_HOME": "/x/state", "XDG_CACHE_HOME": "/x/cache"}
     cfg = load_config(None, env=env)
-    assert cfg.state_dir == Path("/x/state/tabarr")
-    assert cfg.cache_dir == Path("/x/cache/tabarr")
+    assert cfg.state_dir == Path("/x/state/caracole")
+    assert cfg.cache_dir == Path("/x/cache/caracole")
 
 
 def test_systemd_directories_win_over_xdg(tmp_path):
     env = {
         "HOME": str(tmp_path), "XDG_STATE_HOME": "/x/state",
-        "STATE_DIRECTORY": "/var/lib/tabarr", "CACHE_DIRECTORY": "/var/cache/tabarr:/other",
+        "STATE_DIRECTORY": "/var/lib/caracole", "CACHE_DIRECTORY": "/var/cache/caracole:/other",
     }
     cfg = load_config(None, env=env)
-    assert cfg.state_dir == Path("/var/lib/tabarr")
-    assert cfg.cache_dir == Path("/var/cache/tabarr")
+    assert cfg.state_dir == Path("/var/lib/caracole")
+    assert cfg.cache_dir == Path("/var/cache/caracole")
 
 
 def test_toml_values_tilde_and_relative_paths(tmp_path):
@@ -72,9 +72,9 @@ delay = [12, 18]
 accept = 92
 
 [ntfy]
-url = "https://ntfy.sh/tabarr-test"
+url = "https://ntfy.sh/caracole-test"
 """)
-    cfg = load_config(p, env={"HOME": "/home/u", "STATE_DIRECTORY": "/var/lib/tabarr"})
+    cfg = load_config(p, env={"HOME": "/home/u", "STATE_DIRECTORY": "/var/lib/caracole"})
     assert cfg.library_dir == Path("/home/u/Lib")
     assert cfg.music_dir == tmp_path / "music"
     assert cfg.state_dir == Path("/srv/state")
@@ -83,50 +83,50 @@ url = "https://ntfy.sh/tabarr-test"
     assert cfg.providers["ug"] == ProviderPolicy(budget=20, delay=(12.0, 18.0))
     assert cfg.providers["lrclib"].budget == 200
     assert cfg.match.accept == 92 and cfg.match.margin == 8
-    assert cfg.ntfy.url == "https://ntfy.sh/tabarr-test"
+    assert cfg.ntfy.url == "https://ntfy.sh/caracole-test"
 
 
 def test_data_dir_holds_the_library_music_state_and_cache(tmp_path):
-    p = write(tmp_path, 'data_dir = "/data/tabarr"\n')
+    p = write(tmp_path, 'data_dir = "/data/caracole"\n')
     cfg = load_config(p, env={"HOME": str(tmp_path / "home")})
-    assert cfg.library_dir == Path("/data/tabarr/library")
-    assert cfg.music_dir == Path("/data/tabarr/music")
-    assert cfg.state_dir == Path("/data/tabarr/state")
-    assert cfg.cache_dir == Path("/data/tabarr/cache")
-    assert cfg.overrides_file == Path("/data/tabarr/library/overrides.toml")
-    assert cfg.wanted_file == Path("/data/tabarr/library/wanted.txt")
-    assert cfg.db_path == Path("/data/tabarr/state/tabarr.sqlite")
+    assert cfg.library_dir == Path("/data/caracole/library")
+    assert cfg.music_dir == Path("/data/caracole/music")
+    assert cfg.state_dir == Path("/data/caracole/state")
+    assert cfg.cache_dir == Path("/data/caracole/cache")
+    assert cfg.overrides_file == Path("/data/caracole/library/overrides.toml")
+    assert cfg.wanted_file == Path("/data/caracole/library/wanted.txt")
+    assert cfg.db_path == Path("/data/caracole/state/caracole.sqlite")
 
 
 def test_explicit_folders_win_over_data_dir(tmp_path):
     p = write(tmp_path, """
-data_dir = "/data/tabarr"
+data_dir = "/data/caracole"
 library_dir = "/srv/tabs"
-cache_dir = "/var/cache/tabarr"
+cache_dir = "/var/cache/caracole"
 """)
     cfg = load_config(p, env={"HOME": str(tmp_path / "home")})
     assert cfg.library_dir == Path("/srv/tabs")
     assert cfg.wanted_file == Path("/srv/tabs/wanted.txt")
-    assert cfg.cache_dir == Path("/var/cache/tabarr")
-    assert cfg.music_dir == Path("/data/tabarr/music")
-    assert cfg.state_dir == Path("/data/tabarr/state")
+    assert cfg.cache_dir == Path("/var/cache/caracole")
+    assert cfg.music_dir == Path("/data/caracole/music")
+    assert cfg.state_dir == Path("/data/caracole/state")
 
 
 def test_data_dir_wins_over_the_systemd_and_xdg_directories(tmp_path):
     env = {
         "HOME": str(tmp_path / "home"), "XDG_STATE_HOME": "/x/state", "XDG_CACHE_HOME": "/x/cache",
-        "STATE_DIRECTORY": "/var/lib/tabarr", "CACHE_DIRECTORY": "/var/cache/tabarr",
+        "STATE_DIRECTORY": "/var/lib/caracole", "CACHE_DIRECTORY": "/var/cache/caracole",
     }
-    cfg = load_config(write(tmp_path, 'data_dir = "/data/tabarr"\n'), env=env)
-    assert cfg.state_dir == Path("/data/tabarr/state")
-    assert cfg.cache_dir == Path("/data/tabarr/cache")
+    cfg = load_config(write(tmp_path, 'data_dir = "/data/caracole"\n'), env=env)
+    assert cfg.state_dir == Path("/data/caracole/state")
+    assert cfg.cache_dir == Path("/data/caracole/cache")
 
 
 def test_data_dir_tilde_and_relative_paths(tmp_path):
     home = tmp_path / "home"
-    cfg = load_config(write(tmp_path, 'data_dir = "~/tabarr"\n'), env={"HOME": str(home)})
-    assert cfg.library_dir == home / "tabarr/library"
-    assert cfg.state_dir == home / "tabarr/state"
+    cfg = load_config(write(tmp_path, 'data_dir = "~/caracole"\n'), env={"HOME": str(home)})
+    assert cfg.library_dir == home / "caracole/library"
+    assert cfg.state_dir == home / "caracole/state"
     cfg = load_config(write(tmp_path, 'data_dir = "data"\n'), env={"HOME": str(home)})
     assert cfg.music_dir == tmp_path / "data/music"
     assert cfg.cache_dir == tmp_path / "data/cache"
@@ -137,8 +137,8 @@ def test_an_empty_data_dir_leaves_the_defaults(tmp_path):
     cfg = load_config(write(tmp_path, 'data_dir = ""\n'), env={"HOME": str(home)})
     assert cfg.library_dir == home / "Tabs"
     assert cfg.music_dir == home / "Music"
-    assert cfg.state_dir == home / ".local/state/tabarr"
-    assert cfg.cache_dir == home / ".cache/tabarr"
+    assert cfg.state_dir == home / ".local/state/caracole"
+    assert cfg.cache_dir == home / ".cache/caracole"
 
 
 def test_credentials_directory_secret_is_stripped(tmp_path):
@@ -155,7 +155,7 @@ def test_secret_file_key_then_env_fallback(tmp_path):
     secret = tmp_path / "secret.txt"
     secret.write_text("from-file\n")
     p = write(tmp_path, f'[spotify]\nclient_secret_file = "{secret}"\n')
-    cfg = load_config(p, env={"HOME": str(tmp_path), "TABARR_NTFY_TOKEN": "from-env"})
+    cfg = load_config(p, env={"HOME": str(tmp_path), "CARACOLE_NTFY_TOKEN": "from-env"})
     assert cfg.spotify.client_secret == "from-file"
     assert cfg.ntfy.token == "from-env"
 
@@ -179,9 +179,9 @@ def test_automatic_guitar_pro_mode_is_rejected(tmp_path):
 
 
 def test_default_config_file_location(tmp_path):
-    cfgdir = tmp_path / ".config/tabarr"
+    cfgdir = tmp_path / ".config/caracole"
     cfgdir.mkdir(parents=True)
-    (cfgdir / "tabarr.toml").write_text('library_dir = "/srv/tabs"\n')
+    (cfgdir / "caracole.toml").write_text('library_dir = "/srv/tabs"\n')
     cfg = load_config(None, env={"HOME": str(tmp_path)})
     assert cfg.library_dir == Path("/srv/tabs")
 
@@ -193,7 +193,7 @@ def test_missing_explicit_config_file_is_error(tmp_path):
 
 def test_autochords_settings(tmp_path):
     p = write(tmp_path, '[autochords]\nbtc_weights = "/w/btc.pt"\ndevice = "cpu"\n')
-    cfg = load_config(p, env={"HOME": str(tmp_path), "TABARR_BEAT_CHECKPOINT": "/w/beat.ckpt"})
+    cfg = load_config(p, env={"HOME": str(tmp_path), "CARACOLE_BEAT_CHECKPOINT": "/w/beat.ckpt"})
     assert cfg.autochords.btc_weights == Path("/w/btc.pt")
     assert cfg.autochords.beat_checkpoint == Path("/w/beat.ckpt")
     assert cfg.autochords.device == "cpu"
@@ -202,7 +202,7 @@ def test_autochords_settings(tmp_path):
 def test_cjk_font_setting_and_env(tmp_path):
     p = write(tmp_path, 'cjk_font = "/fonts/NotoSansCJK.ttc"\n')
     assert load_config(p, env={"HOME": str(tmp_path)}).cjk_font == Path("/fonts/NotoSansCJK.ttc")
-    cfg = load_config(None, env={"HOME": str(tmp_path), "TABARR_CJK_FONT": "/env/font.otf"})
+    cfg = load_config(None, env={"HOME": str(tmp_path), "CARACOLE_CJK_FONT": "/env/font.otf"})
     assert cfg.cjk_font == Path("/env/font.otf")
     assert load_config(None, env={"HOME": str(tmp_path)}).cjk_font is None
 
@@ -220,7 +220,7 @@ def load(tmp_path, text):
 @pytest.mark.parametrize(
     "toml,named",
     [
-        ('data_dir = ["/data/tabarr"]\n', "data_dir"),
+        ('data_dir = ["/data/caracole"]\n', "data_dir"),
         ("library_dir = 5\n", "library_dir"),
         ("music_dir = true\n", "music_dir"),
         ('state_dir = ["/srv/state"]\n', "state_dir"),
@@ -340,6 +340,6 @@ def test_match_and_rank_numbers_in_range_load(tmp_path):
         ('[autochords]\nbtc_config = "/models/btc.yaml"\n', "btc_config"),
     ],
 )
-def test_settings_tabarr_never_reads_are_unknown_keys(tmp_path, toml, named):
+def test_settings_caracole_never_reads_are_unknown_keys(tmp_path, toml, named):
     with pytest.raises(ConfigError, match=f"unknown key.*{named}"):
         load(tmp_path, toml)

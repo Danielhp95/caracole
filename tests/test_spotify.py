@@ -11,9 +11,9 @@ import spotipy
 from spotipy.cache_handler import MemoryCacheHandler
 from spotipy.exceptions import SpotifyException, SpotifyOauthError
 
-from tabarr.config import Config, SpotifyConfig
-from tabarr.sources import SyncStats
-from tabarr.spotify import (
+from caracole.config import Config, SpotifyConfig
+from caracole.sources import SyncStats
+from caracole.spotify import (
     MAX_RETRY_AFTER,
     REQUEST_TIMEOUT,
     SCOPES,
@@ -97,7 +97,7 @@ WONDER = track(
 
 
 class FakeSpotify:
-    """The spotipy calls tabarr makes, answering with paged dicts that next() follows."""
+    """The spotipy calls caracole makes, answering with paged dicts that next() follows."""
 
     def __init__(self, *, saved=(), playlists=(), items=None, top=(), page_size=2, fail=None):
         self.saved, self.playlists, self.top = list(saved), list(playlists), list(top)
@@ -220,7 +220,7 @@ def spotify(**fields):
 # --- reading tracks -------------------------------------------------------------------------
 
 
-def test_track_from_item_reads_the_fields_tabarr_keeps():
+def test_track_from_item_reads_the_fields_caracole_keeps():
     assert track_from_item(BANMA, "2026-10-17T21:04:05Z") == SpotifyTrack(
         id="tBanma",
         title="斑马，斑马",
@@ -409,7 +409,7 @@ def test_a_track_without_added_at_counts_as_added_at_the_epoch_and_goes_last():
 
 
 def test_a_track_without_added_at_is_not_restamped_by_later_runs(conn):
-    from tabarr.songs import list_songs
+    from caracole.songs import list_songs
 
     sp = FakeSpotify(
         saved=[saved(SODA, "2026-01-01T00:00:00Z")], items={LEARN: [entry(CREEP, None)]}
@@ -533,7 +533,7 @@ def test_top_tracks_are_not_read_when_not_wanted():
 )
 def test_auth_failure_maps_to_spotify_auth_error(error):
     sp = FakeSpotify(fail={"saved": error}, items={LEARN: [entry(SODA)]})
-    with pytest.raises(SpotifyAuthError, match="tabarr auth spotify"):
+    with pytest.raises(SpotifyAuthError, match="caracole auth spotify"):
         sync(sp, spotify(playlists=(LEARN,)))
 
 
@@ -659,7 +659,7 @@ class TooManyRequests(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def too_many_requests():
-    """An API client with tabarr's own session, pointed at TooManyRequests on 127.0.0.1."""
+    """An API client with caracole's own session, pointed at TooManyRequests on 127.0.0.1."""
     handler = type("Handler", (TooManyRequests,), {"hits": []})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -767,7 +767,7 @@ def test_authorize_accepts_the_bare_code():
 )
 def test_authorize_refuses_a_paste_without_a_code(pasted):
     auth = FakeAuth()
-    with pytest.raises(SpotifyAuthError, match="tabarr auth spotify"):
+    with pytest.raises(SpotifyAuthError, match="caracole auth spotify"):
         authorize(auth, read=lambda prompt: pasted, write=lambda text: None)
     assert auth.exchanged == []
 
@@ -887,13 +887,13 @@ def test_make_auth_settings(tmp_path):
     assert "redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Fcallback" in auth.get_authorize_url()
 
 
-def test_make_auth_needs_the_client_secret_from_tabarr_config(tmp_path, monkeypatch):
+def test_make_auth_needs_the_client_secret_from_caracole_config(tmp_path, monkeypatch):
     monkeypatch.setenv("SPOTIPY_CLIENT_SECRET", "from-spotipy-env")
     with pytest.raises(SpotifySetupError, match="client secret") as raised:
         make_auth(spotify(), tmp_path / "state")
     # Authorizing can't help until the secret is there, and on NixOS it's a module option.
-    assert "tabarr auth spotify" not in str(raised.value)
-    assert "services.tabarr.credentials.spotify_client_secret" in raised.value.problem
+    assert "caracole auth spotify" not in str(raised.value)
+    assert "services.caracole.credentials.spotify_client_secret" in raised.value.problem
     assert isinstance(raised.value, SpotifyAuthError)  # what callers catch still covers it
 
 
@@ -926,5 +926,5 @@ def test_client_never_prompts(tmp_path, monkeypatch, no_network):
     )  # a token from before a scope was added
     sp = client_from_config(config(tmp_path, client_id="cid", client_secret="secret"))
     monkeypatch.setattr("builtins.input", lambda *args: pytest.fail("prompted for input"))
-    with pytest.raises(SpotifyAuthError, match="tabarr auth spotify"):
+    with pytest.raises(SpotifyAuthError, match="caracole auth spotify"):
         list(iter_saved_tracks(sp))

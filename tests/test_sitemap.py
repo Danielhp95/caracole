@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from tabarr.ug.sitemap import (
+from caracole.ug.sitemap import (
     IndexRow,
     iter_locs,
     parse_sitemap_index,

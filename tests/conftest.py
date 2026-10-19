@@ -9,16 +9,16 @@ import pytest
 
 @pytest.fixture
 def conn(tmp_path: Path):
-    from tabarr import db
+    from caracole import db
 
-    c = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    c = db.connect(tmp_path / "state" / "caracole.sqlite")
     yield c
     c.close()
 
 
 @pytest.fixture
 def cfg(tmp_path: Path):
-    from tabarr.config import load_config
+    from caracole.config import load_config
 
     return load_config(
         None,
@@ -33,7 +33,7 @@ def cfg(tmp_path: Path):
 def add_song(conn, artist="Soda Stereo", title="De Música Ligera", *, added_at="2026-10-01T00:00:00Z",
              duration_ms=213000, album=None, source="wanted", source_id=None, artists=None):
     """Insert a song through the repository and return it."""
-    from tabarr.songs import get_song, upsert_song
+    from caracole.songs import get_song, upsert_song
 
     song_id, _ = upsert_song(
         conn,

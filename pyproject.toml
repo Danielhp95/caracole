@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tabarr"
+name = "caracole"
 version = "0.1.0"
 description = "Nightly builder of a private library of sing-along chord sheets, lyrics and guitar parts"
 readme = "README.md"
@@ -21,17 +21,17 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Danielhp95/tabarr"
-Repository = "https://github.com/Danielhp95/tabarr"
+Homepage = "https://github.com/Danielhp95/caracole"
+Repository = "https://github.com/Danielhp95/caracole"
 
 [project.optional-dependencies]
 autochords = ["torch", "torchaudio", "beat-this", "librosa", "numpy", "scipy", "soundfile", "pyyaml"]
 
 [project.scripts]
-tabarr = "tabarr.cli:main"
+caracole = "caracole.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tabarr"]
+packages = ["src/caracole"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

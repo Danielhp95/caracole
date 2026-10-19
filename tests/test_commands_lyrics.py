@@ -1,8 +1,8 @@
-"""``tabarr lyrics`` and ``tabarr lacuerda``, run through the CLI.
+"""``caracole lyrics`` and ``caracole lacuerda``, run through the CLI.
 
-Each test writes a tabarr.toml rooted in tmp_path, with no pause between
+Each test writes a caracole.toml rooted in tmp_path, with no pause between
 requests. LRCLIB, LaCuerda and ntfy are fakes behind ``httpx.MockTransport``,
-handed to the clients through ``tabarr.commands._common.transport_for``, so no
+handed to the clients through ``caracole.commands._common.transport_for``, so no
 request can reach the network.
 """
 
@@ -20,18 +20,18 @@ import pytest
 from conftest import add_song, subprocess_pythonpath
 from typer.testing import CliRunner
 
-from tabarr import db
-from tabarr.cli import build_app
-from tabarr.commands import _common
-from tabarr.health import get_state, is_cooling, record_block
-from tabarr.lyrics import Lyrics
-from tabarr.songs import get_song, update_song
+from caracole import db
+from caracole.cli import build_app
+from caracole.commands import _common
+from caracole.health import get_state, is_cooling, record_block
+from caracole.lyrics import Lyrics
+from caracole.songs import get_song, update_song
 
 LRCLIB_FIXTURES = Path(__file__).parent / "fixtures" / "lrclib"
 LACUERDA_FIXTURES = Path(__file__).parent / "fixtures" / "lacuerda"
 SODA = "https://acordes.lacuerda.net/soda_stereo/"
 DML_3 = "https://acordes.lacuerda.net/soda_stereo/de_musica_ligera-3.shtml"
-NTFY = "https://ntfy.example/tabarr-test"
+NTFY = "https://ntfy.example/caracole-test"
 
 # Every line is in the LaCuerda version fixture's sheet (all invented).
 SHEET_LYRICS = """\
@@ -43,7 +43,7 @@ guardo tu nombre y no sé qué hacer
 
 # Environment load_config would read; none of it may leak into a test.
 OUTSIDE_SETTINGS = (
-    "CREDENTIALS_DIRECTORY", "TABARR_CONFIG", "TABARR_NTFY_TOKEN", "TABARR_SPOTIFY_CLIENT_SECRET",
+    "CREDENTIALS_DIRECTORY", "CARACOLE_CONFIG", "CARACOLE_NTFY_TOKEN", "CARACOLE_SPOTIFY_CLIENT_SECRET",
 )
 
 
@@ -138,7 +138,7 @@ def write_config(tmp_path: Path, *, budgets=None, ntfy=False) -> Path:
             lines.append(f"budget = {budgets[provider]}")
     if ntfy:
         lines += ["[ntfy]", f'url = "{NTFY}"']
-    path = tmp_path / "tabarr.toml"
+    path = tmp_path / "caracole.toml"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
@@ -149,7 +149,7 @@ def run(tmp_path, *args, **config):
 
 
 def open_db(tmp_path):
-    return db.connect(tmp_path / "state" / "tabarr.sqlite")
+    return db.connect(tmp_path / "state" / "caracole.sqlite")
 
 
 def hit_record() -> dict:
@@ -175,7 +175,7 @@ def song(tmp_path, song_id):
         conn.close()
 
 
-# --- tabarr lyrics ---------------------------------------------------------------------
+# --- caracole lyrics ---------------------------------------------------------------------
 
 
 def test_lyrics_looks_up_pending_songs_and_reports_the_counts(tmp_path, sites):
@@ -228,12 +228,12 @@ def test_lyrics_spent_budget_is_no_failure(tmp_path, sites):
 
 
 def test_lyrics_block_starts_a_cooldown_and_sends_one_alert(tmp_path, sites):
-    # A block is expected behaviour, as for `tabarr fetch` and `tabarr index`: exit 0.
+    # A block is expected behaviour, as for `caracole fetch` and `caracole index`: exit 0.
     sites.lrclib.status = 429
     (song_id,) = seed(tmp_path, ("Soda Stereo", "De Música Ligera"))
     result = run(tmp_path, "lyrics", ntfy=True)
     assert result.exit_code == 0, result.output
-    assert "LRCLIB blocked tabarr" in result.stdout
+    assert "LRCLIB blocked caracole" in result.stdout
     assert "Nothing was marked missing" in result.stdout
     assert song(tmp_path, song_id).lyrics_status == "pending"
     conn = open_db(tmp_path)
@@ -243,7 +243,7 @@ def test_lyrics_block_starts_a_cooldown_and_sends_one_alert(tmp_path, sites):
     finally:
         conn.close()
     (alert,) = sites.ntfy.posts
-    assert alert.headers["Title"] == "tabarr: lrclib blocked"
+    assert alert.headers["Title"] == "caracole: lrclib blocked"
     assert alert.headers["Priority"] == "high"
 
 
@@ -292,7 +292,7 @@ def test_a_pass_that_asked_nothing_leaves_the_strikes(tmp_path, sites):
         conn.close()
 
 
-# --- tabarr lacuerda -------------------------------------------------------------------
+# --- caracole lacuerda -------------------------------------------------------------------
 
 
 def spanish_song(tmp_path, title="De Música Ligera") -> int:
@@ -328,9 +328,9 @@ def test_lacuerda_keeps_a_sheet_and_reports_the_counts(tmp_path, sites):
 
 def ug_sheet_kept_before_its_lyrics(tmp_path, song_id: int, markup: str) -> int:
     """A UG sheet kept while the song's lyrics were pending: sheet.txt and sheet.json, unscored."""
-    from tabarr.library import keep_file
-    from tabarr.songs import refresh_status
-    from tabarr.versions import upsert_version
+    from caracole.library import keep_file
+    from caracole.songs import refresh_status
+    from caracole.versions import upsert_version
 
     url = "https://tabs.ultimate-guitar.com/tab/soda-stereo/de-musica-ligera-chords-101"
     conn = open_db(tmp_path)
@@ -351,7 +351,7 @@ def ug_sheet_kept_before_its_lyrics(tmp_path, song_id: int, markup: str) -> int:
 def test_lacuerda_first_scores_a_sheet_kept_before_its_lyrics(tmp_path, sites):
     # The kept UG sheet covers 1 of the 7 lyric lines, LaCuerda's 4: a partial sheet that
     # covers more replaces the kept one, but only once the kept one is scored, as the run does.
-    from tabarr.versions import get_version
+    from caracole.versions import get_version
 
     sites.lacuerda.pages.update(soda_pages())
     (song_id,) = seed(tmp_path, ("Soda Stereo", "De Música Ligera"))
@@ -415,7 +415,7 @@ def test_lacuerda_block_starts_a_cooldown(tmp_path, sites):
     song_id = spanish_song(tmp_path)
     result = run(tmp_path, "lacuerda", ntfy=True)
     assert result.exit_code == 0, result.output
-    assert "LaCuerda blocked tabarr" in result.stdout
+    assert "LaCuerda blocked caracole" in result.stdout
     assert "Nothing was marked missing" in result.stdout
     assert song(tmp_path, song_id).lacuerda_checked_at is None
     conn = open_db(tmp_path)
@@ -424,7 +424,7 @@ def test_lacuerda_block_starts_a_cooldown(tmp_path, sites):
     finally:
         conn.close()
     (alert,) = sites.ntfy.posts
-    assert alert.headers["Title"] == "tabarr: lacuerda blocked"
+    assert alert.headers["Title"] == "caracole: lacuerda blocked"
 
 
 def test_lacuerda_asks_nothing_while_lacuerda_cools_down(tmp_path, sites):
@@ -535,10 +535,10 @@ def test_nothing_to_do_leaves_the_pages_alone(tmp_path, sites, command):
 def test_registering_the_commands_imports_neither_pass(tmp_path):
     # Every command module is imported on every start; the passes wait for their command.
     src = Path(__file__).resolve().parents[1] / "src"
-    passes = ("tabarr.lyrics", "tabarr.lacuerda", "tabarr.lacuerda_fetch")
+    passes = ("caracole.lyrics", "caracole.lacuerda", "caracole.lacuerda_fetch")
     code = (
         "import sys, typer\n"
-        "from tabarr.commands import lyrics\n"
+        "from caracole.commands import lyrics\n"
         "lyrics.register(typer.Typer())\n"
         f"print([m for m in {passes!r} if m in sys.modules])\n"
     )

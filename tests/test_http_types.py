@@ -1,4 +1,4 @@
-from tabarr.http import BudgetExhausted, Client, Event, ProviderBlocked, ProviderError, ProviderUnavailable, Response
+from caracole.http import BudgetExhausted, Client, Event, ProviderBlocked, ProviderError, ProviderUnavailable, Response
 
 
 def test_response_text_and_json():

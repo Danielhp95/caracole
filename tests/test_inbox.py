@@ -1,8 +1,8 @@
 import pytest
 
-from tabarr.inbox import GP_EXTENSIONS, file_inbox, parse_download_name
-from tabarr.library import keep_file, kept_files, song_dir
-from tabarr.versions import set_picks, upsert_version
+from caracole.inbox import GP_EXTENSIONS, file_inbox, parse_download_name
+from caracole.library import keep_file, kept_files, song_dir
+from caracole.versions import set_picks, upsert_version
 
 from conftest import add_song
 
@@ -174,7 +174,7 @@ def test_unmatched_stays(conn, cfg):
 
 
 def test_a_symlink_in_the_inbox_is_refused_and_left_alone(conn, cfg, tmp_path):
-    # Anyone who can write to the library could point a link at tabarr's credentials,
+    # Anyone who can write to the library could point a link at caracole's credentials,
     # under a name the to-do page lists ("Guitar Pro pages to click").
     s = add_song(conn)
     v = pick(conn, s, 555890)
@@ -196,7 +196,7 @@ def test_a_symlink_in_the_inbox_is_refused_and_left_alone(conn, cfg, tmp_path):
 
 def linked_inbox(conn, cfg, tmp_path):
     """A song with an open pick, and a link in place of _inbox/ to a folder outside the library that
-    holds a download for it and a copy of a file tabarr keeps. Returns the song, the inbox and the files."""
+    holds a download for it and a copy of a file caracole keeps. Returns the song, the inbox and the files."""
     s = add_song(conn)
     a, b = pick(conn, s, 555890), pick(conn, s, 555891, version=2)
     set_picks(conn, s.id, ["guitar-pro", "power"], [a, b])
@@ -213,7 +213,7 @@ def linked_inbox(conn, cfg, tmp_path):
 
 def test_a_linked_inbox_is_refused_and_nothing_is_read_filed_or_deleted_through_it(conn, cfg, tmp_path):
     # Anyone who can write to the library can put a link in place of _inbox/: followed, it would have
-    # tabarr file the .gp* files of the folder it points at, and delete them there.
+    # caracole file the .gp* files of the folder it points at, and delete them there.
     s, inbox, new, kept = linked_inbox(conn, cfg, tmp_path)
     stats = file_inbox(conn, cfg.library_dir)
     assert stats.refused == [inbox]
@@ -227,7 +227,7 @@ def test_an_inbox_swapped_for_a_link_while_it_is_filed_is_emptied_only_where_it_
                                                                                     monkeypatch):
     # A synced device can put a link in place of _inbox/ at any time: the folder is listed, read and
     # emptied through the descriptor it was opened as, so a link swapped in meanwhile leads nowhere.
-    import tabarr.inbox as inbox_module
+    import caracole.inbox as inbox_module
 
     s = add_song(conn)
     set_picks(conn, s.id, ["guitar-pro", "power"], [pick(conn, s, 555890)])
@@ -263,10 +263,10 @@ def test_a_dangling_inbox_link_is_refused(conn, cfg):
 def test_scan_says_it_refused_a_linked_inbox(conn, cfg, tmp_path):
     from typer.testing import CliRunner
 
-    from tabarr.cli import build_app
+    from caracole.cli import build_app
 
     _, _, new, kept = linked_inbox(conn, cfg, tmp_path)
-    config = tmp_path / "tabarr.toml"
+    config = tmp_path / "caracole.toml"
     dirs = ("library_dir", "music_dir", "state_dir", "cache_dir")
     config.write_text("".join(f'{d} = "{getattr(cfg, d)}"\n' for d in dirs), encoding="utf-8")
     result = CliRunner().invoke(build_app(), ["--config", str(config), "scan"])

@@ -1,4 +1,4 @@
-"""tabarr.commands._common: the database, the run lock, clients and the pages, for every command."""
+"""caracole.commands._common: the database, the run lock, clients and the pages, for every command."""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from tabarr import db
-from tabarr.cli import build_app
-from tabarr.commands import _common
-from tabarr.commands._common import exclusive, make_client, open_db, open_db_or_exit, write_pages
-from tabarr.config import load_config
-from tabarr.overrides import Overrides
+from caracole import db
+from caracole.cli import build_app
+from caracole.commands import _common
+from caracole.commands._common import exclusive, make_client, open_db, open_db_or_exit, write_pages
+from caracole.config import load_config
+from caracole.overrides import Overrides
 
 from conftest import add_song
 
@@ -41,30 +41,30 @@ def read_only(folder: Path):
 def write_config(tmp_path: Path, **dirs: Path) -> Path:
     paths = {"library_dir": tmp_path / "lib", "state_dir": tmp_path / "state",
              "cache_dir": tmp_path / "cache", **dirs}
-    toml = tmp_path / "tabarr.toml"
+    toml = tmp_path / "caracole.toml"
     toml.write_text("".join(f'{k} = "{v}"\n' for k, v in paths.items()), encoding="utf-8")
     return toml
 
 
-# --- folders tabarr can't write: a message with the path, never a traceback --------------------
+# --- folders caracole can't write: a message with the path, never a traceback --------------------
 
 
 @needs_permissions
-def test_a_state_folder_tabarr_cant_create_names_the_database(tmp_path, capsys):
+def test_a_state_folder_caracole_cant_create_names_the_database(tmp_path, capsys):
     with read_only(tmp_path / "locked") as locked:
         toml = write_config(tmp_path, state_dir=locked / "state")
         cfg = load_config(toml, env={"HOME": str(tmp_path)})
         with pytest.raises(typer.Exit) as raised:
             open_db(cfg)
     assert raised.value.exit_code == 1
-    db_path = locked / "state" / "tabarr.sqlite"
+    db_path = locked / "state" / "caracole.sqlite"
     assert f"can't open the database {db_path}: Permission denied ({locked / 'state'})" in (
         capsys.readouterr().err
     )
 
 
 @needs_permissions
-def test_a_database_tabarr_cant_write_names_it(tmp_path, cfg, capsys):
+def test_a_database_caracole_cant_write_names_it(tmp_path, cfg, capsys):
     db.connect(cfg.db_path).close()
     # The database is there, but its folder can't take its journal.
     with read_only(cfg.state_dir), pytest.raises(typer.Exit) as raised:
@@ -74,14 +74,14 @@ def test_a_database_tabarr_cant_write_names_it(tmp_path, cfg, capsys):
 
 
 def test_open_db_is_the_one_way_to_open_the_database():
-    # The older name stays for callers that still use it; `tabarr add`, which carries on
+    # The older name stays for callers that still use it; `caracole add`, which carries on
     # without the database, opens it with db.connect itself.
     assert open_db_or_exit is open_db
 
 
 @needs_permissions
 def test_a_command_that_needs_the_database_says_so_instead_of_a_traceback(tmp_path, monkeypatch):
-    import tabarr.commands.autochords as cmd
+    import caracole.commands.autochords as cmd
 
     monkeypatch.setattr(cmd, "find_spec", lambda name: object())  # the model packages "import"
     with read_only(tmp_path / "locked") as locked:
@@ -119,14 +119,14 @@ def test_every_command_names_a_state_folder_it_cant_use(tmp_path, args):
 
 
 def newer_database(path: Path) -> int:
-    """A database a newer tabarr migrated, as a NixOS rollback leaves it; returns its version."""
+    """A database a newer caracole migrated, as a NixOS rollback leaves it; returns its version."""
     conn = db.connect(path)
     conn.execute(f"PRAGMA user_version = {db.SCHEMA_VERSION + 1}")
     conn.close()
     return db.SCHEMA_VERSION + 1
 
 
-def test_a_database_a_newer_tabarr_migrated_exits_2(cfg, capsys):
+def test_a_database_a_newer_caracole_migrated_exits_2(cfg, capsys):
     version = newer_database(cfg.db_path)
     with pytest.raises(typer.Exit) as raised:
         open_db(cfg)
@@ -135,26 +135,26 @@ def test_a_database_a_newer_tabarr_migrated_exits_2(cfg, capsys):
 
 
 @pytest.mark.parametrize("args", DB_COMMANDS, ids=" ".join)
-def test_every_command_exits_2_on_a_database_a_newer_tabarr_migrated(tmp_path, args):
-    version = newer_database(tmp_path / "state" / "tabarr.sqlite")
+def test_every_command_exits_2_on_a_database_a_newer_caracole_migrated(tmp_path, args):
+    version = newer_database(tmp_path / "state" / "caracole.sqlite")
     result = invoke(tmp_path, *args)
     assert result.exit_code == 2, result.output
     assert not isinstance(result.exception, db.DatabaseTooNew), result.exception
-    assert f"is at schema version {version}, but this tabarr knows up to" in result.output
+    assert f"is at schema version {version}, but this caracole knows up to" in result.output
 
 
-def test_add_keeps_its_line_beside_a_database_a_newer_tabarr_migrated(tmp_path):
-    # wanted.txt is the source of truth: the line is kept, and the database waits for that tabarr.
-    newer_database(tmp_path / "state" / "tabarr.sqlite")
+def test_add_keeps_its_line_beside_a_database_a_newer_caracole_migrated(tmp_path):
+    # wanted.txt is the source of truth: the line is kept, and the database waits for that caracole.
+    newer_database(tmp_path / "state" / "caracole.sqlite")
     result = invoke(tmp_path, "add", "Radiohead", "Creep")
     assert result.exit_code == 0, result.output
-    assert "a newer tabarr migrated it" in result.output
+    assert "a newer caracole migrated it" in result.output
     wanted = (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
     assert wanted.endswith("\nRadiohead - Creep\n")
 
 
 @needs_permissions
-def test_a_library_tabarr_cant_write_names_the_page(tmp_path, cfg, conn, capsys):
+def test_a_library_caracole_cant_write_names_the_page(tmp_path, cfg, conn, capsys):
     with read_only(cfg.library_dir), pytest.raises(typer.Exit) as raised:
         write_pages(conn, cfg, Overrides(), datetime(2026, 10, 19, tzinfo=UTC))
     assert raised.value.exit_code == 1
@@ -163,17 +163,17 @@ def test_a_library_tabarr_cant_write_names_the_page(tmp_path, cfg, conn, capsys)
 
 def test_write_pages_writes_what_the_to_do_module_writes(cfg, conn, monkeypatch):
     # One way to write the pages: the commands' is todo.write_pages, with a message on failure.
-    import tabarr.todo
+    import caracole.todo
 
     calls = []
-    monkeypatch.setattr(tabarr.todo, "write_pages", lambda *args: calls.append(args) or ("t", "i"))
+    monkeypatch.setattr(caracole.todo, "write_pages", lambda *args: calls.append(args) or ("t", "i"))
     now = datetime(2026, 10, 19, tzinfo=UTC)
     overrides = Overrides()
     assert write_pages(conn, cfg, overrides, now) == ("t", "i")
     assert calls == [(conn, cfg, overrides, now)]
 
 
-def test_a_page_tabarr_cant_replace_is_named(cfg, conn, capsys):
+def test_a_page_caracole_cant_replace_is_named(cfg, conn, capsys):
     (cfg.library_dir / "_todo.md").mkdir(parents=True)  # a folder where the page goes (root too)
     with pytest.raises(typer.Exit) as raised:
         write_pages(conn, cfg, Overrides(), datetime(2026, 10, 19, tzinfo=UTC))
@@ -189,15 +189,15 @@ def test_write_pages_writes_the_todo_page_and_the_index(cfg, conn):
     assert "斑马斑马" in index.read_text(encoding="utf-8")
 
 
-# --- one tabarr at a time ------------------------------------------------------------------------
+# --- one caracole at a time ------------------------------------------------------------------------
 
 
 def lock_path(cfg) -> Path:
-    return cfg.state_dir / "tabarr.lock"
+    return cfg.state_dir / "caracole.lock"
 
 
 def free(cfg) -> bool:
-    """Whether another process could take tabarr's lock now (an open file of its own)."""
+    """Whether another process could take caracole's lock now (an open file of its own)."""
     lock_path(cfg).parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(lock_path(cfg), os.O_RDWR | os.O_CREAT)
     try:
@@ -210,8 +210,8 @@ def free(cfg) -> bool:
 
 
 @contextmanager
-def another_tabarr(cfg, record: bytes = b"4242 run\n"):
-    """Another tabarr holding the lock, as the nightly run would: its own open file, flocked."""
+def another_caracole(cfg, record: bytes = b"4242 run\n"):
+    """Another caracole holding the lock, as the nightly run would: its own open file, flocked."""
     lock_path(cfg).parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(lock_path(cfg), os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX)
@@ -223,7 +223,7 @@ def another_tabarr(cfg, record: bytes = b"4242 run\n"):
         os.close(fd)
 
 
-def test_a_second_tabarr_waits_for_the_first_and_says_so(cfg, capsys):
+def test_a_second_caracole_waits_for_the_first_and_says_so(cfg, capsys):
     started, done = threading.Event(), threading.Event()
 
     def second():
@@ -231,14 +231,14 @@ def test_a_second_tabarr_waits_for_the_first_and_says_so(cfg, capsys):
         with exclusive(cfg, "fetch"):
             done.set()
 
-    with another_tabarr(cfg):
+    with another_caracole(cfg):
         thread = threading.Thread(target=second)
         thread.start()
         assert started.wait(5)
         assert not done.wait(0.5)  # waiting, not running beside it
     assert done.wait(5)
     thread.join(5)
-    said = "Another tabarr is running (pid 4242: run); waiting for it to finish."
+    said = "Another caracole is running (pid 4242: run); waiting for it to finish."
     assert said in capsys.readouterr().err
 
 
@@ -258,7 +258,7 @@ def test_the_lock_is_taken_again_at_no_cost_by_its_holder(cfg):
 
 
 @needs_permissions
-def test_a_lock_tabarr_cant_create_is_a_message(tmp_path, cfg, capsys):
+def test_a_lock_caracole_cant_create_is_a_message(tmp_path, cfg, capsys):
     with read_only(cfg.state_dir), pytest.raises(typer.Exit) as raised, exclusive(cfg, "run"):
         pass
     assert raised.value.exit_code == 1
@@ -273,7 +273,7 @@ def test_a_client_holds_the_lock_until_it_is_closed(cfg, conn):
     client.close()  # twice is harmless
 
 
-def test_a_client_waits_for_another_tabarr(cfg, conn):
+def test_a_client_waits_for_another_caracole(cfg, conn):
     made = threading.Event()
     clients = []
 
@@ -285,7 +285,7 @@ def test_a_client_waits_for_another_tabarr(cfg, conn):
         finally:
             own.close()
 
-    with another_tabarr(cfg):
+    with another_caracole(cfg):
         thread = threading.Thread(target=make)
         thread.start()
         assert not made.wait(0.5)
@@ -302,7 +302,7 @@ def test_a_command_holding_the_lock_makes_clients(cfg, conn):
     assert free(cfg)
 
 
-# --- the pause between two tabarr processes' requests ----------------------------------------
+# --- the pause between two caracole processes' requests ----------------------------------------
 
 
 def log_request(conn, provider: str, ago: float, decision: str = "ok") -> None:

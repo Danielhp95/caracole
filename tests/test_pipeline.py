@@ -2,11 +2,11 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from tabarr.db import kv_get_json
-from tabarr.health import get_state, is_cooling, record_block
-from tabarr.http import BudgetExhausted, ProviderBlocked, ProviderError
-from tabarr.notify import Notifier
-from tabarr.pipeline import RunReport, Services, Step, run_pipeline
+from caracole.db import kv_get_json
+from caracole.health import get_state, is_cooling, record_block
+from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
+from caracole.notify import Notifier
+from caracole.pipeline import RunReport, Services, Step, run_pipeline
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
 
@@ -57,7 +57,7 @@ def test_runs_steps_in_order_and_reports(conn, cfg):
     assert calls == ["sync", "match", "todo"]
     assert report.steps == {"sync": "2 new songs", "match": "ok", "todo": "ok"}
     assert report.ok and not report.errors
-    assert out.sent and out.sent[-1][0] == "tabarr run"
+    assert out.sent and out.sent[-1][0] == "caracole run"
     assert "sync: 2 new songs" in out.sent[-1][1]
     last = kv_get_json(conn, "run:last")
     assert last["run_id"] == "2026-10-18T03:30:00Z" and last["steps"]["sync"] == "2 new songs"
@@ -79,7 +79,7 @@ def test_ug_block_cools_down_and_never_marks_not_found(conn, cfg):
     assert is_cooling(conn, "ug", NOW + timedelta(hours=23))
     assert report.ok  # a block is expected behaviour, not a failure
     titles = [t for t, _ in out.sent]
-    assert titles.count("tabarr: ug blocked") == 1
+    assert titles.count("caracole: ug blocked") == 1
 
 
 def test_later_steps_of_a_blocked_provider_are_skipped(conn, cfg):
@@ -139,7 +139,7 @@ def test_report_summary_mentions_requests(conn, cfg):
 
 
 def test_default_steps_are_in_plan_order():
-    from tabarr.pipeline import default_steps
+    from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
         "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "render", "todo",
@@ -153,18 +153,18 @@ def test_unreadable_overrides_stop_the_run_with_an_alert(conn, cfg):
     calls, out = [], Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out), steps=[step("todo", calls=calls)], now=NOW)
     assert not report.ok and calls == []
-    assert out.sent[-1][0] == "tabarr run failed" and "pins" in out.sent[-1][1]
+    assert out.sent[-1][0] == "caracole run failed" and "pins" in out.sent[-1][1]
 
 
 def test_unreadable_overrides_still_rewrite_the_todo_page_with_the_error_first(conn, cfg):
     # Two [artist_url] blocks pasted one after the other, as the page used to show them.
-    from tabarr.pipeline import default_steps
+    from caracole.pipeline import default_steps
 
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
     cfg.overrides_file.write_text(
         '[artist_url]\n"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/joaquin_sabina_1"\n\n'
         '[artist_url]\n"宋冬野" = "https://www.ultimate-guitar.com/artist/song_dongye_2"\n', encoding="utf-8")
-    (cfg.library_dir / "_todo.md").write_text("# tabarr to-do\n\n_Updated 2026-10-17 03:30 UTC_\n", encoding="utf-8")
+    (cfg.library_dir / "_todo.md").write_text("# caracole to-do\n\n_Updated 2026-10-17 03:30 UTC_\n", encoding="utf-8")
     report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=default_steps(), now=NOW)
     assert not report.ok and list(report.steps) == ["overrides"]
     page = todo_page(cfg)
@@ -180,7 +180,7 @@ def test_an_overrides_file_that_isnt_utf8_stops_the_run_like_any_unreadable_one(
     calls, out = [], Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out), steps=[step("todo", calls=calls)], now=NOW)
     assert not report.ok and calls == [] and list(report.steps) == ["overrides"]
-    assert out.sent[-1][0] == "tabarr run failed" and "line 2 is not valid UTF-8" in out.sent[-1][1]
+    assert out.sent[-1][0] == "caracole run failed" and "line 2 is not valid UTF-8" in out.sent[-1][1]
     setup = todo_page(cfg).split("\n## ", 1)[1].split("\n## ", 1)[0]
     assert setup.startswith("Setup problems") and "line 2 is not valid UTF-8 (save the file as UTF-8)" in setup
 
@@ -188,10 +188,10 @@ def test_an_overrides_file_that_isnt_utf8_stops_the_run_like_any_unreadable_one(
 def test_run_command_exit_codes(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
-    import tabarr.pipeline as pipeline
-    from tabarr.cli import build_app
+    import caracole.pipeline as pipeline
+    from caracole.cli import build_app
 
-    cfgfile = tmp_path / "tabarr.toml"
+    cfgfile = tmp_path / "caracole.toml"
     cfgfile.write_text(f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n'
                        f'library_dir = "{tmp_path / "lib"}"\n', encoding="utf-8")
     results = iter([RunReport(run_id="r", started="r", steps={"todo": "ok"}),
@@ -208,10 +208,10 @@ def test_a_run_re_keys_the_songs_before_the_sync_reads_wanted_txt(conn, cfg):
     # the new key; read under none, it would be the run's, and the song would jump the queue.
     import json
 
-    from tabarr.db import kv_delete, kv_set
-    from tabarr.pipeline import default_steps
-    from tabarr.songs import KEY_VERSION_KV, list_songs
-    from tabarr.wanted import FIRST_SEEN_KEY
+    from caracole.db import kv_delete, kv_set
+    from caracole.pipeline import default_steps
+    from caracole.songs import KEY_VERSION_KV, list_songs
+    from caracole.wanted import FIRST_SEEN_KEY
 
     old_key, september = "soda-stereo/persiana-americana-en-vivo", "2026-09-01T00:00:00Z"
     conn.execute(
@@ -232,15 +232,15 @@ def test_a_run_re_keys_the_songs_before_the_sync_reads_wanted_txt(conn, cfg):
     assert (song.key, song.added_at) == ("soda-stereo/persiana-americana", september)
 
 
-# --- one tabarr at a time ---------------------------------------------------------------
+# --- one caracole at a time ---------------------------------------------------------------
 
 
 def lock_is_free(cfg) -> bool:
-    """Whether another process could take tabarr's lock now."""
+    """Whether another process could take caracole's lock now."""
     import fcntl
     import os
 
-    path = cfg.state_dir / "tabarr.lock"
+    path = cfg.state_dir / "caracole.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_RDWR | os.O_CREAT)
     try:
@@ -252,10 +252,10 @@ def lock_is_free(cfg) -> bool:
     return True
 
 
-def test_the_runs_clients_keep_the_pause_after_another_tabarrs_last_request(conn, cfg, monkeypatch):
-    # A `tabarr-admin fetch` asked UG 3 s ago: the run's first UG request waits out UG's pause.
-    from tabarr.commands import _common
-    from tabarr.pipeline import make_services
+def test_the_runs_clients_keep_the_pause_after_another_caracoles_last_request(conn, cfg, monkeypatch):
+    # A `caracole-admin fetch` asked UG 3 s ago: the run's first UG request waits out UG's pause.
+    from caracole.commands import _common
+    from caracole.pipeline import make_services
 
     slept = []
     monkeypatch.setattr(_common, "sleep", slept.append)
@@ -273,15 +273,15 @@ def test_the_runs_clients_keep_the_pause_after_another_tabarrs_last_request(conn
 
 
 def test_a_run_lets_go_of_the_lock_its_clients_held(conn, cfg):
-    # Its own clients hold tabarr's lock; once the run is over, another tabarr may go on.
+    # Its own clients hold caracole's lock; once the run is over, another caracole may go on.
     report = run_pipeline(cfg, conn=conn, steps=[step("todo")], now=NOW)
     assert report.ok
     assert lock_is_free(cfg)
 
 
 def test_default_match_step_skips_while_the_index_is_empty(conn, cfg):
-    from tabarr.pipeline import _match, StepContext
-    from tabarr.overrides import Overrides
+    from caracole.pipeline import _match, StepContext
+    from caracole.overrides import Overrides
     from conftest import add_song
 
     add_song(conn, "Radiohead", "Creep")
@@ -297,10 +297,10 @@ def test_default_match_step_waits_for_an_index_a_build_left_half_done(conn, cfg)
     # one it never read. Creep must not become not_found, and the stored decision stays as it is.
     from conftest import add_song
 
-    from tabarr.overrides import Overrides
-    from tabarr.pipeline import StepContext, _match
-    from tabarr.songs import get_song, update_song
-    from tabarr.ug.index import upsert_rows
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext, _match
+    from caracole.songs import get_song, update_song
+    from caracole.ug.index import upsert_rows
 
     upsert_rows(conn, [(1001, "oasis", "wonderwall", "chords", "oasis/wonderwall-chords-1001")], "1", NOW)
     creep = add_song(conn, "Radiohead", "Creep")
@@ -319,9 +319,9 @@ def keep_sheet_before_lyrics(conn, cfg, song, content):
     """A UG sheet kept while the song's lyrics were pending: sheet.txt and sheet.json, no coverage."""
     import json
 
-    from tabarr.library import keep_file
-    from tabarr.ug.page import strip_markup
-    from tabarr.versions import upsert_version
+    from caracole.library import keep_file
+    from caracole.ug.page import strip_markup
+    from caracole.versions import upsert_version
 
     url = "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-101"
     vid = upsert_version(conn, provider="ug", tab_id="101", song_id=song.id, slot="sheet", kind="chords",
@@ -337,10 +337,10 @@ def test_default_fetch_step_scores_sheets_kept_before_their_lyrics(conn, cfg):
     # The lyrics step has since found the song's lyrics: the sheet covers half of them.
     from conftest import add_song
 
-    from tabarr.lyrics import Lyrics
-    from tabarr.pipeline import default_steps
-    from tabarr.songs import update_song
-    from tabarr.versions import get_version
+    from caracole.lyrics import Lyrics
+    from caracole.pipeline import default_steps
+    from caracole.songs import update_song
+    from caracole.versions import get_version
 
     song = add_song(conn, "Soda Stereo", "Persiana Americana")
     content = "[Verso]\n[ch]Am[/ch]      [ch]F[/ch]\nwalking down the river road tonight\n"
@@ -360,9 +360,9 @@ def test_default_fetch_step_scores_sheets_kept_before_their_lyrics(conn, cfg):
 
 
 def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, monkeypatch):
-    import tabarr.lacuerda_fetch as lf
-    from tabarr.overrides import Overrides
-    from tabarr.pipeline import StepContext, _lacuerda
+    import caracole.lacuerda_fetch as lf
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext, _lacuerda
 
     seen = {}
 
@@ -382,9 +382,9 @@ def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, mo
 
 
 def test_default_scan_step_says_how_many_links_the_inbox_refused(conn, cfg, tmp_path):
-    # As `tabarr scan` does: a link in place of _inbox/, or in it, is never read, and the run says so.
-    from tabarr.overrides import Overrides
-    from tabarr.pipeline import StepContext, _scan
+    # As `caracole scan` does: a link in place of _inbox/, or in it, is never read, and the run says so.
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext, _scan
 
     ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
                       report=RunReport(run_id="r", started="r"))
@@ -403,9 +403,9 @@ def test_default_scan_step_says_how_many_links_the_inbox_refused(conn, cfg, tmp_
 
 
 def test_fetch_summary_counts_settled_sheets(conn, cfg, monkeypatch):
-    import tabarr.ug.fetch as fetch
-    from tabarr.overrides import Overrides
-    from tabarr.pipeline import StepContext, _fetch
+    import caracole.ug.fetch as fetch
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext, _fetch
 
     monkeypatch.setattr(fetch, "songs_to_fetch", lambda *a, **k: [])
     monkeypatch.setattr(fetch, "rescore_kept_sheets", lambda *a, **k: 0)
@@ -424,7 +424,7 @@ def todo_page(cfg):
 
 
 def todo_step():
-    from tabarr.pipeline import default_steps
+    from caracole.pipeline import default_steps
 
     return [s for s in default_steps() if s.name == "todo"]
 
@@ -447,11 +447,11 @@ def test_ug_fetch_errors_reach_provider_health_and_an_all_error_run_is_no_succes
     # Every UG request answers 502, so the fetch fails every song: an error for the page, and no success.
     from conftest import add_song
 
-    from tabarr.config import ProviderPolicy
-    from tabarr.health import EventLog
-    from tabarr.http import PoliteClient
-    from tabarr.pipeline import default_steps
-    from tabarr.songs import update_song
+    from caracole.config import ProviderPolicy
+    from caracole.health import EventLog
+    from caracole.http import PoliteClient
+    from caracole.pipeline import default_steps
+    from caracole.songs import update_song
 
     for n in range(5):
         conn.execute(
@@ -462,7 +462,7 @@ def test_ug_fetch_errors_reach_provider_health_and_an_all_error_run_is_no_succes
         s = add_song(conn, "Radiohead", f"Song {n}")
         update_song(conn, s.id, match_decision="accept", match_step="exact", match_artist_key="radiohead",
                     match_song_key=f"song-{n}")
-    ug = PoliteClient("ug", ProviderPolicy(budget=60, delay=(0.0, 0.0)), cfg.cache_dir, user_agent="tabarr-test",
+    ug = PoliteClient("ug", ProviderPolicy(budget=60, delay=(0.0, 0.0)), cfg.cache_dir, user_agent="caracole-test",
                       transport=httpx.MockTransport(lambda request: httpx.Response(502, text="bad gateway")),
                       sleep=lambda s: None, on_event=EventLog(conn, "2026-10-18T03:30:00Z"))
     svc = Services(clients={"ug": ug, "lrclib": FakeClient(), "lacuerda": FakeClient()}, spotify=None,
@@ -481,8 +481,8 @@ def test_ug_fetch_errors_reach_provider_health_and_an_all_error_run_is_no_succes
 
 def test_a_run_with_some_good_answers_still_counts_as_a_success(conn, cfg):
     # One 502 among good answers: the provider works, and its error is shown beside the success.
-    from tabarr.health import EventLog
-    from tabarr.http import Event
+    from caracole.health import EventLog
+    from caracole.http import Event
 
     log = EventLog(conn, "2026-10-18T03:30:00Z")
     log(Event("ug", "https://tabs.ultimate-guitar.com/tab/1", 200, "ok"))

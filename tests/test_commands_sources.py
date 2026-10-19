@@ -1,7 +1,7 @@
-"""``tabarr add``, ``tabarr sync`` and ``tabarr auth spotify``, run through the CLI.
+"""``caracole add``, ``caracole sync`` and ``caracole auth spotify``, run through the CLI.
 
-Each test writes a tabarr.toml rooted in tmp_path. Spotify is faked by replacing
-``tabarr.spotify.client_from_config`` (or the token session of a real OAuth
+Each test writes a caracole.toml rooted in tmp_path. Spotify is faked by replacing
+``caracole.spotify.client_from_config`` (or the token session of a real OAuth
 manager), and no request can reach the network.
 """
 
@@ -17,18 +17,18 @@ import requests
 from spotipy.exceptions import SpotifyException
 from typer.testing import CliRunner
 
-from tabarr import db
-from tabarr.cli import build_app
-from tabarr.songs import list_songs
-from tabarr.wanted import HEADER
+from caracole import db
+from caracole.cli import build_app
+from caracole.songs import list_songs
+from caracole.wanted import HEADER
 from conftest import subprocess_pythonpath
 
 # Environment that load_config or spotipy would read; none of it may leak into a test.
 OUTSIDE_SETTINGS = (
     "CREDENTIALS_DIRECTORY",
-    "TABARR_CONFIG",
-    "TABARR_SPOTIFY_CLIENT_SECRET",
-    "TABARR_NTFY_TOKEN",
+    "CARACOLE_CONFIG",
+    "CARACOLE_SPOTIFY_CLIENT_SECRET",
+    "CARACOLE_NTFY_TOKEN",
     "SPOTIPY_CLIENT_ID",
     "SPOTIPY_CLIENT_SECRET",
     "SPOTIPY_REDIRECT_URI",
@@ -47,7 +47,7 @@ def isolated(monkeypatch):
 
 
 def write_config(tmp_path, extra=""):
-    path = tmp_path / "tabarr.toml"
+    path = tmp_path / "caracole.toml"
     path.write_text(
         f'library_dir = "{tmp_path / "lib"}"\n'
         f'music_dir = "{tmp_path / "music"}"\n'
@@ -72,7 +72,7 @@ def wanted_file(tmp_path, text=None):
 
 
 def songs(tmp_path):
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     try:
         return list_songs(conn)
     finally:
@@ -80,7 +80,7 @@ def songs(tmp_path):
 
 
 def spotify_config(tmp_path, *, secret=True):
-    """A [spotify] table for tabarr.toml; the client secret sits in a file next to it."""
+    """A [spotify] table for caracole.toml; the client secret sits in a file next to it."""
     if not secret:
         return '[spotify]\nclient_id = "cid"\n'
     (tmp_path / "spotify_secret").write_text("secret\n", encoding="utf-8")
@@ -129,11 +129,11 @@ def fake_spotify(monkeypatch, client):
             raise client
         return client
 
-    monkeypatch.setattr("tabarr.spotify.client_from_config", client_from_config)
+    monkeypatch.setattr("caracole.spotify.client_from_config", client_from_config)
     return calls
 
 
-# --- tabarr add -----------------------------------------------------------------------------
+# --- caracole add -----------------------------------------------------------------------------
 
 
 def test_add_creates_wanted_txt_and_the_song(tmp_path):
@@ -241,11 +241,11 @@ def test_add_keeps_the_line_when_the_database_is_out_of_reach(tmp_path):
     assert result.exit_code == 0, result.output
     assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith("\nRadiohead - Creep\n")
     assert "Added to" in result.output
-    assert "`tabarr sync`" in result.output  # the next sync adds it to the database
+    assert "`caracole sync`" in result.output  # the next sync adds it to the database
 
 
 def test_add_and_search_add_go_through_one_add_path(tmp_path, monkeypatch):
-    from tabarr.commands import sources
+    from caracole.commands import sources
 
     real = sources.add_song
     calls = []
@@ -259,7 +259,7 @@ def test_add_and_search_add_go_through_one_add_path(tmp_path, monkeypatch):
         tmp_path, "add", "Radiohead", "Creep", "--album", "Pablo Honey", "--duration", "3:58"
     )
     assert added.exit_code == 0, added.output
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     conn.execute(
         "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
         "VALUES (5001, 'stone-temple-pilots', 'creep', 'chords', '1', 'x', ?)",
@@ -278,7 +278,7 @@ def test_add_and_search_add_go_through_one_add_path(tmp_path, monkeypatch):
     assert {s.key for s in songs(tmp_path)} == {"radiohead/creep", "stone-temple-pilots/creep"}
 
 
-# --- tabarr sync ----------------------------------------------------------------------------
+# --- caracole sync ----------------------------------------------------------------------------
 
 TWO_SONGS_AND_A_TYPO = (
     "宋冬野 - 斑马斑马 | 安和桥北 | 4:13\nnot a song line\nSoda Stereo - De Música Ligera\n"
@@ -301,14 +301,14 @@ SEPTEMBER = "2026-09-01T00:00:00Z"
 
 
 def listed_since_september_under_an_older_key(tmp_path):
-    """Persiana Americana - En Vivo, in wanted.txt since September, as an older tabarr keyed it."""
+    """Persiana Americana - En Vivo, in wanted.txt since September, as an older caracole keyed it."""
     import json
 
-    from tabarr.songs import KEY_VERSION_KV
-    from tabarr.wanted import FIRST_SEEN_KEY
+    from caracole.songs import KEY_VERSION_KV
+    from caracole.wanted import FIRST_SEEN_KEY
 
     wanted_file(tmp_path, "Soda Stereo - Persiana Americana - En Vivo\n")
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     try:
         conn.execute(
             "INSERT INTO songs (key, artist, title, artists, source_ids, added_at, created_at, "
@@ -325,14 +325,14 @@ def listed_since_september_under_an_older_key(tmp_path):
 def test_sync_after_an_upgrade_keeps_a_re_keyed_lines_place_in_the_queue(tmp_path):
     # The songs are re-keyed as the database opens, before the sync reads a line's first-seen
     # time: read under the old key, it would be "now", and the song would jump the queue.
-    from tabarr.wanted import FIRST_SEEN_KEY
+    from caracole.wanted import FIRST_SEEN_KEY
 
     listed_since_september_under_an_older_key(tmp_path)
     result = run(tmp_path, "sync")
     assert result.exit_code == 0, result.output
     [song] = songs(tmp_path)
     assert (song.key, song.added_at) == ("soda-stereo/persiana-americana", SEPTEMBER)
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     try:
         assert db.kv_get(conn, FIRST_SEEN_KEY + "soda-stereo/persiana-americana") == SEPTEMBER
     finally:
@@ -343,7 +343,7 @@ def test_sync_with_nothing_to_read_says_how_to_start(tmp_path):
     result = run(tmp_path, "sync")
     assert result.exit_code == 0, result.output
     assert "wanted.txt 0 songs, 0 new; Spotify off" in result.output
-    assert str(wanted_file(tmp_path)) in result.output and "`tabarr add" in result.output
+    assert str(wanted_file(tmp_path)) in result.output and "`caracole add" in result.output
 
 
 def test_sync_with_spotify(tmp_path, monkeypatch):
@@ -362,7 +362,7 @@ def test_sync_when_spotify_needs_authorization(tmp_path):
     wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
     result = run(tmp_path, "sync", config=spotify_config(tmp_path))
     assert result.exit_code == 0, result.output
-    assert "Spotify needs authorization (run `tabarr auth spotify`)" in result.output
+    assert "Spotify needs authorization (run `caracole auth spotify`)" in result.output
     token = tmp_path / "state" / "spotify_token.json"
     assert f"Spotify: No Spotify authorization is saved yet (no token in {token})." in result.output
     assert len(songs(tmp_path)) == 2  # wanted.txt synced all the same
@@ -426,7 +426,7 @@ def test_add_and_sync_rewrite_the_pages(tmp_path, args):
 
 
 def test_search_add_rewrites_the_pages_too(tmp_path):
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     conn.execute(
         "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
         "VALUES (5001, 'stone-temple-pilots', 'creep', 'chords', '1', 'x', ?)",
@@ -465,7 +465,7 @@ def test_a_page_it_cant_write_is_a_warning_and_the_songs_are_synced(tmp_path, ar
     assert said in result.output
 
 
-# --- tabarr auth spotify --------------------------------------------------------------------
+# --- caracole auth spotify --------------------------------------------------------------------
 
 REDIRECT = "http://127.0.0.1:8888/callback"
 
@@ -504,26 +504,26 @@ class FakeTokenSession:
 
 def token_session(monkeypatch, session):
     """Have the real OAuth manager that ``make_auth`` builds post through ``session``."""
-    import tabarr.spotify
+    import caracole.spotify
 
-    real = tabarr.spotify.make_auth
+    real = caracole.spotify.make_auth
 
     def make_auth(cfg, state_dir):
         auth = real(cfg, state_dir)
         auth._session = session
         return auth
 
-    monkeypatch.setattr(tabarr.spotify, "make_auth", make_auth)
+    monkeypatch.setattr(caracole.spotify, "make_auth", make_auth)
 
 
 def test_auth_spotify_without_a_client_id_says_how_to_set_it_up(tmp_path, monkeypatch):
-    monkeypatch.setattr("tabarr.spotify.make_auth", lambda *a: pytest.fail("Spotify is off"))
+    monkeypatch.setattr("caracole.spotify.make_auth", lambda *a: pytest.fail("Spotify is off"))
     result = run(tmp_path, "auth", "spotify")
     assert result.exit_code == 1, result.output
     out = result.output
     assert "optional" in out and "wanted.txt" in out
     assert "developer.spotify.com" in out and REDIRECT in out
-    assert str(tmp_path / "tabarr.toml") in out
+    assert str(tmp_path / "caracole.toml") in out
     assert "[spotify]" in out and 'client_id = "' in out
     assert "spotify_client_secret" in out
 
@@ -546,7 +546,7 @@ def test_auth_spotify_saves_the_token_and_says_where(tmp_path, monkeypatch):
     token = tmp_path / "state" / "spotify_token.json"
     assert '"refresh_token": "RT"' in token.read_text(encoding="utf-8")
     assert f"the token is in {token}" in result.output
-    assert "`tabarr sync`" in result.output
+    assert "`caracole sync`" in result.output
 
 
 def test_auth_spotify_refused_in_the_browser_exits_1(tmp_path, monkeypatch):
@@ -561,7 +561,7 @@ def test_auth_spotify_refused_in_the_browser_exits_1(tmp_path, monkeypatch):
     )
     assert result.exit_code == 1, result.output
     assert "access was refused in the browser (access_denied)" in result.output
-    assert "Run `tabarr auth spotify`" not in result.output  # that's what was just run
+    assert "Run `caracole auth spotify`" not in result.output  # that's what was just run
     assert session.posts == []
     assert not (tmp_path / "state" / "spotify_token.json").exists()
 
@@ -593,9 +593,9 @@ def test_registering_the_commands_imports_no_spotipy(tmp_path):
     src = Path(__file__).resolve().parents[1] / "src"
     code = (
         "import sys, typer\n"
-        "from tabarr.commands import sources\n"
+        "from caracole.commands import sources\n"
         "sources.register(typer.Typer())\n"
-        "print([m for m in ('spotipy', 'tabarr.spotify') if m in sys.modules])\n"
+        "print([m for m in ('spotipy', 'caracole.spotify') if m in sys.modules])\n"
     )
     env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
     result = subprocess.run(

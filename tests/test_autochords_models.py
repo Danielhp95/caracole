@@ -1,8 +1,8 @@
 """Auto-chords models: BTC chord recognition and beat_this beat tracking.
 
 Tests marked ``autochords`` need torch, librosa and beat_this, and the model
-files: set TABARR_BTC_WEIGHTS and TABARR_BEAT_CHECKPOINT, or put the files under
-TABARR_MODELS_DIR. Run them in the auto-chords environment. The other tests here
+files: set CARACOLE_BTC_WEIGHTS and CARACOLE_BEAT_CHECKPOINT, or put the files under
+CARACOLE_MODELS_DIR. Run them in the auto-chords environment. The other tests here
 cover the pure helpers and run anywhere.
 """
 
@@ -16,9 +16,9 @@ from pathlib import Path
 
 import pytest
 
-from tabarr.autochords import ChordSegment
-from tabarr.autochords.beats import detect_beats
-from tabarr.autochords.btc import (
+from caracole.autochords import ChordSegment
+from caracole.autochords.beats import detect_beats
+from caracole.autochords.btc import (
     BTCRecognizer,
     common_name,
     frames_to_segments,
@@ -28,7 +28,7 @@ from tabarr.autochords.btc import (
 
 from conftest import subprocess_pythonpath
 
-MODELS_DIR = Path(os.environ["TABARR_MODELS_DIR"]) if os.environ.get("TABARR_MODELS_DIR") else None
+MODELS_DIR = Path(os.environ["CARACOLE_MODELS_DIR"]) if os.environ.get("CARACOLE_MODELS_DIR") else None
 
 
 def _imports(*names: str) -> bool:
@@ -48,9 +48,9 @@ def _model_file(env_var: str, name: str) -> Path | None:
 
 
 HAVE_LIBS = _imports("numpy", "soundfile", "torch", "librosa", "beat_this")
-BTC_WEIGHTS = _model_file("TABARR_BTC_WEIGHTS", "btc_model_large_voca.pt")
-BTC_MAJMIN_WEIGHTS = _model_file("TABARR_BTC_MAJMIN_WEIGHTS", "btc_model.pt")
-BEAT_CHECKPOINT = _model_file("TABARR_BEAT_CHECKPOINT", "final0.ckpt")
+BTC_WEIGHTS = _model_file("CARACOLE_BTC_WEIGHTS", "btc_model_large_voca.pt")
+BTC_MAJMIN_WEIGHTS = _model_file("CARACOLE_BTC_MAJMIN_WEIGHTS", "btc_model.pt")
+BEAT_CHECKPOINT = _model_file("CARACOLE_BEAT_CHECKPOINT", "final0.ckpt")
 
 needs_libs = pytest.mark.skipif(not HAVE_LIBS, reason="needs torch, librosa and beat_this")
 needs_btc = pytest.mark.skipif(BTC_WEIGHTS is None, reason="no BTC weights")
@@ -216,7 +216,7 @@ def test_a_sliver_after_the_last_full_chunk_is_skipped_quietly():
 
     import numpy as np
 
-    from tabarr.autochords.btc import cqt_features
+    from caracole.autochords.btc import cqt_features
 
     rng = np.random.default_rng(0)
     with warnings.catch_warnings():
@@ -239,7 +239,7 @@ def test_features_work_without_a_writable_home(tmp_path):
     locked.mkdir(mode=0o555)
     code = (
         "import numpy\n"
-        "from tabarr.autochords.btc import cqt_features\n"
+        "from caracole.autochords.btc import cqt_features\n"
         "print(cqt_features(numpy.zeros(4096, 'float32')).shape)"
     )
     env = {"HOME": str(locked / "home"), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}

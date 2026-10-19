@@ -1,11 +1,11 @@
 from datetime import UTC, datetime
 
-from tabarr.config import MatchPolicy
-from tabarr.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
-from tabarr.overrides import Overrides
-from tabarr.songs import get_song, update_song
-from tabarr.ug.index import mark_built
-from tabarr.versions import picks, set_picks, song_versions, upsert_version
+from caracole.config import MatchPolicy
+from caracole.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
+from caracole.overrides import Overrides
+from caracole.songs import get_song, update_song
+from caracole.ug.index import mark_built
+from caracole.versions import picks, set_picks, song_versions, upsert_version
 
 from conftest import add_song
 
@@ -202,7 +202,7 @@ def test_ignore_pin_and_match_overrides(conn):
 
 
 def test_rejected_covers_never_come_back_and_other_covers_still_can(conn):
-    # "None of these" in tabarr review, for a review on the title alone: UG lists Maná only by bare ids.
+    # "None of these" in caracole review, for a review on the title alone: UG lists Maná only by bare ids.
     index(conn, (1, "ana-gabriel", "rayando-el-sol", "chords"), (2, "pablo-alboran", "rayando-el-sol", "chords"),
           (3, "pablo-alboran", "rayando-el-sol", "tabs"))
     song = add_song(conn, "Maná", "Rayando el Sol")
@@ -362,7 +362,7 @@ def test_match_all_marks_dirty_when_a_review_becomes_an_accept_on_the_same_keys(
     match_all(conn, Overrides(), POLICY)
     update_song(conn, s.id, ug_dirty=False)
     assert get_song(conn, s.id).match_decision == "review"
-    match_all(conn, Overrides(), MatchPolicy(margin=4))  # you loosened the margin in tabarr.toml
+    match_all(conn, Overrides(), MatchPolicy(margin=4))  # you loosened the margin in caracole.toml
     assert (get_song(conn, s.id).match_decision, get_song(conn, s.id).ug_dirty) == ("accept", True)
 
 
@@ -454,7 +454,7 @@ def test_an_empty_index_keeps_what_the_ladder_found(conn):
 
 def test_a_partial_index_keeps_what_the_ladder_found_and_saves_no_new_miss(conn):
     # A build stopped part-way: a song whose tabs are in the sitemaps it didn't read isn't missing from
-    # UG. match_all holds this for every caller, `tabarr review`'s rematch among them.
+    # UG. match_all holds this for every caller, `caracole review`'s rematch among them.
     index(conn, (1, "radiohead", "creep", "chords"), (2, "oasis", "wonderwall", "chords"), built=False)
     earlier = add_song(conn, "Eagles", "Hotel California")  # matched before, in a sitemap not read yet
     update_song(conn, earlier.id, match_decision="accept", match_step="exact", match_score=100.0,
@@ -498,7 +498,7 @@ def test_an_artist_page_match_is_not_undone_by_the_ladder(conn):
 
 
 def test_none_of_these_leaves_the_song_not_found_for_the_fetch_to_look_further(conn):
-    from tabarr.ug.fetch import needs_artist_page
+    from caracole.ug.fetch import needs_artist_page
 
     index(conn, (1, "ana-gabriel", "rayando-el-sol", "chords"), (2, "pablo-alboran", "rayando-el-sol", "chords"))
     s = add_song(conn, "Maná", "Rayando el Sol")

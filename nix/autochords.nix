@@ -1,9 +1,9 @@
 # Model weights for the auto-chords unit, as fixed-output derivations.
 #
 # The unit runs with PrivateNetwork = true, so nothing may download at run time.
-# package.nix's auto-chords variant points TABARR_BTC_WEIGHTS and
-# TABARR_BEAT_CHECKPOINT at these store paths (wrapper defaults, which the NixOS
-# module's options and [autochords] in tabarr.toml override).
+# package.nix's auto-chords variant points CARACOLE_BTC_WEIGHTS and
+# CARACOLE_BEAT_CHECKPOINT at these store paths (wrapper defaults, which the NixOS
+# module's options and [autochords] in caracole.toml override).
 { fetchurl }:
 {
   # BTC large-vocabulary weights (170 chord classes), from the authors' repository

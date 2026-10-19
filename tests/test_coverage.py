@@ -1,4 +1,4 @@
-from tabarr.coverage import coverage, lyric_lines, normalize_line, sheet_lyric_text
+from caracole.coverage import coverage, lyric_lines, normalize_line, sheet_lyric_text
 
 LYRICS = """Walking down the empty road tonight
 Counting every light along the way

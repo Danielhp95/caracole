@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-from tabarr.config import ProviderPolicy
-from tabarr.http import (
+from caracole.config import ProviderPolicy
+from caracole.http import (
     BudgetExhausted,
     PoliteClient,
     ProviderBlocked,
@@ -41,7 +41,7 @@ def make_client(tmp_path, handler, *, budget=60, delay=(10.0, 20.0), sleeps=None
         "ug",
         ProviderPolicy(budget=budget, delay=delay),
         tmp_path / "cache",
-        user_agent="tabarr/test",
+        user_agent="caracole/test",
         transport=httpx.MockTransport(rec),
         sleep=(sleeps.append if sleeps is not None else (lambda s: None)),
         rng=random.Random(1),
@@ -85,7 +85,7 @@ def test_params_are_part_of_the_cache_key(tmp_path):
 def test_user_agent_sent(tmp_path):
     client, rec = make_client(tmp_path, ok())
     client.get("https://tabs.ultimate-guitar.com/tab/1")
-    assert rec.requests[0].headers["user-agent"] == "tabarr/test"
+    assert rec.requests[0].headers["user-agent"] == "caracole/test"
 
 
 def test_pause_before_every_network_request_but_the_first(tmp_path):
@@ -177,7 +177,7 @@ ROBOTS_CLOSED = [
     WWW + "/tab-pro/download?id=1",  # /tab-pro/download
     WWW + "/artist/soda_stereo_2946?no_takeover",  # /*?no_takeover
 ]
-READ_BY_TABARR = [
+READ_BY_CARACOLE = [
     TABS + "/tab/soda-stereo/persiana-americana-tabs-1081462",
     TABS + "/tab/85053",
     WWW + "/artist/soda_stereo_2946?filter=chords&page=2",
@@ -196,17 +196,17 @@ def test_urls_robots_txt_closes_are_never_requested(tmp_path, url):
     assert rec.requests == [] and client.requests_made == 0
 
 
-@pytest.mark.parametrize("url", READ_BY_TABARR)
-def test_urls_tabarr_reads_are_open(tmp_path, url):
+@pytest.mark.parametrize("url", READ_BY_CARACOLE)
+def test_urls_caracole_reads_are_open(tmp_path, url):
     client, rec = make_client(tmp_path, ok())
     assert client.get(url).status == 200 and len(rec.requests) == 1
 
 
 def test_robots_disallows_names_the_rule_for_other_modules():
-    from tabarr.http import robots_disallows
+    from caracole.http import robots_disallows
 
     assert robots_disallows(TABS + "/tab/track/ave-fenix-guitar-pro-1149792") == "/tab/track/"
-    assert [u for u in READ_BY_TABARR if robots_disallows(u)] == []
+    assert [u for u in READ_BY_CARACOLE if robots_disallows(u)] == []
 
 
 def test_robots_refusals_are_not_provider_failures(tmp_path):
@@ -236,7 +236,7 @@ NOT_URLS = {
 @pytest.mark.parametrize("url", NOT_URLS.values(), ids=NOT_URLS.keys())
 def test_robots_disallows_counts_a_string_that_isnt_a_url_as_closed(url):
     # Never httpx.InvalidURL: fetch.py asks it of every candidate, index.py of indexed paths.
-    from tabarr.http import robots_disallows
+    from caracole.http import robots_disallows
 
     assert robots_disallows(url) is not None
 
@@ -320,8 +320,8 @@ def test_a_redirect_robots_txt_closes_is_not_followed(tmp_path):
 
 
 def test_a_url_robots_txt_closes_is_robots_closed_asked_for_or_redirected_to(tmp_path):
-    # One error for both, so a caller can treat the URL as one tabarr may not read, not as a failure.
-    from tabarr.http import RobotsClosed
+    # One error for both, so a caller can treat the URL as one caracole may not read, not as a failure.
+    from caracole.http import RobotsClosed
 
     client, _ = make_client(tmp_path, moved("/tab/print?id=1", status=302))
     for url in (TABS + "/tab/print?id=1", OLD):
@@ -332,7 +332,7 @@ def test_a_url_robots_txt_closes_is_robots_closed_asked_for_or_redirected_to(tmp
 
 def test_a_redirect_robots_txt_closes_is_no_failure_of_the_provider(tmp_path):
     # UG answered: the breaker doesn't count the hop it won't follow, and the event says redirect.
-    from tabarr.http import RobotsClosed
+    from caracole.http import RobotsClosed
 
     events = []
     client, rec = make_client(tmp_path, moved("/tab/print?id=1", status=302), events=events,
@@ -401,7 +401,7 @@ def test_a_404_the_caller_rejects_is_not_cached(tmp_path):
 
 
 def test_a_cached_answer_the_caller_rejects_is_asked_again(tmp_path):
-    # A 404 stored by a caller that accepted it (or by an older tabarr) is no answer
+    # A 404 stored by a caller that accepted it (or by an older caracole) is no answer
     # for one that doesn't: replaying it would fail the song every night without asking.
     statuses = iter([404, 200])
     client, rec = make_client(tmp_path, lambda r: httpx.Response(next(statuses), content=b"[]"))

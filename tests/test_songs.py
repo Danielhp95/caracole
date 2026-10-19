@@ -4,10 +4,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from tabarr import db
-from tabarr.library import keep_file, kept_files
-from tabarr.normalize import KEY_VERSION
-from tabarr.songs import (
+from caracole import db
+from caracole.library import keep_file, kept_files
+from caracole.normalize import KEY_VERSION
+from caracole.songs import (
     KEY_VERSION_KV,
     ensure_current_keys,
     find_song,
@@ -17,7 +17,7 @@ from tabarr.songs import (
     update_song,
     upsert_song,
 )
-from tabarr.versions import get_version, set_picks, song_versions, upsert_version
+from caracole.versions import get_version, set_picks, song_versions, upsert_version
 
 from conftest import add_song
 
@@ -162,7 +162,7 @@ def test_a_retitled_track_is_still_its_song(conn):
 
 
 def older_song(conn, artist, title, key, *, source, source_id, added_at="2026-09-01T00:00:00Z"):
-    """A song as an older tabarr stored it: keyed by that day's normalizer, with no key version."""
+    """A song as an older caracole stored it: keyed by that day's normalizer, with no key version."""
     cur = conn.execute(
         "INSERT INTO songs (key, artist, title, artists, source_ids, added_at, created_at, "
         "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -185,7 +185,7 @@ def wanted_file(tmp_path):
 
 def test_a_wanted_song_keyed_by_an_older_normalizer_is_re_keyed_not_split(conn, tmp_path):
     # Its source id is its key, so a new normalizer gives the same line a new source id too.
-    from tabarr.wanted import sync_wanted
+    from caracole.wanted import sync_wanted
 
     song_id = older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
                          source="wanted", source_id=OLD_LIVE_KEY)
@@ -198,7 +198,7 @@ def test_a_wanted_song_keyed_by_an_older_normalizer_is_re_keyed_not_split(conn, 
 
 def test_re_keying_carries_a_wanted_lines_first_seen_time(conn, tmp_path):
     # Re-keyed before the sync reads it (on opening the database), the line keeps its place.
-    from tabarr.wanted import FIRST_SEEN_KEY, sync_wanted
+    from caracole.wanted import FIRST_SEEN_KEY, sync_wanted
 
     older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
                source="wanted", source_id=OLD_LIVE_KEY)
@@ -222,7 +222,7 @@ def test_a_spotify_song_keyed_by_an_older_normalizer_is_re_keyed_not_split(conn)
 
 
 def test_todays_overrides_meet_a_song_an_older_normalizer_keyed(conn):
-    from tabarr.overrides import override_key
+    from caracole.overrides import override_key
 
     song_id = older_song(conn, "Los Enanitos Verdes", "Lamento Boliviano",
                          "los-enanitos-verdes/lamento-boliviano", source="spotify", source_id="sp9")
@@ -375,7 +375,7 @@ def test_two_tracks_of_one_song_dont_take_turns(conn):
 
 
 def test_a_value_stored_before_sources_were_heard_gives_way_once_they_are(conn):
-    # A database from before tabarr kept what each source says: nothing tells whose value
+    # A database from before caracole kept what each source says: nothing tells whose value
     # this duration is, so it stays until each of the song's sources has spoken.
     both = older_song(conn, "Radiohead", "Creep", LINE, source="wanted", source_id=LINE)
     update_song(conn, both, source_ids={"wanted": [LINE], "spotify": ["tCreep"]},
@@ -408,7 +408,7 @@ def test_a_source_never_heard_again_keeps_only_what_no_other_source_said(conn):
 
 def test_re_keying_carries_what_a_wanted_line_said(conn):
     # Said under the key an older normalizer gave the line; it still outranks Spotify after.
-    from tabarr.songs import SOURCE_FIELDS_KV
+    from caracole.songs import SOURCE_FIELDS_KV
 
     song_id = older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
                          source="wanted", source_id=OLD_LIVE_KEY)

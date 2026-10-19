@@ -20,16 +20,16 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from tabarr.autochords import ChordSegment
-from tabarr.autochords.run import AUTO_SHEET, AutoStats, autochords_pending
-from tabarr.cli import build_app
-from tabarr.config import AutochordsConfig
-from tabarr.db import kv_get, kv_get_json
-from tabarr.library import keep_file, kept_files, song_dir
-from tabarr.lyrics import Lyrics
-from tabarr.overrides import Overrides
-from tabarr.songs import get_song, update_song
-from tabarr.versions import get_version, upsert_version
+from caracole.autochords import ChordSegment
+from caracole.autochords.run import AUTO_SHEET, AutoStats, autochords_pending
+from caracole.cli import build_app
+from caracole.config import AutochordsConfig
+from caracole.db import kv_get, kv_get_json
+from caracole.library import keep_file, kept_files, song_dir
+from caracole.lyrics import Lyrics
+from caracole.overrides import Overrides
+from caracole.songs import get_song, update_song
+from caracole.versions import get_version, upsert_version
 
 from conftest import add_song
 
@@ -159,7 +159,7 @@ def with_model_files(cfg, tmp_path):
 
 def fake_default_models(monkeypatch, *, fail_on: tuple[str, ...] = ()) -> None:
     """Fakes for BTCRecognizer and detect_beats, which the default models are built from."""
-    import tabarr.autochords.run as ac_run
+    import caracole.autochords.run as ac_run
 
     class Recognizer(FakeRecognizer):
         def __init__(self, weights, *, device="cpu"):
@@ -371,7 +371,7 @@ def test_missing_lyrics_are_not_waited_for(conn, cfg, tmp_path):
 
 
 def test_build_sheet_gets_the_song_beats_and_lyrics(conn, cfg, tmp_path, monkeypatch):
-    import tabarr.autochords.run as ac_run
+    import caracole.autochords.run as ac_run
 
     seen = {}
 
@@ -399,7 +399,7 @@ def test_build_sheet_gets_the_song_beats_and_lyrics(conn, cfg, tmp_path, monkeyp
 
 
 def test_default_models_are_built_once_from_the_config(conn, cfg, tmp_path, monkeypatch):
-    import tabarr.autochords.run as ac_run
+    import caracole.autochords.run as ac_run
 
     built, tracked = [], []
 
@@ -434,7 +434,7 @@ def test_default_models_are_built_once_from_the_config(conn, cfg, tmp_path, monk
 
 
 def test_default_models_first_read_a_test_tone(conn, cfg, tmp_path, monkeypatch):
-    import tabarr.autochords.run as ac_run
+    import caracole.autochords.run as ac_run
 
     heard = []
 
@@ -467,7 +467,7 @@ def test_default_models_first_read_a_test_tone(conn, cfg, tmp_path, monkeypatch)
 def test_models_that_cannot_read_a_test_tone_are_a_setup_problem(conn, cfg, tmp_path, monkeypatch):
     # As under a sandbox that stops them (MemoryDenyWriteExecute, docs/deploy.md): every
     # file would fail, so none is blamed, and the purchase is made once the setup is fixed.
-    import tabarr.autochords.run as ac_run
+    import caracole.autochords.run as ac_run
 
     class Recognizer(FakeRecognizer):
         def __init__(self, weights, *, device="cpu"):
@@ -507,7 +507,7 @@ def test_missing_weights_fail_every_pending_song_and_are_reported_once(conn, cfg
     b = with_audio(conn, tmp_path, add_song(conn, "A", "Two"))
     keep_human_sheet(conn, cfg, with_audio(conn, tmp_path, add_song(conn, "A", "Three")))
     beats = FakeBeats()
-    with caplog.at_level(logging.ERROR, logger="tabarr.autochords.run"):
+    with caplog.at_level(logging.ERROR, logger="caracole.autochords.run"):
         stats = autochords_pending(conn, cfg, beats_fn=beats)
     assert (stats.generated, stats.skipped, stats.failed) == (0, 1, 2)
     assert len(stats.errors) == 1 and "BTC weights not found" in stats.errors[0]
@@ -523,8 +523,8 @@ def test_unconfigured_models_say_how_to_configure_them(conn, cfg, tmp_path):
     with_audio(conn, tmp_path, add_song(conn, "A", "One"))
     stats = autochords_pending(conn, cfg)  # the cfg fixture has no [autochords] paths
     assert stats.failed == 1
-    assert any("TABARR_BTC_WEIGHTS" in e for e in stats.errors)
-    assert any("TABARR_BEAT_CHECKPOINT" in e for e in stats.errors)
+    assert any("CARACOLE_BTC_WEIGHTS" in e for e in stats.errors)
+    assert any("CARACOLE_BEAT_CHECKPOINT" in e for e in stats.errors)
 
 
 def test_missing_beat_checkpoint_is_reported_once(conn, cfg, tmp_path):
@@ -540,11 +540,11 @@ def test_missing_beat_checkpoint_is_reported_once(conn, cfg, tmp_path):
 def test_a_file_that_will_not_decode_fails_alone(conn, cfg, tmp_path, caplog):
     bad = with_audio(conn, tmp_path, add_song(conn, "A", "Broken Download"), name="bad.wav")
     good = with_audio(conn, tmp_path, add_song(conn, "A", "Fine"), name="good.wav")
-    with caplog.at_level(logging.INFO, logger="tabarr.autochords.run"):
+    with caplog.at_level(logging.INFO, logger="caracole.autochords.run"):
         stats = run(conn, cfg, FakeRecognizer(fail_on=("bad.wav",)))
     assert (stats.generated, stats.failed, stats.errors) == (1, 1, [])
     assert failures(stats) == [("A - Broken Download", unreadable(bad.audio_path), bad.audio_path)]
-    # Named in the journal, as a warning: the purchase's problem, not tabarr's.
+    # Named in the journal, as a warning: the purchase's problem, not caracole's.
     named = [r.levelname for r in caplog.records if "Format not recognised" in r.getMessage()]
     assert named == ["WARNING"]
     song = get_song(conn, bad.id)
@@ -703,7 +703,7 @@ def test_missing_models_blame_no_purchase(conn, cfg, tmp_path):
 def test_a_sheet_that_cannot_be_kept_is_not_blamed_on_the_purchase(
     conn, cfg, tmp_path, monkeypatch
 ):
-    import tabarr.autochords.run as ac_run
+    import caracole.autochords.run as ac_run
 
     s = with_audio(conn, tmp_path, add_song(conn, "A", "T"))
 
@@ -751,7 +751,7 @@ def write_config(tmp_path: Path, **autochords: Path) -> Path:
     if autochords:
         lines.append("[autochords]")
         lines += [f'{k} = "{v}"' for k, v in autochords.items()]
-    p = tmp_path / "tabarr.toml"
+    p = tmp_path / "caracole.toml"
     p.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return p
 
@@ -762,26 +762,26 @@ def invoke(config: Path):
 
 @pytest.fixture
 def models_importable(monkeypatch):
-    import tabarr.commands.autochords as cmd
+    import caracole.commands.autochords as cmd
 
     monkeypatch.setattr(cmd, "find_spec", lambda name: object())
 
 
 def test_command_without_the_models_says_which_package_has_them(tmp_path, monkeypatch):
-    import tabarr.commands.autochords as cmd
+    import caracole.commands.autochords as cmd
 
     monkeypatch.setattr(cmd, "find_spec", lambda name: None if name == "torch" else object())
     result = invoke(write_config(tmp_path))
     assert result.exit_code == 1
     assert (
-        "this tabarr was built without auto-chords; use the flake's packages.autochords"
+        "this caracole was built without auto-chords; use the flake's packages.autochords"
         in result.output
     )
     assert "torch" in result.output
 
 
 def test_command_scans_music_then_generates(tmp_path, monkeypatch, models_importable):
-    import tabarr.autochords.run as ac_run
+    import caracole.autochords.run as ac_run
 
     class Recognizer(FakeRecognizer):
         def __init__(self, weights, *, device="cpu"):
@@ -797,9 +797,9 @@ def test_command_scans_music_then_generates(tmp_path, monkeypatch, models_import
     config = write_config(
         tmp_path, btc_weights=tmp_path / "btc.pt", beat_checkpoint=tmp_path / "final0.ckpt"
     )
-    from tabarr import db
+    from caracole import db
 
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     add_song(conn, "宋冬野", "斑马斑马", duration_ms=None)
     # Dropped into Music/ after the night's run: only the command's own scan links it.
     make_wav(tmp_path / "music" / "宋冬野 - 斑马斑马.wav", 3.0)
@@ -813,9 +813,9 @@ def test_command_scans_music_then_generates(tmp_path, monkeypatch, models_import
 
 def bought(tmp_path: Path):
     """The database, with a song whose purchase was dropped into Music/ after the night's run."""
-    from tabarr import db
+    from caracole import db
 
-    conn = db.connect(tmp_path / "state" / "tabarr.sqlite")
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     add_song(conn, "Nobody", "River Road", duration_ms=None)
     make_wav(tmp_path / "music" / "Nobody - River Road.wav", 3.0)
     return conn
@@ -858,7 +858,7 @@ def test_command_exits_1_when_the_beat_checkpoint_is_missing(
 def test_command_exits_1_when_the_models_fail_on_a_test_tone(
     tmp_path, monkeypatch, models_importable
 ):
-    import tabarr.autochords.run as ac_run
+    import caracole.autochords.run as ac_run
 
     def broken(path, checkpoint, device="cpu"):
         raise RuntimeError("could not create a primitive")
@@ -872,7 +872,7 @@ def test_command_exits_1_when_the_models_fail_on_a_test_tone(
 
 
 def test_command_rewrites_the_todo_page_and_the_index(tmp_path, monkeypatch, models_importable):
-    # tabarr-autochords runs after the nightly run has written both pages: they must not
+    # caracole-autochords runs after the nightly run has written both pages: they must not
     # wait a night to show its sheets.
     fake_default_models(monkeypatch)
     bought(tmp_path)
@@ -894,14 +894,14 @@ def test_command_lists_a_purchase_it_cant_read_on_the_todo_page_at_once(
     assert "## Auto-chords couldn't read these purchases" in todo and "Nobody - River Road" in todo
 
 
-def test_command_waits_for_another_tabarr(tmp_path, monkeypatch, models_importable):
+def test_command_waits_for_another_caracole(tmp_path, monkeypatch, models_importable):
     import fcntl
     import threading
 
     fake_default_models(monkeypatch)
     bought(tmp_path)
     config = write_config(tmp_path, **model_files(tmp_path))
-    lock = tmp_path / "state" / "tabarr.lock"
+    lock = tmp_path / "state" / "caracole.lock"
     fd = os.open(lock, os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX)  # the nightly run, say, still writing the library
     results = []
@@ -918,12 +918,12 @@ def test_command_waits_for_another_tabarr(tmp_path, monkeypatch, models_importab
 
 
 def test_command_with_nothing_to_do(tmp_path, models_importable):
-    from tabarr import db
+    from caracole import db
 
     result = invoke(write_config(tmp_path))
     assert result.exit_code == 0, result.output
     assert "auto-chords: 0 generated, 0 skipped, 0 failed" in result.output
-    status = kv_get_json(db.connect(tmp_path / "state" / "tabarr.sqlite"), STATUS, {})
+    status = kv_get_json(db.connect(tmp_path / "state" / "caracole.sqlite"), STATUS, {})
     assert (status.get("generated"), status.get("skipped"), status.get("failed")) == (0, 0, [])
 
 
@@ -952,7 +952,7 @@ def model_packages_after(code: str, tmp_path: Path, *args: str) -> list[str]:
 def test_registering_the_command_imports_no_model_packages(tmp_path):
     # Every command module is imported on every start, and the default package has no torch.
     code = (
-        "import typer\nfrom tabarr.commands import autochords\nautochords.register(typer.Typer())"
+        "import typer\nfrom caracole.commands import autochords\nautochords.register(typer.Typer())"
     )
     assert model_packages_after(code, tmp_path) == ["[]"]
 
@@ -962,13 +962,13 @@ def test_a_night_with_nothing_due_imports_no_model_packages(conn, cfg, tmp_path)
     # The cfg fixture's directories, and model files that would fail if anything loaded them.
     code = (
         "from pathlib import Path\n"
-        "from tabarr import db\n"
-        "from tabarr.autochords.run import autochords_pending\n"
-        "from tabarr.config import load_config\n"
+        "from caracole import db\n"
+        "from caracole.autochords.run import autochords_pending\n"
+        "from caracole.config import load_config\n"
         "tmp = Path(sys.argv[1])\n"
         "env = {'HOME': str(tmp / 'home'), 'STATE_DIRECTORY': str(tmp / 'state')}\n"
-        "env['TABARR_BTC_WEIGHTS'] = str(tmp / 'btc.pt')\n"
-        "env['TABARR_BEAT_CHECKPOINT'] = str(tmp / 'final0.ckpt')\n"
+        "env['CARACOLE_BTC_WEIGHTS'] = str(tmp / 'btc.pt')\n"
+        "env['CARACOLE_BEAT_CHECKPOINT'] = str(tmp / 'final0.ckpt')\n"
         "cfg = load_config(None, env=env)\n"
         "print(autochords_pending(db.connect(cfg.db_path), cfg).summary())"
     )

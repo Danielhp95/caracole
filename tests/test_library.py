@@ -4,8 +4,8 @@ import re
 
 import pytest
 
-from tabarr.library import drop_file, keep_file, kept_files, safe_name, song_dir, write_atomic, write_info
-from tabarr.versions import (
+from caracole.library import drop_file, keep_file, kept_files, safe_name, song_dir, write_atomic, write_info
+from caracole.versions import (
     SHEET_KINDS,
     mark_gone,
     mark_stale,
@@ -90,7 +90,7 @@ def test_write_atomic_syncs_the_file_before_the_rename_and_the_folder_after(tmp_
 
 
 def test_holds_only_the_regular_file_with_those_bytes(tmp_path):
-    from tabarr.library import holds
+    from caracole.library import holds
 
     path = tmp_path / "sheet.txt"
     sha = write_atomic(path, b"sheet")

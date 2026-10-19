@@ -1,10 +1,10 @@
-"""One tabarr at a time: every command that sends requests or writes takes tabarr's lock.
+"""One caracole at a time: every command that sends requests or writes takes caracole's lock.
 
-Another tabarr (the nightly run, say) holds the lock here the way it would: an open file of
-its own on state/tabarr.lock, flocked. A command started meanwhile must wait, say which
-tabarr it waits for, and do nothing until the lock is free; a read-only command doesn't wait
+Another caracole (the nightly run, say) holds the lock here the way it would: an open file of
+its own on state/caracole.lock, flocked. A command started meanwhile must wait, say which
+caracole it waits for, and do nothing until the lock is free; a read-only command doesn't wait
 at all. A command that waited also sees what the other one did: after a block, the provider
-is cooling down, and the command sends nothing. The last test runs ``tabarr run`` in a
+is cooling down, and the command sends nothing. The last test runs ``caracole run`` in a
 process of its own. Every site is a fake behind ``httpx.MockTransport``.
 """
 
@@ -26,23 +26,23 @@ import pytest
 from helpers.ug_pages import make_tab_page_html, version_dict
 from typer.testing import CliRunner
 
-from tabarr import db
-from tabarr.cli import build_app
-from tabarr.commands import _common
-from tabarr.health import record_block
-from tabarr.lyrics import Lyrics
-from tabarr.songs import update_song
-from tabarr.ug.index import mark_built
+from caracole import db
+from caracole.cli import build_app
+from caracole.commands import _common
+from caracole.health import record_block
+from caracole.lyrics import Lyrics
+from caracole.songs import update_song
+from caracole.ug.index import mark_built
 
 from conftest import add_song, subprocess_pythonpath
 
-WAITING = "Another tabarr is running (pid 4242: run); waiting for it to finish."
+WAITING = "Another caracole is running (pid 4242: run); waiting for it to finish."
 PERSIANA = "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-101"
 LRCLIB_HIT = Path(__file__).parent / "fixtures" / "lrclib" / "get_hit.json"
 SPANISH_LYRICS = "Cruzo la plaza con el café frío\ny cuento las luces del tren de las seis\n"
 # Environment load_config would read; none of it may leak into a test.
 OUTSIDE_SETTINGS = (
-    "CREDENTIALS_DIRECTORY", "TABARR_CONFIG", "TABARR_NTFY_TOKEN", "TABARR_SPOTIFY_CLIENT_SECRET",
+    "CREDENTIALS_DIRECTORY", "CARACOLE_CONFIG", "CARACOLE_NTFY_TOKEN", "CARACOLE_SPOTIFY_CLIENT_SECRET",
 )
 
 
@@ -78,15 +78,15 @@ def config(tmp_path) -> Path:
     lines = [f'{key} = "{tmp_path / name}"' for key, name in folders]
     for provider in ("ug", "lrclib", "lacuerda"):
         lines += [f"[providers.{provider}]", "delay = [0, 0]"]
-    path = tmp_path / "tabarr.toml"
+    path = tmp_path / "caracole.toml"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return path  # beside conftest's conn: tmp_path/state/tabarr.sqlite is the database
+    return path  # beside conftest's conn: tmp_path/state/caracole.sqlite is the database
 
 
 @contextmanager
-def another_tabarr(tmp_path: Path):
-    """Another tabarr holding the lock, as the nightly run would: its own open file, flocked."""
-    lock = tmp_path / "state" / "tabarr.lock"
+def another_caracole(tmp_path: Path):
+    """Another caracole holding the lock, as the nightly run would: its own open file, flocked."""
+    lock = tmp_path / "state" / "caracole.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(lock, os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX)
@@ -251,9 +251,9 @@ def argv(case: Case, tmp_path: Path) -> list[str]:
 
 
 @pytest.mark.parametrize("case", WRITERS, ids=lambda c: " ".join(c.args))
-def test_a_command_that_writes_waits_for_another_tabarr(tmp_path, config, sites, conn, case):
+def test_a_command_that_writes_waits_for_another_caracole(tmp_path, config, sites, conn, case):
     case.setup(tmp_path, sites, conn)
-    with another_tabarr(tmp_path):
+    with another_caracole(tmp_path):
         started = Started(config, argv(case, tmp_path))
         assert started.still_waiting()
         assert not case.done(tmp_path, sites, conn)  # nothing sent, nothing written yet
@@ -268,7 +268,7 @@ READERS = [("search", "creep"), ("match", "--dry-run"), ("index", "stats")]
 @pytest.mark.parametrize("args", READERS, ids=" ".join)
 def test_a_command_that_only_reads_doesnt_wait(tmp_path, config, sites, conn, args):
     a_song_to_match(tmp_path, sites, conn)
-    with another_tabarr(tmp_path):
+    with another_caracole(tmp_path):
         started = Started(config, list(args))
         started.thread.join(10)
         waited = started.thread.is_alive()
@@ -288,12 +288,12 @@ ASKERS = [
 
 
 @pytest.mark.parametrize("args,setup,provider", ASKERS)
-def test_a_command_that_waited_for_a_tabarr_that_got_blocked_asks_nothing(
+def test_a_command_that_waited_for_a_caracole_that_got_blocked_asks_nothing(
     tmp_path, config, sites, conn, args, setup, provider
 ):
     # The run it waited for met a 403: the provider is cooling down when the lock comes free.
     setup(tmp_path, sites, conn)
-    with another_tabarr(tmp_path):
+    with another_caracole(tmp_path):
         started = Started(config, list(args))
         assert started.still_waiting()
         record_block(conn, provider, _common.utcnow(), f"{provider}: 403: HTTP 403")
@@ -304,7 +304,7 @@ def test_a_command_that_waited_for_a_tabarr_that_got_blocked_asks_nothing(
 
 
 def lock_is_free(tmp_path: Path) -> bool:
-    fd = os.open(tmp_path / "state" / "tabarr.lock", os.O_RDWR | os.O_CREAT)
+    fd = os.open(tmp_path / "state" / "caracole.lock", os.O_RDWR | os.O_CREAT)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
@@ -334,9 +334,9 @@ def test_review_never_holds_the_lock_while_it_waits_for_you(tmp_path, config, co
     assert free_at_each_prompt and all(free_at_each_prompt)
 
 
-def test_the_nightly_run_waits_for_another_tabarr_process(tmp_path, config):
-    # Two processes: this one holds the lock, as a `tabarr-admin index build` would, and
-    # `tabarr run` starts in a process of its own. Its library is empty, so it asks no site;
+def test_the_nightly_run_waits_for_another_caracole_process(tmp_path, config):
+    # Two processes: this one holds the lock, as a `caracole-admin index build` would, and
+    # `caracole run` starts in a process of its own. Its library is empty, so it asks no site;
     # the proxy is a dead end all the same.
     src = Path(__file__).resolve().parents[1] / "src"
     env = {
@@ -345,9 +345,9 @@ def test_the_nightly_run_waits_for_another_tabarr_process(tmp_path, config):
         "HTTP_PROXY": "http://127.0.0.1:9", "HTTPS_PROXY": "http://127.0.0.1:9",
     }
     todo = tmp_path / "lib" / "_todo.md"
-    with another_tabarr(tmp_path):
+    with another_caracole(tmp_path):
         run = subprocess.Popen(
-            [sys.executable, "-m", "tabarr", "--config", str(config), "run"], env=env,
+            [sys.executable, "-m", "caracole", "--config", str(config), "run"], env=env,
             cwd=tmp_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         try:

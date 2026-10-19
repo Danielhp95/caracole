@@ -18,10 +18,10 @@ import httpx
 import pytest
 from conftest import add_song
 
-from tabarr.config import ProviderPolicy
-from tabarr.http import PoliteClient, ProviderBlocked
-from tabarr.lyrics import LyricsStats, fetch_pending_lyrics, lyrics_from_json
-from tabarr.songs import get_song, update_song
+from caracole.config import ProviderPolicy
+from caracole.http import PoliteClient, ProviderBlocked
+from caracole.lyrics import LyricsStats, fetch_pending_lyrics, lyrics_from_json
+from caracole.songs import get_song, update_song
 
 FIXTURES = Path(__file__).parent / "fixtures" / "lrclib"
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
@@ -89,7 +89,7 @@ class FakeLrclib:
             "lrclib",
             ProviderPolicy(budget=budget, delay=(0.0, 0.0)),
             cache_dir,
-            user_agent="tabarr-test",
+            user_agent="caracole-test",
             transport=httpx.MockTransport(self.handler),
             sleep=lambda seconds: None,
             wall_clock=lambda: now,
@@ -344,8 +344,8 @@ def test_a_recheck_the_budget_cannot_pay_for_changes_nothing(conn, tmp_path):
 
 
 def test_the_nightly_lyrics_step_reports_the_counts(conn, cfg, tmp_path):
-    from tabarr.notify import Notifier
-    from tabarr.pipeline import Services, default_steps, run_pipeline
+    from caracole.notify import Notifier
+    from caracole.pipeline import Services, default_steps, run_pipeline
 
     add_song(conn, "Soda Stereo", "De Música Ligera")
     add_song(conn, "Soda Stereo", "Canción Inexistente")

@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta, timezone
 import pytest
 from spotipy.exceptions import SpotifyException
 
-from tabarr.config import Config, SpotifyConfig
-from tabarr.sources import (
+from caracole.config import Config, SpotifyConfig
+from caracole.sources import (
     SourcesReport,
     SyncStats,
     default_kv_get,
@@ -42,17 +42,17 @@ def test_utc_stamp_reads_naive_time_as_utc():
 
 
 def test_default_upsert_is_the_song_repository(monkeypatch):
-    fake = types.ModuleType("tabarr.songs")
+    fake = types.ModuleType("caracole.songs")
     fake.upsert_song = lambda conn, **fields: (1, True)
-    monkeypatch.setitem(sys.modules, "tabarr.songs", fake)
+    monkeypatch.setitem(sys.modules, "caracole.songs", fake)
     assert default_upsert() is fake.upsert_song
 
 
 def test_default_kv_functions_are_the_database_ones(monkeypatch):
-    fake = types.ModuleType("tabarr.db")
+    fake = types.ModuleType("caracole.db")
     fake.kv_get = lambda conn, key: None
     fake.kv_set = lambda conn, key, value: None
-    monkeypatch.setitem(sys.modules, "tabarr.db", fake)
+    monkeypatch.setitem(sys.modules, "caracole.db", fake)
     assert default_kv_get() is fake.kv_get
     assert default_kv_set() is fake.kv_set
 
@@ -188,12 +188,12 @@ def test_sync_sources_needs_authorization_without_a_client(tmp_path, wanted):
 
 
 def test_sync_sources_says_when_the_client_secret_is_missing(tmp_path, wanted):
-    # `tabarr auth spotify` would fail the same way: the advice is to give the secret.
+    # `caracole auth spotify` would fail the same way: the advice is to give the secret.
     repo = Repo()
     report = run(config(tmp_path, client_id="cid"), repo, None)
     assert report.spotify_state == "setup_needed"
     assert "client secret" in report.spotify_message
-    assert "services.tabarr.credentials.spotify_client_secret" in report.spotify_message
+    assert "services.caracole.credentials.spotify_client_secret" in report.spotify_message
     assert repo.record("source:spotify")["state"] == "setup_needed"
     summary = report.summary()
     assert "Spotify isn't fully set up (The client secret is missing" in summary
@@ -216,7 +216,7 @@ def test_sync_sources_turns_a_refused_token_into_auth_needed(tmp_path, wanted):
     spotify = OneTrackSpotify(error=SpotifyException(401, -1, "x:\n The access token expired"))
     report = run(config(tmp_path, client_id="cid", client_secret="secret"), repo, spotify)
     assert report.spotify_state == "auth_needed"
-    assert "tabarr auth spotify" not in report.spotify_message  # the caller adds the advice
+    assert "caracole auth spotify" not in report.spotify_message  # the caller adds the advice
     assert repo.record("source:spotify")["state"] == "auth_needed"
 
 
@@ -238,7 +238,7 @@ def test_summary_says_how_to_authorize_spotify():
         spotify_message="The access token was refused (HTTP 401).",
     )
     assert report.summary() == (
-        "wanted.txt 3 songs, 0 new; Spotify needs authorization (run `tabarr auth spotify`)"
+        "wanted.txt 3 songs, 0 new; Spotify needs authorization (run `caracole auth spotify`)"
     )
 
 
@@ -313,8 +313,8 @@ def test_a_fixed_wanted_line_lets_the_purchase_it_kept_out_link(conn, tmp_path, 
     # "| 0:30" for a song of 0:10. The scan wants the file of a song to last as long as the
     # song, give or take 3 s, so the purchase stays out until the line is fixed or its
     # duration goes; then the next sync and scan link it.
-    from tabarr.music import scan_music
-    from tabarr.songs import find_song
+    from caracole.music import scan_music
+    from caracole.songs import find_song
 
     cfg = config(tmp_path)
     bought = wav(cfg.music_dir / "Radiohead - Creep.wav", 10)
@@ -330,7 +330,7 @@ def test_a_fixed_wanted_line_lets_the_purchase_it_kept_out_link(conn, tmp_path, 
 def test_the_wanted_line_outranks_spotify_until_its_duration_comes_off(conn, tmp_path):
     # Spotify has Creep at 3:58 and the line says 4:20, the version you bought, say: the line
     # wins, whichever runs first. Taken off the line, the duration is Spotify's.
-    from tabarr.songs import find_song
+    from caracole.songs import find_song
 
     cfg = config(tmp_path, client_id="cid", client_secret="secret")
     write_wanted(cfg, "Radiohead - Creep | 4:20\n")

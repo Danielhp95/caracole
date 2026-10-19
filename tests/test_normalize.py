@@ -1,6 +1,6 @@
 import pytest
 
-from tabarr.normalize import (
+from caracole.normalize import (
     clean_title,
     compact,
     display_key,

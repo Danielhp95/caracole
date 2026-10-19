@@ -1,4 +1,4 @@
-"""The nightly timer in nix/module.nix, as its option text and tabarr's cooldowns assume it."""
+"""The nightly timer in nix/module.nix, as its option text and caracole's cooldowns assume it."""
 
 import re
 from datetime import timedelta
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tabarr.health import COOLDOWN_BASE, COOLDOWN_MARGIN
+from caracole.health import COOLDOWN_BASE, COOLDOWN_MARGIN
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "nix" / "module.nix"
