@@ -87,7 +87,7 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
     head, artist = "Only other artists' songs with this title (probably covers)", md(song.artist)
     if song.status == "found":  # a cover's [match] would bring that artist's guitar parts, and no better sheet
         head += ", and the song has a sheet already: nothing is lost by leaving this"
-    if not artist_is_known(conn, song, overrides):
+    if not artist_is_known(conn, song, overrides) or pasted_page_problem(conn, song, overrides) is not None:
         return (f"{head}. If none is the song you want, UG probably lists {artist} only by bare ids: find the "
                 "artist's page, or one of their tab pages (see Artists to find below), and paste its address "
                 "under `[artist_url]`, and caracole looks for the song there.")
@@ -186,11 +186,14 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
     for s in songs:
         # Not found, or reviewed on its title alone (only covers), by an artist whose UG page the
         # fetch can't find: the index has no slugged tab of theirs, and no address was pasted or learned
-        # (or the tab page pasted leads to none).
-        if s.status == "ignored" or not needs_artist_page(s) or artist_is_known(conn, s, overrides):
+        # (or the tab page pasted leads to none, or can't be read for now).
+        if s.status == "ignored" or not needs_artist_page(s):
+            continue
+        problem = pasted_page_problem(conn, s, overrides)
+        if problem is None and artist_is_known(conn, s, overrides):
             continue
         wanted.setdefault(s.artist, []).append(s)
-        if (problem := pasted_page_problem(conn, s, overrides)) is not None:
+        if problem is not None:
             pasted.setdefault(s.artist, problem)
     items = []
     for artist, group in sorted(wanted.items()):

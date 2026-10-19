@@ -599,7 +599,11 @@ when it has something in it:
   doesn't link to its artist's page), the artist stays on the list, with the
   page you pasted and what is wrong with it, and no new line: put the
   artist's page, or another of their tab pages, in its place. The song isn't
-  taken for missing meanwhile.
+  taken for missing meanwhile. The same goes when UG's copy of the page can't
+  be read, even fetched again: an error on UG's side rather than a page that
+  leads nowhere. caracole asks for it again a week later, then after twice as
+  long each time it still can't, whichever of the artist's songs asks, and
+  the list says when; another page in its place is read at the next run.
 - **Buy list.** No human sheet found yet, and nothing caracole will still do may
   find one: the song's UG fetch is done (or UG doesn't have it), no fetch,
   artist page or LaCuerda check is due for it, and, for a song not found, the

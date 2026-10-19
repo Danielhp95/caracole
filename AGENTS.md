@@ -162,7 +162,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `/artist/<name>_<id>` or `/artist/<id>` (`overrides.artist_page_address`), its URL from
   `[artist_url]` or learned from a tab page into kv `ug:artist_url:<artist key>`. An
   `[artist_url]` tab page is read once, through the run's client, for the page it links to:
-  kv `ug:pasted_tab:<tab id>` (`test_fetch.py::test_slugged_tabs_fetched_at_their_slugged_url`,
+  kv `ug:pasted_tab:<tab id>`; one that won't parse waits as any tab page does, kv
+  `ug:unreadable:<tab id>` (`test_fetch.py::test_slugged_tabs_fetched_at_their_slugged_url`,
   `::test_bare_id_chords_of_a_matched_song_come_from_its_artist_page`, tests/test_live_banma.py).
 - **Guitar Pro is assisted only.** config.py refuses any `guitar_pro_mode` but "assisted";
   ug/fetch.py picks Guitar Pro and Power Tab versions and downloads none; the to-do page

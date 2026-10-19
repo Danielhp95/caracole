@@ -238,10 +238,6 @@ def test_w7_7_a_download_of_a_title_with_latin_in_it_files_into_its_own_song(con
 # --- a tab page pasted under [artist_url] -------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-8: a pasted tab page that won't parse is asked for again by every "
-                          "song of the artist every night, with no retry date, and the to-do page "
-                          "never says so")
 def test_w7_8_an_unreadable_pasted_tab_page_is_not_asked_for_by_every_song_every_night(conn, tmp_path):
     ug = FakeUG()
     # A 200 whose data has no tab_view (a page shape UG drifted to): it doesn't parse, fetched again or not.

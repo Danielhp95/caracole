@@ -1637,6 +1637,36 @@ def test_a_block_on_a_pasted_tab_page_is_a_block(conn, tmp_path):
     assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None
 
 
+def test_a_pasted_tab_page_that_wont_parse_waits_for_its_retry_date_like_any_tab_page(conn, tmp_path):
+    # UG answers 200 with a page caracole can't read: an error, never a miss, asked for again on the
+    # dates of the tab-page rule (UNREADABLE_RETRY), and named on the to-do page meanwhile.
+    song = song_by_song_dongye(conn, "斑马斑马")
+    ug = FakeUG()
+    ug.add(FOUND_TAB, BROKEN)
+
+    def night(day):
+        ug.requests.clear()
+        when = NOW + timedelta(days=day)
+        stats = fetch_songs(context(conn, ug.client(tmp_path / "cache", now=when), tmp_path, TAB_PASTED, now=when),
+                            songs_to_fetch(conn, TAB_PASTED, when))
+        return stats, list(ug.requests)
+
+    first, asked = night(0)
+    assert first.songs_failed == 1 and asked == [FOUND_TAB]  # one bad answer may be a passing fault
+    second, asked = night(1)
+    assert second.songs_failed == 0 and asked == [FOUND_TAB]  # fetched again: still unreadable
+    assert pasted_page_problem(conn, song, TAB_PASTED) == (
+        FOUND_TAB, "UG's copy of it can't be read; caracole asks for it again after 2026-10-26")
+    assert artist_is_known(conn, song, TAB_PASTED)  # an error: the song keeps waiting for the page
+    assert [night(day)[1] for day in (2, 5, 7)] == [[], [], []]
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None  # never looked for: not a miss
+    assert get_song(conn, song.id).match_decision == "not_found"
+
+    serve_song_dongye(ug)  # UG serves the page properly again
+    assert night(8)[1][0] == FOUND_TAB
+    assert get_song(conn, song.id).status == "found" and pasted_page_problem(conn, song, TAB_PASTED) is None
+
+
 def test_bare_id_chords_with_a_tab_page_you_pasted(conn, tmp_path):
     ug = FakeUG()
     song = persiana_with_bare_chords(conn, ug)
