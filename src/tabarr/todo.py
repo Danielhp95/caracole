@@ -383,9 +383,15 @@ def _sources(conn: sqlite3.Connection, cfg: Config) -> list[str]:
         out.append(f"- Spotify: error at {sp.get('at')}: {sp.get('message')}")
     w = kv_get_json(conn, "source:wanted", default=None)
     if w:
-        out.append(f"- wanted.txt: {w.get('lines', 0)} songs ({w.get('new', 0)} new at {w.get('at')})")
-        for line_no, message in w.get("errors") or []:
-            out.append(f"  - line {line_no}: {md(str(message))}")
+        errors = w.get("errors") or []
+        unread = [str(message) for line_no, message in errors if line_no == 0]  # the file, not a line of it
+        if unread:
+            out.append(f"- wanted.txt: error at {w.get('at')}: {md('; '.join(unread))}")
+        else:
+            out.append(f"- wanted.txt: {w.get('lines', 0)} songs ({w.get('new', 0)} new at {w.get('at')})")
+        for line_no, message in errors:
+            if line_no != 0:
+                out.append(f"  - line {line_no}: {md(str(message))}")
     elif not cfg.wanted_file.exists():
         out.append("- wanted.txt: not created yet. `tabarr add ARTIST TITLE` creates it.")
     return out + [""]
@@ -440,14 +446,18 @@ def _health(conn: sqlite3.Connection, now: datetime) -> list[str]:
 _NUC_BUILD = "`tabarr index build` (on the NUC: `sudo tabarr-admin index build`)"
 
 
-def _wanted_errors(conn: sqlite3.Connection) -> int:
-    """How many wanted.txt lines the last sync couldn't read (listed under Sources)."""
+def _wanted_errors(conn: sqlite3.Connection) -> tuple[int, list[str]]:
+    """How many wanted.txt lines the last sync couldn't read (listed under Sources), and why it
+    couldn't read the file at all, if it couldn't: ``sources.sync_sources`` stores that as line 0."""
     w = kv_get_json(conn, "source:wanted", default=None)
     errors = w.get("errors") if isinstance(w, dict) else None
-    return len(errors) if isinstance(errors, list) else 0
+    if not isinstance(errors, list):
+        return 0, []
+    unread = [str(message) for line_no, message in errors if line_no == 0]
+    return len(errors) - len(unread), unread
 
 
-def _setup(index: str, overrides_error: str | None, unreadable_lines: int) -> list[str]:
+def _setup(index: str, overrides_error: str | None, unreadable_lines: int, unread_wanted: list[str]) -> list[str]:
     """What stops tabarr from doing its job until you act, for the section at the top."""
     items = []
     if overrides_error:
@@ -469,6 +479,9 @@ def _setup(index: str, overrides_error: str | None, unreadable_lines: int) -> li
             "the rest are read, tabarr matches no song and suggests buying none, so nothing UG has is taken for "
             f"missing. The nightly refresh reads them as its budget allows, or run {_NUC_BUILD}."
         )
+    if unread_wanted:
+        items.append("- **wanted.txt can't be read**, so tabarr doesn't see the songs you add to it (those it "
+                     f"read before are still looked for): {_code('; '.join(unread_wanted))}.")
     if unreadable_lines:
         lines = f"{unreadable_lines} line{'s' if unreadable_lines != 1 else ''}"
         items.append(f"- **wanted.txt has {lines} tabarr couldn't read**, so those songs aren't looked for; "
@@ -497,7 +510,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     to_buy, waiting = songs_to_buy(conn, songs, overrides, now)
     if waiting:
         out += [f"{waiting} song{'s' if waiting != 1 else ''} waiting for the nightly fetch.", ""]
-    setup = _setup(index, overrides_error, _wanted_errors(conn))
+    setup = _setup(index, overrides_error, *_wanted_errors(conn))
     if setup:
         out += _section("Setup problems", setup)
 
