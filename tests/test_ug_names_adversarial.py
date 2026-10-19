@@ -1,9 +1,10 @@
 """Defects found by attacking UG's names in two scripts and its bare artist pages (branch w7-ug-names).
 
-Each test is an input a real user or UG would produce, and fails on the branch: it is marked
-``xfail(strict=True)`` with its defect's id, so the suite stays green and a fix shows up as an
-XPASS. The attacks that passed are not kept here. Nothing reaches the network: UG is a fake behind
-``httpx.MockTransport`` that answers the way the live site does (its 404 page for anything else).
+Each test is an input a real user or UG would produce, which failed on that branch; its name
+carries its defect's id (``test_w7_4_…`` is W7-4), and each one is fixed now, so they stand guard
+against the defect coming back. The attacks that passed are not kept here. Nothing reaches the
+network: UG is a fake behind ``httpx.MockTransport`` that answers the way the live site does (its
+404 page for anything else).
 """
 
 from __future__ import annotations
