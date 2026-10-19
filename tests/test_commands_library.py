@@ -104,6 +104,35 @@ def test_review_reports_overrides_broken_while_it_waits(tmp_path, monkeypatch):
     assert get_song(conn, sid).review is True
 
 
+def index_covers(conn, *, built=True):
+    """The index has only a cover of 斑马斑马, by 李志; ``built`` marks the build finished."""
+    from datetime import UTC, datetime
+
+    from tabarr.ug.index import mark_built
+
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(1, 'li-zhi', 'ban-ma-ban-ma', 'chords', '1', 'x', 'li-zhi/ban-ma-ban-ma-chords-1')")
+    if built:
+        mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+
+
+COVER = {"artist_key": "li-zhi", "song_key": "ban-ma-ban-ma", "score": 100.0, "step": "title_only"}
+
+
+def test_review_none_of_these_keeps_looking_for_the_song(tmp_path):
+    conn, sid = seed(tmp_path)
+    index_covers(conn)
+    update_song(conn, sid, review=True, match_decision="review", match_step="title_only", match_candidates=[COVER])
+    result = run(tmp_path, "review", input="n\n")
+    assert result.exit_code == 0, result.output
+    assert "(n)one of these" in result.output
+    assert "accepted 0, pinned 0, ignored 0, rejected 1, skipped 0" in result.output
+    overrides = (tmp_path / "lib" / "overrides.toml").read_text(encoding="utf-8")
+    assert '[reject]\n"宋冬野 - 斑马斑马" = ["li-zhi/ban-ma-ban-ma"]' in overrides
+    song = get_song(conn, sid)
+    assert (song.match_decision, song.review, song.status) == ("not_found", False, "wanted")
+
+
 def test_review_on_a_partial_index_saves_no_song_as_not_found(tmp_path):
     # A build stopped part-way: the rematch after your answers mustn't take the songs in the sitemaps
     # not read yet for misses.

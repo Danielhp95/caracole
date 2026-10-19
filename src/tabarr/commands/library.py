@@ -45,9 +45,8 @@ def register(app: typer.Typer) -> None:
                                  rematch=lambda: _rematch(conn, cfg))
         except OverridesError as e:  # the file broke while review waited for an answer
             fail(f"overrides: {e}", 2)
-        typer.echo(
-            f"accepted {stats.accepted}, pinned {stats.pinned}, ignored {stats.ignored}, skipped {stats.skipped}"
-        )
+        typer.echo(f"accepted {stats.accepted}, pinned {stats.pinned}, ignored {stats.ignored}, "
+                   f"rejected {stats.rejected}, skipped {stats.skipped}")
 
     @app.command("scan")
     def scan_cmd(ctx: typer.Context) -> None:
