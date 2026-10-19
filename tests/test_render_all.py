@@ -20,13 +20,13 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from caracole import render as render_module
 from caracole.autochords import ChordSegment, build_sheet
 from caracole.cli import build_app
 from caracole.db import kv_get_json, kv_set_json
 from caracole.lacuerda import parse_version_page
 from caracole.library import drop_file, keep_file, song_dir, write_atomic, write_info
 from caracole.overrides import Overrides, load_overrides
-from caracole import render as render_module
 from caracole.render import STYLE_FILE, RenderStats, render_all, written_file
 from caracole.songs import get_song, update_song
 from caracole.ug.page import strip_markup

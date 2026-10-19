@@ -49,7 +49,10 @@ pinyin), overrides.py, library.py (song folders, safe file access), notify.py (n
   keys, guesses keys, changes modes and finds alternatives; voicings.py and voicings.json are
   the fingerings, a checked subset of chords-db (MIT, LICENSE-chords-db); viewer.js and
   viewer.css are inlined, and the page's CSP holds their hashes. The music theory is Python,
-  tested in test_viewer_theory.py; the script only looks up what page.py precomputed.
+  tested in test_viewer_theory.py; the script only looks up what page.py precomputed. A
+  server serves a viewer only while `render.written_file` (kv `render:files:<song id>`)
+  matches it (`library.holds`), with `viewer.viewer_csp()` (a sandbox) as its header: anyone
+  with a synced device can put an HTML page in the library.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
