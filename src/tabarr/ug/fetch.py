@@ -74,9 +74,11 @@ from tabarr.ug.page import (
     strip_markup,
 )
 from tabarr.versions import (
+    SHEET_KINDS,
     VersionRow,
     get_version,
     mark_gone,
+    replaces_sheet,
     set_coverage,
     set_picks,
     song_versions,
@@ -87,10 +89,10 @@ log = logging.getLogger(__name__)
 
 PROVIDER = "ug"
 _PAGE_ACCEPT = (200, 404)
-SHEET_KINDS = ("chords",)
+CHORDS_KINDS = ("chords",)  # UG's kinds for the sheet slot, which holds every site's SHEET_KINDS
 GUITAR_PRO_KINDS = ("guitar-pro", "power")
 TAB_KINDS = ("tabs",)
-_GROUPS = (SHEET_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)
+_GROUPS = (CHORDS_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)
 _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
 SHEET_FILES = ("sheet.txt", "sheet.json")
 TAB_FILES = ("tab.txt", "tab.json")
@@ -474,19 +476,17 @@ def _lyric_lines(song: Song) -> list[str]:
     return coverage.lyric_lines(lyrics.plain) if lyrics is not None else []
 
 
-def _is_complete_row(row: VersionRow, policy: RankPolicy) -> bool:
-    return row.coverage is not None and row.coverage >= policy.coverage_threshold
-
-
 def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     """Score the top sheets for lyric coverage, rank them, and keep the best (or the first pin).
 
-    A sheet another site gave (LaCuerda's) yields only to a complete UG sheet
-    when it isn't complete itself: ratings can't be compared across sites. A
-    complete sheet retires the auto-chords sheet.
+    A sheet another site gave (LaCuerda's) is replaced only as the shared rule
+    says (``versions.replaces_sheet``): ratings can't be compared across sites,
+    so coverage alone decides, and a tie keeps it. A pin is your decision and
+    always wins. The sheet kept becomes the slot's only pick, and a complete
+    one retires the auto-chords sheet.
     """
     policy = run.ctx.rank
-    rows = _rows(run, SHEET_KINDS)
+    rows = _rows(run, CHORDS_KINDS)
     lines = _lyric_lines(run.song)
     by_id = {r.id: r for r in rows}
     pages: dict[int, UGTabPage] = {}
@@ -514,19 +514,19 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
             alive.append(c)
         ranked = rank_sheets(alive, policy, variant=run.song.variant)
     best = _first_with_text(run, ranked, rows, pages)
-    other = _kept_version(run, SHEET_FILES[0])
-    other = other if other is not None and other.provider != PROVIDER else None
-    if best is None or (other is not None and pinned is None
-                        and not (is_complete(best[0], policy) and not _is_complete_row(other, policy))):
-        set_picks(run.conn, run.song.id, SHEET_KINDS, [])
+    if best is None:
+        set_picks(run.conn, run.song.id, CHORDS_KINDS, [])
         _drop_if_blocked(run, SHEET_FILES)
         return None
     c, page = best
     assert c.version_id is not None
+    kept = _kept_version(run, SHEET_FILES[0])
+    if (kept is not None and kept.provider != PROVIDER and pinned is None
+            and not replaces_sheet(c.coverage, kept.coverage, policy.coverage_threshold)):
+        set_picks(run.conn, run.song.id, CHORDS_KINDS, [])  # the other site's sheet stays the pick
+        return None
     _keep_text(run, c.version_id, page, SHEET_FILES)
     set_picks(run.conn, run.song.id, SHEET_KINDS, [c.version_id])
-    if other is not None:
-        set_picks(run.conn, run.song.id, (other.kind,), [])
     if is_complete(c, policy) and (auto := _kept_version(run, AUTO_SHEET)) is not None:
         drop_file(run.conn, run.ctx.library_dir, song=run.song, name=AUTO_SHEET)
         set_picks(run.conn, run.song.id, (auto.kind,), [])
@@ -777,7 +777,7 @@ def process_song(ctx: FetchContext, song: Song) -> SongFetchOutcome:
             _rate_group(run, [t for t in tabs if t.type in group])
         return pinned.get(group)
 
-    sheet = _sheet_slot(run, rated(SHEET_KINDS))
+    sheet = _sheet_slot(run, rated(CHORDS_KINDS))
     guitar_pro = _guitar_pro_slot(run, rated(GUITAR_PRO_KINDS))
     tab = _tab_slot(run, rated(TAB_KINDS))
     _finish(run)

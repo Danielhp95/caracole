@@ -1079,20 +1079,30 @@ def test_auto_sheet_dropped_when_a_complete_human_sheet_arrives(conn, tmp_path, 
     assert "sheet.txt" in names(conn, song)
     assert ("sheet (auto).txt" not in names(conn, song)) is dropped
     assert (song_dir(tmp_path / "lib", song) / "sheet (auto).txt").exists() is not dropped
-    assert len(picks(conn, song.id, ("auto",))) == (0 if dropped else 1)
+    # Either way the human sheet is the slot's only pick; a partial one leaves the auto file as a fallback.
+    assert pick_ids(conn, song, "chords", "acordes", "auto") == [101]
 
 
 @pytest.mark.parametrize("lacuerda,ug_lines,replaced", [
-    (1.0, LINES[:3], False),  # a complete LaCuerda sheet beats a partial UG one
+    (1.0, LINES[:3], False),  # a complete LaCuerda sheet beats a partial UG one (0.3)
+    (1.0, None, False),  # ...and one of unknown coverage
     (1.0, LINES, False),  # ratings can't be compared across sites: a tie keeps what you have
     (0.5, LINES, True),  # a complete UG sheet beats a partial LaCuerda one
+    (None, LINES, True),  # ...and one of unknown coverage, which isn't complete
+    (0.2, LINES[:3], True),  # of two partial sheets, the one covering more wins
+    (0.5, LINES[:3], False),
+    (0.3, LINES[:3], False),  # a tie keeps what you have
+    (None, LINES[:3], False),  # a partial sheet never displaces one that may be complete
+    (0.5, None, False),  # unknown coverage never displaces a known partial sheet
+    (None, None, False),
 ])
-def test_a_sheet_from_lacuerda_yields_only_to_a_complete_ug_sheet(conn, tmp_path, lacuerda, ug_lines, replaced):
-    song = accepted(conn)
+def test_a_ug_sheet_meets_a_lacuerda_sheet_on_coverage_alone(conn, tmp_path, lacuerda, ug_lines, replaced):
+    # ug_lines=None: the song has no lyrics yet, so UG's sheet can't be scored.
+    song = accepted(conn, plain=None) if ug_lines is None else accepted(conn)
     keep_other_sheet(conn, tmp_path, song, provider="lacuerda", kind="acordes", name="sheet.txt", coverage=lacuerda)
     index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
     ug = FakeUG()
-    ug.tab(v(101), content=sheet("sheet 101", ug_lines))
+    ug.tab(v(101), content=sheet("sheet 101", ug_lines or LINES))
 
     out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
 
@@ -1101,6 +1111,37 @@ def test_a_sheet_from_lacuerda_yields_only_to_a_complete_ug_sheet(conn, tmp_path
     assert (out.sheet == 101) is replaced
     assert pick_ids(conn, song, "chords") == ([101] if replaced else [])
     assert len(picks(conn, song.id, ("acordes",))) == (0 if replaced else 1)
+
+
+def test_a_ug_sheet_you_pinned_replaces_even_a_complete_lacuerda_sheet(conn, tmp_path):
+    # [pin] is your decision: the coverage rule only settles what tabarr chooses itself.
+    song = accepted(conn)
+    keep_other_sheet(conn, tmp_path, song, provider="lacuerda", kind="acordes", name="sheet.txt", coverage=1.0)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES[:3]))
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, Overrides(pin={song.key: (101,)})),
+                       song)
+
+    assert out.sheet == 101 and "sheet 101" in read(tmp_path, song, "sheet.txt")
+    assert pick_ids(conn, song, "chords", "acordes", "auto") == [101]
+
+
+def test_a_kept_ug_sheet_becomes_the_only_pick_of_the_sheet_slot(conn, tmp_path):
+    # Picks are cleared across every sheet kind: chords, acordes and auto.
+    song = accepted(conn)
+    keep_other_sheet(conn, tmp_path, song, provider="lacuerda", kind="acordes", name="sheet.txt", coverage=0.2)
+    keep_other_sheet(conn, tmp_path, song, provider="auto", kind="auto", name="sheet (auto).txt")
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES[:5]))
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+    assert pick_ids(conn, song, "chords", "acordes", "auto") == [101]
+    assert "sheet (auto).txt" in names(conn, song)  # a partial sheet leaves the auto sheet's file in place
 
 
 def test_kept_files_of_a_tab_blocked_later_are_dropped_when_nothing_replaces_them(conn, tmp_path):

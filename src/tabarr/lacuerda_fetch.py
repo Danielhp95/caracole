@@ -12,10 +12,11 @@ in the last 30 days (``songs.lacuerda_checked_at``). Per song:
    "acordes" (Letra y Acordes) version is fetched; version pages are cached
    forever. No artist page, no matching title, no acordes version or a version
    that is gone is a miss, asked again after 30 days.
-3. **Keeping it.** The sheet's coverage of the song's lyrics decides: it is kept
-   as ``sheet.txt`` and ``sheet.json`` when no sheet is kept, when it is
-   complete and the kept one isn't, or when neither is complete and it covers
-   more. A complete sheet also replaces the auto-chords sheet.
+3. **Keeping it.** The sheet's coverage of the song's lyrics decides, by the
+   rule UG's sheets go by too (``versions.replaces_sheet``): it is kept as
+   ``sheet.txt`` and ``sheet.json`` when no sheet is kept, when it is complete
+   and the kept one isn't, or when neither is complete and it covers more. A
+   complete sheet also replaces the auto-chords sheet.
 
 Errors are never misses: a page that doesn't parse, or any other provider
 error, leaves the song to be tried again next run.
@@ -59,7 +60,15 @@ from tabarr.normalize import clean_title
 from tabarr.overrides import Overrides
 from tabarr.songs import SHEET_FILE_NAMES, Song, get_song, list_songs, refresh_status, update_song
 from tabarr.ug.page import strip_markup
-from tabarr.versions import VersionRow, get_version, set_coverage, set_picks, upsert_version
+from tabarr.versions import (
+    SHEET_KINDS,
+    VersionRow,
+    get_version,
+    replaces_sheet,
+    set_coverage,
+    set_picks,
+    upsert_version,
+)
 
 log = logging.getLogger(__name__)
 
@@ -67,8 +76,6 @@ ARTIST_PAGE_MAX_AGE = timedelta(days=30)
 RECHECK_AFTER = timedelta(days=30)
 _ACCEPT = (200, 404)  # a 404 is an answer: no such artist, or no such version
 HUMAN_SHEET, AUTO_SHEET = SHEET_FILE_NAMES  # "sheet.txt", "sheet (auto).txt"
-# Every kind the sheet slot holds; keeping a sheet makes it the slot's only pick.
-SHEET_KINDS = ("chords", "acordes", "auto")
 
 
 @dataclass
@@ -259,27 +266,15 @@ def _record(
     )
     set_coverage(conn, vid, value)
     already_kept = kept is not None and kept.id == vid
-    keep = kept is None or (not already_kept and _better(value, kept.coverage, rank))
+    keep = kept is None or (
+        not already_kept and replaces_sheet(value, kept.coverage, rank.coverage_threshold)
+    )
     if keep:
         _keep(conn, library_dir, song, vid, sheet, complete=_complete(value, rank))
     update_song(conn, song.id, lacuerda_checked_at=stamp)
     if keep or already_kept:  # info.json lists the kept sheet's coverage
         write_info(conn, library_dir, get_song(conn, song.id))
     return keep
-
-
-def _better(value: float | None, kept: float | None, rank: RankPolicy) -> bool:
-    """Whether a sheet covering ``value`` of the lyrics beats a kept one covering ``kept``.
-
-    A complete sheet beats one that isn't; of two partial sheets, the one that
-    covers more wins. An unknown coverage is never complete, and never shown to
-    be smaller than a partial sheet's, so a partial sheet doesn't replace it.
-    """
-    if _complete(kept, rank):
-        return False
-    if _complete(value, rank):
-        return True
-    return value is not None and kept is not None and value > kept
 
 
 def _keep(

@@ -3,7 +3,15 @@ import json
 import pytest
 
 from tabarr.library import drop_file, keep_file, kept_files, safe_name, song_dir, write_atomic, write_info
-from tabarr.versions import picks, set_coverage, set_picks, song_versions, upsert_version
+from tabarr.versions import (
+    SHEET_KINDS,
+    picks,
+    replaces_sheet,
+    set_coverage,
+    set_picks,
+    song_versions,
+    upsert_version,
+)
 
 from conftest import add_song
 
@@ -98,6 +106,55 @@ def test_set_picks_ranks_and_clears(conn):
     set_picks(conn, s.id, ["guitar-pro", "power"], [a])
     assert [v.id for v in picks(conn, s.id, ["guitar-pro", "power"])] == [a]
     assert [v.id for v in picks(conn, s.id, ["tabs"])] == [t]
+
+
+def test_sheet_kinds_are_every_kind_the_sheet_slot_holds():
+    # UG's chords, LaCuerda's acordes and the auto-chords sheet: keeping one makes it the only pick.
+    assert SHEET_KINDS == ("chords", "acordes", "auto")
+
+
+def test_set_picks_over_every_sheet_kind_leaves_one_pick(conn):
+    s = add_song(conn)
+    ug = _version(conn, s, 1)
+    lacuerda = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/signos-1", song_id=s.id,
+                              slot="sheet", kind="acordes", rating=0, votes=0, version=1, label=None,
+                              url="https://acordes.lacuerda.net/soda_stereo/signos.shtml", raw={},
+                              now="2026-10-18T03:30:00Z")
+    auto = upsert_version(conn, provider="auto", tab_id=str(s.id), song_id=s.id, slot="sheet", kind="auto",
+                          rating=0, votes=0, version=1, label=None, url="file:///music/signos.flac", raw={},
+                          now="2026-10-18T03:30:00Z")
+    set_picks(conn, s.id, ("acordes",), [lacuerda])
+    set_picks(conn, s.id, ("auto",), [auto])
+    set_picks(conn, s.id, SHEET_KINDS, [ug])
+    assert [v.id for v in picks(conn, s.id, SHEET_KINDS)] == [ug]
+
+
+THRESHOLD = 0.8
+
+
+@pytest.mark.parametrize("new,kept,replaces", [
+    (0.9, 0.5, True),  # complete beats incomplete
+    (0.8, 0.79, True),  # the threshold itself is complete
+    (0.8, None, True),  # unknown coverage is incomplete
+    (1.0, 0.85, False),  # two complete sheets tie: the kept one stays
+    (0.85, 1.0, False),
+    (0.5, 0.9, False),  # a partial sheet never beats a complete one
+    (0.6, 0.4, True),  # of two incomplete sheets the one covering more wins
+    (0.4, 0.6, False),
+    (0.5, 0.5, False),  # a tie keeps the kept sheet
+    (None, 0.3, False),  # unknown coverage never displaces a known partial sheet
+    (None, 0.9, False),  # nor a complete one
+    (None, 0.0, False),
+    (0.5, None, False),  # a sheet of unknown coverage may be complete: a partial one doesn't displace it
+    (0.0, None, False),
+    (None, None, False),  # a tie
+])
+def test_replaces_sheet(new, kept, replaces):
+    assert replaces_sheet(new, kept, THRESHOLD) is replaces
+
+
+def test_replaces_sheet_follows_the_threshold():
+    assert replaces_sheet(0.6, 0.4, 0.5) is True and replaces_sheet(0.6, 0.55, 0.5) is False
 
 
 def test_keep_file_replaces_and_dedupes(conn, tmp_path):
