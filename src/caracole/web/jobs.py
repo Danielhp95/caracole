@@ -112,9 +112,11 @@ class JobQueue:
 
         A song's waiting or running job that does as much (a fetch, or the new
         job fetches nothing) is the answer. A fetch joins a song's add that
-        still waits: the add gets the fetch's other steps. One asked for while
-        the add runs comes after it, as a job of its own. Raises QueueFull when
-        ``limit`` jobs are waiting or running.
+        still waits: the add gets the fetch's steps of the commands it doesn't
+        run (one ``caracole add``, whatever its album: the server wrote
+        wanted.txt already). One asked for while the add runs comes after it,
+        as a job of its own. Raises QueueFull when ``limit`` jobs are waiting
+        or running.
         """
         with self._lock:
             mine = [job for job in self._jobs if job.active and job.song_key == song_key]
@@ -125,8 +127,8 @@ class JobQueue:
                 return copy.deepcopy(enough), False
             waiting = next((job for job in mine if job.state == "queued"), None)
             if waiting is not None:
-                has = {step.args for step in waiting.steps}
-                waiting.steps += [Step(label, tuple(args)) for label, args in steps if tuple(args) not in has]
+                runs = {step.args[0] for step in waiting.steps}
+                waiting.steps += [Step(label, tuple(args)) for label, args in steps if args[0] not in runs]
                 waiting.title, waiting.fetching = title, True
                 waiting.note = waiting.note or note
                 return copy.deepcopy(waiting), False

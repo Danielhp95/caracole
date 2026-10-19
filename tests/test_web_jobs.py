@@ -109,6 +109,16 @@ def test_a_fetch_joins_a_waiting_add_of_the_same_song():
     assert queue.fetching_keys() == {"radiohead|creep"} and queue.active_count() == 1
 
 
+def test_a_fetch_that_joins_an_add_runs_caracole_add_once_whatever_its_album():
+    # The server wrote wanted.txt already; a second `caracole add` would leave the line as it is.
+    queue = JobQueue(FakeRunner())
+    queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep", album="Pablo Honey"))
+    job, _ = queue.submit("Fetch Radiohead - Creep", "radiohead|creep",
+                          add_steps("Radiohead", "Creep") + fetch_steps("Radiohead - Creep"), fetching=True)
+    assert [s.args for s in job.steps] == [("add", "--album=Pablo Honey", "--", "Radiohead", "Creep"), ("match",),
+                                           ("fetch", "--song=Radiohead - Creep"), ("render",)]
+
+
 def test_an_add_never_replaces_a_fetch_of_the_same_song():
     queue = JobQueue(FakeRunner())
     fetch, _ = queue.submit("Fetch Radiohead - Creep", "radiohead|creep", fetch_steps("Radiohead - Creep"),
