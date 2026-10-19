@@ -73,6 +73,29 @@ def test_ignore(conn, cfg):
     assert get_song(conn, s.id).status == "ignored" and stats.ignored == 1
 
 
+def test_none_of_these_rejects_every_candidate_shown_and_keeps_the_song(conn, cfg):
+    s = review_song(conn)
+    script = Script("n")
+    rematched = []
+    stats = review_songs(conn, cfg, script.io(), rematch=lambda: rematched.append(True))
+    o = load_overrides(cfg.overrides_file)
+    assert o.reject["soda/persiana-americana"] == frozenset({("soda-stereo", "persiana-americana"),
+                                                             ("soda-stereo", "persiana")})
+    assert not o.ignore and not o.match and not o.alias
+    assert (get_song(conn, s.id).review, get_song(conn, s.id).status) == (False, "wanted")
+    assert stats.rejected == 1 and stats.changed and rematched == [True]
+    assert script.prompts == ["Pick 1-2, (n)one of these, (p)in a URL, (i)gnore, (s)kip, (q)uit: "]
+
+
+def test_none_of_these_is_offered_only_with_candidates(conn, cfg):
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=[])
+    script = Script("n")
+    stats = review_songs(conn, cfg, script.io())
+    assert script.prompts == ["Pick (p)in a URL, (i)gnore, (s)kip, (q)uit: "]
+    assert stats.skipped == 1 and stats.rejected == 0 and not cfg.overrides_file.exists()
+
+
 def test_pin_url(conn, cfg):
     review_song(conn)
     stats = review_songs(conn, cfg, Script("p", "https://tabs.ultimate-guitar.com/tab/1081460").io())

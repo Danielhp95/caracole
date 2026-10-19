@@ -28,7 +28,7 @@ from tabarr.commands._common import (
     fail,
     load_cfg,
     load_ovr,
-    open_db_or_exit,
+    open_db,
     utcnow,
     write_pages,
 )
@@ -55,7 +55,7 @@ def register(app: typer.Typer) -> None:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
         cfg = load_cfg(ctx)
         overrides = load_ovr(cfg)
-        conn = open_db_or_exit(cfg)
+        conn = open_db(cfg)
         with exclusive(cfg, "autochords"):
             # A track dropped in after the night's run, with the unit started by hand, is
             # linked here first.

@@ -12,9 +12,10 @@ key. A to-do page lists the few things only you can do, such as a match to
 confirm or a Guitar Pro file to download. For a song nobody has charted, buy
 the track and a local model writes the chords.
 
-It is polite by design: it never uses Ultimate Guitar's search, keeps to a
-small nightly budget of requests, one at a time, never downloads Guitar Pro
-files itself, and backs off when a site pushes back.
+It is polite by design: it never uses Ultimate Guitar's search or any other
+page its robots.txt closes to bots, keeps to a small nightly budget of
+requests, one at a time, never downloads Guitar Pro files itself, and backs
+off when a site pushes back.
 
 ## Quick start
 

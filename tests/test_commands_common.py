@@ -55,7 +55,7 @@ def test_a_state_folder_tabarr_cant_create_names_the_database(tmp_path, capsys):
         toml = write_config(tmp_path, state_dir=locked / "state")
         cfg = load_config(toml, env={"HOME": str(tmp_path)})
         with pytest.raises(typer.Exit) as raised:
-            open_db_or_exit(cfg)
+            open_db(cfg)
     assert raised.value.exit_code == 1
     db_path = locked / "state" / "tabarr.sqlite"
     assert f"can't open the database {db_path}: Permission denied ({locked / 'state'})" in (
@@ -65,19 +65,18 @@ def test_a_state_folder_tabarr_cant_create_names_the_database(tmp_path, capsys):
 
 @needs_permissions
 def test_a_database_tabarr_cant_write_names_it(tmp_path, cfg, capsys):
-    open_db(cfg).close()
+    db.connect(cfg.db_path).close()
     # The database is there, but its folder can't take its journal.
     with read_only(cfg.state_dir), pytest.raises(typer.Exit) as raised:
-        open_db_or_exit(cfg)
+        open_db(cfg)
     assert raised.value.exit_code == 1
     assert f"can't open the database {cfg.db_path}: " in capsys.readouterr().err
 
 
-@needs_permissions
-def test_open_db_still_raises_for_a_caller_that_carries_on(tmp_path, cfg):
-    # `tabarr add` keeps the line in wanted.txt and exits 0 when only the database fails.
-    with read_only(cfg.state_dir.parent), pytest.raises(OSError):
-        open_db(cfg)
+def test_open_db_is_the_one_way_to_open_the_database():
+    # The older name stays for callers that still use it; `tabarr add`, which carries on
+    # without the database, opens it with db.connect itself.
+    assert open_db_or_exit is open_db
 
 
 @needs_permissions
@@ -93,12 +92,93 @@ def test_a_command_that_needs_the_database_says_so_instead_of_a_traceback(tmp_pa
     assert "Permission denied" in result.output and str(locked / "state") in result.output
 
 
+# Every command that opens the database, as you'd type it ({tmp} is the test's folder).
+DB_COMMANDS = [
+    ["run"], ["sync"], ["fetch"], ["fetch", "--song", "Radiohead - Creep"], ["lyrics"],
+    ["lacuerda"], ["render"], ["match"], ["match", "--dry-run"],
+    ["index", "build", "--from", "{tmp}"], ["index", "refresh"], ["index", "stats"],
+    ["search", "creep"], ["search", "creep", "--add", "1"], ["todo"], ["review"], ["scan"],
+]
+
+
+def invoke(tmp_path: Path, *args: str):
+    toml = write_config(tmp_path, music_dir=tmp_path / "music")
+    argv = [arg.format(tmp=tmp_path) for arg in args]
+    return CliRunner().invoke(build_app(), ["--config", str(toml), *argv])
+
+
+@pytest.mark.parametrize("args", DB_COMMANDS, ids=" ".join)
+def test_every_command_names_a_state_folder_it_cant_use(tmp_path, args):
+    # A file where the state folder should be, as a wrong mount would leave it (root too).
+    state = tmp_path / "state"
+    state.write_text("not a folder", encoding="utf-8")
+    result = invoke(tmp_path, *args)
+    assert result.exit_code == 1, result.output
+    assert not isinstance(result.exception, OSError), result.exception  # a message, no traceback
+    assert "can't open" in result.output and str(state) in result.output
+
+
+def newer_database(path: Path) -> int:
+    """A database a newer tabarr migrated, as a NixOS rollback leaves it; returns its version."""
+    conn = db.connect(path)
+    conn.execute(f"PRAGMA user_version = {db.SCHEMA_VERSION + 1}")
+    conn.close()
+    return db.SCHEMA_VERSION + 1
+
+
+def test_a_database_a_newer_tabarr_migrated_exits_2(cfg, capsys):
+    version = newer_database(cfg.db_path)
+    with pytest.raises(typer.Exit) as raised:
+        open_db(cfg)
+    assert raised.value.exit_code == 2
+    assert f"database: {cfg.db_path} is at schema version {version}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("args", DB_COMMANDS, ids=" ".join)
+def test_every_command_exits_2_on_a_database_a_newer_tabarr_migrated(tmp_path, args):
+    version = newer_database(tmp_path / "state" / "tabarr.sqlite")
+    result = invoke(tmp_path, *args)
+    assert result.exit_code == 2, result.output
+    assert not isinstance(result.exception, db.DatabaseTooNew), result.exception
+    assert f"is at schema version {version}, but this tabarr knows up to" in result.output
+
+
+def test_add_keeps_its_line_beside_a_database_a_newer_tabarr_migrated(tmp_path):
+    # wanted.txt is the source of truth: the line is kept, and the database waits for that tabarr.
+    newer_database(tmp_path / "state" / "tabarr.sqlite")
+    result = invoke(tmp_path, "add", "Radiohead", "Creep")
+    assert result.exit_code == 0, result.output
+    assert "a newer tabarr migrated it" in result.output
+    wanted = (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
+    assert wanted.endswith("\nRadiohead - Creep\n")
+
+
 @needs_permissions
 def test_a_library_tabarr_cant_write_names_the_page(tmp_path, cfg, conn, capsys):
     with read_only(cfg.library_dir), pytest.raises(typer.Exit) as raised:
         write_pages(conn, cfg, Overrides(), datetime(2026, 10, 19, tzinfo=UTC))
     assert raised.value.exit_code == 1
     assert f"can't write {cfg.library_dir / '_todo.md'}" in capsys.readouterr().err
+
+
+def test_write_pages_writes_what_the_to_do_module_writes(cfg, conn, monkeypatch):
+    # One way to write the pages: the commands' is todo.write_pages, with a message on failure.
+    import tabarr.todo
+
+    calls = []
+    monkeypatch.setattr(tabarr.todo, "write_pages", lambda *args: calls.append(args) or ("t", "i"))
+    now = datetime(2026, 10, 19, tzinfo=UTC)
+    overrides = Overrides()
+    assert write_pages(conn, cfg, overrides, now) == ("t", "i")
+    assert calls == [(conn, cfg, overrides, now)]
+
+
+def test_a_page_tabarr_cant_replace_is_named(cfg, conn, capsys):
+    (cfg.library_dir / "_todo.md").mkdir(parents=True)  # a folder where the page goes (root too)
+    with pytest.raises(typer.Exit) as raised:
+        write_pages(conn, cfg, Overrides(), datetime(2026, 10, 19, tzinfo=UTC))
+    assert raised.value.exit_code == 1
+    assert f"can't write {cfg.library_dir / '_todo.md'}: Is a directory" in capsys.readouterr().err
 
 
 def test_write_pages_writes_the_todo_page_and_the_index(cfg, conn):

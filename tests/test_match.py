@@ -1,7 +1,10 @@
+from datetime import UTC, datetime
+
 from tabarr.config import MatchPolicy
 from tabarr.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
 from tabarr.overrides import Overrides
 from tabarr.songs import get_song, update_song
+from tabarr.ug.index import mark_built
 from tabarr.versions import picks, set_picks, song_versions, upsert_version
 
 from conftest import add_song
@@ -9,13 +12,16 @@ from conftest import add_song
 POLICY = MatchPolicy()
 
 
-def index(conn, *rows):
-    """Index rows (tab_id, artist_key, song_key, type), inserted directly."""
+def index(conn, *rows, built=True):
+    """Index rows (tab_id, artist_key, song_key, type), inserted directly, in an index a build
+    finished; ``built=False`` leaves it partial, as a build stopped part-way does."""
     conn.executemany(
         "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
         "VALUES (?, ?, ?, ?, '1', 'x', ?)",
         [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows],
     )
+    if built:
+        mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
 
 
 def match(conn, artist, title, overrides=None, artists=None):
@@ -193,6 +199,50 @@ def test_ignore_pin_and_match_overrides(conn):
     assert summary(m(match=over)) == ("accept", "override", 100.0, "oasis", "wonderwall-ii")
     bare = m(pin={"oasis/wonderwall": (85053,)})
     assert summary(bare) == ("pinned", "pin", None, None, None) and bare.pinned == (85053,)
+
+
+def test_rejected_covers_never_come_back_and_other_covers_still_can(conn):
+    # "None of these" in tabarr review, for a review on the title alone: UG lists Maná only by bare ids.
+    index(conn, (1, "ana-gabriel", "rayando-el-sol", "chords"), (2, "pablo-alboran", "rayando-el-sol", "chords"),
+          (3, "pablo-alboran", "rayando-el-sol", "tabs"))
+    song = add_song(conn, "Maná", "Rayando el Sol")
+    view = IndexView(conn)
+    assert [c.artist_key for c in match_song(song, view, Overrides(), POLICY).candidates] == [
+        "pablo-alboran", "ana-gabriel"]
+    one = Overrides(reject={song.key: frozenset({("pablo-alboran", "rayando-el-sol")})})
+    r = match_song(song, view, one, POLICY)
+    assert summary(r) == ("review", "title_only", 100.0, "ana-gabriel", "rayando-el-sol")
+    assert [c.artist_key for c in r.candidates] == ["ana-gabriel"]
+    both = Overrides(reject={song.key: frozenset({("pablo-alboran", "rayando-el-sol"),
+                                                  ("ana-gabriel", "rayando-el-sol")})})
+    r = match_song(song, view, both, POLICY)
+    assert (r.decision, r.candidates) == ("not_found", ())
+
+
+def test_rejected_titles_of_the_songs_own_artist_never_come_back(conn):
+    index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwalls", "chords"))
+    song = add_song(conn, "Oasis", "Wonderwal")
+    view = IndexView(conn)
+    assert match_song(song, view, Overrides(), POLICY).decision == "review"
+    # Without its rival, the other title leads clearly: it is accepted.
+    r = match_song(song, view, Overrides(reject={song.key: frozenset({("oasis", "wonderwalls")})}), POLICY)
+    assert summary(r) == ("accept", "fuzzy_title", 94.7, "oasis", "wonderwall")
+    # Nor does a rejected title come back on the title alone.
+    both = Overrides(reject={song.key: frozenset({("oasis", "wonderwall"), ("oasis", "wonderwalls")})})
+    r = match_song(song, view, both, POLICY)
+    assert (r.decision, r.candidates) == ("not_found", ())
+
+
+def test_a_rejected_exact_title_is_accepted_through_no_step_but_your_match(conn):
+    index(conn, (1, "soda-stereo", "persiana-americana", "chords"), (2, "soda", "persiana-americana", "chords"))
+    song = add_song(conn, "Soda", "Persiana Americana")
+    view = IndexView(conn)
+    rejected = {song.key: frozenset({("soda-stereo", "persiana-americana")})}
+    aliased = Overrides(alias={"soda": ("soda-stereo",)}, reject=rejected)
+    assert summary(match_song(song, view, aliased, POLICY)) == ("accept", "exact", 100.0, "soda", "persiana-americana")
+    matched = Overrides(match={song.key: ("soda-stereo", "persiana-americana")}, reject=rejected)
+    assert summary(match_song(song, view, matched, POLICY)) == (
+        "accept", "override", 100.0, "soda-stereo", "persiana-americana")
 
 
 def test_pinyin_keys_meet_ug_slugs(conn):
@@ -390,12 +440,37 @@ def test_an_empty_index_keeps_what_the_ladder_found(conn):
     before = columns(conn, creep.id)
     conn.execute("DELETE FROM ug_index")
     hotel = add_song(conn, "Eagles", "Hotel California")
+    newcomer = add_song(conn, "Soda Stereo", "Signos")
     changes = match_all(conn, Overrides(match={hotel.key: ("eagles", "hotel-california")}), POLICY)
     assert columns(conn, creep.id) == before and get_song(conn, creep.id).ug_dirty is False
+    # The ignore you took out comes off; a song matched never isn't saved as a miss, and shows as one.
     assert {c.song.id: (c.old, c.new.decision) for c in changes} == {
-        creep.id: ("accept", "accept"), wonderwall.id: ("ignored", "not_found"), hotel.id: (None, "accept")}
+        creep.id: ("accept", "accept"), wonderwall.id: ("ignored", "not_found"), hotel.id: (None, "accept"),
+        newcomer.id: (None, "not_found")}
     assert get_song(conn, wonderwall.id).status == "wanted"
     assert get_song(conn, hotel.id).match_step == "override"
+    assert get_song(conn, newcomer.id).match_decision is None
+
+
+def test_a_partial_index_keeps_what_the_ladder_found_and_saves_no_new_miss(conn):
+    # A build stopped part-way: a song whose tabs are in the sitemaps it didn't read isn't missing from
+    # UG. match_all holds this for every caller, `tabarr review`'s rematch among them.
+    index(conn, (1, "radiohead", "creep", "chords"), (2, "oasis", "wonderwall", "chords"), built=False)
+    earlier = add_song(conn, "Eagles", "Hotel California")  # matched before, in a sitemap not read yet
+    update_song(conn, earlier.id, match_decision="accept", match_step="exact", match_score=100.0,
+                match_artist_key="eagles", match_song_key="hotel-california", ug_dirty=False,
+                match_candidates=[{"artist_key": "eagles", "song_key": "hotel-california", "score": 100.0,
+                                   "step": "exact"}])
+    before = columns(conn, earlier.id)
+    creep = add_song(conn, "Radiohead", "Creep")
+    missing = add_song(conn, "Soda Stereo", "Signos")
+    pinned = add_song(conn, "Joaquín Sabina", "Contigo")
+    changes = match_all(conn, Overrides(pin={pinned.key: (85053,)}), POLICY)
+    assert columns(conn, earlier.id) == before and get_song(conn, earlier.id).ug_dirty is False
+    assert get_song(conn, creep.id).match_decision == "accept"  # what the index has is still found
+    assert get_song(conn, missing.id).match_decision is None  # not looked up yet, rather than a miss
+    assert get_song(conn, pinned.id).match_decision == "pinned"  # and your overrides apply
+    assert {c.song.id: c.new.decision for c in changes}[missing.id] == "not_found"  # as `match --dry-run` shows
 
 
 def test_ignored_songs_get_status_ignored_and_come_back(conn):
@@ -420,6 +495,32 @@ def test_an_artist_page_match_is_not_undone_by_the_ladder(conn):
     match_all(conn, Overrides(match={"joaquin-sabina/19-dias-y-500-noches": ("sabina-ddumba",
                                                                             "19-dias-y-500-noches")}), POLICY)
     assert get_song(conn, s.id).match_step == "override"
+
+
+def test_none_of_these_leaves_the_song_not_found_for_the_fetch_to_look_further(conn):
+    from tabarr.ug.fetch import needs_artist_page
+
+    index(conn, (1, "ana-gabriel", "rayando-el-sol", "chords"), (2, "pablo-alboran", "rayando-el-sol", "chords"))
+    s = add_song(conn, "Maná", "Rayando el Sol")
+    match_all(conn, Overrides(), POLICY)
+    assert get_song(conn, s.id).review is True
+    shown = frozenset((c["artist_key"], c["song_key"]) for c in get_song(conn, s.id).match_candidates)
+    match_all(conn, Overrides(reject={s.key: shown}), POLICY)
+    song = get_song(conn, s.id)
+    assert (song.match_decision, song.review, song.status) == ("not_found", False, "wanted")
+    assert needs_artist_page(song)  # its artist's UG page is read for it, as for any song not found
+
+
+def test_an_artist_page_match_you_rejected_is_undone(conn):
+    s = add_song(conn, "Joaquín Sabina", "19 Días y 500 Noches")
+    update_song(conn, s.id, match_decision="accept", match_step="artist_page", match_score=100.0,
+                match_artist_key="joaquin-sabina", match_song_key="19-dias-y-500-noches")
+    index(conn, (1, "oasis", "wonderwall", "chords"))
+    other = Overrides(reject={s.key: frozenset({("joaquin-sabina", "19-y-500")})})
+    match_all(conn, other, POLICY)
+    assert get_song(conn, s.id).match_step == "artist_page"  # another UG song's rejection: kept (A6)
+    match_all(conn, Overrides(reject={s.key: frozenset({("joaquin-sabina", "19-dias-y-500-noches")})}), POLICY)
+    assert (get_song(conn, s.id).match_decision, get_song(conn, s.id).match_step) == ("not_found", None)
 
 
 def test_an_artist_page_match_yields_to_ignore(conn):

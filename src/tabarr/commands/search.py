@@ -12,13 +12,13 @@ from __future__ import annotations
 import re
 import sqlite3
 import textwrap
-from contextlib import closing
+from contextlib import closing, nullcontext
 from typing import TYPE_CHECKING
 
 import typer
 
 from tabarr.commands import sources
-from tabarr.commands._common import fail, load_cfg, open_db
+from tabarr.commands._common import exclusive, fail, load_cfg, open_db
 
 if TYPE_CHECKING:
     from tabarr.config import Config
@@ -46,7 +46,9 @@ def register(app: typer.Typer) -> None:
         if not re.search(r"\w", text):
             fail(f"nothing to search for in {text!r}", 2)
         cfg = load_cfg(ctx)
-        with closing(open_db(cfg)) as conn:
+        # Only --add writes (wanted.txt, then the library), so only it waits for another tabarr.
+        lock = nullcontext() if add is None else exclusive(cfg, "search --add")
+        with lock, closing(open_db(cfg)) as conn:
             if add is None:
                 _search(cfg, conn, text, limit)
             else:

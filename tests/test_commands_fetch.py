@@ -289,6 +289,92 @@ def test_song_option_for_an_unknown_song(tmp_path, ug):
     assert find_song(connect(tmp_path), "soda-stereo/zoom") is None
 
 
+# --- the pages --------------------------------------------------------------------------------
+
+STALE = "as an earlier run left it\n"
+PAGES = ("_todo.md", "index.html")
+
+
+def stale_pages(tmp_path):
+    lib = tmp_path / "lib"
+    lib.mkdir(parents=True, exist_ok=True)
+    for name in PAGES:
+        (lib / name).write_text(STALE, encoding="utf-8")
+
+
+def pages(tmp_path):
+    return [(tmp_path / "lib" / name).read_text(encoding="utf-8") for name in PAGES]
+
+
+@pytest.mark.parametrize("args", [(), ("--song", "Soda Stereo - Signos")], ids=["fetch", "--song"])
+def test_fetch_rewrites_the_pages(tmp_path, ug, args):
+    two_songs(tmp_path, ug)
+    stale_pages(tmp_path)
+
+    result = run(tmp_path, *args)
+
+    assert result.exit_code == 0, result.output
+    todo, index = pages(tmp_path)
+    found = 1 if args else 2
+    assert f"2 songs: {found} found, {2 - found} wanted" in todo
+    assert "Signos" in index and index != STALE
+
+
+def test_a_block_rewrites_the_pages_with_the_cooldown(tmp_path, ug):
+    two_songs(tmp_path, ug)
+    ug.pages[PERSIANA] = (403, "<html><body>Forbidden</body></html>")
+    stale_pages(tmp_path)
+
+    result = run(tmp_path)
+
+    assert result.exit_code == 0, result.output
+    todo, index = pages(tmp_path)
+    assert STALE not in (todo, index)
+    assert "| ug | cooling down until " in todo
+
+
+def test_a_cooldown_leaves_the_pages_alone(tmp_path, ug):
+    from tabarr.commands._common import utcnow
+
+    conn, _, _ = two_songs(tmp_path, ug)
+    record_block(conn, "ug", utcnow(), "HTTP 403")
+    stale_pages(tmp_path)
+
+    result = run(tmp_path)
+
+    assert "cooling down" in result.output, result.output
+    assert pages(tmp_path) == [STALE, STALE]
+
+
+def test_nothing_to_fetch_leaves_the_pages_alone(tmp_path, ug):
+    conn = connect(tmp_path)
+    accepted(conn, "Signos", "signos", 201, added_at="2026-10-01T00:00:00Z", dirty=False)
+    stale_pages(tmp_path)
+
+    result = run(tmp_path)
+
+    assert "Nothing to fetch." in result.output, result.output
+    assert pages(tmp_path) == [STALE, STALE]
+
+
+def test_sheets_scored_with_nothing_to_fetch_rewrite_the_pages(tmp_path, ug):
+    # The partial sheet the score found shows on the to-do page at once.
+    conn, persiana, signos = two_songs(tmp_path, ug)
+    assert run(tmp_path).exit_code == 0  # both sheets kept while LRCLIB had no lyrics for them
+    record = {"id": 1, "plainLyrics": "walking down the river road tonight\ncounting every lantern",
+              "syncedLyrics": None, "instrumental": False, "duration": 213.0}
+    lyrics = Lyrics.from_record(record).to_json()
+    update_song(conn, persiana, lyrics_status="found", lyrics_json=lyrics)
+    stale_pages(tmp_path)
+
+    result = run(tmp_path)
+
+    assert "Scored 1 kept sheet" in result.output, result.output
+    assert "Nothing to fetch." in result.output
+    todo, _ = pages(tmp_path)
+    assert "**Soda Stereo - Persiana Americana**: 50% of the lyrics" in todo
+
+
 def test_registering_the_command_imports_no_fetch_code(tmp_path):
     # Every command module is imported on every start; the fetch code waits for the command.
     src = Path(__file__).resolve().parents[1] / "src"
