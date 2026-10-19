@@ -54,6 +54,29 @@ def test_version_number_selects_pick(conn, cfg):
     assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-2.gp5", b)]
 
 
+@pytest.mark.parametrize("ext,kind", [(".gp5", "guitar-pro"), (".ptb", "power")])
+def test_version_number_selects_a_pick_of_the_files_kind(conn, cfg, ext, kind):
+    # UG numbers versions within each type, so a Power Tab and a Guitar Pro file are both "ver 1".
+    s = add_song(conn)
+    other = "power" if kind == "guitar-pro" else "guitar-pro"
+    first = pick(conn, s, 1, kind=other, version=1)
+    second = pick(conn, s, 2, kind=kind, version=1)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [first, second])
+    drop(cfg, f"Soda Stereo - De Musica Ligera (ver 1){ext}")
+    file_inbox(conn, cfg.library_dir)
+    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [(f"guitar-2{ext}", second)]
+
+
+def test_version_number_of_another_kind_falls_back_to_the_kind(conn, cfg):
+    s = add_song(conn)
+    gp = pick(conn, s, 1, kind="guitar-pro", version=3)
+    pt = pick(conn, s, 2, kind="power", version=1)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [gp, pt])
+    drop(cfg, "Soda Stereo - De Musica Ligera (ver 1).gp5")
+    file_inbox(conn, cfg.library_dir)
+    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-1.gp5", gp)]
+
+
 def test_second_file_takes_next_open_pick(conn, cfg):
     s = add_song(conn)
     a, b = pick(conn, s, 1), pick(conn, s, 2, version=2)

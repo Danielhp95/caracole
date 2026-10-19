@@ -94,15 +94,18 @@ def _match(artist: str | None, title: str, candidates: list[tuple[Song, list[Ver
 
 
 def _choose_pick(open_picks: list[VersionRow], version: int | None, ext: str) -> VersionRow:
+    """The pick of the file's kind with its version number, else the first of its kind, else the first.
+
+    UG numbers versions within each type, so a song's Guitar Pro and Power Tab
+    picks are often both "ver 1": the number alone can't tell them apart.
+    """
+    wanted_kind = "power" if ext == ".ptb" else "guitar-pro"
+    same_kind = [v for v in open_picks if v.kind == wanted_kind]
     if version is not None:
-        for v in open_picks:
+        for v in same_kind:
             if v.version == version:
                 return v
-    wanted_kind = "power" if ext == ".ptb" else "guitar-pro"
-    for v in open_picks:
-        if v.kind == wanted_kind:
-            return v
-    return open_picks[0]
+    return same_kind[0] if same_kind else open_picks[0]
 
 
 def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
