@@ -217,6 +217,22 @@ def test_invalid_toml_is_error(tmp_path):
         load_overrides(write(tmp_path, "[alias\n"))
 
 
+def test_a_table_declared_twice_says_to_merge_the_two(tmp_path):
+    # As pasting two blocks that each start with the table's header makes it.
+    p = write(tmp_path, (
+        '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n\n'
+        '[artist_url]\n"宋冬野" = "https://www.ultimate-guitar.com/artist/song_dongye_99"\n'
+    ))
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == (f"{p}: Cannot declare ('artist_url',) twice (at line 4, column 12); "
+                            "merge the two [artist_url] sections into one")
+    other = write(tmp_path, '[match]\n"A - B" = "a/b"\n"A - B" = "a/c"\n')  # a key twice: no such hint
+    with pytest.raises(OverridesError) as e:
+        load_overrides(other)
+    assert "merge" not in str(e.value)
+
+
 def test_override_key():
     assert override_key("Soda Stereo - De Música Ligera") == "soda-stereo/de-musica-ligera"
     assert override_key("宋冬野 - 斑马，斑马") == "宋冬野/斑马斑马"

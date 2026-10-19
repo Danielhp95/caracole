@@ -26,6 +26,7 @@ name of its own (``library.write_atomic``).
 
 from __future__ import annotations
 
+import ast
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -48,6 +49,7 @@ _TAB_HOST = "https://tabs.ultimate-guitar.com"
 _ARTIST_URL = re.compile(r"^https://www\.ultimate-guitar\.com/artist/[^/?#]+_\d+/?(?:[?#].*)?$")
 _ARTIST_HOST = "https://www.ultimate-guitar.com"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block"}
+_TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
 
 
 class OverridesError(Exception):
@@ -149,6 +151,16 @@ def _read(path: Path) -> str | None:
     return data.decode("utf-8")
 
 
+def _declared_twice(e: tomllib.TOMLDecodeError) -> str:
+    """What to do about a table declared twice, as pasting two blocks with the same header makes one."""
+    m = _TWICE.match(str(e))
+    try:
+        keys = ast.literal_eval(m.group(1)) if m else None
+        return f"; merge the two [{'.'.join(keys)}] sections into one" if keys else ""
+    except (ValueError, SyntaxError, TypeError):
+        return ""
+
+
 def load_overrides(path: Path) -> Overrides:
     """Read overrides.toml; a missing file means no overrides. Every error names the file."""
     text = _read(path)
@@ -156,7 +168,9 @@ def load_overrides(path: Path) -> Overrides:
         return Overrides()
     try:
         return _parse(tomllib.loads(text))
-    except (tomllib.TOMLDecodeError, OverridesError) as e:
+    except tomllib.TOMLDecodeError as e:
+        raise OverridesError(f"{path}: {e}{_declared_twice(e)}") from e
+    except OverridesError as e:
         raise OverridesError(f"{path}: {e}") from e
 
 
