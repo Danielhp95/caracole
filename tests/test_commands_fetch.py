@@ -14,13 +14,15 @@ from pathlib import Path
 
 import httpx
 import pytest
-from helpers.ug_pages import make_tab_page_html, version_dict
+from helpers.ug_pages import make_artist_page_html, make_tab_page_html, version_dict
 from typer.testing import CliRunner
 
 from tabarr import db
 from tabarr.cli import build_app
 from tabarr.health import get_state, record_block
 from tabarr.songs import find_song, get_song, update_song, upsert_song
+from tabarr.ug.artist import artist_page_url
+from tabarr.ug.lookup import remember_artist_url
 from conftest import subprocess_pythonpath
 
 TAB = "https://tabs.ultimate-guitar.com/tab/"
@@ -209,6 +211,45 @@ def test_song_option_for_an_artist_ug_lists_only_by_bare_ids(tmp_path, ug):
     update_song(conn, song_id, match_decision="not_found")
 
     result = run(tmp_path, "--song", "Joaquín Sabina - 19 Días y 500 Noches")
+
+    assert result.exit_code == 1 and "[artist_url]" in result.output
+    assert ug.requests == []
+
+
+SODA_ARTIST = "https://www.ultimate-guitar.com/artist/soda_stereo_2946"
+
+
+def title_only_review(conn):
+    """Soda Stereo - De Música Ligera: all its tabs are bare ids, so the index offers only a cover."""
+    song_id, _ = upsert_song(conn, artists=["Soda Stereo"], title="De Música Ligera", album=None, duration_ms=None,
+                             isrc=None, source="wanted", source_id="dml", added_at="2026-10-01T00:00:00Z")
+    update_song(conn, song_id, match_decision="review", review=True, match_candidates=[
+        {"artist_key": "os-paralamas-do-sucesso", "song_key": "de-musica-ligeira", "score": 97.0,
+         "step": "title_only"}])
+    return song_id
+
+
+def test_song_option_looks_a_title_only_review_up_on_the_artist_page(tmp_path, ug):
+    # The nightly fetch takes such a review to the artist's UG page; so does --song.
+    conn = connect(tmp_path)
+    song_id = title_only_review(conn)
+    remember_artist_url(conn, "soda-stereo", SODA_ARTIST)
+    tab = version_dict(85042, song="De Música Ligera", artist="Soda Stereo")
+    ug.pages[artist_page_url(SODA_ARTIST, kind="chords")] = (200, make_artist_page_html(2946, "Soda Stereo", [tab]))
+    ug.pages[f"{TAB}85042"] = (200, make_tab_page_html(tab, [], content=SHEET, artist_url=SODA_ARTIST))
+
+    result = run(tmp_path, "--song", "Soda Stereo - De Música Ligera")
+
+    assert result.exit_code == 0, result.output
+    assert "Soda Stereo - De Música Ligera: sheet 85042" in result.output
+    assert get_song(conn, song_id).match_step == "artist_page"
+
+
+def test_song_option_for_a_title_only_review_of_an_artist_ug_lists_only_by_bare_ids(tmp_path, ug):
+    conn = connect(tmp_path)
+    title_only_review(conn)
+
+    result = run(tmp_path, "--song", "Soda Stereo - De Música Ligera")
 
     assert result.exit_code == 1 and "[artist_url]" in result.output
     assert ug.requests == []

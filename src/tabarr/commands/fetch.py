@@ -86,10 +86,15 @@ def _fetch(cfg: Config, display: str | None) -> None:
 
 
 def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> Song:
-    """The song ``--song`` names, if it is one UG can be asked about; otherwise say what's missing."""
+    """The song ``--song`` names, if it is one UG can be asked about; otherwise say what's missing.
+
+    As in the nightly run, a song the index can't settle (not found, or a
+    review of other artists' songs of its title) is looked up on its artist's
+    UG page.
+    """
     from tabarr.overrides import OverridesError, override_key
     from tabarr.songs import find_song
-    from tabarr.ug.fetch import artist_is_known
+    from tabarr.ug.fetch import artist_is_known, needs_artist_page
 
     try:
         key = override_key(display)
@@ -100,14 +105,15 @@ def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> S
         fail(f'No song "{display}" in the library. Add it with `tabarr add` first.')
     if song.status == "ignored" or song.match_decision == "ignored" or key in overrides.ignore:
         fail(f'"{song.display}" is ignored in overrides.toml.')
-    if song.match_decision == "review":
+    artist_page = needs_artist_page(song)
+    if song.match_decision == "review" and not artist_page:
         fail(f'"{song.display}" needs review first: run `tabarr review`.')
-    if song.match_decision == "not_found" and not artist_is_known(conn, song, overrides):
+    if artist_page and not artist_is_known(conn, song, overrides):
         fail(
             f"Ultimate Guitar lists {song.artist} only by bare tab ids, which tabarr can't see. "
             "Find the artist's page on UG and paste it under [artist_url] in overrides.toml."
         )
-    if song.match_decision not in ("accept", "pinned", "not_found"):
+    if song.match_decision not in ("accept", "pinned") and not artist_page:
         fail(f'"{song.display}" isn\'t matched yet: run `tabarr match` first.')
     return song
 
