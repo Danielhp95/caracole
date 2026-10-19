@@ -48,6 +48,13 @@ class Services:
     def client(self, provider: str) -> Client:
         return self.clients[provider]
 
+    def close(self) -> None:
+        """Close every client that can be closed; a polite client holds tabarr's lock until then."""
+        for client in self.clients.values():
+            close = getattr(client, "close", None)
+            if close is not None:
+                close()
+
 
 @dataclass
 class RunReport:
@@ -248,14 +255,22 @@ def default_steps() -> list[Step]:
 
 
 def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Services:
-    """Real clients for a run: one polite client per provider, Spotify if configured."""
-    from tabarr.health import EventLog
-    from tabarr.http import PoliteClient
+    """Real clients for a run: one polite client per provider, Spotify if configured.
 
-    clients = {
-        p: PoliteClient(p, cfg.provider(p), cfg.cache_dir, user_agent=cfg.user_agent, on_event=EventLog(conn, run_id))
-        for p in PROVIDERS
-    }
+    The clients are the commands' own (``commands._common.make_client``): each
+    holds tabarr's lock until it is closed, and its first request keeps the
+    pause after the provider's last one, whichever tabarr sent it.
+    """
+    from tabarr.commands._common import make_client
+
+    clients: dict[str, Any] = {}
+    try:
+        for p in PROVIDERS:
+            clients[p] = make_client(cfg, conn, p, run_id)
+    except BaseException:  # Ctrl-C during a pause, say: the clients made let go of the lock
+        for client in clients.values():
+            client.close()
+        raise
     spotify = None
     if cfg.spotify.enabled:
         try:
@@ -310,12 +325,28 @@ def run_pipeline(
     steps: list[Step] | None = None,
     now: datetime | None = None,
 ) -> RunReport:
+    """Run the steps (by default ``default_steps``) and report; see the module docstring.
+
+    Services the run makes itself (``make_services``) are closed when it ends,
+    and with their clients goes the hold they had on tabarr's lock.
+    """
     clock_given = now is not None
     now = (now or datetime.now(UTC)).replace(microsecond=0)
     run_id = _iso(now)
     conn = conn or db.connect(cfg.db_path)
-    ensure_current_keys(conn)  # before a step reads a song's key, or wanted.txt's first-seen times by it
-    services = services or make_services(cfg, conn, run_id)
+    # Before any step reads songs by key, as the sync reads wanted.txt's first-seen times.
+    ensure_current_keys(conn)
+    if services is not None:
+        return _run(cfg, conn, services, steps, now, run_id, clock_given)
+    services = make_services(cfg, conn, run_id)
+    try:
+        return _run(cfg, conn, services, steps, now, run_id, clock_given)
+    finally:
+        services.close()
+
+
+def _run(cfg: Config, conn: sqlite3.Connection, services: Services, steps: list[Step] | None,
+         now: datetime, run_id: str, clock_given: bool) -> RunReport:
     report = RunReport(run_id=run_id, started=run_id)
     try:
         overrides = load_overrides(cfg.overrides_file)

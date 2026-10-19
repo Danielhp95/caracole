@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import sqlite3
 from collections import Counter
-from contextlib import closing
+from contextlib import closing, nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import typer
 
-from tabarr.commands._common import fail, load_cfg, load_ovr, open_db, utcnow
+from tabarr.commands._common import exclusive, fail, load_cfg, load_ovr, open_db, utcnow
 
 if TYPE_CHECKING:
     from tabarr.config import Config
@@ -46,7 +46,8 @@ def _match(cfg: Config, dry_run: bool) -> None:
     from tabarr.ug.index import index_state
 
     overrides = load_ovr(cfg)
-    with closing(open_db(cfg)) as conn:
+    # A dry run saves nothing, so it needn't wait for another tabarr.
+    with nullcontext() if dry_run else exclusive(cfg, "match"), closing(open_db(cfg)) as conn:
         state = index_state(conn)
         if state == "empty":
             fail("The UG index is empty: run `tabarr index build` first.")

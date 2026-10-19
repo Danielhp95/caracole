@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import typer
 
 from tabarr import db
-from tabarr.commands._common import fail, load_cfg, open_db, utcnow
+from tabarr.commands._common import exclusive, fail, load_cfg, open_db, utcnow
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -116,8 +116,8 @@ def _sync(cfg: Config) -> None:
     """Sync every source, print the summary and each problem; Spotify never fails it."""
     from tabarr.sources import sync_sources
 
-    spotify = _spotify_client(cfg)
-    with closing(open_db(cfg)) as conn:
+    with exclusive(cfg, "sync"), closing(open_db(cfg)) as conn:
+        spotify = _spotify_client(cfg)  # it may refresh the token in the state folder
         report = sync_sources(conn, cfg, utcnow(), spotify=spotify)
     typer.echo(report.summary())
     for problem in report.wanted.errors:
@@ -198,7 +198,8 @@ def add_song(
     A song the file can't hold exits with status 2, and a file that can't be
     written with status 1. The file is the source of truth, so a database that
     can't be opened or updated is no failure: it's reported in ``db_error``.
-    ``conn`` is the caller's open database; without one, it's opened here.
+    ``conn`` is the caller's open database; without one, it's opened here. The
+    line is written at once; the database waits for tabarr's lock.
     """
     from tabarr.songs import find_song
     from tabarr.wanted import append_wanted, find_wanted, sync_wanted
@@ -212,7 +213,10 @@ def add_song(
     except OSError as e:
         fail(f"can't update {path}: {e.strerror or e}")
     try:
-        with (nullcontext(conn) if conn is not None else closing(db.connect(cfg.db_path))) as conn:
+        with (
+            exclusive(cfg, "add", fatal=False),
+            nullcontext(conn) if conn is not None else closing(db.connect(cfg.db_path)) as conn,
+        ):
             known = find_song(conn, line.identity)
             stats = sync_wanted(conn, path, utcnow())
             song = find_song(conn, line.identity)

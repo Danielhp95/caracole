@@ -94,10 +94,10 @@ def test_a_command_that_needs_the_database_says_so_instead_of_a_traceback(tmp_pa
 
 # Every command that opens the database, as you'd type it ({tmp} is the test's folder).
 DB_COMMANDS = [
-    ["run"], ["sync"], ["fetch"], ["fetch", "--song", "Radiohead - Creep"], ["lyrics"], ["lacuerda"],
-    ["render"], ["match"], ["match", "--dry-run"], ["index", "build", "--from", "{tmp}"],
-    ["index", "refresh"], ["index", "stats"], ["search", "creep"], ["search", "creep", "--add", "1"],
-    ["todo"], ["review"], ["scan"],
+    ["run"], ["sync"], ["fetch"], ["fetch", "--song", "Radiohead - Creep"], ["lyrics"],
+    ["lacuerda"], ["render"], ["match"], ["match", "--dry-run"],
+    ["index", "build", "--from", "{tmp}"], ["index", "refresh"], ["index", "stats"],
+    ["search", "creep"], ["search", "creep", "--add", "1"], ["todo"], ["review"], ["scan"],
 ]
 
 
@@ -149,7 +149,8 @@ def test_add_keeps_its_line_beside_a_database_a_newer_tabarr_migrated(tmp_path):
     result = invoke(tmp_path, "add", "Radiohead", "Creep")
     assert result.exit_code == 0, result.output
     assert "a newer tabarr migrated it" in result.output
-    assert (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8").endswith("\nRadiohead - Creep\n")
+    wanted = (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
+    assert wanted.endswith("\nRadiohead - Creep\n")
 
 
 @needs_permissions

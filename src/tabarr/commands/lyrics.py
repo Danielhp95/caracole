@@ -25,6 +25,7 @@ import typer
 
 from tabarr.commands import _common
 from tabarr.commands._common import (
+    exclusive,
     load_cfg,
     load_ovr,
     make_client,
@@ -40,6 +41,7 @@ if TYPE_CHECKING:
     from tabarr.http import Client
 
 _NAMES = {"lrclib": "LRCLIB", "lacuerda": "LaCuerda"}
+_COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda"}  # each provider's command, for the lock
 
 
 def register(app: typer.Typer) -> None:
@@ -106,11 +108,13 @@ def _provider_pass[T](
     Either way it says so first; neither is a failure, so the command exits 0.
     Requests are logged to ``events`` under a run id of their own. A pass that
     made requests without a block clears the provider's strikes, as a run does.
+    It holds tabarr's lock throughout, so the cooldown it reads is the one a
+    tabarr it waited for left.
     """
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     name = _NAMES[provider]
-    now = utcnow()
-    with closing(open_db(cfg)) as conn:
+    with exclusive(cfg, _COMMANDS[provider]), closing(open_db(cfg)) as conn:
+        now = utcnow()
         if is_cooling(conn, provider, now):
             until = get_state(conn, provider).cooldown_until
             typer.echo(f"{name} is cooling down after a block until {_when(until)}; "

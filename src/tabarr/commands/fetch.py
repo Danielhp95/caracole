@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import typer
 
 from tabarr.commands._common import (
+    exclusive,
     fail,
     load_cfg,
     load_ovr,
@@ -53,9 +54,10 @@ def _fetch(cfg: Config, display: str | None) -> None:
     from tabarr.http import ProviderBlocked
     from tabarr.ug.fetch import FetchContext, fetch_songs, rescore_kept_sheets, songs_to_fetch
 
-    now = utcnow()
     overrides = load_ovr(cfg)
-    with closing(open_db(cfg)) as conn:
+    # Under tabarr's lock from the start: a run this waited for may have been blocked meanwhile.
+    with exclusive(cfg, "fetch"), closing(open_db(cfg)) as conn:
+        now = utcnow()
         if is_cooling(conn, PROVIDER, now):
             until = _when(get_state(conn, PROVIDER).cooldown_until)
             typer.echo(f"Ultimate Guitar is cooling down after a block until {until}; nothing fetched.")

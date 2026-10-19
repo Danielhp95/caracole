@@ -7,7 +7,7 @@ import os
 import random
 import sqlite3
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,9 +17,9 @@ import httpx
 import typer
 
 from tabarr import db
-from tabarr.config import Config, ConfigError, load_config
+from tabarr.config import Config, ConfigError, ProviderPolicy, load_config
 from tabarr.health import EventLog
-from tabarr.http import PoliteClient
+from tabarr.http import Event, PoliteClient
 from tabarr.overrides import Overrides, OverridesError, load_overrides
 
 LOCK_NAME = "tabarr.lock"  # in the state directory
@@ -89,7 +89,7 @@ def run_id_for(now: datetime) -> str:
 _held: dict[Path, tuple[int, int]] = {}  # lock file -> (its descriptor, how many hold it here)
 
 
-def _acquire(cfg: Config, what: str) -> Path:
+def _acquire(cfg: Config, what: str, *, fatal: bool = True) -> Path:
     """Take tabarr's lock, waiting for another process that holds it; see ``exclusive``."""
     path = cfg.state_dir / LOCK_NAME
     if path in _held:
@@ -100,6 +100,8 @@ def _acquire(cfg: Config, what: str) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
     except OSError as e:
+        if not fatal:
+            raise
         fail(f"can't open {path}: {_reason(e)}")
     try:
         try:
@@ -136,7 +138,7 @@ def _holder(fd: int) -> str:
 
 
 @contextmanager
-def exclusive(cfg: Config, what: str) -> Iterator[None]:
+def exclusive(cfg: Config, what: str, *, fatal: bool = True) -> Iterator[None]:
     """Hold tabarr's lock, ``state_dir/tabarr.lock``, for a command that sends requests or writes.
 
     Two tabarr processes at once, such as the nightly run and a ``tabarr-admin
@@ -145,8 +147,13 @@ def exclusive(cfg: Config, what: str) -> Iterator[None]:
     first, saying which it is (``what``). The lock is an flock, so it goes
     with its process, whatever ends it. The process that holds it may take it
     again at no cost, so a command and the clients it makes nest.
+
+    A command takes it before it reads what another tabarr may change, such as
+    a provider's cooldown. A lock file tabarr can't open exits 1, naming it;
+    ``fatal=False`` raises the OSError instead, for a caller that carries on
+    without the state folder (``tabarr add``).
     """
-    path = _acquire(cfg, what)
+    path = _acquire(cfg, what, fatal=fatal)
     try:
         yield
     finally:
@@ -204,24 +211,42 @@ def _pause_after_last_request(
         sleep(min(remaining, delay[1]))  # never longer than one pause, the clock set back or not
 
 
-def make_client(cfg: Config, conn: sqlite3.Connection, provider: str, run_id: str) -> PoliteClient:
+def make_client(
+    cfg: Config,
+    conn: sqlite3.Connection,
+    provider: str,
+    run_id: str,
+    *,
+    policy: ProviderPolicy | None = None,
+    on_event: Callable[[Event], None] | None = None,
+) -> PoliteClient:
     """A polite client for one provider and one run, logging every request to ``events``.
 
     It holds tabarr's lock (``exclusive``) until it is closed, so no other
     tabarr sends requests meanwhile, and its first request keeps the pause
-    after the provider's last one, made by this process or another.
+    after the provider's last one, made by this process or another. Every
+    caller closes it. ``policy`` stands in for the provider's own (``tabarr
+    index build`` has a budget of its own), and ``on_event`` hears every
+    event too, once it is logged.
     """
     lock = _acquire(cfg, f"{provider} requests")
     try:
-        policy = cfg.provider(provider)
+        policy = policy or cfg.provider(provider)
         _pause_after_last_request(conn, provider, policy.delay)
+        log = EventLog(conn, run_id)
+
+        def logged(event: Event) -> None:
+            log(event)
+            if on_event is not None:
+                on_event(event)
+
         return _LockedClient(
             provider,
             policy,
             cfg.cache_dir,
             user_agent=cfg.user_agent,
             transport=transport_for(provider),
-            on_event=EventLog(conn, run_id),
+            on_event=logged,
             lock=lock,
         )
     except BaseException:
