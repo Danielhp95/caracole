@@ -978,9 +978,24 @@ def _artist_page_gone(run: _SongRun, keys: list[str], base: str) -> None:
     _forget_learned(run, keys, base)
 
 
-def _usable_hits(run: _SongRun, hits: list[_Hit]) -> list[_Hit]:
-    """The hits of the song's title (see ``_best_title``) that tabarr may use."""
-    return [h for h in _best_title(hits) if _usable(run, h.tab)]
+def _listed_keys(run: _SongRun, tab: UGVersion, artist_name: str) -> tuple[str, str]:
+    """The UG keys of a tab on an artist's page: the page's artist (``artist_name``) and the tab's title,
+    as the match a hit makes stores them, and as ``[reject]`` names them."""
+    artist_key = slug_key(artist_name) or slug_key(tab.artist_name) or run.artist_key
+    song_key = slug_key(clean_title(tab.song_name)) or slug_key(clean_title(run.song.title))
+    return artist_key, song_key
+
+
+def _usable_hits(run: _SongRun, hits: list[_Hit], artist_name: str) -> list[_Hit]:
+    """The hits of the song's title (see ``_best_title``) that tabarr may use.
+
+    A UG song you rejected for the song (``[reject]``, "none of these" in
+    ``tabarr review``) drops out first, as it does in the matcher: never the
+    song, it hides none of the page's other titles either.
+    """
+    rejected = run.ctx.overrides.reject.get(run.song.key, frozenset())
+    allowed = [h for h in hits if _listed_keys(run, h.tab, artist_name) not in rejected]
+    return [h for h in _best_title(allowed) if _usable(run, h.tab)]
 
 
 def _record_hits(run: _SongRun, hits: list[_Hit]) -> None:
@@ -993,8 +1008,7 @@ def _accept_artist_page_match(run: _SongRun, hits: list[_Hit], artist_name: str)
     """Record the matching tabs as the song's versions, and the match itself (step ``artist_page``)."""
     _record_hits(run, hits)
     best = max(hits, key=lambda h: h.score)
-    artist_key = slug_key(artist_name) or slug_key(best.tab.artist_name) or run.artist_key
-    song_key = slug_key(clean_title(best.tab.song_name)) or slug_key(clean_title(run.song.title))
+    artist_key, song_key = _listed_keys(run, best.tab, artist_name)
     update_song(
         run.conn, run.song.id, match_decision="accept", match_step=ARTIST_PAGE, match_score=best.score,
         match_artist_key=artist_key, match_song_key=song_key, review=False, matched_at=_iso(run.ctx.now),
@@ -1012,24 +1026,56 @@ def _artist_page_route(run: _SongRun) -> bool:
     artist. The chords list is read first; its filter bar tells which guitar
     lists the artist has. A list cut short by the page cap leaves the song as
     it was, for the next run; otherwise the check is recorded, found or not.
+    Not found, the song loses what an undone match kept (``_drop_undone``).
     """
     keys = artist_keys(run.song, run.ctx.overrides)
     base = _known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_artist_page(run, keys)
     if base is None:
-        _mark_checked(run)
-        return False
+        return _not_on_artist_page(run)
     listing = _read_artist_page(run, base, ARTIST_PAGE_KINDS, _name_keys(clean_title(run.song.title)))
     if not listing.complete:
         return False
-    _mark_checked(run)
     if listing.gone:
         _artist_page_gone(run, keys, base)
-        return False
-    best = _usable_hits(run, listing.hits)
+        return _not_on_artist_page(run)
+    best = _usable_hits(run, listing.hits, listing.name)
     if not best:
-        return False
+        return _not_on_artist_page(run)
+    _mark_checked(run)
     _accept_artist_page_match(run, best, listing.name)
     return True
+
+
+def _not_on_artist_page(run: _SongRun) -> bool:
+    """The artist's page settled it, for now: the song isn't there. The check is recorded (it is due
+    again after ``artist_page_max_age``), and an undone match's files go (``_drop_undone``). False."""
+    _mark_checked(run)
+    _drop_undone(run)
+    return False
+
+
+def _undone(conn: sqlite3.Connection, song_id: int) -> bool:
+    """Whether the song keeps a sheet or a tab from a UG version an earlier match found (``STALE``)."""
+    names = (*SHEET_FILES, *TAB_FILES)
+    marks = ",".join("?" for _ in names)
+    return conn.execute(
+        "SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id "
+        f"WHERE f.song_id = ? AND v.provider = ? AND v.gone = {STALE} AND f.name IN ({marks}) LIMIT 1",
+        (song_id, PROVIDER, *names),
+    ).fetchone() is not None
+
+
+def _drop_undone(run: _SongRun) -> None:
+    """A song that has no UG match now (you rejected it, say) loses the sheet and the tab an earlier match
+    kept, and their rows (``_drop_left_over``); its status then says what is left: a LaCuerda or an auto
+    sheet, or nothing. Guitar Pro files you filed, and files tabarr doesn't track, stay; so does every
+    file of an ignored song."""
+    if _ignored(run.song, run.ctx.overrides) or not _undone(run.conn, run.song.id):
+        return
+    _drop_left_over(run, SHEET_FILES)
+    _drop_left_over(run, TAB_FILES)
+    refresh_status(run.conn, run.song.id, ignored=False)
+    write_info(run.conn, run.ctx.library_dir, get_song(run.conn, run.song.id))
 
 
 def _matched_artist_keys(run: _SongRun) -> list[str]:
@@ -1081,7 +1127,7 @@ def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[I
         if listing.gone:
             _artist_page_gone(run, keys, base)
         else:
-            _record_hits(run, _usable_hits(run, listing.hits))
+            _record_hits(run, _usable_hits(run, listing.hits, listing.name))
     _mark_checked(run)
     return True
 
@@ -1114,7 +1160,9 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
     versions; a song whose index tabs hold no chords (bare ids) has its sheet
     candidates read from its artist's chords list. Each kind group is rated and
     its slot filled before the next group is touched, so the sheet a singer
-    needs most is settled before the budget goes to guitar parts.
+    needs most is settled before the budget goes to guitar parts. Any other
+    song without a match (a review of other UG songs) only loses what an
+    undone match kept (``_drop_undone``), with no request.
     """
     start = ctx.client.requests_made
     run = _SongRun(ctx, song)
@@ -1126,6 +1174,9 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
         if not _artist_page_route(run):
             return unfinished()
         song = run.song
+    elif song.match_decision not in ("accept", "pinned"):
+        _drop_undone(run)
+        return unfinished()
     elif song.match_step == ARTIST_PAGE and not _artist_page_versions(run, ARTIST_PAGE_KINDS):
         return unfinished()
     tabs = _song_index_tabs(ctx.conn, song, ctx.overrides.block)
@@ -1283,20 +1334,23 @@ def songs_to_fetch(
       songs accepted there, and the songs whose chords the index lists only
       as bare ids. No index refresh can make those dirty, so this is how they
       get fresh ratings and new versions.
+    - Songs whose UG match was undone (you rejected it, say) that still keep a
+      sheet or a tab that match found: unless their artist's page finds them
+      again, those go (``process_song``).
     """
     out = []
     for song in list_songs(conn):
         if _ignored(song, overrides):
             continue
-        dirty = song.match_decision in ("accept", "pinned") and (
-            song.ug_dirty or _block_changed(conn, song, overrides.block)
-        )
+        matched = song.match_decision in ("accept", "pinned")
+        dirty = matched and (song.ug_dirty or _block_changed(conn, song, overrides.block))
         due = (
             needs_artist_page(song)
             and not _checked_within(conn, song.id, now, artist_page_max_age)
             and artist_is_known(conn, song, overrides)
         )
-        if dirty or due or _recheck_due(conn, song, overrides, now, artist_page_max_age):
+        undone = not matched and _undone(conn, song.id)
+        if dirty or due or undone or _recheck_due(conn, song, overrides, now, artist_page_max_age):
             out.append(song)
     return out
 

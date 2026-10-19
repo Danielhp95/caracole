@@ -320,6 +320,44 @@ def test_the_auto_pdf_goes_once_the_human_sheet_proves_complete(conn, cfg):
     assert kv_get_json(conn, f"render:{song.id}:auto") is None
 
 
+def drop_human_sheet(conn, cfg, song):
+    """The fetch drops the song's UG sheet: its match was undone ([reject], a corrected [match])."""
+    for name in ("sheet.txt", "sheet.json"):
+        drop_file(conn, cfg.library_dir, song=song, name=name)
+
+
+@pytest.mark.parametrize("auto", [False, True])
+def test_the_cho_and_pdf_of_a_sheet_no_longer_kept_go(conn, cfg, auto):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    if auto:
+        auto_sheet(conn, cfg, song)
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    (folder / "notes.txt").write_text("yours", encoding="utf-8")  # untracked: never tabarr's to delete
+    drop_human_sheet(conn, cfg, song)
+
+    render(conn, cfg)
+
+    assert not (folder / "sheet.cho").exists() and not (folder / "sheet.pdf").exists()
+    record = kv_get_json(conn, f"render:{song.id}")  # the auto sheet's now, if there is one
+    assert (record or {}).get("pdf") == ("sheet (auto).pdf" if auto else None)
+    assert (folder / "sheet (auto).pdf").is_file() is auto
+    assert (folder / "notes.txt").read_text(encoding="utf-8") == "yours"
+    assert info_json(cfg, song)["render"] == ({"transpose": 0, "pdf": "sheet (auto).pdf"} if auto else None)
+
+
+def test_a_sheet_pdf_tabarr_never_rendered_stays(conn, cfg):
+    # No render record names it, so it is yours: a song tabarr found no sheet for, say.
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    folder = song_dir(cfg.library_dir, song)
+    folder.mkdir(parents=True)
+    for name in ("sheet.cho", "sheet.pdf"):
+        (folder / name).write_bytes(b"yours")
+    render(conn, cfg)
+    assert [(folder / name).read_bytes() for name in ("sheet.cho", "sheet.pdf")] == [b"yours", b"yours"]
+
+
 def test_lacuerda_sheet_gets_letter_chords(conn, cfg):
     song = add_song(conn, "Placeholder Banda", "Canción Sintética")
     lacuerda_sheet(conn, cfg, song, parse_version_page(LC_PAGE))

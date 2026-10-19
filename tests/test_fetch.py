@@ -7,10 +7,13 @@ the way the live site does: a slugged tab only at its slugged URL, and UG's
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
+import subprocess
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -28,10 +31,11 @@ import tabarr.http
 from tabarr.config import MatchPolicy, ProviderPolicy, RankPolicy
 from tabarr.db import kv_get, kv_set
 from tabarr.http import PoliteClient, ProviderBlocked
-from tabarr.library import keep_file, kept_files, song_dir
+from tabarr.library import drop_file, keep_file, kept_files, song_dir
 from tabarr.lyrics import Lyrics
 from tabarr.match import match_all
 from tabarr.overrides import Overrides, load_overrides
+from tabarr.render import render_all
 from tabarr.songs import get_song, update_song
 from tabarr.ug.artist import artist_page_url
 from tabarr.ug.fetch import (
@@ -998,6 +1002,45 @@ def test_a_corrected_match_leaves_the_old_songs_guitar_parts_out_of_the_running(
     assert pick_ids(conn, song, "guitar-pro", "power") == [301]
     assert names(conn, song) == {"sheet.txt", "sheet.json"}  # Persiana Americana has no tab: Signos's goes
     assert not (song_dir(tmp_path / "lib", song) / "tab.txt").exists()
+
+
+def fake_chordpro(cmd, **kwargs):
+    """Stands in for the chordpro program in the nightly render step: a PDF where --output= says."""
+    out = next(a.split("=", 1)[1] for a in cmd if a.startswith("--output="))
+    Path(out).write_bytes(b"%PDF-1.4 fake")
+    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+
+def render_library(conn, cfg, tmp_path, overrides):
+    return render_all(conn, dataclasses.replace(cfg, library_dir=tmp_path / "lib"), overrides,
+                      runner=fake_chordpro, now=NOW)
+
+
+@pytest.mark.parametrize("correction", [
+    '[match]\n"Soda Stereo - Persiana Americana" = "soda-stereo/persiana-americana"\n',
+    '[pin]\n"Soda Stereo - Persiana Americana" = ["https://tabs.ultimate-guitar.com/tab/999"]\n',  # gone
+], ids=["match", "pin"])
+def test_a_correction_whose_fetch_finds_no_sheet_leaves_none_of_the_old_ones(conn, cfg, tmp_path, correction):
+    # Persiana Americana was wrongly accepted as "Signos"; corrected, UG has no sheet of it tabarr can see.
+    song = accepted(conn, akey="soda-stereo", skey="signos")
+    index(conn, (901, "soda-stereo", "signos", "chords"))
+    ug = FakeUG()
+    ug.tab(signos_tab(901), content=sheet("sheet 901", LINES))
+    soda_chords(ug)  # Soda Stereo's chords list has only "Signos"
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    render_library(conn, cfg, tmp_path, Overrides())
+    folder = song_dir(tmp_path / "lib", song)
+    assert {"sheet.txt", "sheet.json", "sheet.cho", "sheet.pdf"} <= {p.name for p in folder.iterdir()}
+
+    overrides = overrides_from(tmp_path, correction)
+    match_all(conn, overrides, MatchPolicy())
+    fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides),
+                songs_to_fetch(conn, overrides, NOW))
+    render_library(conn, cfg, tmp_path, overrides)
+
+    assert names(conn, song) == set() and get_song(conn, song.id).status == "wanted"
+    assert sorted(p.name for p in folder.iterdir()) == ["info.json"]
+    assert json.loads(read(tmp_path, song, "info.json"))["render"] is None
 
 
 def test_unblocking_a_tab_only_an_earlier_match_found_sends_nothing_back(conn, tmp_path):
@@ -2045,6 +2088,120 @@ def test_title_only_review_resolved_on_the_artist_page(conn, tmp_path):
     done = get_song(conn, song.id)
     assert (done.match_decision, done.match_step, done.review) == ("accept", "artist_page", False)
     assert "sheet 85042" in read(tmp_path, song, "sheet.txt")
+
+
+# --- [reject] on the artist page, and what an undone match kept ----------------------------------
+
+REJECT_DML = '[reject]\n"Soda Stereo - De Música Ligera" = "soda-stereo/de-musica-ligera"\n'
+
+
+def overrides_from(tmp_path, toml):
+    path = tmp_path / "overrides.toml"
+    path.write_text(toml, encoding="utf-8")
+    return load_overrides(path)
+
+
+def test_a_ug_song_you_rejected_is_no_match_on_the_artist_page(conn, tmp_path):
+    # "None of these" in `tabarr review` leaves the song not found, and its artist's page is read for it.
+    index(conn, (1081462, "soda-stereo", "persiana-americana", "tabs"))
+    song = soda_dml(conn)
+    ug = FakeUG()
+    ug.tab(v(1081462, "tabs"), content=riff("persiana riff"))
+    serve_dml(ug)
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides_from(tmp_path, REJECT_DML)),
+                       song)
+
+    done = get_song(conn, song.id)
+    assert (done.match_decision, out.sheet, names(conn, song)) == ("not_found", None, set())
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") == "2026-10-18T03:30:00Z"  # again in 30 days
+
+
+def test_the_artist_pages_other_titles_still_compete_once_you_reject_one(conn, tmp_path):
+    # As in the matcher, a rejected UG song drops out before the title is chosen: here the near title
+    # is left to lead, where the exact one you rejected would have hidden it.
+    song = matched(conn, "Soda Stereo", "Persiana Americana", "not_found", added_at="2026-10-17T00:00:00Z")
+    remember_artist_url(conn, "soda-stereo", SODA_URL)
+    exact = v(1601640, tab_url=f"{TAB}1601640")
+    near = version_dict(1601700, song="Persiana Americanas", artist="Soda Stereo")
+    ug = FakeUG()
+    ug.add(artist_list(SODA_URL), artist_page(2946, "Soda Stereo", [exact, near]))
+    ug.tab(near, content=sheet("sheet 1601700", LINES))
+    overrides = overrides_from(tmp_path, '[reject]\n"Soda Stereo - Persiana Americana" = "soda-stereo/persiana-americana"\n')
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), song)
+
+    done = get_song(conn, song.id)
+    assert (done.match_decision, done.match_step, done.match_song_key) == ("accept", "artist_page", "persiana-americanas")
+
+
+def dml_found_on_its_artist_page(conn, tmp_path, ug):
+    """De Música Ligera accepted on Soda Stereo's artist page (A6): sheet 85042, which covers half the
+    lyrics so the auto sheet stays beside it, and tab 85100. A Guitar Pro file you filed is there too,
+    and a file of yours tabarr doesn't track."""
+    song = soda_dml(conn)
+    remember_artist_url(conn, "soda-stereo", SODA_URL)
+    dml = {"song": "De Música Ligera", "artist": "Soda Stereo", "song_id": 67588}
+    chords, tab = version_dict(85042, **dml), version_dict(85100, type="Tabs", **dml)
+    kinds = ("chords", "tabs")
+    ug.add(artist_list(SODA_URL), artist_page(2946, "Soda Stereo", [chords], kinds=kinds))
+    ug.add(artist_list(SODA_URL, "tabs"), artist_page(2946, "Soda Stereo", [tab], kinds=kinds))
+    ug.tab(chords, content=sheet("sheet 85042", LINES[:5]))
+    ug.tab(tab, content=riff("tab 85100"))
+    keep_other_sheet(conn, tmp_path, song, provider="auto", kind="auto", name="sheet (auto).txt")
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    gp = upsert_version(conn, provider="ug", tab_id="85200", song_id=song.id, slot="guitar", kind="guitar-pro",
+                        rating=4.5, votes=9, version=1, label=None, url=f"{TAB}85200", raw={},
+                        now="2026-10-18T03:30:00Z")
+    keep_file(conn, tmp_path / "lib", song=song, version_id=gp, name="guitar-1.gp5", data=b"GP5 bytes", rank=1)
+    (song_dir(tmp_path / "lib", song) / "notes.txt").write_text("yours", encoding="utf-8")
+    done = get_song(conn, song.id)
+    assert (done.match_step, names(conn, song)) == (
+        "artist_page", {"sheet.txt", "sheet.json", "tab.txt", "tab.json", "sheet (auto).txt", "guitar-1.gp5"})
+    ug.requests.clear()
+    return done
+
+
+def test_a_match_you_reject_takes_its_sheet_and_tab_with_it(conn, tmp_path):
+    ug = FakeUG()
+    song = dml_found_on_its_artist_page(conn, tmp_path, ug)
+    folder = song_dir(tmp_path / "lib", song)
+    overrides = overrides_from(tmp_path, REJECT_DML)
+    match_all(conn, overrides, MatchPolicy())
+    assert get_song(conn, song.id).match_decision == "not_found"
+
+    # Its artist page was read today, so no check is due: what the undone match kept brings it back.
+    assert [s.id for s in songs_to_fetch(conn, overrides, NOW)] == [song.id]
+    fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides),
+                songs_to_fetch(conn, overrides, NOW))
+
+    done = get_song(conn, song.id)
+    assert (done.match_decision, done.status) == ("not_found", "found")  # the auto sheet is what is left
+    assert names(conn, song) == {"sheet (auto).txt", "guitar-1.gp5"}  # the Guitar Pro file is yours
+    assert sorted(p.name for p in folder.iterdir()) == ["guitar-1.gp5", "info.json", "notes.txt", "sheet (auto).txt"]
+    assert json.loads(read(tmp_path, song, "info.json"))["status"] == "found"
+    assert ug.requests == [] and songs_to_fetch(conn, overrides, NOW) == []
+
+    # Thirty days on its artist page is read again, and what you rejected is still not the song.
+    later = NOW + timedelta(days=31)
+    assert [s.id for s in songs_to_fetch(conn, overrides, later)] == [song.id]
+    fetch_songs(context(conn, ug.client(tmp_path / "cache", now=later), tmp_path, overrides, now=later),
+                songs_to_fetch(conn, overrides, later))
+    assert artist_list(SODA_URL) in ug.requests
+    assert (get_song(conn, song.id).match_decision, names(conn, song)) == ("not_found", {"sheet (auto).txt", "guitar-1.gp5"})
+
+
+def test_a_rejected_match_leaves_a_song_without_any_sheet_wanted(conn, tmp_path):
+    ug = FakeUG()
+    song = dml_found_on_its_artist_page(conn, tmp_path, ug)
+    drop_file(conn, tmp_path / "lib", song=song, name="sheet (auto).txt")
+    overrides = overrides_from(tmp_path, REJECT_DML)
+    match_all(conn, overrides, MatchPolicy())
+
+    fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides),
+                songs_to_fetch(conn, overrides, NOW))
+
+    assert (get_song(conn, song.id).status, names(conn, song)) == ("wanted", {"guitar-1.gp5"})
 
 
 # --- sheets kept before their lyrics -------------------------------------------------------------

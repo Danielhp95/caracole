@@ -41,6 +41,11 @@ beside it:
   Once they retire it, its outputs are removed as soon as the human sheet's
   PDF is in place.
 
+A human sheet the song no longer keeps (the fetch drops one whose UG match was
+undone when nothing replaces it) takes the ``sheet.cho`` and ``sheet.pdf``
+rendered from it along, at the next pass. Only what the record below says
+tabarr rendered goes: files of yours by those names stay.
+
 The PDFs are transposed by the song's ``[transpose]`` override. kv
 ``render:<song id>`` keeps what the song's PDF was made from (the SHA-256 of
 the .cho, the transposition, the font and the PDF's name) and what was
@@ -105,7 +110,8 @@ from tabarr.versions import get_version
 
 log = logging.getLogger(__name__)
 
-HUMAN_SHEET = "sheet.txt"  # rendered to sheet.cho and sheet.pdf
+HUMAN_SHEET = "sheet.txt"  # rendered to the HUMAN_OUTPUTS
+HUMAN_OUTPUTS = ("sheet.cho", "sheet.pdf")
 AUTO_SHEET = "sheet (auto).txt"  # rendered to the AUTO_OUTPUTS
 AUTO_OUTPUTS = ("sheet (auto).cho", "sheet (auto).pdf")
 STATUS_KEY = "render:status"  # kv: the last pass, for the to-do page
@@ -400,6 +406,8 @@ def _render_song(
     ``cjk_font`` is a usable font or None. The auto sheet is kept, and so
     rendered, until the fetch steps retire it for a complete human sheet; its
     outputs go once that has happened and the human sheet's PDF is in place.
+    A human sheet the song no longer keeps takes its outputs along
+    (``_drop_human_outputs``).
     """
     files = {f.name: f for f in kept_files(conn, song.id)}
     human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
@@ -416,6 +424,8 @@ def _render_song(
             for name in AUTO_OUTPUTS:
                 (folder / name).unlink(missing_ok=True)
             kv_delete(conn, _state_key(song.id, auto=True))
+    else:
+        _drop_human_outputs(conn, cfg.library_dir, song, folder)
     if auto is not None:
         beside = human is not None
         render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside))
@@ -477,6 +487,21 @@ def _up_to_date(pdf: Path, record: Any, state: Mapping[str, Any]) -> bool:
         return False
     sha, size = record.get("pdf_sha256"), record.get("pdf_size")
     return isinstance(sha, str) and isinstance(size, int) and holds(pdf, sha, size)
+
+
+def _drop_human_outputs(conn: sqlite3.Connection, library_dir: Path, song: Song, folder: Path) -> None:
+    """The song keeps no human sheet now (the fetch dropped one whose UG match was undone, say): the
+    .cho and the PDF rendered from the one it kept go, with their record, before an auto sheet's PDF
+    takes the record's place. Only when the record says tabarr rendered them: a ``sheet.cho`` or
+    ``sheet.pdf`` of yours, in a folder tabarr never rendered a human sheet in, stays."""
+    key = _state_key(song.id)
+    record = kv_get_json(conn, key)
+    if not isinstance(record, Mapping) or record.get("pdf") != HUMAN_OUTPUTS[1]:
+        return
+    for name in HUMAN_OUTPUTS:
+        (folder / name).unlink(missing_ok=True)
+    kv_delete(conn, key)
+    write_info(conn, library_dir, song)  # its "render" entry is gone too
 
 
 def _state_key(song_id: int, *, auto: bool = False) -> str:
