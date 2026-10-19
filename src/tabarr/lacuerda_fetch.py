@@ -2,8 +2,8 @@
 
 UG lists every artist with an accented name only by bare ids, but a LaCuerda
 artist URL can be built from the name. A song is tried when it isn't ignored,
-has no complete human sheet, looks Spanish and wasn't tried in the last 30 days.
-Per song:
+has no complete human sheet, looks Spanish, and LaCuerda hasn't answered for it
+in the last 30 days (``songs.lacuerda_checked_at``). Per song:
 
 1. **The artist page.** Its slugs are tried best guess first; a 404, or
    LaCuerda's HTTP 200 "aqui llega:" body, moves on to the next. The page is

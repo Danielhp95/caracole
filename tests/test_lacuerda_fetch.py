@@ -227,6 +227,23 @@ def test_one_artist_page_serves_every_song_by_the_artist(conn, tmp_path):
     assert site.requests == [SODA, DML_3, persiana_2]
 
 
+def test_coverage_is_scored_with_the_rank_policy(conn, tmp_path):
+    # Demanding exact lines, "y cuento las luces…" misses the sheet's "cuento las luces,".
+    song = spanish_song(conn)
+    run(FakeLaCuerda(), conn, tmp_path, rank=RankPolicy(line_match=100))
+    (v,) = lacuerda_versions(conn, song)
+    assert v.coverage == 7 / 8
+
+
+def test_completeness_follows_the_rank_policy(conn, tmp_path):
+    # At a threshold of 0.5, a sheet covering 0.6 is complete: nothing to look for.
+    song = spanish_song(conn)
+    keep_ug_sheet(conn, tmp_path, song, 0.6)
+    site = FakeLaCuerda()
+    assert run(site, conn, tmp_path, rank=RankPolicy(coverage_threshold=0.5)) == LaCuerdaStats()
+    assert site.requests == []
+
+
 def test_sheet_files_stay_group_readable_under_the_service_umask(conn, tmp_path):
     # The service runs with UMask=0007; Syncthing reads the library through the group.
     spanish_song(conn)
