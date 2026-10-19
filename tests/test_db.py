@@ -105,9 +105,30 @@ def test_a_version_1_database_gains_the_gtptabs_index_and_keeps_its_songs(tmp_pa
     db.connect(path).close()
 
     cols, version = columns(path, "gtptabs_index")
-    assert version == 2
+    assert version == NOW
     assert cols == ["path", "artist_path", "artist_key", "title_key", "base_key", "sitemap"]
     c = sqlite3.connect(path)
     assert c.execute("SELECT key FROM songs").fetchall() == [("blur/song-2",)]
     c.close()
     assert columns(path.with_name("caracole.sqlite.v1.bak"), "gtptabs_index") == ([], 1)
+
+
+def test_a_version_2_database_gains_the_musescore_index_and_keeps_its_gtptabs_rows(tmp_path):
+    # As the gtptabs.com caracole left it: schema 2, with a row of gtptabs.com's index.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript(db._MIGRATIONS[1] + db._MIGRATIONS[2] + "\nPRAGMA user_version = 2;")
+    old.execute("INSERT INTO gtptabs_index VALUES ('tabs/2/blur.html', 'tabs/2/blur.html', 'blur', '', '', '1')")
+    old.commit()
+    old.close()
+
+    db.connect(path).close()
+
+    cols, version = columns(path, "musescore_index")
+    assert version == 3
+    assert cols == ["page_id", "path", "title_key", "sitemap"]
+    c = sqlite3.connect(path)
+    assert c.execute("SELECT artist_key FROM gtptabs_index").fetchall() == [("blur",)]
+    c.close()
+    assert columns(path.with_name("caracole.sqlite.v2.bak"), "musescore_index") == ([], 2)
