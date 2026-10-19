@@ -293,6 +293,20 @@ def test_inbox_unmatched_files_listed(conn, cfg):
     assert "mystery.gp5" in text and ".hidden" not in text
 
 
+def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
+    # A file moved into a song's folder by hand gets no record: index.html never lists it, and its
+    # Guitar Pro page stays on the list to click.
+    inbox = cfg.library_dir / "_inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "Radiohead - Creep live bootleg.gp5").write_bytes(b"x")
+    (inbox / "notes.pdf").write_bytes(b"x")
+    section = section_of(todo(conn, cfg), "Inbox: files tabarr couldn't place")
+    assert "move it into the song's folder" not in section
+    assert '`Radiohead - Creep live bootleg.gp5`: rename it "Artist - Title (ver N).gp5"' in section
+    assert "Guitar Pro pages to click" in section
+    assert "`notes.pdf`: not a Guitar Pro or Power Tab file" in section
+
+
 def test_missing_lyrics(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马斑马")
     update_song(conn, s.id, lyrics_status="missing")

@@ -17,6 +17,7 @@ from urllib.parse import quote
 from tabarr.config import Config
 from tabarr.db import kv_get_json
 from tabarr.health import get_state
+from tabarr.inbox import GP_EXTENSIONS
 from tabarr.lacuerda import artist_slug_candidates, looks_spanish
 from tabarr.library import write_atomic
 from tabarr.lyrics import song_lyrics
@@ -284,8 +285,15 @@ def _inbox(cfg: Config) -> list[str]:
     inbox = cfg.library_dir / "_inbox"
     if not inbox.is_dir():
         return []
-    names = sorted(p.name for p in inbox.iterdir() if p.is_file() and not p.name.startswith("."))
-    return [f"- `{n}`: rename it to \"Artist - Title.ext\", or move it into the song's folder" for n in names]
+    items = []
+    for p in sorted(p for p in inbox.iterdir() if p.is_file() and not p.name.startswith(".")):
+        if p.suffix.lower() in GP_EXTENSIONS:
+            items.append(f"- {_code(p.name)}: rename it \"Artist - Title (ver N){p.suffix}\", as Guitar Pro pages "
+                         "to click names the song and the version")
+        else:
+            items.append(f"- {_code(p.name)}: not a Guitar Pro or Power Tab file ({', '.join(GP_EXTENSIONS)}), "
+                         "so tabarr leaves it there")
+    return items
 
 
 def _suggestions(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:
@@ -466,7 +474,10 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
          "Download each file with the page's Download button and drop it into `_inbox/`; tabarr "
          "files it under the right song.", n_pages),
         ("Guitar parts not found", _guitar_parts_not_found(conn, songs), None, None),
-        ("Inbox: files tabarr couldn't place", _inbox(cfg), None, None),
+        ("Inbox: files tabarr couldn't place", _inbox(cfg),
+         "tabarr files a download by its name, for a version listed under Guitar Pro pages to click: the "
+         "next run, or `tabarr scan`, makes it the song's guitar-N file. Don't move one into a song's folder "
+         "yourself: tabarr wouldn't know it is there.", None),
         ("Missing lyrics", [f"- {md(s.display)}" for s in songs
                             if s.lyrics_status == "missing" and s.status != "ignored"],
          "LRCLIB has no lyrics for these yet.", None),
