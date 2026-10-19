@@ -8,6 +8,7 @@ requests. UG is served by ``httpx.MockTransport`` through
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -134,7 +135,8 @@ def test_a_block_cools_ug_down_and_exits_0(tmp_path, ug):
 
     assert result.exit_code == 0, result.output
     assert "Ultimate Guitar blocked caracole" in result.output
-    assert "No more UG requests until 2026-10-" in result.output and "Nothing was marked not found." in result.output
+    assert re.search(r"No more UG requests until \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC", result.output)
+    assert "Nothing was marked not found." in result.output
     state = get_state(conn, "ug")
     assert state.strikes == 1 and state.cooldown_until is not None
     assert ug.requests == [PERSIANA]
