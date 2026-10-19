@@ -1,4 +1,5 @@
 import random
+import re
 import socket
 import sqlite3
 import time
@@ -194,6 +195,23 @@ def test_hint_paste_line_names_the_artist():
     assert '"宋冬野" = "https://www.ultimate-guitar.com/artist/<name>_<id>"' in bare_id_hint(
         "宋冬野 斑马", [], artist="宋冬野")
     assert '"Joaquín Sabina" = "https://www.ultimate-guitar.com/artist/' in bare_id_hint("Joaquín Sabina", [])
+
+
+MANA = '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n'
+
+
+@pytest.mark.parametrize("query,hits", [("Joaquín Sabina", []), ("Persiana Américana", None)])
+def test_hint_leaves_the_header_out_when_overrides_has_the_table(conn, query, hits):
+    # A second [artist_url] header would make overrides.toml unreadable, as on the to-do page.
+    from tabarr.overrides import Overrides
+
+    index(conn, ROWS)
+    hits = search_index(conn, query) if hits is None else hits
+    o = Overrides(artist_url={"mana": "https://www.ultimate-guitar.com/artist/mana_98"})
+    hint = bare_id_hint(query, hits, overrides=o)
+    assert "    [artist_url]\n" not in hint and "under the [artist_url] table it has already" in hint
+    assert "    [artist_url]\n" in bare_id_hint(query, hits, overrides=Overrides())
+    assert "    [artist_url]\n" in bare_id_hint(query, hits)
 
 
 def test_empty_query_finds_nothing(conn):
@@ -446,6 +464,40 @@ def test_cli_add_12_for_add_2_with_the_default_limit_is_refused(tmp_path):
 def test_cli_chinese_query_points_to_artist_url(tmp_path):
     seed(tmp_path)
     result = run(tmp_path, "search", "宋冬野")
+    assert result.exit_code == 0, result.output
+    assert "[artist_url]" in result.output and "bare" in result.output
+
+
+def paste_hint(output: str, overrides: Path) -> None:
+    """The hint's lines, pasted into overrides.toml as it says: a block with its header at the end,
+    lines without one under the [artist_url] table the file has."""
+    block = [line for line in re.findall(r"^    (\S.*)$", output, re.M)]
+    lines = "".join(f"{line}\n" for line in block).replace("<name>_<id>", "joaquin_sabina_1234")
+    text = overrides.read_text(encoding="utf-8")
+    if block[0] == "[artist_url]":
+        text += "\n" + lines
+    else:
+        text = text.replace("[artist_url]\n", "[artist_url]\n" + lines, 1)
+    overrides.write_text(text, encoding="utf-8")
+
+
+def test_cli_hint_pasted_as_shown_keeps_overrides_readable(tmp_path):
+    from tabarr.overrides import load_overrides
+
+    seed(tmp_path)
+    overrides = tmp_path / "lib" / "overrides.toml"
+    for before, artists in (("", {"joaquin-sabina"}), (MANA, {"mana", "joaquin-sabina"})):
+        overrides.write_text(before, encoding="utf-8")
+        result = run(tmp_path, "search", "Joaquín", "Sabina")
+        assert result.exit_code == 0, result.output
+        paste_hint(result.output, overrides)
+        assert set(load_overrides(overrides).artist_url) == artists, overrides.read_text(encoding="utf-8")
+
+
+def test_cli_search_still_hints_when_overrides_cant_be_read(tmp_path):
+    seed(tmp_path)
+    (tmp_path / "lib" / "overrides.toml").write_text(MANA + "\n" + MANA, encoding="utf-8")
+    result = run(tmp_path, "search", "Joaquín", "Sabina")
     assert result.exit_code == 0, result.output
     assert "[artist_url]" in result.output and "bare" in result.output
 

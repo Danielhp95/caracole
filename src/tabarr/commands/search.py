@@ -22,6 +22,7 @@ from tabarr.commands._common import exclusive, fail, load_cfg, open_db
 
 if TYPE_CHECKING:
     from tabarr.config import Config
+    from tabarr.overrides import Overrides
     from tabarr.search import IndexHit, LibraryHit
     from tabarr.songs import Song
 
@@ -76,9 +77,20 @@ def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int) -> Non
     if not hits:
         typer.echo("  nothing matches")
     artist = library[0].song.artist if library and library[0].score >= STRONG else None
-    hint = bare_id_hint(text, hits, artist=artist)
+    hint = bare_id_hint(text, hits, artist=artist, overrides=_overrides(cfg))
     if hint:
         typer.echo("\n" + _wrap(hint))
+
+
+def _overrides(cfg: Config) -> Overrides | None:
+    """overrides.toml, for the hint's line to paste into it; None when it can't be read, which
+    leaves the search itself as it is: it needs no overrides."""
+    from tabarr.overrides import OverridesError, load_overrides
+
+    try:
+        return load_overrides(cfg.overrides_file)
+    except OverridesError:
+        return None
 
 
 def _library_line(cfg: Config, hit: LibraryHit) -> str:
