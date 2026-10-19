@@ -163,7 +163,8 @@ def test_the_exact_track_replaces_a_sibling_linked_before_it_arrived(conn, tmp_p
 def with_lrclib_duration(conn, song, seconds: float):
     record = {"id": 1, "trackName": song.title, "artistName": song.artist, "duration": seconds,
               "plainLyrics": "words to sing", "syncedLyrics": None}
-    update_song(conn, song.id, lyrics_status="found", lyrics_json=Lyrics.from_record(record).to_json())
+    lyrics = Lyrics.from_record(record).to_json()
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics)
 
 
 def test_lrclib_duration_guards_a_fuzzy_match_when_the_song_has_none(conn, tmp_path):
@@ -197,7 +198,8 @@ def test_a_fuzzy_title_needs_a_clear_lead_over_the_next_title(conn, tmp_path):
 def test_a_file_as_close_to_two_songs_links_to_neither(conn, tmp_path):
     one = add_song(conn, "Pink Floyd", "Another Brick in the Wall, Pt. 1", duration_ms=None)
     two = add_song(conn, "Pink Floyd", BRICK, duration_ms=None)
-    make_wav(tmp_path / "music" / "x.wav", artist="Pink Floyd", title="Another Brick in the Wall (Part 2)")
+    title = "Another Brick in the Wall (Part 2)"
+    make_wav(tmp_path / "music" / "x.wav", artist="Pink Floyd", title=title)
     scan_music(conn, tmp_path / "music")
     assert get_song(conn, one.id).audio_path is None and get_song(conn, two.id).audio_path is None
 

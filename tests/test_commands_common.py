@@ -17,6 +17,7 @@ from tabarr import db
 from tabarr.cli import build_app
 from tabarr.commands import _common
 from tabarr.commands._common import exclusive, make_client, open_db, open_db_or_exit, write_pages
+from tabarr.config import load_config
 from tabarr.overrides import Overrides
 
 from conftest import add_song
@@ -50,10 +51,9 @@ def write_config(tmp_path: Path, **dirs: Path) -> Path:
 
 @needs_permissions
 def test_a_state_folder_tabarr_cant_create_names_the_database(tmp_path, capsys):
-    from tabarr.config import load_config
-
     with read_only(tmp_path / "locked") as locked:
-        cfg = load_config(write_config(tmp_path, state_dir=locked / "state"), env={"HOME": str(tmp_path)})
+        toml = write_config(tmp_path, state_dir=locked / "state")
+        cfg = load_config(toml, env={"HOME": str(tmp_path)})
         with pytest.raises(typer.Exit) as raised:
             open_db_or_exit(cfg)
     assert raised.value.exit_code == 1
@@ -66,9 +66,9 @@ def test_a_state_folder_tabarr_cant_create_names_the_database(tmp_path, capsys):
 @needs_permissions
 def test_a_database_tabarr_cant_write_names_it(tmp_path, cfg, capsys):
     open_db(cfg).close()
-    with read_only(cfg.state_dir):  # the database is there, but its folder can't take its journal
-        with pytest.raises(typer.Exit) as raised:
-            open_db_or_exit(cfg)
+    # The database is there, but its folder can't take its journal.
+    with read_only(cfg.state_dir), pytest.raises(typer.Exit) as raised:
+        open_db_or_exit(cfg)
     assert raised.value.exit_code == 1
     assert f"can't open the database {cfg.db_path}: " in capsys.readouterr().err
 
@@ -76,9 +76,8 @@ def test_a_database_tabarr_cant_write_names_it(tmp_path, cfg, capsys):
 @needs_permissions
 def test_open_db_still_raises_for_a_caller_that_carries_on(tmp_path, cfg):
     # `tabarr add` keeps the line in wanted.txt and exits 0 when only the database fails.
-    with read_only(cfg.state_dir.parent):
-        with pytest.raises(OSError):
-            open_db(cfg)
+    with read_only(cfg.state_dir.parent), pytest.raises(OSError):
+        open_db(cfg)
 
 
 @needs_permissions
@@ -96,9 +95,8 @@ def test_a_command_that_needs_the_database_says_so_instead_of_a_traceback(tmp_pa
 
 @needs_permissions
 def test_a_library_tabarr_cant_write_names_the_page(tmp_path, cfg, conn, capsys):
-    with read_only(cfg.library_dir):
-        with pytest.raises(typer.Exit) as raised:
-            write_pages(conn, cfg, Overrides(), datetime(2026, 10, 19, tzinfo=UTC))
+    with read_only(cfg.library_dir), pytest.raises(typer.Exit) as raised:
+        write_pages(conn, cfg, Overrides(), datetime(2026, 10, 19, tzinfo=UTC))
     assert raised.value.exit_code == 1
     assert f"can't write {cfg.library_dir / '_todo.md'}" in capsys.readouterr().err
 
@@ -160,7 +158,8 @@ def test_a_second_tabarr_waits_for_the_first_and_says_so(cfg, capsys):
         assert not done.wait(0.5)  # waiting, not running beside it
     assert done.wait(5)
     thread.join(5)
-    assert "Another tabarr is running (pid 4242: run); waiting for it to finish." in capsys.readouterr().err
+    said = "Another tabarr is running (pid 4242: run); waiting for it to finish."
+    assert said in capsys.readouterr().err
 
 
 def test_the_lock_is_held_for_the_block_and_names_its_holder(cfg):
@@ -180,9 +179,8 @@ def test_the_lock_is_taken_again_at_no_cost_by_its_holder(cfg):
 
 @needs_permissions
 def test_a_lock_tabarr_cant_create_is_a_message(tmp_path, cfg, capsys):
-    with read_only(cfg.state_dir):
-        with pytest.raises(typer.Exit) as raised, exclusive(cfg, "run"):
-            pass
+    with read_only(cfg.state_dir), pytest.raises(typer.Exit) as raised, exclusive(cfg, "run"):
+        pass
     assert raised.value.exit_code == 1
     assert f"can't open {lock_path(cfg)}: Permission denied" in capsys.readouterr().err
 
@@ -255,7 +253,9 @@ def test_a_new_client_pauses_after_another_process_s_last_request(cfg, conn, pau
     [("ug", 25, "ok"), ("lrclib", 1, "ok"), ("ug", 1, "budget")],
     ids=["long-ago", "another-provider", "not-a-request"],
 )
-def test_no_pause_without_a_recent_request_to_the_provider(cfg, conn, pauses, provider, ago, decision):
+def test_no_pause_without_a_recent_request_to_the_provider(
+    cfg, conn, pauses, provider, ago, decision
+):
     log_request(conn, provider, ago=ago, decision=decision)
     make_client(cfg, conn, "ug", "run").close()
     assert pauses == []

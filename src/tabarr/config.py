@@ -321,17 +321,23 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
             _optional_string(sp, "client_secret_file", "[spotify].client_secret_file"),
             "TABARR_SPOTIFY_CLIENT_SECRET",
         ),
-        redirect_uri=_string(sp.get("redirect_uri", SpotifyConfig.redirect_uri), "[spotify].redirect_uri"),
+        redirect_uri=_string(
+            sp.get("redirect_uri", SpotifyConfig.redirect_uri), "[spotify].redirect_uri"
+        ),
         liked_songs=_bool(sp.get("liked_songs", True), "[spotify].liked_songs"),
         playlists=tuple(playlists),
-        suggest_top_tracks=_bool(sp.get("suggest_top_tracks", True), "[spotify].suggest_top_tracks"),
+        suggest_top_tracks=_bool(
+            sp.get("suggest_top_tracks", True), "[spotify].suggest_top_tracks"
+        ),
     )
 
     providers = dict(DEFAULT_PROVIDERS)
     for name, table in _table(data, "providers").items():
         if name not in DEFAULT_PROVIDERS:
             known = ", ".join(sorted(DEFAULT_PROVIDERS))
-            raise ConfigError(f"unknown provider [providers.{name}]; tabarr's providers are {known}")
+            raise ConfigError(
+                f"unknown provider [providers.{name}]; tabarr's providers are {known}"
+            )
         if not isinstance(table, Mapping):
             raise ConfigError(f"[providers.{name}] must be a table")
         _check_keys(table, _PROVIDER_KEYS, f"[providers.{name}]")

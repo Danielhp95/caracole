@@ -489,7 +489,8 @@ def test_letters_that_look_latin_stay_beside_letters_that_dont(conn, cfg, tmp_pa
     song = add_song(conn, "宋冬野", "斑马斑马")
     human_sheet(conn, cfg, song, ZH_SHEET + f"({chr(0x445)}2)\n", tonality="")
     render(conn, cfg)
-    assert f"({chr(0x445)}2)" in (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    assert f"({chr(0x445)}2)" in cho
 
 
 def test_the_font_error_names_the_letter_each_sheet_needs(conn, cfg):

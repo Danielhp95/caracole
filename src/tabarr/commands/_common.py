@@ -170,14 +170,17 @@ class _LockedClient(PoliteClient):
 _SENT = ("ok", "not_modified", "blocked", "error")  # events that were requests
 
 
-def _pause_after_last_request(conn: sqlite3.Connection, provider: str, delay: tuple[float, float]) -> None:
+def _pause_after_last_request(
+    conn: sqlite3.Connection, provider: str, delay: tuple[float, float]
+) -> None:
     """Wait out the pause after the provider's last logged request, whichever process sent it.
 
     A client paces only its own requests, so a command started right after
     another (or after the nightly run) would send its first one at once.
     """
+    sent = ",".join("?" * len(_SENT))
     row = conn.execute(
-        f"SELECT max(at) FROM events WHERE provider = ? AND decision IN ({','.join('?' * len(_SENT))})",
+        f"SELECT max(at) FROM events WHERE provider = ? AND decision IN ({sent})",
         (provider, *_SENT),
     ).fetchone()
     if row is None or row[0] is None:

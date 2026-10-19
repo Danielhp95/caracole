@@ -3,6 +3,7 @@ import threading
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from itertools import pairwise
+from typing import ClassVar
 
 import pytest
 import requests
@@ -628,10 +629,13 @@ def test_a_rate_limit_without_a_wait_still_stops_the_sync():
 
 
 class TooManyRequests(BaseHTTPRequestHandler):
-    """A local stand-in for api.spotify.com that answers every request 429 with Retry-After."""
+    """A local stand-in for api.spotify.com that answers every request 429 with Retry-After.
+
+    The ``too_many_requests`` fixture gives each test a subclass with ``hits`` of its own.
+    """
 
     retry_after = "3600"
-    hits: list[str] = []
+    hits: ClassVar[list[str]]
 
     def do_GET(self):
         type(self).hits.append(self.path)
@@ -654,7 +658,9 @@ def too_many_requests():
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    sp = spotipy.Spotify(auth="AT", requests_session=_api_session(), requests_timeout=REQUEST_TIMEOUT)
+    sp = spotipy.Spotify(
+        auth="AT", requests_session=_api_session(), requests_timeout=REQUEST_TIMEOUT
+    )
     sp.prefix = f"http://127.0.0.1:{server.server_port}/v1/"
     yield sp, handler
     server.shutdown()

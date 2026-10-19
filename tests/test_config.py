@@ -203,7 +203,8 @@ def test_a_setting_that_is_not_a_string_is_a_config_error(tmp_path, toml, named)
 @pytest.mark.parametrize("value", ['"false"', '"true"', "0", "1"])
 def test_a_spotify_switch_must_be_true_or_false(tmp_path, key, value):
     # bool("false") is True: a quoted false would quietly turn the source on.
-    with pytest.raises(ConfigError, match=rf"\[spotify\]\.{key} must be true or false, not {value}"):
+    message = rf"\[spotify\]\.{key} must be true or false, not {value}"
+    with pytest.raises(ConfigError, match=message):
         load(tmp_path, f"[spotify]\n{key} = {value}\n")
 
 
@@ -267,7 +268,8 @@ def test_review_above_accept_is_a_config_error(tmp_path):
 def test_match_and_rank_numbers_in_range_load(tmp_path):
     cfg = load(tmp_path, (
         "[match]\naccept = 92.5\nreview = 70\nmargin = 0\n"
-        "[rank]\ncoverage_threshold = 0.75\nline_match = 80.5\nscored_sheets = 2\nkeep_guitar_pro = 0\n"
+        "[rank]\ncoverage_threshold = 0.75\nline_match = 80.5\n"
+        "scored_sheets = 2\nkeep_guitar_pro = 0\n"
     ))
     assert (cfg.match.accept, cfg.match.review, cfg.match.margin) == (92.5, 70, 0)
     assert (cfg.rank.coverage_threshold, cfg.rank.line_match) == (0.75, 80.5)

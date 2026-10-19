@@ -404,7 +404,8 @@ def _render_song(
                 (folder / name).unlink(missing_ok=True)
             kv_delete(conn, _state_key(song.id, auto=True))
     if auto is not None:
-        render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=human is not None))
+        beside = human is not None
+        render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside))
     return done
 
 

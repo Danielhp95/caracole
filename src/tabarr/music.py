@@ -240,7 +240,9 @@ def scan_music(conn: sqlite3.Connection, music_dir: Path) -> ScanStats:
     stats = ScanStats()
     if not music_dir.is_dir():
         return stats
-    paths = sorted(p for p in music_dir.rglob("*") if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS)
+    paths = sorted(
+        p for p in music_dir.rglob("*") if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS
+    )
     if not paths:
         return stats
     songs = [s for s in list_songs(conn) if s.status != "ignored"]
