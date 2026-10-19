@@ -65,7 +65,14 @@ from tabarr.ug.lookup import (
     song_tabs,
     tab_url_for,
 )
-from tabarr.ug.page import PageParseError, UGTabPage, UGVersion, parse_tab_page, strip_markup
+from tabarr.ug.page import (
+    TAB_BASE_URL,
+    PageParseError,
+    UGTabPage,
+    UGVersion,
+    parse_tab_page,
+    strip_markup,
+)
 from tabarr.versions import (
     VersionRow,
     get_version,
@@ -88,6 +95,8 @@ _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
 SHEET_FILES = ("sheet.txt", "sheet.json")
 TAB_FILES = ("tab.txt", "tab.json")
 AUTO_SHEET = "sheet (auto).txt"
+_TAB_HOST = urlsplit(TAB_BASE_URL).netloc
+_CLOSED_TAB_PATHS = frozenset({"download", "print"})  # robots.txt on the tabs host
 
 # The artist-page route (A6).
 ARTIST_PAGE = "artist_page"  # the match step of a song found on its artist's page
@@ -231,9 +240,22 @@ def _upsert(run: _SongRun, v: UGVersion) -> int:
     )
 
 
+def _tab_page_url(url: str) -> bool:
+    """Whether a link from UG's JSON is a plain tab page; robots.txt closes /tab/download and /tab/print."""
+    parts = urlsplit(url)
+    segments = parts.path.split("/")
+    return (
+        parts.scheme in ("http", "https") and parts.netloc == _TAB_HOST
+        and len(segments) > 2 and segments[1] == "tab" and segments[2] not in _CLOSED_TAB_PATHS
+    )
+
+
 def _usable(run: _SongRun, v: UGVersion) -> bool:
-    """A kind tabarr uses (never Official, which UG marks public too), public, and not blocked."""
-    return v.kind is not None and v.access == "public" and v.tab_id not in run.ctx.overrides.block
+    """A kind tabarr uses (never Official, which UG marks public too), public, not blocked, at a tab page."""
+    return (
+        v.kind is not None and v.access == "public" and v.tab_id not in run.ctx.overrides.block
+        and _tab_page_url(v.url)
+    )
 
 
 def _known(run: _SongRun, tab_id: int) -> bool:

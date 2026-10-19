@@ -271,6 +271,24 @@ def test_official_and_non_public_skipped(conn, tmp_path):
     assert "sheet 102" in read(tmp_path, song, "sheet.txt")
 
 
+@pytest.mark.parametrize("tab_url", [
+    "https://tabs.ultimate-guitar.com/tab/download?id=102",  # robots.txt: Disallow /tab/download
+    "https://tabs.ultimate-guitar.com/tab/print?id=102",  # robots.txt: Disallow /tab/print?
+    "https://www.ultimate-guitar.com/pro/?tab_id=102",  # UG's paid app
+])
+def test_versions_whose_link_is_no_tab_page_are_never_fetched(conn, tmp_path, tab_url):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    odd = v(102, rating=5.0, votes=500, tab_url=tab_url)
+    ug = FakeUG()
+    ug.tab(v(101, rating=3.0, votes=10), [odd], content=sheet("sheet 101", LINES))
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert ug.requests == [slugged(101)]
+    assert {int(r.tab_id) for r in song_versions(conn, song.id, include_gone=True)} == {101}
+
+
 # --- the guitar slot ------------------------------------------------------------------
 
 
