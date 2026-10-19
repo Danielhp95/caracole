@@ -11,6 +11,7 @@ from tabarr.overrides import (
     add_ignore,
     add_match,
     add_pin,
+    add_reject,
     load_overrides,
     override_key,
     tab_id_from_url,
@@ -270,6 +271,58 @@ def test_writers_preserve_comments_and_roundtrip(tmp_path):
     assert sorted(o.block) == [1601668]
 
 
+def test_reject_lists_the_ug_songs_that_are_not_the_song(tmp_path):
+    o = load_overrides(write(tmp_path, '''
+[reject]   # "none of these" in tabarr review
+"Soda - Persiana Americana" = ["Soda-Stereo/Persiana-Americana", "soda-stereo/persiana"]
+"soda - persiana americana" = "soda-stereo-ar/persiana-americana"  # the same song, written another way
+"宋冬野 - 斑马，斑马" = ["li-zhi/ban-ma-ban-ma"]
+'''))
+    assert o.reject == {
+        "soda/persiana-americana": frozenset({("soda-stereo", "persiana-americana"), ("soda-stereo", "persiana"),
+                                              ("soda-stereo-ar", "persiana-americana")}),
+        "宋冬野/斑马斑马": frozenset({("li-zhi", "ban-ma-ban-ma")}),
+    }
+    assert Overrides().reject == {}
+
+
+@pytest.mark.parametrize("text, where, expected", [
+    ('[reject]\n"Creep" = ["radiohead/creep"]\n', "[reject] 'Creep'", "expected \"Artist - Title\", got 'Creep'"),
+    ('[reject]\n"A - B" = ["no-slash"]\n', "[reject] 'A - B'", "expected \"ug-artist/ug-song\", got 'no-slash'"),
+    ('[reject]\n"A - B" = 5\n', "[reject] 'A - B'", "expected a string or a list of strings"),
+])
+def test_a_malformed_reject_names_its_entry(tmp_path, text, where, expected):
+    p = write(tmp_path, text)
+    with pytest.raises(OverridesError) as e:
+        load_overrides(p)
+    assert str(e.value) == f"{p}: {where}: {expected}"
+
+
+def test_add_reject_adds_to_the_songs_list_and_keeps_your_comments(tmp_path):
+    p = write(tmp_path, '# mine\n[reject]\n"Soda - Persiana Americana" = "soda-stereo/persiana"  # a cover\n')
+    add_reject(p, "soda - persiana americana", ["soda-stereo/persiana", "soda-stereo/persiana-americana"])
+    add_reject(p, "Maná - Rayando el Sol", ["ana-gabriel/rayando-el-sol"])
+    before, inode = p.read_text(encoding="utf-8"), p.stat().st_ino
+    add_reject(p, "Soda - Persiana Americana", ["Soda-Stereo/Persiana"])  # rejected already: nothing is written
+    add_reject(p, "Maná - Rayando el Sol", [])
+    text = p.read_text(encoding="utf-8")
+    assert text == before and p.stat().st_ino == inode
+    assert "# mine" in text and "# a cover" in text and "soda - persiana americana" not in text
+    o = load_overrides(p)
+    assert o.reject["soda/persiana-americana"] == frozenset({("soda-stereo", "persiana"),
+                                                             ("soda-stereo", "persiana-americana")})
+    assert o.reject["mana/rayando-el-sol"] == frozenset({("ana-gabriel", "rayando-el-sol")})
+
+
+def test_add_reject_checks_what_it_writes(tmp_path):
+    p = tmp_path / "overrides.toml"
+    with pytest.raises(OverridesError, match="Artist - Title"):
+        add_reject(p, "Creep", ["radiohead/creep"])
+    with pytest.raises(OverridesError, match=r"\[reject\] 'Radiohead - Creep': expected \"ug-artist/ug-song\""):
+        add_reject(p, "Radiohead - Creep", ["radiohead"])
+    assert not p.exists()
+
+
 def test_add_alias_keeps_the_artists_other_aliases(tmp_path):
     p = write(tmp_path, (
         "[alias]\n"
@@ -308,6 +361,7 @@ def all_writers(p: Path):
         lambda: add_pin(p, "Maná - Rayando el Sol", ["https://tabs.ultimate-guitar.com/tab/85053"]),
         lambda: add_ignore(p, "Maná - Rayando el Sol"),
         lambda: add_block(p, 1601668),
+        lambda: add_reject(p, "Maná - Rayando el Sol", ["ana-gabriel/rayando-el-sol"]),
     ]
 
 

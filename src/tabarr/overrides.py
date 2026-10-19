@@ -14,6 +14,9 @@ Tables:
 - ``[transpose]``: "Artist - Title" → semitones, applied when sheets are rendered.
 - ``[ignore] songs``: songs to skip.
 - ``[block] tab_ids``: tabs never to use.
+- ``[reject]``: "Artist - Title" → "ug-artist/ug-song"s that are not the song
+  (``tabarr review``'s "none of these"): the matcher never offers them again,
+  and goes on looking for the song.
 
 Keys are canonicalized when loaded, so they're matched the same way songs are.
 Writers use tomlkit, so your comments and layout survive.
@@ -48,7 +51,7 @@ _TAB_URL = re.compile(
 _TAB_HOST = "https://tabs.ultimate-guitar.com"
 _ARTIST_URL = re.compile(r"^https://www\.ultimate-guitar\.com/artist/[^/?#]+_\d+/?(?:[?#].*)?$")
 _ARTIST_HOST = "https://www.ultimate-guitar.com"
-_TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block"}
+_TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject"}
 _TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
 
 
@@ -58,7 +61,8 @@ class OverridesError(Exception):
 
 @dataclass(frozen=True)
 class Overrides:
-    """overrides.toml, canonicalized. ``pin_urls`` holds each pin's address, in ``pin``'s order."""
+    """overrides.toml, canonicalized. ``pin_urls`` holds each pin's address, in ``pin``'s order;
+    ``reject`` holds each song's rejected (artist key, song key) pairs, every entry of the song's."""
 
     alias: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     match: Mapping[str, tuple[str, str]] = field(default_factory=dict)
@@ -68,6 +72,7 @@ class Overrides:
     ignore: frozenset[str] = frozenset()
     block: frozenset[int] = frozenset()
     pin_urls: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    reject: Mapping[str, frozenset[tuple[str, str]]] = field(default_factory=dict)
 
 
 def override_key(display: str) -> str:
@@ -107,12 +112,13 @@ def _artist_page(url: Any) -> str | None:
 
 
 def _ug_ref(value: Any, where: str) -> tuple[str, str]:
+    """The (artist key, song key) of ``"ug-artist/ug-song"``; ``where`` names the table and entry."""
     if not isinstance(value, str) or value.count("/") != 1:
-        raise OverridesError(f"[match] {where}: expected \"ug-artist/ug-song\", got {value!r}")
+        raise OverridesError(f"{where}: expected \"ug-artist/ug-song\", got {value!r}")
     artist, song = value.split("/")
     a, s = ug_slug_key(artist), ug_slug_key(song)
     if not a or not s:
-        raise OverridesError(f"[match] {where}: expected \"ug-artist/ug-song\", got {value!r}")
+        raise OverridesError(f"{where}: expected \"ug-artist/ug-song\", got {value!r}")
     return a, s
 
 
@@ -189,7 +195,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         slug_key(artist): tuple(ug_slug_key(s) for s in _strings(v, f"[alias] {artist!r}"))
         for artist, v in table("alias").items()
     }
-    match = {_song_key(k, f"[match] {k!r}"): _ug_ref(v, repr(k)) for k, v in table("match").items()}
+    match = {_song_key(k, f"[match] {k!r}"): _ug_ref(v, f"[match] {k!r}") for k, v in table("match").items()}
 
     artist_url: dict[str, str] = {}
     for artist, url in table("artist_url").items():
@@ -229,9 +235,16 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
     if not isinstance(tab_ids, list) or not all(isinstance(t, int) for t in tab_ids):
         raise OverridesError("[block] tab_ids must be a list of integers")
 
+    reject: dict[str, frozenset[tuple[str, str]]] = {}
+    for k, v in table("reject").items():
+        where = f"[reject] {k!r}"
+        ident = _song_key(k, where)
+        refs = frozenset(_ug_ref(r, where) for r in _strings(v, where))
+        reject[ident] = reject.get(ident, frozenset()) | refs  # the song written two ways: both count
+
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
-        ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls,
+        ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
     )
 
 
@@ -281,8 +294,42 @@ def add_alias(path: Path, source_artist: str, ug_artist: str) -> None:
 
 def add_match(path: Path, display: str, ug_ref: str) -> None:
     override_key(display)
-    _ug_ref(ug_ref, repr(display))
+    _ug_ref(ug_ref, f"[match] {display!r}")
     _edit(path, lambda doc: _table_of(doc, "match").__setitem__(display, ug_ref))
+
+
+def add_reject(path: Path, display: str, ug_refs: Sequence[str]) -> None:
+    """Add UG songs (``"ug-artist/ug-song"``) to the song's ``[reject]`` list, keeping the ones there.
+
+    The song's entry is found by its key, as rejections are matched, so the same song written
+    another way adds to the entry it has. A UG song rejected already isn't added again.
+    """
+    wanted = override_key(display)
+    refs = {_ug_ref(r, f"[reject] {display!r}"): r for r in ug_refs}
+
+    def same_song(key: str) -> bool:
+        try:
+            return override_key(key) == wanted
+        except OverridesError:
+            return False
+
+    def change(doc) -> None:
+        t = _table_of(doc, "reject")
+        key = next((k for k in reversed(list(t)) if same_song(k)), None)
+        if key is None:
+            t[display] = list(refs.values())
+            return
+        current, where = t[key], f"[reject] {key!r}"
+        have = {_ug_ref(r, where) for r in _strings(current, where)}
+        new = [r for ref, r in refs.items() if ref not in have]
+        if new and isinstance(current, str):
+            t[key] = [str(current), *new]
+        else:
+            for r in new:
+                current.append(r)
+
+    if refs:
+        _edit(path, change)
 
 
 def add_artist_url(path: Path, artist: str, url: str) -> None:
