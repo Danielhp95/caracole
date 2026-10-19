@@ -30,12 +30,18 @@ from typing import Any, Mapping, Sequence
 from urllib.parse import urlsplit
 
 import tomlkit
+from tomlkit.exceptions import TOMLKitError
 
 from tabarr.normalize import identity_key, slug_key, ug_slug_key
 
-_TAB_URL = re.compile(r"^https?://tabs\.ultimate-guitar\.com/tab/(?:[^/?#]+/)?(?:[^/?#]*-)?(\d+)/?$")
+# A query or fragment is allowed (a link's ?ref=, the artist page's own ?filter=chords and ?page=2
+# links) and dropped: tabarr asks for the bare page.
+_TAB_URL = re.compile(
+    r"^https?://tabs\.ultimate-guitar\.com/tab/(?:[^/?#]+/)?(?:[^/?#]*-)?(\d+)/?(?:[?#].*)?$"
+)
 _TAB_HOST = "https://tabs.ultimate-guitar.com"
-_ARTIST_URL = re.compile(r"^https://www\.ultimate-guitar\.com/artist/[^/?#]+_\d+/?$")
+_ARTIST_URL = re.compile(r"^https://www\.ultimate-guitar\.com/artist/[^/?#]+_\d+/?(?:[?#].*)?$")
+_ARTIST_HOST = "https://www.ultimate-guitar.com"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block"}
 
 
@@ -76,12 +82,21 @@ def tab_id_from_url(url: str | int) -> int:
 
 
 def _pin_url(value: str) -> str:
-    """A pinned page's address: the URL as pasted, over https and without a trailing slash;
-    for a bare tab id, the bare ``/tab/{id}`` page. ``value`` passed ``tab_id_from_url``."""
+    """A pinned page's address: the URL as pasted, over https and without its query, fragment
+    and trailing slash; for a bare tab id, the bare ``/tab/{id}`` page. ``value`` passed
+    ``tab_id_from_url``."""
     text = value.strip()
     if text.isdigit():
         return f"{_TAB_HOST}/tab/{int(text)}"
     return _TAB_HOST + urlsplit(text).path.rstrip("/")
+
+
+def _artist_page(url: Any) -> str | None:
+    """A UG artist page's address, without its query, fragment and trailing slash; None if
+    ``url`` isn't one."""
+    if not isinstance(url, str) or not _ARTIST_URL.match(url.strip()):
+        return None
+    return _ARTIST_HOST + urlsplit(url.strip()).path.rstrip("/")
 
 
 def _ug_ref(value: Any, where: str) -> tuple[str, str]:
@@ -102,17 +117,36 @@ def _strings(value: Any, where: str) -> list[str]:
     raise OverridesError(f"{where}: expected a string or a list of strings")
 
 
+def _song_key(display: str, where: str) -> str:
+    """``override_key`` for an entry of a table, whose error names the entry."""
+    try:
+        return override_key(display)
+    except OverridesError as e:
+        raise OverridesError(f"{where}: {e}") from e
+
+
+def _only_key(t: Mapping[str, Any], name: str, key: str, shape: str) -> None:
+    """``[ignore]`` and ``[block]`` hold one list each: any other key is a typo, never dropped."""
+    unknown = [k for k in t if k != key]
+    if unknown:
+        listed = ", ".join(map(repr, unknown))
+        raise OverridesError(f"unknown key(s) in [{name}]: {listed}; expected {key} = {shape}")
+
+
 def load_overrides(path: Path) -> Overrides:
-    """Read overrides.toml; a missing file means no overrides."""
+    """Read overrides.toml; a missing file means no overrides. Every error names the file."""
     if not path.is_file():
         return Overrides()
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as e:
+        return _parse(tomllib.loads(path.read_text(encoding="utf-8")))
+    except (tomllib.TOMLDecodeError, OverridesError) as e:
         raise OverridesError(f"{path}: {e}") from e
+
+
+def _parse(data: Mapping[str, Any]) -> Overrides:
     unknown = sorted(set(data) - _TABLES)
     if unknown:
-        raise OverridesError(f"{path}: unknown table(s): {', '.join(unknown)}")
+        raise OverridesError(f"unknown table(s): {', '.join(unknown)}")
 
     def table(name: str) -> Mapping[str, Any]:
         value = data.get(name, {})
@@ -124,21 +158,23 @@ def load_overrides(path: Path) -> Overrides:
         slug_key(artist): tuple(ug_slug_key(s) for s in _strings(v, f"[alias] {artist!r}"))
         for artist, v in table("alias").items()
     }
-    match = {override_key(k): _ug_ref(v, repr(k)) for k, v in table("match").items()}
+    match = {_song_key(k, f"[match] {k!r}"): _ug_ref(v, repr(k)) for k, v in table("match").items()}
 
     artist_url: dict[str, str] = {}
     for artist, url in table("artist_url").items():
-        if not isinstance(url, str) or not _ARTIST_URL.match(url.strip()):
+        page = _artist_page(url)
+        if page is None:
             raise OverridesError(
-                f"[artist_url] {artist!r}: expected https://www.ultimate-guitar.com/artist/<name>_<id>"
+                f"[artist_url] {artist!r}: expected https://www.ultimate-guitar.com/artist/<name>_<id>, "
+                f"got {url!r}"
             )
-        artist_url[slug_key(artist)] = url.strip().rstrip("/")
+        artist_url[slug_key(artist)] = page
 
     pin: dict[str, tuple[int, ...]] = {}
     pin_urls: dict[str, tuple[str, ...]] = {}
     for k, v in table("pin").items():
+        pasted = _strings(v, f"[pin] {k!r}")
         try:
-            pasted = _strings(v, f"[pin] {k!r}")
             ident = override_key(k)
             pin[ident] = tuple(tab_id_from_url(u) for u in pasted)
             pin_urls[ident] = tuple(_pin_url(u) for u in pasted)
@@ -149,12 +185,15 @@ def load_overrides(path: Path) -> Overrides:
     for k, v in table("transpose").items():
         if not isinstance(v, int) or isinstance(v, bool) or not -11 <= v <= 11:
             raise OverridesError(f"[transpose] {k!r}: expected semitones between -11 and 11")
-        transpose[override_key(k)] = v
+        transpose[_song_key(k, f"[transpose] {k!r}")] = v
 
     ignore_t = table("ignore")
-    ignore = frozenset(override_key(s) for s in _strings(ignore_t.get("songs", []), "[ignore] songs"))
+    _only_key(ignore_t, "ignore", "songs", '["Artist - Title", ...]')
+    songs = _strings(ignore_t.get("songs", []), "[ignore] songs")
+    ignore = frozenset(_song_key(s, "[ignore] songs") for s in songs)
 
     block_t = table("block")
+    _only_key(block_t, "block", "tab_ids", "[<tab id>, ...]")
     tab_ids = block_t.get("tab_ids", [])
     if not isinstance(tab_ids, list) or not all(isinstance(t, int) for t in tab_ids):
         raise OverridesError("[block] tab_ids must be a list of integers")
@@ -166,11 +205,18 @@ def load_overrides(path: Path) -> Overrides:
 
 
 def _edit(path: Path, change) -> None:
-    doc = tomlkit.parse(path.read_text(encoding="utf-8")) if path.is_file() else tomlkit.document()
+    old = path.read_text(encoding="utf-8") if path.is_file() else None
+    try:
+        doc = tomlkit.document() if old is None else tomlkit.parse(old)
+    except TOMLKitError as e:
+        raise OverridesError(f"{path}: {e}") from e
     change(doc)
+    text = tomlkit.dumps(doc)
+    if text == old:
+        return  # nothing changed: the file is left alone
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(tomlkit.dumps(doc), encoding="utf-8")
+    tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
 
 
@@ -181,7 +227,28 @@ def _table_of(doc, name: str):
 
 
 def add_alias(path: Path, source_artist: str, ug_artist: str) -> None:
-    _edit(path, lambda doc: _table_of(doc, "alias").__setitem__(source_artist, ug_artist))
+    """Add ``ug_artist`` to the artist's aliases, keeping the ones already there.
+
+    The artist's entry is found by its key, as aliases are matched, so the same artist
+    written another way grows its own entry. A slug already among them changes nothing.
+    """
+    artist, slug = slug_key(source_artist), ug_slug_key(ug_artist)
+
+    def change(doc) -> None:
+        t = _table_of(doc, "alias")
+        key = next((k for k in reversed(list(t)) if slug_key(k) == artist), None)  # the last one counts
+        if key is None:
+            t[source_artist] = ug_artist
+            return
+        current = t[key]
+        if any(ug_slug_key(s) == slug for s in _strings(current, f"[alias] {key!r}")):
+            return
+        if isinstance(current, str):
+            t[key] = [str(current), ug_artist]
+        else:
+            current.append(ug_artist)
+
+    _edit(path, change)
 
 
 def add_match(path: Path, display: str, ug_ref: str) -> None:
@@ -191,9 +258,10 @@ def add_match(path: Path, display: str, ug_ref: str) -> None:
 
 
 def add_artist_url(path: Path, artist: str, url: str) -> None:
-    if not _ARTIST_URL.match(url.strip()):
+    page = _artist_page(url)
+    if page is None:
         raise OverridesError(f"[artist_url] {artist!r}: not a UG artist page URL: {url!r}")
-    _edit(path, lambda doc: _table_of(doc, "artist_url").__setitem__(artist, url.strip()))
+    _edit(path, lambda doc: _table_of(doc, "artist_url").__setitem__(artist, page))
 
 
 def add_pin(path: Path, display: str, urls: Sequence[str]) -> None:

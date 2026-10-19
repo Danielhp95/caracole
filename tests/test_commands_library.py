@@ -1,10 +1,18 @@
 from pathlib import Path
 
+import typer
 from typer.testing import CliRunner
 
 from tabarr import db
 from tabarr.cli import build_app
-from tabarr.songs import upsert_song, update_song
+from tabarr.songs import get_song, upsert_song, update_song
+
+# Two [artist_url] tables, as pasting two of the to-do page's blocks one after the other makes them.
+BROKEN_OVERRIDES = (
+    '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n\n'
+    '[artist_url]\n"宋冬野" = "https://www.ultimate-guitar.com/artist/song_dongye_99"\n'
+)
+CANDIDATE = {"artist_key": "song-dongye", "song_key": "ban-ma-ban-ma", "score": 80.0, "step": "fuzzy_title"}
 
 
 def config(tmp_path: Path) -> Path:
@@ -52,6 +60,48 @@ def test_review_skip_and_quit(tmp_path):
     result = run(tmp_path, "review", input="s\n")
     assert result.exit_code == 0, result.output
     assert "song-dongye/ban-ma-ban-ma" in result.output and "skipped 1" in result.output
+
+
+def test_review_prompts_end_in_one_colon_and_enter_at_the_url_prompt_skips(tmp_path):
+    conn, sid = seed(tmp_path)
+    update_song(conn, sid, review=True, match_candidates=[CANDIDATE])
+    result = run(tmp_path, "review", input="p\n\n")
+    assert result.exit_code == 0, result.output
+    assert "(q)uit: p" in result.output and ": :" not in result.output
+    assert "not an Ultimate Guitar tab URL" not in result.output and "skipped 1" in result.output
+    assert not (tmp_path / "lib" / "overrides.toml").exists()
+
+
+def test_review_with_broken_overrides_stops_before_the_first_prompt(tmp_path):
+    conn, sid = seed(tmp_path)
+    update_song(conn, sid, review=True, match_candidates=[CANDIDATE])
+    overrides = tmp_path / "lib" / "overrides.toml"
+    overrides.parent.mkdir(parents=True)
+    overrides.write_text(BROKEN_OVERRIDES, encoding="utf-8")
+    result = run(tmp_path, "review", input="1\nq\n")
+    assert result.exit_code == 2, result.output
+    assert "overrides:" in result.output and "artist_url" in result.output
+    assert "[1/1]" not in result.output  # no question asked that can't be saved
+    assert overrides.read_text(encoding="utf-8") == BROKEN_OVERRIDES
+
+
+def test_review_reports_overrides_broken_while_it_waits(tmp_path, monkeypatch):
+    # The file is edited in another window while review waits for an answer.
+    conn, sid = seed(tmp_path)
+    update_song(conn, sid, review=True, match_candidates=[CANDIDATE])
+    overrides = tmp_path / "lib" / "overrides.toml"
+
+    def answer(prompt, **kwargs):
+        overrides.parent.mkdir(parents=True, exist_ok=True)
+        overrides.write_text(BROKEN_OVERRIDES, encoding="utf-8")
+        return "1"
+
+    monkeypatch.setattr(typer, "prompt", answer)
+    result = run(tmp_path, "review")
+    assert result.exit_code == 2, result.output
+    assert "overrides:" in result.output and "artist_url" in result.output
+    assert overrides.read_text(encoding="utf-8") == BROKEN_OVERRIDES
+    assert get_song(conn, sid).review is True
 
 
 def test_scan_reports_music_and_inbox(tmp_path):
