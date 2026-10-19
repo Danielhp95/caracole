@@ -255,6 +255,37 @@ def synthetic_rows(n, seed=7):
     return rows
 
 
+@pytest.mark.parametrize("patterns", [
+    ["%love%"], ["%love%", "%night%"], ["%creep%"], ["%u2%"], ["%r-e-m%", "%rem%"], ["%ban%ma%ban%ma%"],
+    ["%song%dong%ye%"], ["%acdc%"], ["%nothing-at-all%"],
+])
+def test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds(conn, patterns):
+    from caracole.ug.key_search import rows_like
+
+    index(conn, synthetic_rows(3_000) + ROWS + PINYIN_ROWS)
+    where = " OR ".join(f"artist_key LIKE ?{i} OR song_key LIKE ?{i}" for i in range(1, len(patterns) + 1))
+    scan = conn.execute(f"SELECT artist_key, song_key, COUNT(*) FROM ug_index WHERE {where} "
+                        "GROUP BY artist_key, song_key", patterns).fetchall()
+    assert sorted(rows_like(conn, patterns)) == sorted(tuple(r) for r in scan)
+
+
+def test_the_prefilter_reads_the_trigram_index_not_every_row(conn):
+    from caracole.ug import key_search
+
+    plans = []
+    real = conn.execute
+
+    class Spy:
+        def execute(self, sql, *args):
+            if "ug_keys_fts" in sql:
+                plans.append(" ".join(r[3] for r in real(f"EXPLAIN QUERY PLAN {sql}", *args)))
+            return real(sql, *args)
+
+    index(conn, ROWS)
+    key_search.rows_like(Spy(), ["%creep%"])
+    assert plans and all("VIRTUAL TABLE INDEX" in p for p in plans)
+
+
 def test_index_search_is_fast_on_a_large_index(conn):
     conn.execute("BEGIN")
     index(conn, synthetic_rows(50_000) + ROWS + PINYIN_ROWS)

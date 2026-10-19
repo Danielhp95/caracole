@@ -122,9 +122,12 @@ goes when the PDF is done, so caracole must be able to write there.
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
 to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
-status 2: `database: … is at schema version 4, but this caracole knows up to 3:
+status 2: `database: … is at schema version 5, but this caracole knows up to 4:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
-when there is one. A state folder caracole can't use ends a command with status
+when there is one. Schema 4 adds an index of the UG index's names, for
+searching as you type: the first command after the upgrade builds it from the
+index, in a few seconds, and it adds about a quarter to the database's size
+(about 75 MB to a full index's 315). A state folder caracole can't use ends a command with status
 1 and `can't open the database …` (or `can't open …/caracole.lock: …`).
 `caracole add` is the exception to both: it keeps its line and warns (see
 below).
@@ -1037,7 +1040,12 @@ two places, and sends no request:
 
 QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
-compares Chinese as pinyin. `--limit N` (or `-n N`) shows up to N hits from
+compares Chinese as pinyin. It reads an index of the UG index's names, so a
+word of three letters or more is looked up in milliseconds, not by reading all
+1.6 million rows: a typical query answers in 3–75 ms on a full index, against
+0.4–0.9 s before. A query made only of very common words ("love", "you") still
+takes about half a second to a second and a half, since tens of thousands of
+songs have them to rank. `--limit N` (or `-n N`) shows up to N hits from
 each place, 10 by default. `--add N` adds UG hit N to wanted.txt and syncs it,
 the same way `caracole add` does. N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another

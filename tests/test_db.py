@@ -126,9 +126,48 @@ def test_a_version_2_database_gains_the_musescore_index_and_keeps_its_gtptabs_ro
     db.connect(path).close()
 
     cols, version = columns(path, "musescore_index")
-    assert version == 3
+    assert version == NOW
     assert cols == ["page_id", "path", "title_key", "sitemap"]
     c = sqlite3.connect(path)
     assert c.execute("SELECT artist_key FROM gtptabs_index").fetchall() == [("blur",)]
     c.close()
     assert columns(path.with_name("caracole.sqlite.v2.bak"), "musescore_index") == ([], 2)
+
+
+def test_a_version_3_database_gains_a_substring_index_of_its_ug_keys(tmp_path):
+    # Typing into caracole serve's lookup searches 1.6 million index rows: a LIKE '%…%' scan of
+    # both key columns took 0.4 s a pattern; the trigram index over the distinct keys answers in ms.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript(db._MIGRATIONS[1] + db._MIGRATIONS[2] + db._MIGRATIONS[3] + "\nPRAGMA user_version = 3;")
+    old.executemany("INSERT INTO ug_index VALUES (?, ?, ?, 'chords', '1', 'x', '')",
+                    [(1, "oasis", "wonderwall"), (2, "oasis", "wonderwall-acoustic"), (3, "radiohead", "creep")])
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] >= 4
+    assert sorted(r[0] for r in c.execute("SELECT key FROM ug_keys")) == [
+        "creep", "oasis", "radiohead", "wonderwall", "wonderwall-acoustic"]
+    found = c.execute("SELECT key FROM ug_keys WHERE id IN (SELECT rowid FROM ug_keys_fts WHERE key LIKE '%derwa%')")
+    assert sorted(r[0] for r in found) == ["wonderwall", "wonderwall-acoustic"]
+    c.close()
+
+
+def test_the_substring_index_follows_the_rows_a_sitemap_adds_or_renames(conn):
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import upsert_rows
+
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(1, "oasis", "wonderwall", "chords", "oasis/wonderwall-chords-1")], "1", when)
+    upsert_rows(conn, [(1, "oasis", "wonderwal", "chords", "oasis/wonderwal-chords-1"),
+                       (2, "blur", "song-2", "chords", "blur/song-2-chords-2")], "1", when)
+
+    def like(pattern):
+        return sorted(r[0] for r in conn.execute(
+            "SELECT key FROM ug_keys WHERE id IN (SELECT rowid FROM ug_keys_fts WHERE key LIKE ?)", (pattern,)))
+
+    assert like("%wonderwal%") == ["wonderwal", "wonderwall"]  # an old key stays: it matches no row
+    assert like("%song-2%") == ["song-2"] and like("%blur%") == ["blur"]

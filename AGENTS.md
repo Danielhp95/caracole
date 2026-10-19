@@ -54,7 +54,10 @@ and `search --key`).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `write_pages`, `fail`, `warn`.
-  The logic of `caracole review` and `caracole search` is in review.py and search.py.
+  The logic of `caracole review` and `caracole search` is in review.py and search.py;
+  search.py's prefilter reads ug/key_search.py (`rows_like`: the keys' trigram index,
+  `ug_keys_fts`, schema 4), which must find exactly what a `LIKE` scan of `ug_index` finds
+  (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`).
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed), jobs.py (the queue: each
   request runs the `caracole` CLI in a child process, one command at a time), app.py (the
