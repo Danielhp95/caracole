@@ -79,8 +79,8 @@ let
     NUMBA_CACHE_DIR = "/var/cache/tabarr/numba";
   };
 
-  # The model files for auto-chords; null ones are left to settings.autochords
-  # and the package's own defaults.
+  # The model files for auto-chords. Null ones stay unset, so the package
+  # wrapper's --set-default values apply; settings.autochords wins over both.
   modelEnv = lib.filterAttrs (_: value: value != null) {
     TABARR_BTC_WEIGHTS = cfg.autochords.btcWeights;
     TABARR_BTC_CONFIG = cfg.autochords.btcConfig;
@@ -230,13 +230,21 @@ in
         type = lib.types.package;
         default = cfg.package.override { withAutochords = true; };
         defaultText = lib.literalExpression "config.services.tabarr.package.override { withAutochords = true; }";
-        description = "tabarr with the autochords extra (torch, beat-this, librosa).";
+        description = ''
+          tabarr with the autochords extra (torch, beat-this, librosa). Its
+          wrapper defaults TABARR_BTC_WEIGHTS and TABARR_BEAT_CHECKPOINT to the
+          model files fetched by nix/autochords.nix, so the offline unit needs
+          nothing else.
+        '';
       };
 
       btcWeights = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
-        description = "The BTC chord model weights, as TABARR_BTC_WEIGHTS.";
+        description = ''
+          Other BTC chord model weights, as TABARR_BTC_WEIGHTS. Null leaves the
+          package's own; settings.autochords.btc_weights wins over both.
+        '';
       };
 
       btcConfig = lib.mkOption {
@@ -248,7 +256,10 @@ in
       beatCheckpoint = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
         default = null;
-        description = "The beat_this checkpoint, as TABARR_BEAT_CHECKPOINT.";
+        description = ''
+          Another beat_this checkpoint, as TABARR_BEAT_CHECKPOINT. Null leaves
+          the package's own; settings.autochords.beat_checkpoint wins over both.
+        '';
       };
     };
   };
