@@ -29,6 +29,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "lacuerda"
 def _fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
 
+
 # --- slugs and URLs -------------------------------------------------------
 
 
@@ -122,7 +123,9 @@ def test_version_url():
     assert version_url("soda_stereo", "de_musica_ligera", 12).endswith("/de_musica_ligera-12.shtml")
 
 
-@pytest.mark.parametrize("artist,song,n", [("soda_stereo", "x", 0), ("", "x", 1), ("soda_stereo", "", 2)])
+@pytest.mark.parametrize(
+    "artist,song,n", [("soda_stereo", "x", 0), ("", "x", 1), ("soda_stereo", "", 2)]
+)
 def test_version_url_refuses_bad_arguments(artist, song, n):
     with pytest.raises(ValueError):
         version_url(artist, song, n)
@@ -252,11 +255,22 @@ def test_parse_artist_page_decodes_entities_and_skips_items_without_lcd_or_link(
     <li lcd='RT-21'><a href="/otra_banda/otra">Otra <em>acordes</em></a></li>
     </ul>"""
     songs = parse_artist_page(html)
-    assert [(s.slug, s.title) for s in songs] == [("cancion_y_co", "Canción & Co"), ("otra", "Otra")]
+    assert [(s.slug, s.title) for s in songs] == [
+        ("cancion_y_co", "Canción & Co"),
+        ("otra", "Otra"),
+    ]
 
 
 def test_parse_artist_page_with_an_empty_list():
     assert parse_artist_page("<ul id=b_main class=b_main></ul>") == []
+
+
+def test_a_song_list_with_no_readable_item_is_a_parse_error():
+    # Shape drift (the lcd attribute renamed, say) must not read as "no songs".
+    with pytest.raises(LaCuerdaParseError):
+        parse_artist_page(
+            "<ul id=b_main><li data-lcd='R-1'><a href='x'>X <em>acordes</em></a></li></ul>"
+        )
 
 
 def test_a_page_without_the_song_list_is_a_parse_error():
@@ -277,7 +291,10 @@ def test_match_title_exact(artist_songs):
 
 
 def test_match_title_cleans_spotify_suffixes(artist_songs):
-    assert match_title(artist_songs, "De Música Ligera - Remasterizado 2007").slug == "de_musica_ligera"
+    assert (
+        match_title(artist_songs, "De Música Ligera - Remasterizado 2007").slug
+        == "de_musica_ligera"
+    )
     assert match_title(artist_songs, "Cuando Pase El Temblor - MTV Unplugged").slug == (
         "cuando_pase_el_temblor"
     )
@@ -309,7 +326,10 @@ def test_match_title_cutoff_is_adjustable(artist_songs):
 
 
 def test_match_title_prefers_a_song_with_acordes_on_a_tie():
-    songs = [LCSong("la_flaca_tab", "La Flaca", "T", (1,)), LCSong("la_flaca", "La Flaca", "TR", (2, 1))]
+    songs = [
+        LCSong("la_flaca_tab", "La Flaca", "T", (1,)),
+        LCSong("la_flaca", "La Flaca", "TR", (2, 1)),
+    ]
     assert match_title(songs, "La Flaca").slug == "la_flaca"
 
 
@@ -342,7 +362,7 @@ def test_parse_version_page_marks_chords():
 
 def test_parse_version_page_keeps_the_line_structure_exactly():
     page = _fixture("version.html")
-    raw = re.search(r"<PRE>(.*?)</PRE>", page, re.S).group(1)
+    raw = re.search(r"<PRE>(.*?)</PRE>", page, re.DOTALL).group(1)
     shown = re.sub(r"\[/?ch\]", "", parse_version_page(page))
     assert shown == htmllib.unescape(re.sub(r"<[^>]+>", "", raw))
 

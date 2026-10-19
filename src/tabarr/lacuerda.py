@@ -1,13 +1,27 @@
 """LaCuerda (acordes.lacuerda.net): chord sheets for Spanish songs.
 
-Ultimate Guitar's sitemaps hide every artist with an accented name behind bare
-ids, but a LaCuerda artist URL can be built from the name. What the pages look
-like (captured 18 October 2026):
+Ultimate Guitar's sitemaps list every artist with an accented name only as bare
+ids, but a LaCuerda artist URL can be built from the name. One artist page then
+serves every song by that artist, and one version page gives the sheet. What
+the pages look like (captured 18 October 2026; robots.txt is empty):
 
 - **Artist slugs** are the name lowercased, with accents stripped, "ñ" written
   "ni", each space turned into "_" and any other punctuation removed without a
   trace ("Fito & Fitipaldis" → ``fito__fitipaldis``). A leading article is
-  dropped ("Las Pastillas del Abuelo" → ``pastillas_del_abuelo``).
+  dropped ("Las Pastillas del Abuelo" → ``pastillas_del_abuelo``). Song slugs
+  follow the same rules but keep their articles, and can't always be predicted
+  ("Algun día" → ``algun_diasomeday``), so songs are matched by title.
+- **The artist page** ``/{artist}/`` lists each song as ``ul#b_main > li[lcd]``
+  with a relative link to the song slug and the title, followed by
+  ``<em>acordes</em>``.
+- **The lcd code**, such as "RHRTTTDTB-314865972", has one type letter per
+  version, version 1 first, then the version numbers in the order the song page
+  shows them: grouped by type (R, then T, B, D, then H and K), best first within
+  a type. The letters seen are R (Letra y Acordes), T (Tablatura), B (Tab p/Bajo),
+  D (Batería), H (Armónica) and K (offered by the filter bar, never labelled).
+- **Version pages** are ``/{artist}/{song}.shtml`` for version 1 and
+  ``/{artist}/{song}-{n}.shtml`` after that. The sheet is ``div#t_body > pre``,
+  with chords as ``<A>Bm</A>`` and an empty ``<div></div>`` before each chord line.
 """
 
 from __future__ import annotations
@@ -28,8 +42,8 @@ BASE_URL = "https://acordes.lacuerda.net"
 PROVIDER = "lacuerda"
 
 ACORDES = "R"
-# Version types by lcd letter, labelled as the song page labels them. The artist
-# page's filter bar also offers K, which no captured page labelled.
+# Version types by lcd letter, as the song page labels them. K has no label on
+# any captured page, so look letters up with .get().
 TYPE_NAMES = {
     "R": "Letra y Acordes",
     "T": "Tablatura",
@@ -61,6 +75,73 @@ class LCSong:
     ranking: tuple[int, ...]
 
 
+# --- slugs and URLs ----------------------------------------------------------
+
+_ARTICLES = frozenset({"el", "la", "los", "las", "the"})
+_NOT_SLUG = re.compile(r"[^a-z0-9 ]")
+_AND_WORD = re.compile(r"(?i)(?<!\S)y(?!\S)")
+
+
+def _words(name: str) -> list[str]:
+    """The name's slug words. Removed punctuation leaves an empty word behind."""
+    s = unicodedata.normalize("NFC", name).lower().replace("ñ", "ni")
+    s = _NOT_SLUG.sub("", fold(" ".join(s.split()))).strip()
+    return s.split(" ") if s else []
+
+
+def artist_slug(name: str) -> str:
+    """LaCuerda's slug for an artist: "Joaquín Sabina" → ``joaquin_sabina``.
+
+    Returns "" when nothing of the name survives (a name in Chinese characters,
+    say); LaCuerda can't be asked about that artist.
+    """
+    words = _words(name)
+    if len(words) > 1 and words[0] in _ARTICLES:
+        words = words[1:]
+    return "_".join(words)
+
+
+def artist_slug_candidates(name: str) -> tuple[str, ...]:
+    """Slugs worth trying for an artist, best guess first.
+
+    After :func:`artist_slug` come the slug that keeps a leading article and the
+    slug with "y" and "&" swapped, because sources disagree on both (Spotify's
+    "Fito y Fitipaldis" is LaCuerda's ``fito__fitipaldis``). Each extra
+    candidate costs a request only when the ones before it miss.
+    """
+    variants = [name]
+    if _AND_WORD.search(name):
+        variants.append(_AND_WORD.sub("&", name))
+    if "&" in name:
+        variants.append(name.replace("&", " y "))
+    out: list[str] = []
+    for variant in variants:
+        for slug in (artist_slug(variant), "_".join(_words(variant))):
+            if slug and slug not in out:
+                out.append(slug)
+    return tuple(out)
+
+
+def artist_url(slug: str) -> str:
+    """The artist page: ``artist_url("soda_stereo")`` → ".../soda_stereo/"."""
+    if not slug:
+        raise ValueError("empty LaCuerda artist slug")
+    return f"{BASE_URL}/{slug}/"
+
+
+def version_url(artist: str, song: str, n: int) -> str:
+    """The page of version ``n``: ``{song}.shtml`` for 1, ``{song}-{n}.shtml`` after that."""
+    if not artist or not song:
+        raise ValueError("empty LaCuerda artist or song slug")
+    if n < 1:
+        raise ValueError(f"LaCuerda version numbers start at 1, not {n}")
+    suffix = "" if n == 1 else f"-{n}"
+    return f"{BASE_URL}/{artist}/{song}{suffix}.shtml"
+
+
+# --- the artist page ---------------------------------------------------------
+
+
 def parse_lcd(lcd: str) -> tuple[str, tuple[int, ...]]:
     """Split an ``lcd`` code such as "RHRTTTDTB-314865972" into types and ranking.
 
@@ -89,77 +170,13 @@ def best_acordes_version(song: LCSong) -> int | None:
             return n
     return None
 
-_ARTICLES = frozenset({"el", "la", "los", "las", "the"})
-_NOT_SLUG = re.compile(r"[^a-z0-9 ]")
-_AND_WORD = re.compile(r"(?i)(?<!\S)y(?!\S)")
-
-
-def _words(name: str) -> list[str]:
-    """The name's slug words. Removed punctuation leaves an empty word behind."""
-    s = unicodedata.normalize("NFC", name).lower().replace("ñ", "ni")
-    s = _NOT_SLUG.sub("", fold(" ".join(s.split())))
-    return s.strip().split(" ") if s.strip() else []
-
-
-def _join(words: list[str]) -> str:
-    return "_".join(words)
-
-
-def artist_slug(name: str) -> str:
-    """LaCuerda's slug for an artist: "Joaquín Sabina" → ``joaquin_sabina``.
-
-    Returns "" when nothing of the name survives (a name in Chinese characters,
-    say); LaCuerda can't be asked about that artist.
-    """
-    words = _words(name)
-    if len(words) > 1 and words[0] in _ARTICLES:
-        words = words[1:]
-    return _join(words)
-
-
-def artist_slug_candidates(name: str) -> tuple[str, ...]:
-    """Slugs worth trying for an artist, best guess first.
-
-    After :func:`artist_slug` come the slug that keeps a leading article and the
-    slug with "y" and "&" swapped, because sources disagree on both
-    (Spotify's "Fito y Fitipaldis" is LaCuerda's ``fito__fitipaldis``). Each
-    extra candidate costs a request only when the ones before it miss.
-    """
-    variants = [name]
-    if _AND_WORD.search(name):
-        variants.append(_AND_WORD.sub("&", name))
-    if "&" in name:
-        variants.append(name.replace("&", " y "))
-    out: list[str] = []
-    for variant in variants:
-        for slug in (artist_slug(variant), _join(_words(variant))):
-            if slug and slug not in out:
-                out.append(slug)
-    return tuple(out)
-
-
-def artist_url(slug: str) -> str:
-    """The artist page: ``artist_url("soda_stereo")`` → ".../soda_stereo/"."""
-    if not slug:
-        raise ValueError("empty LaCuerda artist slug")
-    return f"{BASE_URL}/{slug}/"
-
-
-def version_url(artist: str, song: str, n: int) -> str:
-    """The page of version ``n`` of a song: ``song.shtml`` for 1, ``song-n.shtml`` after that."""
-    if not artist or not song:
-        raise ValueError("empty LaCuerda artist or song slug")
-    if n < 1:
-        raise ValueError(f"LaCuerda version numbers start at 1, not {n}")
-    suffix = "" if n == 1 else f"-{n}"
-    return f"{BASE_URL}/{artist}/{song}{suffix}.shtml"
-
 
 def parse_artist_page(html: str, *, url: str | None = None) -> list[LCSong]:
     """The songs listed on an artist page, in page order.
 
-    Raises :class:`LaCuerdaParseError` when the page has no ``ul#b_main``, so a
-    changed or unexpected page is never read as "the artist has no songs".
+    Raises :class:`LaCuerdaParseError` when the page has no ``ul#b_main``, or
+    when the list has items but none with an lcd code and a link, so a changed
+    or unexpected page is never read as "the artist has no songs".
     """
     tree = LexborHTMLParser(html)
     if tree.css_first("ul#b_main") is None:
@@ -172,6 +189,8 @@ def parse_artist_page(html: str, *, url: str | None = None) -> list[LCSong]:
             continue
         types, ranking = parse_lcd(item.attributes.get("lcd") or "")
         songs.append(LCSong(slug=slug, title=_link_title(link), types=types, ranking=ranking))
+    if not songs and tree.css_first("ul#b_main > li") is not None:
+        raise LaCuerdaParseError("no song in the list has an lcd code and a link", url=url)
     return songs
 
 
@@ -215,6 +234,9 @@ def match_title(songs: Iterable[LCSong], title: str, *, cutoff: float = 90) -> L
 
 def _title_forms(song: LCSong) -> tuple[str, str]:
     return slug_key(song.title), ug_slug_key(song.slug.replace("_", "-"))
+
+
+# --- the version page --------------------------------------------------------
 
 
 def parse_version_page(html: str, *, url: str | None = None) -> str:
@@ -264,6 +286,8 @@ def _chord(text: str) -> str:
     return f"{lead}[ch]{name}[/ch]{trail}"
 
 
+# --- is it Spanish? ------------------------------------------------------------
+
 # Common function words, accent-folded. Words that both languages use ("a",
 # "no", "me", "he", "son", "sin") and Portuguese's "o" and "e" count for neither.
 _SPANISH_WORDS = frozenset(
@@ -275,7 +299,7 @@ _SPANISH_WORDS = frozenset(
     tengo tienes tiene quiero puedo aqui asi ahora nunca siempre otra vez cada cual
     mucho poco tan tanto aunque contigo conmigo esa aquel nuestro nuestra hoy sea
     ser estar hacer puede
-    """.split()
+    """.split()  # noqa: SIM905 - a word list reads better as text
 )
 _ENGLISH_WORDS = frozenset(
     """
@@ -285,7 +309,7 @@ _ENGLISH_WORDS = frozenset(
     out if there they them their she her his at have has had from by one yeah never
     ever every more how why where who here about into over than then too very an or
     as got get gonna wanna say said see go
-    """.split()
+    """.split()  # noqa: SIM905
 )
 # A Latin word, or one character of any other script: Chinese has no spaces, and
 # counting its characters keeps a Spanish phrase from tipping Chinese lyrics.
@@ -312,7 +336,8 @@ def is_spanish(text: str) -> bool:
     """Whether a text reads as Spanish, by its share of Spanish function words.
 
     Spanish words must outnumber English ones and make up at least 15% of the
-    words.
+    words, where each character of Chinese and other unspaced scripts counts as
+    a word.
     """
     spanish, english, total = _language_counts(text)
     return spanish > english and spanish >= _MIN_SPANISH_SHARE * total
