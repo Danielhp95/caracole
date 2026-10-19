@@ -30,6 +30,7 @@ from typing import Any, Mapping, Sequence
 from urllib.parse import urlsplit
 
 import tomlkit
+from tomlkit.exceptions import TOMLKitError
 
 from tabarr.normalize import identity_key, slug_key, ug_slug_key
 
@@ -166,7 +167,10 @@ def load_overrides(path: Path) -> Overrides:
 
 
 def _edit(path: Path, change) -> None:
-    doc = tomlkit.parse(path.read_text(encoding="utf-8")) if path.is_file() else tomlkit.document()
+    try:
+        doc = tomlkit.parse(path.read_text(encoding="utf-8")) if path.is_file() else tomlkit.document()
+    except TOMLKitError as e:
+        raise OverridesError(f"{path}: {e}") from e
     change(doc)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")

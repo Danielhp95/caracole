@@ -166,3 +166,20 @@ def test_writer_creates_missing_file(tmp_path):
     p = tmp_path / "sub" / "overrides.toml"
     add_ignore(p, "A - B")
     assert load_overrides(p).ignore == frozenset({"a/b"})
+
+
+def test_writers_report_a_broken_file_as_an_overrides_error(tmp_path):
+    broken = '[artist_url]\n"Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n[artist_url]\n'
+    p = write(tmp_path, broken)
+    writers = [
+        lambda: add_alias(p, "Maná", "mana"),
+        lambda: add_match(p, "Maná - Rayando el Sol", "mana/rayando-el-sol"),
+        lambda: add_artist_url(p, "宋冬野", "https://www.ultimate-guitar.com/artist/song_dongye_99"),
+        lambda: add_pin(p, "Maná - Rayando el Sol", ["https://tabs.ultimate-guitar.com/tab/85053"]),
+        lambda: add_ignore(p, "Maná - Rayando el Sol"),
+        lambda: add_block(p, 1601668),
+    ]
+    for add in writers:
+        with pytest.raises(OverridesError, match=r"overrides\.toml: .*artist_url"):
+            add()
+    assert p.read_text(encoding="utf-8") == broken

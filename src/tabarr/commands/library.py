@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from tabarr.commands._common import load_cfg, load_ovr, open_db, utcnow
+from tabarr.commands._common import fail, load_cfg, load_ovr, open_db, utcnow
 
 
 def _rematch(conn, cfg) -> None:
@@ -30,15 +30,20 @@ def register(app: typer.Typer) -> None:
     @app.command("review")
     def review_cmd(ctx: typer.Context) -> None:
         """Settle uncertain matches; each answer is written to overrides.toml."""
+        from tabarr.overrides import OverridesError
         from tabarr.review import ReviewIO, review_songs
 
         cfg = load_cfg(ctx)
+        load_ovr(cfg)  # a broken file stops here, before a question whose answer it couldn't keep
         conn = open_db(cfg)
-        stats = review_songs(
-            conn, cfg, ReviewIO(read=lambda prompt: typer.prompt(prompt, default="s", show_default=False),
-                                write=typer.echo),
-            rematch=lambda: _rematch(conn, cfg),
-        )
+        try:
+            stats = review_songs(
+                conn, cfg, ReviewIO(read=lambda prompt: typer.prompt(prompt, default="s", show_default=False),
+                                    write=typer.echo),
+                rematch=lambda: _rematch(conn, cfg),
+            )
+        except OverridesError as e:  # the file broke while review waited for an answer
+            fail(f"overrides: {e}", 2)
         typer.echo(
             f"accepted {stats.accepted}, pinned {stats.pinned}, ignored {stats.ignored}, skipped {stats.skipped}"
         )
