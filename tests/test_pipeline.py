@@ -187,6 +187,29 @@ def test_default_match_step_skips_while_the_index_is_empty(conn, cfg):
     assert conn.execute("SELECT match_decision FROM songs").fetchone()[0] is None
 
 
+def test_default_match_step_waits_for_an_index_a_build_left_half_done(conn, cfg):
+    # A build stopped part-way (a block, the budget, Ctrl-C) indexed one sitemap: Radiohead's tabs are in
+    # one it never read. Creep must not become not_found, and the stored decision stays as it is.
+    from conftest import add_song
+
+    from tabarr.overrides import Overrides
+    from tabarr.pipeline import StepContext, _match
+    from tabarr.songs import get_song, update_song
+    from tabarr.ug.index import upsert_rows
+
+    upsert_rows(conn, [(1001, "oasis", "wonderwall", "chords", "oasis/wonderwall-chords-1001")], "1", NOW)
+    creep = add_song(conn, "Radiohead", "Creep")
+    wall = add_song(conn, "Oasis", "Wonderwall")
+    update_song(conn, wall.id, match_decision="accept", match_step="exact", match_artist_key="oasis",
+                match_song_key="wonderwall", match_score=100.0)
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
+                      report=RunReport(run_id="r", started="r"))
+    summary = _match(ctx)
+    assert get_song(conn, creep.id).match_decision is None, summary
+    assert summary.startswith("skipped: the index is incomplete")
+    assert get_song(conn, wall.id).match_decision == "accept"
+
+
 def keep_sheet_before_lyrics(conn, cfg, song, content):
     """A UG sheet kept while the song's lyrics were pending: sheet.txt and sheet.json, no coverage."""
     import json

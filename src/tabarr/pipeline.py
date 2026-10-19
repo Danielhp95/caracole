@@ -125,12 +125,17 @@ def _plural(n: int, word: str) -> str:
 
 def _match(ctx: StepContext) -> str:
     from tabarr.match import match_all
-    from tabarr.ug.index import index_count
+    from tabarr.ug.index import index_state
 
-    if index_count(ctx.conn) == 0:
+    state = index_state(ctx.conn)
+    if state == "empty":
         # Matching against an empty index would mark every song not found (and put it on the
         # buy list); errors are not misses, and a missing index is not evidence of absence.
         return "skipped: the index is empty; run `tabarr index build` once"
+    if state == "partial":
+        # Nor is an index a build left half-done: the songs in the sitemaps it didn't read would
+        # be marked not found. Stored decisions stay; the index step's refresh reads the rest.
+        return "skipped: the index is incomplete; the next refresh, or `tabarr index build`, reads the rest"
     changes = match_all(ctx.conn, ctx.overrides, ctx.cfg.match)
     changed = [c for c in changes if c.old != c.new.decision]
     return f"{len(changed)} decisions changed"
