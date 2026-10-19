@@ -42,6 +42,9 @@
 
       checks.${system} = {
         package = self.packages.${system}.default;
+        # The same tests with torch importable, and a `tabarr autochords` run on
+        # the wrapped program with its packaged model files.
+        autochords = self.packages.${system}.autochords;
         module = pkgs.callPackage ./nix/module-check.nix {
           module = self.nixosModules.default;
           defaultPackage = self.packages.${system}.default;
