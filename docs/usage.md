@@ -342,8 +342,14 @@ and cache.
   when LaCuerda is cooling down or blocks it.
 - **`tabarr scan`** links the audio files in Music/ to your songs, by their
   tags (or an "Artist - Title" file name) and their duration, give or take 3
-  seconds. It never adds a song. Then it files the Guitar Pro and Power Tab
-  files you dropped into `_inbox/`, by their names: a file named
+  seconds. It never adds a song. A file named as the song wins over one whose
+  name only comes close, so a whole album's "Pt. 1" doesn't take the place of
+  its "Pt. 2". A close name must also be clearly closer than any other, and
+  when your line gives no duration, the file must be as long as LRCLIB's
+  lyrics say. Chinese names are compared as pinyin too, so 斑馬斑馬 meets
+  斑马斑马. A Music/ folder that is missing or has no audio, such as a disk
+  that isn't mounted, unlinks nothing. Then it files the Guitar Pro and Power
+  Tab files you dropped into `_inbox/`, by their names: a file named
   `Soda Stereo - De Musica Ligera (ver 2).gp5` becomes that song's
   `guitar-N.gp5`, where N is the rank tabarr gave version 2. A file the
   library already has is removed from the inbox; a file it can't place stays
