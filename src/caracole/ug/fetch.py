@@ -71,7 +71,7 @@ from caracole.http import (
 )
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
 from caracole.lyrics import song_lyrics
-from caracole.normalize import clean_title, compact, name_forms, slug_key
+from caracole.normalize import clean_title, compact, listing_forms, name_forms, slug_key, without_featuring
 from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from caracole.songs import Song, get_song, list_songs, refresh_status, update_song
@@ -255,8 +255,14 @@ def artist_is_known(conn: sqlite3.Connection, song: Song, overrides: Overrides) 
 
 def pasted_page_problem(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> tuple[str, str] | None:
     """The tab page you pasted under [artist_url] for the song's artist and what is wrong with it, when
-    reading it gave no artist page (``PASTE_GONE``, ``PASTE_CLOSED``, ``PASTE_NO_ARTIST``); else None."""
-    return _failed_paste(conn, artist_keys(song, overrides), overrides)
+    reading it gave no artist page (``PASTE_GONE``, ``PASTE_CLOSED``, ``PASTE_NO_ARTIST``) or it couldn't
+    be read (``PASTE_UNREADABLE``, and when caracole asks for it again); else None."""
+    keys = artist_keys(song, overrides)
+    if (failed := _failed_paste(conn, keys, overrides)) is not None:
+        return failed
+    if (unread := _unread_paste(conn, keys, overrides)) is not None:
+        return unread[0], f"{PASTE_UNREADABLE}; caracole asks for it again after {unread[1][:10]}"
+    return None
 
 
 # --- pages and versions ---------------------------------------------------------------------------
@@ -440,18 +446,32 @@ def _artist_page_base(url: str | None) -> str | None:
         return None
 
 
+def _a_pair(name: str) -> bool:
+    """Whether the artist UG names ``name`` features another ("Ma Di (feat. 宋冬野)"): UG may give such a
+    pair a page of its own, which lists neither artist's other songs."""
+    return without_featuring(name) != name.strip()
+
+
 def _same_artist(key: str, name: str) -> bool:
     """Whether the artist UG names ``name`` is the one filed under ``key``: they share a form, hyphens
-    aside, as "宋冬野" and "Song Dongye (宋冬野)" do."""
+    aside, as "宋冬野" and "Song Dongye (宋冬野)" do. A pair is neither of its artists."""
+    if _a_pair(name):
+        return False
     return not {compact(k) for k in _name_keys(key)}.isdisjoint(compact(k) for k in _name_keys(name))
 
 
 def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[str] = ()) -> str | None:
-    """Remember the artist page a tab page links to, under its artist's keys and ``also``; return it."""
+    """Remember the artist page a tab page links to, under its artist's keys and ``also``; return it.
+
+    A pair's page is filed under the pair's own name alone: under either artist's, it would stand in
+    for that artist's own page (``_same_artist``)."""
     url = _artist_page_base(page.artist_url)
     if url is not None:
-        for key in dict.fromkeys([*_name_keys(page.tab.artist_name), *also]):
-            remember_artist_url(conn, key, url)
+        name = page.tab.artist_name
+        own = [slug_key(name)] if _a_pair(name) else _name_keys(name)
+        for key in dict.fromkeys([*own, *also]):
+            if key:
+                remember_artist_url(conn, key, url)
     return url
 
 
@@ -468,6 +488,16 @@ def _waits(run: _SongRun, tab_id: int) -> bool:
         return False
 
 
+def _note_unreadable(run: _SongRun, tab_id: int, error: UnreadablePage) -> None:
+    """Note when to ask for the tab's page again, which won't parse even fetched again: after a week, then
+    after twice as long each time it still won't (``UNREADABLE_RETRY``)."""
+    record = kv_get_json(run.conn, _unreadable_key(tab_id))
+    strikes = int(record.get("strikes", 0) if isinstance(record, dict) else 0) + 1
+    until = run.ctx.now + min(UNREADABLE_RETRY * 2 ** (strikes - 1), UNREADABLE_RETRY_MAX)
+    kv_set_json(run.conn, _unreadable_key(tab_id), {"until": _iso(until), "strikes": strikes, "error": str(error)})
+    log.warning("UG tab %s can't be read (%s); asked for again after %s", tab_id, error, _iso(until))
+
+
 def _unreadable(run: _SongRun, tab_id: int, kind: str | None, error: UnreadablePage | None = None) -> None:
     """No page for the tab this run; with ``error``, note when to ask for it again.
 
@@ -476,12 +506,7 @@ def _unreadable(run: _SongRun, tab_id: int, kind: str | None, error: UnreadableP
     """
     if error is not None:
         run.fetched[kind or "?"] += 1  # the request that fetched it again
-        record = kv_get_json(run.conn, _unreadable_key(tab_id))
-        strikes = int(record.get("strikes", 0) if isinstance(record, dict) else 0) + 1
-        until = run.ctx.now + min(UNREADABLE_RETRY * 2 ** (strikes - 1), UNREADABLE_RETRY_MAX)
-        kv_set_json(run.conn, _unreadable_key(tab_id),
-                    {"until": _iso(until), "strikes": strikes, "error": str(error)})
-        log.warning("UG tab %s can't be read (%s); asked for again after %s", tab_id, error, _iso(until))
+        _note_unreadable(run, tab_id, error)
     run.pages[tab_id] = None
     run.unreadable.add(tab_id)
 
@@ -818,7 +843,7 @@ def _title_score(forms: list[str], listed: list[str]) -> float:
 
 
 def _title_hit(tab: UGVersion, forms: list[str], fresh: bool) -> _Hit | None:
-    listed = _name_keys(clean_title(tab.song_name))
+    listed = list(listing_forms(clean_title(tab.song_name)))
     if not listed or not forms:
         return None
     score = _title_score(forms, listed)
@@ -856,6 +881,9 @@ def _known_artist_page(conn: sqlite3.Connection, keys: list[str], overrides: Ove
 PASTE_GONE = "UG answers 404 for it"
 PASTE_CLOSED = "robots.txt closes it to caracole"
 PASTE_NO_ARTIST = "it doesn't link to its artist's page"
+# A tab page you pasted that won't parse, even fetched again, is an error and no verdict: it is asked for
+# again on the tab-page rule's dates (UNREADABLE_RETRY), and the to-do page says so meanwhile.
+PASTE_UNREADABLE = "UG's copy of it can't be read"
 
 
 def _pasted_key(tab_id: int) -> str:
@@ -887,22 +915,36 @@ def _failed_paste(conn: sqlite3.Connection, keys: list[str], overrides: Override
     return (entry[1], problem) if entry is not None and isinstance(problem, str) and problem else None
 
 
+def _unread_paste(conn: sqlite3.Connection, keys: list[str], overrides: Overrides) -> tuple[str, str] | None:
+    """Your [artist_url] address for an artist with these keys and when caracole asks for it again, when it
+    is a tab page not read yet whose page won't parse, even fetched again (kv ``ug:unreadable:<tab id>``)."""
+    entry = artist_url_entry(overrides, keys)
+    tab_id = pasted_tab_id(entry[1]) if entry is not None else None
+    if entry is None or tab_id is None or _pasted_record(conn, entry[1]) is not None:
+        return None
+    record = kv_get_json(conn, _unreadable_key(tab_id))
+    until = record.get("until") if isinstance(record, dict) else None
+    return (entry[1], until) if isinstance(until, str) and until else None
+
+
 def _read_pasted_tab_page(run: _SongRun, keys: list[str]) -> None:
     """Read the tab page you pasted under [artist_url] for the song's artist, once, for the artist page
     it links to, and remember what it said (kv ``ug:pasted_tab:<tab id>``).
 
     It is a request like any other (budget, pause, robots.txt, block, the cache), and an error leaves
-    it to be read next run. A bare ``/tab/{id}`` of a slugged tab is read at the index's slugged path,
-    where UG serves it. The artist page is filed under UG's names for the artist and under your entry's
-    key. A page that gives none (gone, closed to caracole, or linking nowhere) is remembered as such:
-    the to-do page asks for another one.
+    it to be read next run; a page that won't parse, even fetched again, is asked for again on the
+    tab-page rule's dates (``UNREADABLE_RETRY``), whichever song of the artist asks. A bare
+    ``/tab/{id}`` of a slugged tab is read at the index's slugged path, where UG serves it. The artist
+    page is filed under UG's names for the artist and under your entry's key. A page that gives none
+    (gone, closed to caracole, or linking nowhere) is remembered as such: the to-do page asks for
+    another one.
     """
     entry = artist_url_entry(run.ctx.overrides, keys)
     if entry is None:
         return
     key, url = entry
     tab_id = pasted_tab_id(url)
-    if tab_id is None or _pasted_record(run.conn, url) is not None:
+    if tab_id is None or _pasted_record(run.conn, url) is not None or _waits(run, tab_id):
         return
     target = url if _slugged_url(url, tab_id) else tab_url_for(run.conn, tab_id)
     artist, problem = None, PASTE_CLOSED  # unless read: robots.txt closes it, or where UG sends it
@@ -911,7 +953,11 @@ def _read_pasted_tab_page(run: _SongRun, keys: list[str]) -> None:
             page, _ = _get_page(run.ctx.client, target, parse_tab_page)
         except RobotsClosed:
             page = None
+        except UnreadablePage as e:
+            _note_unreadable(run, tab_id, e)
+            return
         else:
+            kv_delete(run.conn, _unreadable_key(tab_id))
             if page is None:
                 problem = PASTE_GONE
             elif (artist := _learn_artist_url(run.conn, page, [key])) is None:
@@ -1106,15 +1152,16 @@ def _artist_page_route(run: _SongRun) -> bool:
     guitar lists the artist has. A list cut short by the page cap leaves the
     song as it was, for the next run; otherwise the check is recorded, found
     or not. Not found, the song loses what an undone match kept
-    (``_drop_undone``). A tab page you pasted that leads to no artist page
-    records no check: the song wasn't looked for, and the to-do page asks
-    for another page.
+    (``_drop_undone``). A tab page you pasted that leads to no artist page,
+    or can't be read, records no check: the song wasn't looked for, and the
+    to-do page says why.
     """
     keys = artist_keys(run.song, run.ctx.overrides)
     _read_pasted_tab_page(run, keys)
     base = _known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_artist_page(run, keys)
     if base is None:
-        if _failed_paste(run.conn, keys, run.ctx.overrides) is not None:
+        overrides = run.ctx.overrides
+        if _failed_paste(run.conn, keys, overrides) is not None or _unread_paste(run.conn, keys, overrides):
             return False
         return _not_on_artist_page(run)
     listing = _read_artist_page(run, base, ARTIST_PAGE_KINDS, _name_keys(clean_title(run.song.title)))

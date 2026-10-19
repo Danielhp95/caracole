@@ -205,7 +205,8 @@ def test_hint_takes_a_tab_page_of_the_artist_too():
 def test_hint_knows_an_entry_written_as_ug_names_the_artist():
     from caracole.overrides import Overrides
 
-    o = Overrides(artist_url={"song-dongye-宋冬野": "https://tabs.ultimate-guitar.com/tab/4180894"})
+    o = Overrides(artist_url={"song-dongye-宋冬野": "https://tabs.ultimate-guitar.com/tab/4180894"},
+                  artist_url_names={"song-dongye-宋冬野": "Song Dongye (宋冬野)"})  # as load_overrides keeps it
     hint = bare_id_hint("宋冬野", [], overrides=o)
     assert "overrides.toml has 宋冬野's page already (https://tabs.ultimate-guitar.com/tab/4180894)" in hint
 

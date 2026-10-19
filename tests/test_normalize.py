@@ -8,6 +8,7 @@ from caracole.normalize import (
     fold,
     has_han,
     identity_key,
+    listing_forms,
     name_forms,
     romanize,
     slug_key,
@@ -269,6 +270,46 @@ def test_the_translation_after_a_romanization_is_a_form_of_its_own():
 
 
 @pytest.mark.parametrize("ug,wanted", [
+    # Chinese read in any of a character's readings: 重 is chong in 重来, though pypinyin says zhong.
+    ("重来 Chong Lai Start Over", "Chong Lai"),
+    ("重来 Chong Lai Start Over", "Start Over"),
+    ("长大 Zhang Da Growing Up", "Growing Up"),
+    ("绿色 Lü Se Green", "Green"),  # ü written u, as pypinyin's v folds
+    ("女人 Nv Ren Woman", "Woman"),
+    ("西安 Xi'an Old Capital", "Old Capital"),
+    # Korean, in the Revised Romanization and the spellings titles also use.
+    ("봄날 Bomnal Spring Day", "Spring Day"),
+    ("봄날 Bomnal Spring Day", "Bomnal"),
+    ("피 땀 눈물 Pi Ttam Nunmul Blood Sweat & Tears", "Blood Sweat & Tears"),
+    ("피 땀 눈물 Pi Ttam Nunmul Blood Sweat & Tears", "Pi Ttam Nunmul"),
+    ("사랑해 Saranghae I Love You", "I Love You"),
+    ("너의 의미 Neoui Uimi The Meaning of You", "The Meaning of You"),
+    # Japanese: kana as Hepburn writes them, and each kanji as one to three morae.
+    ("夜に駆ける Yoru ni Kakeru Racing Into The Night", "Yoru ni Kakeru"),
+    ("夜に駆ける Yoru ni Kakeru Racing Into The Night", "Racing Into The Night"),
+    ("さくら Sakura Cherry Blossoms", "Cherry Blossoms"),
+    ("ありがとう Arigato Thank You", "Thank You"),
+    ("君の知らない物語 Kimi no Shiranai Monogatari The Story You Don't Know", "Kimi no Shiranai Monogatari"),
+    ("チェリー Cherī Cherry", "Cherry"),
+])
+def test_a_romanization_and_the_translation_after_it_are_forms_of_their_own(ug, wanted):
+    assert shares_a_form(ug, wanted)
+
+
+@pytest.mark.parametrize("ug,wanted", [
+    # Where the Latin part doesn't start with the original's reading, it stays whole: no word of a
+    # translation is a name of its own.
+    ("봄날 Spring Day", "Day"),
+    ("夜に駆ける Racing Into The Night", "Night"),
+    ("夜に駆ける Racing Into The Night", "Into The Night"),
+    ("与我交谈 Speak With Me", "With Me"),
+    ("Кино Kino Cinema", "Cinema"),  # Cyrillic: no reading of it here
+])
+def test_a_translation_alone_is_never_cut(ug, wanted):
+    assert not shares_a_form(ug, wanted)
+
+
+@pytest.mark.parametrize("ug,wanted", [
     ("莉莉安 Lilian", "莉莉安"),
     ("莉莉安 Lilian", "Lilian"),
     ("与我交谈 Speak With Me", "与我交谈"),
@@ -318,6 +359,45 @@ def test_separators_between_the_parts(ug, wanted):
     assert shares_a_form(ug, wanted)
 
 
+@pytest.mark.parametrize("title,other", [
+    # With nothing between them, UG writes the original first, then its romanization or translation
+    # after a space: Latin before the original, or glued to it, is part of the title.
+    ("Baby 对不起", "对不起"),
+    ("Baby 对不起", "Baby"),
+    ("我的Baby", "Baby"),
+    ("我的Baby", "我的"),
+    ("K歌之王", "歌之王"),
+    ("Baby 对不起 Baby Dui Bu Qi", "对不起"),
+])
+def test_latin_in_an_original_is_part_of_the_title(title, other):
+    assert not shares_a_form(title, other)
+
+
+@pytest.mark.parametrize("ug,wanted", [
+    ("Baby 对不起 Baby Dui Bu Qi", "Baby 对不起"),  # the original, Latin and all, then its romanization
+    ("Baby 对不起 Baby Dui Bu Qi", "Baby Dui Bu Qi"),
+    ("17岁 17 Sui", "17岁"),  # the digits after the original start its romanization
+    ("17岁 17 Sui", "17 Sui"),
+    ("2002年的第一场雪 2002 Nian De Di Yi Chang Xue", "2002年的第一场雪"),
+])
+def test_the_original_ends_where_its_romanization_starts(ug, wanted):
+    assert shares_a_form(ug, wanted)
+
+
+@pytest.mark.parametrize("ug", ["南山南（feat. 宋冬野）", "南山南 feat. 宋冬野", "南山南【feat. 宋冬野】", "南山南 (ft. 宋冬野)"])
+def test_a_featured_artist_is_no_part_of_a_title(ug):
+    assert shares_a_form(ug, "南山南")
+    assert not shares_a_form(ug, "宋冬野")
+
+
+@pytest.mark.parametrize("ug", [
+    "Ma Di (feat. 宋冬野)", "Ma Di feat. 宋冬野", "Ma Di (feat. 宋冬野 Song Dongye)", "Ma Di feat. Song Dongye",
+])
+def test_a_featured_artist_is_no_name_of_the_artist(ug):
+    assert shares_a_form(ug, "马頔")
+    assert not shares_a_form(ug, "宋冬野") and not shares_a_form(ug, "Song Dongye")
+
+
 @pytest.mark.parametrize("ug", ["董小姐", "郭源潮", "莉莉安 Lilian", "与我交谈 Speak With Me"])
 def test_another_song_of_the_artist_never_shares_a_form(ug):
     assert not shares_a_form(ug, "斑马斑马")
@@ -331,13 +411,30 @@ def test_another_song_of_the_artist_never_shares_a_form(ug):
     ("斑马斑马 (Intro)", "Intro", "斑马斑马"),
     ("斑马斑马 (Live Version)", "Live Version", "斑马斑马"),
     ("斑马斑马 2", "2", "斑马斑马 2"),
-    ("斑马斑马 B", "B", "斑马斑马"),
-    ("爱 Ai", "Ai", "爱"),  # under three Latin letters
+    ("斑马斑马 B", "B", "斑马斑马"),  # a single Latin letter
     ("Кино (Live)", "Live", "Кино"),
 ])
 def test_a_generic_part_never_makes_a_match_on_its_own(ug, generic, own):
     assert not shares_a_form(ug, generic)
     assert shares_a_form(ug, own)  # the rest of the name still matches
+
+
+@pytest.mark.parametrize("ug,wanted", [
+    # An original in any script is a name at any length, as a Chinese one always was.
+    ("Ты (Ty)", "Ты"),
+    ("Σε (Se)", "Σε"),
+    ("לב (Lev)", "לב"),
+    ("حب (Hob)", "حب"),
+    ("ใจ (Jai)", "ใจ"),
+    ("Я (Ya)", "Я"),
+    ("Би-2 (Bi-2)", "Би-2"),
+    # Two Latin letters are a name too: a romanization, or a stage name.
+    ("爱 Ai", "Ai"),
+    ("IU (아이유)", "IU"),
+    ("Би-2 (Bi-2)", "Bi-2"),
+])
+def test_a_short_part_is_a_name_of_its_own(ug, wanted):
+    assert shares_a_form(ug, wanted)
 
 
 def test_two_names_with_their_own_scripts_are_no_bilingual_name():
@@ -353,6 +450,30 @@ def test_two_names_with_their_own_scripts_are_no_bilingual_name():
 ])
 def test_latin_names_have_their_slug_key_alone(name):
     assert name_forms(name) == (slug_key(name),)
+
+
+@pytest.mark.parametrize("listed,wanted", [
+    # UG lists some titles in Latin letters alone, a romanization with its translation bracketed: on an
+    # artist page, outside the brackets is the title, whatever they hold.
+    ("Hong Dou (Red Bean)", "红豆"),
+    ("Hong Dou (Red Bean)", "Hong Dou"),
+    ("Nơi Này Có Anh (Where This Is You)", "Nơi này có anh"),
+    ("Persiana Americana (Gira Me Verás Volver)", "Persiana Americana"),
+])
+def test_a_listing_in_latin_letters_counts_by_its_title_outside_the_brackets(listed, wanted):
+    assert {compact(f) for f in listing_forms(listed)} & {compact(f) for f in name_forms(wanted)}
+
+
+@pytest.mark.parametrize("listed,wanted", [
+    ("Hong Dou (Red Bean)", "Red Bean"),  # what the brackets hold may be anything
+    ("Intro (Hong Dou)", "Intro"),  # outside them, a generic word is no title either
+])
+def test_what_a_latin_listing_brackets_is_no_title(listed, wanted):
+    assert not {compact(f) for f in listing_forms(listed)} & {compact(f) for f in name_forms(wanted)}
+
+
+def test_listing_forms_of_a_name_in_two_scripts_are_its_forms():
+    assert listing_forms("斑马 斑马 Banma Banma Zebra Zebra") == name_forms("斑马 斑马 Banma Banma Zebra Zebra")
 
 
 def test_chinese_names_lead_with_their_keys_and_pinyin():

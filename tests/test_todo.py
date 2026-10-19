@@ -486,6 +486,24 @@ def test_a_pasted_tab_page_that_leads_to_no_artist_page_is_asked_for_again(conn,
     assert '"Joaquín Sabina"' in blocks and "宋冬野" not in blocks and "[artist_url]" not in blocks
 
 
+def test_a_pasted_tab_page_that_cant_be_read_is_named_until_it_is(conn, cfg):
+    # UG's copy of the page wouldn't parse, even fetched again: caracole asks for it again later, and
+    # meanwhile the page says so, as another page in its place would do.
+    s = add_song(conn, "宋冬野", "斑马斑马")
+    update_song(conn, s.id, match_decision="not_found")
+    pasted = "https://tabs.ultimate-guitar.com/tab/4180894"
+    kv_set_json(conn, "ug:unreadable:4180894", {"until": "2026-10-26T03:30:00Z", "strikes": 1, "error": "no js-store"})
+    o = Overrides(artist_url={"宋冬野": pasted})
+    section = section_of(todo(conn, cfg, o), "Artists to find")
+    item = next(line for line in section.splitlines() if line.startswith("- **宋冬野**"))
+    assert (f"[{pasted}]({pasted}): UG's copy of it can't be read; caracole asks for it again after "
+            "2026-10-26") in item
+    assert "宋冬野" not in "".join(toml_blocks(section))  # its line is in overrides.toml already
+    kv_set_json(conn, "ug:pasted_tab:4180894", {"artist_url": "https://www.ultimate-guitar.com/artist/634073",
+                                               "problem": None, "at": "2026-10-26T03:35:00Z"})
+    assert "## Artists to find" not in todo(conn, cfg, o)  # read since
+
+
 def toml_blocks(text):
     return re.findall(r"```toml\n(.*?)```", text, re.S)
 

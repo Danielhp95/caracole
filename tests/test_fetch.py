@@ -41,6 +41,7 @@ from caracole.http import PoliteClient, ProviderBlocked
 from caracole.library import drop_file, keep_file, kept_files, song_dir
 from caracole.lyrics import Lyrics
 from caracole.match import match_all
+from caracole.normalize import slug_key
 from caracole.overrides import Overrides, load_overrides
 from caracole.render import render_all
 from caracole.songs import get_song, update_song
@@ -1538,6 +1539,27 @@ def test_a_tab_page_of_another_artist_in_two_scripts_teaches_nothing_for_the_son
     assert learned_artist_url(conn, "李志") == "https://www.ultimate-guitar.com/artist/99"
 
 
+@pytest.mark.parametrize("pair", [
+    "Li Zhi (feat. 宋冬野)", "Li Zhi feat. Song Dongye", "Li Zhi (feat. 宋冬野 Song Dongye)",
+    "Song Dongye (宋冬野) feat. Li Zhi",
+])
+def test_a_tab_of_a_pair_teaches_its_page_to_neither_artist(conn, tmp_path, pair):
+    # UG may give a pair a page of its own, which lists neither artist's other songs: filed under either
+    # one's name, it would stand in for that artist's own page, and their songs would be missed there.
+    song = song_by_song_dongye(conn, "斑马斑马", decision="pinned")
+    remember_artist_url(conn, "李志", "https://www.ultimate-guitar.com/artist/li_zhi_5")
+    duet = version_dict(778, song=BANMA_UG, artist=pair)
+    ug = FakeUG()
+    ug.tab(duet, content=song_dongye_sheet(BANMA_TRADITIONAL_LINES), artist_url="https://www.ultimate-guitar.com/artist/99")
+
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, Overrides(pin={song.key: (778,)})), song)
+
+    for key in ("宋冬野", "song-dong-ye", "song-dongye", "song-dongye-宋冬野", "li-zhi"):
+        assert learned_artist_url(conn, key) is None, key
+    assert learned_artist_url(conn, "李志") == "https://www.ultimate-guitar.com/artist/li_zhi_5"
+    assert learned_artist_url(conn, slug_key(pair)) == "https://www.ultimate-guitar.com/artist/99"  # the pair's
+
+
 # --- a tab page pasted under [artist_url] --------------------------------------------------------
 
 FOUND_TAB = f"{TAB}4180894"  # the page the user found on UG for 宋冬野 - 斑马斑马 (2026-10-19)
@@ -1649,6 +1671,36 @@ def test_a_block_on_a_pasted_tab_page_is_a_block(conn, tmp_path):
     assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None
 
 
+def test_a_pasted_tab_page_that_wont_parse_waits_for_its_retry_date_like_any_tab_page(conn, tmp_path):
+    # UG answers 200 with a page caracole can't read: an error, never a miss, asked for again on the
+    # dates of the tab-page rule (UNREADABLE_RETRY), and named on the to-do page meanwhile.
+    song = song_by_song_dongye(conn, "斑马斑马")
+    ug = FakeUG()
+    ug.add(FOUND_TAB, BROKEN)
+
+    def night(day):
+        ug.requests.clear()
+        when = NOW + timedelta(days=day)
+        stats = fetch_songs(context(conn, ug.client(tmp_path / "cache", now=when), tmp_path, TAB_PASTED, now=when),
+                            songs_to_fetch(conn, TAB_PASTED, when))
+        return stats, list(ug.requests)
+
+    first, asked = night(0)
+    assert first.songs_failed == 1 and asked == [FOUND_TAB]  # one bad answer may be a passing fault
+    second, asked = night(1)
+    assert second.songs_failed == 0 and asked == [FOUND_TAB]  # fetched again: still unreadable
+    assert pasted_page_problem(conn, song, TAB_PASTED) == (
+        FOUND_TAB, "UG's copy of it can't be read; caracole asks for it again after 2026-10-26")
+    assert artist_is_known(conn, song, TAB_PASTED)  # an error: the song keeps waiting for the page
+    assert [night(day)[1] for day in (2, 5, 7)] == [[], [], []]
+    assert kv_get(conn, f"ug:artist_page_checked:{song.id}") is None  # never looked for: not a miss
+    assert get_song(conn, song.id).match_decision == "not_found"
+
+    serve_song_dongye(ug)  # UG serves the page properly again
+    assert night(8)[1][0] == FOUND_TAB
+    assert get_song(conn, song.id).status == "found" and pasted_page_problem(conn, song, TAB_PASTED) is None
+
+
 def test_bare_id_chords_with_a_tab_page_you_pasted(conn, tmp_path):
     ug = FakeUG()
     song = persiana_with_bare_chords(conn, ug)
@@ -1665,7 +1717,8 @@ def test_an_entry_written_as_ug_names_the_artist_serves_the_songs_artist(conn, t
     song = song_by_song_dongye(conn, "斑马斑马")
     ug = FakeUG()
     serve_song_dongye(ug)
-    pasted = Overrides(artist_url={"song-dongye-宋冬野": SONG_DONGYE_URL})
+    pasted = Overrides(artist_url={"song-dongye-宋冬野": SONG_DONGYE_URL},
+                       artist_url_names={"song-dongye-宋冬野": "Song Dongye (宋冬野)"})  # as load_overrides keeps it
 
     out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, pasted), song)
 

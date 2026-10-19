@@ -22,6 +22,7 @@ from __future__ import annotations
 import functools
 import re
 import unicodedata
+from collections.abc import Iterator
 
 VARIANT_TOKENS = ("intro", "solo", "outro", "riff", "lesson", "acoustic", "live", "unplugged")
 
@@ -220,6 +221,11 @@ def has_han(s: str) -> bool:
     return _HAN.search(s) is not None
 
 
+def has_other_script(s: str) -> bool:
+    """Whether the text has letters of a script other than Latin (Chinese, Japanese, Korean, Cyrillic...)."""
+    return any(_foreign(c) for c in s)
+
+
 def romanize(s: str) -> str:
     """Hanyu Pinyin for Chinese characters, so "宋冬野" can meet UG's ``song-dongye``.
 
@@ -245,45 +251,99 @@ GENERIC_WORDS = frozenset({
     "pt", "english", "chinese", "mandarin", "cantonese", "japanese", "korean", "russian", "translation",
     "romanized", "lyrics",
 })
-# Where a name written in two scripts breaks into its parts, besides each change of script: brackets
-# of every width ("Song Dongye (宋冬野)", "【斑马斑马】Zebra Zebra") and a spaced " / " or " - ".
+# Where a name written in two scripts breaks into its parts, besides where its original ends (_cut):
+# brackets of every width ("Song Dongye (宋冬野)", "【斑马斑马】Zebra Zebra") and a spaced " / " or " - ".
 _PART_BREAK = re.compile(r"\s+[-–—/|]\s+|[()\[\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]")
 _LATIN, _CJK_SCRIPT, _OTHER = "latin", "cjk", "other"
+# The artists a name features, bracketed in any width or after it: "Ma Di (feat. 宋冬野)", "南山南（feat.
+# 宋冬野）", "Ma Di feat. 宋冬野". Spotify's ASCII-bracketed featurings leave titles in clean_title.
+_FEATURING = re.compile(
+    r"\s*[(\[（［【]\s*(?:feat\.|ft\.|(?:feat|ft|featuring|with)\s)[^)\]）］】]*[)\]）］】]"
+    r"|\s+(?:feat\.|ft\.|featuring\s).*$",
+    re.IGNORECASE,
+)
+
+
+def without_featuring(name: str) -> str:
+    """The name without the artists it features ("Ma Di (feat. 宋冬野)" is "Ma Di"); the name itself when
+    it features nobody, or is nothing else."""
+    return _FEATURING.sub("", name).strip() or name.strip()
 
 
 @functools.lru_cache(maxsize=8192)
 def name_forms(name: str) -> tuple[str, ...]:
     """The keys a name is compared by wherever a name caracole didn't write meets yours: UG's
     artist pages and sitemap slugs, the artist pages learned from UG's tab pages, purchases'
-    tags, UG's names for a download, and your ``[artist_url]`` keys. Forms are for comparing;
-    no key is made from them.
+    tags, UG's names for a download, and the names of your ``[artist_url]`` entries. Forms are
+    for comparing; no key is made from them.
 
     First come the keys a name always had: its slug key, then, for Chinese, its pinyin key and
     its Simplified one. A Latin name has its slug key alone, and a name in one other script
     these keys alone.
 
     UG writes many non-Latin names in two scripts, each part a name on its own: the original,
-    a romanization, a translation, in any order, bracketed, after " / " or " - ", or with
-    nothing between them ("斑马 斑马 Banma Banma Zebra Zebra", "Song Dongye (宋冬野)",
-    "与我交谈 Speak With Me", "봄날 (Spring Day)", "Кино (Kino)"). Each part of such a name is
-    a form too, with its pinyin and its Simplified key when it is Chinese, so "宋冬野" meets
-    "Song Dongye (宋冬野)" and "Song Dong Ye" meets "Song Dongye". A Latin part that starts or
-    ends with the pinyin of the Chinese part also gives the romanization and the rest (a
-    translation) apart: "banma-banma" and "zebra-zebra". Scripts without a romanizer here
-    (Japanese, Korean, Cyrillic) meet on their original part, or on the Latin one.
+    a romanization, a translation, in any order when bracketed or after " / " or " - "
+    ("Song Dongye (宋冬野)", "봄날 (Spring Day)", "Кино (Kino)"); with nothing between them,
+    the original first and the rest after a space ("斑马 斑马 Banma Banma Zebra Zebra",
+    "与我交谈 Speak With Me", "17岁 17 Sui"). Latin before the original, or glued to it, is
+    part of the title ("Baby 对不起", "我的Baby", "K歌之王"), never another song's name. Each
+    part of such a name is a form too, with its pinyin and its Simplified key when it is
+    Chinese, so "宋冬野" meets "Song Dongye (宋冬野)" and "Song Dong Ye" meets "Song Dongye". A
+    Latin part that starts or ends with a romanization of the original also gives the
+    romanization and the rest (a translation) apart (``_romanized``): "banma-banma" and
+    "zebra-zebra", "bomnal" and "spring-day" after 봄날, "yoru-ni-kakeru" and
+    "racing-into-the-night" after 夜に駆ける. Chinese is read in any of its characters' readings
+    (重来 is chong lai too), Korean and kana by tables, a kanji as any one to three morae.
+    Scripts read nowhere here (Cyrillic, Greek, ...) meet on their original part, or on the
+    Latin one whole.
+
+    The artists a name features are no part of it: "Ma Di (feat. 宋冬野)" and "Ma Di feat. 宋冬野"
+    are Ma Di's, never 宋冬野's, and "南山南（feat. 宋冬野）" is 南山南, so the name without them
+    (``without_featuring``) gives its keys and its parts.
 
     A part that is only words such as "Live", "Acoustic" or "Remix" (``GENERIC_WORDS``),
-    numbers, single letters or fewer than three Latin letters is no form: it never makes a
-    match on its own. Nor is a name with two non-Latin parts split ("A (甲) & B (乙)", two
-    singers): its parts would be other artists' names.
+    numbers or a single Latin letter is no form: it never makes a match on its own. Two Latin
+    letters are a name ("爱 Ai", "IU (아이유)"), and an original in another script is one at any
+    length ("Ты (Ty)", "ใจ (Jai)"). Nor is a name with two non-Latin parts split ("A (甲) & B
+    (乙)", two singers): its parts would be other artists' names.
     """
-    forms = [slug_key(name)]
-    if has_han(name):
-        forms += [slug_key(romanize(name)), slug_key(_simplified(name))]
-    parts = _parts(name)
+    core = without_featuring(name)
+    forms = _own_keys(name)
+    if core != name.strip():
+        forms += _own_keys(core)
+    parts = _parts(core)
     for part in parts:
         forms += _part_forms(part, parts)
     return tuple(f for f in dict.fromkeys(forms) if f)
+
+
+# A bracketed group, in any width, as a listing in Latin letters alone holds a translation (listing_forms).
+_BRACKETED = re.compile(r"[(\[（［【][^)\]）］】]*[)\]）］】]")
+
+
+@functools.lru_cache(maxsize=8192)
+def listing_forms(title: str) -> tuple[str, ...]:
+    """The forms of a title as UG lists it on an artist page: its ``name_forms``, and, for a title in
+    Latin letters alone, the key of the title outside its brackets.
+
+    UG lists some titles as a romanization with its translation bracketed ("Hong Dou (Red Bean)" for
+    红豆, "Nơi Này Có Anh (Where This Is You)"), and outside the brackets is the title whatever they
+    hold; what they hold may be anything, so it is no form. Only a listing's: a title you bracket is
+    compared whole, so "Another Brick in the Wall (Part 1)" never takes the tabs of another part.
+    """
+    forms = list(name_forms(title))
+    if not has_other_script(title):
+        outside = slug_key(_BRACKETED.sub(" ", title))
+        if outside and not _generic(outside):
+            forms.append(outside)
+    return tuple(dict.fromkeys(forms))
+
+
+def _own_keys(name: str) -> list[str]:
+    """The keys a name always had: its slug key, and its pinyin and Simplified keys when it is Chinese."""
+    if has_han(name):
+        return [slug_key(name), slug_key(romanize(name)), slug_key(_simplified(name))]
+    return [slug_key(name)]
 
 
 def _script(c: str) -> str | None:
@@ -296,17 +356,27 @@ def _script(c: str) -> str | None:
     return _LATIN if fold(c).isascii() or "LATIN" in unicodedata.name(c, "") else _OTHER
 
 
-def _runs(text: str) -> list[str]:
-    """The text cut wherever its letters change script; what isn't a letter goes with the run it ends."""
-    runs, current, script = [], "", None
-    for c in text:
-        s = _script(c)
-        if s is not None and script is not None and s != script:
-            runs.append(current)
-            current = ""
-        current += c
-        script = s or script
-    return [*runs, current]
+def _foreign(c: str) -> bool:
+    """Whether a character is a letter of a script other than Latin."""
+    return _script(c) in (_CJK_SCRIPT, _OTHER)
+
+
+def _cut(piece: str) -> list[str]:
+    """A piece of a name with nothing between its parts, cut where the original ends and its romanization
+    or translation starts: at the space (or punctuation) after the original's last letter, when Latin
+    letters follow. UG writes the original first ("斑马 斑马 Banma Banma Zebra Zebra", "17岁 17 Sui"),
+    so Latin before it, or glued to it, is part of the title ("Baby 对不起", "我的Baby", "K歌之王")."""
+    last = max((i for i, c in enumerate(piece) if _foreign(c)), default=None)
+    if last is None:
+        return [piece]
+    for i in range(last + 1, len(piece)):
+        c = piece[i]
+        if _script(c) == _LATIN:
+            return [piece]
+        if c.isspace() or unicodedata.category(c)[0] in "PSZ":
+            rest = piece[i:]
+            return [piece[:i], rest] if any(_script(r) == _LATIN for r in rest) else [piece]
+    return [piece]
 
 
 def _parts(name: str) -> list[str]:
@@ -314,14 +384,14 @@ def _parts(name: str) -> list[str]:
     text = _APOSTROPHES.sub("", name)
     if len({s for c in text if (s := _script(c)) is not None}) < 2:
         return []
-    parts = [run for piece in _PART_BREAK.split(text) for run in _runs(piece) if slug_key(run)]
-    foreign = [p for p in parts if any(_script(c) in (_CJK_SCRIPT, _OTHER) for c in p)]
-    return parts if len(foreign) == 1 else []
+    parts = [part for piece in _PART_BREAK.split(text) for part in _cut(piece) if slug_key(part)]
+    foreign = [p for p in parts if any(_foreign(c) for c in p)]
+    return parts if len(parts) > 1 and len(foreign) == 1 else []
 
 
 def _part_forms(part: str, parts: list[str]) -> list[str]:
     """One part's forms: its key, then its Simplified and pinyin keys (Chinese), or the romanization
-    of the name's Chinese part it holds and the rest apart (Latin)."""
+    of the name's original part it holds and the rest apart (Latin)."""
     key = slug_key(part)
     if _generic(key):
         return []
@@ -330,29 +400,183 @@ def _part_forms(part: str, parts: list[str]) -> list[str]:
         forms += [slug_key(_simplified(part)), slug_key(romanize(part))]
     else:
         for other in parts:
-            if has_han(other):
-                forms += _romanized(key, compact(slug_key(romanize(other))))
+            if other is not part and has_other_script(other):
+                forms += _romanized(key, other)
     return [f for f in forms if not _generic(f)]
 
 
-def _romanized(key: str, syllables: str) -> list[str]:
-    """A Latin part's key split where the romanization ``syllables`` (compact pinyin) starts or ends
-    it: ``banma-banma-zebra-zebra`` with ``banmabanma`` gives ``banma-banma`` and ``zebra-zebra``."""
+def _romanized(key: str, original: str) -> list[str]:
+    """A Latin part's key split where the romanization of ``original`` starts or ends it
+    (``_reads_as``): ``banma-banma-zebra-zebra`` after 斑马 斑马 gives ``banma-banma`` and
+    ``zebra-zebra``, ``bomnal-spring-day`` after 봄날 ``bomnal`` and ``spring-day``."""
+    readings = _readings(original)
+    if not readings:
+        return []
     words = key.split("-")
-    for n in range(1, len(words)):
-        if "".join(words[:n]) == syllables:
-            return ["-".join(words[:n]), "-".join(words[n:])]
-        if "".join(words[-n:]) == syllables:
-            return ["-".join(words[-n:]), "-".join(words[:-n])]
+    for n in range(1, len(words)):  # each piece keyed as slug_key would key it ("the meaning of you")
+        if _reads_as("".join(words[:n]), readings):
+            return [_canon(words[:n]), _canon(words[n:])]
+        if _reads_as("".join(words[-n:]), readings):
+            return [_canon(words[-n:]), _canon(words[:-n])]
     return []
 
 
+# --- reading an original, to tell its romanization from a translation after it --------------------
+
+# Hangul: each syllable block's initial, medial and final jamo, and how each is romanized: the Revised
+# Romanization first, then the spellings titles also use (k for g, eo as o or u, ...).
+_HANGUL_INITIALS = ("g k", "kk gg k", "n", "d t", "tt dd", "r l", "m", "b p", "pp bb", "s sh", "ss s", "",
+                    "j ch", "jj tch", "ch", "k", "t", "p", "h")
+_HANGUL_MEDIALS = ("a", "ae e", "ya", "yae ye", "eo o u", "e", "yeo yo", "ye", "o", "wa", "wae we", "oe we",
+                   "yo", "u oo", "wo", "we", "wi", "yu", "eu u", "ui eui i", "i ee")
+_HANGUL_FINALS = ("", "k g", "k kk", "k", "n", "n", "n", "t d", "l r", "k", "m", "l", "l", "l", "p", "l", "m",
+                  "p b", "p", "t s", "t ss", "ng", "t j", "t ch", "k", "t", "p", "t h")
+# Kana as Hepburn writes them (and Kunrei-shiki: si, ti, tu, hu); katakana as the hiragana they match.
+_KANA = {
+    "あ": "a", "い": "i", "う": "u", "え": "e", "お": "o", "か": "ka", "き": "ki", "く": "ku", "け": "ke",
+    "こ": "ko", "が": "ga", "ぎ": "gi", "ぐ": "gu", "げ": "ge", "ご": "go", "さ": "sa", "し": "shi si",
+    "す": "su", "せ": "se", "そ": "so", "ざ": "za", "じ": "ji zi", "ず": "zu", "ぜ": "ze", "ぞ": "zo",
+    "た": "ta", "ち": "chi ti", "つ": "tsu tu", "て": "te", "と": "to", "だ": "da", "ぢ": "ji di",
+    "づ": "zu du", "で": "de", "ど": "do", "な": "na", "に": "ni", "ぬ": "nu", "ね": "ne", "の": "no",
+    "は": "ha wa", "ひ": "hi", "ふ": "fu hu", "へ": "he e", "ほ": "ho", "ば": "ba", "び": "bi", "ぶ": "bu",
+    "べ": "be", "ぼ": "bo", "ぱ": "pa", "ぴ": "pi", "ぷ": "pu", "ぺ": "pe", "ぽ": "po", "ま": "ma",
+    "み": "mi", "む": "mu", "め": "me", "も": "mo", "や": "ya", "ゆ": "yu", "よ": "yo", "ら": "ra",
+    "り": "ri", "る": "ru", "れ": "re", "ろ": "ro", "わ": "wa", "ゐ": "i wi", "ゑ": "e we", "を": "wo o",
+    "ん": "n m", "ゔ": "vu bu", "ゎ": "wa",
+}
+_SMALL_Y = {"ゃ": "a", "ゅ": "u", "ょ": "o"}  # with the kana before them: きゃ kya, しゃ sha
+_SMALL_VOWELS = {"ぁ": "a", "ぃ": "i", "ぅ": "u", "ぇ": "e", "ぉ": "o"}  # in katakana: ファ fa, ティ ti
+_GEMINATE = frozenset({"", "k", "s", "t", "p", "c", "g", "d", "b", "z", "j", "h", "f"})  # っ doubles the next
+_LONG = frozenset({"", "a", "i", "u", "e", "o", "h"})  # ー draws out the vowel before it
+# A kanji in a Japanese name, whose reading isn't at hand here: one to three morae of _MORA's.
+_KANJI = None
+_MORA = re.compile(r"(?:[bcdfghjkmnprstvwz]?[hy]?|ts)[aeiou]|n(?![aeiouy])|([bcdfgjkpstz])(?=\1)|t(?=ch)")
+
+
+def _kana_letter(c: str) -> bool:
+    """Whether a character is a hiragana or katakana letter (not ・ or another mark of the block)."""
+    return 0x3041 <= ord(c) <= 0x3096 or 0x30A1 <= ord(c) <= 0x30FA
+
+
+@functools.lru_cache(maxsize=4096)
+def _readings(original: str) -> tuple[frozenset[str] | None, ...] | None:
+    """An original part of a name read one syllable at a time, each as the set of the ways it is
+    romanized (``_KANJI`` for a kanji); None when it has letters caracole can't read (Cyrillic, say).
+
+    Chinese is read in pinyin, in any of each character's readings (重 is zhong, chong or tong) as
+    well as pypinyin's in context; ü may be written v or u. Hangul is read by its jamo, kana by
+    Hepburn's table. In a name with kana, which is Japanese, a kanji is any one to three morae.
+    Latin letters and digits in it read as themselves.
+    """
+    japanese = any(_kana_letter(c) for c in original)
+    readings: list[frozenset[str] | None] = []
+    pinyin = _pinyin_readings(original) if has_han(original) and not japanese else iter(())
+    fixed = ""
+    for c in original:
+        letter = fold(c)
+        if letter.isascii() and letter.isalnum():
+            fixed += letter
+            continue
+        if fixed:
+            readings.append(frozenset({fixed}))
+            fixed = ""
+        if _HAN.match(c):
+            readings.append(_KANJI if japanese else next(pinyin, frozenset()))
+        elif c == "々" and japanese:  # the kanji before it again
+            readings.append(_KANJI)
+        elif 0xAC00 <= ord(c) <= 0xD7A3:  # a Hangul syllable block
+            readings.append(_hangul(c))
+        elif _kana_letter(c) or c == "ー":
+            _kana(readings, chr(ord(c) - 0x60) if 0x30A1 <= ord(c) <= 0x30F6 else c)  # katakana as hiragana
+        elif _foreign(c):
+            return None
+    if fixed:
+        readings.append(frozenset({fixed}))
+    return tuple(readings)
+
+
+def _pinyin_readings(text: str) -> Iterator[frozenset[str]]:
+    """Each Chinese character's readings in pinyin, in order: all of them, and pypinyin's in context."""
+    from pypinyin import Style, lazy_pinyin, pinyin
+
+    chars = [c for c in text if _HAN.match(c)]
+    in_context = lazy_pinyin(text, errors="ignore")
+    for i, c in enumerate(chars):
+        found = set(pinyin(c, style=Style.NORMAL, heteronym=True)[0])
+        if len(in_context) == len(chars):
+            found.add(in_context[i])
+        yield frozenset(r for f in found for r in (f, f.replace("v", "u")))
+
+
+def _hangul(c: str) -> frozenset[str]:
+    """A Hangul syllable's romanizations, from its jamo."""
+    n = ord(c) - 0xAC00
+    initial, medial, final = n // 588, n % 588 // 28, n % 28
+    return frozenset(
+        i + m + f
+        for i in _HANGUL_INITIALS[initial].split(" ")
+        for m in _HANGUL_MEDIALS[medial].split(" ")
+        for f in _HANGUL_FINALS[final].split(" ")
+    )
+
+
+def _kana(readings: list[frozenset[str] | None], c: str) -> None:
+    """Add a kana (as hiragana) to ``readings``: a small ya, yu, yo or vowel joins the kana before it."""
+    before = readings[-1] if readings else None
+    if c in _SMALL_Y and before:
+        v = _SMALL_Y[c]
+        joined = {r[:-1] + "y" + v for r in before}
+        joined |= {r[:-1] + v for r in before if r[:-1] in ("sh", "ch", "j")}  # しゃ sha, ちゃ cha, じゃ ja
+        readings[-1] = frozenset(joined)
+    elif c in _SMALL_VOWELS and before:
+        v = _SMALL_VOWELS[c]
+        joined = {r[:-1] + v for r in before} | {r + v for r in before}
+        if "u" in before:  # ウィ wi
+            joined.add("w" + v)
+        readings[-1] = frozenset(joined)
+    elif c == "っ":
+        readings.append(_GEMINATE)
+    elif c == "ー":
+        readings.append(_LONG)
+    elif c in _SMALL_VOWELS or c in _SMALL_Y:
+        readings.append(frozenset({_SMALL_VOWELS.get(c) or "y" + _SMALL_Y[c]}))
+    elif c in _KANA:
+        found = set(_KANA[c].split(" "))
+        if c == "う" and before and any(r.endswith(("o", "u")) for r in before):
+            found.add("")  # a long vowel: ありがとう is arigatou, or arigato
+        readings.append(frozenset(found))
+
+
+def _reads_as(text: str, readings: tuple[frozenset[str] | None, ...]) -> bool:
+    """Whether ``text`` (compact Latin letters) is ``readings`` romanized, syllable after syllable."""
+
+    @functools.cache
+    def at(i: int, j: int) -> bool:
+        if j == len(readings):
+            return i == len(text)
+        reading = readings[j]
+        if reading is _KANJI:
+            k = i
+            for _ in range(3):
+                mora = _MORA.match(text, k)
+                if mora is None:
+                    return False
+                k = mora.end()
+                if at(k, j + 1):
+                    return True
+            return False
+        return any(text.startswith(r, i) and at(i + len(r), j + 1) for r in reading)
+
+    return at(0, 0)
+
+
 def _generic(key: str) -> bool:
-    """Whether a key names no song or artist on its own (see ``name_forms``)."""
+    """Whether a key names no song or artist on its own (see ``name_forms``): letters of a script other
+    than Latin name one at any length ("爱", "Ты", "ใจ"), Latin ones from two letters ("Ai", "IU")."""
     words = [w for w in key.split("-") if w and w not in GENERIC_WORDS and not w.isdigit()]
-    if any(_CJK.search(w) for w in words):
+    if any(_foreign(c) for w in words for c in w):
         return False
-    return sum(len(w) for w in words) < 3
+    return sum(len(w) for w in words) < 2
 
 
 # Traditional -> Simplified, one character for one, for identity keys: each pair is a

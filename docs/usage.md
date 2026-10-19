@@ -257,15 +257,21 @@ work. Caracole compares Chinese as pinyin too, and Traditional characters as
 Simplified ones.
 
 Ultimate Guitar often writes a non-Latin name in two scripts at once: the
-original, a romanization and a translation, in any order, in brackets, after
-" / " or " - ", or with nothing between them. 宋冬野's artist page calls him
-"Song Dongye (宋冬野)", and the song "斑马 斑马 Banma Banma Zebra Zebra".
-Each part counts as a name of its own when caracole compares UG's names with
-yours, so `宋冬野 - 斑马斑马` finds that song there, and so would "Banma Banma",
-"Ban Ma Ban Ma" or "Zebra Zebra". Japanese, Korean and Cyrillic names come in
-the same patterns ("打上花火 (Uchiage Hanabi)", "봄날 (Spring Day)",
-"Кино (Kino)"). Caracole has no romanizer for those, so they meet on the part
-in their own script, or on the Latin one.
+original, a romanization and a translation, in any order in brackets or after
+" / " or " - ", or, with nothing between them, the original first and the rest
+after a space. 宋冬野's artist page calls him "Song Dongye (宋冬野)", and the song
+"斑马 斑马 Banma Banma Zebra Zebra". Each part counts as a name of its own when
+caracole compares UG's names with yours, so `宋冬野 - 斑马斑马` finds that song
+there, and so would "Banma Banma", "Ban Ma Ban Ma" or "Zebra Zebra".
+
+Japanese, Korean and Cyrillic names come in the same patterns ("打上花火 (Uchiage
+Hanabi)", "봄날 (Spring Day)", "Кино (Kino)"). Caracole doesn't romanize those
+to compare them: they meet on the part in their own script, or on the Latin
+one. It reads Hangul and kana only to tell where a romanization ends and a
+translation starts, as it does for Chinese with pinyin in any reading of a
+character: "봄날 Bomnal Spring Day" is "Bomnal" and "Spring Day", "夜に駆ける Yoru ni
+Kakeru Racing Into The Night" is "Yoru ni Kakeru" and "Racing Into The Night",
+and "重来 Chong Lai Start Over" is "Chong Lai" and "Start Over".
 
 The same goes wherever caracole meets a name it didn't write: a song you
 wrote in two scripts against the index (UG's sitemaps write names in Latin
@@ -273,12 +279,23 @@ letters only, so `DAOKO - 打上花火 (Uchiage Hanabi)` meets
 `daoko/uchiage-hanabi`), a purchase tagged that way, and a Guitar Pro download
 UG named so.
 
+UG also lists some of these titles in Latin letters alone, the romanization
+with its translation in brackets ("Hong Dou (Red Bean)" for 王菲's 红豆): on an
+artist page, a title in Latin letters counts by what is outside its brackets
+too, so 红豆 finds it there.
+
 A part that only names a version or a part, such as "Live", "Acoustic",
-"Remix" or "Intro", or that is a number, a single letter or fewer than three
-Latin letters, never makes a match on its own. Another song of the artist never
-stands in for yours either: 董小姐 is no 斑马斑马, in any script. A name with
-two non-Latin parts, as a duet's "Joey Yung (容祖儿) & Eason Chan (陈奕迅)", is
-taken whole: it is neither singer.
+"Remix" or "Intro", or that is a number or a single Latin letter, never makes
+a match on its own. Two Latin letters do ("IU (아이유)" is IU), and so does an
+original in any script, however short ("Ты (Ty)" is Ты). Another song of the
+artist never stands in for yours either: 董小姐 is no 斑马斑马, in any script, and
+Latin before the original, or glued to it, is part of the title: "Baby 对不起"
+and "我的Baby" are neither 对不起 nor "Baby". A name with two non-Latin parts, as a
+duet's "Joey Yung (容祖儿) & Eason Chan (陈奕迅)", is taken whole: it is neither
+singer. Nor is an artist a name features part of it, bracketed in any width or
+not: "Ma Di (feat. 宋冬野)" is Ma Di's, never 宋冬野's, and "南山南（feat. 宋冬野）" is 南山南.
+A tab page of such a pair teaches caracole no artist page for either of them,
+as UG may give the pair a page of its own.
 
 ### caracole sync
 
@@ -697,7 +714,9 @@ and cache.
   number no score of that format holds, so the formats of one score share it.
   A MusicXML file is also placed by the title and composer its header gives,
   when exactly one song has both. A score is never `sheet.pdf`, which caracole
-  renders itself. A file the library
+  renders itself. A name UG writes in two scripts meets yours by any of its
+  parts, the bracketed original included: the file of 周杰伦's 晴天 may be
+  named `Jay Chou (周杰倫) - 晴天 Qing Tian Sunny Day (ver 1).gp5`. A file the library
   already has is removed from the inbox; a file it can't place stays there,
   and so does a symbolic link, which is never read:
   `Inbox: 0 filed, 0 duplicates, 0 left, 1 symbolic link refused`. If
@@ -816,7 +835,11 @@ when it has something in it:
   doesn't link to its artist's page), the artist stays on the list, with the
   page you pasted and what is wrong with it, and no new line: put the
   artist's page, or another of their tab pages, in its place. The song isn't
-  taken for missing meanwhile.
+  taken for missing meanwhile. The same goes when UG's copy of the page can't
+  be read, even fetched again: an error on UG's side rather than a page that
+  leads nowhere. caracole asks for it again a week later, then after twice as
+  long each time it still can't, whichever of the artist's songs asks, and
+  the list says when; another page in its place is read at the next run.
 - **Buy list.** No human sheet found yet, and nothing caracole will still do may
   find one: the song's UG fetch is done (or UG doesn't have it), no fetch,
   artist page or LaCuerda check is due for it, and, for a song not found, the
@@ -1034,23 +1057,28 @@ tab_ids = [1601668]
   songs by 宋冬野 too (see [names in other scripts](#names-in-other-scripts)).
   The value is the artist's page on UG, whose address ends in the artist's
   number: UG writes some with the name before it
-  (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`) and some with the
-  number alone (宋冬野's is `https://www.ultimate-guitar.com/artist/634073`).
+  (`https://www.ultimate-guitar.com/artist/soda_stereo_2946`) and some with
+  the number alone (宋冬野's is `https://www.ultimate-guitar.com/artist/634073`).
   Paste it as your browser shows it, even after you clicked a filter or
   another page (`?filter=chords`, `?page=2`, `?sort=date`): caracole drops the
-  query. An address without the number (`/artist/joaquin_sabina`) is an error:
-  UG answers it with "page not found". Any tab page of the artist works too,
-  bare or slugged (`https://tabs.ultimate-guitar.com/tab/4180894`): the next
-  fetch reads it once, a request like any other within the night's budget,
-  and remembers the artist page it links to, for every song by the artist. A
-  tab page that leads to no artist page is listed on the to-do page, and its
-  songs wait for another address.
+  query. It may come without `https://` or `www.`, as an address bar shortens
+  it, with capitals, or from one of UG's language editions
+  (`es.ultimate-guitar.com`, the Spanish one): caracole asks for the page at
+  UG's own address. An address without the number (`/artist/joaquin_sabina`)
+  is an error: UG answers it with "page not found". Any tab page of the artist
+  works too, bare or slugged (`https://tabs.ultimate-guitar.com/tab/4180894`):
+  the next fetch reads it once, a request like any other within the night's
+  budget, and remembers the artist page it links to, for every song by the
+  artist. A tab page that leads to no artist page is listed on the to-do page,
+  and its songs wait for another address.
 - **`[pin]`** takes tab page addresses: paste them as your browser shows them,
-  a query or a fragment included. Pinned tabs replace the candidates of their
-  kind (sheet, Guitar Pro, tab), in the order given. A pin whose page is
-  gone, is Official, or is closed to bots by robots.txt (UG's `/tab/track/`
-  pages), or redirects to such a page, pins nothing, and the song's other
-  versions compete for that kind.
+  a query or a fragment included, without `https://` too, and from a language
+  edition (`https://es.ultimate-guitar.com/tab/4180894` is
+  `https://tabs.ultimate-guitar.com/tab/4180894`). Pinned tabs replace the
+  candidates of their kind (sheet, Guitar Pro, tab), in the order given. A pin
+  whose page is gone, is Official, or is closed to bots by robots.txt (UG's
+  `/tab/track/` pages), or redirects to such a page, pins nothing, and the
+  song's other versions compete for that kind.
 - **`[transpose]`** shifts the chords and the key in the PDF. `sheet.txt`
   stays as the source wrote it.
 - **`[ignore]`** takes only `songs = [...]`. It stops all work on a song: no

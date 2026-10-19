@@ -201,6 +201,14 @@ def test_an_artist_url_entry_is_found_by_any_form_of_the_artists_name(tmp_path, 
     assert artist_url_entry(o, name_forms(artist)) == (slug_key(entry), "https://www.ultimate-guitar.com/artist/634073")
 
 
+def test_an_artist_url_entry_is_compared_by_the_name_as_written(tmp_path):
+    # Its key loses the brackets: "Song Dongye (宋冬野)" and "DJ 李志" are both Latin, then the original.
+    o = load_overrides(write(tmp_path, '[artist_url]\n"Song Dongye (宋冬野)" = "https://www.ultimate-guitar.com/artist/634073"\n'
+                                       '"DJ 李志" = "https://www.ultimate-guitar.com/artist/1"\n'))
+    assert artist_url_entry(o, name_forms("宋冬野")) == ("song-dongye-宋冬野", "https://www.ultimate-guitar.com/artist/634073")
+    assert artist_url_entry(o, name_forms("李志")) is None  # another artist's name holds his
+
+
 def test_an_artist_url_entry_under_the_artists_own_key_comes_first():
     o = Overrides(artist_url={"song-dongye": "https://www.ultimate-guitar.com/artist/1",
                               "宋冬野": "https://www.ultimate-guitar.com/artist/634073"})
@@ -319,6 +327,21 @@ def test_tab_id_from_url():
     assert tab_id_from_url("85053") == 85053
     with pytest.raises(OverridesError):
         tab_id_from_url("https://example.com/tab/1")
+
+
+@pytest.mark.parametrize("pasted", [
+    # Taken as an address bar shows it, but only on UG's own hosts.
+    "example.com/tab/85053",
+    "https://ultimate-guitar.com.example.com/tab/85053",
+    "https://notultimate-guitar.com/tab/85053",
+    "https://tabs.ultimate-guitar.com.example.com/tab/85053",
+    "https://user@tabs.ultimate-guitar.com/tab/85053",
+    "https://tabs.ultimate-guitar.com:8080/tab/85053",
+    "ftp://tabs.ultimate-guitar.com/tab/85053",
+])
+def test_a_lookalike_of_ugs_hosts_is_no_tab_page(pasted):
+    with pytest.raises(OverridesError, match="not an Ultimate Guitar tab URL"):
+        tab_id_from_url(pasted)
 
 
 def test_writers_preserve_comments_and_roundtrip(tmp_path):
