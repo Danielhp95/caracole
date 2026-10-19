@@ -909,7 +909,12 @@ def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[I
     has passed; the 30-day cache serves the lists in between, one request per
     artist. The match stands whatever the lists say. False when this run's
     page cap cut a list short: the song waits for the next run, as it was.
+
+    The check is recorded once the lists are read, before the slots are
+    filled, so the song is marked dirty first: a recheck the budget or an
+    error cuts short resumes next run, and ``_finish`` makes it clean.
     """
+    update_song(run.conn, run.song.id, ug_dirty=True)
     keys = _matched_artist_keys(run)
     base = (_known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_from_own_tabs(run, own, keys)
             or _learn_artist_page(run, keys))

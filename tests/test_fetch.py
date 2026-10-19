@@ -1285,6 +1285,32 @@ def test_a_recheck_cut_short_by_the_page_cap_resumes_next_run(conn, tmp_path):
     assert second.sheet == 2001236 and songs_to_fetch(conn, PASTED, LATER) == []
 
 
+def test_a_recheck_the_budget_cuts_short_resumes_next_run(conn, tmp_path):
+    # Live, the budget usually runs out in the middle of a song: here after the list, before the new
+    # version's page. The list was read, so the check is recorded; the song must come back anyway.
+    ug = FakeUG()
+    song = banma_found(conn, ug, tmp_path)
+    newer = banma_tab(2001236, version=3, rating=4.9, votes=300)
+    relist_banma(ug, banma_tab(2001234, rating=4.7, votes=50), banma_tab(2001235, version=2, rating=4.2, votes=5),
+                 newer)
+    ug.tab(newer, content=sheet("sheet 2001236", BANMA_LINES), artist_url=BANMA_ARTIST)
+
+    first = fetch_songs(context(conn, ug.client(tmp_path / "cache", budget=1, now=LATER), tmp_path, PASTED,
+                                now=LATER), songs_to_fetch(conn, PASTED, LATER))
+
+    assert first.budget_exhausted and ug.requests == [artist_list(BANMA_ARTIST)]
+    tomorrow = LATER + timedelta(days=1)
+    assert [s.id for s in songs_to_fetch(conn, PASTED, tomorrow)] == [song.id]
+
+    ug.requests.clear()
+    fetch_songs(context(conn, ug.client(tmp_path / "cache", now=tomorrow), tmp_path, PASTED, now=tomorrow),
+                songs_to_fetch(conn, PASTED, tomorrow))
+
+    assert ug.requests == [f"{TAB}2001236"]  # yesterday's list comes from the cache
+    assert "sheet 2001236" in read(tmp_path, song, "sheet.txt")
+    assert songs_to_fetch(conn, PASTED, tomorrow) == []
+
+
 def test_a_recheck_that_no_longer_lists_the_title_leaves_the_match(conn, tmp_path):
     # What the list says no longer is no miss: the versions and the sheet you have stay.
     ug = FakeUG()
