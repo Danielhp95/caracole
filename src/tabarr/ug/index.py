@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import zlib
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -75,6 +75,10 @@ class IndexStats:
     sitemaps_unchanged: int = 0
     rows: int = 0
     new_tab_ids: tuple[int, ...] = ()
+
+
+# Called after each sitemap with its short name ("12", "last") and what it did.
+Progress = Callable[[str, IndexStats], None]
 
 
 def _iso(dt: datetime) -> str:
@@ -193,7 +197,8 @@ def _tab_sitemap_urls(client: Client) -> list[str]:
     return urls
 
 
-def _index_sitemaps(conn: sqlite3.Connection, client: Client, urls: list[str], now: datetime) -> IndexStats:
+def _index_sitemaps(conn: sqlite3.Connection, client: Client, urls: list[str], now: datetime,
+                    progress: Progress | None) -> IndexStats:
     fetched = unchanged = count = 0
     new: list[int] = []
     for url in urls:
@@ -203,11 +208,16 @@ def _index_sitemaps(conn: sqlite3.Connection, client: Client, urls: list[str], n
         done = _indexed(conn).get(name)
         if resp.status == 304 and done is not None and _validators_of(done) == validators:
             unchanged += 1
+            if progress is not None:
+                progress(name, IndexStats(sitemaps_unchanged=1))
             continue
         rows = _rows(resp.content, url, resp.status)
-        new += _store(conn, name, rows, validators, now)
+        added = _store(conn, name, rows, validators, now)
+        new += added
         fetched += 1
         count += len(rows)
+        if progress is not None:
+            progress(name, IndexStats(sitemaps_fetched=1, rows=len(rows), new_tab_ids=tuple(added)))
     return IndexStats(sitemaps_fetched=fetched, sitemaps_unchanged=unchanged, rows=count, new_tab_ids=tuple(new))
 
 
@@ -223,7 +233,7 @@ def _sitemap_files(directory: Path) -> list[tuple[str, Path]]:
     return [(n, found[n]) for n in [*numbered, *(["last"] if "last" in found else [])]]
 
 
-def _index_files(conn: sqlite3.Connection, directory: Path, now: datetime) -> IndexStats:
+def _index_files(conn: sqlite3.Connection, directory: Path, now: datetime, progress: Progress | None) -> IndexStats:
     fetched = count = 0
     new: list[int] = []
     for name, path in _sitemap_files(directory):
@@ -231,9 +241,12 @@ def _index_files(conn: sqlite3.Connection, directory: Path, now: datetime) -> In
             rows = _rows(path.read_bytes(), str(path))
         except ProviderError as e:
             raise ValueError(f"{path}: {e.message}") from e
-        new += _store(conn, name, rows, _NO_VALIDATORS, now)
+        added = _store(conn, name, rows, _NO_VALIDATORS, now)
+        new += added
         fetched += 1
         count += len(rows)
+        if progress is not None:
+            progress(name, IndexStats(sitemaps_fetched=1, rows=len(rows), new_tab_ids=tuple(added)))
     return IndexStats(sitemaps_fetched=fetched, rows=count, new_tab_ids=tuple(new))
 
 
@@ -241,32 +254,37 @@ def _index_files(conn: sqlite3.Connection, directory: Path, now: datetime) -> In
 
 
 def build_index(conn: sqlite3.Connection, client: Client | None, now: datetime, *,
-                from_dir: Path | None = None) -> IndexStats:
+                from_dir: Path | None = None, progress: Progress | None = None) -> IndexStats:
     """Index every tab sitemap UG lists, or the sitemap files in ``from_dir`` (no network).
 
     The files are ``sitemapN.xml`` and ``sitemap_last.xml``, gzipped or not.
-    Raises ``ProviderError`` (including blocks) and ``BudgetExhausted`` from
-    the client; sitemaps stored before the error stay stored.
+    ``progress`` is called after each sitemap. Raises ``ProviderError``
+    (including blocks) and ``BudgetExhausted`` from the client; sitemaps
+    stored before the error stay stored.
     """
     if from_dir is not None:
-        stats = _index_files(conn, Path(from_dir), now)
+        stats = _index_files(conn, Path(from_dir), now, progress)
     else:
         if client is None:
             raise ValueError("build_index needs a client unless from_dir is given")
-        stats = _index_sitemaps(conn, client, _tab_sitemap_urls(client), now)
+        stats = _index_sitemaps(conn, client, _tab_sitemap_urls(client), now, progress)
     kv_set(conn, _BUILT_KEY, _iso(now))
     return stats
 
 
-def refresh_index(conn: sqlite3.Connection, client: Client, now: datetime) -> IndexStats:
+def refresh_index(conn: sqlite3.Connection, client: Client, now: datetime, *,
+                  progress: Progress | None = None) -> IndexStats:
     """Revalidate the sitemaps where new tabs appear: ``sitemap_last``, the highest-numbered
-    sitemap, and any numbered sitemap this database has never indexed."""
+    sitemap, and any numbered sitemap this database has never indexed.
+
+    ``progress`` is called after each sitemap. Errors propagate as in ``build_index``.
+    """
     urls = _tab_sitemap_urls(client)
     indexed = _indexed(conn)
     numbered = [u for u in urls if sitemap_name(u) != "last"]
     highest = numbered[-1] if numbered else None
     wanted = [u for u in urls if sitemap_name(u) == "last" or u == highest or sitemap_name(u) not in indexed]
-    stats = _index_sitemaps(conn, client, wanted, now)
+    stats = _index_sitemaps(conn, client, wanted, now, progress)
     kv_set(conn, _REFRESHED_KEY, _iso(now))
     return stats
 

@@ -192,6 +192,31 @@ def test_refresh_picks_up_new_numbered_sitemaps(conn, tmp_path):
     assert ug.names() == ["sitemap.xml", "sitemap4.xml", "sitemap_last.xml"]
 
 
+def test_build_and_refresh_report_each_sitemap(conn, tmp_path):
+    ug = site()
+    seen = []
+    build_index(conn, ug.client(tmp_path / "cache"), NOW, progress=lambda name, s: seen.append((name, s)))
+    assert seen == [
+        ("1", IndexStats(sitemaps_fetched=1, rows=4, new_tab_ids=(1001, 1002, 1005, 1006))),
+        ("2", IndexStats(sitemaps_fetched=1, rows=2, new_tab_ids=(2001, 2002))),
+        ("last", IndexStats(sitemaps_fetched=1, rows=2, new_tab_ids=(3001,))),
+    ]
+    seen.clear()
+    refresh_index(conn, ug.client(tmp_path / "cache"), LATER, progress=lambda name, s: seen.append((name, s)))
+    assert seen == [("2", IndexStats(sitemaps_unchanged=1)), ("last", IndexStats(sitemaps_unchanged=1))]
+
+
+def test_build_from_dir_reports_each_file(conn, tmp_path):
+    d = tmp_path / "sitemaps"
+    d.mkdir()
+    (d / "sitemap2.xml").write_bytes(S2)
+    (d / "sitemap_last.xml.gz").write_bytes(gzip.compress(LAST))
+    seen = []
+    build_index(conn, None, NOW, from_dir=d, progress=lambda name, s: seen.append((name, s)))
+    assert seen == [("2", IndexStats(sitemaps_fetched=1, rows=2, new_tab_ids=(2001, 2002))),
+                    ("last", IndexStats(sitemaps_fetched=1, rows=2, new_tab_ids=(3001,)))]
+
+
 def test_a_304_for_a_sitemap_this_database_never_indexed_is_parsed(tmp_path):
     """A fresh database next to a warm HTTP cache (the state was deleted, the cache kept)."""
     from tabarr import db
