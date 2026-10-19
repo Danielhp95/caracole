@@ -14,6 +14,12 @@ from conftest import add_song
     ("Artist - Title (solo).gp5", ("Artist", "Title", None)),
     ("random.gp5", (None, "random", None)),
     ("宋冬野 - 斑马斑马.gp", ("宋冬野", "斑马斑马", None)),
+    # UG names a download after its artist and song, which it writes in two scripts for some: a
+    # bracketed original is a part of the name, the version (and its tabber's name) is not.
+    ("Jay Chou (周杰倫) - 晴天 (ver 1).gp5", ("Jay Chou (周杰倫)", "晴天", 1)),
+    ("米津玄師 - Lemon (レモン) (ver 3).gp5", ("米津玄師", "Lemon (レモン)", 3)),
+    ("宋冬野 - 斑马斑马 (ver 2 by 小明).gp5", ("宋冬野", "斑马斑马", 2)),
+    ("宋冬野 - 斑马斑马 (Banma Banma) (ver 2).gp5", ("宋冬野", "斑马斑马", 2)),
 ])
 def test_parse_download_name(name, parsed):
     assert parse_download_name(name) == parsed

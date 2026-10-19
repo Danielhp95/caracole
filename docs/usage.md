@@ -489,7 +489,10 @@ and cache.
   Guitar Pro and Power Tab files you dropped into `_inbox/`, by their names: a
   file named `Soda Stereo - De Musica Ligera (ver 2).gp5` becomes that song's
   `guitar-N.gp5`, where N is the rank caracole gave version 2, or the lowest
-  free number when another file already holds guitar-N. A file the library
+  free number when another file already holds guitar-N. A name UG writes in
+  two scripts meets yours by any of its parts, the bracketed original
+  included: the file of 周杰伦's 晴天 may be named
+  `Jay Chou (周杰倫) - 晴天 Qing Tian Sunny Day (ver 1).gp5`. A file the library
   already has is removed from the inbox; a file it can't place stays there,
   and so does a symbolic link, which is never read:
   `Inbox: 0 filed, 0 duplicates, 0 left, 1 symbolic link refused`. If

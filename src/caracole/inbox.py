@@ -26,7 +26,7 @@ from pathlib import Path
 from rapidfuzz import fuzz
 
 from caracole.library import NotRegularFile, keep_file, song_dir
-from caracole.normalize import clean_title, identity_key, name_forms
+from caracole.normalize import clean_title, has_other_script, identity_key, name_forms
 from caracole.songs import Song, get_song
 from caracole.versions import VersionRow, picks
 
@@ -47,11 +47,16 @@ class InboxStats:
 
 
 def parse_download_name(name: str) -> tuple[str | None, str, int | None]:
-    """``"Artist - Title (ver 2).gp5"`` → ("Artist", "Title", 2)."""
+    """``"Artist - Title (ver 2).gp5"`` → ("Artist", "Title", 2).
+
+    Bracketed words go, the version first, but not an original in another script: UG writes some
+    artists and songs in two scripts ("Jay Chou (周杰倫)"), and that part is the one that meets yours.
+    """
     stem = Path(name).stem
     m = _VERSION.search(stem)
     version = int(m.group(1)) if m else None
-    stem = _PARENS.sub("", stem).strip()
+    stem = _VERSION.sub("", stem)
+    stem = _PARENS.sub(lambda g: g.group(0) if has_other_script(g.group(0)) else "", stem).strip()
     artist, sep, title = stem.partition(" - ")
     if sep and artist.strip() and title.strip():
         return artist.strip(), title.strip(), version

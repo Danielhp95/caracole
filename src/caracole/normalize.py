@@ -220,6 +220,11 @@ def has_han(s: str) -> bool:
     return _HAN.search(s) is not None
 
 
+def has_other_script(s: str) -> bool:
+    """Whether the text has letters of a script other than Latin (Chinese, Japanese, Korean, Cyrillic...)."""
+    return any(_foreign(c) for c in s)
+
+
 def romanize(s: str) -> str:
     """Hanyu Pinyin for Chinese characters, so "宋冬野" can meet UG's ``song-dongye``.
 

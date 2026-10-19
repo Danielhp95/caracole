@@ -296,9 +296,6 @@ def test_w7_11_a_romanization_with_its_translation_bracketed(conn, tmp_path, art
     assert ids == {9000002} and song.match_step == "artist_page"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-12: inbox drops a bracketed part before comparing names, so UG's "
-                          "'Jay Chou (周杰倫)' loses the part that meets 周杰伦, and the download stays")
 @pytest.mark.parametrize("artist,title,download", [
     ("周杰伦", "晴天", "Jay Chou (周杰倫) - 晴天 Qing Tian Sunny Day (ver 1).gp5"),
     ("米津玄師", "Lemon", "Kenshi Yonezu (米津玄師) - Lemon (ver 1).gp5"),
