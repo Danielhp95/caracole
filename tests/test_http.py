@@ -166,8 +166,17 @@ def test_after_a_block_no_more_requests_this_run(tmp_path):
 TABS = "https://tabs.ultimate-guitar.com"
 WWW = "https://www.ultimate-guitar.com"
 GTP = "https://gtptabs.com"
+MS = "https://musescore.com"
 # Each closed by a Disallow line of its host's robots.txt (User-agent: *), as captured in the spike.
 ROBOTS_CLOSED = [
+    MS + "/api/jmuse?id=6159957&index=0&type=img",  # /api/jmuse: a score's pages, audio and MIDI
+    MS + "/score/6159957/download/pdf",  # /score/*/download/*
+    MS + "/sheetmusic?text=wonderwall",  # /sheetmusic?: the site's search
+    MS + "/search/wonderwall",  # /search/
+    MS + "/oembed/endpoint?url=https%3A%2F%2Fmusescore.com%2Fsong%2Fwonderwall-1",  # /oembed/*
+    MS + "/user/login?destination=/song/wonderwall-1",  # /user/login?
+    MS + "/redirect?to=https%3A%2F%2Fexample.com",  # /redirect*
+    MS + "/user/27/s/abcdef",  # /*/s/*: a private share link
     GTP + "/storage/archive/blur.zip",  # /storage/: an artist page's "Download all" link
     GTP + "/tabs/upload.html?artistId=1593",  # /tabs/upload.html: its "Add a tab" link
     GTP + "/ru/tabs/2/blur/country-house.html",  # /ru/: half of every sitemap
@@ -193,6 +202,9 @@ READ_BY_CARACOLE = [
     GTP + "/sitemapGoogle.xml",
     GTP + "/tabs/2/blur.html",
     GTP + "/tabs/download/58155.html",
+    MS + "/sitemaps/song-index.xml",
+    MS + "/sitemaps/song-index/sitemap_songs1.xml",
+    MS + "/song/wonderwall-1524",
 ]
 
 
@@ -218,14 +230,11 @@ def test_robots_disallows_names_the_rule_for_other_modules():
     assert [u for u in READ_BY_CARACOLE if robots_disallows(u)] == []
 
 
-def test_gtptabs_rules_are_the_user_agent_star_group_of_its_robots_txt():
-    # tests/fixtures/gtptabs/robots.txt is the live file of 19 October 2026. Its Yandex group
-    # leaves /ru/ open, so the group read must be the one for every other crawler.
+def robots_groups(fixture: str) -> dict[str, list[str]]:
+    """The Disallow lines of each User-agent group of a captured robots.txt."""
     from pathlib import Path
 
-    from caracole.http import ROBOTS_DISALLOW
-
-    text = (Path(__file__).parent / "fixtures" / "gtptabs" / "robots.txt").read_text(encoding="utf-8")
+    text = (Path(__file__).parent / "fixtures" / fixture / "robots.txt").read_text(encoding="utf-8")
     groups: dict[str, list[str]] = {}
     agent = None
     for line in text.splitlines():
@@ -235,8 +244,28 @@ def test_gtptabs_rules_are_the_user_agent_star_group_of_its_robots_txt():
             groups[agent] = []
         elif field.strip().lower() == "disallow" and agent is not None:
             groups[agent].append(value.strip())
+    return groups
+
+
+def test_gtptabs_rules_are_the_user_agent_star_group_of_its_robots_txt():
+    # tests/fixtures/gtptabs/robots.txt is the live file of 19 October 2026. Its Yandex group
+    # leaves /ru/ open, so the group read must be the one for every other crawler.
+    from caracole.http import ROBOTS_DISALLOW
+
+    groups = robots_groups("gtptabs")
     assert "/ru/" not in groups["Yandex"]
     assert ROBOTS_DISALLOW["gtptabs.com"] == tuple(groups["*"])
+
+
+def test_musescore_rules_are_the_user_agent_star_group_of_its_robots_txt():
+    # tests/fixtures/musescore/robots.txt is the live file of 19 October 2026 (Last-Modified
+    # 16 October). Its BingPreview group leaves /api/jmuse and /sheetmusic? open; the group
+    # for every other crawler closes both, and its commented-out lines close nothing.
+    from caracole.http import ROBOTS_DISALLOW
+
+    groups = robots_groups("musescore")
+    assert "/api/jmuse" not in groups["BingPreview"]
+    assert ROBOTS_DISALLOW["musescore.com"] == tuple(groups["*"])
 
 
 def test_robots_refusals_are_not_provider_failures(tmp_path):

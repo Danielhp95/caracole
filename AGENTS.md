@@ -157,8 +157,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     `robots_disallows`): not UG's `/search.php` (matching is local, against the sitemap
     index), `/tab/download`, `/tab/print?` or `/download/public/`, nor gtptabs.com's
     `/ru/` (half of its sitemaps), `/search/` or `/storage/` (an artist's "Download all"
-    archive). A host's rules are the `User-agent: *` group of its live robots.txt
-    (tests/fixtures/gtptabs/robots.txt for gtptabs.com).
+    archive), nor musescore.com's `/api/jmuse`, `/score/*/download/*`, `/sheetmusic?`
+    (its search) or `/oembed/*`. A host's rules are the `User-agent: *` group of its live
+    robots.txt (tests/fixtures/gtptabs/ and tests/fixtures/musescore/robots.txt).
   - Every accepted 200 and 404 is cached forever, in `cache_dir/http/<provider>/`.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
   that won't parse (`PageParseError`, `GtpTabsParseError`) never makes a song not found,

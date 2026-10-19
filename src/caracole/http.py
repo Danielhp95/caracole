@@ -156,14 +156,22 @@ def _header(headers: Mapping[str, str], name: str) -> str | None:
 
 
 # The Disallow lines of the "User-agent: *" group of each host's robots.txt, as fetched
-# on 2026-10-18 (docs/spike-2026-10-18.md), gtptabs.com's on 2026-10-19
-# (tests/fixtures/gtptabs/robots.txt). LaCuerda's robots.txt is empty and LRCLIB is an
-# API, so their hosts have none.
+# on 2026-10-18 (docs/spike-2026-10-18.md), gtptabs.com's and musescore.com's on 2026-10-19
+# (tests/fixtures/gtptabs/robots.txt, tests/fixtures/musescore/robots.txt). LaCuerda's
+# robots.txt is empty and LRCLIB is an API, so their hosts have none.
 ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     # /storage/ holds each artist's "Download all" archive; /ru/ is half of every sitemap.
     "gtptabs.com": (
         "/ru/", "/profile/", "/search/", "/storage/", "/index.php", "/tabs/upload.html",
         "/advertisement.html", "/message/",
+    ),
+    # /api/jmuse serves a score's pages, audio and MIDI; /sheetmusic? is the site's search.
+    "musescore.com": (
+        "/core/", "/profiles/", "/comment/reply/", "/filter/tips/", "/node/add/", "/search/",
+        "/score/*/download/*", "/sheetmusic?", "/api/jmuse", "/pay-pal/*", "/pro/payment/*",
+        "/pro/tools/*", "/pro/gift/*", "/user/login?", "/cas/login?", "/components/analytics/",
+        "/components/data", "/gift/", "/community/", "/community?", "/redirect*", "/*/s/*",
+        "/courses?", "/courses/favorites", "/books?", "/books/purchased", "/oembed/*", "/hymnal?",
     ),
     "www.ultimate-guitar.com": (
         "/search.php", "/forum/showthread.php?p=", "/forum/showpost.php", "/guitar/", "/tabmanager/",
