@@ -496,3 +496,14 @@ def write_todo(library_dir: Path, text: str) -> Path:
     path = library_dir / "_todo.md"
     write_atomic(path, text.encode("utf-8"))
     return path
+
+
+def write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> tuple[Path, Path]:
+    """Rewrite ``_todo.md`` and ``index.html`` from the database (no requests); return their paths.
+
+    Whatever changes what the pages show calls this, so they never point at a stale state.
+    """
+    from tabarr.library_page import build_library_page, write_library_page  # it imports this module
+
+    todo = write_todo(cfg.library_dir, build_todo(conn, cfg, overrides, now))
+    return todo, write_library_page(cfg.library_dir, build_library_page(conn, cfg, overrides, now))

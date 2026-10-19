@@ -310,6 +310,21 @@ def test_cli_match_needs_a_built_index(tmp_path):
     assert get_song(conn, 1).match_decision is None
 
 
+def test_cli_match_rewrites_the_pages_it_points_to(tmp_path):
+    seed(tmp_path)
+    todo, page = tmp_path / "lib" / "_todo.md", tmp_path / "lib" / "index.html"
+    dry = run(tmp_path, "match", "--dry-run")
+    assert dry.exit_code == 0, dry.output
+    assert not todo.exists() and not page.exists()  # a dry run saves nothing, pages included
+    result = run(tmp_path, "match")
+    assert result.exit_code == 0, result.output
+    assert "on _todo.md" in result.output
+    assert todo.is_file(), result.output
+    assert "### Oasis - Wonderwal" in todo.read_text(encoding="utf-8")  # the review it points to
+    assert "Oasis - Wonderwal" in page.read_text(encoding="utf-8")
+    assert f"Wrote {todo} and {page}" in result.output
+
+
 def test_cli_match_refuses_to_save_against_an_incomplete_index(tmp_path):
     # A build stopped part-way: the songs in the sitemaps it didn't read would be saved as not found.
     conn, songs = seed(tmp_path, built=False)
