@@ -262,3 +262,25 @@ def test_large_bodies_round_trip_through_the_compressed_cache(tmp_path):
     files = list((tmp_path / "cache").rglob("*.body"))
     assert files and files[0].stat().st_size < len(body) / 10
     assert client.get("https://x.test/big").content == body
+
+
+def test_max_age_refetches_stale_copies_and_falls_back_when_budget_is_spent(tmp_path):
+    clock = [datetime(2026, 10, 18, tzinfo=UTC)]
+    bodies = iter([b"v1", b"v2"])
+    rec = Recorder(lambda r: httpx.Response(200, content=next(bodies)))
+    client = PoliteClient(
+        "ug", ProviderPolicy(budget=2, delay=(0.0, 0.0)), tmp_path / "c", user_agent="t",
+        transport=httpx.MockTransport(rec), sleep=lambda s: None, rng=random.Random(1), clock=lambda: 0.0,
+        wall_clock=lambda: clock[0],
+    )
+    url = "https://www.ultimate-guitar.com/artist/soda_stereo_2946?filter=chords"
+    assert client.get(url, max_age=timedelta(days=30)).content == b"v1"
+    clock[0] += timedelta(days=10)
+    fresh = client.get(url, max_age=timedelta(days=30))
+    assert fresh.from_cache and fresh.content == b"v1" and len(rec.requests) == 1
+    clock[0] += timedelta(days=25)
+    assert client.get(url, max_age=timedelta(days=30)).content == b"v2"
+    assert len(rec.requests) == 2
+    clock[0] += timedelta(days=40)
+    stale = client.get(url, max_age=timedelta(days=30))  # budget spent: the stale copy beats nothing
+    assert stale.from_cache and stale.content == b"v2" and len(rec.requests) == 2

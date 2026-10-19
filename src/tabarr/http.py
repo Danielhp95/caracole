@@ -19,7 +19,7 @@ import os
 import random
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Collection, Mapping, Protocol, runtime_checkable
 
@@ -75,6 +75,7 @@ class Response:
     content: bytes
     headers: Mapping[str, str] = field(default_factory=dict)
     from_cache: bool = False
+    fetched_at: str | None = None
 
     @property
     def text(self) -> str:
@@ -109,6 +110,7 @@ class Client(Protocol):
         cache: bool = True,
         conditional: bool = False,
         accept: Collection[int] = (200,),
+        max_age: timedelta | None = None,
     ) -> Response: ...
 
 
@@ -170,6 +172,7 @@ class PoliteClient:
         max_consecutive_errors: int = 3,
         timeout: float = 30.0,
         clock: Callable[[], float] = time.monotonic,
+        wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ):
         self.provider = provider
         self.policy = policy
@@ -180,6 +183,7 @@ class PoliteClient:
         self._on_event = on_event
         self._max_errors = max_consecutive_errors
         self._clock = clock
+        self._wall_clock = wall_clock
         self._last_request: float | None = None
         self._errors_in_a_row = 0
         self._blocked: ProviderBlocked | None = None
@@ -202,14 +206,20 @@ class PoliteClient:
         cache: bool = True,
         conditional: bool = False,
         accept: Collection[int] = (200,),
+        max_age: timedelta | None = None,
     ) -> Response:
+        """GET ``url``; see the class docstring. ``max_age`` refetches cached copies older than it,
+        but serves the stale copy when this run's budget is spent."""
         full = str(httpx.URL(url, params=params)) if params else url
         key = hashlib.sha256(full.encode("utf-8")).hexdigest()
         cached = self._read_cache(key) if (cache or conditional) else None
-        if cache and cached is not None and not conditional:
+        stale = cached is not None and max_age is not None and self._older_than(cached, max_age)
+        if cache and cached is not None and not conditional and not stale:
             if cached.status in accept:
                 return cached
             raise ProviderError(self.provider, full, cached.status, "cached response not accepted")
+        if stale and self.requests_made >= self.policy.budget and cached.status in accept:
+            return cached
 
         if self._blocked is not None:
             raise ProviderBlocked(self.provider, full, self._blocked.status, "blocked earlier this run")
@@ -275,6 +285,12 @@ class PoliteClient:
 
     # -- internals ---------------------------------------------------------
 
+    def _older_than(self, cached: Response, max_age: timedelta) -> bool:
+        if not cached.fetched_at:
+            return True
+        fetched = datetime.strptime(cached.fetched_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        return self._wall_clock() - fetched > max_age
+
     def _pause(self) -> None:
         if self._last_request is None:
             return
@@ -307,7 +323,7 @@ class PoliteClient:
             return None
         return Response(
             url=meta["url"], status=meta["status"], content=content,
-            headers=meta.get("headers", {}), from_cache=True,
+            headers=meta.get("headers", {}), from_cache=True, fetched_at=meta.get("fetched_at"),
         )
 
     def _write_cache(self, key: str, url: str, status: int, headers: Mapping[str, str], body: bytes) -> None:
@@ -315,7 +331,7 @@ class PoliteClient:
         body_path.parent.mkdir(parents=True, exist_ok=True)
         meta = {
             "url": url, "status": status, "headers": dict(headers),
-            "fetched_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "fetched_at": self._wall_clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
         for path, data in (
             (body_path, gzip.compress(body, compresslevel=6)),
