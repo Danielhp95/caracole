@@ -353,9 +353,9 @@ def _sheet_page(pre: str) -> str:
 def test_parse_version_page_marks_chords():
     lines = parse_version_page(_fixture("version.html")).splitlines()
     assert lines[0] == "Intro:"
-    assert lines[2] == "[ch]Bm[/ch]-[ch]G[/ch]-[ch]D[/ch]-[ch]A[/ch]"
-    assert lines[3] == "[ch]Bm[/ch]-[ch]G[/ch]-[ch]D[/ch]-[ch]A[/ch](4)"
-    assert lines[5].startswith("[ch]Bm[/ch]          [ch]G[/ch] [ch]D[/ch]       [ch]A[/ch]")
+    assert lines[2] == "[ch]Am[/ch]-[ch]F[/ch]-[ch]C[/ch]-[ch]G[/ch]"
+    assert lines[3] == "[ch]Am[/ch]-[ch]F[/ch]-[ch]C[/ch]-[ch]G[/ch](2)"
+    assert lines[5] == "[ch]Am[/ch]             [ch]F[/ch]          [ch]C[/ch]        [ch]G[/ch]"
     assert lines[6] == "Cruzo la plaza,    con el café frío"
     assert "CORO:" in lines
 
