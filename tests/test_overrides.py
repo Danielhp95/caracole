@@ -201,6 +201,14 @@ def test_an_artist_url_entry_is_found_by_any_form_of_the_artists_name(tmp_path, 
     assert artist_url_entry(o, name_forms(artist)) == (slug_key(entry), "https://www.ultimate-guitar.com/artist/634073")
 
 
+def test_an_artist_url_entry_is_compared_by_the_name_as_written(tmp_path):
+    # Its key loses the brackets: "Song Dongye (宋冬野)" and "DJ 李志" are both Latin, then the original.
+    o = load_overrides(write(tmp_path, '[artist_url]\n"Song Dongye (宋冬野)" = "https://www.ultimate-guitar.com/artist/634073"\n'
+                                       '"DJ 李志" = "https://www.ultimate-guitar.com/artist/1"\n'))
+    assert artist_url_entry(o, name_forms("宋冬野")) == ("song-dongye-宋冬野", "https://www.ultimate-guitar.com/artist/634073")
+    assert artist_url_entry(o, name_forms("李志")) is None  # another artist's name holds his
+
+
 def test_an_artist_url_entry_under_the_artists_own_key_comes_first():
     o = Overrides(artist_url={"song-dongye": "https://www.ultimate-guitar.com/artist/1",
                               "宋冬野": "https://www.ultimate-guitar.com/artist/634073"})

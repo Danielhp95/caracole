@@ -212,9 +212,10 @@ work. Caracole compares Chinese as pinyin too, and Traditional characters as
 Simplified ones.
 
 Ultimate Guitar often writes a non-Latin name in two scripts at once: the
-original, a romanization and a translation, in any order, in brackets, after
-" / " or " - ", or with nothing between them. 宋冬野's artist page calls him
-"Song Dongye (宋冬野)", and the song "斑马 斑马 Banma Banma Zebra Zebra".
+original, a romanization and a translation, in any order in brackets or after
+" / " or " - ", or, with nothing between them, the original first and the rest
+after a space. 宋冬野's artist page calls him "Song Dongye (宋冬野)", and the
+song "斑马 斑马 Banma Banma Zebra Zebra".
 Each part counts as a name of its own when caracole compares UG's names with
 yours, so `宋冬野 - 斑马斑马` finds that song there, and so would "Banma Banma",
 "Ban Ma Ban Ma" or "Zebra Zebra". Japanese, Korean and Cyrillic names come in
@@ -231,7 +232,9 @@ UG named so.
 A part that only names a version or a part, such as "Live", "Acoustic",
 "Remix" or "Intro", or that is a number, a single letter or fewer than three
 Latin letters, never makes a match on its own. Another song of the artist never
-stands in for yours either: 董小姐 is no 斑马斑马, in any script. A name with
+stands in for yours either: 董小姐 is no 斑马斑马, in any script, and Latin
+before the original, or glued to it, is part of the title: "Baby 对不起" and
+"我的Baby" are neither 对不起 nor "Baby". A name with
 two non-Latin parts, as a duet's "Joey Yung (容祖儿) & Eason Chan (陈奕迅)", is
 taken whole: it is neither singer.
 

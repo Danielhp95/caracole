@@ -1683,7 +1683,8 @@ def test_an_entry_written_as_ug_names_the_artist_serves_the_songs_artist(conn, t
     song = song_by_song_dongye(conn, "斑马斑马")
     ug = FakeUG()
     serve_song_dongye(ug)
-    pasted = Overrides(artist_url={"song-dongye-宋冬野": SONG_DONGYE_URL})
+    pasted = Overrides(artist_url={"song-dongye-宋冬野": SONG_DONGYE_URL},
+                       artist_url_names={"song-dongye-宋冬野": "Song Dongye (宋冬野)"})  # as load_overrides keeps it
 
     out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, pasted), song)
 

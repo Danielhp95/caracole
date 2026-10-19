@@ -318,6 +318,31 @@ def test_separators_between_the_parts(ug, wanted):
     assert shares_a_form(ug, wanted)
 
 
+@pytest.mark.parametrize("title,other", [
+    # With nothing between them, UG writes the original first, then its romanization or translation
+    # after a space: Latin before the original, or glued to it, is part of the title.
+    ("Baby 对不起", "对不起"),
+    ("Baby 对不起", "Baby"),
+    ("我的Baby", "Baby"),
+    ("我的Baby", "我的"),
+    ("K歌之王", "歌之王"),
+    ("Baby 对不起 Baby Dui Bu Qi", "对不起"),
+])
+def test_latin_in_an_original_is_part_of_the_title(title, other):
+    assert not shares_a_form(title, other)
+
+
+@pytest.mark.parametrize("ug,wanted", [
+    ("Baby 对不起 Baby Dui Bu Qi", "Baby 对不起"),  # the original, Latin and all, then its romanization
+    ("Baby 对不起 Baby Dui Bu Qi", "Baby Dui Bu Qi"),
+    ("17岁 17 Sui", "17岁"),  # the digits after the original start its romanization
+    ("17岁 17 Sui", "17 Sui"),
+    ("2002年的第一场雪 2002 Nian De Di Yi Chang Xue", "2002年的第一场雪"),
+])
+def test_the_original_ends_where_its_romanization_starts(ug, wanted):
+    assert shares_a_form(ug, wanted)
+
+
 @pytest.mark.parametrize("ug", ["董小姐", "郭源潮", "莉莉安 Lilian", "与我交谈 Speak With Me"])
 def test_another_song_of_the_artist_never_shares_a_form(ug):
     assert not shares_a_form(ug, "斑马斑马")

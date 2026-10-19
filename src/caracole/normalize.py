@@ -255,18 +255,21 @@ _LATIN, _CJK_SCRIPT, _OTHER = "latin", "cjk", "other"
 def name_forms(name: str) -> tuple[str, ...]:
     """The keys a name is compared by wherever a name caracole didn't write meets yours: UG's
     artist pages and sitemap slugs, the artist pages learned from UG's tab pages, purchases'
-    tags, UG's names for a download, and your ``[artist_url]`` keys. Forms are for comparing;
-    no key is made from them.
+    tags, UG's names for a download, and the names of your ``[artist_url]`` entries. Forms are
+    for comparing; no key is made from them.
 
     First come the keys a name always had: its slug key, then, for Chinese, its pinyin key and
     its Simplified one. A Latin name has its slug key alone, and a name in one other script
     these keys alone.
 
     UG writes many non-Latin names in two scripts, each part a name on its own: the original,
-    a romanization, a translation, in any order, bracketed, after " / " or " - ", or with
-    nothing between them ("斑马 斑马 Banma Banma Zebra Zebra", "Song Dongye (宋冬野)",
-    "与我交谈 Speak With Me", "봄날 (Spring Day)", "Кино (Kino)"). Each part of such a name is
-    a form too, with its pinyin and its Simplified key when it is Chinese, so "宋冬野" meets
+    a romanization, a translation, in any order when bracketed or after " / " or " - "
+    ("Song Dongye (宋冬野)", "봄날 (Spring Day)", "Кино (Kino)"); with nothing between them,
+    the original first and the rest after a space ("斑马 斑马 Banma Banma Zebra Zebra",
+    "与我交谈 Speak With Me", "17岁 17 Sui"). Latin before the original, or glued to it, is
+    part of the title ("Baby 对不起", "我的Baby", "K歌之王"), never another song's name. Each
+    part of such a name is a form too, with its pinyin and its Simplified key when it is
+    Chinese, so "宋冬野" meets
     "Song Dongye (宋冬野)" and "Song Dong Ye" meets "Song Dongye". A Latin part that starts or
     ends with the pinyin of the Chinese part also gives the romanization and the rest (a
     translation) apart: "banma-banma" and "zebra-zebra". Scripts without a romanizer here
@@ -296,17 +299,27 @@ def _script(c: str) -> str | None:
     return _LATIN if fold(c).isascii() or "LATIN" in unicodedata.name(c, "") else _OTHER
 
 
-def _runs(text: str) -> list[str]:
-    """The text cut wherever its letters change script; what isn't a letter goes with the run it ends."""
-    runs, current, script = [], "", None
-    for c in text:
-        s = _script(c)
-        if s is not None and script is not None and s != script:
-            runs.append(current)
-            current = ""
-        current += c
-        script = s or script
-    return [*runs, current]
+def _foreign(c: str) -> bool:
+    """Whether a character is a letter of a script other than Latin."""
+    return _script(c) in (_CJK_SCRIPT, _OTHER)
+
+
+def _cut(piece: str) -> list[str]:
+    """A piece of a name with nothing between its parts, cut where the original ends and its romanization
+    or translation starts: at the space (or punctuation) after the original's last letter, when Latin
+    letters follow. UG writes the original first ("斑马 斑马 Banma Banma Zebra Zebra", "17岁 17 Sui"),
+    so Latin before it, or glued to it, is part of the title ("Baby 对不起", "我的Baby", "K歌之王")."""
+    last = max((i for i, c in enumerate(piece) if _foreign(c)), default=None)
+    if last is None:
+        return [piece]
+    for i in range(last + 1, len(piece)):
+        c = piece[i]
+        if _script(c) == _LATIN:
+            return [piece]
+        if c.isspace() or unicodedata.category(c)[0] in "PSZ":
+            rest = piece[i:]
+            return [piece[:i], rest] if any(_script(r) == _LATIN for r in rest) else [piece]
+    return [piece]
 
 
 def _parts(name: str) -> list[str]:
@@ -314,9 +327,9 @@ def _parts(name: str) -> list[str]:
     text = _APOSTROPHES.sub("", name)
     if len({s for c in text if (s := _script(c)) is not None}) < 2:
         return []
-    parts = [run for piece in _PART_BREAK.split(text) for run in _runs(piece) if slug_key(run)]
-    foreign = [p for p in parts if any(_script(c) in (_CJK_SCRIPT, _OTHER) for c in p)]
-    return parts if len(foreign) == 1 else []
+    parts = [part for piece in _PART_BREAK.split(text) for part in _cut(piece) if slug_key(part)]
+    foreign = [p for p in parts if any(_foreign(c) for c in p)]
+    return parts if len(parts) > 1 and len(foreign) == 1 else []
 
 
 def _part_forms(part: str, parts: list[str]) -> list[str]:

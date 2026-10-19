@@ -145,9 +145,6 @@ def test_w7_3_an_address_with_capitals_in_its_host_is_taken(tmp_path, pasted, st
 # --- false positives: a part of a name in two scripts stands in for another song or artist ----------
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-4: on an artist page, the CJK part of a title with Latin in it "
-                          "('Baby 对不起') is an exact form, so it is taken for another song ('对不起')")
 @pytest.mark.parametrize("title,listed,expected", [
     ("对不起", [(9000001, "对不起"), (9000002, "Baby 对不起")], {9000001}),
     ("Baby 对不起", [(9000001, "对不起"), (9000002, "Baby 对不起")], {9000002}),
@@ -163,9 +160,6 @@ def test_w7_4_a_title_with_latin_in_it_is_not_another_song_of_the_artist(conn, t
     assert ids == expected
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-5: a tab of another artist whose UG name brackets a featured artist "
-                          "('Ma Di (feat. 宋冬野)') overwrites 宋冬野's learned artist page")
 @pytest.mark.parametrize("featuring", ["Ma Di (feat. 宋冬野)", "Ma Di feat. 宋冬野"])
 def test_w7_5_a_tab_of_an_artist_featuring_him_keeps_his_learned_page(conn, tmp_path, featuring):
     banma = wanted(conn, "宋冬野", "斑马斑马", decision="pinned")
@@ -197,9 +191,6 @@ def make_wav(path: Path, *, artist, title) -> Path:
     return path
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-6: a purchase of 'Baby 对不起' links to the wanted 对不起 by the "
-                          "title's CJK part, so its auto sheet would chart another recording")
 def test_w7_6_a_purchase_of_another_song_holding_the_title_is_not_linked(conn, tmp_path):
     s = add_song(conn, "周杰伦", "对不起", duration_ms=None)
     make_wav(tmp_path / "music" / "a.wav", artist="周杰伦", title="Baby 对不起")
@@ -220,9 +211,6 @@ def drop(cfg, name):
     (inbox / name).write_bytes(b"GP-DATA")
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-7: a download of 'Baby 对不起' is filed under 对不起, the first song "
-                          "whose title is one of the download's parts")
 def test_w7_7_a_download_of_a_title_with_latin_in_it_files_into_its_own_song(conn, cfg):
     sorry = add_song(conn, "周杰伦", "对不起")
     baby = add_song(conn, "周杰伦", "Baby 对不起")
@@ -343,9 +331,6 @@ def test_w7_13_a_short_artist_name_meets_ugs_name_in_two_scripts(conn, tmp_path,
     assert learned_artist_url(conn, slug_key(artist)) == page
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="W7-14: digits between the original and its romanization stay with the "
-                          "original ('17岁 17 Sui' gives 17岁-17), so the title is missed")
 def test_w7_14_digits_between_the_original_and_its_romanization(conn, tmp_path):
     ug = FakeUG()
     serve_artist(ug, "刘德华", [(9000001, "Another Song"), (9000002, "17岁 17 Sui")])

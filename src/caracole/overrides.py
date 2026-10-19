@@ -70,7 +70,8 @@ class OverridesError(Exception):
 @dataclass(frozen=True)
 class Overrides:
     """overrides.toml, canonicalized. ``pin_urls`` holds each pin's address, in ``pin``'s order;
-    ``reject`` holds each song's rejected (artist key, song key) pairs, every entry of the song's."""
+    ``reject`` holds each song's rejected (artist key, song key) pairs, every entry of the song's;
+    ``artist_url_names`` the name each ``[artist_url]`` entry is written under, by its key."""
 
     alias: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     match: Mapping[str, tuple[str, str]] = field(default_factory=dict)
@@ -81,6 +82,7 @@ class Overrides:
     block: frozenset[int] = frozenset()
     pin_urls: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     reject: Mapping[str, frozenset[tuple[str, str]]] = field(default_factory=dict)
+    artist_url_names: Mapping[str, str] = field(default_factory=dict)
 
 
 def override_key(display: str) -> str:
@@ -175,7 +177,8 @@ def artist_url_entry(overrides: Overrides, keys: Iterable[str]) -> tuple[str, st
 
     The entry under one of the keys comes first, else one whose name shares a form with them
     (``normalize.name_forms``), hyphens aside: an entry written "Song Dongye (宋冬野)", as UG
-    names the artist, or "Song Dongye" serves 宋冬野's songs.
+    names the artist, or "Song Dongye" serves 宋冬野's songs. The name is the one the entry is
+    written under: its key has lost the brackets that tell its parts.
     """
     keys = [k for k in keys if k]
     for key in keys:
@@ -183,7 +186,7 @@ def artist_url_entry(overrides: Overrides, keys: Iterable[str]) -> tuple[str, st
             return key, overrides.artist_url[key]
     wanted = {compact(k) for k in keys}
     for key, url in overrides.artist_url.items():
-        if not wanted.isdisjoint(compact(f) for f in name_forms(key)):
+        if not wanted.isdisjoint(compact(f) for f in name_forms(overrides.artist_url_names.get(key, key))):
             return key, url
     return None
 
@@ -284,6 +287,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
     match = {_song_key(k, f"[match] {k!r}"): _ug_ref(v, f"[match] {k!r}") for k, v in table("match").items()}
 
     artist_url: dict[str, str] = {}
+    artist_url_names: dict[str, str] = {}
     for artist, url in table("artist_url").items():
         page = _artist_url_value(url)
         if page is None:
@@ -292,6 +296,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
                 f"tab pages ({TAB_PAGE_SHAPE}), as your browser shows it, got {url!r}"
             )
         artist_url[slug_key(artist)] = page
+        artist_url_names[slug_key(artist)] = artist
 
     pin: dict[str, tuple[int, ...]] = {}
     pin_urls: dict[str, tuple[str, ...]] = {}
@@ -331,6 +336,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
+        artist_url_names=artist_url_names,
     )
 
 
