@@ -285,3 +285,59 @@ def test_sync_sources_reports_spotify_problems_as_errors(tmp_path, wanted):
     record = repo.record("source:spotify")
     assert record["state"] == "error" and record["new"] == 1
     assert record["missing_playlists"] == ["Learn", LEARN]
+
+
+# --- with the song repository: a wanted.txt line you fix, the sync, the music scan --------------
+
+
+def wav(path, seconds):
+    """A silent WAV file of that many seconds; its name says which song it is."""
+    import wave
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(b"\x00\x00" * 8000 * seconds)
+    return path
+
+
+def write_wanted(cfg, text):
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text(text, encoding="utf-8")
+
+
+@pytest.mark.parametrize("fixed", ["Radiohead - Creep | 0:10", "Radiohead - Creep"])
+def test_a_fixed_wanted_line_lets_the_purchase_it_kept_out_link(conn, tmp_path, fixed):
+    # "| 0:30" for a song of 0:10. The scan wants the file of a song to last as long as the
+    # song, give or take 3 s, so the purchase stays out until the line is fixed or its
+    # duration goes; then the next sync and scan link it.
+    from tabarr.music import scan_music
+    from tabarr.songs import find_song
+
+    cfg = config(tmp_path)
+    bought = wav(cfg.music_dir / "Radiohead - Creep.wav", 10)
+    write_wanted(cfg, "Radiohead - Creep | 0:30\n")
+    sync_sources(conn, cfg, NOW)
+    assert scan_music(conn, cfg.music_dir).unmatched == [bought]
+    write_wanted(cfg, fixed + "\n")
+    sync_sources(conn, cfg, NOW + timedelta(days=1))
+    assert scan_music(conn, cfg.music_dir).unmatched == []
+    assert find_song(conn, "radiohead/creep").audio_path == str(bought)
+
+
+def test_the_wanted_line_outranks_spotify_until_its_duration_comes_off(conn, tmp_path):
+    # Spotify has Creep at 3:58 and the line says 4:20, the version you bought, say: the line
+    # wins, whichever runs first. Taken off the line, the duration is Spotify's.
+    from tabarr.songs import find_song
+
+    cfg = config(tmp_path, client_id="cid", client_secret="secret")
+    write_wanted(cfg, "Radiohead - Creep | 4:20\n")
+    sync_sources(conn, cfg, NOW, spotify=OneTrackSpotify())
+    song = find_song(conn, "radiohead/creep")
+    assert song.source_ids == {"wanted": ["radiohead/creep"], "spotify": ["tCreep"]}
+    assert (song.album, song.duration_ms) == ("Pablo Honey", 260000)
+    write_wanted(cfg, "Radiohead - Creep\n")
+    sync_sources(conn, cfg, NOW + timedelta(days=1), spotify=OneTrackSpotify())
+    assert find_song(conn, "radiohead/creep").duration_ms == 238000

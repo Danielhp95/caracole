@@ -1,8 +1,11 @@
 """Provider health: cooldowns after blocks, and the per-request event log.
 
 On a block a provider cools down for 24 hours, doubling on each repeated
-block (24 h, 48 h, 96 h, …), until a successful run resets it (plan §6).
-State lives in the ``kv`` table under ``provider:<name>``.
+block (24 h, 48 h, 96 h, …), until a successful run resets it (plan §6). Each
+cooldown is 2 hours longer than that, so however late the timer starts a run,
+the nightly run's k-th block in a row skips the next 2^(k−1) runs, not one
+fewer and not one more. State lives in the ``kv`` table under
+``provider:<name>``.
 """
 
 from __future__ import annotations
@@ -16,6 +19,12 @@ from tabarr.db import kv_get_json, kv_set_json
 from tabarr.http import Event
 
 COOLDOWN_BASE = timedelta(hours=24)
+# A cooldown counts from the blocked run's start, and the timer (nix/module.nix)
+# starts each run at 03:30 plus a fresh delay of up to 45 minutes; the night the
+# clocks go back is 25 hours long. Without a margin, 24 h would end before the
+# next run about half the time. 2 h covers both and stays well short of the
+# night after.
+COOLDOWN_MARGIN = timedelta(hours=2)
 
 
 @dataclass(frozen=True)
@@ -64,12 +73,12 @@ def _save(conn: sqlite3.Connection, s: ProviderState) -> ProviderState:
 
 
 def record_block(conn: sqlite3.Connection, provider: str, now: datetime, message: str) -> ProviderState:
-    """Start (or extend) a cooldown: 24 h × 2^(strikes − 1)."""
+    """Start (or extend) a cooldown: 24 h × 2^(strikes − 1), plus the margin."""
     s = get_state(conn, provider)
     strikes = s.strikes + 1
     return _save(conn, ProviderState(
         provider=provider, strikes=strikes,
-        cooldown_until=now + COOLDOWN_BASE * (2 ** (strikes - 1)),
+        cooldown_until=now + COOLDOWN_BASE * (2 ** (strikes - 1)) + COOLDOWN_MARGIN,
         last_ok=s.last_ok, last_error=message, last_error_at=now,
     ))
 

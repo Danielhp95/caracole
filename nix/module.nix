@@ -274,7 +274,7 @@ in
     schedule = lib.mkOption {
       type = lib.types.str;
       default = "*-*-* 03:30";
-      description = "When `tabarr run` starts (systemd.time(7) calendar event), give or take 45 minutes.";
+      description = "When `tabarr run` starts (systemd.time(7) calendar event), up to 45 minutes late.";
     };
 
     settings = lib.mkOption {

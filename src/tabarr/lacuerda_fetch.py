@@ -3,7 +3,9 @@
 UG lists every artist with an accented name only by bare ids, but a LaCuerda
 artist URL can be built from the name. A song is tried when it isn't ignored,
 has no complete human sheet, looks Spanish, and LaCuerda hasn't answered for it
-in the last 30 days (``songs.lacuerda_checked_at``). Per song:
+in the last 30 days (``songs.lacuerda_checked_at``); or, whatever its sheet and
+the date, when the library lost the LaCuerda sheet kept for it (deleted on a
+synced device, cut short by a power cut), which is then written again. Per song:
 
 1. **The artist page.** Its slugs are tried best guess first; a 404, or
    LaCuerda's HTTP 200 "aqui llega:" body, moves on to the next. The page is
@@ -58,7 +60,7 @@ from tabarr.lacuerda import (
     parse_version_page,
     version_url,
 )
-from tabarr.library import drop_file, keep_file, kept_files, write_info
+from tabarr.library import drop_file, holds, keep_file, kept_already, kept_files, write_info
 from tabarr.lyrics import song_lyrics
 from tabarr.normalize import clean_title
 from tabarr.overrides import Overrides
@@ -80,6 +82,7 @@ ARTIST_PAGE_MAX_AGE = timedelta(days=30)
 RECHECK_AFTER = timedelta(days=30)
 _ACCEPT = (200, 404)  # a 404 is an answer: no such artist, or no such version
 HUMAN_SHEET, AUTO_SHEET = SHEET_FILE_NAMES  # "sheet.txt", "sheet (auto).txt"
+SHEET_DOCS = ("sheet.json", HUMAN_SHEET)  # what keeping a sheet writes, in that order
 
 
 @dataclass
@@ -116,7 +119,7 @@ def lacuerda_sheets(
     stats = LaCuerdaStats()
     stamp = _stamp(now)
     fetched: set[str] = set()  # URLs fetched from LaCuerda in this pass
-    for song in _songs_to_try(conn, rank, now, overrides):
+    for song in _songs_to_try(conn, library_dir, rank, now, overrides):
         try:
             sheet = _find_sheet(client, song.artists[0], song.title, now, fetched)
         except ProviderBlocked:
@@ -145,24 +148,28 @@ def lacuerda_sheets(
 
 
 def _songs_to_try(
-    conn: sqlite3.Connection, rank: RankPolicy, now: datetime, overrides: Overrides | None
+    conn: sqlite3.Connection, library_dir: Path, rank: RankPolicy, now: datetime, overrides: Overrides | None
 ) -> list[Song]:
     """Songs worth asking LaCuerda about, newest first.
 
     Not ignored; no kept human sheet that is complete or that you pinned; probably
     Spanish (the lyrics decide when there are any, else the title); an artist name
-    a slug can be built from; and not asked about in the last 30 days.
+    a slug can be built from; and not asked about in the last 30 days. A song whose
+    kept LaCuerda sheet the library lost (``_lost``) is asked about whatever its
+    sheet and the date, so that the sheet is written again.
     """
     cutoff = _utc(now) - RECHECK_AFTER
     ignored = overrides.ignore if overrides is not None else frozenset()
     songs = []
     for song in list_songs(conn):
-        recent = not _before(song.lacuerda_checked_at, cutoff)
-        if song.status == "ignored" or song.key in ignored or recent:
+        if song.status == "ignored" or song.key in ignored:
             continue
         kept = _kept_sheet(conn, song.id)
-        if kept is not None and (_complete(kept.coverage, rank) or _pinned(overrides, song, kept)):
-            continue
+        if not (kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id)):
+            if not _before(song.lacuerda_checked_at, cutoff):  # asked about in the last 30 days
+                continue
+            if kept is not None and (_complete(kept.coverage, rank) or _pinned(overrides, song, kept)):
+                continue
         lyrics = song_lyrics(song)
         if not looks_spanish(clean_title(song.title), lyrics.plain if lyrics is not None else None):
             continue
@@ -177,6 +184,17 @@ def _kept_sheet(conn: sqlite3.Connection, song_id: int) -> VersionRow | None:
         if f.name == HUMAN_SHEET:
             return get_version(conn, f.version_id)
     return None
+
+
+def _lost(conn: sqlite3.Connection, library_dir: Path, song_id: int) -> bool:
+    """Whether a file of the song's kept LaCuerda sheet is no longer in the library as kept
+    (``library.holds``): deleted on a synced device, cut short by a power cut, a link in its place.
+    Each is hashed; the files table keeps no length to compare first."""
+    return any(
+        f.name in SHEET_DOCS and get_version(conn, f.version_id).provider == PROVIDER
+        and not holds(library_dir / f.path, f.sha256)
+        for f in kept_files(conn, song_id)
+    )
 
 
 def _pinned(overrides: Overrides | None, song: Song, kept: VersionRow) -> bool:
@@ -295,12 +313,16 @@ def _record(
 
     The sheet already kept, met again, is only rescored: the lyrics may have
     arrived since, and once it proves complete the auto-chords sheet gives way,
-    as it would have on keeping. Returns whether the sheet was kept now.
+    as it would have on keeping. A kept LaCuerda sheet the library lost
+    (``_lost``) counts as none, so the sheet met is kept: the same one is
+    written again. Returns whether the sheet was kept now.
     """
     lyrics = song_lyrics(song)
     lines = coverage.lyric_lines(lyrics.plain) if lyrics is not None else []
     value = coverage.coverage(sheet.markup, lines, line_match=rank.line_match)
     kept = _kept_sheet(conn, song.id)
+    if kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id):
+        kept = None
     vid = upsert_version(
         conn, provider=PROVIDER, tab_id=sheet.tab_id, song_id=song.id, slot="sheet", kind="acordes",
         rating=0, votes=0, version=sheet.version, label=None, url=sheet.url,
@@ -327,20 +349,20 @@ def _keep(
 ) -> None:
     """Keep the sheet as ``sheet.txt`` (no markup) and ``sheet.json``, and pick it for the slot.
 
-    ``sheet.json`` goes first: ``sheet.txt`` is what makes the song found. A
-    complete sheet replaces the auto-chords sheet, which only stands in for a
-    human sheet until one covers the lyrics.
+    ``sheet.json`` goes first: ``sheet.txt`` is what makes the song found. A file
+    of this version kept already, and still in the library, isn't written again
+    (``library.kept_already``). A complete sheet replaces the auto-chords sheet,
+    which only stands in for a human sheet until one covers the lyrics.
     """
     doc = {
         "provider": PROVIDER, "url": sheet.url, "content": sheet.markup, "version": sheet.version,
     }
-    files = {
-        "sheet.json": json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
-        HUMAN_SHEET: strip_markup(sheet.markup),
-    }
+    files = dict(zip(SHEET_DOCS, (json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
+                                  strip_markup(sheet.markup)), strict=True))
     for name, text in files.items():
-        keep_file(conn, library_dir, song=song, version_id=version_id, name=name,
-                  data=text.encode("utf-8"), rank=1)
+        data = text.encode("utf-8")
+        if not kept_already(conn, library_dir, song=song, version_id=version_id, name=name, data=data):
+            keep_file(conn, library_dir, song=song, version_id=version_id, name=name, data=data, rank=1)
     if complete:
         _retire_auto_sheet(conn, library_dir, song, version_id)
     set_picks(conn, song.id, SHEET_KINDS, [version_id])

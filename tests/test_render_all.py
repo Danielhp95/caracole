@@ -22,7 +22,7 @@ from typer.testing import CliRunner
 
 from tabarr.autochords import ChordSegment, build_sheet
 from tabarr.cli import build_app
-from tabarr.db import kv_get_json
+from tabarr.db import kv_get_json, kv_set_json
 from tabarr.lacuerda import parse_version_page
 from tabarr.library import drop_file, keep_file, song_dir, write_atomic, write_info
 from tabarr.overrides import Overrides, load_overrides
@@ -320,6 +320,44 @@ def test_the_auto_pdf_goes_once_the_human_sheet_proves_complete(conn, cfg):
     assert kv_get_json(conn, f"render:{song.id}:auto") is None
 
 
+def drop_human_sheet(conn, cfg, song):
+    """The fetch drops the song's UG sheet: its match was undone ([reject], a corrected [match])."""
+    for name in ("sheet.txt", "sheet.json"):
+        drop_file(conn, cfg.library_dir, song=song, name=name)
+
+
+@pytest.mark.parametrize("auto", [False, True])
+def test_the_cho_and_pdf_of_a_sheet_no_longer_kept_go(conn, cfg, auto):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    if auto:
+        auto_sheet(conn, cfg, song)
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    (folder / "notes.txt").write_text("yours", encoding="utf-8")  # untracked: never tabarr's to delete
+    drop_human_sheet(conn, cfg, song)
+
+    render(conn, cfg)
+
+    assert not (folder / "sheet.cho").exists() and not (folder / "sheet.pdf").exists()
+    record = kv_get_json(conn, f"render:{song.id}")  # the auto sheet's now, if there is one
+    assert (record or {}).get("pdf") == ("sheet (auto).pdf" if auto else None)
+    assert (folder / "sheet (auto).pdf").is_file() is auto
+    assert (folder / "notes.txt").read_text(encoding="utf-8") == "yours"
+    assert info_json(cfg, song)["render"] == ({"transpose": 0, "pdf": "sheet (auto).pdf"} if auto else None)
+
+
+def test_a_sheet_pdf_tabarr_never_rendered_stays(conn, cfg):
+    # No render record names it, so it is yours: a song tabarr found no sheet for, say.
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    folder = song_dir(cfg.library_dir, song)
+    folder.mkdir(parents=True)
+    for name in ("sheet.cho", "sheet.pdf"):
+        (folder / name).write_bytes(b"yours")
+    render(conn, cfg)
+    assert [(folder / name).read_bytes() for name in ("sheet.cho", "sheet.pdf")] == [b"yours", b"yours"]
+
+
 def test_lacuerda_sheet_gets_letter_chords(conn, cfg):
     song = add_song(conn, "Placeholder Banda", "Canción Sintética")
     lacuerda_sheet(conn, cfg, song, parse_version_page(LC_PAGE))
@@ -393,6 +431,43 @@ def test_missing_pdf_rerenders(conn, cfg):
     pdf_of(cfg, song).unlink()
     assert render(conn, cfg).rendered == 1
     assert pdf_of(cfg, song).is_file()
+
+
+@pytest.mark.parametrize("how", ["emptied", "same-size", "linked"])
+def test_a_pdf_that_is_no_longer_the_one_rendered_rerenders(conn, cfg, how):
+    # "emptied": the rename of a write a power cut caught, with no data behind it.
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    pdf = pdf_of(cfg, song)
+    good = pdf.read_bytes()
+    twin = pdf.with_name("elsewhere.pdf")
+    if how == "emptied":
+        pdf.write_bytes(b"")
+    elif how == "same-size":
+        pdf.write_bytes(bytes(len(good)))
+    else:  # a link to a file with the very bytes rendered, which is no reason to trust it
+        twin.write_bytes(good)
+        pdf.unlink()
+        pdf.symlink_to(twin)
+    assert render(conn, cfg).rendered == 1
+    data, record = pdf.read_bytes(), kv_get_json(conn, f"render:{song.id}")
+    assert not pdf.is_symlink() and data.startswith(b"%PDF-1.4 fake") and b"[Bm]Una" in data
+    assert (record["pdf_size"], record["pdf_sha256"]) == (len(data), hashlib.sha256(data).hexdigest())
+    assert how != "linked" or twin.read_bytes() == good  # the link's target is left as it was
+    run = FakeChordPro()
+    assert render(conn, cfg, runner=run).skipped == 1 and run.calls == []  # in place again: left alone
+
+
+def test_a_pdf_whose_record_predates_its_size_and_sha256_rerenders_once(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    key = f"render:{song.id}"
+    old = {k: kv_get_json(conn, key)[k] for k in ("source_sha", "transpose", "font", "pdf")}
+    kv_set_json(conn, key, old)  # as a tabarr that didn't record what it wrote left it
+    assert render(conn, cfg).rendered == 1
+    assert render(conn, cfg).skipped == 1
 
 
 def test_force_rerenders_unchanged_sheets(conn, cfg):
@@ -779,11 +854,14 @@ def test_render_record_says_what_the_pdf_was_made_from(conn, cfg, tmp_path):
     human_sheet(conn, cfg, song, ZH_SHEET, tonality="")
     render(conn, cfg, overrides(cfg, '[transpose]\n"宋冬野 - 斑马斑马" = 3\n'))
     cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_bytes()
+    pdf = pdf_of(cfg, song).read_bytes()
     assert kv_get_json(conn, f"render:{song.id}") == {
         "source_sha": hashlib.sha256(cho).hexdigest(),
         "transpose": 3,
         "font": str(font),
         "pdf": "sheet.pdf",
+        "pdf_sha256": hashlib.sha256(pdf).hexdigest(),  # what was written, to tell it is still there
+        "pdf_size": len(pdf),
     }
 
 

@@ -413,10 +413,21 @@ def test_sync_counts_the_same_song_twice_as_one(tmp_path):
     path.write_text("宋冬野 - 斑马，斑马\n宋冬野 - 斑马斑马 | 安和桥北 | 4:13\n", encoding="utf-8")
     stats, up = sync(path)
     assert (stats.seen, stats.new) == (1, 1)
-    # Both lines reach the repository, which merges them: the second one fills in the album.
-    assert [(c["source_id"], c["album"]) for c in up.calls] == [
-        ("宋冬野/斑马斑马", None),
-        ("宋冬野/斑马斑马", "安和桥北"),
+    # The song reaches the repository once, as its first line: the second one fills in the rest.
+    assert [(c["source_id"], c["title"], c["album"], c["duration_ms"]) for c in up.calls] == [
+        ("宋冬野/斑马斑马", "斑马，斑马", "安和桥北", 253000),
+    ]
+
+
+def test_a_song_on_two_lines_takes_each_field_from_the_first_line_that_gives_it(tmp_path):
+    # The repository keeps what a line says now, so the order of the lines mustn't matter more
+    # than which comes first: a later line that leaves the album out doesn't take it away.
+    path = tmp_path / "wanted.txt"
+    path.write_text("宋冬野 - 斑马斑马 | 安和桥北 | 4:13\n宋冬野 - 斑马，斑马 | 4:14\n", encoding="utf-8")
+    stats, up = sync(path)
+    assert (stats.seen, stats.new) == (1, 1)
+    assert [(c["title"], c["album"], c["duration_ms"]) for c in up.calls] == [
+        ("斑马斑马", "安和桥北", 253000),
     ]
 
 

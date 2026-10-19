@@ -2,7 +2,8 @@
 
 Two sources feed the song table. ``wanted.txt`` is always available; Spotify is
 optional. Each sync hands its songs to ``songs.upsert_song``, which merges a song
-that arrives from several sources into one record. The repository functions are
+that arrives from several sources into one record, with the album and duration
+your wanted.txt line gives now, else Spotify's. The repository functions are
 injected, so a source can be tested without a database; by default they are
 imported from ``tabarr.songs`` and ``tabarr.db`` on first use.
 """

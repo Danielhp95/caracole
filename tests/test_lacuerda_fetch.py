@@ -606,6 +606,40 @@ def test_the_sheet_already_kept_is_rescored_not_written_again(conn, tmp_path):
     assert get_song(conn, song.id).lacuerda_checked_at == "2026-11-18T03:30:00Z"
 
 
+def damage(path: Path, how: str) -> None:
+    """What the library may do to a kept file between two runs."""
+    if how == "deleted":  # on a synced device, say
+        path.unlink()
+    elif how == "emptied":  # the rename of a write a power cut caught, with no data behind it
+        path.write_bytes(b"")
+    else:  # a link to a file with the very bytes kept, which is no reason to trust it
+        twin = path.with_name("elsewhere")
+        twin.write_bytes(path.read_bytes())
+        path.unlink()
+        path.symlink_to(twin)
+
+
+@pytest.mark.parametrize("how", ["deleted", "emptied", "linked"])
+def test_a_kept_sheet_the_library_lost_is_written_again_at_the_next_run(conn, tmp_path, how):
+    # Complete and asked about yesterday, so LaCuerda would leave the song alone for 30 days.
+    site = FakeLaCuerda()
+    song = spanish_song(conn)
+    run(site, conn, tmp_path)
+    here = song_folder(tmp_path)
+    kept, inode = (here / "sheet.txt").read_bytes(), (here / "sheet.json").stat().st_ino
+    damage(here / "sheet.txt", how)
+    site.requests.clear()
+    tomorrow = NOW + timedelta(days=1)
+
+    assert run(site, conn, tmp_path, tomorrow) == LaCuerdaStats(tried=1, kept=1)
+
+    assert not (here / "sheet.txt").is_symlink() and (here / "sheet.txt").read_bytes() == kept
+    assert (here / "sheet.json").stat().st_ino == inode  # still kept: not written again
+    assert site.requests == []  # both pages from the cache
+    assert get_song(conn, song.id).status == "found"
+    assert run(site, conn, tmp_path, tomorrow) == LaCuerdaStats()  # all there again: left alone
+
+
 # --- errors are never misses ------------------------------------------------------
 
 

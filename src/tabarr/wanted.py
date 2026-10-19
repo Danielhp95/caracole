@@ -19,6 +19,10 @@ the library folder, so Syncthing carries it to your phone. One song per line:
 - ``#`` starts a comment, at the start of a line or after a space, and blank
   lines are ignored. Write ``\#`` for a ``#`` that belongs to a name
   ("John Lennon - \#9 Dream") and ``\|`` for a ``|``.
+- A line's album and duration win over Spotify's. Correcting one corrects the
+  song at the next sync, and taking one off the line takes it off the song,
+  for Spotify's to take its place. A song on two lines is its first line; a
+  later one only fills in what the first leaves out.
 - Deleting a line doesn't delete the song from tabarr, just as unliking a track
   on Spotify doesn't.
 - The file must be a regular file. Others can write to the library, so a
@@ -243,6 +247,11 @@ def sync_wanted(
     new line), remembered in the kv table. Passing ``now`` every night would let
     the repository's "keep the newest added_at" rule push every listed song to
     the front of the queue, so a song you just added would no longer go first.
+
+    The repository keeps what a song's line says now, album and duration
+    included, so a song listed on several lines is handed over once: as its
+    first line, with what that line leaves out taken from the next that gives
+    it (``_one_per_song``).
     """
     path = Path(path)
     stats = SyncStats()
@@ -270,8 +279,8 @@ def sync_wanted(
     kv_get = kv_get or default_kv_get()
     kv_set = kv_set or default_kv_set()
     stamp = utc_stamp(now)
-    songs: set[str] = set()
-    for line in lines:
+    songs = _one_per_song(lines)
+    for line in songs:
         key = line.identity
         first_seen = kv_get(conn, FIRST_SEEN_KEY + key)
         _, created = upsert(
@@ -287,10 +296,23 @@ def sync_wanted(
         )
         if first_seen is None:
             kv_set(conn, FIRST_SEEN_KEY + key, stamp)
-        songs.add(key)
         stats.new += int(created)
     stats.seen = len(songs)
     return stats
+
+
+def _one_per_song(lines: list[WantedLine]) -> list[WantedLine]:
+    """Each song once: its first line (as for ``find_wanted``), filled in by its later ones."""
+    first: dict[str, WantedLine] = {}
+    for line in lines:
+        kept = first.setdefault(line.identity, line)
+        if kept is not line:
+            first[line.identity] = replace(
+                kept,
+                album=kept.album or line.album,
+                duration_ms=line.duration_ms if kept.duration_ms is None else kept.duration_ms,
+            )
+    return list(first.values())
 
 
 def _checked_line(
