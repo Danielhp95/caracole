@@ -86,6 +86,10 @@ let
     stubbed
     { services.tabarr.settings.state_dir = "/elsewhere"; }
   ];
+  libraryInHome = evalSystem [
+    stubbed
+    { services.tabarr.libraryDir = "/home/alice/Tabs"; }
+  ];
 
   failedAssertions = cfg: map (a: a.message) (lib.filter (a: !a.assertion) cfg.assertions);
 
@@ -194,6 +198,8 @@ let
     "settings.state_dir is rejected" = lib.any (lib.hasInfix "state_dir") (
       failedAssertions stateDirSet
     );
+    "a library under /home, which the sandbox hides, is rejected" =
+      lib.any (lib.hasInfix "ProtectHome") (failedAssertions libraryInHome);
     "the package defaults to this flake's package" =
       defaults.services.tabarr.package.drvPath == defaultPackage.drvPath;
     "the auto-chords package defaults to this flake's autochords package" =

@@ -271,6 +271,23 @@ in
         ];
         message = "services.tabarr: libraryDir and musicDir must be absolute paths without whitespace.";
       }
+      {
+        assertion =
+          let
+            hidden =
+              dir:
+              lib.any (top: dir == top || lib.hasPrefix "${top}/" dir) [
+                "/home"
+                "/root"
+                "/run/user"
+              ];
+          in
+          !(hidden cfg.libraryDir || hidden cfg.musicDir);
+        message = ''
+          services.tabarr: libraryDir and musicDir must be outside /home, /root
+          and /run/user, which the units' sandbox hides (ProtectHome).
+        '';
+      }
     ];
 
     # The generated file always names the directories the sandbox opens; a
