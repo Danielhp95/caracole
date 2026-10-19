@@ -23,12 +23,12 @@ from tabarr.autochords import ChordSegment, build_sheet
 from tabarr.cli import build_app
 from tabarr.db import kv_get_json
 from tabarr.lacuerda import parse_version_page
-from tabarr.library import keep_file, song_dir, write_atomic, write_info
+from tabarr.library import drop_file, keep_file, song_dir, write_atomic, write_info
 from tabarr.overrides import Overrides, load_overrides
 from tabarr.render import RenderStats, render_all
 from tabarr.songs import get_song, update_song
 from tabarr.ug.page import strip_markup
-from tabarr.versions import upsert_version
+from tabarr.versions import set_coverage, upsert_version
 
 from conftest import add_song
 from helpers.ug_pages import version_dict
@@ -229,11 +229,18 @@ def test_auto_sheet_rendered_under_its_own_name(conn, cfg):
     assert stats.rendered == 1
 
 
-def test_human_sheet_replaces_auto_outputs(conn, cfg):
+def complete_human_sheet(conn, cfg, song):
+    """A complete human sheet arrives: the fetch step keeps it and retires the auto sheet."""
+    vid = human_sheet(conn, cfg, song)
+    set_coverage(conn, vid, 1.0)
+    drop_file(conn, cfg.library_dir, song=song, name="sheet (auto).txt")
+
+
+def test_a_complete_human_sheet_replaces_auto_outputs(conn, cfg):
     song = add_song(conn, "Placeholder Band", "Synthetic Song")
     auto_sheet(conn, cfg, song)
     render(conn, cfg)
-    human_sheet(conn, cfg, song)
+    complete_human_sheet(conn, cfg, song)
     stats = render(conn, cfg)
     folder = song_dir(cfg.library_dir, song)
     assert stats.rendered == 1
@@ -241,20 +248,54 @@ def test_human_sheet_replaces_auto_outputs(conn, cfg):
     assert (folder / "sheet.pdf").is_file()
     assert not (folder / "sheet (auto).cho").exists()
     assert not (folder / "sheet (auto).pdf").exists()
-    assert (folder / "sheet (auto).txt").is_file()  # the kept auto sheet is the fetch step's
 
 
 def test_auto_outputs_stay_until_the_human_pdf_replaces_them(conn, cfg):
     song = add_song(conn, "Placeholder Band", "Synthetic Song")
     auto_sheet(conn, cfg, song)
     render(conn, cfg)
-    human_sheet(conn, cfg, song)
+    complete_human_sheet(conn, cfg, song)
     folder = song_dir(cfg.library_dir, song)
     assert render(conn, cfg, runner=FakeChordPro(fail=("sheet.cho",))).failed == 1
     assert (folder / "sheet (auto).pdf").is_file()  # still the song's only PDF
     assert (folder / "sheet (auto).cho").is_file()
     assert render(conn, cfg).rendered == 1
     assert not (folder / "sheet (auto).pdf").exists()
+
+
+def test_a_partial_human_sheet_keeps_the_auto_pdf_beside_it(conn, cfg):
+    # The fetch step keeps 'sheet (auto).txt' until a complete human sheet arrives, so
+    # both are rendered: the auto sheet still has every verse.
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    render(conn, cfg)
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)
+    stats = render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    assert stats.failed == 0 and stats.rendered >= 1
+    for name in ("sheet.cho", "sheet.pdf", "sheet (auto).cho", "sheet (auto).pdf"):
+        assert (folder / name).is_file(), name
+    assert info_json(cfg, song)["render"] == {"transpose": 0, "pdf": "sheet.pdf"}
+    run = FakeChordPro()
+    assert render(conn, cfg, runner=run).skipped == 2 and run.calls == []
+    down = overrides(cfg, '[transpose]\n"Placeholder Band - Synthetic Song" = -2\n')
+    assert render(conn, cfg, down).rendered == 2  # both PDFs are in your key
+    assert b"--transpose=-2" in pdf_of(cfg, song, "sheet (auto).pdf").read_bytes()
+
+
+def test_the_auto_pdf_goes_once_the_human_sheet_proves_complete(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    vid = human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    assert (folder / "sheet (auto).pdf").is_file()  # coverage unknown: no lyrics yet
+    set_coverage(conn, vid, 0.95)
+    drop_file(conn, cfg.library_dir, song=song, name="sheet (auto).txt")  # as rescoring does
+    render(conn, cfg)
+    assert not (folder / "sheet (auto).pdf").exists() and not (folder / "sheet (auto).cho").exists()
+    assert (folder / "sheet.pdf").is_file()
+    assert kv_get_json(conn, f"render:{song.id}:auto") is None
 
 
 def test_lacuerda_sheet_gets_letter_chords(conn, cfg):

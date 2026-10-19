@@ -34,17 +34,22 @@ beside it:
   ``content`` of the ``sheet.json`` next to it, with the key UG gives the
   version (``tonality_name``) and the capo in ``meta``, to ``sheet.cho`` and
   ``sheet.pdf``;
-- otherwise an auto-chords sheet (``sheet (auto).txt``) is rendered to
-  ``sheet (auto).cho`` and ``sheet (auto).pdf``, so a human sheet found later
-  never collides with them. They are removed once the human sheet's PDF exists.
+- an auto-chords sheet (``sheet (auto).txt``) is rendered to
+  ``sheet (auto).cho`` and ``sheet (auto).pdf``, so a human sheet never
+  collides with them. The fetch steps keep the auto sheet until a complete
+  human sheet arrives, so beside a partial human sheet it is rendered too.
+  Once they retire it, its outputs are removed as soon as the human sheet's
+  PDF is in place.
 
-The PDF is transposed by the song's ``[transpose]`` override. kv
-``render:<song id>`` keeps what each PDF was made from (the SHA-256 of the
-.cho, the transposition, the font and the PDF's name), so a PDF is rendered
-again only when one of those changes, when it is missing, or when forced.
-A sheet whose letters the built-in fonts lack gets its .cho but no PDF until a
-usable CJK font is set: one font error for the pass, not a failure per song. A
-font that is set but unusable (a collection, a missing file) counts as none.
+The PDFs are transposed by the song's ``[transpose]`` override. kv
+``render:<song id>`` keeps what the song's PDF was made from (the SHA-256 of
+the .cho, the transposition, the font and the PDF's name): its human sheet's,
+else its auto sheet's. ``render:<song id>:auto`` does the same for an auto
+sheet's PDF beside a human one. A PDF is rendered again only when one of those
+changes, when it is missing, or when forced. A sheet whose letters the
+built-in fonts lack gets its .cho but no PDF until a usable CJK font is set:
+one font error for the pass, not a failure per song. A font that is set but
+unusable (a collection, a missing file) counts as none.
 """
 
 from __future__ import annotations
@@ -68,7 +73,7 @@ from typing import Any, Literal
 from tabarr.autochords.merge import AUTO_MARKER
 from tabarr.chordpro import to_chordpro
 from tabarr.config import Config
-from tabarr.db import kv_get_json, kv_set_json
+from tabarr.db import kv_delete, kv_get_json, kv_set_json
 from tabarr.library import KeptFile, kept_files, song_dir, write_info
 from tabarr.normalize import clean_title
 from tabarr.overrides import Overrides
@@ -287,18 +292,16 @@ def render_all(
         if song.status == "ignored" or song.key in overrides.ignore:
             continue
         try:
-            outcome = _render_song(
+            done = _render_song(
                 conn, cfg, overrides, song, cjk_font=font, runner=runner, force=force
             )
         except (RenderError, OSError) as e:
             log.warning("no PDF for %s: %s", song.display, e)
             failed.append(song.display)
             continue
-        if outcome == "rendered":
-            stats.rendered += 1
-        elif outcome == "skipped":
-            stats.skipped += 1
-        elif outcome == "no font":
+        stats.rendered += sum(1 for d in done if d.outcome == "rendered")
+        stats.skipped += sum(1 for d in done if d.outcome == "skipped")
+        if any(d.outcome == "no font" for d in done):
             no_font.append(song.display)
     stats.failed = len(failed)
     if no_font:
@@ -311,6 +314,13 @@ def render_all(
     return stats
 
 
+@dataclass(frozen=True)
+class _Done:
+    """One sheet's pass."""
+
+    outcome: Outcome
+
+
 def _render_song(
     conn: sqlite3.Connection,
     cfg: Config,
@@ -320,16 +330,48 @@ def _render_song(
     cjk_font: Path | None,
     runner: Runner,
     force: bool,
-) -> Outcome | None:
-    """Render one song's sheet; None when it has none. ``cjk_font`` is a usable font or None."""
+) -> list[_Done]:
+    """Render every sheet the song keeps, the human one first; [] when it keeps none.
+
+    ``cjk_font`` is a usable font or None. The auto sheet is kept, and so
+    rendered, until the fetch steps retire it for a complete human sheet; its
+    outputs go once that has happened and the human sheet's PDF is in place.
+    """
     files = {f.name: f for f in kept_files(conn, song.id)}
-    if (kept := files.get(HUMAN_SHEET)) is not None:
-        sheet = _human_sheet(conn, cfg.library_dir, kept)
-    elif (kept := files.get(AUTO_SHEET)) is not None:
-        sheet = _auto_sheet(cfg.library_dir, kept)
-    else:
-        return None
+    human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
     folder = song_dir(cfg.library_dir, song)
+    done: list[_Done] = []
+
+    def render(kept: KeptFile, sheet: _Sheet, state_key: str) -> None:
+        done.append(_render_sheet(conn, cfg, overrides, song, folder, kept, sheet, state_key,
+                                  cjk_font=cjk_font, runner=runner, force=force))
+
+    if human is not None:
+        render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id))
+        if auto is None:
+            for name in AUTO_OUTPUTS:
+                (folder / name).unlink(missing_ok=True)
+            kv_delete(conn, _state_key(song.id, auto=True))
+    if auto is not None:
+        render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=human is not None))
+    return done
+
+
+def _render_sheet(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    overrides: Overrides,
+    song: Song,
+    folder: Path,
+    kept: KeptFile,
+    sheet: _Sheet,
+    state_key: str,
+    *,
+    cjk_font: Path | None,
+    runner: Runner,
+    force: bool,
+) -> _Done:
+    """Write one sheet's .cho, and render its PDF unless kv ``state_key`` says it is up to date."""
     stem = Path(kept.name).stem
     cho = write_chordpro(
         sheet.markup,
@@ -344,7 +386,7 @@ def _render_song(
     need = _font_need(text)
     font = cjk_font if need else None
     if need == "letters" and font is None:
-        return "no font"
+        return _Done("no font")
     pdf = folder / f"{stem}.pdf"
     transpose = overrides.transpose.get(song.key, 0)
     state = {
@@ -353,25 +395,21 @@ def _render_song(
         "font": str(font) if font else None,
         "pdf": pdf.name,
     }
-    outcome: Outcome
-    if not force and pdf.is_file() and kv_get_json(conn, _state_key(song.id)) == state:
-        outcome = "skipped"
-    else:
-        _render_into(cho, pdf, transpose=transpose, chordpro_bin=cfg.chordpro_bin, font_file=font,
-                     runner=runner)
-        kv_set_json(conn, _state_key(song.id), state)
-        write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
-        outcome = "rendered"
-    if not sheet.auto:
-        # The human sheet's PDF is in place, so the auto sheet's outputs are stale.
-        for name in AUTO_OUTPUTS:
-            (folder / name).unlink(missing_ok=True)
-    return outcome
+    if not force and pdf.is_file() and kv_get_json(conn, state_key) == state:
+        return _Done("skipped")
+    _render_into(cho, pdf, transpose=transpose, chordpro_bin=cfg.chordpro_bin, font_file=font,
+                 runner=runner)
+    kv_set_json(conn, state_key, state)
+    write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
+    return _Done("rendered")
 
 
-def _state_key(song_id: int) -> str:
-    """kv: what the song's PDF was made from (written here, read by ``library.write_info``)."""
-    return f"render:{song_id}"
+def _state_key(song_id: int, *, auto: bool = False) -> str:
+    """kv: what a PDF was made from (written here; ``library.write_info`` reads the song's own).
+
+    ``auto`` names the record of an auto sheet's PDF rendered beside a human sheet's.
+    """
+    return f"render:{song_id}:auto" if auto else f"render:{song_id}"
 
 
 # --- where a sheet comes from ----------------------------------------------------------

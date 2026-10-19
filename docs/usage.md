@@ -587,9 +587,9 @@ Library/                    library_dir: ~/Tabs by default, /srv/tabs on the NUC
       lyrics.lrc            the timed lyrics, when LRCLIB has them
       guitar-1.gp5          Guitar Pro or Power Tab files you downloaded, best first
       tab.txt  tab.json     the best text tab
-      sheet (auto).txt      made from audio you bought, when no human sheet exists
-      sheet (auto).cho      its ChordPro and PDF
-      sheet (auto).pdf
+      sheet (auto).txt      made from audio you bought, when no human sheet exists;
+      sheet (auto).cho      it stays, with its ChordPro and PDF, beside a partial
+      sheet (auto).pdf      human sheet, until a complete one replaces it
       info.json             where everything came from
 Music/                      music_dir: the tracks you bought (tabarr only reads it)
 ```
@@ -655,7 +655,8 @@ song by its tags and duration, finds the chords and the beats, and writes
 a chord chart by bars followed by the plain lyrics. It starts with
 "auto-generated, unverified", the song counts as found, and the next render
 makes `sheet (auto).pdf` with the Chinese font. A complete human sheet found
-later takes its place.
+later takes its place; a partial one is rendered beside it, and the auto
+sheet's PDF stays until a complete one arrives.
 
 If the scan reports the file as unmatched, make the file's artist and title
 tags match the song's line in wanted.txt.
