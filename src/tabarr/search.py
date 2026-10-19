@@ -149,7 +149,7 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = N
     for a query with such letters even when something does.
     """
     strong = any(h.score >= STRONG for h in hits)
-    if strong and query.isascii():
+    if strong and not any(c.isalpha() and not c.isascii() for c in query):
         return None
     name = (artist or " ".join(query.split())).replace("\\", "\\\\").replace('"', '\\"')
     line = f'"{name}" = "https://www.ultimate-guitar.com/artist/<name>_<id>"'

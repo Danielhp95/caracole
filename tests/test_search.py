@@ -161,6 +161,14 @@ def test_no_hint_for_a_plain_query_with_a_good_hit(conn):
     assert bare_id_hint("creep", search_index(conn, "creep")) is None
 
 
+def test_no_hint_for_typographic_punctuation_around_a_strong_hit(conn):
+    index(conn, ROWS)
+    query = "AC/DC — “Highway to Hell”"
+    hits = search_index(conn, query)
+    assert keys(hits)[0] == ("acdc", "highway-to-hell") and hits[0].score >= 90
+    assert bare_id_hint(query, hits) is None
+
+
 def test_hint_for_an_accented_name_without_a_strong_hit(conn):
     index(conn, ROWS)
     hits = search_index(conn, "Joaquín Sabina")
