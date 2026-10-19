@@ -62,8 +62,11 @@ let
     # ...while the files it writes are group-writable: Syncthing, in group
     # tabarr, syncs the library both ways (the inbox, edits from a phone).
     UMask = "0007";
-    LoadCredential = credentials;
   };
+
+  # The static secrets, for the nightly run and tabarr-admin (`auth spotify`,
+  # `sync`). The auto-chords unit reads none, so it gets none.
+  secrets.LoadCredential = credentials;
 
   paths = {
     ReadWritePaths = [ cfg.libraryDir ];
@@ -121,20 +124,33 @@ let
   };
 
   # tabarr as its units run it, for `auth spotify`, `index build` and one-off
-  # commands: a transient unit under the tabarr user, with the same state,
-  # cache, credentials and generated config. With the auto-chords package when
-  # that is on, so `tabarr-admin autochords` works too.
+  # commands: a transient unit under the tabarr user, in the units' sandbox,
+  # with the same state, cache, paths, credentials and generated config. It
+  # keeps the network (`auth spotify` and `index build` need it). With the
+  # auto-chords package when that is on, so `tabarr-admin autochords` works
+  # too, and then, as in that unit, without MemoryDenyWriteExecute.
   adminPackage = if cfg.autochords.enable then cfg.autochords.package else cfg.package;
   adminEnv = {
     TABARR_CONFIG = configFile;
   }
   // cacheEnv
   // lib.optionalAttrs cfg.autochords.enable modelEnv;
+  adminProperties =
+    sandbox
+    // identity
+    // secrets
+    // paths
+    // lib.optionalAttrs cfg.autochords.enable { MemoryDenyWriteExecute = false; };
+  # One --property per list item, as a unit file gets one line per item (for
+  # SystemCallFilter, the order is the units' too); booleans as yes or no.
+  property =
+    name: value:
+    map (v: "--property=${name}=${if lib.isBool v then (if v then "yes" else "no") else toString v}") (
+      lib.toList value
+    );
   adminArgs =
     lib.mapAttrsToList (name: value: "--setenv=${name}=${value}") adminEnv
-    ++ lib.concatLists (
-      lib.mapAttrsToList (name: value: map (v: "--property=${name}=${v}") (lib.toList value)) identity
-    );
+    ++ lib.concatLists (lib.mapAttrsToList property adminProperties);
   tabarrAdmin = pkgs.writeShellApplication {
     name = "tabarr-admin";
     runtimeInputs = [ config.systemd.package ];
@@ -218,7 +234,8 @@ in
       description = ''
         Files systemd passes to tabarr through `LoadCredential`, by credential
         name. tabarr reads `spotify_client_secret` and `ntfy_token`. The files
-        are read as root, so they can stay root-only.
+        are read as root, so they can stay root-only. The nightly run and
+        `tabarr-admin` get them; the auto-chords unit, which reads none, doesn't.
       '';
     };
 
@@ -330,6 +347,7 @@ in
       serviceConfig =
         sandbox
         // identity
+        // secrets
         // paths
         // {
           Type = "oneshot";

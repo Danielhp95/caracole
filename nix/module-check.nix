@@ -137,7 +137,10 @@ let
   autochordsSc = autochords.serviceConfig;
   autochordsPackageModels = nucModelsFromPackage.systemd.services.tabarr-autochords;
   libraryRule = nuc.systemd.tmpfiles.settings.tabarr."/srv/tabs".d;
-  admin = lib.findFirst (p: lib.getName p == "tabarr-admin") null nuc.environment.systemPackages;
+  findAdmin =
+    system: lib.findFirst (p: lib.getName p == "tabarr-admin") null system.environment.systemPackages;
+  admin = findAdmin nuc;
+  adminAutochords = findAdmin nucAutochords;
 
   hardened =
     sc:
@@ -215,6 +218,9 @@ let
     "tabarr-autochords.service runs `tabarr --config <generated tabarr.toml> autochords`" =
       autochordsSc.ExecStart == "${lib.getExe stub} --config ${configFile} autochords";
     "tabarr-autochords.service runs as tabarr with the same paths" = sameUserAndPaths autochordsSc;
+    # It reads no secret, and its parsers (FFmpeg, libsndfile) see the most outside data.
+    "tabarr-autochords.service loads no credentials" =
+      !(autochordsSc ? LoadCredential) || autochordsSc.LoadCredential == [ ];
     "tabarr-autochords.service is otherwise hardened the same way" =
       hardened autochordsSc && autochordsSc.Type == "oneshot";
     "tabarr-autochords.service gets the model paths" =
@@ -279,6 +285,7 @@ else
       inherit configFile;
       notifyUnconfigured = bare.systemd.services.tabarr-notify-failure.serviceConfig.ExecStart;
       adminScript = lib.getExe admin;
+      adminAutochordsScript = lib.getExe adminAutochords;
       passAsFile = [
         "runUnit"
         "timerUnit"
@@ -320,13 +327,32 @@ else
       "$notifyUnconfigured" > notify.log
       grep -q "not configured" notify.log
 
-      # tabarr-admin runs as the units do.
+      # tabarr-admin runs as the units do: their user, state, credentials and
+      # paths, and their sandbox, network included.
       grep -q -- "TABARR_CONFIG=$configFile" "$adminScript"
       grep -q -- "--property=User=tabarr" "$adminScript"
       grep -q -- "--property=StateDirectory=tabarr" "$adminScript"
       grep -q -- "--property=CacheDirectory=tabarr" "$adminScript"
       grep -q -- "LoadCredential=ntfy_token:/run/agenix/ntfy_token" "$adminScript"
       grep -q -- "NUMBA_CACHE_DIR=/var/cache/tabarr/numba" "$adminScript"
+      for property in \
+        ProtectSystem=strict ProtectHome=yes PrivateTmp=yes PrivateDevices=yes \
+        NoNewPrivileges=yes RestrictNamespaces=yes MemoryDenyWriteExecute=yes \
+        LockPersonality=yes ProtectProc=invisible CapabilityBoundingSet= \
+        SystemCallFilter=@system-service SystemCallFilter=~@privileged \
+        RestrictAddressFamilies=AF_INET RestrictAddressFamilies=AF_UNIX \
+        ReadWritePaths=/srv/tabs ReadOnlyPaths=-/srv/music; do
+        grep -q -- "'--property=$property'" "$adminScript" \
+          || { echo "tabarr-admin lacks --property=$property" >&2; exit 1; }
+      done
+      ! grep -q -- "PrivateNetwork" "$adminScript"
+      # With the auto-chords package, as in its unit, torch may generate code.
+      grep -q -- "'--property=MemoryDenyWriteExecute=no'" "$adminAutochordsScript"
+      ! grep -q -- "MemoryDenyWriteExecute=yes" "$adminAutochordsScript"
+
+      # The auto-chords unit holds no secret.
+      ! grep -q -- "LoadCredential" "$autochordsUnitPath"
+      grep -q -- "LoadCredential=ntfy_token:/run/agenix/ntfy_token" "$runUnitPath"
 
       mkdir -p $out
       cp "$configFile" $out/tabarr.toml
