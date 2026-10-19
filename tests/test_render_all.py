@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
+import re
+import shutil
 import struct
 import subprocess
 import sys
+import unicodedata
+import zlib
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -612,3 +617,158 @@ def test_render_command_a_missing_font_is_no_failure(conn, cfg, fake_chordpro, c
     assert result.exit_code == 0, result.output
     assert "0 rendered, 0 up to date, 0 failed" in result.output
     assert "set cjk_font or TABARR_CJK_FONT to render 宋冬野 - 斑马斑马" in caplog.text
+
+
+# --- the real chordpro -----------------------------------------------------------------------
+#
+# These run with chordpro 6.050.7 on PATH (or TABARR_CHORDPRO_BIN) and TABARR_CJK_FONT set to
+# FusionKaiJ-Regular.ttf from nixpkgs lxgw-fusionkai. With poppler's pdftotext on PATH (or
+# TABARR_PDFTOTEXT) they also read each PDF's text: nix shell nixpkgs#poppler-utils.
+
+CHORDPRO = os.environ.get("TABARR_CHORDPRO_BIN") or shutil.which("chordpro")
+CJK_FONT = os.environ.get("TABARR_CJK_FONT")
+PDFTOTEXT = os.environ.get("TABARR_PDFTOTEXT") or shutil.which("pdftotext")
+
+real_chordpro = pytest.mark.skipif(
+    CHORDPRO is None, reason="chordpro not found on PATH or in TABARR_CHORDPRO_BIN"
+)
+real_cjk_font = pytest.mark.skipif(
+    not (CJK_FONT and Path(CJK_FONT).is_file()),
+    reason="set TABARR_CJK_FONT to a single-font CJK .ttf/.otf, such as FusionKaiJ-Regular.ttf",
+)
+
+# A chord name standing alone, as pdftotext lays out chord lines and chord diagrams.
+CHORD = re.compile(r"(?<!\S)[A-G][#b]?(?:m|maj|dim|aug|sus)?\d*(?!\S)")
+SOLFEGE = re.compile(r"(?<!\S)(?:Do|Re|Mi|Fa|Sol|La|Si)[#b]?m?\d*(?!\S)")
+
+
+@pytest.fixture
+def real(cfg):
+    """The config with the real chordpro, and the CJK font when TABARR_CJK_FONT names one."""
+    font = Path(CJK_FONT) if CJK_FONT and Path(CJK_FONT).is_file() else None
+    return replace(cfg, chordpro_bin=CHORDPRO, cjk_font=font)
+
+
+def pdf_text(pdf: Path) -> str | None:
+    """What the PDF shows, as poppler's pdftotext lays it out; None without pdftotext.
+
+    PDF::API2 maps a glyph that the font shares between a Kangxi radical and an
+    ideograph to the radical (一 comes out as U+2F00); NFKC maps it back.
+    """
+    if PDFTOTEXT is None:
+        return None
+    out = subprocess.run(
+        [PDFTOTEXT, "-layout", "-enc", "UTF-8", str(pdf), "-"], capture_output=True, check=True
+    )
+    return unicodedata.normalize("NFKC", out.stdout.decode("utf-8"))
+
+
+def drawn_strings(pdf: Path) -> set[bytes]:
+    """The literal strings that the PDF's pages draw, such as b"Bm" for a chord, unpadded.
+
+    ChordPro sets chord names in a built-in font, as plain strings, so this reads
+    them without pdftotext. (The object order of its PDFs varies from run to run,
+    so comparing whole files says nothing.)
+    """
+    strings: set[bytes] = set()
+    for m in re.finditer(rb"stream\r?\n(.*?)endstream", pdf.read_bytes(), re.DOTALL):
+        try:
+            stream = zlib.decompressobj().decompress(m.group(1))
+        except zlib.error:
+            continue
+        if b" Tf" in stream:
+            strings |= {s.strip() for s in re.findall(rb"\(((?:\\.|[^\\)])*)\)", stream)}
+    return strings
+
+
+def font_name(font: Path) -> bytes:
+    """How a PDF names an embedded font: FusionKaiJ-Regular.ttf is /FusionKaiJ."""
+    return font.stem.split("-")[0].encode()
+
+
+def assert_built_in_fonts(cfg, pdf: Path) -> None:
+    """A Latin sheet keeps ChordPro's built-in fonts, even when a CJK font is set."""
+    data = pdf.read_bytes()
+    assert data.startswith(b"%PDF") and b"/Times-Roman" in data
+    if cfg.cjk_font is not None:
+        assert font_name(cfg.cjk_font) not in data
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_real_spanish_ug_sheet_transposed_then_skipped(conn, real):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, real, song, meta={"capo": 2})
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    pdf = pdf_of(real, song)
+    assert_built_in_fonts(real, pdf)
+    assert {b"Bm", b"G", b"D", b"A"} <= drawn_strings(pdf)
+    if (text := pdf_text(pdf)) is not None:
+        for shown in ("De Música Ligera", "Soda Stereo", "Key: Bm", "Capo: 2",
+                      "Una canción de prueba", "solo para el analizador"):
+            assert shown in text
+        assert set(CHORD.findall(text)) == {"Bm", "G", "D", "A"}
+
+    down = overrides(real, '[transpose]\n"Soda Stereo - De Musica Ligera" = -2\n')
+    assert render_all(conn, real, down) == RenderStats(rendered=1)
+    drawn = drawn_strings(pdf)
+    assert {b"Am", b"F", b"C", b"G"} <= drawn and not {b"Bm", b"D", b"A"} & drawn
+    if (text := pdf_text(pdf)) is not None:
+        assert "Key: Am" in text and "Capo: 2" in text
+        assert set(CHORD.findall(text)) == {"Am", "F", "C", "G"}
+    assert info_json(real, song)["render"] == {"transpose": -2, "pdf": "sheet.pdf"}
+
+    stamp = pdf.stat().st_mtime_ns
+    assert render_all(conn, real, down) == RenderStats(skipped=1)
+    assert pdf.stat().st_mtime_ns == stamp
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_real_lacuerda_sheet_with_solfege(conn, real):
+    song = add_song(conn, "Placeholder Banda", "Canción Sintética")
+    lacuerda_sheet(conn, real, song, parse_version_page(LC_PAGE))
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    pdf = pdf_of(real, song)
+    assert_built_in_fonts(real, pdf)
+    drawn = drawn_strings(pdf)
+    assert {b"Am", b"F", b"C", b"G7", b"Dm", b"Em"} <= drawn
+    assert not {b"Lam", b"Fa", b"Do", b"Sol7", b"Rem", b"Mim"} & drawn
+    if (text := pdf_text(pdf)) is not None:
+        for shown in ("Canción Sintética", "Placeholder Banda", "Cruzo la plaza", "café frío",
+                      "guardo tu nombre", "qué hacer"):
+            assert shown in text
+        assert set(CHORD.findall(text)) == {"Am", "F", "C", "G", "G7", "Dm", "Em"}
+        assert SOLFEGE.findall(text) == []
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_real_auto_sheet(conn, real):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, real, song)
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    pdf = pdf_of(real, song, "sheet (auto).pdf")
+    assert_built_in_fonts(real, pdf)
+    assert {b"C", b"G"} <= drawn_strings(pdf)
+    if (text := pdf_text(pdf)) is not None:
+        for shown in ("Synthetic Song", "Placeholder Band", "auto-generated, unverified",
+                      "made up words to sing", "only for the test"):
+            assert shown in text
+        assert set(CHORD.findall(text)) == {"C", "G"}
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@real_cjk_font
+def test_real_chinese_sheet_with_the_cjk_font(conn, real):
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, real, song, ZH_SHEET, tonality="")
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    pdf = pdf_of(real, song)
+    assert font_name(real.cjk_font) in pdf.read_bytes()
+    assert {b"C", b"G", b"Am", b"F"} <= drawn_strings(pdf)
+    if (text := pdf_text(pdf)) is not None:
+        for shown in ("斑马斑马", "宋冬野", "这是一个合成的例子", "测试歌词第二行"):
+            assert shown in text
+        assert set(CHORD.findall(text)) == {"C", "G", "Am", "F"}
