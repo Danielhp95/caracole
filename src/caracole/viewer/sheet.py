@@ -67,6 +67,7 @@ class Sheet:
 
 _DIRECTIVE = re.compile(r"\s*\{\s*([A-Za-z_]+)\s*(?::\s*(.*?))?\s*\}\s*")
 _TOKEN = re.compile(r"\[([^\]]*)\]")
+_FRET = re.compile(r"[0-9]+")  # ASCII digits: str.isdigit takes "²", which int() refuses
 _CHORUS = re.compile(r"(?i)chorus|coro|estribillo|refr[aeá]i?n|副歌")
 _ESCAPED_BACKSLASH = "\\" + "u005c"
 _COMMENTS = {"comment", "c", "comment_italic", "ci", "comment_box", "cb", "highlight"}
@@ -109,7 +110,7 @@ def parse_sheet(text: str) -> Sheet:
             elif name == "key":
                 sheet.key = value or None
             elif name == "capo":
-                sheet.capo = int(value) if value.isdigit() and int(value) > 0 else None
+                sheet.capo = int(value) if _FRET.fullmatch(value) and int(value) > 0 else None
             elif name in _COMMENTS:
                 if value == AUTO_MARKER:
                     sheet.auto = True

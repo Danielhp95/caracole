@@ -105,3 +105,6 @@ def test_a_chinese_sheet_keeps_its_text():
 def test_a_capo_that_is_no_number_is_none():
     assert parse_sheet("{title: T}\n{capo: two}\n").capo is None
     assert parse_sheet("{title: T}\n").capo is None
+    assert parse_sheet("{title: T}\n{capo: ²}\n").capo is None  # a digit to str.isdigit, not to int
+    assert parse_sheet("{title: T}\n{capo: ٣}\n").capo is None  # nor an Arabic-Indic three
+    assert parse_sheet("{title: T}\n{capo: 3}\n").capo == 3
