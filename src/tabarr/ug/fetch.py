@@ -1078,14 +1078,58 @@ def _finish(run: _SongRun) -> None:
 
     A song with a page that couldn't be read is neither checked nor clean (an
     error is never a miss): it is fetched again, from the cache, until that
-    page is due and read.
+    page is due and read. The tabs [block] left out are remembered, so that
+    taking one out of [block] brings the song back (``songs_to_fetch``).
     """
     refresh_status(run.conn, run.song.id, ignored=False)
     if run.unreadable:
         update_song(run.conn, run.song.id, ug_dirty=True)
     else:
         update_song(run.conn, run.song.id, ug_dirty=False, ug_checked_at=_iso(run.ctx.now))
+    left_out = _left_out(run)
+    if left_out:
+        kv_set_json(run.conn, _left_out_key(run.song.id), left_out)
+    else:
+        kv_delete(run.conn, _left_out_key(run.song.id))
     write_info(run.conn, run.ctx.library_dir, get_song(run.conn, run.song.id))
+
+
+def _left_out_key(song_id: int) -> str:
+    return f"ug:blocked:{song_id}"
+
+
+def _left_out(run: _SongRun) -> list[int]:
+    """The tabs you have blocked among the song's: its UG versions, its index tabs and its pins."""
+    block = run.ctx.overrides.block
+    if not block:
+        return []
+    song = run.song
+    ids = {int(r.tab_id) for r in song_versions(run.conn, song.id, include_gone=True) if r.provider == PROVIDER}
+    ids |= {t.tab_id for t in _song_index_tabs(run.conn, song, frozenset())}
+    ids |= set(run.ctx.overrides.pin.get(song.key, ()))
+    return sorted(ids & block)
+
+
+def _block_changed(conn: sqlite3.Connection, song: Song, block: frozenset[int]) -> bool:
+    """Whether [block] changed for the song since its fetch finished.
+
+    That is a tab it keeps (as ``sheet.txt`` or ``tab.txt``) or picks that
+    you have blocked since, or a tab the fetch left out that you no longer
+    block.
+    """
+    left_out = kv_get_json(conn, _left_out_key(song.id), default=[]) or []
+    if any(t not in block for t in left_out):
+        return True
+    if not block:
+        return False
+    names = (*SHEET_FILES, *TAB_FILES)
+    marks = ",".join("?" for _ in names)
+    rows = conn.execute(
+        "SELECT v.tab_id FROM versions v WHERE v.song_id = ? AND v.provider = ? AND (v.pick_rank IS NOT NULL "
+        f"OR EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id AND f.name IN ({marks})))",
+        (song.id, PROVIDER, *names),
+    )
+    return any(int(r[0]) in block for r in rows)
 
 
 def _last_checked(conn: sqlite3.Connection, song_id: int) -> datetime | None:
@@ -1146,7 +1190,8 @@ def songs_to_fetch(
     """The songs this run should fetch, newest first.
 
     - Accepted or pinned songs that are dirty (new match, new tabs, or a run
-      that stopped half-way).
+      that stopped half-way), or whose [block] changed since their fetch: a
+      tab they keep or pick is blocked now, or one left out is no longer.
     - Not-found songs whose artist is known (A6), so that its UG artist page,
       which lists bare-id tabs the index can't see, is searched for the
       title, at most once per ``artist_page_max_age``.
@@ -1160,7 +1205,9 @@ def songs_to_fetch(
     for song in list_songs(conn):
         if _ignored(song, overrides):
             continue
-        dirty = song.match_decision in ("accept", "pinned") and song.ug_dirty
+        dirty = song.match_decision in ("accept", "pinned") and (
+            song.ug_dirty or _block_changed(conn, song, overrides.block)
+        )
         due = (
             needs_artist_page(song)
             and not _checked_within(conn, song.id, now, artist_page_max_age)

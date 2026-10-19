@@ -588,6 +588,54 @@ def test_kept_sheet_blocked_later_is_replaced(conn, tmp_path):
     assert pick_ids(conn, song, "chords") == [702]
 
 
+def test_a_kept_sheet_blocked_after_the_fetch_sends_its_song_back_and_unblocking_does_too(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)])
+    ug = FakeUG()
+    three_chords(ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert "sheet 102" in read(tmp_path, song, "sheet.txt") and songs_to_fetch(conn, Overrides(), NOW) == []
+
+    blocked = Overrides(block=frozenset({102}))  # "this sheet is wrong, never use it"
+    assert [s.id for s in songs_to_fetch(conn, blocked, NOW)] == [song.id]
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, blocked), get_song(conn, song.id))
+    assert "sheet 103" in read(tmp_path, song, "sheet.txt") and songs_to_fetch(conn, blocked, NOW) == []
+
+    # You take it out of [block] again: it competes again, and wins.
+    assert [s.id for s in songs_to_fetch(conn, Overrides(), NOW)] == [song.id]
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+    assert "sheet 102" in read(tmp_path, song, "sheet.txt") and songs_to_fetch(conn, Overrides(), NOW) == []
+    assert ug.requests == [slugged(101), slugged(102), slugged(103)]  # all of it from the cache since
+
+
+def test_a_guitar_pro_pick_blocked_after_the_fetch_sends_its_song_back(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (301, "soda-stereo", "persiana-americana", "guitar-pro"), (302, "soda-stereo", "persiana-americana", "guitar-pro"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    best, other = v(301, "guitar-pro", rating=4.8, votes=30), v(302, "guitar-pro", version=2, rating=4.2, votes=10)
+    ug.tab(best, [other], meta={"fileExtension": ".gp5"})
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    assert pick_ids(conn, song, "guitar-pro", "power") == [301, 302]
+
+    blocked = Overrides(block=frozenset({301}))
+    assert [s.id for s in songs_to_fetch(conn, blocked, NOW)] == [song.id]
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, blocked), get_song(conn, song.id))
+
+    assert pick_ids(conn, song, "guitar-pro", "power") == [302]  # off the to-do page's pages to click
+    assert songs_to_fetch(conn, blocked, NOW) == []
+
+
+def test_blocking_a_tab_the_song_doesnt_use_sends_nothing_back(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)])
+    ug = FakeUG()
+    three_chords(ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)  # keeps 102
+    assert songs_to_fetch(conn, Overrides(block=frozenset({101})), NOW) == []
+
+
 # --- fetch_songs: budget, errors and blocks -----------------------------------------------
 
 
