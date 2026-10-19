@@ -2,8 +2,8 @@
 
 Rules this module enforces (plan §6, "Politeness"):
 
-- every raw response worth keeping (200, 404) is cached forever, and a cached
-  URL never costs a request again;
+- every raw response worth keeping (a 200 or 404 the caller accepts) is cached
+  forever, and a cached URL never costs a request again;
 - a per-run request budget, with a random pause before every network request;
 - one request at a time;
 - a 403, a 429 or a challenge page raises ``ProviderBlocked``. Errors are never
@@ -147,7 +147,9 @@ def _header(headers: Mapping[str, str], name: str) -> str | None:
 class PoliteClient:
     """One provider's HTTP client for one run: cache-first, budgeted, paced, never escalating.
 
-    - A cached 200 or 404 is served without a request (``cache=True``).
+    - A cached 200 or 404 is served without a request (``cache=True``) when the
+      caller accepts its status; otherwise the URL is asked again. Only accepted
+      answers are cached.
     - ``conditional=True`` revalidates a cached copy with If-None-Match /
       If-Modified-Since; a 304 returns the cached body.
     - Before every network request except the first, it pauses for a random
@@ -214,12 +216,12 @@ class PoliteClient:
         full = str(httpx.URL(url, params=params)) if params else url
         key = hashlib.sha256(full.encode("utf-8")).hexdigest()
         cached = self._read_cache(key) if (cache or conditional) else None
+        if cached is not None and cached.status not in accept:
+            cached = None  # an answer the caller rejects is no answer: ask again
         stale = cached is not None and max_age is not None and self._older_than(cached, max_age)
         if cache and cached is not None and not conditional and not stale:
-            if cached.status in accept:
-                return cached
-            raise ProviderError(self.provider, full, cached.status, "cached response not accepted")
-        if stale and self.requests_made >= self.policy.budget and cached.status in accept:
+            return cached
+        if stale and self.requests_made >= self.policy.budget:
             return cached
 
         if self._blocked is not None:
@@ -263,14 +265,13 @@ class PoliteClient:
             self._event(full, status, "not_modified", None)
             return Response(url=full, status=304, content=cached.content, headers=cached.headers, from_cache=True)
 
-        if status in _CACHED_STATUSES:
-            kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
-            self._write_cache(key, full, status, kept, body)
         if status in accept:
+            kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
+            if status in _CACHED_STATUSES:  # only what the caller accepts: a rejected 404 is asked again
+                self._write_cache(key, full, status, kept, body)
             if status < 500:  # an accepted 5xx (LRCLIB's 503 for a miss) is no sign of health
                 self._errors_in_a_row = 0
             self._event(full, status, "ok", None)
-            kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
             return Response(url=full, status=status, content=body, headers=kept, from_cache=False)
 
         self._fail(full, status, f"HTTP {status}")

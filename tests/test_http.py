@@ -197,6 +197,26 @@ def test_unaccepted_404_raises_provider_error(tmp_path):
     assert e.value.status == 404
 
 
+def test_a_404_the_caller_rejects_is_not_cached(tmp_path):
+    client, rec = make_client(tmp_path, ok(b"<html>Not Found</html>", status=404))
+    with pytest.raises(ProviderError):
+        client.get("https://lrclib.net/api/search?track_name=x")  # accepts only 200
+    assert not client.get("https://lrclib.net/api/search?track_name=x", accept=(200, 404)).from_cache
+    assert len(rec.requests) == 2
+
+
+def test_a_cached_answer_the_caller_rejects_is_asked_again(tmp_path):
+    # A 404 stored by a caller that accepted it (or by an older tabarr) is no answer
+    # for one that doesn't: replaying it would fail the song every night without asking.
+    statuses = iter([404, 200])
+    client, rec = make_client(tmp_path, lambda r: httpx.Response(next(statuses), content=b"[]"))
+    assert client.get("https://lrclib.net/api/search?track_name=x", accept=(200, 404)).status == 404
+    again = client.get("https://lrclib.net/api/search?track_name=x")
+    assert again.status == 200 and not again.from_cache
+    assert len(rec.requests) == 2 and client.requests_made == 2
+    assert client.get("https://lrclib.net/api/search?track_name=x").from_cache
+
+
 def test_accepted_503_is_returned_not_cached(tmp_path):
     client, rec = make_client(tmp_path, ok(b'{"name": "ServerOverloaded"}', status=503))
     assert client.get("https://lrclib.net/api/get", accept=(200, 404, 503)).status == 503
