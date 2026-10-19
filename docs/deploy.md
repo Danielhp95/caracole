@@ -5,13 +5,13 @@ gives the machine:
 
 | What | Does |
 |---|---|
-| `tabarr.timer` | Starts the nightly run at 03:30, give or take 45 minutes, and catches up after downtime |
+| `tabarr.timer` | Starts the nightly run at 03:30, up to 45 minutes late, and catches up after downtime |
 | `tabarr.service` | `tabarr --config <generated tabarr.toml> run`, a hardened oneshot as user `tabarr` |
 | `tabarr-autochords.service` | Optional. After each successful run, writes `sheet (auto).txt` from audio you bought, with no network at all |
 | `tabarr-notify-failure.service` | POSTs to your ntfy topic when either unit fails |
 | `tabarr-admin` | Runs any `tabarr` command as the units do: `sudo tabarr-admin auth spotify` |
-| `/var/lib/tabarr` | The database and the Spotify token, readable by `tabarr` alone |
-| `/var/cache/tabarr` | Every raw HTTP response, kept forever |
+| `/var/lib/tabarr` | The database, the Spotify token and tabarr's lock, readable by `tabarr` alone |
+| `/var/cache/tabarr` | Every raw HTTP response, kept forever, and the private folders PDFs are made in |
 | `/srv/tabs` | The library: sheets, lyrics, guitar parts, `_todo.md`, `wanted.txt`, `overrides.toml` |
 | `/srv/music` | Audio you bought, read-only, for auto-chords |
 
@@ -240,6 +240,11 @@ there.
 The state directory is not synced, and should not be: it holds the Spotify
 token.
 
+Keep `wanted.txt`, `overrides.toml` and the downloads in `_inbox/` regular
+files on every device. Whoever can write to the library could point a
+symbolic link at tabarr's private files, so tabarr refuses a link there
+instead of following it, and the to-do page or the journal says so.
+
 ## 4. Backups with restic
 
 Back up the state, the library and the music. The live database can be
@@ -360,10 +365,12 @@ sudo systemctl start tabarr.service       # a full run now; returns when it ends
 journalctl -u tabarr.service -e           # what it did
 ```
 
-Then read `_todo.md` in the library: review items, partial sheets, the buy
-list, Guitar Pro pages to download by hand, and provider health. A block or an
-exhausted budget is not a failure: the run exits 0 and the song stays pending.
-Only an unexpected error fails the unit, and that sends the ntfy message.
+Then read `_todo.md` in the library: setup problems first, if any, then
+review items, partial sheets, the buy list, Guitar Pro pages to download by
+hand, and provider health. A block or an exhausted budget is not a failure:
+the run exits 0 and the song stays pending. Only an unexpected error, an
+`overrides.toml` tabarr can't read, or a database it can't open fails the
+unit, and that sends the ntfy message.
 
 **`tabarr-admin`** runs any command as the units run it: a transient unit as
 user `tabarr`, with the same state and cache directories, the same credentials,
@@ -374,13 +381,21 @@ sudo. A file you pass it must be readable by the `tabarr` user and sit where
 the sandbox shows it: not under `/home`, `/root` or `/tmp`, which it hides, so
 `index build --from` reads sitemaps from somewhere like `/srv/sitemaps`.
 
-**One tabarr at a time.** A command that sends requests or writes the library
-waits while another one does, and says which (`Another tabarr is running (pid
-…: run); waiting for it to finish.`): a `tabarr-admin fetch` started during the
-nightly run waits for it, and the run waits for a `tabarr-admin index build`.
-So the request budget and the 10–20 second pauses hold for the machine, not
-per process. The lock is `/var/lib/tabarr/tabarr.lock`; it goes with the
-process holding it, whatever ends it.
+**One tabarr at a time.** The nightly run holds tabarr's lock,
+`/var/lib/tabarr/tabarr.lock`, from start to end, and every command that asks
+the sites for pages or writes the library holds it while it works. One
+started meanwhile waits, and says which it waits for (`Another tabarr is
+running (pid …: run); waiting for it to finish.`): a `tabarr-admin fetch`
+started during the nightly run waits for it, and the run waits for a
+`tabarr-admin index build`. `tabarr-admin review` takes the lock only after
+your answers, so the run never waits for you, and `search`,
+`match --dry-run` and `index stats` never wait. A command that waited for a
+run that got blocked sends that site nothing: it is cooling down. Each
+process's first request to a site also waits out the pause after the last
+request any tabarr sent there, so a run that starts right after a command may
+pause up to 20 seconds per site, and the 10–20 second pauses hold for the
+machine, not per process. The lock goes with the process holding it, whatever
+ends it.
 
 ## 6. Auto-chords
 
@@ -411,7 +426,9 @@ arrived is made once more when they do. Everything else is left alone, so a
 night with no new purchases loads no model. Then it rewrites `_todo.md` and
 `index.html`, which the nightly run wrote before it, so both show its sheets
 and the purchases it couldn't read the same night. The PDF of a new auto
-sheet comes with the next night's render.
+sheet comes with the next night's render. It holds tabarr's lock while it
+works, as the nightly run does, so a `tabarr-admin` command started meanwhile
+waits for it.
 
 BTC finds the chords and beat_this the beats and bars. The chords then go over
 LRCLIB's timed lyrics when LRCLIB's duration matches the file's within 2
@@ -496,6 +513,18 @@ or build the package with `tabarr.override { cjkFont = "…"; }`.
 
 - **ntfy says a unit failed:** `journalctl -u tabarr.service -e` (or
   `tabarr-autochords.service`).
+- **`_todo.md` leads with "overrides.toml can't be read":** the nightly run
+  stopped before its first step. The error names the table and the entry; a
+  table declared twice says to merge the two sections. Fix the file, then
+  `sudo systemctl start tabarr.service`, or wait for the next night.
+- **A command says the database "is at schema version N, but this tabarr
+  knows up to M":** a newer tabarr migrated it, and an older one runs now,
+  after a rollback say. Switch back to the newer tabarr, or restore the copy
+  saved before the migration, `/var/lib/tabarr/tabarr.sqlite.vM.bak`, which
+  the message names when it is there. Until then the commands that use the
+  database exit 2, and so does the nightly unit.
+- **A command waits with "Another tabarr is running":** the message names the
+  process and what it is doing; the nightly run takes about half an hour.
 - **Auto-chords can't read a purchase:** the to-do page lists it, with the
   error, and `journalctl -u tabarr-autochords.service` names it too.
   Re-download the file, or convert it (to FLAC, say) and replace the original:
