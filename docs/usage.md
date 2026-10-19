@@ -415,6 +415,11 @@ How a song is matched, in order:
      for a show's song your source credits to its composer.
 5. The title alone, across all artists: always a review.
 
+A review keeps its five best candidates, but the best `catch_all` and the
+best `typo_artist` candidate are always among them, in place of the last of
+the others: `Idina Menzel - Let It Go` lists covers of "Let It Go" at 100,
+and `misc-cartoons/frozen-let-it-go` (90) too.
+
 At steps 2 to 5, the matcher passes over the UG songs you rejected for the
 song under `[reject]`, and so does the fetch on the artist's UG page, so they
 are never offered again; other candidates still can be.

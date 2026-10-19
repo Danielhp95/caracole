@@ -377,6 +377,43 @@ def test_a_show_song_under_its_composers_name_is_found_at_the_end_of_a_catch_all
     assert r.decision == "not_found"
 
 
+def candidate_keys(r: MatchResult):
+    return [(c.artist_key, c.song_key) for c in r.candidates]
+
+
+def test_a_show_song_credited_to_its_singer_keeps_its_catch_all_tab_among_the_covers(conn):
+    # The real index: Frozen's song is misc-cartoons/frozen-let-it-go (38 tabs), and its title alone is
+    # other artists' covers, each scoring 100 to the catch-all title's 90.
+    covers = ["james-bay", "def-leppard", "demi-lovato", "blue-october", "sungha-jung", "zac-brown-band"]
+    index(conn, *((10 + i, a, "let-it-go", "chords") for i, a in enumerate(covers)),
+          *((100 + i, "misc-cartoons", "frozen-let-it-go", "chords") for i in range(38)),
+          (200, "idina-menzel", "defying-gravity", "chords"))
+    r = match(conn, "Idina Menzel", "Let It Go")
+    assert r.decision == "review" and len(r.candidates) == 5
+    assert ("misc-cartoons", "frozen-let-it-go") in candidate_keys(r)
+    assert r.candidates[0].step == "title_only"  # the covers keep their order, ahead of it
+
+
+def test_epic_credited_to_its_composer_keeps_its_catch_all_tab_among_the_covers(conn):
+    covers = ["journey", "bonnie-raitt", "boyce-avenue", "celine-dion", "mariah-carey", "nsync"]
+    index(conn, *((10 + i, a, "open-arms", "chords") for i, a in enumerate(covers)),
+          *((100 + i, "journey", "open-arms", "tabs") for i in range(20)),
+          *((200 + i, "misc-musicals", "epic-the-musical-open-arms", "chords") for i in range(5)),
+          (300, "misc-musicals", "hamilton-open-arms-reprise", "chords"))
+    r = match(conn, "Jorge Rivera-Herrans", "Open Arms")
+    assert r.decision == "review" and len(r.candidates) == 5
+    assert ("misc-musicals", "epic-the-musical-open-arms") in candidate_keys(r)
+
+
+def test_a_misspelt_artists_song_is_kept_among_the_candidates_too(conn):
+    # UG has five covers titled as misspelt as yours, and the misspelt artist's own song scores less.
+    covers = ["a-band", "b-band", "c-band", "d-band", "e-band", "f-band"]
+    index(conn, *((10 + i, a, "yelow", "chords") for i, a in enumerate(covers)), (1, "coldplay", "yellow", "chords"))
+    r = match(conn, "Coldplya", "Yelow")
+    assert r.decision == "review" and len(r.candidates) == 5
+    assert ("coldplay", "yellow") in candidate_keys(r)
+
+
 def test_only_artists_named_misc_are_catch_alls(conn):
     index(conn, (1, "misc-soundtrack", "frozen-let-it-go", "chords"),
           (2, "misc-cartoons", "steven-universe-here-comes-a-thought", "chords"),

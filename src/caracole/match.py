@@ -49,8 +49,11 @@ At every step, the UG songs you rejected for the song (``[reject]``, "none of
 these" in ``caracole review``) are dropped, so they never come back; the others
 still can. Decision: accept at ``accept`` or more with a lead of ``margin`` over
 the next different title; review from ``review``; otherwise not found. A review
-made only of steps 4 and 5 (``REVIEW_ONLY_STEPS``) leaves the song to its
-artist's UG page as well (``ug.fetch.needs_artist_page``).
+keeps five candidates, the best ``catch_all`` and the best ``typo_artist`` hit
+among them (``KEPT_STEPS``) however many others score more: a show's song
+credited to its singer ends a catch-all title at 90, behind the covers of its
+title at 100. A review made only of steps 4 and 5 (``REVIEW_ONLY_STEPS``)
+leaves the song to its artist's UG page as well (``ug.fetch.needs_artist_page``).
 
 ``match_all`` never replaces a match the fetch step made on a UG artist page
 (step ``artist_page``, amendment A6): the index can't see those bare-id tabs,
@@ -102,6 +105,8 @@ CATCH_ALL_ENDING = 90.0  # a catch-all title that ends in yours: "hamilton-my-sh
 # The keys that start with it, as a range the artist_key index serves: "misc-" up to "misc.".
 _CATCH_ALL_RANGE = (CATCH_ALL_PREFIX, CATCH_ALL_PREFIX[:-1] + chr(ord(CATCH_ALL_PREFIX[-1]) + 1))
 MAX_CANDIDATES = 5
+# A review keeps the best hit of each among its MAX_CANDIDATES, however many others score more.
+KEPT_STEPS = ("catch_all", "typo_artist")
 _TITLE_ONLY_TITLES = 10  # nearest titles expanded into candidates, per title form
 _TYPO_ARTISTS = 5  # nearest artist keys within the typo distance, per name
 # Words a catch-all title may put next to a show's name: "epic-the-musical-not-sorry-for-loving-you".
@@ -575,6 +580,29 @@ def _allowed(hits: Iterable[_Hit], rejected: frozenset[tuple[str, str]]) -> list
     return [h for h in hits if (h.cand.artist_key, h.cand.song_key) not in rejected]
 
 
+def _keeping_near_names(hits: list[_Hit]) -> list[_Hit]:
+    """``hits`` with the best of each of ``KEPT_STEPS`` (score, then tabs) among the first
+    ``MAX_CANDIDATES``, in place of the last of the others there; the rest keep their order.
+
+    A show's song credited to its singer ends a catch-all title (``CATCH_ALL_ENDING``), behind the
+    covers of its title (100): cut off with them, it would never be offered, and rejecting five
+    covers would only bring five more.
+    """
+    top = hits[:MAX_CANDIDATES]
+    kept = [best for step in KEPT_STEPS if (best := min(
+        (h for h in hits if h.cand.step == step), key=lambda h: (-h.cand.score, -h.tabs, h.rank), default=None))]
+    missing = [h for h in kept if h not in top]
+    if not missing:
+        return hits
+    dropped = [h for h in top if h not in kept][-len(missing):]
+    top = [h for h in top if h not in dropped] + missing
+    return top + [h for h in hits if h not in top]
+
+
+def _review(hits: list[_Hit]) -> MatchResult:
+    return _result("review", _keeping_near_names(_ranked(hits)))
+
+
 def _result(decision: str, hits: list[_Hit]) -> MatchResult:
     best = hits[0].cand
     return MatchResult(decision, best.step, best.score, best.artist_key, best.song_key,
@@ -633,11 +661,11 @@ def match_song(song: Song, index: IndexView, overrides: Overrides, policy: Match
     # Names that aren't quite UG's: never an accept.
     tolerant = _allowed(_tolerant_hits(song, index, title, routes, bool(own), policy), rejected)
     if decision == "review":
-        return _result("review", _ranked(hits + tolerant))
+        return _review(hits + tolerant)
     behind = max((h.rank for h in tolerant), default=len(routes)) + 1
-    found = _ranked(tolerant + _allowed(_title_only(index, title, policy, behind), rejected))
+    found = tolerant + _allowed(_title_only(index, title, policy, behind), rejected)
     if found:
-        return _result("review", found)
+        return _review(found)
     return MatchResult("not_found", None, ranked[0].cand.score if ranked else None, None, None,
                        candidates=tuple(h.cand for h in ranked[:MAX_CANDIDATES]))
 
