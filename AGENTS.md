@@ -103,7 +103,11 @@ songs.py's, in the `removed` table).
   beat_this; run.py runs them over the library.
 - `tests/`: named after what they cover (test_fetch.py is ug/fetch.py's), and
   `test_commands_*.py` for the CLI. conftest.py has the `conn` and `cfg` fixtures (every
-  directory under `tmp_path`), `add_song` and `subprocess_pythonpath`. helpers/ug_pages.py
+  directory under `tmp_path`, in /dev/shm if it will do; `conn` copies a database migrated once
+  per process), `add_song` and `subprocess_pythonpath`. helpers/browser.py's `dump_dom` opens
+  pages in one Chromium per process, each in a fresh context, for a test marked `@in_chromium`;
+  helpers/locks.py `waiting_for` sees a command wait for caracole's lock. test_harness.py tests
+  what makes the suite fast. helpers/ug_pages.py
   builds fake UG tab and artist pages, escaped the way UG escapes them
   (`from helpers.ug_pages import ...`). helpers/gtptabs_site.py is `FakeGtpTabs`, a fake
   gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7
@@ -114,10 +118,11 @@ songs.py's, in the `removed` table).
   YouTube route on (auto-chords' packages taken to be there, model files, the fake).
   helpers/rendered.py keeps a sheet and renders it with a stand-in
   for chordpro (`rendered_song`), so its viewer is one caracole wrote; helpers/chromium.py
-  drives headless Chromium over the DevTools protocol (a pipe, the standard library), for
-  a page whose CSP refuses a test's script; helpers/browser.py is `Browser`, the same over
-  two pipes with typing, Enter, clicks and the layout read back, for the lookup page's
-  tests. fixtures/ holds UG, LaCuerda, LRCLIB,
+  drives a headless Chromium of the test's own over the DevTools protocol (a pipe, the standard
+  library), for a page whose CSP refuses a test's script; helpers/browser.py's `Browser` is the
+  same with typing, Enter, clicks and the layout read back, for the lookup page's tests. Both
+  resolve no host name (`helpers.browser.NO_LOOKUPS`), and their tests are `@in_chromium` too.
+  fixtures/ holds UG, LaCuerda, LRCLIB,
   gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
   synthetic lyrics, sheets and files.
 - `nix/`: package.nix (`buildPythonApplication`; the wrapper puts `chordpro` on PATH and
@@ -133,9 +138,20 @@ songs.py's, in the `removed` table).
 
 ## Development
 
-    nix develop        # Python 3.14 with the dependencies, pytest, chordpro, ruff, sqlite3
-    pytest -q          # from the repo root; pyproject.toml sets testpaths and pythonpath
+    nix develop        # Python 3.14 with the dependencies, pytest, pytest-xdist, chordpro, ruff, sqlite3
+    pytest -q                         # the whole suite, from the repo root, on up to 12 cores
+    pytest -q -m "not slow"           # the quick loop, a few seconds
+    pytest -q -m "not slow" --lf -x   # what failed last time, stopping at the first failure
+    pytest -q tests/test_fetch.py     # given paths, pytest runs them in one process
     nix develop .#autochords -c pytest -m autochords   # the model tests
+
+Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12,
+`--dist worksteal`); `-n 0` runs it in one process, as `--pdb`, `--trace`, `-s` and
+`-m autochords` do. `slow` marks a test that starts a browser (`helpers.browser.in_chromium`),
+chordpro or the models (`@pytest.mark.chordpro` and `autochords` add `slow`) or another
+process: mark a new one too. The whole suite stays the gate before a commit. tmp_path is in
+/dev/shm, and stays on disk with `--basetemp` or `PYTEST_DEBUG_TEMPROOT`, or when /dev/shm is
+noexec or has less than 1 GB free (a container's).
 
 Both shells set `CARACOLE_CJK_FONT` to the packages' font. `.#autochords` adds torch,
 beat-this and librosa, and sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` to the
@@ -149,7 +165,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), and the page served by a real `caracole serve` (test_web_page.py) | neither |
+| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py), and the shared browser itself (test_harness.py) | neither |
 
 Before a change is done:
 
@@ -176,6 +192,9 @@ Traps:
   unit setting changes together with its expectation in nix/module-check.nix.
 - `ruff check --select E4,E7,E9,F src tests` is clean; ruff's default rules and
   `ruff format --check` are not. Don't reformat code you aren't changing.
+- Every pytest-xdist worker collects the suite itself and must find the same test ids:
+  parametrize with nothing that changes between processes, such as a zip's clock-dated entries
+  (helpers/zips.py `dated_entry`), random values or a set's order.
 
 ## How work is done here
 

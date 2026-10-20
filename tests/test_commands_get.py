@@ -68,6 +68,7 @@ def get(config, *args):
     return CliRunner().invoke(build_app(), ["--config", str(config), "get", *args])
 
 
+@pytest.mark.slow
 def test_get_says_where_the_sheet_is_as_soon_as_it_is_kept(config, sites, conn, tmp_path):
     serve_creep(sites, conn)
 
@@ -83,12 +84,14 @@ def test_get_says_where_the_sheet_is_as_soon_as_it_is_kept(config, sites, conn, 
     assert find_song(conn, "radiohead/creep").status == "found"
 
 
+@pytest.mark.slow
 def test_get_takes_the_artist_and_the_title_as_two_words_too(config, sites, conn):
     serve_creep(sites, conn)
     assert get(config, "Radiohead", "Creep").exit_code == 0
     assert find_song(conn, "radiohead/creep").status == "found"
 
 
+@pytest.mark.slow
 def test_get_print_shows_the_sheet_itself(config, sites, conn):
     serve_creep(sites, conn)
     result = get(config, "--print", "Radiohead - Creep")
@@ -97,6 +100,7 @@ def test_get_print_shows_the_sheet_itself(config, sites, conn):
     assert "walking down the river road tonight" in result.output
 
 
+@pytest.mark.slow
 def test_get_progress_writes_a_json_line_per_stage_for_caracole_serve(config, sites, conn):
     serve_creep(sites, conn)
     result = get(config, "--progress", "Radiohead - Creep")
@@ -112,6 +116,7 @@ def test_get_progress_writes_a_json_line_per_stage_for_caracole_serve(config, si
     json.loads(result.output.splitlines()[0][len(PROGRESS_PREFIX):])
 
 
+@pytest.mark.slow
 def test_get_records_the_ug_song_and_the_tab_you_pick(config, sites, conn, tmp_path):
     serve_creep(sites, conn)
     result = get(config, "--ug", "radiohead/creep", "--tab", f"{TAB}radiohead/creep-chords-103", "Radiohead - Creep")
@@ -151,6 +156,7 @@ def test_a_block_exits_0(config, sites, conn):
     assert "blocked caracole" in result.output and "Nothing was marked not found" in result.output
 
 
+@pytest.mark.slow
 def test_registering_the_command_imports_no_lookup_code(tmp_path):
     src = Path(__file__).resolve().parents[1] / "src"
     code = (

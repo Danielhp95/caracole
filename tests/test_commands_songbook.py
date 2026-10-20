@@ -63,6 +63,7 @@ def folder(setup, name="Campfire") -> Path:
 # --- make ----------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_make_writes_the_songbook_with_the_songs_as_the_library_names_them_and_renders_it(setup):
     result = run(setup, "make", "Campfire", "soda stereo - de musica ligera", "ban ma ban ma", "Muse - Hysteria")
     assert result.exit_code == 0, result.output
@@ -91,6 +92,7 @@ def test_make_refuses_a_name_taken_and_a_name_that_cant_be_a_folder(setup):
     assert result.exit_code == 1 and "dot" in result.output
 
 
+@pytest.mark.slow
 def test_make_keeps_a_song_named_twice_once_and_says_so(setup):
     result = run(setup, "make", "Gig", "Muse - Hysteria", "Soda Stereo - De Música Ligera", "muse - hysteria")
     assert result.exit_code == 0, result.output
@@ -106,6 +108,7 @@ def test_make_needs_songs(setup):
 # --- reading them ---------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_list_and_show_say_what_each_songbook_holds(setup):
     _, cfg, _ = setup
     assert "No songbooks yet" in run(setup, "list").output
@@ -151,6 +154,7 @@ def test_a_broken_songbooks_file_exits_2_naming_it(setup):
 # --- changing them --------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_add_remove_move_rename_and_delete(setup):
     assert run(setup, "make", "Campfire", "Muse - Hysteria").exit_code == 0
     added = run(setup, "add", "campfire", "soda stereo - de música ligera", "Muse - Hysteria")
@@ -203,6 +207,7 @@ def gig(setup):
     conn.execute("DELETE FROM songs WHERE id = ?", (live.id,))
 
 
+@pytest.mark.slow
 def test_a_song_gone_from_the_library_is_shown_missing_and_moved_or_taken_out_alone(setup, gig):
     lines = run(setup, "show", "Gig").output.splitlines()
     assert lines[1:4] == ["  1. Radiohead - Karma Police", "  2. Oasis - Wonderwall (missing: no sheet yet)",
@@ -222,6 +227,7 @@ def test_a_song_gone_from_the_library_is_shown_missing_and_moved_or_taken_out_al
     assert books(setup)[0].songs == ("Radiohead - Karma Police", "Oasis - Wonderwall")
 
 
+@pytest.mark.slow
 def test_a_song_caracole_remove_takes_out_of_the_library_is_missing_from_its_songbook(setup):
     # caracole remove deletes the song's record and its files, never a songbook's entry: the songbook goes
     # on, listing the song as missing until you take it out, and every file of it is made again.
@@ -254,6 +260,7 @@ def test_a_song_caracole_remove_takes_out_of_the_library_is_missing_from_its_son
     assert books(setup)[0].songs == ("宋冬野 - 斑马，斑马",)
 
 
+@pytest.mark.slow
 def test_a_song_the_songbook_lacks_is_still_found_by_a_search_of_the_library(setup, gig):
     moved = run(setup, "move", "Gig", "oasis wonderwal", "1")  # no entry of Gig is it: the library's search
     assert moved.exit_code == 0, moved.output
@@ -263,6 +270,7 @@ def test_a_song_the_songbook_lacks_is_still_found_by_a_search_of_the_library(set
     assert books(setup)[0].songs == ("Radiohead - Karma Police", "Radiohead - Karma Police Live")
 
 
+@pytest.mark.slow
 def test_a_change_whose_files_cant_be_made_exits_1_and_stays_made(setup):
     (folder(setup, "Trip") / "songbook.pdf").mkdir(parents=True)  # a synced device put a folder in its place
     made = run(setup, "make", "Trip", "Soda Stereo - De Música Ligera")
@@ -278,6 +286,7 @@ def test_a_change_whose_files_cant_be_made_exits_1_and_stays_made(setup):
     assert run(setup, "add", "Trip", "Muse - Hysteria").exit_code == 0
 
 
+@pytest.mark.slow
 def test_render_renders_one_or_every_songbook(setup):
     _, cfg, _ = setup
     make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Soda Stereo - De Música Ligera"])
@@ -292,6 +301,7 @@ def test_render_renders_one_or_every_songbook(setup):
     assert run(setup, "render", "Weddings").exit_code == 1
 
 
+@pytest.mark.slow
 def test_every_change_holds_caracoles_lock(setup, monkeypatch):
     from caracole import songbook
 
@@ -319,6 +329,7 @@ def test_every_change_holds_caracoles_lock(setup, monkeypatch):
     assert held == [True] * 7
 
 
+@pytest.mark.slow
 def test_registering_the_command_imports_neither_the_songbooks_nor_the_renderer():
     code = ("import sys; import caracole.cli; "
             "print(sorted(m for m in sys.modules if m in ('caracole.songbook', 'caracole.render', 'caracole.viewer')))")
@@ -331,6 +342,7 @@ def test_registering_the_command_imports_neither_the_songbooks_nor_the_renderer(
 # --- caracole render and the nightly run ---------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_caracole_render_makes_the_songbooks_after_the_sheets(setup):
     toml, cfg, _ = setup
     make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Soda Stereo - De Música Ligera"])
@@ -342,6 +354,7 @@ def test_caracole_render_makes_the_songbooks_after_the_sheets(setup):
     assert "Songbooks: 0 rendered, 1 up to date, 0 failed" in again.output
 
 
+@pytest.mark.slow
 def test_a_songbook_file_that_cant_be_written_fails_caracole_render_without_a_traceback(setup):
     toml, cfg, _ = setup
     make_songbook(cfg.library_dir / FILE_NAME, "Trip", ["Soda Stereo - De Música Ligera"])
@@ -362,6 +375,7 @@ def test_caracole_render_says_nothing_of_songbooks_without_any(setup):
     assert result.exit_code == 0 and "Songbooks" not in result.output
 
 
+@pytest.mark.slow
 def test_a_broken_songbooks_file_costs_caracole_render_no_pdf(setup):
     toml, cfg, _ = setup
     (cfg.library_dir / FILE_NAME).write_text("[Campfire\n", encoding="utf-8")
@@ -371,6 +385,7 @@ def test_a_broken_songbooks_file_costs_caracole_render_no_pdf(setup):
     assert "2 rendered" in result.output and "Songbooks: songbooks.toml can't be read" in result.output
 
 
+@pytest.mark.slow
 def test_the_nightly_render_step_makes_the_songbooks(setup):
     from caracole.notify import Notifier
     from caracole.pipeline import Services, default_steps, run_pipeline
@@ -387,6 +402,7 @@ def test_the_nightly_render_step_makes_the_songbooks(setup):
     assert (folder(setup) / "songbook.pdf").is_file()
 
 
+@pytest.mark.slow
 def test_a_songbook_file_that_cant_be_written_costs_the_nightly_render_step_nothing_else(setup):
     from caracole.notify import Notifier
     from caracole.pipeline import Services, default_steps, run_pipeline

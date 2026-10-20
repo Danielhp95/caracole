@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 import typer
+from helpers.locks import waiting_for
 from typer.testing import CliRunner
 
 from caracole import db
@@ -235,7 +236,8 @@ def test_a_second_caracole_waits_for_the_first_and_says_so(cfg, capsys):
         thread = threading.Thread(target=second)
         thread.start()
         assert started.wait(5)
-        assert not done.wait(0.5)  # waiting, not running beside it
+        # waiting, not running beside it
+        assert waiting_for(lock_path(cfg), thread.is_alive) and not done.is_set()
     assert done.wait(5)
     thread.join(5)
     said = "Another caracole is running (pid 4242: run); waiting for it to finish."
@@ -288,7 +290,7 @@ def test_a_client_waits_for_another_caracole(cfg, conn):
     with another_caracole(cfg):
         thread = threading.Thread(target=make)
         thread.start()
-        assert not made.wait(0.5)
+        assert waiting_for(lock_path(cfg), thread.is_alive) and not made.is_set()
     assert made.wait(5)
     thread.join(5)
     clients[0].close()
@@ -450,6 +452,8 @@ def test_bulk_work_after_a_lookup_keeps_the_long_pause(cfg, conn, site, pauses):
 
 
 def test_a_waiting_lookup_says_whom_it_waits_for_and_is_announced(cfg, capsys):
+    import time
+
     took = threading.Event()
 
     def lookup():
@@ -459,7 +463,12 @@ def test_a_waiting_lookup_says_whom_it_waits_for_and_is_announced(cfg, capsys):
     with another_caracole(cfg):
         thread = threading.Thread(target=lookup)
         thread.start()
-        assert not took.wait(0.5)
+        # A lookup tries for the lock without blocking on it, so /proc/locks never lists it waiting
+        # (helpers.locks.waiting_for): its ticket says it waits, as soon as it does.
+        deadline = time.monotonic() + 5
+        while not _common.lookups_waiting(cfg) and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert not took.is_set()  # waiting, not running beside it
         assert _common.lookups_waiting(cfg)  # what the nightly run checks in its pauses
     assert took.wait(5)
     thread.join(5)
@@ -548,6 +557,7 @@ with _common.exclusive(cfg, "run"):
 """
 
 
+@pytest.mark.slow
 def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, cfg):
     import subprocess
     import sys
@@ -580,6 +590,7 @@ def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, c
     assert int(handoffs) == 1
 
 
+@pytest.mark.slow
 def test_the_youtube_steps_pauses_hand_the_lock_to_a_waiting_lookup_too(cfg, conn, tmp_path, monkeypatch):
     # The nightly run's youtube step holds caracole's lock for minutes, 15 to 30 seconds between two yt-dlp
     # runs: a lookup waiting meanwhile goes first in that pause, as in a client's, and the pause starts again.

@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
-import subprocess
 import threading
 from datetime import UTC, datetime
 from urllib.parse import quote
 
+import helpers.browser
 import pytest
+from helpers.browser import in_chromium
 
 from caracole import db
 from caracole.get import PROGRESS_PREFIX
@@ -26,7 +26,6 @@ from caracole.web.lookup_page import LOOKUP_CSP, SCRIPT, STYLE, lookup_page
 from caracole.web.security import allowed_hosts
 from caracole.web.server import make_server
 
-CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 SHEET = "[Intro]\nAm   F   C   G\nwalking down the river road tonight\n"
 
 
@@ -71,25 +70,16 @@ def served(cfg):
     queue = JobQueue(FakeGet(cfg))
     app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
     server = make_server(app, "127.0.0.1", 0)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()  # stops within 10 ms
     yield server, queue
     server.shutdown()
     server.server_close()
 
 
 def dump_dom(url: str, tmp_path) -> str:
-    try:
-        result = subprocess.run(
-            [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={tmp_path / 'chrome'}", "--window-size=1000,900", "--virtual-time-budget=5000",
-             "--dump-dom", url],
-            capture_output=True, text=True, timeout=60,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        pytest.skip(f"chromium couldn't run: {e}")
-    if result.returncode != 0 or "<html" not in result.stdout:
-        pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
-    return result.stdout
+    """The page's DOM once its timers ran for 5 s of virtual time, in a browser context of its own
+    (helpers/browser.py)."""
+    return helpers.browser.dump_dom(url, (1000, 900), budget_ms=5000)
 
 
 def shown(dom: str, element: str, until: str | None = None) -> str:
@@ -100,7 +90,7 @@ def shown(dom: str, element: str, until: str | None = None) -> str:
     return found.group(1)
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_lookup_shows_its_stages_and_the_sheet_in_a_real_browser(cfg, served, tmp_path):
     server, queue = served
     queue.submit("Fetch Radiohead - Creep", "radiohead/creep", lookup_steps("Radiohead", "Creep"), fetching=True)
@@ -116,7 +106,7 @@ def test_a_lookup_shows_its_stages_and_the_sheet_in_a_real_browser(cfg, served, 
     assert 'href="/Radiohead/Creep/sheet.txt"' in reader
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_search_lists_the_offline_index_as_you_type_in_a_real_browser(cfg, served, tmp_path):
     server, _ = served
     conn = db.connect(cfg.db_path)
@@ -141,7 +131,7 @@ def test_the_search_lists_the_offline_index_as_you_type_in_a_real_browser(cfg, s
     assert 'href="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169"' in results
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_why_a_stage_waits_or_was_left_is_written_out_not_only_in_a_tooltip(cfg, tmp_path):
     release = threading.Event()
 
@@ -159,7 +149,7 @@ def test_why_a_stage_waits_or_was_left_is_written_out_not_only_in_a_tooltip(cfg,
     queue.start()
     app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
     server = make_server(app, "127.0.0.1", 0)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()  # stops within 10 ms
     try:
         queue.submit("Fetch Radiohead - Creep", "radiohead/creep", lookup_steps("Radiohead", "Creep"), fetching=True)
         url = f"http://127.0.0.1:{server.server_address[1]}/lookup?job=1"
@@ -205,7 +195,7 @@ def live(cfg):
     queue.start()
     app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
     server = make_server(app, "127.0.0.1", 0)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()  # stops within 10 ms
     yield f"http://127.0.0.1:{server.server_address[1]}", queue
     server.shutdown()
     server.server_close()
@@ -252,7 +242,7 @@ def posted(queue, timeout=10.0):
 HITS = "document.querySelectorAll('#results .hit').length"
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_enter_right_after_typing_looks_up_what_you_typed_not_the_results_before(cfg, live, browser):
     base, queue = live
     index_songs(cfg, [("eagles", "hotel-california", 9), ("eagles", "desperado", 3), ("eagles", "take-it-easy", 2)])
@@ -266,12 +256,12 @@ def test_enter_right_after_typing_looks_up_what_you_typed_not_the_results_before
     assert args[-2:] == ("Eagles", "Desperado"), args
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_page_left_open_across_a_restart_says_to_reload_it(cfg, browser):
     queue = JobQueue(FakeGet(cfg))
     app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
     server = make_server(app, "127.0.0.1", 0)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()  # stops within 10 ms
     try:
         index_songs(cfg, [("radiohead", "creep", 2)])
         browser.open(f"http://127.0.0.1:{server.server_address[1]}/lookup")
@@ -290,7 +280,7 @@ def test_a_page_left_open_across_a_restart_says_to_reload_it(cfg, browser):
     assert queue.snapshot() == []
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_your_librarys_song_found_on_ug_under_another_name_is_looked_up_as_itself(cfg, live, browser):
     from caracole.songs import update_song
 
@@ -316,7 +306,7 @@ SHEET_TOP = ("(() => { const s = document.getElementById('sheet'); if (s.hidden 
              "return [r.top, bar.bottom, innerHeight]; })()")
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_on_a_phone_the_sheet_you_picked_is_on_the_screen_once_it_arrives(cfg, live, phone):
     import time
 
@@ -338,7 +328,7 @@ def test_on_a_phone_the_sheet_you_picked_is_on_the_screen_once_it_arrives(cfg, l
     assert bar - 1 <= top and top + 24 <= height, (top, bar, height)  # its first line, below the search box
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(cfg, live, browser):
     from helpers.rendered import rendered_song
 

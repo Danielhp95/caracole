@@ -508,6 +508,7 @@ def drawn(pdf: Path) -> list[str]:
 
 
 @real_chordpro
+@pytest.mark.chordpro
 def test_the_real_pdf_has_a_title_page_contents_and_every_song_in_its_key(conn, cfg, two):
     cfg = replace(cfg, chordpro_bin=CHORDPRO, cjk_font=None)
     add_song(conn, "Muse", "Hysteria")
@@ -528,6 +529,7 @@ def test_the_real_pdf_has_a_title_page_contents_and_every_song_in_its_key(conn, 
 
 
 @real_chordpro
+@pytest.mark.chordpro
 def test_the_real_chordpro_file_holds_every_song_in_its_key(conn, cfg, two):
     cfg = replace(cfg, chordpro_bin=CHORDPRO, cjk_font=None)
     render_songbooks(conn, cfg, overrides(cfg, '[transpose]\n"Soda Stereo - De Música Ligera" = 2\n'))
@@ -540,6 +542,7 @@ def test_the_real_chordpro_file_holds_every_song_in_its_key(conn, cfg, two):
 
 @real_chordpro
 @pytest.mark.skipif(not (CJK_FONT and Path(CJK_FONT).is_file()), reason="set CARACOLE_CJK_FONT")
+@pytest.mark.chordpro
 def test_the_real_pdf_of_a_chinese_songbook_embeds_the_font(conn, cfg):
     cfg = replace(cfg, chordpro_bin=CHORDPRO, cjk_font=Path(CJK_FONT))
     zh = add_song(conn, "宋冬野", "斑马斑马")

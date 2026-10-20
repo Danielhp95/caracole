@@ -8,8 +8,6 @@ import html as html_module
 import json
 import re
 import shlex
-import shutil
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,11 +17,11 @@ from caracole.library_page import WebControls, build_library_page, write_library
 from caracole.overrides import Overrides
 from caracole.songbook import make_songbook, render_songbooks, songbooks_file
 from conftest import add_song
+from helpers import browser
+from helpers.browser import in_chromium
 from helpers.songbooks import FakeChordPro, keep_sheet, render_sheets
 
 NOW = datetime(2026, 10, 18, 3, 41, tzinfo=UTC)
-CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
-in_chromium = pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
 
 
 def page(conn, cfg, controls=None) -> str:
@@ -159,19 +157,11 @@ def run_in_page(html: str, cfg, tmp_path: Path, body: str, *, size: str = "1280,
     html = html.replace(csp, csp.replace("script-src ", f"script-src {sha(script)} "))
     html = html.replace("</body>", f"<script>{script}</script>\n</body>")
     path = write_library_page(cfg.library_dir, html)
-    try:
-        result = subprocess.run(
-            [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={tmp_path / 'chrome'}", f"--window-size={size}", "--hide-scrollbars",
-             "--virtual-time-budget=3000", "--dump-dom", path.as_uri() + fragment],
-            capture_output=True, text=True, timeout=60, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        pytest.skip(f"chromium couldn't run: {e}")
-    if result.returncode != 0 or "<html" not in result.stdout:
-        pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
-    found = re.search(r'data-result="([^"]*)"', result.stdout)
-    assert found, result.stdout[-3000:]
+    width, height = (int(n) for n in size.split(","))
+    # A phone's width, narrower than any window, laid out as a phone's screen (test_library_page.py).
+    dom = browser.dump_dom(path.as_uri() + fragment, (width, height), hide_scrollbars=True, mobile=width < 500)
+    found = re.search(r'data-result="([^"]*)"', dom)
+    assert found, dom[-3000:]
     out = json.loads(html_module.unescape(found.group(1)))
     assert not (isinstance(out, dict) and "error" in out), out["error"]
     return out

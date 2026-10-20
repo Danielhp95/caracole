@@ -6,12 +6,13 @@ from __future__ import annotations
 import re
 import shutil
 import struct
-import subprocess
 import threading
 from urllib.parse import urlencode
 
 import pytest
 from conftest import add_song
+from helpers import browser
+from helpers.browser import in_chromium
 from helpers.songbooks import FakeChordPro, fake_chordpro_program, keep_sheet, render_sheets
 from typer.testing import CliRunner
 
@@ -27,7 +28,6 @@ from caracole.web.jobs import JobQueue
 HOST = "127.0.0.1:8737"
 ALLOWED = frozenset({"localhost", "127.0.0.1", "::1"})
 PAGE = "/_songbooks/Campfire/songbook.html"
-CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 
 
 class InProcess:
@@ -120,6 +120,7 @@ def steps(queue):
 # --- the forms -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_select_bar_makes_a_songbook_of_the_songs_in_the_order_picked(app, setup, queue):
     songs = setup[3]
     response = post(app, "/songbook/make", {"name": "  Beach   nights ",
@@ -136,6 +137,7 @@ def test_the_select_bar_makes_a_songbook_of_the_songs_in_the_order_picked(app, s
     assert (setup[1].library_dir / "_songbooks" / "Beach nights" / "songbook.html").is_file()
 
 
+@pytest.mark.slow
 def test_a_songbook_whose_files_cant_be_made_is_a_failed_request(app, setup, queue):
     songs = setup[3]
     (setup[1].library_dir / "_songbooks" / "Trip" / "songbook.pdf").mkdir(parents=True)
@@ -147,6 +149,7 @@ def test_a_songbook_whose_files_cant_be_made_is_a_failed_request(app, setup, que
     assert books(setup) == [Songbook("Trip", ("Radiohead - Creep",))]
 
 
+@pytest.mark.slow
 def test_a_name_starting_with_a_dash_is_a_name_not_an_option(app, setup, queue):
     songs = setup[3]
     assert post(app, "/songbook/make", {"name": "-Encore", "songs": str(songs["creep"].id)}).status == 303
@@ -161,6 +164,7 @@ def test_the_select_bar_adds_to_a_songbook_there_is(app, setup, queue, campfire)
     assert steps(queue) == [[("songbook", "add", "--", "Campfire", "Soda Stereo - De Música Ligera")]]
 
 
+@pytest.mark.slow
 def test_the_songbook_forms_queue_move_remove_rename_and_delete(app, setup, queue, campfire):
     for path, fields in [
         ("/songbook/move", {"name": "Campfire", "song": "Muse - Hysteria", "position": "1"}),
@@ -185,6 +189,7 @@ def test_the_songbook_forms_queue_move_remove_rename_and_delete(app, setup, queu
     assert books(setup) == [] and not campfire.exists()
 
 
+@pytest.mark.slow
 def test_a_song_gone_from_the_library_can_still_be_moved_or_taken_out(app, setup, queue, campfire):
     cfg = setup[1]
     make_songbook(cfg.library_dir / FILE_NAME, "Picnic", ["Radiohead - Creep", "Pixies - Where Is My Mind"])
@@ -193,6 +198,7 @@ def test_a_song_gone_from_the_library_can_still_be_moved_or_taken_out(app, setup
     assert books(setup)[1] == Songbook("Picnic", ("Radiohead - Creep",))
 
 
+@pytest.mark.slow
 def test_a_song_gone_from_the_library_goes_alone_never_with_the_song_whose_title_its_own_holds(app, setup, queue):
     _, cfg, conn, _ = setup
     police = add_song(conn, "Radiohead", "Karma Police")
@@ -216,6 +222,7 @@ def test_a_song_gone_from_the_library_goes_alone_never_with_the_song_whose_title
     assert books(setup) == [Songbook("Gig", ("Radiohead - Karma Police", "Muse - Hysteria"))]
 
 
+@pytest.mark.slow
 def test_a_song_the_page_removes_from_the_library_stays_in_its_songbook_as_missing(app, setup, queue, campfire):
     # The page's Remove runs caracole remove, which leaves songbooks.toml alone: the songbook lists the song
     # as missing, its page is still served, and its × takes the song out.
@@ -361,31 +368,22 @@ def test_a_page_whose_policy_cant_be_read_runs_nothing():
     assert songbook_csp(bad).startswith("sandbox; default-src 'none'")
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_songbook_works_in_its_sandbox_in_a_real_browser(setup, campfire, tmp_path):
     from caracole.web.server import make_server
 
     cfg = setup[1]
     app = WebApp(cfg, JobQueue(lambda args, emit: 0), allowed=ALLOWED, csrf="tok")
     server = make_server(app, "127.0.0.1", 0)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # shutdown() returns at the next poll: every 10 ms, not every 500
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_address[1]}{PAGE}#song-1"
     try:
-        result = subprocess.run(
-            [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={tmp_path / 'chrome'}", "--window-size=390,844", "--virtual-time-budget=4000",
-             "--dump-dom", url],
-            capture_output=True, text=True, timeout=90, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        pytest.skip(f"chromium couldn't run: {e}")
+        dom = browser.dump_dom(url, (390, 844), budget_ms=4000)
     finally:
         server.shutdown()
         server.server_close()
-    if result.returncode != 0 or "<html" not in result.stdout:
-        pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
-    dom = result.stdout
     assert 'data-view="song"' in dom and 'data-ready="1"' in dom  # both scripts ran, under the header's policy
     sheet = re.search(r'<article[^>]*id="sheet"[^>]*>(.*?)</article>', dom, re.DOTALL).group(1)
     chords = re.findall(r'<b class="c[^"]*" data-c="\d+"[^>]*>([^<]*)</b>', sheet)
@@ -403,7 +401,7 @@ def test_the_songbook_page_is_one_of_the_pages_caracole_writes():
     assert page.refused == songbook.PAGE_REFUSED
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_served_songbook_keeps_a_songs_transposition_in_its_address_across_a_reload(setup, campfire, tmp_path):
     # The sandbox has no storage: the viewer keeps a song's settings in the address, beside the song
     # book.js opens ("#song-1=&t=3"), so a reload, and Back from the next song, find them again.
@@ -413,7 +411,8 @@ def test_a_served_songbook_keeps_a_songs_transposition_in_its_address_across_a_r
 
     app = WebApp(setup[1], JobQueue(lambda args, emit: 0), allowed=ALLOWED, csrf="tok")
     server = make_server(app, "127.0.0.1", 0)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    # shutdown() returns at the next poll: every 10 ms, not every 500
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
     url = f"http://127.0.0.1:{server.server_address[1]}{PAGE}"
     chords = ("Array.from(document.querySelectorAll('#sheet .c[data-c]')).slice(0, 4)"
               ".map((c) => c.textContent).join(' ')")

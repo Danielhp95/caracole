@@ -301,6 +301,7 @@ def runner(fake, tmp_path, *, budget=6, delay=(15.0, 30.0), events=None, clock=N
                  on_event=events.append if events is not None else None, sleep=clock.sleep, clock=clock, **kw)
 
 
+@pytest.mark.slow
 def test_a_search_runs_yt_dlp_flat_with_no_cookies_config_or_plugins(fake, tmp_path):
     fake.search("Radiohead Creep", entry(ID, "Creep", "Radiohead - Topic", 239))
     found = runner(fake, tmp_path).search("Radiohead Creep")
@@ -317,11 +318,13 @@ def test_a_search_runs_yt_dlp_flat_with_no_cookies_config_or_plugins(fake, tmp_p
     assert argv[argv.index("--retries") + 1] == "0"
 
 
+@pytest.mark.slow
 def test_a_query_that_looks_like_an_option_is_still_the_query(fake, tmp_path):
     runner(fake, tmp_path).search("--exec rm -rf ~ Creep")
     assert fake.argvs()[0][-2:] == ["--", "ytsearch8:--exec rm -rf ~ Creep"]
 
 
+@pytest.mark.slow
 def test_a_download_takes_the_audio_alone_as_m4a_into_the_folder_given(fake, tmp_path):
     fake.video(ID, "Creep", "Radiohead - Topic", 239, ext="m4a", data="AAC bytes")
     into = tmp_path / "download"
@@ -341,6 +344,7 @@ def test_a_download_takes_the_audio_alone_as_m4a_into_the_folder_given(fake, tmp
 
 
 @pytest.mark.parametrize("printed", ["elsewhere/audio.m4a", "into/missing.m4a", "into/audio.txt", "into"])
+@pytest.mark.slow
 def test_a_download_that_leaves_no_audio_file_in_its_folder_is_an_error(fake, tmp_path, printed):
     into = tmp_path / "into"
     into.mkdir()
@@ -352,6 +356,7 @@ def test_a_download_that_leaves_no_audio_file_in_its_folder_is_an_error(fake, tm
         runner(fake, tmp_path).download(ID, into)
 
 
+@pytest.mark.slow
 def test_deno_runs_without_its_jit_so_the_units_memory_protection_holds(fake, tmp_path, monkeypatch):
     # yt-dlp solves YouTube's JavaScript with deno, whose JIT dies under systemd's
     # MemoryDenyWriteExecute; caracole's units keep that, so V8 runs as an interpreter.
@@ -363,6 +368,7 @@ def test_deno_runs_without_its_jit_so_the_units_memory_protection_holds(fake, tm
     assert fake.calls()[1]["env"]["DENO_V8_FLAGS"] == "--jitless --max-old-space-size=256"
 
 
+@pytest.mark.slow
 def test_yt_dlp_gets_none_of_caracoles_secrets(fake, tmp_path, monkeypatch):
     # The nightly unit's credentials (ntfy, Spotify) and caracole's tokens stay with caracole:
     # yt-dlp, deno and ffmpeg are other people's programs reading YouTube's pages.
@@ -380,6 +386,7 @@ def test_yt_dlp_gets_none_of_caracoles_secrets(fake, tmp_path, monkeypatch):
     assert {"PATH", "DENO_V8_FLAGS", *kept} <= names
 
 
+@pytest.mark.slow
 def test_runs_are_counted_against_the_budget_and_paced(fake, tmp_path):
     clock, events = Clock(), []
     yt = runner(fake, tmp_path, budget=2, clock=clock, events=events, rng=FixedRng(20.0))
@@ -411,6 +418,7 @@ class FixedRng:
     (("ERROR: [youtube] dQw4w9WgXcQ: This content isn't available, try again later. The current session has "
       "been rate-limited by YouTube for up to an hour."), None),
 ])
+@pytest.mark.slow
 def test_a_bot_check_a_429_or_a_403_is_a_block_and_nothing_more_runs(fake, tmp_path, stderr, status):
     fake.video(ID, stderr=stderr, exit=1)
     events = []
@@ -435,6 +443,7 @@ def test_a_bot_check_a_429_or_a_403_is_a_block_and_nothing_more_runs(fake, tmp_p
     "ERROR: [youtube] dQw4w9WgXcQ: This video is not available",
     "ERROR: [youtube] dQw4w9WgXcQ: This video is unavailable",
 ])
+@pytest.mark.slow
 def test_a_video_that_cant_be_had_without_logging_in_is_unavailable_not_a_block(fake, tmp_path, stderr):
     fake.video(ID, stderr=stderr, exit=1)
     yt = runner(fake, tmp_path)
@@ -444,6 +453,7 @@ def test_a_video_that_cant_be_had_without_logging_in_is_unavailable_not_a_block(
     assert len(fake.argvs()) == 2
 
 
+@pytest.mark.slow
 def test_any_other_failure_is_an_error_that_names_yt_dlps_reason(fake, tmp_path):
     fake.search("q", stderr="WARNING: something\nERROR: Unable to download API page: [Errno -3] Temporary failure "
                             "in name resolution", exit=1)
@@ -454,6 +464,7 @@ def test_any_other_failure_is_an_error_that_names_yt_dlps_reason(fake, tmp_path)
     assert [ev.decision for ev in events] == ["error"]
 
 
+@pytest.mark.slow
 def test_a_run_that_takes_too_long_is_stopped_and_is_an_error(fake, tmp_path):
     fake.search("slow", sleep=30)
     started = time.monotonic()
@@ -463,6 +474,7 @@ def test_a_run_that_takes_too_long_is_stopped_and_is_an_error(fake, tmp_path):
     assert isinstance(e.value.__cause__, TimeoutError)
 
 
+@pytest.mark.slow
 def test_an_interrupted_run_stops_yt_dlp_and_what_it_started(fake, tmp_path):
     # Ctrl-C reaches caracole alone: yt-dlp runs in a session of its own, so its process group
     # (ffmpeg, deno) would go on downloading after caracole has let go of its lock.

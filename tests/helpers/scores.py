@@ -8,6 +8,8 @@ from __future__ import annotations
 import io
 import zipfile
 
+from helpers.zips import dated_entry
+
 DOCTYPE = ('<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" '
            '"http://www.musicxml.org/dtds/partwise.dtd">\n')
 PARTS = ('<part-list><score-part id="P1"><part-name>Guitar</part-name></score-part></part-list>'
@@ -32,9 +34,9 @@ def mxl(xml: bytes, *, container: bool = True, name: str = "score.musicxml") -> 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         if container:
-            z.writestr("META-INF/container.xml", (
+            z.writestr(dated_entry(z, "META-INF/container.xml"), (
                 '<?xml version="1.0" encoding="UTF-8"?><container><rootfiles>'
                 f'<rootfile full-path="{name}" media-type="application/vnd.recordare.musicxml+xml"/>'
                 "</rootfiles></container>"))
-        z.writestr(name, xml)
+        z.writestr(dated_entry(z, name), xml)
     return buf.getvalue()

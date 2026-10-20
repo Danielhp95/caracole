@@ -109,6 +109,7 @@ def creep(fake):
     fake.video(TOPIC, "Creep", "Radiohead - Topic", 238, data="topic")
 
 
+@pytest.mark.slow
 def test_youtube_downloads_the_due_songs_and_says_what_comes_next(tmp_path, ntfy, fake, conn):
     song = to_buy(conn)
     creep(fake)
@@ -153,6 +154,7 @@ def test_without_auto_chords_it_downloads_nothing_and_fails(tmp_path, ntfy, fake
     assert result.exit_code == 1 and "auto-chords has no BTC weights configured" in result.output
 
 
+@pytest.mark.slow
 def test_one_song_by_hand(tmp_path, ntfy, fake, conn):
     song = to_buy(conn)
     other = to_buy(conn, "Radiohead", "Airbag")
@@ -166,6 +168,7 @@ def test_one_song_by_hand(tmp_path, ntfy, fake, conn):
     assert f"Radiohead - Creep already has the audio of https://www.youtube.com/watch?v={TOPIC}" in again.output
 
 
+@pytest.mark.slow
 def test_a_song_whose_audio_is_gone_from_the_cache_gets_it_again(tmp_path, ntfy, fake, conn):
     import shutil
 
@@ -221,6 +224,7 @@ def test_a_song_whose_purchase_is_linked_gets_nothing_from_youtube(tmp_path, ntf
     assert fake.argvs() == [] and get_song(conn, song.id).audio_path == str(bought)
 
 
+@pytest.mark.slow
 def test_a_pasted_url_is_written_to_overrides_and_downloaded(tmp_path, ntfy, fake, conn):
     song = to_buy(conn)
     fake.video(OTHER, "Radiohead - Creep (Live)", "someone", 300, data="live")
@@ -234,6 +238,7 @@ def test_a_pasted_url_is_written_to_overrides_and_downloaded(tmp_path, ntfy, fak
     assert Path(get_song(conn, song.id).audio_path).read_text() == "live"
 
 
+@pytest.mark.slow
 def test_none_turns_youtube_down_for_the_song_and_lets_go_of_its_audio(tmp_path, ntfy, fake, conn):
     song = to_buy(conn)
     creep(fake)
@@ -249,6 +254,7 @@ def test_none_turns_youtube_down_for_the_song_and_lets_go_of_its_audio(tmp_path,
     assert len(fake.argvs()) == calls
 
 
+@pytest.mark.slow
 def test_audio_let_go_with_nothing_due_rewrites_the_pages(tmp_path, ntfy, fake, conn):
     from caracole.library import keep_file
     from caracole.versions import upsert_version
@@ -302,6 +308,7 @@ def test_bad_options_are_usage_errors(tmp_path, ntfy, fake, conn, args, said):
     assert fake.argvs() == []
 
 
+@pytest.mark.slow
 def test_a_block_cools_youtube_down_alerts_once_and_exits_0(tmp_path, ntfy, fake, conn):
     song = to_buy(conn)
     fake.search("Radiohead Creep", stderr="ERROR: [youtube] Sign in to confirm you’re not a bot.", exit=1)
@@ -315,6 +322,7 @@ def test_a_block_cools_youtube_down_alerts_once_and_exits_0(tmp_path, ntfy, fake
     assert again.exit_code == 0 and "cooling down" in again.output and len(fake.argvs()) == 1
 
 
+@pytest.mark.slow
 def test_a_download_that_fails_the_same_way_every_time_gives_way_to_another_pick(tmp_path, ntfy, fake, conn):
     to_buy(conn)
     creep(fake)
@@ -333,6 +341,7 @@ def test_a_download_that_fails_the_same_way_every_time_gives_way_to_another_pick
     assert "tried again on the next run" not in last.output
 
 
+@pytest.mark.slow
 def test_a_spent_budget_says_so(tmp_path, ntfy, fake, conn):
     to_buy(conn)
     creep(fake)
@@ -365,6 +374,7 @@ def test_the_help_names_the_youtube_table(tmp_path, ntfy, fake):
     assert '("none" under [youtube])' in text
 
 
+@pytest.mark.slow
 def test_registering_the_command_imports_neither_the_pass_nor_yt_dlp(tmp_path):
     src = Path(__file__).resolve().parents[1] / "src"
     code = (
@@ -380,6 +390,7 @@ def test_registering_the_command_imports_neither_the_pass_nor_yt_dlp(tmp_path):
     assert out.stdout.strip() == "[]"
 
 
+@pytest.mark.slow
 def test_the_song_is_found_by_any_spelling(tmp_path, ntfy, fake, conn):
     song = to_buy(conn, "宋冬野", "斑马，斑马")
     assert find_song(conn, song.key) is not None

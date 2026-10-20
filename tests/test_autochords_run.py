@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from helpers.locks import waiting_for
 from typer.testing import CliRunner
 
 from caracole.autochords import ChordSegment
@@ -813,6 +814,7 @@ with _common.exclusive(cfg, "get Nobody - Lantern Shore", interactive=True):
 """
 
 
+@pytest.mark.slow
 def test_a_lookup_waiting_for_the_lock_takes_it_between_two_songs(conn, cfg, tmp_path):
     # A song's auto sheet takes minutes, and the unit runs for hours: a lookup never waits for all of it.
     import time
@@ -926,6 +928,10 @@ def models_importable(monkeypatch):
     import caracole.commands.autochords as cmd
 
     monkeypatch.setattr(cmd, "find_spec", lambda name: object())
+    # Only the model files a test configures: `nix develop .#autochords` sets both variables, and
+    # its real beat_this would read the test tone (seconds, and torch in the test process).
+    monkeypatch.delenv("CARACOLE_BTC_WEIGHTS", raising=False)
+    monkeypatch.delenv("CARACOLE_BEAT_CHECKPOINT", raising=False)
 
 
 def test_command_without_the_models_says_which_package_has_them(tmp_path, monkeypatch):
@@ -1069,8 +1075,7 @@ def test_command_waits_for_another_caracole(tmp_path, monkeypatch, models_import
     thread = threading.Thread(target=lambda: results.append(invoke(config)))
     try:
         thread.start()
-        thread.join(0.5)
-        assert thread.is_alive() and not (tmp_path / "lib" / "_todo.md").exists()
+        assert waiting_for(lock, thread.is_alive) and not (tmp_path / "lib" / "_todo.md").exists()
     finally:
         os.close(fd)
     thread.join(10)
@@ -1110,6 +1115,7 @@ def model_packages_after(code: str, tmp_path: Path, *args: str) -> list[str]:
     return result.stdout.strip().splitlines()
 
 
+@pytest.mark.slow
 def test_registering_the_command_imports_no_model_packages(tmp_path):
     # Every command module is imported on every start, and the default package has no torch.
     code = (
@@ -1118,6 +1124,7 @@ def test_registering_the_command_imports_no_model_packages(tmp_path):
     assert model_packages_after(code, tmp_path) == ["[]"]
 
 
+@pytest.mark.slow
 def test_a_night_with_nothing_due_imports_no_model_packages(conn, cfg, tmp_path):
     keep_human_sheet(conn, cfg, with_audio(conn, tmp_path, add_song(conn, "A", "Charted")))
     # The cfg fixture's directories, and model files that would fail if anything loaded them.
@@ -1145,9 +1152,9 @@ def test_a_night_with_nothing_due_imports_no_model_packages(conn, cfg, tmp_path)
 @pytest.fixture
 def real_models(cfg):
     """The cfg with the real model files; skips without them or their packages."""
-    from test_autochords_models import BEAT_CHECKPOINT, BTC_WEIGHTS, HAVE_LIBS
+    from test_autochords_models import BEAT_CHECKPOINT, BTC_WEIGHTS, libs_load
 
-    if not HAVE_LIBS or BTC_WEIGHTS is None or BEAT_CHECKPOINT is None:
+    if BTC_WEIGHTS is None or BEAT_CHECKPOINT is None or not libs_load():
         pytest.skip("needs torch, librosa, beat_this and both model files")
     return replace(
         cfg, autochords=AutochordsConfig(btc_weights=BTC_WEIGHTS, beat_checkpoint=BEAT_CHECKPOINT)

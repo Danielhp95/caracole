@@ -19,6 +19,7 @@ from caracole.web.security import allowed_hosts
 from caracole.web.server import make_server
 
 from conftest import subprocess_pythonpath
+from helpers.browser import in_chromium
 from helpers.chromium import Chromium
 from helpers.rendered import rendered_song
 
@@ -34,7 +35,8 @@ class Recorder:
 
 def running(app):
     server = make_server(app, "127.0.0.1", 0)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # shutdown() returns at the next poll: every 10 ms, not every 500
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
     return server
 
@@ -85,6 +87,7 @@ def test_a_long_or_unsized_form_is_refused_unread(served):
         conn.close()
 
 
+@pytest.mark.slow
 def test_sigterm_stops_caracole_serve_cleanly(tmp_path):
     """How systemd stops the unit: the server closes, the queue stops, and it exits 0."""
     import signal
@@ -102,11 +105,18 @@ def test_sigterm_stops_caracole_serve_cleanly(tmp_path):
     process = subprocess.Popen([sys.executable, "-m", "caracole", "--config", str(config), "serve", "--port",
                                 str(port)], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:
+        # An answer, not just a connection: the socket listens before serve() is ready for a
+        # SIGTERM, a gap a loaded machine (the suite on every core) can make wide enough to hit.
         for _ in range(200):
             try:
-                socket.create_connection(("127.0.0.1", port), timeout=1).close()
+                served = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+                try:
+                    served.request("GET", "/")
+                    served.getresponse().read()
+                finally:
+                    served.close()
                 break
-            except OSError:
+            except (OSError, http.client.HTTPException):
                 time.sleep(0.05)
         process.send_signal(signal.SIGTERM)
         out, _ = process.communicate(timeout=15)
@@ -116,6 +126,7 @@ def test_sigterm_stops_caracole_serve_cleanly(tmp_path):
     assert f"http://127.0.0.1:{port}/" in out
 
 
+@pytest.mark.slow
 def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
     src = Path(__file__).resolve().parents[1] / "src"
     monkeypatch.setenv("PYTHONPATH", subprocess_pythonpath(src))
@@ -157,6 +168,7 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
         server.server_close()
 
 
+@in_chromium
 def test_a_served_viewer_works_in_its_sandbox(cfg, conn, tmp_path):
     # The server sends viewer_csp() with the page: its own script and style by their hashes, in a
     # sandbox, so no other script runs there, a test's included; Chromium is driven from outside.
@@ -185,6 +197,7 @@ def test_a_served_viewer_works_in_its_sandbox(cfg, conn, tmp_path):
         server.server_close()
 
 
+@in_chromium
 def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
     # The sandbox has no storage, so the transposition, the mode and the capo go in the page's
     # address: a reload and Back keep them.
@@ -222,6 +235,7 @@ def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
         server.server_close()
 
 
+@in_chromium
 def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_path, monkeypatch):
     # The server is a newer caracole than the one that wrote the viewer: the page's own hashes
     # must go out with it, or the browser refuses its script until the next render.
@@ -244,6 +258,7 @@ def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_pa
         server.server_close()
 
 
+@in_chromium
 def test_a_served_viewers_links_open_once_signed_in(cfg, conn, tmp_path):
     # The sandboxed viewer has an origin of its own, so following one of its links is a navigation
     # from another site: the sign-in cookie must go with it (SameSite=Lax, not Strict), or its PDF

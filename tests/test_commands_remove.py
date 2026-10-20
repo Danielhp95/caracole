@@ -154,6 +154,7 @@ def test_caracole_add_brings_a_removed_song_back_and_says_so(tmp_path, conn):
     assert [s.title for s in list_songs(conn)] == ["Creep"] and list_removed(conn) == []
 
 
+@pytest.mark.slow
 def test_registering_the_command_imports_no_removal_code(tmp_path):
     # Every command module is imported on every start, so the removal waits for the command.
     src = Path(__file__).resolve().parents[1] / "src"

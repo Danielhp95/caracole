@@ -412,6 +412,7 @@ def _png(path: Path, width: int, height: int) -> None:
     )
 
 
+@pytest.mark.chordpro
 @real_chordpro
 @pytest.mark.parametrize("image", ["private.png", "missing.png"])
 def test_a_chord_name_cannot_embed_or_ask_for_a_local_image(tmp_path, image):

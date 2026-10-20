@@ -2,6 +2,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 import httpx
+import pytest
 
 from caracole.db import kv_get_json
 from caracole.health import get_state, is_cooling, record_block
@@ -914,6 +915,7 @@ def youtube_run(conn, ycfg, fake, *, budget=6, notifier=None):
     return run_pipeline(ycfg, conn=conn, services=svc, steps=youtube_step(), now=NOW)
 
 
+@pytest.mark.slow
 def test_the_youtube_step_says_what_it_downloaded_and_counts_its_runs(conn, cfg, tmp_path, monkeypatch):
     from conftest import add_song
     from helpers.fake_ytdlp import entry
@@ -933,6 +935,7 @@ def test_the_youtube_step_says_what_it_downloaded_and_counts_its_runs(conn, cfg,
     assert get_state(conn, "youtube").last_ok == NOW
 
 
+@pytest.mark.slow
 def test_youtube_errors_leave_their_songs_for_the_next_run(conn, cfg, tmp_path, monkeypatch):
     from conftest import add_song
 
@@ -949,6 +952,7 @@ def test_youtube_errors_leave_their_songs_for_the_next_run(conn, cfg, tmp_path, 
     assert get_state(conn, "youtube").last_error == "1 song failed this run"
 
 
+@pytest.mark.slow
 def test_a_youtube_bot_check_cools_it_down_with_one_alert_and_marks_no_song(conn, cfg, tmp_path, monkeypatch):
     from conftest import add_song
 

@@ -443,6 +443,7 @@ def test_the_child_finds_caracole_and_writes_each_line_at_once():
     assert str(Path(__import__("caracole").__file__).parents[1]) in env["PYTHONPATH"].split(":")
 
 
+@pytest.mark.slow
 def test_the_runner_runs_the_caracole_command_line(tmp_path, monkeypatch):
     src = Path(__file__).resolve().parents[1] / "src"
     monkeypatch.setenv("PYTHONPATH", subprocess_pythonpath(src))
@@ -458,6 +459,7 @@ def test_the_runner_runs_the_caracole_command_line(tmp_path, monkeypatch):
     assert any("No song" in line for line in lines), lines
 
 
+@pytest.mark.slow
 def test_the_child_never_imports_a_module_from_the_folder_it_runs_in(tmp_path, monkeypatch):
     # `cd ~/Tabs && caracole serve`: a typer.py dropped into the synced library must not run.
     planted = tmp_path / "planted"

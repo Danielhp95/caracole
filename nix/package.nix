@@ -117,8 +117,10 @@ python3Packages.buildPythonApplication (finalAttrs: {
 
   # `chordpro` on PATH lets the tests marked `chordpro` run. Those marked
   # `autochords` need the model weights; they run in `nix develop .#autochords`.
+  # pytest-xdist's setup hook runs them on $NIX_BUILD_CORES workers.
   nativeCheckInputs = [
     python3Packages.pytestCheckHook
+    python3Packages.pytest-xdist
     chordpro
   ];
   disabledTestMarks = [ "autochords" ];

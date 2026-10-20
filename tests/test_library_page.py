@@ -2,13 +2,13 @@ import base64
 import hashlib
 import json
 import re
-import shutil
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote, unquote
 
 import pytest
+from helpers import browser
+from helpers.browser import in_chromium
 from typer.testing import CliRunner
 
 from caracole import db
@@ -610,128 +610,16 @@ def test_the_nightly_todo_step_also_writes_index_html(conn, cfg):
 
 # --- in a real browser ---------------------------------------------------------------------
 
-CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
-
-
-NARROWEST_WINDOW = 500  # headless Chromium makes a narrower --window-size this wide, whatever is asked
+NARROWEST_WINDOW = 500  # a --window-size narrower than this, headless Chromium widens to it
 
 
 def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,900") -> str:
-    """The page's DOM after its script ran, laid out in a window of ``size`` ("width,height");
-    skips the test when this machine can't run Chromium. A phone's width, narrower than headless
-    Chromium's narrowest window, is set as a phone's screen over the DevTools protocol."""
-    url = path.as_uri() + fragment
+    """The page's DOM after its script ran, laid out in a window of ``size`` ("width,height"), in a
+    browser context of its own (helpers/browser.py); skips the test when this machine can't run
+    Chromium. A phone's width, narrower than any window, is laid out as a phone's screen."""
     width, height = (int(n) for n in size.split(","))
-    if width < NARROWEST_WINDOW:
-        return phone_dom(url, tmp_path, width, height)
-    try:
-        result = subprocess.run(
-            [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={tmp_path / 'chrome'}", f"--window-size={size}", "--hide-scrollbars",
-             "--virtual-time-budget=3000", "--dump-dom", url],
-            capture_output=True, text=True, timeout=60,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        pytest.skip(f"chromium couldn't run: {e}")
-    if result.returncode != 0 or "<html" not in result.stdout:
-        pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
-    return result.stdout
-
-
-# Runs Chromium with the pipe it reads the DevTools protocol from as fd 3, and writes to as fd 4.
-_PIPE_FDS = ("import os, sys; os.dup2(int(sys.argv[1]), 3); os.dup2(int(sys.argv[2]), 4); "
-             "os.execv(sys.argv[3], sys.argv[3:])")
-
-
-def phone_dom(url: str, tmp_path: Path, width: int, height: int, timeout: float = 60.0) -> str:
-    """The DOM of ``url`` on a phone's screen of ``width`` × ``height`` CSS pixels
-    (``Emulation.setDeviceMetricsOverride``, over ``--remote-debugging-pipe``), once it loaded and its
-    timers ran for 3 s of its own clock (``Emulation.setVirtualTimePolicy``), as dump_dom's
-    ``--virtual-time-budget`` lets them: a test's script that notes what it sees after a timeout runs."""
-    import os
-    import select
-    import sys
-    import time
-
-    chrome_reads, to_chrome = os.pipe()
-    from_chrome, chrome_writes = os.pipe()
-    try:
-        proc = subprocess.Popen(
-            [sys.executable, "-c", _PIPE_FDS, str(chrome_reads), str(chrome_writes), CHROMIUM,
-             "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={tmp_path / 'chrome'}", "--hide-scrollbars", "--remote-debugging-pipe",
-             "about:blank"],
-            pass_fds=(chrome_reads, chrome_writes), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except OSError as e:
-        pytest.skip(f"chromium couldn't run: {e}")
-    finally:
-        os.close(chrome_reads)
-        os.close(chrome_writes)
-    deadline = time.monotonic() + timeout
-    pending = b""
-    heard: list[dict] = []
-    sent = 0
-
-    def hear() -> dict:
-        nonlocal pending
-        while b"\0" not in pending:
-            left = deadline - time.monotonic()
-            if left <= 0 or not select.select([from_chrome], [], [], left)[0]:
-                raise TimeoutError("chromium answered nothing in time")
-            chunk = os.read(from_chrome, 1 << 16)
-            if not chunk:
-                raise EOFError("chromium closed its pipe")
-            pending += chunk
-        message, pending = pending.split(b"\0", 1)
-        return json.loads(message)
-
-    def ask(method: str, params: dict | None = None, session: str | None = None) -> dict:
-        nonlocal sent
-        sent += 1
-        message = {"id": sent, "method": method, "params": params or {}}
-        if session is not None:
-            message["sessionId"] = session
-        os.write(to_chrome, json.dumps(message).encode() + b"\0")
-        while (answer := hear()).get("id") != sent:
-            heard.append(answer)
-        if "error" in answer:
-            raise RuntimeError(f"{method}: {answer['error']}")
-        return answer.get("result", {})
-
-    try:
-        try:
-            target = ask("Target.createTarget", {"url": "about:blank"})["targetId"]
-        except (OSError, EOFError, TimeoutError, RuntimeError) as e:
-            pytest.skip(f"chromium couldn't run: {e}")
-        session = ask("Target.attachToTarget", {"targetId": target, "flatten": True})["sessionId"]
-        ask("Emulation.setDeviceMetricsOverride",
-            {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": True}, session)
-        ask("Page.enable", None, session)
-        ask("Page.navigate", {"url": url}, session)
-        while not any(m.get("method") == "Page.loadEventFired" and m.get("sessionId") == session for m in heard):
-            heard.append(hear())
-        # Then, as --virtual-time-budget does for dump_dom, the page's timers run, 3 s of its own clock.
-        ask("Emulation.setVirtualTimePolicy", {"policy": "pauseIfNetworkFetchesPending", "budget": 3000}, session)
-        while not any(m.get("method") == "Emulation.virtualTimeBudgetExpired" and m.get("sessionId") == session
-                      for m in heard):
-            heard.append(hear())
-        done = ask("Runtime.evaluate", {"expression": "document.documentElement.outerHTML", "returnByValue": True},
-                   session)
-        return done["result"]["value"]
-    finally:
-        try:
-            ask("Browser.close")
-        except (OSError, EOFError, TimeoutError, RuntimeError):
-            pass
-        os.close(to_chrome)
-        os.close(from_chrome)
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
+    return browser.dump_dom(path.as_uri() + fragment, (width, height), hide_scrollbars=True,
+                            mobile=width < NARROWEST_WINDOW)
 
 
 def listing(dom: str) -> str:
@@ -741,7 +629,7 @@ def listing(dom: str) -> str:
     return found.group(1)
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_page_renders_and_filters_in_a_real_browser(conn, cfg, tmp_path):
     s = add_song(conn, "宋冬野", "斑马，斑马")
     put(cfg, s, "lyrics.txt")
@@ -760,7 +648,7 @@ def test_the_page_renders_and_filters_in_a_real_browser(conn, cfg, tmp_path):
         assert title in shown
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_cards_youtube_note_links_its_video_in_a_real_browser(conn, cfg, tmp_path, monkeypatch):
     from helpers.fake_ytdlp import route_on
 
@@ -784,7 +672,7 @@ def test_a_cards_youtube_note_links_its_video_in_a_real_browser(conn, cfg, tmp_p
     assert "Creep (Radiohead - Topic) ↗" in note.group(1) and 'rel="noopener noreferrer"' in note.group(1)
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_apostrophes_and_empty_results_in_a_real_browser(conn, cfg, tmp_path):
     add_song(conn, "Queen", "Don't Stop Me Now")
     oasis = add_song(conn, "Oasis", "Don’t Look Back in Anger")
@@ -808,7 +696,7 @@ def test_apostrophes_and_empty_results_in_a_real_browser(conn, cfg, tmp_path):
     assert "caracole search 'guns n'\\'' roses'" in shown
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_commands_the_file_names_quote_each_word_so_no_shell_expands_it(conn, cfg, tmp_path):
     # bash and zsh expand ! even in double quotes ("event not found"): each word goes in single quotes, each '
     # written '\'', as the Select bar's command writes them.
@@ -834,7 +722,7 @@ def test_the_commands_the_file_names_quote_each_word_so_no_shell_expands_it(conn
     assert shlex.split(hint[0]) == ["caracole", "search", query]
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_keys_show_with_their_source_and_filter_in_a_real_browser(conn, cfg, tmp_path):
     soda = add_song(conn, "Soda Stereo", "De Música Ligera")
     keep_sheet_json(conn, cfg, soda, AM_F_C_G)
@@ -859,7 +747,7 @@ def test_keys_show_with_their_source_and_filter_in_a_real_browser(conn, cfg, tmp
     assert shown.count("<article") == 1 and "De Música Ligera" in shown
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_key_typed_in_the_search_box_finds_that_key_only_in_a_real_browser(conn, cfg, tmp_path):
     soda = add_song(conn, "Soda Stereo", "De Música Ligera")
     keep_sheet_json(conn, cfg, soda, AM_F_C_G)
@@ -888,7 +776,7 @@ def test_a_key_typed_in_the_search_box_finds_that_key_only_in_a_real_browser(con
     assert "No songs match" in shown and "caracole search" not in shown  # the index has no keys
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_key_menu_puts_the_spellings_of_one_key_together_in_a_real_browser(conn, cfg, tmp_path):
     keyed = {("Muse", "Hysteria"): "F#m", ("Radiohead", "Lucky"): "Gbm", ("Daft Punk", "Get Lucky"): "Fm",
              ("Queen", "Bohemian Rhapsody"): "Bb", ("Oasis", "Wonderwall"): "A#"}
@@ -942,7 +830,7 @@ def layout_of(dom: str) -> dict:
     return json.loads(html_module.unescape(found.group(1)))
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_cards_fill_a_desktop_row_and_stack_on_a_phone(conn, cfg, tmp_path):
     # One song per artist: each artist used to get a section of its own, one narrow card wide.
     for artist, title in (("Radiohead", "Creep"), ("Soda Stereo", "De Música Ligera"), ("Oasis", "Wonderwall"),
@@ -963,7 +851,7 @@ def test_cards_fill_a_desktop_row_and_stack_on_a_phone(conn, cfg, tmp_path):
     assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_letter_strip_lists_the_artists_initials(conn, cfg, tmp_path):
     for artist, title in (("The Beatles", "Yesterday"), ("Radiohead", "Creep"), ("Soda Stereo", "Música"),
                           ("宋冬野", "斑马，斑马")):
@@ -978,7 +866,7 @@ def test_the_letter_strip_lists_the_artists_initials(conn, cfg, tmp_path):
     assert re.search(r'<nav[^>]*id="jump"[^>]*hidden', dump_dom(path, tmp_path, "#sort=recent"))
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_page_offers_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
     from caracole.library_page import WebControls
 
@@ -1001,7 +889,7 @@ def test_the_served_page_offers_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
     assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", card) and "/fetch" not in card
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_page_offers_a_remove_on_every_card(conn, cfg, tmp_path):
     from caracole.library_page import WebControls
 
@@ -1042,7 +930,7 @@ LOOKS = """
 """
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_cards_removing_note_looks_like_its_fetching_line(conn, cfg, tmp_path):
     # Remove's note in the card's foot and the request's line above it are both "something runs": one look,
     # with no paragraph margins that push the foot down.
@@ -1079,7 +967,7 @@ JUMP = """
 """
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_screen_reader_hears_each_cards_song_and_a_jump_moves_the_focus(conn, cfg, tmp_path):
     from caracole.library_page import WebControls
 
@@ -1113,7 +1001,7 @@ ARTIST_CLICK = """
 """
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(conn, cfg, tmp_path):
     import html as html_module
 
@@ -1149,7 +1037,7 @@ def card_of(shown: str, title: str) -> str:
     raise AssertionError(f"no card {title!r} in {shown[-1500:]}")
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_file_shows_a_reviews_candidates_and_the_line_that_picks_one(conn, cfg, tmp_path):
     index_tabs(conn, (1, "radiohead", "creep", "chords"), (3, "radiohead", "creep", "tabs"))
     in_review(conn)
@@ -1167,7 +1055,7 @@ def test_the_file_shows_a_reviews_candidates_and_the_line_that_picks_one(conn, c
     assert "<form" not in card and "<input" not in card  # the file sends nothing
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_page_picks_a_candidate_with_a_form_in_place_of_review_first(conn, cfg, tmp_path):
     from caracole.library_page import WebControls
 
@@ -1197,7 +1085,7 @@ def test_the_served_page_picks_a_candidate_with_a_form_in_place_of_review_first(
     assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", plain) and "picker" not in plain
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_picker_of_a_song_being_fetched_is_read_only_until_its_request_ends(conn, cfg, tmp_path):
     # POST /review would refuse a pick while the song's request waits or runs: the card offers none.
     from caracole.library_page import WebControls
@@ -1219,7 +1107,7 @@ def test_the_served_picker_of_a_song_being_fetched_is_read_only_until_its_reques
     assert "Fetching…" in card
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_picker_is_read_only_while_any_request_of_its_song_waits(conn, cfg, tmp_path):
     # POST /review refuses a pick while any request of the song waits or runs, not only a fetch: a pick
     # without Fetch it now, say, or an add. The card's line says how that request goes; the picker waits.
@@ -1240,7 +1128,7 @@ def test_the_served_picker_is_read_only_while_any_request_of_its_song_waits(conn
     assert card.index('class="progress"') < card.index('class="picker"')  # its line, above the picker
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_found_song_in_review_gets_the_picker_too(conn, cfg, tmp_path):
     # A sheet from elsewhere (LaCuerda, say) while its UG match waits for review: no Fetch now, but a pick.
     from caracole.library_page import WebControls
@@ -1400,7 +1288,7 @@ MARKS = """
 """
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_opening_the_picker_takes_the_focus_to_its_first_candidate_and_fits_a_phone(conn, cfg, tmp_path):
     import html as html_module
 
@@ -1417,7 +1305,7 @@ def test_opening_the_picker_takes_the_focus_to_its_first_candidate_and_fits_a_ph
     assert state["width"] <= state["page"], state  # nothing wider than the phone
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_card_of_a_song_not_found_links_to_its_search_hits(conn, cfg, tmp_path):
     from caracole.library_page import WebControls
 
@@ -1443,7 +1331,7 @@ def marks_of(dom: str) -> list[dict]:
     return json.loads(html_module.unescape(found.group(1)))
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tmp_path):
     sourced_library(conn, cfg)
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), MARKS))
@@ -1476,7 +1364,7 @@ def row_of(shown: str, title: str) -> str:
     return found.group(0)
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_rows_view_shows_a_song_a_row_with_its_source_key_status_and_main_action(conn, cfg, tmp_path):
     sourced_library(conn, cfg)
     path = write_library_page(cfg.library_dir, page(conn, cfg))
@@ -1552,7 +1440,7 @@ def youtube_auto_sheet(conn, cfg):
     return s
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_an_auto_sheet_from_youtube_audio_shows_where_it_came_from_in_both_views(conn, cfg, tmp_path, monkeypatch):
     from helpers.fake_ytdlp import route_on
 
@@ -1586,7 +1474,7 @@ def test_an_auto_sheet_from_youtube_audio_shows_where_it_came_from_in_both_views
     assert 'aria-label="from the audio (auto-chords)"' in row_of(shown, "斑马，斑马")
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_many_rows_fit_on_a_screen_and_a_phones_rows_wrap_to_two_lines(conn, cfg, tmp_path):
     for n in range(24):
         s = add_song(conn, f"Artist With A Long Name {n:02d}", f"A Song Title That Goes On For A While {n:02d}")
@@ -1611,7 +1499,7 @@ def test_many_rows_fit_on_a_screen_and_a_phones_rows_wrap_to_two_lines(conn, cfg
     assert phone["screen"] // max(phone["heights"]) >= 9, phone
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_phones_row_keeps_its_artist_beside_the_most_badges_a_song_has(conn, cfg, tmp_path):
     # The fullest second lines: a key, the status and Needs review, beside an auto sheet's mark; Wanted
     # and Needs review.
@@ -1646,7 +1534,7 @@ def test_a_phones_row_keeps_its_artist_beside_the_most_badges_a_song_has(conn, c
     assert ">Needs review<" in dancing and ">Auto sheet<" not in dancing
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_filters_sort_key_menu_artist_and_letters_work_in_rows_in_a_real_browser(conn, cfg, tmp_path):
     for tab_id, (artist, title, key) in enumerate((("Queen", "Bohemian Rhapsody", "Bb"),
                                                     ("Queen", "Don't Stop Me Now", "F"),
@@ -1705,7 +1593,7 @@ ROW_CLICKS = """
 """
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_view_toggle_is_remembered_and_a_rows_controls_work_from_the_keyboard(conn, cfg, tmp_path):
     import html as html_module
 
@@ -1725,7 +1613,7 @@ def test_the_view_toggle_is_remembered_and_a_rows_controls_work_from_the_keyboar
     assert "view=" not in notes["cards"]["hash"] and notes["cards"]["cards"] == 2, notes
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_pages_rows_offer_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
     from caracole.library_page import WebControls
 
@@ -1762,7 +1650,7 @@ RESULT_ROWS = """
 """
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_row_renderer_takes_any_search_result_in_a_real_browser(conn, cfg, tmp_path):
     from helpers.icon_files import png
 
@@ -1814,7 +1702,7 @@ def panel_of(row: str) -> str:
     return found.group(0)
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_rows_carry_every_state_a_card_shows(conn, cfg, tmp_path):
     controls, s = served_states(conn, cfg)
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
@@ -1859,7 +1747,7 @@ def test_the_served_rows_carry_every_state_a_card_shows(conn, cfg, tmp_path):
     assert 'aria-label="Remove De Música Ligera by Soda Stereo from caracole"' in soda
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_file_rows_show_a_reviews_candidates_and_a_song_not_founds_line(conn, cfg, tmp_path):
     index_tabs(conn, (1, "radiohead", "creep", "chords"))
     in_review(conn)
@@ -1916,7 +1804,7 @@ ROW_STATES = """
 
 
 @pytest.mark.parametrize("size", ["390,844", "1280,900"])
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_rows_states_fit_its_row_and_its_pick_opens_the_picker_where_it_is(conn, cfg, tmp_path, size):
     import html as html_module
 

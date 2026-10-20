@@ -685,7 +685,8 @@ def too_many_requests():
     """An API client with caracole's own session, pointed at TooManyRequests on 127.0.0.1."""
     handler = type("Handler", (TooManyRequests,), {"hits": []})
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # shutdown() returns at the next poll: every 10 ms, not every 500
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
     sp = spotipy.Spotify(
         auth="AT", requests_session=_api_session(), requests_timeout=REQUEST_TIMEOUT

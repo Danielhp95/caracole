@@ -129,6 +129,7 @@ def test_while_youtube_cools_down_its_songs_wait_blocked(conn, ycfg):
 # --- a pass -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_a_song_on_the_buy_list_gets_its_topic_audio_kept_outside_the_library(conn, ycfg, fake):
     song = to_buy(conn, duration_ms=239000)
     creep_results(fake)
@@ -146,6 +147,7 @@ def test_a_song_on_the_buy_list_gets_its_topic_audio_kept_outside_the_library(co
     assert [a[-1] for a in fake.argvs()] == ["ytsearch8:Radiohead Creep", watch_url(TOPIC)]
 
 
+@pytest.mark.slow
 def test_the_video_must_fit_lrclibs_duration_when_the_song_has_none(conn, ycfg, fake):
     song = to_buy(conn, duration_ms=None)
     update_song(conn, song.id, lyrics_status="found", lyrics_json=json.dumps(
@@ -171,6 +173,7 @@ def test_songs_caracole_may_still_find_a_sheet_for_or_has_audio_for_are_left_alo
     assert unmatched.match_decision is None
 
 
+@pytest.mark.slow
 def test_a_song_youtube_has_nothing_for_is_a_miss_asked_about_again_after_30_days(conn, ycfg, fake):
     song = to_buy(conn)
     fake.search("Radiohead Creep", entry(OTHER, "Creep", "Stone Temple Pilots - Topic"))
@@ -181,6 +184,7 @@ def test_a_song_youtube_has_nothing_for_is_a_miss_asked_about_again_after_30_day
     assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW + timedelta(days=31))] == [song.id]
 
 
+@pytest.mark.slow
 def test_a_pasted_video_is_downloaded_without_a_search(conn, ycfg, fake):
     song = to_buy(conn)
     fake.video(OTHER, "Radiohead - Creep (Live at Glastonbury)", "someone", 300, data="the live one")
@@ -192,6 +196,7 @@ def test_a_pasted_video_is_downloaded_without_a_search(conn, ycfg, fake):
     assert record["source"] == "pasted" and record["video"]["title"] == "Radiohead - Creep (Live at Glastonbury)"
 
 
+@pytest.mark.slow
 def test_a_pasted_video_also_serves_a_song_its_search_found_nothing_for(conn, ycfg, fake):
     song = to_buy(conn)
     run(conn, ycfg)  # no results: a miss
@@ -200,6 +205,7 @@ def test_a_pasted_video_also_serves_a_song_its_search_found_nothing_for(conn, yc
     assert Path(get_song(conn, song.id).audio_path).read_text() == "pasted"
 
 
+@pytest.mark.slow
 def test_a_new_paste_replaces_the_audio_and_none_takes_it_away(conn, ycfg, fake):
     song = to_buy(conn)
     creep_results(fake)
@@ -218,6 +224,7 @@ def test_a_new_paste_replaces_the_audio_and_none_takes_it_away(conn, ycfg, fake)
     assert yf.songs_for_youtube(conn, ycfg, Overrides(youtube={song.key: None}), NOW) == []
 
 
+@pytest.mark.slow
 def test_a_spent_budget_keeps_the_pick_and_the_next_run_only_downloads(conn, ycfg, fake):
     first = to_buy(conn, added_at="2026-10-02T00:00:00Z")
     second = to_buy(conn, "Radiohead", "Karma Police", duration_ms=200000, added_at="2026-10-01T00:00:00Z")
@@ -234,6 +241,7 @@ def test_a_spent_budget_keeps_the_pick_and_the_next_run_only_downloads(conn, ycf
     assert Path(get_song(conn, second.id).audio_path).read_text() == "karma"
 
 
+@pytest.mark.slow
 def test_an_error_is_no_miss_and_the_song_waits_for_the_next_run(conn, ycfg, fake):
     song = to_buy(conn)
     fake.search("Radiohead Creep", stderr="ERROR: Unable to download API page: HTTP Error 503: Service Unavailable",
@@ -246,6 +254,7 @@ def test_an_error_is_no_miss_and_the_song_waits_for_the_next_run(conn, ycfg, fak
     assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [song.id]
 
 
+@pytest.mark.slow
 def test_a_picked_video_whose_download_fails_the_same_way_every_night_gives_way_to_the_next(conn, ycfg, fake):
     song = to_buy(conn)
     creep_results(fake)
@@ -262,6 +271,7 @@ def test_a_picked_video_whose_download_fails_the_same_way_every_night_gives_way_
     assert [a[-1] for a in fake.argvs()].count("ytsearch8:Radiohead Creep") == 2
 
 
+@pytest.mark.slow
 def test_a_network_error_never_counts_against_the_picked_video(conn, ycfg, fake):
     song = to_buy(conn)
     creep_results(fake)
@@ -273,6 +283,7 @@ def test_a_network_error_never_counts_against_the_picked_video(conn, ycfg, fake)
     assert record["video"]["id"] == TOPIC and record["skip"] == []
 
 
+@pytest.mark.slow
 def test_a_pasted_video_whose_download_fails_the_same_way_every_night_waits_for_another_paste(conn, ycfg, fake):
     song = to_buy(conn)
     fake.video(OTHER, stderr="ERROR: [youtube] oNOFfl3Hx3s: Requested format is not available", exit=1)
@@ -285,6 +296,7 @@ def test_a_pasted_video_whose_download_fails_the_same_way_every_night_waits_for_
     assert state.state == yf.UNUSABLE and "Requested format is not available" in state.detail
 
 
+@pytest.mark.slow
 def test_songs_whose_last_try_failed_come_after_the_others(conn, ycfg, fake):
     failing = to_buy(conn, added_at="2026-10-02T00:00:00Z")  # the newest
     other = to_buy(conn, "Radiohead", "Karma Police", added_at="2026-10-01T00:00:00Z")
@@ -294,6 +306,7 @@ def test_songs_whose_last_try_failed_come_after_the_others(conn, ycfg, fake):
     assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [other.id, failing.id]
 
 
+@pytest.mark.slow
 def test_a_block_stops_the_pass_and_marks_no_song(conn, ycfg, fake):
     first = to_buy(conn, added_at="2026-10-02T00:00:00Z")
     second = to_buy(conn, "Radiohead", "Karma Police", added_at="2026-10-01T00:00:00Z")
@@ -306,6 +319,7 @@ def test_a_block_stops_the_pass_and_marks_no_song(conn, ycfg, fake):
         assert "missing_at" not in record and get_song(conn, song.id).audio_path is None
 
 
+@pytest.mark.slow
 def test_a_searched_video_that_cant_be_had_is_passed_over_for_the_next_one(conn, ycfg, fake):
     song = to_buy(conn)
     creep_results(fake)
@@ -317,6 +331,7 @@ def test_a_searched_video_that_cant_be_had_is_passed_over_for_the_next_one(conn,
     assert get_song(conn, song.id).audio_path.endswith(f"-{LYRICS}.m4a")
 
 
+@pytest.mark.slow
 def test_a_pasted_video_that_cant_be_had_waits_for_another_paste(conn, ycfg, fake):
     song = to_buy(conn)
     fake.video(OTHER, stderr="ERROR: [youtube] oNOFfl3Hx3s: Private video", exit=1)
@@ -330,6 +345,7 @@ def test_a_pasted_video_that_cant_be_had_waits_for_another_paste(conn, ycfg, fak
     assert Path(get_song(conn, song.id).audio_path).read_text() == "another"
 
 
+@pytest.mark.slow
 def test_a_pasted_video_that_cant_be_had_for_a_song_with_audio_waits_for_another_paste_too(conn, ycfg, fake):
     song = to_buy(conn)
     creep_results(fake)
@@ -354,6 +370,7 @@ def test_a_pasted_video_that_cant_be_had_for_a_song_with_audio_waits_for_another
     assert Path(get_song(conn, song.id).audio_path).read_text() == "another"
 
 
+@pytest.mark.slow
 def test_one_song_by_hand_is_looked_up_even_when_its_search_missed_lately(conn, ycfg, fake):
     song = to_buy(conn)
     run(conn, ycfg)  # a miss
@@ -362,6 +379,7 @@ def test_one_song_by_hand_is_looked_up_even_when_its_search_missed_lately(conn, 
     assert stats.downloaded == 1
 
 
+@pytest.mark.slow
 def test_a_purchase_takes_the_youtube_audios_place(conn, ycfg, fake):
     from caracole.music import scan_music
 
@@ -377,6 +395,7 @@ def test_a_purchase_takes_the_youtube_audios_place(conn, ycfg, fake):
     assert yf.songs_for_youtube(conn, ycfg, Overrides(), NOW) == []
 
 
+@pytest.mark.slow
 def test_audio_gone_from_the_cache_is_taken_again_until_its_chords_are_done(conn, ycfg, fake):
     import shutil
 
@@ -399,6 +418,7 @@ def test_audio_gone_from_the_cache_is_taken_again_until_its_chords_are_done(conn
     assert kv_get_json(conn, f"youtube:{song.id}")["audio"] is None
 
 
+@pytest.mark.slow
 def test_audio_no_song_or_record_names_goes(conn, ycfg, fake):
     song = to_buy(conn)
     creep_results(fake)
@@ -420,6 +440,7 @@ def auto_sheet(conn, cfg, song):
     update_song(conn, song.id, status="found", autochords_mtime=get_song(conn, song.id).audio_mtime)
 
 
+@pytest.mark.slow
 def test_each_song_without_a_human_sheet_has_a_state(conn, ycfg, fake):
     queued = to_buy(conn, "Radiohead", "Karma Police")
     creep = to_buy(conn)

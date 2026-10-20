@@ -14,7 +14,8 @@ a port. Clicks are real mouse events, at the element's place on the screen::
         tab.click("#fab")
         tab.eval("document.querySelector('#panel').hidden")  # False
 
-``Chromium`` skips the test when this machine can't run Chromium.
+``Chromium`` skips the test when this machine can't run Chromium. Like helpers/browser.py's, it
+resolves no host name and starts without the desktop's environment; its tests are ``@in_chromium``.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from helpers.browser import NO_LOOKUPS, headless_env
 
 CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 TIMEOUT = 30  # seconds, for any one answer
@@ -48,12 +50,13 @@ class Chromium:
         os.close(commands)
         os.close(answers)
         cmd = [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-               f"--user-data-dir={profile}", f"--window-size={size}", "--remote-debugging-pipe", "about:blank"]
+               f"--user-data-dir={profile}", NO_LOOKUPS, f"--window-size={size}", "--remote-debugging-pipe",
+               "about:blank"]
         script = f'exec "$@" 3<&{theirs[0]} 4>&{theirs[1]} {theirs[0]}<&- {theirs[1]}>&-'
         try:
             self._process = subprocess.Popen(["sh", "-c", script, "sh", *cmd], pass_fds=theirs,
                                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                             stderr=subprocess.DEVNULL)
+                                             stderr=subprocess.DEVNULL, env=headless_env())
         except OSError as e:
             pytest.skip(f"chromium couldn't run: {e}")
         finally:
