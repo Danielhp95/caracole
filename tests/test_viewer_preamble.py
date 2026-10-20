@@ -191,3 +191,64 @@ def test_the_keyboard_reaches_more_after_the_title_and_opens_it(tmp_path):
         browser.press("Enter")
         opened_now = browser.js("document.querySelector('#sheet .pre').open")
     assert focused == ["back", "more"] and opened_now
+
+
+# Printed: which of the notes' lines a reader sees, and whether the fold's own parts show.
+PRINTED = """(() => {
+  const pre = document.querySelector(".sheet:not([hidden]) .pre, section.song:not([hidden]) .pre");
+  const shown = (el) => Boolean(el && el.checkVisibility());
+  const line = (text) => [...pre.querySelectorAll(".l")].find((l) => l.textContent.includes(text));
+  return {
+    lines: ["This is a made-up note", "Capo 2. fret", "(x32033)", "Dsus4/F#(2x0233)"].map((t) => shown(line(t))),
+    peek: shown(pre.querySelector(".peek")), more: shown(pre.querySelector(".more")), open: pre.open,
+  };
+})()"""
+
+
+def print_preview(tmp_path: Path, html: str, fragment: str = "") -> dict:
+    page = tmp_path / "Library" / "Artist" / "Title" / "sheet.html"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(html, encoding="utf-8")
+    with Browser(tmp_path / "profile", width=1280, height=800) as browser:
+        browser.open(page.as_uri() + fragment)
+        assert browser.wait("document.readyState === 'complete'")
+        browser.send("Emulation.setEmulatedMedia", media="print")
+        return browser.js(PRINTED)
+
+
+@in_chromium
+@pytest.mark.parametrize("page", ["sheet", "sheet-without-script", "songbook"])
+def test_printed_the_notes_print_whole(tmp_path, page):
+    # Paper has no More to press: the chord legend and the rest of the notes print, the peek doesn't.
+    if page == "songbook":
+        html = build_songbook("Campfire", [BookSong("Legend Song", "The Placeholders", cho=LEGEND, id="aaaa")])
+        fragment = "#song-1"
+    else:
+        html = build_viewer(LEGEND)
+        if page == "sheet-without-script":
+            html = re.sub(r"<script>.*?</script>\n", "", html, flags=re.S)
+        fragment = ""
+    seen = print_preview(tmp_path, html, fragment)
+    assert seen["lines"] == [True, True, True, True] and not seen["peek"] and not seen["more"], seen
+    assert not seen["open"], seen  # on the screen, still folded
+
+
+@in_chromium
+def test_where_the_stylesheet_cant_open_the_fold_the_script_opens_it_to_print(tmp_path):
+    # A browser without ::details-content: the script opens the notes for the printout, then folds them again.
+    page = tmp_path / "Library" / "Artist" / "Title" / "sheet.html"
+    page.parent.mkdir(parents=True)
+    page.write_text(build_viewer(LEGEND), encoding="utf-8")
+    with Browser(tmp_path / "profile", width=390, height=844) as browser:
+        browser.send("Page.addScriptToEvaluateOnNewDocument",
+                     source="CSS.supports = (s) => !String(s).includes('details-content');")
+        browser.open(page.as_uri())
+        assert browser.wait("document.documentElement.dataset.ready === '1'")
+        fold = "document.querySelector('#sheet .pre').open"
+        before = browser.js(fold)
+        printing = browser.js(f"(() => {{ dispatchEvent(new Event('beforeprint')); return {fold}; }})()")
+        after = browser.js(f"(() => {{ dispatchEvent(new Event('afterprint')); return {fold}; }})()")
+        browser.click("#sheet .pre summary")  # one you opened yourself stays open
+        browser.js("dispatchEvent(new Event('beforeprint')); dispatchEvent(new Event('afterprint'))")
+        kept = browser.js(fold)
+    assert (before, printing, after, kept) == (False, True, False, True)

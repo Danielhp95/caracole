@@ -335,6 +335,19 @@
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout, () => {});
   // The tab's preamble opened or folded again (page.py): the song moves, and may no longer fit two columns.
   for (const fold of sheetEl.querySelectorAll("details")) fold.addEventListener("toggle", layout);
+  // Printed, the notes print whole: where the stylesheet can't show a folded one's text (no
+  // ::details-content), they open for the printout and fold again after it.
+  if (!(window.CSS && CSS.supports && CSS.supports("selector(::details-content)"))) {
+    let unfolded = [];
+    window.addEventListener("beforeprint", () => {
+      unfolded = [...document.querySelectorAll("details.pre:not([open])")];
+      for (const fold of unfolded) fold.open = true;
+    });
+    window.addEventListener("afterprint", () => {
+      for (const fold of unfolded) fold.open = false;
+      unfolded = [];
+    });
+  }
 
   const drawStrip = () => {
     const strip = $("strip");

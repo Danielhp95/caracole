@@ -103,7 +103,15 @@ a { color: inherit; }
 .pre .named { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .pre[open] .peek, .pre[open] .more, .pre:not([open]) .less, .pre:not([open]) .named { display: none; }
 .pre[open] summary { align-items: center; }
-@media print { .pre .more, .pre .less { display: none; } }
+/* Paper has no More to press: printed, the notes print whole, without their peek (viewer.js opens
+   them for the printout where ::details-content is missing). */
+@media print {
+  .pre .more, .pre .less { display: none; }
+  @supports selector(::details-content) {
+    .pre summary { display: none; }
+    .pre::details-content { content-visibility: visible; }
+  }
+}
 
 /* Every chord's shape at a glance: large enough to read, without the fingers (the card has them). */
 .strip { display: flex; gap: 6px; margin: 14px -16px 0; padding: 4px 16px 6px; overflow-x: auto;

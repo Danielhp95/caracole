@@ -1559,8 +1559,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **The tab's notes**: what a tab says before its first section or its first
   riff (the tabber's comments, a link, a chord legend) is shown small and
   muted, two lines of it; **More** opens the rest, and works without
-  JavaScript too. Chords or a verse before the first section are the song, and
-  nothing is folded then.
+  JavaScript too. Printed, all of it prints. Chords or a verse before the
+  first section are the song, and nothing is folded then.
 - **On a wide screen** (1100 px or more: a laptop), the song reads down one
   column, centred, in slightly larger text. A song short enough for the
   window to show it whole in two columns is shown in two, side by side; a
