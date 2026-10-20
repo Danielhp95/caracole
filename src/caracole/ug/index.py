@@ -38,15 +38,14 @@ import re
 import sqlite3
 import zlib
 from collections import Counter
-from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json
+from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 from caracole.http import ROBOTS_DISALLOW, Client, ProviderError, robots_disallows
 from caracole.songs import update_song
 from caracole.ug.lookup import song_tabs
@@ -275,19 +274,6 @@ def _iso(dt: datetime) -> str:
     return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-@contextmanager
-def _transaction(conn: sqlite3.Connection, name: str) -> Iterator[None]:
-    """A savepoint: a transaction of its own, or a nested one inside the caller's."""
-    conn.execute(f"SAVEPOINT {name}")
-    try:
-        yield
-    except BaseException:
-        conn.execute(f"ROLLBACK TO {name}")
-        conn.execute(f"RELEASE {name}")
-        raise
-    conn.execute(f"RELEASE {name}")
-
-
 # --- storing rows -------------------------------------------------------------------
 
 
@@ -301,7 +287,7 @@ def upsert_rows(conn: sqlite3.Connection, rows: Iterable[IndexRow | Sequence[Any
     from an anti-join against a temporary table, so a 50,000-row sitemap is a
     handful of statements.
     """
-    with _transaction(conn, "ug_upsert"):
+    with savepoint(conn, "ug_upsert"):
         conn.execute(_CREATE_BATCH)
         conn.execute("DELETE FROM temp._ug_batch")
         conn.executemany(
@@ -377,7 +363,7 @@ def _drop_closed(conn: sqlite3.Connection) -> list[int]:
     starts = [x for start in _CLOSED_STARTS for x in (len(start), start)]
     rows = conn.execute(f"SELECT tab_id, path FROM ug_index WHERE {where}", starts).fetchall()
     closed = [r[0] for r in rows if _closed(r[0], r[1])]
-    with _transaction(conn, "ug_closed"):
+    with savepoint(conn, "ug_closed"):
         conn.executemany("DELETE FROM ug_index WHERE tab_id = ?", [(t,) for t in closed])
     return closed
 
@@ -433,7 +419,7 @@ def _indexed(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
 def _store(conn: sqlite3.Connection, name: str, rows: list[IndexRow], tabs: TabCounts,
            validators: Mapping[str, str | None], now: datetime) -> list[int]:
     """Index one sitemap's rows, flag the songs its new tabs belong to, and record it, atomically."""
-    with _transaction(conn, "ug_sitemap"):
+    with savepoint(conn, "ug_sitemap"):
         new = upsert_rows(conn, rows, name, now)
         mark_dirty_for_new(conn, new)
         indexed = _indexed(conn)

@@ -22,6 +22,8 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
+from caracole.db import savepoint
+
 # Every kind the sheet slot holds: UG chords, LaCuerda acordes, auto-chords. A kept
 # sheet becomes the slot's only pick, so picks are cleared across all of them.
 SHEET_KINDS = ("chords", "acordes", "auto")
@@ -142,9 +144,11 @@ def mark_stale(conn: sqlite3.Connection, song_id: int, provider: str) -> int:
 
 
 def set_picks(conn: sqlite3.Connection, song_id: int, kinds: Sequence[str], version_ids: Sequence[int]) -> None:
-    """Make ``version_ids`` the picks for these kinds, ranked 1..n in order; clear older picks."""
+    """Make ``version_ids`` the picks for these kinds, ranked 1..n in order; clear older picks.
+
+    All or nothing, and inside a caller's savepoint, undone with it."""
     marks = ",".join("?" for _ in kinds)
-    with conn:
+    with savepoint(conn, "set_picks"):
         conn.execute(f"UPDATE versions SET pick_rank = NULL WHERE song_id = ? AND kind IN ({marks})", (song_id, *kinds))
         for rank, vid in enumerate(version_ids, start=1):
             conn.execute("UPDATE versions SET pick_rank = ? WHERE id = ? AND song_id = ?", (rank, vid, song_id))

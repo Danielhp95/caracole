@@ -341,6 +341,56 @@ def test_review_song_none_with_seen_rejects_only_the_candidates_seen(tmp_path):
     assert "Now matched to song-dongye/ban-ma-ban-ma" in result.output
 
 
+def wanted(conn, artists: list[str], title: str, source_id: str) -> int:
+    """Another song in the library, which the matcher last found nowhere: a stale match, should the
+    index have it now."""
+    sid, _ = upsert_song(conn, artists=artists, title=title, album=None, duration_ms=None, isrc=None,
+                         source="wanted", source_id=source_id, added_at="2026-10-18T00:00:00Z")
+    update_song(conn, sid, match_decision="not_found")
+    return sid
+
+
+@pytest.mark.parametrize("answer", [("--pick", "1"), ("--none",)])
+def test_review_song_answer_matches_that_song_again_and_no_other(tmp_path, answer):
+    # The answer changes the song's own [match] or [reject] alone: matching the whole library again
+    # would hold caracole's lock for as long, while the picker's card waits on it.
+    conn, sid = in_review(tmp_path)
+    other = wanted(conn, ["李志"], "斑马斑马", "y")  # the index has it, but nothing here asked
+    result = run(tmp_path, "review", "--song", SONG, *answer)
+    assert result.exit_code == 0, result.output
+    assert get_song(conn, sid).match_decision == ("accept" if "--pick" in answer else "not_found")
+    assert get_song(conn, other).match_decision == "not_found"
+
+
+def test_review_song_pick_writing_an_alias_matches_the_artists_other_songs_again(tmp_path):
+    # The [alias] it writes applies to every song with that artist among its artists, however spelt.
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import mark_built
+
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(1, 'beatles', 'yesterday', 'chords', '1', 'x', 'beatles/yesterday-chords-1'), "
+                 "(2, 'beatles', 'let-it-be', 'chords', '1', 'x', 'beatles/let-it-be-chords-2'), "
+                 "(3, 'beatles', 'help', 'chords', '1', 'x', 'beatles/help-chords-3')")
+    mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+    sid = wanted(conn, ["Fab Four"], "Yesterday", "a")
+    update_song(conn, sid, review=True, match_decision="review", match_step="fuzzy_artist",
+                match_candidates=[{"artist_key": "beatles", "song_key": "yesterday", "score": 70.0,
+                                   "step": "fuzzy_artist"}])
+    same = wanted(conn, ["Fab Four"], "Let It Be", "b")
+    featured = wanted(conn, ["Paul", "FAB FOUR"], "Help", "c")
+    cover = wanted(conn, ["Other Band"], "Let It Be", "d")  # another artist's: left as it was
+    result = run(tmp_path, "review", "--song", "Fab Four - Yesterday", "--pick", "1")
+    assert result.exit_code == 0, result.output
+    assert '[alias]\n"Fab Four" = "beatles"' in overrides_text(tmp_path)
+    assert [(s.match_decision, s.match_artist_key, s.match_song_key)
+            for s in (get_song(conn, i) for i in (sid, same, featured))] == [
+        ("accept", "beatles", "yesterday"), ("accept", "beatles", "let-it-be"),
+        ("accept", "beatles", "help")]
+    assert get_song(conn, cover).match_decision == "not_found"
+
+
 def test_review_song_alone_asks_about_that_song_only(tmp_path):
     conn, sid = in_review(tmp_path)
     other, _ = upsert_song(conn, artists=["Soda Stereo"], title="Signos", album=None, duration_ms=None,

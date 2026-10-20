@@ -3,10 +3,12 @@ from datetime import UTC, datetime
 import pytest
 
 from caracole.config import MatchPolicy
-from caracole.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
+from caracole.match import IndexTitle, IndexView, MatchCandidate, MatchResult, match_all, match_song
 from caracole.overrides import Overrides
 from caracole.songs import get_song, update_song
-from caracole.ug.index import mark_built
+from caracole.normalize import compact
+from caracole.ug.index import mark_built, upsert_rows
+from caracole.ug.sitemap import IndexRow, classify_tab_url
 from caracole.versions import picks, set_picks, song_versions, upsert_version
 
 from conftest import add_song
@@ -38,21 +40,84 @@ def summary(r: MatchResult):
 # --- the index view ---------------------------------------------------------------------
 
 
-def test_index_view_groups_tabs_by_song_and_splits_variant_labels(conn):
+def test_index_view_groups_tabs_by_title_with_their_variant_keys(conn):
     index(conn, (3, "oasis", "wonderwall", "guitar-pro"), (1, "oasis", "wonderwall", "chords"),
-          (2, "oasis", "wonderwall-acoustic", "chords"), (4, "radiohead", "creep", "chords"))
+          (2, "oasis", "wonderwall-acoustic", "chords"), (5, "oasis", "wonderwall-ii", "chords"),
+          (6, "oasis", "champagne-supernova", "chords"), (4, "radiohead", "creep", "chords"),
+          (7, "liam-gallagher", "wonderwall-live", "chords"))
     view = IndexView(conn)
-    assert view.songs_for_artist("oasis") == [
-        IndexSong("wonderwall", "wonderwall", None, ((1, "chords"), (3, "guitar-pro"))),
-        IndexSong("wonderwall-acoustic", "wonderwall", "acoustic", ((2, "chords"),)),
+    assert view.titles_for_artist("oasis") == [
+        IndexTitle("champagne-supernova", ("champagne-supernova",), 1),
+        IndexTitle("wonderwall", ("wonderwall", "wonderwall-acoustic"), 3),
+        IndexTitle("wonderwall-ii", ("wonderwall-ii",), 1),
     ]
-    assert view.songs_for_artist("nobody") == []
-    assert view.artist_keys() == ["oasis", "radiohead"]
-    assert view.title_keys() == ["creep", "wonderwall"]
-    assert view.songs_for_title("wonderwall") == [
-        ("oasis", IndexSong("wonderwall", "wonderwall", None, ((1, "chords"), (3, "guitar-pro")))),
-        ("oasis", IndexSong("wonderwall-acoustic", "wonderwall", "acoustic", ((2, "chords"),))),
-    ]
+    assert view.titles_for_artist("nobody") == []
+    assert view.artist_keys() == ["liam-gallagher", "oasis", "radiohead"]
+    assert view.title_keys() == ["champagne-supernova", "creep", "wonderwall", "wonderwall-ii"]
+    assert view.artists_for_title("wonderwall") == {"liam-gallagher": 1, "oasis": 3}
+    assert view.artists_for_title("nothing") == {}
+
+
+ARTIST_KEYS = ("x", "xy", "acdc", "abba", "nobody", "")
+
+
+def test_index_view_reads_artists_from_the_index_until_a_step_needs_them_all(conn):
+    # A one-letter key is one range of keys; a longer one is up to four, a hyphen or none between its
+    # first three letters. Each answer is what the list of every artist key gives once it is loaded.
+    index(conn, (1, "x", "a", "chords"), (2, "x", "b", "chords"), (3, "x-y", "c", "chords"),
+          (4, "xy", "d", "chords"), (5, "ac-dc", "e", "chords"), (6, "acdc", "f", "chords"),
+          (7, "a-c-d-c", "g", "chords"), (8, "acdcx", "h", "chords"), (9, "abba", "i", "chords"))
+    view = IndexView(conn)
+    seen = []
+    conn.set_trace_callback(seen.append)
+    compacts = [view.compact_artists(k) for k in ARTIST_KEYS]
+    known = [view.has_artist(k) for k in ("x", "x-y", "acd", "nobody")]
+    conn.set_trace_callback(None)
+    assert compacts == [("x",), ("x-y", "xy"), ("a-c-d-c", "ac-dc", "acdc"), ("abba",), (), ()]
+    assert known == [True, True, False, False]
+    assert not any("ORDER BY artist_key" in s for s in seen)
+    assert view.artist_keys()[:2] == ["a-c-d-c", "abba"]
+    assert [view.compact_artists(k) for k in ARTIST_KEYS] == compacts
+    assert [view.has_artist(k) for k in ("x", "x-y", "acd", "nobody")] == known
+
+
+# Slugs as UG may write them: hyphens leading, trailing or doubled, fullwidth (U+FF0D) or small
+# (U+FE63), which NFKD makes hyphens, and Chinese letters on both sides of one.
+AWKWARD_SLUGS = ("--x--y-z-", "x\uff0dyz", "xy\ufe63\ufe63z", "x\ufe63y\uff0dz-", "-xyz-", "\u5b8b-\u51ac\u91ce-",
+                 "-\u5b8b\uff0d\u51ac\u91ce", "song--\u51ac-\u91ce-x-")
+
+
+def test_the_index_keeps_no_stray_hyphen_so_compact_artists_ranges_find_every_key(conn):
+    # compact_artists asks the index for the keys that start acd, ac-d, a-cd or a-c-d, which finds
+    # every key reading "acdc" only while none starts or ends with a hyphen or holds two in a row.
+    # The index's one writer stores the keys of the sitemaps' tab URLs (ug_slug_key), whatever
+    # hyphens UG's slugs hold.
+    rows = [classify_tab_url(f"https://tabs.ultimate-guitar.com/tab/{slug}/{slug}-chords-{i}")
+            for i, slug in enumerate(AWKWARD_SLUGS, 1)]
+    assert all(isinstance(r, IndexRow) for r in rows)
+    upsert_rows(conn, rows, "1", datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+    keys = {r[0] for r in conn.execute("SELECT artist_key FROM ug_index UNION SELECT song_key FROM ug_index")}
+    assert keys == {"x-y-z", "x-yz", "xy-z", "xyz", "\u5b8b\u51ac\u91ce", "song-\u51ac\u91ce-x"}
+    assert all(k == k.strip("-") and "--" not in k for k in keys)
+    view = IndexView(conn)
+    ranged = {k: view.compact_artists(compact(k)) for k in sorted(keys)}
+    view.artist_keys()
+    assert {k: view.compact_artists(compact(k)) for k in sorted(keys)} == ranged
+    assert ranged["xyz"] == ("x-y-z", "x-yz", "xy-z", "xyz")
+    assert ranged["song-\u51ac\u91ce-x"] == ("song-\u51ac\u91ce-x",)
+
+
+def test_an_exact_match_never_loads_every_artist_key(conn):
+    # `caracole add`, the web page's add and a lookup match one song: one whose artist UG has needs
+    # its artist's titles alone, not the 150,000 artist keys the steps after it compare names with.
+    index(conn, (1, "acdc", "highway-to-hell", "chords"), (2, "abba", "sos", "chords"))
+    song = add_song(conn, "AC/DC", "Highway to Hell")
+    seen = []
+    conn.set_trace_callback(seen.append)
+    r = match_song(song, IndexView(conn), Overrides(), POLICY)
+    conn.set_trace_callback(None)
+    assert summary(r)[:2] == ("accept", "exact")
+    assert not any("SELECT DISTINCT artist_key FROM ug_index ORDER BY" in s for s in seen)
 
 
 # --- the ladder ---------------------------------------------------------------------------
@@ -439,6 +504,37 @@ def test_performers_catch_alls_hold_the_performers_name_at_the_start_of_the_titl
     assert summary(r) == ("review", "catch_all", 100.0, "misc-originals", "ray-porter-red-sarah")
     # Nor does a performer's title end in a show's song: no ending rule there.
     assert match(conn, "Jorge Rivera-Herrans", "Red Sarah").decision == "not_found"
+
+
+def test_the_catch_all_titles_holding_a_name_or_an_ending_come_in_their_order(conn):
+    index(conn, (1, "misc-musicals", "hamilton-my-shot", "chords"), (2, "misc-musicals", "hamilton-my-shot", "tabs"),
+          (3, "misc-originals", "my-shot-at-love", "chords"), (4, "misc-cartoons", "frozen-let-it-go", "chords"),
+          (5, "misc-cartoons", "my-shot", "chords"), (6, "misc-soundtrack", "shot-in-the-dark", "chords"),
+          (7, "misc-praise-songs", "my-shot", "chords"))
+    view = IndexView(conn)
+    assert view.catch_all_holding(["-my-shot-\n", "-frozen-"]) == [
+        ("misc-cartoons", "frozen-let-it-go", 1), ("misc-cartoons", "my-shot", 1),
+        ("misc-musicals", "hamilton-my-shot", 2)]
+    assert view.catch_all_holding(["-shot-"]) == [
+        ("misc-cartoons", "my-shot", 1), ("misc-musicals", "hamilton-my-shot", 2),
+        ("misc-originals", "my-shot-at-love", 1), ("misc-soundtrack", "shot-in-the-dark", 1)]
+    assert view.catch_all_holding(["-sho-"]) == view.catch_all_holding([]) == []
+
+
+def test_a_performers_title_that_holds_the_name_past_its_start_is_no_match_where_a_shows_is(conn):
+    index(conn, (1, "misc-originals", "robert-muecke-kiss-you", "chords"),
+          (2, "misc-musicals", "robert-muecke-kiss-you", "chords"))
+    r = match(conn, "Kiss", "You")
+    assert r.candidates == (MatchCandidate("misc-musicals", "robert-muecke-kiss-you", 100.0, "catch_all"),)
+
+
+def test_a_shows_title_that_is_your_title_alone_does_not_end_in_it(conn):
+    # What comes before the ending is the show's name: a title with nothing before it is no show's song.
+    index(conn, (1, "misc-musicals", "not-sorry-for-loving-you", "chords"), EPIC,
+          (2, "jorge-rivera-herrans", "not-sorry-for-loving-me", "chords"))
+    r = match(conn, "Jorge Rivera-Herrans", "Not Sorry for Loving You")
+    assert [(c.song_key, c.step) for c in r.candidates] == [
+        ("epic-the-musical-not-sorry-for-loving-you", "catch_all"), ("not-sorry-for-loving-me", "fuzzy_title")]
 
 
 def test_catch_alls_that_file_the_bare_title_are_left_to_the_title_alone(conn):

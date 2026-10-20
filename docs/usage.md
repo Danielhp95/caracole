@@ -1473,11 +1473,14 @@ answer too, it asks nothing, and writes what that answer writes:
 the list shows it; `--none` rejects every candidate listed, or, with one
 `--seen ARTIST/SONG` for each, only those: the ones you saw, should the
 nightly run have found others since. It holds caracole's lock while it
-answers, matches again and rewrites the pages, then says where the song
+answers, matches that song again (and, when it writes an `[alias]`, the
+artist's other songs) and rewrites the pages, then says where the song
 stands: matched (and how to fetch it now), still in review, or not found,
-which caracole goes on looking for. A song that doesn't need review, a number
-or a UG song the list hasn't, exits 1 and writes nothing. This is what the
-picker of `caracole serve` runs (see [caracole serve](#caracole-serve)).
+which caracole goes on looking for. Other songs keep their match: an edit
+you made by hand to another song's entry in overrides.toml waits for the next
+`caracole match` or nightly run. A song that doesn't need review, a number or
+a UG song the list hasn't, exits 1 and writes nothing. This is what the picker
+of `caracole serve` runs (see [caracole serve](#caracole-serve)).
 
 A song not found has no candidates, but `--pick` also takes one of the first
 five songs `caracole search` finds for its artist and title, leaving out
@@ -1952,8 +1955,9 @@ with it. A KEY that is no key exits with status 2.
   or None of these, and Pick. It runs `caracole review --song "ARTIST - TITLE"
   --pick ARTIST/SONG`, which writes what answering that number in `caracole
   review` writes (`[match]`, and `[alias]` where the number would add one),
-  matches again and rewrites the pages; or, for None of these, `--none` with
-  the candidates you saw, which go under `[reject]`. As a request does, the
+  matches that song again (with an `[alias]`, the artist's other songs too)
+  and rewrites the pages; or, for None of these, `--none` with the
+  candidates you saw, which go under `[reject]`. As a request does, the
   pick leaves you where you are: the picker gives way to the card's line,
   which says "Writing the answer to overrides.toml…", then how the rest goes
   (below). With Fetch it now ticked,

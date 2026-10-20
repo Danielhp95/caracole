@@ -48,10 +48,11 @@ left, with the error; what needs the user), which report.py turns into the run's
 stdout and ntfy: a new step plugs in by returning one. The log goes to stderr, set up once
 by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities, redacted secrets).
 
-Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`),
-http.py (`PoliteClient`, robots rules, `stale` and `read_once_more` for cached answers),
-health.py (cooldowns, `events`), normalize.py (keys, pinyin), overrides.py, library.py (song
-folders, safe file access), notify.py (ntfy),
+Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`,
+`savepoint`: atomic writes on the autocommit connection), http.py (`PoliteClient`, robots
+rules, `stale` and `read_once_more` for cached answers), health.py (cooldowns, `events`),
+normalize.py (keys, pinyin), overrides.py, library.py (song folders, safe file access),
+notify.py (ntfy),
 site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's and
 MuseScore's), keys.py (a song's musical key and its source, for info.json, `index.html`
 and `search --key`), removal.py (`caracole remove` and the web page's Remove: a song's
@@ -399,7 +400,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `_MIGRATIONS`. `_migrate` copies an existing database to `caracole.sqlite.v<N>.bak`
   (`VACUUM INTO`), then runs each script in one `BEGIN IMMEDIATE` transaction with its
   `PRAGMA user_version` (a script never begins or commits one itself). A newer database
-  raises `DatabaseTooNew`, and `_common.open_db` exits 2 (tests/test_db.py).
+  raises `DatabaseTooNew`, and `_common.open_db` exits 2 (tests/test_db.py). Writes that
+  apply whole or not at all go in `db.savepoint(conn, name)`, which nests in a caller's:
+  the connection is in autocommit mode, where `with conn:` opens no transaction
+  (`test_db.py::test_a_savepoint_undoes_its_whole_block_and_nests`, tests/test_versions.py).
 - **overrides.toml** is written only through the `add_*` functions of overrides.py: tomlkit,
   so the user's comments and layout survive, then `library.write_atomic`. It is read only
   as a regular file (`test_overrides.py::test_writers_preserve_comments_and_roundtrip`).

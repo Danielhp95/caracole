@@ -41,7 +41,6 @@ import logging
 import re
 import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -49,7 +48,7 @@ from typing import Any
 from rapidfuzz import fuzz
 
 from caracole import normalize
-from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json
+from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 from caracole.http import (
     BudgetExhausted,
     Client,
@@ -119,7 +118,7 @@ def ensure_current_keys(conn: sqlite3.Connection) -> int:
     if kv_get(conn, KEYS_KEY) == version:
         return 0
     changed = 0
-    with _savepoint(conn, "lacuerda_index_keys"):
+    with savepoint(conn, "lacuerda_index_keys"):
         rows = conn.execute("SELECT path, artist, title, artist_key, title_key FROM lacuerda_index").fetchall()
         for path, artist, title, old_artist, old_title in rows:
             keys = (name_key(artist), title_key(title) if title else "")
@@ -191,7 +190,7 @@ def index_size(conn: sqlite3.Connection) -> tuple[int, int]:
 def _replace(conn: sqlite3.Connection, page: str, rows: Sequence[Sequence[Any]]) -> None:
     ensure_current_keys(conn)
     marks = ", ".join("?" for _ in _COLUMNS)
-    with _savepoint(conn, "lacuerda_index_store"):
+    with savepoint(conn, "lacuerda_index_store"):
         conn.execute("DELETE FROM lacuerda_index WHERE page = ?", (page,))
         conn.executemany(f"INSERT OR REPLACE INTO lacuerda_index ({', '.join(_COLUMNS)}) VALUES ({marks})", rows)
 
@@ -284,7 +283,7 @@ def _read(conn: sqlite3.Connection, client: Client, name: str, now: datetime,
         _record(conn, name, {**entry, "checked_at": _iso(now)})
         return tuple(entry.get("pages", ()))
     if resp.status == 404:  # no such page: its artists go, and it is checked for this round
-        with _savepoint(conn, "lacuerda_index_gone"):
+        with savepoint(conn, "lacuerda_index_gone"):
             conn.execute("DELETE FROM lacuerda_index WHERE page = ?", (name,))
             _record(conn, name, {"checked_at": _iso(now), "gone": True})
         return ()
@@ -298,7 +297,7 @@ def _read(conn: sqlite3.Connection, client: Client, name: str, now: datetime,
 def _store(conn: sqlite3.Connection, name: str, listing: Listing, validators: Mapping[str, str | None],
            now: datetime) -> None:
     """A listing page's artists and its record, in one transaction."""
-    with _savepoint(conn, "lacuerda_index_page"):
+    with savepoint(conn, "lacuerda_index_page"):
         store_artists(conn, name, listing.artists)
         _record(conn, name, {**validators, "checked_at": _iso(now), "rows": len(listing.artists),
                              "pages": list(listing.pages), "total": listing.total})
@@ -326,7 +325,7 @@ def _record(conn: sqlite3.Connection, name: str, entry: Mapping[str, Any]) -> No
 
 def _forget(conn: sqlite3.Connection, name: str) -> None:
     """A listing page its letter no longer lists: its artists go, and its record."""
-    with _savepoint(conn, "lacuerda_index_forget"):
+    with savepoint(conn, "lacuerda_index_forget"):
         conn.execute("DELETE FROM lacuerda_index WHERE page = ?", (name,))
         indexed = pages(conn)
         indexed.pop(name, None)
@@ -618,18 +617,6 @@ def _reading(scores: Iterable[tuple[float, float, float]]) -> tuple[float, str]:
 
 
 # --- small helpers --------------------------------------------------------------------------
-
-
-@contextmanager
-def _savepoint(conn: sqlite3.Connection, name: str) -> Iterator[None]:
-    conn.execute(f"SAVEPOINT {name}")
-    try:
-        yield
-    except BaseException:
-        conn.execute(f"ROLLBACK TO {name}")
-        conn.execute(f"RELEASE {name}")
-        raise
-    conn.execute(f"RELEASE {name}")
 
 
 def _utc(dt: datetime) -> datetime:
