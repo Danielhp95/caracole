@@ -325,6 +325,12 @@ def _type_rank(kind: str) -> tuple[int, str]:
     return (TYPE_ORDER.index(kind) if kind in TYPE_ORDER else len(TYPE_ORDER), kind)
 
 
+def index_song(conn: sqlite3.Connection, artist_key: str, song_key: str, score: float = 0.0) -> IndexHit | None:
+    """One UG song of the index as a hit, as a search shows it: its tabs per type, a sample page and
+    its names as UG writes them. None when the index has no tab of it."""
+    return _index_hit(conn, artist_key, song_key, score)
+
+
 def _index_hit(conn: sqlite3.Connection, artist_key: str, song_key: str, score: float) -> IndexHit | None:
     """Every tab of the song, counted per type, with a sample page and names to show."""
     tabs = song_tabs(conn, artist_key, song_key)

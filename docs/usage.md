@@ -1129,6 +1129,37 @@ you, so the nightly run never waits for an answer. The to-do page's Review
 section has the same `[match]`, `[alias]` and `[reject]` lines, ready to
 paste, if you'd rather edit the file.
 
+`caracole review --song "ARTIST - TITLE"` asks about that song alone. Given an
+answer too, it asks nothing, and writes what that answer writes:
+
+    caracole review --song "Radio Head - Crep" --pick 1
+    caracole review --song "Radio Head - Crep" --pick radiohead/creep
+    caracole review --song "Radio Head - Crep" --none
+
+`--pick` takes a candidate's number, as the list numbers it, or its UG song as
+the list shows it; `--none` rejects every candidate listed, or, with one
+`--seen ARTIST/SONG` for each, only those: the ones you saw, should the
+nightly run have found others since. It holds caracole's lock while it
+answers, matches again and rewrites the pages, then says where the song
+stands: matched (and how to fetch it now), still in review, or not found,
+which caracole goes on looking for. A song that doesn't need review, a number
+or a UG song the list hasn't, exits 1 and writes nothing. This is what the
+picker of `caracole serve` runs (see [caracole serve](#caracole-serve)).
+
+A song not found has no candidates, but `--pick` also takes one of the first
+five songs `caracole search` finds for its artist and title, leaving out
+those you rejected for it. `caracole review --song "ARTIST - TITLE"` with no
+answer lists them, numbered as `--pick` takes them, and writes nothing:
+
+    Radio Head - Crep: not found under this name. What caracole search "Radio Head Crep" finds for it, without the songs you rejected for it:
+      1) 88  radiohead/creep  https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-1
+    Pick one with caracole review --song "Radio Head - Crep" --pick N, or ARTIST/SONG: that writes [match] alone, no [alias].
+
+Go by these numbers, or by ARTIST/SONG, never by `caracole search`'s own:
+it numbers the songs you rejected too. A pick writes `[match]` alone: no
+`[alias]`, since a song under another artist's name may as well be a cover
+as another spelling.
+
 ## Browse and search
 
 ### Library/index.html
@@ -1151,6 +1182,18 @@ shows only that artist's songs ("Queen" leaves out ABBA's "Dancing Queen"),
 until you take its chip off. "Find it elsewhere" opens a song's MuseScore
 pages, each a possible match, as on the to-do page, and, for a song without a
 sheet, its search and buy links.
+
+A song that needs review opens its candidates under "3 candidates", numbered
+as `caracole review` numbers them. Each is the UG song as UG names it
+("Radiohead – Creep"), why the matcher thought of it ("artist spelled
+differently", "title only: another artist's song, probably a cover", "under
+UG's catch-all misc-musicals"), its score, its tabs per type ("Chords ×2 ·
+Tabs ×1") and a link to its page on UG. The file can't write overrides.toml,
+so it ends with the line to run, as `caracole review --song "Radio Head -
+Crep"`; `caracole serve` makes the list a picker (see below). A wanted song
+the offline index didn't match says so, with the same line: for it, that
+lists what `caracole search` finds, numbered as `--pick` takes them (see
+[Review](#review)); `caracole serve` links to them instead.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
@@ -1308,7 +1351,7 @@ with it. A KEY that is no key exits with status 2.
 
 `caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
 [--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with four things the file on disk can't
+`http://127.0.0.1:8737/` by default, with what the file on disk can't
 do:
 
 - **Request a song.** The form at the top takes an artist, a title and,
@@ -1319,10 +1362,34 @@ do:
   `caracole match` (offline), `caracole fetch --song "ARTIST - TITLE"` and
   `caracole render` (offline), so a sheet can be there in a minute or two.
   Each wanted song's card has a Fetch now button that does the same, except
-  on a song that needs review: it says Review first, since `caracole fetch`
-  waits for `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
-  overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for
-  the nightly run.
+  on a song that needs review, which `caracole fetch` won't fetch until
+  `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
+  overrides.toml) settles the match: its card has Pick the match instead
+  (below). Lyrics, LaCuerda and the rest wait for the nightly run.
+- **Pick the match.** On a song that needs review, Pick the match opens its
+  candidates, as on the file (see above), as a list to choose from: pick one,
+  or None of these, and Pick. It runs `caracole review --song "ARTIST - TITLE"
+  --pick ARTIST/SONG`, which writes what answering that number in `caracole
+  review` writes (`[match]`, and `[alias]` where the number would add one),
+  matches again and rewrites the pages; or, for None of these, `--none` with
+  the candidates you saw, which go under `[reject]`. With Fetch it now ticked,
+  as it is by default, a pick then runs `caracole fetch --song` and
+  `caracole render`; None of these fetches nothing, and caracole goes on
+  looking for the song: if the matcher finds others, the song is back in
+  review with those, and its card offers them to pick from, with no Fetch now
+  until one is picked. The candidates must still be the ones the page showed
+  (the nightly run may have matched the song again: reload the page then),
+  and a song whose own request waits or runs gets its pick once that ends. A
+  review without candidates keeps its Review first button: `caracole review`
+  offers it a pin or an ignore. With the keyboard, Enter opens the picker and
+  takes the focus to the first candidate, the arrow keys choose, and Tab
+  goes on through the candidates' UG links to Fetch it now and Pick.
+- **Look in the index.** A wanted song the offline index didn't match has a
+  Look in the index link beside Fetch now: its page, `/review?song=ID`, runs
+  `caracole search` for the song's artist and title, and offers the first five
+  hits the same way, without None of these. A pick writes `[match]` alone (see
+  [Review](#review)). The page runs the search when you open it, so the
+  library page carries no hits of its own.
 - **Remove a song.** Each card's Remove… button opens a page that says what
   goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
   it queues `caracole remove --yes "ARTIST - TITLE"`, and the card says
@@ -1367,7 +1434,15 @@ do:
   its card's, with the commands it ran and what each printed folded away
   under it (they run at `-v`, so that is the whole story). A card's Details
   link opens that request's output. It refreshes itself every 10 seconds while
-  one waits or runs; Stop refreshing keeps it still.
+  one waits or runs; Stop refreshing keeps it still. A request that ended in a
+  review (`caracole add` found only candidates) shows the song's picker under
+  its line, so you pick at once. With Fetch it now ticked, its `caracole
+  fetch` refused the song until it's picked: its line then says Needs review,
+  not the fetch's error, and in its output the fetch Waits for a pick. While
+  the page refreshes itself, which would undo a choice half made, it shows a
+  Pick the match link to the picker's own page, `/review?song=ID`, instead of
+  the picker. One whose song the index didn't match links to what `caracole
+  search` finds for it (Look in the index, above).
 - **Without JavaScript**, the forms still work: a request sends you to its
   line on `/jobs`, its output open.
 

@@ -2,7 +2,10 @@
 
 Each rewrites _todo.md and index.html for what it changed (``review`` only when
 an answer changed something), holding caracole's lock while it writes; ``review``
-takes it only after the questions, never while it waits for you. An
+takes it only after the questions, never while it waits for you. ``review
+--song S --pick N`` (or ``--none``) answers for one song with no question, so
+it holds the lock from reading the song to rewriting the pages: it is what
+caracole serve's picker runs. An
 overrides.toml that can't be read still gets the to-do page rewritten, leading
 with why, and the command exits 2, as the nightly run does. The pages are built
 by modules that import the matcher and the index, so those are imported inside
@@ -32,6 +35,8 @@ from caracole.overrides import Overrides, OverridesError, load_overrides
 if TYPE_CHECKING:
     from caracole.config import Config
     from caracole.music import ScanStats
+    from caracole.review import ReviewStats
+    from caracole.songs import Song
 
 
 def _overrides_for_pages(conn: sqlite3.Connection, cfg: Config, now: datetime) -> Overrides:
@@ -69,6 +74,138 @@ def _rewrite_pages(conn: sqlite3.Connection, cfg: Config, what: str, *,
         return write_pages(conn, cfg, overrides, now)
 
 
+def _counts(stats: ReviewStats) -> str:
+    return (f"accepted {stats.accepted}, pinned {stats.pinned}, ignored {stats.ignored}, "
+            f"rejected {stats.rejected}, skipped {stats.skipped}")
+
+
+def _song_named(conn: sqlite3.Connection, display: str) -> Song:
+    """The song ``--song`` names; a name that isn't "Artist - Title" exits 2, one not in the library 1."""
+    from caracole.overrides import override_key
+    from caracole.songs import find_song
+
+    try:
+        key = override_key(display)
+    except OverridesError as e:
+        fail(f"--song: {e}", 2)
+    found = find_song(conn, key)
+    if found is None:
+        fail(f'No song "{display}" in the library.')
+    return found
+
+
+def _seen_candidate(text: str) -> dict[str, str]:
+    """A ``--seen`` UG song, as a candidate; one that isn't ARTIST/SONG exits 2."""
+    artist_key, sep, song_key = text.strip().partition("/")
+    if not sep or not artist_key or not song_key or "/" in song_key:
+        fail(f"--seen: {text!r} isn't a UG song: write it as ARTIST/SONG, as caracole review lists it", 2)
+    return {"artist_key": artist_key, "song_key": song_key}
+
+
+def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, str]]) -> None:
+    """One song's answer, as ``caracole review`` takes it, with no question: ``pick`` (a number or
+    ARTIST/SONG), or none of the candidates (those ``seen``, else every one it lists).
+
+    A song not found has no review, but ``pick`` may be one of what ``caracole search`` finds for
+    it (``review.search_candidates``): that writes ``[match]`` alone. It holds caracole's lock from
+    reading the song to rewriting the pages, as nothing waits for you here: what caracole serve's
+    picker runs (web/app.py).
+    """
+    from caracole.review import ReviewStats, accept, candidates_of, ref, reject, search_candidates, writes_alias
+    from caracole.songs import get_song
+
+    with exclusive(cfg, "review"):
+        overrides = load_ovr(cfg)
+        conn = open_db(cfg)
+        song = _song_named(conn, display)
+        searched = pick is not None and _searched(song, overrides)
+        if song.status == "ignored" or song.key in overrides.ignore or not (song.review or searched):
+            fail(f'"{song.display}" doesn\'t need review, so nothing was written.')
+        if searched:
+            cands = search_candidates(conn, song, rejected=overrides.reject.get(song.key, frozenset()))
+        else:
+            cands = candidates_of(song)
+        # It lists them numbered as --pick takes them, which caracole search doesn't: it numbers the
+        # songs rejected for the song too.
+        again = f'caracole review --song "{song.display}"'
+        stats = ReviewStats()
+        try:
+            if pick is not None:
+                chosen = _picked(cands, pick.strip())
+                if chosen is None:
+                    fail(f'"{song.display}" has no candidate {pick.strip()} now: {again} lists them.')
+                accept(conn, cfg, song, chosen)
+                stats.accepted += 1
+                alias = (f', and [alias] "{song.artist}" = "{chosen["artist_key"]}"'
+                         if writes_alias(song, chosen) else "")
+                typer.echo(f'{song.display}: "{ref(chosen)}" under [match]{alias}')
+            else:
+                rejected = seen or cands
+                if not rejected:
+                    fail(f'"{song.display}" has no candidates to reject: {again} offers the rest.')
+                reject(conn, cfg, song, rejected)
+                stats.rejected += 1
+                typer.echo(f"{song.display}: {', '.join(ref(c) for c in rejected)} under [reject]")
+        except OverridesError as e:  # the file broke since it was read
+            fail(f"overrides: {e}", 2)
+        path, page = _rewrite_pages(conn, cfg, "review", rematch=True)
+        typer.echo(_counts(stats))
+        typer.echo(f"Wrote {path} and {page}")
+        typer.echo(_now(get_song(conn, song.id)))
+
+
+def _searched(song: Song, overrides: Overrides) -> bool:
+    """Whether ``--pick`` takes one of the song's search hits: a song not found, and not ignored."""
+    return (not song.review and song.match_decision == "not_found" and song.status != "ignored"
+            and song.key not in overrides.ignore)
+
+
+def _list_hits(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> None:
+    """``caracole review --song`` of a song not found: what ``caracole search`` finds for it, numbered
+    as ``--pick`` takes them (``review.search_candidates``), without the songs rejected for it, which
+    ``caracole search`` lists and numbers too. It writes nothing, so it takes no lock."""
+    from caracole.normalize import clean_title
+    from caracole.review import ref, search_candidates
+    from caracole.ug.lookup import song_tabs
+
+    hits = search_candidates(conn, song, rejected=overrides.reject.get(song.key, frozenset()))
+    if not hits:
+        typer.echo(f"{song.display}: not found, and caracole search finds nothing close to it in the offline "
+                   "Ultimate Guitar index. caracole goes on looking for it, on its artist's UG page too.")
+        return
+    search = f'caracole search "{song.artist} {clean_title(song.title)}"'
+    typer.echo(f"{song.display}: not found under this name. What {search} finds for it, without the songs "
+               "you rejected for it:")
+    for n, c in enumerate(hits, start=1):
+        tabs = song_tabs(conn, c["artist_key"], c["song_key"])
+        url = f"  {tabs[0].url}" if tabs else ""
+        typer.echo(f"  {n}) {float(c.get('score') or 0):.0f}  {ref(c)}{url}")
+    typer.echo(f'Pick one with caracole review --song "{song.display}" --pick N, or ARTIST/SONG: that writes '
+               "[match] alone, no [alias].")
+
+
+def _picked(cands: list[dict], pick: str) -> dict | None:
+    """The candidate ``--pick`` names: its number in the list, or its ARTIST/SONG."""
+    from caracole.review import ref
+
+    if pick.isdigit():
+        n = int(pick)
+        return cands[n - 1] if 1 <= n <= len(cands) else None
+    return next((c for c in cands if ref(c) == pick), None)
+
+
+def _now(song: Song) -> str:
+    """Where the song stands after the rematch."""
+    if song.match_decision in ("accept", "pinned") and song.match_artist_key and song.match_song_key:
+        return (f"Now matched to {song.match_artist_key}/{song.match_song_key}: "
+                f'caracole fetch --song "{song.display}" fetches it now, or the nightly run does.')
+    if song.match_decision == "review":
+        return f'Still in review, with other candidates: caracole review --song "{song.display}" lists them.'
+    if song.match_decision == "not_found":
+        return "Not found now: caracole goes on looking for it, on its artist's UG page too."
+    return f"Now {song.match_decision or 'not matched yet'}."
+
+
 def _music_line(cfg: Config, music: ScanStats) -> str:
     if not music.seen:  # scan_music unlinks nothing then: a disk that isn't mounted tonight, say
         why = "has no audio files" if cfg.music_dir.is_dir() else "is missing"
@@ -86,13 +223,49 @@ def register(app: typer.Typer) -> None:
         typer.echo(f"Wrote {path} and {page}")
 
     @app.command("review")
-    def review_cmd(ctx: typer.Context) -> None:
+    def review_cmd(
+        ctx: typer.Context,
+        song: str | None = typer.Option(
+            None, "--song", metavar='"ARTIST - TITLE"',
+            help="Only this song: ask about it alone (a song not found: list the search hits --pick takes), "
+                 "or answer for it with --pick or --none.",
+        ),
+        pick: str | None = typer.Option(
+            None, "--pick", metavar="N|ARTIST/SONG",
+            help="With --song: this candidate is the song, by its number or as ARTIST/SONG. Writes \\[match], "
+                 "and \\[alias] as answering its number does.",
+        ),
+        none: bool = typer.Option(
+            False, "--none", help="With --song: none of its candidates is the song. Writes them under \\[reject].",
+        ),
+        seen: list[str] = typer.Option(
+            [], "--seen", metavar="ARTIST/SONG",
+            help="With --none: a candidate you were shown; only those are rejected. Repeat for each.",
+        ),
+    ) -> None:
         """Settle uncertain matches; each answer is written to overrides.toml."""
         from caracole.review import ReviewIO, review_songs
 
+        if (pick is not None or none) and song is None:
+            fail("--pick and --none answer for one song: name it with --song", 2)
+        if pick is not None and none:
+            fail("--pick or --none, not both", 2)
+        if seen and not none:
+            fail("--seen goes with --none", 2)
+        shown = [_seen_candidate(text) for text in seen]
         cfg = load_cfg(ctx)
-        load_ovr(cfg)  # a broken file stops here, before a question whose answer it couldn't keep
+        if song is not None and (pick is not None or none):
+            _answer(cfg, song, pick, shown)
+            return
+        overrides = load_ovr(cfg)  # a broken file stops here, before a question whose answer it couldn't keep
         conn = open_db(cfg)
+        only = None
+        if song is not None:
+            one = _song_named(conn, song)
+            if _searched(one, overrides):  # nothing to ask: what --pick takes for it
+                _list_hits(conn, one, overrides)
+                return
+            only = {one.id}
         written: list[Path] = []
 
         def read(prompt: str) -> str:  # the prompts end in ": "; Enter answers ""
@@ -102,11 +275,10 @@ def register(app: typer.Typer) -> None:
             written.extend(_rewrite_pages(conn, cfg, "review", rematch=True))
 
         try:
-            stats = review_songs(conn, cfg, ReviewIO(read=read, write=typer.echo), rematch=settle)
+            stats = review_songs(conn, cfg, ReviewIO(read=read, write=typer.echo), rematch=settle, only=only)
         except OverridesError as e:  # the file broke while review waited for an answer
             fail(f"overrides: {e}", 2)
-        typer.echo(f"accepted {stats.accepted}, pinned {stats.pinned}, ignored {stats.ignored}, "
-                   f"rejected {stats.rejected}, skipped {stats.skipped}")
+        typer.echo(_counts(stats))
         if written:
             typer.echo(f"Wrote {written[0]} and {written[1]}")
 

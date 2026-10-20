@@ -367,6 +367,68 @@ def test_a_song_whose_audio_you_have_gets_no_buy_links(conn, cfg):
     assert songs_of(page(conn, cfg))[s.display]["buy"] == []
 
 
+# --- songs that need review: their candidates ------------------------------------------------
+
+
+def index_tabs(conn, *rows):
+    """Rows of the UG index: (tab id, artist key, song key, type), at their slugged paths."""
+    conn.executemany(
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (?, ?, ?, ?, '1', 'x', ?)",
+        [(t, a, s, kind, f"{a}/{s}-{kind}-{t}") for t, a, s, kind in rows])
+
+
+CREEP = [{"artist_key": "radiohead", "song_key": "creep", "score": 89.4, "step": "fuzzy_artist"},
+         {"artist_key": "jeff-buckley", "song_key": "creep", "score": 80.0, "step": "title_only"},
+         {"artist_key": "misc-musicals", "song_key": "creep-the-musical", "score": 76.0, "step": "catch_all"},
+         {"artist_key": None, "song_key": "creep", "score": 70.0, "step": "fuzzy_artist"}]
+
+
+def in_review(conn, artist="Radio Head", title="Crep", cands=CREEP):
+    s = add_song(conn, artist, title)
+    update_song(conn, s.id, review=True, match_decision="review", match_candidates=cands)
+    return s
+
+
+def test_a_song_in_review_carries_its_candidates_as_caracole_review_lists_them(conn, cfg):
+    index_tabs(conn, (1, "radiohead", "creep", "chords"), (2, "radiohead", "creep", "chords"),
+               (3, "radiohead", "creep", "tabs"), (4, "the-radiohead", "x", "chords"),
+               (5, "jeff-buckley", "creep", "guitar-pro"))
+    s = in_review(conn)
+    plain = add_song(conn, "Oasis", "Wonderwall")
+    songs = songs_of(page(conn, cfg))
+    assert songs[s.display]["candidates"] == [
+        {"n": 1, "ref": "radiohead/creep", "artist": "Radiohead", "title": "Creep", "score": 89,
+         "why": "artist spelled differently", "tabs": "Chords ×2 · Tabs ×1",
+         "href": "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-1"},
+        {"n": 2, "ref": "jeff-buckley/creep", "artist": "Jeff Buckley", "title": "Creep", "score": 80,
+         "why": "title only: another artist's song, probably a cover", "tabs": "Guitar Pro ×1",
+         "href": "https://tabs.ultimate-guitar.com/tab/jeff-buckley/creep-guitar-pro-5"},
+        # Not in the index (any more): its names come from its keys, and it has no page to open.
+        {"n": 3, "ref": "misc-musicals/creep-the-musical", "artist": "Misc Musicals", "title": "Creep The Musical",
+         "score": 76, "why": "under UG's catch-all misc-musicals", "tabs": "", "href": ""},
+    ]
+    assert "candidates" not in songs[plain.display]
+
+
+def test_an_ignored_song_in_review_has_no_candidates_to_pick(conn, cfg):
+    s = in_review(conn)
+    o = Overrides(ignore=frozenset({s.key}))
+    assert "candidates" not in songs_of(page(conn, cfg, o))[s.display]
+
+
+def test_a_song_not_found_says_so_for_the_served_card_to_look_in_the_index(conn, cfg):
+    # Its search hits cost a search each, so the page carries none: caracole serve's /review runs it.
+    lost = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, lost.id, match_decision="not_found")
+    ignored = add_song(conn, "Nobody", "Nothing")
+    update_song(conn, ignored.id, match_decision="not_found", status="ignored")
+    plain = add_song(conn, "Oasis", "Wonderwall")
+    songs = songs_of(page(conn, cfg))
+    assert songs[lost.display]["notFound"] is True and "candidates" not in songs[lost.display]
+    assert "notFound" not in songs[ignored.display] and "notFound" not in songs[plain.display]
+
+
 def test_guitar_pro_pages_to_click_are_the_picks_without_files(conn, cfg):
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", ver=2, rating=4.2, votes=5)
@@ -434,7 +496,8 @@ def test_no_external_resources_and_no_urls_outside_the_data(conn, cfg):
     v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
     set_picks(conn, s.id, ["guitar-pro"], [v])
     html = page(conn, cfg)
-    shell = JSON_BLOCK.sub("", html)
+    # The CSP's hashes are base64, which may hold "//" before a letter: they are no addresses.
+    shell = re.sub(r"'sha256-[A-Za-z0-9+/]+=*'", "'sha256'", JSON_BLOCK.sub("", html))
     assert not re.search(r"https?://|//[a-z]", shell, re.I)  # no CDN, fonts, images, fetches
     assert not re.search(r"<(link|img|iframe|object|embed)\b|\bsrc=|@import|url\(", shell, re.I)
     allowed = set(search_links("宋冬野", "斑马，斑马").values()) | {"https://tabs.ultimate-guitar.com/tab/555890"}
@@ -873,3 +936,151 @@ def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(co
     shown = listing(dump_dom(plain, tmp_path, "#artist=queen&q=dancing"))
     assert "No songs of Queen match “dancing”" in shown and "every artist" in shown
     assert "caracole search" not in shown
+
+
+# --- the picker: a song in review's candidates, in a real browser -------------------------------
+
+
+def card_of(shown: str, title: str) -> str:
+    """The rendered card whose heading is ``title``."""
+    for card in re.findall(r"<article[^>]*>.*?</article>", shown, re.S):
+        if f"<h2>{title}</h2>" in card:
+            return card
+    raise AssertionError(f"no card {title!r} in {shown[-1500:]}")
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_file_shows_a_reviews_candidates_and_the_line_that_picks_one(conn, cfg, tmp_path):
+    index_tabs(conn, (1, "radiohead", "creep", "chords"), (3, "radiohead", "creep", "tabs"))
+    in_review(conn)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    card = card_of(listing(dump_dom(path, tmp_path)), "Crep")
+    picker = re.search(r'<details class="picker">.*?</details>', card, re.S).group(0)
+    assert re.search(r"<summary[^>]*>3 candidates</summary>", picker)
+    names = re.findall(r'<span class="choice-name">([^<]*)</span>', picker)
+    assert names == ["1. Radiohead – Creep", "2. Jeff Buckley – Creep", "3. Misc Musicals – Creep The Musical"]
+    assert "artist spelled differently · score 89 · Chords ×1 · Tabs ×1" in picker
+    assert 'href="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-1"' in picker
+    assert 'target="_blank"' in picker and 'rel="noopener noreferrer"' in picker
+    assert picker.count('class="choice-link"') == 1  # the candidate the index no longer has links nowhere
+    assert '<code>caracole review --song "Radio Head - Crep"</code>' in picker
+    assert "<form" not in card and "<input" not in card  # the file sends nothing
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_page_picks_a_candidate_with_a_form_in_place_of_review_first(conn, cfg, tmp_path):
+    from caracole.library_page import WebControls
+
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    s = in_review(conn)
+    bare = add_song(conn, "Queen", "Bohemian Rhapsody")  # in review with no candidate to pick
+    update_song(conn, bare.id, review=True)
+    controls = WebControls(csrf='t"k', held=frozenset({s.id, bare.id}))
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path))
+    card = card_of(shown, "Crep")
+    assert "Review first" not in card and "/fetch" not in card
+    assert re.search(r'<summary class="btn picker-open"[^>]*>Pick the match', card)
+    form = re.search(r'<form[^>]*action="/review"[^>]*>(.*?)</form>', card, re.S)
+    assert form and 'method="post"' in form.group(0)
+    fields = form.group(1)
+    assert 'name="csrf" value="t&quot;k"' in fields and f'name="song" value="{s.id}"' in fields
+    assert 'name="shown" value="radiohead/creep jeff-buckley/creep misc-musicals/creep-the-musical"' in fields
+    radios = re.findall(r'<input type="radio" name="pick" value="([^"]*)" required="">', fields)
+    assert radios == ["radiohead/creep", "jeff-buckley/creep", "misc-musicals/creep-the-musical", "none"]
+    assert re.search(r"<fieldset[^>]*><legend>Which Ultimate Guitar song is “Crep” by Radio Head\?</legend>", fields)
+    assert re.search(r'<input type="checkbox" name="fetch" value="1" checked="">', fields)
+    assert re.search(r'<button[^>]*type="submit"[^>]*>Pick</button>', fields)
+    assert "None of these" in fields
+    # A review with no candidate keeps its note and the button that says why it can't be fetched.
+    plain = card_of(shown, "Bohemian Rhapsody")
+    assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", plain) and "picker" not in plain
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_picker_of_a_song_being_fetched_is_read_only_until_its_request_ends(conn, cfg, tmp_path):
+    # POST /review would refuse a pick while the song's request waits or runs: the card offers none.
+    from caracole.library_page import WebControls
+
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    s = in_review(conn)
+    controls = WebControls(csrf="tok", busy=frozenset({s.id}), active=1, held=frozenset({s.id}))
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    card = card_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    assert 'action="/review"' not in card and "<input" not in card
+    picker = re.search(r'<details class="picker">.*?</details>', card, re.S).group(0)
+    choices = re.search(r'<ol class="choices"[^>]*>(.*?)</ol>', picker, re.S)
+    assert choices and re.findall(r'<span class="choice-name">([^<]*)</span>', choices.group(1)) == [
+        "1. Radiohead – Creep", "2. Jeff Buckley – Creep", "3. Misc Musicals – Creep The Musical"]
+    assert '<p class="pick-hint">A request for this song is running: pick one once it ends.</p>' in picker
+    assert "Fetching…" in card
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_found_song_in_review_gets_the_picker_too(conn, cfg, tmp_path):
+    # A sheet from elsewhere (LaCuerda, say) while its UG match waits for review: no Fetch now, but a pick.
+    from caracole.library_page import WebControls
+
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    s = in_review(conn)
+    update_song(conn, s.id, status="found")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", held=frozenset({s.id})))
+    card = card_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    assert 'data-status="found"' in card and "/fetch" not in card
+    form = re.search(r'<form[^>]*action="/review"[^>]*>(.*?)</form>', card, re.S)
+    assert form and f'name="song" value="{s.id}"' in form.group(1)
+    radios = re.findall(r'<input type="radio" name="pick" value="([^"]*)"', form.group(1))
+    assert radios == ["radiohead/creep", "jeff-buckley/creep", "misc-musicals/creep-the-musical", "none"]
+
+
+# Opens the first picker by its summary, as a click or Enter does, then notes where the focus went.
+OPEN_PICKER = """
+(() => {
+  const picker = document.querySelector("#list details.picker");
+  picker.querySelector("summary").click();
+  setTimeout(() => {
+    const focus = document.activeElement;
+    document.body.setAttribute("data-picker", JSON.stringify({
+      open: picker.open,
+      focus: focus ? (focus.name || "") + "=" + (focus.value || "") : "none",
+      inPicker: picker.contains(focus),
+      width: document.documentElement.scrollWidth, page: window.innerWidth,
+    }));
+  }, 50);
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_opening_the_picker_takes_the_focus_to_its_first_candidate_and_fits_a_phone(conn, cfg, tmp_path):
+    import html as html_module
+
+    from caracole.library_page import WebControls
+
+    in_review(conn, "Los Fabulosos Cadillacs y Los Auténticos Decadentes", "Matador (versión acústica en vivo)")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    path = write_library_page(cfg.library_dir, with_script(html, OPEN_PICKER))
+    dom = dump_dom(path, tmp_path, size="390,844")
+    found = re.search(r'data-picker="([^"]*)"', dom)
+    assert found, dom[-2000:]
+    state = json.loads(html_module.unescape(found.group(1)))
+    assert state["open"] and state["inPicker"] and state["focus"] == "pick=radiohead/creep", state
+    assert state["width"] <= state["page"], state  # nothing wider than the phone
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_card_of_a_song_not_found_links_to_its_search_hits(conn, cfg, tmp_path):
+    from caracole.library_page import WebControls
+
+    lost = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, lost.id, match_decision="not_found")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    card = card_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    assert re.search(rf'<a class="btn" href="/review\?song={lost.id}"[^>]*>Look in the index</a>', card)
+    assert "/fetch" in card  # its artist's UG page may have it: Fetch now still asks
+    on_file = card_of(listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)), "Crep")
+    assert "/review" not in on_file
+    # The file can't search: it names the line that lists the hits, numbered as --pick takes them.
+    hint = re.search(r'<p class="pick-hint">(.*?)</p>', on_file, re.S)
+    assert hint and '<code>caracole review --song "Radio Head - Crep"</code>' in hint.group(1), on_file
+    assert "caracole search finds for it" in hint.group(1)

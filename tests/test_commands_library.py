@@ -259,6 +259,244 @@ def test_review_on_a_partial_index_saves_no_song_as_not_found(tmp_path):
     assert get_song(conn, other).match_decision is None
 
 
+# --- one song, one answer: caracole review --song (what caracole serve's picker runs) -------------
+
+SONG = "宋冬野 - 斑马斑马"
+
+
+def index_both(conn):
+    """A finished index with 宋冬野's 斑马斑马 and 李志's cover of it."""
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import mark_built
+
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(1, 'li-zhi', 'ban-ma-ban-ma', 'chords', '1', 'x', 'li-zhi/ban-ma-ban-ma-chords-1'), "
+                 "(2, 'song-dongye', 'ban-ma-ban-ma', 'chords', '1', 'x', 'song-dongye/ban-ma-ban-ma-chords-2')")
+    mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+
+
+def in_review(tmp_path):
+    conn, sid = seed(tmp_path)
+    index_both(conn)
+    update_song(conn, sid, review=True, match_decision="review", match_step="fuzzy_title",
+                match_candidates=[CANDIDATE, COVER])
+    return conn, sid
+
+
+def overrides_text(tmp_path) -> str:
+    path = tmp_path / "lib" / "overrides.toml"
+    return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+@pytest.mark.parametrize("pick", ["song-dongye/ban-ma-ban-ma", "1"])
+def test_review_song_pick_answers_as_its_number_does_without_a_question(tmp_path, monkeypatch, pick):
+    import caracole.review
+
+    conn, sid = in_review(tmp_path)
+    held = spy(monkeypatch, caracole.review, "add_match", tmp_path)
+    monkeypatch.setattr(typer, "prompt", lambda *a, **k: pytest.fail("asked a question"))
+    result = run(tmp_path, "review", "--song", SONG, "--pick", pick)
+    assert result.exit_code == 0, result.output
+    text = overrides_text(tmp_path)
+    assert f'[match]\n"{SONG}" = "song-dongye/ban-ma-ban-ma"' in text
+    assert '[alias]\n"宋冬野" = "song-dongye"' in text
+    assert held == [True] and free(tmp_path)  # the answer is written under caracole's lock
+    assert "accepted 1, pinned 0, ignored 0, rejected 0, skipped 0" in result.output
+    song = get_song(conn, sid)
+    assert (song.match_decision, song.review) == ("accept", False)
+    assert "Now matched to song-dongye/ban-ma-ban-ma" in result.output
+    todo, page = pages(tmp_path)
+    assert f"Wrote {todo} and {page}" in result.output
+
+
+def test_review_song_pick_of_a_cover_writes_no_alias(tmp_path):
+    in_review(tmp_path)
+    result = run(tmp_path, "review", "--song", SONG, "--pick", "2")
+    assert result.exit_code == 0, result.output
+    text = overrides_text(tmp_path)
+    assert f'"{SONG}" = "li-zhi/ban-ma-ban-ma"' in text and "[alias]" not in text
+
+
+def test_review_song_none_rejects_every_candidate_listed(tmp_path):
+    conn, sid = in_review(tmp_path)
+    result = run(tmp_path, "review", "--song", SONG, "--none")
+    assert result.exit_code == 0, result.output
+    assert (f'[reject]\n"{SONG}" = ["song-dongye/ban-ma-ban-ma", "li-zhi/ban-ma-ban-ma"]'
+            in overrides_text(tmp_path))
+    assert "rejected 1" in result.output
+    song = get_song(conn, sid)
+    assert (song.match_decision, song.review, song.status) == ("not_found", False, "wanted")
+    assert "caracole goes on looking for it" in result.output
+
+
+def test_review_song_none_with_seen_rejects_only_the_candidates_seen(tmp_path):
+    # The page showed one candidate; the nightly run found another since. Only the one seen goes.
+    conn, sid = in_review(tmp_path)
+    result = run(tmp_path, "review", "--song", SONG, "--none", "--seen", "li-zhi/ban-ma-ban-ma")
+    assert result.exit_code == 0, result.output
+    assert f'[reject]\n"{SONG}" = ["li-zhi/ban-ma-ban-ma"]' in overrides_text(tmp_path)
+    # The one not seen is still a candidate, which the rematch accepts: the index has it exactly.
+    assert get_song(conn, sid).match_decision == "accept"
+    assert "Now matched to song-dongye/ban-ma-ban-ma" in result.output
+
+
+def test_review_song_alone_asks_about_that_song_only(tmp_path):
+    conn, sid = in_review(tmp_path)
+    other, _ = upsert_song(conn, artists=["Soda Stereo"], title="Signos", album=None, duration_ms=None,
+                           isrc=None, source="wanted", source_id="y", added_at="2026-10-18T00:00:00Z")
+    update_song(conn, other, review=True, match_candidates=[CANDIDATE])
+    result = run(tmp_path, "review", "--song", SONG, input="1\n")
+    assert result.exit_code == 0, result.output
+    assert "[1/1] 宋冬野 - 斑马斑马" in result.output and "Signos" not in result.output
+    assert "accepted 1" in result.output and "Signos" not in overrides_text(tmp_path)
+
+
+@pytest.mark.parametrize("args,code,message", [
+    (["--pick", "1"], 2, "--pick and --none answer for one song: name it with --song"),
+    (["--none"], 2, "--pick and --none answer for one song: name it with --song"),
+    (["--song", SONG, "--pick", "1", "--none"], 2, "--pick or --none, not both"),
+    (["--song", SONG, "--seen", "li-zhi/ban-ma-ban-ma"], 2, "--seen goes with --none"),
+    (["--song", SONG, "--none", "--seen", "li-zhi"], 2, "--seen: 'li-zhi' isn't a UG song"),
+    (["--song", "no dash", "--pick", "1"], 2, "expected \"Artist - Title\""),
+    (["--song", "Radiohead - Creep", "--pick", "1"], 1, 'No song "Radiohead - Creep" in the library'),
+    (["--song", SONG, "--pick", "3"], 1, "has no candidate 3 now"),
+    (["--song", SONG, "--pick", "radiohead/creep"], 1, "has no candidate radiohead/creep now"),
+])
+def test_review_song_refuses_what_it_cant_answer_and_writes_nothing(tmp_path, args, code, message):
+    in_review(tmp_path)
+    result = run(tmp_path, "review", *args)
+    assert result.exit_code == code, result.output
+    assert message in result.output
+    assert overrides_text(tmp_path) == "" and not any(p.exists() for p in pages(tmp_path))
+
+
+def test_review_song_of_a_song_that_needs_no_review_says_so(tmp_path):
+    conn, sid = in_review(tmp_path)
+    update_song(conn, sid, review=False, match_decision="accept")
+    result = run(tmp_path, "review", "--song", SONG, "--none")
+    assert result.exit_code == 1, result.output
+    assert "doesn't need review" in result.output and overrides_text(tmp_path) == ""
+
+
+def test_review_song_with_broken_overrides_stops_before_writing(tmp_path):
+    in_review(tmp_path)
+    overrides = tmp_path / "lib" / "overrides.toml"
+    overrides.parent.mkdir(parents=True)
+    overrides.write_text(BROKEN_OVERRIDES, encoding="utf-8")
+    result = run(tmp_path, "review", "--song", SONG, "--pick", "1")
+    assert result.exit_code == 2, result.output
+    assert "overrides:" in result.output and overrides.read_text(encoding="utf-8") == BROKEN_OVERRIDES
+
+
+CREP = "Radio Head - Crep"
+
+
+def not_found(tmp_path):
+    """Radio Head's "Crep", not found under that name, and an index that has Radiohead's "Creep"."""
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import mark_built
+
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    sid, _ = upsert_song(conn, artists=["Radio Head"], title="Crep", album=None, duration_ms=None, isrc=None,
+                         source="wanted", source_id="x", added_at="2026-10-18T00:00:00Z")
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(1, 'radiohead', 'creep', 'chords', '1', 'x', 'radiohead/creep-chords-1')")
+    mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+    update_song(conn, sid, match_decision="not_found")
+    return conn, sid
+
+
+@pytest.mark.parametrize("pick", ["radiohead/creep", "1"])
+def test_review_song_pick_of_a_song_not_found_takes_a_search_hit_and_writes_match_alone(tmp_path, pick):
+    conn, sid = not_found(tmp_path)
+    result = run(tmp_path, "review", "--song", CREP, "--pick", pick)
+    assert result.exit_code == 0, result.output
+    text = overrides_text(tmp_path)
+    assert f'[match]\n"{CREP}" = "radiohead/creep"' in text and "[alias]" not in text
+    assert get_song(conn, sid).match_decision == "accept"
+    assert "Now matched to radiohead/creep" in result.output
+
+
+@pytest.mark.parametrize("args,message", [
+    (["--pick", "oasis/wonderwall"], "has no candidate oasis/wonderwall now"),
+    (["--pick", "2"], "has no candidate 2 now"),
+    (["--none"], "doesn't need review"),
+])
+def test_review_song_of_a_song_not_found_takes_only_a_search_hit(tmp_path, args, message):
+    not_found(tmp_path)
+    result = run(tmp_path, "review", "--song", CREP, *args)
+    assert result.exit_code == 1, result.output
+    assert message in result.output and overrides_text(tmp_path) == ""
+
+
+HALLELUJAH = "Leonard Cohenn - Hallelujah"  # its title is "Hallelujah (Live)": (Live) is left out
+
+
+def not_found_with_a_rejected_hit(tmp_path):
+    """Leonard Cohenn's "Hallelujah (Live)", not found, and its best search hit rejected for it already."""
+    from caracole.overrides import add_reject
+
+    conn, sid = not_found(tmp_path)
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(11, 'leonard-cohen', 'hallelujah', 'chords', '1', 'x', 'leonard-cohen/hallelujah-chords-11'), "
+                 "(12, 'leonard-cohen', 'hallelujah-anthem', 'chords', '1', 'x', "
+                 "'leonard-cohen/hallelujah-anthem-chords-12'), "
+                 "(13, 'leonard-cohen', 'hallelujah-for-two', 'chords', '1', 'x', "
+                 "'leonard-cohen/hallelujah-for-two-chords-13')")
+    lost, _ = upsert_song(conn, artists=["Leonard Cohenn"], title="Hallelujah (Live)", album=None, duration_ms=None,
+                          isrc=None, source="wanted", source_id="h", added_at="2026-10-18T00:00:00Z")
+    update_song(conn, lost, match_decision="not_found")
+    add_reject(tmp_path / "lib" / "overrides.toml", HALLELUJAH, ["leonard-cohen/hallelujah"])
+    return conn, lost
+
+
+def numbered(output: str) -> dict[str, str]:
+    """The UG songs a listing numbers, by their ARTIST/SONG: ``{"leonard-cohen/hallelujah-anthem": "1"}``."""
+    import re
+
+    return {ref: n for n, ref in re.findall(r"^\s+(\d+)\)\s+\d+\s+(\S+/\S+)", output, re.M)}
+
+
+def test_review_song_lists_a_song_not_founds_search_hits_numbered_as_pick_takes_them(tmp_path):
+    # caracole search numbers every hit, the rejected one too; --pick numbers them without it, as
+    # `caracole review --song` lists them: the number it shows is the one that picks the song.
+    conn, lost = not_found_with_a_rejected_hit(tmp_path)
+    listed = run(tmp_path, "review", "--song", HALLELUJAH)
+    assert listed.exit_code == 0, listed.output
+    hits = numbered(listed.output)
+    assert "leonard-cohen/hallelujah" not in hits and set(hits) >= {"leonard-cohen/hallelujah-anthem",
+                                                                     "leonard-cohen/hallelujah-for-two"}
+    searched = run(tmp_path, "search", "Leonard Cohenn Hallelujah").output
+    assert "  2. Leonard Cohen - Hallelujah Anthem" in searched and hits["leonard-cohen/hallelujah-anthem"] == "1"
+    # The search it ran, as you'd type it: the title as caracole compares it, "(Live)" left out.
+    assert 'caracole search "Leonard Cohenn Hallelujah"' in listed.output
+    assert f'caracole review --song "{HALLELUJAH}" --pick N' in listed.output
+    assert "[match]" not in overrides_text(tmp_path)  # a list writes nothing
+    picked = run(tmp_path, "review", "--song", HALLELUJAH, "--pick", hits["leonard-cohen/hallelujah-anthem"])
+    assert picked.exit_code == 0, picked.output
+    assert f'[match]\n"{HALLELUJAH}" = "leonard-cohen/hallelujah-anthem"' in overrides_text(tmp_path)
+    assert get_song(conn, lost).match_song_key == "hallelujah-anthem"
+
+
+def test_review_song_pick_of_a_song_not_found_names_the_list_its_numbers_come_from(tmp_path):
+    not_found_with_a_rejected_hit(tmp_path)
+    result = run(tmp_path, "review", "--song", HALLELUJAH, "--pick", "9")
+    assert result.exit_code == 1, result.output
+    assert f'has no candidate 9 now: caracole review --song "{HALLELUJAH}" lists them' in result.output
+
+
+def test_review_song_of_a_song_not_found_with_no_hit_says_so(tmp_path):
+    conn, sid = not_found(tmp_path)
+    lost, _ = upsert_song(conn, artists=["Nobody"], title="Nothing Like It", album=None, duration_ms=None,
+                          isrc=None, source="wanted", source_id="n", added_at="2026-10-18T00:00:00Z")
+    update_song(conn, lost, match_decision="not_found")
+    result = run(tmp_path, "review", "--song", "Nobody - Nothing Like It")
+    assert result.exit_code == 0, result.output
+    assert "caracole search finds nothing close to it" in result.output and numbered(result.output) == {}
+
+
 def test_scan_reports_music_and_inbox(tmp_path):
     seed(tmp_path)
     (tmp_path / "music").mkdir()

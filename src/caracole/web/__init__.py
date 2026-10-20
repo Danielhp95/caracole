@@ -9,7 +9,8 @@ A small server from the standard library (``http.server``), in these parts:
   sheet viewers), only while each is still as written.
 - jobs.py: the queue. A request runs the ``caracole`` command line in a child
   process, one command at a time: ``caracole add``, then, to fetch the song
-  now, ``match``, ``fetch --song`` and ``render``. Each takes caracole's lock
+  now, ``match``, ``fetch --song`` and ``render``; a pick of a review's
+  candidate is ``caracole review --song``. Each takes caracole's lock
   and keeps the pause after the last request any caracole sent, as it does
   from a terminal, so the server is never more aggressive than the CLI.
 - status.py: the one line a request shows on its song's card and on /jobs,

@@ -1,3 +1,5 @@
+import pytest
+
 from caracole.overrides import load_overrides, override_key
 from caracole.review import ReviewIO, review_songs
 from caracole.songs import get_song, update_song
@@ -156,3 +158,145 @@ def test_nothing_to_review(conn, cfg):
     stats = review_songs(conn, cfg, script.io())
     assert stats.accepted == stats.skipped == 0
     assert any("Nothing to review" in line for line in script.out)
+
+
+# --- one answer at a time (caracole review --song, and caracole serve's picker) -----------------
+
+
+def test_the_candidates_a_review_lists_are_numbered_as_it_numbers_them(conn, cfg):
+    from caracole.review import candidates_of
+
+    s = review_song(conn, cands=[
+        {"artist_key": "soda-stereo", "song_key": "persiana-americana", "score": 82.0, "step": "fuzzy_artist"},
+        {"artist_key": None, "song_key": "persiana", "score": 80.0, "step": "fuzzy_artist"},  # no artist: unlisted
+        *({"artist_key": "soda-stereo", "song_key": f"song-{n}", "score": 70.0, "step": "fuzzy_title"}
+          for n in range(10)),
+    ])
+    listed = candidates_of(get_song(conn, s.id))
+    assert [c["song_key"] for c in listed] == ["persiana-americana", *(f"song-{n}" for n in range(8))]
+    script = Script("q")
+    review_songs(conn, cfg, script.io())
+    assert script.prompts == ["Pick 1-9, (n)one of these, (p)in a URL, (i)gnore, (s)kip, (q)uit: "]
+
+
+def test_accepting_one_candidate_writes_what_its_number_writes(conn, cfg):
+    from caracole.review import accept, candidates_of
+
+    s = get_song(conn, review_song(conn).id)
+    accept(conn, cfg, s, candidates_of(s)[0])
+    o = load_overrides(cfg.overrides_file)
+    assert o.match["soda/persiana-americana"] == ("soda-stereo", "persiana-americana")
+    assert o.alias["soda"] == ("soda-stereo",)
+    assert get_song(conn, s.id).review is False
+
+
+def test_accepting_a_cover_or_a_catch_alls_song_writes_no_alias(conn, cfg):
+    from caracole.review import accept, candidates_of, writes_alias
+
+    cover = review_song(conn, "Someone", "Hallelujah", cands=[
+        {"artist_key": "jeff-buckley", "song_key": "hallelujah", "score": 100.0, "step": "title_only"}])
+    show = review_song(conn, "epic", "Not Sorry for Loving You", cands=[
+        {"artist_key": "misc-musicals", "song_key": "epic-the-musical-not-sorry-for-loving-you", "score": 94.1,
+         "step": "catch_all"}])
+    typo = review_song(conn, "Coldplya", "Yellow", cands=[
+        {"artist_key": "coldplay", "song_key": "yellow", "score": 100.0, "step": "typo_artist"}])
+    cover, show, typo = (get_song(conn, s.id) for s in (cover, show, typo))
+    assert [writes_alias(s, candidates_of(s)[0]) for s in (cover, show, typo)] == [False, False, True]
+    for s in (cover, show):
+        accept(conn, cfg, s, candidates_of(s)[0])
+    assert not load_overrides(cfg.overrides_file).alias
+
+
+def test_none_of_these_as_one_answer_rejects_the_candidates_given(conn, cfg):
+    from caracole.review import candidates_of, reject
+
+    s = get_song(conn, review_song(conn).id)
+    reject(conn, cfg, s, candidates_of(s))
+    o = load_overrides(cfg.overrides_file)
+    assert o.reject["soda/persiana-americana"] == frozenset({("soda-stereo", "persiana-americana"),
+                                                             ("soda-stereo", "persiana")})
+    assert not o.match and not o.alias
+    assert (get_song(conn, s.id).review, get_song(conn, s.id).status) == (False, "wanted")
+
+
+def test_review_songs_can_ask_about_one_song_alone(conn, cfg):
+    review_song(conn, "A", "One")
+    two = review_song(conn, "B", "Two")
+    script = Script("1")
+    stats = review_songs(conn, cfg, script.io(), only={two.id})
+    assert stats.accepted == 1 and len(script.prompts) == 1
+    assert any("[1/1] B - Two" in line for line in script.out)
+    assert list(load_overrides(cfg.overrides_file).match) == [override_key("B - Two")]
+
+
+@pytest.mark.parametrize("cand,words", [
+    ({"step": "exact", "artist_key": "radiohead"}, "same artist and title"),
+    ({"step": "alias", "artist_key": "radiohead"}, "under the artist's [alias]"),
+    ({"step": "fuzzy_title", "artist_key": "radiohead"}, "title spelled differently"),
+    ({"step": "fuzzy_artist", "artist_key": "radiohead"}, "artist spelled differently"),
+    ({"step": "word_title", "artist_key": "radiohead"}, "a title of the artist's with words more or fewer"),
+    ({"step": "typo_artist", "artist_key": "coldplay"}, "artist a letter or two off"),
+    ({"step": "catch_all", "artist_key": "misc-musicals"}, "under UG's catch-all misc-musicals"),
+    ({"step": "catch_all", "artist_key": "misc-originals"},
+     "under UG's catch-all misc-originals, the performer's name first"),
+    ({"step": "title_only", "artist_key": "jeff-buckley"}, "title only: another artist's song, probably a cover"),
+    ({"step": "brand_new", "artist_key": "x"}, "brand_new"),
+    ({"artist_key": "x"}, ""),
+])
+def test_each_step_is_said_in_plain_words(cand, words):
+    from caracole.review import step_words
+
+    assert step_words(cand) == words
+
+
+# --- a song not found: caracole search's hits as its candidates ---------------------------------
+
+
+def index(conn, *rows):
+    conn.executemany(
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (?, ?, ?, ?, '1', 'x', ?)", [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows])
+
+
+def test_a_song_not_found_has_caracole_searchs_hits_for_candidates(conn, cfg):
+    from caracole.review import accept, search_candidates, step_words, writes_alias
+
+    index(conn, (1, "radiohead", "creep", "chords"), (2, "radiohead", "creep", "chords"),
+          (3, "radiohead", "high-and-dry", "chords"), (4, "oasis", "wonderwall", "chords"))
+    s = add_song(conn, "Radio Head", "Creep")
+    update_song(conn, s.id, match_decision="not_found")
+    s = get_song(conn, s.id)
+    found = search_candidates(conn, s)
+    assert [(c["artist_key"], c["song_key"], c["step"]) for c in found][:2] == [
+        ("radiohead", "creep", "search"), ("radiohead", "high-and-dry", "search")]
+    assert all(c["score"] for c in found) and len(found) <= 5
+    assert step_words(found[0]) == "a caracole search hit for its artist and title"
+    # A hit under another artist's name may be a cover as well as a spelling: no [alias].
+    assert not writes_alias(s, found[0])
+    accept(conn, cfg, s, found[0])
+    o = load_overrides(cfg.overrides_file)
+    assert o.match[s.key] == ("radiohead", "creep") and not o.alias
+
+
+def test_only_a_song_not_found_has_search_hits_for_candidates(conn):
+    from caracole.review import search_candidates
+
+    index(conn, (1, "radiohead", "creep", "chords"))
+    for decision in ("review", "accept", None):
+        s = add_song(conn, "Radiohead", f"Creep {decision}")
+        update_song(conn, s.id, match_decision=decision)
+        assert search_candidates(conn, get_song(conn, s.id)) == [], decision
+    ignored = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, ignored.id, match_decision="not_found", status="ignored")
+    assert search_candidates(conn, get_song(conn, ignored.id)) == []
+
+
+def test_the_songs_you_rejected_for_a_song_never_come_back_as_its_search_hits(conn):
+    # "None of these" made it not found: its hits mustn't offer the same songs again.
+    from caracole.review import search_candidates
+
+    index(conn, (1, "radiohead", "creep", "chords"), (3, "radiohead", "high-and-dry", "chords"))
+    s = add_song(conn, "Radio Head", "Creep")
+    update_song(conn, s.id, match_decision="not_found")
+    found = search_candidates(conn, get_song(conn, s.id), rejected={("radiohead", "creep")})
+    assert [c["song_key"] for c in found] == ["high-and-dry"]
