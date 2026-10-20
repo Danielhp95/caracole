@@ -102,6 +102,14 @@ This route goes against YouTube's robots.txt and terms. It is your choice, and A
 
 For UG, have the 10-20 second slow polling for when building the index, but remove it when we are searching. For la cuerda / muse score, don't wait until the end of the day to trigger a search. do it immediately. This tool will not be used simply as a library for me to have downloaded tabs. It will also be used to quickly look up tabs on the spot. As a replacement for ultimate guitar. So I need it to be fast and responsive. Design how to fasten this look-up process so that it feels as fast as looking up a tab in ultimate guitar
 
+**Done in [f2cae9b](https://github.com/Danielhp95/caracole/commit/f2cae9b).** A song you want now is looked up at once, sheet first, usually readable within seconds.
+- **Two paces:** the nightly run and the index build keep 10–20 s between requests. A lookup you ask for keeps about a second between two requests to a site, six requests to a site at most, and sixty an hour for all lookups together (`lookup_delay`, `lookup_budget` in caracole.toml).
+- **`caracole get "Artist - Title"`** runs the nightly work for that one song, in order: match against the offline index, the best-rated sheet from one UG page (or LaCuerda's), the PDF, the lyrics, a better sheet if the lyrics show one, then LaCuerda, gtptabs.com and MuseScore's local index. It prints where the sheet is the moment it is kept (`--print` prints the sheet itself).
+- **On `caracole serve`:**
+  - Fetch now and "Fetch it now" are one quick lookup, and the card says which part is running.
+  - A new **Look up** page (`/lookup`) searches your library and UG's offline index as you type. Search takes 1–77 ms on 1.6 million tabs, against 200–470 ms before; the database upgrades itself to schema 5, which adds a trigram index of UG's names. Pick a song or a version and its sheet appears under the box.
+- **No waiting behind the nightly run:** while it runs, it lets a lookup go first at its next pause, including between yt-dlp runs and between two PDFs.
+
 ## Better info when downlading
 
 When requesting a new song, having a full new page is a bit verbose when I normally just want one song downloaded. And even as a "bulk" it is a bit verbose. 
