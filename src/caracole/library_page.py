@@ -798,7 +798,8 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .request > summary::-webkit-details-marker { display: none; }
 .plus { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
   background: var(--accent); color: var(--on-accent); font-size: 1.15rem; line-height: 1; }
-.request[open] > summary .plus { transform: rotate(45deg); }
+.plus span { display: inline-block; }
+.request[open] > summary .plus span { transform: rotate(45deg); }  /* the + turns into a ×, the square stays */
 .request-form { display: grid; gap: 12px; padding: 0 16px 16px; }
 .fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
 .request-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
@@ -837,7 +838,7 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .artist-head h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
 .artist-head h2:focus { outline: none; }
 .skipped { margin: 16px 0 0; color: var(--muted); font-size: .85rem; }
-.results .hint { max-width: 72ch; margin-top: 10px; white-space: pre-wrap; }
+.index-hint { max-width: 72ch; margin-top: 10px; white-space: pre-wrap; }
 .results .request { margin-top: 20px; }
 .file-answer { display: grid; gap: 8px; max-width: 72ch; margin: 6px 0 12px; padding: 12px 14px;
   border: 1px solid var(--border); border-radius: 14px; background: var(--surface); font-size: .92rem; }
@@ -967,7 +968,7 @@ body.with-tray .page { padding-bottom: 88px; }
   .view-panel .sort { margin-left: 0; }
 }
 @media (pointer: coarse) {
-  .view-toggle, .masthead.lib .navlink { min-height: 44px; }
+  .view-toggle, .masthead.lib .navlink, .toolbar .chip, .view-panel .views button, .view-panel select { min-height: 44px; }
 }
 @media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
@@ -976,7 +977,7 @@ body.with-tray .page { padding-bottom: 88px; }
   .chips { flex-wrap: wrap; overflow: visible; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .plus { transition: transform .15s; }
+  .plus span { transition: transform .15s; }
   .progress[data-tone="running"]::before { animation: pulse 1.2s ease-in-out infinite; }
 }
 @keyframes pulse { 50% { opacity: .25; } }
@@ -2440,7 +2441,7 @@ _SCRIPT = r"""
       box.appendChild(el("p", "skipped", "Not searched: " +
         left.map((x) => String(x.name || x.source) + " (" + String(x.why || "") + ")").join("; ") + "."));
     }
-    if (typeof data.hint === "string" && data.hint) box.appendChild(el("p", "hint", data.hint));
+    if (typeof data.hint === "string" && data.hint) box.appendChild(el("p", "hint index-hint", data.hint));
     sitesBox.replaceChildren(box);
     const parts = [];
     if (index.length || artists.length) parts.push((index.length + artists.length) + " on Ultimate Guitar");
@@ -3324,7 +3325,7 @@ __REQUEST__</section>
 # The form caracole serve adds, under the search's results: a song for wanted.txt, written as `caracole add`
 # writes it. The script fills it in from what was searched; without the script it posts as a form.
 _REQUEST = """<details class="request" id="request-box">
-  <summary><span class="plus" aria-hidden="true">+</span>Not in the list? Request it by name</summary>
+  <summary><span class="plus" aria-hidden="true"><span>+</span></span>Not in the list? Request it by name</summary>
   <form class="request-form" method="post" action="/request">
     <input type="hidden" name="csrf" value="__CSRF__">
     <div class="fields">

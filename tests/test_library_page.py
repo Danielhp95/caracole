@@ -1979,6 +1979,10 @@ def test_on_a_phone_the_first_song_starts_on_the_first_screen(conn, cfg, phone_p
         phone_page.click("#view-toggle")
         assert phone_page.wait(f"{SHOWN}(document.getElementById('sort')) && {SHOWN}(document.querySelector('.views'))")
         assert phone_page.js(f"{toggle}.getAttribute('aria-expanded')") == "true"
+        heights = phone_page.js("[...document.querySelectorAll('.toolbar .chip, #view-panel button, #view-panel select')]"
+                                ".filter((e) => e.getClientRects().length).map((e) => e.getBoundingClientRect().height)")
+        assert heights and min(heights) >= 44, heights  # a thumb's worth each
+        phone_page.click("#view-toggle")
 
 
 @in_chromium
