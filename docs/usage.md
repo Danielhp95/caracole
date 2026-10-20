@@ -849,10 +849,15 @@ it honours it. It does so on these terms:
 and picks the upload whose title is the song's and whose channel or title names
 the artist, names in two scripts included (宋冬野 meets "Song Dongye"), and
 whose length is within 20 seconds of the song's (its own, else LRCLIB's; with
-neither, from 45 seconds to 15 minutes). A cover, a live, karaoke, instrumental,
-lesson, slowed, sped-up or remixed version loses to any other, unless the song
-itself is live or acoustic. Then the closest length wins (within 2 seconds,
-LRCLIB's timed lyrics fit the audio), then the artist's "Topic" channel
+neither, from 45 seconds to 15 minutes). A title in Chinese, Japanese or Korean,
+written with no spaces, is the song's when nothing but the artist and words such
+as 官方, 歌词 or MV are left around it, or when it stands as a word of its own
+among others; never when it only starts a longer one (雨 isn't 雨下一整晚, nor
+晴天 晴天娃娃). A cover, a live, karaoke, instrumental, lesson, slowed, sped-up
+or remixed version loses to any other, unless the song itself is live or
+acoustic. Then a title that is exactly the song's beats one that only stands
+among other words; then the closest length wins (within 2 seconds, LRCLIB's
+timed lyrics fit the audio), then the artist's "Topic" channel
 (YouTube's own upload of the release), official audio, the artist's own
 channel or an official video, then the search's order. Nothing that fits makes
 the song a miss, asked about again after 30 days. A wrong pick, or a song the

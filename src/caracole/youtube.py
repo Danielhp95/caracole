@@ -47,7 +47,7 @@ from urllib.parse import parse_qs, urlsplit
 from caracole.config import ProviderPolicy
 from caracole.http import BudgetExhausted, Event, ProviderBlocked, ProviderError
 from caracole.logs import request_line
-from caracole.normalize import clean_title, compact, fold, name_forms, slug_key, title_variant
+from caracole.normalize import clean_title, compact, fold, name_forms, simplified, slug_key, title_variant
 
 log = logging.getLogger(__name__)
 
@@ -173,6 +173,7 @@ TOLERANCE_S = 20.0  # how far a video's length may be from LRCLIB's: an intro, n
 SYNCED_S = 2.0  # close enough for the synced lyrics' timings (autochords/run.py)
 CLOSE_S = 5.0
 SHORTEST_S, LONGEST_S = 45.0, 15 * 60.0  # with no length to fit: no clip, no compilation
+EXACT, ALONE = 2, 1  # how surely a video's title is the song's (_Names.title_in)
 
 # Where a video's title breaks into parts: a spaced dash, slash or bar, a bar, and brackets of
 # every width ("Radiohead - Creep (Official Audio)", "宋冬野《斑马斑马》").
@@ -203,8 +204,44 @@ _OFFICIAL_AUDIO = re.compile(r"\bofficial (?:hd )?audio\b")
 _OFFICIAL_VIDEO = re.compile(r"\bofficial (?:hd )?(?:music )?video\b|\(official\)")
 
 
+# Letters of Chinese, Japanese and Korean (Han, kana, Hangul and the jamo it folds to), and runs of one
+# script or the other.
+_CJK_CHARS = "ᄀ-ᇿ぀-ヿ㐀-䶿一-鿿가-힯豈-﫿\U00020000-\U0002ebef"
+_CJK_LETTER = re.compile(f"[{_CJK_CHARS}]")
+_SCRIPT_RUN = re.compile(f"[{_CJK_CHARS}]+|[^{_CJK_CHARS}]+")
+# What a channel adds around a title in those scripts, and the versions _UNWANTED names, as
+# _DECORATION in Latin letters (Simplified: a title is read in Simplified characters too).
+_CJK_DECORATION = frozenset(compact(slug_key(w)) for w in (
+    "官方", "官方版", "完整版", "正式版", "高清", "高音质", "无损", "音乐", "视频", "影片", "歌词", "动态歌词",
+    "歌词版", "字幕", "中字", "首播", "音频", "公式", "フル", "가사", "공식", "뮤직비디오",
+    "现场", "现场版", "演唱会", "翻唱", "伴奏", "吉他", "弹唱", "教学", "ライブ", "カバー", "カラオケ", "노래방",
+))
+
+
 def _compact_forms(name: str) -> set[str]:
     return {compact(f) for f in name_forms(name) if f}
+
+
+class _Squeezed:
+    """A video's title as a name is looked for in it with no space between words, as Chinese,
+    Japanese and Korean write them: its words as ``slug_key`` reads them, a run of those scripts
+    apart from Latin letters glued to it ("k歌之王" is "k" and "歌之王"), run together; and
+    where each word starts and ends."""
+
+    def __init__(self, text: str):
+        words = [run for token in slug_key(text).split("-") if token for run in _SCRIPT_RUN.findall(token)]
+        self.text = "".join(words)
+        self.ends: dict[int, int] = {}  # each word's start, and its end
+        at = 0
+        for word in words:
+            self.ends[at] = at + len(word)
+            at += len(word)
+
+    def word_around(self, start: int, end: int) -> tuple[int, int]:
+        """Where the words holding ``text[start:end]`` start and end."""
+        first = max(s for s in self.ends if s <= start)
+        last = min(e for e in self.ends.values() if e >= end)
+        return first, last
 
 
 def _parts(text: str) -> list[str]:
@@ -228,19 +265,74 @@ class _Names:
         self.artist_slugs = {f for a in artists for f in name_forms(a) if f}
         title = clean_title(song.title)
         self.titles = _compact_forms(title)
+        self.cjk_titles = {t for t in self.titles if _CJK_LETTER.search(t)}
+        self.cjk_words = {a for a in self.artists if _CJK_LETTER.search(a)} | _CJK_DECORATION
+        self.latin_artists = self.artists - self.cjk_words
         self.whole = fold(f"{song.title} {' '.join(artists)}")  # a version word here is the song's own
         self.variant = title_variant(song.title)
 
     def names(self, forms: set[str], text: str) -> bool:
         """Whether a part of ``text`` is one of these names, or, for one in Chinese, Japanese or
-        Korean, whether the text holds it at all (those scripts don't space their words)."""
+        Korean, whether the text holds it at all (those scripts don't space their words): for
+        the artists, whom the title must name somewhere."""
         if any(forms & _compact_forms(part) for part in _parts(text)):
             return True
-        squeezed = compact(slug_key(text))
-        return any(_cjk(f) and f in squeezed for f in forms)
+        squeezed = {compact(slug_key(t)) for t in (text, simplified(text))}
+        return any(_cjk(f) and f in s for f in forms for s in squeezed)
 
-    def title_in(self, title: str) -> bool:
-        return self.names(self.titles, title) or self._stripped_to_title(title)
+    def title_in(self, title: str) -> int:
+        """How surely the video's title is the song's: ``EXACT`` when a part of it is (quoted, or
+        between dashes or brackets), or all that is left once the artist and words such as
+        "official video" or 官方 are taken off; ``ALONE`` when a title in Chinese, Japanese or
+        Korean is a word of its own among others ("周杰伦 Jay Chou 晴天 Sunny Day"); else 0. A title
+        in those scripts that is only the start of a longer word is another song's: 雨 isn't
+        雨下一整晚, nor 晴天 晴天娃娃."""
+        if any(self.titles & _compact_forms(part) for part in _parts(title)) or self._stripped_to_title(title):
+            return EXACT
+        return self._cjk_title_in(title)
+
+    def _cjk_title_in(self, title: str) -> int:
+        found = 0
+        for text in dict.fromkeys((title, simplified(title))):
+            squeezed = _Squeezed(text)
+            for form in self.cjk_titles:
+                start = squeezed.text.find(form)
+                while start >= 0:
+                    end = start + len(form)
+                    if self._covered(squeezed, 0, start) and self._covered(squeezed, end, len(squeezed.text)):
+                        return EXACT
+                    first, last = squeezed.word_around(start, end)
+                    if self._covered(squeezed, first, start, latin=False) and \
+                            self._covered(squeezed, end, last, latin=False):
+                        found = ALONE
+                    start = squeezed.text.find(form, start + 1)
+        return found
+
+    def _covered(self, squeezed: _Squeezed, start: int, end: int, *, latin: bool = True) -> bool:
+        """Whether ``squeezed.text[start:end]`` is only the artist's names and words such as 官方, or,
+        with ``latin``, also whole Latin words such as "official" or "mv" and numbers. A run that
+        ends inside a Latin word is never covered: "Creep" isn't in "Creeper"."""
+        text, ends = squeezed.text, squeezed.ends
+        if start < end and ((start not in ends and not _CJK_LETTER.match(text[start]))
+                            or (end not in ends.values() and not _CJK_LETTER.match(text[end - 1]))):
+            return False
+        reached, todo = {start}, [start]
+        while todo:
+            at = todo.pop()
+            if at == end:
+                return True
+            steps = [at + len(w) for w in self.cjk_words if text.startswith(w, at)]
+            if latin and at in ends and not _CJK_LETTER.match(text[at]):
+                word = text[at:ends[at]]
+                if word in _DECORATION or word.isdigit():
+                    steps.append(ends[at])
+                steps += [at + len(a) for a in self.latin_artists
+                          if text.startswith(a, at) and at + len(a) in ends.values()]
+            for step in steps:
+                if step <= end and step not in reached:
+                    reached.add(step)
+                    todo.append(step)
+        return False
 
     def _stripped_to_title(self, title: str) -> bool:
         """Whether the title, its artist and the words around it taken off its ends, is the song's:
@@ -321,13 +413,16 @@ def choose(song: _Song, videos: Sequence[Video], expected: float | None, *,
     """The video of the song among a search's, or None when none fits.
 
     A video fits when its title is the song's title (a part of it, quoted in it, or what is
-    left once the artist and words such as "official video" are taken off its ends), the
-    artist is its channel or named in its title (names in two scripts meet, by
-    ``normalize.name_forms``), its length is within 20 s of ``expected`` (LRCLIB's or the
-    song's own; with none, from 45 s to 15 min), and it is no stream, short or ``skip``ped.
+    left once the artist and words such as "official video" or 官方 are taken off; a title in
+    Chinese, Japanese or Korean also as a word of its own among others, never as the start
+    of a longer one), the artist is its channel or named in its title (names in two scripts
+    meet, by ``normalize.name_forms``), its length is within 20 s of ``expected`` (LRCLIB's
+    or the song's own; with none, from 45 s to 15 min), and it is no stream, short or
+    ``skip``ped.
 
     Of those, a cover, live, karaoke, lesson, slowed or remixed version loses to any other
-    (and a song that is itself live or acoustic prefers its own version); then the closest
+    (and a song that is itself live or acoustic prefers its own version); then a title that
+    is exactly the song's beats one that only stands among other words; then the closest
     length (within 2 s the synced lyrics fit); then the artist's Topic channel, official
     audio, the artist's own channel or an official video; then the search's order.
     """
@@ -338,14 +433,15 @@ def choose(song: _Song, videos: Sequence[Video], expected: float | None, *,
         if video.id in skipped or video.live or video.short:
             continue
         close = _closeness(video, expected)
-        if close is None or not names.title_in(video.title):
+        title = names.title_in(video.title) if close is not None else 0
+        if not title:
             continue
         if not (names.channel_is_artist(video.channel) or names.artist_in(video.title)):
             continue
         tier = 1 if names.unwanted(video.title) else 0
         if names.variant and not re.search(rf"\b{names.variant}\b|unplugged", fold(video.title)):
             tier = max(tier, 1)
-        ranked.append(((tier, close, -_official(names, video), rank), video))
+        ranked.append(((tier, -title, close, -_official(names, video), rank), video))
     return min(ranked, key=lambda r: r[0])[1] if ranked else None
 
 

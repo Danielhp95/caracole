@@ -11,11 +11,17 @@ from caracole.normalize import (
     listing_forms,
     name_forms,
     romanize,
+    simplified,
     slug_key,
     split_variant,
     title_variant,
     ug_slug_key,
 )
+
+
+def test_simplified_writes_traditional_characters_as_simplified_ones():
+    assert simplified("周杰倫《斑馬，斑馬》") == "周杰伦《斑马，斑马》"
+    assert simplified("Radiohead - Creep") == "Radiohead - Creep"
 
 
 def test_fold_strips_accents_and_transliterates():

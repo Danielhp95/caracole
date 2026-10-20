@@ -215,6 +215,41 @@ def test_names_in_two_scripts_meet():
     assert pick(banma, v("other", "赵雷 - 成都", "赵雷")) is None
 
 
+def test_a_chinese_title_held_in_a_longer_one_is_another_song():
+    # Chinese doesn't space its words, so 雨 is in 雨下一整晚, and 晴天 in 晴天娃娃: other songs.
+    rain = S("周杰伦", "雨")
+    assert pick(rain, v("longer", "周杰伦 - 雨下一整晚", "周杰伦")) is None
+    sunny = S("周杰伦", "晴天")
+    doll = v("doll", "周杰伦 晴天娃娃", "someone", 240.0)
+    topic = v("topic", "晴天", "周杰伦 - Topic", 243.0)
+    assert pick(sunny, doll, topic, expected=239.0) == topic.id
+    assert pick(sunny, doll, expected=239.0) is None
+    assert pick(sunny, v("cover", "林俊杰 晴天", "周杰伦")) is None  # another singer's name glued to it
+
+
+def test_a_chinese_title_glued_to_its_artist_and_a_channels_words_is_the_songs():
+    sunny = S("周杰伦", "晴天")
+    for title in ("周杰伦晴天", "周杰伦 晴天 官方MV", "【动态歌词】周杰伦 晴天", "晴天周杰伦完整版", "周杰倫晴天 高清"):
+        assert pick(sunny, v("glued", title, "someone")) == "gluedxxxxxx", title
+    music = S("周杰伦", "我的音乐")  # a title that ends in a word channels add
+    assert pick(music, v("music", "周杰伦 我的音乐 MV", "someone")) == "musicxxxxxx"
+    assert pick(S("陈奕迅", "K歌之王"), v("k", "陈奕迅K歌之王官方MV", "someone")) == "kxxxxxxxxxx"
+    # A live version in Chinese is the song too, as "Live" is in English: picked only alone.
+    banma = S("宋冬野", "斑马，斑马")
+    live, studio = v("live", "宋冬野 斑马斑马 现场版", "someone"), v("studio", "宋冬野 斑马斑马", "someone")
+    assert pick(banma, live, studio) == studio.id and pick(banma, live) == live.id
+
+
+def test_a_chinese_title_standing_alone_among_other_words_is_the_song_but_an_exact_title_comes_first():
+    sunny = S("周杰伦", "晴天")
+    alone = v("alone", "周杰伦 Jay Chou 晴天 Sunny Day", "someone", 239.0)
+    assert pick(sunny, alone, expected=239.0) == alone.id
+    exact = v("exact", "周杰伦 - 晴天", "someone", 230.0)  # 9 s off, where the other is spot on
+    assert pick(sunny, alone, exact, expected=239.0) == exact.id
+    topic = v("topic", "晴天", "周杰伦 - Topic", 239.0)
+    assert pick(sunny, alone, topic, expected=239.0) == topic.id
+
+
 def test_any_of_the_songs_artists_counts():
     duet = S("Simon & Garfunkel", "The Boxer", ["Simon & Garfunkel", "Paul Simon"])
     assert pick(duet, v("paul", "Paul Simon - The Boxer (Official Audio)", "Paul Simon")) == "paulxxxxxxx"

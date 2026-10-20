@@ -206,6 +206,12 @@ def _simplified(s: str) -> str:
     return s.translate(_t2s_table()) if has_han(s) else s
 
 
+def simplified(s: str) -> str:
+    """A text with its Traditional Chinese characters written as Simplified ones (斑馬 → 斑马), for
+    comparing it with names whose forms are Simplified (youtube.py's video titles)."""
+    return _simplified(s)
+
+
 @functools.cache
 def _t2s_table() -> dict[int, int]:
     return str.maketrans(_T2S_PAIRS[0::2], _T2S_PAIRS[1::2])
