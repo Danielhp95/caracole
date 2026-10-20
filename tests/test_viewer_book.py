@@ -287,6 +287,40 @@ def test_the_page_remembers_the_song_and_each_songs_own_settings(tmp_path):
 
 
 @in_chromium
+def test_the_song_the_page_reopens_is_in_its_address_so_a_reload_keeps_it(tmp_path):
+    # Opened with no address, the page reopens the song you had open; the viewer then keeps that song's
+    # settings in the address as well as in storage, so the address must name the song, or a reload
+    # after a change finds only the settings ("#t=3") and opens the contents.
+    harness = """
+      const step = Number(sessionStorage.getItem("step") || "0");
+      sessionStorage.setItem("step", String(step + 1));
+      const log = (value) => {
+        const seen = JSON.parse(sessionStorage.getItem("seen") || "[]");
+        seen.push(value);
+        sessionStorage.setItem("seen", JSON.stringify(seen));
+      };
+      const shown = () => Array.from(document.querySelectorAll("section.song")).filter((s) => !s.hidden)
+        .map((s) => s.id).join(",");
+      if (step === 0) {  // song 3; then the page with no address
+        location.hash = "";
+      } else if (step === 1) {  // song 3 again, named in the address; up a semitone, and reload
+        log([shown(), location.hash]);
+        q("#up").click();
+        log(location.hash);
+        location.reload();
+      } else {
+        log([shown(), q("#fab") ? q("#fab").textContent : ""]);
+        out = JSON.parse(sessionStorage.getItem("seen"));
+      }
+    """
+    dom = open_page(page(), tmp_path, "#song-3", harness=harness, budget=12000)
+    reopened, changed, reloaded = result_of(dom)
+    assert reopened[0] == "song-3" and reopened[1].startswith("#song-3")
+    assert changed == "#song-3=&t=3"
+    assert reloaded == ["song-3", "Key Cm · +3"]
+
+
+@in_chromium
 def test_the_files_are_linked_once_wherever_you_are(tmp_path):
     harness = """
       const shown = (s) => Array.from(document.querySelectorAll(s)).filter((el) => el.offsetParent !== null).length;

@@ -1733,7 +1733,8 @@ hidden file, and never the database, the token or the cache. A songbook's page,
 caracole wrote there, as recorded when it wrote it (anyone with a synced device
 could put a page of their own in the library), and in a sandbox: its scripts
 run, but it can reach neither the server nor your sign-in, and keeps no
-storage, so the song it shows is the one in its address (`#song-3`). Edited
+storage, so the song it shows is the one in its address (`#song-3`), where the
+viewer keeps the song's transposition, mode and capo too (`#song-3=&t=2`). Edited
 on a device, or replaced by a link, it gets a page saying so until the next
 `caracole render` (or `caracole songbook render`) writes it again.
 
@@ -1805,11 +1806,14 @@ in `Library/_songbooks/<name>/`:
   song in its own key and keeping its own settings. Next and Previous (above
   each song, and again at its end), a swipe across the sheet or the arrow keys
   go from song to song, skipping the missing ones, and Contents goes back. Opened again, the page takes you back
-  to the song you had open, where you were in it; the contents mark it as
+  to the song you had open, where you were in it, and its address names it
+  (`#song-3`); the contents mark it as
   "last opened". Without JavaScript, or printed, it is every song one after
   the other. Served by `caracole serve`, it runs in a sandbox without the
-  browser's storage: each song keeps its address (`#song-3`) but not your
-  place or settings.
+  browser's storage: each song keeps its address (`#song-3`), and the
+  viewer keeps the song's transposition, mode and capo there
+  (`#song-3=&t=2`), so a reload or Back keeps them, but not your place or
+  its other settings; the next song opens in its own key.
 - **`songbook.cho`**: every song's ChordPro, in its key, split by
   `{new_song}`, to import into a songbook app such as SongbookPro or OnSong.
   chordpro writes it, so the chords are already transposed; songs without a

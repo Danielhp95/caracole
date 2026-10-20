@@ -32,7 +32,16 @@
   const hash = location.hash.replace(/^#/, "");
   const asked = /^song-(\d+)=?(?:&|$)/.exec(hash);  // the viewer may add its settings: "song-3=&t=2"
   let current = asked ? sections.find((s) => s.dataset.n === asked[1]) || null : null;
-  if (!current && !hash) current = sections.find((s) => s.dataset.id === book.at) || null;  // where you were
+  if (!current && !hash) {
+    current = sections.find((s) => s.dataset.id === book.at) || null;  // where you were
+    // The address names it, as a link to it would: the viewer keeps its settings there too ("#song-3=&t=2"),
+    // so a reload opens this song with them. Replaced, so Back still leaves the page.
+    if (current) {
+      try {
+        history.replaceState(null, "", "#song-" + current.dataset.n);
+      } catch (err) { /* an address the page can't change */ }
+    }
+  }
   harvest();
 
   if (current) {
