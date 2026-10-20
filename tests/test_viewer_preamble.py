@@ -252,3 +252,20 @@ def test_where_the_stylesheet_cant_open_the_fold_the_script_opens_it_to_print(tm
         browser.js("dispatchEvent(new Event('beforeprint')); dispatchEvent(new Event('afterprint'))")
         kept = browser.js(fold)
     assert (before, printing, after, kept) == (False, True, False, True)
+
+
+@in_chromium
+def test_the_open_legend_reads_in_one_size(tmp_path):
+    # "Em7 (022033)", a line of chords, and "Dsus4   (xx0233)", a line of text: the same small size.
+    with Chromium(tmp_path / "profile") as browser:
+        tab = opened(browser, build_viewer(LEGEND), tmp_path)
+        tab.click("#sheet .pre summary")
+        sizes = tab.eval("""(() => {
+          const pre = document.querySelector("#sheet .pre");
+          const size = (el) => parseFloat(getComputedStyle(el).fontSize);
+          const text = [...pre.querySelectorAll(".l")].find((l) => l.textContent.startsWith("Dsus4 "));
+          const line = pre.querySelector(".l.chords");
+          return {text: size(text), chord: size(line.querySelector(".c")), mark: size(line.querySelector(".m")),
+                  pre: size(pre)};
+        })()""")
+    assert sizes["text"] == sizes["chord"] == sizes["mark"] == sizes["pre"], sizes

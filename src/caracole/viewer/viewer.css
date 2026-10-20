@@ -91,7 +91,7 @@ a { color: inherit; }
 .tab { margin: .25em 0; padding: .55em .7em; overflow-x: auto; border-radius: 8px; background: var(--raised);
   font: .78em/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .gap { height: .65em; }
-/* What the tab says before its first section (notes, a link, a chord legend): small and muted,
+/* What the tab says before its first section or riff (notes, a link, a chord legend): small and muted,
    folded after two lines, with More (a <details>: it opens without the script too). */
 .pre { margin: 0 0 1.05em; color: var(--muted); font-size: .75em; line-height: 1.4; break-inside: avoid; }
 .pre summary { display: flex; align-items: flex-end; gap: 12px; min-height: 44px; padding: 3px 0; list-style: none;
@@ -103,6 +103,7 @@ a { color: inherit; }
 .pre .named { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .pre[open] .peek, .pre[open] .more, .pre:not([open]) .less, .pre:not([open]) .named { display: none; }
 .pre[open] summary { align-items: center; }
+.pre .l.chords .c, .pre .l.chords .m { font-size: 1em; }  /* a legend's chords, as its lines of text */
 /* Paper has no More to press: printed, the notes print whole, without their peek (viewer.js opens
    them for the printout where ::details-content is missing). */
 @media print {
