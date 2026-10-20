@@ -1349,6 +1349,8 @@ _SCRIPT = r"""
     });
     return { keys, either, words: terms(rest) };
   };
+  // Whether a key is typed ("a minor", not "am"): it filters your songs alone, as the sites' indexes know no keys.
+  const keyed = (text) => parseQuery(text).keys.length > 0;
   const songKeys = songs.map((s) => keyId(s.key));
   // Whether song i matches what is typed: each word in its search text, or its title's initials whole, and
   // each key typed.
@@ -1991,7 +1993,7 @@ _SCRIPT = r"""
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
     if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
     if (VIEWS.indexOf(params.get("view")) >= 0) state.view = params.get("view");
-    state.all = params.get("all") === "1" && Boolean(state.q.trim());
+    state.all = params.get("all") === "1" && Boolean(state.q.trim()) && !keyed(state.q);
   } catch (err) {
     // A malformed address: start from the defaults.
   }
@@ -2080,7 +2082,7 @@ _SCRIPT = r"""
     // Searching the sites, served: the results take the grid's place, its tools with it, until Escape.
     const searchingAll = Boolean(server) && state.all;
     document.body.classList.toggle("searching-all", searchingAll);
-    drawBar(matching.length === 0);
+    drawBar(matching.length === 0, query.keys.length > 0);
     let answerInList = false;  // the file's line that searches the sites, in the list's empty state
     if (searchingAll) {
       drawResults(query, false);
@@ -2219,7 +2221,7 @@ _SCRIPT = r"""
   input.value = state.q;
   input.addEventListener("input", () => {
     state.q = input.value;
-    if (state.all && !state.q.trim()) {  // nothing left to search: your songs again
+    if (state.all && (!state.q.trim() || keyed(state.q))) {  // nothing the sites can search: your songs again
       leaveAll(false);
       return;
     }
@@ -2266,11 +2268,15 @@ _SCRIPT = r"""
     barStatus.textContent = text;
     barStatus.title = text;  // one line on a phone: the whole of it on hovering
   };
-  const drawBar = (none) => {
+  const drawBar = (none, key) => {
     const q = normal(state.q);
-    allButton.classList.toggle("primary", Boolean(q) && none);
+    allButton.classList.toggle("primary", Boolean(q) && none && !key);
+    allButton.disabled = key;
+    if (key) allButton.title = "The sites' indexes know no keys";
+    else allButton.removeAttribute("title");
     if (server && state.all) return;  // the search of the sites says how it goes
     if (!q) say(server ? "Filter your songs; Enter searches the sites too" : "Filter your songs as you type");
+    else if (key) say(none ? "None of yours match: the sites know no keys" : "A key filters your songs alone: the sites know no keys");
     else if (none) say(server ? "None of yours match: Enter searches the sites" : "None of yours match: see the line below");
     else if (!server && state.all) say("The sites need caracole serve: run the line below");
     else say(server ? "Enter or Search all looks on the sites too" : "Enter or Search all: the line that searches the sites");
@@ -2522,7 +2528,7 @@ _SCRIPT = r"""
 
   // Searching the sites: on Enter, Search all or the address (#all=1); on Enter again, at once.
   const enterAll = () => {
-    if (!normal(state.q)) {
+    if (!normal(state.q) || keyed(state.q)) {  // the line under the box says why a key searches no site
       input.focus();
       return;
     }

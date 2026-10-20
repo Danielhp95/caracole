@@ -1545,8 +1545,9 @@ beside the box, searches the sites too: the file on disk, which can ask
 nothing of anyone, shows under the box the `caracole search` line to run where
 caracole runs, with Copy, and leaves your songs as they are; Escape takes it
 away. When nothing in the library matches, the page shows that line at once
-(Search all turns orange), unless you searched for a key, which the offline
-index doesn't know. The page puts each word of a line to run in single quotes
+(Search all turns orange). A key typed as a key ("a minor", "F# major")
+filters your songs alone: the sites' indexes know no keys, so the line under
+the box says so, and Enter and Search all wait for a search without one. The page puts each word of a line to run in single quotes
 (`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote in
 it. `caracole serve` serves the same page, where Enter lists what the sites
 have under the box, with Get it, and a form to request a song by name (see

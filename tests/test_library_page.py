@@ -1929,6 +1929,40 @@ def test_with_none_of_your_songs_matching_the_file_page_says_what_to_run_at_once
     assert re.search(r'<button type="button" id="all" class="btn all primary"', dom)  # the way on, prominent
 
 
+
+@in_chromium
+def test_a_key_filters_your_songs_alone_as_the_sites_know_no_keys(conn, cfg, driven):
+    from caracole.library_page import WebControls
+
+    keep_sheet_json(conn, cfg, add_song(conn, "Soda Stereo", "De Música Ligera"), AM_F_C_G)
+    add_song(conn, "Radiohead", "Creep")
+    served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=0))
+    status = "document.getElementById('bar-status').textContent"
+    for html in (page(conn, cfg), served):
+        path = write_library_page(cfg.library_dir, html)
+        driven.send("Page.navigate", url="about:blank")
+        driven.open(path.as_uri() + "#q=" + quote("a minor") + "&all=1")  # an address asking the sites for a key
+        assert driven.wait(f"{SHOWN_TITLES}.join() === 'De Música Ligera'")
+        assert driven.js(status) == "A key filters your songs alone: the sites know no keys"
+        assert driven.js("document.getElementById('results').hidden") is True
+        assert driven.js("document.getElementById('all').disabled") is True
+        driven.js("document.getElementById('q').focus()")
+        driven.press("Enter")
+        assert driven.js("document.getElementById('results').hidden") is True  # still your songs alone
+        driven.js("document.getElementById('q').select()")
+        driven.type("f# minor")  # no song in that key: nothing below to run or press
+        assert driven.wait(f"{SHOWN_TITLES}.length === 0")
+        assert driven.js(status) == "None of yours match: the sites know no keys"
+        driven.press("Enter")
+        assert driven.js("document.querySelectorAll('.file-answer, #list .btn.primary').length") == 0
+        assert driven.js("document.getElementById('results').hidden") is True
+        assert driven.js("location.hash.includes('all=1')") is False
+        driven.js("document.getElementById('q').select()")
+        driven.type("creep")  # no key: the sites again
+        assert driven.wait("!document.getElementById('all').disabled")
+        assert "know no keys" not in driven.js(status)
+
+
 # --- the header on a phone, and the bar that stays at the top ----------------------------------------
 
 
