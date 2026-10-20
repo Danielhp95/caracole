@@ -34,10 +34,12 @@ model and the inbox; each is named "from Ultimate Guitar" for a screen reader.
 An auto sheet made from the audio caracole took from YouTube shows YouTube's
 (``icons.kept_sources``), and its card, or its row's "⋯", the video.
 
-The seam for lists the page doesn't make itself (the served page's type-ahead
-results): ``window.caracole.resultRow(result)`` returns a row element, the
-same as a song's row, to put in a ``<div class="rows">``. ``result`` is a
-plain object, every field optional:
+The seam for lists the page doesn't make itself (the results of caracole
+serve's lookup page, web/lookup_page.py, which runs ``ROWS_SCRIPT`` and has
+``ROWS_STYLE`` as this page does, and gets each song's files from
+``result_cards``): ``window.caracole.resultRow(result)`` returns a row
+element, the same as a song's row, to put in a ``<div class="rows">``.
+``result`` is a plain object, every field optional:
 
 - ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button;
 - ``source``: a key of the data's ``icons`` (``icons.SOURCES``: "ug", "lacuerda"…);
@@ -231,6 +233,21 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                    _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}))
              for s in library]
     _add_picks(conn, library, cards)
+    return cards
+
+
+def result_cards(conn: sqlite3.Connection, cfg: Config, songs: list[Song]) -> dict[int, dict[str, Any]]:
+    """What a list the page doesn't make itself shows of each song as its card does (caracole serve's
+    lookup page, which draws them with ``ROWS_SCRIPT``): its files, relative to the library and
+    percent-encoded, the primary one marked (its viewer, else its PDF, else its text), each with where
+    it came from; where its sheet came from; its key. By song id."""
+    origins = kept_sources(conn)
+    cards = {}
+    for s in songs:
+        files = _files(cfg.library_dir, s, _file_names(song_dir(cfg.library_dir, s)), {}, origins.get(s.id, {}))
+        key = song_key(conn, cfg.library_dir, s)
+        cards[s.id] = {"links": files, "source": next((f["source"] for f in files if f["primary"]), None),
+                       "key": key.key if key else None}
     return cards
 
 
@@ -641,6 +658,70 @@ label.choice-pick { cursor: pointer; }
 .pick-hint { margin: 0; color: var(--muted); font-size: .82rem; }
 """
 
+# A list's rows and the marks of where each thing came from: index.html's Rows view, and the results of
+# caracole serve's lookup page (web/lookup_page.py), which builds them with ROWS_SCRIPT.
+ROWS_STYLE = """
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions form { margin: 0; }
+.subhead { margin: 2px 0 -2px; color: var(--muted); font-size: .75rem; font-weight: 650; letter-spacing: .06em;
+  text-transform: uppercase; }
+.source { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 4px;
+  vertical-align: -3px; }
+/* A site with no icon (yet), or no site: a badge a little bigger than an icon, so its letters read. */
+.source.letters, .source.glyph { width: 20px; height: 20px; border: 1px solid var(--border-strong);
+  border-radius: 5px; background: var(--raised); color: var(--text); font-size: 10px; font-weight: 750;
+  letter-spacing: -.02em; line-height: 1; vertical-align: -5px; }
+.source.glyph { font-size: 12px; font-weight: 600; }
+.btn.sourced { gap: 7px; }
+.btn.sourced .source { order: -1; }
+.badges .source { align-self: center; }
+.rows { margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+  box-shadow: var(--shadow); }
+/* Below 900px a row is two lines: the title and the main action, then the artist with the key and
+   badges (.row-sub, as wide as the row but for the "⋯" button), the artist at least 3rem wide. */
+.row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 34px;
+  grid-template-areas: "src title act act" ". sub sub more"; align-items: center; gap: 2px 10px;
+  min-width: 0; padding: 8px 10px 8px 12px; border-top: 1px solid var(--border); scroll-margin-top: 84px; }
+.row:first-child { border-top: 0; }
+.row[data-status="ignored"] { opacity: .7; }
+.row > .source { grid-area: src; justify-self: center; }
+.row-title { grid-area: title; min-width: 0; margin: 0; overflow: hidden; font-size: .98rem; line-height: 1.3;
+  white-space: nowrap; text-overflow: ellipsis; }
+.row-sub { grid-area: sub; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+.row-artist { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
+  font-size: .86rem; white-space: nowrap; text-overflow: ellipsis; }
+.row .artist { margin: 0; }
+.row-meta { flex: 0 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
+  gap: 4px 6px; min-width: 0; margin: 0 0 0 auto; color: var(--muted); font-size: .82rem; }
+.row-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.row-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
+.row-action form { margin: 0; }
+.row .btn { min-height: 34px; padding: 0 11px; font-size: .85rem; }
+.row-busy { display: inline-flex; align-items: center; min-height: 34px; color: var(--wanted); font-size: .85rem;
+  font-weight: 650; text-underline-offset: 2px; }
+.row .btn.row-pick { border-color: var(--review); color: var(--review); background: var(--review-bg); }
+/* A request's line: a line of the row's own, under the title, the artist and the button. */
+.row > .progress { grid-column: 2 / -1; font-size: .85rem; }
+.row-panel .foot { margin-top: 2px; }
+.row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: 34px; height: 30px;
+  padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
+.row-more:hover, .row-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
+  color: var(--text); }
+.row-panel { grid-column: 1 / -1; display: grid; gap: 4px; padding: 4px 0 6px 30px; }
+.row-panel .note { margin: 0; }
+.row-group .subhead { margin: 4px 0 6px; }
+@media (min-width: 900px) {
+  .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px;
+    grid-template-areas: "src title artist meta act more"; padding: 3px 10px 3px 12px; }
+  .row-sub { display: contents; }
+  .row-artist { grid-area: artist; justify-self: start; max-width: 100%; }
+  .row-meta { grid-area: meta; margin: 0; }
+  .row .btn { min-height: 30px; }
+  .row-more { height: 28px; }
+}
+"""
+
 _STYLE = BASE_STYLE + PICKER_STYLE + """
 :root {
   --h0: #8a3313; --h0-bg: #f6ded3;
@@ -766,10 +847,6 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .tray .progress { font-size: .85rem; }
 body.with-tray .page { padding-bottom: 16rem; }
 .youtube { margin: 0; color: var(--auto); font-size: .85rem; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.actions form { margin: 0; }
-.subhead { margin: 2px 0 -2px; color: var(--muted); font-size: .75rem; font-weight: 650; letter-spacing: .06em;
-  text-transform: uppercase; }
 .more { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border); }
 .more > summary { display: flex; align-items: center; gap: 4px; min-height: 32px; color: var(--muted);
   font-size: .85rem; font-weight: 600; list-style: none; cursor: pointer; }
@@ -786,69 +863,14 @@ body.with-tray .page { padding-bottom: 16rem; }
 .btn.quiet:hover { border-color: var(--border); color: var(--failed); }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
 .empty-hint { margin: 0; color: var(--muted); }
-.source { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 4px;
-  vertical-align: -3px; }
-/* A site with no icon (yet), or no site: a badge a little bigger than an icon, so its letters read. */
-.source.letters, .source.glyph { width: 20px; height: 20px; border: 1px solid var(--border-strong);
-  border-radius: 5px; background: var(--raised); color: var(--text); font-size: 10px; font-weight: 750;
-  letter-spacing: -.02em; line-height: 1; vertical-align: -5px; }
-.source.glyph { font-size: 12px; font-weight: 600; }
-.btn.sourced { gap: 7px; }
-.btn.sourced .source { order: -1; }
-.badges .source { align-self: center; }
 .views { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 12px;
   background: var(--surface); }
 .views button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent;
   color: var(--muted); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
 .views button:hover { color: var(--text); }
 .views button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
-.rows { margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
-  box-shadow: var(--shadow); }
-/* Below 900px a row is two lines: the title and the main action, then the artist with the key and
-   badges (.row-sub, as wide as the row but for the "⋯" button), the artist at least 3rem wide. */
-.row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 34px;
-  grid-template-areas: "src title act act" ". sub sub more"; align-items: center; gap: 2px 10px;
-  min-width: 0; padding: 8px 10px 8px 12px; border-top: 1px solid var(--border); scroll-margin-top: 84px; }
-.row:first-child { border-top: 0; }
-.row[data-status="ignored"] { opacity: .7; }
-.row > .source { grid-area: src; justify-self: center; }
-.row-title { grid-area: title; min-width: 0; margin: 0; overflow: hidden; font-size: .98rem; line-height: 1.3;
-  white-space: nowrap; text-overflow: ellipsis; }
-.row-sub { grid-area: sub; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
-.row-artist { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
-  font-size: .86rem; white-space: nowrap; text-overflow: ellipsis; }
-.row .artist { margin: 0; }
-.row-meta { flex: 0 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
-  gap: 4px 6px; min-width: 0; margin: 0 0 0 auto; color: var(--muted); font-size: .82rem; }
-.row-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
-.row-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
-.row-action form { margin: 0; }
-.row .btn { min-height: 34px; padding: 0 11px; font-size: .85rem; }
-.row-busy { display: inline-flex; align-items: center; min-height: 34px; color: var(--wanted); font-size: .85rem;
-  font-weight: 650; text-underline-offset: 2px; }
-.row .btn.row-pick { border-color: var(--review); color: var(--review); background: var(--review-bg); }
-/* A request's line: a line of the row's own, under the title, the artist and the button. */
-.row > .progress { grid-column: 2 / -1; font-size: .85rem; }
-.row-panel .foot { margin-top: 2px; }
-.row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: 34px; height: 30px;
-  padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted);
-  font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
-.row-more:hover, .row-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
-  color: var(--text); }
-.row-panel { grid-column: 1 / -1; display: grid; gap: 4px; padding: 4px 0 6px 30px; }
-.row-panel .note { margin: 0; }
-.row-group .subhead { margin: 4px 0 6px; }
-@media (min-width: 720px) {
+""" + ROWS_STYLE + """@media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
-}
-@media (min-width: 900px) {
-  .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px;
-    grid-template-areas: "src title artist meta act more"; padding: 3px 10px 3px 12px; }
-  .row-sub { display: contents; }
-  .row-artist { grid-area: artist; justify-self: start; max-width: 100%; }
-  .row-meta { grid-area: meta; margin: 0; }
-  .row .btn { min-height: 30px; }
-  .row-more { height: 28px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .plus { transition: transform .15s; }
@@ -856,6 +878,155 @@ body.with-tray .page { padding-bottom: 16rem; }
 }
 @keyframes pulse { 50% { opacity: .25; } }
 """
+
+ROWS_SCRIPT = r"""
+// Where each thing came from, and a list's rows (``resultRow``): index.html's, and the results of
+// caracole serve's lookup page (web/lookup_page.py), which runs this script before its own.
+const caracoleRows = (icons) => {
+  "use strict";
+  const own = Object.prototype.hasOwnProperty;
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  };
+  const listOf = (value) => (Array.isArray(value) ? value : []);
+  const keyName = (key) => (/ minor$/.test(key) ? key : key + " major");
+  // Its site's own icon, inlined as a data: URI, else its lettered badge; a glyph for the audio model
+  // and the inbox (icons.py). Each is named for a screen reader: "from LaCuerda".
+  const ICONS = icons && typeof icons === "object" ? icons : {};
+  const PNG_URI = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
+  const sourceMark = (key) => {
+    if (typeof key !== "string" || !key) return null;
+    const info = own.call(ICONS, key) && ICONS[key] && typeof ICONS[key] === "object" ? ICONS[key] : {};
+    const name = "from " + String(info.name || key);
+    let mark;
+    if (typeof info.src === "string" && PNG_URI.test(info.src)) {
+      mark = el("img", "source");
+      mark.setAttribute("src", info.src);
+      mark.setAttribute("alt", name);
+      mark.setAttribute("width", "16");
+      mark.setAttribute("height", "16");
+    } else {
+      mark = el("span", info.glyph ? "source glyph" : "source letters",
+        String(info.letters || key.slice(0, 2).toUpperCase()));
+      mark.setAttribute("role", "img");
+      mark.setAttribute("aria-label", name);
+    }
+    mark.title = name;
+    mark.dataset.source = key;
+    return mark;
+  };
+  const safeHref = (href, external) => {
+    const value = String(href || "");
+    if (external) return /^https?:/i.test(value) ? value : "#";
+    return /^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith("/") ? "#" : value;
+  };
+  const link = (item, cls, external) => {
+    const a = el("a", cls, String(item.label || "") + (external ? " ↗" : ""));
+    a.href = safeHref(item.href, external);
+    if (external) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
+    const mark = sourceMark(item.source);  // after the label, so the link reads "Sheet PDF from LaCuerda"
+    if (mark) {
+      a.classList.add("sourced");
+      a.appendChild(mark);
+    }
+    return a;
+  };
+  let rowSerial = 0;
+  const isWeb = (href) => /^https?:/i.test(String(href || ""));
+  const shortKey = (key) => String(key).replace(/ minor$/, "m").replace(/ major$/, "");
+  const linkGroup = (group) => {
+    if (group instanceof Node) return group;
+    const items = listOf(group && group.links).filter((item) => item && typeof item === "object");
+    if (!items.length) return null;
+    const box = el("div", "row-group");
+    if (group.heading) box.appendChild(el("p", "subhead", group.heading));
+    const line = el("div", "actions");
+    for (const item of items) line.appendChild(link(item, "btn small", isWeb(item.href)));
+    box.appendChild(line);
+    return box;
+  };
+  const resultRow = (result) => {
+    const r = result && typeof result === "object" ? result : {};
+    const title = String(r.title || "");
+    const artist = String(r.artist || "");
+    const row = el("article", "row");
+    row.tabIndex = -1;
+    if (r.status) row.dataset.status = String(r.status);
+    const heading = el("h2", "row-title", title);
+    heading.title = title;
+    row.appendChild(heading);
+    // The artist and the key, the status and the badges: one wrapping line under the title on a phone,
+    // where badges that don't fit go under the artist, never over it; their own columns on a desktop.
+    const sub = el("div", "row-sub");
+    if (artist && typeof r.onArtist === "function") {
+      const who = el("button", "artist row-artist", artist);
+      who.type = "button";
+      who.title = "Show only " + artist + "'s songs";
+      who.addEventListener("click", r.onArtist);
+      sub.appendChild(who);
+    } else if (artist) {
+      sub.appendChild(el("span", "row-artist", artist));
+    }
+    const meta = el("p", "row-meta");
+    if (typeof r.key === "string" && r.key) {
+      const said = String(r.keyText || "Key " + keyName(r.key));
+      const key = el("span", "row-key");
+      key.title = said;
+      const shown = el("span", null, shortKey(r.key));
+      shown.setAttribute("aria-hidden", "true");
+      key.appendChild(shown);
+      key.appendChild(el("span", "visually-hidden", said));
+      meta.appendChild(key);
+    }
+    for (const badge of listOf(r.badges)) {
+      if (badge && badge.text) meta.appendChild(el("span", "badge " + String(badge.kind || ""), badge.text));
+    }
+    if (r.facts) meta.appendChild(el("span", "row-facts", r.facts));
+    if (meta.childNodes.length) sub.appendChild(meta);
+    if (sub.childNodes.length) row.appendChild(sub);
+    const mark = sourceMark(r.source);
+    if (mark) row.appendChild(mark);
+    const action = el("div", "row-action");
+    const main = r.action instanceof Node ? r.action
+      : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null;
+    if (main) action.appendChild(main);
+    row.appendChild(action);
+    const extra = listOf(r.more).map(linkGroup).filter(Boolean);
+    if (extra.length) {
+      const panel = el("div", "row-panel");
+      rowSerial += 1;
+      panel.id = "row-more-" + rowSerial;
+      panel.hidden = true;
+      for (const node of extra) panel.appendChild(node);
+      const more = el("button", "row-more");
+      more.type = "button";
+      more.setAttribute("aria-expanded", "false");
+      more.setAttribute("aria-controls", panel.id);
+      more.title = "More for " + title;
+      const dots = el("span", null, "⋯");
+      dots.setAttribute("aria-hidden", "true");
+      more.appendChild(dots);
+      more.appendChild(el("span", "visually-hidden", "More for " + title));
+      more.addEventListener("click", () => {
+        const open = more.getAttribute("aria-expanded") !== "true";
+        more.setAttribute("aria-expanded", String(open));
+        panel.hidden = !open;
+      });
+      row.appendChild(more);
+      row.appendChild(panel);
+    }
+    return row;
+  };
+  return { resultRow, sourceMark, link };
+};
+"""
+
 
 _SCRIPT = r"""
 (() => {
@@ -987,51 +1158,11 @@ _SCRIPT = r"""
   // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
-  const PNG_URI = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
-  const sourceMark = (key) => {
-    if (typeof key !== "string" || !key) return null;
-    const info = own.call(ICONS, key) && ICONS[key] && typeof ICONS[key] === "object" ? ICONS[key] : {};
-    const name = "from " + String(info.name || key);
-    let mark;
-    if (typeof info.src === "string" && PNG_URI.test(info.src)) {
-      mark = el("img", "source");
-      mark.setAttribute("src", info.src);
-      mark.setAttribute("alt", name);
-      mark.setAttribute("width", "16");
-      mark.setAttribute("height", "16");
-    } else {
-      mark = el("span", info.glyph ? "source glyph" : "source letters",
-        String(info.letters || key.slice(0, 2).toUpperCase()));
-      mark.setAttribute("role", "img");
-      mark.setAttribute("aria-label", name);
-    }
-    mark.title = name;
-    mark.dataset.source = key;
-    return mark;
-  };
+  const { sourceMark, link, resultRow } = caracoleRows(ICONS);  // ROWS_SCRIPT, which the lookup page shares
   // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
 
-  const safeHref = (href, external) => {
-    const value = String(href || "");
-    if (external) return /^https?:/i.test(value) ? value : "#";
-    return /^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith("/") ? "#" : value;
-  };
-  const link = (item, cls, external) => {
-    const a = el("a", cls, String(item.label || "") + (external ? " ↗" : ""));
-    a.href = safeHref(item.href, external);
-    if (external) {
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-    }
-    const mark = sourceMark(item.source);  // after the label, so the link reads "Sheet PDF from LaCuerda"
-    if (mark) {
-      a.classList.add("sourced");
-      a.appendChild(mark);
-    }
-    return a;
-  };
   // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py): where
   // that stands, and the video its audio came from.
   const youtubeNote = (s) => {
@@ -1494,94 +1625,8 @@ _SCRIPT = r"""
     return cards.get(i);
   };
 
-  // Rows: one compact line a song, or a result of a search (resultRow: the seam the module docstring
-  // describes). A row is an article titled by its h2; the A-Z strip moves the focus to it.
-  let rowSerial = 0;
-  const isWeb = (href) => /^https?:/i.test(String(href || ""));
-  const shortKey = (key) => String(key).replace(/ minor$/, "m").replace(/ major$/, "");
-  const linkGroup = (group) => {
-    if (group instanceof Node) return group;
-    const items = listOf(group && group.links).filter((item) => item && typeof item === "object");
-    if (!items.length) return null;
-    const box = el("div", "row-group");
-    if (group.heading) box.appendChild(el("p", "subhead", group.heading));
-    const line = el("div", "actions");
-    for (const item of items) line.appendChild(link(item, "btn small", isWeb(item.href)));
-    box.appendChild(line);
-    return box;
-  };
-  const resultRow = (result) => {
-    const r = result && typeof result === "object" ? result : {};
-    const title = String(r.title || "");
-    const artist = String(r.artist || "");
-    const row = el("article", "row");
-    row.tabIndex = -1;
-    if (r.status) row.dataset.status = String(r.status);
-    const heading = el("h2", "row-title", title);
-    heading.title = title;
-    row.appendChild(heading);
-    // The artist and the key, the status and the badges: one wrapping line under the title on a phone,
-    // where badges that don't fit go under the artist, never over it; their own columns on a desktop.
-    const sub = el("div", "row-sub");
-    if (artist && typeof r.onArtist === "function") {
-      const who = el("button", "artist row-artist", artist);
-      who.type = "button";
-      who.title = "Show only " + artist + "'s songs";
-      who.addEventListener("click", r.onArtist);
-      sub.appendChild(who);
-    } else if (artist) {
-      sub.appendChild(el("span", "row-artist", artist));
-    }
-    const meta = el("p", "row-meta");
-    if (typeof r.key === "string" && r.key) {
-      const said = String(r.keyText || "Key " + keyName(r.key));
-      const key = el("span", "row-key");
-      key.title = said;
-      const shown = el("span", null, shortKey(r.key));
-      shown.setAttribute("aria-hidden", "true");
-      key.appendChild(shown);
-      key.appendChild(el("span", "visually-hidden", said));
-      meta.appendChild(key);
-    }
-    for (const badge of listOf(r.badges)) {
-      if (badge && badge.text) meta.appendChild(el("span", "badge " + String(badge.kind || ""), badge.text));
-    }
-    if (r.facts) meta.appendChild(el("span", "row-facts", r.facts));
-    if (meta.childNodes.length) sub.appendChild(meta);
-    if (sub.childNodes.length) row.appendChild(sub);
-    const mark = sourceMark(r.source);
-    if (mark) row.appendChild(mark);
-    const action = el("div", "row-action");
-    const main = r.action instanceof Node ? r.action
-      : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null;
-    if (main) action.appendChild(main);
-    row.appendChild(action);
-    const extra = listOf(r.more).map(linkGroup).filter(Boolean);
-    if (extra.length) {
-      const panel = el("div", "row-panel");
-      rowSerial += 1;
-      panel.id = "row-more-" + rowSerial;
-      panel.hidden = true;
-      for (const node of extra) panel.appendChild(node);
-      const more = el("button", "row-more");
-      more.type = "button";
-      more.setAttribute("aria-expanded", "false");
-      more.setAttribute("aria-controls", panel.id);
-      more.title = "More for " + title;
-      const dots = el("span", null, "⋯");
-      dots.setAttribute("aria-hidden", "true");
-      more.appendChild(dots);
-      more.appendChild(el("span", "visually-hidden", "More for " + title));
-      more.addEventListener("click", () => {
-        const open = more.getAttribute("aria-expanded") !== "true";
-        more.setAttribute("aria-expanded", String(open));
-        panel.hidden = !open;
-      });
-      row.appendChild(more);
-      row.appendChild(panel);
-    }
-    return row;
-  };
+  // Rows: one compact line a song (resultRow, from ROWS_SCRIPT: the seam the module docstring describes).
+  // A row is an article titled by its h2; the A-Z strip moves the focus to it.
   // A song's main action in its row, as its card has it: its sheet; on the served page, a wanted song's
   // fetch, or the button that opens its picker; nothing while its request waits or runs (the row's line
   // says how it goes); Removing… while caracole removes it.
@@ -2530,7 +2575,7 @@ _SELECT_SCRIPT = r"""
 """
 
 _PAGE_STYLE = _STYLE + _SONGBOOK_STYLE
-_PAGE_SCRIPT = _SCRIPT + _SELECT_SCRIPT
+_PAGE_SCRIPT = ROWS_SCRIPT + _SCRIPT + _SELECT_SCRIPT
 
 
 def sha256_source(text: str) -> str:
@@ -2629,9 +2674,9 @@ _REQUEST = """<details class="request">
       <label class="check"><input type="checkbox" name="fetch" value="1" checked>Fetch it now</label>
       <button class="btn primary" type="submit">Request</button>
     </div>
-    <p class="hint">It goes into wanted.txt, as <code>caracole add</code> writes it. Fetch it now asks
-      Ultimate Guitar for this song alone, under the same pauses as every caracole command; its lyrics
-      come with the nightly run.</p>
+    <p class="hint">It goes into wanted.txt, as <code>caracole add</code> writes it. Fetch it now looks it
+      up at once, as <code>caracole get</code> does: its sheet in seconds, then its lyrics, PDF and the rest,
+      a few requests about a second apart.</p>
   </form>
 </details>
 <section class="requested" id="requested" aria-label="Songs you just requested" hidden>
@@ -2655,6 +2700,7 @@ def _nav(controls: WebControls | None) -> str:
     links = '<a class="navlink" href="_todo.md">To-do</a>'
     if controls is not None:
         n = f'<span class="n">{controls.active}</span>' if controls.active else ""
+        links = '<a class="navlink" href="/lookup">Look up</a>' + links  # the lookup page, web/lookup_page.py
         links += f'<a class="navlink" href="/jobs">Requests{n}</a>'
     return links
 

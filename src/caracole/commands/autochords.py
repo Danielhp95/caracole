@@ -13,7 +13,8 @@ that will never decode doesn't fail the unit (and alert you) every night.
 The unit runs after the nightly run has written _todo.md and index.html, so
 the command writes both again, with its own sheets and failures. It holds
 caracole's lock while it works, so it waits for another caracole writing the
-library (a ``caracole-admin`` command, say).
+library (a ``caracole-admin`` command, say), and hands it to a waiting lookup
+between two songs (``_common.hand_over``), since a song takes minutes.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from importlib.util import find_spec
 import typer
 
 from caracole import logs
+from caracole.commands import _common
 from caracole.commands._common import (
     exclusive,
     fail,
@@ -62,7 +64,9 @@ def register(app: typer.Typer) -> None:
             music = scan_music(conn, cfg.music_dir)
             files = "file" if music.seen == 1 else "files"
             typer.echo(f"Music: {music.seen} {files}, {music.matched} linked")
-            stats = autochords_pending(conn, cfg, overrides=overrides)
+            # A song takes minutes: a lookup waiting for the lock goes between two of them.
+            stats = autochords_pending(conn, cfg, overrides=overrides,
+                                       between=lambda: _common.hand_over(cfg, conn))
             typer.echo(f"auto-chords: {stats.summary()}")
             write_pages(conn, cfg, overrides, utcnow())
         if stats.errors:  # the setup's problems; stats.failures are listed on the to-do page

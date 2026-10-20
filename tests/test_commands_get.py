@@ -1,0 +1,166 @@
+"""``caracole get``, run through the CLI against fake sites: one song, now, sheet first.
+
+The sites are test_get.py's ``Sites`` behind ``caracole.commands._common.transport_for``;
+chordpro is a fake script that writes a dummy PDF.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import httpx
+import pytest
+from test_get import TAB, Sites, serve_creep
+from typer.testing import CliRunner
+
+from caracole import db
+from caracole.cli import build_app
+from caracole.commands import _common
+from caracole.get import PROGRESS_PREFIX, read_progress_line
+from caracole.songs import find_song
+from conftest import subprocess_pythonpath
+
+FAKE_CHORDPRO = """\
+#!{python}
+import sys
+out = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--output="))
+open(out, "w").write("%PDF-1.4 fake")
+"""
+OUTSIDE_SETTINGS = ("CREDENTIALS_DIRECTORY", "CARACOLE_CONFIG", "CARACOLE_NTFY_TOKEN",
+                    "CARACOLE_SPOTIFY_CLIENT_SECRET")
+
+
+@pytest.fixture
+def sites(monkeypatch) -> Sites:
+    for name in OUTSIDE_SETTINGS:
+        monkeypatch.delenv(name, raising=False)
+    s = Sites()
+    monkeypatch.setattr(_common, "transport_for", lambda provider: httpx.MockTransport(s.handler))
+    monkeypatch.setattr(_common, "sleep", lambda seconds: None)
+    return s
+
+
+@pytest.fixture
+def config(tmp_path) -> Path:
+    chordpro = tmp_path / "bin" / "chordpro"
+    chordpro.parent.mkdir()
+    chordpro.write_text(FAKE_CHORDPRO.format(python=sys.executable), encoding="utf-8")
+    chordpro.chmod(0o755)
+    providers = "".join(f"[providers.{p}]\ndelay = [0, 0]\nlookup_delay = [0, 0]\n"
+                        for p in ("ug", "lrclib", "lacuerda", "gtptabs", "musescore"))
+    path = tmp_path / "caracole.toml"
+    path.write_text(f'data_dir = "{tmp_path}"\nchordpro_bin = "{chordpro}"\n{providers}', encoding="utf-8")
+    return path
+
+
+@pytest.fixture
+def conn(tmp_path):
+    c = db.connect(tmp_path / "state" / "caracole.sqlite")
+    yield c
+    c.close()
+
+
+def get(config, *args):
+    return CliRunner().invoke(build_app(), ["--config", str(config), "get", *args])
+
+
+def test_get_says_where_the_sheet_is_as_soon_as_it_is_kept(config, sites, conn, tmp_path):
+    serve_creep(sites, conn)
+
+    result = get(config, "Radiohead - Creep")
+
+    assert result.exit_code == 0, result.output
+    sheet = tmp_path / "library" / "Radiohead" / "Creep" / "sheet.txt"
+    lines = result.output.splitlines()
+    at = next(i for i, line in enumerate(lines) if line.startswith("Sheet: "))
+    assert str(sheet) in lines[at] and "from Ultimate Guitar" in lines[at] and "readable after" in lines[at]
+    assert any(line.startswith("Lyrics: found") for line in lines[at:])  # after the sheet
+    assert lines[-1].startswith("Done in ") and "4 requests" in lines[-1]
+    assert find_song(conn, "radiohead/creep").status == "found"
+
+
+def test_get_takes_the_artist_and_the_title_as_two_words_too(config, sites, conn):
+    serve_creep(sites, conn)
+    assert get(config, "Radiohead", "Creep").exit_code == 0
+    assert find_song(conn, "radiohead/creep").status == "found"
+
+
+def test_get_print_shows_the_sheet_itself(config, sites, conn):
+    serve_creep(sites, conn)
+    result = get(config, "--print", "Radiohead - Creep")
+    assert result.exit_code == 0, result.output
+    assert "sheet 101" in result.output  # the first sheet, the moment it is kept
+    assert "walking down the river road tonight" in result.output
+
+
+def test_get_progress_writes_a_json_line_per_stage_for_caracole_serve(config, sites, conn):
+    serve_creep(sites, conn)
+    result = get(config, "--progress", "Radiohead - Creep")
+    assert result.exit_code == 0, result.output
+    events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
+    assert events[0] == {"stage": "song", "state": "running", "detail": ""}
+    assert {"stage": "sheet", "state": "done", "detail": "tab 101 from Ultimate Guitar"} in events
+    readable = next(e for e in events if "files" in e)
+    assert readable["files"]["sheet"] == "Radiohead/Creep/sheet.txt" and readable["seconds"] >= 0
+    song = next(e for e in events if "song" in e)
+    assert song["song"] == {"id": find_song(conn, "radiohead/creep").id, "display": "Radiohead - Creep"}
+    assert all(line.startswith(PROGRESS_PREFIX) or not line.startswith("{") for line in result.output.splitlines())
+    json.loads(result.output.splitlines()[0][len(PROGRESS_PREFIX):])
+
+
+def test_get_records_the_ug_song_and_the_tab_you_pick(config, sites, conn, tmp_path):
+    serve_creep(sites, conn)
+    result = get(config, "--ug", "radiohead/creep", "--tab", f"{TAB}radiohead/creep-chords-103", "Radiohead - Creep")
+    assert result.exit_code == 0, result.output
+    overrides = (tmp_path / "library" / "overrides.toml").read_text(encoding="utf-8")
+    assert '"Radiohead - Creep" = "radiohead/creep"' in overrides
+    assert f'"Radiohead - Creep" = ["{TAB}radiohead/creep-chords-103"]' in overrides
+
+
+@pytest.mark.parametrize("args,said", [
+    (["Radiohead"], 'a song as "Artist - Title"'),
+    (["a", "b", "c"], 'a song as "Artist - Title"'),
+    (["--tab", "https://example.com/x", "Radiohead - Creep"], "--tab"),
+    (["--ug", "radiohead", "Radiohead - Creep"], "--ug"),
+    (["--duration", "soon", "Radiohead - Creep"], "--duration"),
+])
+def test_get_refuses_what_isnt_a_song_with_status_2(config, sites, args, said):
+    result = get(config, *args)
+    assert result.exit_code == 2 and said in result.output
+    assert sites.requests == []
+
+
+def test_get_of_a_song_ignored_in_overrides_toml_exits_1(config, sites, conn, tmp_path):
+    (tmp_path / "library").mkdir(exist_ok=True)
+    (tmp_path / "library" / "overrides.toml").write_text('[ignore]\nsongs = ["Radiohead - Creep"]\n',
+                                                         encoding="utf-8")
+    result = get(config, "Radiohead - Creep")
+    assert result.exit_code == 1 and "ignored in overrides.toml" in result.output
+    assert sites.requests == []
+
+
+def test_a_block_exits_0(config, sites, conn):
+    serve_creep(sites, conn)
+    sites.pages[f"{TAB}radiohead/creep-chords-101"] = (403, "Forbidden")
+    result = get(config, "Radiohead - Creep")
+    assert result.exit_code == 0, result.output
+    assert "blocked caracole" in result.output and "Nothing was marked not found" in result.output
+
+
+def test_registering_the_command_imports_no_lookup_code(tmp_path):
+    src = Path(__file__).resolve().parents[1] / "src"
+    code = (
+        "import sys, typer\n"
+        "from caracole.commands import get\n"
+        "get.register(typer.Typer())\n"
+        "print([m for m in ('caracole.get', 'caracole.ug', 'rapidfuzz', 'caracole.match') if m in sys.modules])\n"
+    )
+    env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
+    result = subprocess.run([sys.executable, "-c", code], env=env, cwd=tmp_path, capture_output=True, text=True,
+                            check=False)
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert result.stdout.strip() == "[]"

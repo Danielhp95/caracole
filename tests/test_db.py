@@ -150,9 +150,69 @@ def test_a_version_3_database_gains_the_removed_songs_and_keeps_its_songs(tmp_pa
     db.connect(path).close()
 
     cols, version = columns(path, "removed")
-    assert version == NOW == 4
+    assert version == NOW == 5
     assert cols == ["key", "artist", "title", "source_ids", "removed_at"]
     c = sqlite3.connect(path)
     assert c.execute("SELECT key FROM songs").fetchall() == [("blur/song-2",)]
     c.close()
     assert columns(path.with_name("caracole.sqlite.v3.bak"), "removed") == ([], 3)
+
+
+def test_a_version_3_database_gains_a_substring_index_of_its_ug_keys(tmp_path):
+    # Typing into caracole serve's lookup searches 1.6 million index rows: a LIKE '%…%' scan of
+    # both key columns took 0.4 s a pattern; the trigram index over the distinct keys answers in ms.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript(db._MIGRATIONS[1] + db._MIGRATIONS[2] + db._MIGRATIONS[3] + "\nPRAGMA user_version = 3;")
+    old.executemany("INSERT INTO ug_index VALUES (?, ?, ?, 'chords', '1', 'x', '')",
+                    [(1, "oasis", "wonderwall"), (2, "oasis", "wonderwall-acoustic"), (3, "radiohead", "creep")])
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] >= 4
+    assert sorted(r[0] for r in c.execute("SELECT key FROM ug_keys")) == [
+        "creep", "oasis", "radiohead", "wonderwall", "wonderwall-acoustic"]
+    found = c.execute("SELECT key FROM ug_keys WHERE id IN (SELECT rowid FROM ug_keys_fts WHERE key LIKE '%derwa%')")
+    assert sorted(r[0] for r in found) == ["wonderwall", "wonderwall-acoustic"]
+    c.close()
+
+
+def test_a_version_4_database_gains_the_substring_index_and_keeps_its_removed_songs(tmp_path):
+    # As the remove caracole left it: schema 4, with an index row and a removed song.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in (1, 2, 3, 4)) + "\nPRAGMA user_version = 4;")
+    old.execute("INSERT INTO ug_index VALUES (1, 'oasis', 'wonderwall', 'chords', '1', 'x', '')")
+    old.execute("INSERT INTO removed VALUES ('blur/song-2', 'Blur', 'Song 2', '{}', 'x')")
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW == 5
+    assert sorted(r[0] for r in c.execute("SELECT key FROM ug_keys")) == ["oasis", "wonderwall"]
+    found = c.execute("SELECT key FROM ug_keys WHERE id IN (SELECT rowid FROM ug_keys_fts WHERE key LIKE '%derwa%')")
+    assert [r[0] for r in found] == ["wonderwall"]
+    assert [tuple(r) for r in c.execute("SELECT key, artist, title FROM removed")] == [("blur/song-2", "Blur", "Song 2")]
+    c.close()
+    assert columns(path.with_name("caracole.sqlite.v4.bak"), "ug_keys") == ([], 4)
+
+
+def test_the_substring_index_follows_the_rows_a_sitemap_adds_or_renames(conn):
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import upsert_rows
+
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(1, "oasis", "wonderwall", "chords", "oasis/wonderwall-chords-1")], "1", when)
+    upsert_rows(conn, [(1, "oasis", "wonderwal", "chords", "oasis/wonderwal-chords-1"),
+                       (2, "blur", "song-2", "chords", "blur/song-2-chords-2")], "1", when)
+
+    def like(pattern):
+        return sorted(r[0] for r in conn.execute(
+            "SELECT key FROM ug_keys WHERE id IN (SELECT rowid FROM ug_keys_fts WHERE key LIKE ?)", (pattern,)))
+
+    assert like("%wonderwal%") == ["wonderwal", "wonderwall"]  # an old key stays: it matches no row
+    assert like("%song-2%") == ["song-2"] and like("%blur%") == ["blur"]

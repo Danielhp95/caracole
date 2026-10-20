@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -122,6 +123,8 @@ def gtptabs_files(
     now: datetime,
     *,
     overrides: Overrides | None = None,
+    only: Collection[int] | None = None,
+    refresh_index: bool = True,
 ) -> GtpTabsStats:
     """Refresh the index when due, then download a file for each song that needs one, newest first.
 
@@ -130,17 +133,22 @@ def gtptabs_files(
     pass (``budget_exhausted``), and so does a client that gives up on the site for this run
     (``ProviderUnavailable``). Any other ``ProviderError`` counts in ``errors``: one from the
     sitemaps leaves the index as it was, and one for a song leaves the song for the next run.
+
+    A lookup (``caracole get``) passes ``only`` its song's id, and ``refresh_index=False``:
+    the sitemaps are the nightly run's to read. A song that got a file meanwhile (from a
+    lookup the nightly run let go first) is passed over when its turn comes.
     """
     stats = GtpTabsStats()
     now = _utc(now)
-    wanting = _songs_wanting_a_file(conn, now, overrides)
+    wanting = [s for s in _songs_wanting_a_file(conn, now, overrides) if only is None or s.id in only]
     if not wanting:
         return stats
     def read() -> None:
         stats.sitemaps += 1
 
     try:
-        site_index.refresh(conn, client, SITE, now, on_read=read)
+        if refresh_index:
+            site_index.refresh(conn, client, SITE, now, on_read=read)
     except ProviderBlocked:
         raise
     except BudgetExhausted:
@@ -155,6 +163,8 @@ def gtptabs_files(
     index = _Index(conn)
     run = _Pass(conn, client, Path(library_dir), now)
     for song in _songs_to_try(index, wanting):
+        if song.id in songs_with_a_guitar_file(conn):
+            continue
         try:
             outcome = _look_up(run, song, index)
         except ProviderBlocked:

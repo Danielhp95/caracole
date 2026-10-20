@@ -352,9 +352,11 @@ Soda Stereo - De Música Ligera
 
 The album and duration are optional; they make the lyrics lookup exact.
 `sudo caracole-admin add "宋冬野" "斑马斑马" --album "安和桥北" --duration 4:13`
-appends the same line. `sudo caracole-admin remove "宋冬野 - 斑马斑马"` takes a
-song out for good, its line and the files caracole wrote, until you add it
-again ([usage.md](usage.md), "caracole remove").
+appends the same line. `sudo caracole-admin get "Radiohead - Creep"` adds a
+song and looks it up at once, sheet first, in seconds rather than at night
+([usage.md](usage.md), "caracole get"). `sudo caracole-admin remove "宋冬野 - 斑马斑马"`
+takes a song out for good, its line and the files caracole wrote, until you add
+it again ([usage.md](usage.md), "caracole remove").
 
 **Spotify, optionally.** Liked Songs and the playlists you name join
 `wanted.txt` as sources. Without a client id the Spotify step is skipped
@@ -429,7 +431,10 @@ process's first request to a site also waits out the pause after the last
 request any caracole sent there, so a run that starts right after a command may
 pause up to 20 seconds per site, and the 10–20 second pauses hold for the
 machine, not per process. The lock goes with the process holding it, whatever
-ends it.
+ends it. A lookup (`caracole-admin get`, or one from the library page) is the
+exception that waits only for a moment: the run lets it go first in the pause
+it is in, and `caracole-autochords` and the PDF pass between two songs, then
+they go on ([usage.md](usage.md), "One caracole at a time").
 
 ## 6. Auto-chords
 
@@ -570,9 +575,10 @@ its own fonts, so a Chinese sheet has one even while its PDF waits for a font.
 
 `services.caracole.web` runs `caracole serve` as `caracole-web.service`: the
 library page, a form to request songs, a Fetch now button on each wanted
-song, a picker on each song that needs review, and a Remove… button on each
-card, which asks first ([usage.md](usage.md), "caracole serve"). A request
-runs caracole commands
+song, a picker on each song that needs review, a Remove… button on each
+card, which asks first, and the lookup page (`/lookup`), which searches as you
+type and shows a sheet seconds after you pick a song ([usage.md](usage.md),
+"caracole serve"). A request runs caracole commands
 in the unit, one at a time and each under caracole's lock, so the unit has the
 nightly run's sandbox, folders and network. Of the credentials it gets
 `web_token` alone: neither the server nor the commands it runs read Spotify or
@@ -618,13 +624,15 @@ Make the token with `openssl rand -base64 24` and store it with
   address gone, stops it after 30 starts in 10 minutes, about 5 minutes of
   tries: then the unit is `failed`, ntfy says so once, and
   `sudo systemctl restart caracole-web` starts it again once it's fixed.
-- **Politeness.** The server sends no request of its own. Fetch now runs
-  `caracole match`, `caracole fetch --song` and `caracole render`, which wait
-  behind a nightly run, keep the pauses between requests and the budgets, and
-  leave a site alone while it cools down. A pick runs `caracole review --song`
-  first, which writes overrides.toml in the library, under the same lock.
-  The song's card says how it goes, on one line; `/jobs` keeps what each
-  command printed, at `-v`.
+- **Politeness.** The server sends no request of its own: searching reads the
+  offline index. A lookup, Fetch it now and Fetch now run `caracole get`, at
+  the interactive pace (a few requests about a second apart, sixty an hour per
+  site, half of them kept for sheets), which a nightly run lets go first at
+  its next pause; it keeps the budgets, and leaves a site alone while it cools
+  down. A pick runs `caracole review --song` first, which writes overrides.toml
+  in the library, under the same lock, then, asked to fetch, `caracole fetch
+  --song` and `caracole render`, at the nightly pace. The song's card says how
+  it goes, on one line; `/jobs` keeps what each command printed, at `-v`.
 
 ## Logs
 

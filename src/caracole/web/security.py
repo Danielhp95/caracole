@@ -107,6 +107,18 @@ def cross_origin_ok(method: str, headers: Mapping[str, str], host: str | None) -
     return bool(netloc) and bool(host) and netloc.lower() == host.strip().lower()
 
 
+def own_page_read(headers: Mapping[str, str]) -> bool:
+    """Whether a read of the JSON API comes from the server's own pages (or from no browser at all).
+
+    Another site can't read the answers, but its page could still make the
+    server search, again and again: a browser that says it is fetching for
+    another site (``Sec-Fetch-Site`` cross-site or same-site) is refused. One
+    that sends no such header (curl, an older browser) is let through.
+    """
+    site = headers.get("sec-fetch-site")
+    return site is None or site in ("same-origin", "none")
+
+
 def same_token(given: str | None, expected: str) -> bool:
     """Whether a token is the expected one, compared in constant time; nothing never matches."""
     if not given or not expected:

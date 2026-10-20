@@ -279,6 +279,8 @@ def _fetch(ctx: StepContext) -> StepResult:
     fctx = FetchContext(
         conn=ctx.conn, client=ctx.services.client("ug"), overrides=ctx.overrides, rank=ctx.cfg.rank,
         library_dir=ctx.cfg.library_dir, now=ctx.now,
+        # A lookup the run lets go first, in a pause, may pin a song: read again after one (_Handoffs).
+        reload_overrides=lambda: load_overrides(ctx.cfg.overrides_file),
     )
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
     if s.songs_failed:
@@ -406,9 +408,11 @@ def _scan(ctx: StepContext) -> StepResult:
 
 
 def _render(ctx: StepContext) -> StepResult:
+    from caracole.commands._common import hand_over
     from caracole.render import render_all
 
-    s = render_all(ctx.conn, ctx.cfg, ctx.overrides, now=ctx.now)
+    # Many PDFs to make (a new font, say) take minutes: a waiting lookup goes between two songs.
+    s = render_all(ctx.conn, ctx.cfg, ctx.overrides, now=ctx.now, between=lambda: hand_over(ctx.cfg, ctx.conn))
     tail = f"; {s.font_error}" if s.font_error else ""
     result = StepResult(title="PDFs", done=_counted((s.rendered, "rendered")),
                         status=f"{s.rendered} rendered, {s.failed} failed{tail}")

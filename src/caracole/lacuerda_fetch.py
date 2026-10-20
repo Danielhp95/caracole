@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -110,12 +110,14 @@ def lacuerda_sheets(
     now: datetime,
     *,
     overrides: Overrides | None = None,
+    only: Collection[int] | None = None,
 ) -> LaCuerdaStats:
     """Ask LaCuerda for the songs that need a sheet, newest first, and keep what helps.
 
     See the module docstring for which songs are tried and when a sheet is kept.
     With ``overrides``, songs ignored there since the last match are skipped too,
-    and a sheet you pinned is never replaced.
+    and a sheet you pinned is never replaced. ``only``: the ids of the songs that
+    may be tried (a lookup's one song), when the rules above would try them.
 
     ``ProviderBlocked`` propagates. ``BudgetExhausted`` ends the pass
     (``budget_exhausted``), and so does a client that gives up on LaCuerda for
@@ -125,7 +127,7 @@ def lacuerda_sheets(
     stats = LaCuerdaStats()
     stamp = _stamp(now)
     fetched: set[str] = set()  # URLs fetched from LaCuerda in this pass
-    songs = _songs_to_try(conn, library_dir, rank, now, overrides)
+    songs = [s for s in _songs_to_try(conn, library_dir, rank, now, overrides) if only is None or s.id in only]
     for i, song in enumerate(songs):
         try:
             sheet = _find_sheet(client, song.artists[0], song.title, now, fetched)

@@ -422,3 +422,53 @@ def test_a_sitemap_the_index_no_longer_lists_leaves_the_index(conn, tmp_path):
     site.pages[INDEX] = (200, one_child, {"Content-Type": "text/xml", "ETag": '"new"'})
     run(site, conn, tmp_path, NOW + timedelta(days=31))
     assert [r[0] for r in conn.execute("SELECT DISTINCT sitemap FROM gtptabs_index")] == ["1"]
+
+
+# --- one song, looked up now (caracole get) ------------------------------------------------------------
+
+
+def look_up(site, conn, tmp_path, song, now=NOW):
+    client = site.client(tmp_path / "cache", now=now)
+    try:
+        return gtptabs_files(conn, client, tmp_path / "library", now, only={song.id}, refresh_index=False)
+    finally:
+        client.close()
+
+
+def test_a_lookup_asks_about_its_own_song_alone_and_leaves_the_sitemaps_to_the_nightly_run(conn, tmp_path):
+    song = add_song(conn, "Blur", "Beetlebum")
+    other = add_song(conn, "Blur", "Song 2")
+    site = FakeGtpTabs(files={26: gp_file(b"v3.00"), 12: gp_file()})
+    assert look_up(site, conn, tmp_path, song) == GtpTabsStats() and site.requests == []  # no index to look in
+
+    run(site, conn, tmp_path, budget=3)  # the nightly run indexes the sitemaps, and spends its budget
+    site.requests.clear()
+    stats = look_up(site, conn, tmp_path, song, NOW + timedelta(days=40))  # the index is due: the night's work
+    assert (stats.tried, stats.kept, stats.sitemaps) == (1, 1, 0)
+    assert site.requests == [BLUR, download(26)]
+    assert kept_files(conn, other.id) == []
+
+
+def test_a_song_given_a_file_while_the_pass_ran_gets_no_other(conn, tmp_path, monkeypatch):
+    # A lookup the nightly run let go first, in one of its pauses, downloaded the song a file.
+    from caracole import gtptabs_fetch
+
+    songs = [add_song(conn, "Blur", "Beetlebum", added_at="2026-10-02T00:00:00Z"), add_song(conn, "Blur", "Song 2")]
+    real = gtptabs_fetch._look_up
+    others = []
+
+    def looked_up_meanwhile(run, song, index):
+        if not others:  # while the pass waited before its first song, a lookup filed the other one a file
+            other = next(s for s in songs if s.id != song.id)
+            vid = upsert_version(conn, provider="gtptabs", tab_id="999", song_id=other.id, slot="guitar",
+                                 kind="guitar-pro", rating=0, votes=0, version=1, label=None,
+                                 url=f"{BASE}/tabs/2/blur/other.html", raw={}, now="x")
+            keep_file(conn, tmp_path / "library", song=other, version_id=vid, name="guitar-1.gp5", data=gp_file(),
+                      rank=1)
+            others.append(other)
+        return real(run, song, index)
+
+    monkeypatch.setattr(gtptabs_fetch, "_look_up", looked_up_meanwhile)
+    stats = run(FakeGtpTabs(files={26: gp_file(b"v3.00"), 12: gp_file()}), conn, tmp_path)
+    assert stats.tried == 1
+    assert [f.name for f in kept_files(conn, others[0].id)] == ["guitar-1.gp5"]  # and no second file

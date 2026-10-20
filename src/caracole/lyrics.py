@@ -21,7 +21,7 @@ import os
 import re
 import secrets
 import sqlite3
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -489,8 +489,10 @@ def fetch_pending_lyrics(
     now: datetime,
     *,
     recheck_missing_after: timedelta = RECHECK_MISSING_AFTER,
+    only: Collection[int] | None = None,
 ) -> LyricsStats:
-    """Look up the lyrics of every song that has none yet, newest first.
+    """Look up the lyrics of every song that has none yet, newest first (of ``only``'s ids, when given:
+    a lookup's one song).
 
     Ignored songs are skipped. Songs LRCLIB had no lyrics for are asked again
     once their ``lyrics_at`` is older than ``recheck_missing_after``, after the
@@ -508,7 +510,7 @@ def fetch_pending_lyrics(
     """
     stats = LyricsStats()
     stamp = _stamp(now)
-    songs = _songs_to_look_up(conn, now, recheck_missing_after)
+    songs = [(s, r) for s, r in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only]
     for i, (song, recheck) in enumerate(songs):
         try:
             result = fetch_lyrics(

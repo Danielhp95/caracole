@@ -148,3 +148,48 @@ def test_a_line_as_json():
                                                     "details": None}
     # Details: the request's output on /jobs, after the line's own link.
     assert Line("failed", "No.", details="jobs?job=2#job-2").as_json()["details"] == "jobs?job=2#job-2"
+
+
+# --- a lookup: one `caracole get`, its stages on the line -------------------------------------------
+
+
+def lookup_job(state="running", stages=None):
+    from caracole.web.jobs import JobQueue, lookup_steps
+
+    queue = JobQueue(lambda args, emit: 0)
+    made, _ = queue.submit("Fetch Radiohead - Creep", "radiohead/creep", lookup_steps("Radiohead", "Creep"),
+                           fetching=True)
+    made.state = state
+    made.steps[0].state = {"queued": "waiting", "running": "running"}.get(state, state)
+    for stage in made.stages:
+        stage.state, stage.detail = (stages or {}).get(stage.name, ("waiting", ""))
+    return made
+
+
+def test_a_running_lookup_says_its_running_stage_as_a_steps_label_would():
+    # One `caracole get` does what match, fetch and render did: the card still says which part runs.
+    assert job_line(lookup_job(), SongFacts()) == Line("running", "Finding the song…")
+    assert job_line(lookup_job(), None) == Line("running", "Adding to the library…")  # a song new to the library
+    sheet = lookup_job(stages={"song": ("done", "in the library"), "match": ("done", "matched to radiohead/creep"),
+                               "sheet": ("running", "")})
+    assert job_line(sheet, None) == Line("running", "Fetching from Ultimate Guitar…")
+    pdf = lookup_job(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("done", ""),
+                             "pdf": ("running", "")})
+    assert job_line(pdf, None).text == "Rendering the sheet…"
+    lyrics = lookup_job(stages={name: ("done", "") for name in ("song", "match", "sheet", "pdf")})
+    assert job_line(lyrics, None).text == "Fetching the lyrics from LRCLIB…"  # between two: the one about to run
+
+
+def test_a_lookup_waiting_for_the_lock_says_so():
+    waiting = lookup_job(stages={"song": ("running", "waiting for another caracole (pid 42: run), which lets "
+                                                     "a lookup go first at its next pause, or between two songs")})
+    assert job_line(waiting, None).text == "Waiting for another caracole…"
+
+
+def test_a_refused_lookup_says_why_in_its_stages_words():
+    refused = lookup_job("failed", stages={
+        "song": ("failed", "Radiohead - Creep is ignored in overrides.toml: take it out of [ignore] to look it up"),
+        "match": ("skipped", "")})
+    assert job_line(refused, None) == Line(
+        "failed", "Radiohead - Creep is ignored in overrides.toml: take it out of [ignore] to look it up.",
+        details=details_href(1))

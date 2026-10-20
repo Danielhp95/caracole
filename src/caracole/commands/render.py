@@ -10,6 +10,7 @@ from contextlib import closing
 
 import typer
 
+from caracole.commands import _common
 from caracole.commands._common import exclusive, load_cfg, load_ovr, open_db, utcnow, write_pages
 from caracole.commands.songbook import songbooks_line
 
@@ -34,7 +35,8 @@ def register(app: typer.Typer) -> None:
         cfg = load_cfg(ctx)
         overrides = load_ovr(cfg)
         with exclusive(cfg, "render"), closing(open_db(cfg)) as conn:
-            stats = render_all(conn, cfg, overrides, force=force)
+            # A waiting lookup goes between two songs: --force renders every PDF, minutes of work.
+            stats = render_all(conn, cfg, overrides, force=force, between=lambda: _common.hand_over(cfg, conn))
             books = render_songbooks(conn, cfg, overrides, force=force)  # after the sheets: they hold them
             write_pages(conn, cfg, overrides, utcnow())
         typer.echo(f"{stats.rendered} rendered, {stats.skipped} up to date, {stats.failed} failed")

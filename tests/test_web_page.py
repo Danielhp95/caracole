@@ -58,8 +58,10 @@ class Polls:
 class FakeCaracole:
     """The job's commands, faked: ``add`` syncs wanted.txt, ``fetch`` keeps a sheet.pdf once the page has
     seen it run, ``review --pick`` settles the song's match on the candidate picked once the page has asked
-    once. A song in ``fail`` fails its fetch with that error, as the CLI says one. With ``slow_add``,
-    ``add`` too waits for the page to ask twice; the next ``down`` times the page asks, the server answers 503.
+    once. A lookup's ``get`` (Fetch it now, Fetch now) does what add and fetch do, its stages reported as
+    ``caracole get --progress`` reports them. A song in ``fail`` fails its fetch with that error, as the CLI
+    says one. With ``slow_add``, ``add`` (and a lookup's song stage) too waits for the page to ask twice; the
+    next ``down`` times the page asks, the server answers 503.
     """
 
     def __init__(self, cfg, *, fail=None, slow_add=False, down=0):
@@ -74,6 +76,8 @@ class FakeCaracole:
 
         conn = db.connect(self.cfg.db_path)
         try:
+            if args[0] == "get":
+                return self._get(conn, args, emit)
             if args[0] == "add":
                 if self.slow_add:
                     self.polls.wait(2, timeout=30)
@@ -100,6 +104,34 @@ class FakeCaracole:
             return 0
         finally:
             conn.close()
+
+
+    def _get(self, conn, args, emit):
+        from caracole.get import PROGRESS_PREFIX
+        from caracole.wanted import sync_wanted
+
+        def stage(name, state, detail=""):
+            emit(PROGRESS_PREFIX + json.dumps({"stage": name, "state": state, "detail": detail}))
+
+        display = f"{args[-2]} - {args[-1]}"
+        stage("song", "running")
+        if self.slow_add:
+            self.polls.wait(2, timeout=30)
+        sync_wanted(conn, self.cfg.wanted_file, datetime.now(UTC))
+        stage("song", "done", "in the library")
+        stage("sheet", "running")
+        self.polls.wait(2)
+        if display in self.fail:
+            emit(f"error: {self.fail[display]}")
+            return 1
+        song = find_song(conn, override_key(display))
+        folder = song_dir(self.cfg.library_dir, song)
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
+        update_song(conn, song.id, status="found", ug_dirty=False)
+        stage("sheet", "done", "tab 1 from Ultimate Guitar")
+        emit("ran get")
+        return 0
 
 
 def sha(text: str) -> str:

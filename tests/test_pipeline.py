@@ -542,7 +542,7 @@ def test_the_runs_clients_keep_the_pause_after_another_caracoles_last_request(co
     made = make_services(cfg, conn, "2026-10-18T03:30:00Z")
     for client in made.clients.values():
         client.close()
-    [pause] = slept
+    pause = sum(slept)  # in slices, each a chance to hand the lock to a lookup
     low, high = cfg.provider("ug").delay
     assert low - 4 <= pause <= high - 3
 
@@ -552,6 +552,24 @@ def test_a_run_lets_go_of_the_lock_its_clients_held(conn, cfg):
     report = run_pipeline(cfg, conn=conn, steps=[step("todo")], now=NOW)
     assert report.ok
     assert lock_is_free(cfg)
+
+
+def test_the_fetch_step_can_read_overrides_toml_again_after_a_lookup(conn, cfg, monkeypatch):
+    # A lookup that the run let go first may pin a tab: the fetch reads the file again then.
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext, _fetch
+    from caracole.ug import fetch as ug_fetch
+
+    seen = []
+    monkeypatch.setattr(ug_fetch, "fetch_songs", lambda ctx, songs, **kw: seen.append(ctx) or ug_fetch.FetchStats())
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text('[pin]\n"Radiohead - Creep" = ["https://tabs.ultimate-guitar.com/tab/1"]\n',
+                                  encoding="utf-8")
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
+                      report=RunReport(run_id="r", started="r"))
+    _fetch(ctx)
+    [fctx] = seen
+    assert fctx.overrides == Overrides() and list(fctx.reload_overrides().pin.values()) == [(1,)]
 
 
 def test_default_match_step_skips_while_the_index_is_empty(conn, cfg):

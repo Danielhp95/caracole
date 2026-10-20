@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote, urlencode
 
@@ -188,11 +189,10 @@ def test_a_request_is_written_to_wanted_txt_exactly_as_caracole_add_writes_it(ap
     assert job.title == "Fetch Soda Stereo - De Música | Ligera #1" and job.fetching
     line_no = re.search(r"wanted\.txt line (\d+)", result.output).group(1)
     assert job.note == f"Added to wanted.txt, line {line_no}."
+    # One `caracole get`, which adds the song itself: the sheet first, at the lookup pace.
     assert [s.args for s in job.steps] == [
-        ("add", "--album=Canción Animal", "--duration=3:33", "--", "Soda Stereo", "De Música | Ligera #1"),
-        ("match",),
-        ("fetch", "--song=Soda Stereo - De Música | Ligera #1"),
-        ("render",),
+        ("get", "--progress", "--album=Canción Animal", "--duration=3:33", "--", "Soda Stereo",
+         "De Música | Ligera #1"),
     ]
 
 
@@ -211,8 +211,7 @@ def test_fetch_it_now_on_a_song_whose_add_still_waits_fetches_it_too(app, queue)
     job = queue.snapshot()[0]
     assert job.fetching and job.title == "Fetch Radiohead - Creep"
     queue.run_pending()
-    assert queue._runner.calls == [["add", "--", "Radiohead", "Creep"], ["match"],
-                                   ["fetch", "--song=Radiohead - Creep"], ["render"]]
+    assert queue._runner.calls == [["get", "--progress", "--", "Radiohead", "Creep"]]  # it adds the song too
 
 
 def test_the_cards_fetch_now_on_a_song_whose_add_still_waits_fetches_it_too(app, conn, queue):
@@ -220,7 +219,7 @@ def test_the_cards_fetch_now_on_a_song_whose_add_still_waits_fetches_it_too(app,
     post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
     assert post(app, "/fetch", {"song": str(creep.id)}).status == 303
     queue.run_pending()
-    assert [c[0] for c in queue._runner.calls] == ["add", "match", "fetch", "render"]
+    assert [c[0] for c in queue._runner.calls] == ["get"]
 
 
 def test_a_song_listed_already_is_left_as_it_is(app, cfg, queue):
@@ -268,12 +267,12 @@ def test_a_full_queue_still_keeps_the_song_in_wanted_txt(app, cfg, queue):
 # --- fetching a song now ------------------------------------------------------------------------
 
 
-def test_fetch_now_queues_match_fetch_and_render_for_that_song(app, conn, queue):
+def test_fetch_now_looks_that_song_up_now(app, conn, queue):
     creep = add_song(conn, "Radiohead", "Creep")
     response = post(app, "/fetch", {"song": str(creep.id)})
     assert response.status == 303 and header(response, "location") == "/jobs?job=1#job-1"
     job = queue.snapshot()[0]
-    assert [s.args for s in job.steps] == [("match",), ("fetch", "--song=Radiohead - Creep"), ("render",)]
+    assert [s.args for s in job.steps] == [("get", "--progress", "--", "Radiohead", "Creep")]
     assert job.fetching and job.song_key == creep.key
 
 
@@ -496,7 +495,8 @@ def test_a_done_requests_line_and_card_say_what_the_library_has_now(app, conn, c
 
 
 class LooksUp:
-    """The job's commands, faked: ``fetch`` looks the song up as ``how`` says, and keeps nothing."""
+    """The job's commands, faked: ``fetch``, or a lookup's ``get``, looks the song up as ``how`` says, and
+    keeps nothing."""
 
     def __init__(self, cfg, how):
         self.cfg = cfg
@@ -507,10 +507,11 @@ class LooksUp:
         from caracole.overrides import override_key
         from caracole.songs import find_song
 
-        if args[0] == "fetch":
+        if args[0] in ("fetch", "get"):
+            display = args[-1].removeprefix("--song=") if args[0] == "fetch" else f"{args[-2]} - {args[-1]}"
             conn = db.connect(self.cfg.db_path)
             try:
-                song = find_song(conn, override_key(args[-1].removeprefix("--song=")))
+                song = find_song(conn, override_key(display))
                 if self.how == "finished":  # every slot done, nothing kept (ug.fetch._finish)
                     update_song(conn, song.id, ug_dirty=False, ug_checked_at=_iso_now())
                 elif self.how == "artist page":  # read for the song, which isn't there (_not_on_artist_page)
@@ -541,7 +542,11 @@ def test_a_done_fetch_without_a_sheet_is_not_found_only_when_it_looked_the_song_
         post(app, "/fetch", {"song": str(creep.id)})
         queue.run_pending()
         assert answer(get_json(app, "/jobs.json"))["jobs"][0]["line"] == line, how
-    # A song not found in the index, looked up on its artist's page during the request, is not found.
+    # A song not found in the index, looked up on its artist's page during the request, is not found. (Its
+    # artist's page is known: one that isn't can't be looked up at all, and that alone is Not found.)
+    from caracole.ug.lookup import remember_artist_url
+
+    remember_artist_url(conn, "radiohead", "https://www.ultimate-guitar.com/artist/radiohead_1")
     update_song(conn, creep.id, match_decision="not_found", match_artist_key=None, match_song_key=None,
                 ug_checked_at="2026-10-01T00:00:00Z")
     for how, tone in (("nothing", "waiting"), ("artist page", "missing")):
@@ -558,13 +563,14 @@ SIGNOS = "https://tabs.ultimate-guitar.com/tab/soda-stereo/signos-chords-201"
 
 
 class RealFetch:
-    """The job's commands: ``caracole fetch`` itself, through the CLI at -v; the others do nothing."""
+    """The job's commands: ``caracole fetch`` and a lookup's ``caracole get`` themselves, through the CLI at -v;
+    the others do nothing."""
 
     def __init__(self, config):
         self.config = config
 
     def __call__(self, args, emit):
-        if args[0] != "fetch":
+        if args[0] not in ("fetch", "get"):
             emit("ok")
             return 0
         result = CliRunner().invoke(build_app(), ["--config", str(self.config), "-v", *args])
@@ -596,11 +602,13 @@ def signos_page(tab_id=201, url=SIGNOS):
                                    artist_url="https://www.ultimate-guitar.com/artist/soda_stereo_2946")
 
 
-def real_fetch_app(cfg, tmp_path, *, budget=60):
+def real_fetch_app(cfg, tmp_path, *, budget=60, lookup_requests=6):
     config = tmp_path / "caracole-cli.toml"
+    quick = "".join(f"[providers.{p}]\nlookup_delay = [0, 0]\n" for p in ("lrclib", "lacuerda", "gtptabs"))
     config.write_text(f'library_dir = "{cfg.library_dir}"\nmusic_dir = "{cfg.music_dir}"\n'
                       f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
-                      f"[providers.ug]\nbudget = {budget}\ndelay = [0, 0]\n", encoding="utf-8")
+                      f"[providers.ug]\nbudget = {budget}\ndelay = [0, 0]\nlookup_delay = [0, 0]\n"
+                      f"lookup_requests = {lookup_requests}\n{quick}", encoding="utf-8")
     queue = JobQueue(RealFetch(config))
     return WebApp(cfg, queue, allowed=ALLOWED, csrf="tok"), queue
 
@@ -617,11 +625,12 @@ def test_a_clean_song_fetched_now_is_missing_only_when_ug_answered(cfg, conn, tm
     conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
                  "VALUES (201, 'soda-stereo', 'signos', 'chords', 'last', '2026-10-01T00:00:00Z', ?)",
                  ("soda-stereo/signos-chords-201",))
-    budget = 60
+    budget, lookup_requests = 60, 6
     fake_ug[SIGNOS] = signos_page()
     if how == "cooldown":
         record_block(conn, "ug", utcnow(), "HTTP 403")
-    elif how == "budget":  # two pages to read, one request to spend
+    elif how == "budget":  # two pages to read, one request to spend at night, and none for a lookup
+        lookup_requests = 0
         conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
                      "VALUES (202, 'soda-stereo', 'signos', 'chords', 'last', '2026-10-01T00:00:00Z', ?)",
                      ("soda-stereo/signos-chords-202",))
@@ -632,18 +641,18 @@ def test_a_clean_song_fetched_now_is_missing_only_when_ug_answered(cfg, conn, tm
         fake_ug[SIGNOS] = (200, "<html><body>maintenance</body></html>")  # no js-store: it won't parse
     else:
         del fake_ug[SIGNOS]  # gone: UG answers 404, and the fetch keeps nothing
-    app, queue = real_fetch_app(cfg, tmp_path, budget=budget)
+    app, queue = real_fetch_app(cfg, tmp_path, budget=budget, lookup_requests=lookup_requests)
 
     post(app, "/fetch", {"song": str(signos.id)})
     queue.run_pending()
 
     job = answer(get_json(app, "/jobs.json"))["jobs"][0]
-    assert job["state"] == "done", queue.snapshot()[0].steps[1].output
+    assert job["state"] == "done", queue.snapshot()[0].steps[-1].output
     if how == "nothing kept":
         assert job["line"]["tone"] == "missing"
     else:
         assert job["line"] == {"tone": "waiting", "text": "Not fetched yet", "link": None,
-                               "details": "jobs?job=1#job-1"}, queue.snapshot()[0].steps[1].output
+                               "details": "jobs?job=1#job-1"}, queue.snapshot()[0].steps[-1].output
         from caracole.songs import get_song
 
         assert get_song(conn, signos.id).ug_dirty is True  # so the next run fetches it: it does wait
@@ -653,14 +662,18 @@ def test_a_clean_song_fetched_now_is_missing_only_when_ug_answered(cfg, conn, tm
     ("not_found", False, "Ultimate Guitar lists Obscure Band only by bare tab ids, which caracole can't see. "
                          "Find the artist's page on UG.",
      {"tone": "missing", "text": "Not found", "link": {"label": "see the to-do page", "href": "_todo.md"},
-      "details": "jobs?job=1#job-1"}),
+      "details": None}),
     ("review", True, '"Obscure Band - Song" needs review first: run `caracole review`.',
      {"tone": "review", "text": "Needs review", "link": {"label": "see the to-do page", "href": "_todo.md"},
-      "details": "jobs?job=1#job-1"}),
+      "details": None}),
 ])
 def test_a_requested_fetch_that_fetch_refuses_says_why_as_the_card_would(cfg, conn, decision, review, error,
                                                                            line):
-    # `caracole fetch --song` exits 1 on a song the match left not found (its artist unknown) or in review.
+    # A song the match leaves not found (its artist unknown) or in review has no Ultimate Guitar sheet to
+    # fetch: Fetch it now's `caracole get` skips its sheet stage, saying why, and goes on (exit 0), where
+    # `caracole fetch --song` refused it (exit 1). The card says why, the same either way.
+    from caracole.get import PROGRESS_PREFIX
+
     def runner(args, emit):
         from caracole import db
         from caracole.songs import find_song
@@ -668,13 +681,10 @@ def test_a_requested_fetch_that_fetch_refuses_says_why_as_the_card_would(cfg, co
 
         c = db.connect(cfg.db_path)
         try:
-            if args[0] == "add":
+            if args[0] == "get":
                 sync_wanted(c, cfg.wanted_file, datetime_now())
-            elif args[0] == "match":
                 update_song(c, find_song(c, "obscure-band/song").id, match_decision=decision, review=review)
-            elif args[0] == "fetch":
-                emit(f"error: {error}")
-                return 1
+                emit(PROGRESS_PREFIX + json.dumps({"stage": "sheet", "state": "skipped", "detail": error}))
         finally:
             c.close()
         return 0
@@ -684,7 +694,7 @@ def test_a_requested_fetch_that_fetch_refuses_says_why_as_the_card_would(cfg, co
     post(app, "/request", {"artist": "Obscure Band", "title": "Song", "fetch": "1"})
     queue.run_pending()
     job = answer(get_json(app, "/jobs.json"))["jobs"][0]
-    assert job["state"] == "failed" and job["line"] == line
+    assert job["state"] == "done" and job["line"] == line
     assert "caracole review" not in json.dumps(job["line"])  # nothing to type on a phone
 
 
@@ -726,7 +736,7 @@ def test_the_status_endpoint_reads_only_plain_digits(app, conn, queue):
 
 def test_a_failed_requests_line_is_its_error_with_a_link_to_its_output(cfg, conn):
     def runner(args, emit):
-        if args[0] == "fetch":
+        if args[0] in ("fetch", "get"):  # Fetch now is a lookup
             emit("Ultimate Guitar GET https://tabs.ultimate-guitar.com/tab/1 → 200 OK in 0.40 s (1 of 60 requests)")
             emit("error: The page under [artist_url] for Radiohead, UG answers 404 for it. Put another there.")
             return 1
@@ -1130,8 +1140,8 @@ def cli_config(cfg, tmp_path: Path) -> Path:
 
 
 def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cfg, conn, tmp_path, monkeypatch):
-    # Fetch it now is ticked by default; `caracole add` finds only candidates, so `caracole fetch --song`
-    # refuses the song. The request waits for the pick its picker, right under it, gives.
+    # Fetch it now is ticked by default; its `caracole get` matches the song to candidates only, so it has
+    # no Ultimate Guitar sheet to fetch. The request waits for the pick its picker, right under it, gives.
     from datetime import UTC, datetime
 
     import httpx
@@ -1139,6 +1149,8 @@ def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cf
     from caracole.ug.index import mark_built
 
     def refuse(request):
+        if request.url.host == "lrclib.net":  # the lyrics come all the same
+            return httpx.Response(404, json={"name": "TrackNotFound"})
         raise AssertionError(f"a request to {request.url}")
 
     monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(refuse))
@@ -1152,8 +1164,8 @@ def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cf
     assert post(app, "/request", fields).status == 303
     queue.run_pending()
     [job] = queue.snapshot()
-    assert [s.state for s in job.steps] == ["done", "done", "failed", "skipped"], runner.outputs
-    assert "needs review first" in runner.outputs[2]
+    assert [s.state for s in job.steps] == ["done"], runner.outputs
+    assert "isn't sure which Ultimate Guitar song" in runner.outputs[0]
     article = job_item(text(get(app, "/jobs")), 1)
     # Its line, the one its card shows (status.py), says the song needs review and sends you to its picker,
     # not to the to-do page: no failure.
@@ -1166,19 +1178,19 @@ def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cf
     view = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"][0]
     assert view["line"]["link"] == {"label": "Pick the match", "href": f"review?song={song.id}"}
     assert view["card"]["candidates"]  # the card it is drawn again as has the picker the line names
-    fetch = re.search(r'<li class="step [^"]*"><div class="step-head"><span>Fetching from Ultimate Guitar</span>.*?</li>',
+    fetch = re.search(r'<li class="step [^"]*"><div class="step-head"><span>The sheet</span>.*?</li>',
                       article, re.S).group(0)
     assert '<span class="badge review">Waits for a pick</span>' in fetch and "Failed" not in fetch
     assert "Pick it below" in shown_text(fetch)
-    # The command's own words are there, folded away with the request's output; the picker is below it.
-    assert "needs review first" in fetch and '<details class="output">' in article
+    # The lookup's own words are there, folded away with the request's output; the picker is below it.
+    assert "isn&#x27;t sure which Ultimate Guitar song" in fetch and '<details class="output">' in article
     assert article.index('<form class="pick-form"') > article.index("</details>")
     assert picker_of(article)
 
 
 def test_a_request_whose_fetch_failed_otherwise_still_shows_failed(cfg, conn):
     def down(args, emit):
-        if args[0] != "fetch":
+        if args[0] not in ("fetch", "get"):  # Fetch it now is a lookup
             return 0
         emit("error: the network is down")
         return 1
@@ -1256,7 +1268,8 @@ def test_the_requests_page_has_one_line_per_request_its_output_collapsed(app, co
     assert "Radiohead - Creep" in line and "Ready" in line and 'href="Radiohead/Creep/sheet.pdf"' in line
     # The commands and what each printed are there, folded away.
     assert '<details class="output">' in newest and "<details open" not in body
-    assert "Fetching from Ultimate Guitar" in newest and "<pre>ok" in newest and "Done" in newest
+    # A fetch now is one `caracole get`, its stages listed each with its state.
+    assert "Look it up now" in newest and "The sheet" in newest and "<pre>ok" in newest and "Done" in newest
 
 
 def test_a_requests_output_opens_when_its_details_link_asks_for_it(app, queue):
@@ -1283,6 +1296,326 @@ def test_the_requests_page_can_stop_refreshing_so_an_output_can_be_read(app, que
 def test_the_requests_page_with_nothing_queued(app):
     body = text(get(app, "/jobs"))
     assert "No requests yet" in body
+
+
+# --- looking a song up as you type ---------------------------------------------------------------
+
+
+def as_json(response):
+    import json
+
+    assert header(response, "content-type") == "application/json; charset=utf-8"
+    return json.loads(response.body)
+
+
+def creep_index(conn):
+    from caracole.ug.index import mark_built, upsert_rows
+
+    rows = [(4169, "radiohead", "creep", "chords"), (4170, "radiohead", "creep", "chords"),
+            (4172, "radiohead", "creep", "tabs"), (4174, "radiohead", "creep-acoustic", "guitar-pro"),
+            (5001, "stone-temple-pilots", "creep", "chords"), (9, "oasis", "wonderwall", "chords")]
+    upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+
+
+def test_the_lookup_page_is_served_with_its_script(app):
+    response = get(app, "/lookup")
+    assert response.status == 200 and header(response, "content-type") == "text/html; charset=utf-8"
+    body = text(response)
+    assert 'id="q"' in body and 'data-csrf="tok"' in body
+    csp = header(response, "content-security-policy")
+    assert "connect-src 'self'" in csp and "script-src 'sha256-" in csp and "frame-ancestors 'none'" in csp
+    assert "unsafe-inline" not in csp and "innerHTML" not in body
+    assert 'href="/lookup"' in text(get(app, "/"))  # the library page links it
+
+
+def test_the_search_answers_json_from_your_library_and_the_offline_index(app, conn):
+    creep_index(conn)
+    mine = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, mine.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    data = as_json(get(app, "/api/search?q=creep"))
+    assert data["query"] == "creep"
+    assert [h["display"] for h in data["library"]] == ["Radiohead - Creep"]
+    assert data["library"][0]["id"] == mine.id and data["library"][0]["status"] == "wanted"
+    first, second = data["index"][:2]
+    assert (first["artist"], first["title"], first["ug"]) == ("Radiohead", "Creep", "radiohead/creep")
+    assert first["counts"] == {"chords": 2, "tabs": 1, "guitar-pro": 1} and first["song"] == mine.id
+    assert [t["id"] for t in first["tabs"]][:2] == [4169, 4170]  # chords first
+    assert first["tabs"][0] == {"id": 4169, "type": "chords", "label": None,
+                                "url": "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169"}
+    assert (second["ug"], second["song"]) == ("stone-temple-pilots/creep", None)
+
+
+def test_a_library_song_found_comes_as_its_card_has_it_its_viewer_first(app, cfg, conn):
+    # The lookup page draws it as index.html's row does: its viewer opens it, and every file says where it
+    # came from. Its links are the card's, relative to the library, as the server serves them.
+    from helpers.rendered import rendered_song
+
+    from caracole.ug.index import mark_built, upsert_rows
+
+    song = rendered_song(conn, cfg)  # Soda Stereo - De Música Ligera, a UG sheet in G, rendered
+    upsert_rows(conn, [(85053, "soda-stereo", "de-musica-ligera", "chords", "soda-stereo/de-musica-ligera-chords-1")],
+                "1", datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+    data = as_json(get(app, "/api/search?q=musica%20ligera"))
+    [mine] = data["library"]
+    assert (mine["id"], mine["source"], mine["key"]) == (song.id, "ug", "G")
+    [primary] = [f for f in mine["links"] if f["primary"]]
+    assert (primary["name"], primary["href"]) == ("sheet.html", "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.html")
+    assert {"sheet.pdf", "sheet.txt"} <= {f["name"] for f in mine["links"]}
+    assert mine["files"]["viewer"] == "Soda Stereo/De Música Ligera/sheet.html"  # the page's reader, as before
+    # Its Ultimate Guitar song names it, with its links too.
+    [hit] = [h for h in data["index"] if h["song"] == song.id]
+    assert [f["href"] for f in hit["library"]["links"] if f["primary"]] == [primary["href"]]
+    assert get(app, "/" + primary["href"]).status == 200  # the viewer caracole wrote, served
+
+
+def test_a_search_of_fewer_than_three_letters_looks_nowhere(app, conn):
+    creep_index(conn)
+    assert as_json(get(app, "/api/search?q=cr")) == {"query": "cr", "library": [], "index": [], "short": True}
+    assert as_json(get(app, "/api/search"))["short"] is True
+
+
+def test_a_search_with_an_empty_index_says_so(app, conn):
+    data = as_json(get(app, "/api/search?q=creep"))
+    assert data["index"] == [] and "caracole index build" in data["hint"]
+
+
+def test_the_search_answers_only_to_the_servers_names(app, conn):
+    assert app.handle(Request("GET", "/api/search?q=creep", {"host": "evil.example"})).status == 421
+
+
+def lookup(app, fields, **headers):
+    return post(app, "/lookup", fields, accept="application/json", **headers)
+
+
+def test_the_ug_song_you_pick_is_looked_up_now(app, cfg, queue, conn):
+    response = lookup(app, {"artist": "Stone Temple Pilots", "title": "Creep", "ug": "stone-temple-pilots/creep"})
+    assert response.status == 202
+    data = as_json(response)
+    assert data == {"job": 1, "url": "/api/jobs/1"}
+    assert "Stone Temple Pilots - Creep" in cfg.wanted_file.read_text(encoding="utf-8")  # at once, as a request
+    job = queue.snapshot()[0]
+    assert [s.args for s in job.steps] == [
+        ("get", "--progress", "--ug=stone-temple-pilots/creep", "--", "Stone Temple Pilots", "Creep")]
+    assert job.fetching and job.title == "Fetch Stone Temple Pilots - Creep"
+
+
+def test_the_tab_you_pick_is_looked_up_now(app, queue):
+    tab = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4170"
+    assert lookup(app, {"artist": "Radiohead", "title": "Creep", "ug": "radiohead/creep", "tab": tab}).status == 202
+    assert queue.snapshot()[0].steps[0].args == (
+        "get", "--progress", "--ug=radiohead/creep", f"--tab={tab}", "--", "Radiohead", "Creep")
+
+
+def acdc_index(conn):
+    from caracole.ug.index import mark_built, upsert_rows
+
+    rows = [(11, "acdc", "back-in-black", "chords"), (12, "acdc", "back-in-black", "tabs"),
+            (21, "song-dongye", "banma-banma", "chords"), (31, "r-e-m", "losing-my-religion", "chords")]
+    upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+
+
+def test_a_ug_hit_your_library_has_under_another_name_is_that_song(app, conn):
+    # UG's slugs make "Acdc", "Song Dongye" and "R E M": your library's names are the song's.
+    acdc_index(conn)
+    acdc = add_song(conn, "AC/DC", "Back In Black")
+    update_song(conn, acdc.id, match_decision="accept", match_artist_key="acdc", match_song_key="back-in-black")
+    banma = add_song(conn, "宋冬野", "斑马斑马")  # not matched yet: its names still meet UG's
+    rem = add_song(conn, "R.E.M.", "Losing My Religion")
+    for query, song in (("back in black", acdc), ("banma banma", banma), ("losing my religion", rem)):
+        [hit] = [h for h in as_json(get(app, "/api/search?q=" + query.replace(" ", "%20")))["index"]
+                 if h["song"] is not None]
+        assert hit["song"] == song.id, query
+        assert (hit["library"]["artist"], hit["library"]["title"]) == (song.artist, song.title)
+
+
+def test_getting_a_ug_hit_your_library_has_under_another_name_adds_no_second_song(app, cfg, conn, queue):
+    acdc_index(conn)
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("AC/DC - Back In Black\n", encoding="utf-8")
+    acdc = add_song(conn, "AC/DC", "Back In Black")
+    update_song(conn, acdc.id, match_decision="accept", match_artist_key="acdc", match_song_key="back-in-black")
+    # The page's names for the hit, from UG's slugs, and its pick: the server finds the song it is.
+    response = lookup(app, {"artist": "Acdc", "title": "Back In Black", "ug": "acdc/back-in-black"})
+    assert response.status == 202
+    assert cfg.wanted_file.read_text(encoding="utf-8") == "AC/DC - Back In Black\n"
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("get", "--progress", "--ug=acdc/back-in-black", "--", "AC/DC", "Back In Black")
+    assert job.song_key == acdc.key and "AC/DC - Back In Black" in job.title
+
+
+def test_get_it_now_on_a_song_of_your_library_adds_it_to_no_source(app, cfg, conn, queue):
+    # A song from Spotify alone stays Spotify's: once unliked, it is no longer wanted.
+    creep = add_song(conn, "Radiohead", "Creep", source="spotify", source_id="spotify:track:1")
+    response = lookup(app, {"song": str(creep.id)})
+    assert response.status == 202 and not cfg.wanted_file.exists()
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("get", "--progress", "--", "Radiohead", "Creep")
+    assert lookup(app, {"song": "999"}).status == 404
+    assert lookup(app, {"song": "x"}).status == 400
+
+
+def test_a_song_you_removed_and_look_up_again_is_asked_for_again(app, cfg, conn, queue):
+    # caracole remove left its tombstone; picking it on the lookup page is asking for it again, as a
+    # wanted.txt line always is, and its lookup syncs that line back in. Its UG song is no song of yours.
+    from caracole.removal import plan_removal, remove_song
+    from caracole.songs import find_song
+
+    creep_index(conn)
+    creep = add_song(conn, "Radiohead", "Creep")
+    remove_song(conn, cfg, plan_removal(conn, cfg, creep))
+    assert find_song(conn, creep.key) is None
+    [hit] = [h for h in as_json(get(app, "/api/search?q=creep"))["index"] if h["ug"] == "radiohead/creep"]
+    assert hit["song"] is None and hit["library"] is None
+    assert lookup(app, {"artist": "Radiohead", "title": "Creep", "ug": "radiohead/creep"}).status == 202
+    assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("get", "--progress", "--ug=radiohead/creep", "--", "Radiohead", "Creep")
+
+
+def test_a_version_picked_while_the_first_lookup_runs_is_looked_up_too(cfg):
+    import threading
+
+    started, release = threading.Event(), threading.Event()
+    ran = []
+
+    def runner(args, emit):
+        ran.append(list(args))
+        started.set()
+        release.wait(10)
+        return 0
+
+    queue = JobQueue(runner)
+    queue.start()
+    try:
+        app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+        tab = "https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-6789"
+        first = as_json(lookup(app, {"artist": "Oasis", "title": "Wonderwall", "ug": "oasis/wonderwall"}))
+        assert started.wait(5)  # it runs now, and its sheet is on the screen
+        pick = lookup(app, {"artist": "Oasis", "title": "Wonderwall", "ug": "oasis/wonderwall", "tab": tab})
+        assert pick.status == 202 and as_json(pick)["job"] != first["job"]
+        release.set()
+        for _ in range(100):
+            if len(ran) == 2 and not queue.active_count():
+                break
+            threading.Event().wait(0.05)
+    finally:
+        release.set()
+        queue.stop()
+    assert [a for a in ran[1] if a.startswith("--tab")] == [f"--tab={tab}"]
+
+
+@pytest.mark.parametrize("fields,said", [
+    ({"artist": "Radiohead", "title": "Creep", "ug": "radiohead"}, "Ultimate Guitar song"),
+    ({"artist": "Radiohead", "title": "Creep", "tab": "https://example.com/tab/1"}, "tab"),
+    ({"artist": "", "title": "Creep"}, "artist and a title"),
+])
+def test_a_pick_that_isnt_one_is_refused(app, cfg, queue, fields, said):
+    response = lookup(app, fields)
+    assert response.status == 400 and said in as_json(response)["error"]
+    assert queue.snapshot() == [] and not cfg.wanted_file.exists()
+
+
+def test_a_lookup_without_the_pages_script_lands_on_the_lookup_page(app, queue):
+    response = post(app, "/lookup", {"artist": "Radiohead", "title": "Creep"})
+    assert response.status == 303 and header(response, "location") == "/lookup?job=1"
+
+
+def test_a_lookup_needs_the_form_token_like_every_write(app, queue):
+    assert lookup(app, {"artist": "Radiohead", "title": "Creep"}, csrf="wrong").status == 403
+    assert queue.snapshot() == []
+
+
+def test_the_lookup_pages_script_hears_a_refusal_as_data_and_is_told_to_reload(app, queue):
+    # A phone left open across a restart of the server sends the old form token.
+    stale = lookup(app, {"artist": "Radiohead", "title": "Creep"}, csrf="older")
+    assert stale.status == 403 and as_json(stale)["reload"] is True and "reload" in as_json(stale)["error"]
+    elsewhere = lookup(app, {"artist": "Radiohead", "title": "Creep"}, **{"sec-fetch-site": "cross-site"})
+    assert elsewhere.status == 403 and "another site" in as_json(elsewhere)["error"]
+    not_a_form = post(app, "/lookup", {"artist": "A", "title": "B"}, accept="application/json",
+                      **{"content-type": "text/plain"})
+    assert not_a_form.status == 415 and "error" in as_json(not_a_form)
+    assert queue.snapshot() == []
+
+
+def test_before_signing_in_the_api_and_the_lookups_answer_data(locked, conn):
+    response = get(locked, "/api/search?q=creep")
+    assert response.status == 401 and as_json(response)["reload"] is True
+    refused = lookup(locked, {"artist": "Radiohead", "title": "Creep"})
+    assert refused.status == 401 and "Sign in" in as_json(refused)["error"]
+    assert get(locked, "/lookup").status == 401 and 'action="/login"' in text(get(locked, "/lookup"))
+
+
+def test_a_job_is_served_as_data_with_each_step_and_its_state(app, queue):
+    lookup(app, {"artist": "Radiohead", "title": "Creep"})
+    data = as_json(get(app, "/api/jobs/1"))
+    assert data["id"] == 1 and data["state"] == "queued"
+    assert [s["name"] for s in data["steps"]][:3] == ["song", "match", "sheet"]
+    assert all(s["state"] == "waiting" for s in data["steps"])
+    assert [j["id"] for j in as_json(get(app, "/api/jobs"))["jobs"]] == [1]
+    assert get(app, "/api/jobs/9").status == 404 and get(app, "/api/jobs/x").status == 404
+
+
+@pytest.mark.parametrize("number", ["%C2%B2", "%D9%A1", "%EF%BC%91"])  # ², Arabic-Indic 1, fullwidth 1
+def test_a_request_number_of_other_digits_than_0_to_9_is_no_request(app, queue, number):
+    lookup(app, {"artist": "Radiohead", "title": "Creep"})
+    response = get(app, f"/api/jobs/{number}")
+    assert response.status == 404 and as_json(response) == {"error": "no such request"}
+
+
+@pytest.mark.parametrize("path", ["/api/search?q=creep", "/api/jobs", "/api/jobs/1"])
+def test_the_api_answers_its_own_pages_and_no_other_site(app, conn, queue, path):
+    # Another site can't read the answers, but it could make the server search for it: refused.
+    creep_index(conn)
+    lookup(app, {"artist": "Radiohead", "title": "Creep"})
+    for site in ("cross-site", "same-site"):
+        response = get(app, path, **{"sec-fetch-site": site})
+        assert response.status == 403 and "another site" in as_json(response)["error"], site
+    assert get(app, path, **{"sec-fetch-site": "same-origin"}).status == 200
+    assert get(app, path, **{"sec-fetch-site": "none"}).status == 200  # typed into the address bar
+    assert get(app, path).status == 200  # no browser: curl, a script on this machine
+
+
+def test_a_search_typed_over_lets_go_of_the_database_at_once(app, conn, monkeypatch):
+    # A query of one very common word reads tens of thousands of rows: the next one typed doesn't wait for it.
+    import threading
+    import time
+
+    import caracole.search
+
+    creep_index(conn)
+    started = threading.Event()
+    real = caracole.search.search_index
+
+    def search_index(c, query, limit=10):
+        if query != "slow words":
+            return real(c, query, limit)
+        started.set()
+        c.execute("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 300000000) "
+                  "SELECT count(*) FROM n").fetchone()  # half a minute or more, unless interrupted
+        return []
+
+    monkeypatch.setattr(caracole.search, "search_index", search_index)
+    first: dict = {}
+    newer: dict = {}
+    older = threading.Thread(target=lambda: first.update(as_json(get(app, "/api/search?q=slow%20words"))),
+                             daemon=True)
+    older.start()
+    assert started.wait(10)
+    begun = time.monotonic()
+    typed = threading.Thread(target=lambda: newer.update(as_json(get(app, "/api/search?q=creep"))), daemon=True)
+    typed.start()
+    typed.join(5)
+    assert not typed.is_alive(), "the newer search waited for the older one"
+    older.join(5)
+    assert not older.is_alive() and time.monotonic() - begun < 5
+    assert first == {"query": "slow words", "superseded": True}
+    assert newer["index"][0]["ug"] == "radiohead/creep"
+    assert "slow words" not in app._found  # an interrupted search is no answer to keep
 
 
 # --- the library's files ----------------------------------------------------------------------
