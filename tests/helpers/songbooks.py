@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 from caracole.library import keep_file, song_dir, write_atomic
@@ -85,6 +86,31 @@ class FakeChordPro:
         else:
             out.write_bytes(b"%PDF-1.4 fake\n" + "\n".join([*cmd[1:], *texts]).encode("utf-8"))
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+
+FAKE_PROGRAM = """\
+#!{python}
+import sys
+
+out = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--output="))
+songs = [a for a in sys.argv[1:] if not a.startswith("-")]
+texts = [open(s, encoding="utf-8").read() for s in songs]
+with open(out, "w", encoding="utf-8") as f:
+    if out.endswith(".cho"):
+        f.write("{{new_song}}\\n".join(texts))
+    else:
+        f.write("%PDF-1.4 fake " + " ".join(sys.argv[1:]) + "\\n" + "\\n".join(texts))
+"""
+
+
+def fake_chordpro_program(folder: Path) -> Path:
+    """A stand-in for the chordpro program, run as one: it writes its output by name, a PDF naming its
+    options and holding its inputs, or a ChordPro file of its inputs joined by {new_song}."""
+    path = folder / "bin" / "chordpro"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(FAKE_PROGRAM.format(python=sys.executable), encoding="utf-8")
+    path.chmod(0o755)
+    return path
 
 
 def render_sheets(conn, cfg, overrides: Overrides | None = None) -> None:

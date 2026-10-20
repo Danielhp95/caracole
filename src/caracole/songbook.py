@@ -99,6 +99,10 @@ class SongbookError(Exception):
     """songbooks.toml can't be read or written, or a change to it can't be made; the message says why."""
 
 
+class SongbookFileError(SongbookError):
+    """songbooks.toml itself can't be read: not a regular file, not UTF-8, not TOML, or not songbooks."""
+
+
 @dataclass(frozen=True)
 class Songbook:
     """A songbook: its name and its songs, in order, as songbooks.toml writes them."""
@@ -258,14 +262,14 @@ def _read(path: Path) -> str | None:
     except FileNotFoundError:
         return None
     except NotRegularFile as e:
-        raise SongbookError(f"{path}: {e.strerror}; put the file itself there") from e
+        raise SongbookFileError(f"{path}: {e.strerror}; put the file itself there") from e
     except OSError as e:
-        raise SongbookError(f"{path}: can't read it: {e.strerror or e}") from e
+        raise SongbookFileError(f"{path}: can't read it: {e.strerror or e}") from e
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError as e:
         line = data[: e.start].count(b"\n") + 1
-        raise SongbookError(f"{path}: line {line} is not valid UTF-8 (save the file as UTF-8)") from e
+        raise SongbookFileError(f"{path}: line {line} is not valid UTF-8 (save the file as UTF-8)") from e
 
 
 def load_songbooks(path: Path) -> list[Songbook]:
@@ -277,9 +281,9 @@ def load_songbooks(path: Path) -> list[Songbook]:
     try:
         return _parse(tomllib.loads(text))
     except tomllib.TOMLDecodeError as e:
-        raise SongbookError(f"{path}: {e}") from e
+        raise SongbookFileError(f"{path}: {e}") from e
     except SongbookError as e:
-        raise SongbookError(f"{path}: {e}") from e
+        raise SongbookFileError(f"{path}: {e}") from e
 
 
 def _parse(data: Mapping[str, Any]) -> list[Songbook]:
@@ -329,7 +333,7 @@ def _edit[T](path: Path, change: Callable[[Any, list[Songbook]], T]) -> T:
         books = [] if old is None else _parse(tomllib.loads(old))
         doc = tomlkit.parse(old) if old is not None and old.strip() else _new_document()
     except (tomllib.TOMLDecodeError, TOMLKitError, SongbookError) as e:
-        raise SongbookError(f"{path}: {e}") from e
+        raise SongbookFileError(f"{path}: {e}") from e
     result = change(doc, books)
     text = tomlkit.dumps(doc)
     if text != old:

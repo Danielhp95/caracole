@@ -378,7 +378,26 @@ def _render(ctx: StepContext) -> StepResult:
                                        "and the log says why."))
     if s.font_error:
         result.problems.append(Problem(s.font_error))
+    _render_songbooks(ctx, result)
     return result
+
+
+def _render_songbooks(ctx: StepContext, result: StepResult) -> None:
+    """The songbooks' files, after the sheets they hold (songbook.py), on the render step's line."""
+    from caracole.songbook import render_songbooks
+
+    b = render_songbooks(ctx.conn, ctx.cfg, ctx.overrides)
+    result.done += _counted((b.rendered, "songbook made" if b.rendered == 1 else "songbooks made"))
+    if b.rendered or b.skipped or b.failed:
+        result.status += f"; songbooks: {b.rendered} rendered, {len(b.failed)} failed"
+    if b.error:
+        result.problems.append(Problem(f"No songbook was made: {b.error}. Fix songbooks.toml, then run caracole "
+                                       "songbook render."))
+    if b.failed:
+        result.problems.append(Problem(f"{plural(len(b.failed), 'songbook')} couldn't be made in full "
+                                       f"({', '.join(b.failed)}): the log says why."))
+    if b.font_error:
+        result.problems.append(Problem(b.font_error))
 
 
 def _todo(ctx: StepContext) -> StepResult:

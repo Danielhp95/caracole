@@ -36,7 +36,7 @@ an earlier one failed:
 | scan | music.py (Music/), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html), songbook.py (the songbooks of songbooks.toml, in `Library/_songbooks/`) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
@@ -54,7 +54,8 @@ and `search --key`).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `write_pages`, `fail`, `warn`.
-  The logic of `caracole review` and `caracole search` is in review.py and search.py.
+  The logic of `caracole review`, `caracole search` and `caracole songbook` is in review.py, search.py
+  and songbook.py.
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed), jobs.py (the queue: each
   request runs the `caracole` CLI in a child process, one command at a time), app.py (the
@@ -68,7 +69,12 @@ and `search --key`).
   tested in test_viewer_theory.py; the script only looks up what page.py precomputed. A
   server serves a viewer only while `render.written_file` (kv `render:files:<song id>`)
   matches it (`library.holds`), with `viewer.viewer_csp()` (a sandbox) as its header: anyone
-  with a synced device can put an HTML page in the library.
+  with a synced device can put an HTML page in the library. book.py builds songbook.html
+  (`build_songbook`): a section per song, made as page.py makes a sheet.html, and book.js,
+  which runs before viewer.js and gives the song it shows the element ids viewer.js looks
+  for; book.css and book.js are inlined and hashed too. A server serves it only while
+  `songbook.served_page` (kv `songbook:<folder>`) says it is caracole's, with
+  `book.songbook_csp()`.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
@@ -249,6 +255,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **overrides.toml** is written only through the `add_*` functions of overrides.py: tomlkit,
   so the user's comments and layout survive, then `library.write_atomic`. It is read only
   as a regular file (`test_overrides.py::test_writers_preserve_comments_and_roundtrip`).
+  So is **songbooks.toml**, through the writers of songbook.py (`make_songbook`, `add_to_songbook`,
+  ...): a file that won't parse is a `SongbookFileError`, which stops the songbooks and nothing else
+  (`test_songbook.py::test_writers_keep_comments_and_layout`,
+  `test_songbook_render.py::test_a_broken_songbooks_file_is_an_error_that_stops_nothing_else`).
 - **The library is synced**: Syncthing and every device can write to it. Read a file there
   with `library.read_regular` (or `open_regular`: no symbolic link followed, regular files
   only), and write one with `library.write_atomic`: a random temporary name opened
@@ -260,7 +270,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   re-entrant within a process, and the clients of `make_client` hold it until closed.
   Every command that asks UG, LRCLIB, LaCuerda, gtptabs.com or MuseScore for pages or
   writes the library takes it;
-  `search`, `match --dry-run` and `index stats` only read and never wait. `review` takes it
+  `search`, `match --dry-run`, `index stats`, `songbook list` and `songbook show` only read and
+  never wait. `review` takes it
   only after its questions (commands/library.py), so the nightly run never waits for an
   answer (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`).
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
