@@ -571,9 +571,11 @@ _STYLE = BASE_STYLE + """
 .empty-hint { margin: 0; color: var(--muted); }
 .source { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 4px;
   vertical-align: -3px; }
-.source.letters, .source.glyph { border: 1px solid var(--border-strong); background: var(--raised);
-  color: var(--muted); font-size: 7.5px; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
-.source.glyph { font-size: 10px; font-weight: 600; }
+/* A site with no icon (yet), or no site: a badge a little bigger than an icon, so its letters read. */
+.source.letters, .source.glyph { width: 20px; height: 20px; border: 1px solid var(--border-strong);
+  border-radius: 5px; background: var(--raised); color: var(--text); font-size: 10px; font-weight: 750;
+  letter-spacing: -.02em; line-height: 1; vertical-align: -5px; }
+.source.glyph { font-size: 12px; font-weight: 600; }
 .btn.sourced { gap: 7px; }
 .btn.sourced .source { order: -1; }
 .badges .source { align-self: center; }

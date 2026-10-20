@@ -990,6 +990,8 @@ MARKS = """
     name: m.getAttribute("alt") || m.getAttribute("aria-label"), role: m.getAttribute("role"),
     loaded: m.tagName === "IMG" ? m.complete && m.naturalWidth > 0 : null,
     link: m.closest("a") ? m.closest("a").textContent : null,
+    width: m.getBoundingClientRect().width, font: parseFloat(getComputedStyle(m).fontSize),
+    colour: getComputedStyle(m).color, text_colour: getComputedStyle(document.body).color,
   }));
   document.body.setAttribute("data-marks", JSON.stringify(marks));
 })();
@@ -1022,6 +1024,12 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
     assert any(m["source"] == "auto" and m["text"] == "♪" and m["name"] == "from the audio (auto-chords)"
                for m in marks)
     assert any(m["source"] == "youtube" for m in marks)  # Wonderwall's search link
+    # A site's icon is 16 px; its badge, there until the icon is in, is bigger, its letters
+    # big enough to read and in the text's own colour.
+    assert {m["width"] for m in ug} == {16}, ug
+    badges = [m for m in marks if m["tag"] == "span"]
+    assert badges and all(m["width"] >= 18 and m["font"] >= 10 for m in badges), badges
+    assert all(m["colour"] == m["text_colour"] for m in badges if m["text"] in ("LC", "LR", "YT")), badges
 
 
 def row_of(shown: str, title: str) -> str:
