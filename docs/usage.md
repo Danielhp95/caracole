@@ -1209,11 +1209,16 @@ row has the sheet's mark, the title, the artist (which, as on a card,
 shows only that artist's songs), the key ("Am"; a screen reader hears "Key A
 minor (from the tab)"), the status, Needs review when caracole isn't sure of
 the match, and one button: the sheet, or, on the page
-`caracole serve` serves, Fetch now for a wanted song. An auto sheet's row
-says so by its ♪ mark and its button, "Auto sheet PDF", rather than by a
-badge, so that a phone's second line keeps room for the artist. Its "⋯" button opens the
-rest: the other files, the Guitar Pro pages, MuseScore's pages, and the search
-and buy links. The search, the status buttons, the Key menu, the sort and the
+`caracole serve` serves, Fetch now for a wanted song (Pick the match for one
+that needs review first, and Removing… while caracole removes it). An auto
+sheet's row says so by its ♪ mark and its button, "Auto sheet PDF", rather
+than by a badge, so that a phone's second line keeps room for the artist. Its
+"⋯" button opens the rest: a review's candidates (the same picker as a
+card's, which Pick the match opens there), the other files, the Guitar Pro
+pages, MuseScore's pages, the search and buy links and, served, Look in the
+index and Remove…. A request's line (see [caracole serve](#caracole-serve))
+shows under the row, a line of its own, as it does on a card. The search, the
+status buttons, the Key menu, the sort and the
 letters work the same in both, and the address remembers the choice
 (`#view=rows`), as it does the rest: a bookmark opens the page as you left it.
 
@@ -1439,8 +1444,9 @@ do:
   button that does the same, except
   on a song that needs review, which `caracole fetch` won't fetch until
   `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
-  overrides.toml) settles the match: its card has Pick the match instead
-  (below). Lyrics, LaCuerda and the rest wait for the nightly run.
+  overrides.toml) settles the match: its card and its row have Pick the
+  match instead (below). Lyrics, LaCuerda and the rest wait for the nightly
+  run.
 - **Pick the match.** On a song that needs review, Pick the match opens its
   candidates, as on the file (see above), as a list to choose from: pick one,
   or None of these, and Pick. It runs `caracole review --song "ARTIST - TITLE"
@@ -1462,22 +1468,28 @@ do:
   review without candidates keeps its Review first button: `caracole review`
   offers it a pin or an ignore. With the keyboard, Enter opens the picker and
   takes the focus to the first candidate, the arrow keys choose, and Tab
-  goes on through the candidates' UG links to Fetch it now and Pick.
+  goes on through the candidates' UG links to Fetch it now and Pick. In the
+  Rows view the picker is under the row's "⋯", and the row's Pick the match
+  opens it there, the focus on the first candidate.
 - **Look in the index.** A wanted song the offline index didn't match has a
-  Look in the index link beside Fetch now: its page, `/review?song=ID`, runs
+  Look in the index link beside Fetch now (under "⋯" in the Rows view): its
+  page, `/review?song=ID`, runs
   `caracole search` for the song's artist and title, and offers the first five
   hits the same way, without None of these. A pick writes `[match]` alone (see
   [Review](#review)). The page runs the search when you open it, so the
   library page carries no hits of its own.
-- **Remove a song.** Each card's Remove… button opens a page that says what
+- **Remove a song.** Each card's Remove… button (a row's, under its "⋯")
+  opens a page that says what
   goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
   it queues `caracole remove --yes "ARTIST - TITLE"`, and the card says
-  Removing… until it has run; on `/jobs` its line says "Removing from
+  Removing… until it has run (a row, in place of its button); on `/jobs`
+  its line says "Removing from
   caracole…", then "Removed". Keep it goes back to the library, and nothing
   changes. A page older than a change to the library (the song merged into
   another since, say) removes nothing: reload the library.
 - **How it goes, on the page.** A request leaves you where you are. The
-  song's card, or for a song new to the library a card of its own under the
+  song's card (or its row, on a line under it), or for a song new to the
+  library a card of its own under the
   form ("Just requested"), says on one line how its request goes: "Queued…"
   (or "Queued behind 2 requests…"), then what runs ("Adding to the
   library…", "Looking it up…", "Fetching from Ultimate Guitar…", "Rendering

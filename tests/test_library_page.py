@@ -1612,3 +1612,159 @@ def test_the_row_renderer_takes_any_search_result_in_a_real_browser(conn, cfg, t
     assert main and 'target="_blank"' in main.group(1) and 'rel="noopener noreferrer"' in main.group(1)
     assert "javascript:" not in creep and 'href="#"' in creep  # an unsafe link goes nowhere
     assert "row-more" not in row_of(results, "Nameless")  # nothing more to show, no button
+
+
+# --- rows on the served page: every state a card shows ------------------------------------------
+
+
+def served_states(conn, cfg):
+    """A song in each state a served card shows: in review with candidates to pick (Crep), being removed
+    (Wonderwall), its request queued (Bohemian Rhapsody), not found (Yesterday), found in a key (De Música
+    Ligera); and the controls that say so."""
+    from caracole.library_page import WebControls
+
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    crep = in_review(conn)
+    going = add_song(conn, "Oasis", "Wonderwall")
+    queued = add_song(conn, "Queen", "Bohemian Rhapsody")
+    lost = add_song(conn, "The Beatles", "Yesterday")
+    update_song(conn, lost.id, match_decision="not_found")
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet_json(conn, cfg, soda, "Words\n", raw={"tonality_name": "Am"}, tab_id=7)
+    put(cfg, soda, "sheet.pdf")
+    update_song(conn, soda.id, status="found")
+    job = {"id": 4, "display": queued.display, "songId": queued.id, "state": "queued", "fetching": True,
+           "line": {"tone": "queued", "text": "Queued behind 1 request…", "link": None,
+                    "details": "jobs?job=4#job-4"}, "details": "jobs?job=4#job-4"}
+    controls = WebControls(csrf="tok", busy=frozenset({queued.id}), active=2, held=frozenset({crep.id}),
+                           removing=frozenset({going.id}), jobs=(job,))
+    return controls, {"crep": crep, "going": going, "queued": queued, "lost": lost, "soda": soda}
+
+
+def panel_of(row: str) -> str:
+    found = re.search(r'<div class="row-panel"[^>]*>.*', row, re.S)
+    assert found, row
+    return found.group(0)
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_rows_carry_every_state_a_card_shows(conn, cfg, tmp_path):
+    controls, s = served_states(conn, cfg)
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, "#view=rows"))
+    assert shown.count('<article class="row"') == 5 and 'class="card"' not in shown
+
+    # In review, with candidates: its button opens the picker, in its panel, instead of Review first.
+    crep = row_of(shown, "Crep")
+    assert re.search(r'<div class="row-action"><button class="btn small row-pick"[^>]*>Pick the match</button>', crep)
+    assert "Review first" not in crep and "/fetch" not in crep
+    # The button says Pick the match once: the picker under it folds as a card's read-only one does.
+    assert re.search(r'<summary class="picker-open"[^>]*>3 candidates</summary>', panel_of(crep))
+    pick = re.search(r'<form[^>]*action="/review"[^>]*>(.*?)</form>', panel_of(crep), re.S)
+    assert pick and f'name="song" value="{s["crep"].id}"' in pick.group(1)
+    assert re.findall(r'<input type="radio" name="pick" value="([^"]*)"', pick.group(1)) == [
+        "radiohead/creep", "jeff-buckley/creep", "misc-musicals/creep-the-musical", "none"]
+
+    # Being removed: it says so where its button was, and offers neither a fetch nor another removal.
+    going = row_of(shown, "Wonderwall")
+    assert re.search(r'<div class="row-action"><a class="row-busy" href="/jobs"[^>]*>Removing…</a>', going)
+    assert "/fetch" not in going and "/remove" not in going
+
+    # Its request queued: the row says how it goes, on its own line, as the card does.
+    queued = row_of(shown, "Bohemian Rhapsody")
+    line = re.search(r'<p class="progress"[^>]*>(.*?)</p>', queued, re.S)
+    assert line and 'role="status"' in line.group(0) and 'data-tone="queued"' in line.group(0)
+    assert "Queued behind 1 request…" in line.group(1) and 'href="jobs?job=4#job-4"' in line.group(1)
+    assert "/fetch" not in queued and queued.count('class="progress"') == 1
+
+    # Not found: Fetch now still asks its artist's UG page; the panel looks in the index.
+    lost = row_of(shown, "Yesterday")
+    assert re.search(r'<div class="row-action"><form[^>]*action="/fetch"', lost)
+    assert re.search(rf'<a class="btn small" href="/review\?song={s["lost"].id}"[^>]*>Look in the index</a>',
+                     panel_of(lost))
+
+    # Found, in a key: the sheet, the key, and Remove… with the other files behind ⋯.
+    soda = row_of(shown, "De Música Ligera")
+    assert re.search(r'<div class="row-action"><a [^>]*>Sheet PDF</a>', soda) and "Key A minor" in soda
+    removes = {title: re.findall(r'<form[^>]*action="/remove"[^>]*>(.*?)</form>', panel_of(row_of(shown, title)), re.S)
+               for title in ("Crep", "Bohemian Rhapsody", "Yesterday", "De Música Ligera")}
+    assert all(len(forms) == 1 and "Remove…" in forms[0] for forms in removes.values()), removes
+    assert 'aria-label="Remove De Música Ligera by Soda Stereo from caracole"' in soda
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_file_rows_show_a_reviews_candidates_and_a_song_not_founds_line(conn, cfg, tmp_path):
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    in_review(conn)
+    lost = add_song(conn, "The Beatles", "Yesterday")
+    update_song(conn, lost.id, match_decision="not_found")
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path, "#view=rows"))
+    crep = panel_of(row_of(shown, "Crep"))
+    assert re.search(r'<details class="picker"', crep) and "<form" not in crep
+    assert '<code>caracole review --song "Radio Head - Crep"</code>' in crep
+    hint = re.search(r'<p class="pick-hint">(.*?)</p>', panel_of(row_of(shown, "Yesterday")), re.S)
+    assert hint and '<code>caracole review --song "The Beatles - Yesterday"</code>' in hint.group(1)
+
+
+# Measures each row (its height, whether a part of it leaves it or covers another), then opens Crep's picker
+# from its row's button and notes where the focus went and how wide the page got.
+ROW_STATES = """
+(() => {
+  const box = (n) => n.getBoundingClientRect();
+  const rows = Array.from(document.querySelectorAll("#list .row"));
+  const measured = {};
+  for (const r of rows) {
+    const rb = box(r);
+    const parts = Array.from(r.querySelectorAll(
+      ".row-title, .row-artist, .row-meta > *, .row-action > *, .row-more, .row > .source, .row > .progress"))
+      .filter((p) => box(p).height > 0);
+    const out = parts.filter((p) => box(p).right > rb.right + 0.5 || box(p).left < rb.left - 0.5)
+      .map((p) => p.className);
+    const over = [];
+    for (let a = 0; a < parts.length; a++) {
+      for (let b = a + 1; b < parts.length; b++) {
+        const x = box(parts[a]);
+        const y = box(parts[b]);
+        if (x.left < y.right - 1 && y.left < x.right - 1 && x.top < y.bottom - 1 && y.top < x.bottom - 1) {
+          over.push(parts[a].className + " / " + parts[b].className);
+        }
+      }
+    }
+    measured[r.querySelector("h2").textContent] = { height: Math.round(rb.height), out, over };
+  }
+  const crep = rows.find((r) => r.querySelector("h2").textContent === "Crep");
+  crep.querySelector(".row-action button").click();
+  setTimeout(() => {
+    const picker = crep.querySelector("details.picker");
+    const at = document.activeElement;
+    document.body.setAttribute("data-states", JSON.stringify({
+      rows: measured, open: picker.open, panel: !picker.closest(".row-panel").hidden,
+      expanded: crep.querySelector(".row-more").getAttribute("aria-expanded"),
+      focus: at && at.name === "pick" ? at.value : null,
+      scroll: document.documentElement.scrollWidth, page: window.innerWidth,
+    }));
+  }, 50);
+})();
+"""
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,900"])
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_rows_states_fit_its_row_and_its_pick_opens_the_picker_where_it_is(conn, cfg, tmp_path, size):
+    import html as html_module
+
+    controls, _ = served_states(conn, cfg)
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    path = write_library_page(cfg.library_dir, with_script(html, ROW_STATES))
+    dom = dump_dom(path, tmp_path, "#view=rows", size=size)
+    found = re.search(r'data-states="([^"]*)"', dom)
+    assert found, dom[-2000:]
+    states = json.loads(html_module.unescape(found.group(1)))
+    assert states["page"] == int(size.split(",")[0]) and states["scroll"] <= states["page"], states
+    for title, row in states["rows"].items():
+        assert row["out"] == [] and row["over"] == [], (title, row)
+    # A row with a request's line is one line taller than the rest, no more.
+    plain = max(row["height"] for title, row in states["rows"].items() if title != "Bohemian Rhapsody")
+    assert plain < states["rows"]["Bohemian Rhapsody"]["height"] <= plain + 30, states
+    assert states["open"] and states["panel"] and states["expanded"] == "true", states
+    assert states["focus"] == "radiohead/creep", states

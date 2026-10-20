@@ -567,3 +567,78 @@ def test_a_requests_picker_on_the_requests_page_takes_the_requests_whole_width(s
         })()""")
     waits, inside = widths
     assert waits >= inside - 1, widths
+
+
+# --- the same in the Rows view ------------------------------------------------------------------
+
+ROWS_FIRST = 'document.querySelector(\'button[data-view="rows"]\').click();\n'
+
+
+def row(dom: str, title: str) -> str:
+    found = re.search(r'<article class="row"[^>]*>(?:(?!</article>).)*?<h2 class="row-title"[^>]*>' + re.escape(title)
+                      + r"</h2>.*?</article>", dom, re.S)
+    assert found, dom[-3000:]
+    return found.group(0)
+
+
+def listed(dom: str) -> str:
+    return re.search(r'<main[^>]*id="list"[^>]*>(.*?)</main>', dom, re.S).group(1)
+
+
+def test_fetch_now_in_a_row_shows_its_progress_on_the_row_then_its_sheet(serve, cfg, conn, tmp_path):
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    add_song(conn, "Oasis", "Wonderwall")
+    script = ("(() => {\n" + WATCH + FIRST_LINE_AND_FOCUS + ROWS_FIRST
+              + 'const go = cardOf("Creep").querySelector("form.fetch button");\ngo.focus();\ngo.click();\n})();\n')
+    url = serve(FakeCaracole(cfg), script)
+
+    dom = dump_dom(url, tmp_path)
+
+    seen = attribute(dom, "data-seen")
+    assert "Fetching from Ultimate Guitar…" in seen, seen
+    # Once done, the row is drawn again, as a row, around its line: the sheet is its button now.
+    assert 'class="card"' not in listed(dom) and listed(dom).count('<article class="row"') == 2
+    shown = row(dom, "Creep")
+    line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
+    assert 'role="status"' in line and 'data-tone="ready"' in line and "Open sheet" in line
+    assert re.search(r'<div class="row-action"><a [^>]*>Sheet PDF</a>', shown) and 'action="/fetch"' not in shown
+    assert 'data-status="found"' in shown and shown.count('class="progress"') == 1
+    assert attribute(dom, "data-same") == {"list Creep": True}  # the same live region all along
+    assert attribute(dom, "data-focus") == ["p.progress", "Creep"]  # the focus went from the button to the line
+    assert 'action="/fetch"' in row(dom, "Wonderwall")
+
+
+def test_a_rows_pick_opens_its_picker_there_and_the_row_shows_how_it_goes(serve, cfg, conn, tmp_path):
+    in_review(conn)
+    script = "(() => {\n" + WATCH + ROWS_FIRST + """
+new MutationObserver(() => {
+  const r = cardOf("Creep");
+  const p = r && r.querySelector(".progress");
+  if (p && /Queued|Writing|Fetching/.test(p.textContent) && r.querySelector("form.pick-form, .row-pick")) {
+    document.body.setAttribute("data-both", "1");
+  }
+}).observe(document.body, { subtree: true, childList: true, characterData: true });
+const r = cardOf("Creep");
+r.querySelector(".row-action .row-pick").click();
+const panel = r.querySelector(".row-panel");
+document.body.setAttribute("data-opened", JSON.stringify({
+  panel: !panel.hidden, picker: panel.querySelector("details.picker").open }));
+r.querySelector('input[name="pick"][value="radiohead/creep"]').checked = true;
+r.querySelector("form.pick-form button[type=submit]").click();
+})();
+"""
+    url = serve(FakeCaracole(cfg), script)
+
+    dom = dump_dom(url, tmp_path)
+
+    assert attribute(dom, "data-opened") == {"panel": True, "picker": True}
+    seen = attribute(dom, "data-seen")
+    assert "Writing the answer to overrides.toml…" in seen and "Fetching from Ultimate Guitar…" in seen, seen
+    assert 'class="card"' not in listed(dom)
+    shown = row(dom, "Creep")
+    line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
+    assert 'data-tone="ready"' in line and "Open sheet" in line
+    assert re.search(r'<div class="row-action"><a [^>]*>Sheet PDF</a>', shown)
+    assert 'class="picker"' not in shown and "row-pick" not in shown and "Needs review" not in shown
+    assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran

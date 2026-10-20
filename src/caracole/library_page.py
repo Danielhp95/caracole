@@ -58,7 +58,9 @@ ask it how its requests go (``connect-src 'self'``). The script posts the forms
 with fetch(), so the page stays where it is: each song's card shows its
 request's one line (web/status.py), from ``/jobs.json``, asked every 1.5 s
 while one waits or runs, and is drawn again from the song's new data once the
-request is over. A song new to the library gets a card of its own under the
+request is over. A song's row carries what its card does: the line, on a line
+of the row's own; Pick the match, or Removing…, as its button; the picker,
+Look in the index and Remove… under its "⋯". A song new to the library gets a card of its own under the
 form, and two requests or more also show as a short list in a corner. Without
 JavaScript the forms post as forms. The file on disk has none of it, and lets
 no form be sent and nothing be asked.
@@ -778,7 +780,12 @@ body.with-tray .page { padding-bottom: 16rem; }
 .row-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
 .row-action form { margin: 0; }
 .row .btn { min-height: 34px; padding: 0 11px; font-size: .85rem; }
-.row-busy { color: var(--wanted); font-size: .85rem; font-weight: 650; }
+.row-busy { display: inline-flex; align-items: center; min-height: 34px; color: var(--wanted); font-size: .85rem;
+  font-weight: 650; text-underline-offset: 2px; }
+.row .btn.row-pick { border-color: var(--review); color: var(--review); background: var(--review-bg); }
+/* A request's line: a line of the row's own, under the title, the artist and the button. */
+.row > .progress { grid-column: 2 / -1; font-size: .85rem; }
+.row-panel .foot { margin-top: 2px; }
 .row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: 34px; height: 30px;
   padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted);
   font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
@@ -1020,8 +1027,7 @@ _SCRIPT = r"""
           showLine(progressIn(card), failure(answer));
           return;
         }
-        const i = byIndex.get(Number(s.id));
-        if (card && (i === undefined || cards.get(i) !== card)) spots.set(Number(view.id), card);
+        if (card && !isOwn(s, card)) spots.set(Number(view.id), card);
         track(view);  // its line takes the button's place
       }, () => {
         go.disabled = false;
@@ -1063,6 +1069,12 @@ _SCRIPT = r"""
   const byIndex = new Map(songs.map((s, i) => [Number(s.id), i]));  // song id -> its place in songs
   const isActive = (view) => view.state === "queued" || view.state === "running";
   const jobOfSong = (id) => (songJob.has(Number(id)) ? views.get(songJob.get(Number(id))) : null);
+  // Whether node is the song's own card or row in the list, which the page draws again itself; any other
+  // (#requested's card) is a spot of the job's.
+  const isOwn = (s, node) => {
+    const i = byIndex.get(Number(s.id));
+    return i !== undefined && (cards.get(i) === node || rows.get(i) === node);
+  };
   // A request's line, written into p only when it changed, so a screen reader hears each change once.
   // Its link says where to go next; details, the request's output on /jobs, follows it.
   const showLine = (p, view) => {
@@ -1095,8 +1107,19 @@ _SCRIPT = r"""
     const href = e.currentTarget.getAttribute("href") || "";
     if (!box || !box.querySelector("form") || !/^review\?song=\d+$/.test(href)) return;
     e.preventDefault();
+    showPicker(box);
+  };
+  // Opens a picker where it is, a row's in its panel (the "⋯" button's), which opens first. Opened, the
+  // picker takes the focus to its first candidate (its toggle); open already, the focus goes there.
+  const showPicker = (box) => {
+    const panel = box.closest(".row-panel");
+    if (panel && panel.hidden) {
+      const more = panel.parentNode.querySelector(".row-more");
+      if (more) more.setAttribute("aria-expanded", "true");
+      panel.hidden = false;
+    }
     if (!box.open) {
-      box.open = true;  // its toggle takes the focus to the first candidate
+      box.open = true;
       return;
     }
     const first = box.querySelector("input[name=pick]:checked") || box.querySelector("input[name=pick]");
@@ -1114,7 +1137,9 @@ _SCRIPT = r"""
     if (!p) {
       p = el("p", "progress");
       p.setAttribute("role", "status");
-      const after = card.querySelector(".facts") || card.querySelector(".head");
+      // A card's under its facts; a row's under its artist, a line of its own across the row.
+      const after = card.querySelector(".facts") || card.querySelector(".head") || card.querySelector(".row-sub") ||
+        card.querySelector(".row-title");
       if (after) after.after(p);
       else card.appendChild(p);
     }
@@ -1155,8 +1180,8 @@ _SCRIPT = r"""
   let track = () => {};
 
   // A song not found: caracole serve's picker page shows what `caracole search` finds for it.
-  const lookLink = (s) => {
-    const look = el("a", "btn", "Look in the index");
+  const lookLink = (s, cls) => {
+    const look = el("a", cls || "btn", "Look in the index");
     look.href = "/review?song=" + Number(s.id);
     look.setAttribute("aria-label", "Look for " + String(s.title) + " by " + String(s.artist) + " in the index");
     look.title = "What caracole search finds for it in the offline Ultimate Guitar index, to pick from";
@@ -1284,8 +1309,7 @@ _SCRIPT = r"""
           showLine(progressIn(card), failure(answer));
           return;
         }
-        const i = byIndex.get(Number(s.id));
-        if (card && (i === undefined || cards.get(i) !== card)) spots.set(Number(view.id), card);
+        if (card && !isOwn(s, card)) spots.set(Number(view.id), card);
         track(view);  // its line takes the picker's place
       }, () => {
         go.disabled = false;
@@ -1499,14 +1523,27 @@ _SCRIPT = r"""
     }
     return row;
   };
-  // A song's main action in its row: its sheet; on the served page, a wanted song's fetch, as on its card.
-  const songAction = (s, primary) => {
+  // A song's main action in its row, as its card has it: its sheet; on the served page, a wanted song's
+  // fetch, or the button that opens its picker; nothing while its request waits or runs (the row's line
+  // says how it goes); Removing… while caracole removes it.
+  const songAction = (s, primary, picker) => {
+    if (server && removing.has(Number(s.id))) {
+      const going = el("a", "row-busy", "Removing…");
+      going.href = "/jobs";
+      going.title = "See the requests";
+      return going;
+    }
     if (server && s.status === "wanted") {
-      if (busy.has(Number(s.id))) {
-        const going = el("a", "row-busy", "Fetching…");
-        going.href = "/jobs";
-        going.title = "See the requests";
-        return going;
+      const job = jobOfSong(s.id);
+      if ((job && isActive(job)) || busy.has(Number(s.id))) return null;
+      if (s.fetchable === false && picker && picker.querySelector("form")) {
+        // caracole fetch would refuse it until the match is picked: this opens the picker, in the row's panel.
+        const pick = el("button", "btn small row-pick", "Pick the match");
+        pick.type = "button";
+        pick.setAttribute("aria-label", "Pick the match for " + String(s.title) + " by " + String(s.artist));
+        pick.title = "Which Ultimate Guitar song this is: caracole isn't sure";
+        pick.addEventListener("click", () => showPicker(picker));
+        return pick;
       }
       if (s.fetchable === false) {
         const held = el("button", "btn small", "Review first");
@@ -1523,28 +1560,49 @@ _SCRIPT = r"""
     return open;
   };
   const songRow = (s) => {
+    const id = Number(s.id);
     const files = listOf(s.files);
     const primary = files.find((f) => f && f.primary) || null;
     const more = [];
-    if (SHOWS.review(s)) {
+    // What a card shows under its facts, in the row's panel: the picker, or the note that says why not.
+    const picker = SHOWS.review(s) && listOf(s.candidates).length > 0 ? makePicker(s) : null;
+    if (picker) {
+      // The row's button says Pick the match: its picker folds as a read-only one does, "3 candidates".
+      const summary = picker.querySelector("summary");
+      summary.className = "picker-open";
+      summary.textContent = plural(listOf(s.candidates).filter((c) => c && c.ref).length, "candidate");
+      more.push(picker);
+    } else if (SHOWS.review(s)) {
       const note = el("p", "note", "caracole isn't sure about this match: see the ");
       const todo = el("a", null, "to-do page");
       todo.href = "_todo.md";
       note.appendChild(todo);
       note.appendChild(document.createTextNode(", or run caracole review."));
       more.push(note);
+    } else if (!server && s.notFound && s.status === "wanted") {
+      more.push(notFoundHint(s));
+    }
+    if (server && s.notFound && s.status === "wanted" && !removing.has(id)) {
+      const look = el("div", "actions");
+      look.appendChild(lookLink(s, "btn small"));
+      more.push(look);
     }
     more.push({ heading: "Files", links: files.filter((f) => f !== primary).map((f) => elsewhere(s, f)) },
       { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },
       { heading: "Find the chords", links: listOf(s.links) },
       { heading: "Buy the track for an auto sheet", links: listOf(s.buy) });
+    if (server && !removing.has(id)) {  // removing: its action says so
+      const foot = el("div", "foot");
+      foot.appendChild(removeForm(s));
+      more.push(foot);
+    }
     // No "Auto sheet" badge: the row's mark (♪, "from the audio") and its button ("Auto sheet PDF") say so.
     const badges = [{ kind: s.status, text: label(STATUS_TEXT, s.status) || s.status }];
     if (SHOWS.review(s)) badges.push({ kind: "review", text: "Needs review" });
     const artists = listOf(s.artists);
     const keyed = typeof s.key === "string" && s.key;
-    return resultRow({
+    const row = resultRow({
       title: s.title,
       artist: artists.length > 1 ? artists.join(", ") : s.artist,
       source: s.source,
@@ -1552,13 +1610,21 @@ _SCRIPT = r"""
       key: keyed ? s.key : "",
       keyText: keyed ? keyText(s) : "",
       badges,
-      action: songAction(s, primary),
+      action: songAction(s, primary, picker),
       more,
       onArtist: () => {
         setArtist(String(s.sortArtist || ""));
         window.scrollTo(0, 0);
       },
     });
+    // How the song's request goes, on a line of the row's own, as on its card.
+    const job = server ? jobOfSong(id) : null;
+    if (job) {
+      showLine(progressIn(row), job);
+    } else if (server && s.status === "wanted" && !removing.has(id) && busy.has(id)) {
+      showLine(progressIn(row), { line: { tone: "running", text: "Fetching…" } });
+    }
+    return row;
   };
   const rows = new Map();
   const rowFor = (i) => {
@@ -1856,6 +1922,7 @@ _SCRIPT = r"""
       songKeys[i] = keyId(data.key);
       hay[i] = String(data.search || "");
       if (cards.has(i)) cards.set(i, refill(cards.get(i), makeCard(data)));  // else drawn when shown
+      if (rows.has(i)) rows.set(i, refill(rows.get(i), songRow(data)));
     } else {
       arrived.set(Number(data.id), data);  // counted, and shown under the form until the next load
     }
@@ -1879,12 +1946,12 @@ _SCRIPT = r"""
     }
     paint(view);
   };
-  // The job's line on the cards that show it, and in the list of requests.
+  // The job's line on the cards and rows that show it, and in the list of requests.
   const paint = (view) => {
     const id = Number(view.id);
     const song = songOf(view);
     const i = song !== null && songJob.get(song) === id ? byIndex.get(song) : undefined;
-    for (const card of [i === undefined ? null : cards.get(i), spots.get(id)]) {
+    for (const card of [i === undefined ? null : cards.get(i), i === undefined ? null : rows.get(i), spots.get(id)]) {
       if (!card) continue;
       const p = progressIn(card);
       showLine(p, view);
@@ -1898,6 +1965,11 @@ _SCRIPT = r"""
         const box = picker.closest("details.picker");
         if (box.contains(document.activeElement)) focusOn(p);
         box.remove();
+        const pick = card.querySelector(".row-pick");  // a row's button that opened it
+        if (pick) {
+          if (pick.contains(document.activeElement)) focusOn(p);
+          pick.remove();
+        }
       }
     }
     trayShow(view);
