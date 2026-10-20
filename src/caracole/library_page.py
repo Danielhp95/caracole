@@ -86,6 +86,13 @@ form, and two requests or more also show as a short list in a corner. Without
 JavaScript the forms post as forms. The file on disk has none of it, and lets
 no form be sent and nothing be asked.
 
+Remove…'s question is a page of the server's; Remove it, and Keep it, come back
+to this page as it was left (Remove… sends the address after # along, ``back``),
+at the song's card: ``song=ID`` in the address, which the script scrolls to and
+focuses, then drops. The card's line follows the removal ("Removing from
+caracole…", then "Removed"), and the card is then a ``gone`` one, its name
+alone, until the page is loaded again.
+
 The Songbooks section's forms, and the Select bar's Make songbook, post with
 fetch() too: the songbook's card says how its change goes on a line under its
 name, its buttons waiting (a song moves by its place now), a new songbook's
@@ -196,8 +203,8 @@ class WebControls:
     ``removing`` holds the songs with a removal queued or running, whose cards
     say so instead of offering Remove; ``jobs`` are the requests queued or
     running, as ``/jobs.json`` gives them, so their cards show their progress
-    from the start: a song's, and a songbook's change on its songbook's
-    (``kind``).
+    from the start: a song's, a removal's on its song's card, and a songbook's
+    change on its songbook's (``kind``).
     """
 
     csrf: str
@@ -859,6 +866,9 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
   border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: 84px; }
 .card[data-status="ignored"] { opacity: .7; }
+/* A song caracole removed while the page was open: it says so, and nothing more, until the page is loaded again. */
+.card.gone { border-style: dashed; box-shadow: none; }
+.gone h2 { color: var(--muted); }
 .head { display: flex; align-items: flex-start; gap: 12px; }
 .mono { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
   font-size: .95rem; font-weight: 700; letter-spacing: .02em; color: var(--h0); background: var(--h0-bg); }
@@ -1329,13 +1339,16 @@ _SCRIPT = r"""
     });
     return form;
   };
-  // Every card's "Remove…": caracole serve answers with what goes and what stays, and asks.
+  // Every card's "Remove…": caracole serve answers with what goes and what stays, and asks. Its answers go
+  // back to the library as you leave it (`back`: the address after #, its search, filters and view).
   const removeForm = (s) => {
     const form = el("form", "remove");
     form.setAttribute("method", "post");
     form.setAttribute("action", "/remove");
     form.appendChild(hidden("csrf", String(server.csrf || "")));
     form.appendChild(hidden("song", Number(s.id)));
+    const back = form.appendChild(hidden("back", ""));
+    form.addEventListener("submit", () => { back.value = location.hash.slice(1); });
     const go = el("button", "btn small quiet", "Remove…");
     go.type = "submit";
     go.setAttribute("aria-label", "Remove " + String(s.title) + " by " + String(s.artist) + " from caracole");
@@ -1725,16 +1738,16 @@ _SCRIPT = r"""
     }
     if (server) {
       const foot = el("div", "foot");
-      if (removing.has(Number(s.id))) {
+      if (!removing.has(Number(s.id))) {
+        foot.appendChild(removeForm(s));
+      } else if (!job || job.kind !== "remove") {  // a removal the page follows says how it goes on its line
         const note = el("p", "busy", "Removing… ");
         const jobs = el("a", null, "see the requests");
         jobs.href = "/jobs";
         note.appendChild(jobs);
         foot.appendChild(note);
-      } else {
-        foot.appendChild(removeForm(s));
       }
-      card.appendChild(foot);
+      if (foot.childNodes.length) card.appendChild(foot);
     }
     return card;
   };
@@ -1752,6 +1765,8 @@ _SCRIPT = r"""
   // row's button (sheetAction), as it is on the file.
   const serverAction = (s, picker) => {
     if (server && removing.has(Number(s.id))) {
+      const job = jobOfSong(s.id);
+      if (job && job.kind === "remove") return null;  // the row's line says how it goes
       const going = el("a", "row-busy", "Removing…");
       going.href = "/jobs";
       going.title = "See the requests";
@@ -2148,9 +2163,16 @@ _SCRIPT = r"""
     tray.hidden = trayClosed || shown.length < 2;
     document.body.classList.toggle("with-tray", !tray.hidden);
   };
-  // The cards drawn again from what the library has now: a request is over. Each keeps its line. A songbook's
-  // change: the Songbooks section drawn again.
+  // The cards drawn again from what the library has now: a request is over. Each keeps its line. A removal
+  // done leaves its song's card saying so; a songbook's change, the Songbooks section drawn again.
   const redraw = (view) => {
+    if (view.kind === "remove" && songOf(view) !== null) {
+      removing.delete(songOf(view));
+      if (view.state === "done") {
+        removed(songOf(view));
+        return;
+      }
+    }
     if (view.kind === "songbook" && view.songbooks && typeof view.songbooks === "object") {
       drawSongbooks(view);
       return;
@@ -2174,9 +2196,9 @@ _SCRIPT = r"""
   };
   const songOf = (view) => (view.songId === null || view.songId === undefined ? null : Number(view.songId));
   // Whether a job that is over brings what the page draws again: its song's card (none for a song the library
-  // hasn't got), or the Songbooks section, for a songbook's change.
+  // hasn't got), or the Songbooks section, for a songbook's change; a removal's song is gone, or as it was.
   const drawable = (view) => (view.kind === "songbook" ? Boolean(view.songbooks)
-    : Boolean(view.card) || songOf(view) === null);
+    : view.kind === "remove" || Boolean(view.card) || songOf(view) === null);
   const apply = (view) => {
     const id = Number(view.id);
     views.set(id, view);
@@ -2232,6 +2254,38 @@ _SCRIPT = r"""
       nav.appendChild(badge);
     }
     badge.textContent = String(n);
+  };
+
+  // A song caracole removed: its card, and its row, say so until the page is loaded again, with nothing left to
+  // open, fetch or pick (its files are gone, and so is its data-id, which the Select mode finds songs by).
+  const goneItem = (s, asRow) => {
+    const artist = listOf(s.artists).length > 1 ? listOf(s.artists).join(", ") : String(s.artist);
+    if (asRow) {
+      const row = resultRow({ title: s.title, artist, status: "removed" });
+      row.classList.add("gone");
+      return row;
+    }
+    const card = el("article", "card gone");
+    card.tabIndex = -1;
+    const head = el("div", "head");
+    const hue = Number.isInteger(s.hue) && s.hue >= 0 && s.hue < 8 ? s.hue : 0;
+    const mono = el("span", "mono hue-" + hue, s.monogram || "");
+    mono.setAttribute("aria-hidden", "true");
+    head.appendChild(mono);
+    const names = el("div", "names");
+    names.append(el("h2", null, s.title), el("p", "by", artist));
+    head.appendChild(names);
+    card.appendChild(head);
+    return card;
+  };
+  const removed = (id) => {
+    const i = byIndex.get(id);
+    if (i === undefined) return;
+    songs[i] = Object.assign({}, songs[i], { status: "removed" });
+    cards.set(i, cards.has(i) ? refill(cards.get(i), goneItem(songs[i], false)) : goneItem(songs[i], false));
+    rows.set(i, rows.has(i) ? refill(rows.get(i), goneItem(songs[i], true)) : goneItem(songs[i], true));
+    summarize();
+    tallyChips();
   };
 
   // --- caracole serve: the songbooks' forms ---------------------------------------------------------
@@ -2583,6 +2637,26 @@ _SCRIPT = r"""
   }
   summarize();
   render();
+  // Back from a page of caracole serve's about a song (Remove's question): its card in view, and the focus
+  // on it, as the A-Z strip leaves it; the address keeps the rest. In the next frame, once every script
+  // has drawn what it draws above the list (the Songbooks section, opened as it was left).
+  let back = NaN;
+  try {
+    back = Number(new URLSearchParams(location.hash.slice(1)).get("song"));
+  } catch (err) {
+    // A malformed address: nothing to show.
+  }
+  if (back) {
+    requestAnimationFrame(() => {
+      const i = byIndex.get(back);
+      const item = i === undefined ? null : (state.view === "rows" ? rows : cards).get(i);
+      if (item && item.isConnected) {
+        item.scrollIntoView({ block: "center" });
+        item.focus({ preventScroll: true });
+      }
+      save();
+    });
+  }
 })();
 """
 

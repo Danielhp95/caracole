@@ -236,7 +236,7 @@ class JobQueue:
 
     def submit(self, title: str, song_key: str, steps: Sequence[tuple[str, Sequence[str]]], *,
                fetching: bool = False, note: str = "", display: str = "",
-               join: bool = True) -> tuple[Job, bool]:
+               join: bool = True, song_id: int | None = None) -> tuple[Job, bool]:
         """Queue a job, and say whether it is new: one per song, unless a fetch must come after an add.
 
         A song's waiting or running job that does as much (a fetch, or the new
@@ -252,8 +252,10 @@ class JobQueue:
         A lookup of a song or tab you picked (``--ug``, ``--tab``) that the
         song's jobs don't look up yet is never dropped: it takes the place of
         the song's lookup that still waits, or comes after the one that runs,
-        as a job of its own. Raises QueueFull when ``limit`` jobs are waiting
-        or running.
+        as a job of its own. ``song_id`` is the library's song the job is about,
+        when it is known before the job runs: a removal's, whose song is gone
+        once it is done. Raises QueueFull when ``limit`` jobs are waiting or
+        running.
         """
         new = [Step(label, tuple(args)) for label, args in steps]
         with self._lock:
@@ -281,7 +283,8 @@ class JobQueue:
             if sum(job.active for job in self._jobs) >= self._limit:
                 raise QueueFull(f"{self._limit} requests are waiting already")
             job = Job(self._next_id, title, song_key, new, fetching=fetching, note=note, display=display or title,
-                      stages=_stages(new))
+                      stages=_stages(new), song_id=song_id,
+                      song_display=(display or title) if song_id is not None else None)
             self._next_id += 1
             self._jobs.append(job)
             self._wake.notify_all()

@@ -61,8 +61,8 @@ class FakeCaracole:
     ``caracole get --progress`` reports them. A song in ``fail`` fails its fetch with that error, as the CLI
     says one. With ``slow_add``, ``add`` (and a lookup's song stage) too waits for the page to ask twice; the
     next ``down`` times the page asks, the server answers 503. ``songbook`` changes songbooks.toml as the
-    command does (no files), once the page has asked once; a songbook named in ``fail`` fails its command with
-    that error.
+    command does (no files), and ``remove`` takes the song out of the database, each once the page has asked
+    once; a songbook named in ``fail`` fails its command with that error.
     """
 
     def __init__(self, cfg, *, fail=None, slow_add=False, down=0):
@@ -93,6 +93,10 @@ class FakeCaracole:
             elif args[0] == "songbook":
                 self.polls.wait(1)
                 return self._songbook(args, emit)
+            elif args[0] == "remove":
+                self.polls.wait(1)
+                song = find_song(conn, override_key(args[-1]))
+                conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))
             elif args[0] == "fetch":
                 display = args[-1].removeprefix("--song=")
                 self.polls.wait(2)
@@ -975,3 +979,48 @@ def test_a_songbook_change_on_its_way_when_the_page_loads_shows_on_its_songbook(
     assert re.search(r'<section[^>]*id="requested"[^>]*hidden', dom)  # not a song just requested
     assert attribute(dom, "data-books") == {"same": True, "locked": True, "running": True}
 
+
+# --- Remove ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("left,size", [("#show=wanted", "390,844"), ("#view=rows", "390,844"), ("#q=creep", "1280,800")])
+def test_remove_it_goes_back_to_the_library_where_the_song_says_removing_then_removed(serve, cfg, conn, tmp_path,
+                                                                                      left, size):
+    # The question is a page of its own; its answer goes back to the library as you left it (its filter or
+    # view, here, and the Songbooks section open above the list), at the song's card, which says how the
+    # removal goes: no requests page.
+    from caracole.songbook import make_songbook, songbooks_file
+
+    for n in range(12):
+        add_song(conn, "Band", f"Song {n:02}")
+    creep = add_song(conn, "Radiohead", "Creep")
+    make_songbook(songbooks_file(cfg.library_dir), "Campfire", [f"Band - Song {n:02}" for n in range(6)])
+    url = serve(FakeCaracole(cfg), "(() => {})();\n")
+    item = f'#list [data-id="{creep.id}"]'
+    width, height = (int(n) for n in size.split(","))
+    with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
+        page.open(url + left)
+        page.js("localStorage.setItem('caracole-library:songbooks-open', '1')")  # as you left it open
+        page.js("window.before = true; location.reload()")
+        assert page.wait("window.before === undefined && document.readyState === 'complete' && "
+                         "document.querySelector('#songbooks > details').open")
+        if left == "#view=rows":
+            page.click(f"{item} .row-more")
+        page.click(f"{item} form.remove button")
+        assert page.wait("location.pathname === '/remove' && document.querySelector('form.confirm') !== null")
+        page.click("form.confirm button.danger")
+        assert page.wait(f"location.pathname === '/' && document.querySelector('{item} .progress') !== null")
+        assert page.wait(f"location.hash === {json.dumps(left)}"), page.js("location.hash")  # as you left it
+        at = page.js(f"""(() => {{ const r = document.querySelector('{item}').getBoundingClientRect();
+            return [document.activeElement === document.querySelector('{item}'), r.top >= 0 && r.bottom <= innerHeight];
+            }})()""")
+        assert at == [True, True]  # the song's card in view, the focus on it
+        first = page.js(f"document.querySelector('{item} .progress').textContent")
+        assert first in ("Queued…", "Removing from caracole…"), first
+        assert page.wait("(() => { const c = document.querySelector('#list .gone .progress'); "
+                         "return c !== null && c.textContent === 'Removed'; })()", timeout=20)
+        gone = page.js("""(() => { const c = document.querySelector('#list .gone');
+            return [c.querySelector('h2').textContent, c.querySelectorAll('a, button, form').length,
+                    c.querySelector('.progress').getAttribute('role')]; })()""")
+    assert gone == ["Creep", 0, "status"]  # nothing left to open or to ask for
+    assert find_song(conn, creep.key) is None

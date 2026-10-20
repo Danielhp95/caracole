@@ -1834,10 +1834,11 @@ with it. A KEY that is no key exits with status 2.
 - **Remove a song.** Each card's Remove… button (a row's, under its "⋯")
   opens a page that says what
   goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
-  it queues `caracole remove --yes "ARTIST - TITLE"`, and the card says
-  Removing… until it has run (a row, in place of its button); on `/jobs`
-  its line says "Removing from
-  caracole…", then "Removed". Keep it goes back to the library, and nothing
+  it queues `caracole remove --yes "ARTIST - TITLE"` and goes back to the
+  library as you left it (its search, filters and view), the song's card in
+  view, whose line says how it goes: "Queued…", "Removing from caracole…",
+  then "Removed", the card keeping only the song's name until you load the
+  page again (a row, the same). Keep it goes back there too, and nothing
   changes. A page older than a change to the library (the song merged into
   another since, say) removes nothing: reload the library.
 - **How it goes, on the page.** A request leaves you where you are. The

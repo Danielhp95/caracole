@@ -347,8 +347,10 @@ def sign_in_page(csrf: str, *, failed: bool = False) -> str:
 
 
 def remove_page(display: str, song_id: int, key: str, csrf: str, goes: list[str], stays: list[str],
-                notes: list[str], *, waiting: int = 0) -> str:
-    """Whether to remove a song, with what goes and what stays (``removal.describe``); the form confirms it."""
+                notes: list[str], *, waiting: int = 0, back: str = "", library: str = "/") -> str:
+    """Whether to remove a song, with what goes and what stays (``removal.describe``); the form confirms it.
+    Both answers go back to ``library``, the library page as it was left: ``back``, its address after #,
+    goes along with the form."""
     after = (f" It runs after the {waiting} request{'s' if waiting != 1 else ''} queued before it."
              if waiting else "")
     lede = ('<p class="lede">Remove it queues <code>caracole remove</code> for this song, as every request is '
@@ -360,11 +362,12 @@ def remove_page(display: str, song_id: int, key: str, csrf: str, goes: list[str]
         return (f'<h2 class="sub">{escape(heading)}</h2>\n<ul class="plan">'
                 + "".join(f"<li>{escape(line)}</li>" for line in lines) + "</ul>\n")
 
+    fields = (("csrf", csrf), ("song", song_id), ("key", key), ("confirm", "1"), *((("back", back),) if back else ()))
     hidden = "".join(f'  <input type="hidden" name="{name}" value="{escape(str(value), quote=True)}">\n'
-                     for name, value in (("csrf", csrf), ("song", song_id), ("key", key), ("confirm", "1")))
+                     for name, value in fields)
     form = ('<form class="confirm" method="post" action="/remove">\n' + hidden
             + '  <button class="btn danger" type="submit">Remove it</button>\n'
-            '  <a class="btn" href="/">Keep it</a>\n</form>')
+            f'  <a class="btn" href="{escape(library, quote=True)}">Keep it</a>\n</form>')
     said = "".join(f'<p class="message">{escape(note)}</p>\n' for note in notes)
     return page(f"Remove {display}?", lede + items("It takes", goes) + items("It leaves", stays) + said + form)
 
