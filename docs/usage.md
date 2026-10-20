@@ -1683,7 +1683,10 @@ two places, and sends no request:
 
 QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
-compares Chinese as pinyin. It reads an index of the UG index's names, so a
+compares Chinese as pinyin, as whole words only, as the matcher does: 斑马
+finds a title written `ban-ma` or `banma`, never the letters inside
+`suburban-male` or `band-maid`, and pinyin matching only part of a name is
+never a strong hit. It reads an index of the UG index's names, so a
 word of three letters or more is looked up in milliseconds, not by reading all
 1.6 million rows: a song or an artist answers in 5–25 ms on a full index, and
 a query made only of very common words in 50–160 ms ("the" about 0.1 s, "i
