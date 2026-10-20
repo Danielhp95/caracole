@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import NoReturn
+from typing import TYPE_CHECKING, NoReturn
 
 import httpx
 import typer
@@ -22,6 +22,9 @@ from caracole.config import Config, ConfigError, ProviderPolicy, load_config
 from caracole.health import EventLog
 from caracole.http import Event, PoliteClient
 from caracole.overrides import Overrides, OverridesError, load_overrides
+
+if TYPE_CHECKING:
+    from caracole.youtube import YtDlp
 
 LOCK_NAME = "caracole.lock"  # in the state directory
 sleep = time.sleep  # tests replace it
@@ -258,6 +261,36 @@ def make_client(
             on_event=logged,
             lock=lock,
         )
+    except BaseException:
+        _release(lock)
+        raise
+
+
+def make_youtube(
+    cfg: Config,
+    conn: sqlite3.Connection,
+    run_id: str,
+    *,
+    on_event: Callable[[Event], None] | None = None,
+) -> YtDlp:
+    """yt-dlp for one run (youtube.py), as ``make_client`` makes a provider's client: it holds
+    caracole's lock until it is closed, its first run keeps the pause after the last one any
+    caracole made, and every run is logged to ``events``. Every caller closes it."""
+    from caracole.youtube import PROVIDER, YtDlp
+
+    lock = _acquire(cfg, "youtube downloads")
+    try:
+        policy = cfg.provider(PROVIDER)
+        _pause_after_last_request(conn, PROVIDER, policy.delay)
+        log = EventLog(conn, run_id)
+
+        def logged(event: Event) -> None:
+            log(event)
+            if on_event is not None:
+                on_event(event)
+
+        return YtDlp(cfg.ytdlp_bin, policy, cfg.cache_dir, on_event=logged, sleep=lambda s: sleep(s),
+                     on_close=lambda: _release(lock))
     except BaseException:
         _release(lock)
         raise

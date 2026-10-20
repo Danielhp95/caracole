@@ -15,6 +15,7 @@ up as a nightly service on a NixOS host, with secrets, Syncthing and backups.
 - [Say what you want to learn](#say-what-you-want-to-learn)
 - [The first run](#the-first-run)
 - [One step at a time](#one-step-at-a-time)
+- [Audio from YouTube](#audio-from-youtube)
 - [The to-do page](#the-to-do-page)
 - [Browse and search](#browse-and-search)
 - [overrides.toml: your decisions](#overridestoml-your-decisions)
@@ -47,6 +48,7 @@ music_dir = "~/Music"             # tracks you bought; read only, used only for 
 user_agent = "caracole/0.1 (personal tab library)"
 guitar_pro_mode = "assisted"      # UG's mode, the only one: you click its Guitar Pro pages
 chordpro_bin = "chordpro"         # the program that renders PDFs
+ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouTube"
 # cjk_font = "/path/to/font.ttf"  # or $CARACOLE_CJK_FONT; see "Fonts for Chinese sheets"
 
 [spotify]                         # optional: without a client_id, Spotify is skipped
@@ -78,6 +80,10 @@ delay = [10, 20]
 enabled = true                    # false: caracole asks MuseScore nothing
 budget = 10
 delay = [10, 20]
+[providers.youtube]               # the audio of songs nobody has charted, with auto-chords
+enabled = true                    # false: caracole runs no yt-dlp; on only with auto-chords
+budget = 6                        # yt-dlp runs per run, each a search or a download
+delay = [15, 30]                  # seconds between two yt-dlp runs
 
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
@@ -135,13 +141,16 @@ else the file `client_secret_file` names, else
 `$CREDENTIALS_DIRECTORY/ntfy_token`, else `token_file`, else
 `$CARACOLE_NTFY_TOKEN`.
 
-**Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs` and
-`musescore`. Any other `[providers.…]` table is an error, like any other
-unknown key. Only gtptabs.com and MuseScore can be turned off: with
-`enabled = false` under `[providers.gtptabs]` or `[providers.musescore]`,
-caracole sends that site nothing, the nightly run skips its step, and the to-do
-page's Provider health says it is off. The other three are what caracole is
-built on, so `enabled` in their tables is an unknown key.
+**Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs`, `musescore`
+and `youtube`. Any other `[providers.…]` table is an error, like any other
+unknown key. Only gtptabs.com, MuseScore and YouTube can be turned off: with
+`enabled = false` under `[providers.gtptabs]`, `[providers.musescore]` or
+`[providers.youtube]`, caracole sends that site nothing, the nightly run skips
+its step, and the to-do page's Provider health says it is off. The other three
+are what caracole is built on, so `enabled` in their tables is an unknown key.
+YouTube is on only where caracole can make chords of what it downloads (see
+[Audio from YouTube](#audio-from-youtube)); its budget counts yt-dlp runs, not
+requests.
 
 **Guitar Pro files** come two ways. Ultimate Guitar's robots.txt closes its
 download endpoint to bots, so its Guitar Pro pages are yours to click:
@@ -666,8 +675,11 @@ configuration it would take, and why it waits.
    filed first, and that song gets none from gtptabs.com.
 10. **musescore**: read MuseScore's song sitemaps into a local index, for the
     to-do page's links to its pages. It downloads nothing.
-11. **render**: write ChordPro files and PDFs.
-12. **todo**: rewrite `_todo.md` and `index.html`.
+11. **youtube**: take the audio of a few songs no human sheet was found for from
+    YouTube, for auto-chords (see [Audio from YouTube](#audio-from-youtube)).
+    Skipped in a caracole without auto-chords.
+12. **render**: write ChordPro files and PDFs.
+13. **todo**: rewrite `_todo.md` and `index.html`.
 
 Every step runs even when an earlier one failed, so the to-do page is always
 rewritten. Until the index is built, the index and match steps are skipped;
@@ -733,6 +745,10 @@ caracole first asked for them, on 19 October 2026, MuseScore's Cloudflare
 protection answered with a challenge: caracole takes that as a block, like a
 403, and lists what it read before, if anything (see
 [the to-do page](#the-to-do-page)).
+
+YouTube gets at most 6 yt-dlp runs a night, 15–30 seconds apart: a search and a
+download a song, so three songs. Inside each run yt-dlp waits 2 seconds between
+its own requests, and 10–20 seconds before a download.
 
 **Errors are never misses.** A block (HTTP 403, 429 or a challenge page)
 stops that site for the rest of the run and sends one ntfy message, which
@@ -932,14 +948,32 @@ and cache.
   says so and exits 1. A purchase it can't read fails that song alone: it
   exits 0, the to-do page lists the file, and the song is tried again once the
   file changes. It exits 1 when auto-chords can't work at all: the model files
-  missing or unusable, or a sheet it can't write into the library.
+  missing or unusable, or a sheet it can't write into the library. It also
+  works out the chords of the audio the youtube step took, as of a purchase.
+- **`caracole youtube [--song "ARTIST - TITLE" [--url URL | --none]]`** takes
+  the audio of the songs no human sheet was found for from YouTube, as the
+  nightly run's youtube step does (see [Audio from YouTube](#audio-from-youtube)),
+  printing a line per song, such as
+  `Radiohead - Creep: downloaded Creep (Radiohead - Topic), https://www.youtube.com/watch?v=…`,
+  then `YouTube: 1 downloaded, 0 not there, 0 unavailable, 0 errors (2 yt-dlp runs of 6).`
+  `--song` takes that song's audio now, even when its search found nothing
+  lately; it refuses a song that has a human sheet, is ignored or has a
+  purchase linked, and says so when the song has that video's audio already. `--url` first writes the video
+  under `[youtube]` in overrides.toml, so the song's audio comes from it; `--none`
+  writes `"none"` there, lets go of any audio the song had from YouTube, and asks
+  nothing, so it works with YouTube off too, and for a song not in the library
+  yet. It needs the flake's `packages.autochords`, which has auto-chords and
+  yt-dlp: without them, or without the model files, it asks nothing and exits 1.
+  Turned off, it asks nothing and says so. A cooldown, a block or a spent budget
+  exits 0. The chords come next, from `caracole autochords`.
 
 **The pages.** A command that changes what `_todo.md` and `index.html` show
 rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
 `todo`, `add`, `search --add`, `sync` and `autochords`; `review` when an
-answer changed something; and `fetch`, `lyrics`, `lacuerda`, `gtptabs` and
-`musescore` when they did something or were blocked, so that Provider health
-shows the cooldown.
+answer changed something; and `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
+`musescore` and `youtube` when they did something or were blocked, so that
+Provider health shows the cooldown (`youtube` also when it let go of audio no
+song needs any more, with nothing to download).
 A page caracole can't write ends the command with status 1 and
 `can't write …/_todo.md: Permission denied`, its own work saved first; for
 `add`, `search --add` and `sync` that is only a warning.
@@ -948,8 +982,8 @@ A page caracole can't write ends the command with status 1 and
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
 `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
-`musescore`, `render`, `match`, `scan`, `todo`, `sync`, `add`, `search --add`
-and `autochords`. A
+`musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
+`search --add` and `autochords`. A
 second one waits for the first, and says which it is:
 `Another caracole is running (pid 4242: run); waiting for it to finish.`
 `caracole review` and `caracole remove` take the lock only after your answers,
@@ -958,6 +992,78 @@ and `remove --list` only read, so they never wait. A command that waited reads t
 lock: if the caracole it waited for was blocked, it sends that site nothing and
 exits 0. Its first request to a site also waits out the pause after the last
 request any caracole sent there, so the pauses hold whichever caracole sends.
+
+## Audio from YouTube
+
+For a song nobody has charted, caracole can take the audio from YouTube and
+work out the chords itself, with auto-chords. This is your choice for your own
+library, and it goes against YouTube's robots.txt (which closes `/results` and
+`/youtubei/`, the search and the API yt-dlp uses, to crawlers) and against
+YouTube's terms of service, which allow no downloads but those YouTube offers.
+It is the one place caracole goes against a site's robots.txt; everywhere else
+it honours it. It does so on these terms:
+
+- **Only for a song with no human sheet**, and nothing caracole will still do may
+  find one: the songs the buy list would list. A purchase in Music/ comes
+  first, and a human sheet found later still takes the auto sheet's place.
+- **Only with auto-chords.** The download is no use without the chords, so a
+  caracole without auto-chords (the default package), or without its model
+  files, runs no yt-dlp at all, and the to-do page says why. It is on by
+  default in `packages.autochords`, which has yt-dlp; `[providers.youtube]
+  enabled = false` turns it off.
+- **A few songs a night**: a budget of 6 yt-dlp runs (a search or a download
+  each), 15–30 seconds apart, one at a time; yt-dlp's own pauses space out its
+  requests inside a run (`--sleep-requests 2`, and 10–20 seconds before a
+  download).
+- **Blocks honoured**: "Sign in to confirm you're not a bot", an HTTP 429 or 403,
+  a rate limit or a captcha stops YouTube for the night and starts its
+  cooldown, 24 hours and doubling, as for any site, with one ntfy message.
+  Nothing is retried, and caracole never works around a block: no cookies, no
+  login, no proxy, no PO tokens or plugins (yt-dlp gets `--ignore-config`,
+  `--no-cookies`, `--no-cookies-from-browser`, `--no-plugin-dirs`). Nor does
+  yt-dlp get any of caracole's secrets: it runs without the unit's credentials
+  or any `CARACOLE_*` variable, with only the paths, language, proxy and
+  certificate settings it needs.
+- **Audio alone**, as m4a, never a playlist, at most 100 MB, kept outside the
+  synced library, in the cache (see [the library folder](#the-library-folder)).
+
+**Which video.** caracole asks yt-dlp's search for `ytsearch8:<artist> <title>`
+and picks the upload whose title is the song's and whose channel or title names
+the artist, names in two scripts included (宋冬野 meets "Song Dongye"), and
+whose length is within 20 seconds of the song's (its own, else LRCLIB's; with
+neither, from 45 seconds to 15 minutes). A title in Chinese, Japanese or Korean,
+written with no spaces, is the song's when nothing but the artist and words such
+as 官方, 歌词 or MV are left around it, or when it stands as a word of its own
+among others; never when it only starts a longer one (雨 isn't 雨下一整晚, nor
+晴天 晴天娃娃). A cover, a live, karaoke, instrumental, lesson, slowed, sped-up
+or remixed version loses to any other, unless the song itself is live or
+acoustic: by its title (karaoke "in the style of" the artist included) or by
+its channel's name (KaraFun, Sing King, any "Karaoke" or "Nightcore" channel). Then a title that is exactly the song's beats one that only stands
+among other words; then the closest length wins (within 2 seconds, LRCLIB's
+timed lyrics fit the audio), then the artist's "Topic" channel
+(YouTube's own upload of the release), official audio, the artist's own
+channel or an official video, then the search's order. Nothing that fits makes
+the song a miss, asked about again after 30 days. A wrong pick, or a song the
+search found nothing for: paste the right video under `[youtube]` in
+overrides.toml, or run `caracole youtube --song "Artist - Title" --url URL`.
+
+**Then the chords.** The youtube step links the audio to the song as the scan
+links a purchase, and `caracole autochords` (its unit, after each nightly run)
+makes `sheet (auto).txt` from it. Its third line says where the audio came from,
+`Audio from YouTube: Creep (Radiohead - Topic), https://www.youtube.com/watch?v=…`,
+and so does the PDF's first line; info.json gives the video's address as the
+auto sheet's source. The to-do page and index.html say where each song stands.
+
+**Errors are never misses** here either: a network error, a timeout (2 minutes
+for a search, 15 for a download) or anything else yt-dlp fails on leaves the
+song for the next run, after the songs whose last try didn't fail. A video
+YouTube won't give without a login (private, removed, age-restricted,
+members-only, DRM-protected) is passed over for the next pick; one you pasted
+waits for another paste, and is never asked for again meanwhile. A song with
+audio from another video keeps it until then. So is a video whose download
+failed 3 times for any reason but the network (a format YouTube no longer
+offers, say): the next run searches again, without that one, and the song is no
+miss.
 
 ## The to-do page
 
@@ -1046,10 +1152,32 @@ when it has something in it:
   top instead. Each has links to buy the track DRM-free (Bandcamp, Qobuz, the
   iTunes Store) and to check the song first (Chordify, Songsterr, a YouTube
   lesson search). Drop the purchase into Music/, and auto-chords writes a
-  sheet from it. Songs whose audio you have are left off.
+  sheet from it. Songs whose audio you have are left off. This is the list of a
+  caracole that takes no audio from YouTube; unless you turned YouTube off, it
+  says why it takes none (`… only when it can work out the chords from it, and
+  here it can't: this caracole was built without auto-chords …`).
+- **No human sheet found yet**, in place of the buy list when caracole takes the
+  audio from YouTube (see [Audio from YouTube](#audio-from-youtube)). The same
+  songs, and those whose audio came from YouTube, until a human sheet turns up,
+  each with where it stands: `queued` (the next run looks for it, or downloads
+  the video it picked, linked), `waiting` while YouTube is blocking caracole,
+  `audio downloaded from` the video, or `chords done, from` the video, with a
+  link to the auto sheet; with the "check first" links (Chordify, Songsterr, a
+  YouTube lesson search), and no buy links. A song whose last try failed says
+  so, and is tried again. caracole does all of this itself, so the section
+  doesn't count among the things that need you.
+- **Nothing on YouTube for these.** The songs YouTube's search found no video
+  that fits (asked again after 30 days), whose video under `[youtube]` can't be
+  downloaded (private, removed, age-restricted: caracole never logs in; a song
+  with audio from an earlier video says so, and keeps it), or that
+  you turned YouTube down for (`"none"`, with buy links). The lines to paste
+  under `[youtube]` follow, one per song, each in place of
+  `https://www.youtube.com/watch?v=…`; for a song with an entry already, the
+  line says to put it in place of that entry.
 - **Auto-chords couldn't read these purchases.** Each file auto-chords failed
   on, with the error. Re-download it, or convert it (to FLAC, say) and replace
-  the original: a changed file is tried again on the next run.
+  the original: a changed file is tried again on the next run. Audio from
+  YouTube is named by its video: paste another video under `[youtube]`.
 - **New Guitar Pro files from gtptabs.com.** The files caracole downloaded in
   the last 7 days, one for each song that had none, each with a link to its
   page on gtptabs.com. Open each in Guitar Pro or TuxGuitar: if it isn't the
@@ -1099,10 +1227,12 @@ when it has something in it:
   secret missing, say), or needs `caracole auth spotify`, and how many songs
   wanted.txt has, with the lines it couldn't read; for a wanted.txt it
   couldn't read at all, the error, as `wanted.txt: error at <time>: …`.
-- **Provider health.** For Ultimate Guitar, LRCLIB, LaCuerda, gtptabs.com and
-  MuseScore: OK, errors (nothing has worked since the last error), cooling down
-  until when, or off (`[providers.gtptabs] enabled = false`, and the same for
-  `musescore`); the last success; the last error; the requests of the last run.
+- **Provider health.** For Ultimate Guitar, LRCLIB, LaCuerda, gtptabs.com,
+  MuseScore and YouTube: OK, errors (nothing has worked since the last error),
+  cooling down until when, or off (`[providers.gtptabs] enabled = false`, and
+  the same for `musescore` and `youtube`; for YouTube also `off:` and why, as in
+  a caracole without auto-chords); the last success; the last error; the
+  requests of the last run (for YouTube, its yt-dlp runs).
 
 ### Review
 
@@ -1197,10 +1327,14 @@ artist's cards share a coloured monogram, and the artist's name under a title
 shows only that artist's songs ("Queen" leaves out ABBA's "Dancing Queen"),
 until you take its chip off. "Find it elsewhere" opens a song's MuseScore
 pages, each a possible match, as on the to-do page, and, for a song without a
-sheet, its search and buy links. Next to its status, a card shows where its
-sheet came from, by the site's own icon, and a file from somewhere else
-carries its own: the lyrics LRCLIB's, a Guitar Pro file gtptabs.com's (see
-[Where each file came from](#where-each-file-came-from)).
+sheet, its search and buy links. When caracole takes the audio of songs with no
+human sheet from YouTube, their cards say where that stands instead of offering
+to buy them ("No human sheet yet: caracole takes the audio from YouTube next",
+"Audio from YouTube: auto-chords works out the chords next", "Auto sheet from
+YouTube audio"), with a link to the video once there is one. Next to its
+status, a card shows where its sheet came from, by the site's own icon, and a
+file from somewhere else carries its own: the lyrics LRCLIB's, a Guitar Pro
+file gtptabs.com's (see [Where each file came from](#where-each-file-came-from)).
 
 The Cards/Rows switch, beside the Key menu, shows the songs as rows instead:
 one line a song on a laptop, about twenty to a screen, and two lines on a
@@ -1605,8 +1739,9 @@ It runs until Ctrl-C. On the NUC, `services.caracole.web` runs it as a unit
 
 `overrides.toml` sits in the library folder (or where `overrides_file` says),
 and can live in git. `caracole review` writes `[match]`, `[alias]`, `[pin]`,
-`[ignore]` and `[reject]` for you; you write the rest by hand. These are all
-the tables:
+`[ignore]` and `[reject]` for you, and `caracole youtube --song … --url` or
+`--none` writes `[youtube]`; you write the rest by hand. These are all the
+tables:
 
 ```toml
 [alias]        # source artist -> UG artist slug(s): fixes every song by that artist
@@ -1632,6 +1767,10 @@ tab_ids = [1601668]
 
 [reject]       # UG songs that are not the song: never offered for it again
 "Maná - Rayando el Sol" = ["ana-gabriel/rayando-el-sol"]
+
+[youtube]      # the video a song's audio comes from, or "none" for no audio from YouTube
+"Radiohead - Creep" = "https://www.youtube.com/watch?v=XFkzRNyygfk"
+"Some Artist - Some Interlude" = "none"
 ```
 
 - **Song keys** are written `"Artist - Title"`. They match the way songs
@@ -1696,6 +1835,15 @@ tab_ids = [1601668]
   their `sheet.cho` and `sheet.pdf` at the next render; it stays found only
   if a LaCuerda or auto sheet is left. Guitar Pro files you filed, and files
   caracole doesn't track, stay. `n` in `caracole review` writes this table.
+- **`[youtube]`** names the YouTube video a song's audio comes from, in place of
+  the one caracole's search picks, also for a song its search found nothing
+  for: paste the address as your browser shows it (`watch?v=`, `youtu.be/`,
+  `music.youtube.com`, `/shorts/`, a playlist or a time in it included; caracole
+  takes the video alone). A new video for a song whose audio came from another
+  replaces it at the next run, and its auto sheet is made again. `"none"` keeps
+  the song's audio off YouTube for good: caracole lets go of any it took, and the
+  song goes back to buying. An auto sheet made already stays until a human
+  sheet, or one from other audio, takes its place.
 
 Each table may appear only once in the file: add lines under a table it has
 already, as the to-do page's lines say. An unknown table, a key other than
@@ -1770,13 +1918,21 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       guitar-1.gp5          Guitar Pro or Power Tab files: filed by rank, or from gtptabs.com
       score-1.mscz          scores you downloaded (MuseScore, MusicXML, PDF, MIDI), filed
       tab.txt  tab.json     the best text tab
-      sheet (auto).txt      made from audio you bought, when no human sheet exists;
-      sheet (auto).cho      it stays, with its ChordPro, PDF and viewer, beside a
-      sheet (auto).pdf      partial human sheet, until a complete one replaces it
-      sheet (auto).html
+      sheet (auto).txt      made from audio you bought, or caracole took from YouTube,
+      sheet (auto).cho      when no human sheet exists; it stays, with its ChordPro,
+      sheet (auto).pdf      PDF and viewer, beside a partial human sheet, until a
+      sheet (auto).html     complete one replaces it
       info.json             where everything came from, and the song's key
 Music/                      music_dir: the tracks you bought (caracole only reads it)
 ```
+
+The audio caracole takes from YouTube is not in the library: it stays in the
+cache folder, `cache_dir/youtube/<song id>-<video id>.m4a`, private and out of
+Syncthing's way, a few MB a song. caracole deletes a song's file there once a
+purchase or a human sheet takes its place, or `"none"` under `[youtube]` turns
+YouTube down for it, and any file there no song names; deleting the folder
+yourself costs only downloads, and only for songs that have no auto sheet yet:
+the next run, or `caracole youtube`, downloads their videos again.
 
 Folder names keep their accents and scripts, but never contain a path
 separator or a character file systems reserve: `AC/DC` becomes `AC-DC`.
@@ -1968,6 +2124,14 @@ sheet's PDF stays until a complete one arrives.
 
 If the scan reports the file as unmatched, make the file's artist and title
 tags match the song's line in wanted.txt.
+
+With auto-chords, caracole doesn't wait for a purchase: the nightly run takes
+the song's audio from YouTube itself (see [Audio from YouTube](#audio-from-youtube)),
+picking an upload named "斑马，斑马" or "Banma Banma" by 宋冬野 or "Song
+Dongye", and the to-do page lists the song as "No human sheet found yet",
+queued, then downloaded, then with its chords done. The auto sheet says which
+video its audio came from, on its third line. A purchase dropped into Music/
+later takes the video's place.
 
 ## Running it on the NUC
 

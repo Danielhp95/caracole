@@ -105,8 +105,10 @@ def build_sheet(
     plain: str | None = None,
     beats: Sequence[float] | None = None,
     downbeats: Sequence[float] | None = None,
+    source: str | None = None,
 ) -> str:
-    """The text of ``sheet (auto).txt``.
+    """The text of ``sheet (auto).txt``. ``source``, when given, is a line after the song's
+    name that says where its audio came from (a YouTube video, say).
 
     With synced lyrics (LRC), every lyric line gets the chords whose snapped start
     falls between its time and the next line's, at character columns proportional
@@ -125,7 +127,7 @@ def build_sheet(
     beat = _period(grid) or DEFAULT_BEAT
     bars = _bar_starts(grid, [s.start for s in segs], downbeats or [])
     bar = _period(bars) or BEATS_PER_BAR * beat
-    out = [AUTO_MARKER, f"{artist} - {title}", ""]
+    out = [AUTO_MARKER, f"{artist} - {title}", *([source.strip()] if source and source.strip() else []), ""]
     if any(text for _, text in lines):
         out += _synced_body(segs, lines, tol=beat / 2, bars=bars, bar=bar)
     else:

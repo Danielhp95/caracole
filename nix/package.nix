@@ -1,13 +1,20 @@
 # caracole as a Python application built from nixpkgs dependencies only. The
 # wrapper puts `chordpro` on PATH for sheet PDFs, and points CARACOLE_CJK_FONT at
 # a font with Chinese glyphs, so a song like 斑马斑马 renders. The `autochords`
-# variant's wrapper also points at the model files the offline unit needs.
+# variant's wrapper also points at the model files the offline unit needs, and
+# puts `yt-dlp` on PATH, for the audio of songs nobody has charted.
 {
   lib,
   callPackage,
   python3Packages,
   perl5Packages,
   lxgw-fusionkai,
+
+  # yt-dlp, which the nightly run's YouTube step runs (src/caracole/youtube.py),
+  # in the auto-chords variant alone: without auto-chords caracole takes no audio
+  # from YouTube. nixpkgs' wrapper brings what it needs: ffmpeg and ffprobe for
+  # `-x`, and deno, the JavaScript runtime YouTube's player needs, patched in.
+  yt-dlp,
 
   # `chordpro`, without its wxWidgets GUI: the full package pulls GTK, WebKit
   # and GStreamer (about 1 GiB) into a closure that only ever runs headless.
@@ -101,7 +108,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
     "--prefix"
     "PATH"
     ":"
-    (lib.makeBinPath [ chordpro ])
+    (lib.makeBinPath ([ chordpro ] ++ lib.optional withAutochords yt-dlp))
     "--set-default"
     "CARACOLE_CJK_FONT"
     cjkFont
@@ -122,8 +129,10 @@ python3Packages.buildPythonApplication (finalAttrs: {
   '';
 
   # After the tests, on the wrapped program: the font exists, and the wrapper
-  # sets it and finds chordpro. The auto-chords variant finds its models and
-  # their packages; the default one says where to get them.
+  # sets it and finds chordpro. The auto-chords variant finds its models, their
+  # packages and yt-dlp, so its YouTube route is on (with no song to ask about,
+  # it asks nothing); the default one says where to get them, and takes no audio
+  # from YouTube.
   postCheck = ''
     if [ ! -f ${lib.escapeShellArg cjkFont} ]; then
       echo "CJK font not found: ${cjkFont}" >&2
@@ -142,6 +151,9 @@ python3Packages.buildPythonApplication (finalAttrs: {
       + ''
         $out/bin/caracole autochords > autochords.out
         grep -qFx "auto-chords: 0 generated, 0 skipped, 0 failed" autochords.out
+        grep -qF -- ${lib.escapeShellArg "${yt-dlp}/bin"} $out/bin/caracole
+        $out/bin/caracole youtube > youtube.out
+        grep -qFx "No song is waiting for audio from YouTube." youtube.out
       ''
     else
       ''
@@ -150,6 +162,15 @@ python3Packages.buildPythonApplication (finalAttrs: {
           exit 1
         fi
         grep -qF "packages.autochords" autochords.err
+        if $out/bin/caracole youtube 2> youtube.err; then
+          echo "caracole youtube ran without auto-chords" >&2
+          exit 1
+        fi
+        grep -qF "packages.autochords" youtube.err
+        if grep -qF -- ${lib.escapeShellArg "${yt-dlp}/bin"} $out/bin/caracole; then
+          echo "the default package puts yt-dlp on PATH" >&2
+          exit 1
+        fi
       ''
   );
 
@@ -161,6 +182,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
   passthru = {
     inherit
       chordpro
+      yt-dlp
       cjkFont
       withAutochords
       btcWeights

@@ -8,8 +8,10 @@ caracole is a Python CLI, run every night by a NixOS service, that builds a priv
 of sing-along chord sheets (Ultimate Guitar, LaCuerda), lyrics (LRCLIB), PDFs (ChordPro)
 and Guitar Pro files (downloaded from gtptabs.com, or picked on UG for the user to
 download) for the songs in `wanted.txt` and, optionally, Spotify. For a song
-nobody has charted, `caracole autochords` writes a sheet from purchased audio with local
-models (torch, optional). The design lives in three files:
+nobody has charted, `caracole autochords` writes a sheet from audio with local models
+(torch, optional): a purchase, or audio the nightly run takes from YouTube with yt-dlp
+(youtube.py, youtube_fetch.py), a few songs a night, only where auto-chords is. The
+design lives in three files:
 
 - `plan.md`: design v2.1, and why. Its code sketches are older than the code: its module
   runs `caracole run --config …`, which the CLI rejects (`--config` is a root option:
@@ -37,6 +39,7 @@ an earlier one failed:
 | scan | music.py (Music/), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
+| youtube | youtube.py (video addresses, picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 
@@ -56,7 +59,8 @@ songs.py's, in the `removed` table).
 
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
-  `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `write_pages`, `fail`, `warn`.
+  `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `make_youtube`,
+  `write_pages`, `fail`, `warn`.
   The logic of `caracole review`, `caracole search` and `caracole remove` is in review.py,
   search.py and removal.py.
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
@@ -93,16 +97,22 @@ songs.py's, in the `removed` table).
   gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7
   and Power Tab files (a format's magic header, then filler). helpers/musescore_site.py
   is `FakeMuseScore`, its song sitemaps and the challenge Cloudflare answers caracole
-  with (`challenge()`). helpers/rendered.py keeps a sheet and renders it with a stand-in
+  with (`challenge()`). helpers/fake_ytdlp.py is `FakeYtDlp`, a yt-dlp the test writes as a
+  script that answers from a plan and logs its arguments, and `route_on`, a config with the
+  YouTube route on (auto-chords' packages taken to be there, model files, the fake).
+  helpers/rendered.py keeps a sheet and renders it with a stand-in
   for chordpro (`rendered_song`), so its viewer is one caracole wrote; helpers/chromium.py
   drives headless Chromium over the DevTools protocol (a pipe, the standard library), for
   a page whose CSP refuses a test's script. fixtures/ holds UG, LaCuerda, LRCLIB,
   gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
   synthetic lyrics, sheets and files.
 - `nix/`: package.nix (`buildPythonApplication`; the wrapper puts `chordpro` on PATH and
-  defaults `CARACOLE_CJK_FONT`; `withAutochords` adds the extra and the model files),
-  autochords.nix (the model files, fixed-output), module.nix (`services.caracole`: units,
-  timer, `caracole-admin`), module-check.nix (`checks.module`).
+  defaults `CARACOLE_CJK_FONT`; `withAutochords` adds the extra, the model files and
+  `yt-dlp` on PATH), autochords.nix (the model files, fixed-output), module.nix
+  (`services.caracole`: units, timer, `caracole-admin`; with auto-chords on, the nightly
+  unit runs the auto-chords package, for its youtube step, and caracole-web and
+  `caracole-admin` run it too, so their pages agree), module-check.nix
+  (`checks.module`).
 - `docs/`: usage.md (configuration, commands, the to-do page, overrides.toml, the library
   folder), deploy.md (the NixOS host), install.md, and the design files above.
   web-search.md designs a search-API fallback for matching, not built.
@@ -157,19 +167,24 @@ Traps:
 
 - Test first: a test that fails (on the missing name or an assertion), then the code.
 - Never a live request in a test: not to ultimate-guitar.com, lrclib.net, lacuerda.net,
-  gtptabs.com, musescore.com or Spotify. Give `PoliteClient` an `httpx.MockTransport` as
-  `transport=`; CLI tests monkeypatch `caracole.commands._common.transport_for` (and
-  `_common.sleep`); pipeline tests pass `Services` with fake clients (`FakeGtpTabs.client`
-  and `FakeMuseScore.client` make real ones); Spotify tests use `FakeSpotify`
-  (test_spotify.py) or patch `caracole.spotify.client_from_config`. Nothing blocks the
-  network for the whole suite; only the package build's sandbox has none.
+  gtptabs.com, musescore.com, YouTube or Spotify. Give `PoliteClient` an
+  `httpx.MockTransport` as `transport=`; CLI tests monkeypatch
+  `caracole.commands._common.transport_for` (and `_common.sleep`); pipeline tests pass
+  `Services` with fake clients (`FakeGtpTabs.client` and `FakeMuseScore.client` make real
+  ones); Spotify tests use `FakeSpotify` (test_spotify.py) or patch
+  `caracole.spotify.client_from_config`; YouTube tests run `FakeYtDlp` as `ytdlp_bin`,
+  never a real yt-dlp: conftest.py points `CARACOLE_YTDLP_BIN` at no program for every
+  test, so a command reading the real environment in `nix develop .#autochords` (torch, the
+  model paths, yt-dlp on PATH) finds the route off. Nothing blocks the network for the
+  whole suite; only the package build's sandbox has none.
 - `load_config` takes `env=`, and unit tests pass it. CLI tests read the real environment:
   clear what could leak in, as `OUTSIDE_SETTINGS` does in test_commands_sources.py.
 - Heavy imports stay inside the command function: `cli.build_app` imports every module in
   commands/ on every start, and the default package has no torch.
   `test_commands_index_match.py::test_registering_the_commands_imports_neither_the_matcher_nor_the_index`
   fails when importing `caracole.cli` loads rapidfuzz, `caracole.match` or `caracole.ug`; the
-  `test_registering_the_command*` tests of fetch, lyrics, sources and autochords do the same.
+  `test_registering_the_command*` tests of fetch, lyrics, sources, autochords and youtube do
+  the same.
 - Branch from `caracole-v1`, the default branch (`main` holds only the first design commit).
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:
@@ -183,10 +198,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 
 - **Politeness** (http.py, health.py, commands/_common.py).
   - Budgets per run: `ug` 60, `lrclib` 200, `lacuerda` 30, `gtptabs` 20, `musescore` 10
-    requests (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100
-    (`BUILD_BUDGET`, commands/index.py). Then `BudgetExhausted`. Only a provider in
-    `config.SWITCHABLE` (`gtptabs`, `musescore`) can be turned off (`enabled = false`):
-    then it gets no client and its step is skipped.
+    requests, `youtube` 6 yt-dlp runs (`config.DEFAULT_PROVIDERS`); `caracole index build`
+    at least 100 (`BUILD_BUDGET`, commands/index.py). Then `BudgetExhausted`. Only a
+    provider in `config.SWITCHABLE` (`gtptabs`, `musescore`, `youtube`) can be turned off
+    (`enabled = false`): then it gets no client and its step is skipped.
   - One request at a time (a synchronous client, and the lock below), with a random pause
     from the provider's `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore, 1–2 s
     for LRCLIB) between any two, redirect hops included: `PoliteClient` paces its own
@@ -202,6 +217,25 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     archive), nor musescore.com's `/api/jmuse`, `/score/*/download/*`, `/sheetmusic?`
     (its search) or `/oembed/*`. A host's rules are the `User-agent: *` group of its live
     robots.txt (tests/fixtures/gtptabs/ and tests/fixtures/musescore/robots.txt).
+  - **The one exception is YouTube**, the owner's explicit choice for a handful of their
+    own songs a night: its robots.txt closes `/results` and `/youtubei/` to crawlers, and
+    yt-dlp uses both, against its terms too. Provider `youtube` (youtube.py) is the one
+    place caracole runs yt-dlp, and only on these terms: for a song with no human sheet
+    (`todo.songs_to_buy`) and only where auto-chords can make chords of it
+    (`youtube_fetch.route_problem`: the packages, both model files, yt-dlp; the default
+    package never runs it); within the budget, one run at a time, a pause from `delay`
+    (15–30 s) between two runs (`YtDlp._pause`, and `_common._pause_after_last_request`
+    via `make_youtube`), and yt-dlp's own pauses inside one (`--sleep-requests`,
+    `--sleep-interval`); `--retries 0`; audio alone (`-x`), never a playlist, the song's
+    name after `--`, arguments a list and never a shell; no cookies, login, config files,
+    plugins (PO-token providers among them) or remote code (`--ignore-config`,
+    `--no-cookies`, `--no-cookies-from-browser`, `--no-plugin-dirs`,
+    `--no-remote-components`); none of caracole's secrets (`ytdlp_env` passes no
+    `CREDENTIALS_DIRECTORY` or `CARACOLE_*` variable); a stop or Ctrl-C stops its process
+    group too; a bot check, an HTTP 429 or 403, a rate limit or a captcha
+    is `ProviderBlocked`, honoured like any block (tests/test_youtube.py). Everything else
+    keeps honouring robots.txt; widen nothing here without the owner, and copy it to no
+    other site.
   - Every accepted 200 and 404 is cached forever, in `cache_dir/http/<provider>/`.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
   that won't parse (`PageParseError`, `GtpTabsParseError`) never makes a song not found,
@@ -210,7 +244,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `test_pipeline.py::test_ug_block_cools_down_and_never_marks_not_found`,
   `test_fetch.py::test_parse_error_is_not_a_miss`,
   `test_gtptabs_fetch.py::test_a_spent_budget_is_no_miss`). On gtptabs.com only an artist
-  page that answered without a candidate is a miss, asked about again after 30 days. A
+  page that answered without a candidate is a miss, asked about again after 30 days; on
+  YouTube only a search that answered without a video that fits (youtube_fetch.py,
+  `test_youtube_fetch.py::test_an_error_is_no_miss_and_the_song_waits_for_the_next_run`). A
   block or a spent budget exits 0; a bug exits 1, which fires the unit's ntfy alert.
 - **Slugged tabs only at their slugged URL**, as UG answers 404 for them at `/tab/{id}`:
   the index keeps each tab's sitemap path (`ug_index.path`), from which ug/page.py
@@ -285,17 +321,18 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   with `library.read_regular` (or `open_regular`: no symbolic link followed, regular files
   only), and write one with `library.write_atomic`: a random temporary name opened
   exclusively, then a rename. Never `mkstemp`, whose mode 0600 hides files from Syncthing.
-  Nothing private goes there: the database, the Spotify token, the lock and the HTTP cache
-  stay in `state_dir` and `cache_dir`, and chordpro works on a copy in a 0700 folder under
-  the cache (render.py). tests/test_library_safety.py. A removal deletes only what caracole
+  Nothing private or bulky goes there: the database, the Spotify token, the lock, the HTTP
+  cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in
+  `state_dir` and `cache_dir`, and chordpro works on a copy in a 0700 folder under the cache
+  (render.py). tests/test_library_safety.py. A removal deletes only what caracole
   wrote in the song's folder (`removal._caracoles`: kept files, the outputs of a kept sheet or
   of a render record, LRCLIB's lyrics, info.json), by name, through descriptors opened with
   `O_NOFOLLOW` from the library down, and names everything it leaves; it never touches Music/
   (tests/test_removal.py).
 - **One caracole at a time**: `_common.exclusive` holds an flock on `state_dir/caracole.lock`,
-  re-entrant within a process, and the clients of `make_client` hold it until closed.
-  Every command that asks UG, LRCLIB, LaCuerda, gtptabs.com or MuseScore for pages or
-  writes the library takes it;
+  re-entrant within a process, and the clients of `make_client` and the yt-dlp runner of
+  `make_youtube` hold it until closed. Every command that asks UG, LRCLIB, LaCuerda,
+  gtptabs.com, MuseScore or YouTube for pages or writes the library takes it;
   `search`, `match --dry-run`, `index stats` and `remove --list` only read and never wait.
   `review` and `remove` take it only after their questions (commands/library.py,
   commands/remove.py), so the nightly run never waits for an answer

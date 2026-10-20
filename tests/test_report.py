@@ -119,6 +119,15 @@ def test_why_says_what_the_provider_did_without_its_url(error, said):
     assert "http" not in why(error)
 
 
+def test_why_says_a_program_that_took_too_long_didnt_answer_in_time():
+    # yt-dlp, stopped after its timeout (youtube.py): no httpx error, but the same answer.
+    try:
+        raise ProviderError("youtube", "ytsearch8:Radiohead Creep", None, "yt-dlp took longer than 120 s") \
+            from TimeoutError("yt-dlp took longer than 120 s")
+    except ProviderError as e:
+        assert why(e) == "didn't answer in time"
+
+
 def test_a_duration_reads_in_seconds_minutes_or_hours():
     assert [duration(s) for s in (0.4, 3.2, 59.6, 125, 3600 + 4 * 60 + 9)] == [
         "less than a second", "3 s", "1 min", "2 min 5 s", "1 h 4 min",
