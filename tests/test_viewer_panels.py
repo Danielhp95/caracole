@@ -326,6 +326,37 @@ def test_the_card_comes_after_its_chord_in_the_focus_order(tmp_path):
     assert back == 2  # and back out to its chord
 
 
+@in_chromium
+@pytest.mark.parametrize("size", [PHONE, DESKTOP], ids=["phone", "desktop"])
+def test_a_chip_pressed_keeps_the_focus_though_its_row_is_drawn_anew(tmp_path, size):
+    # The capo's frets, the modes and the card's chords are drawn anew as one is pressed: the focus stays
+    # on the one pressed, in the settings or the card, not on the page behind them.
+    focused = """(() => { const a = document.activeElement, row = a && a.closest('.chips');
+      return row ? [row.id, a.firstChild.textContent, a.getAttribute('aria-pressed')] : [a ? a.tagName : null]; })()"""
+    with viewer(tmp_path, written(tmp_path) + "#t=1", **size) as b:  # in Ab: frets to suggest
+        b.js("document.querySelector('#more').focus()")
+        b.press("Enter")
+        b.js("document.querySelector('#capo .chip').focus()")
+        b.press("Enter")
+        capo = b.js(focused)
+        b.js("[...document.querySelectorAll('#modes .chip')].find((c) => c.firstChild.textContent === 'Dorian').focus()")
+        b.press("Enter")
+        mode = b.js(focused)
+        b.js("document.querySelectorAll('#sheet .c')[0].focus()")
+        b.press("Enter")  # its card
+        name = b.js("document.querySelectorAll('#alts .chip')[1].firstChild.textContent")
+        b.js("document.querySelectorAll('#alts .chip')[1].focus()")
+        b.press("Enter")
+        alt = b.js(focused)
+        b.js("document.querySelector('#use').focus()")  # Play it for every one
+        b.press("Enter")
+        used = b.js(focused)
+    assert capo == ["capo", "Capo 1", "true"]
+    assert mode == ["modes", "Dorian", "true"]
+    assert alt == ["alts", name, "true"]
+    assert used == ["alts", name, "true"]  # Play … hides once played: the focus on the chord played
+
+
 # --- in a songbook ---------------------------------------------------------------------------------------
 
 

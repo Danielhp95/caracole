@@ -239,6 +239,15 @@
     b.addEventListener("click", onClick);
     return b;
   };
+  // A row of chips drawn anew, as one of them is pressed: the focus, when it was on one, goes to the
+  // one in its place, and stays in the settings or the card rather than falling back to the page.
+  const refill = (box, chips) => {
+    const at = Array.prototype.indexOf.call(box.children, document.activeElement);
+    box.textContent = "";
+    for (const chip of chips) box.appendChild(chip);
+    const to = at >= 0 ? box.children[Math.min(at, box.children.length - 1)] : null;
+    if (to) to.focus({ preventScroll: true });
+  };
 
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
@@ -281,29 +290,20 @@
       ? "Your PDF is transposed " + signed(data.transpose) + "; Reset goes back there." : "";
     $("capo-at").textContent = String(capoNow());
     const hints = capoHints();
-    const capoBox = $("capo");
-    capoBox.textContent = "";
-    for (const [fret, shapesKey] of hints) {
-      capoBox.appendChild(button(fret ? "Capo " + fret : "No capo", state.capo === fret, () => {
-        state.capo = state.capo === fret ? null : fret;
-        render();
-      }, shapesKey + " shapes"));
-    }
+    refill($("capo"), hints.map(([fret, shapesKey]) => button(fret ? "Capo " + fret : "No capo", state.capo === fret, () => {
+      state.capo = state.capo === fret ? null : fret;
+      render();
+    }, shapesKey + " shapes")));
     // The same words wherever the capo is, so the row keeps its height under your thumb.
     $("capo-hint").textContent = "Wherever the capo is, the song sounds the same: the chords show the shapes to play."
       + (hints.length ? " Easier shapes:" : "");
 
     $("mode-row").hidden = !key;
-    const modeBox = $("modes");
-    modeBox.textContent = "";
+    refill($("modes"), key ? data.modes.map((mode) => button((MODES[mode] || [mode])[0], modeNow() === mode, () => {
+      state.mode = mode === key.mode ? null : mode;
+      render();
+    }, mode === key.mode ? "as written" : "")) : []);
     if (key) {
-      for (const mode of data.modes) {
-        const info = MODES[mode] || [mode, ""];
-        modeBox.appendChild(button(info[0], modeNow() === mode, () => {
-          state.mode = mode === key.mode ? null : mode;
-          render();
-        }, mode === key.mode ? "as written" : ""));
-      }
       const info = MODES[modeNow()] || ["", ""];
       $("mode-hint").textContent = keyName(state.t + sheetCapo) + ": " + info[1] + "." +
         (asWritten() ? "" : " Each chord moves to the same degree of the new scale.");
@@ -429,14 +429,17 @@
     $("shape-note").textContent = note.trim();
 
     const altBox = $("alts");
-    altBox.textContent = "";
     $("alts-title").hidden = !list.length;
-    if (list.length) {
-      altBox.appendChild(button(label(i, base(i)), shown.pick < 0, () => pick(-1), "as written"));
-      list.forEach((alt, j) => altBox.appendChild(button(label(i, alt), shown.pick === j, () => pick(j))));
-    }
+    refill(altBox, list.length ? [button(label(i, base(i)), shown.pick < 0, () => pick(-1), "as written")]
+      .concat(list.map((alt, j) => button(label(i, alt), shown.pick === j, () => pick(j)))) : []);
     const use = $("use");
+    const using = document.activeElement === use;
     use.hidden = shown.pick === choice(i);
+    // Played for every one, it hides: the focus goes to the chord now played.
+    if (using && use.hidden) {
+      const played = altBox.querySelector('[aria-pressed="true"]');
+      if (played) played.focus({ preventScroll: true });
+    }
     const was = label(i, base(i));
     use.textContent = shown.pick >= 0 ? "Play " + name + " for every " + was : "Back to " + was + " everywhere";
     place();
