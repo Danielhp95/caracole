@@ -1345,10 +1345,12 @@ minor (from the tab)"), the status, Needs review when caracole isn't sure of
 the match, and one button: the sheet, or, on the page
 `caracole serve` serves, Fetch now for a wanted song (Pick the match for one
 that needs review first, and Removing… while caracole removes it). An auto
-sheet's row says so by its ♪ mark and its button, "Auto sheet PDF", rather
-than by a badge, so that a phone's second line keeps room for the artist. Its
-"⋯" button opens the rest: a review's candidates (the same picker as a
-card's, which Pick the match opens there), the other files, the Guitar Pro
+sheet's row says so by its ♪ mark (YouTube's, when its audio came from there)
+and its button, "Auto sheet PDF", rather than by a badge, so that a phone's
+second line keeps room for the artist. Its "⋯" button opens the rest: where a
+song stands on the YouTube route, with its video, as its card says it, a
+review's candidates (the same picker as a card's, which Pick the match opens
+there), the other files, the Guitar Pro
 pages, MuseScore's pages, the search and buy links and, served, Look in the
 index and Remove…. A request's line (see [caracole serve](#caracole-serve))
 shows under the row, a line of its own, as it does on a card. The search, the
@@ -1449,7 +1451,9 @@ opens the file directly, works.
 
 Each source has a mark: the site's own icon for Ultimate Guitar, LaCuerda,
 LRCLIB (lyrics), gtptabs.com, MuseScore and YouTube, a ♪ for a sheet the
-audio model wrote (auto-chords), and a ↓ for a file you filed from `_inbox/`.
+audio model wrote (auto-chords) from audio you bought, YouTube's for one it
+wrote from the audio caracole took from YouTube, and a ↓ for a file you filed
+from `_inbox/`.
 A site's mark is named for screen readers ("from Ultimate Guitar").
 
 A site's icon is its favicon. The nightly run's icons step asks each site for
@@ -1500,7 +1504,8 @@ two places, and sends no request:
 - **In your library**: every song, whatever its status, with its key when it
   has one (`Key G major (from the tab)`) and its folder. A song with a sheet
   is tagged with where the sheet came from, as `index.html` marks it with the
-  site's icon: `[UG]`, `[LaCuerda]`, `[auto]` (the audio model), as in
+  site's icon: `[UG]`, `[LaCuerda]`, `[auto]` (the audio model), `[YouTube]`
+  (the audio model, from the audio caracole took from YouTube), as in
   `[LaCuerda] Soda Stereo - De Música Ligera · found · …`. A song in review
   also shows its first three candidates, as the matcher found them:
 

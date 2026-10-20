@@ -1486,6 +1486,62 @@ ROWS = """
 """
 
 
+def youtube_auto_sheet(conn, cfg):
+    """Creep, whose auto sheet auto-chords made from the audio caracole took from YouTube."""
+    from caracole.db import kv_set_json
+
+    s = add_song(conn, "Radiohead", "Creep")
+    audio = cfg.cache_dir / "youtube" / f"{s.id}-XFkzRNyygfk.m4a"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(b"aac")
+    mtime = audio.stat().st_mtime
+    video = {"id": "XFkzRNyygfk", "title": "Creep", "channel": "Radiohead - Topic", "duration": 238.0,
+             "url": "https://www.youtube.com/watch?v=XFkzRNyygfk"}
+    kv_set_json(conn, f"youtube:{s.id}", {"video": video, "source": "search", "audio": str(audio)})
+    v = upsert_version(conn, provider="auto", tab_id=str(s.id), song_id=s.id, slot="sheet", kind="auto", rating=0,
+                       votes=0, version=1, label=None, url=video["url"],
+                       raw={"audio": str(audio), "model": "btc", "lyrics": "plain", "youtube": video}, now="x")
+    keep_file(conn, cfg.library_dir, song=s, version_id=v, name="sheet (auto).txt", data=b"A\nWords\n", rank=1)
+    put(cfg, s, "sheet (auto).pdf")
+    update_song(conn, s.id, status="found", match_decision="not_found", audio_path=str(audio), audio_mtime=mtime,
+                autochords_mtime=mtime)
+    return s
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_an_auto_sheet_from_youtube_audio_shows_where_it_came_from_in_both_views(conn, cfg, tmp_path, monkeypatch):
+    from helpers.fake_ytdlp import route_on
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    youtube_auto_sheet(conn, on)
+    bought = add_song(conn, "宋冬野", "斑马，斑马")  # a purchase's auto sheet beside it: the audio model's ♪
+    put(on, bought, "sheet (auto).txt", "sheet (auto).pdf")
+    update_song(conn, bought.id, status="found")
+    html = page(conn, on)
+    assert songs_of(html)["Radiohead - Creep"]["source"] == "youtube"
+    path = write_library_page(on.library_dir, html)
+
+    card = card_of(listing(dump_dom(path, tmp_path)), "Creep")
+    assert re.search(r'<div class="badges"><span class="source letters"[^>]*aria-label="from YouTube"', card), card
+    assert ">Auto sheet<" in card
+    note = re.search(r'<p class="youtube">(.*?)</p>', card, re.S)
+    assert note and note.group(1).startswith("Auto sheet from YouTube audio · <a"), card
+    assert 'href="https://www.youtube.com/watch?v=XFkzRNyygfk"' in note.group(1)
+    assert "Creep (Radiohead - Topic) ↗" in note.group(1)
+    assert 'aria-label="from the audio (auto-chords)"' in card_of(listing(dump_dom(path, tmp_path)), "斑马，斑马")
+
+    shown = listing(dump_dom(path, tmp_path, "#view=rows"))
+    row = row_of(shown, "Creep")
+    assert re.search(r'</div><span class="source letters"[^>]*aria-label="from YouTube"', row), row
+    assert re.search(r'<div class="row-action"><a [^>]*>Auto sheet PDF</a>', row), row
+    # The video waits behind the row's ⋯, as the rest of the card does.
+    panel = row.split('class="row-panel"', 1)[1]
+    note = re.search(r'<p class="youtube">(.*?)</p>', panel, re.S)
+    assert note and note.group(1).startswith("Auto sheet from YouTube audio · <a"), row
+    assert 'href="https://www.youtube.com/watch?v=XFkzRNyygfk"' in note.group(1)
+    assert 'aria-label="from the audio (auto-chords)"' in row_of(shown, "斑马，斑马")
+
+
 @pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
 def test_many_rows_fit_on_a_screen_and_a_phones_rows_wrap_to_two_lines(conn, cfg, tmp_path):
     for n in range(24):

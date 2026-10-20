@@ -31,6 +31,8 @@ Each file, link and row shows where it came from (icons.py): the site's own
 icon, inlined in the data as a ``data:`` URI (the CSP allows images from
 ``data:`` alone), else the site's lettered badge, or a glyph for the audio
 model and the inbox; each is named "from Ultimate Guitar" for a screen reader.
+An auto sheet made from the audio caracole took from YouTube shows YouTube's
+(``icons.kept_sources``), and its card, or its row's "⋯", the video.
 
 The seam for lists the page doesn't make itself (the served page's type-ahead
 results): ``window.caracole.resultRow(result)`` returns a row element, the
@@ -1027,6 +1029,17 @@ _SCRIPT = r"""
     }
     return a;
   };
+  // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py): where
+  // that stands, and the video its audio came from.
+  const youtubeNote = (s) => {
+    if (!s.youtube || typeof s.youtube.text !== "string") return null;
+    const note = el("p", "youtube", s.youtube.text);
+    if (s.youtube.video && typeof s.youtube.video === "object") {
+      note.appendChild(document.createTextNode(" · "));
+      note.appendChild(link(s.youtube.video, null, true));
+    }
+    return note;
+  };
   const linkRow = (parent, heading, items, cls) => {
     if (!items.length) return;
     parent.appendChild(el("p", "subhead", heading));
@@ -1421,15 +1434,8 @@ _SCRIPT = r"""
     } else if (!server && s.notFound && s.status === "wanted") {
       card.appendChild(notFoundHint(s));
     }
-    if (s.youtube && typeof s.youtube.text === "string") {
-      // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py).
-      const note = el("p", "youtube", s.youtube.text);
-      if (s.youtube.video) {
-        note.appendChild(document.createTextNode(" · "));
-        note.appendChild(link(s.youtube.video, null, true));
-      }
-      card.appendChild(note);
-    }
+    const fromYouTube = youtubeNote(s);
+    if (fromYouTube) card.appendChild(fromYouTube);
 
     // Served by caracole serve: how the song's request goes, on one line, and Fetch now unless one runs.
     const job = server ? jobOfSong(s.id) : null;
@@ -1631,6 +1637,8 @@ _SCRIPT = r"""
     } else if (!server && s.notFound && s.status === "wanted") {
       more.push(notFoundHint(s));
     }
+    const fromYouTube = youtubeNote(s);  // as on its card, first in the row's panel
+    if (fromYouTube) more.push(fromYouTube);
     if (server && s.notFound && s.status === "wanted" && !removing.has(id)) {
       const look = el("div", "actions");
       look.appendChild(lookLink(s, "btn small"));

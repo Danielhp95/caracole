@@ -405,6 +405,30 @@ def test_the_sources_in_use_are_those_the_library_has_something_from(conn):
     assert icons.sources_in_use(conn) == {"ug", "auto", "lrclib", "musescore"}
 
 
+def test_an_auto_sheet_made_from_youtube_audio_comes_from_youtube(conn, cfg):
+    # autochords/run.py keeps the video in the auto sheet's version when its audio came from YouTube
+    # (youtube_fetch.py); a purchase's auto sheet is the audio model's alone.
+    from conftest import add_song
+
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    video = {"id": "XFkzRNyygfk", "title": "Creep", "channel": "Radiohead - Topic",
+             "url": "https://www.youtube.com/watch?v=XFkzRNyygfk"}
+    kept = {}
+    for artist, raw in (("Radiohead", {"audio": "/cache/youtube/1-XFkzRNyygfk.m4a", "youtube": video}),
+                        ("Oasis", {"audio": "/music/Oasis - Wonderwall.flac"})):
+        song = add_song(conn, artist, "Creep")
+        v = upsert_version(conn, provider="auto", tab_id=str(song.id), song_id=song.id, slot="sheet", kind="auto",
+                           rating=0, votes=0, version=1, label=None, url=video["url"], raw=raw, now="x")
+        keep_file(conn, cfg.library_dir, song=song, version_id=v, name="sheet (auto).txt", data=b"A\n", rank=1)
+        kept[artist] = icons.kept_sources(conn)[song.id]
+    assert kept["Radiohead"] == {"sheet (auto).txt": "youtube"}
+    assert icons.source_of("sheet (auto).pdf", kept["Radiohead"]) == "youtube"
+    assert icons.sheet_source(kept["Radiohead"]) == "youtube"
+    assert kept["Oasis"] == {"sheet (auto).txt": "auto"} and icons.sheet_source(kept["Oasis"]) == "auto"
+
+
 def test_the_nightly_run_asks_only_for_the_icons_of_sources_in_use(conn, cfg):
     ug = Site("ug", {"/favicon.ico": (200, png(32))})
     lacuerda = Site("lacuerda", {"/favicon.ico": (200, png(32))})
