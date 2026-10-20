@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 from helpers import browser
-from helpers.browser import in_chromium
+from helpers.browser import Browser, in_chromium
 
 from caracole.chordpro import to_chordpro
 from caracole.viewer.book import BookSong, assets_version, build_songbook, songbook_csp
@@ -305,6 +305,55 @@ def test_the_page_remembers_the_song_and_each_songs_own_settings(tmp_path):
     assert three == "Key Cm · +3" and one == "G shapes · capo 2 · sounds A" and again == "Key Cm · +3"
     assert "Minor Song" in here
     assert shown == ["song-3"]
+
+
+@in_chromium
+def test_each_song_keeps_its_own_text_size_and_scroll_speed(tmp_path):
+    harness = """
+      const step = Number(sessionStorage.getItem("step") || "0");
+      sessionStorage.setItem("step", String(step + 1));
+      const log = (value) => {
+        const seen = JSON.parse(sessionStorage.getItem("seen") || "[]");
+        seen.push(value);
+        sessionStorage.setItem("seen", JSON.stringify(seen));
+      };
+      const now = () => [q("#pill-speed").textContent, getComputedStyle(q("#sheet")).fontSize, location.hash];
+      if (step === 0) {  // song 3: bigger, and faster; then song 1
+        q("#fab").click();
+        q("#bigger").click();
+        q("#faster").click();
+        log(now());
+        location.hash = "song-1";
+      } else if (step === 1) {  // song 1 as it was; back to song 3
+        log(now());
+        location.hash = "song-3";
+      } else {
+        log(now());
+        out = JSON.parse(sessionStorage.getItem("seen"));
+      }
+    """
+    dom = open_page(page(), tmp_path, "#song-3", harness=harness, budget=12000)
+    three, one, again = result_of(dom)
+    assert three == ["7", "20px", "#song-3=&fs=20&speed=7"]
+    assert one[:2] == ["6", "18px"] and "fs=" not in one[2] and "speed=" not in one[2]
+    assert again == three
+
+
+@in_chromium
+def test_a_song_in_the_songbook_scrolls_by_itself_too(tmp_path):
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(page(), encoding="utf-8")
+    with Browser(tmp_path / "profile", width=390, height=640, mobile=True) as b:
+        b.open(path.as_uri() + "#song-1&speed=20")
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        b.click("#fab")
+        b.click("#scroll")
+        b.click("#go")
+        label = b.js("document.querySelector('#go').getAttribute('aria-label')")
+        assert b.wait("scrollY > 20", 5)
+        shown = b.js("location.hash.startsWith('#song-1') && !document.querySelector('#pill').hidden")
+    assert label == "Pause" and shown
 
 
 @in_chromium

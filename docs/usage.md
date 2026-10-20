@@ -1589,13 +1589,25 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Phrygian, Lydian, Mixolydian, Locrian). Each chord's notes move to the same
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
   the key, such as the G major chord's B in C minor, stays where it is.
-- Text size, every chord's shape in a strip above the song, and scrolling by
-  itself (with the screen kept on, where the browser allows it).
+- Text size, and every chord's shape in a strip above the song.
+- **Scrolling by itself**: Start, under Scroll in the settings, counts down
+  3 seconds to give you time to get your hands on the guitar (press the count
+  to start at once), then scrolls the song at a steady pace, with the screen
+  kept on where the browser allows it. While it is on, a pill takes the key
+  button's place: − and + change the speed (1 to 30) as it scrolls, ❚❚ pauses
+  and ▶ goes on after another countdown, and × ends it and brings the key
+  button back. A finger on the page, the mouse wheel, a key that scrolls, a
+  scroll by hand or a chord's card pauses it, so the page is yours to read
+  until you press ▶; it pauses at the end of the song too. A bigger text
+  scrolls as much faster, so a speed keeps its pace through the song. With
+  reduced motion asked for in your system's settings, the countdown shows the
+  seconds alone, with no ring.
 
-The viewer remembers its settings for each song in the browser. It keeps the
-transposition, the mode, the capo and the text size in its address too
-(`sheet.html#t=2&mode=aeolian&fs=20`), so a reload or Back keeps them where
-the browser keeps nothing, as when `caracole serve` sends it (see
+The viewer remembers its settings for each song in the browser, the scroll
+speed and the text size among them. It keeps the transposition, the mode, the
+capo, the text size and the scroll speed in its address too
+(`sheet.html#t=2&mode=aeolian&fs=20&speed=8`), so a reload or Back keeps them
+where the browser keeps nothing, as when `caracole serve` sends it (see
 [caracole serve](#caracole-serve)). Its key is its sheet's, found as for
 info.json (see [The song's key](#the-songs-key)): the human sheet's from the
 tab, or estimated from its chords, and the auto sheet's heard in the audio;
@@ -1922,8 +1934,8 @@ caracole wrote there, as recorded when it wrote it (anyone with a synced device
 could put a page of their own in the library), and in a sandbox: its scripts
 run, but it can reach neither the server nor your sign-in, and keeps no
 storage, so the song it shows is the one in its address (`#song-3`), where the
-viewer keeps the song's transposition, mode, capo and text size too
-(`#song-3=&t=2&fs=20`). Edited
+viewer keeps the song's transposition, mode, capo, text size and scroll speed
+too (`#song-3=&t=2&fs=20&speed=8`). Edited
 on a device, or replaced by a link, it gets a page saying so until the next
 `caracole render` (or `caracole songbook render`) writes it again.
 
@@ -1941,8 +1953,8 @@ of its own, with no cookie and no way to ask the server for anything. The
 header allows the script and style the page itself was written with, so a
 viewer an older caracole wrote keeps working after an upgrade until the next
 render writes it again. It works as it does from the folder, but keeps only
-the transposition, the mode, the capo and the text size, in its address: a
-reload or Back keeps them, and opening it again from the library starts
+the transposition, the mode, the capo, the text size and the scroll speed, in
+its address: a reload or Back keeps them, and opening it again from the library starts
 afresh. Its links to
 the PDF and back to the library work with an access token too: the sign-in
 cookie goes with a link followed from another page, but not with a form
@@ -1993,7 +2005,8 @@ in `Library/_songbooks/<name>/`:
   folder and loads nothing. It opens on the contents; tap a song to open it in
   the sheet viewer, with everything the viewer does (chord shapes,
   transposition, chords to play instead, modes, scrolling by itself), each
-  song in its own key and keeping its own settings. Next and Previous (above
+  song in its own key and keeping its own settings, its scroll speed and text
+  size among them. Next and Previous (above
   each song, and again at its end), a swipe across the sheet or the arrow keys
   go from song to song, skipping the missing ones, and Contents goes back. Opened again, the page takes you back
   to the song you had open, where you were in it, and its address names it
@@ -2001,8 +2014,8 @@ in `Library/_songbooks/<name>/`:
   "last opened". Without JavaScript, or printed, it is every song one after
   the other. Served by `caracole serve`, it runs in a sandbox without the
   browser's storage: each song keeps its address (`#song-3`), and the
-  viewer keeps the song's transposition, mode, capo and text size there
-  (`#song-3=&t=2&fs=20`), so a reload or Back keeps them, but not your place
+  viewer keeps the song's transposition, mode, capo, text size and scroll
+  speed there (`#song-3=&t=2&fs=20&speed=8`), so a reload or Back keeps them, but not your place
   or its other settings; the next song opens in its own key.
 - **`songbook.cho`**: every song's ChordPro, in its key, split by
   `{new_song}`, to import into a songbook app such as SongbookPro or OnSong.

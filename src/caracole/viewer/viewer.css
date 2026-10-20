@@ -115,6 +115,36 @@ a { color: inherit; }
   border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit;
   font-weight: 650; line-height: 1.25; font-variant-numeric: tabular-nums; box-shadow: 0 2px 12px rgb(0 0 0 / .14);
   cursor: pointer; }
+/* Scrolling by itself: the pill that steers it, in the key button's place while it is on. Its
+   first button counts down (a ring that empties, and the seconds), then shows ❚❚, or ▶ when paused;
+   every state is the same size, so nothing moves under a thumb. */
+.pill { position: fixed; z-index: 5; right: max(16px, env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 2px; padding: 3px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  box-shadow: 0 2px 12px rgb(0 0 0 / .14); font-variant-numeric: tabular-nums; }
+.pill button { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0;
+  border-radius: 50%; background: none; color: inherit; font: inherit; font-size: 1.35rem; line-height: 1;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pill button:hover { background: var(--raised); }
+.pill .go, .pill .go:hover { background: var(--accent); color: var(--on-accent); }
+.pill .go > * { grid-area: 1 / 1; }
+.pill .end { color: var(--muted); }
+.pill output { min-width: 2.4ch; text-align: center; font-weight: 700; }
+.i-pause, .i-play { width: 16px; height: 16px; fill: currentColor; }
+.pill .ring { width: 44px; height: 44px; fill: none; stroke: currentColor; stroke-width: 3; transform: rotate(-90deg); }
+.pill .ring .track { opacity: .3; }
+.pill .ring .bar { stroke-dasharray: 100; stroke-dashoffset: 0; }
+.tick { font-size: 1.05rem; font-weight: 700; }
+.pill .ring, .pill .tick, .pill .i-play,
+.pill[data-state="counting"] .i-pause, .pill[data-state="paused"] .i-pause { display: none; }
+.pill[data-state="counting"] .tick, .pill[data-state="paused"] .i-play { display: block; }
+@media (prefers-reduced-motion: no-preference) {
+  .pill[data-state="counting"] .ring { display: block; }
+  .pill[data-state="counting"] .ring .bar { animation: drain 3s linear forwards; }
+}
+@keyframes drain { to { stroke-dashoffset: 100; } }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%);
+  white-space: nowrap; border: 0; }
 .scrim { position: fixed; inset: 0; z-index: 6; background: rgb(0 0 0 / .22); }
 .sheet-ui { position: fixed; z-index: 7; left: 0; right: 0; bottom: 0; max-width: 620px; max-height: 80vh;
   margin: 0 auto; padding: 6px 16px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto;
@@ -143,7 +173,6 @@ a { color: inherit; }
 .hint { flex-basis: 100%; margin: 2px 0 0; color: var(--muted); font-size: .82rem; }
 .hint:empty { display: none; }
 .center { text-align: center; }
-input[type="range"] { flex: 1 1 120px; accent-color: var(--accent); min-height: 44px; }
 .shape { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 4px 0; }
 .round { border-radius: 50%; padding: 0; font-size: 1.3rem; }
 .round:disabled { opacity: .35; cursor: default; }
@@ -172,7 +201,7 @@ input[type="range"] { flex: 1 1 120px; accent-color: var(--accent); min-height: 
   .sheet { columns: 2 28em; column-gap: 56px; }
 }
 @media print {
-  .fab, .scrim, .sheet-ui, .back, .strip, .foot, .noscript { display: none !important; }
+  .fab, .pill, .scrim, .sheet-ui, .back, .strip, .foot, .noscript { display: none !important; }
   body { background: #fff; color: #000; }
   .page { max-width: none; padding: 0; }
   .c { color: #b4441e; }

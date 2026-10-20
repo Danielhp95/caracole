@@ -141,9 +141,9 @@ def viewer_csp(page: bytes) -> str:
     stylesheet, by their hashes, and nothing else to load, no form to send, no base to
     change), with a sandbox, which a ``<meta>`` policy can't set: the page then runs in an
     origin of its own, with no cookie and no way to ask the server for anything. Its script
-    still runs; it has no storage there, and keeps the transposition, the mode, the capo and
-    the text size in its address (``#t=2&mode=aeolian&fs=20``) alone, as it does everywhere
-    besides its storage.
+    still runs; it has no storage there, and keeps the transposition, the mode, the capo, the
+    text size and the scroll speed in its address (``#t=2&mode=aeolian&fs=20&speed=8``) alone,
+    as it does everywhere besides its storage.
 
     The policy is the page's, not this caracole's: a viewer written before an upgrade carries
     the hashes of the script and style it was written with, and keeps them until the next
@@ -390,8 +390,18 @@ def _words(text: str) -> list[str]:
     return words
 
 
-# The settings sheet and the chord card the script fills in; hidden until it runs.
+# The settings sheet and the chord card the script fills in; hidden until it runs. The pill steers
+# the scroll once it starts, in the key button's place: its first button counts down (a ring and
+# the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader.
 _CONTROLS = """<button type="button" class="fab" id="fab" hidden aria-controls="panel" aria-expanded="false">Key</button>
+<div class="pill" id="pill" role="group" aria-label="Scrolling by itself" hidden>
+<button type="button" class="go" id="go" aria-label="Pause"><svg class="ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="track" cx="22" cy="22" r="19"/><circle class="bar" cx="22" cy="22" r="19" pathLength="100"/></svg><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.6" height="12" rx="1"/><rect x="9.4" y="2" width="3.6" height="12" rx="1"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg><span class="tick" id="tick"></span></button>
+<button type="button" class="step" id="pill-slower" data-speed="-1" aria-label="Slower">−</button>
+<output id="pill-speed">6</output>
+<button type="button" class="step" id="pill-faster" data-speed="1" aria-label="Faster">+</button>
+<button type="button" class="end" id="pill-end" aria-label="Stop scrolling">×</button>
+</div>
+<p class="vh" id="scroll-status" role="status"></p>
 <div class="scrim" id="scrim" hidden></div>
 <section class="sheet-ui panel" id="panel" hidden role="dialog" aria-modal="true" aria-labelledby="panel-title">
 <header class="ui-head"><h2 id="panel-title" tabindex="-1">Key</h2>
@@ -412,9 +422,11 @@ _CONTROLS = """<button type="button" class="fab" id="fab" hidden aria-controls="
 <button type="button" id="bigger" aria-label="Bigger text">A+</button></span></div>
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
-<div class="row"><span class="lab">Scroll</span>
-<button type="button" class="chip" id="scroll" aria-pressed="false">Start</button>
-<input type="range" id="speed" min="1" max="10" value="3" aria-label="Scroll speed"></div>
+<div class="row" id="scroll-row"><span class="lab">Scroll</span>
+<button type="button" class="chip" id="scroll">Start</button>
+<span class="stepper"><button type="button" id="slower" data-speed="-1" aria-label="Slower">−</button>
+<output id="speed">6</output><button type="button" id="faster" data-speed="1" aria-label="Faster">+</button></span>
+<p class="hint">It counts down 3 seconds first: press the count to start at once. − and + change the speed as it scrolls; a touch pauses it.</p></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-modal="true" aria-labelledby="card-name">

@@ -110,7 +110,7 @@
   let start = null;
   document.addEventListener("touchstart", (e) => {
     const target = e.target instanceof Element ? e.target : null;
-    start = e.touches.length === 1 && !busy() && !(target && target.closest(".tab, .strip, .sheet-ui, input"))
+    start = e.touches.length === 1 && !busy() && !(target && target.closest(".tab, .strip, .sheet-ui, .pill, input"))
       ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
   }, { passive: true });
   document.addEventListener("touchend", (e) => {

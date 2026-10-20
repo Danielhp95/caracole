@@ -27,13 +27,16 @@
     locrian: ["Locrian", "tense and unstable"],
   };
   const FS = { min: 13, max: 30, step: 2, start: 18 };
+  // The scroll's speed, 1 to 30: ``px`` pixels a second a step at the usual text size (see pace()).
+  const SPEED = { min: 1, max: 30, start: 6, px: 2 };
   // The capo goes on any fret up to the 11th (past it the shapes come round again), or the sheet's.
   const CAPO_MAX = Math.max(11, Number(data.capoSheet) || 0);
 
   // --- the state: where the song is played, kept per page ------------------------------------
   // capo: the fret the capo is on (0 for none), or null for the sheet's own. It stays there
   // through a transposition, as on a guitar: the shapes move instead.
-  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null, fs: FS.start, strip: false };
+  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null, fs: FS.start, strip: false,
+    speed: SPEED.start };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -43,6 +46,7 @@
   const fretOf = (v) => (v === null || v === undefined || v === "" || !(Number(v) >= 0) ? null
     : Math.min(CAPO_MAX, Math.round(Number(v))));
   const sizeOf = (v) => (Number(v) >= FS.min && Number(v) <= FS.max ? Math.round(Number(v)) : null);
+  const speedOf = (v) => (Number(v) >= SPEED.min && Number(v) <= SPEED.max ? Math.round(Number(v)) : null);
   try {
     const saved = JSON.parse(localStorage.getItem(store) || "null");
     if (saved && typeof saved === "object") {
@@ -50,6 +54,7 @@
       if (validMode(saved.mode)) state.mode = saved.mode;
       if (saved.alt && typeof saved.alt === "object" && saved.chords === sheetChords) state.alt = saved.alt;
       if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
+      if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
       state.strip = saved.strip === true;
       state.capo = fretOf(saved.capo);
     }
@@ -59,13 +64,14 @@
   if (validMode(hash.get("mode"))) state.mode = hash.get("mode");
   if (hash.has("capo")) state.capo = fretOf(hash.get("capo"));
   if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
+  if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
   const save = () => {
     try {
       localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose, chords: sheetChords }, state)));
     } catch (err) { /* private mode, or a server's sandbox */ }
-    // The address keeps where the song is played too, and the text size, read back above:
-    // without storage (a server's sandbox), a reload and Back still keep them. Replaced, so Back
-    // isn't a step per tap.
+    // The address keeps where the song is played too, and the text size and the scroll speed,
+    // read back above: without storage (a server's sandbox), a reload and Back still keep them.
+    // Replaced, so Back isn't a step per tap.
     try {
       const params = new URLSearchParams(location.hash.slice(1));
       const keep = (name, value, kept) => (kept ? params.set(name, String(value)) : params.delete(name));
@@ -73,6 +79,7 @@
       keep("mode", state.mode, state.mode !== null);
       keep("capo", state.capo, state.capo !== null);
       keep("fs", state.fs, state.fs !== FS.start);
+      keep("speed", state.speed, state.speed !== SPEED.start);
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -206,7 +213,7 @@
   };
 
   // --- drawing the page --------------------------------------------------------------------------
-  const fab = $("fab"), panel = $("panel"), card = $("card"), scrim = $("scrim");
+  const fab = $("fab"), panel = $("panel"), card = $("card"), scrim = $("scrim"), pill = $("pill"), go = $("go");
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -288,6 +295,7 @@
 
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
+    drawSpeed();
     drawStrip();
     fit();
     save();
@@ -431,8 +439,9 @@
     scrim.hidden = false;
     pageEl.inert = true;
     fab.inert = true;
+    pill.inert = true;
     fab.setAttribute("aria-expanded", which === panel ? "true" : "false");
-    stopScroll();
+    pauseScroll();
     which.querySelector("h2").focus({ preventScroll: true });
   };
   const close = () => {
@@ -442,6 +451,7 @@
     scrim.hidden = true;
     pageEl.inert = false;
     fab.inert = false;
+    pill.inert = false;
     fab.setAttribute("aria-expanded", "false");
     for (const el of chordEls) el.classList.remove("on");
     if (wasOpen && opener && opener !== document.body && opener.isConnected) {
@@ -490,48 +500,160 @@
   });
 
   // --- scrolling by itself, hands on the guitar ----------------------------------------------------
-  let scrolling = false, last = 0, carry = 0, wake = null;
-  const scrollButton = $("scroll");
-  const frame = (now) => {
-    if (!scrolling) return;
-    if (last) {
-      carry += ((now - last) / 1000) * Number($("speed").value) * 9;
-      const px = Math.floor(carry);
-      if (px > 0) {
-        window.scrollBy(0, px);
-        carry -= px;
-      }
-      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) stopScroll();
-    }
-    last = now;
-    if (scrolling) requestAnimationFrame(frame);
+  // Off, counting down (3 s, for your hands to get to the guitar; pressed again, it starts at
+  // once), running, or paused. While it is on, the pill takes the key button's place: − and +
+  // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it. A
+  // finger on the page, the wheel, a key that scrolls, a scroll by hand or a card opening pauses
+  // it: the page is yours to read until you press ▶.
+  const COUNTDOWN = 3000;
+  const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
+  const moving = () => scroll.state === "counting" || scroll.state === "running";
+  // Pixels a second: a bigger text scrolls as much faster, so a speed keeps its pace through the song.
+  const pace = () => (state.speed * SPEED.px * state.fs) / FS.start;
+  const LABELS = { counting: "Start now", running: "Pause", paused: "Resume" };
+  const showScroll = (said) => {
+    pill.hidden = scroll.state === "off";
+    fab.hidden = count === 0 || scroll.state !== "off";  // nothing to transpose, or the pill there
+    pill.dataset.state = scroll.state;
+    go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
+    $("tick").textContent = scroll.state === "counting"
+      ? String(Math.max(1, Math.ceil((scroll.ends - performance.now()) / 1000))) : "";
+    if (said !== undefined) $("scroll-status").textContent = said;
   };
-  const startScroll = () => {
-    scrolling = true;
-    last = 0;
-    carry = 0;
-    scrollButton.setAttribute("aria-pressed", "true");
-    scrollButton.textContent = "Stop";
+  const drawSpeed = () => {
+    $("speed").textContent = String(state.speed);
+    $("pill-speed").textContent = String(state.speed);
+  };
+  const setSpeed = (n) => {
+    state.speed = Math.max(SPEED.min, Math.min(SPEED.max, n));
+    drawSpeed();
+    save();
+  };
+
+  // The screen stays on while it counts down and scrolls. A browser lets go of the lock when the
+  // page is hidden; it is asked for again when the page shows.
+  let wake = null, asking = false;
+  const holdScreen = () => {
+    if (wake || asking || !navigator.wakeLock) return;
+    asking = true;
     try {
-      if (navigator.wakeLock) navigator.wakeLock.request("screen").then((l) => { wake = l; }, () => {});
-    } catch (err) { /* no wake lock here */ }
-    close();
+      navigator.wakeLock.request("screen").then((lock) => {
+        asking = false;
+        if (!moving()) {
+          lock.release().catch(() => {});
+          return;
+        }
+        wake = lock;
+        lock.addEventListener("release", () => { if (wake === lock) wake = null; });
+      }, () => { asking = false; });
+    } catch (err) {
+      asking = false;  // no wake lock here
+    }
+  };
+  const letScreenSleep = () => {
+    const lock = wake;
+    wake = null;
+    if (lock) lock.release().catch(() => {});
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && moving()) holdScreen();
+  });
+
+  const countdown = () => {
+    clearTimeout(scroll.timer);
+    scroll.state = "counting";
+    scroll.ends = performance.now() + COUNTDOWN;
+    const tick = () => {
+      const left = scroll.ends - performance.now();
+      if (left <= 0) {
+        run();
+        return;
+      }
+      showScroll();
+      scroll.timer = setTimeout(tick, left % 1000 || 1000);
+    };
+    tick();
+    showScroll("Scrolling in " + COUNTDOWN / 1000 + " seconds");
+    holdScreen();
+  };
+  // Each frame scrolls to a whole pixel counted from where it began, Math.round(from + travelled),
+  // never a pixel on from where the page is: a browser that rounds a scroll to its device pixels
+  // (WebKit at a zoom other than 100 %, bug 281786) would lose every such step and stall.
+  const run = () => {
+    clearTimeout(scroll.timer);
+    scroll.state = "running";
+    scroll.from = scroll.at = window.scrollY;
+    scroll.travelled = 0;
+    scroll.last = 0;
+    const loop = ++scroll.loop;
+    const frame = (now) => {
+      if (scroll.state !== "running" || loop !== scroll.loop) return;
+      // Moved some other way (the scroll bar, a search in the page, a link): yours to read.
+      if (Math.abs(window.scrollY - scroll.at) > 3) {
+        pauseScroll();
+        return;
+      }
+      if (scroll.last) {
+        // A frame long in coming (a tab in the background) moves no further than a quarter second.
+        scroll.travelled += (Math.min(now - scroll.last, 250) / 1000) * pace();
+        const y = Math.round(scroll.from + scroll.travelled);
+        if (y !== Math.round(scroll.at)) {
+          window.scrollTo(0, y);
+          scroll.at = window.scrollY;
+        }
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+          pauseScroll("Paused at the end of the song");
+          return;
+        }
+      }
+      scroll.last = now;
+      requestAnimationFrame(frame);
+    };
+    showScroll("Scrolling");
+    holdScreen();
     requestAnimationFrame(frame);
   };
-  function stopScroll() {
-    if (!scrolling) return;
-    scrolling = false;
-    scrollButton.setAttribute("aria-pressed", "false");
-    scrollButton.textContent = "Start";
-    if (wake) wake.release().catch(() => {});
-    wake = null;
+  function pauseScroll(said) {
+    if (!moving()) return;
+    clearTimeout(scroll.timer);
+    scroll.state = "paused";
+    showScroll(said || "Paused");
+    letScreenSleep();
   }
-  scrollButton.addEventListener("click", () => (scrolling ? stopScroll() : startScroll()));
-  window.addEventListener("touchstart", (e) => {
-    if (scrolling && !e.target.closest(".fab")) stopScroll();
-  }, { passive: true });
+  const endScroll = () => {
+    const mine = pill.contains(document.activeElement);
+    clearTimeout(scroll.timer);
+    scroll.state = "off";
+    showScroll("");
+    letScreenSleep();
+    if (mine) fab.focus({ preventScroll: true });
+  };
 
-  fab.hidden = count === 0;  // nothing to transpose
+  $("scroll").addEventListener("click", () => {
+    close();
+    countdown();
+    go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
+  });
+  go.addEventListener("click", () => {
+    if (scroll.state === "counting") run();
+    else if (scroll.state === "running") pauseScroll();
+    else countdown();
+  });
+  $("pill-end").addEventListener("click", endScroll);
+  for (const b of document.querySelectorAll("[data-speed]")) {
+    b.addEventListener("click", () => setSpeed(state.speed + Number(b.dataset.speed)));
+  }
+  window.addEventListener("touchstart", (e) => {
+    if (!(e.target instanceof Element && e.target.closest("#pill"))) pauseScroll();
+  }, { passive: true });
+  window.addEventListener("wheel", () => pauseScroll(), { passive: true });
+  const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"];
+  document.addEventListener("keydown", (e) => {
+    const control = e.target instanceof Element && e.target.closest("button, a, [role=button], summary, input");
+    if (SCROLL_KEYS.indexOf(e.key) >= 0 || (e.key === " " && !control)) pauseScroll();
+  });
+
+  showScroll();
   render();
   if (hash.get("panel") === "1") open(panel);
   if (hash.has("chord")) openCard(String(hash.get("chord")));
