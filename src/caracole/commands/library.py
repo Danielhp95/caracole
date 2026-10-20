@@ -61,17 +61,18 @@ def _overrides_for_pages(conn: sqlite3.Connection, cfg: Config, now: datetime) -
         fail(f"overrides: {e}", 2)
 
 
-def _rewrite_pages(conn: sqlite3.Connection, cfg: Config, what: str, *, rematch: bool = False,
-                   song_ids: Collection[int] | None = None) -> tuple[Path, Path]:
-    """Rewrite _todo.md and index.html, holding caracole's lock as ``what``, after matching every song
-    again with ``rematch``, or the songs of ``song_ids``; a library caracole can't write exits 1."""
+def _rewrite_pages(conn: sqlite3.Connection, cfg: Config, what: str, *,
+                   rematch: bool | Collection[int] = False) -> tuple[Path, Path]:
+    """Rewrite _todo.md and index.html, holding caracole's lock as ``what``, after matching again
+    every song with ``rematch=True``, or the songs whose ids ``rematch`` holds; a library caracole
+    can't write exits 1."""
     with exclusive(cfg, what):
         now = utcnow()
         overrides = _overrides_for_pages(conn, cfg, now)
-        if rematch or song_ids is not None:
+        if rematch:
             from caracole.match import match_all
 
-            match_all(conn, overrides, cfg.match, song_ids=song_ids)
+            match_all(conn, overrides, cfg.match, song_ids=None if rematch is True else rematch)
         return write_pages(conn, cfg, overrides, now)
 
 
@@ -157,7 +158,7 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
                 typer.echo(f"{song.display}: {', '.join(ref(c) for c in rejected)} under [reject]")
         except OverridesError as e:  # the file broke since it was read
             fail(f"overrides: {e}", 2)
-        path, page = _rewrite_pages(conn, cfg, "review", song_ids=changed)
+        path, page = _rewrite_pages(conn, cfg, "review", rematch=changed)
         typer.echo(_counts(stats))
         typer.echo(f"Wrote {path} and {page}")
         typer.echo(_now(get_song(conn, song.id)))
