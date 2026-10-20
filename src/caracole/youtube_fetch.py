@@ -220,7 +220,8 @@ def songs_for_youtube(conn: sqlite3.Connection, cfg: Config, overrides: Override
         record = load_record(conn, song.id)
         pasted = overrides.youtube.get(song.key)
         if _own_audio(song, record):
-            if pasted and (record.video is None or pasted != record.video.id) and not _kept(conn, song.id, HUMAN_SHEET):
+            if (pasted and (record.video is None or pasted != record.video.id) and record.unusable != pasted
+                    and not _kept(conn, song.id, HUMAN_SHEET)):
                 due.append(song)
         elif song.id not in buy:
             continue
@@ -419,23 +420,31 @@ def _delete(path: Path) -> None:
 
 @dataclass(frozen=True)
 class SongState:
+    """``video`` is the one the state is about (picked, pasted, downloaded); ``audio_from``, for a
+    pasted video that can't be had, the one the song's audio still comes from, if any."""
+
     state: str
     video: Video | None = None
     detail: str | None = None
+    audio_from: Video | None = None
 
 
 def song_state(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, now: datetime) -> SongState:
-    """Where a song with no human sheet stands on the YouTube route (``QUEUED`` and the rest)."""
+    """Where a song with no human sheet stands on the YouTube route (``QUEUED`` and the rest).
+
+    A pasted video that can't be had is ``UNUSABLE`` even when the song has audio from
+    another video: that one stays, and the paste waits for another."""
     now = _utc(now)
     record = load_record(conn, song.id)
     if _declined(song, overrides):
         return SongState(DECLINED)
-    if _own_audio(song, record):
+    pasted = overrides.youtube.get(song.key)
+    own = _own_audio(song, record)
+    if pasted and record.unusable == pasted:
+        return SongState(UNUSABLE, Video(pasted), record.unusable_reason, record.video if own else None)
+    if own:
         made = _kept(conn, song.id, AUTO_SHEET) and song.autochords_mtime == song.audio_mtime
         return SongState(CHORDS if made else DOWNLOADED, record.video)
-    pasted = overrides.youtube.get(song.key)
-    if pasted and record.unusable == pasted:
-        return SongState(UNUSABLE, Video(pasted), record.unusable_reason)
     if not pasted and _recent(record.missing_at, now):
         again = _parse(record.missing_at) + RECHECK_AFTER
         return SongState(MISSING, None, f"asked again from {again.strftime('%Y-%m-%d')}")

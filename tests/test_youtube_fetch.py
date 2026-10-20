@@ -282,6 +282,30 @@ def test_a_pasted_video_that_cant_be_had_waits_for_another_paste(conn, ycfg, fak
     assert Path(get_song(conn, song.id).audio_path).read_text() == "another"
 
 
+def test_a_pasted_video_that_cant_be_had_for_a_song_with_audio_waits_for_another_paste_too(conn, ycfg, fake):
+    song = to_buy(conn)
+    creep_results(fake)
+    run(conn, ycfg)  # the Topic upload's audio
+    fake.video(OTHER, stderr="ERROR: [youtube] oNOFfl3Hx3s: Private video", exit=1)
+    o = Overrides(youtube={song.key: OTHER})
+    assert run(conn, ycfg, o).unavailable == 1
+    before = len(fake.argvs())
+    for night in (1, 2, 3):
+        later = NOW + timedelta(days=night)
+        assert yf.songs_for_youtube(conn, ycfg, o, later) == []
+        run(conn, ycfg, o, now=later)
+    assert len(fake.argvs()) == before  # YouTube refused it once: it isn't asked again every night
+    after = get_song(conn, song.id)
+    assert Path(after.audio_path).read_text() == "the topic upload"  # the audio it had stays
+    state = yf.song_state(conn, ycfg, after, o, NOW)
+    assert state.state == yf.UNUSABLE and state.video == Video(OTHER) and "Private video" in state.detail
+    assert state.audio_from.id == TOPIC
+    assert yf.song_states(conn, ycfg, o, NOW)[song.id].state == yf.UNUSABLE
+    fake.video(LYRICS, data="another")
+    run(conn, ycfg, Overrides(youtube={song.key: LYRICS}))  # another paste is taken
+    assert Path(get_song(conn, song.id).audio_path).read_text() == "another"
+
+
 def test_one_song_by_hand_is_looked_up_even_when_its_search_missed_lately(conn, ycfg, fake):
     song = to_buy(conn)
     run(conn, ycfg)  # a miss

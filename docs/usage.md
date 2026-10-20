@@ -870,7 +870,8 @@ auto sheet's source. The to-do page and index.html say where each song stands.
 for a search, 15 for a download) or anything else yt-dlp fails on leaves the
 song for the next run. A video YouTube won't give without a login (private,
 removed, age-restricted, members-only) is passed over for the next pick; one you
-pasted waits for another paste.
+pasted waits for another paste, and is never asked for again meanwhile. A song
+with audio from another video keeps it until then.
 
 ## The to-do page
 
@@ -954,7 +955,8 @@ when it has something in it:
   doesn't count among the things that need you.
 - **Nothing on YouTube for these.** The songs YouTube's search found no video
   that fits (asked again after 30 days), whose video under `[youtube]` can't be
-  downloaded (private, removed, age-restricted: caracole never logs in), or that
+  downloaded (private, removed, age-restricted: caracole never logs in; a song
+  with audio from an earlier video says so, and keeps it), or that
   you turned YouTube down for (`"none"`, with buy links). The lines to paste
   under `[youtube]` follow, one per song, each in place of
   `https://www.youtube.com/watch?v=…`; for a song with an entry already, the

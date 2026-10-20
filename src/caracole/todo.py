@@ -349,6 +349,8 @@ def _youtube_lists(conn: sqlite3.Connection, cfg: Config, songs_by_id: dict[int,
             elif st.state == UNUSABLE:
                 url = st.video.url if st.video else VIDEO_SHAPE
                 text = f"the video under `[youtube]`, {_link(url, url)}, can't be downloaded: {md(st.detail or '')}"
+                if st.audio_from is not None:
+                    text += f"; its audio is still that of {video_link(st.audio_from)}"
                 paste.append(f"{_toml_str(s.display)} = {_toml_str(VIDEO_SHAPE)}  # in place of the song's line "
                              "under [youtube]")
             else:

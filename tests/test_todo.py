@@ -1025,6 +1025,25 @@ def test_songs_youtube_has_nothing_for_need_you(conn, cfg, tmp_path, monkeypatch
     assert todo_count(f"## {NOTHING} (3)\n") == 3
 
 
+def test_a_pasted_video_that_cant_be_had_for_a_song_with_audio_from_youtube_needs_you(conn, cfg, tmp_path,
+                                                                                      monkeypatch):
+    from helpers.fake_ytdlp import route_on
+
+    from caracole.overrides import Overrides
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    s = youtube_record(conn, buy_song(conn), on, unusable=OTHER_ID, unusable_reason="Private video")
+    text = todo(conn, on, Overrides(youtube={s.key: OTHER_ID}))
+    assert f"{NO_SHEET} (" not in text
+    section = section_of(text, f"{NOTHING} (1)")
+    (line,) = [line for line in section.splitlines() if line.startswith("- **")]
+    assert (f"the video under `[youtube]`, [https://www.youtube.com/watch?v={OTHER_ID}]"
+            f"(https://www.youtube.com/watch?v={OTHER_ID}), can't be downloaded: Private video") in line
+    assert f"its audio is still that of [Creep (Radiohead - Topic)](https://www.youtube.com/watch?v={CREEP_ID})" in line
+    assert ('"Radiohead - Creep" = "https://www.youtube.com/watch?v=…"  # in place of the song\'s line under '
+            '[youtube]') in section
+
+
 def test_while_youtube_blocks_caracole_its_songs_say_so(conn, cfg, tmp_path, monkeypatch):
     from helpers.fake_ytdlp import route_on
 
