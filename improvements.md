@@ -130,6 +130,12 @@ Once the phone sheet viewer lands (`sheet.html`, in progress), it covers the sam
 
 Currently we have a "gallery view" for songs. I would also like to have a row-style view where I can see more results at once. I would like when searching for tabs to have similar outputs. Depending on which source the song comes from (la cuerda, ultimate guitar) I want a little icon to denote it, make the icon come from the webisite's own icon
 
+**Done in [aa5ad75](https://github.com/Danielhp95/caracole/commit/aa5ad75).** The library page (the file and the served page) has a **Cards/Rows** switch beside the Key menu, kept in the address (`#view=rows`).
+- **Rows:** one line per song on a laptop (about twenty to a screen), two on a phone: the title and its button, then the artist, the key and the status. Search, the status buttons, the Key menu, the sort, the A–Z letters and clicking an artist work the same in both views.
+- **On `caracole serve`** a row does everything a card does: Fetch now, Pick the match, Removing…, and the request's line under it. Its ⋯ holds the other files and links.
+- **Source icons:** every sheet and file shows where it came from with the site's own icon (Ultimate Guitar, LaCuerda, LRCLIB, gtptabs.com, MuseScore, YouTube), or a lettered badge (UG, LC…) until the icon is in. Auto sheets show ♪, files from `_inbox/` ↓. A new nightly `icons` step fetches each site's favicon once, politely, into the cache folder, and the page inlines them, so it still loads nothing from the network. `caracole icons` fetches the missing ones now.
+- **Search results look alike:** `caracole search` tags each hit with its source (`[UG]`, `[LaCuerda]`, `[auto]`), and the page's search shares the row's layout.
+
 ## Songbooks
 
 bundle in a songbook app too. I want the ability to "make songbook" so that i select different songs and a songbook is generated from them
@@ -146,3 +152,11 @@ It's great that the cli allows for disambiguation by having differnet alternativ
 ## Design pass
 
 After finishing, do a /deep-research for what is the best UX design for this type of application for feature discoverability, usability, snappyness and overall user experience design. Take inspiration from ultimate guitar and other websites that already present this kind of information. Do a research too on lightweight javascript frameworks (like d3.js or other alterntaives) to come up with cool and useful designs. Find anti-patterns in the current implementation and remove them too. Essentially, do a strong design pass with /deep-research
+
+## Searching only by artist or songname
+
+Sometimes one does not know the artist, we need to allow for either or scenarios for searching
+
+## Unify search and "request a song" so that we have both of them on the same bar
+
+typing will filter from what we have in our library, and pressing enter will return whatever are the most likely matches from the different sources
