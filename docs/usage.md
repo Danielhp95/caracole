@@ -1021,12 +1021,18 @@ and cache.
   now, so that their songs are there to search: NAME is their name, or the
   slug of their page as `caracole search` prints it (`joaquin_sabina`), tried
   first when it is written as one. It asks at the lookup pace, as
-  `caracole get` does: one request, within a lookup's budgets, and none when
-  the page is in the cache (30 days). It prints `LaCuerda: Joaquín Sabina's
-  page lists 241 songs, in the index now.`, or `LaCuerda has no artist page
-  for NAME.`; a cooldown, a block, a spent budget or an error says so and
-  exits 0, nothing changed. It can't go with `--index` (exit 2). An artist's
-  Songs on the page `caracole serve` serves runs it.
+  `caracole get` does, within a lookup's budgets: a request for each slug
+  tried until one answers (one for a slug the listings give; a name they don't
+  list may take one per spelling, "the" or "y" kept or not), and none when the
+  page is in the cache (30 days). Its last line starts with what LaCuerda
+  answered, which caracole serve's request line shows: `Read: LaCuerda's page
+  of Joaquín Sabina lists 241 songs, in the index now.`, `Not found: LaCuerda
+  has no artist page for NAME.`, or `Not read: …` for a cooldown, a block, a
+  spent budget or an error (`Not read: LaCuerda failed (…); nothing changed:
+  try again later.`), all of which exit 0, nothing changed. It can't go with
+  `--index` (exit 2). An artist's Songs on the page `caracole serve` serves
+  runs it, and so does Read LaCuerda's page for a name its listings haven't
+  reached yet.
 - **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
   song that has no Guitar Pro or Power Tab file, newest songs first. It reads
   gtptabs.com's sitemaps into a local index when it never has, or last did 30
@@ -2098,7 +2104,15 @@ with it. A KEY that is no key exits with status 2.
     never a miss, and the song waits for the next run (Details says if it
     doesn't);
   - **Added: the nightly run looks for it**, for a request without Fetch it
-    now;
+    now; **Added: tonight's run gets the sheet you picked on LaCuerda** for
+    one with a LaCuerda pick still to ask for;
+  - for a read of a LaCuerda artist's page (Read their page, Read LaCuerda's
+    page for a name), what LaCuerda answered, in the command's words up to its
+    first ";": **Read: LaCuerda's page of Caifanes lists 88 songs, in the index
+    now.**, **Not found: LaCuerda has no artist page for caifanes.**, or **Not
+    read: LaCuerda failed.**, **Not read: LaCuerda is cooling down after a
+    block until …**, **Not read: this hour's 60 lookup requests to LaCuerda are
+    spent.**, each with **Details**;
   - or, when a command failed, its error in one sentence, with a **Details**
     link to what it printed.
 

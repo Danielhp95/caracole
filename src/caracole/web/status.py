@@ -23,7 +23,11 @@ ran. So a job of other commands reads the same way:
   fetched yet", for one it didn't (a cooldown, a block, a spent budget or an
   error, all of which exit 0): an error is never a miss. A removal
   (``jobs.REMOVING``), whose song is gone once it is done, says "Removed", and
-  a LaCuerda artist page's read (``jobs.LACUERDA_ARTIST``), no song's, "Done".
+  a LaCuerda artist page's read (``jobs.LACUERDA_ARTIST``), no song's, what
+  LaCuerda answered, in the words ``caracole lacuerda --artist`` ends with
+  ("Read: …", "Not found: …", or "Not read: …" for a cooldown, a block, a spent
+  budget or an error). An add of a song whose sheet you picked on LaCuerda says
+  that tonight's run gets that sheet.
 
 A line that ends in a failure or a wait also links to the job's output on
 /jobs (``Line.details``). Every link is relative to the library page, which
@@ -55,6 +59,8 @@ STAGE_LINES = {
     "pages": "Writing the library page",
 }
 _WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
+# How ``caracole lacuerda --artist`` ends, by what LaCuerda answered, and the tone of the line it makes.
+_READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting"}
 
 
 @dataclass(frozen=True)
@@ -69,7 +75,8 @@ class SongFacts:
     ``caracole fetch --song`` refuses as such), and ``ignored`` that
     overrides.toml ignores it.
     ``picker`` is the link to its picker (``review?song=ID``) while its review
-    has candidates to pick from.
+    has candidates to pick from. ``lacuerda`` says the sheet you picked on
+    LaCuerda (``[lacuerda]``) is still to be asked for.
     """
 
     sheet: str | None = None
@@ -78,6 +85,7 @@ class SongFacts:
     checked_now: bool = False
     ignored: bool = False
     picker: str | None = None
+    lacuerda: bool = False
 
 
 @dataclass(frozen=True)
@@ -120,19 +128,35 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     if job.song_key.startswith(REMOVING):  # no song to read once it is done: that is what it did
         return Line("removed", "Removed")
-    if job.song_key.startswith(LACUERDA_ARTIST):  # no song's: what LaCuerda answered is in its output
-        return Line("added", "Done", details=details)
+    if job.song_key.startswith(LACUERDA_ARTIST):  # no song's: its command's last word says what LaCuerda answered
+        return _artist_read(job.steps, details)
     if song is not None and song.sheet:
         return Line("ready", "Ready", ("Open sheet", song.sheet))
     if song is not None and song.ignored:
         return Line("added", "Ignored in overrides.toml")
     if song is not None and song.review:
         return Line("review", "Needs review", _review_link(song))
+    if not job.fetching and song is not None and song.lacuerda:
+        return Line("added", "Added: tonight's run gets the sheet you picked on LaCuerda")
     if not job.fetching or song is None:
         return Line("added", "Added: the nightly run looks for it")
     if song.checked_now:
         return Line("missing", "Not found", ("see the to-do page", TODO))
     return Line("waiting", "Not fetched yet", details=details)
+
+
+def _artist_read(steps: list[Step], details: str) -> Line:
+    """A LaCuerda artist page's read, over: the sentence ``caracole lacuerda --artist`` ends with
+    (commands/lyrics.py), up to its first "; " or bracket. "Read: …" is done, "Not found: …"
+    LaCuerda's answer that it has no such page, and "Not read: …" a cooldown, a block, a spent budget or an
+    error, each a wait; any other ending, "Done"."""
+    said = next((line.strip() for step in reversed(steps) for line in reversed(step.output)
+                 if line.startswith(tuple(_READ_TONES))), None)
+    if said is None:
+        return Line("added", "Done", details=details)
+    tone = next(t for prefix, t in _READ_TONES.items() if said.startswith(prefix))
+    text = said.split("; ", 1)[0].split(" (", 1)[0].rstrip(".") + "."
+    return Line(tone, _short(text), details=None if tone == "added" else details)
 
 
 def _review_link(song: SongFacts) -> tuple[str, str]:
