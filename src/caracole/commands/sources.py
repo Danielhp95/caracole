@@ -346,11 +346,16 @@ def _match_added(
     return AddedMatch(state, change.new, tuple(pages))
 
 
-def match_lines(match: AddedMatch | None) -> list[str]:
+def match_lines(match: AddedMatch | None, *, lacuerda: str | None = None) -> list[str]:
     """What the offline index says of a song just added: the UG song it matched, the candidates of a
-    review ("Did you mean"), or that it has nothing under that name."""
+    review ("Did you mean"), or that it has nothing under that name, which for a song picked on LaCuerda
+    (``lacuerda``) is no matter."""
     if match is None:
         return []
+    if lacuerda is not None and match.result is not None and match.result.decision == "not_found":
+        index = ("The part of Ultimate Guitar's offline index read so far has" if match.index == "partial"
+                 else "Ultimate Guitar's offline index has")
+        return [f"{index} no song of theirs by this name; the sheet is the one you picked on LaCuerda."]
     if match.result is None:
         return ["The offline index is empty: run `caracole index build` once (about 10 minutes), and the "
                 "song can be matched."]
@@ -449,7 +454,7 @@ def say_added(cfg: Config, added: AddedSong, album: str | None = None, duration_
     if added.lacuerda is not None:
         typer.echo(f"LaCuerda: the nightly run keeps the sheet you picked there ({added.lacuerda}), recorded "
                    "under [lacuerda] in overrides.toml.")
-    for text in match_lines(added.match):
+    for text in match_lines(added.match, lacuerda=added.lacuerda):
         typer.echo(text)
     for problem in added.problems:
         _warn(problem)

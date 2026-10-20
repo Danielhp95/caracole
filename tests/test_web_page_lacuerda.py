@@ -223,3 +223,24 @@ def test_the_file_page_names_the_line_that_searches_lacuerda_too(cfg, tmp_path, 
     said = browser.js("document.querySelector('.file-answer').textContent")
     assert "LaCuerda" in said and "caracole search 'estopa'" in said
     assert browser.js("performance.getEntriesByType('resource').length") == 0  # the file asks nothing
+
+
+def test_a_song_picked_on_lacuerda_says_on_its_card_that_tonights_run_gets_that_sheet(cfg, browser):
+    # UG has no song of theirs by that name, which is no matter: the card says what comes, not that it's missing.
+    from caracole.library_page import build_library_page, write_library_page
+    from caracole.overrides import LaCuerdaPick, Overrides
+    from caracole.songs import update_song
+    from conftest import add_song
+
+    conn = db.connect(cfg.db_path)
+    song = add_song(conn, "Andrés Calamaro", "Flaca")
+    update_song(conn, song.id, match_decision="not_found")
+    picked = Overrides(lacuerda={song.key: LaCuerdaPick("andres_calamaro", "flaca")})
+    path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, picked, datetime.now(UTC)))
+    conn.close()
+    browser.open(path.as_uri())
+    assert browser.wait("!!document.querySelector('.lacuerda-pick')")
+    assert browser.js("document.querySelector('.lacuerda-pick').textContent").startswith(
+        "Tonight's run gets the sheet you picked on LaCuerda")
+    assert browser.js("document.querySelector('.lacuerda-pick a').href") == LC + "andres_calamaro/flaca"
+    assert not browser.js("!!document.querySelector('.pick-hint')")  # not "Not in the offline Ultimate Guitar index"

@@ -318,8 +318,8 @@ def _add_picks(conn: sqlite3.Connection, library: list[Song], songs: list[dict[s
             choices = review_choices(conn, song)
             if choices:
                 card["candidates"] = choices
-        elif song.match_decision == "not_found" and card["status"] != "ignored":
-            card["notFound"] = True
+        elif song.match_decision == "not_found" and card["status"] != "ignored" and not card["lacuerda"]:
+            card["notFound"] = True  # not for the sheet picked on LaCuerda, still to come: that is the song's
 
 
 _TAB_KINDS = {"chords": "Chords", "tabs": "Tabs", "guitar-pro": "Guitar Pro", "power": "Power Tab"}
@@ -356,6 +356,15 @@ _YOUTUBE_NOTES = {
     MISSING: "Nothing on YouTube fits: see the to-do page",
     UNUSABLE: "The video under [youtube] can't be downloaded: see the to-do page",
 }
+
+
+def _lacuerda_pick(song: Song, overrides: Overrides, status: str) -> dict[str, str] | None:
+    """The sheet you picked on LaCuerda (``[lacuerda]``), for a wanted song's card to say that tonight's run
+    gets it; None once LaCuerda was asked for it, and for any other song."""
+    pick = overrides.lacuerda.get(song.key)
+    if pick is None or status != "wanted" or song.lacuerda_checked_at is not None:
+        return None
+    return {"label": "the sheet you picked on LaCuerda", "href": pick.url}
 
 
 def _youtube_note(state: SongState | None) -> dict[str, Any] | None:
@@ -415,6 +424,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "links": links,
         "buy": buy,
         "youtube": youtube if status != "ignored" else None,
+        "lacuerda": _lacuerda_pick(song, overrides, status),
         "sortArtist": _sort_key(song.artist),
         "sortTitle": _sort_key(title),
         "artistLetter": _letter(_sort_key(song.artist)),
@@ -1521,6 +1531,14 @@ _SCRIPT = r"""
     }
     return note;
   };
+  // A wanted song whose sheet you picked on LaCuerda: tonight's run gets it, a link to its page.
+  const lacuerdaNote = (s) => {
+    if (!s.lacuerda || typeof s.lacuerda !== "object" || !/^https:[/][/]/i.test(String(s.lacuerda.href || ""))) return null;
+    const note = el("p", "note lacuerda-pick", "Tonight's run gets ");
+    note.appendChild(link(s.lacuerda, null, true));
+    note.appendChild(document.createTextNode("."));
+    return note;
+  };
   const linkRow = (parent, heading, items, cls) => {
     if (!items.length) return;
     parent.appendChild(el("p", "subhead", heading));
@@ -1918,6 +1936,8 @@ _SCRIPT = r"""
     }
     const fromYouTube = youtubeNote(s);
     if (fromYouTube) card.appendChild(fromYouTube);
+    const picked = lacuerdaNote(s);
+    if (picked) card.appendChild(picked);
 
     // Served by caracole serve: how the song's request goes, on one line, and Fetch now unless one runs.
     const job = server ? jobOfSong(s.id) : null;
@@ -2035,6 +2055,8 @@ _SCRIPT = r"""
     }
     const fromYouTube = youtubeNote(s);  // as on its card, first in the row's panel
     if (fromYouTube) more.push(fromYouTube);
+    const picked = lacuerdaNote(s);
+    if (picked) more.push(picked);
     if (server && s.notFound && s.status === "wanted" && !removing.has(id)) {
       const look = el("div", "actions");
       look.appendChild(lookLink(s, "btn small"));

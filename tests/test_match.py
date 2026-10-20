@@ -4,7 +4,7 @@ import pytest
 
 from caracole.config import MatchPolicy
 from caracole.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
-from caracole.overrides import Overrides
+from caracole.overrides import LaCuerdaPick, Overrides
 from caracole.songs import get_song, update_song
 from caracole.ug.index import mark_built
 from caracole.versions import picks, set_picks, song_versions, upsert_version
@@ -181,6 +181,27 @@ def test_title_only_is_review(conn):
     # the most-tabbed artist of the title comes first; its variant slugs count as the same song
     assert r.candidates == (MatchCandidate("leonard-cohen", "hallelujah", 100.0, "title_only"),
                             MatchCandidate("jeff-buckley", "hallelujah", 100.0, "title_only"))
+
+
+def test_a_song_picked_on_lacuerda_is_no_review_of_other_artists_songs_of_its_title(conn):
+    # The LaCuerda sheet you picked is the song's: other artists' songs of its title, covers mostly, are no
+    # question to ask you then. The song is not found, as any song UG has nothing of its artist's by that
+    # name, so its artist's UG page is still read. Without a pick it is a review; a pick changes nothing of
+    # a review of the artist's own songs, nor of an accept.
+    index(conn, (1, "miguel-inzunza", "flaca", "chords"), (2, "dedo-verde", "flaca", "chords"),
+          (3, "oasis", "wonderwall", "chords"), (4, "oasis", "wonderwalls", "chords"),
+          (5, "radiohead", "creep", "chords"))
+    picked = Overrides(lacuerda={"andres-calamaro/flaca": LaCuerdaPick("andres_calamaro", "flaca"),
+                                 "oasis/wonderwal": LaCuerdaPick("oasis", "wonderwall"),
+                                 "radiohead/creep": LaCuerdaPick("radiohead", "creep")})
+    song = add_song(conn, "Andrés Calamaro", "Flaca")
+    view = IndexView(conn)
+    assert summary(match_song(song, view, Overrides(), POLICY))[:2] == ("review", "title_only")
+    assert summary(match_song(song, view, picked, POLICY)) == ("not_found", None, None, None, None)
+    assert summary(match(conn, "Oasis", "Wonderwal", picked))[:2] == ("review", "fuzzy_title")
+    assert summary(match(conn, "Radiohead", "Creep", picked))[:2] == ("accept", "exact")
+    changes = match_all(conn, picked, POLICY, song_ids={song.id})
+    assert [c.new.decision for c in changes] == ["not_found"] and not get_song(conn, song.id).review
 
 
 def test_ignore_pin_and_match_overrides(conn):

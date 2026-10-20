@@ -58,6 +58,9 @@ among them (``KEPT_STEPS``) however many others score more: a show's song
 credited to its singer ends a catch-all title at 90, behind the covers of its
 title at 100. A review made only of steps 4 and 5 (``REVIEW_ONLY_STEPS``)
 leaves the song to its artist's UG page as well (``ug.fetch.needs_artist_page``).
+A song whose sheet you picked on LaCuerda (``[lacuerda]``) is no review of other
+artists' songs alone (``NO_ALIAS_STEPS``): that sheet is the song's, so it is not
+found, and its artist's UG page is read as for any song not found.
 
 ``match_all`` never replaces a match the fetch step made on a UG artist page
 (step ``artist_page``, amendment A6): the index can't see those bare-id tabs,
@@ -643,6 +646,12 @@ def _result(decision: str, hits: list[_Hit]) -> MatchResult:
                        candidates=tuple(h.cand for h in hits[:MAX_CANDIDATES]))
 
 
+def _settled_on_lacuerda(ident: str, hits: list[_Hit], overrides: Overrides) -> bool:
+    """Whether the LaCuerda sheet you picked for the song (``[lacuerda]``) leaves a review of ``hits`` nothing
+    to ask: they are other artists' songs alone (``NO_ALIAS_STEPS``), covers mostly."""
+    return ident in overrides.lacuerda and all(h.cand.step in NO_ALIAS_STEPS for h in hits)
+
+
 def _pinned_keys(index: IndexView, pins: tuple[int, ...]) -> tuple[str | None, str | None]:
     for tab_id in pins:
         keys = index.tab_keys(tab_id)
@@ -698,7 +707,7 @@ def match_song(song: Song, index: IndexView, overrides: Overrides, policy: Match
         return _review(hits + tolerant)
     behind = max((h.rank for h in tolerant), default=len(routes)) + 1
     found = tolerant + _allowed(_title_only(index, title, policy, behind), rejected)
-    if found:
+    if found and not _settled_on_lacuerda(ident, found, overrides):
         return _review(found)
     return MatchResult("not_found", None, ranked[0].cand.score if ranked else None, None, None,
                        candidates=tuple(h.cand for h in ranked[:MAX_CANDIDATES]))

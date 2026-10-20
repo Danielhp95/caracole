@@ -335,7 +335,15 @@ that sheet, whatever the song's language, asking LaCuerda for it at its next
 pass however lately it answered for the song: `LaCuerda: the nightly run keeps
 the sheet you picked there (https://acordes.lacuerda.net/estopa/como_camaron),
 recorded under [lacuerda] in overrides.toml.` Any other address is a usage
-error (exit 2), with nothing written.
+error (exit 2), with nothing written. overrides.toml is in the library, so the
+pick is written once `caracole add` holds caracole's lock, as every writer of
+that file does; a lock file that can't be opened exits 1, the line in
+wanted.txt and no pick written. A song you picked on LaCuerda is no Ultimate
+Guitar review of other artists' songs of its title (covers, mostly): the sheet
+is the one you picked, so with nothing of its artist's by that name in the
+offline index it is not found there, and says so: `Ultimate Guitar's offline
+index has no song of theirs by this name; the sheet is the one you picked on
+LaCuerda.`
 
 A song you [removed](#caracole-remove) comes back with `caracole add`, as new:
 `Added Radiohead - Creep to wanted.txt; back from its removal on 2026-10-19, as
@@ -2013,7 +2021,10 @@ with it. A KEY that is no key exits with status 2.
   song your library hasn't, from Ultimate Guitar, LaCuerda or gtptabs.com, also has **Add
   for tonight's run** under "⋯": it goes into wanted.txt under the site's names,
   as Request does with Fetch it now unticked (a LaCuerda song as
-  `caracole add --lacuerda …`, the pick recorded), and the nightly run looks it up
+  `caracole add --lacuerda …`, the pick recorded: its request says Added:
+  tonight's run gets the sheet you picked on LaCuerda, as its card does, with a
+  link to that sheet's page, and it waits for no Ultimate Guitar review of
+  other artists' songs of its title), and the nightly run looks it up
   (not a song under one of UG's `misc-…` names, which are no one's: request it
   by name as you know it).
   Back to your songs, a song new to the library gets a card of its own under the box
@@ -2063,7 +2074,9 @@ with it. A KEY that is no key exits with status 2.
   goes on through the candidates' UG links to Fetch it now and Pick. In the
   Rows view the picker is under the row's "⋯", and the row's Pick the match
   opens it there, the focus on the first candidate.
-- **Look in the index.** A wanted song the offline index didn't match has a
+- **Look in the index.** A wanted song the offline index didn't match (and
+  whose sheet you didn't pick on LaCuerda: its card says Tonight's run gets
+  the sheet you picked on LaCuerda instead) has a
   Look in the index link beside Fetch now (under "⋯" in the Rows view): its
   page, `/review?song=ID`, runs
   `caracole search` for the song's artist and title, and offers the first five

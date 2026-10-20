@@ -495,8 +495,9 @@ class WebApp:
                 from caracole.review import candidates_of
 
                 picker = f"review?song={song.id}" if candidates_of(song) else None  # the card's, or its page
+            picked = overrides is not None and song.key in overrides.lacuerda and song.lacuerda_checked_at is None
             facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
-                              checked_now=checked_now, ignored=ignored, picker=picker)
+                              checked_now=checked_now, ignored=ignored, picker=picker, lacuerda=picked)
         answer = (song.id if song is not None else None, facts)
         if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known
             with self._ended_lock:

@@ -1411,7 +1411,11 @@ def test_cli_add_takes_a_lacuerda_song_with_its_pick(tmp_path):
     assert load_overrides(tmp_path / "lib" / "overrides.toml").lacuerda == {
         "estopa/como-camaron": LaCuerdaPick("estopa", "como_camaron")}
     assert "LaCuerda: the nightly run keeps the sheet you picked there" in result.output
-    assert find_song(conn, "estopa/como-camaron") is not None
+    # El Barrio's Como Camarón, a cover, is no Ultimate Guitar review to settle: the sheet is the one picked.
+    assert "Not sure which Ultimate Guitar song" not in result.output and "looks wider" not in result.output
+    assert "The part of Ultimate Guitar's offline index read so far has no song of theirs" in result.output
+    song = find_song(conn, "estopa/como-camaron")
+    assert song is not None and not song.review and song.match_decision is None  # a partial index records no miss
 
 
 def test_cli_a_lacuerda_song_without_chords_is_added_by_its_names_alone(tmp_path):
