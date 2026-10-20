@@ -92,6 +92,7 @@ from caracole.normalize import (
 from caracole.overrides import Overrides
 from caracole.songs import Song, list_songs, refresh_status, update_song, utc_now_iso
 from caracole.ug.index import index_state
+from caracole.ug.lookup import artist_known
 from caracole.versions import mark_stale
 
 DECISIONS = ("accept", "review", "not_found", "pinned", "ignored")
@@ -154,9 +155,13 @@ def _songs_of(rows: Iterable[tuple[str, int, str]]) -> list[IndexSong]:
 class IndexView:
     """``ug_index`` as the matcher reads it during one run.
 
-    The artist keys (about 150,000) are loaded once, on first use, and so are
-    the title keys (about 720,000), which only title-only matching needs. An
-    artist's songs are read when a song first asks for that artist.
+    The artist keys (about 150,000) are loaded once, when a step first needs them
+    all: steps 3 and 4 compare names with every one. Until then the index itself
+    answers whether it has an artist and which artists read the same without
+    hyphens, so matching a song whose artist UG has (``caracole add``, a lookup)
+    never loads them. The title keys (about 720,000), which only title-only
+    matching needs, are loaded once too, on first use. An artist's songs are read
+    when a song first asks for that artist.
     """
 
     def __init__(self, conn: sqlite3.Connection):
@@ -184,12 +189,25 @@ class IndexView:
         return self._artists
 
     def has_artist(self, artist_key: str) -> bool:
-        self.artist_keys()
+        if self._artists is None:
+            return artist_known(self.conn, artist_key)
         return artist_key in self._artist_set
 
     def compact_artists(self, compact_key: str) -> tuple[str, ...]:
-        """The artist keys that read ``compact_key`` once hyphens are removed."""
-        self.artist_keys()
+        """The artist keys that read ``compact_key`` once hyphens are removed, sorted."""
+        if not compact_key:
+            return ()
+        if self._artists is None:
+            # A key never starts or ends with a hyphen, nor holds two in a row: one that reads
+            # ``acdc`` starts with acd, ac-d, a-cd or a-c-d, a range of keys each. UNION, as SQLite
+            # reads an OR of ranges as a full scan.
+            head = compact_key[:3]
+            starts = ["".join(c + sep for c, sep in zip(head, (*seps, ""), strict=True))
+                      for seps in itertools.product(("", "-"), repeat=len(head) - 1)]
+            sql = " UNION ".join(["SELECT DISTINCT artist_key FROM ug_index WHERE artist_key >= ? AND artist_key < ?"]
+                                 * len(starts))
+            rows = self.conn.execute(f"{sql} ORDER BY 1", [k for s in starts for k in (s, s + "\U0010ffff")])
+            return tuple(r[0] for r in rows if compact(r[0]) == compact_key)
         return self._by_compact.get(compact_key, ())
 
     def compact_artist_keys(self) -> list[str]:

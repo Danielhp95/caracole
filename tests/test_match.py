@@ -55,6 +55,42 @@ def test_index_view_groups_tabs_by_song_and_splits_variant_labels(conn):
     ]
 
 
+ARTIST_KEYS = ("x", "xy", "acdc", "abba", "nobody", "")
+
+
+def test_index_view_reads_artists_from_the_index_until_a_step_needs_them_all(conn):
+    # A one-letter key is one range of keys; a longer one is up to four, a hyphen or none between its
+    # first three letters. Each answer is what the list of every artist key gives once it is loaded.
+    index(conn, (1, "x", "a", "chords"), (2, "x", "b", "chords"), (3, "x-y", "c", "chords"),
+          (4, "xy", "d", "chords"), (5, "ac-dc", "e", "chords"), (6, "acdc", "f", "chords"),
+          (7, "a-c-d-c", "g", "chords"), (8, "acdcx", "h", "chords"), (9, "abba", "i", "chords"))
+    view = IndexView(conn)
+    seen = []
+    conn.set_trace_callback(seen.append)
+    compacts = [view.compact_artists(k) for k in ARTIST_KEYS]
+    known = [view.has_artist(k) for k in ("x", "x-y", "acd", "nobody")]
+    conn.set_trace_callback(None)
+    assert compacts == [("x",), ("x-y", "xy"), ("a-c-d-c", "ac-dc", "acdc"), ("abba",), (), ()]
+    assert known == [True, True, False, False]
+    assert not any("ORDER BY artist_key" in s for s in seen)
+    assert view.artist_keys()[:2] == ["a-c-d-c", "abba"]
+    assert [view.compact_artists(k) for k in ARTIST_KEYS] == compacts
+    assert [view.has_artist(k) for k in ("x", "x-y", "acd", "nobody")] == known
+
+
+def test_an_exact_match_never_loads_every_artist_key(conn):
+    # `caracole add`, the web page's add and a lookup match one song: one whose artist UG has needs
+    # its artist's titles alone, not the 150,000 artist keys the steps after it compare names with.
+    index(conn, (1, "acdc", "highway-to-hell", "chords"), (2, "abba", "sos", "chords"))
+    song = add_song(conn, "AC/DC", "Highway to Hell")
+    seen = []
+    conn.set_trace_callback(seen.append)
+    r = match_song(song, IndexView(conn), Overrides(), POLICY)
+    conn.set_trace_callback(None)
+    assert summary(r)[:2] == ("accept", "exact")
+    assert not any("SELECT DISTINCT artist_key FROM ug_index ORDER BY" in s for s in seen)
+
+
 # --- the ladder ---------------------------------------------------------------------------
 
 
