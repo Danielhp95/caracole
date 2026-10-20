@@ -74,7 +74,10 @@ and `search --key`).
   search.py's public functions, one at a time, the newest first, an older one's SQL
   interrupted once a newer waits (`set_progress_handler`); `/api/jobs[/<id>]`; every
   `/api/` read refused to another site's fetch, `security.own_page_read`;
-  `POST /lookup`), lookup_page.py (the lookup page: its script, `createElement` and
+  `POST /lookup`, which runs a song your library has, by its id or found from the UG pick
+  (`_Mine`: its match, or its names' `name_forms`), under its own names and writes no
+  wanted.txt line for it; a page's script gets every refusal as JSON), lookup_page.py (the
+  lookup page: its script, `createElement` and
   `textContent` only, allowed by hash, connects to the server alone), pages.py, server.py
   (`http.server`). The library page is library_page.py's, with `WebControls`.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
