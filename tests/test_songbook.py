@@ -291,6 +291,20 @@ def test_a_search_two_songs_answer_as_well_finds_neither(conn):
     assert find_library_song(conn, "Radiohead - Creep").song.artist == "Radiohead"
 
 
+def test_an_artist_alone_names_no_song_even_when_the_library_has_one_of_theirs(conn):
+    # "Oasis" is the artist: the one song of theirs you have is not the song you named.
+    from caracole.songbook import NotInLibrary, find_library_song, library_songs
+
+    add_song(conn, "Oasis", "Wonderwall")
+    add_song(conn, "Eagles", "Hotel California")
+    assert find_library_song(conn, "Oasis") is None
+    assert find_library_song(conn, "eagles") is None
+    with pytest.raises(NotInLibrary) as e:
+        library_songs(conn, ["Oasis"])
+    assert 'No song "Oasis" in the library: did you mean "Oasis - Wonderwall"?' in str(e.value)
+    assert find_library_song(conn, "wonderwall").song.title == "Wonderwall"  # a title alone still names it
+
+
 def test_songs_the_library_lacks_are_refused_with_a_hint(conn):
     from caracole.songbook import NotInLibrary, library_songs
 
