@@ -287,6 +287,20 @@ def test_caracole_render_makes_the_songbooks_after_the_sheets(setup):
     assert "Songbooks: 0 rendered, 1 up to date, 0 failed" in again.output
 
 
+def test_a_songbook_file_that_cant_be_written_fails_caracole_render_without_a_traceback(setup):
+    toml, cfg, _ = setup
+    make_songbook(cfg.library_dir / FILE_NAME, "Trip", ["Soda Stereo - De Música Ligera"])
+    make_songbook(cfg.library_dir / FILE_NAME, "Weekend", ["Soda Stereo - De Música Ligera"])
+    (folder(setup, "Trip") / "songbook.pdf").mkdir(parents=True)  # a synced device put a folder in its place
+    result = CliRunner().invoke(build_app(), ["--config", str(toml), "render"], env={"CARACOLE_CJK_FONT": None})
+    assert result.exit_code == 1 and isinstance(result.exception, SystemExit), result.output
+    assert "Traceback" not in result.output
+    assert "songbook Trip: no songbook.pdf: [Errno 21] Is a directory" in result.output  # the warning
+    assert "Songbooks: 1 rendered, 0 up to date, 1 failed" in result.output
+    assert (folder(setup, "Weekend") / "songbook.pdf").is_file()
+    assert (cfg.library_dir / "index.html").is_file()  # the pages, written all the same
+
+
 def test_caracole_render_says_nothing_of_songbooks_without_any(setup):
     toml, _, _ = setup
     result = CliRunner().invoke(build_app(), ["--config", str(toml), "render"], env={"CARACOLE_CJK_FONT": None})
@@ -316,6 +330,21 @@ def test_the_nightly_render_step_makes_the_songbooks(setup):
     assert "1 songbook made" in result.done
     assert "songbooks: 1 rendered" in result.status
     assert (folder(setup) / "songbook.pdf").is_file()
+
+
+def test_a_songbook_file_that_cant_be_written_costs_the_nightly_render_step_nothing_else(setup):
+    from caracole.notify import Notifier
+    from caracole.pipeline import Services, default_steps, run_pipeline
+
+    _, cfg, conn = setup
+    make_songbook(cfg.library_dir / FILE_NAME, "Trip", ["Soda Stereo - De Música Ligera"])
+    (folder(setup, "Trip") / "songbook.pdf").mkdir(parents=True)
+    steps = [s for s in default_steps() if s.name == "render"]
+    services = Services(clients={}, spotify=None, notifier=Notifier(None, None))
+    report = run_pipeline(cfg, conn=conn, services=services, steps=steps)
+    assert report.ok, report.errors  # no crash: the sheets' counts are kept
+    problems = " ".join(p.text for p in report.results["render"].problems)
+    assert "couldn't be made in full (Trip)" in problems
 
 
 def test_the_nightly_render_step_reports_a_broken_songbooks_file(setup):

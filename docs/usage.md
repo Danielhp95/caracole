@@ -1284,7 +1284,10 @@ songbook's files stay as they are, and everything else goes on.
 - **`caracole songbook render [NAME] [--force]`** makes the files of one
   songbook, or of all, that need it, and prints
   `1 rendered, 2 up to date, 0 failed`. It exits 1 when a file couldn't be
-  made, and the log says why, as `songbook Campfire: no songbook.pdf: …`.
+  made, and the log says why, as `songbook Campfire: no songbook.pdf: …`. A
+  file that can't be made or written (chordpro failed, a folder in its place,
+  a full disk) fails its songbook alone: its other files and the other
+  songbooks are still made.
 
 A NAME is found in any case. `remove` and `move` take the songbook's own song
 of that artist and title first, and only when it has none, the song a search of

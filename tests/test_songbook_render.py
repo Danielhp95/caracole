@@ -304,6 +304,68 @@ def test_a_failed_run_is_reported_and_the_rest_goes_on(conn, cfg, two, caplog):
     assert (folder(cfg) / "songbook.html").exists()  # the page needs no chordpro
 
 
+def test_a_file_that_cant_be_written_fails_its_songbook_alone(conn, cfg, two, caplog):
+    make(cfg, "Trip", "Radiohead - Creep")
+    make(cfg, "Weekend", "Soda Stereo - De Música Ligera")
+    (folder(cfg, "Trip") / "songbook.pdf").mkdir(parents=True)  # a synced device put a folder in its place
+    stats = render(conn, cfg)
+    assert stats.failed == ["Trip"] and stats.rendered == 2
+    assert "songbook Trip: no songbook.pdf" in caplog.text
+    assert (folder(cfg, "Weekend") / "songbook.pdf").is_file()  # the songbooks after it are made
+    trip = kv_get_json(conn, "songbook:Trip")
+    assert set(trip["files"]) == {"songbook.cho", "songbook.html"}  # what it wrote, recorded
+    assert written_page(conn, "Trip") is not None
+    assert "songbook.pdf" not in (folder(cfg, "Trip") / "songbook.html").read_text(encoding="utf-8")
+
+
+def test_a_songbook_folder_that_cant_be_made_fails_that_songbook_alone(conn, cfg, two, caplog, monkeypatch):
+    make(cfg, "Trip", "Radiohead - Creep")
+    real = Path.mkdir
+
+    def mkdir(self, *args, **kwargs):
+        if self.name == "Trip":
+            raise PermissionError(13, "Permission denied", str(self))
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", mkdir)
+    stats = render(conn, cfg)
+    assert stats.failed == ["Trip"] and stats.rendered == 1
+    assert "songbook Trip" in caplog.text and "Permission denied" in caplog.text
+
+
+def test_a_file_of_a_songbook_gone_that_cant_be_removed_is_tried_again_next_time(conn, cfg, two, caplog,
+                                                                                  monkeypatch):
+    render(conn, cfg)
+    delete_songbook(songbooks_file(cfg.library_dir), "Campfire")
+    real = Path.unlink
+
+    def unlink(self, *args, **kwargs):
+        if self.name == "songbook.pdf":
+            raise PermissionError(13, "Permission denied", str(self))
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    stats = render(conn, cfg)
+    assert stats.removed == 0 and "Permission denied" in caplog.text
+    assert kv_get_json(conn, "songbook:Campfire") is not None  # kept, to try again
+    monkeypatch.undo()
+    assert render(conn, cfg).removed == 1
+    assert not folder(cfg).exists()
+
+
+def test_the_files_written_stay_recorded_when_a_songbook_breaks_off(conn, cfg, two, monkeypatch):
+    from caracole.viewer import book
+
+    def interrupted(*args, **kwargs):
+        raise KeyboardInterrupt  # Ctrl-C while the page is made: the PDF and the .cho are written
+
+    monkeypatch.setattr(book, "build_songbook", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        render(conn, cfg)
+    record = kv_get_json(conn, "songbook:Campfire")
+    assert set(record["files"]) == {"songbook.cho", "songbook.pdf"}
+
+
 # --- what it records -------------------------------------------------------------------------
 
 

@@ -655,27 +655,40 @@ def _render_book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, bo
         return done
     record = _record(conn, book.folder)
     record["name"] = book.name
+    try:
+        _make_files(cfg, book, entries, folder, record, done, font=font, runner=runner, force=force)
+    finally:  # what was written stays recorded, whatever stopped the rest
+        kv_set_json(conn, f"{RECORD_KEY}{book.folder}", record)
+    return done
+
+
+def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path, record: dict[str, Any],
+                done: _BookDone, *, font: Path | None, runner: Runner, force: bool) -> None:
+    """songbook.cho, songbook.pdf, then songbook.html, into ``folder``, each written in ``record``."""
     playable = [e for e in entries if e.cho is not None]
 
     def make(name: str, inputs: Any, build: Callable[[], bytes | None]) -> None:
-        """Write ``name`` from ``build`` unless it was made from these ``inputs`` and is still as written."""
+        """Write ``name`` from ``build`` unless it was made from these ``inputs`` and is still as written.
+        A file that can't be made or written (chordpro failed; a folder in its place, a full disk) is
+        logged and fails the songbook, and the others are still made."""
         digest = _digest(inputs)
         files, made = record["files"], record["inputs"]
         if not force and made.get(name) == digest and _holds(folder / name, files.get(name)):
             return
         try:
             data = build()
+            if data is None:  # nothing to make: what caracole wrote there goes
+                _drop(folder / name, files.get(name))
+                files.pop(name, None)
+                made.pop(name, None)
+                return
+            if not holds(folder / name, hashlib.sha256(data).hexdigest(), len(data)):  # one more sync, else none
+                write_atomic(folder / name, data)
+                done.written = True
         except (RenderError, OSError) as e:
             log.warning("songbook %s: no %s: %s", book.name, name, e)
             done.failed = True
             return
-        if data is None:  # nothing to make: what caracole wrote there goes
-            _drop(folder / name, files.pop(name, None))
-            made.pop(name, None)
-            return
-        if not holds(folder / name, hashlib.sha256(data).hexdigest(), len(data)):  # one more sync, else none
-            write_atomic(folder / name, data)
-            done.written = True
         files[name] = {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
         made[name] = digest
 
@@ -712,8 +725,6 @@ def _render_book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, bo
         return html.encode("utf-8")
 
     make(HTML_NAME, page_inputs, page)
-    kv_set_json(conn, f"{RECORD_KEY}{book.folder}", record)
-    return done
 
 
 def _song_id(entry: Entry) -> str:
@@ -789,7 +800,7 @@ PAGE_REFUSED = ("This songbook page isn't the one caracole last wrote here (it w
 
 def _book_folder(library_dir: Path, book: Songbook) -> Path:
     """``Library/_songbooks/<folder>/``, made if need be; SongbookError when either is a symbolic link
-    (caracole doesn't follow one there) or not a folder."""
+    (caracole doesn't follow one there), not a folder, or can't be made."""
     path = library_dir
     for part in (FOLDER, book.folder):
         path = path / part
@@ -799,6 +810,8 @@ def _book_folder(library_dir: Path, book: Songbook) -> Path:
             path.mkdir(parents=True, exist_ok=True)
         except FileExistsError as e:
             raise SongbookError(f"{path} isn't a folder") from e
+        except OSError as e:  # no permission, a full disk, a read-only file system
+            raise SongbookError(f"can't make the folder {path}: {e.strerror or e}") from e
         if path.is_symlink() or not path.is_dir():
             raise SongbookError(f"{path} isn't a folder")
     return path
@@ -815,9 +828,13 @@ def _remove_gone(conn: sqlite3.Connection, library_dir: Path, folders: set[str])
             continue
         where = library_dir / FOLDER / folder
         if folder and not folder.startswith(".") and "/" not in folder and not where.is_symlink() and where.is_dir():
-            for name, entry in _record(conn, folder)["files"].items():
-                if name in OUTPUTS:
-                    _drop(where / name, entry)
+            try:
+                for name, entry in _record(conn, folder)["files"].items():
+                    if name in OUTPUTS:
+                        _drop(where / name, entry)
+            except OSError as e:  # no permission, say: the record stays, and the next render tries again
+                log.warning("songbook folder %s: can't remove caracole's files: %s", where, e)
+                continue
             try:
                 where.rmdir()  # only when empty: a file of yours stays, and so does its folder
             except OSError:
