@@ -1447,12 +1447,15 @@ loads nothing from the network. It shows every song as a card, in a grid as
 wide as the screen: one column on a phone, three or four on a laptop. A card
 has its status, its key and where the key came from ("Key A minor (from the
 tab)", "Key C major (estimated from the chords)", "(from the audio)": see
-[The song's key](#the-songs-key)), its transposition, and links to its files:
-the sheet viewer first (see [The sheet viewer](#the-sheet-viewer)), then the
-PDF; its title opens the first. A Guitar Pro file caracole downloaded names
-its site, as `Guitar Pro 1 · gtptabs.com`, and a score its format, as
-`Score 1 (MuseScore)`; a score's PDF is never the card's main link, which is
-the sheet's. Each
+[The song's key](#the-songs-key)), its transposition, and its sheet: its
+title and its one Open button open the sheet viewer (see
+[The sheet viewer](#the-sheet-viewer)), else the PDF (Open PDF), else the
+text. The rest is under Files: the PDF, the text, the ChordPro file, the
+lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files and the
+Guitar Pro versions to download from Ultimate Guitar. A Guitar Pro file
+caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`, and a
+score its format, as `Score 1 (MuseScore)`; a score's PDF is never what a
+card opens, which is the sheet. Each
 artist's cards share a coloured monogram, and the artist's name under a title
 shows only that artist's songs ("Queen" leaves out ABBA's "Dancing Queen"),
 until you take its chip off. "Find it elsewhere" opens a song's MuseScore
@@ -1476,7 +1479,8 @@ the match, and one button: the sheet, or, on the page
 `caracole serve` serves, Fetch now for a wanted song (Pick the match for one
 that needs review first, and Removing… while caracole removes it). The title
 opens the sheet too, as a card's does; when Fetch now has the row's button,
-the sheet is the first of its files under "⋯". An auto
+the sheet is the first of its files under "⋯", and on its card Open is a
+plain button beside Fetch now. An auto
 sheet's row says so by its ♪ mark (YouTube's, when its audio came from there)
 and its button, "Auto sheet PDF", rather than by a badge, so that a phone's
 second line keeps room for the artist. Its "⋯" button opens the rest: where a

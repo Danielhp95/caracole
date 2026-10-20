@@ -1505,6 +1505,78 @@ def test_a_result_rows_title_opens_what_its_href_says(conn, cfg, tmp_path):
     assert re.search(r'<article class="row" tabindex="-1"><h2 class="row-title"[^>]*>Plain</h2>', results), results
 
 
+# --- a card opens its sheet from one button; its other files fold away ---------------------------------
+
+
+@in_chromium
+def test_a_card_opens_its_sheet_from_one_button_and_its_other_files_fold_away(conn, cfg, tmp_path):
+    filed_library(conn, cfg)
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+
+    creep = card_of(shown, "Creep")
+    assert creep.count('<details class="more files">') == 1, creep
+    top, files = creep.split('<details class="more files">')
+    files = files.split("</details>", 1)[0]
+    # One button opens the viewer, as the title does, named for the song.
+    assert link_texts(top) == ["Open"], top
+    opened = re.search(r'<a class="btn primary" ([^>]*)>Open</a>', top)
+    assert 'href="Radiohead/Creep/sheet.html"' in opened.group(1)
+    assert 'aria-label="Open Creep by Radiohead"' in opened.group(1) and 'title="Sheet viewer"' in opened.group(1)
+    # Every other file, and the Guitar Pro versions to download, under Files: closed, small.
+    assert files.startswith("<summary>Files</summary>"), files
+    assert link_texts(files) == ["Sheet PDF", "Sheet text", "ChordPro", "Lyrics", "Timed lyrics", "Guitar Pro 1",
+                                 "Tab", "Info", "Guitar Pro ver 1 · 4.5★ · 12 votes ↗"], files
+    assert '<p class="subhead">Guitar Pro to download</p>' in files
+    assert all(cls.startswith("btn small") for cls in re.findall(r'<a class="([^"]*)"', files)), files
+
+    # A sheet with no viewer opens its PDF, and says so.
+    wonderwall = card_of(shown, "Wonderwall")
+    opened = re.search(r'<a class="btn primary" ([^>]*)>Open PDF</a>', wonderwall)
+    assert opened and 'href="Oasis/Wonderwall/sheet.pdf"' in opened.group(1), wonderwall
+    assert 'aria-label="Open PDF of Wonderwall by Oasis"' in opened.group(1)
+    assert "more files" not in wonderwall  # nothing else to fold away
+    # A song with no file has nothing to open.
+    yesterday = card_of(shown, "Yesterday")
+    assert ">Open" not in yesterday and "more files" not in yesterday
+
+
+@in_chromium
+def test_a_wanted_songs_card_keeps_fetch_now_its_one_primary_button(conn, cfg, tmp_path):
+    card = card_of(listing(dump_dom(served_auto_sheet(conn, cfg), tmp_path)), "斑马，斑马")
+    # Fetch now is the card's one primary button, as it is the row's; the auto sheet opens beside it.
+    assert 'action="/fetch"' in card and card.count("btn primary") == 1, card
+    assert re.search(r'<a class="btn" ' + AUTO_VIEWER + r"[^>]*>Open</a>", card), card
+
+
+@in_chromium
+def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_skips_the_title(conn, cfg, tmp_path):
+    from helpers.browser import Browser, BrowserError
+
+    creep = filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    try:
+        phone = Browser(tmp_path / "chrome", width=390, height=844, mobile=True)
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    card = f'#list .card[data-id="{creep.id}"]'
+    with phone:
+        phone.open(path.as_uri())
+        assert phone.wait(f"document.querySelector({json.dumps(card)}) !== null")
+        q = f"document.querySelector({json.dumps(card)})"
+        # A thumb's target: Files, and each file once it's open.
+        assert phone.js(f"{q}.querySelector('details.files > summary').getBoundingClientRect().height") >= 44
+        phone.click(card + " details.files > summary")
+        assert phone.wait(f"{q}.querySelector('details.files').open")
+        heights = phone.js(f"Array.from({q}.querySelectorAll('details.files a')).map((a) => a.getBoundingClientRect().height)")
+        assert len(heights) == 9 and min(heights) >= 44, heights
+        # From the artist, Tab goes to Open: the title opens the same, and isn't a stop of its own.
+        phone.js(f"{q}.querySelector('button.artist').focus()")
+        phone.press("Tab")
+        assert phone.js("document.activeElement.textContent") == "Open"
+        phone.click(card + " .title-link")
+        assert phone.wait("location.pathname.endsWith('/Radiohead/Creep/sheet.html')")
+
+
 def row_of(shown: str, title: str) -> str:
     found = re.search(r'<article class="row"[^>]*>(?:(?!</article>).)*?' + re.escape(title) + r".*?</article>",
                       shown, re.S)

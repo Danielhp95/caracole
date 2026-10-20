@@ -23,9 +23,10 @@ by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
 The songs are one grid of cards, as many columns as the screen holds, in every
 order: a section per artist left one narrow card per row on a desktop. Each
 card has its artist's monogram, in a colour of that artist's, and an A-Z strip
-jumps to the first card of a letter. A card's title opens its sheet (its
-viewer, else its PDF, else its text), as a row's does. A Cards/Rows toggle
-shows them as rows
+jumps to the first card of a letter. A card's title and its one Open button
+open its sheet (its viewer, else its PDF, else its text); its other files, and
+the Guitar Pro versions to download from UG, fold under Files, as a row's
+"⋯" folds them. A Cards/Rows toggle shows them as rows
 instead, one compact line a song (two on a phone), remembered in the address
 (``#view=rows``) as the search, the filters, the sort and the key are.
 
@@ -865,6 +866,8 @@ body.with-tray .page { padding-bottom: 16rem; }
   text-align: center; }
 .more[open] > summary::before { transform: rotate(90deg); }
 .more > .subhead { margin: 8px 0 6px; }
+.more > summary + .actions { margin-top: 6px; }
+.more + .more { margin-top: 0; }  /* Files, then Find it elsewhere: one fold under the other */
 .foot { display: flex; justify-content: flex-end; margin-top: auto; }
 .more + .foot { margin-top: 0; }
 .foot form { margin: 0; }
@@ -881,6 +884,10 @@ body.with-tray .page { padding-bottom: 16rem; }
 .views button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
 """ + ROWS_STYLE + """@media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
+}
+/* A thumb's targets: the folds of a card and the files in them. */
+@media (pointer: coarse) {
+  .more > summary, .more .btn.small { min-height: 44px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .plus { transition: transform .15s; }
@@ -1186,9 +1193,19 @@ _SCRIPT = r"""
   // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
-  // The file a song opens with, from its title: its viewer, else its PDF, else its text (the data marks it
-  // primary).
+  // The file a song opens with, from its title and its card's one button: its viewer, else its PDF, else its
+  // text (the data marks it primary).
   const primaryOf = (s) => listOf(s.files).find((f) => f && f.primary) || null;
+  // A card's button for it: "Open" for the viewer, "Open PDF" and "Open text" for the others. The card's
+  // primary one unless it has another (a wanted song's Fetch now, which its row's button is too).
+  const openButton = (s, f, lead) => {
+    const kind = /\.html$/i.test(String(f.name || "")) ? "" : /\.pdf$/i.test(String(f.name || "")) ? "PDF" : "text";
+    const text = kind ? "Open " + kind : "Open";
+    const open = link({ label: text, href: f.href }, lead ? "btn primary" : "btn", false);
+    open.setAttribute("aria-label", text + (kind ? " of " : " ") + String(s.title) + " by " + String(s.artist));
+    open.title = String(f.label || "");  // "Sheet viewer", "Auto sheet PDF"
+    return open;
+  };
 
   // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py): where
   // that stands, and the video its audio came from.
@@ -1621,9 +1638,21 @@ _SCRIPT = r"""
       }
       if (s.notFound) actions.appendChild(lookLink(s));
     }
-    for (const f of listOf(s.files)) actions.appendChild(link(elsewhere(s, f), f.primary ? "btn primary" : "btn", false));
+    if (primary) actions.appendChild(openButton(s, primary, !actions.querySelector(".btn.primary")));
     if (actions.childNodes.length) card.appendChild(actions);
-    linkRow(card, "Guitar Pro to download", listOf(s.guitarPro), "btn small");
+    // The other files, and the Guitar Pro versions to download, folded away as a row's "⋯" folds them.
+    const others = listOf(s.files).filter((f) => f && f !== primary).map((f) => elsewhere(s, f));
+    if (others.length || listOf(s.guitarPro).length) {
+      const files = el("details", "more files");
+      files.appendChild(el("summary", null, "Files"));
+      if (others.length) {
+        const line = el("div", "actions");
+        for (const f of others) line.appendChild(link(f, "btn small", false));
+        files.appendChild(line);
+      }
+      linkRow(files, "Guitar Pro to download", listOf(s.guitarPro), "btn small");
+      card.appendChild(files);
+    }
     if (listOf(s.museScore).length || listOf(s.links).length || listOf(s.buy).length) {
       const more = el("details", "more");
       more.appendChild(el("summary", null, "Find it elsewhere"));

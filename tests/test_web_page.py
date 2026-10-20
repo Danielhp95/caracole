@@ -273,7 +273,7 @@ def test_fetch_now_shows_its_progress_on_the_card_then_its_files(serve, cfg, con
     assert 'role="status"' in line and 'data-tone="ready"' in line  # read out as it changes
     assert "Ready" in line and 'href="Radiohead/Creep/sheet.pdf"' in line and "Open sheet" in line
     # Once done, the card shows what the library has now: the sheet, and no Fetch now.
-    assert ">Sheet PDF</a>" in shown and 'action="/fetch"' not in shown
+    assert ">Open PDF</a>" in shown and 'action="/fetch"' not in shown
     assert 'data-status="found"' in shown
     assert 'action="/fetch"' in card(dom, "Wonderwall")  # the other card is as it was
     # The counts follow: one found song now, in the masthead and on the buttons.
@@ -317,7 +317,7 @@ def test_a_cards_line_stays_the_same_live_region_until_its_request_ends(serve, c
 
     shown = card(dom, "Creep")
     assert re.search(r'<p class="progress"[^>]*data-tone="ready"', shown) and shown.count('class="progress"') == 1
-    assert ">Sheet PDF</a>" in shown  # the card is the song's new one all the same
+    assert ">Open PDF</a>" in shown  # the card is the song's new one all the same
     assert attribute(dom, "data-same") == {"list Creep": True}
     assert attribute(dom, "data-focus") == ["p.progress", "Creep"]
 
@@ -331,7 +331,7 @@ def test_a_requested_song_gets_a_card_of_its_own_on_the_page(serve, cfg, conn, t
     requested = re.search(r'<section[^>]*id="requested"[^>]*>(.*?)</section>', dom, re.S)
     assert requested and "hidden" not in requested.group(0)[:80], dom[-3000:]
     shown = card(requested.group(1), "Creep")
-    assert "Radiohead" in shown and "Ready" in shown and ">Sheet PDF</a>" in shown
+    assert "Radiohead" in shown and "Ready" in shown and ">Open PDF</a>" in shown
     # Its line is the one "Sending…" was written in: a screen reader hears it change, to the end.
     assert shown.count('class="progress"') == 1 and attribute(dom, "data-same") == {"requested Creep": True}
     seen = attribute(dom, "data-seen")
@@ -420,7 +420,7 @@ def test_a_new_songs_request_shows_after_a_reload(serve, cfg, conn, tmp_path):
     requested = re.search(r'<section[^>]*id="requested"[^>]*>(.*?)</section>', dom, re.S)
     assert requested and "hidden" not in requested.group(0)[:80], dom[-3000:]
     shown = card(requested.group(1), "Creep")
-    assert "Radiohead" in shown and "Ready" in shown and ">Sheet PDF</a>" in shown
+    assert "Radiohead" in shown and "Ready" in shown and ">Open PDF</a>" in shown
     assert "Adding to the library…" in attribute(dom, "data-seen")
 
 
@@ -525,7 +525,7 @@ def test_a_pick_on_a_card_shows_how_it_goes_there_then_the_sheet(serve, cfg, con
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
     assert 'data-tone="ready"' in line and "Open sheet" in line
-    assert ">Sheet PDF</a>" in shown and 'class="picker"' not in shown and "Needs review" not in shown
+    assert ">Open PDF</a>" in shown and 'class="picker"' not in shown and "Needs review" not in shown
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
 
 
