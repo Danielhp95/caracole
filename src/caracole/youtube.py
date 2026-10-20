@@ -19,8 +19,9 @@ night, on these terms (youtube_fetch.py runs it, AGENTS.md says why):
 - **Audio alone**: ``-x`` to m4a, never a playlist, at most 100 MB.
 
 yt-dlp runs as a program, its arguments a list and never a shell, and whatever comes from
-a song's name follows ``--``, so it is never read as an option. A run that takes too long
-is stopped with its whole process group (yt-dlp, ffmpeg, deno).
+a song's name follows ``--``, so it is never read as an option. A run that takes too long,
+or that caracole is interrupted in (Ctrl-C reaches caracole alone), is stopped with its
+whole process group (yt-dlp, ffmpeg, deno).
 
 YouTube's player needs JavaScript solved, which yt-dlp does with deno. Its JIT dies under
 systemd's MemoryDenyWriteExecute, which caracole's units keep, so deno gets
@@ -598,6 +599,9 @@ class YtDlp:
             self._log(what, target, "timed out")
             self._event(target, None, "error", message)
             raise ProviderError(PROVIDER, target, None, message) from TimeoutError(message)
+        except BaseException:  # Ctrl-C, a stop: its own session hears neither, so it goes with caracole
+            _stop(proc)
+            raise
         self._last = self._clock()
         stdout, stderr = out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
         if proc.returncode == 0:

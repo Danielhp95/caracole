@@ -431,6 +431,36 @@ def test_a_run_that_takes_too_long_is_stopped_and_is_an_error(fake, tmp_path):
     assert isinstance(e.value.__cause__, TimeoutError)
 
 
+def test_an_interrupted_run_stops_yt_dlp_and_what_it_started(fake, tmp_path):
+    # Ctrl-C reaches caracole alone: yt-dlp runs in a session of its own, so its process group
+    # (ffmpeg, deno) would go on downloading after caracole has let go of its lock.
+    import os
+    import signal
+    import threading
+
+    fake.search("slow", sleep=30)
+    main = threading.main_thread().ident
+
+    def interrupt():
+        deadline = time.monotonic() + 10
+        while not fake.calls() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        signal.pthread_kill(main, signal.SIGINT)
+
+    threading.Thread(target=interrupt, daemon=True).start()
+    started = time.monotonic()
+    with pytest.raises(KeyboardInterrupt):
+        runner(fake, tmp_path).search("slow")
+    assert time.monotonic() - started < 15
+    pid = fake.calls()[0]["pid"]
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return
+    os.killpg(pid, signal.SIGKILL)
+    pytest.fail("yt-dlp went on running after caracole was interrupted")
+
+
 def test_a_missing_yt_dlp_is_an_error_naming_it(tmp_path):
     yt = YtDlp(str(tmp_path / "no-such-yt-dlp"), ProviderPolicy(6, (0, 0)), tmp_path / "cache", sleep=lambda s: None)
     with pytest.raises(ProviderError, match="no-such-yt-dlp"):

@@ -4,7 +4,8 @@ reaches YouTube.
 caracole runs yt-dlp as a program (youtube.py), so the fake is a program too: a short
 Python script, run with the tests' own interpreter, that answers from a plan the test
 writes (``plan.json`` beside it) and logs every call it gets (``calls.jsonl``): its
-arguments and the environment variables caracole sets.
+arguments, the environment variables caracole sets (``watch_env``), the names of all it
+was given, and its process id.
 
 - A search (``ytsearchN:<query>``) prints the playlist JSON yt-dlp's ``--flat-playlist
   --dump-single-json`` prints: the entries the plan lists for the query, at most N.
@@ -30,7 +31,8 @@ here = Path(__file__).resolve().parent
 plan = json.loads((here / "plan.json").read_text(encoding="utf-8"))
 argv = sys.argv[1:]
 with open(here / "calls.jsonl", "a", encoding="utf-8") as log:
-    log.write(json.dumps({"argv": argv, "env": {k: os.environ.get(k) for k in plan["watch_env"]}}) + "\n")
+    log.write(json.dumps({"argv": argv, "env": {k: os.environ.get(k) for k in plan["watch_env"]},
+                          "env_names": sorted(os.environ), "pid": os.getpid()}) + "\n")
 target = argv[argv.index("--") + 1] if "--" in argv else argv[-1]
 
 def answer(spec):
