@@ -120,7 +120,8 @@ songs.py's, in the `removed` table).
   for chordpro (`rendered_song`), so its viewer is one caracole wrote; helpers/chromium.py
   drives a headless Chromium of the test's own over the DevTools protocol (a pipe, the standard
   library), for a page whose CSP refuses a test's script; helpers/browser.py's `Browser` is the
-  same with typing, Enter, clicks and the layout read back, for the lookup page's tests.
+  same with typing, Enter, clicks and the layout read back, for the lookup page's tests. Both
+  resolve no host name (`helpers.browser.NO_LOOKUPS`), and their tests are `@in_chromium` too.
   fixtures/ holds UG, LaCuerda, LRCLIB,
   gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
   synthetic lyrics, sheets and files.

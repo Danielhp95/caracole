@@ -6,11 +6,10 @@ import base64
 import hashlib
 import json
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
-import pytest
+from helpers import browser
+from helpers.browser import in_chromium
 
 from caracole.chordpro import to_chordpro
 from caracole.viewer.book import BookSong, assets_version, build_songbook, songbook_csp
@@ -149,14 +148,11 @@ def test_the_assets_version_changes_with_the_scripts():
 
 # --- in a real browser ---------------------------------------------------------------------------
 
-CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
-in_chromium = pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
-
-
 def open_page(html: str, tmp_path: Path, fragment: str = "", *, harness: str = "", size: str = "390,844",
               budget: int = 4000) -> str:
-    """The DOM of songbook.html in Chromium after its scripts ran. ``harness`` is JavaScript that runs
-    on every load, after the page's scripts; ``out`` set there is in the DOM as data-result."""
+    """The DOM of songbook.html in Chromium after its scripts ran, in a browser context of its own
+    (helpers/browser.py). ``harness`` is JavaScript that runs on every load, after the page's
+    scripts; ``out`` set there is in the DOM as data-result."""
     path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
     path.parent.mkdir(parents=True, exist_ok=True)
     if harness:
@@ -167,19 +163,8 @@ def open_page(html: str, tmp_path: Path, fragment: str = "", *, harness: str = "
                   "</script>\n")
         html = html.replace("</body>", script + "</body>")
     path.write_text(html, encoding="utf-8")
-    profile = tmp_path / f"chrome-{len(list(tmp_path.glob('chrome-*')))}"
-    try:
-        result = subprocess.run(
-            [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={profile}", f"--window-size={size}", f"--virtual-time-budget={budget}",
-             "--dump-dom", path.as_uri() + fragment],
-            capture_output=True, text=True, timeout=90, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        pytest.skip(f"chromium couldn't run: {e}")
-    if result.returncode != 0 or "<html" not in result.stdout:
-        pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
-    return result.stdout
+    width, height = (int(n) for n in size.split(","))
+    return browser.dump_dom(path.as_uri() + fragment, (width, height), budget_ms=budget)
 
 
 def result_of(dom: str):

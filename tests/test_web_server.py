@@ -19,6 +19,7 @@ from caracole.web.security import allowed_hosts
 from caracole.web.server import make_server
 
 from conftest import subprocess_pythonpath
+from helpers.browser import in_chromium
 from helpers.chromium import Chromium
 from helpers.rendered import rendered_song
 
@@ -167,6 +168,7 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
         server.server_close()
 
 
+@in_chromium
 def test_a_served_viewer_works_in_its_sandbox(cfg, conn, tmp_path):
     # The server sends viewer_csp() with the page: its own script and style by their hashes, in a
     # sandbox, so no other script runs there, a test's included; Chromium is driven from outside.
@@ -195,6 +197,7 @@ def test_a_served_viewer_works_in_its_sandbox(cfg, conn, tmp_path):
         server.server_close()
 
 
+@in_chromium
 def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
     # The sandbox has no storage, so the transposition, the mode and the capo go in the page's
     # address: a reload and Back keep them.
@@ -232,6 +235,7 @@ def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
         server.server_close()
 
 
+@in_chromium
 def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_path, monkeypatch):
     # The server is a newer caracole than the one that wrote the viewer: the page's own hashes
     # must go out with it, or the browser refuses its script until the next render.
@@ -254,6 +258,7 @@ def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_pa
         server.server_close()
 
 
+@in_chromium
 def test_a_served_viewers_links_open_once_signed_in(cfg, conn, tmp_path):
     # The sandboxed viewer has an origin of its own, so following one of its links is a navigation
     # from another site: the sign-in cookie must go with it (SameSite=Lax, not Strict), or its PDF

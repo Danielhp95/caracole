@@ -15,12 +15,12 @@ import hashlib
 import html
 import json
 import re
-import shutil
-import subprocess
 import threading
 from datetime import UTC, datetime
 
 import pytest
+from helpers import browser
+from helpers.browser import CHROMIUM_MARKS
 
 from caracole import db
 from caracole.library import song_dir
@@ -33,8 +33,7 @@ from caracole.web.server import make_server
 
 from conftest import add_song
 
-CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
-pytestmark = pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+pytestmark = CHROMIUM_MARKS  # every test here opens the page in Chromium
 
 
 class Polls:
@@ -174,7 +173,8 @@ def serve(cfg, monkeypatch):
         if before is not None:
             before(app)
         server = make_server(app, "127.0.0.1", 0)
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        # shutdown() returns at the next poll: every 10 ms, not every 500
+        threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
         queue.start()
         started.append((server, queue))
         return f"http://127.0.0.1:{server.server_address[1]}/"
@@ -187,18 +187,10 @@ def serve(cfg, monkeypatch):
 
 
 def dump_dom(url: str, tmp_path, size: str = "1280,900") -> str:
-    try:
-        result = subprocess.run(
-            [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={tmp_path / 'chrome'}", f"--window-size={size}", "--hide-scrollbars",
-             "--virtual-time-budget=60000", "--dump-dom", url],
-            capture_output=True, text=True, timeout=90,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        pytest.skip(f"chromium couldn't run: {e}")
-    if result.returncode != 0 or "<html" not in result.stdout:
-        pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
-    return result.stdout
+    """The page's DOM once its timers ran for a minute of virtual time, in a browser context of its
+    own (helpers/browser.py); a phone's width is laid out as a phone's screen (test_library_page.py)."""
+    width, height = (int(n) for n in size.split(","))
+    return browser.dump_dom(url, (width, height), hide_scrollbars=True, mobile=width < 500, budget_ms=60000)
 
 
 # Notes each line the page shows, in order, and how wide the page ever got.

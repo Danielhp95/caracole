@@ -52,11 +52,17 @@ def headless_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k not in DESKTOP}
 
 
+# What @in_chromium gives a test; a module whose every test opens pages has it as its pytestmark.
+CHROMIUM_MARKS = [pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH"), pytest.mark.slow,
+                  pytest.mark.usefixtures("_chromium")]
+
+
 def in_chromium(test):
     """For a test that opens pages in Chromium: marked slow, skipped without Chromium, and given
     conftest.py's ``_chromium``, which keeps the browser's profile in the run's basetemp."""
-    test = pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")(test)
-    return pytest.mark.usefixtures("_chromium")(pytest.mark.slow(test))
+    for mark in CHROMIUM_MARKS:
+        test = mark(test)
+    return test
 
 
 class BrowserError(RuntimeError):
