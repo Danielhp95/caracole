@@ -664,8 +664,12 @@ and cache.
   or not found or reviewed on its title alone with its artist page known. It
   prints that song's line alone, without the count (`Artist - Title: sheet
   101`), or why nothing came: `not fetched (the error); it waits for the next
-  run`, or that the budget was spent first. `-v` adds the requests, the count
-  and the totals. A cooldown, a block or a spent budget exits 0.
+  run`, or that the budget was spent first, or UG's cooldown. A `--song` cut
+  short that way marks a matched song to fetch, so the next run fetches it
+  even if it was fetched before and nothing changed; a song looked up on its
+  artist's page lately waits for that page's next reading instead, and the
+  line says to ask for it again later. `-v` adds the requests, the count and
+  the totals. A cooldown, a block or a spent budget exits 0.
 - **`caracole lacuerda`** looks on LaCuerda for Spanish songs (judged by their
   lyrics, or by their title until there are lyrics) that have no complete
   sheet, at most once in 30 days per song. Like `caracole fetch`, it first

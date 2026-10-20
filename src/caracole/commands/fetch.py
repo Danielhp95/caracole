@@ -10,6 +10,8 @@ imported inside the command.
 
 It prints a line per song and the totals; for one song (``--song``), that
 song's line alone, which says why when nothing came, and -v adds the rest.
+A ``--song`` cut short (a cooldown, a block, a spent budget, an error) marks
+a matched song to fetch, so the next run fetches it even if it was clean.
 """
 
 from __future__ import annotations
@@ -66,9 +68,14 @@ def _fetch(cfg: Config, display: str | None) -> None:
     # Under caracole's lock from the start: a run this waited for may have been blocked meanwhile.
     with exclusive(cfg, "fetch"), closing(open_db(cfg)) as conn:
         now = utcnow()
+        asked = _one_song(conn, display, overrides) if display else None  # what's missing comes first
         if is_cooling(conn, PROVIDER, now):
             until = _when(get_state(conn, PROVIDER).cooldown_until)
-            typer.echo(f"Ultimate Guitar is cooling down after a block until {until}; nothing fetched.")
+            if asked is not None and _send_back(conn, asked, overrides, now):
+                typer.echo(f"Ultimate Guitar is cooling down after a block until {until}; "
+                           f"{asked.display} waits for the first run after that.")
+            else:
+                typer.echo(f"Ultimate Guitar is cooling down after a block until {until}; nothing fetched.")
             return
         # As in the nightly run: sheets kept before their lyrics are scored first, with no request,
         # and a partial one sends its song back to have its sheets ranked again.
@@ -79,7 +86,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
                 log.info(scored)
             else:
                 typer.echo(scored)
-        songs = [_one_song(conn, display, overrides)] if display else songs_to_fetch(conn, overrides, now)
+        songs = [asked] if asked is not None else songs_to_fetch(conn, overrides, now)
         if not songs:
             typer.echo("Nothing to fetch.")
             if rescored:  # a partial sheet it found shows at once
@@ -88,7 +95,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
         client = make_client(cfg, conn, PROVIDER, run_id_for(now))
         ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank,
                            library_dir=cfg.library_dir, now=now)
-        one = display is not None
+        one = asked is not None
 
         def said(song: Song, outcome: SongFetchOutcome) -> None:
             typer.echo(_line(song, outcome, requests=not one))
@@ -97,6 +104,8 @@ def _fetch(cfg: Config, display: str | None) -> None:
             stats = fetch_songs(ctx, songs, on_song=said)
         except ProviderBlocked as e:
             state = record_block(conn, e.provider, now, str(e))
+            if asked is not None:
+                _send_back(conn, asked, overrides, now)
             typer.echo(
                 f"Ultimate Guitar blocked caracole ({e}). No more UG requests until "
                 f"{_when(state.cooldown_until)} (block #{state.strikes}). Nothing was marked not found."
@@ -107,16 +116,36 @@ def _fetch(cfg: Config, display: str | None) -> None:
             client.close()
         if client.requests_made:
             record_ok(conn, PROVIDER, now)
+        unfinished = asked is not None and not stats.songs_done
+        due = _send_back(conn, asked, overrides, now) if unfinished else True
         write_pages(conn, cfg, overrides, utcnow())
     budget = cfg.provider(PROVIDER).budget
     if one:
         log.info(_totals(stats, client.requests_made))
-        if stats.failures or (stats.budget_exhausted and not stats.songs_done):
-            typer.echo(_not_done(songs[0], stats, budget))
+        if unfinished:
+            typer.echo(_not_done(songs[0], stats, budget, due=due))
         return
     typer.echo(_totals(stats, client.requests_made))
     if stats.budget_exhausted:
         typer.echo(f"The UG budget of {_count(budget, 'request')} is spent; the rest waits for the next run.")
+
+
+def _send_back(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime) -> bool:
+    """``--song``'s song, cut short before it was done (a cooldown, a block, a spent budget, an error).
+
+    A matched song is marked to fetch, so the nightly run fetches it again even
+    if it was clean (fetched before, nothing new): asked for, it is owed a
+    fetch. True when the next run will fetch it; a song looked up on its
+    artist's UG page lately waits for that page's next reading.
+    """
+    from caracole.songs import get_song, update_song
+    from caracole.ug.fetch import fetch_due
+
+    song = get_song(conn, song.id)  # the fetch may have matched it on its artist's page
+    if song.match_decision in ("accept", "pinned") and not song.ug_dirty:
+        update_song(conn, song.id, ug_dirty=True)
+        song = get_song(conn, song.id)
+    return fetch_due(conn, song, overrides, now)
 
 
 def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> Song:
@@ -178,17 +207,19 @@ def _line(song: Song, outcome: SongFetchOutcome, *, requests: bool = True) -> st
     return f"{line} ({_count(outcome.requests, 'request')})"
 
 
-def _not_done(song: Song, stats: FetchStats, budget: int) -> str:
+def _not_done(song: Song, stats: FetchStats, budget: int, *, due: bool = True) -> str:
     """Why ``--song``'s song got no line of its own: an error, or the budget, before it was done.
-    Neither is a miss, so it waits for the next run; a sheet the first pass kept stays."""
+    Neither is a miss, so it waits for the next run (``due``, as ``_send_back`` makes a matched song),
+    or for you to ask again; a sheet the first pass kept stays."""
     spent = f"the UG budget of {_count(budget, 'request')} is spent"
     if stats.sheets_done:
         if stats.failures:
             return f"{song.display}: sheet kept; its guitar parts wait for the next run ({stats.failures[0][1]})."
         return f"{song.display}: sheet kept; {spent}, so its guitar parts wait for the next run."
+    then = "it waits for the next run" if due else "ask for it again later"
     if stats.failures:
-        return f"{song.display}: not fetched ({stats.failures[0][1]}); it waits for the next run."
-    return f"{song.display}: not fetched; {spent}, so it waits for the next run."
+        return f"{song.display}: not fetched ({stats.failures[0][1]}); {then}."
+    return f"{song.display}: not fetched; {spent}, so {then}."
 
 
 def _totals(stats: FetchStats, requests: int) -> str:

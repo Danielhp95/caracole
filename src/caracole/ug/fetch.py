@@ -1471,21 +1471,30 @@ def songs_to_fetch(
       sheet or a tab that match found: unless their artist's page finds them
       again, those go (``process_song``).
     """
-    out = []
-    for song in list_songs(conn):
-        if _ignored(song, overrides):
-            continue
-        matched = song.match_decision in ("accept", "pinned")
-        dirty = matched and (song.ug_dirty or _block_changed(conn, song, overrides.block))
-        due = (
-            needs_artist_page(song)
-            and not _checked_within(conn, song.id, now, artist_page_max_age)
-            and artist_is_known(conn, song, overrides)
-        )
-        undone = not matched and _undone(conn, song.id)
-        if dirty or due or undone or _recheck_due(conn, song, overrides, now, artist_page_max_age):
-            out.append(song)
-    return out
+    return [song for song in list_songs(conn)
+            if fetch_due(conn, song, overrides, now, artist_page_max_age=artist_page_max_age)]
+
+
+def fetch_due(
+    conn: sqlite3.Connection,
+    song: Song,
+    overrides: Overrides,
+    now: datetime,
+    *,
+    artist_page_max_age: timedelta = ARTIST_PAGE_MAX_AGE,
+) -> bool:
+    """Whether this run should fetch the song: ``songs_to_fetch``, for one song."""
+    if _ignored(song, overrides):
+        return False
+    matched = song.match_decision in ("accept", "pinned")
+    dirty = matched and (song.ug_dirty or _block_changed(conn, song, overrides.block))
+    due = (
+        needs_artist_page(song)
+        and not _checked_within(conn, song.id, now, artist_page_max_age)
+        and artist_is_known(conn, song, overrides)
+    )
+    undone = not matched and _undone(conn, song.id)
+    return dirty or due or undone or _recheck_due(conn, song, overrides, now, artist_page_max_age)
 
 
 def fetch_songs(
