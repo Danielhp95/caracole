@@ -19,6 +19,7 @@ from helpers import viewer_pages as pages
 from helpers.browser import Browser, in_chromium
 from helpers.viewer_pages import key, tap
 
+import caracole.viewer
 from caracole.viewer import build_viewer, viewer_csp
 
 LONG = "{title: Long Song}\n{artist: Synthetic}\n" + "".join(
@@ -434,6 +435,29 @@ def test_the_pill_fits_a_phone_and_a_desktop_and_holds_still(tmp_path):
             boxes.add(tuple(b.js(box)))  # paused
         assert len(boxes) == 1, (width, boxes)
         assert smallest >= 44 and fits, width
+
+
+@in_chromium
+def test_a_tap_on_the_pill_leaves_no_hover_behind(tmp_path):
+    with viewer(tmp_path) as b:
+        b.click("#scroll")
+        b.click("#go")
+        # A phone keeps :hover on what was tapped last, as the mouse left over it does here.
+        b.click("#pill-faster")
+        tapped = b.js("getComputedStyle(document.querySelector('#pill-faster')).backgroundColor")
+        hovers = b.js("matchMedia('(hover: hover)').matches")
+    assert not hovers and tapped == "rgba(0, 0, 0, 0)"  # left as it was
+
+
+def test_the_pill_and_the_bar_light_up_under_a_pointer_that_hovers_only():
+    # A headless Chromium hovers nothing ((hover: none), whatever it emulates): the stylesheet says it.
+    css = (Path(caracole.viewer.__file__).parent / "viewer.css").read_text(encoding="utf-8")
+    start = css.index("@media (hover: hover) {")
+    end = css.index("\n}", start)
+    inside, outside = css[start:end], css[:start] + css[end:]
+    for selector in (".pill button:hover", ".pill .go:hover", ".bar button:hover"):
+        assert selector in inside, selector
+    assert not re.search(r"\.(pill|bar)\b[^{}]*:hover", outside)
 
 
 @in_chromium

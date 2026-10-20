@@ -146,11 +146,12 @@ a { color: inherit; }
 .sizes output { min-width: 4.2em; text-align: center; font-size: .9rem; font-weight: 650;
   font-variant-numeric: tabular-nums; }
 .sizes button[aria-disabled="true"] { opacity: .35; cursor: default; }
-/* Hover only where a pointer hovers: on a phone it would stay on the last button tapped. */
+/* Hover only where a pointer hovers: on a phone it would stay on the last button tapped, in the bar
+   and in the pill alike. */
 @media (hover: hover) {
-  .bar button:hover { background: var(--raised); }
+  .bar button:hover, .pill button:hover { background: var(--raised); }
   .keys .step:hover { background: var(--border); }
-  .bar .play:hover { background: var(--accent); }
+  .bar .play:hover, .pill .go:hover { background: var(--accent); }
   .sizes button[aria-disabled="true"]:hover { background: none; }
 }
 /* Scrolling by itself: the pill that steers it, above the bar's place (--foot) whether the bar is there
@@ -164,8 +165,7 @@ a { color: inherit; }
 .pill button { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0;
   border-radius: 50%; background: none; color: inherit; font: inherit; font-size: 1.35rem; line-height: 1;
   cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.pill button:hover { background: var(--raised); }
-.pill .go, .pill .go:hover { background: var(--accent); color: var(--on-accent); }
+.pill .go { background: var(--accent); color: var(--on-accent); }
 .pill .go > * { grid-area: 1 / 1; }
 .pill .end { color: var(--muted); }
 .pill output { min-width: 2.4ch; text-align: center; font-weight: 700; }
