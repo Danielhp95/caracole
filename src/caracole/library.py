@@ -23,6 +23,7 @@ import stat
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from caracole.db import kv_get_json
 from caracole.normalize import clean_title
@@ -117,6 +118,21 @@ def read_regular(path: Path) -> bytes:
     """The bytes of the regular file at ``path``, never read through a link (``open_regular``)."""
     with open(open_regular(path), "rb") as f:
         return f.read()
+
+
+def read_json(path: Path) -> Any:
+    """The JSON in the regular file at ``path``, never read through a link (``read_regular``).
+
+    Any synced device can write the file, so whatever it holds raises ValueError at worst: not
+    UTF-8, not JSON, or nested too deep for the decoder (which raises RecursionError, and that
+    would stop a pass over every song). Nothing there, a link or no regular file raises
+    OSError (FileNotFoundError, NotRegularFile).
+    """
+    text = read_regular(path).decode("utf-8")
+    try:
+        return json.loads(text)
+    except RecursionError:
+        raise ValueError("nested too deep for the JSON decoder") from None
 
 
 def holds(path: Path, sha256: str, size: int | None = None) -> bool:

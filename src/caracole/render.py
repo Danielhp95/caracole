@@ -88,7 +88,6 @@ directory, and the PDF then goes into the song's folder in one rename.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import sqlite3
 import struct
@@ -112,6 +111,7 @@ from caracole.library import (
     NotRegularFile,
     holds,
     kept_files,
+    read_json,
     read_regular,
     song_dir,
     write_atomic,
@@ -720,8 +720,8 @@ def _human_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) ->
     """The sheet the fetch step kept: the markup in sheet.json, the key UG gives the version."""
     path = (library_dir / kept.path).with_name("sheet.json")
     try:
-        doc = json.loads(_read_text(path))
-    except ValueError as e:  # not JSON
+        doc = read_json(path)
+    except (OSError, ValueError) as e:  # ValueError: not UTF-8, not JSON, or nested too deep
         raise RenderError(f"cannot read {path}: {e}") from e
     content = doc.get("content") if isinstance(doc, Mapping) else None
     if not isinstance(content, str) or not content.strip():

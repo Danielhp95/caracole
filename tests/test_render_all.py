@@ -991,6 +991,20 @@ def test_unreadable_sheet_json_fails_that_song_only(conn, cfg, caplog, doc):
     assert "sheet.json" in caplog.text
 
 
+def test_a_sheet_json_nested_too_deep_fails_that_song_only(conn, cfg, caplog):
+    # Any synced device can write one, and the decoder raises RecursionError on it, not ValueError:
+    # the song it stops comes first (the newest is rendered first), and the pass goes on after it.
+    good = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-01T00:00:00Z")
+    human_sheet(conn, cfg, good, tab_id=2)
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana", added_at="2026-10-02T00:00:00Z")
+    human_sheet(conn, cfg, bad, tab_id=1)
+    (song_dir(cfg.library_dir, bad) / "sheet.json").write_bytes(b"[" * 100_000 + b"]" * 100_000)
+    stats = render(conn, cfg)
+    assert (stats.rendered, stats.failed) == (1, 1)
+    assert pdf_of(cfg, good).is_file() and not pdf_of(cfg, bad).exists()
+    assert "nested too deep" in caplog.text
+
+
 @pytest.mark.parametrize("data", [None, b"\xff\xfe not UTF-8"], ids=["missing", "not-utf8"])
 def test_unreadable_auto_sheet_fails_that_song_only(conn, cfg, caplog, data):
     bad = add_song(conn, "Placeholder Band", "Synthetic Song")

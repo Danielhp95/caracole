@@ -35,7 +35,6 @@ correlation under ``MIN_FIT``) give no estimate.
 
 from __future__ import annotations
 
-import json
 import logging
 import math
 import re
@@ -48,7 +47,7 @@ from typing import Any
 
 from caracole.chordpro import is_chord_line, normalize_chord
 from caracole.db import kv_get_json, kv_set_json
-from caracole.library import KeptFile, kept_files, read_regular, write_info
+from caracole.library import KeptFile, kept_files, read_json, read_regular, write_info
 from caracole.songs import Song, list_songs
 from caracole.versions import get_version
 
@@ -304,15 +303,14 @@ def _tonality(raw: Mapping[str, Any], field: str = "tonality_name") -> str | Non
 def _markup(library_dir: Path, doc: KeptFile | None, sheet: KeptFile) -> str | None:
     """The human sheet's markup: the ``content`` of the sheet.json kept with it.
 
-    Any synced device can write that file, so whatever it holds gives None at worst: a file
-    nested too deep for the decoder raises RecursionError, not ValueError.
+    Any synced device can write that file, so whatever it holds gives None at worst
+    (``library.read_json``).
     """
     if doc is None or doc.version_id != sheet.version_id:
         return None
-    text = _text(library_dir / doc.path)
     try:
-        data = json.loads(text) if text is not None else None
-    except (ValueError, RecursionError):
+        data = read_json(library_dir / doc.path)
+    except (OSError, ValueError):
         return None
     content = data.get("content") if isinstance(data, dict) else None
     return content if isinstance(content, str) else None

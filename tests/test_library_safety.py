@@ -6,7 +6,7 @@ import stat
 
 import pytest
 
-from caracole.library import NotRegularFile, read_regular, write_atomic
+from caracole.library import NotRegularFile, read_json, read_regular, write_atomic
 
 
 @pytest.fixture
@@ -94,3 +94,27 @@ def test_read_regular_refuses_a_fifo_without_waiting_for_a_writer(tmp_path):
 def test_read_regular_of_nothing_is_file_not_found(tmp_path):
     with pytest.raises(FileNotFoundError):
         read_regular(tmp_path / "wanted.txt")
+
+
+def test_read_json_reads_a_regular_file(tmp_path):
+    (tmp_path / "sheet.json").write_bytes('{"content": "[ch]Am[/ch] canción"}'.encode())
+    assert read_json(tmp_path / "sheet.json") == {"content": "[ch]Am[/ch] canción"}
+
+
+@pytest.mark.parametrize(
+    "data", [b"{not json", b"\xff\xfe not UTF-8", b"[" * 100_000 + b"]" * 100_000],
+    ids=["not-json", "not-utf8", "nested-too-deep"],
+)
+def test_read_json_of_anything_else_is_a_value_error(tmp_path, data):
+    # Any synced device can write the file: whatever it holds raises ValueError, never
+    # RecursionError, which would stop a pass over every song.
+    (tmp_path / "sheet.json").write_bytes(data)
+    with pytest.raises(ValueError):
+        read_json(tmp_path / "sheet.json")
+
+
+def test_read_json_refuses_a_symbolic_link(tmp_path, state):
+    link = tmp_path / "sheet.json"
+    link.symlink_to(state / "spotify_token.json")
+    with pytest.raises(NotRegularFile, match="symbolic link"):
+        read_json(link)
