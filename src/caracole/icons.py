@@ -393,7 +393,8 @@ def _asked_key(key: str) -> str:
 @dataclass
 class IconRun:
     """What ``fetch_icons`` did, by source: ``fetched`` and kept; ``missing``, the site gave none;
-    ``errors``, it failed; ``waiting``, not asked this time (no client for it, or its budget spent)."""
+    ``errors``, it failed; ``waiting``, not asked this time (no client for it, or its budget spent).
+    A source asked less than ``wait`` ago without an icon is left alone, in none of them."""
 
     fetched: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
