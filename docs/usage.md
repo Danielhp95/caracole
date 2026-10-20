@@ -1060,17 +1060,21 @@ two places, and sends no request:
       Radiohead - Creep · wanted, no sheet yet · no folder yet
 
     On Ultimate Guitar (offline index)
-      1. Radiohead - Creep · chords×2 tabs×1 guitar-pro×1 (incl. acoustic)
+      1. [UG] Radiohead - Creep · chords×2 tabs×1 guitar-pro×1 (incl. acoustic)
          https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169
          in your library
-      2. Stone Temple Pilots - Creep · chords×1
+      2. [UG] Stone Temple Pilots - Creep · chords×1
          https://tabs.ultimate-guitar.com/tab/stone-temple-pilots/creep-chords-5001
          caracole add "Stone Temple Pilots" "Creep"
 
 - **In your library**: every song, whatever its status, with its key when it
-  has one (`Key G major (from the tab)`) and its folder.
-- **On Ultimate Guitar**: numbered hits from the offline index, each with its
-  tabs per type, one of its pages, and the `caracole add` line to paste.
+  has one (`Key G major (from the tab)`) and its folder. A song with a sheet
+  is tagged with where the sheet came from, as `index.html` marks it with the
+  site's icon: `[UG]`, `[LaCuerda]`, `[auto]` (the audio model), as in
+  `[LaCuerda] Soda Stereo - De Música Ligera · found · …`.
+- **On Ultimate Guitar**: numbered hits from the offline index, each tagged
+  `[UG]`, with its tabs per type, one of its pages, and the `caracole add`
+  line to paste.
 
 QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
@@ -1094,7 +1098,7 @@ more there are:
 
     $ caracole search --key Am
     In your library, in A minor
-      Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
+      [LaCuerda] Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
 
     The offline Ultimate Guitar index has no keys: search it without --key.
 

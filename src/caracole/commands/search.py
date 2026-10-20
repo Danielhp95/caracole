@@ -22,6 +22,8 @@ from caracole.commands import sources
 from caracole.commands._common import exclusive, fail, load_cfg, open_db
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from caracole.config import Config
     from caracole.keys import SongKey
     from caracole.overrides import Overrides
@@ -84,9 +86,11 @@ def _wanted_key(key: str, add: int | None) -> str:
 
 
 def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int, key: str | None = None) -> None:
+    from caracole.icons import kept_sources
     from caracole.keys import key_name, song_key
     from caracole.search import STRONG, bare_id_hint, search_index, search_library
 
+    kept = kept_sources(conn)  # where each song's sheet came from, for its tag
     more = 0  # songs in the key that --limit leaves out
     if key is None:
         typer.echo("In your library")
@@ -97,7 +101,7 @@ def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int, key: s
         in_key = _in_key(cfg, conn, text, key)
         library, more = in_key[:limit], max(len(in_key) - limit, 0)
     for hit, found in library:
-        typer.echo(_library_line(cfg, hit, found))
+        typer.echo(_library_line(cfg, hit, found, kept.get(hit.song.id, {})))
     if not library:
         typer.echo("  nothing matches")
     elif more:
@@ -157,14 +161,24 @@ def _in_key(
     return found
 
 
-def _library_line(cfg: Config, hit: LibraryHit, key: SongKey | None = None) -> str:
+def _library_line(cfg: Config, hit: LibraryHit, key: SongKey | None = None,
+                  kept: Mapping[str, str] | None = None) -> str:
+    """A song of yours, tagged with where its sheet came from (``kept``: its files' sources), when it has one."""
+    from caracole.icons import sheet_source
     from caracole.library import song_dir
 
     song = hit.song
     folder = song_dir(cfg.library_dir, song)
     where = str(folder) if folder.is_dir() else "no folder yet"
     known = f"Key {key.describe()} · " if key is not None else ""
-    return f"  {song.display} · {_status(song)} · {known}{where}"
+    return f"  {_tag(sheet_source(kept or {}))}{song.display} · {_status(song)} · {known}{where}"
+
+
+def _tag(source: str | None) -> str:
+    """Where a hit came from, as the command line marks it: "[UG] ", "[LaCuerda] "; nothing for no source."""
+    from caracole.icons import tag
+
+    return f"[{tag(source)}] " if source else ""
 
 
 def _status(song: Song) -> str:
@@ -184,7 +198,7 @@ def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]]) -> str:
         identity_key(hit.artist, hit.title).split("/", 1)
     ) in known
     action = "in your library" if in_library else f"caracole add {_quote(hit.artist)} {_quote(hit.title)}"
-    return f"  {n}. {hit.artist} - {hit.title} · {counts}\n     {hit.url}\n     {action}"
+    return f"  {n}. {_tag('ug')}{hit.artist} - {hit.title} · {counts}\n     {hit.url}\n     {action}"
 
 
 # Only these decisions make a song's matched UG song its own; a review's keys are a candidate's,
