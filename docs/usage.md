@@ -1813,8 +1813,9 @@ with it. A KEY that is no key exits with status 2.
   results goes back. Enter acts on what you typed, once its results are in:
   the song you clearly meant (one of yours opens; an Ultimate Guitar song is
   looked up), the leading artist's songs, or, when nothing stands out (a
-  partial match, a catch-all's song), nothing at all: it says to pick one, and
-  a guess never spends a request.
+  partial match, a catch-all's song, a song of yours under a placeholder
+  artist such as "misc"), nothing at all: it says to pick one, and a guess
+  never spends a request.
   Pick a song with Get it, or one of its versions (Versions numbers its
   chords, tabs and Guitar Pro pages within each kind, "Chords 2 of 13", each
   with an "on UG" link to look at it there first): it is looked up at once,

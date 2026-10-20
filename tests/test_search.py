@@ -1157,3 +1157,14 @@ def test_cli_hint_never_keys_a_line_by_a_placeholder_artist(tmp_path):
     assert '"misc" = ' not in out
     assert '"斑马" = "https://www.ultimate-guitar.com/artist/' in out
     assert 'If 斑马 is a title, caracole needs its artist too: `caracole add ARTIST "斑马"`' in out
+
+
+def test_a_song_of_yours_under_a_placeholder_artist_is_never_what_enter_takes(conn):
+    # The owner's "misc - 斑马": looked up under "misc", it can't be found, so Enter would spend requests on it.
+    from caracole.search import find
+
+    index(conn, EITHER)
+    add_song(conn, "misc", "斑马")
+    answer = find(conn, "斑马")
+    assert [h.song.artist for h in answer.library] == ["misc"] and answer.library[0].score >= 90
+    assert answer.best is None  # and the index's partial pinyin match is no clear song either

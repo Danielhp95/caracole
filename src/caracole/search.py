@@ -32,15 +32,16 @@ name tops out below a strong hit.
 any order: each hit says which reading scored it (``via``: "title",
 "artist" or "both"; a tie goes to the title, then both), with the score it
 always had. ``find`` gives the answer the pages and the commands show: your
-songs, the artists the query names (``ArtistHit``: an artist reading of 90 or
-more, never a catch-all, with its songs and tabs counted and its most tabbed
-songs), and the index's songs, those it holds only through an artist's name
-folded into that artist's row. ``lead`` says which comes first, and ``best``
-is the one row Enter may act on: a song of yours read by its title (or both),
-else the first song of the index if it scores 90 or more by its title (or
-both) and isn't a catch-all's, and None when an artist leads or nothing is
-that good. ``artist_songs`` lists all of an artist's songs, and
-``library_by_artist`` yours. The only popularity the index holds is how many
+songs, the artists the query names (``ArtistHit``: the query as the artist's
+whole name scores 90 or more, never a catch-all's, with its songs and tabs
+counted and its most tabbed songs), and the index's songs, those it holds only
+through an artist's name folded into that artist's row. ``lead`` says which
+comes first, and ``best`` is the one row Enter may act on: a song of yours read
+by its title (or both), not under a placeholder artist such as "misc", else
+the first song of the index if it scores 90 or more by its title (or both) and
+isn't a catch-all's, and None when an artist leads or nothing is that good.
+``artist_songs`` lists all of an artist's songs, and ``library_by_artist``
+yours. The only popularity the index holds is how many
 tabs a song or an artist has, so that orders the ties, and the artist with a
 more tabbed song than any song titled like it leads. Nothing here asks any
 site: an artist the index doesn't know is the user's to type.
@@ -65,7 +66,16 @@ from typing import Iterable, Mapping, NamedTuple, Sequence
 from rapidfuzz import fuzz
 
 from caracole.match import CATCH_ALL_PREFIX, SHOW_WORDS, is_catch_all
-from caracole.normalize import clean_title, compact, fold, has_han, name_forms, romanize, split_variant
+from caracole.normalize import (
+    clean_title,
+    compact,
+    fold,
+    has_han,
+    name_forms,
+    placeholder_artist,
+    romanize,
+    split_variant,
+)
 from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
 from caracole.songs import Song, list_songs
 from caracole.ug.key_search import rows_like
@@ -262,8 +272,10 @@ def find(conn: sqlite3.Connection, query: str, *, library: int = LIBRARY_ROWS, a
 
 def found(library: Sequence[LibraryHit], index: IndexFound) -> Found:
     """Your songs with the index's answer: a song of yours read by its title (or both) at ``STRONG``
-    or more comes first and is ``best``; one read only by its artist is never the song you meant."""
-    yours = next((h for h in library if h.via != "artist" and h.score >= STRONG), None)
+    or more comes first and is ``best``; one read only by its artist is never the song you meant,
+    nor one under a placeholder artist ("misc - 斑马"), which nothing can find."""
+    yours = next((h for h in library
+                  if h.via != "artist" and h.score >= STRONG and not placeholder_artist(h.song.artist)), None)
     if yours is not None:
         return Found(tuple(library), index.artists, index.songs, "song", yours)
     lead = index.lead or ("song" if library else None)
