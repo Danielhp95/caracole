@@ -99,6 +99,67 @@ def test_the_pager_is_above_each_sheet_and_after_it_too():
         assert re.search(r'</article>\n<nav class="pager"', section)  # the end of a long sheet: no scrolling back
 
 
+def section(html: str, n: int) -> str:
+    found = re.search(rf'<section class="song" id="song-{n}".*?<script type="application/json" id="data-{n}">',
+                      html, re.DOTALL)
+    assert found, f"no section for song {n}"
+    return found.group(0)
+
+
+def seen(markup: str) -> str:
+    """The text a reader sees: without what only a screen reader hears (``.vh``)."""
+    return re.sub(r"<[^>]+>", "", re.sub(r'<span class="vh">[^<]*</span>', "", markup))
+
+
+def heard(markup: str) -> str:
+    """The text a screen reader reads out: without what is hidden from it (``aria-hidden``)."""
+    return re.sub(r"<[^>]+>", "", re.sub(r'<span[^>]*aria-hidden="true"[^>]*>[^<]*</span>', "", markup))
+
+
+def pager_links(pager: str) -> dict[str, str]:
+    return dict((rel, inner) for rel, inner in re.findall(r'<a href="#song-\d+" rel="(prev|next)"[^>]*>(.*?)</a>', pager))
+
+
+def test_the_pager_names_the_song_before_and_the_song_after():
+    html = page()
+    for n, before, after in ((1, None, "Minor Song"), (3, "Synthetic Test Song", "斑马斑马"), (5, "Minor Song", None)):
+        pagers = re.findall(r'<nav class="pager"[^>]*>.*?</nav>', section(html, n), re.DOTALL)
+        assert len(pagers) == 2
+        for pager in pagers:  # above the sheet and after it, the same
+            links = pager_links(pager)
+            if before is None:
+                assert "prev" not in links
+            else:  # missing songs skipped
+                assert seen(links["prev"]) == f"‹ {before}" and heard(links["prev"]) == f"Previous: {before}"
+            if after is None:
+                assert "next" not in links
+            else:
+                assert seen(links["next"]) == f"Next: {after} ›" and heard(links["next"]) == f"Next: {after}"
+            assert seen(re.search(r'<a href="#contents"[^>]*>(.*?)</a>', pager).group(1)) == "Contents"
+
+
+def toc_rows(html: str) -> list[str]:
+    """Each row of the contents as a reader sees it, its parts apart: number, title, the line under it."""
+    rows = re.findall(r"<li[^>]*>(.*?)</li>", contents(html), re.DOTALL)
+    return [" | ".join(seen(part) for part in re.findall(r'<span class="(?:n|t|a|why)">(.*?)</span>(?=<span|</a>|</span>)',
+                                                       row)) for row in rows]
+
+
+def test_the_contents_give_each_songs_key_and_capo_under_its_title():
+    html = page()
+    assert toc_rows(html) == [
+        "1 | Synthetic Test Song | The Placeholders · G · capo 2",  # its sheet's key and capo
+        "2 | Hysteria | Muse | Missing: no sheet yet",
+        "3 | Minor Song | Others · Bm",  # in Am, up 2: its [transpose], the key the viewer opens it in
+        "4 | Removed Song | Gone Band | Missing: not in the library",
+        "5 | 斑马斑马 | 宋冬野 · C",  # estimated from its chords
+    ]
+    first = re.search(r'<span class="a">(.*?)</span>(?=</a>)', contents(html)).group(1)
+    assert heard(first) == "The Placeholders · key G · capo 2"  # what "G" is, for a screen reader
+    alone = build_songbook("Campfire", [BookSong("Untitled", "", cho=MINOR, key="Am", key_source="tab", id="a")])
+    assert toc_rows(alone) == ["1 | Untitled | Am"]  # no artist: the key alone
+
+
 def test_the_page_links_the_pdf_and_the_chordpro_file_when_there_are_some():
     html = page()
     assert 'href="songbook.pdf"' in html and 'href="songbook.cho"' in html
@@ -334,6 +395,109 @@ def test_the_files_are_linked_once_wherever_you_are(tmp_path):
     """
     assert result_of(open_page(page(), tmp_path, harness=harness)) == [2, 0, 0]  # the contents' own, alone
     assert result_of(open_page(page(), tmp_path, "#song-3", harness=harness)) == [0, 2, 2]  # at the sheet's end
+
+
+LONG = [
+    BookSong("A Synthetic Song Whose Title Goes On and On", "The Placeholders", cho=MINOR, id="aaaa"),
+    BookSong("Short", "Others", cho=MINOR, id="bbbb"),
+    BookSong("Another Made-up Song With a Very Long Name", "Others", cho=MINOR, id="cccc"),
+]
+MEDIUM = [BookSong("A Synthetic Song With a Long Name", "The Placeholders", cho=MINOR, id="aaaa"), LONG[1],
+          BookSong("A Song of Some Length", "Others", cho=MINOR, id="dddd")]
+# Where each part of the song's two pagers is (above the sheet, then after it): the links, their names and arrows.
+PAGERS = """
+  const box = (el) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return [r.left, r.top, r.right, r.bottom];
+  };
+  const vis = (el) => {  // what a reader sees: not what a screen reader alone hears
+    const copy = el.cloneNode(true);
+    copy.querySelectorAll(".vh").forEach((v) => v.remove());
+    return copy.textContent.replace(/\\s+/g, " ").trim();
+  };
+  out = {
+    window: innerWidth, page: document.documentElement.scrollWidth,
+    pagers: [...document.querySelectorAll("section.song:not([hidden]) nav.pager")].map((nav) => {
+      const link = (sel) => {
+        const a = nav.querySelector(sel);
+        if (!a) return null;
+        const name = a.querySelector(".name");
+        return {box: box(a), text: vis(a), arrow: box(a.querySelector('[aria-hidden="true"]')),
+                name: name ? name.clientWidth : null, cut: name ? name.scrollWidth > name.clientWidth : null,
+                ellipsis: name ? getComputedStyle(name).textOverflow : null};
+      };
+      return {box: box(nav), prev: link('a[rel="prev"]'), toc: link('a[href="#contents"]'), next: link('a[rel="next"]')};
+    }),
+  };
+"""
+
+
+def inside(inner, outer) -> bool:
+    return inner[0] >= outer[0] - 0.5 and inner[2] <= outer[2] + 0.5
+
+
+def a_tap(link) -> bool:
+    return link["box"][3] - link["box"][1] >= 44 and link["box"][2] - link["box"][0] >= 44
+
+
+@in_chromium
+def test_on_a_phone_the_pager_names_fit_cut_short_and_next_has_a_row_after_the_sheet(tmp_path):
+    phone = result_of(open_page(page(LONG), tmp_path, "#song-2", harness=PAGERS, size="390,844"))
+    assert phone["page"] <= phone["window"], phone  # no sideways scroll
+    top, end = phone["pagers"]
+    for pager in (top, end):
+        prev, toc, nxt = pager["prev"], pager["toc"], pager["next"]
+        assert all(a_tap(link) for link in (prev, toc, nxt)), pager
+        assert prev["box"][0] >= 0 and nxt["box"][2] <= phone["window"], pager
+        for link in (prev, nxt):
+            assert link["cut"] and link["ellipsis"] == "ellipsis", link  # the title shortened, with "…"
+            assert inside(link["arrow"], link["box"]), link  # and its arrow in sight
+        assert prev["text"].startswith("‹ A Synthetic") and nxt["text"].startswith("Next: Another"), pager
+        assert prev["box"][2] <= toc["box"][0], pager  # side by side, apart
+    # Above the sheet, one row: "Next:" over the title, which keeps its side's width.
+    assert top["toc"]["box"][2] <= top["next"]["box"][0] and top["next"]["box"][1] < top["toc"]["box"][3], top
+    assert top["next"]["name"] >= 80, top
+    # After it, the next song on a row of its own, as wide as the page.
+    assert end["next"]["box"][1] >= max(end["prev"]["box"][3], end["toc"]["box"][3]), end
+    assert end["next"]["box"][2] - end["next"]["box"][0] >= 0.95 * (end["box"][2] - end["box"][0]), end
+    medium = result_of(open_page(page(MEDIUM), tmp_path, "#song-2", harness=PAGERS, size="390,844"))
+    assert medium["pagers"][1]["next"]["text"] == "Next: A Song of Some Length ›", medium
+    assert not medium["pagers"][1]["next"]["cut"], medium  # whole there
+
+
+@in_chromium
+def test_on_a_desktop_the_pager_names_show_whole_in_one_row(tmp_path):
+    desk = result_of(open_page(page(MEDIUM), tmp_path, "#song-2", harness=PAGERS, size="1280,800"))
+    assert len(desk["pagers"]) == 2
+    for pager in desk["pagers"]:
+        prev, toc, nxt = pager["prev"], pager["toc"], pager["next"]
+        assert prev["text"] == "‹ A Synthetic Song With a Long Name" and not prev["cut"], pager
+        assert nxt["text"] == "Next: A Song of Some Length ›" and not nxt["cut"], pager
+        assert prev["box"][2] <= toc["box"][0] and toc["box"][2] <= nxt["box"][0], pager  # one row
+        assert abs((toc["box"][0] + toc["box"][2]) / 2 - (pager["box"][0] + pager["box"][2]) / 2) <= 1, pager  # centred
+
+
+@in_chromium
+def test_the_contents_line_under_each_title_gives_its_key_and_capo(tmp_path):
+    harness = """
+      const vis = (el) => {
+        const copy = el.cloneNode(true);
+        copy.querySelectorAll(".vh").forEach((v) => v.remove());
+        return copy.textContent;
+      };
+      out = [...document.querySelectorAll(".toc li")].map((li) => {
+        const top = (sel) => li.querySelector(sel).getBoundingClientRect();
+        return {t: [top(".t").top, top(".t").bottom], a: [top(".a").top, top(".a").bottom],
+                row: top(".row").height, text: vis(li.querySelector(".a"))};
+      }).concat([document.documentElement.scrollWidth <= innerWidth]);
+    """
+    *rows, fits = result_of(open_page(page(), tmp_path, harness=harness, size="390,844"))
+    assert fits
+    assert [r["text"] for r in rows] == ["The Placeholders · G · capo 2", "Muse", "Others · Bm", "Gone Band", "宋冬野 · C"]
+    for row in rows:
+        assert row["a"][0] >= row["t"][1] - 1, row  # a line of its own, under the title
+        assert row["row"] >= 44, row
 
 
 @in_chromium

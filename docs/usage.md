@@ -1992,12 +1992,17 @@ in `Library/_songbooks/<name>/`:
   ("Hysteria · Muse · missing: no sheet yet"), and its page says so. Its
   document title, the name a PDF viewer or a phone shows, is the songbook's.
 - **`songbook.html`**: one page for the phone, which opens from the synced
-  folder and loads nothing. It opens on the contents; tap a song to open it in
-  the sheet viewer, with everything the viewer does (chord shapes,
-  transposition, chords to play instead, modes, scrolling by itself), each
-  song in its own key and keeping its own settings. Next and Previous (above
-  each song, and again at its end), a swipe across the sheet or the arrow keys
-  go from song to song, skipping the missing ones, and Contents goes back. Opened again, the page takes you back
+  folder and loads nothing. It opens on the contents, each song with its
+  artist, key and capo on a line under its title ("Oasis · Em · capo 2": the
+  key the song opens in, its `[transpose]` applied, and its sheet's capo); tap
+  a song to open it in the sheet viewer, with everything the viewer does
+  (chord shapes, transposition, chords to play instead, modes, scrolling by
+  itself), each song in its own key and keeping its own settings. Previous and
+  Next name the songs they go to ("‹ Hotel California", "Next: little wolf ›",
+  a title too long for the phone cut short with "…"), above each song and
+  again at its end, where on a phone Next has a row of its own, with room for
+  the title. They, a swipe across the sheet or the arrow keys go from
+  song to song, skipping the missing ones, and Contents goes back. Opened again, the page takes you back
   to the song you had open, where you were in it, and its address names it
   (`#song-3`); the contents mark it as
   "last opened". Without JavaScript, or printed, it is every song one after
