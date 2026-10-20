@@ -212,6 +212,28 @@ def test_get_it_looks_the_song_up_and_its_row_says_how_it_goes(cfg, live, browse
                         "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
 
 
+
+def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
+    base, queue, _ = live
+    sites(cfg, **WONDERWALL)
+    browser.open(base + "#q=wonderwall&all=1")
+    assert browser.wait(f"{HITS} >= 2")
+    browser.click("#results .hit[data-ug='ryan-adams/wonderwall'] .row-action button")
+    posted(queue)
+    browser.click("#clear")  # the ×: out of the results, the request on its way with a card of its own
+    assert browser.wait("document.getElementById('results').hidden")
+    assert browser.wait("!document.getElementById('requested').hidden && "
+                        "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
+    assert browser.js("location.hash.includes('all=1')") is False
+    # A search after it waits for its answer before what follows it shows, as after Escape.
+    browser.js("window.waited = false; new MutationObserver(() => { window.waited = window.waited || "
+               "document.body.classList.contains('waiting-sites'); }).observe(document.body, { attributes: true })")
+    browser.type("creep")
+    browser.press("Enter")
+    assert browser.wait("document.getElementById('found').dataset.query === 'creep'")
+    assert browser.js("window.waited") is True
+
+
 def test_enter_never_requests_a_song(cfg, live, browser):
     base, queue, asked = live
     sites(cfg, ug=[("radiohead", "creep", 4)])

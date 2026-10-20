@@ -2187,7 +2187,10 @@ _SCRIPT = r"""
   const setQuery = (q) => {
     input.value = q;
     state.q = q;
-    if (state.all && !q.trim()) state.all = false;
+    if (state.all && !q.trim()) {  // out of the sites' results as Escape goes, with what their rows asked for
+      leaveAll(false);
+      return;
+    }
     render();
     save();
   };

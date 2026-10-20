@@ -1839,7 +1839,8 @@ with it. A KEY that is no key exits with status 2.
   for very common words), takes no lock and spends no budget. **Enter never
   spends a request**, however clear the best result: Get it does. Escape, or
   Back to your songs, goes back to the grid with your search and buttons as
-  they were (Escape again clears the search); ↓ goes from the box to the first
+  they were (Escape again clears the search), and the box's × back to all your
+  songs; either way a song asked for there has its card (see below); ↓ goes from the box to the first
   result. The address keeps it (`#q=wonderwall&all=1`).
 
   **Get it** on an Ultimate Guitar song looks it up at once, as `caracole get
