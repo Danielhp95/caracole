@@ -123,6 +123,7 @@ FOLD = """(() => {
     font: parseFloat(getComputedStyle(pre).fontSize), sheetFont: parseFloat(getComputedStyle(sheet).fontSize),
     colour: getComputedStyle(pre).color, textColour: getComputedStyle(sheet).color,
     legend: Boolean(legend && legend.checkVisibility()), label: summary.innerText.trim().split(/\\s+/).pop(),
+    named: summary.querySelector(".named").checkVisibility(),
     sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
   };
 })()"""
@@ -142,9 +143,10 @@ def test_the_preamble_takes_two_small_muted_lines_until_more_opens_it(tmp_path, 
     assert folded["clamped"] and folded["peek"] <= 2 * folded["lineHeight"] + 1, folded  # two lines, cut short
     assert folded["font"] < folded["sheetFont"] and folded["colour"] != folded["textColour"], folded
     assert 44 <= folded["summary"] and folded["height"] < 80, folded  # a thumb's target, and out of the way
-    assert folded["label"] == "More" and not folded["sideways"], folded
+    assert folded["label"] == "More" and not folded["named"] and not folded["sideways"], folded
     assert unfolded["open"] and unfolded["legend"] and unfolded["height"] > 200, unfolded
     assert unfolded["label"] == "Less" and not unfolded["peek"] and not unfolded["sideways"], unfolded
+    assert unfolded["named"], unfolded  # what the open text is, beside Less
     assert again == folded
 
 

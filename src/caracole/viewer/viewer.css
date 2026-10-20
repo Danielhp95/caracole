@@ -100,9 +100,10 @@ a { color: inherit; }
 .pre .peek { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .pre .more, .pre .less { flex: none; margin-left: auto; color: var(--accent); font-weight: 650; }
-.pre[open] .peek, .pre[open] .more, .pre:not([open]) .less { display: none; }
+.pre .named { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.pre[open] .peek, .pre[open] .more, .pre:not([open]) .less, .pre:not([open]) .named { display: none; }
 .pre[open] summary { align-items: center; }
-@media print { .pre .more { display: none; } }
+@media print { .pre .more, .pre .less { display: none; } }
 
 /* Every chord's shape at a glance: large enough to read, without the fingers (the card has them). */
 .strip { display: flex; gap: 6px; margin: 14px -16px 0; padding: 4px 16px 6px; overflow-x: auto;

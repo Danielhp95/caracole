@@ -374,15 +374,15 @@ def _played_line(line: Line, names: list[str]) -> bool:
 
 def _preamble_html(section: Section, names: list[str]) -> str:
     """The preamble in small, muted type, folded after its first two lines: those two as plain text
-    in the summary of a ``<details>``, to read at a glance, and every line inside. A preamble of two
-    lines has nothing more to show, and isn't folded."""
+    in the summary of a ``<details>``, to read at a glance, and every line inside; open, the summary
+    names it, beside Less. A preamble of two lines has nothing more to show, and isn't folded."""
     lines = [line for line in section.lines if not isinstance(line, Blank)]
     body = "\n".join(_line_html(line, names) for line in section.lines)
     if len(lines) <= 2:
         return f'<div class="pre">\n{body}\n</div>\n'
     peek = "<br>".join(escape(_written(line, names).strip()) for line in lines[:2])
     return (
-        f'<details class="pre">\n<summary><span class="peek">{peek}</span>'
+        f'<details class="pre">\n<summary><span class="peek">{peek}</span><span class="named">Notes</span>'
         '<span class="more">More</span><span class="less">Less</span></summary>\n'
         f'<div class="pre-body">\n{body}\n</div>\n</details>\n'
     )
