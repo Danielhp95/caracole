@@ -223,7 +223,7 @@
   };
 
   // --- drawing the page --------------------------------------------------------------------------
-  const bar = $("bar"), panel = $("panel"), card = $("card"), scrim = $("scrim"), pill = $("pill"), go = $("go");
+  const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
   const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
@@ -302,7 +302,6 @@
         modeBox.appendChild(button(info[0], modeNow() === mode, () => {
           state.mode = mode === key.mode ? null : mode;
           render();
-          if (!card.hidden) drawCard();
         }, mode === key.mode ? "as written" : ""));
       }
       const info = MODES[modeNow()] || ["", ""];
@@ -315,6 +314,8 @@
     drawSpeed();
     drawStrip();
     fit();
+    if (!card.hidden) drawCard();  // an open card follows the key, the mode and the capo
+    dock();
     save();
     hush();  // the lines moved under the page's scroll position, not by your hand
   };
@@ -349,7 +350,11 @@
   let fitting = 0;
   window.addEventListener("resize", () => {
     cancelAnimationFrame(fitting);
-    fitting = requestAnimationFrame(fit);
+    fitting = requestAnimationFrame(() => {
+      fit();
+      place();
+      dock();
+    });
   });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit, () => {});
 
@@ -366,21 +371,36 @@
       const name = label(String(i), rep);
       if (shapes.list.length) b.appendChild(diagram(shapes.list[0], name));
       b.appendChild(document.createTextNode(name));
-      b.addEventListener("click", () => openCard(String(i)));
+      b.addEventListener("click", () => openCard(String(i), b));
       strip.appendChild(b);
     }
   };
 
   // --- the chord card: shapes, and chords to play instead ----------------------------------------
-  const shown = { i: null, pick: -1, at: 0 };
-  const openCard = (i) => {
+  // ``el`` is the chord tapped (or the strip's button): the card is placed by it, from 900 px wide,
+  // and the focus goes back to it. Another chord tapped while the card is open fills it in its place.
+  const shown = { i: null, pick: -1, at: 0, el: null };
+  const openCard = (i, el) => {
     if (!own.call(written, i)) return;
     shown.i = i;
     shown.pick = choice(i);
     shown.at = 0;
-    for (const el of chordEls) el.classList.toggle("on", el.dataset.c === i);
-    open(card);
-    drawCard();
+    shown.el = el || chordEls.find((c) => c.dataset.c === i) || null;
+    for (const c of chordEls) c.classList.toggle("on", c.dataset.c === i);
+    drawCard();  // filled before it takes the focus, so a screen reader hears the chord
+    open(card, el || null);
+    // On a phone, a chord tapped where the card now docks comes up above it (the dock's scroll padding),
+    // lit, with the words of its line; one in sight already stays where it is.
+    if (!wide.matches && shown.el && el) {
+      (shown.el.closest(".l") || shown.el).scrollIntoView({ block: "nearest", behavior: calm.matches ? "auto" : "smooth" });
+    }
+  };
+  // What the card is placed by: the chord, or the strip's button for it, which the strip draws anew.
+  const anchor = () => {
+    if (shown.el && shown.el.isConnected) return shown.el;
+    const again = $("strip").children[Number(shown.i)];
+    if (shown.el && again) return (shown.el = again);
+    return chordEls.find((c) => c.dataset.c === shown.i) || $("sheet");
   };
   const drawCard = () => {
     const i = shown.i;
@@ -419,6 +439,8 @@
     use.hidden = shown.pick === choice(i);
     const was = label(i, base(i));
     use.textContent = shown.pick >= 0 ? "Play " + name + " for every " + was : "Back to " + was + " everywhere";
+    place();
+    dock();
   };
   const pick = (j) => {
     shown.pick = j;
@@ -432,7 +454,6 @@
     else delete mine[shown.i];
     state.alt[mode] = mine;
     render();
-    drawCard();
   });
   $("prev").addEventListener("click", () => { shown.at = Math.max(0, shown.at - 1); drawCard(); });
   $("next").addEventListener("click", () => { shown.at += 1; drawCard(); });
@@ -445,41 +466,86 @@
     if (Math.abs(dx) > 36) (dx < 0 ? $("next") : $("prev")).click();
   });
 
-  // --- the sheets that slide up ------------------------------------------------------------------
-  // Each is a modal dialog: it takes the focus (its heading), the page behind is out of reach
-  // (inert) while it is open, and closing it gives the focus back to what opened it.
+  // --- the settings and a chord's card: beside the song, never over it ------------------------------
+  // Neither is modal: nothing dims the song and the page stays within reach, so you see the chords
+  // change as you transpose and tap one chord after another. On a phone each docks at the foot, above
+  // the bar, the one opened last over the other, and the song scrolls under it; from 900 px wide
+  // (viewer.css) the settings are a rail beside the song and the card a popover by its chord. Each
+  // takes the focus as it opens (its heading); Escape closes the one on top, and the focus goes back
+  // to what opened it when it was in there.
   const pageEl = document.querySelector(".page");
-  let opener = null;
-  const open = (which) => {
-    if (panel.hidden && card.hidden) opener = document.activeElement;
+  const wide = window.matchMedia("(min-width: 900px)");
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const layers = [];  // the open ones, the last on top: {el, opener}
+  const topLayer = () => (layers.length ? layers[layers.length - 1].el : null);
+  const inSight = (which) => !which.hidden && (wide.matches || topLayer() === which);
+  // On a phone the page leaves room under the song for the one docked at its foot, so the end of
+  // the song comes up above it, and the pill rides above it (--dock: its height).
+  function dock() {
+    const there = wide.matches ? null : topLayer();
+    if (there) {
+      doc.dataset.dock = there.id;
+      doc.style.setProperty("--dock", there.offsetHeight + "px");
+    } else if (doc.dataset.dock) {
+      delete doc.dataset.dock;
+      doc.style.removeProperty("--dock");
+    }
+  }
+  // From 900 px wide the card is a popover by its chord: under it, or above it where the bar leaves
+  // no room below, and across it, within the song's column. It is placed in the page, so it goes
+  // with its chord as the page scrolls.
+  function place() {
+    if (card.hidden || !wide.matches) return;
+    const a = anchor().getBoundingClientRect();
+    const column = pageEl.getBoundingClientRect();
+    const width = card.offsetWidth, height = card.offsetHeight, gap = 8;
+    const floor = bar.hidden || bar.classList.contains("away") ? window.innerHeight : bar.getBoundingClientRect().top;
+    let top = a.bottom + gap;
+    if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
+    const left = Math.max(column.left + gap, Math.min(a.left - 16, column.right - gap - width));
+    card.style.setProperty("--pop-top", Math.round(top + window.scrollY) + "px");
+    card.style.setProperty("--pop-left", Math.round(left + window.scrollX) + "px");
+  }
+  const restack = () => {
+    const rail = doc.dataset.panel;
+    for (const which of [panel, card]) which.classList.toggle("top", which === topLayer());
+    more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
+    if (panel.hidden) delete doc.dataset.panel;
+    else doc.dataset.panel = "open";
+    if (wide.matches && rail !== doc.dataset.panel) fit();  // the song's column narrows beside the rail
+    place();
+    dock();
+  };
+  const open = (which, opener) => {
+    const at = layers.findIndex((layer) => layer.el === which);
+    if (at >= 0) layers.splice(at, 1);  // open already: on top again
+    layers.push({ el: which, opener: opener instanceof Element && opener !== document.body ? opener : null });
     showSizes(false);
-    for (const other of [panel, card]) if (other !== which) other.hidden = true;
     which.hidden = false;
-    scrim.hidden = false;
-    pageEl.inert = true;
-    bar.inert = true;
-    pill.inert = true;
-    more.setAttribute("aria-expanded", which === panel ? "true" : "false");
+    slide(false);  // the bar it sits on
+    restack();
     pauseScroll();
     which.querySelector("h2").focus({ preventScroll: true });
   };
-  const close = () => {
-    const wasOpen = !(panel.hidden && card.hidden);
-    panel.hidden = true;
-    card.hidden = true;
-    scrim.hidden = true;
-    pageEl.inert = false;
-    bar.inert = false;
-    pill.inert = false;
-    more.setAttribute("aria-expanded", "false");
-    for (const el of chordEls) el.classList.remove("on");
-    if (wasOpen && opener && opener !== document.body && opener.isConnected) {
-      opener.focus({ preventScroll: true });
-    }
-    opener = null;
+  const close = (which) => {
+    const at = layers.findIndex((layer) => layer.el === which);
+    if (at < 0) return;
+    const opener = layers.splice(at, 1)[0].opener;
+    const active = document.activeElement;
+    const mine = !active || active === document.body || which.contains(active);
+    which.hidden = true;
+    if (which === card) for (const el of chordEls) el.classList.remove("on");
+    restack();
+    if (!mine) return;  // the focus is somewhere else of yours: it stays there
+    let to = opener && opener.isConnected ? opener : null;
+    if (!to && opener && which === card) to = anchor();  // the strip drew its button anew
+    if (!to && topLayer()) to = topLayer().querySelector("h2");
+    if (to) to.focus({ preventScroll: true });
   };
-  scrim.addEventListener("click", close);
-  for (const x of document.querySelectorAll("[data-close]")) x.addEventListener("click", close);
+  const closeAll = () => {
+    while (layers.length) close(topLayer());
+  };
+  for (const x of document.querySelectorAll("[data-close]")) x.addEventListener("click", () => close(x.closest(".sheet-ui")));
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!sizes.hidden) {
@@ -489,9 +555,30 @@
       if (inside) sizeButton.focus({ preventScroll: true });
       return;
     }
-    close();
+    if (layers.length) close(topLayer());
   });
-  more.addEventListener("click", () => (panel.hidden ? open(panel) : close()));
+  // ⋯ closes the settings where you see them, and brings them up from under a card on a phone.
+  more.addEventListener("click", () => (inSight(panel) ? close(panel) : open(panel, more)));
+
+  // In the focus order the card comes after its chord, wherever it is on the page: Tab from its last
+  // control goes on to what follows the chord, and Shift+Tab from its first back to the chord.
+  const reachable = (el) => el.tabIndex >= 0 && !el.disabled && el.getClientRects().length > 0
+    && getComputedStyle(el).visibility === "visible";
+  const FOCUSABLE = "a[href], button, input, select, textarea, summary, [tabindex]";
+  card.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+    const from = anchor();
+    if (!from || from === $("sheet") || card.contains(from)) return;
+    const mine = Array.from(card.querySelectorAll(FOCUSABLE)).filter(reachable);
+    const here = document.activeElement;
+    const edge = e.shiftKey ? here === $("card-name") || here === mine[0] : here === mine[mine.length - 1];
+    if (!edge) return;
+    const to = e.shiftKey ? from : Array.from(document.querySelectorAll(FOCUSABLE)).find((el) => !card.contains(el)
+      && !from.contains(el) && Boolean(from.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) && reachable(el));
+    if (!to) return;
+    e.preventDefault();
+    to.focus();
+  });
 
   // --- Aa: the text size, in a box beside the song -------------------------------------------------
   // Not a dialog: the song stays in view and within reach, and the box closes on Escape, on a tap
@@ -511,13 +598,13 @@
   const sheet = $("sheet");
   sheet.addEventListener("click", (e) => {
     const el = e.target.closest(".c");
-    if (el) openCard(el.dataset.c);
+    if (el) openCard(el.dataset.c, el);
   });
   sheet.addEventListener("keydown", (e) => {
     const el = e.target.closest(".c");
     if (el && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
-      openCard(el.dataset.c);
+      openCard(el.dataset.c, el);
     }
   });
 
@@ -550,7 +637,7 @@
   // once), running, or paused. While it is on, the pill takes the bar's place: − and +
   // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it. A
   // finger on the page, the wheel, a key that scrolls, a scroll by hand or a card opening pauses
-  // it: the page is yours to read until you press ▶.
+  // it: the page is yours to read until you press ▶, which stays within reach with the card open.
   const COUNTDOWN = 3000;
   const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
   const moving = () => scroll.state === "counting" || scroll.state === "running";
@@ -560,7 +647,10 @@
   const showScroll = (said) => {
     pill.hidden = scroll.state === "off";
     bar.hidden = scroll.state !== "off";  // the pill there
+    if (scroll.state === "off") delete doc.dataset.pill;
+    else doc.dataset.pill = scroll.state;  // a docked card sits at the very foot, the pill over it
     if (!bar.hidden) slide(false);
+    dock();
     pill.dataset.state = scroll.state;
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
     $("tick").textContent = scroll.state === "counting"
@@ -676,7 +766,7 @@
   };
 
   $("scroll").addEventListener("click", () => {
-    close();
+    closeAll();
     showSizes(false);
     countdown();
     go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
@@ -753,7 +843,7 @@
   more.hidden = count === 0;
   showScroll();
   render();
-  if (hash.get("panel") === "1") open(panel);
+  if (hash.get("panel") === "1") open(panel, null);
   if (hash.has("chord")) openCard(String(hash.get("chord")));
   doc.dataset.ready = "1";
 })();

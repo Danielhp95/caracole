@@ -44,7 +44,7 @@ BAR = """(() => {
           sizes: !q("#sizes").hidden && q("#sizes").getClientRects().length > 0,
           sizeOpen: q("#size").getAttribute("aria-expanded"), fs: q("#fs-now").textContent,
           font: getComputedStyle(q("#sheet")).fontSize, panel: !q("#panel").hidden,
-          more: q("#more").getAttribute("aria-expanded"), scrim: !q("#scrim").hidden, inert: q(".page").inert,
+          more: q("#more").getAttribute("aria-expanded"), scrim: q("#scrim") !== null, inert: q(".page").inert,
           pill: !q("#pill").hidden, y: Math.round(scrollY)};
 })()"""
 

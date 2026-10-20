@@ -522,7 +522,7 @@ def test_a_mode_change_moves_the_chords(tmp_path):
 @in_chromium
 def test_tapping_a_chord_shows_its_shapes_and_alternatives(tmp_path):
     dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#chord=0")
-    card = re.search(r'<section class="sheet-ui card" id="card"([^>]*)>(.*?)</section>', dom, re.S)
+    card = re.search(r'<section class="sheet-ui card[^"]*" id="card"([^>]*)>(.*?)</section>', dom, re.S)
     assert "hidden" not in card.group(1)
     assert '<h2 id="card-name" tabindex="-1">G</h2>' in card.group(2)
     assert "<svg" in card.group(2) and card.group(2).count('class="dg-dot"') == 3  # 320003
@@ -543,7 +543,7 @@ window.addEventListener("load", () => {
   q("#use").click();
   const g = q('#sheet .c[data-c="0"]');
   out.push(g.textContent, g.classList.contains("changed"));
-  q("#scrim").click();
+  q("#card .x").click();
   q("#more").click();
   q("#up").click();
   q("#up").click();
@@ -670,7 +670,7 @@ def test_a_chosen_chord_is_kept_as_itself_not_as_its_place_in_a_list(tmp_path):
 
 
 @in_chromium
-def test_the_card_and_the_settings_take_the_focus_and_give_it_back(tmp_path):
+def test_the_card_and_the_settings_take_the_focus_and_give_it_back_and_leave_the_page_in_reach(tmp_path):
     card, panel = run_in_page(build_viewer(UG_CHO), tmp_path, """
       const press = (el, key) => el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
       const visit = (opener, dialog, how) => {
@@ -685,9 +685,9 @@ def test_the_card_and_the_settings_take_the_focus_and_give_it_back(tmp_path):
       out = [visit(chord, "#card", () => press(chord, "Enter")),
              visit(q("#more"), "#panel", () => q("#more").click())];
     """)
-    # focus inside, the page behind out of reach, a modal dialog; then closed, focus back, page back
-    assert card == [True, True, True, "true", True, True, False]
-    assert panel == [True, True, True, "true", True, True, False]
+    # focus inside, and the page behind within reach: not modal; then closed, focus back
+    assert card == [True, False, False, None, True, True, False]
+    assert panel == [True, False, False, None, True, True, False]
 
 
 @in_chromium

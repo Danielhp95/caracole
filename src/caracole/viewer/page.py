@@ -390,12 +390,13 @@ def _words(text: str) -> list[str]:
     return words
 
 
-# The bar at the foot of the page, the settings sheet and the chord card the script fills in; hidden
+# The bar at the foot of the page, the settings and the chord card the script fills in; hidden
 # until it runs. The bar, in the order a keyboard reaches it: the song a semitone down or up, its key
 # in short between them (for the eye; whole for a screen reader); Aa, the text size in a box beside
 # it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
 # in the bar's place: its first button counts down (a ring and the seconds), pauses (❚❚) and resumes
-# (▶); the status line says so to a screen reader.
+# (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
+# modal: nothing dims the song or takes it out of reach while they are open (viewer.js).
 _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <div class="bar-in">
 <span class="keys" id="keys" role="group" aria-label="Transpose">
@@ -423,8 +424,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="end" id="pill-end" aria-label="Stop scrolling">×</button>
 </div>
 <p class="vh" id="scroll-status" role="status"></p>
-<div class="scrim" id="scrim" hidden></div>
-<section class="sheet-ui panel" id="panel" hidden role="dialog" aria-modal="true" aria-labelledby="panel-title">
+<section class="sheet-ui panel" id="panel" hidden role="dialog" aria-labelledby="panel-title">
 <header class="ui-head"><h2 id="panel-title" tabindex="-1">Key</h2>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="row"><span class="lab">Transpose</span>
@@ -442,7 +442,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
 </section>
-<section class="sheet-ui card" id="card" hidden role="dialog" aria-modal="true" aria-labelledby="card-name">
+<section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="shape"><button type="button" class="round" id="prev" aria-label="Previous shape">‹</button>

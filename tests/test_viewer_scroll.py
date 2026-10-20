@@ -287,7 +287,7 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
         b.click("#go")
         assert moved_since(b, look(b)["y"])
 
-        # A chord's card covers the pill: the scroll waits, and the pill is out of reach behind it.
+        # A chord's card pauses the scroll, and the pill stays within reach beside it.
         b.js("""[...document.querySelectorAll('#sheet .c')].find((c) => c.getBoundingClientRect().top > 100).click()""")
         card = look(b)
         b.press("Escape")
@@ -306,7 +306,7 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
     assert paused["go"] == "Resume" and paused["icons"] == ["i-play"] and paused["pill"]
     assert paused["status"] == "Paused" and still == paused["y"]
     assert resumed["go"] == "Start now" and resumed["tick"] == "3"  # a countdown again, to get your hands back
-    assert card["go"] == "Resume" and card["inert"]
+    assert card["go"] == "Resume" and card["pill"] and not card["inert"]
     assert after_card["pill"] and not after_card["inert"] and after_card["go"] == "Resume"
     assert not ended["pill"] and ended["bar"] and ended["focus"] == "scroll" and ended_still
     assert ended["status"] == ""

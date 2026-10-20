@@ -1558,7 +1558,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   after it, so the lyrics read without gaps.
 - **Tap a chord** for its fingerings: up to four shapes, with the fingers, the
   barre and the fret they start on (swipe, or ‹ ›, for the next). Every place
-  the chord is played lights up while its card is open. The shapes come from
+  the chord is played lights up while its card is open. The card leaves the
+  song in view: on a phone it sits at the foot, above the bar, about 200 px
+  tall, and the song scrolls under it (a chord tapped where the card comes up
+  moves above it, with its words); from 900 px wide it opens next to the
+  chord, and goes with it as the page scrolls. Tap another chord and the card
+  shows that one; × or Escape closes it. The shapes come from
   [chords-db](https://github.com/tombatossals/chords-db) by David Rubert (MIT
   licence, whose notice is at the foot of every page); a chord it has no
   shape for shows the closest one, saying so.
@@ -1580,8 +1585,15 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   back where you were in the song, and while the keyboard's focus is on one
   of its buttons; Tab reaches each of them from the end of the page, and
   brings the bar back.
-- **The settings** (⋯), headed by the key line: **Transpose**, as − and +
-  do, with the semitones counted; Reset goes back to the song's
+- **The settings** (⋯), headed by the key line, leave the song in view, so
+  you see its chords change as you transpose, move the capo or change the
+  mode: on a phone they sit at the foot, above the bar, in at most 45 % of
+  the screen, and the song scrolls under them; from 900 px wide they are a
+  rail beside the song, which moves over for them. Nothing behind them is
+  dimmed or out of reach. A chord's card opened with them covers them on a
+  phone, and sits by its chord beside them on a wider screen; Escape closes
+  the card first, then the settings, and gives the focus back to what opened
+  each. Among them: **Transpose**, as − and + do, with the semitones counted; Reset goes back to the song's
   `[transpose]`, where the viewer starts, like the PDF. **Capo**, on every
   song, moves the capo a fret at a time, from none to
   the 11th; Reset puts it back where the sheet has it. The song sounds the same
@@ -1614,7 +1626,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   another countdown, and × ends it and brings the bar back. A finger on the
   page, the mouse wheel, a key that scrolls, a
   scroll by hand or a chord's card pauses it, so the page is yours to read
-  until you press ▶; it pauses at the end of the song too. A bigger text
+  until you press ▶, which stays within reach (above the card, on a phone);
+  it pauses at the end of the song too. A bigger text
   scrolls as much faster, so a speed keeps its pace through the song. With
   reduced motion asked for in your system's settings, the countdown shows the
   seconds alone, with no ring.
