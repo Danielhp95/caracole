@@ -1072,10 +1072,11 @@ and cache.
   fails, or waits for a font, is not its own, nor is a songbook, and the to-do
   page keeps telling of the last render of the library. After an upgrade from
   a caracole that didn't record what it wrote, or that drew its PDFs another
-  way, the first render makes every PDF once more. The viewer is written again whenever it would change, at every
-  render. A song that no longer keeps its human sheet (its UG match was
-  undone, say) loses the `sheet.cho`, `sheet.pdf` and `sheet.html` made from
-  it; one you put where caracole never rendered one stays. A sheet that never
+  way, the first render makes every PDF once more. The viewer is written
+  again whenever it would change, at every render. A song that no longer
+  keeps its human sheet (its UG match was undone, say) loses the `sheet.cho`,
+  `sheet.pdf` and `sheet.html` made from it; one you put where caracole never
+  rendered one stays. A sheet that never
   got a PDF (waiting for a font, or chordpro failed on it) loses its
   `sheet.cho` and `sheet.html` while they are still as caracole wrote them.
   chordpro works on a copy, in a private folder in the cache, and the new PDF
