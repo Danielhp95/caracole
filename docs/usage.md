@@ -415,8 +415,8 @@ Options:
 
 A song ignored in overrides.toml, or one wanted.txt can't hold, is not looked
 up, and exits 1. A song the matcher isn't sure of gets everything but its
-Ultimate Guitar sheet: pick its UG song with `--ug`, on the lookup page of
-`caracole serve`, or with `caracole review`.
+Ultimate Guitar sheet: pick its UG song with `--ug`, with Get it on the page
+`caracole serve` serves, or with `caracole review`.
 
 ### caracole remove
 
@@ -1519,9 +1519,11 @@ the offline index didn't match says so, with the same line: for it, that
 lists what `caracole search` finds, numbered as `--pick` takes them (see
 [Review](#review)); `caracole serve` links to them instead.
 
-The search box filters as you type. It ignores case and accents, so "musica"
-finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
-"banma" finds 斑马斑马. It finds keys too, however a sheet spells them: "a
+The search box filters your songs as you type, asking nothing of anyone. It
+ignores case and accents, so "musica" finds "De Música Ligera", and it matches
+Chinese titles by pinyin: "ban ma" or "banma" finds 斑马斑马. A title's
+initials, typed whole, find it too: "wywh" finds "Wish You Were Here", "bmbm"
+斑马斑马. It finds keys too, however a sheet spells them: "a
 minor", "F# major", "bbm", and "gb minor", which also finds the songs in F#
 minor; or "minor" for every song in a minor key. A key written as a chord, such
 as "am", also finds the names with "am" in them ("I Am the Walrus"). The
@@ -1530,12 +1532,17 @@ menu, there once a song has a key, shows only the songs in one key, with how
 many each key has, and puts the spellings of one key together ("F# / Gb
 minor"); and you can sort by artist, by title or by when songs were added.
 Sorted by artist or title, a row of letters jumps to the first song under
-each. When nothing in the library matches, the page shows the
-`caracole search` line to run, unless you searched for a key, which the
-offline index doesn't know. The page puts each word of a line to run in single
-quotes (`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote
-in it. `caracole serve` serves the same page with a form
-to request songs (see below).
+each. A line under the box says what Enter does. **Enter**, or **Search all**
+beside the box, searches the sites too: the file on disk, which can ask
+nothing of anyone, shows under the box the `caracole search` line to run where
+caracole runs, with Copy, and leaves your songs as they are; Escape takes it
+away. When nothing in the library matches, the page shows that line at once
+(Search all turns orange), unless you searched for a key, which the offline
+index doesn't know. The page puts each word of a line to run in single quotes
+(`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote in
+it. `caracole serve` serves the same page, where Enter lists what the sites
+have under the box, with Get it, and a form to request a song by name (see
+below).
 
 **Songbooks** (see [Songbooks](#songbooks)), above the search box once there is
 one, lists each songbook: its songs in order, those without a sheet marked
@@ -1798,52 +1805,58 @@ with it. A KEY that is no key exits with status 2.
 [--token-file FILE]` serves the library page over HTTP, at
 `http://127.0.0.1:8737/` by default, with what the file on disk can't do:
 
-- **Look up**, the page at `/lookup`, is for the song you want to play now,
-  the way you would look it up on Ultimate Guitar. Type a song or an artist:
-  it searches your library and the offline index as you type (5–25 ms a
-  query, up to about 0.15 s for very common words; see
-  [caracole search](#caracole-search)), asking no
-  site anything. A search you type over stops at once, so a slow one (a very
-  common word, "the" on the way to "the beatles") never holds up the next.
-  A song or an artist alone will do, as in `caracole search`: an artist the
-  query names is a row of its own, with their most tabbed songs and how many
-  they have, first when they lead ("oasis"), after the songs when a song does
-  ("wonderwall"); its Songs lists all of theirs, yours by them first, then the
-  offline index's, most tabbed first, fifty at a time (Show more), and All
-  results goes back. Enter acts on what you typed, once its results are in:
-  the song you clearly meant (one of yours opens; an Ultimate Guitar song is
-  looked up), the leading artist's songs, or, when nothing stands out (a
-  partial match, a catch-all's song, a song of yours under a placeholder
-  artist such as "misc"), nothing at all: it says to pick one, and a guess
-  never spends a request.
-  Pick a song with Get it, or one of its versions (Versions numbers its
-  chords, tabs and Guitar Pro pages within each kind, "Chords 2 of 13", each
-  with an "on UG" link to look at it there first): it is looked up at once,
-  as `caracole get --ug … [--tab …]` does it, and the song or tab you picked
-  is recorded in overrides.toml (`[match]`, `[pin]`), so nothing waits for a
-  review. A version picked while the song's lookup still runs is looked up
-  right after it. The results then step aside and the page follows the request
-  stage by stage, right under the search box: it says what each stage waits
-  for, shows the sheet the moment it is kept (and brings it into view once),
-  then links its PDF; the lyrics and the rest fill in after, and "What was
-  left, and why" lists the stages skipped or failed with their reasons. Typing
-  again, or Back to the results, brings the results back.
-  An Ultimate Guitar song your library has already, under its own names
-  (UG's slugs write AC/DC as "Acdc" and 宋冬野 as "Song Dongye"), says Get it
-  again and is looked up as your song: no second song, and no line added to
-  wanted.txt. Nor does Get it now or Fetch again on a song of your library add
-  one, so a song from Spotify alone stays Spotify's. The results are the
-  library's own rows, as in its Rows view, each with the mark of where it
-  came from: an Ultimate Guitar song has UG's, and its versions under "⋯"; a
-  song of your library has its sheet's, and opens as its card does, at once
-  and with no request: its sheet viewer, else its PDF (Enter opens the first
-  one), with its other files, Read it here and Fetch again under "⋯". One with
-  a sheet and neither is read on the page (Read). "Not in the list?" looks a song up by its
-  name. `/lookup?q=WORDS` opens it with that search. A page left open across a
-  restart of the server says to reload it, since its form token is no longer
-  the server's.
-- **Request a song.** The form at the top takes an artist, a title and,
-  optionally, the album and the length. The song goes into wanted.txt at once,
+- **Search all.** The library page's search box filters your songs as you
+  type, here as on the file, asking the server nothing. Enter (a phone's
+  search key), or Search all, lists under the box, in place of the grid and
+  its buttons: your songs that match first (up to five, as their rows, with
+  what their cards offer, then All N of your songs; and a close match the
+  filter missed, a typo say), then what caracole's offline indexes hold:
+  **Ultimate Guitar** (eight songs, and the artists the query names, as in
+  [caracole search](#caracole-search): an artist's Songs lists all of theirs,
+  fifty at a time, and All results goes back), **Guitar Pro on gtptabs.com**
+  (five songs with a file there), and **MuseScore** (five pages whose title is
+  what you typed, or the title with the artist's words around it: its sitemaps
+  name no artist, so each is a possible match). Every row has the mark of its
+  site. The list follows what you type a moment after you stop; a search typed
+  over stops at once, and only the newest query's answer is shown, the older
+  one staying until then. The line under the box says "Searching the sites…",
+  then how many each site has, and the list ends with the sites left out and
+  why: one turned off in caracole.toml, one whose index the nightly run hasn't
+  read yet (MuseScore's while it blocks caracole), and LaCuerda, which has no
+  offline index (Get it asks it too). Searching asks no site anything: it reads
+  the indexes alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s
+  for very common words), takes no lock and spends no budget. **Enter never
+  spends a request**, however clear the best result: Get it does. Escape, or
+  Back to your songs, goes back to the grid with your search and buttons as
+  they were (Escape again clears the search); ↓ goes from the box to the first
+  result. The address keeps it (`#q=wonderwall&all=1`).
+
+  **Get it** on an Ultimate Guitar song looks it up at once, as `caracole get
+  --ug …` does, and records the pick in overrides.toml (`[match]`), so nothing
+  waits for a review; one of its versions, under "⋯" ("Chords 2 of 13", each
+  with an "on UG" link to look at it there first), as `--tab …` (`[pin]`). Get
+  it on a gtptabs.com song looks it up by its names, as `caracole get` does,
+  whose gtptabs.com stage downloads its Guitar Pro file for a song that has
+  none; a MuseScore page is a link to open, as caracole never fetches from
+  MuseScore. The row then says how it goes, on a line of its own ("Sending…",
+  "Fetching from Ultimate Guitar…", "Ready · Open sheet"), and once the sheet
+  is kept the row is the song's, with its sheet as its button. A song your
+  library has already, under its own names (UG's slugs write AC/DC as "Acdc"
+  and 宋冬野 as "Song Dongye"), says In your library and Get it again, and is
+  looked up as your song: no second song, and no line added to wanted.txt. Back
+  to your songs, a song new to the library gets a card of its own under the box
+  ("Just requested").
+
+  `/lookup`, the lookup page, still answers: the same search of your library
+  and the Ultimate Guitar index, whose Get it reads the sheet on the page as it
+  arrives, stage by stage. Its Enter acts on the song you clearly meant (one of
+  yours opens; an Ultimate Guitar song is looked up), the leading artist's
+  songs, or nothing when nothing stands out. `/lookup?q=WORDS` opens it with
+  that search, and a lookup posted without JavaScript lands there.
+- **Request a song.** Under the results, "Not in the list? Request it by
+  name" takes an artist, a title and, optionally, the album and the length,
+  filled in from what you searched ("Muse - Hysteria"; an artist's name alone
+  when an artist leads, else a title) until you type into a field yourself. The song goes into wanted.txt at once,
   as `caracole add ARTIST TITLE` writes it (a song listed already is left as
   it is), then `caracole add` runs to put it in the library.
 - **Fetch it now.** Ticked, as it is by default, the request is looked up at
@@ -1852,8 +1865,8 @@ with it. A KEY that is no key exits with status 2.
   has a Fetch now button that does the same, except on a song that needs
   review, which has no UG song to fetch until you say which it is (`caracole
   review`, or a `[match]`, `[pin]` or `[reject]` entry in overrides.toml): its
-  card and its row have Pick the match instead (below), and the lookup page
-  picks one too.
+  card and its row have Pick the match instead (below), and Get it on an
+  Ultimate Guitar song of Search all picks one too.
 - **Pick the match.** On a song that needs review, Pick the match opens its
   candidates, as on the file (see above), as a list to choose from: pick one,
   or None of these, and Pick. It runs `caracole review --song "ARTIST - TITLE"
@@ -1896,8 +1909,8 @@ with it. A KEY that is no key exits with status 2.
   another since, say) removes nothing: reload the library.
 - **How it goes, on the page.** A request leaves you where you are. The
   song's card (or its row, on a line under it), or for a song new to the
-  library a card of its own under the
-  form ("Just requested"), says on one line how its request goes: "Queued…"
+  library a card of its own under the search box ("Just requested"), says on
+  one line how its request goes: "Queued…"
   (or "Queued behind 2 requests…"), then what runs: for a request without
   Fetch it now, "Adding to the library…"; for one looked up now, its stage
   ("Finding the song…", "Looking it up…", "Fetching from Ultimate Guitar…",

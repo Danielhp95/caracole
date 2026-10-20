@@ -104,12 +104,15 @@ songs.py's, in the `removed` table).
   forms, each queued as its `caracole songbook` command), lookup_page.py (the lookup page:
   its script, `createElement` and `textContent` only, allowed by hash, connects to the
   server alone; its results are the library's rows, `library_page.ROWS_SCRIPT` and
-  `ROWS_STYLE` through `window.caracole.resultRow`, and a song you have opens its viewer;
+  `ROWS_STYLE` through its row builders, `ugHit` and `artistHit` too, and a song you have opens its viewer;
   Enter acts on `/api/search`'s `best`, or opens the leading artist's songs, and never
   spends a request without one),
   pages.py, server.py (`http.server`). The library page is
   library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
-  /jobs.json how they go.
+  /jobs.json how they go. Its one bar filters your songs as you type and, on Enter or Search
+  all, lists `/api/search`'s answer under them (served; the file shows the `caracole search`
+  line to run), each result's Get it a `POST /lookup` whose `view` the page tracks in the
+  result's row; Enter never spends a request.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.

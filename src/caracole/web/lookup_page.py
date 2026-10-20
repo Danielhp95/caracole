@@ -20,9 +20,10 @@ says what the running stage waits for, and the reasons of the stages left are
 listed, not hidden in tooltips. A song of your library with a sheet opens at
 once, with no request at all.
 
-Its results are the library's own rows, as index.html's Rows view draws them:
-the page runs ``library_page.ROWS_SCRIPT`` before its own script and builds
-each result with ``window.caracole.resultRow``, with the mark of where it came
+Its results are the library's own rows, as index.html's Rows view and its
+search of the sites draw them: the page runs ``library_page.ROWS_SCRIPT``
+before its own script and builds each result with its row builders
+(``resultRow``, ``ugHit``, ``artistHit``), with the mark of where it came
 from (``icons.page_icons``, inlined as index.html inlines them) and its other
 actions under the row's "⋯" (an Ultimate Guitar song's versions; a song of
 your library's files). A song of your library opens as its card does: its
@@ -58,7 +59,6 @@ STYLE = BASE_STYLE + ROWS_STYLE + """
 .group { margin: 18px 0 6px; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
 .rows.hits { margin-top: 6px; }
-.versions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .hint { max-width: 72ch; color: var(--muted); font-size: .85rem; white-space: pre-wrap; }
 .artist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
   margin: 18px 0 0; }
@@ -75,8 +75,6 @@ details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 60
   background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: var(--bar, 112px); }
 .reader-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
 .reader h2 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
-.version { display: inline-flex; align-items: center; gap: 4px; }
-.on-ug { color: var(--muted); font-size: .78rem; }
 details.why { margin: 0 0 10px; color: var(--muted); font-size: .85rem; }
 details.why summary { cursor: pointer; }
 details.why ul { margin: 6px 0 0; padding-left: 1.2em; }
@@ -118,7 +116,6 @@ const whyList = document.getElementById("why-list");
 const fileLinks = document.getElementById("files");
 const sheetText = document.getElementById("sheet");
 const MIN = 3;
-const KINDS = {"chords": "Chords", "tabs": "Tab", "guitar-pro": "Guitar Pro", "power": "Power Tab"};
 const STATUS = {"found": "Found", "wanted": "Wanted", "ignored": "Ignored"};
 // The library's own rows and marks (library_page.ROWS_SCRIPT, run before this script), as index.html has them.
 const ICONS = (() => {
@@ -155,10 +152,6 @@ function group(title, rows) {
   const list = el("div", "rows hits");
   for (const row of rows) list.append(row);
   return [el("h2", "group", title), list];
-}
-function counts(c) {
-  const names = {"chords": "chords", "tabs": "tabs", "guitar-pro": "Guitar Pro", "power": "Power Tab"};
-  return Object.entries(c).map(([k, n]) => n + " " + (names[k] || k)).join(" · ");
 }
 // The sticky search box covers the top of the page: what is scrolled into view lands below it.
 function measureBar() { document.documentElement.style.setProperty("--bar", Math.ceil(bar.offsetHeight + 8) + "px"); }
@@ -224,18 +217,8 @@ function pickBest() {
   if (results.querySelector(".hit")) status.textContent = "Nothing stands out: pick one, or type more.";
 }
 
-// An artist of the offline index, with its most tabbed songs said: Songs lists every one.
-function artistRow(a) {
-  const top = (Array.isArray(a.top) ? a.top : []).map(t => t && t.title).filter(Boolean);
-  const open = button("Songs", "small primary", () => openArtist(a, true), "Songs by " + a.artist + " on Ultimate Guitar");
-  const row = window.caracole.resultRow({
-    title: a.artist, artist: top.length ? "Artist · " + top.join(", ") : "Artist", source: "ug",
-    facts: plural(a.songs, "song"), action: open,
-  });
-  row.classList.add("hit", "artist-hit");
-  row.dataset.artist = a.artist_key;
-  return row;
-}
+// An artist of the offline index, with its most tabbed songs said: Songs lists every one (ROWS_SCRIPT's row).
+function artistRow(a) { return rowKit.artistHit(a, () => openArtist(a, true)); }
 
 function getArtist(key, offset, signal) {
   return fetch("/api/artist?key=" + encodeURIComponent(key) + "&offset=" + offset,
@@ -292,9 +275,7 @@ function backToSearch() {
 }
 
 // A song's sheet viewer or PDF, as its card opens it: a link of the library's, relative to this page.
-function opener(files) {
-  return (Array.isArray(files) ? files : []).find(f => f && f.primary && /[.](html|pdf)$/i.test(f.name || "")) || null;
-}
+const opener = rowKit.opener;
 
 // A song of your library, as its row in index.html: its viewer (else its PDF) opens at once; a sheet with
 // neither is read here; a song without one is looked up now. Its other files, and Fetch again, under "⋯".
@@ -327,52 +308,9 @@ function librarySong(s) {
   return row;
 }
 
-// An Ultimate Guitar song of the offline index, with UG's mark: Get it, and its versions under "⋯".
-function ugSong(h) {
-  // A song your library has (under its own names, maybe): looked up as that song, never as a second one.
-  const mine = h.library;
-  const display = mine ? mine.display : h.artist + " - " + h.title;
-  const pick = extra => Object.assign(mine ? {song: mine.id} : {artist: h.artist, title: h.title}, {ug: h.ug}, extra);
-  const get = button(mine ? "Get it again" : "Get it", "small primary", () => lookUp(pick({}), display),
-                     (mine ? "Get " + display + " again" : "Get " + display) + " from Ultimate Guitar");
-  const more = [];
-  if (h.tabs.length) {
-    const versions = el("ul", "versions");
-    const nth = {};
-    for (const t of h.tabs) {
-      // Numbered within its kind, in the index's order (no ratings there): "Chords 2 of 13 · acoustic".
-      nth[t.type] = (nth[t.type] || 0) + 1;
-      const kind = KINDS[t.type] || t.type;
-      const name = kind + " " + nth[t.type] + " of " + (h.counts[t.type] || nth[t.type]) + (t.label ? " · " + t.label : "");
-      const item = el("li", "version");
-      item.append(button(name, "small", () => lookUp(pick({tab: t.url}), display), "Get " + name + ", " + display));
-      const ug = el("a", "on-ug", "on UG");
-      ug.href = /^https:[/][/]/i.test(t.url) ? t.url : "#";
-      ug.target = "_blank";
-      ug.rel = "noopener noreferrer";
-      ug.setAttribute("aria-label", name + ", " + display + ", on Ultimate Guitar");
-      item.append(ug);
-      versions.append(item);
-    }
-    const box = el("div", "row-group");
-    box.append(el("p", "subhead", "Versions"), versions);
-    more.push(box);
-  }
-  const opens = mine ? opener(mine.links) : null;
-  if (opens) more.push({heading: "In your library", links: [{label: opens.label, href: opens.href, source: opens.source}]});
-  const row = window.caracole.resultRow({
-    title: h.title, artist: h.artist, source: "ug", facts: counts(h.counts),
-    badges: mine ? [{kind: "found", text: "In your library"}] : [], action: get, more,
-  });
-  row.classList.add("hit");
-  row.dataset.ug = h.ug;
-  const dots = row.querySelector(".row-more");
-  if (dots && h.tabs.length) {  // what "⋯" holds, said: its versions
-    dots.title = "Versions of " + display;
-    dots.setAttribute("aria-label", "Versions of " + display);
-  }
-  return row;
-}
+// An Ultimate Guitar song of the offline index, with UG's mark: Get it, and its versions under "⋯", as index.html
+// draws it (ROWS_SCRIPT's row); a song your library has, under its own names maybe, is looked up as that song.
+function ugSong(h) { return rowKit.ugHit(h, (pick, display) => lookUp(pick, display)); }
 
 q.addEventListener("input", () => {
   enterFor = null;

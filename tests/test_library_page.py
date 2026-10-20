@@ -203,6 +203,38 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     assert sha(scripts[0]) in csp_of(html) and sha(styles[0]) in csp_of(html)
 
 
+def bar_of(html):
+    found = re.search(r'<div class="searchbar"[^>]*>.*?</div>\n</div>', html, re.S)
+    assert found, html[:3000]
+    return found.group(0)
+
+
+def test_the_bar_has_a_search_all_button_and_a_status_line_in_both_pages(conn, cfg):
+    from caracole.library_page import WebControls
+
+    add_song(conn, "Radiohead", "Creep")
+    for html in (page(conn, cfg), build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))):
+        bar = bar_of(JSON_BLOCK.sub("", html))
+        assert re.search(r'<button type="button" id="all" class="btn all"[^>]*>Search all</button>', bar)
+        status = re.search(r'<p class="bar-status" id="bar-status"[^>]*>', bar)
+        assert status and 'aria-live="polite"' in status.group(0)
+        assert re.search(r'<input id="q"[^>]*aria-describedby="bar-status"', bar, re.S)
+        assert re.search(r'<section class="results" id="results" aria-label="Search results">', html)
+
+
+def test_the_request_form_is_under_the_results_not_above_the_bar(conn, cfg):
+    from caracole.library_page import WebControls
+
+    html = JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok")))
+    bar, results, form = html.index('id="q"'), html.index('id="results"'), html.index('action="/request"')
+    assert bar < results < form < html.index('class="toolbar"')
+    box = re.search(r'<details class="request" id="request-box">\s*<summary>(.*?)</summary>', html, re.S)
+    assert box and "Not in the list? Request it by name" in box.group(1)
+    # The songs just requested show under the bar in both modes, above the results and the grid.
+    assert html.index('id="q"') < html.index('id="requested"') < html.index('id="results"')
+    assert 'href="/lookup"' not in html  # the bar is the way in: no Look up link in the masthead
+
+
 # --- files ---------------------------------------------------------------------------
 
 
@@ -508,6 +540,17 @@ def test_haystack_holds_folded_text_and_pinyin_for_han(conn, cfg):
         assert needle in hay
     assert "musica" in songs[accented.display]["search"] and "soda stereo" in songs[accented.display]["search"]
     assert "acdc" in songs[initials.display]["search"] and "ac/dc" in songs[initials.display]["search"]
+
+
+def test_each_song_carries_its_titles_initials_for_the_search_box(conn, cfg):
+    wish = add_song(conn, "Pink Floyd", "Wish You Were Here")
+    dont = add_song(conn, "Queen", "Don't Stop Me Now")
+    one = add_song(conn, "Radiohead", "Creep")
+    han = add_song(conn, "宋冬野", "斑马，斑马")
+    songs = songs_of(page(conn, cfg))
+    assert songs[wish.display]["initials"] == "wywh" and songs[dont.display]["initials"] == "dsmn"
+    assert songs[han.display]["initials"] == "bmbm"  # by pinyin
+    assert "initials" not in songs[one.display]  # one word: no initials worth typing
 
 
 def test_the_page_folds_queries_with_the_same_letters_as_the_haystack(conn, cfg):
@@ -1823,3 +1866,57 @@ def test_a_rows_states_fit_its_row_and_its_pick_opens_the_picker_where_it_is(con
     assert plain < states["rows"]["Bohemian Rhapsody"]["height"] <= plain + 30, states
     assert states["open"] and states["panel"] and states["expanded"] == "true", states
     assert states["focus"] == "radiohead/creep", states
+
+
+# --- the bar: type to filter, Enter for the sites ----------------------------------------------------
+
+
+@pytest.fixture
+def driven(tmp_path):
+    """A page driven as you would, typing and pressing keys (helpers/browser.py's Browser)."""
+    from helpers.browser import Browser, BrowserError
+
+    try:
+        page = Browser(tmp_path / "chrome")
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    yield page
+    page.close()
+
+
+SHOWN_TITLES = "[...document.querySelectorAll('#list article h2')].map((h) => h.textContent)"
+
+
+@in_chromium
+def test_enter_on_the_file_page_shows_the_line_to_run_and_asks_nothing(conn, cfg, driven):
+    add_song(conn, "Radiohead", "Creep")
+    add_song(conn, "Pink Floyd", "Wish You Were Here")
+    add_song(conn, "Oasis", "Wonderwall")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    driven.open(path.as_uri())
+    driven.js("document.getElementById('q').focus()")
+    driven.type("wywh")  # a title's initials find it
+    assert driven.wait(f"{SHOWN_TITLES}.join() === 'Wish You Were Here'")
+    assert "Enter" in driven.js("document.getElementById('bar-status').textContent")
+    driven.press("Enter")
+    assert driven.wait("!document.getElementById('results').hidden")
+    assert driven.js("document.querySelector('#results .file-answer code').textContent") == "caracole search 'wywh'"
+    assert "caracole serve" in driven.js("document.querySelector('#results .file-answer').textContent")
+    assert driven.js(f"{SHOWN_TITLES}.join()") == "Wish You Were Here"  # the songs stay where they are
+    assert driven.js("location.hash").endswith("all=1")
+    driven.press("Escape")
+    assert driven.wait("document.getElementById('results').hidden")
+    assert driven.js("document.getElementById('q').value") == "wywh"  # Escape leaves the answer, not the search
+    # Nothing was asked of anyone: no fetch, no image, no script but the page's own.
+    assert driven.js("performance.getEntriesByType('resource').length") == 0
+
+
+@in_chromium
+def test_with_none_of_your_songs_matching_the_file_page_says_what_to_run_at_once(conn, cfg, tmp_path):
+    add_song(conn, "Radiohead", "Creep")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    dom = dump_dom(path, tmp_path, "#q=" + quote("karma police"))
+    shown = listing(dom)
+    assert "No songs match “karma police”." in shown
+    assert "<code>caracole search 'karma police'</code>" in shown and "Copy</button>" in shown
+    assert re.search(r'<button type="button" id="all" class="btn all primary"', dom)  # the way on, prominent

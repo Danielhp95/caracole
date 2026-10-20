@@ -14,8 +14,9 @@ still let a ``<!--`` change how the HTML tokenizer reads the block.
 
 Each song carries a search string: its artist, title and display name folded
 (accents stripped, lowercase), the same without punctuation ("acdc"), and
-pinyin for Chinese ("ban ma ban ma", "banma"). The page folds what you type the
-same way, so "musica" finds "Música" and "ban ma" finds 斑马，斑马.
+pinyin for Chinese ("ban ma ban ma", "banma"), and its title's initials
+("wywh", typed whole). The page folds what you type the same way, so "musica"
+finds "Música" and "ban ma" finds 斑马，斑马.
 Of a song's key, the string holds only the mode ("minor"): the script reads a
 key typed in the box ("a minor", "f#m") and compares it, as the Key menu does,
 by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
@@ -52,10 +53,25 @@ element, the same as a song's row, to put in a ``<div class="rows">``.
   ``{heading, links: [{label, href, source}]}``.
 
 ``window.caracole.sourceMark(key)`` gives a source's mark alone, and
-``window.caracole.icons`` the icons' data.
+``window.caracole.icons`` the icons' data. ``ROWS_SCRIPT`` also draws the
+offline indexes' hits, as ``/api/search`` and ``/api/artist`` give them
+(``ugHit``, ``artistHit``, ``siteHit``), for this page's search of the sites
+and the lookup page alike.
 
-``caracole serve`` serves the same page with ``controls`` (``WebControls``): a
-form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
+**One bar.** The search box filters your songs as you type, here, asking
+nothing. Enter, or Search all, searches the sites too. The file can ask
+nothing of anyone: it shows the ``caracole search`` line to run, with Copy,
+above your songs (in their empty list when none match). Served, the results
+take the grid's place until Escape: your songs that match, as their own rows,
+then the Ultimate Guitar index's songs and artists, gtptabs.com's pages and
+MuseScore's (``GET /api/search``, a moment after the last key, the newest
+query alone, the sites left out said with why), each with Get it (``POST
+/lookup``), whose request's line shows in the result's own row. Enter never
+spends a request. The request form sits under the results, filled in from
+the query.
+
+``caracole serve`` serves the same page with ``controls`` (``WebControls``): the
+search of the sites, a form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
 button on each card (the server asks before it removes anything), and a CSP
 that lets the forms post to the server (``form-action 'self'``) and the script
 ask it how its requests go (``connect-src 'self'``). The script posts the forms
@@ -65,7 +81,7 @@ while one waits or runs, and is drawn again from the song's new data once the
 request is over. A song's row carries what its card does: the line, on a line
 of the row's own; Pick the match, or Removing…, as its button; the picker,
 Look in the index and Remove… under its "⋯". A song new to the library gets a card of its own under the
-form, and two requests or more also show as a short list in a corner. Without
+bar, and two requests or more also show as a short list in a corner. Without
 JavaScript the forms post as forms. The file on disk has none of it, and lets
 no form be sent and nothing be asked.
 
@@ -154,6 +170,7 @@ _KIND_NAMES = {"guitar-pro": "Guitar Pro", "power": "Power Tab"}
 # typed queries with this table, so the values come from fold itself.
 _TRANSLITERATED = "øØæÆœŒßẞđĐłŁþÞðÐıħĦ"
 _PUNCTUATION = re.compile(r"[\W_]+")
+_APOSTROPHES = re.compile(r"['’‘`´ʼ]")
 _WORD = re.compile(r"[^\W_]+")
 HUES = 8  # monogram colours, .hue-0 to .hue-7
 
@@ -206,7 +223,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     return (
         _HEAD.replace("__CSP__", csp).replace("__STYLE__", _PAGE_STYLE)
         + _BODY.replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
-        .replace("__SONGBOOKS__", books)
+        .replace("__REQUESTED__", _requested(controls)).replace("__SONGBOOKS__", books)
         + f'<script type="application/json" id="songs">{payload}</script>\n'
         + f"<script>{_PAGE_SCRIPT}</script>\n</body>\n</html>\n"
     )
@@ -400,6 +417,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         # ("a minor", "f#m") by its pitch class instead, which a substring of "a minor" can't do.
         "search": _haystack([song.artist, *song.artists, title, song.display,
                              *([key_name(key.key).rpartition(" ")[2]] if key else [])]),
+        **({"initials": initials} if (initials := _initials(title)) else {}),
     }
 
 
@@ -497,6 +515,13 @@ def _monogram(artist: str) -> str:
 def _hue(artist: str) -> int:
     """The monogram's colour, the same for every song of an artist."""
     return int.from_bytes(hashlib.sha256(fold(artist).encode("utf-8")).digest()[:4], "big") % HUES
+
+
+def _initials(title: str) -> str:
+    """A title's initials, "wywh" for Wish You Were Here (斑马斑马's by pinyin, "bmbm"): typed whole in the
+    search box, they find it. None for a title of one word."""
+    words = _WORD.findall(_APOSTROPHES.sub("", fold(romanize(title) if has_han(title) else title)))
+    return "".join(w[0] for w in words) if len(words) > 1 else ""
 
 
 def _haystack(texts: list[str]) -> str:
@@ -711,6 +736,10 @@ ROWS_STYLE = """
 .row-panel { grid-column: 1 / -1; display: grid; gap: 4px; padding: 4px 0 6px 30px; }
 .row-panel .note { margin: 0; }
 .row-group .subhead { margin: 4px 0 6px; }
+/* An Ultimate Guitar song's versions, under its "⋯": each a button, with a link to look at it on UG. */
+.versions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.version { display: inline-flex; align-items: center; gap: 4px; }
+.on-ug { color: var(--muted); font-size: .78rem; }
 @media (min-width: 900px) {
   .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px;
     grid-template-areas: "src title artist meta act more"; padding: 3px 10px 3px 12px; }
@@ -773,6 +802,39 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .field input:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
 .clear { position: absolute; top: 3px; right: 3px; width: 44px; height: 44px; border: 0; border-radius: 12px;
   background: transparent; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.bar-row { display: flex; align-items: center; gap: 8px; }
+.bar-row .field { flex: 1; min-width: 0; }
+.btn.all { flex: none; min-height: 50px; padding: 0 16px; border-radius: 14px; white-space: nowrap; }
+/* One line, its height kept: what Enter does, or how the search of the sites goes. */
+.bar-status { min-height: 1.35em; margin: 6px 2px 0; overflow: hidden; color: var(--muted); font-size: .8rem;
+  line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
+.searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
+.results-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 4px 0 0; }
+.results .group { margin: 18px 0 0; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; }
+.results .rows { margin-top: 6px; }
+.all-mine, .more-songs { margin: 10px 0 0; }
+.artist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
+  margin: 14px 0 0; }
+.artist-head h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.artist-head h2:focus { outline: none; }
+.skipped { margin: 16px 0 0; color: var(--muted); font-size: .85rem; }
+.results .hint { max-width: 72ch; margin-top: 10px; white-space: pre-wrap; }
+.results .request { margin-top: 20px; }
+.file-answer { display: grid; gap: 8px; max-width: 72ch; margin: 6px 0 12px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); font-size: .92rem; }
+.file-answer p { margin: 0; }
+.command { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.command code { flex: 1 1 240px; padding: 8px 10px; user-select: all; }
+.empty + .btn.primary { margin-top: 4px; }
+@media (pointer: coarse) {
+  .results .btn, .results .row .btn, .file-answer .btn, .list .empty ~ .btn { min-height: 44px; }
+  .results .row .row-more { width: 44px; height: 44px; }
+  .results .row { grid-template-columns: 20px minmax(0, 1fr) auto 44px; }
+}
+@media (pointer: coarse) and (min-width: 900px) {
+  .results .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 44px; }
+}
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
@@ -1023,7 +1085,120 @@ const caracoleRows = (icons) => {
     }
     return row;
   };
-  return { resultRow, sourceMark, link };
+
+  // --- the offline indexes' hits, as /api/search and /api/artist give them --------------------------
+  // index.html's search of the sites and caracole serve's lookup page draw them alike: each is a row with
+  // its site's mark. ``get(pick, display, row, button)`` is what a Get it does: ``pick`` is the form
+  // POST /lookup takes (a song of yours by its id, else its artist and title; the UG song, the tab).
+  const many = (n, word) => Number(n || 0).toLocaleString("en") + " " + word + (Number(n) === 1 ? "" : "s");
+  const button = (label, cls, onclick, aria) => {
+    const b = el("button", "btn " + (cls || "small"), label);
+    b.type = "button";
+    if (aria) b.setAttribute("aria-label", aria);
+    b.addEventListener("click", onclick);
+    return b;
+  };
+  const KINDS = { chords: "Chords", tabs: "Tab", "guitar-pro": "Guitar Pro", power: "Power Tab" };
+  const COUNTED = { chords: "chords", tabs: "tabs", "guitar-pro": "Guitar Pro", power: "Power Tab" };
+  const counts = (c) => Object.entries(c && typeof c === "object" ? c : {})
+    .map(([kind, n]) => n + " " + (own.call(COUNTED, kind) ? COUNTED[kind] : kind)).join(" · ");
+  // A song's sheet viewer or PDF, as its card opens it: a link of the library's, relative to the page.
+  const opener = (files) => listOf(files).find((f) => f && f.primary && /[.](html|pdf)$/i.test(String(f.name || "")))
+    || null;
+  const yours = (hit) => (hit && hit.library && typeof hit.library === "object" ? hit.library : null);
+  // An Ultimate Guitar song: Get it (Get it again for a song of yours, looked up as that song), and its
+  // versions under "⋯", each numbered within its kind ("Chords 2 of 13"), with a link to look at it on UG.
+  const ugHit = (h, get) => {
+    const hit = h && typeof h === "object" ? h : {};
+    const mine = yours(hit);
+    const artist = String(hit.artist || "");
+    const title = String(hit.title || "");
+    const display = mine ? String(mine.display || "") : artist + " - " + title;
+    const pick = (extra) => Object.assign(mine ? { song: mine.id } : { artist, title }, { ug: hit.ug }, extra);
+    let row = null;
+    const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick({}), display, row, e.currentTarget),
+      (mine ? "Get " + display + " again" : "Get " + display) + " from Ultimate Guitar");
+    const more = [];
+    const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object");
+    if (tabs.length) {
+      const versions = el("ul", "versions");
+      const nth = {};
+      const totals = hit.counts && typeof hit.counts === "object" ? hit.counts : {};
+      for (const t of tabs) {
+        nth[t.type] = (nth[t.type] || 0) + 1;
+        const kind = own.call(KINDS, t.type) ? KINDS[t.type] : String(t.type);
+        const name = kind + " " + nth[t.type] + " of " + (totals[t.type] || nth[t.type]) + (t.label ? " · " + t.label : "");
+        const item = el("li", "version");
+        item.appendChild(button(name, "small", (e) => get(pick({ tab: t.url }), display, row, e.currentTarget),
+          "Get " + name + ", " + display));
+        const ug = el("a", "on-ug", "on UG");
+        ug.href = /^https:[/][/]/i.test(String(t.url || "")) ? String(t.url) : "#";
+        ug.target = "_blank";
+        ug.rel = "noopener noreferrer";
+        ug.setAttribute("aria-label", name + ", " + display + ", on Ultimate Guitar");
+        item.appendChild(ug);
+        versions.appendChild(item);
+      }
+      const box = el("div", "row-group");
+      box.appendChild(el("p", "subhead", "Versions"));
+      box.appendChild(versions);
+      more.push(box);
+    }
+    const opens = mine ? opener(mine.links) : null;
+    if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+    row = resultRow({ title, artist, source: "ug", facts: counts(hit.counts),
+      badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
+    row.classList.add("hit");
+    row.dataset.ug = String(hit.ug || "");
+    row.dataset.source = "ug";
+    const dots = row.querySelector(".row-more");
+    if (dots && tabs.length) {  // what "⋯" holds, said: its versions
+      dots.title = "Versions of " + display;
+      dots.setAttribute("aria-label", "Versions of " + display);
+    }
+    return row;
+  };
+  // An artist of the offline index, with their most tabbed songs said: ``open(a)`` lists every one.
+  const artistHit = (a, open) => {
+    const top = listOf(a && a.top).map((t) => t && t.title).filter(Boolean);
+    const go = button("Songs", "small primary", () => open(a), "Songs by " + String(a.artist) + " on Ultimate Guitar");
+    const row = resultRow({ title: a.artist, artist: top.length ? "Artist · " + top.join(", ") : "Artist", source: "ug",
+      facts: many(a.songs, "song"), action: go });
+    row.classList.add("hit", "artist-hit");
+    row.dataset.artist = String(a.artist_key || "");
+    row.dataset.source = "ug";
+    return row;
+  };
+  // A page of gtptabs.com's index (a song with a Guitar Pro file there): Get it looks the song up as
+  // caracole get does, whose gtptabs.com stage downloads one file for a song that has none; or MuseScore's,
+  // a title alone, which caracole never fetches: a link to open.
+  const siteHit = (h, get) => {
+    const hit = h && typeof h === "object" ? h : {};
+    const title = String(hit.title || "");
+    let row = null;
+    if (hit.source === "musescore") {
+      row = resultRow({ title, artist: "Same title: maybe another song", source: "musescore",
+        action: { label: "Open", href: hit.url } });
+      const open = row.querySelector(".row-action a");
+      if (open) open.setAttribute("aria-label", "Open " + title + " on MuseScore, in a new tab");
+    } else {
+      const mine = yours(hit);
+      const artist = String(hit.artist || "");
+      const display = mine ? String(mine.display || "") : artist + " - " + title;
+      const pick = mine ? { song: mine.id } : { artist, title };
+      const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick, display, row, e.currentTarget),
+        (mine ? "Get " + display + " again" : "Get " + display) + ", with a Guitar Pro file from gtptabs.com");
+      main.title = "Looks the song up now, as caracole get does: its sheet, then a Guitar Pro file from gtptabs.com";
+      const uploads = Number(hit.uploads) || 1;
+      row = resultRow({ title, artist, source: "gtptabs", facts: uploads > 1 ? many(uploads, "upload") : "Guitar Pro",
+        badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main,
+        more: [{ heading: "On gtptabs.com", links: [{ label: "Its page", href: hit.url, source: "gtptabs" }] }] });
+    }
+    row.classList.add("hit");
+    row.dataset.source = String(hit.source || "");
+    return row;
+  };
+  return { resultRow, sourceMark, link, button, many, counts, opener, ugHit, artistHit, siteHit };
 };
 """
 
@@ -1041,6 +1216,10 @@ _SCRIPT = r"""
   const list = byId("list");
   const input = byId("q");
   const clear = byId("clear");
+  const allButton = byId("all");
+  const barStatus = byId("bar-status");
+  const results = byId("results");
+  const found = byId("found");
   const sort = byId("sort");
   const count = byId("count");
   const jump = byId("jump");
@@ -1080,6 +1259,7 @@ _SCRIPT = r"""
   // Each word in single quotes, each ' written '\'': bash and zsh expand ! even in double quotes.
   const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
   const hay = songs.map((s) => String(s.search || ""));
+  const inits = songs.map((s) => String(s.initials || ""));  // a title's initials: "wywh" finds Wish You Were Here
 
   const STATUS_TEXT = { found: "Found", wanted: "Wanted", ignored: "Ignored" };
   const LYRICS_TEXT = { pending: "Lyrics pending", missing: "No lyrics found", instrumental: "Instrumental" };
@@ -1125,6 +1305,12 @@ _SCRIPT = r"""
     return { keys, either, words: terms(rest) };
   };
   const songKeys = songs.map((s) => keyId(s.key));
+  // Whether song i matches what is typed: each word in its search text, or its title's initials whole, and
+  // each key typed.
+  const typedMatch = (query) => (i) =>
+    query.keys.every((k) => songKeys[i] === k) &&
+    query.either.every((e) => songKeys[i] === e.key || (e.word && hay[i].indexOf(e.word) >= 0)) &&
+    query.words.every((w) => hay[i].indexOf(w) >= 0 || (w.length > 1 && inits[i] === w));
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   // The Key menu: one entry per key the library has, its spellings together ("F# / Gb minor"), with how
@@ -1158,7 +1344,7 @@ _SCRIPT = r"""
   // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
-  const { sourceMark, link, resultRow } = caracoleRows(ICONS);  // ROWS_SCRIPT, which the lookup page shares
+  const { sourceMark, link, resultRow, button, many, ugHit, artistHit, siteHit } = caracoleRows(ICONS);  // ROWS_SCRIPT
   // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -1745,7 +1931,8 @@ _SCRIPT = r"""
 
   // artist: one artist's songs alone, by sortArtist, which a search for the name wouldn't give
   // ("Queen" also finds "Dancing Queen").
-  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", view: "cards" };
+  // all: the search of the sites (served; on the file, the line that searches them), under the bar.
+  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", view: "cards", all: false };
   const itemFor = (i) => (state.view === "rows" ? rowFor(i) : cardFor(i));
   const artistName = (key) => {
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
@@ -1759,6 +1946,7 @@ _SCRIPT = r"""
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
     if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
     if (VIEWS.indexOf(params.get("view")) >= 0) state.view = params.get("view");
+    state.all = params.get("all") === "1" && Boolean(state.q.trim());
   } catch (err) {
     // A malformed address: start from the defaults.
   }
@@ -1777,6 +1965,7 @@ _SCRIPT = r"""
     if (state.artist) params.set("artist", state.artist);
     if (state.key) params.set("key", state.key);
     if (state.view !== "cards") params.set("view", state.view);
+    if (state.all) params.set("all", "1");
     try {
       history.replaceState(null, "", "#" + params.toString());
     } catch (err) {
@@ -1824,12 +2013,10 @@ _SCRIPT = r"""
   const render = () => {
     const query = parseQuery(state.q);
     const inKey = keyId(state.key);
+    const fits = typedMatch(query);
     const matching = ORDERS[state.sort].filter((i) =>
       (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
-      (!inKey || songKeys[i] === inKey) &&
-      query.keys.every((k) => songKeys[i] === k) &&
-      query.either.every((e) => songKeys[i] === e.key || (e.word && hay[i].indexOf(e.word) >= 0)) &&
-      query.words.every((w) => hay[i].indexOf(w) >= 0));
+      (!inKey || songKeys[i] === inKey) && fits(i));
     matchingNow = matching;
     tallyChips();
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
@@ -1840,6 +2027,15 @@ _SCRIPT = r"""
     artistChip.hidden = !state.artist;
     artistChip.textContent = state.artist ? artistName(state.artist) + " ×" : "";
     artistChip.setAttribute("aria-label", state.artist ? "Show every artist, not only " + artistName(state.artist) : "");
+    // Searching the sites, served: the results take the grid's place, its tools with it, until Escape.
+    const searchingAll = Boolean(server) && state.all;
+    document.body.classList.toggle("searching-all", searchingAll);
+    drawBar(matching.length === 0);
+    let answerInList = false;  // the file's line that searches the sites, in the list's empty state
+    if (searchingAll) {
+      drawResults(query, false);
+      return;
+    }
 
     // One grid, whatever the order, so the cards fill each row; the strip jumps to a letter's first card.
     // In rows, one list of rows.
@@ -1914,16 +2110,19 @@ _SCRIPT = r"""
       list.appendChild(any);
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
-      if (!query.keys.length) {  // the offline index has no keys
-        const hint = el("p", "empty-hint", "To look in the offline Ultimate Guitar index, run ");
-        hint.appendChild(el("code", null, "caracole search " + shellQuote(state.q)));
-        list.appendChild(hint);
+      if (!query.keys.length && server) {  // the offline indexes have no keys
+        const go = button("Search the sites for “" + state.q.trim() + "”", "primary", () => enterAll());
+        list.appendChild(go);
+      } else if (!query.keys.length) {
+        list.appendChild(fileAnswer(state.q.trim()));
+        answerInList = true;
       }
     } else if (!shown.length) {
       list.appendChild(el("p", "empty", state.show === "review" ? "Nothing needs review." : "No songs here."));
     }
     count.textContent = shown.length === songs.length ? plural(songs.length, "song")
       : shown.length + " of " + plural(songs.length, "song");
+    drawResults(query, answerInList);
   };
 
   let frame = 0;
@@ -1938,6 +2137,7 @@ _SCRIPT = r"""
   const setQuery = (q) => {
     input.value = q;
     state.q = q;
+    if (state.all && !q.trim()) state.all = false;
     render();
     save();
   };
@@ -1953,6 +2153,10 @@ _SCRIPT = r"""
   input.value = state.q;
   input.addEventListener("input", () => {
     state.q = input.value;
+    if (state.all && !state.q.trim()) {  // nothing left to search: your songs again
+      leaveAll(false);
+      return;
+    }
     update();
   });
   clear.addEventListener("click", () => {
@@ -1983,12 +2187,317 @@ _SCRIPT = r"""
       save();
     });
   }
+
+  // --- the bar: your songs as you type, the sites on Enter ---------------------------------------
+  // Typing filters your songs, here, asking nothing. Enter, or Search all, searches the sites too: served, one
+  // list under the bar, your songs first (as their own rows), then what caracole's offline indexes hold of
+  // Ultimate Guitar, gtptabs.com and MuseScore (/api/search), following what you type a moment after you
+  // stop, the newest query alone; on the file, which can ask nothing, the line that searches them. Enter
+  // never spends a request: only a result's Get it does. Escape goes back to your songs.
+  const normal = (text) => String(text).trim().replace(/\s+/g, " ");
+  const say = (text) => {
+    if (barStatus.textContent === text) return;
+    barStatus.textContent = text;
+    barStatus.title = text;  // one line on a phone: the whole of it on hovering
+  };
+  const drawBar = (none) => {
+    const q = normal(state.q);
+    allButton.classList.toggle("primary", Boolean(q) && none);
+    if (server && state.all) return;  // the search of the sites says how it goes
+    if (!q) say(server ? "Filter your songs; Enter searches the sites too" : "Filter your songs as you type");
+    else if (none) say(server ? "None of yours match: Enter searches the sites" : "None of yours match: see the line below");
+    else if (!server && state.all) say("The sites need caracole serve: run the line below");
+    else say(server ? "Enter or Search all looks on the sites too" : "Enter or Search all: the line that searches the sites");
+  };
+  // Each word in single quotes, as the Select bar copies its command: on the file, Copy selects it too.
+  const copyText = (code, copy) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code.textContent).then(() => { copy.textContent = "Copied"; }, () => {});
+    }
+    const range = document.createRange();
+    range.selectNodeContents(code);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+  // The file's answer to Enter: what to run where caracole runs, since searching the sites needs caracole serve.
+  const fileAnswer = (q) => {
+    const box = el("div", "file-answer");
+    box.appendChild(el("p", null, "Searching Ultimate Guitar, gtptabs.com and MuseScore needs caracole serve. " +
+      "Where caracole runs, this searches its copy of Ultimate Guitar's index:"));
+    const line = el("div", "command");
+    const code = el("code", null, "caracole search " + shellQuote(q));
+    const copy = button("Copy", "small", () => copyText(code, copy), "Copy the line");
+    line.appendChild(code);
+    line.appendChild(copy);
+    box.appendChild(line);
+    const then = el("p", "hint", "Each hit comes with the line that adds it; ");
+    then.appendChild(el("code", null, "caracole get 'Artist - Title'"));
+    then.appendChild(document.createTextNode(" looks one up now."));
+    box.appendChild(then);
+    return box;
+  };
+
+  const MINE_SHOWN = 5;  // your songs at the top of the results; the grid has them all
+  const SEARCH_PAUSE = 150;  // ms after the last key before the sites are searched
+  const mineBox = el("div", "mine");
+  const sitesBox = el("div", "sites");
+  const group = (title, rows) => {
+    const box = el("div", "rows");
+    for (const row of rows) box.appendChild(row);
+    return [el("h2", "group", title), box];
+  };
+  let asking = null;  // the search of the sites on its way, to abort
+  let asked = 0;  // the newest search sent: an older one's answer is dropped
+  let askTimer = 0;
+  let askedFor = null;  // the query the newest search was sent for
+  let answer = null;  // the answer on the screen, and its query
+  let close = { q: null, ids: [] };  // your songs the server found (typos and all) for a query
+  let settleSpots = () => {};
+  let prefill = () => {};
+  let getIt = () => {};
+
+  // Your songs that match what is typed, whatever the buttons show: the page's own rows, with what their cards
+  // offer; then the server's close matches the filter missed.
+  const drawMine = (query) => {
+    const mine = ORDERS[state.sort].filter(typedMatch(query));
+    const q = normal(state.q);
+    const extra = close.q === q ? close.ids.map((id) => byIndex.get(id))
+      .filter((i) => i !== undefined && mine.indexOf(i) < 0).slice(0, Math.max(0, MINE_SHOWN - mine.length)) : [];
+    mineBox.textContent = "";
+    if (mine.length) {
+      mineBox.append(...group("In your library · " + mine.length, mine.slice(0, MINE_SHOWN).map(rowFor)));
+      if (mine.length > MINE_SHOWN) {
+        const every = el("p", "all-mine");
+        every.appendChild(button("All " + mine.length + " of your songs", "small", () => leaveAll(true)));
+        mineBox.appendChild(every);
+      }
+    }
+    if (extra.length) {
+      mineBox.append(...group(mine.length ? "Close to it, in your library" : "In your library, close to it",
+        extra.map(rowFor)));
+    }
+  };
+  const drawResults = (query, answerInList) => {
+    const q = normal(state.q);
+    const open = state.all && Boolean(q);
+    if (!server) {  // the file: the line to run, above your songs, unless their empty list shows it already
+      found.hidden = !open || answerInList;
+      results.hidden = found.hidden;
+      if (!found.hidden && found.dataset.query !== q) {
+        found.replaceChildren(fileAnswer(q));
+        found.dataset.query = q;
+      }
+      return;
+    }
+    results.hidden = !open;
+    found.hidden = !open;
+    if (!open) return;
+    drawMine(query);
+    askSources(false);
+  };
+
+  const askSources = (now) => {
+    const q = normal(state.q);
+    if (!now && q === askedFor) return;
+    clearTimeout(askTimer);
+    askTimer = setTimeout(() => sendAsk(q), now ? 0 : SEARCH_PAUSE);
+  };
+  const sendAsk = (q) => {
+    if (!state.all || !q) return;
+    askedFor = q;
+    asked += 1;
+    const mine = asked;
+    if (asking) asking.abort();
+    asking = new AbortController();
+    say("Searching the sites…");
+    found.setAttribute("aria-busy", "true");
+    fetch("api/search?q=" + encodeURIComponent(q), {
+      signal: asking.signal, credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" },
+    }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
+      .then((reply) => {
+        if (mine !== asked || !state.all) return;
+        const data = reply.body && typeof reply.body === "object" ? reply.body : null;
+        if (data && data.superseded) {  // another search went first: ask again, still the newest
+          askTimer = setTimeout(() => sendAsk(q), SEARCH_PAUSE);
+          return;
+        }
+        found.removeAttribute("aria-busy");
+        if (!reply.ok || !data || data.error) {
+          say(failure(reply).line.text);
+          return;
+        }
+        showSites(data, q);
+      }, (e) => {
+        if (mine !== asked || (e && e.name === "AbortError")) return;
+        found.removeAttribute("aria-busy");
+        say(UNREACHABLE.line.text);
+      });
+  };
+  // The answer of the newest search, in one go: the old one stays until then, so nothing flashes.
+  const showSites = (data, q) => {
+    answer = { data, q };
+    found.dataset.query = q;
+    close = { q, ids: listOf(data.library).map((h) => Number(h && h.id)) };
+    mineBox.hidden = false;
+    drawMine(parseQuery(state.q));
+    if (data.short) {
+      sitesBox.replaceChildren();
+      say("Type three letters or more to search the sites");
+      return;
+    }
+    const objects = (value) => listOf(value).filter((x) => x && typeof x === "object");
+    const artists = objects(data.artists);
+    const index = objects(data.index);
+    const gtp = objects(data.gtptabs);
+    const ms = objects(data.musescore);
+    const box = document.createDocumentFragment();
+    // The artists the query names: first when one leads ("oasis"), after the songs when a song does.
+    const named = artists.length ? group("Artists on Ultimate Guitar", artists.map((a) => artistHit(a, openArtist))) : [];
+    if (data.lead === "artist") box.append(...named);
+    if (index.length) box.append(...group("Ultimate Guitar · " + many(index.length, "song"), index.map((h) => ugHit(h, getIt))));
+    if (data.lead !== "artist") box.append(...named);
+    if (gtp.length) {
+      box.append(...group("Guitar Pro on gtptabs.com · " + many(gtp.length, "song"), gtp.map((h) => siteHit(h, getIt))));
+    }
+    if (ms.length) {
+      box.append(...group("MuseScore · " + many(ms.length, "page") + " by that title", ms.map((h) => siteHit(h, getIt))));
+    }
+    const left = objects(data.skipped);
+    if (left.length) {
+      box.appendChild(el("p", "skipped", "Not searched: " +
+        left.map((x) => String(x.name || x.source) + " (" + String(x.why || "") + ")").join("; ") + "."));
+    }
+    if (typeof data.hint === "string" && data.hint) box.appendChild(el("p", "hint", data.hint));
+    sitesBox.replaceChildren(box);
+    const parts = [];
+    if (index.length || artists.length) parts.push((index.length + artists.length) + " on Ultimate Guitar");
+    if (gtp.length) parts.push(gtp.length + " on gtptabs.com");
+    if (ms.length) parts.push(ms.length + " on MuseScore");
+    say(parts.length ? parts.join(" · ") : "Nothing on the sites: request it by name below");
+    prefill(data.lead);
+  };
+
+  // An artist's songs in place of the sites' results, yours by them first; All results, or typing, brings
+  // those back.
+  const artistPage = (key, offset, signal) => fetch("api/artist?key=" + encodeURIComponent(key) + "&offset=" + offset,
+    { signal, credentials: "same-origin", headers: { Accept: "application/json" } })
+    .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
+    .then((reply) => {
+      if (!reply.ok || !reply.body || reply.body.error) {
+        say(failure(reply).line.text);
+        return null;
+      }
+      return reply.body;
+    }, (e) => {
+      if (!(e && e.name === "AbortError")) say(UNREACHABLE.line.text);
+      return null;
+    });
+  const openArtist = (a) => {
+    clearTimeout(askTimer);
+    asked += 1;
+    const mine = asked;
+    if (asking) asking.abort();
+    asking = new AbortController();
+    say("Listing " + String(a.artist) + "'s songs…");
+    artistPage(String(a.artist_key || ""), 0, asking.signal).then((page) => {
+      if (page && mine === asked && state.all) showArtist(page);
+    });
+  };
+  const backToResults = () => {
+    if (answer) showSites(answer.data, answer.q);
+    input.focus();
+  };
+  const showArtist = (page) => {
+    const box = document.createDocumentFragment();
+    const head = el("div", "artist-head");
+    const name = el("h2", null, page.artist);
+    name.tabIndex = -1;
+    head.appendChild(name);
+    head.appendChild(button("All results", "small", backToResults, "Back to all the results"));
+    box.appendChild(head);
+    const theirs = listOf(page.library).map((x) => byIndex.get(Number(x && x.id))).filter((i) => i !== undefined);
+    if (theirs.length) box.append(...group("Yours by " + page.artist, theirs.map(rowFor)));
+    const [heading, rows] = group("Ultimate Guitar, the most tabbed first", listOf(page.songs).map((h) => ugHit(h, getIt)));
+    box.appendChild(heading);
+    box.appendChild(rows);
+    let listed = listOf(page.songs).length;
+    if (listed < Number(page.total)) {
+      const more = el("p", "more-songs");
+      const go = button("Show more (" + (page.total - listed) + " left)", "small", () => {
+        go.disabled = true;
+        artistPage(String(page.artist_key), listed).then((next) => {
+          go.disabled = false;
+          if (!next || !rows.isConnected) return;
+          for (const h of listOf(next.songs)) rows.appendChild(ugHit(h, getIt));
+          listed += listOf(next.songs).length;
+          if (listed >= next.total || !listOf(next.songs).length) more.remove();
+          else go.textContent = "Show more (" + (next.total - listed) + " left)";
+        });
+      }, "Show more of " + page.artist + "'s songs");
+      more.appendChild(go);
+      box.appendChild(more);
+    }
+    mineBox.hidden = true;  // the query's songs of yours: back with All results
+    sitesBox.replaceChildren(box);
+    say(page.artist + ": " + many(page.total, "song"));
+    name.focus();
+  };
+
+  // Searching the sites: on Enter, Search all or the address (#all=1); on Enter again, at once.
+  const enterAll = () => {
+    if (!normal(state.q)) {
+      input.focus();
+      return;
+    }
+    state.all = true;
+    render();
+    save();
+    if (server) {
+      prefill(answer && answer.q === normal(state.q) ? answer.data.lead : null);
+      askSources(true);
+    }
+  };
+  const leaveAll = (focus) => {
+    if (!state.all) return;
+    state.all = false;
+    clearTimeout(askTimer);
+    if (asking) asking.abort();
+    asked += 1;
+    askedFor = null;
+    found.removeAttribute("aria-busy");
+    settleSpots();
+    render();
+    save();
+    if (focus) input.focus();
+  };
+  if (server) {
+    const head = el("div", "results-head");
+    head.appendChild(button("Back to your songs", "small", () => leaveAll(true), "Back to your songs (Escape)"));
+    found.append(head, mineBox, sitesBox);
+  }
+  allButton.addEventListener("click", enterAll);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      enterAll();
+    } else if (e.key === "ArrowDown" && state.all && server) {  // on to the first result's button
+      const first = found.querySelector(".row-action button, .row-action a");
+      if (first) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  });
   document.addEventListener("keydown", (e) => {
     const typing = document.activeElement === input;
     if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       input.focus();
       input.select();
+    } else if (e.key === "Escape" && state.all) {
+      e.preventDefault();  // a search field clears itself on Escape: here it keeps what you typed
+      leaveAll(!typing && results.contains(document.activeElement));
     } else if (e.key === "Escape" && typing && input.value) {
       setQuery("");
     }
@@ -2033,8 +2542,8 @@ _SCRIPT = r"""
     } else {
       arrived.set(Number(data.id), data);  // counted, and shown under the form until the next load
     }
-    const spot = spots.get(Number(view.id));
-    if (spot) spots.set(Number(view.id), refill(spot, makeCard(data)));
+    const spot = spots.get(Number(view.id));  // a result's row stays a row: the song's own, now
+    if (spot) spots.set(Number(view.id), refill(spot, spot.classList.contains("row") ? songRow(data) : makeCard(data)));
     summarize();
     tallyChips();  // the grid itself stays as it is: a card the filter now hides goes at the next search
   };
@@ -2172,6 +2681,55 @@ _SCRIPT = r"""
       showLine(progressIn(card), { line: { tone: "queued", text: "Sending…" } });
       return card;
     };
+    // A result's Get it: the song looked up now (POST /lookup, one caracole get), its line in the result's own
+    // row, from "Sending…" to its sheet; a version picked under "⋯" too.
+    getIt = (pick, display, row, go) => {
+      if (!row) return;
+      const line = progressIn(row);  // in the page before its first words, so they are read out
+      showLine(line, { line: { tone: "queued", text: "Sending…" } });
+      if (row.contains(document.activeElement)) focusOn(line);  // a disabled button would drop it
+      if (go) go.disabled = true;
+      const body = new URLSearchParams({ csrf: String(server.csrf || "") });
+      for (const name of ["song", "artist", "title", "ug", "tab"]) {
+        if (pick && pick[name] !== undefined && pick[name] !== null && pick[name] !== "") body.set(name, String(pick[name]));
+      }
+      fetch("lookup", { method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then((r) => r.json().catch(() => null).then((answer) => ({ ok: r.ok, status: r.status, body: answer })))
+        .then((reply) => {
+          const view = reply.ok && reply.body && reply.body.view;
+          if (go) go.disabled = false;
+          if (!view || typeof view !== "object") {
+            showLine(progressIn(row), failure(reply));
+            return;
+          }
+          if (go && go.closest(".row-action")) go.remove();  // its line takes the button's place
+          spots.set(Number(view.id), row);
+          track(view);
+        }, () => {
+          if (go) go.disabled = false;
+          showLine(progressIn(row), UNREACHABLE);
+        });
+    };
+    // Back to your songs: a request's row in the results that is a song new to the library becomes its card
+    // under the bar, which goes on saying how it goes; a song the grid has says it on its own card.
+    settleSpots = () => {
+      for (const [id, node] of Array.from(spots)) {
+        if (!results.contains(node)) continue;
+        const view = views.get(id);
+        const song = view ? songOf(view) : null;
+        if (song !== null && byIndex.has(song)) {
+          spots.delete(id);
+          continue;
+        }
+        const [artist, ...title] = String((view && view.display) || "").split(" - ");
+        const card = song !== null && arrived.has(song) ? makeCard(arrived.get(song))
+          : title.length ? placeholder(artist, title.join(" - ")) : placeholder("", artist);
+        if (view) showLine(progressIn(card), view);
+        requestedGrid.prepend(card);
+        requested.hidden = false;
+        spots.set(id, card);
+      }
+    };
     for (const view of listOf(server.jobs)) {
       if (!view || typeof view !== "object") continue;
       watched.add(Number(view.id));
@@ -2215,8 +2773,27 @@ _SCRIPT = r"""
         document.body.classList.remove("with-tray");
       });
     }
-    // The request form: a card for the song at once, above the grid, which says how its request goes.
+    // The request form, under the results: a card for the song at once, under the bar, which says how its
+    // request goes. It is filled in from what was searched ("Artist - Title", or the artist alone when an
+    // artist leads, else the title), each field until you type into it yourself.
     const requestForm = document.querySelector("form.request-form");
+    const typedInto = new Set();
+    if (requestForm) {
+      for (const name of ["artist", "title"]) {
+        const field = requestForm.elements.namedItem(name);
+        if (field) field.addEventListener("input", () => typedInto.add(name));
+      }
+      prefill = (lead) => {
+        const q = normal(state.q);
+        const [first, ...rest] = q.split(" - ");
+        const values = rest.length ? { artist: first.trim(), title: rest.join(" - ").trim() }
+          : lead === "artist" ? { artist: q, title: "" } : { artist: "", title: q };
+        for (const name of ["artist", "title"]) {
+          const field = requestForm.elements.namedItem(name);
+          if (field && !typedInto.has(name)) field.value = values[name];
+        }
+      };
+    }
     const refused = new Set();  // the cards of requests the server refused, gone at the next one
     // The card #requested shows already for the job's song (or, before the song is in the library, for the
     // same "Artist - Title"), if any: asked for again, it is the one that says how this request goes.
@@ -2240,6 +2817,7 @@ _SCRIPT = r"""
         let spot = placeholder(typed("artist"), typed("title"));
         requestedGrid.prepend(spot);
         requested.hidden = false;
+        if (state.all) spot.scrollIntoView({ block: "nearest", behavior: smooth() });  // under the bar, in view
         const button = requestForm.querySelector('button[type="submit"]');
         button.disabled = true;
         send(requestForm).then((answer) => {
@@ -2251,6 +2829,7 @@ _SCRIPT = r"""
             return;
           }
           for (const name of ["artist", "title", "album", "duration"]) field(name).value = "";
+          typedInto.clear();
           const id = Number(view.id);
           const shown = spots.has(id) ? [id, spots.get(id)] : spotOf(view);
           if (shown) {  // asked for again: its card says how it goes, where it is, its line still in the page
@@ -2614,14 +3193,21 @@ _BODY = """<body>
   </div>
   <nav class="links" aria-label="Pages">__NAV__</nav>
 </header>
-__REQUEST____SONGBOOKS__<div class="searchbar" role="search">
+__SONGBOOKS__<div class="searchbar" role="search">
   <label class="visually-hidden" for="q">Search your songs</label>
-  <div class="field">
-    <input id="q" type="search" placeholder="Search artist, title, pinyin or key" autocomplete="off"
-      autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
-    <button type="button" id="clear" class="clear" aria-label="Clear the search" hidden>×</button>
+  <div class="bar-row">
+    <div class="field">
+      <input id="q" type="search" placeholder="Artist, title or key" autocomplete="off" autocapitalize="off"
+        autocorrect="off" spellcheck="false" enterkeyhint="search" aria-describedby="bar-status">
+      <button type="button" id="clear" class="clear" aria-label="Clear the search" hidden>×</button>
+    </div>
+    <button type="button" id="all" class="btn all">Search all</button>
   </div>
+  <p class="bar-status" id="bar-status" aria-live="polite"></p>
 </div>
+__REQUESTED__<section class="results" id="results" aria-label="Search results">
+<div class="found" id="found" hidden></div>
+__REQUEST__</section>
 <div class="toolbar">
   <div class="chips" role="group" aria-label="Show">
     <button type="button" class="chip" data-show="all" aria-pressed="true">All <span class="n"></span></button>
@@ -2657,9 +3243,10 @@ __REQUEST____SONGBOOKS__<div class="searchbar" role="search">
 </div>
 """
 
-# The form caracole serve adds: a song for wanted.txt, written as `caracole add` writes it.
-_REQUEST = """<details class="request">
-  <summary><span class="plus" aria-hidden="true">+</span>Request a song</summary>
+# The form caracole serve adds, under the search's results: a song for wanted.txt, written as `caracole add`
+# writes it. The script fills it in from what was searched; without the script it posts as a form.
+_REQUEST = """<details class="request" id="request-box">
+  <summary><span class="plus" aria-hidden="true">+</span>Not in the list? Request it by name</summary>
   <form class="request-form" method="post" action="/request">
     <input type="hidden" name="csrf" value="__CSRF__">
     <div class="fields">
@@ -2679,7 +3266,11 @@ _REQUEST = """<details class="request">
       a few requests about a second apart.</p>
   </form>
 </details>
-<section class="requested" id="requested" aria-label="Songs you just requested" hidden>
+"""
+
+# What caracole serve adds under the bar: the songs just requested, each a card with its line, and the
+# requests, a short list in a corner.
+_REQUESTED = """<section class="requested" id="requested" aria-label="Songs you just requested" hidden>
   <p class="subhead">Just requested</p>
   <div class="grid" id="requested-grid"></div>
 </section>
@@ -2700,7 +3291,6 @@ def _nav(controls: WebControls | None) -> str:
     links = '<a class="navlink" href="_todo.md">To-do</a>'
     if controls is not None:
         n = f'<span class="n">{controls.active}</span>' if controls.active else ""
-        links = '<a class="navlink" href="/lookup">Look up</a>' + links  # the lookup page, web/lookup_page.py
         links += f'<a class="navlink" href="/jobs">Requests{n}</a>'
     return links
 
@@ -2709,6 +3299,10 @@ def _request_form(controls: WebControls | None) -> str:
     if controls is None:
         return ""
     return _REQUEST.replace("__CSRF__", html_text.escape(controls.csrf, quote=True))
+
+
+def _requested(controls: WebControls | None) -> str:
+    return _REQUESTED if controls is not None else ""
 
 
 # --- songbooks: the section (songbook.py) ---------------------------------------------------------

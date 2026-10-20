@@ -1327,7 +1327,9 @@ def test_the_lookup_page_is_served_with_its_script(app):
     csp = header(response, "content-security-policy")
     assert "connect-src 'self'" in csp and "script-src 'sha256-" in csp and "frame-ancestors 'none'" in csp
     assert "unsafe-inline" not in csp and "innerHTML" not in body
-    assert 'href="/lookup"' in text(get(app, "/"))  # the library page links it
+    # The library page's own bar searches the sites now: it links no other page for it.
+    library = text(get(app, "/"))
+    assert 'href="/lookup"' not in library and 'id="all"' in library
 
 
 def test_the_search_answers_json_from_your_library_and_the_offline_index(app, conn):
