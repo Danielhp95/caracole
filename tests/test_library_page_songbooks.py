@@ -567,14 +567,21 @@ def test_the_cross_leaves_select_mode_and_keeps_the_picks(library, tmp_path):
       q(".pick-open").click();
       q(".pick-done").focus();
       q(".pick-done").click();
+      // Out of the mode a picked song looks like any other: its card and its row (where the picks show again).
+      const look = (n) => { const c = getComputedStyle(n); return [c.borderLeftColor, c.boxShadow, c.backgroundColor]; };
+      const same = () => JSON.stringify(look(card("Creep"))) === JSON.stringify(look(card("Hysteria")));
       const left = {bar: q(".pickbar").hidden, pressed: q(".pick-toggle").getAttribute("aria-pressed"),
                     focus: document.activeElement === q(".pick-toggle"),
-                    open: card("Creep").querySelector("a.btn.primary").checkVisibility()};
+                    open: card("Creep").querySelector("a.btn.primary").checkVisibility(), same: same()};
+      q('button[data-view="rows"]').click();
+      const row = (title) => qa("#list .row").find((r) => r.querySelector("h2").textContent === title);
+      left.rows = JSON.stringify(look(row("Creep"))) === JSON.stringify(look(row("Hysteria")));
+      q('button[data-view="cards"]').click();
       q(".pick-toggle").click();
       out = {left, count: q(".pick-count").textContent, creep: card("Creep").classList.contains("picked"),
              fields: q(".pick-name").checkVisibility()};
     """, size="390,844")
-    assert out["left"] == {"bar": True, "pressed": "false", "focus": True, "open": True}
+    assert out["left"] == {"bar": True, "pressed": "false", "focus": True, "open": True, "same": True, "rows": True}
     assert out["count"] == "1 selected" and out["creep"]  # back in, the picks are as they were
     assert not out["fields"]  # and the bar is one line again
 

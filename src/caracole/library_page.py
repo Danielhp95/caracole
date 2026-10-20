@@ -2441,7 +2441,8 @@ _SONGBOOK_STYLE = """
 .pick input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .pick:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .pick-n { font-weight: 750; font-variant-numeric: tabular-nums; }
-.card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+/* Picked, while selecting: out of the mode the picks wait, unseen, for when it is on again. */
+.selecting .card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 /* While selecting, a card or a row is one target: a tap anywhere on it lands on it, and the Select script
    picks it or lets it go; only its box takes a tap of its own. What opens a file or acts on the song is put
@@ -2460,7 +2461,7 @@ _SONGBOOK_STYLE = """
 .selecting .row { grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "src title" "src sub"; }
 .selecting .row > .source { display: none; }
 .selecting .row > .pick { grid-area: src; align-self: center; }
-.row.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+.selecting .row.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
 @media (min-width: 900px) {
   .selecting .row { grid-template-columns: 44px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem);
     grid-template-areas: "src title artist meta"; }
