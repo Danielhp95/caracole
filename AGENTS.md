@@ -68,7 +68,9 @@ and `search --key`).
   request runs the `caracole` CLI in a child process, one command at a time; a lookup is
   one `caracole get --progress`, whose JSON lines become `Job.stages`, and `Job.as_json` is
   a job as data), app.py (the routes: `/api/search` for search as you type, through
-  search.py's public functions, one at a time, the newest first; `/api/jobs[/<id>]`;
+  search.py's public functions, one at a time, the newest first, an older one's SQL
+  interrupted once a newer waits (`set_progress_handler`); `/api/jobs[/<id>]`; every
+  `/api/` read refused to another site's fetch, `security.own_page_read`;
   `POST /lookup`), lookup_page.py (the lookup page: its script, `createElement` and
   `textContent` only, allowed by hash, connects to the server alone), pages.py, server.py
   (`http.server`). The library page is library_page.py's, with `WebControls`.

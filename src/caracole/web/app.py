@@ -57,6 +57,7 @@ from caracole.web.security import (
     answers_to,
     cross_origin_ok,
     host_name,
+    own_page_read,
     same_token,
     session_cookie,
     session_value,
@@ -72,6 +73,7 @@ PICK_LIMITS = {"ug": 300, "tab": 600}
 QUERY_LIMIT = 200  # characters of a search
 LIBRARY_HITS, INDEX_HITS, TABS_SHOWN = 5, 8, 24
 CACHE_SIZE, CACHE_SECONDS = 128, 300.0  # the offline index's answers kept
+SEARCH_CHECK_STEPS = 20_000  # SQLite steps between two looks for a newer search, a millisecond or so
 _COMMON_HEADERS = [
     ("X-Content-Type-Options", "nosniff"),
     ("X-Frame-Options", "DENY"),
@@ -175,12 +177,15 @@ class WebApp:
             if path == "/jobs":
                 still = parse_qs(urlsplit(request.target).query).get("refresh") == ["0"]
                 return _html(200, pages.jobs_page(self.queue.snapshot(), refresh=not still))
+            if path.startswith("/api/") and not own_page_read(request.headers):
+                return _json(403, {"error": "This came from another site, so caracole refused it."})
             if path == "/api/search":
                 return self._search(parse_qs(urlsplit(request.target).query).get("q", [""])[0])
             if path == "/api/jobs":
                 return _json(200, {"jobs": [job.as_json() for job in self.queue.snapshot()]})
             if path.startswith("/api/jobs/"):
-                job = self.queue.job(int(path[10:])) if path[10:].isdigit() else None
+                number = path[len("/api/jobs/"):]
+                job = self.queue.job(int(number)) if number.isascii() and number.isdigit() else None
                 return _json(200, job.as_json()) if job is not None else _json(404, {"error": "no such request"})
             if path == "/login":
                 return _redirect("/")
@@ -406,12 +411,22 @@ class WebApp:
             return _json(200, {"query": q, "library": [], "index": [], "short": True})
         ticket = next(self._tickets)
         self._newest = ticket
+        superseded = {"query": q, "superseded": True}
+
+        def typed_over() -> int:  # SQLite asks every few thousand steps: non-zero interrupts the query
+            return int(ticket != self._newest)
+
         with self._searching:
-            if ticket != self._newest:  # typed on meanwhile: the newer query goes first
-                return _json(200, {"query": q, "superseded": True})
+            if typed_over():  # typed on meanwhile: the newer query goes first
+                return _json(200, superseded)
             try:
                 with closing(self._connect()) as conn:
+                    conn.set_progress_handler(typed_over, SEARCH_CHECK_STEPS)
                     return _json(200, self._found_for(conn, q))
+            except sqlite3.OperationalError as e:
+                if typed_over():  # interrupted: the newer one reads now
+                    return _json(200, superseded)
+                return _json(503, {"query": q, "error": f"The database can't be read: {e}"})
             except (sqlite3.Error, OSError) as e:
                 return _json(503, {"query": q, "error": f"The database can't be read: {e}"})
 

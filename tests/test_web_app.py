@@ -477,6 +477,64 @@ def test_a_job_is_served_as_data_with_each_step_and_its_state(app, queue):
     assert get(app, "/api/jobs/9").status == 404 and get(app, "/api/jobs/x").status == 404
 
 
+@pytest.mark.parametrize("number", ["%C2%B2", "%D9%A1", "%EF%BC%91"])  # ², Arabic-Indic 1, fullwidth 1
+def test_a_request_number_of_other_digits_than_0_to_9_is_no_request(app, queue, number):
+    lookup(app, {"artist": "Radiohead", "title": "Creep"})
+    response = get(app, f"/api/jobs/{number}")
+    assert response.status == 404 and as_json(response) == {"error": "no such request"}
+
+
+@pytest.mark.parametrize("path", ["/api/search?q=creep", "/api/jobs", "/api/jobs/1"])
+def test_the_api_answers_its_own_pages_and_no_other_site(app, conn, queue, path):
+    # Another site can't read the answers, but it could make the server search for it: refused.
+    creep_index(conn)
+    lookup(app, {"artist": "Radiohead", "title": "Creep"})
+    for site in ("cross-site", "same-site"):
+        response = get(app, path, **{"sec-fetch-site": site})
+        assert response.status == 403 and "another site" in as_json(response)["error"], site
+    assert get(app, path, **{"sec-fetch-site": "same-origin"}).status == 200
+    assert get(app, path, **{"sec-fetch-site": "none"}).status == 200  # typed into the address bar
+    assert get(app, path).status == 200  # no browser: curl, a script on this machine
+
+
+def test_a_search_typed_over_lets_go_of_the_database_at_once(app, conn, monkeypatch):
+    # A query of one very common word reads tens of thousands of rows: the next one typed doesn't wait for it.
+    import threading
+    import time
+
+    import caracole.search
+
+    creep_index(conn)
+    started = threading.Event()
+    real = caracole.search.search_index
+
+    def search_index(c, query, limit=10):
+        if query != "slow words":
+            return real(c, query, limit)
+        started.set()
+        c.execute("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 300000000) "
+                  "SELECT count(*) FROM n").fetchone()  # half a minute or more, unless interrupted
+        return []
+
+    monkeypatch.setattr(caracole.search, "search_index", search_index)
+    first: dict = {}
+    newer: dict = {}
+    older = threading.Thread(target=lambda: first.update(as_json(get(app, "/api/search?q=slow%20words"))),
+                             daemon=True)
+    older.start()
+    assert started.wait(10)
+    begun = time.monotonic()
+    typed = threading.Thread(target=lambda: newer.update(as_json(get(app, "/api/search?q=creep"))), daemon=True)
+    typed.start()
+    typed.join(5)
+    assert not typed.is_alive(), "the newer search waited for the older one"
+    older.join(5)
+    assert not older.is_alive() and time.monotonic() - begun < 5
+    assert first == {"query": "slow words", "superseded": True}
+    assert newer["index"][0]["ug"] == "radiohead/creep"
+    assert "slow words" not in app._found  # an interrupted search is no answer to keep
+
+
 # --- the library's files ----------------------------------------------------------------------
 
 

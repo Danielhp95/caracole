@@ -1151,7 +1151,9 @@ with it. A KEY that is no key exits with status 2.
   the way you would look it up on Ultimate Guitar. Type a song or an artist:
   it searches your library and the offline index as you type (a few
   milliseconds a query; see [caracole search](#caracole-search)), asking no
-  site anything. Pick a song with Get it, or one of its versions (Versions
+  site anything. A search you type over stops at once, so a slow one (a very
+  common word, "the" on the way to "the beatles") never holds up the next.
+  Pick a song with Get it, or one of its versions (Versions
   lists its chords, tabs and Guitar Pro pages by id): it is looked up at once,
   as `caracole get --ug … [--tab …]` does it, and the song or tab you picked
   is recorded in overrides.toml (`[match]`, `[pin]`), so nothing waits for a
@@ -1176,7 +1178,9 @@ with it. A KEY that is no key exits with status 2.
   waits or runs. Stop refreshing keeps it still, so an output stays open to
   read. `/api/jobs` and `/api/jobs/N` give the same as JSON: each request's
   steps (a lookup's stages), each with its state, its song and the library
-  files its sheet can be read in.
+  files its sheet can be read in. These JSON addresses (`/api/…`) answer
+  caracole's own pages, the address bar and programs such as curl; a browser
+  fetching one for another site's page gets 403.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
