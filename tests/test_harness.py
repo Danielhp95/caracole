@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import conftest
 import pytest
-from helpers import browser
+from helpers import browser, locks
 from helpers.browser import in_chromium
 from helpers.locks import waiting_for
 
@@ -169,6 +169,7 @@ def test_tmp_path_stays_on_disk_where_memory_wont_do(monkeypatch, tmp_path, moun
 # --- waiting for the lock ----------------------------------------------------------------------
 
 
+@pytest.mark.skipif(not os.access(locks.LOCKS, os.R_OK), reason="no /proc/locks to read")
 def test_a_wait_for_the_lock_is_seen_as_soon_as_it_starts(tmp_path):
     lock = tmp_path / "caracole.lock"
     held = os.open(lock, os.O_RDWR | os.O_CREAT)
@@ -185,12 +186,46 @@ def test_a_wait_for_the_lock_is_seen_as_soon_as_it_starts(tmp_path):
     try:
         thread.start()
         start = time.monotonic()
-        assert waiting_for(lock, thread.is_alive, timeout=30)
-        assert time.monotonic() - start < 10  # seen in /proc/locks, not given up on after 30 s
+        assert waiting_for(lock, thread.is_alive, timeout=5)
+        assert time.monotonic() - start < 5  # seen in /proc/locks, not given up on after 5 s
     finally:
         os.close(held)
     thread.join(10)
     assert not thread.is_alive()
+
+
+def test_a_wait_is_seen_where_proc_locks_names_another_device(tmp_path, monkeypatch):
+    # /proc/locks names a file by its superblock's device, which stat gives otherwise on a btrfs
+    # subvolume (where tmp_path is with --basetemp in a btrfs home): the inode alone says which.
+    lock = tmp_path / "caracole.lock"
+    lock.touch()
+    st = lock.stat()
+    inode, other = st.st_ino, f"{os.major(st.st_dev) + 1:02x}:{os.minor(st.st_dev):02x}"
+    listed = tmp_path / "locks"
+    listed.write_text(
+        f"1: FLOCK  ADVISORY  WRITE 4241 {other}:{inode} 0 EOF\n"  # caracole's, held
+        f"1: -> FLOCK  ADVISORY  WRITE 4242 {other}:{inode} 0 EOF\n"  # another, waiting
+        f"2: POSIX  ADVISORY  WRITE 4243 {other}:{inode + 1} 0 EOF\n"
+    )
+    monkeypatch.setattr(locks, "LOCKS", listed)
+    start = time.monotonic()
+    assert waiting_for(lock, lambda: True, timeout=5)
+    assert time.monotonic() - start < 5
+
+
+def test_a_lock_held_is_no_wait(tmp_path, monkeypatch):
+    lock = tmp_path / "caracole.lock"
+    lock.touch()
+    inode = lock.stat().st_ino
+    listed = tmp_path / "locks"
+    listed.write_text(
+        f"1: FLOCK  ADVISORY  WRITE 4241 00:2f:{inode} 0 EOF\n"
+        f"2: -> FLOCK  ADVISORY  WRITE 4242 00:2f:{inode + 1} 0 EOF\n"  # a wait on another file
+        f"3: -> POSIX  ADVISORY  WRITE 4243 00:2f:{inode} 0 EOF\n"  # caracole takes an flock
+    )
+    monkeypatch.setattr(locks, "LOCKS", listed)
+    running = iter([True, True, False])  # finishes on its own, never seen waiting
+    assert not waiting_for(lock, lambda: next(running, False), timeout=5)
 
 
 def test_a_command_that_never_waited_is_not_waiting(tmp_path):

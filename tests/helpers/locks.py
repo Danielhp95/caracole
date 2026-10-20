@@ -19,21 +19,21 @@ def waiting_for(lock: Path, running: Callable[[], bool], timeout: float = 0.5) -
     """Whether a command waits for the flock on ``lock``: true once /proc/locks lists a request
     for it waiting, else whether ``running()`` still holds ``timeout`` seconds later (all a test
     could tell before, and all it can where /proc/locks says nothing)."""
-    st = os.stat(lock)
-    file = f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}"
+    inode = str(os.stat(lock).st_ino)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline and running():
-        if _blocked(file):
+        if _blocked(inode):
             return True
         time.sleep(0.005)
     return running()
 
 
-def _blocked(file: str) -> bool:
-    """Whether /proc/locks lists a blocked flock request on ``file`` (major:minor:inode).
+def _blocked(inode: str) -> bool:
+    """Whether /proc/locks lists a blocked flock request on the file with this inode.
 
     A line reads "3: -> FLOCK  ADVISORY  WRITE 4242 00:26:99373 0 EOF": "->" for a request
-    that waits, then the file.
+    that waits, then the file as major:minor:inode. The device is its superblock's, which stat
+    doesn't give on a btrfs subvolume, so only the inode is compared.
     """
     try:
         listed = LOCKS.read_text()
@@ -41,6 +41,7 @@ def _blocked(file: str) -> bool:
         return False
     for line in listed.splitlines():
         fields = line.split()
-        if len(fields) > 6 and fields[1:3] == ["->", "FLOCK"] and fields[6] == file:
+        if (len(fields) > 6 and fields[1:3] == ["->", "FLOCK"]
+                and fields[6].rsplit(":", 1)[-1] == inode):
             return True
     return False
