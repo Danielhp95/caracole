@@ -399,6 +399,9 @@ def test_a_removal_confirmed_for_another_song_than_the_id_now_names_is_refused(a
     response = post(app, "/remove", {"song": str(creep.id), "key": "oasis/wonderwall", "confirm": "1"})
     assert response.status == 409 and queue.snapshot() == []
     assert post(app, "/remove", {"song": "999"}).status == 404
+    for huge in (BEYOND_SQLITE, f"-{BEYOND_SQLITE}"):  # no SQLite integer: no song, asked or confirmed
+        assert post(app, "/remove", {"song": huge}).status == 404
+        assert post(app, "/remove", {"song": huge, "key": creep.key, "confirm": "1"}).status == 404
     assert post(app, "/remove", {"song": "x"}).status == 400
 
 
@@ -1594,6 +1597,8 @@ def test_get_it_now_on_a_song_of_your_library_adds_it_to_no_source(app, cfg, con
     [job] = queue.snapshot()
     assert job.steps[0].args == ("get", "--progress", "--", "Radiohead", "Creep")
     assert lookup(app, {"song": "999"}).status == 404
+    for huge in (BEYOND_SQLITE, f"-{BEYOND_SQLITE}"):  # no SQLite integer: no song either
+        assert lookup(app, {"song": huge}).status == 404
     assert lookup(app, {"song": "x"}).status == 400
 
 
