@@ -17,6 +17,9 @@ A small server from the standard library (``http.server``), in these parts:
   read from its job's steps and, once it is over, from the song's state.
 - app.py: the routes, as a function from a request to a response, and
   server.py, which puts it on a socket; pages.py, the pages it writes itself.
+- songbooks.py: the songbook forms, each queued as its ``caracole songbook``
+  command, and each songbook's page, sent only while it is the page caracole
+  wrote.
 
 The server itself never takes caracole's lock. It reads the database, as
 ``caracole search`` does, and writes only wanted.txt, as ``caracole add`` does

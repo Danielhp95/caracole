@@ -18,6 +18,7 @@ up as a nightly service on a NixOS host, with secrets, Syncthing and backups.
 - [Audio from YouTube](#audio-from-youtube)
 - [The to-do page](#the-to-do-page)
 - [Browse and search](#browse-and-search)
+- [Songbooks](#songbooks)
 - [overrides.toml: your decisions](#overridestoml-your-decisions)
 - [Fonts for Chinese sheets](#fonts-for-chinese-sheets)
 - [The library folder](#the-library-folder)
@@ -925,7 +926,11 @@ and cache.
   `sheet.json`, `sheet (auto).txt`, a `.cho` file or a viewer fails that song
   alone: caracole reads no sheet through a link. Remove the link, and the next
   render writes the `.cho` and the viewer again; the next `caracole run` writes
-  `sheet.json` again before it renders.
+  `sheet.json` again before it renders. Then it makes the
+  [songbooks](#songbooks)' files that need it, and says how that went on a
+  line of its own, `Songbooks: 1 rendered, 2 up to date, 0 failed`, when there
+  are songbooks; a songbook that couldn't be made, or a songbooks.toml that
+  can't be read, exits 1 too.
 - **`caracole todo`** rewrites `_todo.md` and `index.html` from the database.
 - **`caracole icons`** fetches the icon of each site `index.html` has none for
   yet, now, then rewrites `_todo.md` and `index.html`. It prints a line a site:
@@ -971,7 +976,8 @@ and cache.
 
 **The pages.** A command that changes what `_todo.md` and `index.html` show
 rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
-`todo`, `add`, `search --add`, `sync` and `autochords`; `review` when an
+`todo`, `add`, `search --add`, `sync`, `autochords` and every `songbook`
+command but `list` and `show`; `review` when an
 answer changed something; and `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
 `musescore` and `youtube` when they did something or were blocked, so that
 Provider health shows the cooldown (`youtube` also when it let go of audio no
@@ -985,12 +991,14 @@ the library hold caracole's lock, `caracole.lock` in the state folder, while the
 work, so no two budgets are ever spent side by side: `run` from start to end,
 `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
 `musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
-`search --add` and `autochords`. A
+`search --add`, `autochords` and the `songbook` commands that change a songbook
+or render one. A
 second one waits for the first, and says which it is:
 `Another caracole is running (pid 4242: run); waiting for it to finish.`
 `caracole review` and `caracole remove` take the lock only after your answers,
-never while they wait for one, and `search`, `match --dry-run`, `index stats`
-and `remove --list` only read, so they never wait. A command that waited reads the sites' cooldowns once it has the
+never while they wait for one, and `search`, `match --dry-run`, `index stats`,
+`remove --list`, `songbook list` and `songbook show` only read, so they never
+wait. A command that waited reads the sites' cooldowns once it has the
 lock: if the caracole it waited for was blocked, it sends that site nothing and
 exits 0. Its first request to a site also waits out the pause after the last
 request any caracole sent there, so the pauses hold whichever caracole sends.
@@ -1388,6 +1396,24 @@ each. When nothing in the library matches, the page shows the
 offline index doesn't know. `caracole serve` serves the same page with a form
 to request songs (see below).
 
+**Songbooks** (see [Songbooks](#songbooks)), above the search box once there is
+one, lists each songbook: its songs in order, those without a sheet marked
+missing, and its files, the phone page first, then the PDF and the ChordPro
+file. On the file on disk it names the `caracole songbook` commands that change
+it; `caracole serve` adds buttons. **Select**, beside the Sort menu, puts a
+box on each card: tick songs in the order they go in the songbook (each box
+shows its place, and a screen reader says it: "Pick Creep by Radiohead,
+2nd"), search and filter between ticks, and the bar at the bottom counts them,
+`3 selected`. Give the songbook a name and tap Make songbook, or pick a
+songbook there is in the menu (instead of New songbook) to Add to it; Clear
+unticks them all, and Select, pressed while the mode is on, leaves it. On the
+file on disk, which can't write anything, the bar shows the command to run
+where caracole runs, with Copy:
+`caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
+each word in single quotes, so that no shell changes a `!`, a `$` or a quote
+in a name.
+On `caracole serve`, the button makes the songbook (see below).
+
 Each song's entry in the page's data (the `<script type="application/json"
 id="songs">` block) has the same `key` and `key_source` as its info.json, and
 `source`, where its sheet came from (`ug`, `lacuerda`, `auto`…); each of its
@@ -1680,6 +1706,15 @@ do:
   search` finds for it (Look in the index, above).
 - **Without JavaScript**, the forms still work: a request sends you to its
   line on `/jobs`, its output open; a pick, to its line.
+- **Songbooks.** Select's Make songbook (or Add to a songbook there is) runs
+  `caracole songbook make NAME "ARTIST - TITLE"...` (or `add`) with the songs
+  in the order you ticked them. In the Songbooks section, ↑ and ↓ move a song,
+  × takes it out, and Rename or delete renames the songbook or, once you tick
+  the box, deletes it and the files caracole made of it; each runs its
+  `caracole songbook` command (see [Songbooks](#songbooks)), and the Requests
+  page shows how it went. A change that can't be made, such as a name another
+  songbook has, a song no longer in the library or a songbook deleted since
+  the page was made, is refused at once, and nothing runs.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
@@ -1688,10 +1723,19 @@ last request any caracole sent, and keeps the budgets and cooldowns. The
 queue holds 20 requests and one per song: asking again for a song gives its
 request, and Fetch it now on a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
-loses no song. The page links each
+loses no song. A songbook change waits in the queue like a request; the same
+change sent twice is queued once. The server writes no songbook itself: the
+command does, under caracole's lock. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
 and Guitar Pro files as downloads, never through a symbolic link, never a
-hidden file, and never the database, the token or the cache.
+hidden file, and never the database, the token or the cache. A songbook's page,
+`_songbooks/<name>/songbook.html`, is sent only while it is the very page
+caracole wrote there, as recorded when it wrote it (anyone with a synced device
+could put a page of their own in the library), and in a sandbox: its scripts
+run, but it can reach neither the server nor your sign-in, and keeps no
+storage, so the song it shows is the one in its address (`#song-3`). Edited
+on a device, or replaced by a link, it gets a page saying so until the next
+`caracole render` (or `caracole songbook render`) writes it again.
 
 Of the HTML pages in the library, the server sends only the sheet viewers
 (`sheet.html`, `sheet (auto).html`; see [The sheet viewer](#the-sheet-viewer)),
@@ -1741,6 +1785,121 @@ Who can reach it:
 
 It runs until Ctrl-C. On the NUC, `services.caracole.web` runs it as a unit
 ([deploy.md](deploy.md), section 8).
+
+## Songbooks
+
+A songbook is a name and some songs of your library, in an order: a set list,
+the songs for a trip, a book to print. caracole makes each one into three files
+in `Library/_songbooks/<name>/`:
+
+- **`songbook.pdf`**: a title page (the name, how many songs), the contents,
+  then every song's sheet in order, in caracole's look and each in its own key
+  (`[transpose]`), all from one chordpro run, with the Chinese font when a song
+  needs it. A song without a sheet keeps its place: the contents name it
+  ("Hysteria · Muse · missing: no sheet yet"), and its page says so. Its
+  document title, the name a PDF viewer or a phone shows, is the songbook's.
+- **`songbook.html`**: one page for the phone, which opens from the synced
+  folder and loads nothing. It opens on the contents; tap a song to open it in
+  the sheet viewer, with everything the viewer does (chord shapes,
+  transposition, chords to play instead, modes, scrolling by itself), each
+  song in its own key and keeping its own settings. Next and Previous (above
+  each song, and again at its end), a swipe across the sheet or the arrow keys
+  go from song to song, skipping the missing ones, and Contents goes back. Opened again, the page takes you back
+  to the song you had open, where you were in it; the contents mark it as
+  "last opened". Without JavaScript, or printed, it is every song one after
+  the other. Served by `caracole serve`, it runs in a sandbox without the
+  browser's storage: each song keeps its address (`#song-3`) but not your
+  place or settings.
+- **`songbook.cho`**: every song's ChordPro, in its key, split by
+  `{new_song}`, to import into a songbook app such as SongbookPro or OnSong.
+  chordpro writes it, so the chords are already transposed; songs without a
+  sheet aren't in it.
+
+The songbooks are in `songbooks.toml`, in the library, so the file syncs and
+you can edit it by hand. Each table is a songbook, its header the name and
+`songs` its songs in order, written as `"Artist - Title"` as overrides.toml
+writes them:
+
+```toml
+["Campfire"]
+songs = [
+  "Soda Stereo - De Música Ligera",
+  "宋冬野 - 斑马，斑马",
+  "Radiohead - Creep",
+]
+```
+
+caracole keeps your comments and layout when it changes the file. A song of
+the file is its song of the library by its artist and title: accents, case,
+Traditional or Simplified characters and a version suffix ("- Remastered 2007")
+don't count, but nothing else does, as no search is made for it. A song the
+library hasn't got (removed since, or written with a typo) is listed missing,
+`not in the library`, and never taken for another with a title like it
+("Karma Police Live" for "Karma Police").
+A name can't be empty, start with a dot, hold a line break or be longer than
+80 characters, and two songbooks can't have names that would share a folder
+(`Camp/fire` and `Camp-fire`; `Campfire` and `campfire`). A songbooks.toml that
+can't be read (not TOML, or a symbolic link, which caracole never reads
+through) makes no songbook: the error names the file and the line, every
+songbook's files stay as they are, and everything else goes on.
+
+### caracole songbook
+
+- **`caracole songbook make NAME "ARTIST - TITLE"...`** makes a songbook of
+  these songs, in this order, and its files. A song is found by its artist and
+  title written any way, or by a search of your library that one song answers
+  well ("ban ma ban ma" for 宋冬野 - 斑马，斑马, or a typo), and it says which
+  song it took: `Took 宋冬野 - 斑马，斑马 for "ban ma ban ma"`. The songbook keeps
+  each song as the library names it, and a song named twice once, where it is
+  first (`Muse - Hysteria is in it already`). A song the library hasn't got is refused,
+  with what you may have meant, and nothing is written:
+  `No song "Radiohed - Karma" in the library: did you mean "Radiohead - Karma Police"?`
+  A name another songbook has is refused too.
+- **`caracole songbook list`** shows every songbook, how many songs it has and
+  how many have no sheet, and its files.
+- **`caracole songbook show NAME`** lists its songs in order, each one's
+  transposition, the missing ones marked (`(missing: no sheet yet)`,
+  `(missing: not in the library)`), and where its files are.
+- **`caracole songbook add NAME "ARTIST - TITLE"...`** adds songs at the end;
+  one it has already stays where it is.
+- **`caracole songbook remove NAME "ARTIST - TITLE"...`** takes songs out. A
+  song removed from the library goes by the name the songbook gives it.
+- **`caracole songbook move NAME "ARTIST - TITLE" POSITION`** moves a song,
+  1 being the first; past the end is last.
+- **`caracole songbook rename NAME NEW`** renames it; its files move to the
+  folder of the new name.
+- **`caracole songbook delete NAME`** deletes it, and the files caracole made
+  of it. A file of yours in its folder stays, and so does the folder.
+- **`caracole songbook render [NAME] [--force]`** makes the files of one
+  songbook, or of all, that need it, and prints
+  `1 rendered, 2 up to date, 0 failed`. It exits 1 when a file couldn't be
+  made, and the log says why, as `songbook Campfire: no songbook.pdf: …`. A
+  file that can't be made or written (chordpro failed, a folder in its place,
+  a full disk) fails its songbook alone: its other files and the other
+  songbooks are still made.
+
+A NAME is found in any case. `remove` and `move` take the songbook's own song
+of that artist and title first, and only when it has none, the song a search of
+your library finds ("oasis wonderwal"), as `make` does. Each change writes
+songbooks.toml, makes the songbook's files and rewrites `_todo.md` and
+`index.html`, holding caracole's lock; `list` and `show` only read, and never
+wait. A change whose files couldn't all be made exits 1, as `render` does,
+after saying `Some of its files couldn't be made`: the change to songbooks.toml
+stays made, and on `caracole serve` its request shows as failed. A
+songbooks.toml that can't be read exits 2.
+
+`index.html` lists the songbooks and makes the commands to change them, and
+`caracole serve` runs them from the page (see
+[Library/index.html](#libraryindexhtml) and [caracole serve](#caracole-serve)).
+
+`caracole render` and the nightly run make the songbooks' files after the
+sheets, and a file only when what it is made from changed: its songs, their
+order, their sheets, their transpositions, caracole's PDF style or the font;
+or when it is no longer as caracole wrote it (deleted, edited, a link in its
+place). A songbook gone from songbooks.toml (deleted or renamed by hand) loses
+the files caracole made of it at the next render, each only while it is still
+as caracole wrote it, and never through a symbolic link. Like the sheets' PDFs, a songbook with a Chinese song
+gets its PDF once a CJK font is set; its page and its ChordPro file need none.
 
 ## overrides.toml: your decisions
 
@@ -1913,6 +2072,12 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   index.html                browse and search the library
   wanted.txt                your songs
   overrides.toml            your decisions
+  songbooks.toml            your songbooks (see Songbooks)
+  _songbooks/
+    Campfire/
+      songbook.pdf          every sheet of the songbook, after a title page and the contents
+      songbook.html         the songbook for the phone, in the sheet viewer
+      songbook.cho          every sheet in ChordPro, for a songbook app
   _inbox/                   Guitar Pro and MuseScore downloads waiting to be filed
   宋冬野/
     斑马斑马/

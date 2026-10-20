@@ -196,15 +196,17 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
                           "removing": sorted(controls.removing), "jobs": list(controls.jobs)}
         for song in songs:
             song["fetchable"] = song["id"] not in controls.held
+    books, data["songbooks"] = songbooks_section(conn, cfg, overrides, controls)
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     # The page caracole serve serves may also ask it how its requests go (connect-src); the file can't.
     csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'") if controls is not None
            else _CSP.replace("__FORMS__", "'none'"))
     return (
-        _HEAD.replace("__CSP__", csp).replace("__STYLE__", _STYLE)
+        _HEAD.replace("__CSP__", csp).replace("__STYLE__", _PAGE_STYLE)
         + _BODY.replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
+        .replace("__SONGBOOKS__", books)
         + f'<script type="application/json" id="songs">{payload}</script>\n'
-        + f"<script>{_SCRIPT}</script>\n</body>\n</html>\n"
+        + f"<script>{_PAGE_SCRIPT}</script>\n</body>\n</html>\n"
     )
 
 
@@ -1382,6 +1384,7 @@ _SCRIPT = r"""
   const makeCard = (s) => {
     const card = el("article", "card");
     card.dataset.status = String(s.status);
+    card.dataset.id = String(s.id);
     card.tabIndex = -1;  // the A-Z strip moves the focus to it
     const head = el("div", "head");
     const hue = Number.isInteger(s.hue) && s.hue >= 0 && s.hue < 8 ? s.hue : 0;
@@ -2227,6 +2230,292 @@ _SCRIPT = r"""
 })();
 """
 
+# --- songbooks: the Songbooks section, and the Select mode that makes one (songbook.py) ---------------
+
+_SONGBOOK_STYLE = """
+.songbooks { margin: 8px 0 0; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.songbooks > details > summary { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px;
+  cursor: pointer; font-weight: 650; list-style: none; }
+.songbooks > details > summary::-webkit-details-marker { display: none; }
+.songbooks .sb-icon { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  background: var(--raised); color: var(--accent); font-size: 1rem; line-height: 1; }
+.songbooks summary .n { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--raised);
+  color: var(--muted); font-size: .78rem; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+.sb-list { display: grid; gap: 12px; padding: 0 16px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.sb-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
+  border-radius: 14px; background: var(--bg); }
+.sb-card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
+.sb-songs { margin: 0; padding: 0; list-style: none; }
+.sb-songs li { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 2px 0;
+  border-top: 1px solid var(--border); }
+.sb-n { flex: none; min-width: 2ch; color: var(--muted); font-size: .8rem; text-align: right;
+  font-variant-numeric: tabular-nums; }
+.sb-names { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sb-names .t { font-weight: 600; }
+.sb-names .a, .sb-names .why { color: var(--muted); font-size: .88rem; }
+.sb-songs .missing .t { color: var(--muted); font-weight: 500; }
+.sb-names .why { display: block; font-size: .8rem; font-style: italic; }
+.sb-tools { flex: none; display: flex; gap: 4px; }
+.sb-tools form, .sb-more form { margin: 0; }
+.sb-btn { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 1rem;
+  cursor: pointer; }
+.sb-btn:hover { border-color: var(--border-strong); }
+.sb-more > summary { min-height: 40px; color: var(--muted); font-size: .85rem; font-weight: 600; cursor: pointer; }
+.sb-more form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
+.sb-more .f { flex: 1 1 180px; }
+.sb-sure { display: flex; flex: 1 1 100%; align-items: center; gap: 10px; min-height: 44px; font-size: .9rem; }
+.sb-sure input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.sb-error { margin: 0 16px 16px; color: var(--failed); font-weight: 600; overflow-wrap: anywhere; }
+.pick { display: none; }
+.selecting .card .mono { display: none; }
+.selecting .pick { flex: none; position: relative; display: grid; place-items: center; width: 44px; height: 44px;
+  border-radius: 12px; border: 2px solid var(--border-strong); background: var(--surface); cursor: pointer; }
+.pick input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.pick:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pick-n { font-weight: 750; font-variant-numeric: tabular-nums; }
+.card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.card.picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.selecting .page { padding-bottom: 260px; }
+.pickbar { position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--border);
+  background: var(--surface); box-shadow: 0 -6px 24px rgb(0 0 0 / 14%);
+  padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left)); }
+.pickbar-in { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: 1320px; margin: 0 auto; }
+.pick-count { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pick-form { display: flex; flex: 1 1 340px; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.pick-form label { display: flex; flex: 1 1 150px; min-width: 0; }
+.pick-form input, .pick-form select { width: 100%; min-width: 0; height: 44px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
+.pick-error { flex-basis: 100%; margin: 0; color: var(--failed); font-size: .85rem; }
+.pick-error:empty { display: none; }
+.pick-command { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pick-command code { flex: 1 1 260px; padding: 8px 10px; user-select: all; }
+"""
+
+# The Select mode: a box on each card (any element of #list with a data-id: a row too), and a bar to
+# name the songbook. It goes with the page's own script, after it: it finds the cards by their song's
+# id and builds everything with createElement and textContent, as the page does. On caracole serve
+# the bar posts the songbook (the server's token, the songs' ids in the order picked); on the file on
+# disk it shows the caracole songbook command to run instead.
+_SELECT_SCRIPT = r"""
+(() => {
+  "use strict";
+  const byId = (id) => document.getElementById(id);
+  const list = byId("list");
+  const toolbar = document.querySelector(".toolbar");
+  let data;
+  try {
+    data = JSON.parse(byId("songs").textContent);
+  } catch (err) {
+    return;
+  }
+  const songs = new Map((Array.isArray(data.songs) ? data.songs : []).map((s) => [String(s.id), s]));
+  if (!list || !toolbar || !songs.size) return;
+  const server = data.server && typeof data.server === "object" ? data.server : null;
+  const books = (Array.isArray(data.songbooks) ? data.songbooks : []).map((b) => String(b && b.name || ""))
+    .filter(Boolean);
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  };
+  // Each word in single quotes, each ' written '\'': bash and zsh expand ! even in double quotes.
+  const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
+  const picked = [];  // song ids, in the order they were picked: the songbook's order
+
+  // Remember whether the Songbooks section was open, across reloads (the served page comes back to it).
+  const shelf = document.querySelector("#songbooks > details");
+  const OPEN = "caracole-library:songbooks-open";
+  if (shelf) {
+    try {
+      if (localStorage.getItem(OPEN) === "1") shelf.open = true;
+    } catch (err) { /* no storage */ }
+    shelf.addEventListener("toggle", () => {
+      try {
+        localStorage.setItem(OPEN, shelf.open ? "1" : "0");
+      } catch (err) { /* no storage */ }
+    });
+  }
+
+  const toggle = el("button", "chip pick-toggle", "Select");
+  toggle.type = "button";
+  toggle.title = "Pick songs for a songbook";
+  toggle.setAttribute("aria-pressed", "false");
+  (toolbar.querySelector(".controls") || toolbar).prepend(toggle);
+
+  const bar = el("section", "pickbar");
+  bar.hidden = true;
+  bar.setAttribute("aria-label", "Make a songbook");
+  const inner = el("div", "pickbar-in");
+  const count = el("p", "pick-count");
+  count.setAttribute("aria-live", "polite");
+  const form = el("form", "pick-form");
+  const into = el("select", "pick-into");
+  into.setAttribute("aria-label", "Into which songbook");
+  into.appendChild(new Option("New songbook", ""));
+  for (const name of books) into.appendChild(new Option(name, name));
+  const intoLabel = el("label");
+  intoLabel.appendChild(into);
+  intoLabel.hidden = !books.length;
+  const nameLabel = el("label");
+  const nameInput = el("input", "pick-name");
+  nameInput.type = "text";
+  nameInput.maxLength = 80;
+  nameInput.placeholder = "Songbook name";
+  nameInput.autocomplete = "off";
+  nameInput.setAttribute("aria-label", "The songbook's name");
+  nameLabel.appendChild(nameInput);
+  const submit = el("button", "btn primary", "Make songbook");
+  submit.type = "submit";
+  const clear = el("button", "btn", "Clear");
+  clear.type = "button";
+  const error = el("p", "pick-error");
+  error.setAttribute("role", "alert");
+  const command = el("div", "pick-command");
+  command.hidden = true;
+  const commandText = el("code");
+  const copy = el("button", "btn small", "Copy");
+  copy.type = "button";
+  command.appendChild(el("span", "hint", "Run this where caracole runs:"));
+  command.appendChild(commandText);
+  command.appendChild(copy);
+  const fields = {};
+  if (server) {
+    form.method = "post";
+    form.setAttribute("action", "/songbook/make");
+    for (const name of ["csrf", "name", "songs"]) {
+      const field = el("input");
+      field.type = "hidden";
+      field.name = name;
+      form.appendChild(field);
+      fields[name] = field;
+    }
+    fields.csrf.value = String(server.csrf || "");
+  }
+  form.append(intoLabel, nameLabel, submit, clear, error);
+  inner.append(count, form, command);
+  bar.appendChild(inner);
+  document.body.appendChild(bar);
+
+  const ordinal = (n) => {
+    const tens = n % 100;
+    return n + (tens >= 11 && tens <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th");
+  };
+  // Only what changed is touched: the list's observer sees every change to a card's children.
+  const paint = (card) => {
+    const at = picked.indexOf(card.dataset.id);
+    const box = card.querySelector(".pick input");
+    if (box && box.checked !== (at >= 0)) box.checked = at >= 0;
+    const n = card.querySelector(".pick-n");
+    const number = at >= 0 ? String(at + 1) : "";
+    if (n && n.textContent !== number) n.textContent = number;
+    // The box's name says its place too: the number on it is hidden from a screen reader.
+    const said = card.querySelector(".pick-label");
+    const s = songs.get(card.dataset.id);
+    const name = s ? "Pick " + s.title + " by " + s.artist + (at >= 0 ? ", " + ordinal(at + 1) : "") : "";
+    if (said && s && said.textContent !== name) said.textContent = name;
+    if (card.classList.contains("picked") !== (at >= 0)) card.classList.toggle("picked", at >= 0);
+  };
+  const paintAll = () => {
+    for (const card of list.querySelectorAll("[data-picker]")) paint(card);
+    count.textContent = picked.length + " selected";
+    submit.disabled = !picked.length;
+    const existing = into.value;
+    submit.textContent = existing ? "Add to " + existing : "Make songbook";
+    nameLabel.hidden = Boolean(existing);
+    command.hidden = true;
+  };
+  const pick = (id, on) => {
+    const at = picked.indexOf(id);
+    if (on && at < 0) picked.push(id);
+    if (!on && at >= 0) picked.splice(at, 1);
+    error.textContent = "";
+    paintAll();
+  };
+  // A box on each card, as the page's script puts them in the list (it keeps each card it made).
+  const decorate = () => {
+    for (const card of list.querySelectorAll("[data-id]")) {
+      const id = card.dataset.id;
+      if (!songs.has(id)) continue;
+      if (!card.dataset.picker) {
+        card.dataset.picker = "1";
+        const s = songs.get(id);
+        const label = el("label", "pick");
+        const box = el("input");
+        box.type = "checkbox";
+        const order = el("span", "pick-n");
+        order.setAttribute("aria-hidden", "true");
+        label.append(box, order, el("span", "visually-hidden pick-label", "Pick " + s.title + " by " + s.artist));
+        box.addEventListener("change", () => pick(id, box.checked));
+        (card.querySelector(".head") || card).prepend(label);
+      }
+      paint(card);
+    }
+  };
+  new MutationObserver(decorate).observe(list, { childList: true, subtree: true });
+  decorate();
+
+  const setMode = (on) => {
+    document.body.classList.toggle("selecting", on);
+    toggle.setAttribute("aria-pressed", on ? "true" : "false");  // its name stays "Select": pressed or not
+    bar.hidden = !on;
+    paintAll();
+  };
+  toggle.addEventListener("click", () => setMode(!document.body.classList.contains("selecting")));
+  clear.addEventListener("click", () => {
+    picked.length = 0;
+    paintAll();
+  });
+  into.addEventListener("change", paintAll);
+  copy.addEventListener("click", () => {
+    const text = commandText.textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => { copy.textContent = "Copied"; }, () => {});
+    }
+    const range = document.createRange();
+    range.selectNodeContents(commandText);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  });
+  form.addEventListener("submit", (e) => {
+    const existing = into.value;
+    const name = existing || nameInput.value.split(/\s+/).filter(Boolean).join(" ");
+    error.textContent = "";
+    if (!picked.length) {
+      e.preventDefault();
+      error.textContent = "Pick a song or more first.";
+      return;
+    }
+    if (!name || name.startsWith(".")) {
+      e.preventDefault();
+      error.textContent = name ? "A songbook's name can't start with a dot." : "Give the songbook a name.";
+      nameInput.focus();
+      return;
+    }
+    if (server) {
+      form.setAttribute("action", existing ? "/songbook/add" : "/songbook/make");
+      fields.name.value = name;
+      fields.songs.value = picked.join(",");
+      return;  // the server queues caracole songbook, and its requests page shows how it went
+    }
+    e.preventDefault();
+    const words = ["caracole songbook", existing ? "add" : "make", shellQuote(name)];
+    for (const id of picked) words.push(shellQuote(songs.get(id).display));
+    commandText.textContent = words.join(" ");
+    command.hidden = false;
+    copy.textContent = "Copy";
+  });
+})();
+"""
+
+_PAGE_STYLE = _STYLE + _SONGBOOK_STYLE
+_PAGE_SCRIPT = _SCRIPT + _SELECT_SCRIPT
+
 
 def sha256_source(text: str) -> str:
     """A CSP source allowing exactly this inline script or stylesheet."""
@@ -2237,7 +2526,7 @@ def sha256_source(text: str) -> str:
 # only to caracole serve, and only on the page it serves. Images come from data: URIs alone: the
 # sites' icons, inlined (icons.py).
 _CSP = (
-    f"default-src 'none'; script-src {sha256_source(_SCRIPT)}; style-src {sha256_source(_STYLE)}; "
+    f"default-src 'none'; script-src {sha256_source(_PAGE_SCRIPT)}; style-src {sha256_source(_PAGE_STYLE)}; "
     "img-src data:; base-uri 'none'; form-action __FORMS__"
 )
 
@@ -2264,7 +2553,7 @@ _BODY = """<body>
   </div>
   <nav class="links" aria-label="Pages">__NAV__</nav>
 </header>
-__REQUEST__<div class="searchbar" role="search">
+__REQUEST____SONGBOOKS__<div class="searchbar" role="search">
   <label class="visually-hidden" for="q">Search your songs</label>
   <div class="field">
     <input id="q" type="search" placeholder="Search artist, title, pinyin or key" autocomplete="off"
@@ -2358,3 +2647,114 @@ def _request_form(controls: WebControls | None) -> str:
     if controls is None:
         return ""
     return _REQUEST.replace("__CSRF__", html_text.escape(controls.csrf, quote=True))
+
+
+# --- songbooks: the section (songbook.py) ---------------------------------------------------------
+
+
+def songbooks_section(conn: sqlite3.Connection, cfg: Config, overrides: Overrides,
+                      controls: WebControls | None) -> tuple[str, list[dict[str, Any]]]:
+    """The Songbooks section, and the songbooks for the Select mode's bar ({"name", "songs"}).
+
+    Each songbook lists its songs in order, the missing ones marked, and links its files. On
+    caracole serve (``controls``) each song can move up or down or be taken out, and the songbook
+    renamed or deleted, by forms that post to the server; the file on disk says which command does it.
+    No songbook, no section; a songbooks.toml that can't be read is said there, and costs the rest of
+    the page nothing.
+    """
+    from caracole.songbook import SongbookError, load_songbooks, songbooks_file
+
+    try:
+        books = load_songbooks(songbooks_file(cfg.library_dir))
+    except SongbookError as e:
+        body = (f'<p class="sb-error">songbooks.toml can\'t be read: {html_text.escape(str(e))}. Fix it, and '
+                "the songbooks are back; until then each keeps its files.</p>\n")
+        return _songbooks_wrap("!", body), []
+    if not books:
+        return "", []
+    cards = "".join(_songbook_card(conn, cfg, overrides, book, controls) for book in books)
+    body = f'<div class="sb-list">\n{cards}</div>\n'
+    return _songbooks_wrap(str(len(books)), body), [{"name": b.name, "songs": len(b.songs)} for b in books]
+
+
+def _songbooks_wrap(count: str, body: str) -> str:
+    return (
+        '<section class="songbooks" id="songbooks" aria-labelledby="songbooks-title">\n<details>\n'
+        '<summary><span class="sb-icon" aria-hidden="true">♪</span><span id="songbooks-title">Songbooks</span>'
+        f' <span class="n">{count}</span></summary>\n{body}</details>\n</section>\n'
+    )
+
+
+_SONGBOOK_FILES = (("songbook.html", "Songbook for the phone"), ("songbook.pdf", "PDF"), ("songbook.cho", "ChordPro"))
+
+
+def _songbook_card(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any,
+                   controls: WebControls | None) -> str:
+    from caracole.songbook import FOLDER, songbook_entries
+
+    esc = html_text.escape
+    entries = songbook_entries(conn, cfg.library_dir, overrides, book)
+    missing = sum(1 for e in entries if e.cho is None)
+    songs = f"{len(entries)} song{'' if len(entries) == 1 else 's'}"
+    if missing:
+        songs += f", {missing} without a sheet"
+    names = _file_names(cfg.library_dir / FOLDER / book.folder)
+    base = f"{FOLDER}/{quote(book.folder, safe='')}"
+    links = [f'<a class="btn{" primary" if n == 0 else ""}" href="{base}/{quote(name)}">{label}</a>'
+             for n, (name, label) in enumerate(f for f in _SONGBOOK_FILES if f[0] in names)]
+    files = (f'<div class="actions">{"".join(links)}</div>\n' if links
+             else '<p class="hint">Not made yet: caracole render, or caracole songbook render, makes its files.</p>\n')
+    rows = []
+    for n, entry in enumerate(entries, start=1):
+        title, artist = esc(entry.title), esc(entry.artist)
+        why = f'<span class="why">missing: {esc(entry.missing)}</span>' if entry.missing else ""
+        tools = _songbook_tools(book.name, entry.text, entry.title, n, len(entries), controls) if controls else ""
+        rows.append(f'<li{" class=\"missing\"" if entry.missing else ""}><span class="sb-n">{n}</span>'
+                    f'<span class="sb-names"><span class="t">{title}</span> <span class="a">{artist}</span>{why}</span>'
+                    f"{tools}</li>")
+    if controls is not None:
+        more = (
+            '<details class="sb-more"><summary>Rename or delete</summary>\n'
+            + _songbook_form("rename", book.name, controls,
+                             f'<label class="f">New name<input name="new" required maxlength="80" autocomplete="off" '
+                             f'value="{esc(book.name, quote=True)}"></label>'
+                             '<button class="btn" type="submit">Rename</button>')
+            + _songbook_form("delete", book.name, controls,
+                             '<label class="sb-sure"><input type="checkbox" required> Delete it, and the files '
+                             'caracole made of it</label>'
+                             f'<button class="btn" type="submit">Delete {esc(book.name)}</button>')
+            + "</details>\n"
+        )
+    else:
+        more = ('<p class="hint">Change it with <code>caracole songbook add</code>, <code>remove</code>, '
+                "<code>move</code>, <code>rename</code> or <code>delete</code>, or in songbooks.toml.</p>\n")
+    return (
+        f'<article class="sb-card">\n<div><h2>{esc(book.name)}</h2><p class="hint">{songs}</p></div>\n'
+        + files + f'<ol class="sb-songs">\n{chr(10).join(rows)}\n</ol>\n' + more + "</article>\n"
+    )
+
+
+def _songbook_form(action: str, name: str, controls: WebControls, inner: str, **fields: Any) -> str:
+    """A form that posts to caracole serve's /songbook/<action>, with its token and the songbook's name."""
+    esc = html_text.escape
+    hidden = "".join(f'<input type="hidden" name="{key}" value="{esc(str(value), quote=True)}">'
+                     for key, value in (("csrf", controls.csrf), ("name", name), *fields.items()))
+    return f'<form method="post" action="/songbook/{action}">{hidden}{inner}</form>'
+
+
+def _songbook_tools(name: str, entry: str, title: str, n: int, total: int, controls: WebControls) -> str:
+    """A song's buttons on the served page: up, down, and out of the songbook."""
+    esc = html_text.escape
+    tools = []
+    if n > 1:
+        tools.append(_songbook_form("move", name, controls,
+                                    f'<button class="sb-btn" type="submit" aria-label="Move {esc(title)} up" '
+                                    'title="Up">↑</button>', song=entry, position=n - 1))
+    if n < total:
+        tools.append(_songbook_form("move", name, controls,
+                                    f'<button class="sb-btn" type="submit" aria-label="Move {esc(title)} down" '
+                                    'title="Down">↓</button>', song=entry, position=n + 1))
+    tools.append(_songbook_form("remove", name, controls,
+                                f'<button class="sb-btn" type="submit" aria-label="Take {esc(title)} out of '
+                                f'{esc(name)}" title="Take it out">×</button>', song=entry))
+    return f'<span class="sb-tools">{"".join(tools)}</span>'

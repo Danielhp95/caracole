@@ -284,6 +284,12 @@ def _directive_text(text: str) -> str:
     return _escape_backslashes(_escape_inline(" ".join(text.split())))
 
 
+def directive_text(text: str) -> str:
+    """Text for a directive's value (``{title: …}``), on one line, as ``to_chordpro`` writes it: nothing
+    in it reads as a chord, a directive, a substitution or markup."""
+    return _directive_text(text)
+
+
 def _finish(line: str) -> str:
     """The last touches on an output line: no trailing space, no comment-like start."""
     line = _escape_backslashes(line.rstrip())

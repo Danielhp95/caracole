@@ -12,6 +12,9 @@
     POST /fetch           fetch a song of the library now, unless it needs review first
     POST /review          a song in review's answer, as ``caracole review --song`` writes it
     POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued
+    POST /songbook/…      make a songbook, add to it, move or take out a song, rename it, delete it
+                          (songbooks.py); a songbook's page, _songbooks/<folder>/songbook.html, is
+                          one of the ``written_pages``
     GET, POST /login      the sign-in page, with an access token
 
 Every request must name the server by a name it answers to (421 otherwise).
@@ -35,6 +38,9 @@ A pick from the picker is ``caracole review --song "A - T" --pick ARTIST/SONG``
 page's script, its job; to a form, its line on /jobs), and fetched after it
 when asked: the server writes no overrides.toml itself. The candidates the
 page showed must be the song's now, and the song's own request goes first.
+
+A songbook form queues its ``caracole songbook`` command the same way
+(songbooks.py), and the answer sends the browser to the requests page.
 """
 
 from __future__ import annotations
@@ -200,6 +206,8 @@ class WebApp:
         if method == "POST":
             handler = {"/request": self._request, "/fetch": self._fetch, "/review": self._review,
                        "/remove": self._remove}.get(path)
+            if handler is None and path.startswith("/songbook/"):
+                handler = self._songbook_form(path)
             if handler is None:
                 return _message(404, "Not here", "There's nothing to send to at this address.")
             form = self._form(request)
@@ -479,6 +487,8 @@ class WebApp:
                     return self._written_page(path[1:], page)
                 except NotServed:  # index.html links it all the same: say why it isn't sent
                     return _message(404, "Not sent", page.refused)
+            if path.rsplit("/", 1)[-1] == "songbook.html":  # songbooks.is_page
+                return self._songbook_page(path[1:])
             data, kind, download = read_library_file(self.cfg.library_dir, path[1:],
                                                      hidden=(self.cfg.state_dir, self.cfg.cache_dir))
         except NotServed:
@@ -501,7 +511,47 @@ class WebApp:
         csp = f"{page.csp(data)}; {_FRAMES}"  # the policy of these very bytes, not this caracole's
         return Response(200, data, [("Content-Type", _HTML), ("Content-Security-Policy", csp)])
 
+    def _songbook_page(self, path: str) -> Response:
+        """A songbook's page, while it is still the one caracole wrote (songbooks.py), with its own
+        Content-Security-Policy, a sandbox; a 404 that says why otherwise."""
+        from caracole.songbook import PAGE_REFUSED
+        from caracole.web.songbooks import songbook_page
+
+        try:
+            with closing(self._connect()) as conn:
+                data, csp = songbook_page(conn, self.cfg.library_dir, path,
+                                          hidden=(self.cfg.state_dir, self.cfg.cache_dir))
+        except NotServed:  # index.html links it all the same: say why it isn't sent
+            return _message(404, "Not sent", PAGE_REFUSED)
+        except (sqlite3.Error, OSError) as e:  # DatabaseTooNew is an sqlite3.DatabaseError
+            return _message(503, "The database can't be read", f"The database can't be read: {e}")
+        return Response(200, data, [("Content-Type", _HTML), ("Content-Security-Policy", f"{csp}; {_FRAMES}")])
+
     # --- the forms ------------------------------------------------------------------------------
+
+    def _songbook_form(self, path: str) -> Callable[[dict[str, str]], Response] | None:
+        """The handler of a songbook form (songbooks.py): it queues its caracole songbook command."""
+        from caracole.web.songbooks import ROUTES
+
+        if path not in ROUTES:
+            return None
+
+        def handle(form: dict[str, str]) -> Response:
+            from caracole.web.songbooks import FormRefused, songbook_job
+
+            try:
+                job = songbook_job(path, form, library_dir=self.cfg.library_dir, connect=self._connect)
+            except FormRefused as e:
+                return _message(e.status, e.title, e.message)
+            except (sqlite3.Error, OSError) as e:
+                return _message(503, "The database can't be read", f"The database can't be read: {e}")
+            try:
+                queued, _ = self.queue.submit(job.title, job.key, job.steps)
+            except QueueFull:
+                return _message(503, "The queue is full", "The queue is full: try again once it empties.")
+            return _redirect(f"/jobs#job-{queued.id}")
+
+        return handle
 
     def _request(self, form: dict[str, str]) -> Response:
         """A song for wanted.txt, as ``caracole add`` writes it, and its commands queued."""
