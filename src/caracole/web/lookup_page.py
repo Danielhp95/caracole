@@ -73,6 +73,12 @@ const q = document.getElementById("q");
 const status = document.getElementById("status");
 const results = document.getElementById("results");
 const reader = document.getElementById("reader");
+// The reader's parts stay the same nodes: only the progress line is a live region, read out as it changes.
+const heading = document.getElementById("reader-title");
+const saying = document.getElementById("said");
+const stageList = document.getElementById("stages");
+const fileLinks = document.getElementById("files");
+const sheetText = document.getElementById("sheet");
 const MIN = 3;
 let typed = 0, inflight = null, timer = null, polling = null, shown = "", lastStages = "";
 
@@ -205,14 +211,17 @@ function lookUp(pick, display) {
 
 function openReader(display, words) {
   reader.hidden = false;
-  reader.replaceChildren(el("h2", null, display), el("p", "said", words), el("ul", "stages"), el("div", "files"),
-                         el("pre", "sheet"));
-  reader.querySelector("pre").hidden = true;
+  heading.textContent = display;
+  saying.textContent = words;
+  stageList.replaceChildren();
+  fileLinks.replaceChildren();
+  sheetText.textContent = "";
+  sheetText.hidden = true;
   shown = ""; lastStages = "";
   if (polling) clearTimeout(polling);
   reader.scrollIntoView({block: "start", behavior: "smooth"});
 }
-function said(words) { const p = reader.querySelector(".said"); if (p) p.textContent = words; }
+function said(words) { if (saying.textContent !== words) saying.textContent = words; }
 
 function follow(url) {
   fetch(url, {headers: {"Accept": "application/json"}})
@@ -225,13 +234,12 @@ function follow(url) {
 }
 
 function progress(job) {
-  if (job.song && reader.querySelector("h2")) reader.querySelector("h2").textContent = job.song.display;
-  const stages = reader.querySelector(".stages");
-  stages.replaceChildren();
+  if (job.song) heading.textContent = job.song.display;
+  stageList.replaceChildren();
   for (const s of job.steps) {
     const li = el("li", "stage " + s.state, s.label);
     if (s.detail) li.title = s.detail;
-    stages.append(li);
+    stageList.append(li);
   }
   const running = job.steps.find(s => s.state === "running");
   if (job.files.sheet) {
@@ -250,7 +258,7 @@ function progress(job) {
 }
 
 function links(files) {
-  const box = reader.querySelector(".files");
+  const box = fileLinks;
   box.replaceChildren();
   for (const [name, label] of [["viewer", "Viewer"], ["pdf", "PDF"], ["sheet", "Text"]]) {
     if (!files[name]) continue;
@@ -265,11 +273,10 @@ function links(files) {
 
 function sheet(path) {
   fetch(href(path)).then(r => r.ok ? r.text() : Promise.reject(new Error(r.status))).then(text => {
-    const pre = reader.querySelector("pre");
-    if (!pre || text === shown) return;
+    if (text === shown) return;
     shown = text;
-    pre.textContent = text;
-    pre.hidden = false;
+    sheetText.textContent = text;
+    sheetText.hidden = false;
   }).catch(() => {});
 }
 
@@ -328,7 +335,13 @@ _BODY = """<body>
     <button class="btn primary" type="submit">Look it up</button>
   </form>
 </details>
-<section class="reader" id="reader" aria-live="polite" hidden></section>
+<section class="reader" id="reader" aria-labelledby="reader-title" hidden>
+  <h2 id="reader-title"></h2>
+  <p class="said" id="said" role="status" aria-live="polite"></p>
+  <ul class="stages" id="stages"></ul>
+  <div class="files" id="files"></div>
+  <pre class="sheet" id="sheet" hidden></pre>
+</section>
 </div>
 """
 

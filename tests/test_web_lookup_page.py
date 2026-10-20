@@ -38,6 +38,16 @@ def test_the_page_carries_its_token_and_allows_its_own_script_and_style_alone():
     assert "innerHTML" not in SCRIPT and "eval(" not in SCRIPT
 
 
+def test_a_screen_reader_hears_the_progress_line_and_not_the_whole_sheet_again():
+    # The reader holds the sheet: a live region around it would read the whole sheet out at each step.
+    page = lookup_page("tok")
+    reader = re.search(r'<section class="reader"[^>]*>', page).group(0)
+    assert "aria-live" not in reader
+    said = re.search(r'<p class="said"[^>]*>', page)
+    assert said and 'aria-live="polite"' in said.group(0) and 'role="status"' in said.group(0)
+    assert 'id="said"' in said.group(0) and 'getElementById("said")' in SCRIPT  # the same node throughout
+
+
 class FakeGet:
     """``caracole get``: keeps the sheet in the library, and says so as the real one does."""
 
