@@ -82,7 +82,7 @@ songs.py's, in the `removed` table).
   `Job.as_json` is a job as data), status.py (the one line a request shows on its card and
   on /jobs, read from the job's steps and, once it is over, from the song's state, never
   from which commands ran: a step's label is that line while it runs, "Adding to the
-  library…"), app.py (the routes; `/jobs.json` and the forms answer the page's script in
+  library…", and a lookup's running stage has one of its own, `status.STAGE_LINES`), app.py (the routes; `/jobs.json` and the forms answer the page's script in
   JSON, every refusal as data; `/api/search` for search as you type, through search.py's
   public functions, one at a time, the newest first, an older one's SQL interrupted once a
   newer waits (`set_progress_handler`); `/api/jobs[/<id>]`; every `/api/` read refused to

@@ -5,11 +5,14 @@ library knows of its song (``SongFacts``), never from which commands the job
 ran. So a job of other commands reads the same way:
 
 - **Queued**: "Queued…", or "Queued behind 2 requests…".
-- **Running**: its running step's label, as "Fetching from Ultimate Guitar…".
-  A step's label is written to be this line.
+- **Running**: its running step's label, as "Adding to the library…". A
+  step's label is written to be this line. A lookup, one ``caracole get``,
+  says its running stage's line instead (``STAGE_LINES``), as "Fetching from
+  Ultimate Guitar…", or "Waiting for another caracole…" while its lock is
+  held by a nightly run that lets it go first at its next pause.
 - **Failed**: the error its failing command gave, in one short sentence (the
-  log's last ``error:`` line, its first sentence). A command that printed no
-  error is named by its step. A fetch that fails on a song with no sheet that
+  log's last ``error:`` line, its first sentence; a lookup's, its failed
+  stage's words). A command that printed no error is named by its step. A fetch that fails on a song with no sheet that
   needs review, or wasn't found, says so instead, as a done one would: those
   are the fetch's usual refusals, worded for a terminal.
 - **Done**: "Ready", with a link to the song's sheet; "Needs review", with a
@@ -32,12 +35,25 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from caracole.web.jobs import REMOVING, Job, Step
+from caracole.web.jobs import REMOVING, Job, Stage, Step
 
 TODO = "_todo.md"
 MAX_TEXT = 160  # characters of an error's sentence
 _ERROR = re.compile(r"^(?:<\d>)?error: (.+)$")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s")
+# What a song's card says while a stage of a lookup (get.STAGES) runs, as a step's label would.
+STAGE_LINES = {
+    "song": "Finding the song",
+    "match": "Looking it up",
+    "sheet": "Fetching from Ultimate Guitar",
+    "pdf": "Rendering the sheet",
+    "lyrics": "Fetching the lyrics from LRCLIB",
+    "ug": "Fetching from Ultimate Guitar",
+    "lacuerda": "Fetching from LaCuerda",
+    "gtptabs": "Fetching from gtptabs.com",
+    "pages": "Writing the library page",
+}
+_WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
 
 
 @dataclass(frozen=True)
@@ -85,6 +101,8 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
     if job.state == "queued":
         return Line("queued", f"Queued behind {_count(ahead, 'request')}…" if ahead else "Queued…")
     if job.state == "running":
+        if job.stages:
+            return Line("running", _stage_line(job.stages))
         step = next((s for s in job.steps if s.state == "running"), None) or next(
             (s for s in job.steps if s.state == "waiting"), None)
         return Line("running", f"{step.label}…" if step else "Running…")
@@ -95,7 +113,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
                 return Line("review", "Needs review", _review_link(song), details)
             if song.not_found:
                 return Line("missing", "Not found", ("see the to-do page", TODO), details)
-        return Line("failed", _failure(job.steps), details=details)
+        return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     if job.song_key.startswith(REMOVING):  # no song to read once it is done: that is what it did
         return Line("removed", "Removed")
     if song is not None and song.sheet:
@@ -114,6 +132,26 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
 def _review_link(song: SongFacts) -> tuple[str, str]:
     """Where a song in review goes next: its picker, or, with no candidates to pick, the to-do page."""
     return ("Pick the match", song.picker) if song.picker else ("see the to-do page", TODO)
+
+
+def _stage_line(stages: list[Stage]) -> str:
+    """A running lookup's line: its running stage's, else the next one's, as between two steps."""
+    stage = next((s for s in stages if s.state == "running"), None) or next(
+        (s for s in stages if s.state == "waiting"), None)
+    if stage is None:
+        return "Running…"
+    if stage.state == "running" and stage.detail.startswith(_WAITING):
+        return "Waiting for another caracole…"
+    return f"{STAGE_LINES.get(stage.name, stage.label)}…"
+
+
+def _stage_failure(stages: list[Stage]) -> str | None:
+    """A lookup's failure, in its failed stage's words (a refusal, a bug); None without one."""
+    failed = next((s for s in stages if s.state == "failed" and s.detail), None)
+    if failed is None:
+        return None
+    said = _short(_SENTENCE_END.split(failed.detail.strip(), maxsplit=1)[0])
+    return said if said.endswith((".", "!", "?", "…")) else said + "."
 
 
 def _failure(steps: list[Step]) -> str:

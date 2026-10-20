@@ -1809,9 +1809,14 @@ with it. A KEY that is no key exits with status 2.
   song's card (or its row, on a line under it), or for a song new to the
   library a card of its own under the
   form ("Just requested"), says on one line how its request goes: "Queued…"
-  (or "Queued behind 2 requests…"), then what runs ("Adding to the
-  library…", "Looking it up…", "Fetching from Ultimate Guitar…", "Rendering
-  the sheet…"), then how it ended:
+  (or "Queued behind 2 requests…"), then what runs: for a request without
+  Fetch it now, "Adding to the library…"; for one looked up now, its stage
+  ("Finding the song…", "Looking it up…", "Fetching from Ultimate Guitar…",
+  "Rendering the sheet…", "Fetching the lyrics from LRCLIB…", "Fetching from
+  LaCuerda…", "Fetching from gtptabs.com…", "Writing the library page…"), or
+  "Waiting for another caracole…" while a nightly run holds the lock until
+  its next pause; then how it ended (a lookup that stopped says why, in its
+  stage's words):
   - **Ready · Open sheet**, and the card shows the song's files;
   - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
     the fetch looked the song up during the request and found none, or the
