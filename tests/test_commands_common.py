@@ -475,6 +475,42 @@ def test_an_announcement_a_dead_lookup_left_is_not_waited_for(cfg):
     assert not any(waiting.iterdir())
 
 
+def test_a_ticket_no_waiting_lookup_keeps_alive_is_given_up_after_one_try(cfg, conn, monkeypatch):
+    # A lookup killed while it waited leaves its ticket, and its pid may be another process's by now.
+    import time
+
+    monkeypatch.setattr(_common, "TICKET_STALE", 0.4)
+    waiting = cfg.state_dir / _common.WAITING_DIR
+    waiting.mkdir(parents=True)
+    (waiting / f"{os.getpid()}.7").write_text("get A - B\n", encoding="utf-8")  # a live pid; nothing waits
+    with exclusive(cfg, "run"):
+        began = time.monotonic()
+        assert _common.hand_over(cfg, conn)  # once: the lock is let go, and nobody takes it
+        assert time.monotonic() - began < 3  # not the whole HANDOFF_TAKE
+        assert not _common.hand_over(cfg, conn)  # then it is no longer waited for
+    assert not _common.lookups_waiting(cfg)
+
+
+def test_a_lookup_waiting_long_keeps_its_ticket_alive(cfg, monkeypatch):
+    import time
+
+    monkeypatch.setattr(_common, "TICKET_STALE", 0.4)
+    monkeypatch.setattr(_common, "TICKET_BEAT", 0.1)
+    took = threading.Event()
+
+    def lookup():
+        with exclusive(cfg, "get Oasis - Wonderwall", interactive=True):
+            took.set()
+
+    with another_caracole(cfg):
+        thread = threading.Thread(target=lookup)
+        thread.start()
+        time.sleep(1.2)  # three times TICKET_STALE
+        assert not took.is_set() and _common.lookups_waiting(cfg)
+    assert took.wait(5)
+    thread.join(5)
+
+
 def test_nothing_is_handed_over_when_no_lookup_waits_or_mid_transaction(cfg, conn):
     with exclusive(cfg, "run"):
         assert not _common.hand_over(cfg, conn)

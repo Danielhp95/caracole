@@ -13,6 +13,9 @@ it announces itself in ``state_dir/caracole.lock.waiting/`` (``exclusive(...,
 interactive=True)``), and bulk work, which spends most of its time in its
 pauses, hands the lock over during a pause (``hand_over``), takes it back once
 the lookup is done, and then waits a whole pause again before its next request.
+Bulk work that sends no request (auto-chords, a pass of PDFs) hands it over
+between two songs. The lookup touches its announcement while it waits, so one
+a killed lookup left soon stops counting.
 """
 
 from __future__ import annotations
@@ -44,6 +47,10 @@ WAITING_DIR = "caracole.lock.waiting"  # in the state directory: a file per look
 LOOKUP_RUN = "lookup:"  # how an interactive lookup's run id starts, in events
 HANDOFF_SLICE = 0.25  # seconds of a bulk pause between two looks for a waiting lookup
 HANDOFF_TAKE = 10.0  # seconds a lookup has to take the lock once it is handed over
+WAIT_POLL = 0.05  # seconds between a waiting lookup's tries at the lock
+TICKET_BEAT = 1.0  # seconds between two touches of a waiting lookup's ticket
+TICKET_STALE = 5.0  # seconds untouched after which a ticket is no longer waited for
+TICKET_FORGOTTEN = 3600.0  # seconds untouched after which a ticket is deleted
 sleep = time.sleep  # tests replace it
 _handoff_sleep = time.sleep  # the short waits of a handoff, which tests don't skip
 
@@ -150,11 +157,7 @@ def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = 
                 on_wait(holder)
             if interactive:
                 warn(f"Another caracole is running ({holder}); it lets a lookup go first at its next pause.")
-                ticket = _announce(cfg, what)
-                try:
-                    fcntl.flock(fd, fcntl.LOCK_EX)
-                finally:
-                    ticket.unlink(missing_ok=True)
+                _wait_announced(cfg, what, fd)
             else:
                 warn(f"Another caracole is running ({holder}); waiting for it to finish.")
                 fcntl.flock(fd, fcntl.LOCK_EX)
@@ -183,22 +186,58 @@ def _announce(cfg: Config, what: str) -> Path:
     raise OSError(f"too many lookups of this process wait in {folder}")
 
 
+def _wait_announced(cfg: Config, what: str, fd: int) -> None:
+    """Wait for caracole's lock as a lookup: announced by a ticket, touched every ``TICKET_BEAT`` seconds
+    while this process tries for the lock, so that a ticket left by a lookup that was killed while it
+    waited (its pid maybe another process's since) soon stops counting (``lookups_waiting``)."""
+    ticket = _announce(cfg, what)
+    beat = time.monotonic()
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return
+            except BlockingIOError:
+                pass
+            _handoff_sleep(WAIT_POLL)
+            if time.monotonic() - beat >= TICKET_BEAT:
+                beat = time.monotonic()
+                try:
+                    os.utime(ticket)
+                except FileNotFoundError:  # deleted from under it: announce it again
+                    ticket = _announce(cfg, what)
+    finally:
+        ticket.unlink(missing_ok=True)
+
+
 def lookups_waiting(cfg: Config) -> bool:
-    """Whether a lookup waits for caracole's lock; an announcement a process that ended left is dropped."""
+    """Whether a lookup waits for caracole's lock: a ticket of a live process, touched in the last
+    ``TICKET_STALE`` seconds. A ticket a process that ended left is dropped, and so is one untouched
+    for ``TICKET_FORGOTTEN``."""
     folder = cfg.state_dir / WAITING_DIR
     try:
         names = os.listdir(folder)
     except OSError:
         return False
     waiting = False
+    now = time.time()
     for name in names:
+        ticket = folder / name
         try:
             os.kill(int(name.split(".")[0]), 0)
         except ProcessLookupError:
-            (folder / name).unlink(missing_ok=True)
+            ticket.unlink(missing_ok=True)
             continue
         except (ValueError, PermissionError):
-            pass  # not caracole's name, or a process of another user: it counts
+            pass  # not caracole's name, or a process of another user: its age tells
+        try:
+            age = now - ticket.stat().st_mtime
+        except OSError:
+            continue
+        if age > TICKET_STALE:  # nothing waits on it any more: a lookup killed while it waited
+            if age > TICKET_FORGOTTEN:
+                ticket.unlink(missing_ok=True)
+            continue
         waiting = True
     return waiting
 
