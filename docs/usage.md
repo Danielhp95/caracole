@@ -1286,7 +1286,7 @@ do:
   review without candidates keeps its Review first button: `caracole review`
   offers it a pin or an ignore. With the keyboard, Enter opens the picker and
   takes the focus to the first candidate, the arrow keys choose, and Tab
-  goes on to Fetch it now and Pick.
+  goes on through the candidates' UG links to Fetch it now and Pick.
 - **Look in the index.** A wanted song the offline index didn't match has a
   Look in the index link beside Fetch now: its page, `/review?song=ID`, runs
   `caracole search` for the song's artist and title, and offers the first five
