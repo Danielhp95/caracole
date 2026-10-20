@@ -1,9 +1,10 @@
 # Installing caracole
 
 caracole needs Python 3.12 or newer, ChordPro 6.050.7 for the PDFs, a font
-with Chinese glyphs for Chinese sheets and, for auto-chords only, torch and
-two model files. The Nix packages bring all of it. Without Nix you install
-each one. The flake builds for x86_64-linux only.
+with Chinese glyphs for Chinese sheets and, for auto-chords only, torch, two
+model files and yt-dlp (with ffmpeg and deno), which takes the audio of songs
+nobody has charted from YouTube. The Nix packages bring all of it. Without Nix
+you install each one. The flake builds for x86_64-linux only.
 
 - [NixOS](#nixos): the flake's module runs caracole every night.
 - [Ubuntu](#ubuntu), [with Nix](#ubuntu-with-nix) or
@@ -70,7 +71,12 @@ services.caracole.autochords.enable = true;
 
 `caracole-autochords.service` then starts after each successful run, with no
 network. It runs the flake's `autochords` package, whose wrapper points at
-the two model files the flake downloads.
+the two model files the flake downloads and puts yt-dlp on PATH. The nightly
+run then runs that package too, and takes the audio of up to three songs a
+night that no human sheet was found for from YouTube, for auto-chords: your
+choice, against YouTube's robots.txt and terms (see
+[usage.md](usage.md#audio-from-youtube)). `services.caracole.settings.providers.youtube.enabled = false`
+keeps auto-chords for purchases alone.
 
 **After switching**, in this order:
 
@@ -92,7 +98,7 @@ Then read `_todo.md` in the library.
 | `library` | sheets, lyrics, `_todo.md`, `index.html`, `wanted.txt`, `overrides.toml` |
 | `music` | audio you bought, read-only, for auto-chords |
 | `state` | the database, the Spotify token and the lock: back it up, don't sync it |
-| `cache` | every HTTP response, kept: losing it costs only requests |
+| `cache` | every HTTP response, kept, and audio taken from YouTube: losing it costs only requests |
 
 `libraryDir`, `musicDir`, `stateDir` and `cacheDir` move one folder each.
 None may be under `/home`, `/root`, `/run/user`, `/tmp` or `/var/tmp`,
@@ -129,7 +135,7 @@ sudo -i nix profile add --profile /nix/var/nix/profiles/caracole github:Danielhp
 ```
 
 For auto-chords, add the `autochords` package to a second profile. With
-torch, it takes about 3 GB in the store:
+torch and yt-dlp, it takes about 3 GB in the store:
 
 ```sh
 sudo -i nix profile add --profile /nix/var/nix/profiles/caracole-autochords 'github:Danielhp95/caracole#autochords'
@@ -232,6 +238,24 @@ caracole reads their paths from `CARACOLE_BTC_WEIGHTS` and
 `CARACOLE_BEAT_CHECKPOINT`, or from `btc_weights` and `beat_checkpoint`
 under `[autochords]` in caracole.toml, which win.
 
+**yt-dlp**, for the audio of songs nobody has charted, which caracole takes
+from YouTube only with auto-chords (see [usage.md](usage.md#audio-from-youtube)):
+a recent yt-dlp, with ffmpeg and ffprobe for its audio extraction, and deno,
+the JavaScript runtime YouTube's player needs (yt-dlp finds `deno` on PATH,
+and needs its `yt-dlp-ejs` scripts, which pip installs with `yt-dlp[default]`).
+Ubuntu's own yt-dlp is too old for YouTube. Into a venv of its own:
+
+```sh
+sudo python3 -m venv /opt/yt-dlp
+sudo /opt/yt-dlp/bin/pip install "yt-dlp[default]"
+curl -fsSL https://deno.land/install.sh | sudo DENO_INSTALL=/usr/local sh
+```
+
+caracole runs `yt-dlp` from PATH, or the program `ytdlp_bin` in caracole.toml
+or `CARACOLE_YTDLP_BIN` names: here `ytdlp_bin = "/opt/yt-dlp/bin/yt-dlp"`.
+Without it, caracole takes no audio from YouTube, and the to-do page says why;
+`enabled = false` under `[providers.youtube]` turns that off on purpose.
+
 Then [run it nightly](#run-it-nightly-on-ubuntu).
 
 ### Run it nightly on Ubuntu
@@ -259,8 +283,9 @@ sudo usermod -aG caracole "$USER"   # to edit wanted.txt and read the library; l
 # /etc/caracole/caracole.toml
 data_dir = "/var/lib/caracole"
 
-# Without Nix: the font and, for auto-chords, the model files.
+# Without Nix: the font and, for auto-chords, yt-dlp and the model files.
 # cjk_font = "/usr/local/share/caracole/FusionKaiJ-Regular.ttf"
+# ytdlp_bin = "/opt/yt-dlp/bin/yt-dlp"
 #
 # [autochords]
 # btc_weights = "/usr/local/share/caracole/btc_model_large_voca.pt"
@@ -292,6 +317,8 @@ RequiresMountsFor=/var/lib/caracole/library /var/lib/caracole/state /var/lib/car
 [Service]
 Type=oneshot
 ExecStart=/nix/var/nix/profiles/caracole/bin/caracole --config /etc/caracole/caracole.toml run
+# With auto-chords, its package's run instead, which also takes audio from YouTube for it:
+#ExecStart=/nix/var/nix/profiles/caracole-autochords/bin/caracole --config /etc/caracole/caracole.toml run
 TimeoutStartSec=3h
 User=caracole
 Group=caracole
@@ -343,10 +370,12 @@ Persistent=true
 WantedBy=timers.target
 ```
 
-With auto-chords, this unit too, and uncomment `OnSuccess=` in
-`caracole.service`. It runs after each successful run, as the same user,
-with no network and no credentials. `MemoryDenyWriteExecute` is off here
-because PyTorch and numba generate code at run time.
+With auto-chords, this unit too, and uncomment `OnSuccess=` and the second
+`ExecStart=` in `caracole.service` (taking out the first). It runs after each
+successful run, as the same user, with no network and no credentials.
+`MemoryDenyWriteExecute` is off here because PyTorch and numba generate code
+at run time; the nightly run keeps it, since it never imports torch and
+yt-dlp's deno runs without its JIT.
 
 ```ini
 # /etc/systemd/system/caracole-autochords.service

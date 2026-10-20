@@ -1,7 +1,9 @@
-# services.caracole: a nightly `caracole run` as a hardened oneshot on a timer, an
-# optional auto-chords unit after it with no network, an optional caracole-web
-# (`caracole serve`: the library page and song requests), an ntfy message when
-# one fails, and `caracole-admin` for the interactive commands. Everything
+# services.caracole: a nightly `caracole run` as a hardened oneshot on a timer
+# (with auto-chords on, the auto-chords package's, which also takes a few songs'
+# audio from YouTube), an optional auto-chords unit after it with no network, an
+# optional caracole-web (`caracole serve`: the library page and song requests),
+# an ntfy message when one fails, and `caracole-admin` for the interactive
+# commands. Everything
 # caracole keeps sits in one folder, dataDir, unless an option moves a part.
 {
   config,
@@ -122,6 +124,15 @@ let
     CARACOLE_BEAT_CHECKPOINT = cfg.autochords.beatCheckpoint;
   };
 
+  # The nightly run takes the audio of songs nobody has charted from YouTube
+  # (src/caracole/youtube_fetch.py) only when it could make chords of it: when
+  # it finds auto-chords' packages, its model files and yt-dlp, which the
+  # auto-chords package has. So with auto-chords on, the run is that package's,
+  # with the model paths, as caracole-admin is. It never imports torch, and
+  # yt-dlp's deno runs without its JIT, so MemoryDenyWriteExecute stays.
+  runPackage = if cfg.autochords.enable then cfg.autochords.package else cfg.package;
+  runEnv = cacheEnv // lib.optionalAttrs cfg.autochords.enable modelEnv;
+
   # `caracole serve`'s options, from services.caracole.web. Their types allow no
   # whitespace or quote, so they need no quoting on the ExecStart line.
   webArgs = lib.concatStringsSep " " (
@@ -175,9 +186,9 @@ let
   # commands: a transient unit under the caracole user, in the units' sandbox,
   # with the same folders, credentials and generated config. It keeps the
   # network (`auth spotify` and `index build` need it). With the auto-chords
-  # package when that is on, so `caracole-admin autochords` works too, and then,
-  # as in that unit, without MemoryDenyWriteExecute.
-  adminPackage = if cfg.autochords.enable then cfg.autochords.package else cfg.package;
+  # package when that is on, so `caracole-admin autochords` and `youtube` work
+  # too, and then, as in the auto-chords unit, without MemoryDenyWriteExecute.
+  adminPackage = runPackage;
   adminEnv = {
     CARACOLE_CONFIG = configFile;
   }
@@ -384,17 +395,22 @@ in
     };
 
     autochords = {
-      enable = lib.mkEnableOption "the caracole-autochords unit, run after each successful caracole run";
+      enable = lib.mkEnableOption ''
+        the caracole-autochords unit, run after each successful caracole run. The
+        nightly run then runs the auto-chords package too, so that it takes the
+        audio of a few songs nobody has charted from YouTube each night, for this
+        unit to make chords of, unless settings.providers.youtube.enabled is false'';
 
       package = lib.mkOption {
         type = lib.types.package;
         default = cfg.package.override { withAutochords = true; };
         defaultText = lib.literalExpression "config.services.caracole.package.override { withAutochords = true; }";
         description = ''
-          caracole with the autochords extra (torch, beat-this, librosa). Its
-          wrapper defaults CARACOLE_BTC_WEIGHTS and CARACOLE_BEAT_CHECKPOINT to the
-          model files fetched by nix/autochords.nix, so the offline unit needs
-          nothing else.
+          caracole with the autochords extra (torch, beat-this, librosa) and
+          yt-dlp. Its wrapper defaults CARACOLE_BTC_WEIGHTS and
+          CARACOLE_BEAT_CHECKPOINT to the model files fetched by
+          nix/autochords.nix, so the offline unit needs nothing else. With
+          auto-chords on, the nightly run and caracole-admin run it too.
         '';
       };
 
@@ -564,7 +580,7 @@ in
       # A switch never cuts a run short; the next run uses the new unit.
       restartIfChanged = false;
       unitConfig.RequiresMountsFor = writable;
-      environment = cacheEnv;
+      environment = runEnv;
       serviceConfig =
         sandbox
         // identity
@@ -573,7 +589,7 @@ in
         // {
           Type = "oneshot";
           # --config is a root option of the CLI, so it precedes the subcommand.
-          ExecStart = "${lib.getExe cfg.package} --config ${configFile} run";
+          ExecStart = "${lib.getExe runPackage} --config ${configFile} run";
           # About 30 minutes of polite requests at most; a hung run must not
           # hold the next night's.
           TimeoutStartSec = "3h";

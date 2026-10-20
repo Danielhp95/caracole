@@ -54,6 +54,18 @@ from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
 from caracole.songs import Song, list_songs
 from caracole.todo import search_links, songs_to_buy
+from caracole.youtube_fetch import (
+    BLOCKED,
+    CHORDS,
+    DECLINED,
+    DOWNLOADED,
+    MISSING,
+    QUEUED,
+    UNUSABLE,
+    SongState,
+    route_problem,
+    song_states,
+)
 
 PAGE_NAME = "index.html"
 
@@ -115,9 +127,15 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     library = list_songs(conn)
     keys = {s.id: song_key(conn, cfg.library_dir, s) for s in library}
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
+    # With the YouTube route on, caracole takes those songs' audio itself: their cards say how it goes,
+    # and only a song you turned YouTube down for is for buying.
+    youtube = song_states(conn, cfg, overrides, now) if route_problem(cfg) is None else {}
+    if youtube:
+        to_buy = {i for i in to_buy if i not in youtube or youtube[i].state == DECLINED}
     musescore = cfg.provider("musescore").enabled
     songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
-                   sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [])
+                   sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
+                   _youtube_note(youtube.get(s.id)))
              for s in library]
     data: dict[str, Any] = {
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -155,12 +173,32 @@ def _musescore_links(conn: sqlite3.Connection, song: Song, overrides: Overrides)
     return [{"label": f"{p.path.removeprefix('song/')} (possible match)", "href": p.url} for p in song_pages(conn, song)]
 
 
+_YOUTUBE_NOTES = {
+    QUEUED: "No human sheet yet: caracole takes the audio from YouTube next",
+    BLOCKED: "No human sheet yet: YouTube is blocking caracole for now, so its audio waits",
+    DOWNLOADED: "Audio from YouTube: auto-chords works out the chords next",
+    CHORDS: "Auto sheet from YouTube audio",
+    MISSING: "Nothing on YouTube fits: see the to-do page",
+    UNUSABLE: "The video under [youtube] can't be downloaded: see the to-do page",
+}
+
+
+def _youtube_note(state: SongState | None) -> dict[str, Any] | None:
+    """What a card says of a song on the YouTube route, and the video its audio came from."""
+    if state is None or state.state not in _YOUTUBE_NOTES:
+        return None
+    video = state.video if state.state in (DOWNLOADED, CHORDS) else None
+    name = f"{video.title} ({video.channel})" if video and video.title and video.channel else None
+    return {"text": _YOUTUBE_NOTES[state.state],
+            "video": {"label": name or (video.title or video.url), "href": video.url} if video else None}
+
+
 def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | None,
           guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
-          musescore: list[dict[str, str]]) -> dict[str, Any]:
+          musescore: list[dict[str, str]], youtube: dict[str, Any] | None = None) -> dict[str, Any]:
     """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
-    ``sources`` the site each file caracole downloaded for it came from, by name, and ``musescore``
-    the song's MuseScore pages.
+    ``sources`` the site each file caracole downloaded for it came from, by name, ``musescore``
+    the song's MuseScore pages, and ``youtube`` where the song stands on the YouTube route.
 
     ``key`` and ``key_source`` are the song's key and where it came from, as in its info.json.
     """
@@ -195,6 +233,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "museScore": musescore,
         "links": links,
         "buy": buy,
+        "youtube": youtube if status != "ignored" else None,
         "sortArtist": _sort_key(song.artist),
         "sortTitle": _sort_key(title),
         "artistLetter": _letter(_sort_key(song.artist)),
@@ -516,6 +555,7 @@ _STYLE = BASE_STYLE + """
 .facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--muted); font-size: .85rem; }
 .facts .key, .facts .transpose { color: var(--text); font-weight: 600; }
 .note { margin: 0; color: var(--review); font-size: .85rem; }
+.youtube { margin: 0; color: var(--auto); font-size: .85rem; }
 .busy { margin: 0; color: var(--wanted); font-size: .88rem; font-weight: 600; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .actions form { margin: 0; }
@@ -754,6 +794,15 @@ _SCRIPT = r"""
       todo.href = "_todo.md";
       note.appendChild(todo);
       note.appendChild(document.createTextNode(", or run caracole review."));
+      card.appendChild(note);
+    }
+    if (s.youtube && typeof s.youtube.text === "string") {
+      // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py).
+      const note = el("p", "youtube", s.youtube.text);
+      if (s.youtube.video) {
+        note.appendChild(document.createTextNode(" · "));
+        note.appendChild(link(s.youtube.video, null, true));
+      }
       card.appendChild(note);
     }
 

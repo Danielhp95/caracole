@@ -6,13 +6,13 @@ gives the machine:
 | What | Does |
 |---|---|
 | `caracole.timer` | Starts the nightly run at 03:30, up to 45 minutes late, and catches up after downtime |
-| `caracole.service` | `caracole --config <generated caracole.toml> run`, a hardened oneshot as user `caracole` |
-| `caracole-autochords.service` | Optional. After each successful run, writes `sheet (auto).txt` from audio you bought, with no network at all |
+| `caracole.service` | `caracole --config <generated caracole.toml> run`, a hardened oneshot as user `caracole`; with auto-chords on, it also takes a few songs' audio from YouTube (section 6) |
+| `caracole-autochords.service` | Optional. After each successful run, writes `sheet (auto).txt` from audio you bought, or the run took from YouTube, with no network at all |
 | `caracole-web.service` | Optional. `caracole serve`: the library page over HTTP, with a form to request songs and fetch them now (section 8) |
 | `caracole-notify-failure.service` | POSTs to your ntfy topic when one of the units fails |
 | `caracole-admin` | Runs any `caracole` command as the units do: `sudo caracole-admin auth spotify` |
 | `/var/lib/caracole/state` | The database, the Spotify token and caracole's lock, readable by `caracole` alone |
-| `/var/lib/caracole/cache` | Every raw HTTP response, kept forever, and the private folders PDFs are made in |
+| `/var/lib/caracole/cache` | Every raw HTTP response, kept forever, the private folders PDFs are made in, and the audio taken from YouTube |
 | `/var/lib/caracole/library` | The library: sheets, lyrics, guitar parts, `_todo.md`, `wanted.txt`, `overrides.toml` |
 | `/var/lib/caracole/music` | Audio you bought, read-only, for auto-chords |
 
@@ -431,12 +431,30 @@ ends it.
 
 ## 6. Auto-chords
 
-For a song nobody has charted, buy the track (DRM-free: the buy list on the
-to-do page links Bandcamp, Qobuz and the iTunes Store), drop it into the music
-folder on the laptop, and let a local model write `sheet (auto).txt`:
+For a song nobody has charted, a local model writes `sheet (auto).txt` from its
+audio: a track you bought (DRM-free) and dropped into the music folder on the
+laptop, or, by default, audio the nightly run takes from YouTube itself:
 
 ```nix
   services.caracole.autochords.enable = true;
+```
+
+**Audio from YouTube.** With auto-chords on, `caracole.service` runs the
+`autochords` package too, which has yt-dlp (with the ffmpeg and deno nixpkgs'
+yt-dlp brings) and the model paths: its youtube step then takes the audio of up
+to three songs a night that no human sheet was found for, into the cache folder
+(`/var/lib/caracole/cache/youtube`), never into the synced library, and the
+auto-chords unit makes their chords after the run. This is your choice, and it
+goes against YouTube's robots.txt and terms of service; caracole does it on the
+terms [usage.md](usage.md#audio-from-youtube) gives: a budget of 6 yt-dlp runs,
+yt-dlp's own pauses, no cookies or login, and a block (a bot check, an HTTP 429
+or 403) honoured with the usual cooldown and one ntfy alert. The run never
+imports torch, and yt-dlp's deno runs without its JIT (`DENO_V8_FLAGS=--jitless`,
+which caracole sets), so `caracole.service` keeps `MemoryDenyWriteExecute` and
+the rest of its sandbox. To keep auto-chords for purchases alone:
+
+```nix
+  services.caracole.settings.providers.youtube.enabled = false;
 ```
 
 `caracole-autochords.service` then starts after every successful
@@ -452,8 +470,9 @@ cache folder, since the unit's home is read-only.
 
 **What a run does.** It links new files in the music folder to your songs,
 as the nightly run does, then writes an auto sheet for every song that has its
-audio file, has no human sheet (`sheet.txt`), isn't ignored, and whose audio
-changed since its last auto sheet. A sheet made before the song's lyrics
+audio file (a purchase, or audio the run took from YouTube), has no human sheet
+(`sheet.txt`), isn't ignored, and whose audio changed since its last auto sheet.
+A sheet from YouTube audio names its video on its third line. A sheet made before the song's lyrics
 arrived is made once more when they do. Everything else is left alone, so a
 night with no new purchases loads no model. Then it rewrites `_todo.md` and
 `index.html`, which the nightly run wrote before it, so both show its sheets
@@ -515,7 +534,9 @@ tone, or a sheet that can't be written into the library. Missing model files
 fail every song due, and the journal says so once. `sudo caracole-admin
 autochords` runs the same command with the `autochords` package when
 auto-chords is enabled; the default package has no torch, and says so if
-asked.
+asked. So does `sudo caracole-admin youtube --song "Artist - Title"`, which
+takes that song's audio now, and `--url URL` from a video you chose (see
+[usage.md](usage.md#one-step-at-a-time)); then start the auto-chords unit.
 
 On the laptop, `nix develop .#autochords -c pytest -m autochords` runs the
 model tests against the same model files. `nix flake check` builds both
@@ -650,7 +671,16 @@ No secret reaches the journal, at any priority (see
 - **Auto-chords can't read a purchase:** the to-do page lists it, with the
   error, and `journalctl -u caracole-autochords.service` names it too.
   Re-download the file, or convert it (to FLAC, say) and replace the original:
-  a changed file is tried again on the next run.
+  a changed file is tried again on the next run. For audio from YouTube, paste
+  another video under `[youtube]` in overrides.toml.
+- **ntfy says "caracole: YouTube blocked"** (a bot check, an HTTP 429 or 403):
+  nothing to do, as for any site. caracole never answers it with cookies, a
+  login or a proxy; it leaves YouTube alone until the cooldown ends, and the
+  songs wait. A machine whose address YouTube keeps refusing gets ever longer
+  cooldowns; `settings.providers.youtube.enabled = false` stops asking.
+- **The to-do page says caracole takes no audio from YouTube here:** it names
+  why: auto-chords off (the default package), the model files missing, or no
+  yt-dlp.
 - **Syncthing reports "permission denied":** check that
   `ls -ld /var/lib/caracole/library` (or your `libraryDir`) shows
   `drwxrwsr-x caracole caracole`, that the folders above it let group `caracole`

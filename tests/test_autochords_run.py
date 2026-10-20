@@ -219,6 +219,42 @@ def test_auto_sheet_kept_with_its_version_and_the_song_becomes_found(conn, cfg, 
     ]
 
 
+def test_an_auto_sheet_from_youtube_audio_says_which_video_it_came_from(conn, cfg, tmp_path):
+    # youtube_fetch.py links the audio as a purchase is linked, and records the video it came from.
+    from caracole.db import kv_set_json
+    from caracole.render import _auto_sheet
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Radiohead", "Creep"), name="youtube/1-XFkzRNyygfk.m4a",
+                   lyrics_status="found", lyrics_json=lyrics_json(plain="When you were here before"))
+    video = {"id": "XFkzRNyygfk", "title": "Creep", "channel": "Radiohead - Topic", "duration": 238.0,
+             "url": "https://www.youtube.com/watch?v=XFkzRNyygfk"}
+    kv_set_json(conn, f"youtube:{s.id}", {"video": video, "source": "search", "audio": s.audio_path})
+    run(conn, cfg)
+    text = auto_sheet(cfg, conn, s)
+    assert text.startswith("auto-generated, unverified\nRadiohead - Creep\n"
+                           "Audio from YouTube: Creep (Radiohead - Topic), https://www.youtube.com/watch?v=XFkzRNyygfk\n\n")
+    [kept] = kept_files(conn, s.id)
+    v = get_version(conn, kept.version_id)
+    assert v.url == video["url"]  # info.json then names the video, not a file of caracole's
+    assert v.raw["youtube"] == video and v.raw["audio"] == s.audio_path
+    info = json.loads((song_dir(cfg.library_dir, s) / "info.json").read_text(encoding="utf-8"))
+    assert info["files"][0]["url"] == video["url"]
+    # The PDF, made from the sheet without its two header lines, says it as its first line.
+    assert _auto_sheet(cfg.library_dir, kept).markup.startswith("Audio from YouTube: Creep (Radiohead - Topic)")
+
+
+def test_a_purchase_that_took_the_youtube_audios_place_is_a_purchase_again(conn, cfg, tmp_path):
+    from caracole.db import kv_set_json
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Radiohead", "Creep"), name="Radiohead - Creep.wav")
+    kv_set_json(conn, f"youtube:{s.id}", {"video": {"id": "XFkzRNyygfk", "title": "Creep"}, "source": "search",
+                                          "audio": str(tmp_path / "cache" / "youtube" / "1-XFkzRNyygfk.m4a")})
+    run(conn, cfg)
+    assert "YouTube" not in auto_sheet(cfg, conn, s)
+    [kept] = kept_files(conn, s.id)
+    assert get_version(conn, kept.version_id).url == "file://" + s.audio_path
+
+
 class Heard(FakeRecognizer):
     """A recognizer that hears the given chords, as (start, end, label)."""
 

@@ -221,7 +221,8 @@ def test_default_steps_are_in_plan_order():
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "musescore", "render", "todo",
+        "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "musescore", "youtube", "render",
+        "todo",
     ]
     providers = {s.name: s.provider for s in default_steps()}
     assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs" and providers["musescore"] == "musescore"
@@ -749,7 +750,10 @@ def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     assert "| lrclib | OK | 2026-10-18 03:30 UTC |  | 10 |" in page
     assert "| gtptabs | OK | 2026-10-18 03:30 UTC |  | 3 |" in page
     assert "| musescore | OK | 2026-10-18 03:30 UTC |  | 2 |" in page
-    assert "never" not in page.split("## Provider health", 1)[1]
+    rows = [line for line in page.split("## Provider health", 1)[1].splitlines() if line.startswith("| ")]
+    # Every provider this run asked; YouTube, which needs auto-chords and its models, is off here, never used.
+    assert [row for row in rows if "never" in row] == [next(row for row in rows if row.startswith("| youtube |"))]
+    assert "| youtube | off: " in page
 
 
 def health_row(cfg, provider):
@@ -805,3 +809,143 @@ def test_a_run_with_some_good_answers_still_counts_as_a_success(conn, cfg):
     assert get_state(conn, "ug").last_ok == NOW
     row = health_row(cfg, "ug")
     assert row.startswith("| ug | OK | 2026-10-18 03:30 UTC | ug: 502: u: HTTP 502"), row
+
+
+# --- the youtube step ---------------------------------------------------------------------------
+
+
+def youtube_cfg(cfg, tmp_path, monkeypatch):
+    """A caracole with auto-chords (its packages taken to be there), its model files and a fake yt-dlp."""
+    from helpers.fake_ytdlp import route_on
+
+    return route_on(cfg, tmp_path, monkeypatch)
+
+
+def youtube_step():
+    from caracole.pipeline import default_steps
+
+    return [s for s in default_steps() if s.name == "youtube"]
+
+
+def test_the_youtube_step_comes_after_the_sites_and_before_the_pdfs():
+    from caracole.pipeline import default_steps
+
+    names = [s.name for s in default_steps()]
+    assert names.index("musescore") < names.index("youtube") < names.index("render")
+    assert {s.name: s.provider for s in default_steps()}["youtube"] == "youtube"
+
+
+def test_without_auto_chords_the_youtube_step_asks_nothing_and_gets_no_runner(conn, cfg, tmp_path, monkeypatch):
+    # The default package has no torch: a download nothing can make chords of is no use.
+    import dataclasses
+
+    from helpers.fake_ytdlp import route_on
+
+    import caracole.youtube_fetch as yf
+    from caracole.pipeline import make_services
+
+    plain, fake = route_on(cfg, tmp_path, monkeypatch)
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch", "librosa", "beat_this"])
+    plain = dataclasses.replace(plain, ytdlp_bin=fake.bin)
+    made = make_services(plain, conn, "2026-10-19T03:30:00Z")
+    try:
+        assert "youtube" not in made.clients
+    finally:
+        made.close()
+    report = run_pipeline(plain, conn=conn, services=services(Outbox()), steps=youtube_step(), now=NOW)
+    assert report.ok and report.steps["youtube"].startswith("skipped: this caracole was built without auto-chords")
+    assert fake.argvs() == [] and "YouTube" not in report.summary()
+
+
+def test_with_auto_chords_the_run_makes_a_yt_dlp_runner_that_holds_the_lock(conn, cfg, tmp_path, monkeypatch):
+    from caracole.commands import _common
+    from caracole.pipeline import make_services
+
+    ycfg, _ = youtube_cfg(cfg, tmp_path, monkeypatch)
+    made = make_services(ycfg, conn, "2026-10-19T03:30:00Z")
+    lock = ycfg.state_dir / _common.LOCK_NAME
+    try:
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs", "musescore", "youtube"}
+        assert made.clients["youtube"].policy.budget == 6
+        assert lock in _common._held
+    finally:
+        made.close()
+    assert lock not in _common._held
+
+
+def test_youtube_turned_off_is_skipped(conn, cfg, tmp_path, monkeypatch):
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+
+    ycfg, fake = youtube_cfg(cfg, tmp_path, monkeypatch)
+    off = dataclasses.replace(ycfg, providers={**ycfg.providers, "youtube": ProviderPolicy(6, (15.0, 30.0), False)})
+    report = run_pipeline(off, conn=conn, services=services(Outbox()), steps=youtube_step(), now=NOW)
+    assert report.steps["youtube"] == "skipped: youtube is off ([providers.youtube] enabled = false)"
+    assert fake.argvs() == []
+
+
+def youtube_run(conn, ycfg, fake, *, budget=6, notifier=None):
+    from caracole.config import ProviderPolicy
+    from caracole.health import EventLog
+    from caracole.youtube import YtDlp
+
+    yt = YtDlp(fake.bin, ProviderPolicy(budget, (0.0, 0.0)), ycfg.cache_dir, sleep=lambda s: None,
+               on_event=EventLog(conn, "2026-10-18T03:30:00Z"))
+    svc = Services(clients={"youtube": yt}, spotify=None, notifier=notifier or Outbox().notifier())
+    return run_pipeline(ycfg, conn=conn, services=svc, steps=youtube_step(), now=NOW)
+
+
+def test_the_youtube_step_says_what_it_downloaded_and_counts_its_runs(conn, cfg, tmp_path, monkeypatch):
+    from conftest import add_song
+    from helpers.fake_ytdlp import entry
+
+    from caracole.songs import update_song
+
+    ycfg, fake = youtube_cfg(cfg, tmp_path, monkeypatch)
+    for title in ("Creep", "Airbag"):
+        update_song(conn, add_song(conn, "Radiohead", title, duration_ms=239000).id, match_decision="not_found")
+    fake.search("Radiohead Creep", entry("XFkzRNyygfk", "Creep", "Radiohead - Topic", 239))
+    fake.video("XFkzRNyygfk", "Creep", "Radiohead - Topic", 239)
+    report = youtube_run(conn, ycfg, fake)
+    assert report.ok and report.steps["youtube"] == "2 tried, 1 downloaded, 1 not on YouTube, 0 unavailable, 0 errors"
+    lines = report.summary().splitlines()
+    assert "YouTube: 1 song downloaded, 1 song not there." in lines
+    assert any("YouTube 3 of 6" in line for line in lines)
+    assert get_state(conn, "youtube").last_ok == NOW
+
+
+def test_youtube_errors_leave_their_songs_for_the_next_run(conn, cfg, tmp_path, monkeypatch):
+    from conftest import add_song
+
+    from caracole.songs import update_song
+
+    ycfg, fake = youtube_cfg(cfg, tmp_path, monkeypatch)
+    update_song(conn, add_song(conn, "Radiohead", "Creep").id, match_decision="not_found")
+    fake.search("Radiohead Creep", stderr="ERROR: Unable to download API page: HTTP Error 503: Service Unavailable",
+                exit=1)
+    report = youtube_run(conn, ycfg, fake)
+    assert report.ok and report.steps["youtube"].endswith("1 error")
+    assert ("YouTube didn't answer (HTTP 503), so 1 song will be looked for on YouTube again on the next run."
+            in report.summary().splitlines())
+    assert get_state(conn, "youtube").last_error == "1 song failed this run"
+
+
+def test_a_youtube_bot_check_cools_it_down_with_one_alert_and_marks_no_song(conn, cfg, tmp_path, monkeypatch):
+    from conftest import add_song
+
+    from caracole.songs import update_song
+
+    ycfg, fake = youtube_cfg(cfg, tmp_path, monkeypatch)
+    song = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, song.id, match_decision="not_found")
+    fake.search("Radiohead Creep", stderr="ERROR: [youtube] Sign in to confirm you’re not a bot.", exit=1)
+    out = Outbox()
+    report = youtube_run(conn, ycfg, fake, notifier=out.notifier())
+    assert report.ok and report.blocked == ["youtube"] and report.steps["youtube"].startswith("blocked")
+    assert is_cooling(conn, "youtube", NOW + timedelta(hours=25))
+    assert [title for title, _ in out.sent].count("caracole: YouTube blocked") == 1
+    assert kv_get_json(conn, f"youtube:{song.id}") is None
+    again = youtube_run(conn, ycfg, fake)
+    assert again.steps["youtube"].startswith("skipped: youtube cooling down until")
+    assert len(fake.argvs()) == 1

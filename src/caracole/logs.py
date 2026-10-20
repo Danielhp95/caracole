@@ -49,6 +49,7 @@ PROVIDER_NAMES: Mapping[str, str] = {
     "lacuerda": "LaCuerda",
     "gtptabs": "gtptabs.com",
     "musescore": "MuseScore",
+    "youtube": "YouTube",
     "spotify": "Spotify",
 }
 

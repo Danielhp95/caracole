@@ -14,6 +14,7 @@ from caracole.overrides import (
     add_match,
     add_pin,
     add_reject,
+    add_youtube,
     artist_url_entry,
     load_overrides,
     override_key,
@@ -416,6 +417,49 @@ def test_add_reject_checks_what_it_writes(tmp_path):
     with pytest.raises(OverridesError, match=r"\[reject\] 'Radiohead - Creep': expected \"ug-artist/ug-song\""):
         add_reject(p, "Radiohead - Creep", ["radiohead"])
     assert not p.exists()
+
+
+def test_youtube_names_a_songs_video_or_none(tmp_path):
+    o = load_overrides(write(tmp_path, '''
+[youtube]   # the video caracole takes a song's audio from, or "none"
+"Radiohead - Creep" = "https://youtu.be/XFkzRNyygfk?si=abc"
+"Soda Stereo - De Música Ligera" = "music.youtube.com/watch?v=Dgv4fE0Xjbg&list=OLAK5uy"
+"Some Artist - Some Interlude" = "None"
+'''))
+    assert o.youtube == {
+        "radiohead/creep": "XFkzRNyygfk",
+        "soda-stereo/de-musica-ligera": "Dgv4fE0Xjbg",
+        "some-artist/some-interlude": None,
+    }
+    assert Overrides().youtube == {}
+
+
+@pytest.mark.parametrize("value", ['"https://www.youtube.com/playlist?list=PL1"', '"XFkzRNyygfk"', "5",
+                                   '"https://vimeo.com/123"', '["https://youtu.be/XFkzRNyygfk"]'])
+def test_a_youtube_entry_that_is_no_video_names_its_entry_and_what_it_takes(tmp_path, value):
+    p = write(tmp_path, f'[youtube]\n"Radiohead - Creep" = {value}\n')
+    with pytest.raises(OverridesError, match=r"\[youtube\] 'Radiohead - Creep': expected a YouTube video's address "
+                                             r"\(https://www.youtube.com/watch\?v=…\) or \"none\""):
+        load_overrides(p)
+
+
+def test_add_youtube_writes_the_plain_address_or_none_in_the_songs_one_entry(tmp_path):
+    p = write(tmp_path, '# mine\n[youtube]\n"radiohead - creep" = "none"  # no good upload\n')
+    add_youtube(p, "Radiohead - Creep", "https://www.youtube.com/watch?v=XFkzRNyygfk&list=PL1&t=3")
+    add_youtube(p, "宋冬野 - 斑马，斑马", "none")
+    before, inode = p.read_text(encoding="utf-8"), p.stat().st_ino
+    add_youtube(p, "Radiohead - Creep", "https://youtu.be/XFkzRNyygfk")  # the same video: nothing is written
+    text = p.read_text(encoding="utf-8")
+    assert text == before and p.stat().st_ino == inode
+    assert "# mine" in text and text.count("reep") == 1
+    assert '"radiohead - creep" = "https://www.youtube.com/watch?v=XFkzRNyygfk"' in text
+    o = load_overrides(p)
+    assert o.youtube == {"radiohead/creep": "XFkzRNyygfk", "宋冬野/斑马斑马": None}
+    with pytest.raises(OverridesError, match="YouTube video's address"):
+        add_youtube(p, "Radiohead - Creep", "https://www.youtube.com/@radiohead")
+    with pytest.raises(OverridesError, match="Artist - Title"):
+        add_youtube(p, "Creep", "none")
+    assert p.read_text(encoding="utf-8") == before
 
 
 def test_add_alias_keeps_the_artists_other_aliases(tmp_path):

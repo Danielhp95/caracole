@@ -54,9 +54,10 @@
 
       devShells.${system} = {
         default = pkgs.mkShell ({ packages = [ devPython ] ++ devTools; } // fontEnv);
-        # `pytest -m autochords` here runs the model tests on the packaged model files.
+        # `pytest -m autochords` here runs the model tests on the packaged model files,
+        # and `caracole youtube` finds yt-dlp, as the auto-chords package's wrapper does.
         autochords = pkgs.mkShell ({
-          packages = [ devPythonAutochords ] ++ devTools;
+          packages = [ devPythonAutochords pkgs.yt-dlp ] ++ devTools;
           CARACOLE_BTC_WEIGHTS = caracoleAutochords.btcWeights;
           CARACOLE_BEAT_CHECKPOINT = caracoleAutochords.beatCheckpoint;
         } // fontEnv);

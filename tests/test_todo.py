@@ -906,6 +906,149 @@ def test_musescore_turned_off_lists_nothing_and_says_so_in_provider_health(conn,
     assert "| musescore | off ([providers.musescore] enabled = false) | never |  |  |" in text
 
 
+# --- the YouTube route ----------------------------------------------------------------------------
+
+NO_SHEET = "No human sheet found yet"
+NOTHING = "Nothing on YouTube for these"
+CREEP_ID, OTHER_ID = "XFkzRNyygfk", "oNOFfl3Hx3s"
+
+
+def buy_song(conn, artist="Radiohead", title="Creep"):
+    s = add_song(conn, artist, title)
+    update_song(conn, s.id, match_decision="not_found")
+    return s
+
+
+def youtube_record(conn, song, cfg=None, **fields):
+    from caracole.songs import get_song
+
+    record = {"video": {"id": CREEP_ID, "title": "Creep", "channel": "Radiohead - Topic", "duration": 238.0,
+                        "url": f"https://www.youtube.com/watch?v={CREEP_ID}"}, "source": "search", **fields}
+    if cfg is not None:  # downloaded: the song's audio is the file
+        audio = cfg.cache_dir / "youtube" / f"{song.id}-{CREEP_ID}.m4a"
+        audio.parent.mkdir(parents=True, exist_ok=True)
+        audio.write_bytes(b"aac")
+        record["audio"] = str(audio)
+        update_song(conn, song.id, audio_path=str(audio), audio_mtime=audio.stat().st_mtime)
+    kv_set_json(conn, f"youtube:{song.id}", record)
+    return get_song(conn, song.id)
+
+
+def test_without_auto_chords_the_buy_list_stays_and_says_why_youtube_isnt_used(conn, cfg, monkeypatch):
+    import caracole.youtube_fetch as yf
+
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
+    buy_song(conn)
+    text = todo(conn, cfg)
+    section = section_of(text, "Buy list (1)")
+    assert "bandcamp.com" in section and "Chordify" in section
+    assert ("caracole takes a song's audio from YouTube only when it can work out the chords from it, and here "
+            "it can't: this caracole was built without auto-chords (missing: torch)") in section
+    assert NO_SHEET not in text.split("## Buy list", 1)[1].split("\n", 1)[0]
+    assert "| youtube | off: this caracole was built without auto-chords" in text
+
+
+def test_youtube_turned_off_keeps_the_buy_list_as_it_was(conn, cfg, tmp_path, monkeypatch):
+    import dataclasses
+
+    from helpers.fake_ytdlp import route_on
+
+    from caracole.config import ProviderPolicy
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    off = dataclasses.replace(on, providers={**on.providers, "youtube": ProviderPolicy(6, (15.0, 30.0), False)})
+    buy_song(conn)
+    text = todo(conn, off)
+    assert "## Buy list (1)" in text and "YouTube only when" not in text
+    assert "| youtube | off ([providers.youtube] enabled = false) |" in text
+
+
+def test_with_the_route_on_each_song_without_a_human_sheet_says_where_it_stands(conn, cfg, tmp_path, monkeypatch):
+    from helpers.fake_ytdlp import route_on
+
+    from caracole.versions import upsert_version
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    queued = buy_song(conn, "Radiohead", "Airbag")
+    picked = youtube_record(conn, buy_song(conn, "Radiohead", "Karma Police"), error="HTTP Error 502: Bad Gateway")
+    downloaded = youtube_record(conn, buy_song(conn, "Radiohead", "Let Down"), on)
+    chords = youtube_record(conn, buy_song(conn), on)
+    v = upsert_version(conn, provider="auto", tab_id=str(chords.id), song_id=chords.id, slot="sheet", kind="auto",
+                       rating=0, votes=0, version=1, label=None, url="u", raw={}, now="x")
+    keep_file(conn, on.library_dir, song=chords, version_id=v, name="sheet (auto).txt", data=b"x", rank=1)
+    update_song(conn, chords.id, status="found", autochords_mtime=chords.audio_mtime)
+    text = todo(conn, on)
+    assert "## Buy list" not in text and "bandcamp.com" not in text and "qobuz.com" not in text
+    section = section_of(text, f"{NO_SHEET} (4)")
+    assert "caracole takes the audio from YouTube and works out the chords" in section
+    assert "a human sheet found later takes the auto sheet's place" in section
+    video = f"[Creep (Radiohead - Topic)](https://www.youtube.com/watch?v={CREEP_ID})"
+    lines = {line.split("**")[1]: line for line in section.splitlines() if line.startswith("- **")}
+    assert "queued: caracole looks for it on YouTube in the next run" in lines[queued.display]
+    assert f"queued, picked {video}" in lines[picked.display]
+    assert "the last try failed (HTTP Error 502: Bad Gateway)" in lines[picked.display]
+    assert f"audio downloaded from {video}: auto-chords works out the chords next" in lines[downloaded.display]
+    assert f"chords done, from {video}: [auto sheet](Radiohead/Creep/sheet%20%28auto%29.txt)" in lines[chords.display]
+    for line in lines.values():  # what to check first is still there
+        assert "check first: [Chordify]" in line and "[Songsterr]" in line and "[YouTube]" in line
+    assert '"Artist - Title" = "https://www.youtube.com/watch?v=…"' in section  # how to correct a video
+    from caracole.report import todo_count
+
+    assert todo_count(f"## {NO_SHEET} (4)\n") == 0  # caracole does all of it
+
+
+def test_songs_youtube_has_nothing_for_need_you(conn, cfg, tmp_path, monkeypatch):
+    from helpers.fake_ytdlp import route_on
+
+    from caracole.overrides import Overrides
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    missing = youtube_record(conn, buy_song(conn), video=None, source=None, missing_at="2026-10-18T03:30:00Z")
+    unusable = youtube_record(conn, buy_song(conn, "Radiohead", "Airbag"), video=None, source=None,
+                              unusable=OTHER_ID, unusable_reason="Private video")
+    declined = buy_song(conn, "Radiohead", "Let Down")
+    o = Overrides(youtube={unusable.key: OTHER_ID, declined.key: None})
+    text = todo(conn, on, o)
+    section = section_of(text, f"{NOTHING} (3)")
+    lines = {line.split("**")[1]: line for line in section.splitlines() if line.startswith("- **")}
+    assert "YouTube's search found no video that fits (asked again from 2026-11-17)" in lines[missing.display]
+    assert (f"the video under `[youtube]`, [https://www.youtube.com/watch?v={OTHER_ID}]"
+            f"(https://www.youtube.com/watch?v={OTHER_ID}), can't be downloaded: Private video") in lines[unusable.display]
+    assert "you turned YouTube down for it" in lines[declined.display]
+    assert "bandcamp.com" in lines[declined.display] and "bandcamp.com" not in lines[missing.display]
+    # The lines to paste: one for a song with no entry, the one to put in place of an entry it has.
+    assert '"Radiohead - Creep" = "https://www.youtube.com/watch?v=…"  # under [youtube]' in section
+    assert ('"Radiohead - Airbag" = "https://www.youtube.com/watch?v=…"  # in place of the song\'s line under '
+            '[youtube]') in section
+    from caracole.report import todo_count
+
+    assert todo_count(f"## {NOTHING} (3)\n") == 3
+
+
+def test_while_youtube_blocks_caracole_its_songs_say_so(conn, cfg, tmp_path, monkeypatch):
+    from helpers.fake_ytdlp import route_on
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    buy_song(conn)
+    record_block(conn, "youtube", NOW, "youtube: Sign in to confirm you're not a bot")
+    section = section_of(todo(conn, on), f"{NO_SHEET} (1)")
+    assert "waiting: YouTube is blocking caracole, so it asks again after 2026-10-19 05:41 UTC" in section
+
+
+def test_youtube_audio_auto_chords_cant_read_is_named_by_its_video(conn, cfg, tmp_path, monkeypatch):
+    from helpers.fake_ytdlp import route_on
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    s = youtube_record(conn, buy_song(conn), on)
+    kv_set_json(conn, "autochords:status", {"at": "2026-10-18T04:12:00Z", "generated": 0, "skipped": 0, "failed": [
+        {"song": s.display, "error": "RuntimeError: Failed to decode", "audio": s.audio_path}]})
+    section = section_of(todo(conn, on), f"{AUTOCHORDS[3:]} (1)")
+    assert (f"- **Radiohead - Creep**: the audio of [Creep (Radiohead - Topic)](https://www.youtube.com/watch?v="
+            f"{CREEP_ID}) · RuntimeError: Failed to decode") in section
+    assert str(on.cache_dir) not in section
+    assert "paste another video's address under `[youtube]`" in section
+
+
 def test_the_inbox_section_says_how_a_score_is_named(conn, cfg):
     inbox = cfg.library_dir / "_inbox"
     inbox.mkdir(parents=True)

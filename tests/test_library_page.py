@@ -340,6 +340,49 @@ def test_a_song_whose_audio_you_have_gets_no_buy_links(conn, cfg):
     assert songs_of(page(conn, cfg))[s.display]["buy"] == []
 
 
+def test_with_the_youtube_route_on_a_card_says_where_its_audio_comes_from_and_offers_no_buying(
+        conn, cfg, tmp_path, monkeypatch):
+    from helpers.fake_ytdlp import route_on
+
+    from caracole.db import kv_set_json
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    queued = add_song(conn, "Radiohead", "Airbag")
+    downloaded = add_song(conn, "Radiohead", "Creep")
+    missing = add_song(conn, "Radiohead", "Let Down")
+    declined = add_song(conn, "Blur", "Tender")
+    for s in (queued, downloaded, missing, declined):
+        update_song(conn, s.id, match_decision="not_found")
+    audio = on.cache_dir / "youtube" / f"{downloaded.id}-XFkzRNyygfk.m4a"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(b"aac")
+    update_song(conn, downloaded.id, audio_path=str(audio), audio_mtime=audio.stat().st_mtime)
+    kv_set_json(conn, f"youtube:{downloaded.id}", {
+        "video": {"id": "XFkzRNyygfk", "title": "Creep", "channel": "Radiohead - Topic"}, "source": "search",
+        "audio": str(audio)})
+    kv_set_json(conn, f"youtube:{missing.id}", {"missing_at": "2026-10-18T03:30:00Z"})
+    songs = songs_of(page(conn, on, Overrides(youtube={declined.key: None})))
+    assert songs[queued.display]["youtube"] == {
+        "text": "No human sheet yet: caracole takes the audio from YouTube next", "video": None}
+    assert songs[downloaded.display]["youtube"] == {
+        "text": "Audio from YouTube: auto-chords works out the chords next",
+        "video": {"label": "Creep (Radiohead - Topic)", "href": "https://www.youtube.com/watch?v=XFkzRNyygfk"}}
+    assert songs[missing.display]["youtube"]["text"] == "Nothing on YouTube fits: see the to-do page"
+    for s in (queued, downloaded, missing):
+        assert songs[s.display]["buy"] == [], s.display
+        assert [link["label"] for link in songs[s.display]["links"]] == ["Chordify", "YouTube"]
+    assert songs[declined.display]["youtube"] is None  # you turned YouTube down: buying is the way
+    assert [link["label"] for link in songs[declined.display]["buy"]] == ["Bandcamp", "Qobuz", "iTunes"]
+    assert str(on.cache_dir) not in page(conn, on)  # where caracole keeps the audio is its own
+
+
+def test_without_the_youtube_route_no_card_mentions_youtube_audio(conn, cfg):
+    s = add_song(conn, "宋冬野", "斑马，斑马")
+    update_song(conn, s.id, match_decision="not_found")
+    card = songs_of(page(conn, cfg))[s.display]
+    assert card["youtube"] is None and card["buy"]
+
+
 def test_guitar_pro_pages_to_click_are_the_picks_without_files(conn, cfg):
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", ver=2, rating=4.2, votes=5)
@@ -520,6 +563,30 @@ def test_the_page_renders_and_filters_in_a_real_browser(conn, cfg, tmp_path):
         shown = listing(dump_dom(path, tmp_path, "#q=" + quote(query)))
         assert shown.count("<article") == 1, query
         assert title in shown
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_cards_youtube_note_links_its_video_in_a_real_browser(conn, cfg, tmp_path, monkeypatch):
+    from helpers.fake_ytdlp import route_on
+
+    from caracole.db import kv_set_json
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    s = add_song(conn, "Radiohead", "Creep")
+    audio = on.cache_dir / "youtube" / f"{s.id}-XFkzRNyygfk.m4a"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(b"aac")
+    update_song(conn, s.id, match_decision="not_found", audio_path=str(audio), audio_mtime=audio.stat().st_mtime)
+    kv_set_json(conn, f"youtube:{s.id}", {
+        "video": {"id": "XFkzRNyygfk", "title": "Creep", "channel": "Radiohead - Topic"}, "source": "search",
+        "audio": str(audio)})
+    path = write_library_page(on.library_dir, page(conn, on))
+    shown = listing(dump_dom(path, tmp_path))
+    note = re.search(r'<p class="youtube">(.*?)</p>', shown, re.S)
+    assert note, shown[-2000:]
+    assert note.group(1).startswith("Audio from YouTube: auto-chords works out the chords next · <a")
+    assert 'href="https://www.youtube.com/watch?v=XFkzRNyygfk"' in note.group(1)
+    assert "Creep (Radiohead - Topic) ↗" in note.group(1) and 'rel="noopener noreferrer"' in note.group(1)
 
 
 @pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")

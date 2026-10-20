@@ -281,13 +281,13 @@ def test_a_merged_songs_own_state_goes_with_it(conn):
     newer = older_song(conn, "Enanitos Verdes", "Lamento Boliviano",
                        "enanitos-verdes/lamento-boliviano", source="wanted", source_id="x")
     own = [f"render:{newer}", f"ug:artist_page_checked:{newer}", f"autochords:failed:{newer}",
-           f"gtptabs:checked:{newer}"]
+           f"gtptabs:checked:{newer}", f"youtube:{newer}"]
     for key in own:
         db.kv_set(conn, key, '"2026-10-18T03:30:00Z"')
     ensure_current_keys(conn)
     fresh = add_song(conn, "Soda Stereo", "Signos")
     assert fresh.id == newer
-    assert [db.kv_get(conn, key) for key in own] == [None, None, None, None]
+    assert [db.kv_get(conn, key) for key in own] == [None, None, None, None, None]
 
 
 def test_keys_that_change_hands_are_re_keyed_without_a_clash(conn):

@@ -19,8 +19,9 @@ Sheets come from Ultimate Guitar and, for Spanish songs, LaCuerda. Lyrics come
 from LRCLIB. Guitar Pro files come from gtptabs.com, downloaded for you, and
 from the Ultimate Guitar pages the to-do page lists for you to click. A Spotify
 playlist works as a song list too, but you don't need one. For a song nobody
-has charted, you can buy the track and let caracole work out the chords from
-the audio.
+has charted, caracole works out the chords from the audio, with local models:
+a track you bought, or, by default, the song's audio, which it takes from
+YouTube with yt-dlp, a few songs a night.
 
 ## Install
 
@@ -52,6 +53,16 @@ downloads to bots, so its Guitar Pro pages are yours to click. From MuseScore it
 reads only the song sitemaps its robots.txt lists, for links to its pages, and
 downloads nothing: a download there needs a login. A Cloudflare challenge, which
 is what MuseScore answered caracole with in October 2026, counts as a block.
+
+YouTube is the one exception, made on purpose, for a personal library: caracole
+uses its search there, its robots.txt closes that search and the API yt-dlp
+uses, and its terms allow no such downloads, so this route is your choice to
+keep or turn off. caracole goes there only for the audio of a song no one has
+charted, only with auto-chords to make chords of it, and on the same terms as
+elsewhere: at most 6 yt-dlp runs a night (three songs), with pauses, no cookies
+and no login, and a cooldown when YouTube pushes back. `[providers.youtube]
+enabled = false` turns it off; see
+[docs/usage.md](docs/usage.md#audio-from-youtube).
 
 ## Development
 
