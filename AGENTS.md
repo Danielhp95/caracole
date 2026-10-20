@@ -96,12 +96,15 @@ and `search --key`).
 
 ## Development
 
-    nix develop        # Python 3.14 with the dependencies, pytest, chordpro, ruff, sqlite3
-    pytest -q          # from the repo root; pyproject.toml sets testpaths and pythonpath
-    pytest -q -m "not slow"           # the quick loop
+    nix develop        # Python 3.14 with the dependencies, pytest, pytest-xdist, chordpro, ruff, sqlite3
+    pytest -q                         # the whole suite, from the repo root, on up to 12 cores
+    pytest -q -m "not slow"           # the quick loop, a few seconds
     pytest -q -m "not slow" --lf -x   # what failed last time, stopping at the first failure
+    pytest -q tests/test_fetch.py     # given paths, pytest runs them in one process
     nix develop .#autochords -c pytest -m autochords   # the model tests
 
+Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12,
+`--dist worksteal`); `-n 0` runs it in one process, as `--pdb`, `--trace` and `-s` do.
 `slow` marks a test that starts a browser (`helpers.browser.in_chromium`), chordpro
 (`@pytest.mark.chordpro` adds `slow`) or another process: mark a new one too. The whole
 suite stays the gate before a commit.

@@ -1,6 +1,6 @@
-"""The suite's own machinery: conftest.py's database, and the helpers that wait on
-caracole's lock (helpers/locks.py) and open pages in Chromium (helpers/browser.py). Each
-makes the suite faster; these tests say it still tests the same."""
+"""The suite's own machinery: conftest.py's database and its pytest-xdist defaults, and the
+helpers that wait on caracole's lock (helpers/locks.py) and open pages in Chromium
+(helpers/browser.py). Each makes the suite faster; these tests say it still tests the same."""
 
 from __future__ import annotations
 
@@ -11,8 +11,10 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import conftest
+import pytest
 from helpers import browser
 from helpers.browser import in_chromium
 from helpers.locks import waiting_for
@@ -64,6 +66,56 @@ def test_a_patched_migration_gets_a_database_of_its_own(monkeypatch, tmp_path):
         c.close()
     monkeypatch.undo()
     assert conftest.migrated_database() == before
+
+
+# --- pytest-xdist ------------------------------------------------------------------------------
+
+
+WHOLE_SUITE = pytest.Config.ArgsSource.TESTPATHS
+GIVEN_PATHS = pytest.Config.ArgsSource.ARGS
+
+
+def config(args_source=WHOLE_SUITE, *, xdist=True, worker=False, **options):
+    """What pytest_cmdline_main reads of a pytest.Config, as pytest parsed a command line."""
+    parsed = {"numprocesses": None, "tx": None, "dist": "no", "collectonly": False,
+              "usepdb": False, "trace": False, "capture": "fd"}
+    made = SimpleNamespace(
+        option=SimpleNamespace(**{**parsed, **options}), args_source=args_source,
+        pluginmanager=SimpleNamespace(hasplugin=lambda name: xdist and name == "xdist"),
+    )
+    if worker:
+        made.workerinput = {}
+    return made
+
+
+@pytest.mark.parametrize("given, expected", [
+    pytest.param({}, ("auto", "worksteal"), id="pytest"),
+    pytest.param({"numprocesses": 4}, (4, "worksteal"), id="-n 4"),
+    pytest.param({"args_source": GIVEN_PATHS, "numprocesses": 4}, (4, "worksteal"), id="paths -n 4"),
+    pytest.param({"numprocesses": 4, "dist": "load"}, (4, "load"), id="-n 4 --dist load"),
+    pytest.param({"numprocesses": 0}, (0, "no"), id="-n 0"),
+    pytest.param({"args_source": GIVEN_PATHS}, (None, "no"), id="paths"),
+    pytest.param({"collectonly": True}, (None, "no"), id="--collect-only"),
+    pytest.param({"usepdb": True}, (None, "no"), id="--pdb"),
+    pytest.param({"trace": True}, (None, "no"), id="--trace"),
+    pytest.param({"capture": "no"}, (None, "no"), id="-s"),
+    pytest.param({"worker": True}, (None, "no"), id="a worker"),
+    pytest.param({"xdist": False}, (None, "no"), id="no xdist"),
+])
+def test_the_whole_suite_runs_on_workers_unless_told_otherwise(given, expected):
+    parsed = config(**given)
+    conftest.pytest_cmdline_main(parsed)
+    assert (parsed.option.numprocesses, parsed.option.dist) == expected
+
+
+def test_auto_means_the_cores_up_to_a_dozen(monkeypatch):
+    monkeypatch.delenv("PYTEST_XDIST_AUTO_NUM_WORKERS", raising=False)
+    monkeypatch.setattr(os, "sched_getaffinity", lambda pid: set(range(24)))
+    assert conftest.pytest_xdist_auto_num_workers(None) == conftest.MAX_WORKERS == 12
+    monkeypatch.setattr(os, "sched_getaffinity", lambda pid: {0, 1, 2})
+    assert conftest.pytest_xdist_auto_num_workers(None) == 3
+    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "5")
+    assert conftest.pytest_xdist_auto_num_workers(None) is None  # pytest-xdist's own hook reads it
 
 
 # --- waiting for the lock ----------------------------------------------------------------------

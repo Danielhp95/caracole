@@ -448,8 +448,8 @@ cd caracole
 With Nix:
 
 ```sh
-nix develop                                         # Python, the dependencies, pytest, chordpro, ruff, sqlite3
-pytest -q
+nix develop                                         # Python, the dependencies, pytest, pytest-xdist, chordpro, ruff, sqlite3
+pytest -q                                           # every test, on up to 12 cores
 pytest -q -m "not slow"                             # all but the browser, chordpro and second-process tests
 nix develop .#autochords -c pytest -m autochords    # the model tests, with the model files
 ```
@@ -462,7 +462,7 @@ first, and torch too if you want the auto-chords tests:
 
 ```sh
 python3 -m venv .venv
-.venv/bin/pip install -e . pytest                   # -e '.[autochords]' for auto-chords
+.venv/bin/pip install -e . pytest pytest-xdist      # -e '.[autochords]' for auto-chords
 CARACOLE_CJK_FONT=/usr/local/share/caracole/FusionKaiJ-Regular.ttf .venv/bin/pytest -q
 .venv/bin/caracole --help
 ```

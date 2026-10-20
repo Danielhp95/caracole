@@ -1,5 +1,5 @@
 """Shared fixtures: a fresh database, a config rooted in tmp_path, and fake HTTP. And how the
-suite runs: tmp_path in memory."""
+suite runs: tmp_path in memory, and the whole suite on several cores (pytest-xdist)."""
 
 from __future__ import annotations
 
@@ -14,6 +14,35 @@ import pytest
 # in memory, and the suite runs nearly three times faster. pyproject.toml keeps only the folders
 # of tests that failed.
 MEMORY = Path("/dev/shm")
+# Workers for -n auto. Each imports and collects the whole suite before its first test, and past
+# a dozen they cost more than they save: on 24 cores, the suite takes 6.5 s on 12, 8 s on 24.
+MAX_WORKERS = 12
+
+
+@pytest.hookimpl(tryfirst=True)  # before pytest-xdist's own, which reads -n and --dist
+def pytest_cmdline_main(config):
+    """With pytest-xdist: the whole suite (pytest given no paths) runs on -n auto workers unless
+    -n says otherwise, and tests go to the workers by work stealing (--dist worksteal), so no
+    worker is left with all of a file's browser tests. Given paths, pytest runs them in this
+    process, which starts sooner; and so it does with --pdb, --trace or -s, which want this
+    terminal."""
+    option = config.option
+    if not config.pluginmanager.hasplugin("xdist") or hasattr(config, "workerinput"):
+        return
+    whole_suite = config.args_source == pytest.Config.ArgsSource.TESTPATHS
+    at_the_terminal = option.usepdb or option.trace or option.capture == "no"
+    if (option.numprocesses is None and not option.tx and whole_suite and not option.collectonly
+            and not at_the_terminal):
+        option.numprocesses = "auto"
+    if option.dist == "no" and (option.numprocesses or option.tx):
+        option.dist = "worksteal"
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_xdist_auto_num_workers(config):
+    if os.environ.get("PYTEST_XDIST_AUTO_NUM_WORKERS"):
+        return None  # pytest-xdist's own hook reads it
+    return min(len(os.sched_getaffinity(0)), MAX_WORKERS)
 
 
 def pytest_configure(config):
