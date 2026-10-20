@@ -254,8 +254,8 @@ def _step(step: Step, *, shown: bool = False, picking: bool = False) -> str:
     ``picking``, the fetch that waits for a pick: a note in place of its error, its output closed."""
     output = note = ""
     if picking:
-        note = ('<p class="step-note">Not fetched yet: caracole isn\'t sure which Ultimate Guitar song it is. '
-                "Pick it below, with Fetch it now ticked, and it is fetched then.</p>")
+        note = ('<p class="step-note">Not fetched yet: caracole fetch waits for the match. Pick it below, with '
+                "Fetch it now ticked, and it is fetched then.</p>")
     if step.output or step.dropped:
         lines = ([f"… {step.dropped} earlier lines"] if step.dropped else []) + step.output
         opened = " open" if not picking and (shown or step.state in ("running", "failed")) else ""
