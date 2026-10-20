@@ -248,8 +248,24 @@ Ubuntu's own yt-dlp is too old for YouTube. Into a venv of its own:
 ```sh
 sudo python3 -m venv /opt/yt-dlp
 sudo /opt/yt-dlp/bin/pip install "yt-dlp[default]"
-curl -fsSL https://deno.land/install.sh | sudo DENO_INSTALL=/usr/local sh
 ```
+
+Then deno, from one of its releases: pick the release (2.0 or later) on
+<https://github.com/denoland/deno/releases>, download its Linux archive and the
+archive's checksum, check it, and put `deno` into /usr/local/bin. Nothing is
+run as root but `unzip`:
+
+```sh
+sudo apt install unzip
+DENO_VERSION=v2.x.y   # the release you picked, as its page names it
+DENO_ZIP=deno-x86_64-unknown-linux-gnu.zip
+curl -fsSLO "https://github.com/denoland/deno/releases/download/$DENO_VERSION/$DENO_ZIP"
+curl -fsSLO "https://github.com/denoland/deno/releases/download/$DENO_VERSION/$DENO_ZIP.sha256sum"
+sha256sum -c "$DENO_ZIP.sha256sum" && sudo unzip -o "$DENO_ZIP" deno -d /usr/local/bin
+```
+
+(Deno's own `install.sh` does the same, but piping a script from the network
+into a root shell runs whatever it says that day: read it first if you use it.)
 
 caracole runs `yt-dlp` from PATH, or the program `ytdlp_bin` in caracole.toml
 or `CARACOLE_YTDLP_BIN` names: here `ytdlp_bin = "/opt/yt-dlp/bin/yt-dlp"`.
