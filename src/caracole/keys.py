@@ -35,6 +35,7 @@ correlation under ``MIN_FIT``) give no estimate.
 
 from __future__ import annotations
 
+import functools
 import logging
 import math
 import re
@@ -180,13 +181,16 @@ def estimate_key(chords: Iterable[str | tuple[str, float]]) -> str | None:
     if not played:
         return None
     total = sum(w for _, _, w, _ in played)
+    weights: dict[tuple[int, str | None], float] = {}  # how long each (root, triad) sounds
+    for r, t, w, _ in played:
+        weights[r, t] = weights.get((r, t), 0.0) + w
     (first, first_triad, _, _), (last, last_triad, _, _) = played[0], played[-1]
     best = (-math.inf, 0.0, 0, False)  # score, fit, tonic, minor
     for minor in (False, True):
         profile = _PROFILES[minor]
         for tonic in range(12):
             fit = _correlation(histogram, [profile[(pc - tonic) % 12] for pc in range(12)])
-            share = sum(w * _tonic_chord(r, t, tonic, minor) for r, t, w, _ in played) / total
+            share = sum(w * _tonic_chord(r, t, tonic, minor) for (r, t), w in weights.items()) / total
             starts = _tonic_chord(first, first_triad, tonic, minor)
             ends = _tonic_chord(last, last_triad, tonic, minor)
             score = fit + TONIC_SHARE * share + EDGE * (starts + ends)
@@ -352,13 +356,15 @@ def _tonic_chord(root: int, triad: str | None, tonic: int, minor: bool) -> float
     return 1.0 if triad == ("minor" if minor else "major") else 0.5 if triad == "open" else 0.0
 
 
-def _chord(name: str) -> tuple[int, str, str | None, list[tuple[int, float]]] | None:
+@functools.lru_cache(maxsize=1024)
+def _chord(name: str) -> tuple[int, str, str | None, tuple[tuple[int, float], ...]] | None:
     """A chord's root (pitch class) and its spelling, its triad, and its notes with their weights.
 
     The triad is "major", "minor", "open" (a power chord or a sus chord, with no
     third) or None (diminished, augmented). A bass note under a slash is left out.
     A "sus" anywhere replaces the third ("A7sus4"); "7M" is a major seventh, as Spanish and
-    Portuguese sheets write Cmaj7.
+    Portuguese sheets write Cmaj7. Cached, as a sheet repeats a handful of chords: every
+    caller shares the answer, so it is all tuples.
     """
     m = _CHORD.fullmatch(normalize_chord(name.strip()))
     if not m or not _QUALITY.fullmatch(m.group(3)):
@@ -395,7 +401,7 @@ def _chord(name: str) -> tuple[int, str, str | None, list[tuple[int, float]]] | 
         tones.append((9, 0.5))
     elif _EXTENDED.search(extended):
         tones.append((10, 0.5))
-    return root, letter + accidental, triad, tones
+    return root, letter + accidental, triad, tuple(tones)
 
 
 def _correlation(a: list[float], b: list[float]) -> float:
