@@ -67,7 +67,13 @@ songs.py's, in the `removed` table).
   sheet, then `Progress.readable`), with interactive clients; `--progress` prints a JSON line
   per event (`get.progress_line`) for caracole serve.
   The logic of `caracole review`, `caracole search`, `caracole remove` and `caracole songbook`
-  is in review.py, search.py, removal.py and songbook.py; search.py's prefilter reads
+  is in review.py, search.py, removal.py and songbook.py. search.py reads a query as a
+  title, an artist or both (each hit's `via`); `find_index` (with your songs, `found`, or
+  both at once, `find`) answers `caracole search` and `/api/search`: the artists a query
+  names (`ArtistHit`, never a catch-all), the index's songs, `lead` and `best` (what Enter
+  may act on, None for no clear song), with
+  `artist_songs` and `library_by_artist`; tab counts are its only popularity, and Chinese
+  pinyin counts only as whole words of a key, as in match.py. Its prefilter reads
   ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
   must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
@@ -84,8 +90,9 @@ songs.py's, in the `removed` table).
   from which commands ran: a step's label is that line while it runs, "Adding to the
   library…", and a lookup's running stage has one of its own, `status.STAGE_LINES`), app.py (the routes; `/jobs.json` and the forms answer the page's script in
   JSON, every refusal as data; `/api/search` for search as you type, through search.py's
-  public functions, one at a time, the newest first, an older one's SQL interrupted once a
-  newer waits (`set_progress_handler`); `/api/jobs[/<id>]`; every `/api/` read refused to
+  public functions (`find_index`, `found`), one at a time, the newest first, an older one's
+  SQL interrupted once a newer waits (`set_progress_handler`); `/api/artist?key=` an
+  artist's songs, 50 at a time; `/api/jobs[/<id>]`; every `/api/` read refused to
   another site's fetch, `security.own_page_read`; `POST /lookup`, which runs a song your
   library has, by its id or found from the UG pick (`_Mine`: its match, or its names'
   `name_forms`), under its own names and writes no wanted.txt line for it;
@@ -94,7 +101,9 @@ songs.py's, in the `removed` table).
   forms, each queued as its `caracole songbook` command), lookup_page.py (the lookup page:
   its script, `createElement` and `textContent` only, allowed by hash, connects to the
   server alone; its results are the library's rows, `library_page.ROWS_SCRIPT` and
-  `ROWS_STYLE` through `window.caracole.resultRow`, and a song you have opens its viewer),
+  `ROWS_STYLE` through `window.caracole.resultRow`, and a song you have opens its viewer;
+  Enter acts on `/api/search`'s `best`, or opens the leading artist's songs, and never
+  spends a request without one),
   pages.py, server.py (`http.server`). The library page is
   library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
   /jobs.json how they go.

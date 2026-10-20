@@ -642,6 +642,12 @@ def index_song(conn: sqlite3.Connection, artist_key: str, song_key: str, score: 
     return _index_hit(conn, artist_key, song_key, score)
 
 
+def index_artist(conn: sqlite3.Connection, artist_key: str) -> ArtistHit | None:
+    """One artist of the index as ``find`` gives it (score 100): its songs and tabs counted, its most
+    tabbed songs and its name as UG writes it. None when the index has no tab of theirs."""
+    return _artist_hit(conn, artist_key, 100.0)
+
+
 def _index_hit(conn: sqlite3.Connection, artist_key: str, song_key: str, score: float,
                via: str = "both") -> IndexHit | None:
     """Every tab of the song, counted per type, with a sample page and names to show."""

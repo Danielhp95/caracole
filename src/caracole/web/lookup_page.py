@@ -3,8 +3,13 @@
 It searches your library and the offline Ultimate Guitar index as you type
 (``GET /api/search``: 5–25 ms a query on a full index, up to about 0.15 s for
 very common words, ug/key_search.py), so finding
-a song costs no request to any site. Enter picks the first result of the
-query typed, never of an older one still on the screen. Picking a song, or
+a song costs no request to any site. A query may be an artist's name alone or
+a title alone: an artist it names is a row of its own, whose Songs lists all
+their songs (``GET /api/artist``), and comes first when it leads. Enter acts
+on the answer of the query typed, never of an older one still on the screen:
+its ``best`` row, the song you meant; when an artist leads, that artist's
+songs; when nothing stands out, nothing, so a guess never spends a request.
+Picking a song, or
 one of its versions, looks it up now (``POST /lookup``: one ``caracole get``,
 which records the pick in overrides.toml; a song your library has, under any
 name, is posted as that song, by its id), and the page follows the request
@@ -55,6 +60,14 @@ STYLE = BASE_STYLE + ROWS_STYLE + """
 .rows.hits { margin-top: 6px; }
 .versions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .hint { max-width: 72ch; color: var(--muted); font-size: .85rem; white-space: pre-wrap; }
+.artist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
+  margin: 18px 0 0; }
+.artist-head h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.artist-head h2:focus { outline: none; }
+.more-songs { margin: 10px 0 0; }
+@media (pointer: coarse) {
+  .artist-head .btn, .more-songs .btn { min-height: 44px; }
+}
 details.by-name { margin: 22px 0 0; }
 details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 600; cursor: pointer; }
 .by-name form { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: 1fr; }
@@ -115,7 +128,9 @@ const rowKit = caracoleRows(ICONS);
 window.caracole = Object.freeze({resultRow: rowKit.resultRow, sourceMark: rowKit.sourceMark, icons: ICONS});
 let typed = 0, inflight = null, timer = null, polling = null, shown = "", lastStages = "";
 let shownFor = null;  // the query the results on the screen answer
-let enterFor = null;  // a query Enter was pressed for before its results came: its first one is picked then
+let shownData = null;  // their answer: what Enter acts on (best) and what leads
+let artistOpen = null;  // the artist whose songs are listed in place of the results
+let enterFor = null;  // a query Enter was pressed for before its results came: acted on then
 let scrolled = false;  // the sheet was brought into view once already
 
 function el(tag, cls, text) {
@@ -134,6 +149,12 @@ function button(label, cls, onclick, aria) {
   if (aria) b.setAttribute("aria-label", aria);
   b.addEventListener("click", onclick);
   return b;
+}
+function plural(n, word) { return Number(n || 0).toLocaleString("en") + " " + word + (n === 1 ? "" : "s"); }
+function group(title, rows) {
+  const list = el("div", "rows hits");
+  for (const row of rows) list.append(row);
+  return [el("h2", "group", title), list];
 }
 function counts(c) {
   const names = {"chords": "chords", "tabs": "tabs", "guitar-pro": "Guitar Pro", "power": "Power Tab"};
@@ -169,28 +190,105 @@ function search() {
 
 function show(data, text) {
   results.replaceChildren();
-  const n = data.library.length + data.index.length;
+  artistOpen = null;
+  const artists = Array.isArray(data.artists) ? data.artists : [];
+  const n = data.library.length + data.index.length + artists.length;
   status.textContent = n ? "" : "Nothing matches.";
-  if (data.library.length) {
-    results.append(el("h2", "group", "In your library"));
-    const list = el("div", "rows hits");
-    for (const s of data.library) list.append(librarySong(s));
-    results.append(list);
-  }
-  if (data.index.length) {
-    results.append(el("h2", "group", "On Ultimate Guitar"));
-    const list = el("div", "rows hits");
-    for (const h of data.index) list.append(ugSong(h));
-    results.append(list);
-  }
+  if (data.library.length) results.append(...group("In your library", data.library.map(librarySong)));
+  // The artists the query names: first when one leads ("oasis"), after the songs when a song does ("wonderwall").
+  const named = artists.length ? group("Artists on Ultimate Guitar", artists.map(artistRow)) : [];
+  if (data.lead === "artist") results.append(...named);
+  if (data.index.length) results.append(...group("On Ultimate Guitar", data.index.map(ugSong)));
+  if (data.lead !== "artist") results.append(...named);
   if (data.hint) results.append(el("p", "hint", data.hint));
   shownFor = text;
-  if (enterFor === text) { enterFor = null; pickFirst(); }
+  shownData = data;
+  if (enterFor === text) { enterFor = null; pickBest(); }
 }
 
-function pickFirst() {  // a row's main action: a song of yours opens, an Ultimate Guitar song is looked up
-  const first = results.querySelector(".row-action .primary");
-  if (first) first.click();
+// Enter: the answer's best row, its main action (a song of yours opens, an Ultimate Guitar song is looked up);
+// when an artist leads, that artist's songs; when nothing stands out, nothing: a guess never spends a request.
+function pickBest() {
+  const data = shownData;
+  if (!data || artistOpen) return;
+  const best = data.best;
+  if (best) {
+    const row = [...results.querySelectorAll(".hit")].find(r =>
+      (best.library !== undefined && best.library !== null && r.dataset.song === String(best.library)) ||
+      (typeof best.ug === "string" && r.dataset.ug === best.ug));
+    const main = row && row.querySelector(".row-action .primary");
+    if (main) { main.click(); return; }
+  }
+  const artists = Array.isArray(data.artists) ? data.artists : [];
+  if (data.lead === "artist" && artists.length) { openArtist(artists[0], false); return; }
+  if (results.querySelector(".hit")) status.textContent = "Nothing stands out: pick one, or type more.";
+}
+
+// An artist of the offline index, with its most tabbed songs said: Songs lists every one.
+function artistRow(a) {
+  const top = (Array.isArray(a.top) ? a.top : []).map(t => t && t.title).filter(Boolean);
+  const open = button("Songs", "small primary", () => openArtist(a, true), "Songs by " + a.artist + " on Ultimate Guitar");
+  const row = window.caracole.resultRow({
+    title: a.artist, artist: top.length ? "Artist · " + top.join(", ") : "Artist", source: "ug",
+    facts: plural(a.songs, "song"), action: open,
+  });
+  row.classList.add("hit", "artist-hit");
+  row.dataset.artist = a.artist_key;
+  return row;
+}
+
+function getArtist(key, offset, signal) {
+  return fetch("/api/artist?key=" + encodeURIComponent(key) + "&offset=" + offset,
+               {signal, headers: {"Accept": "application/json"}})
+    .then(r => r.json())
+    .then(data => { if (data.error) { status.textContent = data.error; return null; } return data; })
+    .catch(e => { if (e.name !== "AbortError") status.textContent = "The list failed: " + e.message; return null; });
+}
+
+// An artist's songs in place of the results, yours by them first; typing again, or All results, brings those back.
+function openArtist(a, focus) {
+  const mine = ++typed;
+  if (inflight) inflight.abort();
+  inflight = new AbortController();
+  status.textContent = "Listing " + a.artist + "'s songs…";
+  getArtist(a.artist_key, 0, inflight.signal).then(data => { if (data && mine === typed) showArtist(data, focus); });
+}
+
+function showArtist(data, focus) {
+  results.replaceChildren();
+  artistOpen = data.artist_key;
+  const head = el("div", "artist-head");
+  const name = el("h2", null, data.artist);
+  name.tabIndex = -1;
+  head.append(name, button("All results", "small", backToSearch, "Back to all the results"));
+  results.append(head);
+  status.textContent = data.artist + ": " + plural(data.total, "song") + ".";  // one line: nothing below it moves
+  if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
+  const [heading, list] = group("On Ultimate Guitar, the most tabbed first", data.songs.map(ugSong));
+  results.append(heading, list);
+  let listed = data.songs.length;
+  if (listed < data.total) {
+    const box = el("p", "more-songs");
+    const more = button("Show more (" + (data.total - listed) + " left)", "small", () => {
+      more.disabled = true;
+      getArtist(data.artist_key, listed).then(page => {
+        more.disabled = false;
+        if (!page || artistOpen !== data.artist_key) return;
+        for (const h of page.songs) list.append(ugSong(h));
+        listed += page.songs.length;
+        if (listed >= page.total || !page.songs.length) box.remove();
+        else more.textContent = "Show more (" + (page.total - listed) + " left)";
+      });
+    }, "Show more of " + data.artist + "'s songs");
+    box.append(more);
+    results.append(box);
+  }
+  if (focus) name.focus();
+}
+
+function backToSearch() {
+  if (shownData) show(shownData, shownFor);
+  q.focus();
 }
 
 // A song's sheet viewer or PDF, as its card opens it: a link of the library's, relative to this page.
@@ -223,6 +321,7 @@ function librarySong(s) {
     more: [here.childNodes.length ? here : null, {heading: "Files", links: others}].filter(Boolean),
   });
   row.classList.add("hit");
+  row.dataset.song = String(s.id);
   const main = row.querySelector(".row-action a");
   if (main) main.setAttribute("aria-label", opens.label + " of " + s.display);
   return row;
@@ -266,6 +365,7 @@ function ugSong(h) {
     badges: mine ? [{kind: "found", text: "In your library"}] : [], action: get, more,
   });
   row.classList.add("hit");
+  row.dataset.ug = h.ug;
   const dots = row.querySelector(".row-more");
   if (dots && h.tabs.length) {  // what "⋯" holds, said: its versions
     dots.title = "Versions of " + display;
@@ -285,8 +385,8 @@ q.addEventListener("keydown", e => {
   e.preventDefault();
   if (results.hidden) { expand(); return; }  // after a pick: the results again, not the pick again
   const text = typedText();
-  if (text === shownFor) { pickFirst(); return; }
-  // The results on the screen answer an older query: search now, and pick the first of its answer.
+  if (text === shownFor) { pickBest(); return; }
+  // The results on the screen answer an older query: search now, and act on its answer.
   enterFor = text;
   clearTimeout(timer);
   search();

@@ -1371,6 +1371,58 @@ def test_a_library_song_found_comes_as_its_card_has_it_its_viewer_first(app, cfg
     assert get(app, "/" + primary["href"]).status == 200  # the viewer caracole wrote, served
 
 
+def either_index(conn):
+    """Oasis, a band called Wonderwall, and songs titled Wonderwall and Oasis by others."""
+    from caracole.ug.index import mark_built, upsert_rows
+
+    rows = [(11, "oasis", "wonderwall", "chords"), (12, "oasis", "wonderwall", "tabs"), (13, "oasis", "wonderwall", "tabs"),
+            (14, "oasis", "live-forever", "chords"), (21, "ryan-adams", "wonderwall", "chords"),
+            (31, "wonderwall", "in-april", "chords"), (41, "a-great-big-world", "oasis", "chords")]
+    upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1", datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+
+
+def test_api_search_gives_artists_readings_and_what_enter_takes(app, conn):
+    either_index(conn)
+    data = as_json(get(app, "/api/search?q=wonderwall"))
+    assert [(h["ug"], h["via"]) for h in data["index"]] == [("oasis/wonderwall", "title"), ("ryan-adams/wonderwall", "title")]
+    [band] = data["artists"]
+    assert {k: band[k] for k in ("artist_key", "artist", "songs", "tabs")} == {
+        "artist_key": "wonderwall", "artist": "Wonderwall", "songs": 1, "tabs": 1}
+    assert [t["title"] for t in band["top"]] == ["In April"] and band["top"][0]["ug"] == "wonderwall/in-april"
+    assert (data["lead"], data["best"]) == ("song", {"ug": "oasis/wonderwall"})
+    # An artist alone: it leads, and Enter has no song to take.
+    oasis = as_json(get(app, "/api/search?q=oasis"))
+    assert (oasis["lead"], oasis["best"]) == ("artist", None)
+    assert oasis["artists"][0]["artist_key"] == "oasis" and [h["ug"] for h in oasis["index"]] == ["a-great-big-world/oasis"]
+    # A song of yours read by its title is what Enter takes: it costs no request.
+    mine = add_song(conn, "Oasis", "Wonderwall")
+    again = as_json(get(app, "/api/search?q=wonderwall"))
+    assert [(h["id"], h["via"]) for h in again["library"]] == [(mine.id, "title")]
+    assert again["best"] == {"library": mine.id}
+    assert as_json(get(app, "/api/search?q=oasis"))["library"][0]["via"] == "artist"
+    # Nothing strong: Enter takes nothing.
+    weak = as_json(get(app, "/api/search?q=live%20foreve%20zzz"))
+    assert weak["best"] is None
+
+
+def test_api_artist_lists_an_artists_songs_and_yours(app, conn):
+    either_index(conn)
+    mine = add_song(conn, "Oasis", "Wonderwall")
+    add_song(conn, "Radiohead", "Creep")
+    data = as_json(get(app, "/api/artist?key=oasis"))
+    assert (data["artist_key"], data["artist"], data["total"], data["offset"]) == ("oasis", "Oasis", 2, 0)
+    assert [h["ug"] for h in data["songs"]] == ["oasis/wonderwall", "oasis/live-forever"]  # the most tabbed first
+    first = data["songs"][0]
+    assert first["counts"] == {"chords": 1, "tabs": 2} and first["song"] == mine.id and first["tabs"][0]["id"] == 11
+    assert [s["id"] for s in data["library"]] == [mine.id]  # yours by them, as the search gives them
+    assert "links" in data["library"][0] and data["library"][0]["via"] == "artist"
+    paged = as_json(get(app, "/api/artist?key=oasis&offset=1"))
+    assert [h["ug"] for h in paged["songs"]] == ["oasis/live-forever"] and paged["offset"] == 1
+    assert get(app, "/api/artist?key=nobody-at-all").status == 404
+    assert get(app, "/api/artist").status == 400 and get(app, "/api/artist?key=oasis&offset=x").status == 400
+
+
 def test_a_search_of_fewer_than_three_letters_looks_nowhere(app, conn):
     creep_index(conn)
     assert as_json(get(app, "/api/search?q=cr")) == {"query": "cr", "library": [], "index": [], "short": True}
@@ -1567,7 +1619,7 @@ def test_a_request_number_of_other_digits_than_0_to_9_is_no_request(app, queue, 
     assert response.status == 404 and as_json(response) == {"error": "no such request"}
 
 
-@pytest.mark.parametrize("path", ["/api/search?q=creep", "/api/jobs", "/api/jobs/1"])
+@pytest.mark.parametrize("path", ["/api/search?q=creep", "/api/artist?key=radiohead", "/api/jobs", "/api/jobs/1"])
 def test_the_api_answers_its_own_pages_and_no_other_site(app, conn, queue, path):
     # Another site can't read the answers, but it could make the server search for it: refused.
     creep_index(conn)
@@ -1589,17 +1641,17 @@ def test_a_search_typed_over_lets_go_of_the_database_at_once(app, conn, monkeypa
 
     creep_index(conn)
     started = threading.Event()
-    real = caracole.search.search_index
+    real = caracole.search.find_index
 
-    def search_index(c, query, limit=10):
+    def find_index(c, query, **kwargs):
         if query != "slow words":
-            return real(c, query, limit)
+            return real(c, query, **kwargs)
         started.set()
         c.execute("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 300000000) "
                   "SELECT count(*) FROM n").fetchone()  # half a minute or more, unless interrupted
-        return []
+        return caracole.search.IndexFound()
 
-    monkeypatch.setattr(caracole.search, "search_index", search_index)
+    monkeypatch.setattr(caracole.search, "find_index", find_index)
     first: dict = {}
     newer: dict = {}
     older = threading.Thread(target=lambda: first.update(as_json(get(app, "/api/search?q=slow%20words"))),

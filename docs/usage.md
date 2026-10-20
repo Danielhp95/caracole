@@ -1805,8 +1805,17 @@ with it. A KEY that is no key exits with status 2.
   [caracole search](#caracole-search)), asking no
   site anything. A search you type over stops at once, so a slow one (a very
   common word, "the" on the way to "the beatles") never holds up the next.
-  Pick a song with Get it (Enter picks the first result of what you typed,
-  once its results are in), or one of its versions (Versions numbers its
+  A song or an artist alone will do, as in `caracole search`: an artist the
+  query names is a row of its own, with their most tabbed songs and how many
+  they have, first when they lead ("oasis"), after the songs when a song does
+  ("wonderwall"); its Songs lists all of theirs, yours by them first, then the
+  offline index's, most tabbed first, fifty at a time (Show more), and All
+  results goes back. Enter acts on what you typed, once its results are in:
+  the song you clearly meant (one of yours opens; an Ultimate Guitar song is
+  looked up), the leading artist's songs, or, when nothing stands out (a
+  partial match, a catch-all's song), nothing at all: it says to pick one, and
+  a guess never spends a request.
+  Pick a song with Get it, or one of its versions (Versions numbers its
   chords, tabs and Guitar Pro pages within each kind, "Chords 2 of 13", each
   with an "on UG" link to look at it there first): it is looked up at once,
   as `caracole get --ug … [--tab …]` does it, and the song or tab you picked
