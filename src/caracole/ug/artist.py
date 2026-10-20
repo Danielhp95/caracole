@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urljoin, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from caracole.ug.page import PageParseError, UGVersion, json_int, read_page_data, read_versions
 
@@ -34,20 +34,18 @@ _FILTER_KINDS = {value: kind for kind, value in KIND_FILTERS.items()}
 class UGArtistPage:
     """One page of an artist's tab list.
 
-    ``url`` is the artist's page without filter or page number. ``tabs`` are
-    the tabs on this page, of every type; links to UG's paid app are left out.
-    ``page`` is this page's number and ``pages`` the highest page number UG
-    links to. ``filters`` takes each kind UG offers a filter for (chords, tabs,
-    guitar-pro, power) to the absolute URL of that filtered list.
+    ``tabs`` are the tabs on this page, of every type; links to UG's paid app
+    are left out. ``page`` is this page's number and ``pages`` the highest page
+    number UG links to. ``filters`` holds each kind UG offers a filtered list
+    of (chords, tabs, guitar-pro, power).
     """
 
     artist_id: int
     name: str
-    url: str
     tabs: tuple[UGVersion, ...]
     page: int
     pages: int
-    filters: Mapping[str, str]
+    filters: frozenset[str]
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -63,61 +61,32 @@ def _links(entries: list[Mapping[str, Any]]) -> list[str]:
     return [e["url"] for e in entries if isinstance(e.get("url"), str) and e["url"]]
 
 
-def _without_query(url: str) -> str:
-    parts = urlsplit(url)
-    return urlunsplit((parts.scheme, parts.netloc, parts.path.rstrip("/"), "", ""))
-
-
-def _filters(entries: list[Mapping[str, Any]], base: str) -> dict[str, str]:
-    """kind → absolute URL, read from each filter link's ``filter`` parameter."""
-    filters: dict[str, str] = {}
-    for link in _links(entries):
-        absolute = urljoin(base, link)
-        kind = _FILTER_KINDS.get(parse_qs(urlsplit(absolute).query).get("filter", [""])[0])
-        if kind is not None:
-            filters.setdefault(kind, absolute)
-    return filters
+def _filters(entries: list[Mapping[str, Any]]) -> frozenset[str]:
+    """The kinds named by the filter links' ``filter`` parameter, relative links or absolute."""
+    values = (parse_qs(urlsplit(link).query).get("filter", [""])[0] for link in _links(entries))
+    return frozenset(kind for value in values if (kind := _FILTER_KINDS.get(value)) is not None)
 
 
 def parse_artist_page(html: str | bytes, *, url: str | None = None) -> UGArtistPage:
-    """Parse an artist page. ``url`` is the page's address; UG's relative links resolve against it.
-
-    The artist's ``url`` is taken from the path UG's own links use, else from
-    ``url``, else built from ``name_stripped`` and the id: ``/artist/<name>_<id>``,
-    or ``/artist/<id>`` alone for an artist without one, as UG writes some
-    (宋冬野's is ``/artist/634073``).
-    """
+    """Parse an artist page. ``url`` is the page's address, for the errors it raises."""
     data = read_page_data(html, url=url)
     artist = _mapping(data.get("artist"))
     artist_id = json_int(artist.get("id"))
     if artist_id is None:
         raise PageParseError("ug", url, None, "no usable data.artist")
     tabs = read_versions(data, "other_tabs", url=url)
-    base = url or WWW
     pagination = _mapping(data.get("pagination"))
     page_entries = _entries(pagination.get("pages"))
-    filter_entries = _entries(_mapping(data.get("filters")).get("types"))
-
-    links = _links(page_entries) + _links(filter_entries)
-    if links:
-        artist_url = _without_query(urljoin(base, links[0]))
-    elif url:
-        artist_url = _without_query(url)
-    elif stripped := str(artist.get("name_stripped") or ""):
-        artist_url = f"{WWW}/artist/{stripped}_{artist_id}"
-    else:
-        artist_url = f"{WWW}/artist/{artist_id}"
 
     page = json_int(pagination.get("current")) or json_int(data.get("current_page")) or 1
     listed = [json_int(e.get("page")) for e in page_entries]
     return UGArtistPage(
         artist_id=artist_id,
         name=str(artist.get("name") or ""),
-        url=artist_url,
         tabs=tabs,
         page=page,
         pages=max([page, *(n for n in listed if n)]),
-        filters=_filters(filter_entries, base),
+        filters=_filters(_entries(_mapping(data.get("filters")).get("types"))),
     )
 
 

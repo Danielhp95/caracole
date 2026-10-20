@@ -244,7 +244,7 @@ def test_the_live_artist_page_lists_banma_under_the_names_ug_gave_it(library, co
 
     ug = FakeUG()
     page = parse_artist_page(ug.pages[CHORDS], url=CHORDS)
-    assert (page.artist_id, page.name, page.url, page.pages) == (634073, "Song Dongye (宋冬野)", SONG_DONGYE_URL, 1)
+    assert (page.artist_id, page.name, page.pages) == (634073, "Song Dongye (宋冬野)", 1)
     assert set(page.filters) == {"chords", "tabs"}
     assert [(t.tab_id, t.song_name) for t in page.tabs][:3] == [
         (6613886, "与我交谈 Speak With Me"), (4180894, BANMA_UG), (4689017, BANMA_UG)]
