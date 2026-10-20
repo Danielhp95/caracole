@@ -114,7 +114,9 @@ same way from `$CACHE_DIRECTORY`, `$XDG_CACHE_HOME/caracole` or
 and `caracole.lock`: back it up, but don't sync it. The cache keeps every
 response caracole has received, so it rarely asks for a page twice; deleting it
 costs only requests. PDFs are made in it too, each in a private folder that
-goes when the PDF is done, so caracole must be able to write there.
+goes when the PDF is done, so caracole must be able to write there. Its
+`icons` folder holds each site's icon, for `index.html` (see
+[Where each file came from](#where-each-file-came-from)).
 
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
 to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
@@ -650,19 +652,22 @@ configuration it would take, and why it waits.
 `caracole run` is what the nightly timer starts. Its steps, in order:
 
 1. **sync**: wanted.txt, then Spotify.
-2. **index**: refresh the index, and mark the songs that have new tabs.
-3. **match**: match every song again, locally.
-4. **lyrics**: ask LRCLIB for the songs that have no lyrics yet.
-5. **fetch**: rank and keep Ultimate Guitar sheets and guitar parts.
-6. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet.
-7. **scan**: link purchases in Music/, and file Guitar Pro downloads.
-8. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
+2. **icons**: fetch the icon of each site the library has something from, once
+   (see [Where each file came from](#where-each-file-came-from)). It comes
+   before the steps that can spend a site's budget.
+3. **index**: refresh the index, and mark the songs that have new tabs.
+4. **match**: match every song again, locally.
+5. **lyrics**: ask LRCLIB for the songs that have no lyrics yet.
+6. **fetch**: rank and keep Ultimate Guitar sheets and guitar parts.
+7. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet.
+8. **scan**: link purchases in Music/, and file Guitar Pro downloads.
+9. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
    has none. It comes after the scan, so a file you dropped into `_inbox/` is
    filed first, and that song gets none from gtptabs.com.
-9. **musescore**: read MuseScore's song sitemaps into a local index, for the
-   to-do page's links to its pages. It downloads nothing.
-10. **render**: write ChordPro files and PDFs.
-11. **todo**: rewrite `_todo.md` and `index.html`.
+10. **musescore**: read MuseScore's song sitemaps into a local index, for the
+    to-do page's links to its pages. It downloads nothing.
+11. **render**: write ChordPro files and PDFs.
+12. **todo**: rewrite `_todo.md` and `index.html`.
 
 Every step runs even when an earlier one failed, so the to-do page is always
 rewritten. Until the index is built, the index and match steps are skipped;
@@ -904,6 +909,17 @@ and cache.
   render writes the `.cho` and the viewer again; the next `caracole run` writes
   `sheet.json` again before it renders.
 - **`caracole todo`** rewrites `_todo.md` and `index.html` from the database.
+- **`caracole icons`** fetches the icon of each site `index.html` has none for
+  yet, now, then rewrites `_todo.md` and `index.html`. It prints a line a site:
+  `Ultimate Guitar: icon fetched`, `LaCuerda: kept already`, `LRCLIB: no icon
+  there; its badge stands in, and the site is asked again in a week`, or why it
+  asked nothing (turned off, cooling down). Unlike the run's icons step, it
+  also tries a site whose last try failed less than a week ago, and YouTube,
+  which has no provider of its own: at most 4 requests, at the usual 10–20 s
+  pace. What a site answered less than a week ago still comes from the cache,
+  so running it again sooner asks that site nothing. A block cools that site
+  down, as any block does, and the others are still asked. A block or an error
+  exits 0.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
 - **`caracole search [QUERY]... [--limit N] [--add N] [--key KEY]`** searches
@@ -1181,7 +1197,30 @@ artist's cards share a coloured monogram, and the artist's name under a title
 shows only that artist's songs ("Queen" leaves out ABBA's "Dancing Queen"),
 until you take its chip off. "Find it elsewhere" opens a song's MuseScore
 pages, each a possible match, as on the to-do page, and, for a song without a
-sheet, its search and buy links.
+sheet, its search and buy links. Next to its status, a card shows where its
+sheet came from, by the site's own icon, and a file from somewhere else
+carries its own: the lyrics LRCLIB's, a Guitar Pro file gtptabs.com's (see
+[Where each file came from](#where-each-file-came-from)).
+
+The Cards/Rows switch, beside the Key menu, shows the songs as rows instead:
+one line a song on a laptop, about twenty to a screen, and two lines on a
+phone: the title and the button, then the artist, the key and the status. A
+row has the sheet's mark, the title, the artist (which, as on a card,
+shows only that artist's songs), the key ("Am"; a screen reader hears "Key A
+minor (from the tab)"), the status, Needs review when caracole isn't sure of
+the match, and one button: the sheet, or, on the page
+`caracole serve` serves, Fetch now for a wanted song (Pick the match for one
+that needs review first, and Removing… while caracole removes it). An auto
+sheet's row says so by its ♪ mark and its button, "Auto sheet PDF", rather
+than by a badge, so that a phone's second line keeps room for the artist. Its
+"⋯" button opens the rest: a review's candidates (the same picker as a
+card's, which Pick the match opens there), the other files, the Guitar Pro
+pages, MuseScore's pages, the search and buy links and, served, Look in the
+index and Remove…. A request's line (see [caracole serve](#caracole-serve))
+shows under the row, a line of its own, as it does on a card. The search, the
+status buttons, the Key menu, the sort and the
+letters work the same in both, and the address remembers the choice
+(`#view=rows`), as it does the rest: a bookmark opens the page as you left it.
 
 A song that needs review opens its candidates under "3 candidates", numbered
 as `caracole review` numbers them. Each is the UG song as UG names it
@@ -1212,7 +1251,9 @@ offline index doesn't know. `caracole serve` serves the same page with a form
 to request songs (see below).
 
 Each song's entry in the page's data (the `<script type="application/json"
-id="songs">` block) has the same `key` and `key_source` as its info.json.
+id="songs">` block) has the same `key` and `key_source` as its info.json, and
+`source`, where its sheet came from (`ug`, `lacuerda`, `auto`…); each of its
+files has its own `source`.
 
 ### The sheet viewer
 
@@ -1270,6 +1311,41 @@ On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
 opens the file directly, works.
 
+### Where each file came from
+
+Each source has a mark: the site's own icon for Ultimate Guitar, LaCuerda,
+LRCLIB (lyrics), gtptabs.com, MuseScore and YouTube, a ♪ for a sheet the
+audio model wrote (auto-chords), and a ↓ for a file you filed from `_inbox/`.
+A site's mark is named for screen readers ("from Ultimate Guitar").
+
+A site's icon is its favicon. The nightly run's icons step asks each site for
+it once, from the first night the library has something from that site (a
+sheet, a Guitar Pro page to click, lyrics, MuseScore's pages), with that
+site's own polite client: its robots.txt, budget, pauses and cooldown, and
+every answer cached forever. It asks for `/favicon.ico`
+first; when that gives no icon, the home page, for an `<link rel="icon">` or
+`apple-touch-icon` on the same site (two at most, never an SVG). The icon is
+kept in the cache folder, as `icons/<site>.png`, small and cleaned:
+
+- only a PNG or an ICO is read, by its bytes, up to 256 KB;
+- a PNG keeps its image chunks alone, with no text, metadata or animation,
+  once each chunk and its pixels check out;
+- an ICO gives its image nearest 32 pixels, turned into a PNG;
+- anything else, an SVG too, is refused;
+- a kept icon is at most 256 pixels a side and 16 KB.
+
+The page inlines each icon (a `data:` URI), so it still loads nothing from the
+network. A site whose icon can't be had (it blocked caracole, robots.txt closes
+it, it has none, or it wasn't asked yet) shows a small lettered badge instead:
+UG, LC, LR, GT, MS, YT. A site that gave no icon, or failed, is asked again a
+week later, its answers older than a week asked for once more, so a site that
+puts an icon up later gets it then; a spent budget or a cooldown leaves it for
+the next run. YouTube has no provider of its own, so the nightly run doesn't
+ask it. `caracole icons` asks now (see
+[One step at a time](#one-step-at-a-time)), and deleting `icons/` in the cache
+folder makes caracole read them again from its cache of the answers, however
+old, with no request.
+
 ### caracole search
 
 `caracole search [QUERY]... [--limit N] [--add N] [--key KEY]` looks in
@@ -1280,15 +1356,18 @@ two places, and sends no request:
       Radiohead - Creep · wanted, no sheet yet · no folder yet
 
     On Ultimate Guitar (offline index)
-      1. Radiohead - Creep · chords×2 tabs×1 guitar-pro×1 (incl. acoustic)
+      1. [UG] Radiohead - Creep · chords×2 tabs×1 guitar-pro×1 (incl. acoustic)
          https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169
          in your library
-      2. Stone Temple Pilots - Creep · chords×1
+      2. [UG] Stone Temple Pilots - Creep · chords×1
          https://tabs.ultimate-guitar.com/tab/stone-temple-pilots/creep-chords-5001
          caracole add "Stone Temple Pilots" "Creep"
 
 - **In your library**: every song, whatever its status, with its key when it
-  has one (`Key G major (from the tab)`) and its folder. A song in review
+  has one (`Key G major (from the tab)`) and its folder. A song with a sheet
+  is tagged with where the sheet came from, as `index.html` marks it with the
+  site's icon: `[UG]`, `[LaCuerda]`, `[auto]` (the audio model), as in
+  `[LaCuerda] Soda Stereo - De Música Ligera · found · …`. A song in review
   also shows its first three candidates, as the matcher found them:
 
       epic - I'm not sorry for loving you · wanted, needs review · no folder yet
@@ -1296,9 +1375,9 @@ two places, and sends no request:
            94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)
            82  bill-fox/im-not-over-loving-you (title_only)
 
-- **On Ultimate Guitar**: numbered hits from the offline index, each with its
-  tabs per type, one of its pages, and the `caracole add` line to paste. A
-  song of one of UG's catch-all artists (`misc-musicals`, `misc-soundtrack`…,
+- **On Ultimate Guitar**: numbered hits from the offline index, each tagged
+  `[UG]`, with its tabs per type, one of its pages, and the `caracole add`
+  line to paste. A song of one of UG's catch-all artists (`misc-musicals`, `misc-soundtrack`…,
   see [caracole match](#caracole-match---dry-run)) is also scored on its title
   alone, with and without words such as "the musical", so
   `caracole search epic not sorry for loving you` finds
@@ -1307,7 +1386,7 @@ two places, and sends no request:
   "Misc Musicals". It says instead that its artist is a catch-all, to add the
   song as you know it and pick that hit in `caracole review`:
 
-      1. Misc Musicals - Epic The Musical Not Sorry For Loving You · chords×1
+      1. [UG] Misc Musicals - Epic The Musical Not Sorry For Loving You · chords×1
          https://tabs.ultimate-guitar.com/tab/misc-musicals/epic-the-musical-not-sorry-for-loving-you-chords-4742072
          misc-musicals is UG's catch-all artist, no one's name: add the song as you know it,
          then pick this hit in `caracole review`:
@@ -1337,7 +1416,7 @@ more there are:
 
     $ caracole search --key Am
     In your library, in A minor
-      Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
+      [LaCuerda] Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
 
     The offline Ultimate Guitar index has no keys: search it without --key.
 
@@ -1361,11 +1440,13 @@ do:
 - **Fetch it now.** Ticked, as it is by default, the request also runs
   `caracole match` (offline), `caracole fetch --song "ARTIST - TITLE"` and
   `caracole render` (offline), so a sheet can be there in a minute or two.
-  Each wanted song's card has a Fetch now button that does the same, except
+  Each wanted song's card, and its row in the Rows view, has a Fetch now
+  button that does the same, except
   on a song that needs review, which `caracole fetch` won't fetch until
   `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
-  overrides.toml) settles the match: its card has Pick the match instead
-  (below). Lyrics, LaCuerda and the rest wait for the nightly run.
+  overrides.toml) settles the match: its card and its row have Pick the
+  match instead (below). Lyrics, LaCuerda and the rest wait for the nightly
+  run.
 - **Pick the match.** On a song that needs review, Pick the match opens its
   candidates, as on the file (see above), as a list to choose from: pick one,
   or None of these, and Pick. It runs `caracole review --song "ARTIST - TITLE"
@@ -1387,22 +1468,28 @@ do:
   review without candidates keeps its Review first button: `caracole review`
   offers it a pin or an ignore. With the keyboard, Enter opens the picker and
   takes the focus to the first candidate, the arrow keys choose, and Tab
-  goes on through the candidates' UG links to Fetch it now and Pick.
+  goes on through the candidates' UG links to Fetch it now and Pick. In the
+  Rows view the picker is under the row's "⋯", and the row's Pick the match
+  opens it there, the focus on the first candidate.
 - **Look in the index.** A wanted song the offline index didn't match has a
-  Look in the index link beside Fetch now: its page, `/review?song=ID`, runs
+  Look in the index link beside Fetch now (under "⋯" in the Rows view): its
+  page, `/review?song=ID`, runs
   `caracole search` for the song's artist and title, and offers the first five
   hits the same way, without None of these. A pick writes `[match]` alone (see
   [Review](#review)). The page runs the search when you open it, so the
   library page carries no hits of its own.
-- **Remove a song.** Each card's Remove… button opens a page that says what
+- **Remove a song.** Each card's Remove… button (a row's, under its "⋯")
+  opens a page that says what
   goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
   it queues `caracole remove --yes "ARTIST - TITLE"`, and the card says
-  Removing… until it has run; on `/jobs` its line says "Removing from
+  Removing… until it has run (a row, in place of its button); on `/jobs`
+  its line says "Removing from
   caracole…", then "Removed". Keep it goes back to the library, and nothing
   changes. A page older than a change to the library (the song merged into
   another since, say) removes nothing: reload the library.
 - **How it goes, on the page.** A request leaves you where you are. The
-  song's card, or for a song new to the library a card of its own under the
+  song's card (or its row, on a line under it), or for a song new to the
+  library a card of its own under the
   form ("Just requested"), says on one line how its request goes: "Queued…"
   (or "Queued behind 2 requests…"), then what runs ("Adding to the
   library…", "Looking it up…", "Fetching from Ultimate Guitar…", "Rendering

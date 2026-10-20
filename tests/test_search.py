@@ -358,10 +358,10 @@ def test_cli_prints_library_hits_and_numbered_index_hits(tmp_path):
     assert "In your library" in library
     assert "Radiohead - Creep" in library and "found" in library
     assert str(tmp_path / "lib" / "Radiohead" / "Creep") in library
-    assert "1. Radiohead - Creep" in ug
+    assert "1. [UG] Radiohead - Creep" in ug
     assert "chords×3 tabs×2 guitar-pro×1" in ug
     assert "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169" in ug
-    assert "2. Stone Temple Pilots - Creep" in ug
+    assert "2. [UG] Stone Temple Pilots - Creep" in ug
     assert 'caracole add "Stone Temple Pilots" "Creep"' in ug
 
 
@@ -608,6 +608,23 @@ def test_cli_library_hits_show_their_key(tmp_path):
     assert "Radiohead - Creep · found · Key G major (from the tab) · " in result.output
 
 
+def test_cli_hits_are_tagged_with_where_they_came_from(tmp_path):
+    conn = seed_keys(tmp_path)
+    lucky = find_song(conn, "radiohead/lucky")
+    lc = upsert_version(conn, provider="lacuerda", tab_id="radiohead/lucky", song_id=lucky.id, slot="sheet",
+                        kind="acordes", rating=0, votes=0, version=2, label=None,
+                        url="https://acordes.lacuerda.net/radiohead/lucky.shtml", raw={}, now="x")
+    keep_file(conn, tmp_path / "lib", song=lucky, version_id=lc, name="sheet.txt", data=b"LaCuerda's\n", rank=1)
+    add_song(conn, "Radiohead", "Airbag")  # wanted: no sheet yet, so no tag
+    result = run(tmp_path, "search", "radiohead")
+    assert result.exit_code == 0, result.output
+    library, _, ug = result.output.partition("On Ultimate Guitar (offline index)")
+    assert "\n  [UG] Radiohead - Creep · found · Key G major (from the tab) · " in library
+    assert "\n  [LaCuerda] Radiohead - Lucky · found" in library
+    assert "\n  Radiohead - Airbag · wanted, no sheet yet · no folder yet" in library
+    assert "\n  1. [UG] Radiohead - Creep · chords×3" in ug  # the offline index is Ultimate Guitar's
+
+
 def test_cli_search_by_key_alone_lists_your_songs_in_that_key(tmp_path):
     seed_keys(tmp_path)
     result = run(tmp_path, "search", "--key", "Am")
@@ -654,7 +671,7 @@ def test_cli_search_by_key_takes_the_key_in_lowercase(tmp_path, typed, heading, 
     result = run(tmp_path, "search", "--key", typed)
     assert result.exit_code == 0, result.output
     assert f"In your library, in {heading}" in result.output
-    assert f"  {song} · found · Key {heading}" in result.output
+    assert f"  [UG] {song} · found · Key {heading}" in result.output
 
 
 def test_cli_search_by_key_says_when_limit_cuts_the_list(tmp_path):
@@ -725,13 +742,29 @@ def test_cli_shows_a_reviews_first_candidates_under_its_song(tmp_path):
     assert "cover-1" not in library  # three at most: `caracole review` and the to-do page have them all
 
 
+def test_cli_a_review_with_a_sheet_from_elsewhere_keeps_its_tag_and_its_candidates(tmp_path):
+    conn = seed(tmp_path, rows=ROWS + [EPIC, NEAR_EPIC])
+    s = epic_review(conn)
+    lc = upsert_version(conn, provider="lacuerda", tab_id="epic/not_sorry", song_id=s.id, slot="sheet",
+                        kind="acordes", rating=0, votes=0, version=1, label=None,
+                        url="https://acordes.lacuerda.net/epic/not_sorry.shtml", raw={}, now="x")
+    keep_file(conn, tmp_path / "lib", song=s, version_id=lc, name="sheet.txt", data=b"LaCuerda's\n", rank=1)
+    update_song(conn, s.id, status="found")
+    result = run(tmp_path, "search", "epic")
+    assert result.exit_code == 0, result.output
+    library = result.output.partition("On Ultimate Guitar (offline index)")[0]
+    assert "\n  [LaCuerda] epic - I'm not sorry for loving you · found · " in library
+    assert ("     Did you mean (`caracole review` settles it):\n"
+            "       94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)\n") in library
+
+
 def test_cli_says_a_hit_is_under_ugs_catch_all_artist(tmp_path):
     seed(tmp_path, rows=ROWS + [EPIC, NEAR_EPIC])
     result = run(tmp_path, "search", "epic", "not", "sorry", "for", "loving", "you")
     assert result.exit_code == 0, result.output
     ug = result.output.partition("On Ultimate Guitar (offline index)")[2]
     first, second = ug.split("\n  2. ", 1)
-    assert "1. Misc Musicals - Epic The Musical Not Sorry For Loving You" in first
+    assert "1. [UG] Misc Musicals - Epic The Musical Not Sorry For Loving You" in first
     # Added under UG's names, the song's artist would be "Misc Musicals": no line to paste does that.
     assert 'caracole add "Misc Musicals"' not in first
     assert ("misc-musicals is UG's catch-all artist, no one's name: add the song as you know it, then pick "

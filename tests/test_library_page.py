@@ -245,7 +245,8 @@ def test_a_songs_musescore_pages_are_linked_as_possible_matches(conn, cfg):
     html = page(conn, cfg, Overrides(ignore=frozenset({ignored.key})))
     cards = songs_of(html)
     assert cards[oasis.display]["museScore"] == [
-        {"label": "wonderwall-680101 (possible match)", "href": "https://musescore.com/song/wonderwall-680101"}]
+        {"label": "wonderwall-680101 (possible match)", "href": "https://musescore.com/song/wonderwall-680101",
+         "source": "musescore"}]
     assert cards[ignored.display]["museScore"] == []
     assert '"Scores on MuseScore"' in html  # the card's heading for them
     off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
@@ -569,9 +570,17 @@ def test_the_nightly_todo_step_also_writes_index_html(conn, cfg):
 CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 
 
+NARROWEST_WINDOW = 500  # headless Chromium makes a narrower --window-size this wide, whatever is asked
+
+
 def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,900") -> str:
-    """The page's DOM after its script ran; skips the test when this machine can't run Chromium."""
+    """The page's DOM after its script ran, laid out in a window of ``size`` ("width,height");
+    skips the test when this machine can't run Chromium. A phone's width, narrower than headless
+    Chromium's narrowest window, is set as a phone's screen over the DevTools protocol."""
     url = path.as_uri() + fragment
+    width, height = (int(n) for n in size.split(","))
+    if width < NARROWEST_WINDOW:
+        return phone_dom(url, tmp_path, width, height)
     try:
         result = subprocess.run(
             [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
@@ -584,6 +593,102 @@ def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,9
     if result.returncode != 0 or "<html" not in result.stdout:
         pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
     return result.stdout
+
+
+# Runs Chromium with the pipe it reads the DevTools protocol from as fd 3, and writes to as fd 4.
+_PIPE_FDS = ("import os, sys; os.dup2(int(sys.argv[1]), 3); os.dup2(int(sys.argv[2]), 4); "
+             "os.execv(sys.argv[3], sys.argv[3:])")
+
+
+def phone_dom(url: str, tmp_path: Path, width: int, height: int, timeout: float = 60.0) -> str:
+    """The DOM of ``url`` on a phone's screen of ``width`` × ``height`` CSS pixels
+    (``Emulation.setDeviceMetricsOverride``, over ``--remote-debugging-pipe``), once it loaded and its
+    timers ran for 3 s of its own clock (``Emulation.setVirtualTimePolicy``), as dump_dom's
+    ``--virtual-time-budget`` lets them: a test's script that notes what it sees after a timeout runs."""
+    import os
+    import select
+    import sys
+    import time
+
+    chrome_reads, to_chrome = os.pipe()
+    from_chrome, chrome_writes = os.pipe()
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "-c", _PIPE_FDS, str(chrome_reads), str(chrome_writes), CHROMIUM,
+             "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+             f"--user-data-dir={tmp_path / 'chrome'}", "--hide-scrollbars", "--remote-debugging-pipe",
+             "about:blank"],
+            pass_fds=(chrome_reads, chrome_writes), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    finally:
+        os.close(chrome_reads)
+        os.close(chrome_writes)
+    deadline = time.monotonic() + timeout
+    pending = b""
+    heard: list[dict] = []
+    sent = 0
+
+    def hear() -> dict:
+        nonlocal pending
+        while b"\0" not in pending:
+            left = deadline - time.monotonic()
+            if left <= 0 or not select.select([from_chrome], [], [], left)[0]:
+                raise TimeoutError("chromium answered nothing in time")
+            chunk = os.read(from_chrome, 1 << 16)
+            if not chunk:
+                raise EOFError("chromium closed its pipe")
+            pending += chunk
+        message, pending = pending.split(b"\0", 1)
+        return json.loads(message)
+
+    def ask(method: str, params: dict | None = None, session: str | None = None) -> dict:
+        nonlocal sent
+        sent += 1
+        message = {"id": sent, "method": method, "params": params or {}}
+        if session is not None:
+            message["sessionId"] = session
+        os.write(to_chrome, json.dumps(message).encode() + b"\0")
+        while (answer := hear()).get("id") != sent:
+            heard.append(answer)
+        if "error" in answer:
+            raise RuntimeError(f"{method}: {answer['error']}")
+        return answer.get("result", {})
+
+    try:
+        try:
+            target = ask("Target.createTarget", {"url": "about:blank"})["targetId"]
+        except (OSError, EOFError, TimeoutError, RuntimeError) as e:
+            pytest.skip(f"chromium couldn't run: {e}")
+        session = ask("Target.attachToTarget", {"targetId": target, "flatten": True})["sessionId"]
+        ask("Emulation.setDeviceMetricsOverride",
+            {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": True}, session)
+        ask("Page.enable", None, session)
+        ask("Page.navigate", {"url": url}, session)
+        while not any(m.get("method") == "Page.loadEventFired" and m.get("sessionId") == session for m in heard):
+            heard.append(hear())
+        # Then, as --virtual-time-budget does for dump_dom, the page's timers run, 3 s of its own clock.
+        ask("Emulation.setVirtualTimePolicy", {"policy": "pauseIfNetworkFetchesPending", "budget": 3000}, session)
+        while not any(m.get("method") == "Emulation.virtualTimeBudgetExpired" and m.get("sessionId") == session
+                      for m in heard):
+            heard.append(hear())
+        done = ask("Runtime.evaluate", {"expression": "document.documentElement.outerHTML", "returnByValue": True},
+                   session)
+        return done["result"]["value"]
+    finally:
+        try:
+            ask("Browser.close")
+        except (OSError, EOFError, TimeoutError, RuntimeError):
+            pass
+        os.close(to_chrome)
+        os.close(from_chrome)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
 
 def listing(dom: str) -> str:
@@ -753,11 +858,13 @@ def test_cards_fill_a_desktop_row_and_stack_on_a_phone(conn, cfg, tmp_path):
     path = write_library_page(cfg.library_dir, measured(page(conn, cfg)))
 
     wide = layout_of(dump_dom(path, tmp_path, size="1280,900"))
+    assert wide["page"] == 1280, wide  # laid out at the width asked for
     assert len(wide["tops"]) == 4
     assert wide["tops"].count(wide["tops"][0]) >= 3, wide  # at least three cards share the first row
     assert wide["scroll"] <= wide["page"]
 
     phone = layout_of(dump_dom(path, tmp_path, size="390,844"))
+    assert phone["page"] == 390, phone  # a phone's width, not headless Chromium's narrowest window
     assert len(set(phone["tops"])) == 4, phone  # one card per row
     assert phone["scroll"] <= phone["page"], phone  # nothing wider than the screen
     assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
@@ -1075,6 +1182,113 @@ OPEN_PICKER = """
 """
 
 
+# --- where each file came from: the sites' icons ----------------------------------------------
+
+
+def test_each_file_says_where_it_came_from_and_the_song_where_its_sheet_did(conn, cfg):
+    from caracole.lacuerda_fetch import SHEET_DOCS
+
+    ug = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, ug, "Words\n")
+    gtp = upsert_version(conn, provider="gtptabs", tab_id="12", song_id=ug.id, slot="guitar", kind="guitar-pro",
+                         rating=4, votes=0, version=1, label=None, url="https://gtptabs.com/tabs/r/creep.html",
+                         raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=ug, version_id=gtp, name="guitar-1.gp5", data=b"gp5", rank=1)
+    score = upsert_version(conn, provider="inbox", tab_id="score", song_id=ug.id, slot="guitar", kind="score",
+                           rating=0, votes=0, version=1, label=None, url="", raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=ug, version_id=score, name="score-1.mscz", data=b"ms", rank=1)
+    put(cfg, ug, "sheet.pdf", "sheet.cho", "lyrics.txt", "lyrics.lrc", "info.json")
+    spanish = add_song(conn, "Soda Stereo", "De Música Ligera")
+    lc = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/de_musica_ligera", song_id=spanish.id,
+                        slot="sheet", kind="acordes", rating=0, votes=0, version=1, label=None,
+                        url="https://acordes.lacuerda.net/soda_stereo/de_musica_ligera.shtml", raw={}, now="x")
+    for name in SHEET_DOCS:
+        keep_file(conn, cfg.library_dir, song=spanish, version_id=lc, name=name, data=name.encode(), rank=1)
+    auto = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, auto, "sheet (auto).txt", "sheet (auto).pdf")
+    wanted = add_song(conn, "Oasis", "Wonderwall")
+
+    songs = songs_of(page(conn, cfg))
+    files = {f["name"]: f.get("source") for f in songs[ug.display]["files"]}
+    assert files == {"sheet.pdf": "ug", "sheet.txt": "ug", "sheet.cho": "ug", "lyrics.txt": "lrclib",
+                     "lyrics.lrc": "lrclib", "guitar-1.gp5": "gtptabs", "score-1.mscz": "inbox", "info.json": None}
+    assert songs[ug.display]["source"] == "ug"
+    assert songs[spanish.display]["source"] == "lacuerda"
+    assert songs[auto.display]["source"] == "auto"
+    assert {f["name"]: f["source"] for f in songs[auto.display]["files"]} == {
+        "sheet (auto).pdf": "auto", "sheet (auto).txt": "auto"}
+    assert songs[wanted.display]["source"] is None
+
+
+def test_links_to_other_sites_name_them(conn, cfg):
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
+    set_picks(conn, s.id, ["guitar-pro"], [v])
+    song = songs_of(page(conn, cfg))[s.display]
+    assert [g["source"] for g in song["guitarPro"]] == ["ug"]
+    assert {link["label"]: link.get("source") for link in song["links"]} == {"Chordify": None, "YouTube": "youtube"}
+
+
+def test_the_page_inlines_the_icons_kept_and_allows_images_from_data_alone(conn, cfg):
+    from helpers.icon_files import png
+
+    from caracole import icons
+
+    icons.keep_icon(cfg.cache_dir, "ug", icons.sanitize(png(32)))
+    html = page(conn, cfg)
+    shown = data_of(html)["icons"]
+    assert shown["ug"]["src"] == icons.icon_uri(cfg.cache_dir, "ug")
+    assert shown["lacuerda"] == {"name": "LaCuerda", "letters": "LC"}  # its badge, until it has an icon
+    assert shown["auto"]["glyph"] is True
+    csp = csp_of(html)
+    assert "img-src data:;" in csp + ";" and "default-src 'none'" in csp
+    assert not re.search(r"data:image/png;base64,[A-Za-z0-9+/]", JSON_BLOCK.sub("", html))  # only in the data
+
+
+def sourced_library(conn, cfg):
+    """Creep's sheet from UG (whose icon is kept), De Música Ligera's from LaCuerda (no icon yet),
+    斑马，斑马's from the audio model, and Wonderwall wanted."""
+    from helpers.icon_files import png
+
+    from caracole import icons
+    from caracole.lacuerda_fetch import SHEET_DOCS
+
+    icons.keep_icon(cfg.cache_dir, "ug", icons.sanitize(png(32)))
+    creep = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, creep, "Words\n", raw={"tonality_name": "G"})
+    put(cfg, creep, "sheet.pdf", "lyrics.txt")
+    update_song(conn, creep.id, status="found")
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    lc = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/de_musica_ligera", song_id=soda.id,
+                        slot="sheet", kind="acordes", rating=0, votes=0, version=1, label=None,
+                        url="https://acordes.lacuerda.net/soda_stereo/de_musica_ligera.shtml", raw={}, now="x")
+    for name in SHEET_DOCS:
+        data = AM_F_C_G.encode() if name.endswith(".txt") else json.dumps({"content": AM_F_C_G}).encode()
+        keep_file(conn, cfg.library_dir, song=soda, version_id=lc, name=name, data=data, rank=1)
+    update_song(conn, soda.id, status="found")
+    auto = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, auto, "sheet (auto).txt")
+    update_song(conn, auto.id, status="found")
+    add_song(conn, "Oasis", "Wonderwall")
+    return creep
+
+
+# Notes each icon on the page: its source, its accessible name, and whether the image loaded.
+MARKS = """
+(() => {
+  const marks = Array.from(document.querySelectorAll("#list .source")).map((m) => ({
+    source: m.dataset.source, tag: m.tagName.toLowerCase(), text: m.textContent,
+    name: m.getAttribute("alt") || m.getAttribute("aria-label"), role: m.getAttribute("role"),
+    loaded: m.tagName === "IMG" ? m.complete && m.naturalWidth > 0 : null,
+    link: m.closest("a") ? m.closest("a").textContent : null,
+    width: m.getBoundingClientRect().width, font: parseFloat(getComputedStyle(m).fontSize),
+    colour: getComputedStyle(m).color, text_colour: getComputedStyle(document.body).color,
+  }));
+  document.body.setAttribute("data-marks", JSON.stringify(marks));
+})();
+"""
+
+
 @pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
 def test_opening_the_picker_takes_the_focus_to_its_first_candidate_and_fits_a_phone(conn, cfg, tmp_path):
     import html as html_module
@@ -1108,3 +1322,449 @@ def test_the_served_card_of_a_song_not_found_links_to_its_search_hits(conn, cfg,
     hint = re.search(r'<p class="pick-hint">(.*?)</p>', on_file, re.S)
     assert hint and '<code>caracole review --song "Radio Head - Crep"</code>' in hint.group(1), on_file
     assert "caracole search finds for it" in hint.group(1)
+
+
+def marks_of(dom: str) -> list[dict]:
+    import html as html_module
+
+    found = re.search(r'data-marks="([^"]*)"', dom)
+    assert found, dom[-2000:]
+    return json.loads(html_module.unescape(found.group(1)))
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tmp_path):
+    sourced_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), MARKS))
+    marks = marks_of(dump_dom(path, tmp_path))
+    ug = [m for m in marks if m["source"] == "ug"]
+    assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from Ultimate Guitar" for m in ug), ug
+    # The card says once where its sheet came from; its files from there carry no mark of their own...
+    assert [m["link"] for m in ug] == [None], ug
+    # ...and a file from elsewhere does, as the link's last word: "Lyrics from LRCLIB".
+    assert any(m["source"] == "lrclib" and m["link"] == "LyricsLR" for m in marks), marks
+    lc = [m for m in marks if m["source"] == "lacuerda"]
+    assert lc and all(m["tag"] == "span" and m["role"] == "img" and m["text"] == "LC" and
+                      m["name"] == "from LaCuerda" for m in lc), lc
+    assert any(m["source"] == "lrclib" and m["text"] == "LR" for m in marks)
+    assert any(m["source"] == "auto" and m["text"] == "♪" and m["name"] == "from the audio (auto-chords)"
+               for m in marks)
+    assert any(m["source"] == "youtube" for m in marks)  # Wonderwall's search link
+    # A site's icon is 16 px; its badge, there until the icon is in, is bigger, its letters
+    # big enough to read and in the text's own colour.
+    assert {m["width"] for m in ug} == {16}, ug
+    badges = [m for m in marks if m["tag"] == "span"]
+    assert badges and all(m["width"] >= 18 and m["font"] >= 10 for m in badges), badges
+    assert all(m["colour"] == m["text_colour"] for m in badges if m["text"] in ("LC", "LR", "YT")), badges
+
+
+def row_of(shown: str, title: str) -> str:
+    found = re.search(r'<article class="row"[^>]*>(?:(?!</article>).)*?' + re.escape(title) + r".*?</article>",
+                      shown, re.S)
+    assert found, shown[-2000:]
+    return found.group(0)
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_rows_view_shows_a_song_a_row_with_its_source_key_status_and_main_action(conn, cfg, tmp_path):
+    sourced_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    dom = dump_dom(path, tmp_path, "#view=rows")
+    shown = listing(dom)
+    assert shown.count('<article class="row"') == 4 and 'class="card"' not in shown
+    assert re.search(r'<button[^>]*data-view="rows"[^>]*aria-pressed="true"', dom)
+    creep = row_of(shown, "Creep")
+    assert re.search(r'<h2 class="row-title"[^>]*>Creep</h2>', creep)
+    assert 'alt="from Ultimate Guitar"' in creep and ">Radiohead</button>" in creep
+    assert "Key G major (from the tab)" in creep and ">Found<" in creep
+    main = re.search(r'<div class="row-action"><a ([^>]*)>Sheet PDF</a>', creep)
+    assert main and 'href="Radiohead/Creep/sheet.pdf"' in main.group(1)
+    assert 'aria-label="Sheet PDF of Creep by Radiohead"' in main.group(1)
+    # The other files wait behind a small button, closed.
+    more = re.search(r'<button class="row-more"[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"', creep)
+    assert more and re.search(rf'<div class="row-panel" id="{more.group(1)}" hidden', creep)
+    assert ">More for Creep<" in creep and "Lyrics" in creep.split("row-panel", 1)[1]
+    soda = row_of(shown, "De Música Ligera")
+    assert 'aria-label="from LaCuerda"' in soda and ">Sheet text<" in soda
+    wonderwall = row_of(shown, "Wonderwall")
+    assert ">Wanted<" in wonderwall and "row-action" in wonderwall and "Find the chords" in wonderwall
+
+
+# Measures the rows: each one's top and height, its artist's width, how many lines its parts take
+# (by their middles), the page's width and how far it scrolls sideways.
+ROWS = """
+(() => {
+  const rows = Array.from(document.querySelectorAll("#list .row"));
+  const box = (node) => node.getBoundingClientRect();
+  const lines = (r) => {
+    const parts = r.querySelectorAll(".row-title, .row-artist, .row-meta > *, .row-action > *, .row-more, .row > .source");
+    const middles = Array.from(parts).filter((p) => box(p).height > 0)
+      .map((p) => box(p).top + box(p).height / 2).sort((a, b) => a - b);
+    return middles.filter((m, i) => i === 0 || m - middles[i - 1] > 6).length;
+  };
+  document.body.setAttribute("data-layout", JSON.stringify({
+    tops: rows.map((r) => Math.round(box(r).top + window.scrollY)),
+    heights: rows.map((r) => Math.round(box(r).height)),
+    titles: rows.map((r) => Math.round(box(r.querySelector("h2")).top)),
+    actions: rows.map((r) => r.querySelector(".row-action > *") ? Math.round(box(r.querySelector(".row-action > *")).top) : null),
+    artists: rows.map((r) => r.querySelector(".row-artist") ? Math.round(box(r.querySelector(".row-artist")).width) : null),
+    whole: rows.map((r) => r.querySelector(".row-artist") ? r.querySelector(".row-artist").scrollWidth : null),
+    lines: rows.map(lines),
+    widths: rows.map((r) => Math.round(box(r).width)),
+    page: window.innerWidth,
+    screen: window.innerHeight,
+    scroll: document.documentElement.scrollWidth,
+  }));
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_many_rows_fit_on_a_screen_and_a_phones_rows_wrap_to_two_lines(conn, cfg, tmp_path):
+    for n in range(24):
+        s = add_song(conn, f"Artist With A Long Name {n:02d}", f"A Song Title That Goes On For A While {n:02d}")
+        keep_sheet_json(conn, cfg, s, "Words\n", raw={"tonality_name": "F#m"}, tab_id=100 + n)
+        put(cfg, s, "sheet.pdf", "lyrics.txt")
+        update_song(conn, s.id, status="found", review=n % 5 == 0)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ROWS))
+
+    wide = layout_of(dump_dom(path, tmp_path, "#view=rows", size="1280,900"))
+    assert wide["page"] == 1280, wide  # laid out at the width asked for
+    assert len(wide["tops"]) == 24 and wide["scroll"] <= wide["page"], wide
+    assert all(abs(t - a) <= 8 for t, a in zip(wide["titles"], wide["actions"])), wide  # one line each
+    assert set(wide["lines"]) == {1}, wide
+    assert wide["screen"] // max(wide["heights"]) >= 20, wide  # a screen holds 20 rows, against 9 cards
+
+    phone = layout_of(dump_dom(path, tmp_path, "#view=rows", size="390,844"))
+    assert (phone["page"], phone["screen"]) == (390, 844), phone  # a phone's screen, exactly
+    assert phone["scroll"] <= phone["page"], phone  # nothing wider than the screen
+    assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
+    assert set(phone["lines"]) == {2} and min(phone["artists"]) > 40, phone
+    # Two lines at most, with buttons a thumb can hit: nine rows to a screen, against three cards.
+    assert phone["screen"] // max(phone["heights"]) >= 9, phone
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_phones_row_keeps_its_artist_beside_the_most_badges_a_song_has(conn, cfg, tmp_path):
+    # The fullest second lines: a key, the status and Needs review, beside an auto sheet's mark; Wanted
+    # and Needs review.
+    abba = add_song(conn, "ABBA", "Dancing Queen")
+    auto = upsert_version(conn, provider="auto", tab_id=str(abba.id), song_id=abba.id, slot="sheet", kind="auto",
+                          rating=0, votes=0, version=1, label=None, url="file:///x.flac",
+                          raw={"key": "A major"}, now="2026-10-18T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=abba, version_id=auto, name="sheet (auto).txt", data=b"A\nWords\n", rank=1)
+    put(cfg, abba, "sheet (auto).pdf")
+    update_song(conn, abba.id, status="found", review=True)
+    queen = add_song(conn, "Queen", "Bohemian Rhapsody")
+    keep_sheet_json(conn, cfg, queen, "Words\n", raw={"tonality_name": "Bb"})
+    put(cfg, queen, "sheet.pdf")
+    update_song(conn, queen.id, status="found", review=True)
+    longest = add_song(conn, "Florence + The Machine", "Dog Days Are Over")
+    update_song(conn, longest.id, review=True)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ROWS))
+
+    phone = layout_of(dump_dom(path, tmp_path, "#view=rows", size="390,844"))
+    assert phone["page"] == 390, phone
+    abba_row, florence_row, queen_row = range(3)  # by artist
+    # "ABBA" and "Queen" whole, never squeezed out by the badges; a long name cut, but readable.
+    for short in (abba_row, queen_row):
+        assert phone["artists"][short] >= phone["whole"][short] > 30, phone
+    assert phone["artists"][florence_row] > 40, phone
+    assert max(phone["lines"]) <= 2, phone
+    assert phone["scroll"] <= phone["page"], phone
+    # The auto sheet's row says where it came from by its mark and its button, as a badge would.
+    shown = listing(dump_dom(path, tmp_path, "#view=rows"))
+    dancing = row_of(shown, "Dancing Queen")
+    assert 'aria-label="from the audio (auto-chords)"' in dancing and ">Auto sheet PDF<" in dancing
+    assert ">Needs review<" in dancing and ">Auto sheet<" not in dancing
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_filters_sort_key_menu_artist_and_letters_work_in_rows_in_a_real_browser(conn, cfg, tmp_path):
+    for tab_id, (artist, title, key) in enumerate((("Queen", "Bohemian Rhapsody", "Bb"),
+                                                    ("Queen", "Don't Stop Me Now", "F"),
+                                                    ("ABBA", "Dancing Queen", "A"),
+                                                    ("Radiohead", "Creep", "G")), start=1):
+        s = add_song(conn, artist, title)
+        keep_sheet_json(conn, cfg, s, "Words\n", raw={"tonality_name": key}, tab_id=tab_id)
+        update_song(conn, s.id, status="found" if tab_id != 4 else "wanted")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+
+    def titles(fragment):
+        shown = listing(dump_dom(path, tmp_path, fragment))
+        assert 'class="card"' not in shown
+        return sorted(re.findall(r'<h2 class="row-title"[^>]*>([^<]*)</h2>', shown))
+
+    assert titles("#view=rows") == ["Bohemian Rhapsody", "Creep", "Dancing Queen", "Don't Stop Me Now"]
+    assert titles("#view=rows&artist=queen") == ["Bohemian Rhapsody", "Don't Stop Me Now"]
+    assert titles("#view=rows&key=G") == ["Creep"]
+    assert titles("#view=rows&show=wanted") == ["Creep"]
+    assert titles("#view=rows&q=dancing") == ["Dancing Queen"]
+    shown = listing(dump_dom(path, tmp_path, "#view=rows&sort=title"))
+    assert re.findall(r'<h2 class="row-title"[^>]*>([^<]*)</h2>', shown) == [
+        "Bohemian Rhapsody", "Creep", "Dancing Queen", "Don't Stop Me Now"]
+    strip = re.search(r'<nav[^>]*id="jump"[^>]*>(.*?)</nav>', dump_dom(path, tmp_path, "#view=rows&sort=title"), re.S)
+    assert re.findall(r"<button[^>]*>([^<]+)</button>", strip.group(1)) == ["B", "C", "D"]
+
+
+# Switches to rows and back, jumps to "R", opens a row's other links, and clicks an artist; notes each step.
+ROW_CLICKS = """
+(() => {
+  const notes = {};
+  const view = (name) => document.querySelector('[data-view="' + name + '"]');
+  view("rows").click();
+  notes.rows = { hash: location.hash, rows: document.querySelectorAll("#list .row").length,
+                 cards: document.querySelectorAll("#list .card").length,
+                 pressed: view("rows").getAttribute("aria-pressed") };
+  Array.from(document.querySelectorAll("#jump button")).find((b) => b.textContent === "R").click();
+  const focused = document.activeElement.closest("article");
+  notes.jump = focused ? focused.className + ":" + focused.querySelector("h2").textContent : "none";
+  const row = Array.from(document.querySelectorAll("#list .row"))
+    .find((r) => r.querySelector("h2").textContent === "Creep");
+  const more = row.querySelector(".row-more");
+  more.click();
+  const panel = document.getElementById(more.getAttribute("aria-controls"));
+  notes.opened = { expanded: more.getAttribute("aria-expanded"), hidden: panel.hidden,
+                   links: Array.from(panel.querySelectorAll("a")).map((a) => a.firstChild.textContent) };
+  more.click();
+  notes.closed = { expanded: more.getAttribute("aria-expanded"), hidden: panel.hidden };
+  row.querySelector("button.artist").click();
+  notes.artist = { hash: location.hash, titles: Array.from(document.querySelectorAll("#list .row h2"))
+    .map((h) => h.textContent) };
+  view("cards").click();
+  notes.cards = { hash: location.hash, cards: document.querySelectorAll("#list .card").length };
+  document.body.setAttribute("data-notes", JSON.stringify(notes));
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_view_toggle_is_remembered_and_a_rows_controls_work_from_the_keyboard(conn, cfg, tmp_path):
+    import html as html_module
+
+    creep = add_song(conn, "Radiohead", "Creep")
+    put(cfg, creep, "sheet.pdf", "lyrics.txt", "tab.txt")
+    add_song(conn, "Radiohead", "Lucky")
+    add_song(conn, "The Beatles", "Yesterday")
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ROW_CLICKS))
+    dom = dump_dom(path, tmp_path)
+    notes = json.loads(html_module.unescape(re.search(r'data-notes="([^"]*)"', dom).group(1)))
+    assert notes["rows"] == {"hash": "#view=rows", "rows": 3, "cards": 0, "pressed": "true"}, notes
+    assert notes["jump"] == "row:Creep", notes  # the next Tab goes on from the row jumped to
+    assert notes["opened"] == {"expanded": "true", "hidden": False, "links": ["Lyrics", "Tab"]}, notes
+    assert notes["closed"] == {"expanded": "false", "hidden": True}, notes
+    assert "view=rows" in notes["artist"]["hash"] and "artist=radiohead" in notes["artist"]["hash"], notes
+    assert sorted(notes["artist"]["titles"]) == ["Creep", "Lucky"], notes
+    assert "view=" not in notes["cards"]["hash"] and notes["cards"]["cards"] == 2, notes
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_pages_rows_offer_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
+    from caracole.library_page import WebControls
+
+    wanted = add_song(conn, "Radiohead", "Creep")
+    busy = add_song(conn, "Oasis", "Wonderwall")
+    held = add_song(conn, "Queen", "Bohemian Rhapsody")
+    update_song(conn, held.id, review=True)
+    controls = WebControls(csrf="tok", busy=frozenset({busy.id}), active=1, held=frozenset({held.id}))
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, "#view=rows"))
+    creep = row_of(shown, "Creep")
+    form = re.search(r'<div class="row-action"><form[^>]*action="/fetch"[^>]*>(.*?)</form>', creep, re.S)
+    assert form and f'name="song" value="{wanted.id}"' in form.group(1) and 'name="csrf" value="tok"' in form.group(1)
+    assert 'aria-label="Fetch Creep by Radiohead now"' in form.group(1)
+    assert "Fetching" in row_of(shown, "Wonderwall") and "/fetch" not in row_of(shown, "Wonderwall")
+    assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", row_of(shown, "Bohemian Rhapsody"))
+
+
+# What another list on the page (the served page's type-ahead) does with the row renderer.
+RESULT_ROWS = """
+(() => {
+  const list = document.createElement("div");
+  list.className = "rows";
+  list.id = "results";
+  list.appendChild(window.caracole.resultRow({
+    title: "Creep", artist: "Radiohead", source: "ug", facts: "chords×3 tabs×2",
+    action: { label: "Chords", href: "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169" },
+    more: [{ heading: "Tabs", links: [{ label: "Tab", href: "javascript:alert(1)", source: "ug" }] }],
+  }));
+  list.appendChild(window.caracole.resultRow({ title: "Nameless" }));
+  document.body.appendChild(list);
+  document.body.setAttribute("data-api", Object.keys(window.caracole).sort().join(","));
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_row_renderer_takes_any_search_result_in_a_real_browser(conn, cfg, tmp_path):
+    from helpers.icon_files import png
+
+    from caracole import icons
+
+    icons.keep_icon(cfg.cache_dir, "ug", icons.sanitize(png(32)))
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), RESULT_ROWS))
+    dom = dump_dom(path, tmp_path)
+    assert re.search(r'data-api="icons,resultRow,sourceMark"', dom)
+    results = re.search(r'<div class="rows" id="results">(.*?)</div>\s*</body>', dom, re.S).group(1)
+    creep = row_of(results, "Creep")
+    assert 'alt="from Ultimate Guitar"' in creep and "chords×3 tabs×2" in creep
+    main = re.search(r'<div class="row-action"><a ([^>]*)>Chords ↗</a>', creep)
+    assert main and 'target="_blank"' in main.group(1) and 'rel="noopener noreferrer"' in main.group(1)
+    assert "javascript:" not in creep and 'href="#"' in creep  # an unsafe link goes nowhere
+    assert "row-more" not in row_of(results, "Nameless")  # nothing more to show, no button
+
+
+# --- rows on the served page: every state a card shows ------------------------------------------
+
+
+def served_states(conn, cfg):
+    """A song in each state a served card shows: in review with candidates to pick (Crep), being removed
+    (Wonderwall), its request queued (Bohemian Rhapsody), not found (Yesterday), found in a key (De Música
+    Ligera); and the controls that say so."""
+    from caracole.library_page import WebControls
+
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    crep = in_review(conn)
+    going = add_song(conn, "Oasis", "Wonderwall")
+    queued = add_song(conn, "Queen", "Bohemian Rhapsody")
+    lost = add_song(conn, "The Beatles", "Yesterday")
+    update_song(conn, lost.id, match_decision="not_found")
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet_json(conn, cfg, soda, "Words\n", raw={"tonality_name": "Am"}, tab_id=7)
+    put(cfg, soda, "sheet.pdf")
+    update_song(conn, soda.id, status="found")
+    job = {"id": 4, "display": queued.display, "songId": queued.id, "state": "queued", "fetching": True,
+           "line": {"tone": "queued", "text": "Queued behind 1 request…", "link": None,
+                    "details": "jobs?job=4#job-4"}, "details": "jobs?job=4#job-4"}
+    controls = WebControls(csrf="tok", busy=frozenset({queued.id}), active=2, held=frozenset({crep.id}),
+                           removing=frozenset({going.id}), jobs=(job,))
+    return controls, {"crep": crep, "going": going, "queued": queued, "lost": lost, "soda": soda}
+
+
+def panel_of(row: str) -> str:
+    found = re.search(r'<div class="row-panel"[^>]*>.*', row, re.S)
+    assert found, row
+    return found.group(0)
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_rows_carry_every_state_a_card_shows(conn, cfg, tmp_path):
+    controls, s = served_states(conn, cfg)
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, "#view=rows"))
+    assert shown.count('<article class="row"') == 5 and 'class="card"' not in shown
+
+    # In review, with candidates: its button opens the picker, in its panel, instead of Review first.
+    crep = row_of(shown, "Crep")
+    assert re.search(r'<div class="row-action"><button class="btn small row-pick"[^>]*>Pick the match</button>', crep)
+    assert "Review first" not in crep and "/fetch" not in crep
+    # The button says Pick the match once: the picker under it folds as a card's read-only one does.
+    assert re.search(r'<summary class="picker-open"[^>]*>3 candidates</summary>', panel_of(crep))
+    pick = re.search(r'<form[^>]*action="/review"[^>]*>(.*?)</form>', panel_of(crep), re.S)
+    assert pick and f'name="song" value="{s["crep"].id}"' in pick.group(1)
+    assert re.findall(r'<input type="radio" name="pick" value="([^"]*)"', pick.group(1)) == [
+        "radiohead/creep", "jeff-buckley/creep", "misc-musicals/creep-the-musical", "none"]
+
+    # Being removed: it says so where its button was, and offers neither a fetch nor another removal.
+    going = row_of(shown, "Wonderwall")
+    assert re.search(r'<div class="row-action"><a class="row-busy" href="/jobs"[^>]*>Removing…</a>', going)
+    assert "/fetch" not in going and "/remove" not in going
+
+    # Its request queued: the row says how it goes, on its own line, as the card does.
+    queued = row_of(shown, "Bohemian Rhapsody")
+    line = re.search(r'<p class="progress"[^>]*>(.*?)</p>', queued, re.S)
+    assert line and 'role="status"' in line.group(0) and 'data-tone="queued"' in line.group(0)
+    assert "Queued behind 1 request…" in line.group(1) and 'href="jobs?job=4#job-4"' in line.group(1)
+    assert "/fetch" not in queued and queued.count('class="progress"') == 1
+
+    # Not found: Fetch now still asks its artist's UG page; the panel looks in the index.
+    lost = row_of(shown, "Yesterday")
+    assert re.search(r'<div class="row-action"><form[^>]*action="/fetch"', lost)
+    assert re.search(rf'<a class="btn small" href="/review\?song={s["lost"].id}"[^>]*>Look in the index</a>',
+                     panel_of(lost))
+
+    # Found, in a key: the sheet, the key, and Remove… with the other files behind ⋯.
+    soda = row_of(shown, "De Música Ligera")
+    assert re.search(r'<div class="row-action"><a [^>]*>Sheet PDF</a>', soda) and "Key A minor" in soda
+    removes = {title: re.findall(r'<form[^>]*action="/remove"[^>]*>(.*?)</form>', panel_of(row_of(shown, title)), re.S)
+               for title in ("Crep", "Bohemian Rhapsody", "Yesterday", "De Música Ligera")}
+    assert all(len(forms) == 1 and "Remove…" in forms[0] for forms in removes.values()), removes
+    assert 'aria-label="Remove De Música Ligera by Soda Stereo from caracole"' in soda
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_file_rows_show_a_reviews_candidates_and_a_song_not_founds_line(conn, cfg, tmp_path):
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    in_review(conn)
+    lost = add_song(conn, "The Beatles", "Yesterday")
+    update_song(conn, lost.id, match_decision="not_found")
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path, "#view=rows"))
+    crep = panel_of(row_of(shown, "Crep"))
+    assert re.search(r'<details class="picker"', crep) and "<form" not in crep
+    assert '<code>caracole review --song "Radio Head - Crep"</code>' in crep
+    hint = re.search(r'<p class="pick-hint">(.*?)</p>', panel_of(row_of(shown, "Yesterday")), re.S)
+    assert hint and '<code>caracole review --song "The Beatles - Yesterday"</code>' in hint.group(1)
+
+
+# Measures each row (its height, whether a part of it leaves it or covers another), then opens Crep's picker
+# from its row's button and notes where the focus went and how wide the page got.
+ROW_STATES = """
+(() => {
+  const box = (n) => n.getBoundingClientRect();
+  const rows = Array.from(document.querySelectorAll("#list .row"));
+  const measured = {};
+  for (const r of rows) {
+    const rb = box(r);
+    const parts = Array.from(r.querySelectorAll(
+      ".row-title, .row-artist, .row-meta > *, .row-action > *, .row-more, .row > .source, .row > .progress"))
+      .filter((p) => box(p).height > 0);
+    const out = parts.filter((p) => box(p).right > rb.right + 0.5 || box(p).left < rb.left - 0.5)
+      .map((p) => p.className);
+    const over = [];
+    for (let a = 0; a < parts.length; a++) {
+      for (let b = a + 1; b < parts.length; b++) {
+        const x = box(parts[a]);
+        const y = box(parts[b]);
+        if (x.left < y.right - 1 && y.left < x.right - 1 && x.top < y.bottom - 1 && y.top < x.bottom - 1) {
+          over.push(parts[a].className + " / " + parts[b].className);
+        }
+      }
+    }
+    measured[r.querySelector("h2").textContent] = { height: Math.round(rb.height), out, over };
+  }
+  const crep = rows.find((r) => r.querySelector("h2").textContent === "Crep");
+  crep.querySelector(".row-action button").click();
+  setTimeout(() => {
+    const picker = crep.querySelector("details.picker");
+    const at = document.activeElement;
+    document.body.setAttribute("data-states", JSON.stringify({
+      rows: measured, open: picker.open, panel: !picker.closest(".row-panel").hidden,
+      expanded: crep.querySelector(".row-more").getAttribute("aria-expanded"),
+      focus: at && at.name === "pick" ? at.value : null,
+      scroll: document.documentElement.scrollWidth, page: window.innerWidth,
+    }));
+  }, 50);
+})();
+"""
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,900"])
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_rows_states_fit_its_row_and_its_pick_opens_the_picker_where_it_is(conn, cfg, tmp_path, size):
+    import html as html_module
+
+    controls, _ = served_states(conn, cfg)
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    path = write_library_page(cfg.library_dir, with_script(html, ROW_STATES))
+    dom = dump_dom(path, tmp_path, "#view=rows", size=size)
+    found = re.search(r'data-states="([^"]*)"', dom)
+    assert found, dom[-2000:]
+    states = json.loads(html_module.unescape(found.group(1)))
+    assert states["page"] == int(size.split(",")[0]) and states["scroll"] <= states["page"], states
+    for title, row in states["rows"].items():
+        assert row["out"] == [] and row["over"] == [], (title, row)
+    # A row with a request's line is one line taller than the rest, no more.
+    plain = max(row["height"] for title, row in states["rows"].items() if title != "Bohemian Rhapsody")
+    assert plain < states["rows"]["Bohemian Rhapsody"]["height"] <= plain + 30, states
+    assert states["open"] and states["panel"] and states["expanded"] == "true", states
+    assert states["focus"] == "radiohead/creep", states
