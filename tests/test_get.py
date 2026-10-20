@@ -139,23 +139,26 @@ class Progress:
 
 
 class FakeRunner:
-    """chordpro: writes a dummy PDF where it is told to."""
+    """chordpro: writes a dummy PDF where it is told to, or fails on a sheet that holds ``fail``."""
 
-    def __init__(self):
+    def __init__(self, fail: str | None = None):
         self.calls = 0
+        self.fail = fail
 
     def __call__(self, cmd, **kwargs):
         self.calls += 1
+        if self.fail is not None and self.fail in Path(cmd[-1]).read_text(encoding="utf-8"):
+            return subprocess.CompletedProcess(cmd, 2, stdout="", stderr="chordpro: aborted\n")
         out = next(a.split("=", 1)[1] for a in cmd if a.startswith("--output="))
         Path(out).write_bytes(b"%PDF-1.4 fake")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
 
-def look_up(cfg, *, sites=None, **request):
+def look_up(cfg, *, sites=None, runner=None, **request):
     from caracole.get import LookupRequest, look_up as run
 
     progress = Progress(sites)
-    result = run(cfg, LookupRequest(**request), progress, runner=FakeRunner(), now=NOW)
+    result = run(cfg, LookupRequest(**request), progress, runner=runner or FakeRunner(), now=NOW)
     return result, progress
 
 
@@ -285,6 +288,66 @@ def test_a_lookup_waits_only_the_short_gap_between_two_requests(tmp_path, sites,
 
     assert slept and max(slept) <= 1.5  # never the bulk 10-20 s
     assert sum(slept) <= 1.5 * len(sites.requests)
+
+
+# --- its own PDF -------------------------------------------------------------------------------------
+
+ZH_SHEET = "[Verse]\n[tab][ch]C[/ch]       [ch]G[/ch]\n这是一个合成的例子[/tab]\n"
+
+
+def test_a_lookup_renders_its_own_song_alone(cfg, conn, sites, monkeypatch):
+    from caracole import render
+    from helpers.rendered import rendered_song
+
+    rendered_song(conn, cfg)  # Soda Stereo - De Música Ligera, kept and rendered
+    serve_creep(sites, conn)
+    real, built = render.build_viewer, []
+
+    def build_viewer(cho, **kwargs):
+        built.append(cho)
+        return real(cho, **kwargs)
+
+    monkeypatch.setattr(render, "build_viewer", build_viewer)
+
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert result.details["pdf"] == "made"
+    assert built and all("{title: Creep}" in cho for cho in built)  # the pdf stage's and the pages'
+
+
+def test_another_songs_failed_pdf_is_not_the_lookups(cfg, conn, sites):
+    from caracole.db import kv_get_json
+    from caracole.overrides import Overrides
+    from caracole.render import render_all
+
+    serve_creep(sites, conn)
+    serve_wonderwall(sites, conn)
+    runner = FakeRunner(fail="Wonderwall")  # chordpro fails on Wonderwall's sheet, every time
+    look_up(cfg, sites=sites, runner=runner, artist="Oasis", title="Wonderwall")
+    render_all(conn, cfg, Overrides(), runner=runner, now=datetime(2026, 10, 19, 3, 30, tzinfo=UTC))  # the night's
+    nightly = kv_get_json(conn, "render:status")
+    assert nightly["failed"] == ["Oasis - Wonderwall"]
+
+    result, progress = look_up(cfg, sites=sites, runner=runner, artist="Radiohead", title="Creep")
+
+    assert progress.states()["pdf"] == "done" and result.details["pdf"] == "made"
+    assert kv_get_json(conn, "render:status") == nightly  # the to-do page still tells of the night's render
+
+
+def test_a_chinese_song_elsewhere_waiting_for_a_font_is_not_the_lookups(cfg, conn, sites):
+    from caracole.db import kv_get_json
+    from helpers.rendered import rendered_song
+
+    assert cfg.cjk_font is None
+    rendered_song(conn, cfg, "宋冬野", "斑马斑马", content=ZH_SHEET)  # no PDF until a CJK font is set
+    before = kv_get_json(conn, "render:status")
+    assert "宋冬野 - 斑马斑马" in before["font_error"]
+    serve_creep(sites, conn)
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.states()["pdf"] == "done" and result.details["pdf"] == "made"
+    assert kv_get_json(conn, "render:status") == before
 
 
 # --- your pick -----------------------------------------------------------------------------------------

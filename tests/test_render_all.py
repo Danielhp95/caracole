@@ -183,7 +183,8 @@ def info_json(cfg, song) -> dict:
 
 def render(conn, cfg, ovr=None, **kwargs) -> RenderStats:
     kwargs.setdefault("runner", FakeChordPro())
-    return render_all(conn, cfg, ovr or Overrides(), now=NOW, **kwargs)
+    kwargs.setdefault("now", NOW)
+    return render_all(conn, cfg, ovr or Overrides(), **kwargs)
 
 
 # --- what gets written ------------------------------------------------------------------
@@ -1209,6 +1210,86 @@ def test_info_json_keeps_the_render_entry_when_another_step_rewrites_it(conn, cf
     render(conn, cfg)
     write_info(conn, cfg.library_dir, get_song(conn, song.id))  # as the fetch step does
     assert info_json(cfg, song).get("render") == {"transpose": 0, "pdf": "sheet (auto).pdf"}
+
+
+# --- a pass over some songs (a lookup's one song) --------------------------------------------
+
+LATER = datetime(2026, 10, 18, 12, 0, tzinfo=UTC)
+
+
+def test_a_pass_over_some_songs_renders_those_alone(conn, cfg):
+    mine = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, mine, tab_id=1)
+    other = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, other, tab_id=2)
+    run = FakeChordPro()
+
+    stats = render(conn, cfg, runner=run, song_ids={mine.id, 9999})  # 9999: no such song (merged, removed)
+
+    assert stats == RenderStats(rendered=1) and len(run.calls) == 1
+    assert pdf_of(cfg, mine).is_file()
+    assert not any((song_dir(cfg.library_dir, other) / name).exists()
+                   for name in ("sheet.cho", "sheet.pdf", "sheet.html"))
+
+
+def test_a_pass_over_some_songs_leaves_the_last_full_pass_on_the_todo_page(conn, cfg):
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, bad, tab_id=1)
+    zh = add_song(conn, "宋冬野", "斑马斑马")  # no CJK font: no PDF, and the pass's font error
+    human_sheet(conn, cfg, zh, ZH_SHEET, tab_id=2, tonality="")
+    run = FakeChordPro(fail=("Persiana",))
+    render(conn, cfg, runner=run)
+    nightly = kv_get_json(conn, "render:status")
+    assert nightly["failed"] == ["Soda Stereo - Persiana Americana"] and nightly["font_error"]
+    new = add_song(conn, "Soda Stereo", "Signos")
+    human_sheet(conn, cfg, new, tab_id=3)
+
+    stats = render(conn, cfg, runner=run, now=LATER, song_ids={new.id})
+
+    assert stats == RenderStats(rendered=1)
+    assert kv_get_json(conn, "render:status") == nightly  # its time, its counts, the others' failures
+
+
+def test_a_pass_over_some_songs_brings_their_own_failures_up_to_date(conn, cfg):
+    first = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, first, tab_id=1)
+    second = add_song(conn, "Soda Stereo", "Signos")
+    human_sheet(conn, cfg, second, tab_id=2)
+    render(conn, cfg, runner=FakeChordPro(fail=("Persiana", "Signos")))
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Signos", "Soda Stereo - Persiana Americana"]
+
+    render(conn, cfg, runner=FakeChordPro(fail=("Signos",)), now=LATER, song_ids={first.id})  # renders now
+    status = kv_get_json(conn, "render:status")
+    assert status["failed"] == ["Soda Stereo - Signos"]
+    assert (status["at"], status["rendered"]) == ("2026-10-18T03:30:00Z", 0)
+
+    render(conn, cfg, runner=FakeChordPro(fail=("Persiana",)), force=True, song_ids={first.id})  # fails again
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Signos", "Soda Stereo - Persiana Americana"]
+
+
+def test_a_font_error_of_a_pass_over_some_songs_is_the_one_shown(conn, cfg):
+    render(conn, cfg)  # an empty library: a record, no font error
+    zh = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, zh, ZH_SHEET, tonality="")
+
+    stats = render(conn, cfg, now=LATER, song_ids={zh.id})
+
+    assert stats.font_error is not None and "宋冬野 - 斑马斑马" in stats.font_error
+    assert kv_get_json(conn, "render:status") == {
+        "at": "2026-10-18T03:30:00Z", "rendered": 0, "failed": [], "font_error": stats.font_error,
+    }
+
+
+def test_a_pass_over_some_songs_before_any_full_pass_records_itself(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, song)
+
+    render(conn, cfg, runner=FakeChordPro(fail=("Persiana",)), song_ids={song.id})
+
+    assert kv_get_json(conn, "render:status") == {
+        "at": "2026-10-18T03:30:00Z", "rendered": 0, "failed": ["Soda Stereo - Persiana Americana"],
+        "font_error": None,
+    }
 
 
 # --- caracole render ---------------------------------------------------------------------------

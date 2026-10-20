@@ -27,8 +27,9 @@ Two kinds of font come out wrong, so ``render_pdf`` refuses them up front:
 (every glyph record has an even length). A CFF-flavoured ``.otf`` works too;
 PDF::API2 embeds those whole, so the PDFs are larger.
 
-``render_all`` gives every kept sheet in the library a ChordPro file, a PDF and
-a viewer (a phone-friendly page, see caracole/viewer) beside it:
+``render_all`` gives every kept sheet in the library (or a few songs', as a
+lookup's) a ChordPro file, a PDF and a viewer (a phone-friendly page, see
+caracole/viewer) beside it:
 
 - a human sheet (``sheet.txt``, from UG or LaCuerda) is rendered from the
   ``content`` of the ``sheet.json`` next to it, with the key UG gives the
@@ -94,7 +95,7 @@ import struct
 import subprocess
 import tempfile
 import unicodedata
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -120,7 +121,7 @@ from caracole.library import (
 from caracole.keys import sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
-from caracole.songs import Song, get_song, list_songs
+from caracole.songs import Song, ensure_current_keys, get_song, list_songs
 from caracole.ug.page import json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
@@ -376,6 +377,7 @@ def render_all(
     force: bool = False,
     now: datetime | None = None,
     between: Callable[[], bool] | None = None,
+    song_ids: Collection[int] | None = None,
 ) -> RenderStats:
     """Write every kept sheet as ChordPro and render it to a PDF in the song's key.
 
@@ -385,6 +387,11 @@ def render_all(
     ``{"at", "rendered", "failed": [display keys], "font_error"}``, stamped with
     ``now`` (by default the current time). ``force`` renders every PDF again,
     up to date or not; ``runner`` runs chordpro (tests pass a fake).
+
+    With ``song_ids``, only those songs (``caracole get`` renders its one
+    song), and the stats are theirs alone. The record stays the last full
+    pass's (``_status_after``): their names leave its ``failed`` list and go
+    back on when they failed now; a font error this pass hit replaces its own.
 
     ``between`` is called between two songs, in no transaction: bulk work hands
     caracole's lock to a waiting lookup there (``_common.hand_over``), as a pass
@@ -396,7 +403,8 @@ def render_all(
     no_font: list[str] = []
     font, font_problem = _cjk_font(cfg.cjk_font)
     handed = False
-    for n, listed in enumerate(list_songs(conn)):
+    songs = list_songs(conn) if song_ids is None else _songs_of(conn, song_ids)
+    for n, listed in enumerate(songs):
         if n and between is not None and between():
             handed = True
             try:
@@ -430,10 +438,35 @@ def render_all(
         stats.font_error = _font_error(no_font, font_problem)
         log.warning("%s", stats.font_error)
     at = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    kv_set_json(conn, STATUS_KEY, {
-        "at": at, "rendered": stats.rendered, "failed": failed, "font_error": stats.font_error,
-    })
+    status = {"at": at, "rendered": stats.rendered, "failed": failed, "font_error": stats.font_error}
+    if song_ids is not None:
+        status = _status_after(kv_get_json(conn, STATUS_KEY, default=None), status, {s.display for s in songs})
+    kv_set_json(conn, STATUS_KEY, status)
     return stats
+
+
+def _songs_of(conn: sqlite3.Connection, song_ids: Collection[int]) -> list[Song]:
+    """The songs of ``song_ids`` the library still has, newest first as ``list_songs`` gives them."""
+    ensure_current_keys(conn)
+    songs = []
+    for song_id in song_ids:
+        try:
+            songs.append(get_song(conn, song_id))
+        except KeyError:  # merged into another song, or removed
+            continue
+    return sorted(songs, key=lambda s: (s.added_at, s.id), reverse=True)
+
+
+def _status_after(stored: Any, status: dict[str, Any], names: set[str]) -> dict[str, Any]:
+    """kv ``render:status`` after a pass over some songs (``names``: theirs), whose own record is
+    ``status``: the last full pass's record, with those songs' failures brought up to date and the
+    font error this pass hit, if any. With no record yet, ``status`` itself."""
+    if not isinstance(stored, dict):
+        return status
+    before = stored.get("failed")
+    others = [name for name in before if str(name) not in names] if isinstance(before, list) else []
+    return {**stored, "failed": others + status["failed"],
+            "font_error": status["font_error"] or stored.get("font_error")}
 
 
 @dataclass(frozen=True)

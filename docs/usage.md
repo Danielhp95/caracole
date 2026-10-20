@@ -379,7 +379,8 @@ In order:
    chords with its rating, and the best rated is kept at once: one or two
    requests. Without one there, LaCuerda's, for a song LaCuerda would be asked
    about tonight. From here on the sheet is readable.
-4. **The PDF**, as `caracole render` makes it.
+4. **The PDF**, as `caracole render` makes it, for this song alone: another
+   song's failed PDF, or one waiting for a CJK font, isn't this one's.
 5. **The lyrics**, from LRCLIB.
 6. **Ultimate Guitar again**, as the nightly run would: the top sheets are
    scored against the lyrics, and a more complete one replaces the first;
@@ -1405,8 +1406,12 @@ when it has something in it:
 - **Suggestions from your Spotify top tracks**, with `suggest_top_tracks`.
   Add the ones you want to learn to your Learn playlist or to wanted.txt.
   Songs you have, and songs you removed, aren't suggested.
-- **PDFs.** The last render: how many PDFs were made or failed, a font
-  problem if there is one, and the sheets that failed.
+- **PDFs.** The last render of the library (the nightly run's, or `caracole
+  render`'s): how many PDFs were made or failed, a font problem if there is
+  one, and the sheets that failed. A lookup (`caracole get`) renders its own
+  song alone and leaves that record as it was, but for its song: it takes the
+  song off the sheets that failed, or puts it back on, and a font problem it
+  meets is the one shown.
 - **Sources.** Whether Spotify is off, synced, not fully set up (the client
   secret missing, say), or needs `caracole auth spotify`, and how many songs
   wanted.txt has, with the lines it couldn't read; for a wanted.txt it
