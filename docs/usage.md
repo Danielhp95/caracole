@@ -1123,10 +1123,12 @@ QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
 compares Chinese as pinyin. It reads an index of the UG index's names, so a
 word of three letters or more is looked up in milliseconds, not by reading all
-1.6 million rows: a typical query answers in 3–75 ms on a full index, against
-0.4–0.9 s before. A query made only of very common words ("love", "you") still
-takes about half a second to a second and a half, since tens of thousands of
-songs have them to rank. `--limit N` (or `-n N`) shows up to N hits from
+1.6 million rows: a song or an artist answers in 5–25 ms on a full index, and
+a query made only of very common words in 50–160 ms ("the" about 0.1 s, "i
+love you" about 0.15 s): such a word is in tens of thousands of names, so it
+brings in only the thousand shortest of them, which hold its exact titles and
+artists, and the names every word of the query is in; the first hits are the
+same as when every name was ranked. `--limit N` (or `-n N`) shows up to N hits from
 each place, 10 by default. `--add N` adds UG hit N to wanted.txt and syncs it,
 the same way `caracole add` does. N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another
@@ -1164,8 +1166,9 @@ with it. A KEY that is no key exits with status 2.
 
 - **Look up**, the page at `/lookup`, is for the song you want to play now,
   the way you would look it up on Ultimate Guitar. Type a song or an artist:
-  it searches your library and the offline index as you type (a few
-  milliseconds a query; see [caracole search](#caracole-search)), asking no
+  it searches your library and the offline index as you type (5–25 ms a
+  query, up to about 0.15 s for very common words; see
+  [caracole search](#caracole-search)), asking no
   site anything. A search you type over stops at once, so a slow one (a very
   common word, "the" on the way to "the beatles") never holds up the next.
   Pick a song with Get it (Enter picks the first result of what you typed,

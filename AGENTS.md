@@ -62,7 +62,10 @@ and `search --key`).
   The logic of `caracole review` and `caracole search` is in review.py and search.py;
   search.py's prefilter reads ug/key_search.py (`rows_like`: the keys' trigram index,
   `ug_keys_fts`, schema 4), which must find exactly what a `LIKE` scan of `ug_index` finds
-  (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`).
+  (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
+  except that a pattern in more than `KEYS_PER_PATTERN` keys (a common word) brings in its
+  shortest keys and those every pattern is in
+  (`::test_a_common_word_brings_in_its_shortest_keys_and_those_every_word_is_in`).
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed), jobs.py (the queue: each
   request runs the `caracole` CLI in a child process, one command at a time; a lookup is

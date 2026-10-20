@@ -269,6 +269,19 @@ def test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_find
     assert sorted(rows_like(conn, patterns)) == sorted(tuple(r) for r in scan)
 
 
+def test_a_common_word_brings_in_its_shortest_keys_and_those_every_word_is_in(conn, monkeypatch):
+    # "the" or "love" is in tens of thousands of keys: ranking them all took a second a keystroke.
+    from caracole.ug import key_search
+
+    monkeypatch.setattr(key_search, "KEYS_PER_PATTERN", 2)
+    index(conn, [(1, "x", "love", "chords"), (2, "y", "lovely", "chords"), (3, "z", "glove-box", "chords"),
+                 (4, "w", "i-love-you-baby", "chords"), (5, "v", "baby", "chords"), (6, "u", "babylon", "chords")])
+    found = {song for _, song, _ in key_search.rows_like(conn, ["%love%"])}
+    assert found == {"love", "lovely"}  # the two shortest
+    both = {song for _, song, _ in key_search.rows_like(conn, ["%love%", "%baby%"])}
+    assert both == {"love", "lovely", "baby", "babylon", "i-love-you-baby"}  # and the one with both words
+
+
 def test_the_prefilter_reads_the_trigram_index_not_every_row(conn):
     from caracole.ug import key_search
 

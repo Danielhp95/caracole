@@ -1,7 +1,8 @@
 """The lookup page of ``caracole serve``: search as you type, pick the song or the tab, read its sheet.
 
 It searches your library and the offline Ultimate Guitar index as you type
-(``GET /api/search``, a few milliseconds a query on a full index), so finding
+(``GET /api/search``: 5–25 ms a query on a full index, up to about 0.15 s for
+very common words, ug/key_search.py), so finding
 a song costs no request to any site. Enter picks the first result of the
 query typed, never of an older one still on the screen. Picking a song, or
 one of its versions, looks it up now (``POST /lookup``: one ``caracole get``,
