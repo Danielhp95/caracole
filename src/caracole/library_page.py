@@ -23,7 +23,32 @@ by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
 The songs are one grid of cards, as many columns as the screen holds, in every
 order: a section per artist left one narrow card per row on a desktop. Each
 card has its artist's monogram, in a colour of that artist's, and an A-Z strip
-jumps to the first card of a letter.
+jumps to the first card of a letter. A Cards/Rows toggle shows them as rows
+instead, one compact line a song (two on a phone), remembered in the address
+(``#view=rows``) as the search, the filters, the sort and the key are.
+
+Each file, link and row shows where it came from (icons.py): the site's own
+icon, inlined in the data as a ``data:`` URI (the CSP allows images from
+``data:`` alone), else the site's lettered badge, or a glyph for the audio
+model and the inbox; each is named "from Ultimate Guitar" for a screen reader.
+
+The seam for lists the page doesn't make itself (the served page's type-ahead
+results): ``window.caracole.resultRow(result)`` returns a row element, the
+same as a song's row, to put in a ``<div class="rows">``. ``result`` is a
+plain object, every field optional:
+
+- ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button;
+- ``source``: a key of the data's ``icons`` (``icons.SOURCES``: "ug", "lacuerda"…);
+- ``key`` ("A minor"), and ``keyText``, what a screen reader hears for it;
+- ``status``, which the row's ``data-status`` gets; ``badges``: ``[{kind, text}]``,
+  ``kind`` a badge class (found, wanted, review, auto…); ``facts``: a line of text;
+- ``action``: the main control, a Node, or ``{label, href, source}``: an http(s)
+  link opens in a new tab, any other address stays relative or goes nowhere;
+- ``more``: what the row's "⋯" button shows, Nodes or
+  ``{heading, links: [{label, href, source}]}``.
+
+``window.caracole.sourceMark(key)`` gives a source's mark alone, and
+``window.caracole.icons`` the icons' data.
 
 ``caracole serve`` serves the same page with ``controls`` (``WebControls``): a
 form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
@@ -69,6 +94,7 @@ from typing import Any
 from urllib.parse import quote
 
 from caracole.config import Config
+from caracole.icons import kept_sources, page_icons, source_of
 from caracole.inbox import SCORE_EXTENSIONS
 from caracole.keys import SongKey, key_name, song_key
 from caracole.library import song_dir, write_atomic
@@ -147,6 +173,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "fold": {c: fold(c) for c in _TRANSLITERATED},
         "songs": songs,
+        "icons": page_icons(cfg.cache_dir),  # each source's name, badge and inlined icon (icons.py)
     }
     if controls is not None:
         data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
@@ -168,15 +195,17 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
 def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime,
                songs: list[Song] | None = None) -> list[dict[str, Any]]:
     """The cards' data, as the page's JSON holds it: of every song, or of ``songs``; a song in review
-    with its candidates, for the picker (``_add_picks``)."""
+    with its candidates, for the picker (``_add_picks``); each file with where it came from."""
     pages = _guitar_pro_pages(conn)
     sources = _downloaded(conn)
+    origins = kept_sources(conn)
     library = list_songs(conn) if songs is None else songs
     keys = {s.id: song_key(conn, cfg.library_dir, s) for s in library}
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
     musescore = cfg.provider("musescore").enabled
     cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
-                   sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [])
+                   sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
+                   origins=origins.get(s.id, {}))
              for s in library]
     _add_picks(conn, library, cards)
     return cards
@@ -250,17 +279,20 @@ def _musescore_links(conn: sqlite3.Connection, song: Song, overrides: Overrides)
     """The song's MuseScore pages, each a possible match: the sitemaps give titles only."""
     if song.status == "ignored" or song.key in overrides.ignore:
         return []
-    return [{"label": f"{p.path.removeprefix('song/')} (possible match)", "href": p.url} for p in song_pages(conn, song)]
+    return [{"label": f"{p.path.removeprefix('song/')} (possible match)", "href": p.url, "source": "musescore"}
+            for p in song_pages(conn, song)]
 
 
 def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | None,
           guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
-          musescore: list[dict[str, str]]) -> dict[str, Any]:
+          musescore: list[dict[str, str]], *, origins: dict[str, str] | None = None) -> dict[str, Any]:
     """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, and ``musescore``
     the song's MuseScore pages.
 
     ``key`` and ``key_source`` are the song's key and where it came from, as in its info.json.
+    ``origins`` is where each of its kept files came from (``icons.kept_sources``): each file gets
+    its ``source``, and the song its primary file's.
     """
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
@@ -270,10 +302,12 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     buy: list[dict[str, str]] = []
     if not has_sheet and status != "ignored":
         found = search_links(song.artist, song.title)
-        links = [{"label": "Chordify", "href": found["chordify"]}, {"label": "YouTube", "href": found["youtube"]}]
+        links = [{"label": "Chordify", "href": found["chordify"]},
+                 {"label": "YouTube", "href": found["youtube"], "source": "youtube"}]
         if for_buying:  # not while caracole may still find a sheet, nor once you have the audio
             buy = [{"label": label, "href": found[name]}
                    for label, name in (("Bandcamp", "bandcamp"), ("Qobuz", "qobuz"), ("iTunes", "itunes"))]
+    files = _files(library_dir, song, names, sources, origins or {})
     return {
         "id": song.id,
         "artist": song.artist,
@@ -288,7 +322,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "transpose": overrides.transpose.get(song.key, 0),
         "lyrics": song.lyrics_status,
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
-        "files": _files(library_dir, song, names, sources),
+        "files": files,
+        "source": next((f["source"] for f in files if f["primary"]), None),  # where its sheet came from
         "guitarPro": guitar_pro,
         "museScore": musescore,
         "links": links,
@@ -313,9 +348,11 @@ def _file_names(folder: Path) -> set[str]:
         return set()
 
 
-def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, str]) -> list[dict[str, Any]]:
+def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, str],
+           origins: dict[str, str] | None = None) -> list[dict[str, Any]]:
     """Links to the kept files that exist, as paths relative to index.html, percent-encoded. The
-    primary one is the sheet's PDF, else its text: never a score, whatever its format."""
+    primary one is the sheet's PDF, else its text: never a score, whatever its format. Each says
+    where it came from (``icons.source_of``)."""
     guitar = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
     scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
                     for n in names if (m := _SCORE.fullmatch(n)) and m.group(2) in SCORE_EXTENSIONS)
@@ -327,7 +364,8 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
                    None) or next(
         (n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None)
     return [
-        {"name": n, "label": _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}", "primary": n == primary}
+        {"name": n, "label": _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}", "primary": n == primary,
+         "source": source_of(n, origins or {})}
         for n in ordered
     ]
 
@@ -369,7 +407,7 @@ def _guitar_pro_pages(conn: sqlite3.Connection) -> dict[int, list[dict[str, str]
         label = f" ({v['label']})" if v["label"] else ""
         votes = f"{v['votes']} vote{'s' if v['votes'] != 1 else ''}"
         text = f"{_KIND_NAMES[v['kind']]} ver {v['version']}{label} · {v['rating']:.1f}★ · {votes}"
-        pages.setdefault(v["song_id"], []).append({"label": text, "href": url})
+        pages.setdefault(v["song_id"], []).append({"label": text, "href": url, "source": v["provider"]})
     return pages
 
 
@@ -702,8 +740,64 @@ body.with-tray .page { padding-bottom: 16rem; }
 .btn.quiet:hover { border-color: var(--border); color: var(--failed); }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
 .empty-hint { margin: 0; color: var(--muted); }
+.source { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 4px;
+  vertical-align: -3px; }
+/* A site with no icon (yet), or no site: a badge a little bigger than an icon, so its letters read. */
+.source.letters, .source.glyph { width: 20px; height: 20px; border: 1px solid var(--border-strong);
+  border-radius: 5px; background: var(--raised); color: var(--text); font-size: 10px; font-weight: 750;
+  letter-spacing: -.02em; line-height: 1; vertical-align: -5px; }
+.source.glyph { font-size: 12px; font-weight: 600; }
+.btn.sourced { gap: 7px; }
+.btn.sourced .source { order: -1; }
+.badges .source { align-self: center; }
+.views { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); }
+.views button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent;
+  color: var(--muted); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
+.views button:hover { color: var(--text); }
+.views button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.rows { margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+  box-shadow: var(--shadow); }
+/* Below 900px a row is two lines: the title and the main action, then the artist with the key and
+   badges (.row-sub, as wide as the row but for the "⋯" button), the artist at least 3rem wide. */
+.row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 34px;
+  grid-template-areas: "src title act act" ". sub sub more"; align-items: center; gap: 2px 10px;
+  min-width: 0; padding: 8px 10px 8px 12px; border-top: 1px solid var(--border); scroll-margin-top: 84px; }
+.row:first-child { border-top: 0; }
+.row[data-status="ignored"] { opacity: .7; }
+.row > .source { grid-area: src; justify-self: center; }
+.row-title { grid-area: title; min-width: 0; margin: 0; overflow: hidden; font-size: .98rem; line-height: 1.3;
+  white-space: nowrap; text-overflow: ellipsis; }
+.row-sub { grid-area: sub; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+.row-artist { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
+  font-size: .86rem; white-space: nowrap; text-overflow: ellipsis; }
+.row .artist { margin: 0; }
+.row-meta { flex: 0 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
+  gap: 4px 6px; min-width: 0; margin: 0 0 0 auto; color: var(--muted); font-size: .82rem; }
+.row-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.row-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
+.row-action form { margin: 0; }
+.row .btn { min-height: 34px; padding: 0 11px; font-size: .85rem; }
+.row-busy { color: var(--wanted); font-size: .85rem; font-weight: 650; }
+.row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: 34px; height: 30px;
+  padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted);
+  font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
+.row-more:hover, .row-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
+  color: var(--text); }
+.row-panel { grid-column: 1 / -1; display: grid; gap: 4px; padding: 4px 0 6px 30px; }
+.row-panel .note { margin: 0; }
+.row-group .subhead { margin: 4px 0 6px; }
 @media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
+}
+@media (min-width: 900px) {
+  .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px;
+    grid-template-areas: "src title artist meta act more"; padding: 3px 10px 3px 12px; }
+  .row-sub { display: contents; }
+  .row-artist { grid-area: artist; justify-self: start; max-width: 100%; }
+  .row-meta { grid-area: meta; margin: 0; }
+  .row .btn { min-height: 30px; }
+  .row-more { height: 28px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .plus { transition: transform .15s; }
@@ -838,6 +932,35 @@ _SCRIPT = r"""
       compare(String(songs[j].added || ""), String(songs[i].added || "")) || (songs[j].id || 0) - (songs[i].id || 0)),
   };
 
+  // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
+  // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
+  const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
+  const PNG_URI = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
+  const sourceMark = (key) => {
+    if (typeof key !== "string" || !key) return null;
+    const info = own.call(ICONS, key) && ICONS[key] && typeof ICONS[key] === "object" ? ICONS[key] : {};
+    const name = "from " + String(info.name || key);
+    let mark;
+    if (typeof info.src === "string" && PNG_URI.test(info.src)) {
+      mark = el("img", "source");
+      mark.setAttribute("src", info.src);
+      mark.setAttribute("alt", name);
+      mark.setAttribute("width", "16");
+      mark.setAttribute("height", "16");
+    } else {
+      mark = el("span", info.glyph ? "source glyph" : "source letters",
+        String(info.letters || key.slice(0, 2).toUpperCase()));
+      mark.setAttribute("role", "img");
+      mark.setAttribute("aria-label", name);
+    }
+    mark.title = name;
+    mark.dataset.source = key;
+    return mark;
+  };
+  // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
+  const elsewhere = (s, item) => (item && item.source && item.source === s.source
+    ? Object.assign({}, item, { source: null }) : item);
+
   const safeHref = (href, external) => {
     const value = String(href || "");
     if (external) return /^https?:/i.test(value) ? value : "#";
@@ -849,6 +972,11 @@ _SCRIPT = r"""
     if (external) {
       a.target = "_blank";
       a.rel = "noopener noreferrer";
+    }
+    const mark = sourceMark(item.source);  // after the label, so the link reads "Sheet PDF from LaCuerda"
+    if (mark) {
+      a.classList.add("sourced");
+      a.appendChild(mark);
     }
     return a;
   };
@@ -1196,6 +1324,8 @@ _SCRIPT = r"""
     names.appendChild(who);
     head.appendChild(names);
     const badges = el("div", "badges");
+    const mark = sourceMark(s.source);  // where its sheet came from
+    if (mark) badges.appendChild(mark);
     badges.appendChild(el("span", "badge " + String(s.status), label(STATUS_TEXT, s.status) || s.status));
     if (SHOWS.review(s)) badges.appendChild(el("span", "badge review", "Needs review"));
     if (s.auto) badges.appendChild(el("span", "badge auto", "Auto sheet"));
@@ -1249,7 +1379,7 @@ _SCRIPT = r"""
       }
       if (s.notFound) actions.appendChild(lookLink(s));
     }
-    for (const f of listOf(s.files)) actions.appendChild(link(f, f.primary ? "btn primary" : "btn", false));
+    for (const f of listOf(s.files)) actions.appendChild(link(elsewhere(s, f), f.primary ? "btn primary" : "btn", false));
     if (actions.childNodes.length) card.appendChild(actions);
     linkRow(card, "Guitar Pro to download", listOf(s.guitarPro), "btn small");
     if (listOf(s.museScore).length || listOf(s.links).length || listOf(s.buy).length) {
@@ -1281,9 +1411,169 @@ _SCRIPT = r"""
     return cards.get(i);
   };
 
+  // Rows: one compact line a song, or a result of a search (resultRow: the seam the module docstring
+  // describes). A row is an article titled by its h2; the A-Z strip moves the focus to it.
+  let rowSerial = 0;
+  const isWeb = (href) => /^https?:/i.test(String(href || ""));
+  const shortKey = (key) => String(key).replace(/ minor$/, "m").replace(/ major$/, "");
+  const linkGroup = (group) => {
+    if (group instanceof Node) return group;
+    const items = listOf(group && group.links).filter((item) => item && typeof item === "object");
+    if (!items.length) return null;
+    const box = el("div", "row-group");
+    if (group.heading) box.appendChild(el("p", "subhead", group.heading));
+    const line = el("div", "actions");
+    for (const item of items) line.appendChild(link(item, "btn small", isWeb(item.href)));
+    box.appendChild(line);
+    return box;
+  };
+  const resultRow = (result) => {
+    const r = result && typeof result === "object" ? result : {};
+    const title = String(r.title || "");
+    const artist = String(r.artist || "");
+    const row = el("article", "row");
+    row.tabIndex = -1;
+    if (r.status) row.dataset.status = String(r.status);
+    const heading = el("h2", "row-title", title);
+    heading.title = title;
+    row.appendChild(heading);
+    // The artist and the key, the status and the badges: one wrapping line under the title on a phone,
+    // where badges that don't fit go under the artist, never over it; their own columns on a desktop.
+    const sub = el("div", "row-sub");
+    if (artist && typeof r.onArtist === "function") {
+      const who = el("button", "artist row-artist", artist);
+      who.type = "button";
+      who.title = "Show only " + artist + "'s songs";
+      who.addEventListener("click", r.onArtist);
+      sub.appendChild(who);
+    } else if (artist) {
+      sub.appendChild(el("span", "row-artist", artist));
+    }
+    const meta = el("p", "row-meta");
+    if (typeof r.key === "string" && r.key) {
+      const said = String(r.keyText || "Key " + keyName(r.key));
+      const key = el("span", "row-key");
+      key.title = said;
+      const shown = el("span", null, shortKey(r.key));
+      shown.setAttribute("aria-hidden", "true");
+      key.appendChild(shown);
+      key.appendChild(el("span", "visually-hidden", said));
+      meta.appendChild(key);
+    }
+    for (const badge of listOf(r.badges)) {
+      if (badge && badge.text) meta.appendChild(el("span", "badge " + String(badge.kind || ""), badge.text));
+    }
+    if (r.facts) meta.appendChild(el("span", "row-facts", r.facts));
+    if (meta.childNodes.length) sub.appendChild(meta);
+    if (sub.childNodes.length) row.appendChild(sub);
+    const mark = sourceMark(r.source);
+    if (mark) row.appendChild(mark);
+    const action = el("div", "row-action");
+    const main = r.action instanceof Node ? r.action
+      : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null;
+    if (main) action.appendChild(main);
+    row.appendChild(action);
+    const extra = listOf(r.more).map(linkGroup).filter(Boolean);
+    if (extra.length) {
+      const panel = el("div", "row-panel");
+      rowSerial += 1;
+      panel.id = "row-more-" + rowSerial;
+      panel.hidden = true;
+      for (const node of extra) panel.appendChild(node);
+      const more = el("button", "row-more");
+      more.type = "button";
+      more.setAttribute("aria-expanded", "false");
+      more.setAttribute("aria-controls", panel.id);
+      more.title = "More for " + title;
+      const dots = el("span", null, "⋯");
+      dots.setAttribute("aria-hidden", "true");
+      more.appendChild(dots);
+      more.appendChild(el("span", "visually-hidden", "More for " + title));
+      more.addEventListener("click", () => {
+        const open = more.getAttribute("aria-expanded") !== "true";
+        more.setAttribute("aria-expanded", String(open));
+        panel.hidden = !open;
+      });
+      row.appendChild(more);
+      row.appendChild(panel);
+    }
+    return row;
+  };
+  // A song's main action in its row: its sheet; on the served page, a wanted song's fetch, as on its card.
+  const songAction = (s, primary) => {
+    if (server && s.status === "wanted") {
+      if (busy.has(Number(s.id))) {
+        const going = el("a", "row-busy", "Fetching…");
+        going.href = "/jobs";
+        going.title = "See the requests";
+        return going;
+      }
+      if (s.fetchable === false) {
+        const held = el("button", "btn small", "Review first");
+        held.type = "button";
+        held.disabled = true;
+        held.title = "caracole review settles this match; then it can be fetched";
+        return held;
+      }
+      return fetchForm(s);
+    }
+    if (!primary) return null;
+    const open = link({ label: primary.label, href: primary.href }, "btn small", false);
+    open.setAttribute("aria-label", String(primary.label) + " of " + String(s.title) + " by " + String(s.artist));
+    return open;
+  };
+  const songRow = (s) => {
+    const files = listOf(s.files);
+    const primary = files.find((f) => f && f.primary) || null;
+    const more = [];
+    if (SHOWS.review(s)) {
+      const note = el("p", "note", "caracole isn't sure about this match: see the ");
+      const todo = el("a", null, "to-do page");
+      todo.href = "_todo.md";
+      note.appendChild(todo);
+      note.appendChild(document.createTextNode(", or run caracole review."));
+      more.push(note);
+    }
+    more.push({ heading: "Files", links: files.filter((f) => f !== primary).map((f) => elsewhere(s, f)) },
+      { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
+      { heading: "Scores on MuseScore", links: listOf(s.museScore) },
+      { heading: "Find the chords", links: listOf(s.links) },
+      { heading: "Buy the track for an auto sheet", links: listOf(s.buy) });
+    // No "Auto sheet" badge: the row's mark (♪, "from the audio") and its button ("Auto sheet PDF") say so.
+    const badges = [{ kind: s.status, text: label(STATUS_TEXT, s.status) || s.status }];
+    if (SHOWS.review(s)) badges.push({ kind: "review", text: "Needs review" });
+    const artists = listOf(s.artists);
+    const keyed = typeof s.key === "string" && s.key;
+    return resultRow({
+      title: s.title,
+      artist: artists.length > 1 ? artists.join(", ") : s.artist,
+      source: s.source,
+      status: s.status,
+      key: keyed ? s.key : "",
+      keyText: keyed ? keyText(s) : "",
+      badges,
+      action: songAction(s, primary),
+      more,
+      onArtist: () => {
+        setArtist(String(s.sortArtist || ""));
+        window.scrollTo(0, 0);
+      },
+    });
+  };
+  const rows = new Map();
+  const rowFor = (i) => {
+    if (!rows.has(i)) rows.set(i, songRow(songs[i]));
+    return rows.get(i);
+  };
+  const VIEWS = ["cards", "rows"];
+  const viewButtons = Array.from(document.querySelectorAll("button[data-view]"));
+  // For lists the page doesn't make itself (the served page's type-ahead): the same rows and marks.
+  window.caracole = Object.freeze({ resultRow, sourceMark, icons: ICONS });
+
   // artist: one artist's songs alone, by sortArtist, which a search for the name wouldn't give
   // ("Queen" also finds "Dancing Queen").
-  const state = { q: "", show: "all", sort: "artist", artist: "", key: "" };
+  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", view: "cards" };
+  const itemFor = (i) => (state.view === "rows" ? rowFor(i) : cardFor(i));
   const artistName = (key) => {
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
@@ -1295,6 +1585,7 @@ _SCRIPT = r"""
     if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
     if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
+    if (VIEWS.indexOf(params.get("view")) >= 0) state.view = params.get("view");
   } catch (err) {
     // A malformed address: start from the defaults.
   }
@@ -1312,6 +1603,7 @@ _SCRIPT = r"""
     if (state.sort !== "artist") params.set("sort", state.sort);
     if (state.artist) params.set("artist", state.artist);
     if (state.key) params.set("key", state.key);
+    if (state.view !== "cards") params.set("view", state.view);
     try {
       history.replaceState(null, "", "#" + params.toString());
     } catch (err) {
@@ -1370,19 +1662,21 @@ _SCRIPT = r"""
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
     sort.value = state.sort;
     keySelect.value = state.key;
+    for (const button of viewButtons) button.setAttribute("aria-pressed", String(button.dataset.view === state.view));
     clear.hidden = !state.q;
     artistChip.hidden = !state.artist;
     artistChip.textContent = state.artist ? artistName(state.artist) + " ×" : "";
     artistChip.setAttribute("aria-label", state.artist ? "Show every artist, not only " + artistName(state.artist) : "");
 
     // One grid, whatever the order, so the cards fill each row; the strip jumps to a letter's first card.
+    // In rows, one list of rows.
     list.textContent = "";
     jump.textContent = "";
-    const grid = el("div", "grid");
+    const grid = el("div", state.view === "rows" ? "rows" : "grid");
     const letterOf = LETTERS[state.sort];
     const firsts = new Map();
     for (const i of shown) {
-      const card = cardFor(i);
+      const card = itemFor(i);
       if (letterOf) {
         const letter = String(songs[i][letterOf] || "#");
         if (!firsts.has(letter)) firsts.set(letter, card);
@@ -1509,6 +1803,13 @@ _SCRIPT = r"""
     render();
     save();
   });
+  for (const button of viewButtons) {
+    button.addEventListener("click", () => {
+      state.view = VIEWS.indexOf(button.dataset.view) >= 0 ? button.dataset.view : "cards";
+      render();
+      save();
+    });
+  }
   document.addEventListener("keydown", (e) => {
     const typing = document.activeElement === input;
     if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -1804,10 +2105,11 @@ def sha256_source(text: str) -> str:
 
 
 # default-src 'none' blocks every fetch the page could make; links still navigate. Forms may post
-# only to caracole serve, and only on the page it serves.
+# only to caracole serve, and only on the page it serves. Images come from data: URIs alone: the
+# sites' icons, inlined (icons.py).
 _CSP = (
     f"default-src 'none'; script-src {sha256_source(_SCRIPT)}; style-src {sha256_source(_STYLE)}; "
-    "base-uri 'none'; form-action __FORMS__"
+    "img-src data:; base-uri 'none'; form-action __FORMS__"
 )
 
 _HEAD = """<!doctype html>
@@ -1850,6 +2152,10 @@ __REQUEST__<div class="searchbar" role="search">
     <button type="button" class="chip person" id="artist" hidden></button>
   </div>
   <div class="controls">
+  <div class="views" role="group" aria-label="View">
+    <button type="button" data-view="cards" aria-pressed="true">Cards</button>
+    <button type="button" data-view="rows" aria-pressed="false">Rows</button>
+  </div>
   <label class="sort" id="keys" hidden>Key
     <select id="key"><option value="">Any</option></select>
   </label>

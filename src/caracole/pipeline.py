@@ -1,8 +1,8 @@
 """The nightly ``caracole run`` (plan §6).
 
-Steps, in order: sync → index → match → lyrics → fetch → lacuerda → scan →
-gtptabs → musescore → render → todo. Each step runs even if an earlier one
-failed, so the to-do page is always rewritten.
+Steps, in order: sync → icons → index → match → lyrics → fetch → lacuerda →
+scan → gtptabs → musescore → render → todo. Each step runs even if an earlier
+one failed, so the to-do page is always rewritten.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
   the run once it blocks. So are gtptabs and musescore when caracole.toml turns one
@@ -191,6 +191,21 @@ def _sync(ctx: StepContext) -> StepResult:
         result.problems.append(Problem(f"Spotify couldn't be synced ({why}), so it will be tried again on the "
                                        "next run; wanted.txt was synced."))
     return result
+
+
+def _icons(ctx: StepContext) -> StepResult:
+    """The icons index.html lacks of the sites the library has something from (icons.py), with the
+    run's own clients: never a provider's that cools down or blocked this run. Early, so that a
+    site's budget is never spent before it: an icon costs a request or two, once. A block raises,
+    and ends the step as any block does."""
+    from caracole.icons import fetch_icons, sources_in_use
+
+    clients = {p: c for p, c in ctx.services.clients.items()
+               if p not in ctx.report.blocked and not is_cooling(ctx.conn, p, ctx.now)}
+    run = fetch_icons(ctx.conn, ctx.cfg.cache_dir, clients, ctx.now, only=sources_in_use(ctx.conn))
+    return StepResult(title="Site icons", done=_counted((len(run.fetched), "fetched")),
+                      status=f"{len(run.fetched)} fetched, {len(run.missing)} not there, "
+                             f"{plural(len(run.errors), 'error')}, {len(run.waiting)} waiting")
 
 
 def _index(ctx: StepContext) -> StepResult:
@@ -419,6 +434,7 @@ def _todo_for_broken_overrides(cfg: Config, conn: sqlite3.Connection, now: datet
 def default_steps() -> list[Step]:
     return [
         Step("sync", _sync),
+        Step("icons", _icons),
         Step("index", _index, provider="ug"),
         Step("match", _match),
         Step("lyrics", _lyrics, provider="lrclib"),

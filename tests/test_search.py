@@ -358,10 +358,10 @@ def test_cli_prints_library_hits_and_numbered_index_hits(tmp_path):
     assert "In your library" in library
     assert "Radiohead - Creep" in library and "found" in library
     assert str(tmp_path / "lib" / "Radiohead" / "Creep") in library
-    assert "1. Radiohead - Creep" in ug
+    assert "1. [UG] Radiohead - Creep" in ug
     assert "chords×3 tabs×2 guitar-pro×1" in ug
     assert "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169" in ug
-    assert "2. Stone Temple Pilots - Creep" in ug
+    assert "2. [UG] Stone Temple Pilots - Creep" in ug
     assert 'caracole add "Stone Temple Pilots" "Creep"' in ug
 
 
@@ -608,6 +608,23 @@ def test_cli_library_hits_show_their_key(tmp_path):
     assert "Radiohead - Creep · found · Key G major (from the tab) · " in result.output
 
 
+def test_cli_hits_are_tagged_with_where_they_came_from(tmp_path):
+    conn = seed_keys(tmp_path)
+    lucky = find_song(conn, "radiohead/lucky")
+    lc = upsert_version(conn, provider="lacuerda", tab_id="radiohead/lucky", song_id=lucky.id, slot="sheet",
+                        kind="acordes", rating=0, votes=0, version=2, label=None,
+                        url="https://acordes.lacuerda.net/radiohead/lucky.shtml", raw={}, now="x")
+    keep_file(conn, tmp_path / "lib", song=lucky, version_id=lc, name="sheet.txt", data=b"LaCuerda's\n", rank=1)
+    add_song(conn, "Radiohead", "Airbag")  # wanted: no sheet yet, so no tag
+    result = run(tmp_path, "search", "radiohead")
+    assert result.exit_code == 0, result.output
+    library, _, ug = result.output.partition("On Ultimate Guitar (offline index)")
+    assert "\n  [UG] Radiohead - Creep · found · Key G major (from the tab) · " in library
+    assert "\n  [LaCuerda] Radiohead - Lucky · found" in library
+    assert "\n  Radiohead - Airbag · wanted, no sheet yet · no folder yet" in library
+    assert "\n  1. [UG] Radiohead - Creep · chords×3" in ug  # the offline index is Ultimate Guitar's
+
+
 def test_cli_search_by_key_alone_lists_your_songs_in_that_key(tmp_path):
     seed_keys(tmp_path)
     result = run(tmp_path, "search", "--key", "Am")
@@ -654,7 +671,7 @@ def test_cli_search_by_key_takes_the_key_in_lowercase(tmp_path, typed, heading, 
     result = run(tmp_path, "search", "--key", typed)
     assert result.exit_code == 0, result.output
     assert f"In your library, in {heading}" in result.output
-    assert f"  {song} · found · Key {heading}" in result.output
+    assert f"  [UG] {song} · found · Key {heading}" in result.output
 
 
 def test_cli_search_by_key_says_when_limit_cuts_the_list(tmp_path):

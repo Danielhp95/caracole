@@ -28,6 +28,7 @@ an earlier one failed:
 | Step | Modules |
 |---|---|
 | sync | sources.py (`sync_sources`), wanted.py, spotify.py, songs.py |
+| icons | icons.py (each source's mark: a site's favicon, fetched once, sanitized, in `cache_dir/icons/`) |
 | index | ug/sitemap.py, ug/index.py |
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |

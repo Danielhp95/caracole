@@ -221,7 +221,8 @@ def test_default_steps_are_in_plan_order():
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "musescore", "render", "todo",
+        "sync", "icons", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "musescore", "render",
+        "todo",
     ]
     providers = {s.name: s.provider for s in default_steps()}
     assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs" and providers["musescore"] == "musescore"
