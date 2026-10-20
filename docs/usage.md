@@ -1628,7 +1628,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 
 - **Chords over the lyrics**, in bold rust. A long line wraps between words,
   never between a chord and its syllable, and a chord reaches over the words
-  after it, so the lyrics read without gaps.
+  after it, so the lyrics read without gaps. A chord never reaches past the
+  edge of the screen: at the end of a row with less room left than the chord
+  is wide, it goes on to the next row with its words.
 - **The tab's notes**: what a tab says before its first section or its first
   riff (the tabber's comments, a link, a chord legend) is shown small and
   muted, two lines of it; **More** opens the rest, and works without

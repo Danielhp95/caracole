@@ -337,7 +337,9 @@
   };
 
   // A chord may reach over the words after it, up to the next chord on its row: lyrics then
-  // read without gaps. Where two chords would touch, the first one's column is widened.
+  // read without gaps. Where two chords would touch, the first one's column is widened. A chord
+  // never reaches past the line's edge, which would widen the page: where the row has less room
+  // left than the chord is wide, its column takes the chord's width, and goes on to the next row.
   const sheetEl = $("sheet");
   const fit = () => {
     sheetEl.classList.add("tight");
@@ -349,7 +351,8 @@
       kids.forEach((col, k) => {
         if (!col.classList.contains("s")) return;
         const box = col.getBoundingClientRect();
-        const need = col.firstElementChild.offsetWidth + space;
+        const chord = col.firstElementChild.offsetWidth;
+        const need = chord + space;
         let room = right - box.left;  // no chord after it on its row: up to the edge
         for (let m = k + 1; m < kids.length; m++) {
           const next = kids[m].getBoundingClientRect();
@@ -359,7 +362,9 @@
             break;
           }
         }
-        if (room < need) col.lastElementChild.style.minWidth = Math.ceil(box.width + need - room) + "px";
+        let width = room < need ? box.width + need - room : 0;
+        if (box.left + chord > right + 0.5) width = Math.max(width, chord);  // past the edge: on to the next row
+        if (width) col.lastElementChild.style.minWidth = Math.ceil(width) + "px";
       });
     }
   };

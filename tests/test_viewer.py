@@ -717,6 +717,36 @@ def test_a_chord_is_easy_to_tap(tmp_path):
     assert own and fits  # and the larger targets make the page no wider
 
 
+# A long chord over the space before a line's last word, as Wonderwall has one, with the words before
+# it a letter longer from line to line: one of them puts the chord where the row has less room left
+# than the chord is wide.
+EDGE = "{title: Edge}\n{artist: Synthetic}\n{comment: Verse}\n" + "".join(
+    f"[Dsus4]{'made up words to go on and on and over the edge'[:n]} [A7sus4] do\n" for n in range(1, 49))
+PAST_THE_EDGE = """(() => [...document.querySelectorAll("#sheet .l")].flatMap((line) => {
+  const edge = line.getBoundingClientRect().right;
+  return [...line.querySelectorAll(".c")].filter((c) => c.getBoundingClientRect().right > edge + 0.5)
+    .map((c) => [c.textContent, Math.round(c.getBoundingClientRect().right), Math.round(edge)]);
+}))()"""
+
+
+@in_chromium
+def test_a_chord_never_reaches_past_its_line_or_widens_the_page(tmp_path):
+    # At the end of a row a chord has the room up to the edge: where it is wider, its words go on to the
+    # next row with it, rather than the chord reaching past the edge and the page scrolling sideways.
+    from helpers.chromium import Chromium
+
+    page = tmp_path / "Artist" / "Edge" / "sheet.html"
+    page.parent.mkdir(parents=True)
+    page.write_text(build_viewer(EDGE), encoding="utf-8")
+    seen = {}
+    with Chromium(tmp_path / "profile") as browser:
+        for fs in (18, 22, 24, 30):
+            tab = phone_tab(browser, page.as_uri() + f"#fs={fs}")
+            seen[fs] = [tab.eval(PAST_THE_EDGE),
+                        tab.eval("document.documentElement.scrollWidth <= document.documentElement.clientWidth")]
+    assert seen == {fs: [[], True] for fs in (18, 22, 24, 30)}, seen
+
+
 @in_chromium
 def test_a_capo_stays_on_its_fret_when_the_song_is_transposed(tmp_path):
     # As on a guitar: a semitone up with the capo where it is, and every shape goes up a semitone.
