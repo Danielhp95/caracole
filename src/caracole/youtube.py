@@ -298,6 +298,8 @@ class _Names:
         return self._cjk_title_in(title)
 
     def _cjk_title_in(self, title: str) -> int:
+        if not self.cjk_titles:
+            return 0
         found = 0
         for text in dict.fromkeys((title, simplified(title))):
             squeezed = _Squeezed(text)
@@ -651,7 +653,8 @@ class YtDlp:
 # deno's flags. Nothing else: not the unit's credentials (CREDENTIALS_DIRECTORY) nor caracole's
 # tokens (CARACOLE_*), for these are other people's programs reading YouTube's pages.
 _KEPT_ENV = frozenset({
-    "PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "TZ", "TMPDIR", "TEMP", "TMP", "XDG_CACHE_HOME",
+    "PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "LOCALE_ARCHIVE", "TZ", "TZDIR", "TMPDIR", "TEMP", "TMP",
+    "XDG_CACHE_HOME",
     "XDG_RUNTIME_DIR", "SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
     "DENO_V8_FLAGS", "DENO_DIR", "DENO_NO_UPDATE_CHECK", "DENO_CERT", "DENO_TLS_CA_STORE",
 })

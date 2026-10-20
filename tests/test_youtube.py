@@ -369,6 +369,7 @@ def test_yt_dlp_gets_none_of_caracoles_secrets(fake, tmp_path, monkeypatch):
     secrets = {"CREDENTIALS_DIRECTORY": str(tmp_path / "creds"), "CARACOLE_NTFY_TOKEN": "tk_secret",
                "CARACOLE_SPOTIFY_CLIENT_SECRET": "s3cret", "CARACOLE_WEB_TOKEN": "w3b", "DENO_AUTH_TOKENS": "a@b"}
     kept = {"HTTPS_PROXY": "http://proxy.example:3128", "no_proxy": "localhost", "LC_ALL": "C.UTF-8",
+            "LOCALE_ARCHIVE": "/run/current-system/sw/lib/locale/locale-archive",
             "LANG": "C.UTF-8", "XDG_CACHE_HOME": str(tmp_path / "xdg"), "SSL_CERT_FILE": "/etc/ssl/ca.pem",
             "HOME": str(tmp_path), "TMPDIR": str(tmp_path)}
     for name, value in {**secrets, **kept}.items():
