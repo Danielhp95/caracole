@@ -480,9 +480,17 @@ def test_the_nightly_todo_step_also_writes_index_html(conn, cfg):
 CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 
 
+NARROWEST_WINDOW = 500  # headless Chromium makes a narrower --window-size this wide, whatever is asked
+
+
 def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,900") -> str:
-    """The page's DOM after its script ran; skips the test when this machine can't run Chromium."""
+    """The page's DOM after its script ran, laid out in a window of ``size`` ("width,height");
+    skips the test when this machine can't run Chromium. A phone's width, narrower than headless
+    Chromium's narrowest window, is set as a phone's screen over the DevTools protocol."""
     url = path.as_uri() + fragment
+    width, height = (int(n) for n in size.split(","))
+    if width < NARROWEST_WINDOW:
+        return phone_dom(url, tmp_path, width, height)
     try:
         result = subprocess.run(
             [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
@@ -495,6 +503,98 @@ def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,9
     if result.returncode != 0 or "<html" not in result.stdout:
         pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
     return result.stdout
+
+
+# Runs Chromium with the pipe it reads the DevTools protocol from as fd 3, and writes to as fd 4.
+_PIPE_FDS = ("import os, sys; os.dup2(int(sys.argv[1]), 3); os.dup2(int(sys.argv[2]), 4); "
+             "os.execv(sys.argv[3], sys.argv[3:])")
+
+
+def phone_dom(url: str, tmp_path: Path, width: int, height: int, timeout: float = 60.0) -> str:
+    """The DOM of ``url`` on a phone's screen of ``width`` × ``height`` CSS pixels
+    (``Emulation.setDeviceMetricsOverride``, over ``--remote-debugging-pipe``), once its scripts
+    ran and a frame was drawn."""
+    import os
+    import select
+    import sys
+    import time
+
+    chrome_reads, to_chrome = os.pipe()
+    from_chrome, chrome_writes = os.pipe()
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "-c", _PIPE_FDS, str(chrome_reads), str(chrome_writes), CHROMIUM,
+             "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+             f"--user-data-dir={tmp_path / 'chrome'}", "--hide-scrollbars", "--remote-debugging-pipe",
+             "about:blank"],
+            pass_fds=(chrome_reads, chrome_writes), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    finally:
+        os.close(chrome_reads)
+        os.close(chrome_writes)
+    deadline = time.monotonic() + timeout
+    pending = b""
+    heard: list[dict] = []
+    sent = 0
+
+    def hear() -> dict:
+        nonlocal pending
+        while b"\0" not in pending:
+            left = deadline - time.monotonic()
+            if left <= 0 or not select.select([from_chrome], [], [], left)[0]:
+                raise TimeoutError("chromium answered nothing in time")
+            chunk = os.read(from_chrome, 1 << 16)
+            if not chunk:
+                raise EOFError("chromium closed its pipe")
+            pending += chunk
+        message, pending = pending.split(b"\0", 1)
+        return json.loads(message)
+
+    def ask(method: str, params: dict | None = None, session: str | None = None) -> dict:
+        nonlocal sent
+        sent += 1
+        message = {"id": sent, "method": method, "params": params or {}}
+        if session is not None:
+            message["sessionId"] = session
+        os.write(to_chrome, json.dumps(message).encode() + b"\0")
+        while (answer := hear()).get("id") != sent:
+            heard.append(answer)
+        if "error" in answer:
+            raise RuntimeError(f"{method}: {answer['error']}")
+        return answer.get("result", {})
+
+    try:
+        try:
+            target = ask("Target.createTarget", {"url": "about:blank"})["targetId"]
+        except (OSError, EOFError, TimeoutError, RuntimeError) as e:
+            pytest.skip(f"chromium couldn't run: {e}")
+        session = ask("Target.attachToTarget", {"targetId": target, "flatten": True})["sessionId"]
+        ask("Emulation.setDeviceMetricsOverride",
+            {"width": width, "height": height, "deviceScaleFactor": 1, "mobile": True}, session)
+        ask("Page.enable", None, session)
+        ask("Page.navigate", {"url": url}, session)
+        while not any(m.get("method") == "Page.loadEventFired" and m.get("sessionId") == session for m in heard):
+            heard.append(hear())
+        done = ask("Runtime.evaluate", {
+            "expression": "new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0)))"
+                          ".then(() => document.documentElement.outerHTML)",
+            "awaitPromise": True, "returnByValue": True}, session)
+        return done["result"]["value"]
+    finally:
+        try:
+            ask("Browser.close")
+        except (OSError, EOFError, TimeoutError, RuntimeError):
+            pass
+        os.close(to_chrome)
+        os.close(from_chrome)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
 
 def listing(dom: str) -> str:
@@ -664,11 +764,13 @@ def test_cards_fill_a_desktop_row_and_stack_on_a_phone(conn, cfg, tmp_path):
     path = write_library_page(cfg.library_dir, measured(page(conn, cfg)))
 
     wide = layout_of(dump_dom(path, tmp_path, size="1280,900"))
+    assert wide["page"] == 1280, wide  # laid out at the width asked for
     assert len(wide["tops"]) == 4
     assert wide["tops"].count(wide["tops"][0]) >= 3, wide  # at least three cards share the first row
     assert wide["scroll"] <= wide["page"]
 
     phone = layout_of(dump_dom(path, tmp_path, size="390,844"))
+    assert phone["page"] == 390, phone  # a phone's width, not headless Chromium's narrowest window
     assert len(set(phone["tops"])) == 4, phone  # one card per row
     assert phone["scroll"] <= phone["page"], phone  # nothing wider than the screen
     assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
@@ -954,16 +1056,26 @@ def test_the_rows_view_shows_a_song_a_row_with_its_source_key_status_and_main_ac
     assert ">Wanted<" in wonderwall and "row-action" in wonderwall and "Find the chords" in wonderwall
 
 
-# Measures the rows: each one's top and height, the page's width and how far it scrolls sideways.
+# Measures the rows: each one's top and height, its artist's width, how many lines its parts take
+# (by their middles), the page's width and how far it scrolls sideways.
 ROWS = """
 (() => {
   const rows = Array.from(document.querySelectorAll("#list .row"));
   const box = (node) => node.getBoundingClientRect();
+  const lines = (r) => {
+    const parts = r.querySelectorAll(".row-title, .row-artist, .row-meta > *, .row-action > *, .row-more, .row > .source");
+    const middles = Array.from(parts).filter((p) => box(p).height > 0)
+      .map((p) => box(p).top + box(p).height / 2).sort((a, b) => a - b);
+    return middles.filter((m, i) => i === 0 || m - middles[i - 1] > 6).length;
+  };
   document.body.setAttribute("data-layout", JSON.stringify({
     tops: rows.map((r) => Math.round(box(r).top + window.scrollY)),
     heights: rows.map((r) => Math.round(box(r).height)),
     titles: rows.map((r) => Math.round(box(r.querySelector("h2")).top)),
     actions: rows.map((r) => r.querySelector(".row-action > *") ? Math.round(box(r.querySelector(".row-action > *")).top) : null),
+    artists: rows.map((r) => r.querySelector(".row-artist") ? Math.round(box(r.querySelector(".row-artist")).width) : null),
+    whole: rows.map((r) => r.querySelector(".row-artist") ? r.querySelector(".row-artist").scrollWidth : null),
+    lines: rows.map(lines),
     widths: rows.map((r) => Math.round(box(r).width)),
     page: window.innerWidth,
     screen: window.innerHeight,
@@ -983,15 +1095,54 @@ def test_many_rows_fit_on_a_screen_and_a_phones_rows_wrap_to_two_lines(conn, cfg
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ROWS))
 
     wide = layout_of(dump_dom(path, tmp_path, "#view=rows", size="1280,900"))
+    assert wide["page"] == 1280, wide  # laid out at the width asked for
     assert len(wide["tops"]) == 24 and wide["scroll"] <= wide["page"], wide
     assert all(abs(t - a) <= 8 for t, a in zip(wide["titles"], wide["actions"])), wide  # one line each
+    assert set(wide["lines"]) == {1}, wide
     assert wide["screen"] // max(wide["heights"]) >= 20, wide  # a screen holds 20 rows, against 9 cards
 
     phone = layout_of(dump_dom(path, tmp_path, "#view=rows", size="390,844"))
+    assert (phone["page"], phone["screen"]) == (390, 844), phone  # a phone's screen, exactly
     assert phone["scroll"] <= phone["page"], phone  # nothing wider than the screen
     assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
+    assert set(phone["lines"]) == {2} and min(phone["artists"]) > 40, phone
     # Two lines at most, with buttons a thumb can hit: nine rows to a screen, against three cards.
     assert phone["screen"] // max(phone["heights"]) >= 9, phone
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_phones_row_keeps_its_artist_beside_the_most_badges_a_song_has(conn, cfg, tmp_path):
+    # The fullest second lines: a key, the status and Needs review, beside an auto sheet's mark; Wanted
+    # and Needs review.
+    abba = add_song(conn, "ABBA", "Dancing Queen")
+    auto = upsert_version(conn, provider="auto", tab_id=str(abba.id), song_id=abba.id, slot="sheet", kind="auto",
+                          rating=0, votes=0, version=1, label=None, url="file:///x.flac",
+                          raw={"key": "A major"}, now="2026-10-18T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=abba, version_id=auto, name="sheet (auto).txt", data=b"A\nWords\n", rank=1)
+    put(cfg, abba, "sheet (auto).pdf")
+    update_song(conn, abba.id, status="found", review=True)
+    queen = add_song(conn, "Queen", "Bohemian Rhapsody")
+    keep_sheet_json(conn, cfg, queen, "Words\n", raw={"tonality_name": "Bb"})
+    put(cfg, queen, "sheet.pdf")
+    update_song(conn, queen.id, status="found", review=True)
+    longest = add_song(conn, "Florence + The Machine", "Dog Days Are Over")
+    update_song(conn, longest.id, review=True)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ROWS))
+
+    phone = layout_of(dump_dom(path, tmp_path, "#view=rows", size="390,844"))
+    assert phone["page"] == 390, phone
+    abba_row, florence_row, queen_row = range(3)  # by artist
+    # "ABBA" and "Queen" whole, never squeezed out by the badges; a long name cut, but readable.
+    for short in (abba_row, queen_row):
+        assert phone["artists"][short] >= phone["whole"][short] > 30, phone
+    assert phone["artists"][florence_row] > 40, phone
+    assert max(phone["lines"]) <= 2, phone
+    assert phone["scroll"] <= phone["page"], phone
+    # The auto sheet's row says where it came from by its mark and its button, as a badge would.
+    shown = listing(dump_dom(path, tmp_path, "#view=rows"))
+    dancing = row_of(shown, "Dancing Queen")
+    assert 'aria-label="from the audio (auto-chords)"' in dancing and ">Auto sheet PDF<" in dancing
+    assert ">Needs review<" in dancing and ">Auto sheet<" not in dancing
 
 
 @pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")

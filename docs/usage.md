@@ -983,10 +983,14 @@ carries its own: the lyrics LRCLIB's, a Guitar Pro file gtptabs.com's (see
 
 The Cards/Rows switch, beside the Key menu, shows the songs as rows instead:
 one line a song on a laptop, about twenty to a screen, and two lines on a
-phone. A row has the sheet's mark, the title, the artist (which, as on a card,
+phone: the title and the button, then the artist, the key and the status. A
+row has the sheet's mark, the title, the artist (which, as on a card,
 shows only that artist's songs), the key ("Am"; a screen reader hears "Key A
-minor (from the tab)"), the status, and one button: the sheet, or, on the page
-`caracole serve` serves, Fetch now for a wanted song. Its "⋯" button opens the
+minor (from the tab)"), the status, Needs review when caracole isn't sure of
+the match, and one button: the sheet, or, on the page
+`caracole serve` serves, Fetch now for a wanted song. An auto sheet's row
+says so by its ♪ mark and its button, "Auto sheet PDF", rather than by a
+badge, so that a phone's second line keeps room for the artist. Its "⋯" button opens the
 rest: the other files, the Guitar Pro pages, MuseScore's pages, and the search
 and buy links. The search, the status buttons, the Key menu, the sort and the
 letters work the same in both, and the address remembers the choice

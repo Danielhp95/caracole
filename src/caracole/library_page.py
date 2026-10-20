@@ -585,19 +585,22 @@ _STYLE = BASE_STYLE + """
 .views button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
 .rows { margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
   box-shadow: var(--shadow); }
-.row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto auto;
-  grid-template-areas: "src title title act" ". artist meta more"; align-items: center; gap: 2px 10px;
+/* Below 900px a row is two lines: the title and the main action, then the artist with the key and
+   badges (.row-sub, as wide as the row but for the "⋯" button), the artist at least 3rem wide. */
+.row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 34px;
+  grid-template-areas: "src title act act" ". sub sub more"; align-items: center; gap: 2px 10px;
   min-width: 0; padding: 8px 10px 8px 12px; border-top: 1px solid var(--border); scroll-margin-top: 84px; }
 .row:first-child { border-top: 0; }
 .row[data-status="ignored"] { opacity: .7; }
-.row > .source { grid-area: src; }
+.row > .source { grid-area: src; justify-self: center; }
 .row-title { grid-area: title; min-width: 0; margin: 0; overflow: hidden; font-size: .98rem; line-height: 1.3;
   white-space: nowrap; text-overflow: ellipsis; }
-.row-artist { grid-area: artist; justify-self: start; max-width: 100%; overflow: hidden; color: var(--muted);
+.row-sub { grid-area: sub; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+.row-artist { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
   font-size: .86rem; white-space: nowrap; text-overflow: ellipsis; }
 .row .artist { margin: 0; }
-.row-meta { grid-area: meta; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
-  gap: 4px 6px; min-width: 0; margin: 0; color: var(--muted); font-size: .82rem; }
+.row-meta { flex: 0 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
+  gap: 4px 6px; min-width: 0; margin: 0 0 0 auto; color: var(--muted); font-size: .82rem; }
 .row-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
 .row-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
 .row-action form { margin: 0; }
@@ -608,15 +611,18 @@ _STYLE = BASE_STYLE + """
   font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
 .row-more:hover, .row-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
   color: var(--text); }
-.row-panel { grid-column: 1 / -1; display: grid; gap: 4px; padding: 4px 0 6px 26px; }
+.row-panel { grid-column: 1 / -1; display: grid; gap: 4px; padding: 4px 0 6px 30px; }
 .row-panel .note { margin: 0; }
 .row-group .subhead { margin: 4px 0 6px; }
 @media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
 }
 @media (min-width: 900px) {
-  .row { grid-template-columns: 16px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px;
-    grid-template-areas: "src title artist meta act more"; padding: 3px 10px 3px 14px; }
+  .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px;
+    grid-template-areas: "src title artist meta act more"; padding: 3px 10px 3px 12px; }
+  .row-sub { display: contents; }
+  .row-artist { grid-area: artist; justify-self: start; max-width: 100%; }
+  .row-meta { grid-area: meta; margin: 0; }
   .row .btn { min-height: 30px; }
   .row-more { height: 28px; }
 }
@@ -943,17 +949,18 @@ _SCRIPT = r"""
     const heading = el("h2", "row-title", title);
     heading.title = title;
     row.appendChild(heading);
+    // The artist and the key, the status and the badges: one wrapping line under the title on a phone,
+    // where badges that don't fit go under the artist, never over it; their own columns on a desktop.
+    const sub = el("div", "row-sub");
     if (artist && typeof r.onArtist === "function") {
       const who = el("button", "artist row-artist", artist);
       who.type = "button";
       who.title = "Show only " + artist + "'s songs";
       who.addEventListener("click", r.onArtist);
-      row.appendChild(who);
+      sub.appendChild(who);
     } else if (artist) {
-      row.appendChild(el("span", "row-artist", artist));
+      sub.appendChild(el("span", "row-artist", artist));
     }
-    const mark = sourceMark(r.source);
-    if (mark) row.appendChild(mark);
     const meta = el("p", "row-meta");
     if (typeof r.key === "string" && r.key) {
       const said = String(r.keyText || "Key " + keyName(r.key));
@@ -969,7 +976,10 @@ _SCRIPT = r"""
       if (badge && badge.text) meta.appendChild(el("span", "badge " + String(badge.kind || ""), badge.text));
     }
     if (r.facts) meta.appendChild(el("span", "row-facts", r.facts));
-    if (meta.childNodes.length) row.appendChild(meta);
+    if (meta.childNodes.length) sub.appendChild(meta);
+    if (sub.childNodes.length) row.appendChild(sub);
+    const mark = sourceMark(r.source);
+    if (mark) row.appendChild(mark);
     const action = el("div", "row-action");
     const main = r.action instanceof Node ? r.action
       : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null;
@@ -1041,9 +1051,9 @@ _SCRIPT = r"""
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },
       { heading: "Find the chords", links: listOf(s.links) },
       { heading: "Buy the track for an auto sheet", links: listOf(s.buy) });
+    // No "Auto sheet" badge: the row's mark (♪, "from the audio") and its button ("Auto sheet PDF") say so.
     const badges = [{ kind: s.status, text: label(STATUS_TEXT, s.status) || s.status }];
     if (SHOWS.review(s)) badges.push({ kind: "review", text: "Needs review" });
-    if (s.auto) badges.push({ kind: "auto", text: "Auto sheet" });
     const artists = listOf(s.artists);
     const keyed = typeof s.key === "string" && s.key;
     return resultRow({
