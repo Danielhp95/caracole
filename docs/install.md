@@ -426,7 +426,8 @@ CapabilityBoundingSet=
 **`caracole-admin`** runs one command as the units do: as user `caracole`,
 with the config, the credentials and the cache. With auto-chords from Nix,
 point it at the `caracole-autochords` profile instead, so that
-`caracole-admin autochords` works too.
+`caracole-admin autochords` and `youtube` work too, and the to-do page and
+index.html it rewrites say what the nightly run's say about audio from YouTube.
 
 ```sh
 #!/bin/sh
