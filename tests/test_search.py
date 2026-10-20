@@ -381,7 +381,8 @@ def test_cli_add_says_in_one_line_what_it_did_as_caracole_add_does(tmp_path):
     result = run(tmp_path, "search", "creep", "--add", "2")
     assert result.exit_code == 0, result.output
     assert result.output == (
-        "Added Stone Temple Pilots - Creep to wanted.txt; the next `caracole run` looks for it.\n")
+        "Added Stone Temple Pilots - Creep to wanted.txt; the next `caracole run` looks for it.\n"
+        "On Ultimate Guitar: stone-temple-pilots/creep (exact)\n")  # then what the offline index says, as add does
     again = run(tmp_path, "-v", "search", "creep", "--add", "2")
     assert again.exit_code == 0, again.output
     assert ("Stone Temple Pilots - Creep is in wanted.txt already; the library has it, with no sheet yet.\n"

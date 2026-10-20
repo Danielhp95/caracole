@@ -136,6 +136,10 @@ def fake_spotify(monkeypatch, client):
 
 # --- caracole add -----------------------------------------------------------------------------
 
+# What add says after its line while the offline index is empty (match_lines).
+EMPTY_INDEX = ("The offline index is empty: run `caracole index build` once (about 10 minutes), and the song can "
+               "be matched.\n")
+
 
 def test_add_creates_wanted_txt_and_the_song(tmp_path):
     result = run(tmp_path, "add", "Soda Stereo", "De Música Ligera", "--duration", "213")
@@ -144,9 +148,9 @@ def test_add_creates_wanted_txt_and_the_song(tmp_path):
     text = path.read_text(encoding="utf-8")
     assert text.startswith(HEADER)
     assert text.endswith("\nSoda Stereo - De Música Ligera | 3:33\n")
-    # One line says it all; -v says where, and the song's key.
+    # One line says it all, then what the offline index says; -v says where, and the song's key.
     assert result.output == (
-        "Added Soda Stereo - De Música Ligera to wanted.txt; the next `caracole run` looks for it.\n")
+        "Added Soda Stereo - De Música Ligera to wanted.txt; the next `caracole run` looks for it.\n" + EMPTY_INDEX)
     (tmp_path / "v").mkdir()
     verbose = run(tmp_path / "v", "-v", "add", "Soda Stereo", "De Música Ligera", "--duration", "213")
     vpath = wanted_file(tmp_path / "v")
@@ -165,7 +169,8 @@ def test_add_a_chinese_song_with_album_and_duration(tmp_path):
     assert result.exit_code == 0, result.output
     text = wanted_file(tmp_path).read_text(encoding="utf-8")
     assert text.endswith("\n宋冬野 - 斑马斑马 | 安和桥北 | 4:13\n")
-    assert result.output == "Added 宋冬野 - 斑马斑马 to wanted.txt; the next `caracole run` looks for it.\n"
+    assert result.output == (
+        "Added 宋冬野 - 斑马斑马 to wanted.txt; the next `caracole run` looks for it.\n" + EMPTY_INDEX)
     [song] = songs(tmp_path)
     assert (song.artist, song.title, song.album, song.duration_ms) == (
         "宋冬野",
@@ -205,7 +210,8 @@ def test_add_twice_says_the_song_is_listed_and_known(tmp_path):
     assert first.exit_code == 0, first.output
     again = run(tmp_path, "add", "radiohead", "CREEP")
     assert again.exit_code == 0, again.output
-    assert again.output == "Radiohead - Creep is in wanted.txt already; the library has it, with no sheet yet.\n"
+    assert again.output == (
+        "Radiohead - Creep is in wanted.txt already; the library has it, with no sheet yet.\n" + EMPTY_INDEX)
     assert "edit" not in again.output  # nothing was given that the line lacks
     assert wanted_file(tmp_path).read_text(encoding="utf-8").count("Creep") == 1
 
@@ -220,7 +226,7 @@ def test_add_says_what_the_library_has_of_a_song_it_knew(tmp_path):
     conn.close()
     result = run(tmp_path, "add", "Radiohead", "Creep")
     assert result.exit_code == 0, result.output
-    assert result.output == "Added Radiohead - Creep to wanted.txt; the library has it, with a sheet.\n"
+    assert result.output == "Added Radiohead - Creep to wanted.txt; the library has it, with a sheet.\n" + EMPTY_INDEX
 
 
 def test_add_mentions_lines_of_wanted_txt_it_cannot_read(tmp_path):
@@ -334,6 +340,19 @@ def test_add_says_at_once_which_ug_songs_a_name_not_quite_ugs_may_be(tmp_path):
     assert (song.match_decision, song.review, song.match_artist_key) == ("review", True, "misc-musicals")
     todo = (tmp_path / "lib" / "_todo.md").read_text(encoding="utf-8")
     assert "### epic - I'm not sorry for loving you" in todo.split("## Review (1)", 1)[1]
+
+
+def test_add_says_its_one_line_then_what_the_offline_index_says(tmp_path):
+    ug_index(tmp_path, (4169, "radiohead", "creep", "chords"))
+    result = run(tmp_path, "add", "Radiohead", "Creep")
+    assert result.exit_code == 0, result.output
+    assert result.output == ("Added Radiohead - Creep to wanted.txt; the next `caracole run` looks for it.\n"
+                             "On Ultimate Guitar: radiohead/creep (exact)\n")
+    again = run(tmp_path, "-v", "add", "Radiohead", "Creep")
+    lines = again.output.splitlines()
+    said = lines.index("Radiohead - Creep is in wanted.txt already; the library has it, with no sheet yet.")
+    assert "On Ultimate Guitar: radiohead/creep (exact)" in lines[said + 1:]  # after it, -v or not
+    assert "Song radiohead/creep: already known, wanted" in again.output
 
 
 def test_add_says_which_ug_song_it_matched(tmp_path):
