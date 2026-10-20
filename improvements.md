@@ -96,6 +96,13 @@ For UG, have the 10-20 second slow polling for when building the index, but remo
 
 When requesting a new song, having a full new page is a bit verbose when I normally just want one song downloaded. And even as a "bulk" it is a bit verbose. 
 
+**Done in [8975cc0](https://github.com/Danielhp95/caracole/commit/8975cc0).** A request no longer opens a page of command output: the library page stays where it is, and the song's card says how the request goes on one line, "Queued…", then "Fetching from Ultimate Guitar…", then "Ready · Open sheet". Other endings:
+- "Not found", only when Ultimate Guitar was actually asked during the request and has no sheet;
+- "Needs review · Pick the match", which opens the card's picker;
+- "Not fetched yet · Details", after a cooldown, a block, a spent budget or an error (never a miss: the song waits for the next run).
+
+A new song gets its own card under the form ("Just requested"), which fills in with its files. Several requests also show as one compact list in a corner, folded on a phone. `/jobs` is one line per request, with the output folded under it. On the command line, `caracole add`, `search --add` and `fetch --song` print one line for the song (`-v` for the detail). The line comes from `src/caracole/web/status.py`; only the served page asks the server about it, and `index.html` on disk asks nothing of anyone.
+
 ## Remove button
 
 Have a button to remove the tab from caracole so that it's removed localy, when running `caracole run` it won't be redownloaded and essentially permantently removed from the system until it is requested again.
@@ -131,10 +138,11 @@ bundle in a songbook app too. I want the ability to "make songbook" so that i se
 
 It's great that the cli allows for disambiguation by having differnet alternatives and then selecitng number, surface this in the browser too
 
-## Allow for disambiguation on the browser
-
-It's great that the cli allows for disambiguation by having differnet alternatives and then selecitng number, surface this in the browser too
-
+**Done in [e9a260b](https://github.com/Danielhp95/caracole/commit/e9a260b).** A song that needs review shows its candidates on its card, numbered as `caracole review` numbers them. Each has the UG artist and title, why the matcher proposed it ("artist spelled differently", "title only: another artist's song, probably a cover", "under UG's catch-all misc-musicals"), its score, its tab counts and a link to its UG page.
+- **On `caracole serve`:** "Pick the match" replaces "Review first". Choose a candidate or "None of these" and press Pick. With "Fetch it now" ticked (the default), the song is fetched and rendered right after, and the card shows how it goes, as a request does. If "None of these" leaves other candidates, the card offers those.
+- **A song the index didn't match** gets "Look in the index", which offers what `caracole search` finds for it.
+- **On index.html from disk:** the list is read-only and ends with the line to run.
+- **From a terminal:** the answer is written exactly as `caracole review` writes it, through the new `caracole review --song "ARTIST - TITLE" --pick N` (or `--pick ARTIST/SONG`, or `--none`).
 ## Design pass
 
 After finishing, do a /deep-research for what is the best UX design for this type of application for feature discoverability, usability, snappyness and overall user experience design. Take inspiration from ultimate guitar and other websites that already present this kind of information. Do a research too on lightweight javascript frameworks (like d3.js or other alterntaives) to come up with cool and useful designs. Find anti-patterns in the current implementation and remove them too. Essentially, do a strong design pass with /deep-research
