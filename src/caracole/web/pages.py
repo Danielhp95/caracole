@@ -1,4 +1,4 @@
-"""The pages caracole serve writes itself: the requests, the sign-in page, and errors.
+"""The pages caracole serve writes itself: the requests, the picker, the sign-in page, and errors.
 
 They share index.html's look (``library_page.BASE_STYLE``), carry no script,
 and every text in them is escaped. The requests page refreshes itself every
@@ -6,17 +6,29 @@ and every text in them is escaped. The requests page refreshes itself every
 reload closes what the reader opened, so the newest request's output is open
 already, with any step's that runs or failed, and "Stop refreshing"
 (``/jobs?refresh=0``) leaves the page still.
+
+The picker (``picker_form``) is a song in review's candidates as a radio
+group, the same markup and style (``library_page.PICKER_STYLE``) as the cards'
+picker: on a page of its own (``review_page``), and under a request that ended
+in a review. A reload would undo a choice half made, so a requests page that
+refreshes itself links to the picker's page instead.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime
 from html import escape
+from typing import Any
 
-from caracole.library_page import BASE_STYLE, sha256_source
+from caracole.library_page import BASE_STYLE, PICKER_STYLE, sha256_source
 from caracole.web.jobs import Job, Step
 
-PAGE_STYLE = BASE_STYLE + """
+PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
+.waits { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.waits > p { margin: 0; color: var(--review); font-weight: 600; }
+.pick-page { max-width: 46rem; }
 .lede { max-width: 72ch; margin: 4px 0 20px; color: var(--muted); }
 .jobs { display: grid; gap: 12px; }
 .job { padding: 14px 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
@@ -64,8 +76,75 @@ def page(title: str, body: str, *, head: str = "") -> str:
 REFRESH = 10  # seconds between reloads while a request waits or runs
 
 
-def jobs_page(jobs: list[Job], *, refresh: bool = True) -> str:
-    """Every request remembered, newest first, with each step's output; ``refresh``: reload while one is active."""
+# --- the picker: a song in review's candidates ----------------------------------------------
+
+
+@dataclass(frozen=True)
+class Pick:
+    """A song in review and its candidates (``library_page.review_choices``), for the picker."""
+
+    song_id: int
+    display: str
+    title: str  # as the card shows it (normalize.clean_title)
+    artist: str
+    choices: Sequence[Mapping[str, Any]] = field(default_factory=tuple)
+
+
+def picker_form(pick: Pick, csrf: str, *, focus: bool = False) -> str:
+    """The picker's form, as the library page's script builds it on a card: a radio group of the
+    candidates and "None of these", "Fetch it now" (ticked) and Pick, posted to ``/review``. ``focus``:
+    its first candidate takes the focus when the page opens (a page for this alone)."""
+    rows = []
+    for n, c in enumerate(pick.choices):
+        why = " · ".join(str(part) for part in (c.get("why"), f"score {c.get('score') or 0}", c.get("tabs")) if part)
+        name = f"{c.get('artist')} – {c.get('title')}"
+        href = str(c.get("href") or "")
+        page = (f'<a class="choice-link" href="{escape(href, quote=True)}" target="_blank" rel="noopener noreferrer" '
+                f'aria-label="{escape(name, quote=True)} on Ultimate Guitar, in a new tab">UG ↗</a>'
+                if href.startswith(("https://", "http://")) else "")
+        rows.append(_choice(str(c.get("ref")), f"{c.get('n')}. {name}", why, autofocus=focus and n == 0) + page
+                    + "</div>")
+    rows.append(_choice("none", "None of these", "caracole drops them for good and goes on looking for the song",
+                        cls="choice none") + "</div>")
+    shown = " ".join(str(c.get("ref")) for c in pick.choices)
+    question = f"Which Ultimate Guitar song is “{pick.title}” by {pick.artist}?"
+    return (
+        '<form class="pick-form" method="post" action="/review">\n'
+        f'  <input type="hidden" name="csrf" value="{escape(csrf, quote=True)}">\n'
+        f'  <input type="hidden" name="song" value="{pick.song_id}">\n'
+        f'  <input type="hidden" name="shown" value="{escape(shown, quote=True)}">\n'
+        f'  <fieldset class="choices"><legend>{escape(question)}</legend>\n  ' + "\n  ".join(rows) + "\n  </fieldset>\n"
+        '  <div class="pick-row"><label class="pick-check"><input type="checkbox" name="fetch" value="1" checked>'
+        'Fetch it now</label><button class="btn primary" type="submit">Pick</button></div>\n'
+        '  <p class="pick-hint">Your answer goes into overrides.toml, as caracole review writes it. Fetch it now '
+        "then asks Ultimate Guitar for the song picked; None of these fetches nothing.</p>\n</form>"
+    )
+
+
+def _choice(value: str, name: str, why: str, *, cls: str = "choice", autofocus: bool = False) -> str:
+    """One radio of the picker, in its row (left open, for the row's link)."""
+    focus = " autofocus" if autofocus else ""
+    return (f'<div class="{cls}"><label class="choice-pick"><input type="radio" name="pick" '
+            f'value="{escape(value, quote=True)}" required{focus}><span class="choice-text">'
+            f'<span class="choice-name">{escape(name)}</span><span class="choice-why">{escape(why)}</span>'
+            "</span></label>")
+
+
+def review_page(pick: Pick, csrf: str) -> str:
+    """A song in review's picker on a page of its own, for the requests page to link to."""
+    lede = (f'<p class="lede">caracole isn\'t sure which Ultimate Guitar song {escape(pick.display)} is. Pick it '
+            "here, as <code>caracole review</code> would ask you.</p>")
+    return page("Pick the match", f'<div class="pick-page">{lede}{picker_form(pick, csrf, focus=True)}</div>')
+
+
+def jobs_page(jobs: list[Job], *, refresh: bool = True, picks: Mapping[str, Pick] | None = None,
+              csrf: str = "") -> str:
+    """Every request remembered, newest first, with each step's output; ``refresh``: reload while one is active.
+
+    ``picks`` holds the songs of finished requests that now wait for a pick, by song key: the newest
+    request of each shows its picker (``picker_form``, posting ``csrf``), or, while the page reloads
+    itself, which would undo a choice half made, a link to the picker's page.
+    """
     waiting = any(job.active for job in jobs)
     if not waiting:
         note = ""
@@ -81,9 +160,30 @@ def jobs_page(jobs: list[Job], *, refresh: bool = True) -> str:
     if not jobs:
         items = '<p class="empty">No requests yet. Request a song from <a href="/">the library</a>.</p>'
     else:
-        items = '<div class="jobs">' + "".join(_job(job, newest=n == 0) for n, job in enumerate(jobs)) + "</div>"
+        waits = _waits(jobs, picks or {}, csrf, still=not (waiting and refresh))
+        items = ('<div class="jobs">' + "".join(_job(job, newest=n == 0, waits=waits.get(job.id, ""))
+                                                for n, job in enumerate(jobs)) + "</div>")
     head = f'<meta http-equiv="refresh" content="{REFRESH}">\n' if waiting and refresh else ""
     return page("Requests", lede + items, head=head)
+
+
+def _waits(jobs: list[Job], picks: Mapping[str, Pick], csrf: str, *, still: bool) -> dict[int, str]:
+    """What the newest finished request of each song that waits for a pick shows under its steps."""
+    shown: dict[int, str] = {}
+    seen: set[str] = set()
+    for job in jobs:  # newest first
+        if job.song_key in seen:
+            continue
+        seen.add(job.song_key)
+        pick = picks.get(job.song_key)
+        if job.active or pick is None:
+            continue
+        head = (f"<p>caracole isn't sure which Ultimate Guitar song it is: "
+                f"{len(pick.choices)} candidate{'s' if len(pick.choices) != 1 else ''}.</p>")
+        body = (picker_form(pick, csrf) if still else
+                f'<p><a class="btn primary" href="/review?song={pick.song_id}">Pick the match</a></p>')
+        shown[job.id] = f'<div class="waits">{head}{body}</div>'
+    return shown
 
 
 def _when(dt: datetime | None) -> str:
@@ -94,7 +194,7 @@ def _badge(state: str) -> str:
     return f'<span class="badge {escape(state)}">{escape(_STATE_TEXT.get(state, state))}</span>'
 
 
-def _job(job: Job, *, newest: bool = False) -> str:
+def _job(job: Job, *, newest: bool = False, waits: str = "") -> str:
     meta = f"Requested {_when(job.queued_at)}"
     if job.note:
         meta += f" · {escape(job.note)}"
@@ -102,7 +202,7 @@ def _job(job: Job, *, newest: bool = False) -> str:
     return (
         f'<article class="job" id="job-{job.id}">\n'
         f'  <div class="job-head"><h2>{escape(job.title)}</h2>{_badge(job.state)}</div>\n'
-        f'  <p class="meta">{meta}</p>\n  <ol class="steps">{steps}</ol>\n</article>\n'
+        f'  <p class="meta">{meta}</p>\n  <ol class="steps">{steps}</ol>\n{waits}</article>\n'
     )
 
 

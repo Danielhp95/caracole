@@ -2,9 +2,11 @@
 
     GET  /, /index.html   the library page, with its forms (library_page, WebControls)
     GET  /jobs            the requests, and what each command printed (?refresh=0: no reloading)
+    GET  /review?song=ID  a song in review's picker, on a page of its own
     GET  /<file>          a file of the library (files.py)
     POST /request         a song for wanted.txt; with ``fetch``, fetched now too
     POST /fetch           fetch a song of the library now, unless it needs review first
+    POST /review          a song in review's answer, as ``caracole review --song`` writes it
     GET, POST /login      the sign-in page, with an access token
 
 Every request must name the server by a name it answers to (421 otherwise).
@@ -17,6 +19,11 @@ function ``caracole add`` writes it with, and before the database: the line is
 there even when the queue is full or the server stops. A request and a fetch
 then queue their commands (jobs.py), and the answer sends the browser to the
 requests page.
+
+A pick from the picker is ``caracole review --song "A - T" --pick ARTIST/SONG``
+(or ``--none --seen ARTIST/SONG…``), queued like a fetch, and fetched after it
+when asked: the server writes no overrides.toml itself. The candidates the
+page showed must be the song's now, and the song's own request goes first.
 """
 
 from __future__ import annotations
@@ -35,7 +42,7 @@ from caracole import db
 from caracole.config import Config
 from caracole.web import pages
 from caracole.web.files import NotServed, read_library_file
-from caracole.web.jobs import JobQueue, QueueFull, add_steps, fetch_steps
+from caracole.web.jobs import Job, JobQueue, QueueFull, add_steps, fetch_steps, review_steps
 from caracole.web.security import (
     SESSION_COOKIE,
     answers_to,
@@ -137,12 +144,15 @@ class WebApp:
                 return self._library()
             if path == "/jobs":
                 still = parse_qs(urlsplit(request.target).query).get("refresh") == ["0"]
-                return _html(200, pages.jobs_page(self.queue.snapshot(), refresh=not still))
+                jobs = self.queue.snapshot()
+                return _html(200, pages.jobs_page(jobs, refresh=not still, picks=self._picks(jobs), csrf=self.csrf))
+            if path == "/review":
+                return self._picker(parse_qs(urlsplit(request.target).query).get("song", [""])[0])
             if path == "/login":
                 return _redirect("/")
             return self._file(path)
         if method == "POST":
-            handler = {"/request": self._request, "/fetch": self._fetch}.get(path)
+            handler = {"/request": self._request, "/fetch": self._fetch, "/review": self._review}.get(path)
             if handler is None:
                 return _message(404, "Not here", "There's nothing to send to at this address.")
             form = self._form(request)
@@ -210,6 +220,52 @@ class WebApp:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
         # The page's own CSP is in its meta tag; a header CSP would apply on top of it.
         return _html(200, html, csp=_FRAMES)
+
+    def _picker(self, song_field: str) -> Response:
+        """A song in review's picker, on a page of its own."""
+        from caracole.overrides import OverridesError, load_overrides
+        from caracole.songs import get_song
+
+        try:
+            song_id = int(song_field)
+        except ValueError:
+            return _message(400, "Not a song", "Which song? The address names none.")
+        try:
+            overrides = load_overrides(self.cfg.overrides_file)
+            with closing(self._connect()) as conn:
+                song = get_song(conn, song_id)
+                pick = _pick(conn, song, overrides)
+        except KeyError:
+            return _message(404, "No such song", "That song isn't in the library.")
+        except OverridesError as e:
+            return _message(503, "overrides.toml can't be read", f"overrides.toml can't be read: {e}.")
+        except (sqlite3.Error, OSError) as e:
+            return _message(503, "The database can't be read", f"The database can't be read: {e}")
+        if pick is None:
+            return _message(409, "Nothing to pick", f"{song.display} doesn't need review: there's nothing to pick.")
+        return _html(200, pages.review_page(pick, self.csrf))
+
+    def _picks(self, jobs: list[Job]) -> dict[str, pages.Pick]:
+        """The songs of finished requests that wait for a pick now, by key; none when the database or
+        overrides.toml can't be read: the requests page still shows the requests."""
+        from caracole.overrides import OverridesError, load_overrides
+        from caracole.songs import find_song
+
+        keys = {job.song_key for job in jobs if not job.active}
+        if not keys:
+            return {}
+        picks = {}
+        try:
+            overrides = load_overrides(self.cfg.overrides_file)
+            with closing(self._connect()) as conn:
+                for key in sorted(keys):
+                    song = find_song(conn, key)
+                    pick = _pick(conn, song, overrides) if song is not None else None
+                    if pick is not None:
+                        picks[key] = pick
+        except (OverridesError, sqlite3.Error, OSError):
+            return {}
+        return picks
 
     def _file(self, path: str) -> Response:
         try:
@@ -303,6 +359,68 @@ class WebApp:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
         return _redirect(f"/jobs#job-{job.id}")
 
+    def _review(self, form: dict[str, str]) -> Response:
+        """A song in review's answer, from the picker: ``caracole review --song`` queued with it.
+
+        ``pick`` is a candidate's ARTIST/SONG, fetched at once with ``fetch``, or
+        "none", which rejects the candidates ``shown``. They must be the song's
+        candidates now: the nightly run may have matched it again since the page was
+        loaded. The song's own request, if one waits or runs, goes first.
+        """
+        from caracole.overrides import OverridesError, load_overrides
+        from caracole.review import candidates_of, ref
+        from caracole.songs import get_song
+
+        try:
+            song_id = int(form.get("song", ""))
+        except ValueError:
+            return _message(400, "Not a song", "Which song? The form names none.")
+        pick = form.get("pick", "").strip()
+        try:
+            overrides = load_overrides(self.cfg.overrides_file)
+        except OverridesError as e:
+            return _message(503, "overrides.toml can't be read", f"overrides.toml can't be read: {e}.")
+        try:
+            with closing(self._connect()) as conn:
+                song = get_song(conn, song_id)
+        except KeyError:
+            return _message(404, "No such song", "That song isn't in the library.")
+        except (sqlite3.Error, OSError) as e:
+            return _message(503, "The database can't be read", f"The database can't be read: {e}")
+        if song.status == "ignored" or song.key in overrides.ignore:
+            return _message(409, "Ignored", f"{song.display} is ignored in overrides.toml.")
+        if not song.review:
+            return _message(409, "Nothing to pick", f"{song.display} doesn't need review any more: reload the "
+                                                    "library to see where it stands.")
+        refs = [ref(c) for c in candidates_of(song)]
+        if not pick:
+            return _message(400, "No answer", "Pick a candidate, or None of these.")
+        if form.get("shown", "").split() != refs or not refs:
+            return _message(409, "The candidates changed",
+                            f"caracole matched {song.display} again since this page was loaded, and its "
+                            "candidates changed: reload the library and pick again.")
+        if pick != "none" and pick not in refs:
+            return _message(400, "Not a candidate", f"{pick} isn't one of its candidates.")
+        if any(job.active and job.song_key == song.key for job in self.queue.snapshot()):
+            return _message(409, "Wait for its request",
+                            f"A request for {song.display} is waiting or running: pick once it ends.")
+        if pick == "none":
+            title, steps, fetch = f"None of these for {song.display}", review_steps(song.display, seen=refs), False
+        else:
+            fetch = form.get("fetch") in ("1", "on", "yes")
+            title, steps = f"Pick {pick} for {song.display}", review_steps(song.display, pick=pick)
+            if fetch:  # caracole review matched it again already
+                title += ", and fetch it"
+                steps += [step for step in fetch_steps(song.display) if step[1][0] != "match"]
+        try:
+            job, new = self.queue.submit(title, song.key, steps, fetching=fetch)
+        except QueueFull:
+            return _message(503, "The queue is full", "The queue is full: try again once it empties.")
+        if not new:  # one came in since the check above
+            return _message(409, "Wait for its request",
+                            f"A request for {song.display} is waiting or running: pick once it ends.")
+        return _redirect(f"/jobs#job-{job.id}")
+
 
 def review_first(song: Song, overrides: Overrides) -> bool:
     """Whether ``caracole fetch --song`` would refuse the song as needing review first (commands/fetch.py).
@@ -316,6 +434,19 @@ def review_first(song: Song, overrides: Overrides) -> bool:
     if song.match_decision != "review" or needs_artist_page(song):
         return False
     return not any(song.key in table for table in (overrides.match, overrides.pin, overrides.reject))
+
+
+def _pick(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> pages.Pick | None:
+    """A song in review and its candidates, for the picker; None for a song with nothing to pick."""
+    from caracole.library_page import review_choices
+    from caracole.normalize import clean_title
+
+    if not song.review or song.status == "ignored" or song.key in overrides.ignore:
+        return None
+    choices = review_choices(conn, song)
+    if not choices:
+        return None
+    return pages.Pick(song.id, song.display, clean_title(song.title), song.artist, tuple(choices))
 
 
 def _song_ids(conn: sqlite3.Connection, keys: set[str]) -> frozenset[int]:

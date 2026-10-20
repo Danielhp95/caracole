@@ -29,6 +29,14 @@ jumps to the first card of a letter.
 form to request a song, a "Fetch now" button on each wanted song, and a CSP
 that lets the forms post to the server (``form-action 'self'``). The file on
 disk has neither, and lets no form be sent.
+
+A song in review carries its candidates (``review_choices``), numbered as
+``caracole review`` numbers them, and its card a picker (the script's
+``makePicker``): a disclosure that lists them, each with its UG names, its
+score, why the matcher thought of it and a link to its UG page. On the file
+it is read-only, with the ``caracole review --song`` line that picks one;
+served, it is a radio group posted to ``/review`` (web/app.py), in place of the
+"Review first" button, and opening it takes the focus to the first candidate.
 """
 
 from __future__ import annotations
@@ -122,6 +130,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [])
              for s in library]
+    _add_candidates(conn, library, songs)
     data: dict[str, Any] = {
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "fold": {c: fold(c) for c in _TRANSLITERATED},
@@ -139,6 +148,49 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
         + f'<script type="application/json" id="songs">{payload}</script>\n'
         + f"<script>{_SCRIPT}</script>\n</body>\n</html>\n"
     )
+
+
+def review_choices(conn: sqlite3.Connection, song: Song) -> list[dict[str, Any]]:
+    """The candidates of a song in review as the picker shows them, numbered as ``caracole review``
+    numbers them (``review.candidates_of``): the UG song (``ref``, as overrides.toml names it), its
+    artist and title as UG writes them, its score, why the matcher thought of it (``review.step_words``),
+    its tabs per type and a page of it on UG. A candidate the index no longer has is named from its
+    keys, with no tabs and no page."""
+    from caracole.review import candidates_of, ref, step_words
+    from caracole.search import display_from_keys, index_song
+
+    choices = []
+    for n, cand in enumerate(candidates_of(song), start=1):
+        hit = index_song(conn, cand["artist_key"], cand["song_key"])
+        artist, title = (hit.artist, hit.title) if hit else display_from_keys(cand["artist_key"], cand["song_key"])
+        choices.append({
+            "n": n,
+            "ref": ref(cand),
+            "artist": artist,
+            "title": title,
+            "score": round(float(cand.get("score") or 0)),
+            "why": step_words(cand),
+            "tabs": _tab_counts(hit.counts) if hit else "",
+            "href": hit.url if hit else "",
+        })
+    return choices
+
+
+def _add_candidates(conn: sqlite3.Connection, library: list[Song], songs: list[dict[str, Any]]) -> None:
+    """Give each card of a song in review (not ignored) its candidates, for the picker."""
+    for song, card in zip(library, songs, strict=True):
+        if card["review"]:
+            choices = review_choices(conn, song)
+            if choices:
+                card["candidates"] = choices
+
+
+_TAB_KINDS = {"chords": "Chords", "tabs": "Tabs", "guitar-pro": "Guitar Pro", "power": "Power Tab"}
+
+
+def _tab_counts(counts: Any) -> str:
+    """"Chords ×2 · Tabs ×1": a UG song's tabs per type, best type first, as ``caracole search`` counts them."""
+    return " · ".join(f"{_TAB_KINDS.get(kind, kind)} ×{n}" for kind, n in counts.items())
 
 
 def write_library_page(library_dir: Path, html: str) -> Path:
@@ -426,7 +478,44 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
 }
 """
 
-_STYLE = BASE_STYLE + """
+# The picker of a song in review's candidates: on the cards, and on the pages caracole serve writes
+# itself (web/pages.py), which build the same markup.
+PICKER_STYLE = """
+.picker { min-width: 0; }
+.picker > summary ~ * { margin-top: 8px; }
+.picker > summary { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; list-style: none;
+  cursor: pointer; }
+.picker > summary::-webkit-details-marker { display: none; }
+.picker > summary:not(.btn) { min-height: 32px; color: var(--review); font-size: .88rem; font-weight: 650; }
+.picker > summary:not(.btn)::before { content: "›"; display: inline-block; width: 1em; font-size: 1.15rem;
+  line-height: 1; text-align: center; }
+.picker[open] > summary:not(.btn)::before { transform: rotate(90deg); }
+.picker > summary.btn { border-color: var(--review); color: var(--review); background: var(--review-bg); }
+.picker-n { margin-left: .35em; font-weight: 500; }
+.pick-form { display: grid; gap: 10px; margin: 0; }
+.choices { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; list-style: none; }
+.choices legend { margin: 0 0 6px; padding: 0; font-size: .92rem; font-weight: 650; overflow-wrap: anywhere; }
+.choice { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px 4px 10px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--raised); }
+.choice:has(input:checked) { border-color: var(--accent); }
+.choice-pick { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; min-height: 44px; }
+label.choice-pick { cursor: pointer; }
+.choice-pick input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.choice-text { display: grid; gap: 1px; min-width: 0; padding: 4px 0; }
+.choice-name { font-size: .92rem; font-weight: 600; overflow-wrap: anywhere; }
+.choice-why { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+.choice-link { flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 10px;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-size: .82rem;
+  font-weight: 600; text-decoration: none; }
+.choice-link:hover { border-color: var(--border-strong); }
+.pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.pick-check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600;
+  cursor: pointer; }
+.pick-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.pick-hint { margin: 0; color: var(--muted); font-size: .82rem; }
+"""
+
+_STYLE = BASE_STYLE + PICKER_STYLE + """
 :root {
   --h0: #8a3313; --h0-bg: #f6ded3;
   --h1: #7a4c00; --h1-bg: #f7e8c7;
@@ -711,6 +800,112 @@ _SCRIPT = r"""
     return form;
   };
 
+  // The picker: a song in review's candidates, numbered as `caracole review` numbers them. The file shows
+  // them with the line that picks one; caracole serve, with a form whose answer `caracole review --song`
+  // writes (web/app.py). makePicker(song) builds it from a song of the data that has `candidates`.
+  const choiceRow = (c, pickable) => {
+    const row = el(pickable ? "div" : "li", "choice");
+    const pick = el(pickable ? "label" : "div", "choice-pick");
+    if (pickable) {
+      const radio = el("input");
+      radio.setAttribute("type", "radio");
+      radio.setAttribute("name", "pick");
+      radio.setAttribute("value", String(c.ref));
+      radio.setAttribute("required", "");
+      pick.appendChild(radio);
+    }
+    const text = el("span", "choice-text");
+    text.appendChild(el("span", "choice-name", c.n + ". " + String(c.artist) + " – " + String(c.title)));
+    const why = [c.why, "score " + (Number(c.score) || 0), c.tabs].filter(Boolean).map(String).join(" · ");
+    text.appendChild(el("span", "choice-why", why));
+    pick.appendChild(text);
+    row.appendChild(pick);
+    if (c.href) {
+      const page = link({ label: "UG", href: c.href }, "choice-link", true);
+      page.setAttribute("aria-label", String(c.artist) + " – " + String(c.title) + " on Ultimate Guitar, in a new tab");
+      row.appendChild(page);
+    }
+    return row;
+  };
+  const noneRow = () => {
+    const row = el("div", "choice none");
+    const pick = el("label", "choice-pick");
+    const radio = el("input");
+    radio.setAttribute("type", "radio");
+    radio.setAttribute("name", "pick");
+    radio.setAttribute("value", "none");
+    radio.setAttribute("required", "");
+    pick.appendChild(radio);
+    const text = el("span", "choice-text");
+    text.appendChild(el("span", "choice-name", "None of these"));
+    text.appendChild(el("span", "choice-why", "caracole drops them for good and goes on looking for the song"));
+    pick.appendChild(text);
+    row.appendChild(pick);
+    return row;
+  };
+  const makePicker = (s) => {
+    const cands = listOf(s.candidates).filter((c) => c && c.ref);
+    const box = el("details", "picker");
+    const question = "Which Ultimate Guitar song is “" + String(s.title) + "” by " + String(s.artist) + "?";
+    const pickable = Boolean(server) && !busy.has(Number(s.id));
+    const many = plural(cands.length, "candidate");
+    const summary = el("summary", pickable ? "btn picker-open" : "picker-open", pickable ? "Pick the match" : many);
+    if (pickable) summary.appendChild(el("span", "picker-n", "· " + many));
+    box.appendChild(summary);
+    if (!pickable) {
+      const list = el("ol", "choices");
+      list.setAttribute("aria-label", question);
+      for (const c of cands) list.appendChild(choiceRow(c, false));
+      box.appendChild(list);
+      if (server) {
+        box.appendChild(el("p", "pick-hint", "A request for this song is running: pick one once it ends."));
+      } else {
+        const hint = el("p", "pick-hint", "Pick one with ");
+        hint.appendChild(el("code", null, "caracole review --song " + shellQuote(String(s.display))));
+        hint.appendChild(document.createTextNode(": its number, or "));
+        hint.appendChild(el("code", null, "n"));
+        hint.appendChild(document.createTextNode(" for none of these."));
+        box.appendChild(hint);
+      }
+      return box;
+    }
+    const form = el("form", "pick-form");
+    form.setAttribute("method", "post");
+    form.setAttribute("action", "/review");
+    form.appendChild(hidden("csrf", String(server.csrf || "")));
+    form.appendChild(hidden("song", Number(s.id)));
+    form.appendChild(hidden("shown", cands.map((c) => String(c.ref)).join(" ")));
+    const group = el("fieldset", "choices");
+    group.appendChild(el("legend", null, question));
+    for (const c of cands) group.appendChild(choiceRow(c, true));
+    group.appendChild(noneRow());
+    form.appendChild(group);
+    const row = el("div", "pick-row");
+    const now = el("label", "pick-check");
+    const fetch = el("input");
+    fetch.setAttribute("type", "checkbox");
+    fetch.setAttribute("name", "fetch");
+    fetch.setAttribute("value", "1");
+    fetch.setAttribute("checked", "");
+    now.appendChild(fetch);
+    now.appendChild(document.createTextNode("Fetch it now"));
+    row.appendChild(now);
+    const go = el("button", "btn primary", "Pick");
+    go.type = "submit";
+    row.appendChild(go);
+    form.appendChild(row);
+    form.appendChild(el("p", "pick-hint", "Your answer goes into overrides.toml, as caracole review writes it. " +
+      "Fetch it now then asks Ultimate Guitar for the song picked; None of these fetches nothing."));
+    box.appendChild(form);
+    // Opened, the picker takes the focus to its candidates: the arrow keys then move between them.
+    box.addEventListener("toggle", () => {
+      if (!box.open) return;
+      const first = form.querySelector("input[name=pick]:checked") || form.querySelector("input[name=pick]");
+      if (first) first.focus();
+    });
+    return box;
+  };
+
   let setArtist = () => {};
   const makeCard = (s) => {
     const card = el("article", "card");
@@ -752,7 +947,10 @@ _SCRIPT = r"""
     if (label(LYRICS_TEXT, s.lyrics)) facts.appendChild(el("span", "lyrics", label(LYRICS_TEXT, s.lyrics)));
     if (s.added) facts.appendChild(el("span", "added", "Added " + String(s.added).slice(0, 10)));
     if (facts.childNodes.length) card.appendChild(facts);
-    if (SHOWS.review(s)) {
+    const picks = SHOWS.review(s) && listOf(s.candidates).length > 0;
+    if (picks) {
+      card.appendChild(makePicker(s));
+    } else if (SHOWS.review(s)) {
       const note = el("p", "note", "caracole isn't sure about this match: see the ");
       const todo = el("a", null, "to-do page");
       todo.href = "_todo.md";
@@ -769,6 +967,8 @@ _SCRIPT = r"""
         jobs.href = "/jobs";
         note.appendChild(jobs);
         card.appendChild(note);
+      } else if (s.fetchable === false && picks) {
+        // caracole fetch would refuse it until the match is picked: the picker above does that.
       } else if (s.fetchable === false) {
         // caracole fetch would refuse it: the match needs review first (the note above says how).
         const held = el("button", "btn", "Review first");

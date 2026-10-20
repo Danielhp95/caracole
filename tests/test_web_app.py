@@ -285,6 +285,231 @@ def test_fetch_now_of_a_song_ignored_in_overrides_toml_is_refused(app, conn, cfg
     assert queue.snapshot() == []
 
 
+# --- picking a review's candidate ---------------------------------------------------------------
+
+SHOWN = "radiohead/creep radiohead/creep-acoustic"
+
+
+def in_review(conn, cands=REVIEW):
+    song = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, song.id, match_decision="review", match_candidates=cands, review=True)
+    return song
+
+
+def test_a_pick_queues_caracole_review_then_the_fetch(app, conn, queue):
+    creep = in_review(conn)
+    response = post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN, "fetch": "1"})
+    assert response.status == 303 and header(response, "location") == "/jobs#job-1"
+    job = queue.snapshot()[0]
+    # caracole review --song matches again and rewrites the pages itself: no `caracole match` step.
+    assert [s.args for s in job.steps] == [
+        ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"),
+        ("fetch", "--song=Radiohead - Creep"),
+        ("render",),
+    ]
+    assert job.fetching and job.song_key == creep.key
+    assert job.title == "Pick radiohead/creep for Radiohead - Creep, and fetch it"
+
+
+def test_a_pick_without_fetch_only_answers(app, conn, queue):
+    creep = in_review(conn)
+    assert post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep-acoustic",
+                                 "shown": SHOWN}).status == 303
+    job = queue.snapshot()[0]
+    assert [s.args for s in job.steps] == [("review", "--song=Radiohead - Creep", "--pick=radiohead/creep-acoustic")]
+    assert not job.fetching and job.title == "Pick radiohead/creep-acoustic for Radiohead - Creep"
+
+
+def test_none_of_these_rejects_the_candidates_shown_and_fetches_nothing(app, conn, queue):
+    creep = in_review(conn)
+    assert post(app, "/review", {"song": str(creep.id), "pick": "none", "shown": SHOWN, "fetch": "1"}).status == 303
+    job = queue.snapshot()[0]
+    assert [s.args for s in job.steps] == [("review", "--song=Radiohead - Creep", "--none",
+                                            "--seen=radiohead/creep", "--seen=radiohead/creep-acoustic")]
+    assert not job.fetching and job.title == "None of these for Radiohead - Creep"
+
+
+@pytest.mark.parametrize("fields,status,message", [
+    ({"song": "x", "pick": "radiohead/creep", "shown": SHOWN}, 400, "Which song?"),
+    ({"song": "999", "pick": "radiohead/creep", "shown": SHOWN}, 404, "isn't in the library"),
+    ({"pick": "", "shown": SHOWN}, 400, "Pick a candidate, or None of these"),
+    ({"pick": "radiohead/high-and-dry", "shown": SHOWN}, 400, "isn't one of its candidates"),
+    # The nightly run matched it again since the page was loaded: it may show other candidates now.
+    ({"pick": "radiohead/creep", "shown": "radiohead/creep"}, 409, "reload the library"),
+    ({"pick": "none", "shown": ""}, 409, "reload the library"),
+])
+def test_an_answer_that_cant_be_given_is_refused_before_anything_is_queued(app, conn, queue, fields, status,
+                                                                             message):
+    creep = in_review(conn)
+    response = post(app, "/review", {"song": str(creep.id)} | fields)
+    assert response.status == status
+    assert message in shown(response)
+    assert queue.snapshot() == []
+
+
+def test_a_song_that_needs_no_review_or_is_ignored_has_nothing_to_pick(app, conn, cfg, queue):
+    from caracole.overrides import add_ignore
+
+    settled = add_song(conn, "Oasis", "Wonderwall")
+    update_song(conn, settled.id, match_decision="accept", match_candidates=REVIEW)
+    response = post(app, "/review", {"song": str(settled.id), "pick": "radiohead/creep", "shown": SHOWN})
+    assert response.status == 409 and "doesn't need review" in shown(response)
+    creep = in_review(conn)
+    add_ignore(cfg.overrides_file, creep.display)
+    response = post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN})
+    assert response.status == 409 and "ignored" in shown(response)
+    assert queue.snapshot() == []
+
+
+def test_a_pick_waits_for_the_songs_request_to_end(app, conn, queue):
+    # Its add, say: the pick's `caracole review` must come after it, never be dropped into it.
+    creep = in_review(conn)
+    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
+    response = post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN})
+    assert response.status == 409 and "waiting or running" in shown(response)
+    assert len(queue.snapshot()) == 1
+    queue.run_pending()
+    assert post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN}).status == 303
+
+
+@pytest.mark.parametrize("csrf,headers", [
+    (None, {}),
+    ("wrong", {}),
+    ("tok", {"sec-fetch-site": "cross-site", "origin": "http://evil.example"}),
+])
+def test_a_pick_from_anywhere_but_the_page_is_refused(app, conn, queue, csrf, headers):
+    creep = in_review(conn)
+    response = post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN},
+                    csrf=csrf, **headers)
+    assert response.status == 403 and queue.snapshot() == []
+
+
+def picker_of(body: str) -> str:
+    found = re.search(r'<form class="pick-form" method="post" action="/review">(.*?)</form>', body, re.S)
+    assert found, body[-2000:]
+    return found.group(1)
+
+
+def test_the_picker_has_a_page_of_its_own_with_no_script(app, conn):
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(7, 'radiohead', 'creep', 'chords', '1', 'x', 'radiohead/creep-chords-7')")
+    creep = in_review(conn)
+    response = get(app, f"/review?song={creep.id}")
+    assert response.status == 200
+    body = text(response)
+    assert "<script" not in body and "form-action 'self'" in header(response, "content-security-policy")
+    form = picker_of(body)
+    assert '<input type="hidden" name="csrf" value="tok">' in form
+    assert f'<input type="hidden" name="song" value="{creep.id}">' in form
+    assert f'<input type="hidden" name="shown" value="{SHOWN}">' in form
+    radios = re.findall(r'<input type="radio" name="pick" value="([^"]*)" required', form)
+    assert radios == ["radiohead/creep", "radiohead/creep-acoustic", "none"]
+    assert re.search(r'value="radiohead/creep" required autofocus>', form)  # the page is for this alone
+    assert "<legend>Which Ultimate Guitar song is “Creep” by Radiohead?</legend>" in shown(response)
+    assert '<span class="choice-name">1. Radiohead – Creep</span>' in form
+    assert 'href="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-7"' in form
+    assert '<input type="checkbox" name="fetch" value="1" checked>' in form and ">Pick</button>" in form
+
+
+def test_the_pickers_page_escapes_every_name(app, conn):
+    evil = add_song(conn, "<b>Evil</b>", 'Song "<script>alert(1)</script>"')
+    update_song(conn, evil.id, match_decision="review", review=True, match_candidates=[
+        {"artist_key": "evil", "song_key": "song", "score": 80, "step": "fuzzy_title"}])
+    body = text(get(app, f"/review?song={evil.id}"))
+    assert "<script>alert" not in body and "<b>Evil" not in body
+    assert "&lt;b&gt;Evil&lt;/b&gt;" in body
+
+
+@pytest.mark.parametrize("path,status", [("/review", 400), ("/review?song=x", 400), ("/review?song=999", 404)])
+def test_the_pickers_page_needs_a_song_of_the_library(app, conn, path, status):
+    assert get(app, path).status == status
+
+
+def test_the_pickers_page_of_a_song_that_needs_no_review_says_so(app, conn):
+    settled = add_song(conn, "Oasis", "Wonderwall")
+    update_song(conn, settled.id, match_decision="accept")
+    response = get(app, f"/review?song={settled.id}")
+    assert response.status == 409 and "doesn't need review" in shown(response)
+    assert 'action="/review"' not in text(response)
+
+
+def test_a_request_that_ends_in_a_review_shows_its_picker_on_the_requests_page(app, conn, queue):
+    post(app, "/request", {"artist": "Radiohead", "title": "Creep", "fetch": "1"})
+    creep = in_review(conn)  # what its `caracole add` found
+    assert 'action="/review"' not in text(get(app, "/jobs"))  # not while it runs
+    queue.run_pending()
+    body = text(get(app, "/jobs"))
+    job = re.search(r'<article class="job" id="job-1">.*?</article>', body, re.S).group(0)
+    assert "isn't sure which Ultimate Guitar song" in job
+    form = picker_of(job)
+    assert f'name="song" value="{creep.id}"' in form and 'value="radiohead/creep" required' in form
+    assert "autofocus" not in form  # the page has other things to read
+
+
+def test_while_the_requests_page_refreshes_it_links_to_the_picker_instead(app, conn, queue):
+    # A reload every 10 seconds would undo a choice half made.
+    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
+    creep = in_review(conn)
+    queue.run_pending()
+    post(app, "/request", {"artist": "Oasis", "title": "Wonderwall"})  # waits: the page refreshes
+    body = text(get(app, "/jobs"))
+    job = re.search(r'<article class="job" id="job-1">.*?</article>', body, re.S).group(0)
+    assert 'action="/review"' not in job and f'href="/review?song={creep.id}"' in job
+    still = text(get(app, "/jobs?refresh=0"))
+    assert 'action="/review"' in re.search(r'<article class="job" id="job-1">.*?</article>', still, re.S).group(0)
+
+
+def test_a_request_whose_song_was_picked_since_shows_no_picker(app, conn, queue):
+    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
+    creep = in_review(conn)
+    queue.run_pending()
+    update_song(conn, creep.id, review=False, match_decision="accept")
+    assert "/review" not in text(get(app, "/jobs"))
+
+
+class CliRunnerJobs:
+    """Runs each step as the `caracole` command line, in this process, against ``config``."""
+
+    def __init__(self, config: Path):
+        self.config = config
+        self.outputs = []
+
+    def __call__(self, args, emit):
+        result = CliRunner().invoke(build_app(), ["--config", str(self.config), *args])
+        for line in result.output.splitlines():
+            emit(line)
+        self.outputs.append(result.output)
+        return result.exit_code
+
+
+def test_a_pick_writes_what_caracole_review_writes(cfg, conn, tmp_path):
+    from datetime import UTC, datetime
+
+    from caracole.overrides import load_overrides
+    from caracole.songs import get_song
+    from caracole.ug.index import mark_built
+
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'library_dir = "{cfg.library_dir}"\nstate_dir = "{cfg.state_dir}"\n'
+                      f'cache_dir = "{cfg.cache_dir}"\nmusic_dir = "{cfg.music_dir}"\n', encoding="utf-8")
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(1, 'radiohead', 'creep', 'chords', '1', 'x', 'radiohead/creep-chords-1')")
+    mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+    song = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, song.id, match_decision="review", review=True, match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89, "step": "fuzzy_artist"}])
+    runner = CliRunnerJobs(config)
+    queue = JobQueue(runner)
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    assert post(app, "/review", {"song": str(song.id), "pick": "radiohead/creep", "shown": "radiohead/creep"}).status == 303
+    queue.run_pending()
+    assert queue.snapshot()[0].state == "done", runner.outputs
+    o = load_overrides(cfg.overrides_file)
+    assert o.match[song.key] == ("radiohead", "creep") and o.alias["radio-head"] == ("radiohead",)
+    assert get_song(conn, song.id).match_decision == "accept"
+    assert "Now matched to radiohead/creep" in runner.outputs[0]
+
+
 # --- what every write must carry --------------------------------------------------------------
 
 

@@ -1081,6 +1081,15 @@ until you take its chip off. "Find it elsewhere" opens a song's MuseScore
 pages, each a possible match, as on the to-do page, and, for a song without a
 sheet, its search and buy links.
 
+A song that needs review opens its candidates under "3 candidates", numbered
+as `caracole review` numbers them. Each is the UG song as UG names it
+("Radiohead – Creep"), why the matcher thought of it ("artist spelled
+differently", "title only: another artist's song, probably a cover", "under
+UG's catch-all misc-musicals"), its score, its tabs per type ("Chords ×2 ·
+Tabs ×1") and a link to its page on UG. The file can't write overrides.toml,
+so it ends with the line to run, as `caracole review --song "Radio Head -
+Crep"`; `caracole serve` makes the list a picker (see below).
+
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
 "banma" finds 斑马斑马. It finds keys too, however a sheet spells them: "a
@@ -1232,7 +1241,7 @@ with it. A KEY that is no key exits with status 2.
 
 `caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
 [--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with three things the file on disk can't
+`http://127.0.0.1:8737/` by default, with four things the file on disk can't
 do:
 
 - **Request a song.** The form at the top takes an artist, a title and,
@@ -1243,14 +1252,33 @@ do:
   `caracole match` (offline), `caracole fetch --song "ARTIST - TITLE"` and
   `caracole render` (offline), so a sheet can be there in a minute or two.
   Each wanted song's card has a Fetch now button that does the same, except
-  on a song that needs review: it says Review first, since `caracole fetch`
-  waits for `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
-  overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for
-  the nightly run.
+  on a song that needs review, which `caracole fetch` won't fetch until its
+  match is settled: its card has Pick the match instead (below). Lyrics,
+  LaCuerda and the rest wait for the nightly run.
+- **Pick the match.** On a song that needs review, Pick the match opens its
+  candidates, as on the file (see above), as a list to choose from: pick one,
+  or None of these, and Pick. It runs `caracole review --song "ARTIST - TITLE"
+  --pick ARTIST/SONG`, which writes what answering that number in `caracole
+  review` writes (`[match]`, and `[alias]` where the number would add one),
+  matches again and rewrites the pages; or, for None of these, `--none` with
+  the candidates you saw, which go under `[reject]`. With Fetch it now ticked,
+  as it is by default, a pick then runs `caracole fetch --song` and
+  `caracole render`; None of these fetches nothing, and caracole goes on
+  looking for the song. The candidates must still be the ones the page showed
+  (the nightly run may have matched the song again: reload the page then),
+  and a song whose own request waits or runs gets its pick once that ends. A
+  review without candidates keeps its Review first button: `caracole review`
+  offers it a pin or an ignore. With the keyboard, Enter opens the picker and
+  takes the focus to the first candidate, the arrow keys choose, and Tab
+  goes on to Fetch it now and Pick.
 - **Requests**, the page at `/jobs`, lists each request, the commands it
   runs and what each printed (the newest request's output open), and
   refreshes itself every 10 seconds while one waits or runs. Stop refreshing
-  keeps it still, so an output stays open to read.
+  keeps it still, so an output stays open to read. A request that ended in a
+  review (`caracole add` found only candidates) shows the song's picker under
+  it, so you pick at once; while the page refreshes itself, which would undo
+  a choice half made, it shows a Pick the match link to the picker's own
+  page, `/review?song=ID`, instead.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
