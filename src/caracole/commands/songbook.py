@@ -13,10 +13,13 @@
 A SONG is "Artist - Title", found the way other commands find songs (accents, case,
 Traditional or Simplified characters), or by a search of your library that one song
 answers well ("ban ma ban ma"); a song the library hasn't got is refused, with what you
-may have meant. A change writes songbooks.toml, makes the songbook's files again and
-rewrites the library pages, holding caracole's lock; ``list`` and ``show`` only read. A
-songbooks.toml that can't be read exits 2, naming it and the line. Every command module
-is imported on every start, so the songbook code is imported inside the commands.
+may have meant; ``remove`` and ``move`` look among the songbook's own songs first, by
+"Artist - Title" alone. A song of songbooks.toml is found by its "Artist - Title" alone,
+never by a search: one gone from the library is missing. A change writes songbooks.toml,
+makes the songbook's files again and rewrites the library pages, holding caracole's lock;
+``list`` and ``show`` only read. A songbooks.toml that can't be read exits 2, naming it and
+the line. Every command module is imported on every start, so the songbook code is
+imported inside the commands.
 """
 
 from __future__ import annotations
@@ -131,7 +134,7 @@ def register(app: typer.Typer) -> None:
         cfg = load_cfg(ctx)
         with exclusive(cfg, "songbook remove"), closing(open_db(cfg)) as conn:
             b = _book(_books(cfg), name)
-            removed = _do(lambda: remove_from_songbook(_file(cfg), b.name, _names(conn, songs)))
+            removed = _do(lambda: remove_from_songbook(_file(cfg), b.name, _names(conn, b, songs)))
             for entry in removed:
                 typer.echo(f"Removed {entry}")
             if not removed:
@@ -149,8 +152,7 @@ def register(app: typer.Typer) -> None:
         overrides = load_ovr(cfg)
         with exclusive(cfg, "songbook move"), closing(open_db(cfg)) as conn:
             b = _book(_books(cfg), name)
-            names = _names(conn, [song])
-            entry = next((e for e in b.songs if any(_same(e, n) for n in names)), names[0])
+            entry = _entry_for(conn, b, song)
             to = _do(lambda: move_in_songbook(_file(cfg), b.name, entry, position))
             shown = next((e.song.display for e in songbook_entries(conn, cfg.library_dir, overrides, b)
                           if e.text == entry and e.song is not None), entry)
@@ -253,23 +255,25 @@ def _songs(conn: sqlite3.Connection, texts: list[str]) -> list[Found]:
     return _do(lambda: library_songs(conn, texts))
 
 
-def _names(conn: sqlite3.Connection, texts: list[str]) -> list[str]:
-    """What to look for in a songbook: each text, and the library's name for the song it names."""
-    from caracole.songbook import find_library_song
-
-    names: list[str] = []
-    for text in texts:
-        names.append(text)
-        found = find_library_song(conn, text)
-        if found is not None:
-            names.append(found.song.display)
-    return names
+def _names(conn: sqlite3.Connection, book, texts: list[str]) -> list[str]:
+    """What to look for in the songbook, one for each text: the songbook's own entry when the text
+    names one by its "Artist - Title" (``same_entry``), as the page's buttons send it; only when it
+    names none, the library's name for the song a search of the library finds (``find_library_song``),
+    else the text. A song gone from the library is never taken for one whose title its own holds."""
+    return [_entry_for(conn, book, text) for text in texts]
 
 
-def _same(a: str, b: str) -> bool:
-    from caracole.songbook import same_entry
+def _entry_for(conn: sqlite3.Connection, book, text: str) -> str:
+    """The songbook's entry ``text`` stands for (see ``_names``), or ``text`` when there is none."""
+    from caracole.songbook import find_library_song, same_entry
 
-    return same_entry(a, b)
+    entry = next((e for e in book.songs if same_entry(e, text)), None)
+    if entry is not None:
+        return entry
+    found = find_library_song(conn, text)
+    if found is not None:
+        return next((e for e in book.songs if same_entry(e, found.song.display)), found.song.display)
+    return text
 
 
 def _say_found(texts: list[str], found: list[Found]) -> None:

@@ -1241,9 +1241,13 @@ songs = [
 ]
 ```
 
-caracole keeps your comments and layout when it changes the file. A song is
-found the way other commands find one: accents, case, Traditional or
-Simplified characters and a version suffix ("- Remastered 2007") don't count.
+caracole keeps your comments and layout when it changes the file. A song of
+the file is its song of the library by its artist and title: accents, case,
+Traditional or Simplified characters and a version suffix ("- Remastered 2007")
+don't count, but nothing else does, as no search is made for it. A song the
+library hasn't got (removed since, or written with a typo) is listed missing,
+`not in the library`, and never taken for another with a title like it
+("Karma Police Live" for "Karma Police").
 A name can't be empty, start with a dot, hold a line break or be longer than
 80 characters, and two songbooks can't have names that would share a folder
 (`Camp/fire` and `Camp-fire`; `Campfire` and `campfire`). A songbooks.toml that
@@ -1282,7 +1286,9 @@ songbook's files stay as they are, and everything else goes on.
   `1 rendered, 2 up to date, 0 failed`. It exits 1 when a file couldn't be
   made, and the log says why, as `songbook Campfire: no songbook.pdf: …`.
 
-A NAME is found in any case. Each change writes songbooks.toml, makes the
+A NAME is found in any case. `remove` and `move` take the songbook's own song
+of that artist and title first, and only when it has none, the song a search of
+your library finds ("oasis wonderwal"), as `make` does. Each change writes songbooks.toml, makes the
 songbook's files and rewrites `_todo.md` and `index.html`, holding caracole's
 lock; `list` and `show` only read, and never wait. A songbooks.toml that can't
 be read exits 2.

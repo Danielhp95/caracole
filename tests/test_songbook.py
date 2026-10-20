@@ -297,3 +297,16 @@ def test_songs_the_library_lacks_are_refused_with_a_hint(conn):
     assert e.value.texts == ["Radiohed - Karma", "Muse - Hysteria"]
     found = library_songs(conn, ["Radiohead - Karma Polise", "radiohead - creep"])  # a typo, then a case
     assert [f.song.title for f in found] == ["Karma Police", "Creep"]
+
+
+def test_an_entry_of_the_file_is_its_song_by_artist_and_title_alone_never_by_a_search(conn):
+    from caracole.songbook import find_entry_song, find_library_song
+
+    police = add_song(conn, "Radiohead", "Karma Police")
+    zh = add_song(conn, "宋冬野", "斑马，斑马")
+    assert find_entry_song(conn, "radiohead - karma police").id == police.id
+    assert find_entry_song(conn, "宋冬野 - 斑馬，斑馬").id == zh.id  # Traditional and Simplified
+    # A song gone from the library, whose title holds another's: what you typed may find it, an entry never.
+    assert find_library_song(conn, "Radiohead - Karma Police Live").song.id == police.id
+    assert find_entry_song(conn, "Radiohead - Karma Police Live") is None
+    assert find_entry_song(conn, "ban ma ban ma") is None

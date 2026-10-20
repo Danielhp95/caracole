@@ -151,6 +151,39 @@ def test_songs_without_a_sheet_are_named_missing(conn, cfg, two):
     assert "Hysteria" in page and "no sheet yet" in page and "not in the library" in page
 
 
+@pytest.fixture
+def gig(conn, cfg):
+    """The songbook Gig: Karma Police (a sheet), Wonderwall (none), then Karma Police Live, a song
+    removed from the library since, whose title holds Karma Police's: a search would take one for the
+    other."""
+    police = add_song(conn, "Radiohead", "Karma Police")
+    keep_sheet(conn, cfg, police, tab_id=3)
+    add_song(conn, "Oasis", "Wonderwall")
+    live = add_song(conn, "Radiohead", "Karma Police Live")
+    render_sheets(conn, cfg)
+    make(cfg, "Gig", "Radiohead - Karma Police", "Oasis - Wonderwall", "Radiohead - Karma Police Live")
+    conn.execute("DELETE FROM songs WHERE id = ?", (live.id,))
+    return police
+
+
+def test_a_song_gone_from_the_library_is_missing_never_a_song_whose_title_its_own_holds(conn, cfg, gig):
+    from caracole.songbook import load_songbooks, songbook_entries
+
+    (book,) = load_songbooks(songbooks_file(cfg.library_dir))
+    entries = songbook_entries(conn, cfg.library_dir, overrides(cfg, ""), book)
+    assert [(e.song.id if e.song else None, e.missing) for e in entries] == [
+        (gig.id, None), (entries[1].song.id, "no sheet yet"), (None, "not in the library")]
+    fake = FakeChordPro()
+    render(conn, cfg, runner=fake)
+    police, wonderwall, live = inputs(fake, pdf_call(fake))
+    assert police.startswith("{title: Karma Police}\n")
+    assert live.startswith("{title: Karma Police Live}\n{artist: Radiohead · missing: not in the library}")
+    page = (folder(cfg, "Gig") / "songbook.html").read_text(encoding="utf-8")
+    assert page.count('<section class="song"') == 1  # Karma Police, once
+    assert re.search(r'<li class="missing">.*?Karma Police Live.*?Missing: not in the library', page)
+    assert (folder(cfg, "Gig") / "songbook.cho").read_text(encoding="utf-8").count("{title: Karma Police}") == 1
+
+
 def test_a_songbook_with_no_sheet_gets_its_page_alone(conn, cfg):
     add_song(conn, "Muse", "Hysteria")
     make(cfg, "Campfire", "Muse - Hysteria")

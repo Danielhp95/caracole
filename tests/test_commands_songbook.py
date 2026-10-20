@@ -180,6 +180,49 @@ def test_a_song_removed_from_the_library_can_be_taken_out_by_its_name(setup):
     assert books(setup)[0].songs == ("Muse - Hysteria",)
 
 
+@pytest.fixture
+def gig(setup):
+    """The songbook Gig: Karma Police, Wonderwall, then Karma Police Live, a song removed from the library
+    since, whose title holds Karma Police's: a search would take one for the other."""
+    _, cfg, conn = setup
+    police = add_song(conn, "Radiohead", "Karma Police")
+    keep_sheet(conn, cfg, police, tab_id=3)
+    add_song(conn, "Oasis", "Wonderwall")
+    live = add_song(conn, "Radiohead", "Karma Police Live")
+    render_sheets(conn, cfg)
+    make_songbook(cfg.library_dir / FILE_NAME, "Gig",
+                  ["Radiohead - Karma Police", "Oasis - Wonderwall", "Radiohead - Karma Police Live"])
+    conn.execute("DELETE FROM songs WHERE id = ?", (live.id,))
+
+
+def test_a_song_gone_from_the_library_is_shown_missing_and_moved_or_taken_out_alone(setup, gig):
+    lines = run(setup, "show", "Gig").output.splitlines()
+    assert lines[1:4] == ["  1. Radiohead - Karma Police", "  2. Oasis - Wonderwall (missing: no sheet yet)",
+                          "  3. Radiohead - Karma Police Live (missing: not in the library)"]
+    assert "Gig: 3 songs, 2 without a sheet" in run(setup, "list").output
+
+    moved = run(setup, "move", "--", "Gig", "Radiohead - Karma Police Live", "1")  # as the page's ↑ queues it
+    assert moved.exit_code == 0, moved.output
+    assert "Moved Radiohead - Karma Police Live to 1" in moved.output
+    assert books(setup)[0].songs == ("Radiohead - Karma Police Live", "Radiohead - Karma Police",
+                                     "Oasis - Wonderwall")
+
+    removed = run(setup, "remove", "--", "Gig", "Radiohead - Karma Police Live")  # as the page's × queues it
+    assert removed.exit_code == 0, removed.output
+    assert removed.output.splitlines()[0] == "Removed Radiohead - Karma Police Live"
+    assert "Removed Radiohead - Karma Police\n" not in removed.output
+    assert books(setup)[0].songs == ("Radiohead - Karma Police", "Oasis - Wonderwall")
+
+
+def test_a_song_the_songbook_lacks_is_still_found_by_a_search_of_the_library(setup, gig):
+    moved = run(setup, "move", "Gig", "oasis wonderwal", "1")  # no entry of Gig is it: the library's search
+    assert moved.exit_code == 0, moved.output
+    assert books(setup)[0].songs[0] == "Oasis - Wonderwall"
+    removed = run(setup, "remove", "Gig", "oasis wonderwal")
+    assert removed.exit_code == 0 and "Removed Oasis - Wonderwall" in removed.output
+    assert books(setup)[0].songs == ("Radiohead - Karma Police", "Radiohead - Karma Police Live")
+
+
 def test_render_renders_one_or_every_songbook(setup):
     _, cfg, _ = setup
     make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Soda Stereo - De Música Ligera"])

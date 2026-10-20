@@ -182,6 +182,29 @@ def test_a_song_gone_from_the_library_can_still_be_moved_or_taken_out(app, setup
     assert books(setup)[1] == Songbook("Picnic", ("Radiohead - Creep",))
 
 
+def test_a_song_gone_from_the_library_goes_alone_never_with_the_song_whose_title_its_own_holds(app, setup, queue):
+    _, cfg, conn, _ = setup
+    police = add_song(conn, "Radiohead", "Karma Police")
+    keep_sheet(conn, cfg, police, tab_id=3)
+    live = add_song(conn, "Radiohead", "Karma Police Live")
+    render_sheets(conn, cfg)
+    make_songbook(cfg.library_dir / FILE_NAME, "Gig",
+                  ["Radiohead - Karma Police", "Muse - Hysteria", "Radiohead - Karma Police Live"])
+    conn.execute("DELETE FROM songs WHERE id = ?", (live.id,))
+    page = get(app, "/").body.decode("utf-8")
+    assert re.search(r'<li class="missing">.*?Karma Police Live.*?missing: not in the library', page)
+
+    assert post(app, "/songbook/move", {"name": "Gig", "song": "Radiohead - Karma Police Live",
+                                        "position": "2"}).status == 303
+    queue.run_pending()
+    assert books(setup) == [Songbook("Gig", ("Radiohead - Karma Police", "Radiohead - Karma Police Live",
+                                             "Muse - Hysteria"))]
+    assert post(app, "/songbook/remove", {"name": "Gig", "song": "Radiohead - Karma Police Live"}).status == 303
+    queue.run_pending()
+    assert all(job.state == "done" for job in queue.snapshot())
+    assert books(setup) == [Songbook("Gig", ("Radiohead - Karma Police", "Muse - Hysteria"))]
+
+
 def test_the_same_change_sent_twice_is_queued_once(app, setup, queue, campfire):
     fields = {"name": "Campfire", "song": "Muse - Hysteria", "position": "1"}
     post(app, "/songbook/move", fields)

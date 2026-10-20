@@ -199,19 +199,34 @@ class NotInLibrary(SongbookError):
 SEARCH_MARGIN = 5  # a search finds a song when no other one scores within this of it
 
 
-def find_library_song(conn: sqlite3.Connection, text: str) -> Found | None:
-    """The song of the library ``text`` names, the way other commands find one, or None.
+def find_entry_song(conn: sqlite3.Connection, text: str) -> Song | None:
+    """The song of the library an entry of songbooks.toml names, by its "Artist - Title" alone
+    (``entry_keys``: accents, case, Traditional characters and a version suffix aside), or None.
 
-    First by its "Artist - Title" (``entry_keys``: accents, case, Traditional characters and a
-    version suffix aside), then by a search of the library (``search.search_library``: pinyin for
-    Chinese, a typo), when one song answers it well (``search.STRONG``) and no other comes close.
+    Never by a search: an entry whose song is gone from the library (or one typed with a typo) is
+    missing, not another song with a title like it ("Karma Police Live" is not "Karma Police").
     """
     from caracole.songs import find_song
 
     for key in sorted(entry_keys(text)):
         song = find_song(conn, key)
         if song is not None:
-            return Found(song)
+            return song
+    return None
+
+
+def find_library_song(conn: sqlite3.Connection, text: str) -> Found | None:
+    """The song of the library ``text``, typed on the command line, names, the way other commands
+    find one, or None.
+
+    First by its "Artist - Title" (``find_entry_song``), then by a search of the library
+    (``search.search_library``: pinyin for Chinese, a typo), when one song answers it well
+    (``search.STRONG``) and no other comes close. Only for what you type: an entry of
+    songbooks.toml is found by ``find_entry_song`` alone.
+    """
+    song = find_entry_song(conn, text)
+    if song is not None:
+        return Found(song)
     from caracole.search import STRONG, search_library  # rapidfuzz, only when a search is needed
 
     hits = search_library(conn, text, limit=2)
@@ -540,16 +555,16 @@ class SongbookStats:
 def songbook_entries(conn: sqlite3.Connection, library_dir: Path, overrides: Overrides,
                      book: Songbook) -> list[Entry]:
     """The songbook's songs, in order, each with its sheet or why it has none: a song the library
-    hasn't got (removed since, say) or one without a sheet is missing, never an error."""
+    hasn't got (removed since, say) or one without a sheet is missing, never an error. Each is
+    found by its "Artist - Title" alone (``find_entry_song``), never by a search."""
     return [_entry_of(conn, library_dir, overrides, text) for text in book.songs]
 
 
 def _entry_of(conn: sqlite3.Connection, library_dir: Path, overrides: Overrides, text: str) -> Entry:
-    found = find_library_song(conn, text)
-    if found is None:
+    song = find_entry_song(conn, text)
+    if song is None:
         artist, _, title = text.partition(" - ")
         return Entry(text, title.strip() or text, artist.strip(), missing=MISSING_SONG)
-    song = found.song
     title = clean_title(song.title)
     sheet = _sheet_of(conn, library_dir, song)
     if sheet is None:
