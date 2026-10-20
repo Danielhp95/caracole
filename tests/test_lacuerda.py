@@ -8,19 +8,28 @@ import pytest
 from caracole.http import ProviderError
 from caracole.lacuerda import (
     BASE_URL,
+    LETTERS,
     LaCuerdaParseError,
+    LCArtist,
     LCSong,
+    Listing,
     artist_slug,
     artist_slug_candidates,
     artist_url,
     best_acordes_version,
     is_missing_artist_page,
     is_spanish,
+    listing_path,
+    listing_url,
     looks_spanish,
     match_title,
+    parse_artist_name,
     parse_artist_page,
     parse_lcd,
+    parse_listing_page,
+    parse_popularity,
     parse_version_page,
+    song_url,
     version_url,
 )
 
@@ -573,3 +582,108 @@ def test_looks_spanish_title_marks(title, spanish):
 def test_looks_spanish_reads_decomposed_and_capital_marks():
     assert looks_spanish(unicodedata.normalize("NFD", "Señorita"))
     assert looks_spanish("CORAZÓN ESPINADO")
+
+
+# --- the artist listings ------------------------------------------------------------------
+
+
+def test_the_letters_are_the_initials_the_artist_index_links():
+    # tests/fixtures/lacuerda/tabs.html is /tabs/ as captured: its menu links every initial,
+    # "#" as _num and "ñ" as nn, and every page of each letter's listing follows from its first.
+    menu = re.findall(r"<a href=/tabs/([a-z_]+)/>", _fixture("tabs.html"))
+    assert LETTERS == tuple(menu)
+    assert len(LETTERS) == 28 and LETTERS[0] == "_num" and LETTERS[15] == "nn"
+
+
+def test_listing_paths_and_urls():
+    assert listing_path("e") == "tabs/e/index0.html"
+    assert listing_path("nn", "index100.html") == "tabs/nn/index100.html"
+    assert listing_url("tabs/e/index0.html") == f"{BASE_URL}/tabs/e/index0.html"
+    assert song_url("soda_stereo", "de_musica_ligera") == f"{BASE_URL}/soda_stereo/de_musica_ligera"
+
+
+@pytest.fixture
+def letter_e():
+    return parse_listing_page(_fixture("letter_e.html"), url=f"{BASE_URL}/tabs/e/index0.html")
+
+
+def test_parse_listing_page_lists_each_artist_with_its_slug_name_and_songs(letter_e):
+    # As captured: "Los Ecos" is filed under E with the slug ecos, and E.G.O. as ego.
+    assert letter_e.artists[:5] == (
+        LCArtist("ec_inchausti", "E.C. Inchausti", 1),
+        LCArtist("ego", "E.G.O.", 3),
+        LCArtist("ea", "Ea!", 2),
+        LCArtist("ebenezer", "Ebenezer", 268),
+        LCArtist("ecos", "Los Ecos", 5),
+    )
+    assert len(letter_e.artists) == 12
+    assert LCArtist("eduardo_rios", "Eduardo Ríos", 16) in letter_e.artists
+
+
+def test_parse_listing_page_reads_every_page_of_the_letter_and_how_many_artists_it_has(letter_e):
+    assert letter_e.pages == tuple(f"index{n}.html" for n in range(0, 700, 100))
+    assert letter_e.total == 639
+
+
+def test_a_listing_page_without_its_own_url_lists_the_pages_it_links():
+    listing = parse_listing_page(_fixture("letter_e.html"))
+    assert listing.pages == tuple(f"index{n}.html" for n in range(100, 700, 100))
+
+
+def listing_html(items: str, multipag: str = "") -> str:
+    return f"<html><body>{multipag}<div id=a_cont><ul id=i_main>{items}</ul></div></body></html>"
+
+
+def test_a_letter_with_one_page_lists_that_page():
+    one = listing_html(
+        "<li onclick='w.location=\"/nnaque/\"'><a HREF=\"/nnaque/\"><em>Acordes de &nbsp;</em>Ñaque</a>"
+        "<span>4<em>&nbsp; canciones</em></span></li>",
+        "<div class='multipag'><ul><li class='sel'>1</li><li class=last><font>1</font> Artistas</li></ul></div>",
+    )
+    listing = parse_listing_page(one, url=f"{BASE_URL}/tabs/nn/index0.html")
+    assert listing == Listing((LCArtist("nnaque", "Ñaque", 4),), ("index0.html",), 1)
+
+
+def test_a_listing_skips_items_without_a_slug_and_reads_a_missing_count_as_zero():
+    items = (
+        "<li><a HREF=\"/\"><em>Acordes de</em>Nobody</a></li>"
+        "<li><a HREF=\"/a/b/\">Two segments</a></li>"
+        "<li><span>3 canciones</span></li>"
+        "<li><a HREF=\"https://acordes.lacuerda.net/estopa/\"><em>Acordes de &nbsp;</em>Estopa</a></li>"
+    )
+    listing = parse_listing_page(listing_html(items))
+    assert listing.artists == (LCArtist("estopa", "Estopa", 0),)
+    assert (listing.pages, listing.total) == ((), None)
+
+
+def test_an_empty_listing_is_a_listing():
+    assert parse_listing_page(listing_html("")) == Listing((), (), None)
+
+
+def test_a_page_without_the_artist_list_is_a_parse_error():
+    with pytest.raises(LaCuerdaParseError, match=r"i_main"):
+        parse_listing_page(_fixture("not_found.html"), url=f"{BASE_URL}/tabs/e/index0.html")
+
+
+def test_an_artist_list_with_no_readable_item_is_a_parse_error():
+    with pytest.raises(LaCuerdaParseError):
+        parse_listing_page(listing_html("<li>nothing here</li><li><span>2</span></li>"))
+
+
+def test_parse_artist_name_reads_the_artist_page_heading():
+    assert parse_artist_name(_fixture("artist.html")) == "Soda Stereo"
+    assert parse_artist_name("<html><body><h1>no artist block</h1></body></html>") is None
+
+
+def test_parse_popularity_reads_the_artist_pages_order_of_its_songs():
+    # The page's script orders its list by popularity: item 5 (De Música Ligera) first.
+    places = parse_popularity(_fixture("artist.html"))
+    assert sorted(places, key=places.get)[:3] == ["de_musica_ligera", "persiana_americana", "te_para_3"]
+    assert len(places) == 14 and sorted(places.values()) == list(range(14))
+
+
+def test_parse_popularity_without_an_order_or_with_a_broken_one():
+    page = "<ul id=b_main><li lcd='R-1'><a href='a'>A</a></li><li lcd='R-1'><a href='b'>B</a></li></ul>"
+    assert parse_popularity(page) == {}
+    assert parse_popularity(page + "<script>var popOrder = [1,7,0];</script>") == {"b": 0, "a": 2}
+    assert parse_popularity(page + "<script>var popOrder = [x];</script>") == {}

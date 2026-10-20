@@ -298,6 +298,16 @@ def test_musescore_rules_are_the_user_agent_star_group_of_its_robots_txt():
     assert ROBOTS_DISALLOW["musescore.com"] == tuple(groups["*"])
 
 
+def test_lacuerda_has_no_rules_as_its_robots_txt_is_empty():
+    # tests/fixtures/lacuerda/robots.txt is the live file of 20 October 2026: empty (Last-Modified
+    # 22 May 2012), with no Sitemap line either. Its listings of every artist are open.
+    from caracole.http import ROBOTS_DISALLOW, robots_disallows
+
+    assert robots_groups("lacuerda") == {}
+    assert not any(host.endswith("lacuerda.net") for host in ROBOTS_DISALLOW)
+    assert robots_disallows("https://acordes.lacuerda.net/tabs/e/index0.html") is None
+
+
 def test_robots_refusals_are_not_provider_failures(tmp_path):
     # No request is sent, so the breaker neither counts a refusal nor resets on one.
     client, rec = make_client(tmp_path, ok(b"boom", status=502), max_consecutive_errors=3)
