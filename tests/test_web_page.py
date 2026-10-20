@@ -173,9 +173,9 @@ def clicks(*titles: str) -> str:
     return "(() => {\n" + WATCH + calls + "})();\n"
 
 
-def requests_song(artist: str, title: str) -> str:
-    """The test script: the request form, filled in and sent."""
-    return "(() => {\n" + WATCH + f"""
+def requests_song(artist: str, title: str, *, extra: str = "") -> str:
+    """The test script: the request form, filled in and sent; ``extra`` runs first."""
+    return "(() => {\n" + WATCH + extra + f"""
 const form = document.querySelector("form.request-form");
 form.elements.namedItem("artist").value = {json.dumps(artist)};
 form.elements.namedItem("title").value = {json.dumps(title)};
@@ -219,9 +219,50 @@ def test_fetch_now_shows_its_progress_on_the_card_then_its_files(serve, cfg, con
     assert re.search(r'data-show="found"[^>]*>Found <span class="n">1</span>', dom)
 
 
+# Notes whether each card's line is still the first node it showed one in (data-same, by where the card is
+# and its title), and where the focus is, every 100 ms (data-focus).
+FIRST_LINE_AND_FOCUS = """
+const firsts = new Map();
+const same = {};
+new MutationObserver(() => {
+  for (const p of document.querySelectorAll("article .progress")) {
+    const card = p.closest("article");
+    const where = (card.closest("#requested") ? "requested " : "list ") + card.querySelector("h2").textContent;
+    if (!firsts.has(where)) firsts.set(where, p);
+    same[where] = firsts.get(where) === p;
+  }
+  document.body.setAttribute("data-same", JSON.stringify(same));
+}).observe(document.body, { subtree: true, childList: true, characterData: true });
+setInterval(() => {
+  const at = document.activeElement;
+  const card = at && at.closest ? at.closest("article") : null;
+  document.body.setAttribute("data-focus", JSON.stringify(
+    [at ? at.tagName.toLowerCase() + "." + at.className : null, card ? card.querySelector("h2").textContent : null]));
+}, 100);
+"""
+
+
+def test_a_cards_line_stays_the_same_live_region_until_its_request_ends(serve, cfg, conn, tmp_path):
+    # A live region put in the page with its text in it isn't read out: the card's line must be the node
+    # that was there all along, its text changed in place. And the focus, on Fetch now, isn't lost.
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    script = ("(() => {\n" + WATCH + FIRST_LINE_AND_FOCUS
+              + 'const go = cardOf("Creep").querySelector("form.fetch button");\ngo.focus();\ngo.click();\n})();\n')
+    url = serve(FakeCaracole(cfg), script)
+
+    dom = dump_dom(url, tmp_path)
+
+    shown = card(dom, "Creep")
+    assert re.search(r'<p class="progress"[^>]*data-tone="ready"', shown) and shown.count('class="progress"') == 1
+    assert ">Sheet PDF</a>" in shown  # the card is the song's new one all the same
+    assert attribute(dom, "data-same") == {"list Creep": True}
+    assert attribute(dom, "data-focus") == ["p.progress", "Creep"]
+
+
 def test_a_requested_song_gets_a_card_of_its_own_on_the_page(serve, cfg, conn, tmp_path):
     add_song(conn, "Oasis", "Wonderwall")
-    url = serve(FakeCaracole(cfg), requests_song("Radiohead", "Creep"))
+    url = serve(FakeCaracole(cfg), requests_song("Radiohead", "Creep", extra=FIRST_LINE_AND_FOCUS))
 
     dom = dump_dom(url, tmp_path)
 
@@ -229,6 +270,8 @@ def test_a_requested_song_gets_a_card_of_its_own_on_the_page(serve, cfg, conn, t
     assert requested and "hidden" not in requested.group(0)[:80], dom[-3000:]
     shown = card(requested.group(1), "Creep")
     assert "Radiohead" in shown and "Ready" in shown and ">Sheet PDF</a>" in shown
+    # Its line is the one "Sending…" was written in: a screen reader hears it change, to the end.
+    assert shown.count('class="progress"') == 1 and attribute(dom, "data-same") == {"requested Creep": True}
     seen = attribute(dom, "data-seen")
     assert "Adding to the library…" in seen or "Queued…" in seen, seen
     assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")

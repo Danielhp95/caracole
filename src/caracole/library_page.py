@@ -763,6 +763,9 @@ _SCRIPT = r"""
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const card = form.closest("article");
+      const line = progressIn(card);  // in the page before its first words, so they are read out
+      showLine(line, { line: { tone: "queued", text: "Sending…" } });
+      if (form.contains(document.activeElement)) focusOn(line);  // a disabled button would drop it
       go.disabled = true;
       send(form).then((answer) => {
         const view = answer.ok && answer.body && answer.body.job;
@@ -806,6 +809,7 @@ _SCRIPT = r"""
     const more = typeof line.details === "string" ? line.details : "";
     const key = [line.tone, line.text, to ? to.href : "", more].map(String).join("|");
     if (p.dataset.key === key) return;
+    const focused = p !== document.activeElement && p.contains(document.activeElement);
     p.dataset.key = key;
     p.dataset.tone = String(line.tone || "");
     p.textContent = "";
@@ -817,8 +821,15 @@ _SCRIPT = r"""
       p.appendChild(dot);
       p.appendChild(link(go, null, false));
     }
+    if (focused) focusOn(p);  // its link is gone: the focus stays on the line
   };
-  // A card's line, made the first time: role="status" has it read out when it changes.
+  const focusOn = (p) => {
+    p.tabIndex = -1;
+    p.focus({ preventScroll: true });
+  };
+  // A card's line, made the first time: role="status" has it read out when it changes. A live region
+  // put in the page with its text already in it is not read out, so a card keeps its line from the first
+  // text to the last (refill), and only that text changes.
   const progressIn = (card) => {
     let p = card.querySelector(".progress");
     if (!p) {
@@ -829,6 +840,29 @@ _SCRIPT = r"""
       else card.appendChild(p);
     }
     return p;
+  };
+  // The card old, drawn again as fresh (makeCard's) where it is, around its own line, which never leaves
+  // the page; returns old. The focus, if it was on something of old's that goes, moves to the line.
+  const refill = (old, fresh) => {
+    const kept = old.querySelector(".progress");
+    if (!kept) {
+      if (old.parentNode) old.replaceWith(fresh);
+      return fresh;
+    }
+    const focused = old.contains(document.activeElement) && !kept.contains(document.activeElement);
+    const drawn = progressIn(fresh);  // where fresh has its line
+    for (const child of Array.from(old.childNodes)) if (child !== kept) child.remove();
+    let before = true;
+    for (const child of Array.from(fresh.childNodes)) {
+      if (child === drawn) before = false;
+      else if (before) old.insertBefore(child, kept);
+      else old.appendChild(child);
+    }
+    old.className = fresh.className;
+    for (const name of Object.keys(old.dataset)) delete old.dataset[name];
+    Object.assign(old.dataset, fresh.dataset);
+    if (focused && old.isConnected) focusOn(kept);
+    return old;
   };
   const failure = (answer) => ({ line: { tone: "failed", text: (answer.body && answer.body.error) ||
     "caracole serve answered " + answer.status + ": reload the page." } });
@@ -1190,7 +1224,7 @@ _SCRIPT = r"""
     tray.hidden = trayClosed || shown.length < 2;
     document.body.classList.toggle("with-tray", !tray.hidden);
   };
-  // The cards drawn again from what the library has now: a request is over.
+  // The cards drawn again from what the library has now: a request is over. Each keeps its line.
   const redraw = (view) => {
     const data = view.card && typeof view.card === "object" ? view.card : null;
     if (!data) return;
@@ -1199,19 +1233,12 @@ _SCRIPT = r"""
       songs[i] = data;
       songKeys[i] = keyId(data.key);
       hay[i] = String(data.search || "");
-      const old = cards.get(i);
-      const fresh = makeCard(data);
-      cards.set(i, fresh);
-      if (old && old.parentNode) old.replaceWith(fresh);
+      if (cards.has(i)) cards.set(i, refill(cards.get(i), makeCard(data)));  // else drawn when shown
     } else {
       arrived.set(Number(data.id), data);  // counted, and shown under the form until the next load
     }
     const spot = spots.get(Number(view.id));
-    if (spot) {
-      const fresh = makeCard(data);
-      spot.replaceWith(fresh);
-      spots.set(Number(view.id), fresh);
-    }
+    if (spot) spots.set(Number(view.id), refill(spot, makeCard(data)));
     summarize();
     tallyChips();  // the grid itself stays as it is: a card the filter now hides goes at the next search
   };
@@ -1230,9 +1257,13 @@ _SCRIPT = r"""
     const i = song !== null && songJob.get(song) === id ? byIndex.get(song) : undefined;
     for (const card of [i === undefined ? null : cards.get(i), spots.get(id)]) {
       if (!card) continue;
-      showLine(progressIn(card), view);
+      const p = progressIn(card);
+      showLine(p, view);
       const button = card.querySelector("form.fetch");
-      if (button && isActive(view)) button.remove();
+      if (button && isActive(view)) {
+        if (button.contains(document.activeElement)) focusOn(p);  // the line takes the button's place
+        button.remove();
+      }
     }
     trayShow(view);
   };
@@ -1375,11 +1406,7 @@ _SCRIPT = r"""
             requestedGrid.prepend(spot);
           } else {
             const i = view.songId === null || view.songId === undefined ? undefined : byIndex.get(Number(view.songId));
-            if (i !== undefined) {  // a song the library has: its own card, here too
-              const own = makeCard(songs[i]);
-              spot.replaceWith(own);
-              spot = own;
-            }
+            if (i !== undefined) spot = refill(spot, makeCard(songs[i]));  // a song the library has: its card
             spots.set(id, spot);
           }
           track(view);

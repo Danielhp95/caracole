@@ -1102,7 +1102,8 @@ do:
 
   Two requests or more also show as one short list in a corner, a line per
   song, which folds up or closes. A screen reader hears each card's line as
-  it changes. The page asks the server how its requests go every 1.5 seconds
+  it changes, to the last one, and Fetch now hands the keyboard focus to that
+  line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.
 - **Requests**, the page at `/jobs`, has one line per request, the same as
   its card's, with the commands it ran and what each printed folded away
