@@ -94,6 +94,16 @@ def test_an_ico_without_a_32_pixel_image_gives_the_nearest_bigger_one_else_its_b
     assert pixels(icons.sanitize(ico((16, bmp_image(16)))))[:2] == (16, 16)
 
 
+def test_an_ico_whose_best_image_is_broken_or_too_big_gives_the_next_one():
+    noise = random.Random(2).randbytes(100 * 4 * 100)
+    rows = b"".join(b"\x00" + noise[y * 400:(y + 1) * 400] for y in range(100))
+    big = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 100, 100, 8, 6, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+    assert icons.MAX_ICON < len(big) < icons.MAX_DOWNLOAD
+    assert pixels(icons.sanitize(ico((32, png(32)[:-12]), (16, bmp_image(16)))))[:2] == (16, 16)
+    assert pixels(icons.sanitize(ico((100, big), (48, bmp_image(48)))))[:2] == (48, 48)
+
+
 def test_an_icos_and_mask_makes_its_pixels_transparent():
     hole = {(0, 0), (31, 31)}
     for image in (bmp_image(32, RED, bpp=24, transparent=hole), bmp_image(32, RED, bpp=8, transparent=hole),

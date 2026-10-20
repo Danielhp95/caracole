@@ -254,7 +254,8 @@ def _encode_png(width: int, height: int, rgba: bytes) -> bytes:
 
 
 def _from_ico(data: bytes) -> bytes | None:
-    """The ICO's image nearest ``TARGET`` pixels, as a PNG."""
+    """The ICO's image nearest ``TARGET`` pixels, as a PNG: of its images that read well and fit
+    ``MAX_ICON``, the smallest of ``TARGET`` pixels or more, else the biggest."""
     if len(data) < 6:
         return None
     _, kind, count = struct.unpack_from("<HHH", data)
@@ -270,10 +271,11 @@ def _from_ico(data: bytes) -> bytes | None:
         side = _side(body)
         if side is not None:
             images.append((side, bpp, body, (width or 256, height or 256)))
-    if not images:
-        return None
-    _, _, body, listed = min(images, key=lambda m: ((0, m[0]) if m[0] >= TARGET else (1, -m[0]), -m[1]))
-    return _clean_png(body) if body.startswith(_PNG) else _from_bitmap(body, listed)
+    for _, _, body, listed in sorted(images, key=lambda m: ((0, m[0]) if m[0] >= TARGET else (1, -m[0]), -m[1])):
+        out = _clean_png(body) if body.startswith(_PNG) else _from_bitmap(body, listed)
+        if out is not None and len(out) <= MAX_ICON:
+            return out
+    return None
 
 
 def _side(body: bytes) -> int | None:
