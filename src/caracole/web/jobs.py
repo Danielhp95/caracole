@@ -116,7 +116,7 @@ class JobQueue:
     # --- what the pages ask -------------------------------------------------------------------
 
     def submit(self, title: str, song_key: str, steps: Sequence[tuple[str, Sequence[str]]], *,
-               fetching: bool = False, note: str = "") -> tuple[Job, bool]:
+               fetching: bool = False, note: str = "", join: bool = True) -> tuple[Job, bool]:
         """Queue a job, and say whether it is new: one per song, unless a fetch must come after an add.
 
         A song's waiting or running job that does as much (a fetch, or the new
@@ -124,13 +124,15 @@ class JobQueue:
         still waits: the add gets the fetch's steps of the commands it doesn't
         run (one ``caracole add``, whatever its album: the server wrote
         wanted.txt already). One asked for while the add runs comes after it,
-        as a job of its own. Raises QueueFull when ``limit`` jobs are waiting
-        or running.
+        as a job of its own. With ``join=False`` (a pick, whose ``caracole
+        review`` must come after the song's own request), any waiting or
+        running job of the song is the answer, left as it is. Raises QueueFull
+        when ``limit`` jobs are waiting or running.
         """
         with self._lock:
             mine = [job for job in self._jobs if job.active and job.song_key == song_key]
             enough = next((job for job in mine if job.fetching), None)  # a fetch does the most
-            if enough is None and not fetching and mine:
+            if enough is None and (not fetching or not join) and mine:
                 enough = mine[0]
             if enough is not None:
                 return copy.deepcopy(enough), False

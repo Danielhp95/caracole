@@ -406,6 +406,24 @@ def test_a_pick_waits_for_the_songs_request_to_end(app, conn, queue):
     assert post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN}).status == 303
 
 
+def test_a_request_that_comes_in_while_a_pick_is_checked_is_never_joined_by_it(app, conn, queue, monkeypatch):
+    # The server answers each request in a thread of its own: the song's request may be queued
+    # between the pick's checks and its submit. The pick is refused, and the request is left as it is.
+    creep = in_review(conn)
+    submit = queue.submit
+
+    def request_first(*args, **kwargs):
+        if not queue.snapshot():
+            submit("Add Radiohead - Creep", creep.key, [("Add to the library", ("add", "--", "Radiohead", "Creep"))])
+        return submit(*args, **kwargs)
+
+    monkeypatch.setattr(queue, "submit", request_first)
+    response = post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN, "fetch": "1"})
+    assert response.status == 409 and "waiting or running" in shown(response)
+    [job] = queue.snapshot()
+    assert [s.args[0] for s in job.steps] == ["add"] and not job.fetching
+
+
 @pytest.mark.parametrize("csrf,headers", [
     (None, {}),
     ("wrong", {}),

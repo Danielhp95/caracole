@@ -151,6 +151,28 @@ def test_a_fetch_asked_for_while_the_songs_add_runs_comes_after_it():
     assert [j.state for j in queue.snapshot()] == ["done", "done"]
 
 
+@pytest.mark.parametrize("state", ["queued", "running"])
+def test_a_job_that_mustnt_join_another_gets_the_songs_job_unchanged(state):
+    # A pick: its `caracole review` must come after the song's own request, never be dropped into it.
+    asked = []
+
+    def runner(args, emit):
+        if state == "running" and not asked:
+            asked.append(queue.submit("Pick", "radiohead|creep", review, fetching=True, join=False))
+        return 0
+
+    review = [("Write the answer to overrides.toml", ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"))]
+    queue = JobQueue(runner)
+    add, _ = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"))
+    if state == "queued":
+        asked.append(queue.submit("Pick", "radiohead|creep", review, fetching=True, join=False))
+    queue.run_pending()
+    [(job, new)] = asked
+    assert not new and job.id == add.id and job.title == "Add Radiohead - Creep" and not job.fetching
+    assert [[s.args[0] for s in j.steps] for j in queue.snapshot()] == [["add"]]
+    assert queue.submit("Pick", "radiohead|creep", review, join=False)[1]  # once it ended
+
+
 def test_the_queue_holds_a_limited_number_of_requests():
     queue = JobQueue(FakeRunner(), limit=2)
     queue.submit("Add A - 1", "a|1", add_steps("A", "1"))

@@ -407,9 +407,6 @@ class WebApp:
             return _message(400, "Not an answer", "A song not found takes one of its search hits, or nothing.")
         if pick != "none" and pick not in refs:
             return _message(400, "Not a candidate", f"{pick} isn't one of its candidates.")
-        if any(job.active and job.song_key == song.key for job in self.queue.snapshot()):
-            return _message(409, "Wait for its request",
-                            f"A request for {song.display} is waiting or running: pick once it ends.")
         if pick == "none":
             title, steps, fetch = f"None of these for {song.display}", review_steps(song.display, seen=refs), False
         else:
@@ -418,11 +415,11 @@ class WebApp:
             if fetch:  # caracole review matched it again already
                 title += ", and fetch it"
                 steps += [step for step in fetch_steps(song.display) if step[1][0] != "match"]
-        try:
-            job, new = self.queue.submit(title, song.key, steps, fetching=fetch)
+        try:  # never into the song's own request, nor after its fetch: checked under the queue's lock
+            job, new = self.queue.submit(title, song.key, steps, fetching=fetch, join=False)
         except QueueFull:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
-        if not new:  # one came in since the check above
+        if not new:
             return _message(409, "Wait for its request",
                             f"A request for {song.display} is waiting or running: pick once it ends.")
         return _redirect(f"/jobs#job-{job.id}")
