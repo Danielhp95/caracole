@@ -1823,7 +1823,10 @@ with it. A KEY that is no key exits with status 2.
   [caracole search](#caracole-search): an artist's Songs lists all of theirs,
   fifty at a time, and All results goes back), **Guitar Pro on gtptabs.com**
   (five songs with a file there), and **MuseScore** (five pages whose title is
-  what you typed, or the title with the artist's words around it: its sitemaps
+  what you typed, or what you typed less an artist's name before or after it,
+  when that artist has a song of that title in the Ultimate Guitar index,
+  gtptabs.com's or your library: "oasis wonderwall" finds the Wonderwall pages,
+  and "oasis live forever" never a page titled Oasis or Forever. Its sitemaps
   name no artist, so each is a possible match). Every row has the mark of its
   site. The list follows what you type a moment after you stop; a search typed
   over stops at once, and only the newest query's answer is shown, the older

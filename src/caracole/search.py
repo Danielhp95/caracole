@@ -49,9 +49,10 @@ site: an artist the index doesn't know is the user's to type.
 **Other sites' indexes.** ``search_gtptabs`` reads gtptabs.com's song pages
 (``gtptabs_index``, from its sitemaps), scored as the index's songs are, and
 ``search_musescore`` MuseScore's (``musescore_index``), which give a title
-alone: a page there is one whose whole title is the query, or the query with
-words on either side left for the artist, a possible match, never more. Both
-only read the local tables: nothing here asks gtptabs.com or MuseScore
+alone: a page there is one whose whole title is the query, or the query less
+an artist's name on either side, where that artist has a song of that title in
+the Ultimate Guitar index, gtptabs.com's or your library; a possible match,
+never more. Both only read the local tables: nothing here asks gtptabs.com or MuseScore
 anything, and MuseScore's pages are for the user to open.
 
 UG's sitemaps list artists with accented or non-Latin names only by bare ids,
@@ -382,31 +383,67 @@ def _gtptabs_artist(conn: sqlite3.Connection, artist_key: str) -> str:
 
 
 def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
-    """MuseScore's song pages whose title is the query, or the query with words on either side left for
-    the artist ("oasis wonderwall", "live forever oasis"): the sitemaps give titles alone, so each is a
-    possible match. The whole query first, then the longer titles; a title's pages oldest first, as
-    ``musescore.song_pages`` lists a song's. Exact keys alone, so it reads the title index, never every row."""
+    """MuseScore's song pages whose title is the query, or the query with an artist's name on either side
+    ("oasis wonderwall", "live forever oasis"): the sitemaps give titles alone, so each is a possible match.
+    A run of the query's words is a title only when the rest names the artist of a song by that title, one
+    the Ultimate Guitar index, gtptabs.com's or your library has (``_known_song``): "oasis live forever" is
+    never a page titled "Oasis" or "Forever". The whole query first, then the longer titles; a title's pages
+    oldest first, as ``musescore.song_pages`` lists a song's. Exact keys alone, so it reads the title index,
+    never every row."""
     from caracole.musescore import SongPage, title_key
 
     words = _tokens(query)
-    runs = [words] + [words[:n] for n in range(len(words) - 1, 0, -1)] + [words[-n:] for n in range(len(words) - 1, 0, -1)]
-    runs.sort(key=lambda run: -len(run))  # stable: the whole query, then each length's start before its end
+    runs = [(words, [])] + [(words[:n], words[n:]) for n in range(len(words) - 1, 0, -1)] + \
+        [(words[-n:], words[:-n]) for n in range(len(words) - 1, 0, -1)]
+    runs.sort(key=lambda run: -len(run[0]))  # stable: the whole query, then each length's start before its end
     hits: list[SiteHit] = []
     seen: set[str] = set()
-    for run in runs:
+    mine: list[set[tuple[str, str]]] = []  # your songs' artists and titles, read once, when a run needs them
+    for run, rest in runs:
         text = " ".join(run)
-        score = 100.0 * len(run) / len(words)
         for key in (title_key(text), title_key(romanize(text)) if has_han(text) else ""):  # its slugs are ASCII
             if not key or key in seen:
                 continue
+            rows = conn.execute("SELECT page_id, path, title_key FROM musescore_index WHERE title_key = ? "
+                                "ORDER BY page_id LIMIT ?", (key, max(limit, 0))).fetchall()
+            if not rows or (rest and not _known_song(conn, " ".join(rest), key, mine)):
+                continue
             seen.add(key)
-            for row in conn.execute("SELECT page_id, path, title_key FROM musescore_index WHERE title_key = ? "
-                                    "ORDER BY page_id LIMIT ?", (key, max(limit, 0))):
+            for row in rows:
                 page = SongPage(*row)
-                hits.append(SiteHit("musescore", _title_words(key), page.url, round(score, 1), title_key=key))
+                hits.append(SiteHit("musescore", _title_words(key), page.url, 100.0, title_key=key,
+                                    via="both" if rest else "title"))
         if len(hits) >= limit:
             break
     return hits[:max(limit, 0)]
+
+
+def _known_song(conn: sqlite3.Connection, artist: str, title_key: str, mine: list[set[tuple[str, str]]]) -> bool:
+    """Whether ``artist`` names the artist of a song titled ``title_key`` (a MuseScore title key) in the
+    Ultimate Guitar index, gtptabs.com's (which files people last name first) or your library. ``mine``
+    caches your songs' (artist form, title key) pairs, filled on the first call that needs them."""
+    from caracole.musescore import title_key as key_of
+
+    forms = [f for f in name_forms(artist) if f and not no_ones(f) and not placeholder_artist(f)]
+    for form in forms:
+        if conn.execute("SELECT 1 FROM ug_index WHERE artist_key = ? AND song_key = ? LIMIT 1",
+                        (form, title_key)).fetchone() is not None:
+            return True
+        words = form.split("-")
+        filed = list(dict.fromkeys([form, "-".join([words[-1], *words[:-1]])]))  # as gtptabs.artist_keys files them
+        if conn.execute(f"SELECT 1 FROM gtptabs_index WHERE artist_key IN ({', '.join('?' * len(filed))}) "
+                        "AND base_key = ? LIMIT 1", (*filed, title_key)).fetchone() is not None:
+            return True
+    if not forms:
+        return False
+    if not mine:
+        pairs = set()
+        for song in list_songs(conn):
+            titles = {key_of(song.title), key_of(romanize(song.title))} - {""}
+            for name in dict.fromkeys(song.artists or [song.artist]):
+                pairs |= {(compact(f), t) for f in name_forms(name) for t in titles}
+        mine.append(pairs)
+    return any((compact(f), title_key) in mine[0] for f in forms)
 
 
 def no_ones(artist_key: str) -> bool:

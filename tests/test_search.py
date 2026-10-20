@@ -421,19 +421,47 @@ def test_a_gtptabs_artist_filed_last_name_first_is_named_as_ultimate_guitar_name
 def test_musescore_pages_are_found_by_their_whole_title_alone(conn):
     from caracole.search import search_musescore
 
+    index(conn, [(1, "oasis", "wonderwall", "chords"), (2, "oasis", "live-forever", "chords")])
     musescore_pages(conn, "https://musescore.com/song/wonderwall-1524", "https://musescore.com/song/wonderwall-99",
                     "https://musescore.com/song/creep-7", "https://musescore.com/song/live_forever-8")
     hits = search_musescore(conn, "wonderwall")
     assert [(h.source, h.title, h.artist, h.url) for h in hits] == [
         ("musescore", "Wonderwall", "", "https://musescore.com/song/wonderwall-99"),
         ("musescore", "Wonderwall", "", "https://musescore.com/song/wonderwall-1524")]
-    # The artist's words around the title are left for it: the sitemaps name no artist.
+    # The artist's words around the title are left for it, the sitemaps naming no artist: Oasis has a Wonderwall.
     assert [h.url for h in search_musescore(conn, "oasis wonderwall")][:1] == ["https://musescore.com/song/wonderwall-99"]
     assert [h.title for h in search_musescore(conn, "live forever oasis")] == ["Live Forever"]
     assert search_musescore(conn, "wonder") == []  # a part of a word is no title
     musescore_pages(conn, "https://musescore.com/song/ban_ma_ban_ma-5")
     assert [h.url for h in search_musescore(conn, "斑马，斑马")] == ["https://musescore.com/song/ban_ma_ban_ma-5"]
     assert len(search_musescore(conn, "wonderwall", limit=1)) == 1
+
+
+
+def test_a_musescore_title_is_never_a_word_of_the_query_that_leaves_no_known_song(conn):
+    from caracole.search import search_musescore
+
+    index(conn, [(1, "oasis", "live-forever", "chords"), (2, "eagles", "hotel-california", "chords"),
+                 (3, "hotel", "lobby", "chords"), (4, "forever", "young", "chords")])
+    musescore_pages(conn, *(f"https://musescore.com/song/{title}-{n}" for n, title in enumerate(
+        ["oasis", "hotel_california", "eagles", "the", "california", "live", "forever", "live_forever"], 1)))
+
+    def titles(query):
+        return [h.title for h in search_musescore(conn, query)]
+
+    # A run of the query's words is a title only when the rest names the artist of a song by that title:
+    # "Forever" leaves "oasis live", no one's name, and "Oasis" leaves "live forever", no one's song.
+    assert titles("oasis live forever") == ["Live Forever"]
+    assert titles("the eagles hotel california") == ["Hotel California"]
+    assert titles("hotel california") == ["Hotel California"]  # Hotel, an artist, has no song "California"
+    assert titles("eagles") == ["Eagles"]  # a whole query is a title whoever sings it
+    assert titles("california eagles") == []  # Eagles have no "California"
+    gtptabs_pages(conn, GTP + "10/john-elton/your-song.html")
+    musescore_pages(conn, "https://musescore.com/song/your_song-9")
+    assert titles("elton john your song") == ["Your Song"]  # gtptabs.com's, filed last name first
+    assert titles("forever live") == []  # Forever's one song is "Young"
+    add_song(conn, "Forever", "Live")  # a song of yours names its artist too
+    assert titles("forever live") == ["Live"]
 
 
 # --- caracole search -----------------------------------------------------------------

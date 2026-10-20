@@ -75,7 +75,8 @@ songs.py's, in the `removed` table).
   `artist_songs` and `library_by_artist`; tab counts are its only popularity, and Chinese
   pinyin counts only as whole words of a key, as in match.py. `search_gtptabs` and
   `search_musescore` read gtptabs.com's and MuseScore's tables (`SiteHit`; MuseScore's by
-  exact title keys alone, a possible match), never the sites. Its prefilter reads
+  exact title keys alone, the query's or what it leaves beside the artist of a song of that
+  title, `_known_song`: a possible match), never the sites. Its prefilter reads
   ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
   must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
