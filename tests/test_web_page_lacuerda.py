@@ -3,8 +3,10 @@
 A real ``caracole serve`` (as test_web_page_search.py's ``live``) serves the page; its queue runs
 ``FakeCaracole``: ``caracole get`` as ``FakeGet`` does it, and ``caracole lacuerda --artist`` as
 the index would take the artist's page in, with no request. LaCuerda's index holds Estopa, whose
-page caracole has read, and Joaquín Sabina, whose page it hasn't. The file on disk, which can ask
-nothing, names the line to run, which searches LaCuerda's index too.
+page caracole has read, and Joaquín Sabina, whose page it hasn't; a name under a letter its
+listings aren't read to yet (Bunbury's B) is read by name, and Caifanes has no page. The file on
+disk, which can ask nothing, names the line to run, which searches LaCuerda's index too, and a
+song picked on LaCuerda says on its card that tonight's run gets that sheet.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ pytestmark = CHROMIUM_MARKS
 LC = "https://acordes.lacuerda.net/"
 SABINA = artist_page("Joaquín Sabina", "joaquin_sabina", ("y_nos_dieron_las_diez", "Y Nos Dieron Las Diez", "R-1"),
                      ("19_dias_y_500_noches", "19 Días y 500 Noches", "RT-12"))
+BUNBURY = artist_page("Bunbury", "bunbury", ("lady_blue", "Lady Blue", "R-1"), ("infinito", "Infinito", "RT-2"))
 
 
 class FakeCaracole(FakeGet):
@@ -46,13 +49,19 @@ class FakeCaracole(FakeGet):
         self.ran.append(tuple(args))
         if args[0] == "lacuerda":
             time.sleep(0.3)  # long enough for the page to say it reads
+            if args[1] == "--artist=caifanes":  # the page LaCuerda doesn't have
+                emit("Not found: LaCuerda has no artist page for caifanes.")
+                return 0
             conn = db.connect(self.cfg.db_path)
             try:
-                li.store_artist_page(conn, "joaquin_sabina", SABINA)
+                if args[1] == "--artist=joaquin_sabina":
+                    li.store_artist_page(conn, "joaquin_sabina", SABINA)
+                else:  # a page read by name: Bunbury's, whose B LaCuerda's listings haven't reached
+                    li.store_artist_page(conn, "bunbury", BUNBURY)
                 conn.commit()
             finally:
                 conn.close()
-            emit("LaCuerda: Joaquín Sabina's page lists 2 songs, in the index now.")
+            emit("Read: LaCuerda's page lists 2 songs, in the index now.")
             return 0
         if args[0] == "add":
             return 0
@@ -150,6 +159,42 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed(
     assert ("lacuerda", "--artist=joaquin_sabina") in runner.ran
     assert sorted(browser.js(TITLES)) == ["19 Días y 500 Noches", "Y Nos Dieron Las Diez"]
     assert "2 songs on LaCuerda" in browser.js("document.getElementById('bar-status').textContent")
+
+
+def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_listed(cfg, live, browser):
+    # The owner's "estopa", with LaCuerda's listings read as far as E and J only: the index can't tell, the page can.
+    base, queue, runner = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    lacuerda(cfg, complete=False)
+    search(browser, base, "bunbury")
+    assert browser.wait("!!document.querySelector('#results .read-page.unlisted button')")
+    offer = browser.js("document.querySelector('#results .read-page.unlisted').textContent")
+    assert "LaCuerda hasn't listed B yet" in offer and "“bunbury”" in offer
+    assert queue.snapshot() == []  # the search asked nothing: reading the page is the button's
+    browser.click("#results .read-page.unlisted button")
+    assert browser.wait(f"{TITLES}.length === 2", timeout=20)
+    assert ("lacuerda", "--artist=bunbury") in runner.ran
+    assert sorted(browser.js(TITLES)) == ["Infinito", "Lady Blue"]
+    assert browser.js("document.querySelector('#results .artist-head h2').textContent") == "Bunbury"
+    # A name LaCuerda has no page for says so, with what it answered, and the button rests.
+    search(browser, base, "caifanes")
+    assert browser.wait("!!document.querySelector('#results .read-page.unlisted button')")
+    browser.click("#results .read-page.unlisted button")
+    assert browser.wait("!!document.querySelector('#results .read-outcome')", timeout=20)
+    said = browser.js("document.querySelector('#results .read-outcome').textContent")
+    assert said.startswith("Not found: LaCuerda has no artist page for caifanes.") and "See what it answered" in said
+    assert browser.js("document.querySelector('#results .read-page.unlisted button').disabled")
+
+
+def test_the_lookup_page_offers_to_read_a_name_lacuerda_hasnt_listed_yet(cfg, live, browser):
+    base, queue, runner = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    lacuerda(cfg, complete=False)
+    browser.open(base + "lookup?q=bunbury")
+    assert browser.wait("!!document.querySelector('#results .read-page.unlisted button')")
+    browser.click("#results .read-page.unlisted button")
+    assert browser.wait(f"{TITLES}.length === 2", timeout=20)
+    assert ("lacuerda", "--artist=bunbury") in runner.ran
 
 
 def test_a_lacuerda_song_can_be_added_for_tonights_run_with_its_pick(cfg, live, browser):

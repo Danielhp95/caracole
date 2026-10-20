@@ -7,7 +7,8 @@ a song costs no request to any site. LaCuerda's artists and songs follow
 Ultimate Guitar's, with LaCuerda's mark: a song's Get it keeps that LaCuerda
 sheet (``lacuerda``), and an artist's Songs lists those the index holds, or,
 while caracole hasn't read their page, offers to (``POST /lacuerda/artist``,
-one request, a job the page follows on ``/api/jobs``). A query may be an
+one request, a job the page follows on ``/api/jobs``), as it does for a name
+under a letter LaCuerda's listings aren't read to yet. A query may be an
 artist's name alone or a title alone: an artist it names is a row of its own,
 whose Songs lists all their songs (``GET /api/artist``), and comes first when
 it leads. Enter acts
@@ -204,6 +205,13 @@ function show(data, text) {
   if (lcArtists.length || lc.length) {
     results.append(...group("On LaCuerda", [...lcArtists.map(siteArtistRow), ...lc.map(lcSong)]));
   }
+  // No artist of LaCuerda's by that name, under a letter its listings aren't read to yet: their page may say.
+  const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
+  if (unlisted) {
+    const [heading, offer] = rowKit.siteUnlisted(unlisted, (go, at) => readThenShow({name: String(unlisted.name || "")}, go, at));
+    if (!lc.length) results.append(heading);
+    results.append(offer);
+  }
   const partly = objects(data.partial);
   if (partly.length) {
     results.append(el("p", "hint", "Searched in part: " + partly.map(x => String(x.name || x.source) + " (" +
@@ -334,10 +342,16 @@ function lcSong(h) { return rowKit.siteHit(h, (pick, display) => lookUp(pick, di
 // A LaCuerda artist: Songs lists those the index holds, or offers to read their page (ROWS_SCRIPT's rows).
 function siteArtistRow(a) { return rowKit.siteArtist(a, () => openSiteArtist(a, true)); }
 
-function getSiteArtist(slug, signal) {
-  return fetch("/api/artist?lacuerda=" + encodeURIComponent(slug), {signal, headers: {"Accept": "application/json"}})
-    .then(r => r.json())
-    .then(data => { if (data.error) { status.textContent = data.error; return null; } return data; })
+// A LaCuerda artist, by the slug of their page ({slug}) or by a name ({name}: a page read by name); ``quiet``, a 404
+// isn't said.
+function getSiteArtist(who, signal) {
+  const asked = who.slug ? "lacuerda=" + encodeURIComponent(who.slug) : "lacuerda_name=" + encodeURIComponent(who.name || "");
+  return fetch("/api/artist?" + asked, {signal, headers: {"Accept": "application/json"}})
+    .then(r => r.json().then(data => ({status: r.status, data})))
+    .then(({status: code, data}) => {
+      if (data.error) { if (!(who.quiet && code === 404)) status.textContent = data.error; return null; }
+      return data;
+    })
     .catch(e => { if (e.name !== "AbortError") status.textContent = "The list failed: " + e.message; return null; });
 }
 
@@ -345,14 +359,34 @@ function openSiteArtist(a, focus) {
   const mine = ++typed;
   if (inflight) inflight.abort();
   inflight = new AbortController();
-  status.textContent = "Listing " + a.artist + "'s songs on LaCuerda…";
-  getSiteArtist(a.slug, inflight.signal).then(data => { if (data && mine === typed) showSiteArtist(data, focus); });
+  status.textContent = "Listing the songs of " + a.artist + " on LaCuerda…";
+  getSiteArtist({slug: a.slug}, inflight.signal).then(data => { if (data && mine === typed) showSiteArtist(data, focus); });
 }
 
-function showSiteArtist(data, focus, unread) {
+// Read a LaCuerda page ({slug} or {name}) from the button ``go`` in ``offer``, then list the artist's songs; a read
+// that leaves none to list says what LaCuerda answered, under the offer (ROWS_SCRIPT's readOutcome).
+function readThenShow(who, go, offer) {
+  const mine = typed;
+  go.disabled = true;
+  rowKit.readArtistPage(csrf, who, words => { status.textContent = words; }).then(read => {
+    if (mine !== typed || !offer.isConnected) return;
+    if (read.error) { go.disabled = false; status.textContent = read.error; return; }
+    getSiteArtist(Object.assign({quiet: true}, who)).then(page => {
+      if (mine !== typed || !offer.isConnected) return;
+      if (page && page.read) { showSiteArtist(page, true); return; }
+      const line = read.job && read.job.line && typeof read.job.line === "object" ? read.job.line : {};
+      go.disabled = line.tone === "missing";  // no such page: asking again finds none either
+      offer.querySelectorAll(".read-outcome").forEach(x => x.remove());
+      const said = rowKit.readOutcome(read.job);
+      offer.append(said);
+      status.textContent = said.firstChild.textContent.trim();
+    });
+  });
+}
+
+function showSiteArtist(data, focus) {
   results.replaceChildren();
   artistOpen = "lacuerda:" + data.slug;
-  const mine = typed;
   const head = el("div", "artist-head");
   const name = el("h2", null, data.artist);
   name.tabIndex = -1;
@@ -361,23 +395,8 @@ function showSiteArtist(data, focus, unread) {
   status.textContent = data.artist + ": " + (data.read ? many(data.total, "song") + " on LaCuerda." :
     "caracole hasn't read their page on LaCuerda yet.");
   if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
-  results.append(...rowKit.siteArtistSongs(data, group, (pick, display) => lookUp(pick, display), null, (go, offer) => {
-    go.disabled = true;
-    rowKit.readArtistPage(csrf, data.slug, words => { status.textContent = words; }).then(read => {
-      if (mine !== typed || !offer.isConnected) return;
-      if (read.error) { go.disabled = false; status.textContent = read.error; return; }
-      getSiteArtist(data.slug).then(again => {
-        if (again && mine === typed && offer.isConnected) showSiteArtist(again, true, again.read ? null : read.job);
-      });
-    });
-  }));
-  if (unread && !data.read) {  // read, and still nothing: what LaCuerda answered is in the request's output
-    const why = el("p", "hint", "LaCuerda gave caracole no songs of theirs this time: ");
-    const details = el("a", null, "see what it answered");
-    details.href = "/jobs?job=" + Number(unread.id) + "#job-" + Number(unread.id);
-    why.append(details, document.createTextNode("."));
-    results.append(why);
-  }
+  results.append(...rowKit.siteArtistSongs(data, group, (pick, display) => lookUp(pick, display), null,
+    (go, offer) => readThenShow({slug: data.slug}, go, offer)));
   if (focus) name.focus();
 }
 

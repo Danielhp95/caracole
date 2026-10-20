@@ -1578,6 +1578,72 @@ def test_reading_a_lacuerda_artists_page_is_one_command_in_the_queue(app, conn, 
     assert line["text"] == "Done" and line["details"]  # what LaCuerda answered is in its output
 
 
+def test_the_search_offers_to_read_the_page_of_a_name_lacuerda_hasnt_listed_yet(app, conn):
+    # The owner's "estopa", with E not read yet: no artist of theirs in the index is no sign LaCuerda lacks them.
+    lacuerda_index(conn)  # E and J read whole
+    data = as_json(get(app, "/api/search?q=caifanes"))
+    assert data["lacuerda_artists"] == [] and data["lacuerda_unlisted"] == {"name": "caifanes", "letter": "C"}
+    assert as_json(get(app, "/api/search?q=estopa"))["lacuerda_unlisted"] is None  # listed: their row says it
+    assert as_json(get(app, "/api/search?q=enrique%20bunbury"))["lacuerda_unlisted"] is None  # E is read whole
+    # A title on Ultimate Guitar is no name to read; the artist the query names there is the one.
+    from caracole.ug.index import upsert_rows
+
+    creep_index(conn)
+    upsert_rows(conn, [(3003, "caifanes", "afuera", "chords", "caifanes/afuera-chords-3003")], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    conn.commit()
+    assert as_json(get(app, "/api/search?q=creep"))["lacuerda_unlisted"] is None
+    assert as_json(get(app, "/api/search?q=caifanes%20afuera"))["lacuerda_unlisted"] == {
+        "name": "Caifanes", "letter": "C"}
+    # An artist only near the name is no answer: Bomba Estereo, for "soda stereo".
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+
+    li.store_artists(conn, "tabs/b/index0.html", [LCArtist("bomba_estereo", "Bomba Estereo", 5)])
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=soda%20stereo"))
+    assert [a["artist"] for a in data["lacuerda_artists"]] == ["Bomba Estereo"]
+    assert data["lacuerda_unlisted"] == {"name": "soda stereo", "letter": "S"}
+
+
+def test_a_page_read_by_name_is_searched_at_once_and_its_request_says_what_lacuerda_answered(cfg, conn):
+    from helpers.lacuerda_site import artist_page
+
+    from caracole import db
+    from caracole import lacuerda_index as li
+
+    lacuerda_index(conn)  # E and J read whole: C, Caifanes', isn't
+
+    def read(args, emit):  # caracole lacuerda --artist, as it takes the page in
+        c = db.connect(cfg.db_path)
+        try:
+            li.store_artist_page(c, "caifanes", artist_page("Caifanes", "caifanes", ("afuera", "Afuera", "R-1")))
+            c.commit()
+        finally:
+            c.close()
+        emit("Read: LaCuerda's page of Caifanes lists 1 song, in the index now.")
+        return 0
+
+    queue = JobQueue(read)
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    assert as_json(get(app, "/api/search?q=caifanes"))["lacuerda_artists"] == []  # an answer kept a few minutes
+    data = as_json(post(app, "/lacuerda/artist", {"name": "  caifanes "}, accept="application/json"))
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("lacuerda", "--artist=caifanes") and job.display == "caifanes on LaCuerda"
+    queue.run_pending()
+    after = as_json(get(app, "/api/search?q=caifanes"))  # the read's over: no answer kept from before it
+    assert [a["artist"] for a in after["lacuerda_artists"]] == ["Caifanes"] and after["lacuerda_unlisted"] is None
+    page = as_json(get(app, "/api/artist?lacuerda_name=caifanes"))
+    assert (page["slug"], page["read"], [h["title"] for h in page["songs"]]) == ("caifanes", True, ["Afuera"])
+    assert as_json(get(app, data["url"]))["line"] == {
+        "tone": "added", "text": "Read: LaCuerda's page of Caifanes lists 1 song, in the index now.", "link": None,
+        "details": None}
+    assert get(app, "/api/artist?lacuerda_name=nobody%20at%20all").status == 404
+    for name in ("!!!", "", "x" * 201):
+        assert post(app, "/lacuerda/artist", {"name": name}).status == 400, name
+    assert len(queue.snapshot()) == 1
+
+
 def test_get_it_on_a_lacuerda_song_keeps_that_sheet(app, cfg, queue, conn):
     url = LC + "estopa/como_camaron"
     response = lookup(app, {"artist": "Estopa", "title": "Como Camarón", "lacuerda": url})

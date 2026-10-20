@@ -60,9 +60,11 @@ element, the same as a song's row, to put in a ``<div class="rows">``.
 ``window.caracole.icons`` the icons' data. ``ROWS_SCRIPT`` also draws the
 offline indexes' hits, as ``/api/search`` and ``/api/artist`` give them
 (``ugHit``, ``artistHit``, ``siteHit``, ``siteArtist`` and ``siteArtistSongs``,
-LaCuerda's artists and their songs, with ``readArtistPage``, which asks the
-server to read an artist's page), for this page's search of the sites and the
-lookup page alike.
+LaCuerda's artists and their songs, ``siteUnlisted``, a name under a letter its
+listings aren't read to yet, with ``readArtistPage``, which asks the server to
+read an artist's page, by its slug or by a name, and ``readOutcome``, what
+LaCuerda answered a read that left nothing to list), for this page's search of
+the sites and the lookup page alike.
 
 **One bar.** The search box filters your songs as you type, here, asking
 nothing. Enter, or Search all, searches the sites too. The file can ask
@@ -74,7 +76,11 @@ songs, gtptabs.com's pages and MuseScore's (``GET /api/search``, a moment after
 the last key, the newest query alone, the sites left out, or searched in part,
 said with why), each with Get it (``POST /lookup``), whose request's line shows
 in the result's own row. A LaCuerda artist's Songs lists the songs the index
-holds of theirs, or offers to read their page (``POST /lacuerda/artist``). Enter never
+holds of theirs, or offers to read their page (``POST /lacuerda/artist``), and
+so does a query LaCuerda's index has no artist by while the listing of its
+letter isn't read whole. A wanted song whose sheet you picked on LaCuerda says
+that tonight's run gets it (``lacuerda``), and isn't a song not found
+(``notFound``). Enter never
 spends a request. The request form sits under the results, filled in from
 the query.
 
@@ -707,6 +713,7 @@ ROWS_STYLE = """
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .read-page { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0 0; }
 .read-page p { flex: 1 1 22rem; margin: 0; color: var(--muted); }
+.read-page .read-outcome { flex: 1 1 100%; }
 @media (pointer: coarse) { .read-page .btn { min-height: 44px; } }
 .actions form { margin: 0; }
 .subhead { margin: 2px 0 -2px; color: var(--muted); font-size: .75rem; font-weight: 650; letter-spacing: .06em;
@@ -1317,26 +1324,40 @@ const caracoleRows = (icons) => {
     const p = page && typeof page === "object" ? page : {};
     const songs = listOf(p.songs).filter((h) => h && typeof h === "object");
     if (p.read) return group("LaCuerda, the most popular first · " + many(songs.length, "song"), songs.map((h) => siteHit(h, get, later)));
+    const name = String(p.artist || "");
     const box = el("div", "read-page");
-    box.appendChild(el("p", null, "caracole hasn't read " + String(p.artist || "") + "'s page on LaCuerda yet, which lists " +
+    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on LaCuerda yet, which lists " +
       many(p.listed, "song") + ". Reading it is one request to LaCuerda, at a lookup's pace."));
-    const go = button("Read their page", "small primary", (e) => read(e.currentTarget, box), "Read " + String(p.artist || "") +
-      "'s page on LaCuerda");
-    box.appendChild(go);
+    box.appendChild(button("Read their page", "small primary", (e) => read(e.currentTarget, box),
+      "Read the page of " + name + " on LaCuerda"));
     return [el("h2", "group", "LaCuerda"), box];
   };
-  // Read a LaCuerda artist's page now (POST lacuerda/artist: caracole lacuerda --artist, a job in the queue, one
-  // request), then follow the job until it is over; ``said(text)`` hears how it goes. Resolves with the job, or
-  // with why there is none.
-  const readArtistPage = (csrf, slug, said) => new Promise((resolve) => {
+  // A query LaCuerda's index has no artist by, under a letter its listings aren't read to yet (/api/search's
+  // lacuerda_unlisted): the index can't tell whether LaCuerda has them, their page can (``read(button, box)``).
+  const siteUnlisted = (u, read) => {
+    const x = u && typeof u === "object" ? u : {};
+    const name = String(x.name || "");
+    const box = el("div", "read-page unlisted");
+    box.appendChild(el("p", null, "LaCuerda hasn't listed " + String(x.letter || "") + " yet, so caracole can't " +
+      "tell whether it has “" + name + "”. Reading the page of that name is a request to LaCuerda (one per " +
+      "spelling of it tried, usually one), at a lookup's pace."));
+    box.appendChild(button("Read LaCuerda's page for “" + name + "”", "small primary", (e) => read(e.currentTarget, box)));
+    return [el("h2", "group", "LaCuerda"), box];
+  };
+  // Read a LaCuerda artist's page now (POST lacuerda/artist: caracole lacuerda --artist, a job in the queue), by
+  // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), then follow the job until it
+  // is over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
+  const readArtistPage = (csrf, who, said) => new Promise((resolve) => {
     const gone = () => resolve({ error: "caracole serve can't be reached: is it still running?" });
-    const body = new URLSearchParams({ csrf: String(csrf || ""), slug: String(slug || "") });
-    said("Asking for their page…");
+    const w = who && typeof who === "object" ? who : {};
+    const body = new URLSearchParams(w.slug ? { csrf: String(csrf || ""), slug: String(w.slug) }
+      : { csrf: String(csrf || ""), name: String(w.name || "") });
+    said("Asking for the page…");
     fetch("lacuerda/artist", { method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" } })
       .then((r) => r.json().catch(() => null).then((data) => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         if (!ok || !data || typeof data.url !== "string" || !/^[/]api[/]jobs[/]\d+$/.test(data.url)) {
-          resolve({ error: (data && data.error) || "caracole didn't read their page." });
+          resolve({ error: (data && data.error) || "caracole didn't read the page." });
           return;
         }
         const follow = () => fetch(data.url, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } })
@@ -1345,7 +1366,7 @@ const caracoleRows = (icons) => {
             if (!job || typeof job !== "object") {
               resolve({ error: "That request is gone: caracole serve restarted, maybe." });
             } else if (job.active) {
-              said(job.state === "queued" ? "Waiting for the request before it…" : "Reading their page on LaCuerda…");
+              said(job.state === "queued" ? "Waiting for the request before it…" : "Reading the page on LaCuerda…");
               setTimeout(follow, 700);
             } else {
               resolve({ job });
@@ -1354,6 +1375,22 @@ const caracoleRows = (icons) => {
         follow();
       }, gone);
   });
+  // A read that left no songs to list: what LaCuerda answered, as its request's line says it ("Not read: LaCuerda is
+  // cooling down…", "Not found: …"), and its output on the requests page.
+  const readOutcome = (job) => {
+    const j = job && typeof job === "object" ? job : {};
+    const line = j.line && typeof j.line === "object" && typeof j.line.text === "string" ? j.line.text : "";
+    const said = /^(Read|Not read|Not found): /.test(line) ? line + " " : "LaCuerda gave caracole no songs of theirs this time. ";
+    const why = el("p", "hint read-outcome", said);
+    const id = Number(j.id);
+    if (Number.isInteger(id) && id > 0) {
+      const details = el("a", null, "See what it answered");
+      details.href = "jobs?job=" + id + "#job-" + id;
+      why.appendChild(details);
+      why.appendChild(document.createTextNode("."));
+    }
+    return why;
+  };
   // A paragraph of the server's, its commands in backticks as the terminal prints them: those as code.
   const prose = (cls, text) => {
     const p = el("p", cls);
@@ -1363,7 +1400,7 @@ const caracoleRows = (icons) => {
     return p;
   };
   return { resultRow, sourceMark, link, button, many, counts, opener, ugHit, artistHit, siteHit, siteArtist,
-    siteArtistSongs, readArtistPage, prose };
+    siteArtistSongs, siteUnlisted, readArtistPage, readOutcome, prose };
 };
 """
 
@@ -1514,8 +1551,8 @@ _SCRIPT = r"""
   // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
-  const { sourceMark, link, resultRow, button, many, ugHit, artistHit, siteHit, siteArtist, siteArtistSongs, readArtistPage,
-    prose } = caracoleRows(ICONS);  // ROWS_SCRIPT
+  const { sourceMark, link, resultRow, button, many, ugHit, artistHit, siteHit, siteArtist, siteArtistSongs, siteUnlisted,
+    readArtistPage, readOutcome, prose } = caracoleRows(ICONS);  // ROWS_SCRIPT
   // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -2596,6 +2633,13 @@ _SCRIPT = r"""
       box.append(...group("LaCuerda · " + counted.filter(Boolean).join(" · "),
         [...lcArtists.map((a) => siteArtist(a, openSiteArtist)), ...lc.map((h) => siteHit(h, getIt, later))]));
     }
+    // No artist of LaCuerda's by that name, under a letter its listings aren't read to yet: their page may say.
+    const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
+    if (unlisted) {
+      const [heading, offer] = siteUnlisted(unlisted, (go, at) => readThenShow({ name: String(unlisted.name || "") }, go, at));
+      if (!lc.length) box.appendChild(heading);
+      box.appendChild(offer);
+    }
     if (gtp.length) {
       box.append(...group("Guitar Pro on gtptabs.com · " + many(gtp.length, "song"), gtp.map((h) => siteHit(h, getIt, later))));
     }
@@ -2690,13 +2734,16 @@ _SCRIPT = r"""
   };
 
   // A LaCuerda artist's songs in place of the sites' results, as an Ultimate Guitar artist's are: those the index
-  // holds, or, while caracole hasn't read their page, a button that reads it (one request, a job) and then lists them.
-  const sitePage = (slug, signal) => fetch("api/artist?lacuerda=" + encodeURIComponent(slug),
+  // holds, or, while caracole hasn't read their page, a button that reads it (a job) and then lists them. ``who``
+  // names them by the slug of their page ({ slug }) or by a name ({ name }: a page read by name); ``quiet``, a 404
+  // isn't said.
+  const sitePage = (who, signal) => fetch("api/artist?" + (who.slug ? "lacuerda=" + encodeURIComponent(String(who.slug))
+    : "lacuerda_name=" + encodeURIComponent(String(who.name || ""))),
     { signal, credentials: "same-origin", headers: { Accept: "application/json" } })
     .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
     .then((reply) => {
       if (!reply.ok || !reply.body || reply.body.error) {
-        say(failure(reply).line.text);
+        if (!(who.quiet && reply.status === 404)) say(failure(reply).line.text);
         return null;
       }
       return reply.body;
@@ -2710,13 +2757,39 @@ _SCRIPT = r"""
     const mine = asked;
     if (asking) asking.abort();
     asking = new AbortController();
-    say("Listing " + String(a.artist) + "'s songs on LaCuerda…");
-    sitePage(String(a.slug || ""), asking.signal).then((page) => {
+    say("Listing the songs of " + String(a.artist) + " on LaCuerda…");
+    sitePage({ slug: String(a.slug || "") }, asking.signal).then((page) => {
       if (page && mine === asked && state.all) showSiteArtist(page);
     });
   };
-  const showSiteArtist = (page, unread) => {
+  // Read a LaCuerda page (``who``: { slug } or { name }) from the button ``go`` in ``offer``, then list the artist's
+  // songs; a read that leaves none to list says what LaCuerda answered, under the offer.
+  const readThenShow = (who, go, offer) => {
     const mine = asked;
+    go.disabled = true;
+    readArtistPage(server.csrf, who, say).then((read) => {
+      if (mine !== asked || !state.all || !offer.isConnected) return;
+      if (read.error) {
+        go.disabled = false;
+        say(read.error);
+        return;
+      }
+      sitePage(Object.assign({ quiet: true }, who)).then((page) => {
+        if (mine !== asked || !state.all || !offer.isConnected) return;
+        if (page && page.read) {
+          showSiteArtist(page);
+          return;
+        }
+        const line = read.job && read.job.line && typeof read.job.line === "object" ? read.job.line : {};
+        go.disabled = line.tone === "missing";  // no such page: asking again finds none either
+        offer.querySelectorAll(".read-outcome").forEach((x) => x.remove());
+        const said = readOutcome(read.job);
+        offer.appendChild(said);
+        say(said.firstChild.textContent.trim());
+      });
+    });
+  };
+  const showSiteArtist = (page) => {
     const box = document.createDocumentFragment();
     const head = el("div", "artist-head");
     const name = el("h2", null, page.artist);
@@ -2726,28 +2799,8 @@ _SCRIPT = r"""
     box.appendChild(head);
     const theirs = listOf(page.library).map((x) => byIndex.get(Number(x && x.id))).filter((i) => i !== undefined);
     if (theirs.length) box.append(...group("Yours by " + page.artist, theirs.map(rowFor)));
-    box.append(...siteArtistSongs(page, group, getIt, later, (go, offer) => {
-      go.disabled = true;
-      readArtistPage(server.csrf, page.slug, say).then((read) => {
-        if (mine !== asked || !state.all || !offer.isConnected) return;
-        if (read.error) {
-          go.disabled = false;
-          say(read.error);
-          return;
-        }
-        sitePage(String(page.slug)).then((again) => {
-          if (again && mine === asked && state.all && offer.isConnected) showSiteArtist(again, again.read ? null : read.job);
-        });
-      });
-    }));
-    if (unread && !page.read) {  // read, and still nothing: what LaCuerda answered is in the request's output
-      const why = el("p", "hint", "LaCuerda gave caracole no songs of theirs this time: ");
-      const details = el("a", null, "see what it answered");
-      details.href = "jobs?job=" + Number(unread.id) + "#job-" + Number(unread.id);
-      why.appendChild(details);
-      why.appendChild(document.createTextNode("."));
-      box.appendChild(why);
-    }
+    box.append(...siteArtistSongs(page, group, getIt, later,
+      (go, offer) => readThenShow({ slug: String(page.slug || "") }, go, offer)));
     mineBox.hidden = true;
     sitesBox.replaceChildren(box);
     say(page.artist + ": " + (page.read ? many(page.total, "song") + " on LaCuerda" : "caracole hasn't read their page yet"));

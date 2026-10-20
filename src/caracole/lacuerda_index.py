@@ -32,7 +32,9 @@ an artist, a title or both: each hit says which reading scored it (``via``). The
 apart from the songs, and a song only its artist's name matched is in its artist's row
 (``LaCuerdaHit.top``), never a hit of its own. As most artists' songs aren't in the index, an
 artist whose whole name is words of the query among others ("estopa como camaron") is a
-possible match: ``NAMED`` (80), by "both", below a strong hit.
+possible match: ``NAMED`` (80), by "both", below a strong hit. While a letter's listing isn't
+read whole, no artist found is no sign that LaCuerda lacks them: ``unread_letter`` says under
+which letter a name would be, for a search to offer reading the page of that name.
 """
 
 from __future__ import annotations
@@ -63,6 +65,7 @@ from caracole.lacuerda import (
     LCArtist,
     LCSong,
     Listing,
+    artist_slug_candidates,
     artist_url,
     best_acordes_version,
     is_missing_artist_page,
@@ -220,6 +223,22 @@ def letters_read(conn: sqlite3.Connection) -> list[str]:
         if first is not None and all(listing_path(letter, p) in indexed for p in first.get("pages", ())):
             done.append(letter)
     return done
+
+
+def unread_letter(conn: sqlite3.Connection, name: str) -> str | None:
+    """The letter (``LETTERS``) whose listing an artist of this name would be in, while the index hasn't read
+    it whole (an empty index has read none): no artist of theirs in the index is no sign that LaCuerda lacks
+    them then, and their page can tell. The first unread letter of the slugs their page may have
+    (``lacuerda.artist_slug_candidates``); None once those letters are read, or the whole index is, and for
+    a name no slug can be made of."""
+    if complete_at(conn) is not None:
+        return None
+    read = set(letters_read(conn))
+    for slug in artist_slug_candidates(name):
+        letter = "_num" if slug[0].isdigit() else slug[0]
+        if letter in LETTERS and letter not in read:
+            return letter
+    return None
 
 
 _LETTER_NAMES = {"_num": "#", "nn": "Ñ"}

@@ -1443,6 +1443,47 @@ def test_cli_search_artist_lists_lacuerdas_songs_of_theirs_too(tmp_path):
     assert "No artist named nobody at all in LaCuerda's index" in nobody
 
 
+def test_cli_offers_to_read_the_page_of_an_artist_under_a_letter_lacuerda_hasnt_listed_yet(tmp_path):
+    # The owner's "estopa", with LaCuerda's listings read up to B: the index can't tell, Estopa's page can.
+    from caracole import lacuerda_index as li
+    from caracole.db import kv_set_json
+    from caracole.lacuerda import LCArtist
+
+    conn = seed(tmp_path, rows=ROWS + [CAMARON_UG])
+    offer = 'LaCuerda hasn\'t listed E yet: caracole lacuerda --artist "estopa" reads the page of “estopa” now'
+    empty = " ".join(lc_part(run(tmp_path, "search", "estopa").output).split())
+    assert "Nothing yet: LaCuerda's index is empty" in empty and offer in empty
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist("andres_calamaro", "Andrés Calamaro", 325)])
+    kv_set_json(conn, li.PAGES_KEY, {f"tabs/{x}/index0.html": {"pages": ["index0.html"]} for x in "ab"})
+    conn.commit()
+    partial = " ".join(lc_part(run(tmp_path, "search", "estopa").output).split())
+    assert "still being read: 1 artist so far, those of A, B;" in partial
+    assert offer + " (a request for each spelling of the name tried, usually one)." in partial
+    by_artist = " ".join(lc_part(run(tmp_path, "search", "--artist", "estopa").output).split())
+    assert "No artist named estopa in LaCuerda's index" in by_artist and offer in by_artist
+    # The artist the query names on Ultimate Guitar is the name read; a title there is no name at all.
+    both = " ".join(lc_part(run(tmp_path, "search", "el barrio como camaron").output).split())
+    assert 'caracole lacuerda --artist "El Barrio" reads the page of “El Barrio” now' in both
+    assert "hasn't listed" not in lc_part(run(tmp_path, "search", "creep").output)
+    # Nothing to offer for an artist the index lists, or a name under a letter read whole.
+    assert "hasn't listed" not in lc_part(run(tmp_path, "search", "andres calamaro").output)
+    assert "hasn't listed" not in lc_part(run(tmp_path, "search", "bunbury").output)
+
+
+def test_the_name_whose_lacuerda_page_may_tell_is_the_one_the_query_names_on_ultimate_guitar(conn):
+    from caracole.search import ArtistHit, IndexHit, lacuerda_unlisted
+
+    creep = IndexHit("radiohead", "creep", {"chords": 3}, 100.0, "u", artist="Radiohead", title="Creep", via="title")
+    the_creep = ArtistHit("the-creep", "The Creep", 100.0, 1, 1)
+    camaron = IndexHit("el-barrio", "como-camaron", {"chords": 1}, 100.0, "u", artist="El Barrio",
+                       title="Como Camaron", via="both")
+    assert lacuerda_unlisted(conn, "estopa") == ("estopa", "E")  # an empty index has read no letter
+    assert lacuerda_unlisted(conn, "creep", [the_creep], [creep], "song") is None  # a title leads: no name
+    assert lacuerda_unlisted(conn, "the creep", [the_creep], [creep], "artist") == ("The Creep", "C")  # as creep
+    assert lacuerda_unlisted(conn, "el barrio como camaron", [], [camaron], "song") == ("El Barrio", "B")
+    assert lacuerda_unlisted(conn, "!!!") is None  # no page's address can be made of it
+
+
 def test_cli_says_when_lacuerdas_index_is_empty_or_still_being_read(tmp_path):
     from caracole.db import kv_set_json
 

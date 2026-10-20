@@ -79,8 +79,11 @@ songs.py's, in the `removed` table).
   title, `_known_song`: a possible match), never the sites; `search_lacuerda` reads
   LaCuerda's index (lacuerda_index.py `find`): its songs as `SiteHit`s with the page of the
   sheet a lookup keeps (`sheet`), its artists as `SiteArtist` rows (`known`: the songs it holds
-  of theirs, 0 until caracole read their page), and `lacuerda_left_out` what it lacks (empty,
-  or the letters read so far). Its prefilter reads
+  of theirs, 0 until caracole read their page), `lacuerda_left_out` what it lacks (empty,
+  or the letters read so far), and `lacuerda_unlisted` a name it has no artist by under a
+  letter not read whole yet (`lacuerda_index.unread_letter`), whose page the user may have
+  read (`caracole lacuerda --artist NAME`), never a title Ultimate Guitar's index reads as one.
+  Its prefilter reads
   ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
   must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
@@ -101,9 +104,12 @@ songs.py's, in the `removed` table).
   `search_lacuerda`; `skipped`, the sites it left out and why, and `partial`, LaCuerda's
   index while its listings are still read), one at a time, the newest first, an older one's
   SQL interrupted once a newer waits (`set_progress_handler`); `/api/artist?key=` an
-  artist's songs, 50 at a time, `?lacuerda=SLUG` a LaCuerda artist's that the index holds,
-  and `POST /lacuerda/artist` queues `caracole lacuerda --artist` (`jobs.LACUERDA_ARTIST`)
-  to read their page; `/api/jobs[/<id>]`; every `/api/` read refused to
+  artist's songs, 50 at a time, `?lacuerda=SLUG` (or `?lacuerda_name=NAME`, once a page
+  read by name) a LaCuerda artist's that the index holds, and `POST /lacuerda/artist` queues
+  `caracole lacuerda --artist` (`jobs.LACUERDA_ARTIST`) to read their page, by `slug` or by
+  `name`; once one is over, the search answers kept are dropped (`_after_reads`);
+  `/api/jobs[/<id>]`, a read's with its `line` (status.py reads what LaCuerda answered from
+  the command's last line: "Read: ", "Not found: ", "Not read: "); every `/api/` read refused to
   another site's fetch, `security.own_page_read`; `POST /lookup`, which runs a song your
   library has, by its id or found from the UG pick (`_Mine`: its match, or its names'
   `name_forms`), under its own names and writes no wanted.txt line for it;
@@ -147,7 +153,8 @@ songs.py's, in the `removed` table).
   library), for a page whose CSP refuses a test's script; helpers/browser.py's `Browser` is the
   same with typing, Enter, clicks and the layout read back, for the lookup page's tests and the
   library page's bar (test_web_page_search.py: a real `caracole serve`, its queue running a fake
-  `caracole get`; test_web_page_lacuerda.py, LaCuerda's group and an artist page read). Both
+  `caracole get`; test_web_page_lacuerda.py, LaCuerda's group, an artist page read by slug or
+  by name, and a picked song's card). Both
   resolve no host name (`helpers.browser.NO_LOOKUPS`), and their tests are `@in_chromium` too.
   fixtures/ holds UG, LaCuerda, LRCLIB,
   gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and

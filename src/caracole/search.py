@@ -79,7 +79,7 @@ import re
 import sqlite3
 from collections import Counter
 from dataclasses import dataclass
-from typing import Iterable, Mapping, NamedTuple, Sequence
+from typing import TYPE_CHECKING, Iterable, Mapping, NamedTuple, Sequence
 
 from rapidfuzz import fuzz
 
@@ -98,6 +98,9 @@ from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
 from caracole.songs import Song, list_songs
 from caracole.ug.key_search import rows_like
 from caracole.ug.lookup import IndexTab, song_tabs
+
+if TYPE_CHECKING:
+    from caracole.lacuerda_index import LaCuerdaHit
 
 MIN_SCORE = 70  # below this a hit is noise
 STRONG = 90  # a hit this good is the song you meant
@@ -480,6 +483,21 @@ def lacuerda_artist(conn: sqlite3.Connection, slug: str) -> SiteArtist | None:
     return _lacuerda_artist(conn, hit)
 
 
+def lacuerda_artist_named(conn: sqlite3.Connection, name: str) -> SiteArtist | None:
+    """One artist of LaCuerda's index by their name, as LaCuerda writes it or as you do (``lacuerda_index.name_key``,
+    of each of the name's forms too), as ``lacuerda_artist`` gives them: the one the index holds most of; None
+    for a name it has no artist by."""
+    from caracole.lacuerda_index import name_key
+
+    keys = [k for k in dict.fromkeys([name_key(name), *(name_key(f) for f in name_forms(name))]) if k]
+    if not keys:
+        return None
+    marks = ", ".join("?" for _ in keys)
+    row = conn.execute(f"SELECT artist_slug FROM lacuerda_index WHERE artist_key IN ({marks}) GROUP BY artist_slug "
+                       "ORDER BY COUNT(*) DESC, artist_slug LIMIT 1", keys).fetchone()
+    return lacuerda_artist(conn, row[0]) if row is not None else None
+
+
 def lacuerda_songs(conn: sqlite3.Connection, slug: str, *, title: str | None = None) -> list[SiteHit]:
     """The songs LaCuerda's index holds of an artist, most popular first, as LaCuerda orders them; none
     until caracole has read their page. With ``title``, only those whose title it matches, best first."""
@@ -513,12 +531,36 @@ def lacuerda_left_out(conn: sqlite3.Connection) -> tuple[str, str] | None:
                        f"far{those}; the nightly run reads the rest")
 
 
-def _lacuerda_song(h) -> SiteHit:
+def lacuerda_unlisted(conn: sqlite3.Connection, query: str, artists: Sequence[ArtistHit] = (),
+                      songs: Sequence[IndexHit] = (), lead: str | None = None) -> tuple[str, str] | None:
+    """For a query LaCuerda's index has no artist by, while it hasn't read whole the listing of the letter their
+    name would be in (``lacuerda_index.unread_letter``): the name whose page can tell whether LaCuerda has them,
+    and that letter as LaCuerda's menu names it ("E"). The Ultimate Guitar index's answer (``artists``, ``songs``,
+    ``lead``, as ``find_index`` gives them) says what the query names: a song by its title alone that leads
+    ("creep", beside the artist The Creep) is no name, so none; else the artist that leads, or the artist of a
+    strong song by its artist and title ("Estopa" for "estopa como camaron"); else the query. None when the
+    index can tell."""
+    from caracole.lacuerda_index import letters_text, unread_letter
+
+    strong = [h for h in songs if h.score >= STRONG]
+    first = strong[0] if strong else None
+    name = query
+    if artists and (lead == "artist" or first is None or first.via != "title"):
+        name = artists[0].artist
+    elif first is not None and first.via == "both" and first.artist:
+        name = first.artist
+    elif first is not None and first.via == "title":
+        return None
+    letter = unread_letter(conn, name)
+    return (name, letters_text([letter])) if letter is not None else None
+
+
+def _lacuerda_song(h: LaCuerdaHit) -> SiteHit:
     return SiteHit("lacuerda", h.title, h.url, h.score, h.artist, h.artist_key, h.title_key,
                    uploads=len(h.versions), via=h.via, sheet=h.sheet_url)
 
 
-def _lacuerda_artist(conn: sqlite3.Connection, a) -> SiteArtist:
+def _lacuerda_artist(conn: sqlite3.Connection, a: LaCuerdaHit) -> SiteArtist:
     known = conn.execute("SELECT COUNT(*) FROM lacuerda_index WHERE artist_slug = ? AND title != ''",
                          (a.artist_slug,)).fetchone()[0]
     return SiteArtist("lacuerda", a.artist, a.artist_slug, a.url, a.score, max(a.songs, known), known, a.via,

@@ -1924,6 +1924,24 @@ read their page, the line that reads it, one request:
       Joaquín Sabina · LaCuerda · 241 songs
          caracole hasn't read their page: caracole lacuerda --artist joaquin_sabina reads it (one request)
 
+While the nightly run hasn't read the listing of a name's letter whole, the
+index can't tell whether LaCuerda has an artist it doesn't list: for a query
+it has no artist by, under such a letter, the group ends with the line that
+reads the page of that name now. The name is the artist the query names on
+Ultimate Guitar (`El Barrio` for "el barrio como camaron"), else the query;
+a query Ultimate Guitar's index reads as a title ("creep") gets no such line:
+
+    $ caracole search estopa
+    …
+    On LaCuerda (offline index)
+      nothing matches
+
+      LaCuerda's index is still being read: 2,957 artists so far, those of #, A, B;
+      the nightly run reads the rest.
+
+      LaCuerda hasn't listed E yet: caracole lacuerda --artist "estopa" reads the
+      page of “estopa” now (a request for each spelling of the name tried, usually one).
+
 A song's line adds it as your pick there (`caracole add --lacuerda`), so the
 nightly run keeps that sheet; a song LaCuerda has no chords for ("1 version,
 no chords") is added by its names alone. `--add N` takes LaCuerda's hits too,
@@ -1977,7 +1995,16 @@ with it. A KEY that is no key exits with status 2.
   lists the songs the index holds of theirs, LaCuerda's most popular first, or,
   for an artist whose page caracole has never read, says how many it lists and
   offers Read their page, which queues `caracole lacuerda --artist` (one
-  request, at the lookup pace) and lists them once it has run), **Guitar Pro on gtptabs.com**
+  request, at the lookup pace) and lists them once it has run; and for a query
+  it has no artist by, while the nightly run hasn't read the listing of its
+  letter whole, says so and offers Read LaCuerda's page for “estopa”, which
+  queues `caracole lacuerda --artist estopa` (a request for each spelling of
+  the name tried, usually one), then lists their songs, or says what LaCuerda
+  answered: `Not found: LaCuerda has no artist page for estopa.`, or, for a
+  cooldown, a block, a spent hour's budget or an error, `Not read: …`, with a
+  link to the request's output. The name is the artist the query names on
+  Ultimate Guitar, else the query; a title there, "creep", gets no offer. Once
+  a page is read, a search finds their songs at once), **Guitar Pro on gtptabs.com**
   (five songs with a file there), and **MuseScore** (five pages whose title is
   what you typed, or what you typed less an artist's name before or after it,
   when that artist has a song of that title in the Ultimate Guitar index,

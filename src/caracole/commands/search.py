@@ -169,21 +169,21 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
     elif more:
         typer.echo(f"  … and {more} more: see them with --limit {limit + more}")
     if key is not None:
-        typer.echo("\nThe offline Ultimate Guitar index has no keys: search it without --key.")
+        typer.echo("\nThe offline Ultimate Guitar and LaCuerda indexes have no keys: search them without --key.")
         return
 
     typer.echo("\nOn Ultimate Guitar (offline index)")
     known = _library_keys(conn)
-    shown, hint = 0, None
+    shown, hint, ug = 0, None, None
     if not _index_built(conn):
         typer.echo(f"  Nothing yet: {_EMPTY_INDEX}.")
     else:
-        listing = _listing(conn, ask, limit)
+        listing = ug = _listing(conn, ask, limit)
         _print_listing(listing, known)
         shown = len(listing.hits)
         hint = _hint(ask, listing, library[0][0] if library else None, _overrides(cfg))
     typer.echo(f"\n{LACUERDA}")
-    _print_listing(_lacuerda_listing(conn, ask, limit), known, start=shown)
+    _print_listing(_lacuerda_listing(conn, ask, limit, ug), known, start=shown)
     if hint:  # Ultimate Guitar's bare ids: after every place's hits
         typer.echo("\n" + _wrap(hint))
 
@@ -293,19 +293,23 @@ def _print_listing(listing: _Listing, known: set[tuple[str, str]],
             typer.echo(_index_lines(n, part, known, paste or _add_line))
 
 
-def _lacuerda_listing(conn: sqlite3.Connection, ask: _Ask, limit: int) -> _Listing:
+def _lacuerda_listing(conn: sqlite3.Connection, ask: _Ask, limit: int, ug: _Listing | None = None) -> _Listing:
     """LaCuerda's index's answer as the search prints it, at most ``limit`` songs, numbered on after Ultimate
     Guitar's. An artist that leads comes first, with their most popular songs with chords; any other artist
     the query names is a line. Then what the index lacks: all of it while it is empty, or the letters not
-    read yet (``search.lacuerda_left_out``)."""
-    from caracole.search import lacuerda_left_out, search_lacuerda
+    read yet (``search.lacuerda_left_out``); and, for a name it has no artist by under a letter not read
+    yet, the line that reads the page of that name (``search.lacuerda_unlisted``, which weighs the Ultimate
+    Guitar index's answer, ``ug``)."""
+    from caracole.search import STRONG, lacuerda_left_out, search_lacuerda
 
     left = lacuerda_left_out(conn)
     if left is not None and left[0] == "empty":
         return _Listing((f"  Nothing yet: LaCuerda's {left[1]} (`caracole lacuerda --index` reads them now, "
-                         "a run's budget at a time).",))
+                         "a run's budget at a time).", *_lacuerda_offer(conn, ask, ug)))
+    artists: list[SiteArtist] = []
     if ask.artist is not None:
-        parts = _lacuerda_artist_parts(conn, ask, limit)
+        parts, found = _lacuerda_artist_parts(conn, ask, limit)
+        artists = [found] if found is not None else []
     elif ask.title is not None:
         songs = [h for h in search_lacuerda(conn, ask.title, songs=limit, artists=0)[1] if h.via == "title"]
         parts = list(songs) or ["  nothing matches"]
@@ -329,9 +333,34 @@ def _lacuerda_listing(conn: sqlite3.Connection, ask: _Ask, limit: int) -> _Listi
         for a in others:
             parts += ["", *_lacuerda_artist_head(a, False, also=True)]
     if left is not None:
-        parts += ["", textwrap.fill(f"LaCuerda's {left[1]}.", 88, initial_indent="  ", subsequent_indent="  ",
-                                    break_long_words=False, break_on_hyphens=False)]
+        parts += ["", _fill(f"LaCuerda's {left[1]}.")]
+    if not any(a.score >= STRONG for a in artists):  # none of theirs it found is the name ("Bomba Estereo")
+        parts += _lacuerda_offer(conn, ask, ug)
     return _Listing(tuple(parts))
+
+
+def _lacuerda_offer(conn: sqlite3.Connection, ask: _Ask, ug: _Listing | None) -> list[str]:
+    """For a name LaCuerda's index has no artist by, while its listing of their letter isn't read
+    (``search.lacuerda_unlisted``), the line that reads the page of that name now: ``--artist``'s, or the one
+    the query names; none when the index can tell, and for a title (``--title``, or a query Ultimate Guitar's
+    index reads as one)."""
+    from caracole.search import lacuerda_unlisted
+
+    if ask.title is not None:
+        return []
+    found = (lacuerda_unlisted(conn, ask.artist) if ask.artist is not None else
+             lacuerda_unlisted(conn, ask.text, *((ug.artists, ug.songs, ug.lead) if ug is not None else ())))
+    if found is None:
+        return []
+    name, letter = found
+    return ["", _fill(f"LaCuerda hasn't listed {letter} yet: caracole lacuerda --artist {_quote(name)} reads "
+                      f"the page of “{name}” now (a request for each spelling of the name tried, usually one).")]
+
+
+def _fill(text: str) -> str:
+    """A note of LaCuerda's group, wrapped and indented, its words and commands whole."""
+    return textwrap.fill(text, 88, initial_indent="  ", subsequent_indent="  ", break_long_words=False,
+                         break_on_hyphens=False)
 
 
 def _lacuerda_artist_head(a: SiteArtist, top: bool, *, also: bool = False) -> list[str]:
@@ -344,17 +373,19 @@ def _lacuerda_artist_head(a: SiteArtist, top: bool, *, also: bool = False) -> li
     return [head, f"     caracole hasn't read their page: caracole lacuerda --artist {a.slug} reads it (one request)"]
 
 
-def _lacuerda_artist_parts(conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[str | SiteHit]:
+def _lacuerda_artist_parts(conn: sqlite3.Connection, ask: _Ask,
+                           limit: int) -> tuple[list[str | SiteHit], SiteArtist | None]:
     """``--artist NAME``'s part of LaCuerda: the songs the index holds of the artist the name is, most popular
-    first (with QUERY words, those whose titles they match), or how to read their page."""
+    first (with QUERY words, those whose titles they match), or how to read their page; and that artist, None
+    for a name the index has no artist by."""
     from caracole.search import STRONG, lacuerda_songs, search_lacuerda
 
     named = [a for a in search_lacuerda(conn, ask.artist or "", songs=0, artists=1)[0] if a.score >= STRONG]
     if not named:
-        return [f"  No artist named {ask.artist} in LaCuerda's index"]
+        return [f"  No artist named {ask.artist} in LaCuerda's index"], None
     a = named[0]
     if not a.known:
-        return _lacuerda_artist_head(a, False)
+        return list(_lacuerda_artist_head(a, False)), a
     songs = lacuerda_songs(conn, a.slug, title=ask.text or None)
     head = (f"  {a.artist} · LaCuerda · their songs titled like {ask.text}:" if ask.text else
             f"  {a.artist} · LaCuerda · {a.known:,} of their {_count(a.songs, 'song')} in the index, the most "
@@ -362,7 +393,7 @@ def _lacuerda_artist_parts(conn: sqlite3.Connection, ask: _Ask, limit: int) -> l
     parts: list[str | SiteHit] = [head, *songs[:limit]] if songs else [head, "  nothing matches"]
     if len(songs) > limit:
         parts.append(f"  … and {len(songs) - limit} more: see them with --limit {len(songs)}")
-    return parts
+    return parts, a
 
 
 def _lacuerda_lines(n: int, hit: SiteHit, known: set[tuple[str, str]]) -> str:
