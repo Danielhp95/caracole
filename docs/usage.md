@@ -1059,10 +1059,18 @@ or a UG song the list hasn't, exits 1 and writes nothing. This is what the
 picker of `caracole serve` runs (see [caracole serve](#caracole-serve)).
 
 A song not found has no candidates, but `--pick` also takes one of the first
-five songs `caracole search "ARTIST TITLE"` finds for it, by number or as
-ARTIST/SONG, leaving out those you rejected for it. That writes `[match]`
-alone: no `[alias]`, since a song under another artist's name may as well be
-a cover as another spelling.
+five songs `caracole search` finds for its artist and title, leaving out
+those you rejected for it. `caracole review --song "ARTIST - TITLE"` with no
+answer lists them, numbered as `--pick` takes them, and writes nothing:
+
+    Radio Head - Crep: not found under this name. What caracole search "Radio Head Crep" finds for it, without the songs you rejected for it:
+      1) 88  radiohead/creep  https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-1
+    Pick one with caracole review --song "Radio Head - Crep" --pick N, or ARTIST/SONG: that writes [match] alone, no [alias].
+
+Go by these numbers, or by ARTIST/SONG, never by `caracole search`'s own:
+it numbers the songs you rejected too. A pick writes `[match]` alone: no
+`[alias]`, since a song under another artist's name may as well be a cover
+as another spelling.
 
 ## Browse and search
 

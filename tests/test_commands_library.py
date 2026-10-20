@@ -431,6 +431,72 @@ def test_review_song_of_a_song_not_found_takes_only_a_search_hit(tmp_path, args,
     assert message in result.output and overrides_text(tmp_path) == ""
 
 
+HALLELUJAH = "Leonard Cohenn - Hallelujah"  # its title is "Hallelujah (Live)": (Live) is left out
+
+
+def not_found_with_a_rejected_hit(tmp_path):
+    """Leonard Cohenn's "Hallelujah (Live)", not found, and its best search hit rejected for it already."""
+    from caracole.overrides import add_reject
+
+    conn, sid = not_found(tmp_path)
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(11, 'leonard-cohen', 'hallelujah', 'chords', '1', 'x', 'leonard-cohen/hallelujah-chords-11'), "
+                 "(12, 'leonard-cohen', 'hallelujah-anthem', 'chords', '1', 'x', "
+                 "'leonard-cohen/hallelujah-anthem-chords-12'), "
+                 "(13, 'leonard-cohen', 'hallelujah-for-two', 'chords', '1', 'x', "
+                 "'leonard-cohen/hallelujah-for-two-chords-13')")
+    lost, _ = upsert_song(conn, artists=["Leonard Cohenn"], title="Hallelujah (Live)", album=None, duration_ms=None,
+                          isrc=None, source="wanted", source_id="h", added_at="2026-10-18T00:00:00Z")
+    update_song(conn, lost, match_decision="not_found")
+    add_reject(tmp_path / "lib" / "overrides.toml", HALLELUJAH, ["leonard-cohen/hallelujah"])
+    return conn, lost
+
+
+def numbered(output: str) -> dict[str, str]:
+    """The UG songs a listing numbers, by their ARTIST/SONG: ``{"leonard-cohen/hallelujah-anthem": "1"}``."""
+    import re
+
+    return {ref: n for n, ref in re.findall(r"^\s+(\d+)\)\s+\d+\s+(\S+/\S+)", output, re.M)}
+
+
+def test_review_song_lists_a_song_not_founds_search_hits_numbered_as_pick_takes_them(tmp_path):
+    # caracole search numbers every hit, the rejected one too; --pick numbers them without it, as
+    # `caracole review --song` lists them: the number it shows is the one that picks the song.
+    conn, lost = not_found_with_a_rejected_hit(tmp_path)
+    listed = run(tmp_path, "review", "--song", HALLELUJAH)
+    assert listed.exit_code == 0, listed.output
+    hits = numbered(listed.output)
+    assert "leonard-cohen/hallelujah" not in hits and set(hits) >= {"leonard-cohen/hallelujah-anthem",
+                                                                     "leonard-cohen/hallelujah-for-two"}
+    searched = run(tmp_path, "search", "Leonard Cohenn Hallelujah").output
+    assert "  2. Leonard Cohen - Hallelujah Anthem" in searched and hits["leonard-cohen/hallelujah-anthem"] == "1"
+    # The search it ran, as you'd type it: the title as caracole compares it, "(Live)" left out.
+    assert 'caracole search "Leonard Cohenn Hallelujah"' in listed.output
+    assert f'caracole review --song "{HALLELUJAH}" --pick N' in listed.output
+    assert "[match]" not in overrides_text(tmp_path)  # a list writes nothing
+    picked = run(tmp_path, "review", "--song", HALLELUJAH, "--pick", hits["leonard-cohen/hallelujah-anthem"])
+    assert picked.exit_code == 0, picked.output
+    assert f'[match]\n"{HALLELUJAH}" = "leonard-cohen/hallelujah-anthem"' in overrides_text(tmp_path)
+    assert get_song(conn, lost).match_song_key == "hallelujah-anthem"
+
+
+def test_review_song_pick_of_a_song_not_found_names_the_list_its_numbers_come_from(tmp_path):
+    not_found_with_a_rejected_hit(tmp_path)
+    result = run(tmp_path, "review", "--song", HALLELUJAH, "--pick", "9")
+    assert result.exit_code == 1, result.output
+    assert f'has no candidate 9 now: caracole review --song "{HALLELUJAH}" lists them' in result.output
+
+
+def test_review_song_of_a_song_not_found_with_no_hit_says_so(tmp_path):
+    conn, sid = not_found(tmp_path)
+    lost, _ = upsert_song(conn, artists=["Nobody"], title="Nothing Like It", album=None, duration_ms=None,
+                          isrc=None, source="wanted", source_id="n", added_at="2026-10-18T00:00:00Z")
+    update_song(conn, lost, match_decision="not_found")
+    result = run(tmp_path, "review", "--song", "Nobody - Nothing Like It")
+    assert result.exit_code == 0, result.output
+    assert "caracole search finds nothing close to it" in result.output and numbered(result.output) == {}
+
+
 def test_scan_reports_music_and_inbox(tmp_path):
     seed(tmp_path)
     (tmp_path / "music").mkdir()

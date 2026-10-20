@@ -118,15 +118,16 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
         overrides = load_ovr(cfg)
         conn = open_db(cfg)
         song = _song_named(conn, display)
-        searched = not song.review and pick is not None and song.match_decision == "not_found"
+        searched = pick is not None and _searched(song, overrides)
         if song.status == "ignored" or song.key in overrides.ignore or not (song.review or searched):
             fail(f'"{song.display}" doesn\'t need review, so nothing was written.')
         if searched:
             cands = search_candidates(conn, song, rejected=overrides.reject.get(song.key, frozenset()))
-            again = f'caracole search "{song.artist} {song.title}"'
         else:
             cands = candidates_of(song)
-            again = f'caracole review --song "{song.display}"'
+        # It lists them numbered as --pick takes them, which caracole search doesn't: it numbers the
+        # songs rejected for the song too.
+        again = f'caracole review --song "{song.display}"'
         stats = ReviewStats()
         try:
             if pick is not None:
@@ -151,6 +152,36 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
         typer.echo(_counts(stats))
         typer.echo(f"Wrote {path} and {page}")
         typer.echo(_now(get_song(conn, song.id)))
+
+
+def _searched(song: Song, overrides: Overrides) -> bool:
+    """Whether ``--pick`` takes one of the song's search hits: a song not found, and not ignored."""
+    return (not song.review and song.match_decision == "not_found" and song.status != "ignored"
+            and song.key not in overrides.ignore)
+
+
+def _list_hits(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> None:
+    """``caracole review --song`` of a song not found: what ``caracole search`` finds for it, numbered
+    as ``--pick`` takes them (``review.search_candidates``), without the songs rejected for it, which
+    ``caracole search`` lists and numbers too. It writes nothing, so it takes no lock."""
+    from caracole.normalize import clean_title
+    from caracole.review import ref, search_candidates
+    from caracole.ug.lookup import song_tabs
+
+    hits = search_candidates(conn, song, rejected=overrides.reject.get(song.key, frozenset()))
+    if not hits:
+        typer.echo(f"{song.display}: not found, and caracole search finds nothing close to it in the offline "
+                   "Ultimate Guitar index. caracole goes on looking for it, on its artist's UG page too.")
+        return
+    search = f'caracole search "{song.artist} {clean_title(song.title)}"'
+    typer.echo(f"{song.display}: not found under this name. What {search} finds for it, without the songs "
+               "you rejected for it:")
+    for n, c in enumerate(hits, start=1):
+        tabs = song_tabs(conn, c["artist_key"], c["song_key"])
+        url = f"  {tabs[0].url}" if tabs else ""
+        typer.echo(f"  {n}) {float(c.get('score') or 0):.0f}  {ref(c)}{url}")
+    typer.echo(f'Pick one with caracole review --song "{song.display}" --pick N, or ARTIST/SONG: that writes '
+               "[match] alone, no [alias].")
 
 
 def _picked(cands: list[dict], pick: str) -> dict | None:
@@ -196,7 +227,8 @@ def register(app: typer.Typer) -> None:
         ctx: typer.Context,
         song: str | None = typer.Option(
             None, "--song", metavar='"ARTIST - TITLE"',
-            help="Only this song: ask about it alone, or answer for it with --pick or --none.",
+            help="Only this song: ask about it alone (a song not found: list the search hits --pick takes), "
+                 "or answer for it with --pick or --none.",
         ),
         pick: str | None = typer.Option(
             None, "--pick", metavar="N|ARTIST/SONG",
@@ -225,9 +257,15 @@ def register(app: typer.Typer) -> None:
         if song is not None and (pick is not None or none):
             _answer(cfg, song, pick, shown)
             return
-        load_ovr(cfg)  # a broken file stops here, before a question whose answer it couldn't keep
+        overrides = load_ovr(cfg)  # a broken file stops here, before a question whose answer it couldn't keep
         conn = open_db(cfg)
-        only = None if song is None else {_song_named(conn, song).id}
+        only = None
+        if song is not None:
+            one = _song_named(conn, song)
+            if _searched(one, overrides):  # nothing to ask: what --pick takes for it
+                _list_hits(conn, one, overrides)
+                return
+            only = {one.id}
         written: list[Path] = []
 
         def read(prompt: str) -> str:  # the prompts end in ": "; Enter answers ""
