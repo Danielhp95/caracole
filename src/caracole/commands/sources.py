@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 import typer
 
 from caracole import db
-from caracole.commands._common import exclusive, fail, load_cfg, open_db, utcnow, write_pages
+from caracole.commands._common import LOCK_NAME, exclusive, fail, load_cfg, open_db, utcnow, write_pages
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -267,7 +267,8 @@ def add_song(
     written with status 1. The file is the source of truth, so a database that
     can't be opened or updated is no failure: it's reported in ``db_error``.
     ``conn`` is the caller's open database; without one, it's opened here. The
-    line is written at once; the database waits for caracole's lock. After the
+    line is written at once; the database, and the pick, wait for caracole's lock (a lock file that
+    can't be opened exits with status 1 when there is a pick to write). After the
     sync, the song is matched against the offline index (``_match_added``), and
     _todo.md and index.html are rewritten (``_write_pages``).
     """
@@ -282,26 +283,29 @@ def add_song(
         fail(f"can't add this song: {e}", 2)
     except OSError as e:
         fail(f"can't update {path}: {e.strerror or e}")
-    pick = _record_lacuerda(cfg, line, lacuerda) if lacuerda is not None else None
+    pick = None
     try:
-        with (
-            exclusive(cfg, "add", fatal=False),
-            nullcontext(conn) if conn is not None else closing(db.connect(cfg.db_path)) as conn,
-        ):
-            known = find_song(conn, line.identity)
-            removed = removed_song(conn, line.identity)
-            stats = sync_wanted(conn, path, utcnow())
-            song = find_song(conn, line.identity)
-            if pick is not None and song is not None and song.lacuerda_checked_at is not None:
-                from caracole.songs import update_song
-
-                update_song(conn, song.id, lacuerda_checked_at=None)  # a new pick is asked for at once
-            overrides = _page_overrides(cfg)
-            match = _match_added(conn, cfg, song, overrides) if song is not None else None
-            if match is not None and match.result is not None:
+        with exclusive(cfg, "add", fatal=False):
+            # overrides.toml is in the library: the pick is written under the lock, as its other writers do.
+            pick = _record_lacuerda(cfg, line, lacuerda) if lacuerda is not None else None
+            with nullcontext(conn) if conn is not None else closing(db.connect(cfg.db_path)) as conn:
+                known = find_song(conn, line.identity)
+                removed = removed_song(conn, line.identity)
+                stats = sync_wanted(conn, path, utcnow())
                 song = find_song(conn, line.identity)
-            _write_pages(conn, cfg, overrides)
+                if pick is not None and song is not None and song.lacuerda_checked_at is not None:
+                    from caracole.songs import update_song
+
+                    update_song(conn, song.id, lacuerda_checked_at=None)  # a new pick is asked for at once
+                overrides = _page_overrides(cfg)
+                match = _match_added(conn, cfg, song, overrides) if song is not None else None
+                if match is not None and match.result is not None:
+                    song = find_song(conn, line.identity)
+                _write_pages(conn, cfg, overrides)
     except (sqlite3.Error, OSError) as e:
+        if lacuerda is not None and pick is None:  # no lock: the pick is never written without it
+            fail(f"the song is in wanted.txt, but its LaCuerda pick can't be recorded in overrides.toml without "
+                 f"caracole's lock: can't open {cfg.state_dir / LOCK_NAME}: {e.strerror or e}")
         return AddedSong(line, listed, db_error=e, lacuerda=pick)
     return AddedSong(line, listed, known, song, tuple(stats.errors), match=match, removed=removed, lacuerda=pick)
 
@@ -312,7 +316,7 @@ def _record_lacuerda(cfg: Config, line: WantedLine, url: str) -> str:
 
     try:
         add_lacuerda(cfg.overrides_file, f"{line.artist} - {line.title}", url)
-    except OverridesError as e:
+    except (OverridesError, OSError) as e:
         fail(f"the song is in wanted.txt, but its LaCuerda pick can't be recorded in overrides.toml: {e}")
     return lacuerda_pick_from_url(url).url
 

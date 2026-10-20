@@ -181,6 +181,18 @@ def test_add_with_lacuerda_records_the_sheet_you_picked_there_for_tonights_run(t
     assert "Tu Calorro" not in wanted_file(tmp_path).read_text(encoding="utf-8")
 
 
+def test_add_with_lacuerda_writes_no_pick_without_caracoles_lock(tmp_path):
+    # overrides.toml is in the library, which only a caracole holding the lock writes: with a lock file that
+    # can't be opened (its folder is a file), the line is in wanted.txt, but the pick isn't written unlocked.
+    (tmp_path / "state").write_text("not a folder", encoding="utf-8")
+    url = "https://acordes.lacuerda.net/estopa/como_camaron"
+    result = run(tmp_path, "add", "--lacuerda", url, "Estopa", "Como Camarón")
+    assert result.exit_code == 1, result.output
+    assert "Estopa - Como Camarón" in wanted_file(tmp_path).read_text(encoding="utf-8")
+    assert "caracole's lock" in result.output and "caracole.lock" in result.output
+    assert not (tmp_path / "lib" / "overrides.toml").exists()
+
+
 def test_add_a_chinese_song_with_album_and_duration(tmp_path):
     result = run(tmp_path, "add", "宋冬野", "斑马斑马", "--album", "安和桥北", "--duration", "4:13")
     assert result.exit_code == 0, result.output
