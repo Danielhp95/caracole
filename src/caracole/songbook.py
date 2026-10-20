@@ -368,7 +368,7 @@ def _songs(doc, header: str):
     return table["songs"]
 
 
-def _check_free(books: Sequence[Songbook], name: str, *, but: Songbook | None = None) -> None:
+def check_free(books: Sequence[Songbook], name: str, *, but: Songbook | None = None) -> None:
     """Refuse a name another songbook has, or whose folder another songbook's would be."""
     for book in books:
         if book is but:
@@ -387,7 +387,7 @@ def make_songbook(path: Path, name: str, entries: Sequence[str]) -> Songbook:
     songs = [_entry(e, f"[{_quoted(clean)}]") for e in entries]
 
     def change(doc, books: list[Songbook]) -> Songbook:
-        _check_free(books, clean)
+        check_free(books, clean)
         table = tomlkit.table()
         array = tomlkit.array()
         array.extend(songs)
@@ -458,7 +458,7 @@ def rename_songbook(path: Path, name: str, new: str) -> Songbook:
     def change(doc, books: list[Songbook]) -> Songbook:
         header = _header(doc, name)
         book = find_songbook(books, header)
-        _check_free(books, clean, but=book)
+        check_free(books, clean, but=book)
         if header != clean:
             doc._replace(header, clean, doc[header])  # tomlkit's way to keep the table, comments and place
         return Songbook(clean, book.songs if book else ())
@@ -739,35 +739,37 @@ def _record(conn: sqlite3.Connection, folder: str) -> dict[str, Any]:
 def written_page(conn: sqlite3.Connection, folder: str) -> tuple[str, int] | None:
     """The SHA-256 and the length of the songbook.html caracole last wrote in ``_songbooks/<folder>/``,
     or None: as ``render.written_file`` does for a sheet's viewer, so that a server serves the page
-    only while it is still those bytes (``served_page``)."""
+    only while it is still those bytes (``pages_written``)."""
     entry = _record(conn, folder)["files"].get(HTML_NAME)
-    if not (isinstance(entry, Mapping) and isinstance(entry.get("sha256"), str) and isinstance(entry.get("size"), int)):
+    if not (isinstance(entry, Mapping) and isinstance(entry.get("sha256"), str) and type(entry.get("size")) is int):
         return None
     return entry["sha256"], entry["size"]
 
 
-def served_page(conn: sqlite3.Connection, library_dir: Path, path: str) -> bytes | None:
-    """The bytes of a songbook's page for a server, at ``path`` in the library
-    (``_songbooks/<folder>/songbook.html``), only while they are the ones caracole wrote
-    (``written_page``); None otherwise. Anyone with a synced device can put a page in the library:
-    serve it with ``viewer.book.songbook_csp()``. It is read once, never through a link, and the bytes
-    checked are the bytes served."""
-    parts = path.split("/")
+def pages_written(conn: sqlite3.Connection, library_dir: Path, parts: tuple[str, ...]) -> list[tuple[str, int]]:
+    """The record of the songbook page a server is asked for, by its path's parts in the library
+    (``("_songbooks", "Campfire", "songbook.html")``): the SHA-256 and the length of the page caracole
+    last wrote there (``written_page``), [] for any other path or none written.
+
+    Anyone with a synced device can put a page in the library, whose script would run as the
+    server's: a server sends a songbook's page only while it is still those bytes, read without
+    following a link, with ``viewer.book.songbook_csp`` of them as its policy (web/songbooks.py).
+    ``library_dir`` goes unused (the record is by folder name, as render_songbooks keeps it): the
+    lookups of the server's pages all take the same arguments.
+    """
     if len(parts) != 3 or parts[0] != FOLDER or parts[2] != HTML_NAME:
-        return None
+        return []
     folder = parts[1]
-    if not folder or folder.startswith(".") or "\x00" in folder:
-        return None
+    if not folder or folder.startswith(".") or "\x00" in folder or "/" in folder:
+        return []
     written = written_page(conn, folder)
-    if written is None:
-        return None
-    try:
-        data = read_regular(library_dir / FOLDER / folder / HTML_NAME)
-    except (OSError, ValueError):
-        return None
-    if len(data) != written[1] or hashlib.sha256(data).hexdigest() != written[0]:
-        return None
-    return data
+    return [] if written is None else [written]
+
+
+# What a server says for a songbook page it won't send: index.html links it whatever is there.
+PAGE_REFUSED = ("This songbook page isn't the one caracole last wrote here (it was changed on a synced device, "
+                "say, or caracole has no record of it), so the server won't send it: caracole songbook render "
+                "writes it again. The songbook's PDF is beside it.")
 
 
 def _book_folder(library_dir: Path, book: Songbook) -> Path:

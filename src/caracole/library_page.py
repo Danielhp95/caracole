@@ -1070,6 +1070,8 @@ _SONGBOOK_STYLE = """
 .sb-more > summary { min-height: 40px; color: var(--muted); font-size: .85rem; font-weight: 600; cursor: pointer; }
 .sb-more form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
 .sb-more .f { flex: 1 1 180px; }
+.sb-sure { display: flex; flex: 1 1 100%; align-items: center; gap: 10px; min-height: 44px; font-size: .9rem; }
+.sb-sure input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
 .sb-error { margin: 0 16px 16px; color: var(--failed); font-weight: 600; overflow-wrap: anywhere; }
 .pick { display: none; }
 .selecting .card .mono { display: none; }
@@ -1496,7 +1498,9 @@ def _songbook_card(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, 
                              f'value="{esc(book.name, quote=True)}"></label>'
                              '<button class="btn" type="submit">Rename</button>')
             + _songbook_form("delete", book.name, controls,
-                             f'<button class="btn" type="submit">Delete {esc(book.name)} and its files</button>')
+                             '<label class="sb-sure"><input type="checkbox" required> Delete it, and the files '
+                             'caracole made of it</label>'
+                             f'<button class="btn" type="submit">Delete {esc(book.name)}</button>')
             + "</details>\n"
         )
     else:

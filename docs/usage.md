@@ -1125,7 +1125,7 @@ with it. A KEY that is no key exits with status 2.
 
 `caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
 [--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with three things the file on disk can't
+`http://127.0.0.1:8737/` by default, with four things the file on disk can't
 do:
 
 - **Request a song.** The form at the top takes an artist, a title and,
@@ -1144,6 +1144,15 @@ do:
   runs and what each printed (the newest request's output open), and
   refreshes itself every 10 seconds while one waits or runs. Stop refreshing
   keeps it still, so an output stays open to read.
+- **Songbooks.** Select's Make songbook (or Add to a songbook there is) runs
+  `caracole songbook make NAME "ARTIST - TITLE"...` (or `add`) with the songs
+  in the order you ticked them. In the Songbooks section, ↑ and ↓ move a song,
+  × takes it out, and Rename or delete renames the songbook or, once you tick
+  the box, deletes it and the files caracole made of it; each runs its
+  `caracole songbook` command (see [Songbooks](#songbooks)), and the Requests
+  page shows how it went. A change that can't be made, such as a name another
+  songbook has, a song no longer in the library or a songbook deleted since
+  the page was made, is refused at once, and nothing runs.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
@@ -1152,10 +1161,19 @@ last request any caracole sent, and keeps the budgets and cooldowns. The
 queue holds 20 requests and one per song: asking again for a song gives its
 request, and Fetch it now on a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
-loses no song. The page links each
+loses no song. A songbook change waits in the queue like a request; the same
+change sent twice is queued once. The server writes no songbook itself: the
+command does, under caracole's lock. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
 and Guitar Pro files as downloads, never through a symbolic link, never a
-hidden file, and never the database, the token or the cache.
+hidden file, and never the database, the token or the cache. A songbook's page,
+`_songbooks/<name>/songbook.html`, is sent only while it is the very page
+caracole wrote there, as recorded when it wrote it (anyone with a synced device
+could put a page of their own in the library), and in a sandbox: its scripts
+run, but it can reach neither the server nor your sign-in, and keeps no
+storage, so the song it shows is the one in its address (`#song-3`). Edited
+on a device, or replaced by a link, it gets a page saying so until the next
+`caracole render` (or `caracole songbook render`) writes it again.
 
 Who can reach it:
 
@@ -1201,7 +1219,9 @@ in `Library/_songbooks/<name>/`:
   missing ones, and Contents goes back. Opened again, the page takes you back
   to the song you had open, where you were in it; the contents mark it as
   "last opened". Without JavaScript, or printed, it is every song one after
-  the other.
+  the other. Served by `caracole serve`, it runs in a sandbox without the
+  browser's storage: each song keeps its address (`#song-3`) but not your
+  place or settings.
 - **`songbook.cho`**: every song's ChordPro, in its key, split by
   `{new_song}`, to import into a songbook app such as SongbookPro or OnSong.
   chordpro writes it, so the chords are already transposed; songs without a
@@ -1266,6 +1286,10 @@ A NAME is found in any case. Each change writes songbooks.toml, makes the
 songbook's files and rewrites `_todo.md` and `index.html`, holding caracole's
 lock; `list` and `show` only read, and never wait. A songbooks.toml that can't
 be read exits 2.
+
+`index.html` lists the songbooks and makes the commands to change them, and
+`caracole serve` runs them from the page (see
+[Library/index.html](#libraryindexhtml) and [caracole serve](#caracole-serve)).
 
 `caracole render` and the nightly run make the songbooks' files after the
 sheets, and a file only when what it is made from changed: its songs, their

@@ -124,6 +124,8 @@ def test_the_served_page_reorders_takes_out_renames_and_deletes(library):
     assert 'name="song" value="Muse - Hysteria"' in moves[1] and 'name="position" value="1"' in moves[1]
     rename = next(body for a, body in forms if a == "/songbook/rename")
     assert re.search(r'<input name="new" required maxlength="80"', rename)
+    delete = next(body for a, body in forms if a == "/songbook/delete")
+    assert '<input type="checkbox" required>' in delete  # a tap alone deletes nothing
 
 
 def test_the_data_names_the_songbooks_for_the_select_bar(library):

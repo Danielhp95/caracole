@@ -12,7 +12,9 @@ A small server from the standard library (``http.server``), in four parts:
   and keeps the pause after the last request any caracole sent, as it does
   from a terminal, so the server is never more aggressive than the CLI.
 - app.py: the routes, as a function from a request to a response, and
-  server.py, which puts it on a socket.
+  server.py, which puts it on a socket. songbooks.py has the songbook forms,
+  each queued as its ``caracole songbook`` command, and each songbook's page,
+  sent only while it is the page caracole wrote.
 
 The server itself never takes caracole's lock. It reads the database, as
 ``caracole search`` does, and writes only wanted.txt, as ``caracole add`` does

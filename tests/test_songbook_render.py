@@ -24,9 +24,9 @@ from caracole.songbook import (
     delete_songbook,
     make_songbook,
     move_in_songbook,
+    pages_written,
     rename_songbook,
     render_songbooks,
-    served_page,
     songbooks_file,
     written_page,
 )
@@ -283,18 +283,17 @@ def test_the_bytes_written_are_recorded(conn, cfg, two):
     assert set(record["files"]) == {"songbook.pdf", "songbook.html", "songbook.cho"}
 
 
-def test_a_server_gets_the_page_only_while_it_is_caracoles(conn, cfg, two):
+def test_a_server_finds_the_pages_record_by_its_path(conn, cfg, two):
     render(conn, cfg)
     page = (folder(cfg) / "songbook.html").read_bytes()
-    assert served_page(conn, cfg.library_dir, "_songbooks/Campfire/songbook.html") == page
-    for path in ("_songbooks/Campfire/songbook.pdf", "_songbooks/../index.html", "Campfire/songbook.html",
-                 "_songbooks/Picnic/songbook.html", "_songbooks/.x/songbook.html"):
-        assert served_page(conn, cfg.library_dir, path) is None, path
-    (folder(cfg) / "songbook.html").write_bytes(page.replace(b"Creep", b"Creeq"))  # a device's page now
-    assert served_page(conn, cfg.library_dir, "_songbooks/Campfire/songbook.html") is None
-    (folder(cfg) / "songbook.html").unlink()
-    (folder(cfg) / "songbook.html").symlink_to(cfg.library_dir / "index.html")
-    assert served_page(conn, cfg.library_dir, "_songbooks/Campfire/songbook.html") is None
+    record = (hashlib.sha256(page).hexdigest(), len(page))
+    assert pages_written(conn, cfg.library_dir, ("_songbooks", "Campfire", "songbook.html")) == [record]
+    for parts in (("_songbooks", "Campfire", "songbook.pdf"), ("_songbooks", "..", "index.html"),
+                  ("Campfire", "songbook.html"), ("_songbooks", "Picnic", "songbook.html"),
+                  ("_songbooks", ".x", "songbook.html"), ("x", "_songbooks", "Campfire", "songbook.html")):
+        assert pages_written(conn, cfg.library_dir, parts) == [], parts
+    kv_set_json(conn, "songbook:Campfire", {"files": {"songbook.html": {"sha256": record[0], "size": "big"}}})
+    assert pages_written(conn, cfg.library_dir, ("_songbooks", "Campfire", "songbook.html")) == []
 
 
 # --- songbooks that go, and files that aren't caracole's ------------------------------------------------

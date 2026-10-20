@@ -59,7 +59,8 @@ and `search --key`).
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed), jobs.py (the queue: each
   request runs the `caracole` CLI in a child process, one command at a time), app.py (the
-  routes), pages.py, server.py (`http.server`). The page is library_page.py's, with
+  routes), songbooks.py (the songbook forms, each queued as its `caracole songbook` command,
+  and songbook.html, read only while caracole's), pages.py, server.py (`http.server`). The page is library_page.py's, with
   `WebControls`.
 - `viewer/`: the sheet viewer render.py writes beside each PDF. page.py builds the page
   (`build_viewer`) from the song's .cho (sheet.py reads it back); theory.py names chords and
@@ -73,8 +74,8 @@ and `search --key`).
   (`build_songbook`): a section per song, made as page.py makes a sheet.html, and book.js,
   which runs before viewer.js and gives the song it shows the element ids viewer.js looks
   for; book.css and book.js are inlined and hashed too. A server serves it only while
-  `songbook.served_page` (kv `songbook:<folder>`) says it is caracole's, with
-  `book.songbook_csp()`.
+  `songbook.pages_written` (kv `songbook:<folder>`) matches it, with
+  `book.songbook_csp(page)`, the policy of those bytes in a sandbox, as its header.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.

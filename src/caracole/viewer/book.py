@@ -18,16 +18,17 @@ the viewer starts afresh on each song.
 
 The page is self-contained and loads nothing, as a sheet.html: a Content-Security-Policy
 with the hashes of its two scripts and two stylesheets. A server serves it only while it
-is the page caracole wrote, with ``songbook_csp()``.
+is the page caracole wrote, with ``songbook_csp(page)``.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from functools import lru_cache
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -82,10 +83,34 @@ def assets_version() -> str:
     return digest.hexdigest()
 
 
-def songbook_csp() -> str:
-    """The Content-Security-Policy header a server sends with a songbook's page caracole wrote: the
-    page's own policy in a sandbox, as ``viewer_csp`` is a sheet's."""
-    return "sandbox allow-scripts; " + _policy()
+def songbook_csp(page: bytes) -> str:
+    """The Content-Security-Policy header a server sends with ``page``, a songbook's page caracole wrote.
+
+    It is the page's own policy, as its ``<meta>`` tag holds it (its two scripts and two
+    stylesheets, by their hashes, and nothing else to load, no form to send, no base to change),
+    with a sandbox, which a ``<meta>`` policy can't set: the page then runs in an origin of its
+    own, with no cookie, no storage and no way to ask the server for anything. Its scripts still
+    run; the address (``#song-3``) says which song it shows.
+
+    The policy is the page's, not this caracole's: a page written before an upgrade carries the
+    hashes of the scripts it was written with, until the next render writes it again. A page whose
+    policy can't be read, or wouldn't fit in a header, gets a sandbox that runs and loads nothing.
+    Serve only a page still as caracole wrote it (``songbook.pages_written``): anyone with a synced
+    device can put a page of their own in the library, and its policy too.
+    """
+    found = _META_POLICY.search(page)
+    try:
+        policy = unescape(found.group(1).decode("utf-8")) if found else ""
+    except UnicodeDecodeError:
+        policy = ""
+    return "sandbox allow-scripts; " + policy if _HEADER_TEXT.fullmatch(policy) else _NOTHING
+
+
+# The page's own policy, as build_songbook writes it; what a header may hold (no line break); and the
+# header for a page whose policy can't be read: a sandbox that runs and loads nothing.
+_META_POLICY = re.compile(rb'<meta http-equiv="Content-Security-Policy" content="([^"<>]*)">')
+_HEADER_TEXT = re.compile(r"[ -~]+")
+_NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
 
 
 def _policy() -> str:
