@@ -1,4 +1,4 @@
-from caracole.ug.lookup import IndexTab, artist_known, artist_tab_ids, learned_artist_url, remember_artist_url, song_tabs
+from caracole.ug.lookup import IndexTab, artist_known, learned_artist_url, remember_artist_url, song_tabs
 
 
 def index(conn, rows):
@@ -33,7 +33,6 @@ def test_index_tab_url_is_the_slugged_page(conn):
 def test_artist_helpers(conn):
     index(conn, [(10, "soda-stereo", "persiana-americana", "tabs"), (7, "soda-stereo", "signos", "chords")])
     assert artist_known(conn, "soda-stereo") and not artist_known(conn, "joaquin-sabina")
-    assert artist_tab_ids(conn, "soda-stereo") == [7, 10]
     assert learned_artist_url(conn, "soda-stereo") is None
     remember_artist_url(conn, "soda-stereo", "https://www.ultimate-guitar.com/artist/soda_stereo_2946")
     assert learned_artist_url(conn, "soda-stereo").endswith("soda_stereo_2946")

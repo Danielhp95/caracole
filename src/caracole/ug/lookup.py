@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
-from caracole.db import kv_get, kv_set
+from caracole.db import kv_delete, kv_get, kv_set
 from caracole.normalize import split_variant
 from caracole.ug.page import page_url
 
@@ -42,14 +42,6 @@ def song_tabs(conn: sqlite3.Connection, artist_key: str, song_key: str) -> list[
     return out
 
 
-def artist_tab_ids(conn: sqlite3.Connection, artist_key: str, limit: int = 5) -> list[int]:
-    """A few slugged tab ids of an artist, oldest first (to learn the artist's page URL)."""
-    rows = conn.execute(
-        "SELECT tab_id FROM ug_index WHERE artist_key = ? ORDER BY tab_id LIMIT ?", (artist_key, limit)
-    )
-    return [r[0] for r in rows]
-
-
 def artist_known(conn: sqlite3.Connection, artist_key: str) -> bool:
     return conn.execute("SELECT 1 FROM ug_index WHERE artist_key = ? LIMIT 1", (artist_key,)).fetchone() is not None
 
@@ -64,9 +56,6 @@ def learned_artist_url(conn: sqlite3.Connection, artist_key: str) -> str | None:
 
 def remember_artist_url(conn: sqlite3.Connection, artist_key: str, url: str) -> None:
     kv_set(conn, _artist_url_key(artist_key), url)
-
-
-# --- helpers for ug.fetch (wave 2, w2-ug-fetch) -----------------------------------
 
 
 def _index_tab(row: sqlite3.Row) -> IndexTab:
@@ -96,6 +85,4 @@ def artist_tabs(conn: sqlite3.Connection, artist_key: str, limit: int = 5) -> li
 
 def forget_artist_url(conn: sqlite3.Connection, artist_key: str) -> None:
     """Drop a learned artist page (UG no longer serves it), so it is learned again."""
-    from caracole.db import kv_delete  # imported here to keep this block self-contained
-
     kv_delete(conn, _artist_url_key(artist_key))
