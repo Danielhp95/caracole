@@ -182,7 +182,11 @@ class WebApp:
             return form
         if not same_token(session_value(form.get("token", "")), self._session or ""):
             return _html(401, pages.sign_in_page(self.csrf, failed=True))
-        cookie = f"{SESSION_COOKIE}={self._session}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000"
+        # Lax: a sheet viewer's links (its PDF, the library) are navigations from the origin of its
+        # sandbox, another site's to the browser, which a Strict cookie wouldn't go with. Lax still
+        # keeps it from other sites' POSTs and subresources; no GET changes anything, and every
+        # write must pass the cross-origin check and carry the form token anyway (_form).
+        cookie = f"{SESSION_COOKIE}={self._session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000"
         return _redirect("/", ("Set-Cookie", cookie))
 
     # --- the pages and the files -----------------------------------------------------------------

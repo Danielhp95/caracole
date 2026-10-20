@@ -1151,10 +1151,9 @@ with no cookie and no way to ask the server for anything. The header allows
 the script and style the page itself was written with, so a viewer an older
 caracole wrote keeps working after an upgrade until the next render writes it
 again. It works as it does from the folder, but it can't remember its
-settings. With an access token, its
-links to the PDF and back to the library open the sign-in page, because the
-sandboxed page sends no cookie: use the card's PDF link and the browser's Back
-button instead.
+settings. Its links to the PDF and back to the library work with an access
+token too: the sign-in cookie goes with a link followed from another page, but
+not with a form another site posts or anything it loads from the server.
 
 Who can reach it:
 

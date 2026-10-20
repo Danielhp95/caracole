@@ -526,7 +526,9 @@ def test_signing_in_sets_a_cookie_that_opens_the_library(locked, conn):
     cookie = header(response, "set-cookie")
     value = session_value("a-long-random-access-token")
     assert cookie.startswith(f"caracole_session={value};")
-    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie and "Path=/" in cookie
+    # Lax, not Strict: the sandboxed viewer's links are navigations from another origin (its own),
+    # which a Strict cookie doesn't go with. Writes keep the form token and the cross-origin check.
+    assert "HttpOnly" in cookie and "SameSite=Lax" in cookie and "Path=/" in cookie
     assert "a-long-random-access-token" not in cookie
     signed_in = get(locked, "/", cookie=f"caracole_session={value}")
     assert signed_in.status == 200 and "Radiohead - Creep" in text(signed_in)

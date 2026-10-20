@@ -2,6 +2,7 @@
 sheet viewer it serves, in Chromium."""
 
 import http.client
+import json
 import sys
 import threading
 import time
@@ -198,6 +199,38 @@ def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_pa
             assert tab.eval("getComputedStyle(document.querySelector('#fab')).position") == "fixed"  # its style
             tab.click("#fab")
             assert tab.eval("document.querySelector('#panel').hidden") is False
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_served_viewers_links_open_once_signed_in(cfg, conn, tmp_path):
+    # The sandboxed viewer has an origin of its own, so following one of its links is a navigation
+    # from another site: the sign-in cookie must go with it (SameSite=Lax, not Strict), or its PDF
+    # and its way back to the library open the sign-in page.
+    rendered_song(conn, cfg)
+    token = "a-long-random-access-token"
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok",
+                            access_token=token))
+    root = f"http://127.0.0.1:{server.server_address[1]}/"
+    viewer = root + quote("Soda Stereo/De Música Ligera/sheet.html")
+    ready = "document.documentElement.dataset.ready === '1'"
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(root)
+            tab.wait_for("document.querySelector('input[name=token]') !== null")
+            tab.eval(f"document.querySelector('input[name=token]').value = {json.dumps(token)}")
+            tab.click("button[type=submit]")
+            tab.wait_for("document.title === 'caracole library'")
+            for link, opened in (("a.pdf", "document.contentType === 'application/pdf'"),
+                                 ("a.back", "document.title === 'caracole library'")):
+                tab = browser.open(viewer)
+                tab.wait_for(ready)
+                tab.eval(f"document.querySelector('{link}').scrollIntoView({{block: 'center'}})")
+                tab.click(link)
+                tab.wait_for(f"!document.documentElement.dataset.ready && document.readyState === 'complete' "
+                             f"&& ({opened} || document.title.startsWith('Sign in'))")
+                assert tab.eval(opened), (link, tab.eval("document.title"), tab.eval("location.href"))
     finally:
         server.shutdown()
         server.server_close()
