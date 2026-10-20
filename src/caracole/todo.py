@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from caracole.config import Config
+from caracole.config import DEFAULT_PROVIDERS, Config
 from caracole.db import kv_get_json
 from caracole.health import get_state
 from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS, SCORE_KIND
@@ -48,11 +48,10 @@ from caracole.youtube_fetch import (
     videos_by_audio,
 )
 
-PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs", "musescore", "youtube")
+PROVIDERS = tuple(DEFAULT_PROVIDERS)
 SCORES_TITLE = "Scores on MuseScore"
 NO_SHEET_TITLE = "No human sheet found yet"  # the buy list, when caracole takes the audio from YouTube
 NOTHING_TITLE = "Nothing on YouTube for these"
-GUITAR_KINDS = ("guitar-pro", "power", "tabs")
 NEW_FILES_FOR = timedelta(days=7)  # how long a file downloaded from gtptabs.com is listed as new
 _MD_SPECIAL = "\\`*_[]<>|"
 _KIND_NAMES = {"guitar-pro": "Guitar Pro", "power": "Power Tab", "tabs": "Tab", "chords": "Chords"}
@@ -64,12 +63,8 @@ def md(s: str) -> str:
     return "".join("\\" + c if c in _MD_SPECIAL else c for c in s)
 
 
-def ug_url(tab_id: int | str) -> str:
-    return f"https://tabs.ultimate-guitar.com/tab/{tab_id}"
-
-
 def search_links(artist: str, title: str) -> dict[str, str]:
-    """Links for things caracole won't do itself: buying, Chordify, Songsterr, YouTube, a UG search."""
+    """Links for things caracole won't do itself: buying, Chordify, Songsterr, YouTube."""
     q = f"{artist} {clean_title(title)}"
     lesson = f"{q} 吉他教学" if has_han(q) else f"{q} guitar lesson"
     return {
@@ -79,7 +74,6 @@ def search_links(artist: str, title: str) -> dict[str, str]:
         "chordify": f"https://chordify.net/search/{quote(q)}",
         "songsterr": f"https://www.songsterr.com/?pattern={quote(q)}",
         "youtube": f"https://www.youtube.com/results?search_query={quote(lesson)}",
-        "ug_search": f"https://www.ultimate-guitar.com/search.php?search_type=title&value={quote(q)}",
     }
 
 

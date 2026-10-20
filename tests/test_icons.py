@@ -167,9 +167,9 @@ def test_every_source_has_a_name_a_tag_and_a_badge():
     assert all(s.site.startswith("https://") for s in icons.SOURCES.values() if s.site)
 
 
-def test_an_unknown_source_still_has_a_name_and_a_tag():
-    assert icons.source_name("songsterr") == "songsterr" and icons.tag("songsterr") == "songsterr"
-    assert icons.tag("ug") == "UG" and icons.source_name("lrclib") == "LRCLIB"
+def test_an_unknown_source_still_has_a_tag():
+    assert icons.tag("songsterr") == "songsterr"
+    assert icons.tag("ug") == "UG"
 
 
 # --- the cache --------------------------------------------------------------------------------

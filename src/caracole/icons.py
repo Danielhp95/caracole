@@ -150,11 +150,6 @@ def sheet_source(kept: Mapping[str, str]) -> str | None:
     return next((kept[name] for name in SHEETS if name in kept), None)
 
 
-def source_name(key: str) -> str:
-    """A source as people call it; an unknown one by its key."""
-    return SOURCES[key].name if key in SOURCES else key
-
-
 def tag(key: str) -> str:
     """A source's tag on the command line: "UG", "LaCuerda"; an unknown one's key."""
     return SOURCES[key].tag if key in SOURCES else key
@@ -398,14 +393,12 @@ def _asked_key(key: str) -> str:
 @dataclass
 class IconRun:
     """What ``fetch_icons`` did, by source: ``fetched`` and kept; ``missing``, the site gave none;
-    ``errors``, it failed; ``waiting``, not asked this time (no client for it, or its budget spent);
-    ``left``, asked less than ``RETRY`` ago without an icon."""
+    ``errors``, it failed; ``waiting``, not asked this time (no client for it, or its budget spent)."""
 
     fetched: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     waiting: list[str] = field(default_factory=list)
-    left: list[str] = field(default_factory=list)
 
 
 def sources_in_use(conn: sqlite3.Connection) -> set[str]:
@@ -440,7 +433,6 @@ def fetch_icons(conn: sqlite3.Connection, cache_dir: Path, clients: Mapping[str,
             continue
         asked = kv_get(conn, _asked_key(key))
         if wait is not None and asked is not None and now - _when(asked) < wait:
-            run.left.append(key)
             continue
         client = clients.get(key)
         if client is None:
