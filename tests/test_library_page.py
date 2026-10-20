@@ -1688,10 +1688,12 @@ def test_on_a_touch_screen_every_control_is_a_thumbs_size(conn, cfg, tmp_path, s
     assert short == [], short
 
 
-# On the file on disk, Select a song, name a songbook and make it: the bar then shows the command to run.
+# On the file on disk, Select a song, name a songbook and make it: the bar then shows the command to run. On a
+# phone the name field waits under "Make songbook…".
 MAKE_FROM_DISK = """
 document.querySelector(".pick-toggle").click();
 document.querySelector("#list .pick input").click();
+if (document.querySelector(".pick-open").checkVisibility()) document.querySelector(".pick-open").click();
 document.querySelector(".pick-name").value = "Campfire 2";
 document.querySelector(".pickbar-form button[type=submit]").click();
 document.body.setAttribute("data-command", String(!document.querySelector(".pick-command").hidden));

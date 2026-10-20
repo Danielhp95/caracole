@@ -2466,13 +2466,21 @@ _SONGBOOK_STYLE = """
     grid-template-areas: "src title artist meta"; }
 }
 .pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.selecting .page { padding-bottom: 260px; }
+.selecting .page { padding-bottom: 104px; }
+.selecting:has(.pickbar.open) .page { padding-bottom: 300px; }
 .pickbar { position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--border);
   background: var(--surface); box-shadow: 0 -6px 24px rgb(0 0 0 / 14%);
   padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom))
     max(16px, env(safe-area-inset-left)); }
+/* One line: the way out, the count, then the songbook's menu, its name and the buttons; on a phone a
+   "Make songbook…" button in their place, which unfolds them under the line (.open), the bar growing upwards. */
 .pickbar-in { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: 1320px; margin: 0 auto; }
-.pick-count { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pick-done { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-left: -8px; padding: 0;
+  border: 0; border-radius: 12px; background: none; color: var(--muted); font: inherit; font-size: 1.5rem;
+  line-height: 1; cursor: pointer; }
+.pick-done:hover { background: var(--raised); color: var(--text); }
+.pick-count { margin: 0 auto 0 0; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pick-open { display: none; }
 .pickbar-form { display: flex; flex: 1 1 340px; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
 .pickbar-form label { display: flex; flex: 1 1 150px; min-width: 0; }
 .pickbar-form input, .pickbar-form select { width: 100%; min-width: 0; height: 44px; padding: 0 10px; border-radius: 10px;
@@ -2481,6 +2489,17 @@ _SONGBOOK_STYLE = """
 .pick-error:empty { display: none; }
 .pick-command { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pick-command code { flex: 1 1 260px; padding: 8px 10px; user-select: all; }
+@media (max-width: 719px) {
+  .pick-open { display: inline-flex; }
+  .pickbar:not(.open) .pickbar-form, .pickbar:not(.open) .pick-command { display: none; }
+  .pickbar-form { flex-basis: 100%; }
+  /* Unfolded, the button is a caret that folds the fields away: the bar's one primary button makes the songbook. */
+  .pickbar.open .pick-open { position: relative; width: 44px; min-height: 44px; padding: 0; }
+  .pickbar.open .pick-open .pick-open-text { position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; }
+  .pickbar.open .pick-open::after { content: ""; width: 12px; height: 7px; background: currentColor;
+    clip-path: polygon(0 0, 100% 0, 50% 100%); }
+}
 @media (pointer: coarse) {
   .sb-more > summary { min-height: 44px; }
 }
@@ -2490,8 +2509,9 @@ _SONGBOOK_STYLE = """
 # name the songbook. It goes with the page's own script, after it: it finds the cards by their song's
 # id and builds everything with createElement and textContent, as the page does. While it is on, a tap
 # anywhere on a card picks it (the stylesheet puts its files and actions away, and lets the taps through
-# to the card). On caracole serve the bar posts the songbook (the server's token, the songs' ids in the
-# order picked); on the file on disk it shows the caracole songbook command to run instead.
+# to the card). The bar is one line: on a phone, "2 selected · Make songbook…", which unfolds the menu
+# and the name field. On caracole serve the bar posts the songbook (the server's token, the songs' ids
+# in the order picked); on the file on disk it shows the caracole songbook command to run instead.
 _SELECT_SCRIPT = r"""
 (() => {
   "use strict";
@@ -2543,9 +2563,25 @@ _SELECT_SCRIPT = r"""
   bar.hidden = true;
   bar.setAttribute("aria-label", "Make a songbook");
   const inner = el("div", "pickbar-in");
+  // The way out, as the Select button is, which the page has scrolled away by now: the picks stay.
+  const done = el("button", "pick-done");
+  done.type = "button";
+  done.setAttribute("aria-label", "Leave Select");
+  done.title = "Leave Select (the picks stay)";
+  const cross = el("span", null, "×");
+  cross.setAttribute("aria-hidden", "true");
+  done.appendChild(cross);
   const count = el("p", "pick-count");
   count.setAttribute("aria-live", "polite");
   const form = el("form", "pickbar-form");
+  form.id = "pickbar-form";
+  // On a phone the menu and the name wait under this button, so that the bar is one line while you pick.
+  const unfold = el("button", "btn primary pick-open");
+  unfold.type = "button";
+  unfold.setAttribute("aria-expanded", "false");
+  unfold.setAttribute("aria-controls", form.id);
+  const unfoldText = el("span", "pick-open-text", "Make songbook…");
+  unfold.appendChild(unfoldText);
   const into = el("select", "pick-into");
   into.setAttribute("aria-label", "Into which songbook");
   into.appendChild(new Option("New songbook", ""));
@@ -2589,7 +2625,7 @@ _SELECT_SCRIPT = r"""
     fields.csrf.value = String(server.csrf || "");
   }
   form.append(intoLabel, nameLabel, submit, clear, error);
-  inner.append(count, form, command);
+  inner.append(done, count, unfold, form, command);
   bar.appendChild(inner);
   document.body.appendChild(bar);
 
@@ -2618,6 +2654,7 @@ _SELECT_SCRIPT = r"""
     submit.disabled = !picked.length;
     const existing = into.value;
     submit.textContent = existing ? "Add to " + existing : "Make songbook";
+    unfoldText.textContent = submit.textContent + "…";
     nameLabel.hidden = Boolean(existing);
     command.hidden = true;
   };
@@ -2663,14 +2700,36 @@ _SELECT_SCRIPT = r"""
     if (box) box.click();  // its change event picks the song, or lets it go
   });
 
+  // On a phone: whether the menu and the name show, unfolded under the bar's line by its button.
+  const folds = () => getComputedStyle(unfold).display !== "none";
+  const setOpen = (on, focus) => {
+    bar.classList.toggle("open", on);
+    unfold.setAttribute("aria-expanded", on ? "true" : "false");
+    unfold.className = on ? "btn pick-open" : "btn primary pick-open";  // open, the button that makes it leads
+    if (on && focus) (nameLabel.hidden ? into : nameInput).focus();
+  };
+  unfold.addEventListener("click", () => setOpen(!bar.classList.contains("open"), true));
+  bar.addEventListener("keydown", (e) => {
+    // A name may hold a "/", which elsewhere on the page goes to the search box.
+    if (e.key === "/" && e.target === nameInput) e.stopPropagation();
+    if (e.key === "Escape" && bar.classList.contains("open") && folds()) {
+      setOpen(false);
+      unfold.focus();
+    }
+  });
+
   const setMode = (on) => {
     document.body.classList.toggle("selecting", on);
     toggle.setAttribute("aria-pressed", on ? "true" : "false");  // its name stays "Select": pressed or not
+    const inBar = bar.contains(document.activeElement);
     bar.hidden = !on;
+    setOpen(false);
+    if (!on && inBar) toggle.focus({ preventScroll: true });  // not lost with the bar
     decorate();
     paintAll();
   };
   toggle.addEventListener("click", () => setMode(!selecting()));
+  done.addEventListener("click", () => setMode(false));
   clear.addEventListener("click", () => {
     picked.length = 0;
     paintAll();

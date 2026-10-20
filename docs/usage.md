@@ -1549,8 +1549,11 @@ title or its artist opens and filters nothing, so a tick never opens a file
 by mistake. Search, filter and switch views between ticks; the bar at the
 bottom counts them, `3 selected`. Give the songbook a name and tap Make
 songbook, or pick a songbook there is in the menu (instead of New songbook)
-to Add to it; Clear unticks them all, and Select, pressed while the mode is
-on, leaves it. On the file on disk, which can't write anything, the bar shows
+to Add to it; Clear unticks them all. The × at the start of the bar, or
+Select pressed again, leaves the mode, and the ticks stay for when you come
+back. On a phone the bar is one line, `× 3 selected · Make songbook…`, and
+its button unfolds the menu and the name field (its ▾, or Escape, folds them
+away again). On the file on disk, which can't write anything, the bar shows
 the command to run where caracole runs, with Copy:
 `caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
 each word in single quotes, so that no shell changes a `!`, a `$` or a quote

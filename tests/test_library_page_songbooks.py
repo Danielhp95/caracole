@@ -372,6 +372,7 @@ def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_pat
       out = {form: getComputedStyle(form).display, radio: Math.round(radio.getBoundingClientRect().width),
              box: Math.round(box.getBoundingClientRect().width)};
       q(".pick-toggle").click();
+      q(".pick-open").click();  // on a phone the bar's fields show once asked for
       const bar = q(".pickbar form");
       Object.assign(out, {bar: getComputedStyle(bar).display,
                           name: Math.round(bar.querySelector("input[type=text]").getBoundingClientRect().height)});
@@ -482,3 +483,97 @@ def test_on_a_phone_a_tap_on_a_card_or_a_row_picks_it_and_opens_nothing(library,
         assert size == [44, 44]
         assert phone.js("location.pathname").endswith("/index.html")  # nothing opened
         assert phone.js("document.querySelectorAll('#list [data-id]').length") == 3  # nor filtered
+
+
+# Where each of the bar's parts is, and whether it shows.
+BAR = """
+  const shown = (n) => Boolean(n && n.checkVisibility());
+  const box = (n) => n.getBoundingClientRect();
+  const middle = (n) => Math.round(box(n).top + box(n).height / 2);
+  const bar = () => ({
+    height: Math.round(box(q(".pickbar")).height),
+    fields: [q(".pick-into"), q(".pick-name"), q(".pickbar-form button[type=submit]")].map(shown),
+    toggle: shown(q(".pick-open")), expanded: q(".pick-open").getAttribute("aria-expanded"),
+    primary: qa(".pickbar .btn.primary").filter(shown).map((b) => b.textContent),
+  });
+"""
+
+
+@in_chromium
+def test_on_a_phone_the_select_bar_is_one_line_that_opens_its_name_field_and_its_menu(library, tmp_path):
+    conn, cfg = library
+    out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + BAR + """
+      pick("Creep"); pick("Hysteria");
+      const open = q(".pick-open"), done = q(".pick-done"), count = q(".pick-count");
+      const folded = Object.assign(bar(), {
+        line: [done, count, open].map(middle), said: [count.textContent, open.textContent],
+        names: [done.getAttribute("aria-label"), open.getAttribute("aria-controls") === q(".pickbar-form").id],
+        targets: [open, done].map((n) => [Math.round(box(n).width), Math.round(box(n).height)])});
+      open.click();
+      const opened = Object.assign(bar(), {focus: document.activeElement === q(".pick-name"),
+        caret: [Math.round(box(open).width), open.textContent]});
+      // A name may hold a slash ("AC/DC nights"): the page's "/", which goes to the search box, leaves it be.
+      const slash = new KeyboardEvent("keydown", {key: "/", bubbles: true, cancelable: true});
+      q(".pick-name").dispatchEvent(slash);
+      opened.slash = [document.activeElement === q(".pick-name"), slash.defaultPrevented];
+      document.activeElement.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
+      const back = Object.assign(bar(), {focus: document.activeElement === open});
+      const into = q(".pick-into");
+      into.value = "Campfire";
+      into.dispatchEvent(new Event("change"));
+      out = {folded, opened, back, adds: open.textContent, scroll: document.documentElement.scrollWidth,
+             page: innerWidth};
+    """, size="390,844")
+    folded, opened, back = out["folded"], out["opened"], out["back"]
+    # One line: the way out, the count and the button that names the songbook, each a thumb's target.
+    assert folded["said"] == ["2 selected", "Make songbook…"]
+    assert max(folded["line"]) - min(folded["line"]) <= 2 and folded["height"] <= 66, folded
+    assert all(w >= 44 and h >= 44 for w, h in folded["targets"]), folded["targets"]
+    assert folded["names"] == ["Leave Select", True]
+    assert folded["fields"] == [False, False, False] and folded["expanded"] == "false"
+    assert folded["primary"] == ["Make songbook…"]
+    # Tapped, it opens the songbook menu and the name field, ready to type in; its own button folds to a caret,
+    # so the bar's one primary button is the one that makes the songbook.
+    assert opened["fields"] == [True, True, True] and opened["expanded"] == "true" and opened["focus"]
+    assert opened["primary"] == ["Make songbook"] and opened["caret"] == [44, "Make songbook…"]
+    assert opened["height"] > folded["height"]
+    assert opened["slash"] == [True, False]
+    # Escape folds it back, and the focus goes back to the button.
+    assert back["fields"] == [False, False, False] and back["expanded"] == "false" and back["focus"]
+    assert back["height"] == folded["height"]
+    assert out["adds"] == "Add to Campfire…"  # it says what it will do
+    assert out["scroll"] <= out["page"]
+
+
+@in_chromium
+def test_on_a_desktop_the_select_bar_keeps_everything_on_one_line(library, tmp_path):
+    conn, cfg = library
+    out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + BAR + """
+      pick("Creep");
+      const parts = [q(".pick-done"), q(".pick-count"), q(".pick-into"), q(".pick-name"),
+                     q(".pickbar-form button[type=submit]"), q(".pickbar-form button[type=button]")];
+      out = Object.assign(bar(), {line: parts.map(middle), shown: parts.map(shown)});
+    """, size="1280,800")
+    assert out["shown"] == [True] * 6 and out["fields"] == [True, True, True]
+    assert max(out["line"]) - min(out["line"]) <= 2 and out["height"] <= 66, out
+    assert not out["toggle"] and out["primary"] == ["Make songbook"]  # nothing to open: it is all there
+
+
+@in_chromium
+def test_the_cross_leaves_select_mode_and_keeps_the_picks(library, tmp_path):
+    conn, cfg = library
+    out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + """
+      pick("Creep");
+      q(".pick-open").click();
+      q(".pick-done").focus();
+      q(".pick-done").click();
+      const left = {bar: q(".pickbar").hidden, pressed: q(".pick-toggle").getAttribute("aria-pressed"),
+                    focus: document.activeElement === q(".pick-toggle"),
+                    open: card("Creep").querySelector("a.btn.primary").checkVisibility()};
+      q(".pick-toggle").click();
+      out = {left, count: q(".pick-count").textContent, creep: card("Creep").classList.contains("picked"),
+             fields: q(".pick-name").checkVisibility()};
+    """, size="390,844")
+    assert out["left"] == {"bar": True, "pressed": "false", "focus": True, "open": True}
+    assert out["count"] == "1 selected" and out["creep"]  # back in, the picks are as they were
+    assert not out["fields"]  # and the bar is one line again
