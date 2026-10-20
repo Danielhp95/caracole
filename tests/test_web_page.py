@@ -218,6 +218,23 @@ def clicks(*titles: str) -> str:
     return "(() => {\n" + WATCH + calls + "})();\n"
 
 
+def clicks_in_turn(*titles: str) -> str:
+    """The test script: Fetch now on each card titled so, each once the server has answered the one before
+    (its card's button gone), so that the server takes them in that order: requests sent together are
+    taken in whatever order its threads get to them."""
+    return "(() => {\n" + WATCH + f"""
+const titles = {json.dumps(list(titles))};
+const next = () => {{
+  const title = titles.shift();
+  if (title === undefined) return;
+  cardOf(title).querySelector("form.fetch button").click();
+  const answered = () => cardOf(title).querySelector("form.fetch") ? setTimeout(answered, 10) : next();
+  answered();
+}};
+next();
+""" + "})();\n"
+
+
 def requests_song(artist: str, title: str, *, extra: str = "") -> str:
     """The test script: the request form, filled in and sent; ``extra`` runs first."""
     return "(() => {\n" + WATCH + extra + f"""
@@ -331,7 +348,7 @@ def test_several_requests_show_as_one_short_list(serve, cfg, conn, tmp_path):
         song = add_song(conn, artist, title)
         update_song(conn, song.id, match_decision="accept", match_artist_key=artist.lower(),
                     match_song_key=title.lower())
-    url = serve(FakeCaracole(cfg), clicks("Creep", "Wonderwall", "Hysteria"))
+    url = serve(FakeCaracole(cfg), clicks_in_turn("Creep", "Wonderwall", "Hysteria"))
 
     dom = dump_dom(url, tmp_path)
 
