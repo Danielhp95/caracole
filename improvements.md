@@ -88,6 +88,16 @@ On NixOS, `services.caracole.web.enable = true` runs it as `caracole-web.service
 
 Ignore all comments about "legally buying a song". If a song is not found, allow for a "download and extract chords" pipeline that will download the song from youtube via yt-dlp (as a build dependency)
 
+**Done in [0183d3b](https://github.com/Danielhp95/caracole/commit/0183d3b).** A song with no human sheet now gets its audio from YouTube, and the auto-chords unit makes its chords.
+- **The pick:** each night, after the scan, the new youtube step asks yt-dlp's search for `ytsearch8:<artist> <title>`. It takes the upload whose title and channel name the song (names in two scripts match; a Chinese, Japanese or Korean title must stand on its own in the video's title, never as the start of a longer one), whose length is within 20 s of the song's, and that isn't a cover, live, karaoke, lesson or slowed version. The artist's Topic channel and official audio come first.
+- **The audio** goes, as m4a, into caracole's cache (`cache_dir/youtube/`), never into the synced library. Then caracole-autochords writes `sheet (auto).txt`, whose first line names the video; on the page its mark is YouTube's. A purchase or a human sheet found later takes its place, and the audio is deleted. Remove deletes it too.
+- **The limits:** 6 yt-dlp runs a night (about three songs), 15–30 s apart, no cookies, no login, none of caracole's secrets in yt-dlp's environment. A bot check, a 429 or a 403 is a block, with the usual cooldown and one ntfy alert. A video that fails 3 times is given up, and the next run searches again.
+- **Where:** only where auto-chords is on (`services.caracole.autochords.enable = true`; that package has yt-dlp with ffmpeg and deno). `[providers.youtube] enabled = false` turns it off.
+- **Fixing a pick:** `"Artist - Title" = "<video URL>"` (or `"none"`) under `[youtube]` in overrides.toml, or `caracole youtube --song "Artist - Title" --url URL` (or `--none`). `caracole youtube` alone runs the step by hand.
+- **The to-do page:** the buy list becomes "No human sheet found yet", each song with its state, plus "Nothing on YouTube for these" with the lines to paste.
+
+This route goes against YouTube's robots.txt and terms. It is your choice, and AGENTS.md records it as the one scoped exception.
+
 ## faster songs lookups
 
 For UG, have the 10-20 second slow polling for when building the index, but remove it when we are searching. For la cuerda / muse score, don't wait until the end of the day to trigger a search. do it immediately. This tool will not be used simply as a library for me to have downloaded tabs. It will also be used to quickly look up tabs on the spot. As a replacement for ultimate guitar. So I need it to be fast and responsive. Design how to fasten this look-up process so that it feels as fast as looking up a tab in ultimate guitar
@@ -95,6 +105,13 @@ For UG, have the 10-20 second slow polling for when building the index, but remo
 ## Better info when downlading
 
 When requesting a new song, having a full new page is a bit verbose when I normally just want one song downloaded. And even as a "bulk" it is a bit verbose. 
+
+**Done in [8975cc0](https://github.com/Danielhp95/caracole/commit/8975cc0).** A request no longer opens a page of command output: the library page stays where it is, and the song's card says how the request goes on one line, "Queued…", then "Fetching from Ultimate Guitar…", then "Ready · Open sheet". Other endings:
+- "Not found", only when Ultimate Guitar was actually asked during the request and has no sheet;
+- "Needs review · Pick the match", which opens the card's picker;
+- "Not fetched yet · Details", after a cooldown, a block, a spent budget or an error (never a miss: the song waits for the next run).
+
+A new song gets its own card under the form ("Just requested"), which fills in with its files. Several requests also show as one compact list in a corner, folded on a phone. `/jobs` is one line per request, with the output folded under it. On the command line, `caracole add`, `search --add` and `fetch --song` print one line for the song (`-v` for the detail). The line comes from `src/caracole/web/status.py`; only the served page asks the server about it, and `index.html` on disk asks nothing of anyone.
 
 ## Remove button
 
@@ -123,6 +140,12 @@ Once the phone sheet viewer lands (`sheet.html`, in progress), it covers the sam
 
 Currently we have a "gallery view" for songs. I would also like to have a row-style view where I can see more results at once. I would like when searching for tabs to have similar outputs. Depending on which source the song comes from (la cuerda, ultimate guitar) I want a little icon to denote it, make the icon come from the webisite's own icon
 
+**Done in [aa5ad75](https://github.com/Danielhp95/caracole/commit/aa5ad75).** The library page (the file and the served page) has a **Cards/Rows** switch beside the Key menu, kept in the address (`#view=rows`).
+- **Rows:** one line per song on a laptop (about twenty to a screen), two on a phone: the title and its button, then the artist, the key and the status. Search, the status buttons, the Key menu, the sort, the A–Z letters and clicking an artist work the same in both views.
+- **On `caracole serve`** a row does everything a card does: Fetch now, Pick the match, Removing…, and the request's line under it. Its ⋯ holds the other files and links.
+- **Source icons:** every sheet and file shows where it came from with the site's own icon (Ultimate Guitar, LaCuerda, LRCLIB, gtptabs.com, MuseScore, YouTube), or a lettered badge (UG, LC…) until the icon is in. Auto sheets show ♪, files from `_inbox/` ↓. A new nightly `icons` step fetches each site's favicon once, politely, into the cache folder, and the page inlines them, so it still loads nothing from the network. `caracole icons` fetches the missing ones now.
+- **Search results look alike:** `caracole search` tags each hit with its source (`[UG]`, `[LaCuerda]`, `[auto]`), and the page's search shares the row's layout.
+
 ## Songbooks
 
 bundle in a songbook app too. I want the ability to "make songbook" so that i select different songs and a songbook is generated from them
@@ -131,10 +154,19 @@ bundle in a songbook app too. I want the ability to "make songbook" so that i se
 
 It's great that the cli allows for disambiguation by having differnet alternatives and then selecitng number, surface this in the browser too
 
-## Allow for disambiguation on the browser
-
-It's great that the cli allows for disambiguation by having differnet alternatives and then selecitng number, surface this in the browser too
-
+**Done in [e9a260b](https://github.com/Danielhp95/caracole/commit/e9a260b).** A song that needs review shows its candidates on its card, numbered as `caracole review` numbers them. Each has the UG artist and title, why the matcher proposed it ("artist spelled differently", "title only: another artist's song, probably a cover", "under UG's catch-all misc-musicals"), its score, its tab counts and a link to its UG page.
+- **On `caracole serve`:** "Pick the match" replaces "Review first". Choose a candidate or "None of these" and press Pick. With "Fetch it now" ticked (the default), the song is fetched and rendered right after, and the card shows how it goes, as a request does. If "None of these" leaves other candidates, the card offers those.
+- **A song the index didn't match** gets "Look in the index", which offers what `caracole search` finds for it.
+- **On index.html from disk:** the list is read-only and ends with the line to run.
+- **From a terminal:** the answer is written exactly as `caracole review` writes it, through the new `caracole review --song "ARTIST - TITLE" --pick N` (or `--pick ARTIST/SONG`, or `--none`).
 ## Design pass
 
 After finishing, do a /deep-research for what is the best UX design for this type of application for feature discoverability, usability, snappyness and overall user experience design. Take inspiration from ultimate guitar and other websites that already present this kind of information. Do a research too on lightweight javascript frameworks (like d3.js or other alterntaives) to come up with cool and useful designs. Find anti-patterns in the current implementation and remove them too. Essentially, do a strong design pass with /deep-research
+
+## Searching only by artist or songname
+
+Sometimes one does not know the artist, we need to allow for either or scenarios for searching
+
+## Unify search and "request a song" so that we have both of them on the same bar
+
+typing will filter from what we have in our library, and pressing enter will return whatever are the most likely matches from the different sources
