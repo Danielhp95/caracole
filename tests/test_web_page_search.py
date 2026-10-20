@@ -269,7 +269,8 @@ def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, l
     browser.js("document.getElementById('q').focus()")
     browser.type("Muse - Hysteria")
     browser.press("Enter")
-    assert browser.wait("!document.getElementById('results').hidden")
+    # Under the sites' answer, once it is in: shown before it, the answer would push it down.
+    assert browser.wait("document.getElementById('request-box').getClientRects().length > 0")
     browser.click("#request-box > summary")
     fields = browser.js("['artist', 'title'].map((n) => document.querySelector(`form.request-form [name=${n}]`).value)")
     assert fields == ["Muse", "Hysteria"]
@@ -302,3 +303,19 @@ def test_the_bar_and_its_results_fit_a_phone(cfg, live, phone):
                      ".filter((e) => e.offsetParent).map((e) => [e.textContent.trim(), e.getBoundingClientRect().height])"
                      ".filter(([, h]) => h < 44)")
     assert small == [], small
+
+
+FOOTER = "(() => { const f = document.querySelector('.footer'); return f.getClientRects().length ? " \
+         "Math.round(f.getBoundingClientRect().top) : null; })()"
+
+
+def test_a_search_opened_from_the_address_moves_nothing_when_its_answer_comes(cfg, live, phone):
+    base, _, _ = live
+    sites(cfg, **WONDERWALL)
+    library(cfg, ("Oasis", "Wonderwall"))
+    phone.open(base + "#q=wonderwall&all=1")
+    before = phone.js(FOOTER)  # the page as first drawn, before the sites' answer
+    assert phone.wait(f"{HITS} >= 4 && document.querySelector('.footer').getClientRects().length > 0")
+    after = phone.js(FOOTER)
+    # What follows the answer waits for it: shown at once, it would jump down when the answer came.
+    assert before is None or before == after, (before, after)

@@ -826,6 +826,7 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .bar-status { min-height: 1.35em; margin: 6px 2px 0; overflow: hidden; color: var(--muted); font-size: .8rem;
   line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
+.waiting-sites .results .request, .waiting-sites .footer { display: none; }
 .results-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 4px 0 0; }
 .results .group { margin: 18px 0 0; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
@@ -2314,6 +2315,13 @@ _SCRIPT = r"""
   let askedFor = null;  // the query the newest search was sent for
   let answer = null;  // the answer on the screen, and its query
   let close = { q: null, ids: [] };  // your songs the server found (typos and all) for a query
+  // Until the first answer since Enter, what goes under the results (the request form, the footer) waits too:
+  // shown at once, the answer would only push it down.
+  let waiting = true;
+  const heard = () => {
+    waiting = false;
+    document.body.classList.remove("waiting-sites");
+  };
   let settleSpots = () => {};
   let prefill = () => {};
   let getIt = () => {};
@@ -2353,6 +2361,7 @@ _SCRIPT = r"""
     }
     results.hidden = !open;
     found.hidden = !open;
+    document.body.classList.toggle("waiting-sites", open && waiting);
     if (!open) return;
     drawMine(query);
     askSources(false);
@@ -2384,6 +2393,7 @@ _SCRIPT = r"""
           return;
         }
         found.removeAttribute("aria-busy");
+        heard();
         if (!reply.ok || !data || data.error) {
           say(failure(reply).line.text);
           return;
@@ -2392,6 +2402,7 @@ _SCRIPT = r"""
       }, (e) => {
         if (mine !== asked || (e && e.name === "AbortError")) return;
         found.removeAttribute("aria-busy");
+        heard();
         say(UNREACHABLE.line.text);
       });
   };
@@ -2527,6 +2538,8 @@ _SCRIPT = r"""
     asked += 1;
     askedFor = null;
     found.removeAttribute("aria-busy");
+    waiting = true;
+    document.body.classList.remove("waiting-sites");
     settleSpots();
     render();
     save();
