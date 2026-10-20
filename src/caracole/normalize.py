@@ -87,6 +87,8 @@ _LIVE_WORD = re.compile(r"\b(?:live|vivo|directo)\b", re.IGNORECASE)
 
 def fold(s: str) -> str:
     """Lowercase, strip accents and transliterate letters NFKD can't decompose."""
+    if s.isascii():  # NFKD, the combining marks and _TRANSLIT all leave ASCII as it is
+        return s.lower()
     s = unicodedata.normalize("NFKD", s)
     s = "".join(c for c in s if not unicodedata.combining(c))
     return s.translate(_TRANSLIT).lower()
