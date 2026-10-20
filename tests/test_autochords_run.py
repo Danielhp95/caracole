@@ -799,6 +799,10 @@ def models_importable(monkeypatch):
     import caracole.commands.autochords as cmd
 
     monkeypatch.setattr(cmd, "find_spec", lambda name: object())
+    # Only the model files a test configures: `nix develop .#autochords` sets both variables, and
+    # its real beat_this would read the test tone (seconds, and torch in the test process).
+    monkeypatch.delenv("CARACOLE_BTC_WEIGHTS", raising=False)
+    monkeypatch.delenv("CARACOLE_BEAT_CHECKPOINT", raising=False)
 
 
 def test_command_without_the_models_says_which_package_has_them(tmp_path, monkeypatch):
