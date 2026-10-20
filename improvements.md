@@ -150,6 +150,13 @@ Currently we have a "gallery view" for songs. I would also like to have a row-st
 
 bundle in a songbook app too. I want the ability to "make songbook" so that i select different songs and a songbook is generated from them
 
+**Done in [fc886dd](https://github.com/Danielhp95/caracole/commit/fc886dd).** A songbook is a name and some of your songs, in order, kept in `songbooks.toml` in the library (it syncs, and you can edit it by hand). caracole makes each into three files in `Library/_songbooks/<name>/`:
+- **`songbook.html`**, for the phone: it opens on the contents; tap a song to open it in the sheet viewer, with everything the viewer does, each song in its own key. Next and Previous, a swipe or the arrow keys go from song to song, and it reopens where you were.
+- **`songbook.pdf`**: a title page, the contents, then every sheet in order, from one chordpro run.
+- **`songbook.cho`**: every song's ChordPro, to import into SongbookPro or OnSong.
+
+**On the page:** **Select**, beside the Sort menu, puts a box on each card or row. Tick songs in the order you want them, name the songbook and press Make songbook, or add them to one you have. A Songbooks section above the search lists each one, with ↑ ↓ × to reorder or take out songs, and Rename or delete. On the file on disk, the bar shows the command to run instead. **From a terminal:** `caracole songbook make|list|show|add|remove|move|rename|delete|render`. A song without a sheet, or removed from the library, keeps its place and is marked missing. The nightly run remakes a songbook's files only when something in it changed.
+
 ## Allow for disambiguation on the browser
 
 It's great that the cli allows for disambiguation by having differnet alternatives and then selecitng number, surface this in the browser too
