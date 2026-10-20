@@ -46,7 +46,7 @@ _VERSION = re.compile(r"\(\s*ver\.?\s*(\d+)[^)]*\)", re.IGNORECASE)
 _PARENS = re.compile(r"\s*\([^)]*\)")
 _GUITAR_FILE = re.compile(r"guitar-(\d+)\.", re.IGNORECASE)
 _SCORE_FILE = re.compile(r"score-(\d+)(\.[A-Za-z0-9]+)")
-MATCH_CUTOFF = 90
+MATCH_CUTOFF = 90  # music.Names.score is exact from 82 up (test_inbox.py)
 
 
 @dataclass

@@ -25,6 +25,14 @@ def test_parse_download_name(name, parsed):
     assert parse_download_name(name) == parsed
 
 
+def test_the_cutoff_is_one_music_names_scores_exactly():
+    # Names.score compares no artists for a title below music's cutoff less its margin, so a
+    # download's score is exact only from there up: inbox's own cutoff must stay at or above it.
+    from caracole import inbox, music
+
+    assert inbox.MATCH_CUTOFF >= music.MATCH_CUTOFF - music.MATCH_MARGIN
+
+
 def pick(conn, song, tab_id, *, kind="guitar-pro", version=1):
     return upsert_version(conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot="guitar", kind=kind,
                           rating=4.5, votes=10, version=version, label=None,
