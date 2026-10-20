@@ -980,6 +980,72 @@ def test_a_songbook_change_on_its_way_when_the_page_loads_shows_on_its_songbook(
     assert attribute(dom, "data-books") == {"same": True, "locked": True, "running": True}
 
 
+# Notes every layout shift that no input brought about since the page loaded (buffered): how much, and what
+# moved. A request's answer that comes seconds after its tap moves nothing on the screen.
+SHIFTS = """(() => {
+  window.shifts = [];
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) {
+      if (e.hadRecentInput) continue;
+      const moved = (e.sources || []).map((s) => (s.node ? s.node.id || String(s.node.className || s.node.nodeName) : "?"));
+      window.shifts.push({ value: Math.round(e.value * 10000) / 10000, moved });
+    }
+  }).observe({ type: "layout-shift", buffered: true });
+  return true;
+})()"""
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+@pytest.mark.parametrize("books", [0, 3])
+def test_a_songbook_made_then_deleted_moves_nothing_on_the_screen_when_it_is_done(serve, cfg, conn, tmp_path, size,
+                                                                                  books):
+    # Made from the Select bar, a songbook's card comes in at the end of the Songbooks section, its foot at the
+    # bottom of the screen (the first songbook too, near the top of the page, stretched to it), grows below it once
+    # made, then scrolls into view whole; deleted, it keeps its size. Each says how it goes on its card alone: no
+    # list of requests comes up.
+    from caracole.songbook import make_songbook, songbooks_file
+
+    for n in range(12):
+        add_song(conn, "Band", f"Song {n:02}")
+    for name, first, last in (("Campfire", 0, 8), ("Road trip", 8, 10), ("Quiet", 10, 12))[:books]:
+        make_songbook(songbooks_file(cfg.library_dir), name, [f"Band - Song {n:02}" for n in range(first, last)])
+    url = serve(FakeCaracole(cfg), "(() => {})();\n")
+    width, height = (int(n) for n in size.split(","))
+    book = '#songbooks .sb-card[data-songbook="Beach nights"]'
+    line = f"(() => {{ const p = document.querySelector('{book} .progress'); return p ? p.textContent : ''; }})()"
+    with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
+        page.open(url)
+        assert page.js(SHIFTS)
+        page.click(".pick-toggle")
+        for n in (4, 7):
+            page.click(f'#list article:nth-child({n + 1}) .pick')
+        if width < 500:
+            page.click(".pick-open")
+        page.click(".pick-name")
+        page.type("Beach nights")
+        page.click(".pickbar-form button[type=submit]")
+        assert page.wait(f"{line} === 'Made'", timeout=20), page.js(line)
+        page.js("new Promise((done) => setTimeout(done, 600))")  # the last frames, and any shift in them
+        made = page.js("window.shifts")
+        whole = page.js(f"""(() => {{ const r = document.querySelector('{book}').getBoundingClientRect();
+            return r.top >= 0 && r.bottom <= innerHeight && document.querySelectorAll('{book} .t').length; }})()""")
+        page.js("window.shifts = []")
+        page.click(f"{book} details.sb-more > summary")
+        page.click(f'{book} form[action="/songbook/delete"] input[type="checkbox"]')
+        page.click(f'{book} form[action="/songbook/delete"] button')
+        assert page.wait(f"{line} === 'Deleted'", timeout=20), page.js(line)
+        page.js("new Promise((done) => setTimeout(done, 600))")
+        deleted = page.js("window.shifts")
+        tray = page.js("document.getElementById('tray').hidden")
+        songs = page.js(f"Array.from(document.querySelectorAll('{book} .t, {book} form')).length")
+    # (The masthead's Requests counts what runs, as on every page that asks for something.)
+    moved = [s for s in made + deleted if s["moved"] != ["links"]]
+    assert moved == [], (made, deleted)
+    assert whole == 2  # made, in view whole, its two songs
+    assert tray is True
+    assert songs == 0  # deleted: nothing left on it to change
+
+
 # --- Remove ---------------------------------------------------------------------------------------------
 
 # The library in numbers, as the masthead, the buttons above the list and the count under them say it.
@@ -1019,6 +1085,7 @@ def test_remove_it_goes_back_to_the_library_where_the_song_says_removing_then_re
         assert page.wait("location.pathname === '/remove' && document.querySelector('form.confirm') !== null")
         page.click("form.confirm button.danger")
         assert page.wait(f"location.pathname === '/' && document.querySelector('{item} .progress') !== null")
+        assert page.js(SHIFTS)
         assert page.wait(f"location.hash === {json.dumps(left)}"), page.js("location.hash")  # as you left it
         at = page.js(f"""(() => {{ const r = document.querySelector('{item}').getBoundingClientRect();
             return [document.activeElement === document.querySelector('{item}'), r.top >= 0 && r.bottom <= innerHeight];
@@ -1032,9 +1099,12 @@ def test_remove_it_goes_back_to_the_library_where_the_song_says_removing_then_re
             return [c.querySelector('h2').textContent, c.querySelectorAll('a, button, form').length,
                     c.querySelector('.progress').getAttribute('role')]; })()""")
         page.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
-        counts = page.js(COUNTS)
+        shifts, counts = page.js("window.shifts"), page.js(COUNTS)
     assert gone == ["Creep", 0, "status"]  # nothing left to open or to ask for
     assert find_song(conn, creep.key) is None
+    # Its card keeps its place and its size, Removed, until the page is loaded again: nothing under it moves,
+    # only its own line, a little, to where its facts were.
+    assert all(s["moved"] == ["progress"] for s in shifts) and sum(s["value"] for s in shifts) < 0.01, shifts
     # It counts no more: the masthead, the buttons and the count agree on twelve songs left.
     searched = left == "#q=creep"
     assert counts == {"summary": ["12 songs", "0 found", "12 wanted"],

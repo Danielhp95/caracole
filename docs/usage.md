@@ -1840,10 +1840,11 @@ with it. A KEY that is no key exits with status 2.
   it queues `caracole remove --yes "ARTIST - TITLE"` and goes back to the
   library as you left it (its search, filters and view), the song's card in
   view, whose line says how it goes: "Queued…", "Removing from caracole…",
-  then "Removed", the card keeping only the song's name until you load the
-  page again (a row, the same). From then on the song counts nowhere: the
-  numbers at the top, the buttons' counts and the count over the list leave
-  it out. Keep it goes back there too, and nothing
+  then "Removed", the card keeping only the song's name, and its size, so
+  that nothing under it moves, until you load the page again (a row, the
+  same). From then on the song counts nowhere: the numbers at the top, the
+  buttons' counts and the count over the list leave it out. Keep it goes
+  back there too, and nothing
   changes. A page older than a change to the library (the song merged into
   another since, say) removes nothing: reload the library.
 - **How it goes, on the page.** A request leaves you where you are. The
@@ -1883,7 +1884,8 @@ with it. A KEY that is no key exits with status 2.
 
   Two requests or more also show as one short list in a corner, a line per
   song, which folds up or closes; on a phone it starts folded, a single
-  line. A screen reader hears each card's line as
+  line. A songbook's change and a removal stay out of it: the card where
+  you asked says how each goes. A screen reader hears each card's line as
   it changes, to the last one, and Fetch now hands the keyboard focus to that
   line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.
@@ -1922,9 +1924,14 @@ with it. A KEY that is no key exits with status 2.
   drawn again as songbooks.toml has it, the keyboard focus back on the
   button you pressed. Make songbook (or Add to) ends Select once the server
   has it, and the Songbooks section opens on the songbook, a new one at its
-  end ("Making the songbook…", then "Made"). A deleted songbook's card says
-  Deleted until you load the page again. A change that can't be made, such
-  as a name another songbook has, a song no longer in the library or a
+  end ("Making the songbook…", then "Made"), its foot at the bottom of the
+  screen (near the top of the page, it stretches down to it while it is
+  made): it fills in below the screen, then scrolls into view whole, so that
+  what is on the screen doesn't jump as it grows; stretched taller than what
+  it holds, it takes its own size at your next click or key. A deleted
+  songbook's card says Deleted, keeping its size, until you load the page
+  again. A change that can't be made, such as a name another songbook
+  has, a song no longer in the library or a
   songbook deleted since the page was made, is refused at once, and nothing
   runs: the card, or the Select bar, says why, and the bar keeps your ticks.
   Without JavaScript, each sends you to its line on `/jobs`.

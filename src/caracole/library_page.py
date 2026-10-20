@@ -2160,9 +2160,10 @@ _SCRIPT = r"""
   const trayToggle = byId("tray-toggle");
   const trayItems = new Map();  // job id -> its line in the list of requests
   let trayClosed = false;
-  // The list of requests, once there are two or more: one line each, not read out (the cards' lines are).
+  // The list of requests, once there are two or more: one line each, not read out (the cards' lines are). A
+  // songbook's change, or a removal, is left out: its card, where it was asked for, says how it goes.
   const trayShow = (view) => {
-    if (!tray) return;
+    if (!tray || view.kind === "songbook" || view.kind === "remove") return;
     const id = Number(view.id);
     let item = trayItems.get(id);
     if (!item) {
@@ -2298,8 +2299,17 @@ _SCRIPT = r"""
     const i = byIndex.get(id);
     if (i === undefined) return;
     songs[i] = Object.assign({}, songs[i], { status: "removed" });
-    cards.set(i, cards.has(i) ? refill(cards.get(i), goneItem(songs[i], false)) : goneItem(songs[i], false));
-    rows.set(i, rows.has(i) ? refill(rows.get(i), goneItem(songs[i], true)) : goneItem(songs[i], true));
+    // Drawn again where it is, as tall as it was: what is under it doesn't move, seconds after the tap.
+    const gone = (old, asRow) => {
+      const fresh = goneItem(songs[i], asRow);
+      if (!old) return fresh;
+      const tall = old.isConnected ? old.getBoundingClientRect().height : 0;
+      const kept = refill(old, fresh);
+      if (tall) kept.style.minHeight = tall + "px";
+      return kept;
+    };
+    cards.set(i, gone(cards.get(i), false));
+    rows.set(i, gone(rows.get(i), true));
     summarize();
     tallyChips();
     tell();
@@ -2316,7 +2326,8 @@ _SCRIPT = r"""
   // no songbook, hidden, for the first one. Without JavaScript the forms post as forms, and the server
   // answers with the requests page.
   const SONGBOOK_FORM = /^\/songbook\/(make|add|move|remove|rename|delete)$/;
-  const bookJobs = new Map();  // job id -> {book: the songbook it changes, card: its card, focus: the button sent}
+  // job id -> {book: the songbook it changes, card: its card, focus: the button sent, reveal: from the Select bar}
+  const bookJobs = new Map();
   const shelf = () => {
     const section = byId("songbooks");
     const details = section ? section.querySelector(":scope > details") : null;
@@ -2345,9 +2356,12 @@ _SCRIPT = r"""
     const at = document.activeElement;
     if (on && at && at.disabled && card.contains(at)) focusOn(bookLine(card));  // a disabled button drops it
   };
-  // Deleted, or never made: a songbook's card says so where it was, until the page is loaded again.
+  // Deleted, or never made: a songbook's card says so where it was, as tall as it was, so that what is under it
+  // doesn't move, until the page is loaded again.
   const goneBook = (card) => {
     const line = bookLine(card);
+    const tall = card.isConnected ? card.getBoundingClientRect().height : 0;
+    if (tall) card.style.minHeight = tall + "px";
     if (card.contains(document.activeElement) && !line.contains(document.activeElement)) focusOn(line);
     for (const child of Array.from(card.children)) {
       if (!child.classList.contains("sb-head") && child !== line) child.remove();
@@ -2429,6 +2443,34 @@ _SCRIPT = r"""
       const again = Array.from(job.card.querySelectorAll("button"))
         .find((b) => !b.disabled && (b.getAttribute("aria-label") || b.textContent) === job.focus);
       if (again) again.focus();
+    }
+    // Made, or added to, from the Select bar: the songbook scrolls into view whole, if its line is still where
+    // you left it (scrolling moves nothing on the page, as a card growing over what is on the screen would).
+    if (job && job.reveal && view.state === "done" && job.card.isConnected) {
+      const at = bookLine(job.card).getBoundingClientRect();
+      if (at.top >= 0 && at.bottom <= window.innerHeight) {
+        job.card.scrollIntoView({ block: "nearest", behavior: smooth() });
+      }
+    }
+    // A card stretched while its change ran keeps that height while it is taller than what it holds now, until
+    // your next click or key, when what moves under it moves for you.
+    if (job && job.reveal && !isActive(view) && job.card.style.minHeight) {
+      const card = job.card;
+      const stretched = card.style.minHeight;
+      card.style.minHeight = "";
+      const holds = card.getBoundingClientRect().height;  // no frame drawn in between: nothing moves
+      card.style.minHeight = stretched;
+      if (holds >= parseFloat(stretched)) {
+        card.style.minHeight = "";
+      } else {
+        const release = () => {
+          document.removeEventListener("click", release, true);
+          document.removeEventListener("keydown", release, true);
+          if (!card.classList.contains("sb-gone")) card.style.minHeight = "";
+        };
+        document.addEventListener("click", release, true);
+        document.addEventListener("keydown", release, true);
+      }
     }
     // The Select bar's menu of songbooks follows.
     document.dispatchEvent(new CustomEvent("caracole:songbooks", { detail: { books: listOf(view.songbooks.books) } }));
@@ -2640,8 +2682,17 @@ _SCRIPT = r"""
         const spot = bookSpot(view, plural(many, "song"), sent);
         if (spot && bar) {  // from the Select bar, the section opens on the songbook
           shelf().details.open = true;
-          spot.scrollIntoView({ block: "center", behavior: smooth() });
+          // Its foot at the screen's (its head at the top, if it is taller than the screen): what it gains once
+          // the change is over, its files and its songs, grows below the screen, and nothing on it moves then;
+          // the page scrolls it into view whole after that (drawSongbooks). Near the top of the page, which
+          // can't scroll that far, it is stretched to the screen's foot instead, now, as you tap.
+          const box = spot.getBoundingClientRect();
+          const taller = box.height > window.innerHeight * 0.75;
+          const reach = window.innerHeight - 16 - (box.top + window.scrollY);
+          if (!taller && reach > box.height) spot.style.minHeight = reach + "px";
+          spot.scrollIntoView({ block: taller ? "start" : "end", behavior: smooth() });
           focusOn(bookLine(spot));
+          bookJobs.get(Number(view.id)).reveal = true;
         }
         track(view);
       };
@@ -2691,7 +2742,7 @@ _SONGBOOK_STYLE = """
 .sb-list { display: grid; gap: 12px; padding: 0 16px 16px;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
 .sb-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
-  border-radius: 14px; background: var(--bg); }
+  border-radius: 14px; background: var(--bg); scroll-margin: 84px 0 16px; }
 .sb-card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
 .sb-songs { margin: 0; padding: 0; list-style: none; }
 .sb-songs li { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 2px 0;
