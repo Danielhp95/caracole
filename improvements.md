@@ -78,7 +78,11 @@ On NixOS, `services.caracole.web.enable = true` runs it as `caracole-web.service
 - **Its key** is the song's key, from the key work, so the viewer, info.json and index.html agree.
 - **index.html** links each viewer first.
 
-Opening it through `caracole serve` is being added now. Until then, open `sheet.html` from the library folder.
+**Served too, in [a7e1106](https://github.com/Danielhp95/caracole/commit/a7e1106).** `caracole serve` sends each song's viewer, so a card's "Sheet viewer" link works over the server, on a phone too.
+- **Only caracole's own page:** it sends a viewer only while it is still the page caracole last wrote (its SHA-256 and length are recorded at render), never through a symbolic link.
+- **In a sandbox:** its Content-Security-Policy is the page's own, so it runs only its own script and style.
+- **Edited copies:** a viewer edited on a synced device answers 404, and says the PDF is beside it.
+- **Settings in the address:** the transposition, mode and capo live in the address (`sheet.html#t=2&mode=aeolian`), so a reload or Back keeps them.
 
 ## yt-dlp for downloading songs
 
