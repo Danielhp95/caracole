@@ -31,11 +31,10 @@ import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rapidfuzz import fuzz
-
 from caracole.library import NotRegularFile, keep_file, song_dir
+from caracole.music import Names
 from caracole.musicxml import header
-from caracole.normalize import clean_title, compact, has_other_script, identity_key, name_forms, slug_key
+from caracole.normalize import clean_title, compact, has_other_script, identity_key, slug_key
 from caracole.songs import Song, get_song, list_songs, utc_now_iso
 from caracole.versions import VersionRow, picks, upsert_version
 
@@ -102,34 +101,13 @@ def _match(artist: str | None, title: str, candidates: list[tuple[Song, list[Ver
         for song, open_picks in candidates:
             if song.key == key:
                 return song, open_picks
-    titles = name_forms(clean_title(title))
-    best, best_score = None, 0.0
-    for song, open_picks in candidates:
-        score = _title_score(titles, song)
-        if artist:
-            score = min(score, _artist_score(artist, song.artist))
-        if score >= MATCH_CUTOFF and score > best_score:
-            best, best_score = (song, open_picks), score
-    if best is None or artist:
-        return best
-    # A name without an artist is only trusted when exactly one song fits.
-    fits = [c for c in candidates if _title_score(titles, c[0]) >= MATCH_CUTOFF]
-    return best if len(fits) == 1 else None
-
-
-def _title_score(titles: tuple[str, ...], song: Song) -> float:
-    """How alike a download's title forms and a song's title are, 0-100."""
-    return max((fuzz.ratio(t, s) for t in titles for s in name_forms(clean_title(song.title))), default=0.0)
-
-
-def _artist_score(artist: str, other: str) -> float:
-    """How alike two artists' names are, compared as words (``token_set_ratio``) and whole."""
-    words = [k.replace("-", " ") for k in name_forms(other)]
-    return max(
-        (max(fuzz.ratio(a, b), fuzz.token_set_ratio(a, b))
-         for a in (k.replace("-", " ") for k in name_forms(artist)) for b in words),
-        default=0.0,
-    )
+    own = Names.of(artist or "", title)
+    alike = own.score if artist else own.title_score
+    scored = ((alike(Names.of(song.artist, song.title)), (song, open_picks)) for song, open_picks in candidates)
+    fits = [(score, c) for score, c in scored if score >= MATCH_CUTOFF]
+    if not fits or (not artist and len(fits) > 1):
+        return None  # a name without an artist is only trusted when exactly one song fits
+    return max(fits, key=lambda fit: fit[0])[1]  # the first of the closest
 
 
 def _choose_pick(open_picks: list[VersionRow], version: int | None, ext: str) -> VersionRow:

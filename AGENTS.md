@@ -36,7 +36,7 @@ an earlier one failed:
 | lyrics | lyrics.py |
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), rank.py, coverage.py, versions.py |
 | lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` is for searches, not wired in yet, `artist_slugs` for the sheets) |
-| scan | music.py (Music/), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
+| scan | music.py (Music/; `Names`, how alike a file's names and a song's are, for purchases and the inbox), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
 | youtube | youtube.py (video addresses, picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
@@ -237,7 +237,8 @@ Traps:
   `test_commands_index_match.py::test_registering_the_commands_imports_neither_the_matcher_nor_the_index`
   fails when importing `caracole.cli` loads rapidfuzz, `caracole.match` or `caracole.ug`; the
   `test_registering_the_command*` tests of fetch, lyrics, sources, autochords and youtube do
-  the same.
+  the same. music.py imports mutagen in `read_audio` alone: inbox.py, which the pages import,
+  scores names with its `Names` (`test_music.py::test_the_pages_load_no_tag_reader`).
 - Branch from `caracole-v1`, the default branch (`main` holds only the first design commit).
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:

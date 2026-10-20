@@ -1,7 +1,10 @@
 import os
+import subprocess
+import sys
 import wave
 from pathlib import Path
 
+import pytest
 from mutagen.id3 import TALB, TIT2, TPE1
 from mutagen.wave import WAVE
 
@@ -9,7 +12,7 @@ from caracole.lyrics import Lyrics
 from caracole.music import AUDIO_EXTENSIONS, read_audio, scan_music
 from caracole.songs import get_song, update_song
 
-from conftest import add_song
+from conftest import add_song, subprocess_pythonpath
 
 
 def make_wav(path: Path, seconds: float = 1.0, *, artist=None, title=None, album=None) -> Path:
@@ -102,6 +105,18 @@ def test_missing_music_dir_is_fine(conn, tmp_path):
 
 def test_extensions():
     assert {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav"} <= set(AUDIO_EXTENSIONS)
+
+
+@pytest.mark.slow
+def test_the_pages_load_no_tag_reader():
+    # inbox.py, which the pages and the server import for its constants, compares names with this
+    # module's Names: mutagen is imported only to read a file's tags.
+    code = ("import sys; import caracole.library_page, caracole.todo, caracole.web.files; "
+            "print(sorted(m for m in sys.modules if m.startswith('mutagen')))")
+    src = Path(__file__).resolve().parents[1] / "src"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
+                         env={"PYTHONPATH": subprocess_pythonpath(src)})
+    assert out.stdout.strip() == "[]"
 
 
 # --- a disk that isn't there tonight --------------------------------------------------------
