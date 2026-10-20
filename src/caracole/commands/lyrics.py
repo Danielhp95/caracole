@@ -1,7 +1,10 @@
 """``caracole lyrics``, ``lacuerda``, ``gtptabs`` and ``musescore``: one step of the nightly run, by hand.
 
 Each makes the same pass as its ``caracole run`` step, with a client of its own:
-this run's budget, and the HTTP cache the nightly run uses too. As in the run,
+this run's budget, and the HTTP cache the nightly run uses too; the lacuerda step's
+two, its sheets and its listings of every artist, are ``caracole lacuerda`` and
+``caracole lacuerda --index``, which reads the listings even for an empty library.
+As in the run,
 a provider cooling down after a block is left alone, and a block starts (or
 extends) its cooldown and sends one ntfy alert. Neither is a failure, and
 neither is a spent budget: each prints what happened and exits 0, as
@@ -44,6 +47,7 @@ if TYPE_CHECKING:
     from caracole.gtptabs_fetch import GtpTabsStats
     from caracole.http import Client
     from caracole.lacuerda_fetch import LaCuerdaStats
+    from caracole.lacuerda_index import IndexStats
     from caracole.lyrics import LyricsStats
     from caracole.musescore_fetch import MuseScoreStats
     from caracole.overrides import Overrides
@@ -60,9 +64,19 @@ def register(app: typer.Typer) -> None:
         _lyrics(load_cfg(ctx))
 
     @app.command("lacuerda")
-    def lacuerda_cmd(ctx: typer.Context) -> None:
+    def lacuerda_cmd(
+        ctx: typer.Context,
+        index: bool = typer.Option(
+            False, "--index",
+            help="Instead, read LaCuerda's listings of every artist into its local index (artist slugs, for searches).",
+        ),
+    ) -> None:
         """Look for LaCuerda chord sheets for Spanish songs without a complete one."""
-        _lacuerda(load_cfg(ctx))
+        cfg = load_cfg(ctx)
+        if index:
+            _lacuerda_index(cfg)
+        else:
+            _lacuerda(cfg)
 
     @app.command("gtptabs")
     def gtptabs_cmd(ctx: typer.Context) -> None:
@@ -131,6 +145,36 @@ def _lacuerda(cfg: Config) -> None:
         typer.echo("Songs with an error are tried again next run.")
     if s.budget_exhausted:
         _budget_spent(cfg, "lacuerda")
+
+
+def _lacuerda_index(cfg: Config) -> None:
+    """Read LaCuerda's listings of every artist into the index when due, then say what it holds."""
+    from caracole.lacuerda_index import index_pass, index_size
+
+    overrides = load_ovr(cfg)  # for the pages
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime) -> tuple[IndexStats, tuple[int, int]]:
+        return index_pass(conn, client, now), index_size(conn)
+
+    def ran(result: tuple[IndexStats, tuple[int, int]]) -> bool:
+        s = result[0]
+        return bool(s.pages or s.errors or s.budget_exhausted)
+
+    result = _provider_pass(cfg, "lacuerda", run, overrides, ran)
+    if result is None:
+        return
+    s, (artists, songs) = result
+    held = f"{_count(artists, 'artist')} and {_count(songs, 'song')}"
+    if not ran(result):
+        typer.echo(f"LaCuerda's artist index is up to date: {held}.")
+        return
+    if s.pages:
+        typer.echo(f"Index: {_count(s.pages, 'page')} of artists read.")
+    errors = f", {_count(s.errors, 'error')}; the next run asks again" if s.errors else ""
+    typer.echo(f"LaCuerda: {held} in the index{errors}.")
+    if s.budget_exhausted:
+        typer.echo(f"LaCuerda's budget of {_count(cfg.provider('lacuerda').budget, 'request')} per run is spent; "
+                   "the next run reads the rest of its listings.")
 
 
 def _gtptabs(cfg: Config) -> None:

@@ -73,7 +73,7 @@ lookup_per_hour = 60              # requests to the site for every lookup of an 
 [providers.lrclib]                # lyrics
 budget = 200
 delay = [1, 2]
-[providers.lacuerda]              # Spanish chord sheets
+[providers.lacuerda]              # Spanish chord sheets, and its listings of every artist
 budget = 30
 delay = [10, 20]
 [providers.gtptabs]               # Guitar Pro files, downloaded for you
@@ -131,12 +131,15 @@ goes when the PDF is done, so caracole must be able to write there. Its
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
 to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
-status 2: `database: … is at schema version 6, but this caracole knows up to 5:
+status 2: `database: … is at schema version 7, but this caracole knows up to 6:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
 when there is one. Schema 4 keeps the songs you removed. Schema 5 adds an index of the UG index's names, for
 searching as you type: the first command after the upgrade builds it from the
 index, in a few seconds, and it adds about a quarter to the database's size
-(about 75 MB to a full index's 315). A state folder caracole can't use ends a command with status
+(about 75 MB to a full index's 315). Schema 6 adds LaCuerda's artist index, empty
+until the nightly run, or `caracole lacuerda --index`, reads LaCuerda's listings
+of every artist (see [`caracole lacuerda`](#one-step-at-a-time)). A state
+folder caracole can't use ends a command with status
 1 and `can't open the database …` (or `can't open …/caracole.lock: …`).
 `caracole add` is the exception to both: it keeps its line and warns (see
 below).
@@ -774,7 +777,10 @@ configuration it would take, and why it waits.
 4. **match**: match every song again, locally.
 5. **lyrics**: ask LRCLIB for the songs that have no lyrics yet.
 6. **fetch**: rank and keep Ultimate Guitar sheets and guitar parts.
-7. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet.
+7. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet,
+   then read LaCuerda's listings of every artist into a local index, for
+   searches, with what the sheets left of its budget (once the library has a
+   song: an empty one asks no site).
 8. **scan**: link purchases in Music/, and file Guitar Pro downloads.
 9. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
    has none. It comes after the scan, so a file you dropped into `_inbox/` is
@@ -800,14 +806,17 @@ overloaded, it reads:
     Until then, no song is matched or looked for on Ultimate Guitar.
 
     Songs: 1 in wanted.txt, 1 new.
+    LaCuerda: 30 pages of artists read.
 
     1 thing on your to-do page needs you: /home/you/Tabs/_todo.md
     LRCLIB didn't answer (HTTP 503), so the lyrics of 1 song will be tried again on the next run.
-    Requests: Ultimate Guitar 0 of 60, LRCLIB 2 of 200, LaCuerda 0 of 30.
+    Requests: Ultimate Guitar 0 of 60, LRCLIB 2 of 200, LaCuerda 30 of 30 (used up: the rest waits for the next run).
     Took 3 s.
 
 (gtptabs.com and MuseScore were turned off that night; when they're on, as
-they are by default, the Requests line lists them too.)
+they are by default, the Requests line lists them too. LaCuerda's requests are
+its listings of every artist, about 200 pages: the first nights read them 30
+a night, each going on where the last stopped.)
 
 - **First** comes the one thing that unblocks the rest, when there is one, said
   once however many steps wait for it: build or finish the index, fix
@@ -940,7 +949,32 @@ and cache.
   pinned. A LaCuerda sheet the library lost is written again at the next
   pass, whatever the date, usually from the cache. An artist LaCuerda doesn't
   have gets an almost empty page, with HTTP 200; caracole reads that as "not on
-  LaCuerda". A cooldown, a block or a spent budget exits 0.
+  LaCuerda". The artist's page is asked for first under the slug LaCuerda's
+  own listings give the name, when its artist index has it (Enanitos Verdes
+  are `enanitos` there), then under slugs made from the name; the songs of
+  every artist page caracole reads go into that index. A cooldown, a block or
+  a spent budget exits 0.
+
+  **`caracole lacuerda --index`** reads LaCuerda's listings of every artist
+  into that local index instead, as the nightly lacuerda step does with what
+  its sheets left of the budget. LaCuerda has no sitemap: `/tabs/e/` and the
+  other initials show only their 50 most popular artists, and every artist is
+  on `/tabs/e/index0.html`, `index100.html`…, 100 a page (E has 7 pages and 639
+  artists; the whole index is about 200 pages). Each initial's first page says
+  which pages it has. The index holds each artist's name as LaCuerda writes
+  it, the slug of their page and the songs it counts, and the songs of the
+  artist pages caracole has read, from its cache, with no request of their
+  own. The listings are read when they never all were, and again after 30 days
+  with conditional requests (a page unchanged since costs a request, answered
+  304); a spent budget leaves the rest for the next run, which goes on where
+  this one stopped. It prints `Index: 30 pages of artists read.` and
+  `LaCuerda: 2950 artists and 140 songs in the index.`, or
+  `LaCuerda's artist index is up to date: 19500 artists and 140 songs.` when
+  nothing was due. A page that won't parse, or any other error, leaves the
+  index as it was and counts as an error: an error never empties an initial.
+  A cooldown, a block or a spent budget exits 0. The lacuerda step reads the
+  artists' slugs from it; `caracole search` and the Look up page don't read it
+  yet.
 - **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
   song that has no Guitar Pro or Power Tab file, newest songs first. It reads
   gtptabs.com's sitemaps into a local index when it never has, or last did 30

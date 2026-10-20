@@ -166,7 +166,8 @@ def _header(headers: Mapping[str, str], name: str) -> str | None:
 # The Disallow lines of the "User-agent: *" group of each host's robots.txt, as fetched
 # on 2026-10-18 (docs/spike-2026-10-18.md), gtptabs.com's and musescore.com's on 2026-10-19
 # (tests/fixtures/gtptabs/robots.txt, tests/fixtures/musescore/robots.txt). LaCuerda's
-# robots.txt is empty and LRCLIB is an API, so their hosts have none.
+# robots.txt is empty (tests/fixtures/lacuerda/robots.txt, 2026-10-20) and LRCLIB is an API,
+# so their hosts have none.
 ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     # /storage/ holds each artist's "Download all" archive; /ru/ is half of every sitemap.
     "gtptabs.com": (

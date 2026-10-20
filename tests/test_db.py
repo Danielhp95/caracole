@@ -150,7 +150,7 @@ def test_a_version_3_database_gains_the_removed_songs_and_keeps_its_songs(tmp_pa
     db.connect(path).close()
 
     cols, version = columns(path, "removed")
-    assert version == NOW == 5
+    assert version == NOW
     assert cols == ["key", "artist", "title", "source_ids", "removed_at"]
     c = sqlite3.connect(path)
     assert c.execute("SELECT key FROM songs").fetchall() == [("blur/song-2",)]
@@ -191,13 +191,42 @@ def test_a_version_4_database_gains_the_substring_index_and_keeps_its_removed_so
     old.close()
 
     c = db.connect(path)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW == 5
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW
     assert sorted(r[0] for r in c.execute("SELECT key FROM ug_keys")) == ["oasis", "wonderwall"]
     found = c.execute("SELECT key FROM ug_keys WHERE id IN (SELECT rowid FROM ug_keys_fts WHERE key LIKE '%derwa%')")
     assert [r[0] for r in found] == ["wonderwall"]
     assert [tuple(r) for r in c.execute("SELECT key, artist, title FROM removed")] == [("blur/song-2", "Blur", "Song 2")]
     c.close()
     assert columns(path.with_name("caracole.sqlite.v4.bak"), "ug_keys") == ([], 4)
+
+
+def test_a_version_5_database_gains_the_lacuerda_index_and_keeps_its_ug_keys(tmp_path):
+    # As the fast-lookup caracole left it: schema 5, with a song and an index row.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in (1, 2, 3, 4, 5)) + "\nPRAGMA user_version = 5;")
+    old.execute("INSERT INTO ug_index VALUES (1, 'estopa', 'como-camaron', 'chords', '1', 'x', '')")
+    old.execute(
+        "INSERT INTO songs (key, artist, title, artists, added_at, created_at, updated_at) "
+        "VALUES ('estopa/como-camaron', 'Estopa', 'Como Camarón', '[\"Estopa\"]', 'x', 'x', 'x')"
+    )
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW == 6
+    c.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, page) "
+              "VALUES ('estopa/', 'estopa', 'Estopa', 'estopa', 'tabs/e/index0.html')")
+    row = c.execute("SELECT title, title_key, songs, versions, acordes, popular FROM lacuerda_index").fetchone()
+    assert tuple(row) == ("", "", 0, "", 0, None)
+    assert [r[0] for r in c.execute("SELECT key FROM songs")] == ["estopa/como-camaron"]
+    assert sorted(r[0] for r in c.execute("SELECT key FROM ug_keys")) == ["como-camaron", "estopa"]
+    c.close()
+    cols, _ = columns(path, "lacuerda_index")
+    assert cols == ["path", "artist_slug", "artist", "artist_key", "title", "title_key", "songs", "versions",
+                    "acordes", "popular", "page"]
+    assert columns(path.with_name("caracole.sqlite.v5.bak"), "lacuerda_index") == ([], 5)
 
 
 def test_the_substring_index_follows_the_rows_a_sitemap_adds_or_renames(conn):

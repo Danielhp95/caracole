@@ -23,6 +23,19 @@ the pages look like (captured 18 October 2026; robots.txt is empty):
 - **Version pages** are ``/{artist}/{song}.shtml`` for version 1 and
   ``/{artist}/{song}-{n}.shtml`` after that. The sheet is ``div#t_body > pre``,
   with chords as ``<A>Bm</A>`` and an empty ``<div></div>`` before each chord line.
+  A song's own page, ``/{artist}/{song}``, lists its versions.
+- **The artist listings** (checked 20 October 2026): LaCuerda has no sitemap
+  (``/sitemap.xml`` and ``/sitemap_index.xml`` answer 404, and robots.txt names
+  none), but ``/tabs/`` links a listing for each initial (:data:`LETTERS`).
+  ``/tabs/{letter}/`` shows the 50 most popular artists only; every artist is
+  on ``/tabs/{letter}/index0.html``, ``index100.html``…, 100 a page, in
+  ``ul#i_main > li``: a link to ``/{slug}/``, the name after an
+  ``<em>Acordes de</em>`` label, and the songs counted in a ``<span>``. Each
+  page's ``div.multipag`` links every page of the letter and counts its
+  artists (E: 7 pages, 639 artists). The listings are static files: they
+  answer with a ``Last-Modified``. The name is LaCuerda's, and the slug its
+  own: "Los Ecos" is filed under E as ``ecos``, "Enanitos Verdes" as
+  ``enanitos``, which :func:`artist_slug` couldn't guess.
 """
 
 from __future__ import annotations
@@ -76,6 +89,27 @@ class LCSong:
     types: str
     ranking: tuple[int, ...]
     lcd: str = field(default="", repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class LCArtist:
+    """An artist of a letter's listing: the slug of their page, their name as LaCuerda
+    writes it ("Los Ecos"), and how many songs the listing counts."""
+
+    slug: str
+    name: str
+    songs: int
+
+
+@dataclass(frozen=True)
+class Listing:
+    """A page of a letter's listing: its artists, in page order; every page of the letter
+    (``index0.html``…) it links, its own included when its address is known; and how many
+    artists the letter has, as it counts them (None when it doesn't say)."""
+
+    artists: tuple[LCArtist, ...]
+    pages: tuple[str, ...]
+    total: int | None
 
 
 # --- slugs and URLs ----------------------------------------------------------
@@ -140,6 +174,29 @@ def version_url(artist: str, song: str, n: int) -> str:
         raise ValueError(f"LaCuerda version numbers start at 1, not {n}")
     suffix = "" if n == 1 else f"-{n}"
     return f"{BASE_URL}/{artist}/{song}{suffix}.shtml"
+
+
+def song_url(artist: str, song: str) -> str:
+    """A song's own page, which lists its versions: ``.../soda_stereo/de_musica_ligera``."""
+    if not artist or not song:
+        raise ValueError("empty LaCuerda artist or song slug")
+    return f"{BASE_URL}/{artist}/{song}"
+
+
+# LaCuerda's initials, as the menu of /tabs/ links them: "#" (a name that starts with a
+# digit) is _num, and "ñ" is nn.
+LETTERS = ("_num", *"abcdefghijklmn", "nn", *"opqrstuvwxyz")
+FIRST_PAGE = "index0.html"
+
+
+def listing_path(letter: str, page: str = FIRST_PAGE) -> str:
+    """The path of a page of a letter's listing of every artist: ``tabs/e/index0.html``."""
+    return f"tabs/{letter}/{page}"
+
+
+def listing_url(path: str) -> str:
+    """The address of a listing page from its path (:func:`listing_path`)."""
+    return f"{BASE_URL}/{path}"
 
 
 # --- the artist page ---------------------------------------------------------
@@ -230,6 +287,99 @@ def _link_title(link: LexborNode) -> str:
     if nodes and nodes[-1].tag == "em":
         nodes.pop()
     return " ".join("".join(n.text(deep=True) for n in nodes).split())
+
+
+_POP_ORDER = re.compile(r"var\s+popOrder\s*=\s*\[([^\]]*)\]")
+
+
+def parse_popularity(html: str) -> dict[str, int]:
+    """Each song's place in the artist page's order of popularity, by slug, 0 the most popular.
+
+    The page's script (``var popOrder = [5,9,11,…]``) numbers the items of ``ul#b_main`` in
+    page order, most popular first. A number past the list is skipped; a page without the
+    order, or with one that isn't numbers, gives none.
+    """
+    found = _POP_ORDER.search(html)
+    if found is None:
+        return {}
+    try:
+        order = [int(n) for n in found.group(1).split(",") if n.strip()]
+    except ValueError:
+        return {}
+    items = LexborHTMLParser(html).css("ul#b_main > li")
+    slugs = []
+    for item in items:
+        link = item.css_first("a[href]")
+        slugs.append(_slug_from_href(link.attributes.get("href") or "") if link is not None else "")
+    places: dict[str, int] = {}
+    for place, n in enumerate(order):
+        if 0 <= n < len(slugs) and slugs[n] and slugs[n] not in places:
+            places[slugs[n]] = place
+    return places
+
+
+def parse_artist_name(html: str) -> str | None:
+    """The artist's name as their page heads it (``div.bTit > h1``), or None without one."""
+    heading = LexborHTMLParser(html).css_first("div.bTit > h1")
+    name = " ".join(heading.text(deep=True).split()) if heading is not None else ""
+    return name or None
+
+
+# --- the artist listings -------------------------------------------------------
+
+_PAGE_NAME = re.compile(r"index(\d+)\.html")
+_LEADING_NUMBER = re.compile(r"\s*(\d+)")
+_SLUG = re.compile(r"[a-z0-9_]+")
+
+
+def parse_listing_page(html: str, *, url: str | None = None) -> Listing:
+    """A page of a letter's listing of every artist (``/tabs/{letter}/index0.html``…).
+
+    The pages come from the first ``div.multipag``, ordered by number, with this page's
+    own name taken from ``url``. Raises :class:`LaCuerdaParseError` when there is no
+    ``ul#i_main``, or when it has items but none with a link to an artist page, so a
+    changed page is never read as a letter without artists. An empty list is a listing.
+    """
+    tree = LexborHTMLParser(html)
+    main = tree.css_first("ul#i_main")
+    if main is None:
+        raise LaCuerdaParseError("no artist list (ul#i_main)", url=url)
+    artists = []
+    items = main.css("li")
+    for item in items:
+        link = item.css_first("a[href]")
+        slug = _artist_slug_from_href(link.attributes.get("href") or "") if link is not None else ""
+        if not slug:
+            continue
+        name = " ".join("".join(n.text(deep=True) for n in link.iter(include_text=True)
+                                if n.tag != "em").replace("\xa0", " ").split())
+        count = item.css_first("span")
+        number = _LEADING_NUMBER.match(count.text(deep=True)) if count is not None else None
+        artists.append(LCArtist(slug, name or slug, int(number.group(1)) if number else 0))
+    if items and not artists:
+        raise LaCuerdaParseError("no artist in the list has a link to their page", url=url)
+    pages = set()
+    total = None
+    multipag = tree.css_first("div.multipag")
+    if multipag is not None:
+        for item in multipag.css("li[onclick]"):
+            found = _PAGE_NAME.search(item.attributes.get("onclick") or "")
+            if found:
+                pages.add(found.group(0))
+        counted = multipag.css_first("li.last")
+        number = _LEADING_NUMBER.match(counted.text(deep=True)) if counted is not None else None
+        total = int(number.group(1)) if number else None
+    own = _PAGE_NAME.fullmatch(urlsplit(url).path.rsplit("/", 1)[-1]) if url else None
+    if own:
+        pages.add(own.group(0))
+    ordered = tuple(sorted(pages, key=lambda p: int(_PAGE_NAME.fullmatch(p).group(1))))
+    return Listing(tuple(artists), ordered, total)
+
+
+def _artist_slug_from_href(href: str) -> str:
+    """The slug of an artist page's link, ``/estopa/`` (or its full address); "" for any other link."""
+    segments = [s for s in urlsplit(href.strip()).path.split("/") if s]
+    return segments[0] if len(segments) == 1 and _SLUG.fullmatch(segments[0]) else ""
 
 
 def match_title(songs: Iterable[LCSong], title: str, *, cutoff: float = 90) -> LCSong | None:

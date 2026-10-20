@@ -10,6 +10,8 @@ Tables (plan §5, plus ``kv``):
   until you ask for them again (schema 4).
 - ``ug_keys`` and ``ug_keys_fts``: every key of ``ug_index``, with a trigram index for
   substring search (schema 5, ug/key_search.py).
+- ``lacuerda_index``: LaCuerda's artists, from its listings, and the songs of the artist
+  pages caracole has read (schema 6, lacuerda_index.py).
 - ``versions``: every sheet, tab or Guitar Pro version seen for a song.
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
@@ -24,7 +26,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -200,9 +202,36 @@ INSERT OR IGNORE INTO ug_keys(key) SELECT artist_key FROM ug_index UNION SELECT 
 CREATE INDEX IF NOT EXISTS events_provider_at ON events(provider, at);
 """
 
+# LaCuerda's artist index, read by lacuerda_index.py. A row per artist of its listings, keyed
+# by the path of their page ("estopa/"), and per song of an artist page caracole read
+# ("estopa/como_camaron"); an artist's row has no title: '' in both title columns. The names
+# are LaCuerda's, the keys their identity keys (Chinese in pinyin), made again from the names
+# when caracole's keys change. songs: the songs an artist's listing counts; versions: a
+# song's lcd letters, one per version; acordes: its best Letra y Acordes version, 0 for none;
+# popular: its place in its artist page's order of popularity, 0 first. page: the listing
+# page ("tabs/e/index0.html") or the artist page ("estopa/") the row was read from.
+_SCHEMA_V6 = """
+CREATE TABLE IF NOT EXISTS lacuerda_index (
+  path TEXT PRIMARY KEY,
+  artist_slug TEXT NOT NULL,
+  artist TEXT NOT NULL,
+  artist_key TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  title_key TEXT NOT NULL DEFAULT '',
+  songs INTEGER NOT NULL DEFAULT 0,
+  versions TEXT NOT NULL DEFAULT '',
+  acordes INTEGER NOT NULL DEFAULT 0,
+  popular INTEGER,
+  page TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS lacuerda_index_artist ON lacuerda_index(artist_key);
+CREATE INDEX IF NOT EXISTS lacuerda_index_slug ON lacuerda_index(artist_slug);
+CREATE INDEX IF NOT EXISTS lacuerda_index_page ON lacuerda_index(page);
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
-_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5}
+_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):
