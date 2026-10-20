@@ -235,7 +235,7 @@ class WebApp:
             with closing(self._connect()) as conn:
                 song = get_song(conn, song_id)
                 pick = _pick(conn, song, overrides, search=True)
-        except KeyError:
+        except (KeyError, OverflowError):  # OverflowError: an id beyond any SQLite integer
             return _message(404, "No such song", "That song isn't in the library.")
         except OverridesError as e:
             return _message(503, "overrides.toml can't be read", f"overrides.toml can't be read: {e}.")
@@ -345,7 +345,7 @@ class WebApp:
         try:
             with closing(self._connect()) as conn:
                 song = get_song(conn, song_id)
-        except KeyError:
+        except (KeyError, OverflowError):  # OverflowError: an id beyond any SQLite integer
             return _message(404, "No such song", "That song isn't in the library.")
         except (sqlite3.Error, OSError) as e:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
@@ -387,7 +387,7 @@ class WebApp:
             with closing(self._connect()) as conn:
                 song = get_song(conn, song_id)
                 offered = _pick(conn, song, overrides, search=True)
-        except KeyError:
+        except (KeyError, OverflowError):  # OverflowError: an id beyond any SQLite integer
             return _message(404, "No such song", "That song isn't in the library.")
         except (sqlite3.Error, OSError) as e:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")

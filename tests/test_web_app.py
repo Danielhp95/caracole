@@ -17,6 +17,7 @@ from conftest import add_song
 
 HOST = "localhost:8737"
 ALLOWED = frozenset({"localhost", "127.0.0.1", "::1"})
+BEYOND_SQLITE = "99999999999999999999999"  # a song id larger than any SQLite integer
 JSON_BLOCK = re.compile(r'<script type="application/json" id="songs">(.*?)</script>', re.S)
 
 
@@ -258,6 +259,8 @@ def test_fetch_now_needs_a_song_of_the_library(app, conn, cfg):
     ignored = add_song(conn, "Queen", "Don't Stop Me Now")
     update_song(conn, ignored.id, status="ignored")
     assert post(app, "/fetch", {"song": "999"}).status == 404
+    for huge in (BEYOND_SQLITE, f"-{BEYOND_SQLITE}"):  # no SQLite integer: no song either
+        assert post(app, "/fetch", {"song": huge}).status == 404
     assert post(app, "/fetch", {"song": "x"}).status == 400
     assert post(app, "/fetch", {"song": str(ignored.id)}).status == 409
 
@@ -366,6 +369,7 @@ def test_none_of_these_rejects_the_candidates_shown_and_fetches_nothing(app, con
 @pytest.mark.parametrize("fields,status,message", [
     ({"song": "x", "pick": "radiohead/creep", "shown": SHOWN}, 400, "Which song?"),
     ({"song": "999", "pick": "radiohead/creep", "shown": SHOWN}, 404, "isn't in the library"),
+    ({"song": BEYOND_SQLITE, "pick": "radiohead/creep", "shown": SHOWN}, 404, "isn't in the library"),
     ({"pick": "", "shown": SHOWN}, 400, "Pick a candidate, or None of these"),
     ({"pick": "radiohead/high-and-dry", "shown": SHOWN}, 400, "isn't one of its candidates"),
     # The nightly run matched it again since the page was loaded: it may show other candidates now.
@@ -472,7 +476,8 @@ def test_the_pickers_page_escapes_every_name(app, conn):
     assert "&lt;b&gt;Evil&lt;/b&gt;" in body
 
 
-@pytest.mark.parametrize("path,status", [("/review", 400), ("/review?song=x", 400), ("/review?song=999", 404)])
+@pytest.mark.parametrize("path,status", [("/review", 400), ("/review?song=x", 400), ("/review?song=999", 404),
+                                         (f"/review?song={BEYOND_SQLITE}", 404)])
 def test_the_pickers_page_needs_a_song_of_the_library(app, conn, path, status):
     assert get(app, path).status == status
 
