@@ -91,6 +91,18 @@ a { color: inherit; }
 .tab { margin: .25em 0; padding: .55em .7em; overflow-x: auto; border-radius: 8px; background: var(--raised);
   font: .78em/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .gap { height: .65em; }
+/* What the tab says before its first section (notes, a link, a chord legend): small and muted,
+   folded after two lines, with More (a <details>: it opens without the script too). */
+.pre { margin: 0 0 1.05em; color: var(--muted); font-size: .75em; line-height: 1.4; break-inside: avoid; }
+.pre summary { display: flex; align-items: flex-end; gap: 12px; min-height: 44px; padding: 3px 0; list-style: none;
+  cursor: pointer; }
+.pre summary::-webkit-details-marker { display: none; }
+.pre .peek { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.pre .more, .pre .less { flex: none; margin-left: auto; color: var(--accent); font-weight: 650; }
+.pre[open] .peek, .pre[open] .more, .pre:not([open]) .less { display: none; }
+.pre[open] summary { align-items: center; }
+@media print { .pre .more { display: none; } }
 
 /* Every chord's shape at a glance: large enough to read, without the fingers (the card has them). */
 .strip { display: flex; gap: 6px; margin: 14px -16px 0; padding: 4px 16px 6px; overflow-x: auto;

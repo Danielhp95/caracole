@@ -50,7 +50,7 @@ from caracole.viewer.theory import key_name, parse_chord
 
 HERE = Path(__file__).parent
 LIBRARY_PAGE = "../../index.html"  # Library/_songbooks/<name>/songbook.html -> Library/index.html
-VERSION = 2  # of the page's markup: a new one makes every songbook.html again
+VERSION = 3  # of the page's markup: a new one makes every songbook.html again
 
 
 @dataclass(frozen=True)

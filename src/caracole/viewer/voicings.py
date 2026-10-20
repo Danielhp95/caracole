@@ -16,6 +16,9 @@ from the base fret (1 is the base fret itself); ``fingers`` likewise, 0 for none
 The data is filed by quality and root: ``data[quality][root]`` is the root's positions
 (pitch class 0, C, first). A slash chord's quality is "<quality>/<bass interval>", so
 C/E is ``data["/4"][0]`` and Am/G ``data["m/10"][9]``.
+
+A tab may give fingerings of its own, in a chord legend before the song ("Cadd9 (x32033)"):
+``parse_fingering`` reads one as a position, and ``chord_legend`` a legend's line.
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from caracole.viewer.theory import QUALITIES, Chord, note_pc
+from caracole.viewer.theory import QUALITIES, Chord, note_pc, parse_chord
 
 DATA_FILE = Path(__file__).with_name("voicings.json")
 LICENSE_FILE = Path(__file__).with_name("LICENSE-chords-db")
@@ -115,6 +118,62 @@ def _plays(position: Position, chord: Chord) -> bool:
     if not notes or not pcs <= chord.pitch_classes or chord.root not in pcs:
         return False
     return chord.bass is None or min(notes) % 12 == chord.bass
+
+
+# A fingering as tabs write it, low E first: six characters ("x32033"), or six frets apart
+# ("x-3-2-0-3-3", "8 10 10 9 8 8"), maybe in brackets.
+_FRET = r"(?:[xX]|\d{1,2})"
+_FRETS = rf"[xX\d]{{6}}|{_FRET}(?:[\s.,-]+{_FRET}){{5}}"
+_GIVEN = rf"\(\s*(?:{_FRETS})\s*\)|(?:{_FRETS})"
+_FINGERING = re.compile(rf"\s*(?:\(\s*({_FRETS})\s*\)|({_FRETS}))\s*")
+_FRET_SPAN = 9  # a position's frets are one character each, counted from its base fret
+# One chord of a legend's line: its name, maybe ":", "=" or "-", and its fingering ("Dsus4/F#(2x0233)",
+# "Cadd9: x32033"). The name is the shortest that leaves a fingering ending where the line or the
+# next chord ("| G 320033") does: "E5 0 2 2 x x x" is an E5, not an E with its 5th fret held.
+_ENTRY = re.compile(
+    rf"\s*(?:[;|]\s*)?([A-G][^\s()\[\]:=;|]*?)\s*(?:[-:=]\s*)?({_GIVEN})(?=\s*(?:[;|]\s*)?(?:[A-G]|\Z))"
+)
+
+
+def parse_fingering(text: str) -> Position | None:
+    """A fingering as a tab writes it ("x32033", "(x32033)", "x-3-2-0-3-3"), as a position.
+
+    It says nothing of the fingers ("000000") or barres. Its frets are counted from the
+    nut when the highest is the 4th or lower, else from the lowest held, as chords-db's
+    are (``[frets, fingers, base fret, barres]``). None when the text is no fingering, or
+    sounds no string.
+    """
+    m = _FINGERING.fullmatch(text)
+    if not m:
+        return None
+    raw = m.group(1) or m.group(2)
+    parts = list(raw) if len(raw) == len(TUNING) else re.split(r"[\s.,-]+", raw)
+    frets = [None if p in "xX" else int(p) for p in parts]
+    held = [f for f in frets if f]
+    if all(f is None for f in frets) or any(f is not None and f > 24 for f in frets):
+        return None
+    base = 1 if not held or max(held) <= 4 else min(held)
+    if held and max(held) - base + 1 > _FRET_SPAN:
+        return None
+    shown = "".join("x" if f is None else "0" if f == 0 else str(f - base + 1) for f in frets)
+    return [shown, "0" * len(TUNING), base, []]
+
+
+def chord_legend(line: str) -> list[tuple[Chord, Position]]:
+    """The chords a line of a tab's chord legend gives fingerings for ("Dsus4   (xx0233)",
+    "Em7 022033  G 320033"), each with its position, in order; empty for a line that is
+    anything else, or more than a legend (a note: "Cadd9 (x32033) in the chorus")."""
+    entries: list[tuple[Chord, Position]] = []
+    at, end = 0, len(line.rstrip())
+    while at < end:
+        m = _ENTRY.match(line, at)
+        chord = parse_chord(m.group(1)) if m else None
+        position = parse_fingering(m.group(2)) if m else None
+        if chord is None or position is None:
+            return []
+        entries.append((chord, position))
+        at = m.end()
+    return entries
 
 
 @lru_cache(maxsize=1)

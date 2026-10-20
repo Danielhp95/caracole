@@ -6,7 +6,9 @@ script and one stylesheet makes the browser enforce that) and links only to the 
 beside it and to the library's index.html two folders up. A server may serve it
 too, only while it is the page caracole wrote, with ``viewer_csp(page)`` as its header.
 
-The sheet itself is static HTML, so it reads without the script, and prints. Every
+The sheet itself is static HTML, so it reads without the script, and prints. What a tab
+says before its first section (its tabber's notes, a link, a chord legend) is folded
+after two lines, in a ``<details>`` that opens without the script too. Every
 text from the sheet is escaped. The script (viewer.js) relabels the chords from the
 song data in a ``<script type="application/json">`` block, whose every ``<`` is
 written ``\\u003c``:
@@ -40,7 +42,7 @@ from typing import Any
 from urllib.parse import quote
 
 from caracole.normalize import has_han
-from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Section, Sheet, Tab, Text, parse_sheet
+from caracole.viewer.sheet import Blank, ChordRow, Line, Lyrics, Section, Sheet, Tab, Text, parse_sheet
 from caracole.viewer.theory import (
     DISPLAY,
     MODES,
@@ -55,7 +57,7 @@ from caracole.viewer.theory import (
     parse_key,
     spelling,
 )
-from caracole.viewer.voicings import page_voicings, voicing_keys
+from caracole.viewer.voicings import chord_legend, page_voicings, voicing_keys
 
 HERE = Path(__file__).parent
 LIBRARY_PAGE = "../../index.html"  # Library/<artist>/<title>/sheet.html -> Library/index.html
@@ -310,7 +312,55 @@ def _texts(sheet: Sheet) -> list[str]:
 
 
 def _sheet_html(sheet: Sheet) -> str:
-    return "".join(_section_html(s, sheet.chords) for s in sheet.sections)
+    pre = _preamble(sheet)
+    return ((_preamble_html(pre, sheet.chords) if pre else "")
+            + "".join(_section_html(s, sheet.chords) for s in sheet.sections if s is not pre))
+
+
+def _preamble(sheet: Sheet) -> Section | None:
+    """What a tab says before its first section (its tabber's notes, a link, a chord legend), or None:
+    an unlabelled first section, before another, with nothing played in it. Its lines are text and
+    chords given with their fingerings (``voicings.chord_legend``); chords alone there are the song's
+    intro, words sung there its first verse, and a tab its riff, and none of it is folded away."""
+    first = sheet.sections[0] if len(sheet.sections) > 1 else None
+    if first is None or first.label or first.chorus:
+        return None
+    return first if all(not _played_line(line, sheet.chords) for line in first.lines) else None
+
+
+def _played_line(line: Line, names: list[str]) -> bool:
+    if isinstance(line, (Text, Blank)):
+        return False
+    if isinstance(line, Tab):
+        return True
+    return not chord_legend(_written(line, names))
+
+
+def _preamble_html(section: Section, names: list[str]) -> str:
+    """The preamble in small, muted type, folded after its first two lines: those two as plain text
+    in the summary of a ``<details>``, to read at a glance, and every line inside. A preamble of two
+    lines has nothing more to show, and isn't folded."""
+    lines = [line for line in section.lines if not isinstance(line, Blank)]
+    body = "\n".join(_line_html(line, names) for line in section.lines)
+    if len(lines) <= 2:
+        return f'<div class="pre">\n{body}\n</div>\n'
+    peek = "<br>".join(escape(_written(line, names).strip()) for line in lines[:2])
+    return (
+        f'<details class="pre">\n<summary><span class="peek">{peek}</span>'
+        '<span class="more">More</span><span class="less">Less</span></summary>\n'
+        f'<div class="pre-body">\n{body}\n</div>\n</details>\n'
+    )
+
+
+def _written(line: Line, names: list[str]) -> str:
+    """A line as the sheet writes it, its chords and marks among its words: "Cadd9 (x32033)"."""
+    if isinstance(line, Text):
+        return line.text
+    if isinstance(line, ChordRow):
+        return " ".join(names[i] if isinstance(i, int) else i for i in line.items)
+    if isinstance(line, Lyrics):
+        return "".join((names[c] if isinstance(c, int) else c or "") + text for c, text in line.parts)
+    return ""
 
 
 def _section_html(section: Section, names: list[str]) -> str:

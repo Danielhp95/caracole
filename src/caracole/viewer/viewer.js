@@ -329,6 +329,8 @@
     fitting = requestAnimationFrame(layout);
   });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout, () => {});
+  // The tab's preamble opened or folded again (page.py): the song moves, and may no longer fit two columns.
+  for (const fold of sheetEl.querySelectorAll("details")) fold.addEventListener("toggle", layout);
 
   const drawStrip = () => {
     const strip = $("strip");

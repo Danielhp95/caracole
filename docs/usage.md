@@ -1556,6 +1556,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Chords over the lyrics**, in bold rust. A long line wraps between words,
   never between a chord and its syllable, and a chord reaches over the words
   after it, so the lyrics read without gaps.
+- **The tab's notes**: what a tab says before its first section (the
+  tabber's comments, a link, a chord legend) is shown small and muted, two
+  lines of it; **More** opens the rest, and works without JavaScript too. A
+  tab's opening chords, riff or verse before its first section are the song,
+  and stay as they are.
 - **On a wide screen** (1100 px or more: a laptop), the song reads down one
   column, centred, in slightly larger text. A song short enough for the
   window to show it whole in two columns is shown in two, side by side; a
