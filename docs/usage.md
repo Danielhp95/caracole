@@ -1467,7 +1467,8 @@ synced folder, in a browser on the laptop or the phone. It needs no server and
 loads nothing from the network. Its header is short, so that on a phone the
 first song starts well within the first screen: the library's numbers beside
 its title, the pages on the line above, the search box, then one row of
-buttons, which scrolls sideways on a phone. The search box stays at the top as
+buttons, which scrolls sideways on a phone, fading at an end where more
+buttons are out of sight. The search box stays at the top as
 the page scrolls under it, with an edge to show it. It shows every song as a
 card, in a grid as wide as the screen: one column on a phone, three or four on
 a laptop. A card

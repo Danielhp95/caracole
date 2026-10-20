@@ -859,6 +859,12 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .chips { display: flex; flex: 1 1 0; flex-wrap: nowrap; gap: 8px; min-width: 0; margin: -4px; padding: 4px;
   overflow-x: auto; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
+/* Buttons out of sight: the row fades where it goes on, so it says it scrolls (no fade, no more). */
+.chips.more-end { --fade-start: #000; --fade-end: transparent; }
+.chips.more-start { --fade-start: transparent; }
+.chips.more-start, .chips.more-end {
+  -webkit-mask-image: linear-gradient(to right, var(--fade-start, #000), #000 28px, #000 calc(100% - 28px), var(--fade-end, #000));
+  mask-image: linear-gradient(to right, var(--fade-start, #000), #000 28px, #000 calc(100% - 28px), var(--fade-end, #000)); }
 .chip { flex: none; }
 .view-panel { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 12px; }
 .toolbar .view-toggle { display: none; }
@@ -2052,6 +2058,18 @@ _SCRIPT = r"""
   const smooth = () => (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ? "auto" : "smooth");
 
+  // The row of buttons, one line that scrolls sideways on a phone: which of its ends hide buttons.
+  const chipRow = document.querySelector(".chips");
+  const chipEdges = () => {
+    if (!chipRow) return;
+    const room = chipRow.scrollWidth - chipRow.clientWidth;
+    chipRow.classList.toggle("more-start", room > 1 && chipRow.scrollLeft > 1);
+    chipRow.classList.toggle("more-end", room > 1 && chipRow.scrollLeft < room - 1);
+  };
+  if (chipRow) {
+    chipRow.addEventListener("scroll", chipEdges, { passive: true });
+    if ("ResizeObserver" in window) new ResizeObserver(chipEdges).observe(chipRow);
+  }
   // How many of the songs the search and filters match each button would show; a card drawn again changes it.
   let matchingNow = [];
   const tallyChips = () => {
@@ -2066,6 +2084,7 @@ _SCRIPT = r"""
       chip.querySelector(".n").textContent = String(tally[chip.dataset.show]);
       chip.hidden = chip.dataset.show === "review" && !reviewing && state.show !== "review";
     }
+    chipEdges();
   };
 
   const render = () => {

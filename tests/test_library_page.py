@@ -2023,6 +2023,26 @@ def test_on_a_phone_the_first_song_starts_on_the_first_screen(conn, cfg, phone_p
         phone_page.click("#view-toggle")
 
 
+
+@in_chromium
+def test_on_a_phone_the_row_of_buttons_fades_where_it_goes_on_out_of_sight(conn, cfg, phone_page):
+    from caracole.library_page import WebControls
+
+    for n, (artist, title) in enumerate((("Radiohead", "Creep"), ("Oasis", "Wonderwall"), ("Muse", "Hysteria"))):
+        song = add_song(conn, artist, title)
+        update_song(conn, song.id, status="found" if n else "wanted", review=bool(n == 2))
+    served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
+    phone_page.open(write_library_page(cfg.library_dir, served).as_uri())
+    row = "document.querySelector('.chips')"
+    mask = f"(getComputedStyle({row}).maskImage || getComputedStyle({row}).webkitMaskImage || 'none')"
+    assert phone_page.js(f"{row}.scrollWidth > {row}.clientWidth")  # Needs review is out of sight
+    assert phone_page.wait(f"{row}.classList.contains('more-end')")
+    assert "gradient" in phone_page.js(mask) and not phone_page.js(f"{row}.classList.contains('more-start')")
+    phone_page.js(f"{row}.scrollLeft = {row}.scrollWidth")  # at its end: the fade moves to where it came from
+    assert phone_page.wait(f"!{row}.classList.contains('more-end') && {row}.classList.contains('more-start')")
+    assert "gradient" in phone_page.js(mask)
+
+
 @in_chromium
 def test_on_a_desktop_the_view_controls_sit_in_the_toolbar_and_needs_review_shows_once_a_song_does(
         conn, cfg, tmp_path):
