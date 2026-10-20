@@ -6,6 +6,7 @@ reaches YouTube.
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 
@@ -21,9 +22,8 @@ from caracole.youtube import (
     choose,
     parse_search,
     search_query,
-    video_id_from_url,
-    watch_url,
 )
+from caracole.youtube_urls import video_id_from_url, watch_url
 
 ID = "dQw4w9WgXcQ"
 
@@ -94,9 +94,10 @@ def test_a_flat_search_gives_each_results_id_title_channel_and_duration():
     assert videos[2].short and not videos[0].short
 
 
-def test_a_search_answer_that_is_no_json_is_a_provider_error():
+@pytest.mark.parametrize("text", ["not json", "[" * 100_000], ids=["not JSON", "nested too deep"])
+def test_a_search_answer_that_is_no_json_is_a_provider_error(text):
     with pytest.raises(ProviderError, match="youtube"):
-        parse_search("not json")
+        parse_search(text)
 
 
 # --- choosing the song's video -----------------------------------------------------------------
@@ -354,6 +355,19 @@ def test_a_download_that_leaves_no_audio_file_in_its_folder_is_an_error(fake, tm
     fake.video(ID, print_path=str(tmp_path / printed))
     with pytest.raises(ProviderError, match="no audio file"):
         runner(fake, tmp_path).download(ID, into)
+
+
+def test_a_line_too_deeply_nested_to_read_is_passed_over_for_the_downloads_fields(fake, tmp_path, monkeypatch):
+    into = tmp_path / "into"
+    into.mkdir()
+    (into / "audio.m4a").write_text("AAC bytes")
+    fields = {"id": ID, "title": "Creep", "channel": "Radiohead - Topic", "duration": 239,
+              "filepath": str(into / "audio.m4a")}
+    ytdlp = runner(fake, tmp_path)
+    monkeypatch.setattr(ytdlp, "_run", lambda *args: f"{json.dumps(fields)}\n{'[' * 100_000}\n")
+    got = ytdlp.download(ID, into)
+    assert got.path == into / "audio.m4a"
+    assert got.video == Video(ID, "Creep", "Radiohead - Topic", 239.0)
 
 
 @pytest.mark.slow

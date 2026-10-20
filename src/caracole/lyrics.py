@@ -9,7 +9,10 @@ The nightly pass (``fetch_pending_lyrics``) looks up every song once, through
 the forever cache, and asks again about a miss after 30 days, past the cache.
 
 Errors are never misses: whatever the client raises, and any body that is not
-the JSON LRCLIB documents, propagates and leaves the song pending.
+the JSON LRCLIB documents, propagates and leaves the song pending. A cached
+answer that is not (a maintenance notice served with HTTP 200, say) is asked
+for once more before it counts as an error, so one bad night isn't replayed
+from the cache every night after.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ from caracole.http import (
     ProviderError,
     ProviderUnavailable,
     Response,
+    read_once_more,
 )
 from caracole.library import song_dir
 from caracole.normalize import clean_title, fold, slug_key
@@ -242,11 +246,25 @@ class LyricsResult:
     lyrics: Lyrics | None
 
 
-def _json(resp: Response) -> Any:
+class LrclibParseError(ProviderError):
+    """An answer from LRCLIB that isn't the JSON it documents: an error, never a miss."""
+
+
+def _json(resp: Response, shape: type[Mapping] | type[list]) -> Any:
+    """The JSON an answer holds, which must be a ``shape``: an object (``Mapping``) or a list."""
     try:
-        return resp.json()
-    except ValueError as e:  # also covers UnicodeDecodeError
-        raise ProviderError(PROVIDER, resp.url, resp.status, f"unreadable response: {e}") from e
+        found = resp.json()
+    except (ValueError, RecursionError) as e:  # UnicodeDecodeError too; or nested too deep
+        raise LrclibParseError(PROVIDER, resp.url, resp.status, f"unreadable response: {e}") from e
+    if not isinstance(found, shape):
+        what = "object" if shape is Mapping else "list"
+        raise LrclibParseError(PROVIDER, resp.url, resp.status, f"expected a JSON {what}")
+    return found
+
+
+def _get_record(resp: Response) -> Mapping[str, Any] | None:
+    """The record ``/api/get`` answered; None for its miss, a 404 or a 503 (whatever its body)."""
+    return _json(resp, Mapping) if resp.status == 200 else None
 
 
 def _outcome(lyrics: Lyrics) -> LyricsResult | None:
@@ -349,10 +367,13 @@ def fetch_lyrics(
     record without lyrics, falls back to ``/api/search`` and ``pick_candidate``;
     only an empty or non-matching search result is "missing". Errors raised by
     the client (``ProviderError``, ``BudgetExhausted``) and unreadable bodies
-    propagate, so the song stays pending: an error is never a miss.
+    (``LrclibParseError``) propagate, so the song stays pending: an error is
+    never a miss. A cached answer that can't be read is asked for once more,
+    past the cache, before it is an error (``http.read_once_more``).
 
-    ``cache`` and ``max_age`` go to every ``client.get``. By default a cached
-    answer is used forever; ``cache=False`` asks LRCLIB again.
+    ``cache`` and ``max_age`` go to the first ``client.get`` of each endpoint; the one
+    more ask (``read_once_more``) goes past the cache. By default a cached answer is
+    used forever; ``cache=False`` asks LRCLIB again.
     """
     options: dict[str, Any] = {"cache": cache, "max_age": max_age}
     track = clean_title(title)
@@ -361,24 +382,19 @@ def fetch_lyrics(
         params["album_name"] = album
     if duration_s is not None:
         params["duration"] = round(duration_s)
-    resp = client.get(f"{LRCLIB_API}/get", params=params, accept=_GET_ACCEPT, **options)
-    if resp.status == 200:
-        found = _json(resp)
-        if not isinstance(found, Mapping):
-            raise ProviderError(PROVIDER, resp.url, resp.status, "expected a JSON object")
+    url = f"{LRCLIB_API}/get"
+    resp = client.get(url, params=params, accept=_GET_ACCEPT, **options)
+    found = read_once_more(client, resp, url, _get_record, LrclibParseError, params=params, accept=_GET_ACCEPT)
+    if found is not None:
         outcome = _outcome(Lyrics.from_record(found))
         if outcome is not None:
             return outcome
 
-    resp = client.get(
-        f"{LRCLIB_API}/search",
-        params={"track_name": _search_title(track), "artist_name": artist},
-        accept=(200,),
-        **options,
-    )
-    cands = _json(resp)
-    if not isinstance(cands, list):
-        raise ProviderError(PROVIDER, resp.url, resp.status, "expected a JSON list")
+    url = f"{LRCLIB_API}/search"
+    query = {"track_name": _search_title(track), "artist_name": artist}
+    resp = client.get(url, params=query, accept=(200,), **options)
+    cands = read_once_more(client, resp, url, lambda r: _json(r, list), LrclibParseError, params=query,
+                           accept=(200,))
     best = pick_candidate(cands, artist=artist, title=title, duration_s=duration_s)
     outcome = _outcome(Lyrics.from_record(best)) if best is not None else None
     return outcome or LyricsResult("missing", None)

@@ -190,7 +190,7 @@ def read_page_data(html: str | bytes, *, url: str | None = None) -> dict[str, An
         raise PageParseError("ug", url, None, "no div.js-store data on the page")
     try:
         store = json.loads(payload)
-    except ValueError as e:
+    except (ValueError, RecursionError) as e:  # or nested deeper than the parser goes
         raise PageParseError("ug", url, None, f"js-store is not valid JSON: {e}") from e
     data = store
     for key in ("store", "page", "data"):

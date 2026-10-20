@@ -1,4 +1,4 @@
-"""YouTube, through yt-dlp: a video's address, picking a song's video from a search, running yt-dlp.
+"""YouTube, through yt-dlp: picking a song's video from a search, running yt-dlp.
 
 The one place caracole runs yt-dlp, and the one exception to its rule of honouring
 robots.txt: YouTube's closes ``/results`` and ``/youtubei/`` to crawlers, and yt-dlp's
@@ -28,6 +28,9 @@ whole process group (yt-dlp, ffmpeg, deno).
 YouTube's player needs JavaScript solved, which yt-dlp does with deno. Its JIT dies under
 systemd's MemoryDenyWriteExecute, which caracole's units keep, so deno gets
 ``DENO_V8_FLAGS=--jitless`` unless the environment says otherwise.
+
+A video's address (``video_id_from_url``, ``watch_url``) is youtube_urls.py's, which
+overrides.py reads without this module and its HTTP errors.
 """
 
 from __future__ import annotations
@@ -45,12 +48,12 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.parse import parse_qs, urlsplit
 
 from caracole.config import ProviderPolicy
 from caracole.http import BudgetExhausted, Event, ProviderBlocked, ProviderError
 from caracole.logs import request_line
 from caracole.normalize import clean_title, compact, fold, name_forms, simplified, slug_key, title_variant
+from caracole.youtube_urls import VIDEO_ID, watch_url
 
 log = logging.getLogger(__name__)
 
@@ -62,48 +65,6 @@ AUDIO_FORMAT = "m4a"  # AAC, which auto-chords decodes (btc.py, through torchaud
 MAX_FILESIZE = "100M"
 # What a download may leave: -x to m4a, or yt-dlp's best audio when that can't be converted.
 AUDIO_SUFFIXES = (".m4a", ".mp4", ".aac", ".opus", ".ogg", ".oga", ".mp3", ".flac", ".wav")
-
-# The shape of a video's id, and the hosts its address may be on, as a browser shows them.
-_VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
-_HOSTS = re.compile(r"(?:(?:www|m|music)\.)?youtube\.com")
-_SHORT_HOST = "youtu.be"
-_PATH_ID = re.compile(r"/(?:shorts|embed|live|v)/([A-Za-z0-9_-]{11})")
-_SCHEME = re.compile(r"[a-z][a-z0-9+.-]*://", re.IGNORECASE)
-
-
-def video_id_from_url(url: Any) -> str | None:
-    """The id of a YouTube video's address, as a browser shows it (``watch?v=``, ``youtu.be/``,
-    ``/shorts/``, ``/embed/``, ``/live/``, on www, m or music); None for anything else."""
-    if not isinstance(url, str):
-        return None
-    text = url.strip()
-    if not _SCHEME.match(text):
-        text = f"https://{text}"
-    try:
-        parts = urlsplit(text)
-    except ValueError:
-        return None
-    host = parts.netloc.lower()
-    if parts.scheme not in ("http", "https"):
-        return None
-    if host == _SHORT_HOST:
-        found = parts.path.strip("/")
-    elif _HOSTS.fullmatch(host):
-        m = _PATH_ID.fullmatch(parts.path.rstrip("/"))
-        if m:
-            found = m.group(1)
-        elif parts.path.rstrip("/") == "/watch":
-            found = (parse_qs(parts.query).get("v") or [""])[0]
-        else:
-            return None
-    else:
-        return None
-    return found if _VIDEO_ID.fullmatch(found) else None
-
-
-def watch_url(video_id: str) -> str:
-    """The video's plain address, the one yt-dlp is given: never one with a playlist."""
-    return f"https://www.youtube.com/watch?v={video_id}"
 
 
 @dataclass(frozen=True)
@@ -127,7 +88,7 @@ class Video:
 
     @classmethod
     def from_json(cls, data: Any) -> Video | None:
-        if not isinstance(data, dict) or not isinstance(data.get("id"), str) or not _VIDEO_ID.fullmatch(data["id"]):
+        if not isinstance(data, dict) or not isinstance(data.get("id"), str) or not VIDEO_ID.fullmatch(data["id"]):
             return None
         duration = data.get("duration")
         return cls(data["id"], str(data.get("title") or ""), str(data.get("channel") or ""),
@@ -142,12 +103,12 @@ def parse_search(text: str) -> list[Video]:
     """The videos of yt-dlp's flat search (``--flat-playlist --dump-single-json``), in its order."""
     try:
         data = json.loads(text)
-    except ValueError as e:
+    except (ValueError, RecursionError) as e:  # or nested deeper than the parser goes
         raise ProviderError(PROVIDER, None, None, f"yt-dlp's search answer isn't JSON: {e}") from e
     entries = data.get("entries") if isinstance(data, dict) else None
     videos = []
     for e in entries if isinstance(entries, list) else []:
-        if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not _VIDEO_ID.fullmatch(e["id"]):
+        if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not VIDEO_ID.fullmatch(e["id"]):
             continue
         videos.append(Video(
             e["id"], str(e.get("title") or ""), str(e.get("channel") or e.get("uploader") or ""),
@@ -546,7 +507,7 @@ class YtDlp:
 
     def download(self, video_id: str, into: Path) -> Download:
         """The video's audio, in ``into`` as ``audio.<ext>``, and the video as yt-dlp reported it."""
-        if not _VIDEO_ID.fullmatch(video_id):
+        if not VIDEO_ID.fullmatch(video_id):
             raise ValueError(f"not a YouTube video id: {video_id!r}")
         url = watch_url(video_id)
         out = self._run([*_DOWNLOAD_ARGS, "-o", str(into / "audio.%(ext)s")], url, "download", self._timeouts[1])
@@ -554,7 +515,7 @@ class YtDlp:
         for line in reversed(out.splitlines()):
             try:
                 found = json.loads(line)
-            except ValueError:
+            except (ValueError, RecursionError):
                 continue
             if isinstance(found, dict) and found.get("filepath"):
                 info = found

@@ -72,6 +72,8 @@ from caracole.http import (
     ProviderUnavailable,
     Response,
     RobotsClosed,
+    read_once_more,
+    stale,
 )
 from caracole.inbox import GUITAR_FILE_KINDS, guitar_number
 from caracole.library import keep_file, write_info
@@ -331,28 +333,20 @@ def _artist_tabs(run: _Pass, url: str) -> list[GtpTab] | None:
     """The tabs an artist page lists; None when the site has no such page any more.
 
     A cached page that doesn't parse (a notice served with HTTP 200, say) is fetched once
-    more before it counts as an error, unless this pass fetched it already.
+    more before it counts as an error, unless this pass fetched it already. A redirect
+    robots.txt closes is no page at the first request, and an error at that second one.
     """
     try:
         resp = run.client.get(url, accept=_ACCEPT, max_age=ARTIST_PAGE_MAX_AGE)
     except RobotsClosed:  # redirected where caracole may not go: no page it may read
         return None
-    if _stale(resp, run.now):
-        # PoliteClient serves a copy past max_age only once the budget is spent.
-        raise BudgetExhausted(PROVIDER)
-    if not resp.from_cache:
-        run.fetched.add(url)
-    try:
-        return _listing(resp, url)
-    except GtpTabsParseError:
-        if not resp.from_cache or url in run.fetched:
-            raise
-    run.fetched.add(url)
-    return _listing(run.client.get(url, accept=_ACCEPT, cache=False), url)
+    if stale(resp, run.now, ARTIST_PAGE_MAX_AGE):
+        raise BudgetExhausted(PROVIDER)  # no answer for today: stop as the next request would have
+    return read_once_more(run.client, resp, url, _listing, GtpTabsParseError, fetched=run.fetched, accept=_ACCEPT)
 
 
-def _listing(resp: Response, url: str) -> list[GtpTab] | None:
-    return None if resp.status == 404 else parse_artist_page(resp.text, url)
+def _listing(resp: Response) -> list[GtpTab] | None:
+    return None if resp.status == 404 else parse_artist_page(resp.text, resp.url)
 
 
 def _download(run: _Pass, tab: GtpTab) -> tuple[bytes, str] | None:
@@ -395,13 +389,6 @@ def _keep(run: _Pass, song: Song, tab: GtpTab, data: bytes, ext: str) -> str:
 
 
 # --- small helpers --------------------------------------------------------------------------------------------
-
-
-def _stale(resp: Response, now: datetime) -> bool:
-    """Whether a cached artist page is older than ``ARTIST_PAGE_MAX_AGE``."""
-    if not resp.from_cache or not resp.fetched_at:
-        return False
-    return now - _parse(resp.fetched_at) > ARTIST_PAGE_MAX_AGE
 
 
 def _utc(dt: datetime) -> datetime:

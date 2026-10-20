@@ -39,7 +39,7 @@ an earlier one failed:
 | scan | music.py (Music/), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
-| youtube | youtube.py (video addresses, picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
+| youtube | youtube.py (picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_urls.py (a video's address, the standard library alone: overrides.py's `[youtube]`), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html), songbook.py (the songbooks of songbooks.toml, in `Library/_songbooks/`) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 
@@ -49,8 +49,9 @@ stdout and ntfy: a new step plugs in by returning one. The log goes to stderr, s
 by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities, redacted secrets).
 
 Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`),
-http.py (`PoliteClient`, robots rules), health.py (cooldowns, `events`), normalize.py (keys,
-pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy),
+http.py (`PoliteClient`, robots rules, `stale` and `read_once_more` for cached answers),
+health.py (cooldowns, `events`), normalize.py (keys, pinyin), overrides.py, library.py (song
+folders, safe file access), notify.py (ntfy),
 site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's and
 MuseScore's), keys.py (a song's musical key and its source, for info.json, `index.html`
 and `search --key`), removal.py (`caracole remove` and the web page's Remove: a song's
@@ -237,7 +238,12 @@ Traps:
   `test_commands_index_match.py::test_registering_the_commands_imports_neither_the_matcher_nor_the_index`
   fails when importing `caracole.cli` loads rapidfuzz, `caracole.match` or `caracole.ug`; the
   `test_registering_the_command*` tests of fetch, lyrics, sources, autochords and youtube do
-  the same.
+  the same. httpx, with the rich and pygments it brings, is a third of a start: http.py
+  imports it inside the functions that use it, and `_common` makes its client class on first
+  use (`_locked_client`).
+  `test_commands_index_match.py::test_a_command_that_sends_no_request_imports_no_http_client`
+  fails when importing `caracole.cli` and reading a `[youtube]` entry (youtube_urls.py) loads
+  httpx, rich, `caracole.http` or `caracole.youtube`.
 - Branch from `caracole-v1`, the default branch (`main` holds only the first design commit).
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:
@@ -308,13 +314,18 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     other site.
   - Every accepted 200 and 404 is cached forever, in `cache_dir/http/<provider>/`.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
-  that won't parse (`PageParseError`, `GtpTabsParseError`) never makes a song not found,
-  its lyrics missing or its Guitar Pro file a miss: the song waits for the next run
-  (http.py, pipeline.py, ug/fetch.py, lyrics.py, gtptabs_fetch.py;
-  `test_pipeline.py::test_ug_block_cools_down_and_never_marks_not_found`,
+  that won't parse (`PageParseError`, `GtpTabsParseError`, `LaCuerdaParseError`,
+  `LrclibParseError`) never makes a song not found, its lyrics missing or its Guitar Pro
+  file a miss: the song waits for the next run (http.py, pipeline.py, ug/fetch.py, lyrics.py,
+  gtptabs_fetch.py; `test_pipeline.py::test_ug_block_cools_down_and_never_marks_not_found`,
   `test_fetch.py::test_parse_error_is_not_a_miss`,
-  `test_gtptabs_fetch.py::test_a_spent_budget_is_no_miss`). On gtptabs.com only an artist
-  page that answered without a candidate is a miss, asked about again after 30 days; on
+  `test_gtptabs_fetch.py::test_a_spent_budget_is_no_miss`). A cached answer that won't
+  parse is asked for once more, past the cache, before it is an error, so a bad night
+  isn't replayed every night after: `http.read_once_more` for LRCLIB, LaCuerda and
+  gtptabs.com, ug/fetch.py's `_get_page` for UG
+  (`test_lyrics_pending.py::test_a_cached_answer_that_isnt_json_is_asked_for_once_more`).
+  On gtptabs.com only an artist page that answered without a candidate is a miss, asked
+  about again after 30 days; on
   YouTube only a search that answered without a video that fits (youtube_fetch.py,
   `test_youtube_fetch.py::test_an_error_is_no_miss_and_the_song_waits_for_the_next_run`); of
   LaCuerda's listings only a page that answers 404 loses its artists, never one that errs or

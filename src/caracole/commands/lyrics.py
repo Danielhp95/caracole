@@ -40,7 +40,6 @@ from caracole.commands._common import (
     write_pages,
 )
 from caracole.health import get_state, is_cooling, record_block, record_ok
-from caracole.http import ProviderBlocked
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -258,6 +257,8 @@ def _provider_pass[T](
     caracole it waited for left. After a block, or a pass that did something
     (``ran``), it rewrites _todo.md and index.html.
     """
+    from caracole.http import ProviderBlocked
+
     name = _NAMES[provider]
     with exclusive(cfg, _COMMANDS[provider]), closing(open_db(cfg)) as conn:
         now = utcnow()

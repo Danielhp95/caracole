@@ -31,12 +31,15 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Callable, Collection, Mapping, Protocol, runtime_checkable
-
-import httpx
+from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Protocol, runtime_checkable
 
 from caracole.config import ProviderPolicy
 from caracole.logs import request_line
+
+# httpx, with the rich and pygments it imports, is a third of a caracole's start: each function
+# that uses it imports it, so a command that sends no request never does.
+if TYPE_CHECKING:
+    import httpx
 
 log = logging.getLogger(__name__)  # a line per request, at information (-v)
 
@@ -133,6 +136,50 @@ class Client(Protocol):
     ) -> Response: ...
 
 
+# --- reading a provider's answers ---------------------------------------------
+
+
+_STAMP = "%Y-%m-%dT%H:%M:%SZ"  # a cached copy's ``fetched_at``, in UTC
+
+
+def stale(resp: Response, now: datetime, max_age: timedelta) -> bool:
+    """Whether ``resp`` is a cached copy older than ``max_age`` at ``now`` (a naive time is UTC),
+    or of unknown age. A fresh answer never is, nor one a 304 just revalidated. ``PoliteClient``
+    serves such a copy only once the run's budget is spent: no answer for today, so its caller
+    stops as the next request would have.
+    """
+    if not resp.from_cache:
+        return False
+    if not resp.fetched_at:
+        return True
+    fetched = datetime.strptime(resp.fetched_at, _STAMP).replace(tzinfo=UTC)
+    return (now.replace(tzinfo=UTC) if now.tzinfo is None else now) - fetched > max_age
+
+
+def read_once_more[T](
+    client: Client, resp: Response, url: str, read: Callable[[Response], T],
+    unreadable: type[ProviderError], *, fetched: set[str] | None = None, **get: Any,
+) -> T:
+    """``read(resp)``, where ``resp`` answered ``url``; a cached answer ``read`` can't read
+    (it raises ``unreadable``) is asked for once more, past the cache, and read again.
+
+    A 200 is cached, so a maintenance notice or a cut-short page would otherwise fail the
+    song, from the cache, on every run. A fresh answer that fails is an error, and so is one
+    for a URL this pass fetched already (``fetched``, which gains each URL fetched). ``get``
+    goes to the second ``client.get``: what the first was given (``params``, ``accept``).
+    """
+    if fetched is not None and not resp.from_cache:
+        fetched.add(url)
+    try:
+        return read(resp)
+    except unreadable:
+        if not resp.from_cache or (fetched is not None and url in fetched):
+            raise
+    if fetched is not None:
+        fetched.add(url)
+    return read(client.get(url, cache=False, **get))
+
+
 # --- the polite client --------------------------------------------------------
 
 _CACHED_STATUSES = (200, 404)
@@ -210,6 +257,8 @@ ROBOTS_CRAWL_DELAY: dict[str, float] = {}
 
 def crawl_delay(url: str) -> float:
     """The seconds robots.txt asks between two requests to ``url``'s host (``ROBOTS_CRAWL_DELAY``), or 0."""
+    import httpx
+
     try:
         host = httpx.URL(url).host
     except (httpx.InvalidURL, ValueError):
@@ -232,6 +281,8 @@ def robots_disallows(url: str) -> str | None:
     broken host) can't be asked for either, so it is closed too, by ``NOT_A_URL``:
     one such link in UG's JSON or a sitemap is skipped, and never ends the run.
     """
+    import httpx
+
     try:
         u = httpx.URL(url)
         host, target = u.host, u.raw_path.decode("ascii")
@@ -266,12 +317,16 @@ def _redirect_problem(origin: str, target: str, hops: int) -> str | None:
 
 def _status_line(status: int) -> str:
     """"503 Service Unavailable"."""
+    import httpx
+
     reason = httpx.codes.get_reason_phrase(status)
     return f"{status} {reason}" if reason else str(status)
 
 
 def _site(url: str) -> str:
     """A URL's site: the last two labels of its host (each provider is on a plain .com or .net domain)."""
+    import httpx
+
     return ".".join(httpx.URL(url).host.split(".")[-2:])
 
 
@@ -318,6 +373,8 @@ class PoliteClient:
         clock: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ):
+        import httpx
+
         self.provider = provider
         self.policy = policy
         self.cache_root = cache_dir / "http" / provider
@@ -354,6 +411,8 @@ class PoliteClient:
     ) -> Response:
         """GET ``url``; see the class docstring. ``max_age`` refetches cached copies older than it,
         but serves the stale copy when this run's budget is spent."""
+        import httpx
+
         try:
             full = str(httpx.URL(url, params=params)) if params else url
         except (httpx.InvalidURL, ValueError):
@@ -365,9 +424,9 @@ class PoliteClient:
         cached = self._read_cache(key) if (cache or conditional) else None
         if cached is not None and cached.status not in accept:
             cached = None  # an answer the caller rejects is no answer: ask again
-        stale = cached is not None and max_age is not None and self._older_than(cached, max_age)
-        if (cache and cached is not None and not conditional and not stale) or (
-            stale and self.requests_made >= self.policy.budget
+        expired = cached is not None and max_age is not None and stale(cached, self._wall_clock(), max_age)
+        if (cache and cached is not None and not conditional and not expired) or (
+            expired and self.requests_made >= self.policy.budget
         ):
             self._log_request("GET", full, _status_line(cached.status), cached=True)
             return cached
@@ -405,7 +464,10 @@ class PoliteClient:
         if status == 304 and cached is not None:
             self._errors_in_a_row = 0
             self._event(at, status, "not_modified", None)
-            return Response(url=full, status=304, content=cached.content, headers=cached.headers, from_cache=True)
+            return Response(
+                url=full, status=304, content=cached.content, headers=cached.headers, from_cache=True,
+                fetched_at=self._stamp(),
+            )
 
         if status in accept:
             kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
@@ -440,14 +502,10 @@ class PoliteClient:
 
     # -- internals ---------------------------------------------------------
 
-    def _older_than(self, cached: Response, max_age: timedelta) -> bool:
-        if not cached.fetched_at:
-            return True
-        fetched = datetime.strptime(cached.fetched_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
-        return self._wall_clock() - fetched > max_age
-
     def _send(self, url: str, request: httpx.Request) -> httpx.Response:
         """One network request, a redirect hop included: within the budget, after the pause."""
+        import httpx
+
         if self._blocked is not None:
             raise ProviderBlocked(self.provider, url, self._blocked.status, "blocked earlier this run")
         if self._unavailable:
@@ -524,12 +582,16 @@ class PoliteClient:
             headers=meta.get("headers", {}), from_cache=True, fetched_at=meta.get("fetched_at"),
         )
 
+    def _stamp(self) -> str:
+        """Now, as a ``fetched_at``."""
+        return self._wall_clock().astimezone(UTC).strftime(_STAMP)
+
     def _write_cache(self, key: str, url: str, status: int, headers: Mapping[str, str], body: bytes) -> None:
         body_path, meta_path = self._paths(key)
         body_path.parent.mkdir(parents=True, exist_ok=True)
         meta = {
             "url": url, "status": status, "headers": dict(headers),
-            "fetched_at": self._wall_clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "fetched_at": self._stamp(),
         }
         for path, data in (
             (body_path, gzip.compress(body, compresslevel=6)),
