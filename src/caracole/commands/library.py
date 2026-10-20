@@ -15,6 +15,7 @@ the commands: every command module is imported on every start.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Collection
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -60,17 +61,17 @@ def _overrides_for_pages(conn: sqlite3.Connection, cfg: Config, now: datetime) -
         fail(f"overrides: {e}", 2)
 
 
-def _rewrite_pages(conn: sqlite3.Connection, cfg: Config, what: str, *,
-                   rematch: bool = False) -> tuple[Path, Path]:
-    """Rewrite _todo.md and index.html (matching every song first, with ``rematch``), holding caracole's
-    lock as ``what``; a library caracole can't write exits 1."""
+def _rewrite_pages(conn: sqlite3.Connection, cfg: Config, what: str, *, rematch: bool = False,
+                   song_ids: Collection[int] | None = None) -> tuple[Path, Path]:
+    """Rewrite _todo.md and index.html, holding caracole's lock as ``what``, after matching every song
+    again with ``rematch``, or the songs of ``song_ids``; a library caracole can't write exits 1."""
     with exclusive(cfg, what):
         now = utcnow()
         overrides = _overrides_for_pages(conn, cfg, now)
-        if rematch:
+        if rematch or song_ids is not None:
             from caracole.match import match_all
 
-            match_all(conn, overrides, cfg.match)
+            match_all(conn, overrides, cfg.match, song_ids=song_ids)
         return write_pages(conn, cfg, overrides, now)
 
 
@@ -109,10 +110,13 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
     A song not found has no review, but ``pick`` may be one of what ``caracole search`` finds for
     it (``review.search_candidates``): that writes ``[match]`` alone. It holds caracole's lock from
     reading the song to rewriting the pages, as nothing waits for you here: what caracole serve's
-    picker runs (web/app.py).
+    picker runs (web/app.py). It matches again only the songs the answer can change: the song, whose
+    ``[match]`` or ``[reject]`` it is, and, when it writes an ``[alias]``, every song with that artist
+    among its artists (aliases apply by each artist's ``slug_key``, as ``overrides.add_alias`` keys them).
     """
+    from caracole.normalize import slug_key
     from caracole.review import ReviewStats, accept, candidates_of, ref, reject, search_candidates, writes_alias
-    from caracole.songs import get_song
+    from caracole.songs import get_song, list_songs
 
     with exclusive(cfg, "review"):
         overrides = load_ovr(cfg)
@@ -129,6 +133,7 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
         # songs rejected for the song too.
         again = f'caracole review --song "{song.display}"'
         stats = ReviewStats()
+        changed = {song.id}
         try:
             if pick is not None:
                 chosen = _picked(cands, pick.strip())
@@ -138,6 +143,10 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
                 stats.accepted += 1
                 alias = (f', and [alias] "{song.artist}" = "{chosen["artist_key"]}"'
                          if writes_alias(song, chosen) else "")
+                if alias:
+                    artist = slug_key(song.artist)
+                    changed |= {s.id for s in list_songs(conn)
+                                if any(slug_key(a) == artist for a in s.artists or [s.artist])}
                 typer.echo(f'{song.display}: "{ref(chosen)}" under [match]{alias}')
             else:
                 rejected = seen or cands
@@ -148,7 +157,7 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
                 typer.echo(f"{song.display}: {', '.join(ref(c) for c in rejected)} under [reject]")
         except OverridesError as e:  # the file broke since it was read
             fail(f"overrides: {e}", 2)
-        path, page = _rewrite_pages(conn, cfg, "review", rematch=True)
+        path, page = _rewrite_pages(conn, cfg, "review", song_ids=changed)
         typer.echo(_counts(stats))
         typer.echo(f"Wrote {path} and {page}")
         typer.echo(_now(get_song(conn, song.id)))
