@@ -1459,6 +1459,24 @@ def test_get_it_now_on_a_song_of_your_library_adds_it_to_no_source(app, cfg, con
     assert lookup(app, {"song": "x"}).status == 400
 
 
+def test_a_song_you_removed_and_look_up_again_is_asked_for_again(app, cfg, conn, queue):
+    # caracole remove left its tombstone; picking it on the lookup page is asking for it again, as a
+    # wanted.txt line always is, and its lookup syncs that line back in. Its UG song is no song of yours.
+    from caracole.removal import plan_removal, remove_song
+    from caracole.songs import find_song
+
+    creep_index(conn)
+    creep = add_song(conn, "Radiohead", "Creep")
+    remove_song(conn, cfg, plan_removal(conn, cfg, creep))
+    assert find_song(conn, creep.key) is None
+    [hit] = [h for h in as_json(get(app, "/api/search?q=creep"))["index"] if h["ug"] == "radiohead/creep"]
+    assert hit["song"] is None and hit["library"] is None
+    assert lookup(app, {"artist": "Radiohead", "title": "Creep", "ug": "radiohead/creep"}).status == 202
+    assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("get", "--progress", "--ug=radiohead/creep", "--", "Radiohead", "Creep")
+
+
 def test_a_version_picked_while_the_first_lookup_runs_is_looked_up_too(cfg):
     import threading
 

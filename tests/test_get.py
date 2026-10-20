@@ -487,6 +487,22 @@ def test_progress_lines_are_json_a_server_can_read():
     assert json.loads(line[len(PROGRESS_PREFIX):]) == {"stage": "sheet", "state": "done", "detail": "tab 101"}
 
 
+def test_a_song_you_removed_is_asked_for_again_by_a_lookup(cfg, conn, sites):
+    # caracole remove left its tombstone; `caracole get` writes its wanted.txt line, which always asks again.
+    from caracole.removal import plan_removal, remove_song
+
+    serve_creep(sites, conn)
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    remove_song(conn, cfg, plan_removal(conn, cfg, find_song(conn, "radiohead/creep")))
+    assert find_song(conn, "radiohead/creep") is None and "Creep" not in cfg.wanted_file.read_text(encoding="utf-8")
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.states()["song"] == "done" and result.sheet is not None
+    assert find_song(conn, "radiohead/creep") is not None
+    assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("how", ["cooldown", "block", "error"])
 def test_a_clean_song_whose_lookup_ug_cut_short_is_owed_a_fetch_by_the_nightly_run(cfg, conn, sites, how):
     # A card's Fetch now on a song fetched before (clean: nothing new to fetch at night). A cooldown, a block
