@@ -397,16 +397,21 @@ def _pause_after_last_request(
         _patient_sleep(cfg, conn, remaining, lambda: random.uniform(*delay), lambda s: sleep(s))
 
 
+def lookup_requests_used(conn: sqlite3.Connection, provider: str, now: datetime | None = None) -> int:
+    """How many requests every lookup of the last hour sent the provider, this one's so far included."""
+    since = ((now or datetime.now(UTC)) - timedelta(hours=1)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    sent = ",".join("?" * len(_SENT))
+    return conn.execute(
+        f"SELECT COUNT(*) FROM events WHERE provider = ? AND run LIKE ? AND at >= ? AND decision IN ({sent})",
+        (provider, LOOKUP_RUN + "%", since, *_SENT),
+    ).fetchone()[0]
+
+
 def lookup_policy(cfg: Config, conn: sqlite3.Connection, provider: str, now: datetime | None = None) -> ProviderPolicy:
     """The provider's interactive pace: its ``lookup_delay``, and a budget of ``lookup_requests``, or what
     the last hour's lookups left of ``lookup_per_hour`` when that is less."""
     p = cfg.provider(provider)
-    since = ((now or datetime.now(UTC)) - timedelta(hours=1)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    sent = ",".join("?" * len(_SENT))
-    used = conn.execute(
-        f"SELECT COUNT(*) FROM events WHERE provider = ? AND run LIKE ? AND at >= ? AND decision IN ({sent})",
-        (provider, LOOKUP_RUN + "%", since, *_SENT),
-    ).fetchone()[0]
+    used = lookup_requests_used(conn, provider, now)
     return replace(p, budget=max(0, min(p.lookup_requests, p.lookup_per_hour - used)), delay=p.lookup_delay)
 
 

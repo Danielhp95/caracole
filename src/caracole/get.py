@@ -20,8 +20,11 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 - ``lyrics``: LRCLIB.
 - ``ug``: Ultimate Guitar again, as the nightly run would: the top sheets
   scored against the lyrics (a better one replaces the first), guitar parts
-  and the text tab.
-- ``lacuerda``: LaCuerda, for a Spanish song without a complete sheet.
+  and the text tab. It spends only what leaves ``SHEETS_SHARE`` of the hour's
+  lookup requests to UG for sheets (``after_the_sheet``), so that an evening
+  of lookups keeps getting them.
+- ``lacuerda``: LaCuerda, for a Spanish song without a complete sheet; within
+  ``SHEETS_SHARE`` too, once the song has a sheet.
 - ``gtptabs``: a Guitar Pro file from gtptabs.com, from the index the nightly
   run keeps.
 - ``pages``: the PDF again if the sheet changed, then _todo.md and index.html,
@@ -38,6 +41,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import subprocess
 import time
 from collections.abc import Callable, Mapping
@@ -69,6 +73,7 @@ NAMES = {"ug": "Ultimate Guitar", "lrclib": "LRCLIB", "lacuerda": "LaCuerda", "g
 PROGRESS_PREFIX = "caracole-progress: "  # a JSON line of `caracole get --progress`
 _FIRST_PAGES = 1  # versions pages read before the first sheet is kept: the first lists them all
 _FIRST_SCORED = 1  # sheets fetched for it: the best rated
+SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: what follows one spends the rest
 
 
 @dataclass(frozen=True)
@@ -182,6 +187,7 @@ class _Lookup:
         self.clients: dict[str, Any] = {}
         self.blocked: set[str] = set()
         self.failed: set[str] = set()
+        self.kept_for_sheets: set[str] = set()  # sites whose client a stage after the sheet holds to SHEETS_SHARE
         self.lacuerda_asked = False
         self.conn = None
         self.overrides = None
@@ -257,7 +263,9 @@ class _Lookup:
                                "Nothing was marked not found.")
         except BudgetExhausted as e:
             p = self.cfg.provider(e.provider)
-            if client.policy.budget < p.lookup_requests:
+            if e.provider in self.kept_for_sheets:
+                spent = self._kept_for_sheets(e.provider)
+            elif client.policy.budget < p.lookup_requests:
                 spent = f"this hour's {p.lookup_per_hour} lookup requests to {NAMES[e.provider]} are spent"
             else:
                 spent = f"the lookup's {p.lookup_requests} requests to {NAMES[e.provider]} are spent"
@@ -266,6 +274,30 @@ class _Lookup:
             record_error(self.conn, e.provider, self.now, str(e))
             self.failed.add(e.provider)  # as in a nightly step: an error ends the site's part for this lookup
             return "failed", f"{NAMES.get(e.provider, e.provider)} failed ({e}); the nightly run tries again"
+
+    def after_the_sheet(self, provider: str, work: Callable[[Any], tuple[str, str] | str]) -> tuple[str, str] | str:
+        """Ask a site for what follows the sheet, which the nightly run would do anyway: within what leaves
+        ``SHEETS_SHARE`` of the hour's lookup requests to it for sheets, so an evening of songs looked up
+        on the spot keeps getting them."""
+        from caracole.commands._common import lookup_requests_used
+
+        p = self.cfg.provider(provider)
+        left = p.lookup_per_hour - math.ceil(p.lookup_per_hour * SHEETS_SHARE) - lookup_requests_used(self.conn, provider)
+        if left <= 0 and self._usable(provider) is None:
+            return "skipped", f"{self._kept_for_sheets(provider)}; the nightly run does the rest"
+
+        def within(client) -> tuple[str, str] | str:
+            if client.requests_made + left < client.policy.budget:  # no stage after it asks this site for a sheet
+                client.policy = replace(client.policy, budget=client.requests_made + left)
+                self.kept_for_sheets.add(provider)
+            return work(client)
+
+        return self.asking(provider, within)
+
+    def _kept_for_sheets(self, provider: str) -> str:
+        p = self.cfg.provider(provider)  # SHEETS_SHARE is a half
+        return (f"this hour's lookups have spent half of their {p.lookup_per_hour} requests to {NAMES[provider]}, "
+                "and the other half is kept for sheets")
 
     # --- what can be read -----------------------------------------------------------------------------
 
@@ -453,7 +485,7 @@ class _Lookup:
                 parts.append(f"tab {out.tab}")
             return " · ".join(parts)
 
-        out = self.asking("ug", rest)
+        out = self.after_the_sheet("ug", rest)
         self.song = get_song(self.conn, self.song.id)
         return out
 
@@ -477,7 +509,8 @@ class _Lookup:
                 return "skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"
             return "sheet kept from LaCuerda" if s.kept else ("not on LaCuerda" if s.missing else "kept what it had")
 
-        out = self.asking("lacuerda", ask)
+        # Without a sheet yet, LaCuerda's is the sheet; with one, a better one the nightly run would look for too.
+        out = self.asking("lacuerda", ask) if self._kept_sheet() is None else self.after_the_sheet("lacuerda", ask)
         self.song = get_song(self.conn, self.song.id)
         return out
 

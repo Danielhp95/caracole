@@ -183,8 +183,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     `lookup_delay` (default 0.5–1.5 s; `[0, 0]` allowed) between two requests to a provider,
     a budget of `lookup_requests` (6) requests to it for the song, and at most
     `lookup_per_hour` (60) for every lookup of the last hour together (`_common.lookup_policy`,
-    counting the `events` of runs named `lookup:…`). Then `BudgetExhausted`: the rest waits for
-    the nightly run. Nothing else is looser for a lookup.
+    counting the `events` of runs named `lookup:…`). What follows the sheet, which the nightly
+    run would do anyway (get.py's `ug` stage, LaCuerda for a song with a sheet), spends only what
+    leaves `get.SHEETS_SHARE` (half) of that hour's requests for sheets (`_Lookup.after_the_sheet`).
+    Then `BudgetExhausted`: the rest waits for the nightly run. Nothing else is looser for a lookup.
   - Either pace: one request at a time per provider (a synchronous client, and the lock
     below), redirect hops included. `PoliteClient` paces its own requests, and
     `_common._pause_after_last_request` its first after the last one any caracole sent

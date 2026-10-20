@@ -597,7 +597,8 @@ Make the token with `openssl rand -base64 24` and store it with
 - **Politeness.** The server sends no request of its own: searching reads the
   offline index. A lookup, and Fetch now, run `caracole get`, at the
   interactive pace (a few requests about a second apart, sixty an hour per
-  site), which a nightly run lets go first at its next pause; it keeps the
+  site, half of them kept for sheets), which a nightly run lets go first at
+  its next pause; it keeps the
   budgets, and leaves a site alone while it cools down.
 
 ## Logs

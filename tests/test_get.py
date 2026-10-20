@@ -228,6 +228,49 @@ def test_a_lookup_sends_a_few_requests_at_most_and_leaves_the_rest_for_the_night
     c.close()
 
 
+def lookups_spent(conn, provider: str, n: int) -> None:
+    """``n`` requests of earlier lookups this hour, as their clients logged them."""
+    from datetime import timedelta
+
+    at = (datetime.now(UTC) - timedelta(minutes=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with conn:
+        conn.executemany("INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+                         [("lookup:2026-10-19T11:40:00Z", at, provider, f"{TAB}x-{i}", 200, "ok") for i in range(n)])
+
+
+def test_half_of_the_hours_lookup_requests_are_kept_for_sheets(cfg, conn, sites):
+    # An evening of songs looked up on the spot: what the nightly run would do anyway mustn't eat the sheets.
+    serve_creep(sites, conn)
+    lookups_spent(conn, "ug", 40)  # of 60 an hour
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.readable_after == 1 and len(sites.ug()) == 1  # the sheet, and nothing more
+    assert progress.states()["ug"] == "skipped"
+    assert "kept for sheets" in result.details["ug"] and "nightly run" in result.details["ug"]
+    assert find_song(conn, "radiohead/creep").ug_dirty is True  # the night goes on from here
+    # Later that hour, another song still gets its sheet.
+    serve_wonderwall(sites, conn)
+    later, progress = look_up(cfg, sites=sites, artist="Oasis", title="Wonderwall")
+    assert progress.readable_after is not None and later.sheet is not None
+
+
+def test_what_follows_the_sheet_spends_only_what_leaves_half_of_the_hour_for_sheets(cfg, conn, sites):
+    serve_creep(sites, conn)
+    lookups_spent(conn, "ug", 28)  # 2 more, and half of the hour is spent
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert len(sites.ug()) == 2 and progress.readable_after == 1  # the sheet, then one for the rest
+    assert progress.states()["ug"] == "skipped" and "kept for sheets" in result.details["ug"]
+
+
+def serve_wonderwall(sites: Sites, conn) -> None:
+    tab = creep_tab(201, rating=4.8, artist="Oasis", song="Wonderwall")
+    sites.pages[tab["tab_url"]] = (200, make_tab_page_html(tab, [], content=sheet("sheet 201", LINES)))
+    upsert_rows(conn, [(201, "oasis", "wonderwall", "chords", tab["tab_url"].removeprefix(TAB))], "1", NOW)
+
+
 def test_a_lookup_waits_only_the_short_gap_between_two_requests(tmp_path, sites, monkeypatch):
     path = tmp_path / "caracole.toml"
     path.write_text(f'data_dir = "{tmp_path}"\n', encoding="utf-8")  # the default paces

@@ -150,7 +150,13 @@ two requests to Ultimate Guitar, whichever caracole sends them. A lookup
 for just now, so it keeps `lookup_delay` instead, about a second, and stops
 after `lookup_requests` requests to a site; every lookup of the last hour
 shares `lookup_per_hour`, so a script or a stuck button can't turn lookups
-into a crawl. What a lookup leaves undone waits for the nightly run. Either
+into a crawl. Half of that hour is kept for sheets: what follows a lookup's
+sheet, which the nightly run would do anyway (Ultimate Guitar's other sheets
+scored, guitar parts and the text tab; LaCuerda's for a song with a sheet
+already), stops once the hour's lookups have spent half of `lookup_per_hour`,
+so an evening of songs looked up on the spot keeps getting sheets (about
+twenty to thirty an hour with the defaults). What a lookup leaves undone waits
+for the nightly run. Either
 pace sends one request at a time to a site, never less than its robots.txt's
 `Crawl-delay` apart (none of the sites caracole reads sets one for every
 robot), and keeps everything else below: robots.txt, the cache, the blocks and
