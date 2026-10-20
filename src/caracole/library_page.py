@@ -787,7 +787,7 @@ _SCRIPT = r"""
     }
 
     const actions = el("div", "actions");
-    if (server && s.status === "wanted") {
+    if (server && s.status === "wanted" && !removing.has(Number(s.id))) {  // removing: its foot says so
       if (busy.has(Number(s.id))) {
         const note = el("p", "busy", "Fetching… ");
         const jobs = el("a", null, "see the requests");

@@ -746,6 +746,7 @@ def test_the_served_page_offers_a_remove_on_every_card(conn, cfg, tmp_path):
     assert 'aria-label="Remove Creep by Radiohead from caracole"' in shown
     card = re.search(r"<article[^>]*>(?:(?!</article>).)*Wonderwall.*?</article>", shown, re.S).group(0)
     assert "Removing…" in card and "/remove" not in card
+    assert "/fetch" not in card  # a fetch now would run before the removal and fetch for nothing
     # The page on disk has no server to remove anything.
     path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW))
     assert "/remove" not in listing(dump_dom(path, tmp_path))

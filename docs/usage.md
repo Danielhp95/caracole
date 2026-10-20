@@ -918,9 +918,9 @@ work, so no two budgets are ever spent side by side: `run` from start to end,
 and `autochords`. A
 second one waits for the first, and says which it is:
 `Another caracole is running (pid 4242: run); waiting for it to finish.`
-`caracole review` takes the lock only after your answers, never while it waits
-for one, and `search`, `match --dry-run` and `index stats` only read, so they
-never wait. A command that waited reads the sites' cooldowns once it has the
+`caracole review` and `caracole remove` take the lock only after your answers,
+never while they wait for one, and `search`, `match --dry-run`, `index stats`
+and `remove --list` only read, so they never wait. A command that waited reads the sites' cooldowns once it has the
 lock: if the caracole it waited for was blocked, it sends that site nothing and
 exits 0. Its first request to a site also waits out the pause after the last
 request any caracole sent there, so the pauses hold whichever caracole sends.
