@@ -1144,16 +1144,18 @@ and each only while it is still the page caracole last wrote for that song:
 caracole records each viewer's SHA-256 and length when it writes it. Any other
 page answers 404 Not found, and so does a viewer edited on a synced device, a
 symbolic link in a viewer's place, and a viewer in a folder that is no song's
-in the database. The next `caracole render` writes an edited viewer again. The
-server sends a viewer in a sandbox (its Content-Security-Policy header): the
-page runs its own script and style and nothing else, in an origin of its own,
-with no cookie and no way to ask the server for anything. The header allows
-the script and style the page itself was written with, so a viewer an older
-caracole wrote keeps working after an upgrade until the next render writes it
-again. It works as it does from the folder, but it can't remember its
-settings. Its links to the PDF and back to the library work with an access
-token too: the sign-in cookie goes with a link followed from another page, but
-not with a form another site posts or anything it loads from the server.
+in the database: the page says the viewer isn't the one caracole wrote, and
+that the PDF is beside it. The next `caracole render` writes an edited viewer
+again. The server sends a viewer in a sandbox (its Content-Security-Policy
+header): the page runs its own script and style and nothing else, in an origin
+of its own, with no cookie and no way to ask the server for anything. The
+header allows the script and style the page itself was written with, so a
+viewer an older caracole wrote keeps working after an upgrade until the next
+render writes it again. It works as it does from the folder, but it can't
+remember its settings. Its links to the PDF and back to the library work with
+an access token too: the sign-in cookie goes with a link followed from another
+page, but not with a form another site posts or anything it loads from the
+server.
 
 Who can reach it:
 

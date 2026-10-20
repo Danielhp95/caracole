@@ -223,7 +223,10 @@ class WebApp:
                 raise NotServed(path)
             page = written_pages().get(path.rsplit("/", 1)[-1])
             if page is not None:
-                return self._written_page(path[1:], page)
+                try:
+                    return self._written_page(path[1:], page)
+                except NotServed:  # index.html links it all the same: say why it isn't sent
+                    return _message(404, "Not sent", page.refused)
             data, kind, download = read_library_file(self.cfg.library_dir, path[1:],
                                                      hidden=(self.cfg.state_dir, self.cfg.cache_dir))
         except NotServed:
@@ -351,10 +354,13 @@ class WrittenPage:
     'none'`` joins, from the page's bytes as read and found as written: a page written by an
     older caracole carries the hashes of that one's script and style, which a policy built by
     this one wouldn't allow. Those bytes are caracole's own, so reading them is safe.
+    ``refused`` is what the 404 says for a page by its name that isn't served: index.html
+    links any file there, whatever it holds.
     """
 
     written: Callable[[sqlite3.Connection, Path, tuple[str, ...]], list[tuple[str, int]]]
     csp: Callable[[bytes], str]
+    refused: str
 
 
 def written_pages() -> dict[str, WrittenPage]:
@@ -364,8 +370,13 @@ def written_pages() -> dict[str, WrittenPage]:
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS
     from caracole.viewer import viewer_csp
 
-    viewer = WrittenPage(_viewers_written, viewer_csp)
+    viewer = WrittenPage(_viewers_written, viewer_csp, _VIEWER_REFUSED)
     return {HUMAN_OUTPUTS[2]: viewer, AUTO_OUTPUTS[2]: viewer}  # "sheet.html", "sheet (auto).html"
+
+
+_VIEWER_REFUSED = ("This sheet viewer isn't the page caracole last wrote here (it was changed on a synced "
+                   "device, say), so the server won't send it: the next caracole render writes it again. "
+                   "The PDF is beside it.")
 
 
 def _viewers_written(conn: sqlite3.Connection, library_dir: Path, parts: tuple[str, ...]) -> list[tuple[str, int]]:

@@ -454,6 +454,21 @@ def test_an_edited_viewer_is_not_served(app, conn, cfg, edit):
     assert get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html")).status == 404
 
 
+def test_a_viewer_not_served_says_why_and_what_to_do(app, conn, cfg):
+    # index.html lists the file whatever it holds, as the card's first link: the 404 says what happened.
+    song = rendered_song(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    (folder / "sheet.html").write_bytes((folder / "sheet.html").read_bytes() + b"<!-- edited -->")
+    response = get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html"))
+    assert response.status == 404
+    said = shown(response)
+    assert "This sheet viewer isn't the page caracole last wrote here" in said
+    assert "the next caracole render writes it again" in said and "The PDF is beside it" in said
+    assert "no such page or file" not in said
+    other = shown(get(app, "/" + quote("Soda Stereo/De Música Ligera/notes.txt")))
+    assert "no such page or file" in other and "sheet viewer" not in other
+
+
 def test_a_link_in_a_viewers_place_is_not_followed(app, conn, cfg, tmp_path):
     song = rendered_song(conn, cfg)
     folder = song_dir(cfg.library_dir, song)
