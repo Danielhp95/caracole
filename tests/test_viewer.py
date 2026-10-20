@@ -607,6 +607,52 @@ def test_the_address_keeps_where_the_song_is_played(tmp_path):
 
 
 @in_chromium
+def test_the_address_keeps_the_text_size(tmp_path):
+    # As fs=, read back on a reload, so the page keeps it where it has no storage (a server's
+    # sandbox); the usual size leaves the address alone.
+    hashes = run_in_page(build_viewer(UG_CHO), tmp_path, """
+      q("#fab").click();
+      q("#bigger").click();
+      const bigger = [location.hash, getComputedStyle(q("#sheet")).fontSize];
+      q("#smaller").click();
+      out = [bigger, [location.hash, getComputedStyle(q("#sheet")).fontSize]];
+    """, "#t=1")
+    assert hashes == [["#t=1&fs=20", "20px"], ["#t=1", "18px"]]
+    read = run_in_page(build_viewer(UG_CHO), tmp_path, 'out = [getComputedStyle(q("#sheet")).fontSize, location.hash];',
+                       "#fs=24")
+    assert read == ["24px", "#fs=24"]
+    odd = run_in_page(build_viewer(UG_CHO), tmp_path, 'out = [getComputedStyle(q("#sheet")).fontSize, location.hash];',
+                      "#fs=99")
+    assert odd == ["18px", ""]  # a size the page can't show is its own
+
+
+@in_chromium
+def test_served_in_a_sandbox_a_reload_keeps_the_text_size(tmp_path):
+    page = build_viewer(UG_CHO).encode("utf-8")
+
+    class Server(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", viewer_csp(page))
+            self.end_headers()
+            self.wfile.write(page)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Server)
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
+    try:
+        dom = dump_url(f"http://127.0.0.1:{server.server_port}/Artist/Title/sheet.html#fs=22", tmp_path)
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert 'data-ready="1"' in dom  # its script ran, without storage
+    assert re.search(r'<html[^>]*style="--fs: 22px;"', dom)
+
+
+@in_chromium
 def test_a_chosen_chord_is_kept_as_itself_not_as_its_place_in_a_list(tmp_path):
     shown, changed, saved = run_in_page(build_viewer(UG_CHO), tmp_path, """
       const sheet = (i) => q('#sheet .c[data-c="' + i + '"]');

@@ -26,14 +26,14 @@
     aeolian: ["Minor", "the natural minor"],
     locrian: ["Locrian", "tense and unstable"],
   };
-  const FS = { min: 13, max: 30, step: 2 };
+  const FS = { min: 13, max: 30, step: 2, start: 18 };
   // The capo goes on any fret up to the 11th (past it the shapes come round again), or the sheet's.
   const CAPO_MAX = Math.max(11, Number(data.capoSheet) || 0);
 
   // --- the state: where the song is played, kept per page ------------------------------------
   // capo: the fret the capo is on (0 for none), or null for the sheet's own. It stays there
   // through a transposition, as on a guitar: the shapes move instead.
-  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null, fs: 18, strip: false };
+  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null, fs: FS.start, strip: false };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -42,13 +42,14 @@
   const clampT = (t) => Math.max(-11, Math.min(11, Math.round(Number(t) || 0)));
   const fretOf = (v) => (v === null || v === undefined || v === "" || !(Number(v) >= 0) ? null
     : Math.min(CAPO_MAX, Math.round(Number(v))));
+  const sizeOf = (v) => (Number(v) >= FS.min && Number(v) <= FS.max ? Math.round(Number(v)) : null);
   try {
     const saved = JSON.parse(localStorage.getItem(store) || "null");
     if (saved && typeof saved === "object") {
       if (saved.base === data.transpose) state.t = clampT(saved.t);  // a new [transpose] starts afresh
       if (validMode(saved.mode)) state.mode = saved.mode;
       if (saved.alt && typeof saved.alt === "object" && saved.chords === sheetChords) state.alt = saved.alt;
-      if (Number(saved.fs) >= FS.min && Number(saved.fs) <= FS.max) state.fs = Number(saved.fs);
+      if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
       state.strip = saved.strip === true;
       state.capo = fretOf(saved.capo);
     }
@@ -57,18 +58,21 @@
   if (hash.has("t")) state.t = clampT(hash.get("t"));
   if (validMode(hash.get("mode"))) state.mode = hash.get("mode");
   if (hash.has("capo")) state.capo = fretOf(hash.get("capo"));
+  if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
   const save = () => {
     try {
       localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose, chords: sheetChords }, state)));
     } catch (err) { /* private mode, or a server's sandbox */ }
-    // The address keeps where the song is played too, read back above: without storage (a
-    // server's sandbox), a reload and Back still keep it. Replaced, so Back isn't a step per tap.
+    // The address keeps where the song is played too, and the text size, read back above:
+    // without storage (a server's sandbox), a reload and Back still keep them. Replaced, so Back
+    // isn't a step per tap.
     try {
       const params = new URLSearchParams(location.hash.slice(1));
       const keep = (name, value, kept) => (kept ? params.set(name, String(value)) : params.delete(name));
       keep("t", state.t, state.t !== (Number(data.transpose) || 0));
       keep("mode", state.mode, state.mode !== null);
       keep("capo", state.capo, state.capo !== null);
+      keep("fs", state.fs, state.fs !== FS.start);
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);

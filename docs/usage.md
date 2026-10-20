@@ -1593,9 +1593,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   itself (with the screen kept on, where the browser allows it).
 
 The viewer remembers its settings for each song in the browser. It keeps the
-transposition, the mode and the capo in its address too
-(`sheet.html#t=2&mode=aeolian`), so a reload or Back keeps them where the
-browser keeps nothing, as when `caracole serve` sends it (see
+transposition, the mode, the capo and the text size in its address too
+(`sheet.html#t=2&mode=aeolian&fs=20`), so a reload or Back keeps them where
+the browser keeps nothing, as when `caracole serve` sends it (see
 [caracole serve](#caracole-serve)). Its key is its sheet's, found as for
 info.json (see [The song's key](#the-songs-key)): the human sheet's from the
 tab, or estimated from its chords, and the auto sheet's heard in the audio;
@@ -1922,7 +1922,8 @@ caracole wrote there, as recorded when it wrote it (anyone with a synced device
 could put a page of their own in the library), and in a sandbox: its scripts
 run, but it can reach neither the server nor your sign-in, and keeps no
 storage, so the song it shows is the one in its address (`#song-3`), where the
-viewer keeps the song's transposition, mode and capo too (`#song-3=&t=2`). Edited
+viewer keeps the song's transposition, mode, capo and text size too
+(`#song-3=&t=2&fs=20`). Edited
 on a device, or replaced by a link, it gets a page saying so until the next
 `caracole render` (or `caracole songbook render`) writes it again.
 
@@ -1940,8 +1941,9 @@ of its own, with no cookie and no way to ask the server for anything. The
 header allows the script and style the page itself was written with, so a
 viewer an older caracole wrote keeps working after an upgrade until the next
 render writes it again. It works as it does from the folder, but keeps only
-the transposition, the mode and the capo, in its address: a reload or Back
-keeps them, and opening it again from the library starts afresh. Its links to
+the transposition, the mode, the capo and the text size, in its address: a
+reload or Back keeps them, and opening it again from the library starts
+afresh. Its links to
 the PDF and back to the library work with an access token too: the sign-in
 cookie goes with a link followed from another page, but not with a form
 another site posts or anything it loads from the server.
@@ -1999,9 +2001,9 @@ in `Library/_songbooks/<name>/`:
   "last opened". Without JavaScript, or printed, it is every song one after
   the other. Served by `caracole serve`, it runs in a sandbox without the
   browser's storage: each song keeps its address (`#song-3`), and the
-  viewer keeps the song's transposition, mode and capo there
-  (`#song-3=&t=2`), so a reload or Back keeps them, but not your place or
-  its other settings; the next song opens in its own key.
+  viewer keeps the song's transposition, mode, capo and text size there
+  (`#song-3=&t=2&fs=20`), so a reload or Back keeps them, but not your place
+  or its other settings; the next song opens in its own key.
 - **`songbook.cho`**: every song's ChordPro, in its key, split by
   `{new_song}`, to import into a songbook app such as SongbookPro or OnSong.
   chordpro writes it, so the chords are already transposed; songs without a

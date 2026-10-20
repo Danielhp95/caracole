@@ -209,6 +209,13 @@ def test_the_song_in_the_address_opens_whatever_else_the_address_keeps(tmp_path)
 
 
 @in_chromium
+def test_the_address_keeps_a_songs_text_size(tmp_path):
+    # Served, the page has no storage: the song's text size is in its address, as its key is.
+    harness = 'out = [getComputedStyle(q("#sheet")).fontSize, location.hash];'
+    assert result_of(open_page(page(), tmp_path, "#song-3=&fs=22", harness=harness)) == ["22px", "#song-3=&fs=22"]
+
+
+@in_chromium
 def test_a_song_opens_alone_in_the_viewer_in_its_own_key(tmp_path):
     dom = open_page(page(), tmp_path, "#song-3")
     assert 'data-view="song"' in dom and 'data-ready="1"' in dom  # the viewer ran, on this song

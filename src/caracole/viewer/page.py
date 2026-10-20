@@ -141,8 +141,9 @@ def viewer_csp(page: bytes) -> str:
     stylesheet, by their hashes, and nothing else to load, no form to send, no base to
     change), with a sandbox, which a ``<meta>`` policy can't set: the page then runs in an
     origin of its own, with no cookie and no way to ask the server for anything. Its script
-    still runs; it has no storage there, and keeps the transposition, the mode and the capo
-    in its address (``#t=2&mode=aeolian``) alone, as it does everywhere besides its storage.
+    still runs; it has no storage there, and keeps the transposition, the mode, the capo and
+    the text size in its address (``#t=2&mode=aeolian&fs=20``) alone, as it does everywhere
+    besides its storage.
 
     The policy is the page's, not this caracole's: a viewer written before an upgrade carries
     the hashes of the script and style it was written with, and keeps them until the next
