@@ -102,6 +102,7 @@ def test_an_address_it_cant_listen_on_exits_1(tmp_path, monkeypatch):
     assert result.exit_code == 1 and "can't listen on 127.0.0.1:8737: Address already in use" in result.output
 
 
+@pytest.mark.slow
 def test_registering_the_command_imports_no_server_code():
     code = "import sys; import caracole.cli; print(sorted(m for m in sys.modules if m.startswith('caracole.web')))"
     src = Path(__file__).resolve().parents[1] / "src"

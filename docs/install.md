@@ -450,6 +450,7 @@ With Nix:
 ```sh
 nix develop                                         # Python, the dependencies, pytest, chordpro, ruff, sqlite3
 pytest -q
+pytest -q -m "not slow"                             # all but the browser, chordpro and second-process tests
 nix develop .#autochords -c pytest -m autochords    # the model tests, with the model files
 ```
 
@@ -471,7 +472,7 @@ under root. Tests that need a program or a file skip without it:
 
 | Without | These tests skip |
 |---|---|
-| `chordpro` on PATH | the real PDFs: test_render.py and test_render_all.py (marked `chordpro`), two in test_chordpro.py |
+| `chordpro` on PATH | the real PDFs (marked `chordpro`): in test_render.py and test_render_all.py, two in test_chordpro.py |
 | `CARACOLE_CJK_FONT` | the two Chinese PDFs |
 | torch, librosa and beat_this, or `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` | the model tests (marked `autochords`) |
 | `ffmpeg`, `chromium` | one `.m4a` test, two `index.html` tests in a browser |

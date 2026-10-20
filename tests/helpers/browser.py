@@ -42,8 +42,9 @@ DESKTOP = ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS")
 
 
 def in_chromium(test):
-    """For a test that opens pages in Chromium: skipped without Chromium."""
-    return pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")(test)
+    """For a test that opens pages in Chromium: marked slow, and skipped without Chromium."""
+    test = pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")(test)
+    return pytest.mark.slow(test)
 
 
 class BrowserError(RuntimeError):

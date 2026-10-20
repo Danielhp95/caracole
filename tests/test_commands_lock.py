@@ -353,6 +353,7 @@ def test_review_never_holds_the_lock_while_it_waits_for_you(tmp_path, config, co
     assert free_at_each_prompt and all(free_at_each_prompt)
 
 
+@pytest.mark.slow
 def test_the_nightly_run_waits_for_another_caracole_process(tmp_path, config):
     # Two processes: this one holds the lock, as a `caracole-admin index build` would, and
     # `caracole run` starts in a process of its own. Its library is empty, so it asks no site;

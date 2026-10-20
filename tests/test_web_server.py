@@ -82,6 +82,7 @@ def test_a_long_or_unsized_form_is_refused_unread(served):
         conn.close()
 
 
+@pytest.mark.slow
 def test_sigterm_stops_caracole_serve_cleanly(tmp_path):
     """How systemd stops the unit: the server closes, the queue stops, and it exits 0."""
     import signal
@@ -120,6 +121,7 @@ def test_sigterm_stops_caracole_serve_cleanly(tmp_path):
     assert f"http://127.0.0.1:{port}/" in out
 
 
+@pytest.mark.slow
 def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
     src = Path(__file__).resolve().parents[1] / "src"
     monkeypatch.setenv("PYTHONPATH", subprocess_pythonpath(src))

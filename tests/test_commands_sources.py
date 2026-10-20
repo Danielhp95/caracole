@@ -688,6 +688,7 @@ def test_auth_spotify_when_spotify_cannot_be_reached_exits_1(tmp_path, monkeypat
 # --- the module -----------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_registering_the_commands_imports_no_spotipy(tmp_path):
     # Every command module is imported on every start, so spotipy waits for a command.
     src = Path(__file__).resolve().parents[1] / "src"

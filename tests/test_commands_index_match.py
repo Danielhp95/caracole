@@ -565,6 +565,7 @@ def test_cli_match_without_songs(tmp_path):
 # --- start-up cost --------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_registering_the_commands_imports_neither_the_matcher_nor_the_index():
     code = ("import sys; import caracole.cli; "
             "print(sorted(m for m in sys.modules if m.startswith(('rapidfuzz', 'caracole.match', 'caracole.ug'))))")

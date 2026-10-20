@@ -24,6 +24,12 @@ def pytest_configure(config):
         os.environ["PYTEST_DEBUG_TEMPROOT"] = str(MEMORY)
 
 
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if item.get_closest_marker("chordpro"):
+            item.add_marker(pytest.mark.slow)
+
+
 def pytest_sessionfinish(session):
     browser = sys.modules.get("helpers.browser")  # imported by a test that opened a page
     if browser is not None:

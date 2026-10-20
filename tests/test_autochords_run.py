@@ -982,6 +982,7 @@ def model_packages_after(code: str, tmp_path: Path, *args: str) -> list[str]:
     return result.stdout.strip().splitlines()
 
 
+@pytest.mark.slow
 def test_registering_the_command_imports_no_model_packages(tmp_path):
     # Every command module is imported on every start, and the default package has no torch.
     code = (
@@ -990,6 +991,7 @@ def test_registering_the_command_imports_no_model_packages(tmp_path):
     assert model_packages_after(code, tmp_path) == ["[]"]
 
 
+@pytest.mark.slow
 def test_a_night_with_nothing_due_imports_no_model_packages(conn, cfg, tmp_path):
     keep_human_sheet(conn, cfg, with_audio(conn, tmp_path, add_song(conn, "A", "Charted")))
     # The cfg fixture's directories, and model files that would fail if anything loaded them.

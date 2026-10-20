@@ -427,6 +427,7 @@ def test_sheets_scored_with_nothing_to_fetch_rewrite_the_pages(tmp_path, ug):
     assert "**Soda Stereo - Persiana Americana**: 50% of the lyrics" in todo
 
 
+@pytest.mark.slow
 def test_registering_the_command_imports_no_fetch_code(tmp_path):
     # Every command module is imported on every start; the fetch code waits for the command.
     src = Path(__file__).resolve().parents[1] / "src"

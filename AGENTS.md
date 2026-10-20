@@ -98,7 +98,13 @@ and `search --key`).
 
     nix develop        # Python 3.14 with the dependencies, pytest, chordpro, ruff, sqlite3
     pytest -q          # from the repo root; pyproject.toml sets testpaths and pythonpath
+    pytest -q -m "not slow"           # the quick loop
+    pytest -q -m "not slow" --lf -x   # what failed last time, stopping at the first failure
     nix develop .#autochords -c pytest -m autochords   # the model tests
+
+`slow` marks a test that starts a browser (`helpers.browser.in_chromium`), chordpro
+(`@pytest.mark.chordpro` adds `slow`) or another process: mark a new one too. The whole
+suite stays the gate before a commit.
 
 Both shells set `CARACOLE_CJK_FONT` to the packages' font. `.#autochords` adds torch,
 beat-this and librosa, and sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` to the
