@@ -115,12 +115,16 @@
     if (parent) parent.appendChild(node);
     return node;
   };
+  // A chord's shapes: those the sheet gives that very chord first (page.py's "shapes", "mine" of them:
+  // the first so many), then chords-db's; the note goes with chords-db's.
   const shapesOf = (rep, s) => {
-    if (!rep) return { list: [], note: "" };
+    if (!rep) return { list: [], note: "", mine: 0 };
     const pc = mod12(rep[0] + s);
     const n = names(s);
+    const which = pc + "," + rep[1] + "," + (rep[2] === null ? "" : mod12(rep[2] + s));
+    const given = data.shapes && own.call(data.shapes, which) ? data.shapes[which] : { list: null, mine: 0 };
     const slash = rep[5] && data.voicings[rep[5]] ? data.voicings[rep[5]][pc] : null;
-    if (slash && slash.length) return { list: slash, note: "" };
+    if (slash && slash.length) return { list: given.list || slash, note: "", mine: given.mine };
     const list = data.voicings[rep[3]] ? data.voicings[rep[3]][pc] || [] : [];
     let note = "";
     if (rep[4]) {
@@ -128,9 +132,10 @@
       note = "No shape for this chord here: " + n[pc] + q + " is the closest.";
     }
     if (rep[2] !== null) note = (note ? note + " " : "") + "Play " + n[mod12(rep[2] + s)] + " in the bass.";
-    return { list, note };
+    return { list: given.list || list, note, mine: given.mine };
   };
-  const diagram = (position, title) => {
+  // A position as a diagram; the strip's (bare) leave the fingers out, too small to read there.
+  const diagram = (position, title, bare) => {
     const frets = String(position[0]);
     const fingers = String(position[1]);
     const first = Number(position[2]) || 1;
@@ -164,7 +169,7 @@
       } else {
         const y = top + (Number(f) - 0.5) * row;
         svg("circle", { class: "dg-dot", cx: x, cy: y, r: 4.2 }, root);
-        if (fingers[s] && fingers[s] !== "0") {
+        if (!bare && fingers[s] && fingers[s] !== "0") {
           svg("text", { class: "dg-finger", x: x, y: y + 0.3 }, root).textContent = fingers[s];
         }
       }
@@ -267,7 +272,7 @@
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
     drawStrip();
-    fit();
+    layout();
     save();
   };
 
@@ -298,12 +303,51 @@
       });
     }
   };
+  // One column, or two side by side where viewer.css offers them (a wide screen), only for a song
+  // the window then shows whole: the song's end in the second column, and the sheet no taller than
+  // the window above the room the page keeps at its foot for the controls.
+  const layout = () => {
+    const y = window.scrollY;
+    doc.dataset.columns = "2";
+    if (getComputedStyle(sheetEl).columnCount !== "2") {  // not offered here
+      doc.dataset.columns = "1";
+      fit();
+      return;
+    }
+    fit();
+    const box = sheetEl.getBoundingClientRect();
+    const end = sheetEl.lastElementChild && sheetEl.lastElementChild.lastElementChild;
+    const page = sheetEl.closest(".page") || document.body;
+    const room = window.innerHeight - (parseFloat(getComputedStyle(page).paddingBottom) || 0);
+    const fits = Boolean(end) && end.getBoundingClientRect().left > box.left + box.width / 2 && box.height <= room;
+    if (!fits) {
+      doc.dataset.columns = "1";
+      fit();
+    }
+    // Two columns are shorter than one: measuring them may have moved the page. Back to where it was.
+    if (window.scrollY !== y) window.scrollTo(0, y);
+  };
   let fitting = 0;
   window.addEventListener("resize", () => {
     cancelAnimationFrame(fitting);
-    fitting = requestAnimationFrame(fit);
+    fitting = requestAnimationFrame(layout);
   });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit, () => {});
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout, () => {});
+  // The tab's preamble opened or folded again (page.py): the song moves, and may no longer fit two columns.
+  for (const fold of sheetEl.querySelectorAll("details")) fold.addEventListener("toggle", layout);
+  // Printed, the notes print whole: where the stylesheet can't show a folded one's text (no
+  // ::details-content), they open for the printout and fold again after it.
+  if (!(window.CSS && CSS.supports && CSS.supports("selector(::details-content)"))) {
+    let unfolded = [];
+    window.addEventListener("beforeprint", () => {
+      unfolded = [...document.querySelectorAll("details.pre:not([open])")];
+      for (const fold of unfolded) fold.open = true;
+    });
+    window.addEventListener("afterprint", () => {
+      for (const fold of unfolded) fold.open = false;
+      unfolded = [];
+    });
+  }
 
   const drawStrip = () => {
     const strip = $("strip");
@@ -316,7 +360,7 @@
       const b = document.createElement("button");
       b.type = "button";
       const name = label(String(i), rep);
-      if (shapes.list.length) b.appendChild(diagram(shapes.list[0], name));
+      if (shapes.list.length) b.appendChild(diagram(shapes.list[0], name, true));
       b.appendChild(document.createTextNode(name));
       b.addEventListener("click", () => openCard(String(i)));
       strip.appendChild(b);
@@ -357,8 +401,20 @@
     $("prev").disabled = shown.at <= 0;
     $("next").disabled = shown.at >= shapes.list.length - 1;
     const capoNote = state.capo === null ? "" : state.capo ? " With the capo on fret " + state.capo + "." : " With no capo.";
-    const note = shapes.note + capoNote;
-    $("shape-note").textContent = note.trim();
+    // The shape's note, and a hidden copy of the note on the chord's other shapes (viewer.css): from the
+    // tab's shapes to chords-db's, the card keeps its height, and ‹ › stay under the thumb.
+    const tabs = shown.at < shapes.mine;
+    const said = (mine) => ((mine ? "As the tab plays it." : shapes.note) + capoNote).trim();
+    const noteBox = $("shape-note");
+    noteBox.textContent = "";
+    const line = (text, room) => {
+      if (!text) return;
+      const span = noteBox.appendChild(document.createElement("span"));
+      span.textContent = text;
+      if (room) span.className = "room";
+    };
+    line(said(tabs));
+    if (shapes.mine && shapes.mine < shapes.list.length) line(said(!tabs), true);
 
     const altBox = $("alts");
     altBox.textContent = "";

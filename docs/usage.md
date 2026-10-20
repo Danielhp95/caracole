@@ -1556,12 +1556,30 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Chords over the lyrics**, in bold rust. A long line wraps between words,
   never between a chord and its syllable, and a chord reaches over the words
   after it, so the lyrics read without gaps.
-- **Tap a chord** for its fingerings: up to four shapes, with the fingers, the
-  barre and the fret they start on (swipe, or ‹ ›, for the next). Every place
-  the chord is played lights up while its card is open. The shapes come from
+- **The tab's notes**: what a tab says before its first section or its first
+  riff (the tabber's comments, a link, a chord legend) is shown small and
+  muted, two lines of it; **More** opens the rest, and works without
+  JavaScript too. Printed, all of it prints. Chords or a verse before the
+  first section are the song, and nothing is folded then.
+- **On a wide screen** (1100 px or more: a laptop), the song reads down one
+  column, centred, in slightly larger text. A song short enough for the
+  window to show it whole in two columns is shown in two, side by side; a
+  longer one stays in one, as it would otherwise run down the first column
+  and back up the second. The viewer measures again when the window or the
+  text size changes.
+- **Tap a chord** for its fingerings: up to four shapes from chords-db, after
+  any the sheet gives, with the fingers, the barre and the fret they start on
+  (swipe, or ‹ ›, for the next). Every place the chord is played lights up
+  while its card is open. The shapes come from
   [chords-db](https://github.com/tombatossals/chords-db) by David Rubert (MIT
   licence, whose notice is at the foot of every page); a chord it has no
-  shape for shows the closest one, saying so.
+  shape for shows the closest one, saying so. A shape the sheet gives comes
+  first, on the card ("As the tab plays it") and in the strip: a tab's chord
+  legend (`Cadd9 (x32033)`, `Dsus4/F# 2x0233`), which gives no fingers (they
+  show where chords-db has the same shape), or a ChordPro `{define}` in a
+  sheet of yours. It counts only for the very chord it was given for, and only
+  where it plays that chord: transposed, Cadd9 becomes a Dadd9, with
+  chords-db's shapes.
 - **The key button** (bottom right) opens the settings. **Transpose** moves
   every chord, its shapes and the key by semitones; Reset goes back to the
   song's `[transpose]`, where the viewer starts, like the PDF. In an awkward
@@ -1579,8 +1597,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Phrygian, Lydian, Mixolydian, Locrian). Each chord's notes move to the same
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
   the key, such as the G major chord's B in C minor, stays where it is.
-- Text size, every chord's shape in a strip above the song, and scrolling by
-  itself (with the screen kept on, where the browser allows it).
+- Text size, every chord's shape in a strip above the song (the shapes alone,
+  large enough to read at a glance: tap one for its card, with the fingers),
+  and scrolling by itself (with the screen kept on, where the browser allows
+  it).
 
 The viewer remembers its settings for each song in the browser. It keeps the
 transposition, the mode and the capo in its address too
@@ -1974,12 +1994,17 @@ in `Library/_songbooks/<name>/`:
   ("Hysteria · Muse · missing: no sheet yet"), and its page says so. Its
   document title, the name a PDF viewer or a phone shows, is the songbook's.
 - **`songbook.html`**: one page for the phone, which opens from the synced
-  folder and loads nothing. It opens on the contents; tap a song to open it in
-  the sheet viewer, with everything the viewer does (chord shapes,
-  transposition, chords to play instead, modes, scrolling by itself), each
-  song in its own key and keeping its own settings. Next and Previous (above
-  each song, and again at its end), a swipe across the sheet or the arrow keys
-  go from song to song, skipping the missing ones, and Contents goes back. Opened again, the page takes you back
+  folder and loads nothing. It opens on the contents, each song with its
+  artist, key and capo on a line under its title ("Oasis · Em · capo 2": the
+  key the song opens in, its `[transpose]` applied, and its sheet's capo); tap
+  a song to open it in the sheet viewer, with everything the viewer does
+  (chord shapes, transposition, chords to play instead, modes, scrolling by
+  itself), each song in its own key and keeping its own settings. Previous and
+  Next name the songs they go to ("‹ Hotel California", "Next: little wolf ›",
+  a title too long for the phone cut short with "…"), above each song and
+  again at its end, where on a phone Next has a row of its own, with room for
+  the title. They, a swipe across the sheet or the arrow keys go from
+  song to song, skipping the missing ones, and Contents goes back. Opened again, the page takes you back
   to the song you had open, where you were in it, and its address names it
   (`#song-3`); the contents mark it as
   "last opened". Without JavaScript, or printed, it is every song one after

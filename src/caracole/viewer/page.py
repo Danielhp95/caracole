@@ -6,7 +6,9 @@ script and one stylesheet makes the browser enforce that) and links only to the 
 beside it and to the library's index.html two folders up. A server may serve it
 too, only while it is the page caracole wrote, with ``viewer_csp(page)`` as its header.
 
-The sheet itself is static HTML, so it reads without the script, and prints. Every
+The sheet itself is static HTML, so it reads without the script, and prints. What a tab
+says before its first section or riff (its tabber's notes, a link, a chord legend) is
+folded after two lines, in a ``<details>`` that opens without the script too. Every
 text from the sheet is escaped. The script (viewer.js) relabels the chords from the
 song data in a ``<script type="application/json">`` block, whose every ``<`` is
 written ``\\u003c``:
@@ -23,7 +25,11 @@ written ``\\u003c``:
   that mode on each tonic, ``theory.spelling``), ``keyNames``, and ``capo`` hints
   for each transposition (``theory.capo_hints``: the fret the capo goes on, 0 for
   none, which may be below the sheet's own, and the shapes' key);
-- ``voicings``: the fingerings of every chord the page can show, on every root.
+- ``voicings``: the fingerings of every chord the page can show, on every root;
+- ``shapes``: the fingerings the sheet gives its chords (its chord legend, its ``{define}``),
+  first, before chords-db's (``voicings.sheet_shapes``: ``{"mine": how many are the sheet's,
+  "list": positions}``), by the chord as shown: the script shows them for that very chord
+  alone, not once it is transposed into another.
 """
 
 from __future__ import annotations
@@ -40,7 +46,7 @@ from typing import Any
 from urllib.parse import quote
 
 from caracole.normalize import has_han
-from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Section, Sheet, Tab, Text, parse_sheet
+from caracole.viewer.sheet import Blank, ChordRow, Line, Lyrics, Section, Sheet, Tab, Text, parse_sheet
 from caracole.viewer.theory import (
     DISPLAY,
     MODES,
@@ -55,7 +61,14 @@ from caracole.viewer.theory import (
     parse_key,
     spelling,
 )
-from caracole.viewer.voicings import page_voicings, voicing_keys
+from caracole.viewer.voicings import (
+    Position,
+    chord_legend,
+    page_voicings,
+    parse_define,
+    sheet_shapes,
+    voicing_keys,
+)
 
 HERE = Path(__file__).parent
 LIBRARY_PAGE = "../../index.html"  # Library/<artist>/<title>/sheet.html -> Library/index.html
@@ -253,7 +266,21 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
                 for t in range(12)
             ]
     data["voicings"] = page_voicings(needed)
+    data["shapes"] = sheet_shapes(_given_shapes(sheet))
     return data
+
+
+def _given_shapes(sheet: Sheet) -> list[tuple[Chord, Position]]:
+    """The fingerings the sheet gives its chords, in order: its ``{define}``s, then its chord
+    legend's lines, wherever they are (a legend's line in a tab too)."""
+    given = [found for value in sheet.defines if (found := parse_define(value))]
+    for section in sheet.sections:
+        for line in section.lines:
+            if isinstance(line, Tab):
+                given += [entry for text in line.lines for entry in chord_legend(text)]
+            elif not isinstance(line, Blank):
+                given += chord_legend(_written(line, sheet.chords))
+    return given
 
 
 # --- the page ------------------------------------------------------------------------------------
@@ -310,7 +337,67 @@ def _texts(sheet: Sheet) -> list[str]:
 
 
 def _sheet_html(sheet: Sheet) -> str:
-    return "".join(_section_html(s, sheet.chords) for s in sheet.sections)
+    sections = list(sheet.sections)
+    pre = _preamble(sheet)
+    if pre is not None:  # what follows it in its section, a riff and on, stays a section of the song
+        rest = sections[0].lines[len(pre.lines):]
+        while rest and isinstance(rest[0], Blank):
+            rest = rest[1:]
+        sections[:1] = [Section(None, lines=rest)] if rest else []
+    return ((_preamble_html(pre, sheet.chords) if pre else "")
+            + "".join(_section_html(s, sheet.chords) for s in sections))
+
+
+def _preamble(sheet: Sheet) -> Section | None:
+    """What a tab says before its first section (its tabber's notes, a link, a chord legend), or None:
+    an unlabelled first section, before another, up to its first tab (UG's first label is often inside
+    it: "[Intro]"), with nothing played in it. Its lines are text and chords given with their
+    fingerings (``voicings.chord_legend``); chords alone there are the song's intro and words sung
+    there its first verse, and none of it is folded away."""
+    first = sheet.sections[0] if len(sheet.sections) > 1 else None
+    if first is None or first.label or first.chorus:
+        return None
+    lines: list[Line] = []
+    for line in first.lines:
+        if isinstance(line, Tab):
+            break
+        if _played_line(line, sheet.chords):
+            return None
+        lines.append(line)
+    while lines and isinstance(lines[-1], Blank):
+        lines.pop()
+    return Section(None, lines=lines) if lines else None
+
+
+def _played_line(line: Line, names: list[str]) -> bool:
+    return not isinstance(line, (Text, Blank)) and not chord_legend(_written(line, names))
+
+
+def _preamble_html(section: Section, names: list[str]) -> str:
+    """The preamble in small, muted type, folded after its first two lines: those two as plain text
+    in the summary of a ``<details>``, to read at a glance, and every line inside; open, the summary
+    names it, beside Less. A preamble of two lines has nothing more to show, and isn't folded."""
+    lines = [line for line in section.lines if not isinstance(line, Blank)]
+    body = "\n".join(_line_html(line, names) for line in section.lines)
+    if len(lines) <= 2:
+        return f'<div class="pre">\n{body}\n</div>\n'
+    peek = "<br>".join(escape(_written(line, names).strip()) for line in lines[:2])
+    return (
+        f'<details class="pre">\n<summary><span class="peek">{peek}</span><span class="named">Notes</span>'
+        '<span class="more">More</span><span class="less">Less</span></summary>\n'
+        f'<div class="pre-body">\n{body}\n</div>\n</details>\n'
+    )
+
+
+def _written(line: Line, names: list[str]) -> str:
+    """A line as the sheet writes it, its chords and marks among its words: "Cadd9 (x32033)"."""
+    if isinstance(line, Text):
+        return line.text
+    if isinstance(line, ChordRow):
+        return " ".join(names[i] if isinstance(i, int) else i for i in line.items)
+    if isinstance(line, Lyrics):
+        return "".join((names[c] if isinstance(c, int) else c or "") + text for c, text in line.parts)
+    return ""
 
 
 def _section_html(section: Section, names: list[str]) -> str:

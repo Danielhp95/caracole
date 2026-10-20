@@ -1,7 +1,8 @@
 """songbook.html: a songbook as one page for the phone, each song in the sheet viewer.
 
-The page opens on the contents, every song in the songbook's order; a song without a
-sheet is named there as missing, and has no page. Each song with a sheet is a section
+The page opens on the contents, every song in the songbook's order, each with its artist,
+key and capo on a line under its title; a song without a sheet is named there as missing,
+and has no page. Each song with a sheet is a section
 built the way ``page.build_viewer`` builds a sheet.html, with its own data block (its
 key, its ``[transpose]``, its chords in every mode); the fingerings, which most songs
 share, are one block for the page (``voicings``).
@@ -12,9 +13,9 @@ and prints. With it (book.js), it shows the contents or one song, chosen by the 
 viewer's own script: it gives the song's elements the names the viewer looks for
 (``sheet``, ``facts``, ``strip``, ``song``), hands it the fingerings, and swaps each
 song's settings in and out of the one place the viewer keeps a page's, so every song
-keeps its own transposition, mode and chords. Next and previous, a swipe or the arrow
-keys go from song to song, skipping the missing ones; each step reloads the page, so
-the viewer starts afresh on each song.
+keeps its own transposition, mode and chords. Next and previous, which name the song
+they go to, a swipe or the arrow keys go from song to song, skipping the missing ones;
+each step reloads the page, so the viewer starts afresh on each song.
 
 The page is self-contained and loads nothing, as a sheet.html: a Content-Security-Policy
 with the hashes of its two scripts and two stylesheets. A server serves it only while it
@@ -46,11 +47,11 @@ from caracole.viewer.page import (
     _texts,
 )
 from caracole.viewer.sheet import parse_sheet
-from caracole.viewer.theory import key_name, parse_chord
+from caracole.viewer.theory import Key, key_name, parse_chord
 
 HERE = Path(__file__).parent
 LIBRARY_PAGE = "../../index.html"  # Library/_songbooks/<name>/songbook.html -> Library/index.html
-VERSION = 2  # of the page's markup: a new one makes every songbook.html again
+VERSION = 4  # of the page's markup: a new one makes every songbook.html again
 
 
 @dataclass(frozen=True)
@@ -129,13 +130,14 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
     """
     style, script = _assets()
     book_style, book_script = _book_assets()
-    playable = [n for n, song in enumerate(songs, start=1) if song.cho is not None]
+    playable = [(n, song.title) for n, song in enumerate(songs, start=1) if song.cho is not None]
     voicings: dict[str, Any] = {}
     sections = []
-    for i, n in enumerate(playable):
+    about: dict[int, str] = {}
+    for i, (n, _) in enumerate(playable):
         prev = playable[i - 1] if i > 0 else None
         nxt = playable[i + 1] if i + 1 < len(playable) else None
-        html, data = _song(songs[n - 1], n, len(songs), prev, nxt)
+        html, data, about[n] = _song(songs[n - 1], n, len(songs), prev, nxt)
         voicings.update(data.pop("voicings"))
         sections.append(html + _json(f"data-{n}", data) + "</section>\n")
     count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
@@ -151,7 +153,7 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         '<header class="head book-head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
         f"<h1>{escape(name)}</h1>\n<p class=\"artist\">Songbook · {count}</p>\n</header>\n"
-        + _contents(songs, files)
+        + _contents(songs, about, files)
         + "".join(sections)
         + _json("voicings", voicings)
         + '<footer class="foot">\n'
@@ -171,11 +173,14 @@ def _json(element_id: str, data: Any) -> str:
     return f'<script type="application/json" id="{element_id}">{payload}</script>\n'
 
 
-def _contents(songs: list[BookSong], files: str) -> str:
+def _contents(songs: list[BookSong], about: dict[int, str], files: str) -> str:
+    """The contents: each song's number and title, and on a line under it, its artist and, for a song
+    with a sheet, its key and capo (``about``, by number)."""
     items = []
     for n, song in enumerate(songs, start=1):
+        line = " · ".join(part for part in (escape(song.artist), about.get(n, "")) if part)
         names = (f'<span class="n">{n}</span><span class="t">{escape(song.title)}</span>'
-                 f'<span class="a">{escape(song.artist)}</span>')
+                 + (f'<span class="a">{line}</span>' if line else ""))
         if song.cho is None:
             why = escape(song.missing or "no sheet yet")
             items.append(f'<li class="missing"><span class="row">{names}<span class="why">Missing: {why}</span>'
@@ -190,8 +195,10 @@ def _contents(songs: list[BookSong], files: str) -> str:
     )
 
 
-def _song(song: BookSong, n: int, total: int, prev: int | None, nxt: int | None) -> tuple[str, dict[str, Any]]:
-    """A song's section, without its closing tag, and its data (with its fingerings)."""
+def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
+          nxt: tuple[int, str] | None) -> tuple[str, dict[str, Any], str]:
+    """A song's section, without its closing tag, its data (with its fingerings), and its key and capo
+    as the contents give them. ``prev`` and ``nxt`` are the songs with a sheet around it: number, title."""
     sheet = parse_sheet(song.cho or "")
     chords = [parse_chord(name, strict=False) for name in sheet.chords]
     key, origin = _song_key(sheet, chords, song.key, song.key_source)
@@ -219,15 +226,33 @@ def _song(song: BookSong, n: int, total: int, prev: int | None, nxt: int | None)
         + f'<article class="sheet" id="sheet-{n}"{lang}>\n{_sheet_html(sheet)}</article>\n'
         + _pager("Songs, after the sheet", prev, nxt)  # at the end of a long sheet, no scrolling back up
     )
-    return html, data
+    return html, data, _key_and_capo(key, song.transpose, sheet.capo)
 
 
-def _pager(label: str, prev: int | None, nxt: int | None) -> str:
-    """Previous, Contents and Next: above a song's sheet, and again after it, each named for a screen reader."""
+def _key_and_capo(key: Key | None, transpose: int, capo: int | None) -> str:
+    """"Em · capo 2", as the contents give a song: the key the viewer opens it in (its ``[transpose]``
+    applied, as the songbook's PDF) and its sheet's capo. A screen reader hears "key Em"."""
+    parts = []
+    if key is not None:
+        shown = Key((key.tonic + transpose) % 12, key.mode)
+        parts.append(f'<span class="vh">key </span>{escape(key_name(shown))}')
+    if capo:
+        parts.append(f"capo {capo}")
+    return " · ".join(parts)
+
+
+def _pager(label: str, prev: tuple[int, str] | None, nxt: tuple[int, str] | None) -> str:
+    """Previous, Contents and Next, above a song's sheet and again after it, each named for a screen reader:
+    "‹ Title" and "Next: Title ›", the songs they go to, a title too long for the phone cut short ("…")
+    by book.css. The arrows are hidden from a screen reader, which hears "Previous: Title"."""
     return (
         f'<nav class="pager" aria-label="{escape(label)}">'
-        + (f'<a href="#song-{prev}" rel="prev">‹ Previous</a>' if prev else '<span class="none"></span>')
+        + (f'<a href="#song-{prev[0]}" rel="prev"><span class="arrow" aria-hidden="true">‹ </span>'
+           f'<span class="vh">Previous: </span><span class="name">{escape(prev[1])}</span></a>'
+           if prev else '<span class="none"></span>')
         + '<a href="#contents">Contents</a>'
-        + (f'<a href="#song-{nxt}" rel="next">Next ›</a>' if nxt else '<span class="none"></span>')
+        + (f'<a href="#song-{nxt[0]}" rel="next"><span class="lead">Next: </span>'
+           f'<span class="name">{escape(nxt[1])}</span><span class="arrow" aria-hidden="true"> ›</span></a>'
+           if nxt else '<span class="none"></span>')
         + "</nav>\n"
     )

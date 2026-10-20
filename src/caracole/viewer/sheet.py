@@ -2,8 +2,10 @@
 
 Only what that file holds is read: the ``title``, ``artist``, ``key`` and ``capo``
 directives, ``comment`` (a section's name), tab and chorus environments, and lines
-with ``[Chord]`` and ``[*mark]`` in them. Other directives and ``#`` comment lines are
-skipped. The escapes ChordPro needed (a backslash written ``\\u005c``) are undone.
+with ``[Chord]`` and ``[*mark]`` in them; and the fingerings a sheet of yours may give
+its chords (``define`` and ``chord``, kept as written for ``voicings.parse_define``).
+Other directives and ``#`` comment lines are skipped. The escapes ChordPro needed (a
+backslash written ``\\u005c``) are undone.
 """
 
 from __future__ import annotations
@@ -63,6 +65,7 @@ class Sheet:
     auto: bool = False
     chords: list[str] = field(default_factory=list)  # as written, each once, in order of appearance
     sections: list[Section] = field(default_factory=list)
+    defines: list[str] = field(default_factory=list)  # each {define} and {chord}, as written after its colon
 
 
 _DIRECTIVE = re.compile(r"\s*\{\s*([A-Za-z_]+)\s*(?::\s*(.*?))?\s*\}\s*")
@@ -122,6 +125,8 @@ def parse_sheet(text: str) -> Sheet:
                 start(value or None, chorus=True)
             elif name in ("end_of_chorus", "eoc"):
                 start(None)
+            elif name in ("define", "chord") and value:
+                sheet.defines.append(value)
             continue
         if line.startswith("#"):
             continue

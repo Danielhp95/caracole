@@ -1,20 +1,25 @@
 /* songbook.html, on top of the sheet viewer's stylesheet: the contents, and a song at a time. */
+/* What a screen reader alone hears ("Previous: ", "key "). */
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; }
 .book-head h1 { margin: 0; font-size: 1.7rem; line-height: 1.15; letter-spacing: -0.015em; overflow-wrap: anywhere; }
 .toc { margin-top: 18px; }
 .toc-list { margin: 0; padding: 0; list-style: none; }
 .toc-list li { border-top: 1px solid var(--border); }
 .toc-list li:last-child { border-bottom: 1px solid var(--border); }
-.toc .row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-height: 52px; padding: 12px 6px;
-  color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+/* A row: the number and the title, and under the title its artist, key and capo ("Oasis · Em · capo 2"). */
+.toc .row { display: grid; grid-template-columns: 2ch minmax(0, 1fr) auto; align-items: baseline; gap: 2px 10px;
+  min-height: 52px; padding: 10px 6px; color: inherit; text-decoration: none; overflow-wrap: anywhere; }
 .toc a.row:hover { background: var(--raised); }
-.toc .n { min-width: 2ch; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; text-align: right; }
-.toc .t { font-weight: 650; }
-.toc .a { color: var(--muted); font-size: .92rem; }
+.toc .n { grid-column: 1; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; text-align: right; }
+.toc .t { grid-column: 2; font-weight: 650; }
+.toc .a, .toc .why { grid-column: 2; color: var(--muted); font-size: .88rem; }
 .toc .missing .row { color: var(--muted); }
 .toc .missing .t { font-weight: 500; }
-.toc .why { flex-basis: 100%; padding-left: calc(2ch + 10px); font-size: .8rem; font-style: italic; }
+.toc .why { font-size: .8rem; font-style: italic; }
 .toc .here a.row { background: var(--accent-soft); border-radius: 10px; }
-.toc .here a.row::after { content: "last opened"; margin-left: auto; color: var(--muted); font-size: .75rem; }
+.toc .here a.row::after { content: "last opened"; grid-column: 3; grid-row: 1 / span 2; align-self: center;
+  color: var(--muted); font-size: .75rem; }
 .files { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
 .files .pdf, .foot .pdf { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 10px;
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600; text-decoration: none; }
@@ -26,14 +31,37 @@ html[data-view="song"] .book-head .artist { display: none; }
 .song .head h2.title { margin: 0; font-size: 1.55rem; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .pos { margin: 6px 0 2px; color: var(--muted); font-size: .78rem; font-weight: 650; letter-spacing: .05em;
   text-transform: uppercase; }
-.pager { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; margin: 6px 0 4px; }
-.pager a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 12px;
-  border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600;
-  text-decoration: none; white-space: nowrap; }
+/* Previous, Contents and Next, naming the songs: a title too long for its side of the row is cut short ("…"),
+   its arrow kept in sight. */
+.pager { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px;
+  margin: 6px 0 4px; }
+.pager a { display: inline-flex; align-items: center; justify-content: center; gap: .3em; max-width: 100%;
+  min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.pager .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pager .lead, .pager .arrow { flex: none; }
 .pager a[rel="prev"] { justify-self: start; }
 .pager a[rel="next"] { justify-self: end; }
 .pager a:hover { border-color: var(--muted); }
 .sheet + .pager { margin: 22px 0 6px; }
+@media (max-width: 559px) {
+  /* A phone's row is narrow: above the sheet, "Next:" goes over the title, which keeps its side's width. */
+  .pager { gap: 6px; }
+  .pager a { padding: 0 10px; }
+  .head .pager a[rel="next"] { display: inline-grid; grid-template-columns: minmax(0, 1fr) auto; justify-content: end;
+    gap: 0 .3em; align-content: center; padding-block: 2px; line-height: 1.25; }
+  .head .pager a[rel="next"] .lead { grid-column: 1 / -1; justify-self: end; color: var(--muted); font-size: .75rem; }
+  /* The first song has no Previous, the last no Next: the other link takes that side's room too. */
+  .head .pager > span.none { display: none; }
+  .head .pager:has(> span.none:first-child) { grid-template-columns: auto minmax(0, 1fr); }
+  .head .pager:has(> span.none:last-child) { grid-template-columns: minmax(0, 1fr) auto; }
+  .head .pager a[href="#contents"] { justify-self: center; }
+  /* After it, where the next song is what you want, Next has a row of its own, under Previous and Contents. */
+  .sheet + .pager { grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; }
+  .sheet + .pager a[href="#contents"] { justify-self: end; }
+  .sheet + .pager a[rel="next"] { grid-column: 1 / -1; justify-self: stretch; }
+  .sheet + .pager span.none:last-child { display: none; }  /* the last song's: no row for a Next it hasn't */
+}
 /* The contents link the files themselves: the footer's links are for the end of a song. */
 html[data-view="contents"] .foot .pdf { display: none; }
 

@@ -91,14 +91,36 @@ a { color: inherit; }
 .tab { margin: .25em 0; padding: .55em .7em; overflow-x: auto; border-radius: 8px; background: var(--raised);
   font: .78em/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .gap { height: .65em; }
+/* What the tab says before its first section or riff (notes, a link, a chord legend): small and muted,
+   folded after two lines, with More (a <details>: it opens without the script too). */
+.pre { margin: 0 0 1.05em; color: var(--muted); font-size: .75em; line-height: 1.4; break-inside: avoid; }
+.pre summary { display: flex; align-items: flex-end; gap: 12px; min-height: 44px; padding: 3px 0; list-style: none;
+  cursor: pointer; }
+.pre summary::-webkit-details-marker { display: none; }
+.pre .peek { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.pre .more, .pre .less { flex: none; margin-left: auto; color: var(--accent); font-weight: 650; }
+.pre .named { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.pre[open] .peek, .pre[open] .more, .pre:not([open]) .less, .pre:not([open]) .named { display: none; }
+.pre[open] summary { align-items: center; }
+.pre .l.chords .c, .pre .l.chords .m { font-size: 1em; }  /* a legend's chords, as its lines of text */
+/* Paper has no More to press: printed, the notes print whole, without their peek (viewer.js opens
+   them for the printout where ::details-content is missing). */
+@media print {
+  .pre .more, .pre .less { display: none; }
+  @supports selector(::details-content) {
+    .pre summary { display: none; }
+    .pre::details-content { content-visibility: visible; }
+  }
+}
 
-/* Every chord's shape at a glance. */
+/* Every chord's shape at a glance: large enough to read, without the fingers (the card has them). */
 .strip { display: flex; gap: 6px; margin: 14px -16px 0; padding: 4px 16px 6px; overflow-x: auto;
   scrollbar-width: thin; }
 .strip button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 4px 2px;
   border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: .82rem;
   font-weight: 700; cursor: pointer; }
-.strip svg { width: 58px; height: auto; }
+.strip svg { width: 76px; height: auto; }
 
 .foot { margin-top: 32px; color: var(--muted); font-size: .8rem; }
 .foot p { margin: 6px 0 0; }
@@ -139,6 +161,11 @@ a { color: inherit; }
 .hint { flex-basis: 100%; margin: 2px 0 0; color: var(--muted); font-size: .82rem; }
 .hint:empty { display: none; }
 .center { text-align: center; }
+/* A chord's shape note, over a hidden copy of the note its other shapes have (viewer.js): one
+   height for both, so the card never moves from shape to shape. */
+#shape-note:not(:empty) { display: grid; }
+#shape-note > span { grid-area: 1 / 1; }
+#shape-note .room { visibility: hidden; }
 input[type="range"] { flex: 1 1 120px; accent-color: var(--accent); min-height: 44px; }
 .shape { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 4px 0; }
 .round { border-radius: 50%; padding: 0; font-size: 1.3rem; }
@@ -163,9 +190,14 @@ input[type="range"] { flex: 1 1 120px; accent-color: var(--accent); min-height: 
 .dg-finger { fill: var(--on-accent); font: 700 6.5px system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; }
 .dg-fret { fill: currentColor; font: 600 7px system-ui, sans-serif; text-anchor: end; dominant-baseline: central; }
 
+/* A wide screen: one column, centred, in larger text; two side by side only for a song the window
+   shows whole that way (viewer.js measures it, and says so in data-columns). A longer song would
+   run down the first column and back up the second, against the reading order and the autoscroll. */
 @media (min-width: 1100px) {
-  .page { max-width: 1180px; }
-  .sheet { columns: 2 28em; column-gap: 56px; }
+  .page { max-width: 860px; }
+  :root:not([data-columns="2"]) .sheet { font-size: calc(var(--fs) + 3px); }
+  [data-columns="2"] .page { max-width: 1180px; }
+  [data-columns="2"] .sheet { columns: 2 28em; column-gap: 56px; }
 }
 @media print {
   .fab, .scrim, .sheet-ui, .back, .strip, .foot, .noscript { display: none !important; }
