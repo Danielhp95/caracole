@@ -26,10 +26,10 @@ before its own script and builds each result with its row builders
 (``resultRow``, ``ugHit``, ``artistHit``), with the mark of where it came
 from (``icons.page_icons``, inlined as index.html inlines them) and its other
 actions under the row's "⋯" (an Ultimate Guitar song's versions; a song of
-your library's files). A song of your library opens as its card does: its
-sheet viewer, else its PDF (a page caracole serves only while it is the one
-caracole wrote, ``app.written_pages``); one with a sheet and neither is read
-on the page.
+your library's files). A song of your library opens as its card does, from
+its title or its button: its sheet viewer, else its PDF (a page caracole
+serves only while it is the one caracole wrote, ``app.written_pages``); one
+with a sheet and neither is read on the page.
 
 Like index.html it builds every element with ``createElement`` and
 ``textContent``, never ``innerHTML``: names come from UG's slugs and your own
@@ -51,7 +51,7 @@ STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }
 .lede { max-width: 72ch; margin: 2px 0 14px; color: var(--muted); }
 .search { position: sticky; top: 0; z-index: 2; padding: 10px 0; background: var(--bg); }
-.search input { width: 100%; height: 54px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--border-strong);
+.search input { width: 100%; height: 54px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--control-edge);
   background: var(--surface); color: var(--text); font: inherit; font-size: 1.15rem; box-shadow: var(--shadow); }
 .search input:focus { border-color: var(--focus); outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
@@ -65,14 +65,6 @@ STYLE = BASE_STYLE + ROWS_STYLE + """
 .artist-head h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
 .artist-head h2:focus { outline: none; }
 .more-songs { margin: 10px 0 0; }
-@media (pointer: coarse) {
-  .artist-head .btn, .more-songs .btn, .rows .row .btn { min-height: 44px; }
-  .rows .row .row-more { width: 44px; height: 44px; }
-  .rows .row { grid-template-columns: 20px minmax(0, 1fr) auto 44px; }
-}
-@media (pointer: coarse) and (min-width: 900px) {
-  .rows .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 44px; }
-}
 details.by-name { margin: 22px 0 0; }
 details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 600; cursor: pointer; }
 .by-name form { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: 1fr; }
@@ -98,6 +90,10 @@ pre.sheet { margin: 0; padding: 12px; overflow-x: auto; border-radius: 10px; bac
 @media (min-width: 720px) {
   .by-name form { grid-template-columns: 1fr 1fr auto; align-items: end; }
   pre.sheet { font-size: .95rem; }
+}
+/* A thumb's targets, as BASE_STYLE's buttons and ROWS_STYLE's rows are: the folds. */
+@media (pointer: coarse) {
+  details.by-name summary, details.why summary { min-height: 44px; align-content: center; }
 }
 """
 
@@ -296,7 +292,7 @@ function librarySong(s) {
   const badges = [{kind: s.status, text: STATUS[s.status] || s.status}];
   if (s.review) badges.push({kind: "review", text: "Needs review"});
   const row = window.caracole.resultRow({
-    title: s.title, artist: s.artist, source: s.source, status: s.status,
+    title: s.title, href: opens ? opens.href : "", artist: s.artist, source: s.source, status: s.status,
     key: typeof s.key === "string" ? s.key : "", badges, action,
     more: [here.childNodes.length ? here : null, {heading: "Files", links: others}].filter(Boolean),
   });

@@ -22,7 +22,10 @@ ran. So a job of other commands reads the same way:
   fetch looked up during this request (``SongFacts.checked_now``); or "Not
   fetched yet", for one it didn't (a cooldown, a block, a spent budget or an
   error, all of which exit 0): an error is never a miss. A removal
-  (``jobs.REMOVING``), whose song is gone once it is done, says "Removed".
+  (``jobs.REMOVING``), whose song is gone once it is done, says "Removed";
+  a songbook's change (songbooks.py), which has no song, what it did:
+  "Made", "Moved", "Renamed"…, with a link to the songbook's page
+  ("Open songbook") once caracole has written it; never a song's "Added".
 
 A line that ends in a failure or a wait also links to the job's output on
 /jobs (``Line.details``). Every link is relative to the library page, which
@@ -36,6 +39,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from caracole.web.jobs import REMOVING, Job, Stage, Step
+from caracole.web.songbooks import DONE, songbook_of
 
 TODO = "_todo.md"
 MAX_TEXT = 160  # characters of an error's sentence
@@ -99,8 +103,9 @@ def details_href(job_id: int) -> str:
     return f"jobs?job={job_id}#job-{job_id}"
 
 
-def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
-    """The job's line; ``song`` is None while the library has no such song; ``ahead``: the jobs before it."""
+def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page: str | None = None) -> Line:
+    """The job's line; ``song`` is None while the library has no such song; ``ahead``: the jobs before it;
+    ``songbook_page``: for a songbook's change, its songbook's page (``songbooks.songbook_page``), if any."""
     if job.state == "queued":
         return Line("queued", f"Queued behind {_count(ahead, 'request')}…" if ahead else "Queued…")
     if job.state == "running":
@@ -119,6 +124,12 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     if job.song_key.startswith(REMOVING):  # no song to read once it is done: that is what it did
         return Line("removed", "Removed")
+    songbook = songbook_of(job.song_key)
+    if songbook is not None:  # a songbook's change: no song at all; a deletion says so as a removal does
+        action = str(songbook["action"])
+        if action == "delete":
+            return Line("removed", DONE[action])
+        return Line("ready", DONE[action], ("Open songbook", songbook_page) if songbook_page else None)
     if song is not None and song.sheet:
         return Line("ready", "Ready", ("Open sheet", song.sheet))
     if song is not None and song.ignored:

@@ -3,6 +3,7 @@ while it is the page caracole wrote."""
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import struct
@@ -305,6 +306,159 @@ def test_a_full_queue_says_so(app, setup, queue, campfire):
         post(app, "/songbook/move", {"name": "Campfire", "song": "Muse - Hysteria", "position": str(n + 1)})
     response = post(app, "/songbook/delete", {"name": "Campfire"})
     assert response.status == 503 and "queue is full" in response.body.decode("utf-8")
+
+
+# --- the forms, posted by the library page's script ---------------------------------------------
+
+
+class Edits:
+    """``caracole songbook``, done here on songbooks.toml as the command does it, without making files."""
+
+    def __init__(self, library_dir):
+        self.toml = library_dir / FILE_NAME
+
+    def __call__(self, args, emit):
+        from caracole import songbook
+
+        _, action, _, name, *rest = args
+        if action == "make":
+            songbook.make_songbook(self.toml, name, rest)
+        elif action == "add":
+            songbook.add_to_songbook(self.toml, name, rest)
+        elif action == "move":
+            songbook.move_in_songbook(self.toml, name, rest[0], int(rest[1]))
+        elif action == "remove":
+            songbook.remove_from_songbook(self.toml, name, rest)
+        elif action == "rename":
+            songbook.rename_songbook(self.toml, name, rest[0])
+        else:
+            songbook.delete_songbook(self.toml, name)
+        return 0
+
+
+JSON = "application/json"
+
+
+def jobs_json(app, ids):
+    """/jobs.json, as the page's script asks it: the form token in a header, from the page's own origin."""
+    sent = {"host": HOST, "accept": JSON, "sec-fetch-site": "same-origin", "x-caracole-form-token": "tok"}
+    response = app.handle(Request("GET", f"/jobs.json?jobs={ids}", sent))
+    assert response.status == 200, response.body[:300]
+    return json.loads(response.body)
+
+
+def test_a_songbook_form_from_the_pages_script_is_answered_with_its_job(app, setup, queue, campfire):
+    # The page stays where it is: the answer is the job, which says what it is about, never a page.
+    response = post(app, "/songbook/move", {"name": "campfire", "song": "Muse - Hysteria", "position": "1"},
+                    accept=JSON)
+    assert response.status == 200 and header(response, "content-type") == "application/json; charset=utf-8"
+    view = json.loads(response.body)["job"]
+    assert view["kind"] == "songbook" and view["songId"] is None and view["state"] == "queued"
+    assert view["songbook"] == {"action": "move", "name": "Campfire", "after": "Campfire"}  # as songbooks.toml has it
+    assert view["line"]["text"] == "Queued…" and view["display"] == 'Move Muse - Hysteria to 1 in "Campfire"'
+    # A refusal is a sentence, as data.
+    refused = post(app, "/songbook/rename", {"name": "Campfire", "new": ".hidden"}, accept=JSON)
+    assert refused.status == 400 and "dot" in json.loads(refused.body)["error"]
+
+
+@pytest.mark.parametrize("path,fields,said", [
+    ("/songbook/make", {"name": " Beach  nights", "songs": "creep"}, {"action": "make", "after": "Beach nights"}),
+    ("/songbook/add", {"name": "Campfire", "songs": "soda"}, {"action": "add", "after": "Campfire"}),
+    ("/songbook/remove", {"name": "Campfire", "song": "Radiohead - Creep"}, {"action": "remove", "after": "Campfire"}),
+    ("/songbook/rename", {"name": "Campfire", "new": " Beach "}, {"action": "rename", "after": "Beach"}),
+    ("/songbook/delete", {"name": "CAMPFIRE"}, {"action": "delete", "after": None}),
+])
+def test_a_songbook_job_names_its_songbook_before_and_after(app, setup, queue, campfire, path, fields, said):
+    songs = setup[3]
+    fields = {k: str(songs[v].id) if k == "songs" else v for k, v in fields.items()}
+    view = json.loads(post(app, path, fields, accept=JSON).body)["job"]
+    name = "Beach nights" if said["action"] == "make" else "Campfire"
+    assert view["songbook"] == {"name": name, **said}
+
+
+def test_a_songbook_change_says_what_runs_then_what_it_did(setup, campfire):
+    from caracole.web.status import job_line
+
+    songs = setup[3]
+    app = WebApp(setup[1], JobQueue(lambda args, emit: 0), allowed=ALLOWED, csrf="tok")
+    for path, fields, running, done in [
+        ("/songbook/make", {"name": "Picnic", "songs": str(songs["creep"].id)}, "Making the songbook…", "Made"),
+        ("/songbook/add", {"name": "Campfire", "songs": str(songs["soda"].id)}, "Adding to the songbook…", "Added"),
+        ("/songbook/move", {"name": "Campfire", "song": "Muse - Hysteria", "position": "1"}, "Moving the song…",
+         "Moved"),
+        ("/songbook/remove", {"name": "Campfire", "song": "Muse - Hysteria"}, "Taking the song out…", "Taken out"),
+        ("/songbook/rename", {"name": "Campfire", "new": "Beach"}, "Renaming the songbook…", "Renamed"),
+        ("/songbook/delete", {"name": "Campfire"}, "Deleting the songbook…", "Deleted"),
+    ]:
+        assert post(app, path, fields).status == 303, path
+        job = app.queue.snapshot()[0]
+        job.state, job.steps[0].state = "running", "running"
+        assert job_line(job, None).text == running
+        job.state, job.steps[0].state = "done", "done"
+        tone = "removed" if done == "Deleted" else "ready"  # as a song's removal says Removed
+        assert (job_line(job, None).tone, job_line(job, None).text) == (tone, done)  # not a song "Added"
+
+
+@pytest.mark.slow
+def test_a_songbook_made_says_made_with_its_page_to_open_and_never_that_the_nightly_run_looks(app, setup, queue):
+    songs = setup[3]
+    post(app, "/songbook/make", {"name": "Beach nights", "songs": f"{songs['hysteria'].id},{songs['soda'].id}"},
+         accept=JSON)
+    queue.run_pending()
+    line = jobs_json(app, "1")["jobs"][0]["line"]
+    assert (line["tone"], line["text"]) == ("ready", "Made"), line
+    assert line["link"] == {"label": "Open songbook", "href": "_songbooks/Beach%20nights/songbook.html"}
+    assert get(app, "/" + line["link"]["href"]).status == 200  # the page caracole wrote, which it serves
+    jobs = get(app, "/jobs").body.decode("utf-8")
+    assert 'Made · <a href="_songbooks/Beach%20nights/songbook.html">Open songbook</a>' in jobs
+    assert "nightly run" not in jobs  # a song's line, "Added: the nightly run looks for it", misleads here
+    # Added to, then renamed: its page, under its new name. Deleted: no page to open, nor the older lines.
+    for n, path, fields, done, page in [
+        (2, "/songbook/add", {"name": "Beach nights", "songs": str(songs["creep"].id)}, "Added",
+         "_songbooks/Beach%20nights/songbook.html"),
+        (3, "/songbook/rename", {"name": "Beach nights", "new": "Picnic"}, "Renamed", "_songbooks/Picnic/songbook.html"),
+        (4, "/songbook/delete", {"name": "Picnic"}, "Deleted", None),
+    ]:
+        post(app, path, fields, accept=JSON)
+        queue.run_pending()
+        line = jobs_json(app, str(n))["jobs"][0]["line"]
+        assert (line["text"], line["link"] and line["link"]["href"]) == (done, page), line
+    assert [view["line"]["link"] for view in jobs_json(app, "1,2,3")["jobs"]] == [None, None, None]
+
+
+def test_once_its_job_is_over_the_songbooks_section_comes_with_it_drawn_again(setup, campfire):
+    _, cfg, _, songs = setup
+    queue = JobQueue(Edits(cfg.library_dir))
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    post(app, "/songbook/move", {"name": "Campfire", "song": "Radiohead - Creep", "position": "2"}, accept=JSON)
+    waiting = jobs_json(app, "1")["jobs"][0]
+    assert waiting["state"] == "queued" and "songbooks" not in waiting  # only once it is over
+    queue.run_pending()
+    view = jobs_json(app, "1")["jobs"][0]
+    assert view["state"] == "done" and view["line"]["text"] == "Moved"
+    assert view["songbooks"]["books"] == [{"name": "Campfire", "songs": 3}]  # for the Select bar's menu
+    html = view["songbooks"]["html"]
+    assert html.startswith('<section class="songbooks" id="songbooks"')
+    assert re.findall(r'<span class="t">([^<]*)</span>', html) == ["Hysteria", "Creep", "De Música Ligera"]
+    assert '<input type="hidden" name="csrf" value="tok">' in html  # its forms, as the page's are
+    assert html == re.search(r'<section class="songbooks".*?</section>\n', get(app, "/").body.decode(), re.S).group(0)
+    # Asked about in general (/jobs.json without ?jobs=), no section: the page asks for its own jobs.
+    assert "songbooks" not in jobs_json(app, "")["jobs"][0]
+
+    post(app, "/songbook/delete", {"name": "Campfire"}, accept=JSON)
+    queue.run_pending()
+    none = jobs_json(app, "2")["jobs"][0]["songbooks"]  # none left: the section waits, hidden, for the next one
+    assert none["books"] == [] and re.match(r'<section class="songbooks" id="songbooks"[^>]* hidden>', none["html"])
+
+
+def test_a_songbook_change_on_its_way_is_on_the_page_as_a_songbooks_not_a_songs(app, setup, queue, campfire):
+    post(app, "/songbook/rename", {"name": "Campfire", "new": "Beach"})
+    page = get(app, "/").body.decode("utf-8")
+    data = json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', page, re.S).group(1))
+    [view] = data["server"]["jobs"]
+    assert view["kind"] == "songbook" and view["songbook"] == {"action": "rename", "name": "Campfire",
+                                                                 "after": "Beach"}
+    assert '<article class="sb-card" data-songbook="Campfire">' in page  # where the page shows it
 
 
 # --- the songbook's files ------------------------------------------------------------------------

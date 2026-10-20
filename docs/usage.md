@@ -1525,16 +1525,22 @@ card, in a grid as wide as the screen: one column on a phone, three or four on
 a laptop. A card
 has its status, its key and where the key came from ("Key A minor (from the
 tab)", "Key C major (estimated from the chords)", "(from the audio)": see
-[The song's key](#the-songs-key)), its transposition, and links to its files:
-the sheet viewer first (see [The sheet viewer](#the-sheet-viewer)), then the
-PDF. A Guitar Pro file caracole downloaded names its site, as
-`Guitar Pro 1 · gtptabs.com`, and a score its format, as `Score 1 (MuseScore)`;
-a score's PDF is never the card's main link, which is the sheet's. Each
-artist's cards share a coloured monogram, and the artist's name under a title
-shows only that artist's songs ("Queen" leaves out ABBA's "Dancing Queen"),
-until you take its chip off. "Find it elsewhere" opens a song's MuseScore
-pages, each a possible match, as on the to-do page, and, for a song without a
-sheet, its search and buy links. When caracole takes the audio of songs with no
+[The song's key](#the-songs-key)), its transposition, and its sheet: its
+title and its one Open button open the sheet viewer (see
+[The sheet viewer](#the-sheet-viewer)), else the PDF (Open PDF), else the
+text. The rest is under Files: the PDF, the text, the ChordPro file, the
+lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files and the
+Guitar Pro versions to download from Ultimate Guitar. A Guitar Pro file
+caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`, and a
+score its format, as `Score 1 (MuseScore)`; a score's PDF is never what a
+card opens, which is the sheet. A card's title has its line to itself: the
+artist goes under it, with the badges at the end of that line, or under it
+when they don't fit. Each artist's cards share a coloured monogram, and the
+artist's name, marked with a funnel, shows only that artist's songs ("Queen"
+leaves out ABBA's "Dancing Queen"), until you take its chip off. "Find it
+elsewhere" opens a song's MuseScore pages, each a possible match, as on the
+to-do page, and, for a song without a sheet, its search and buy links. When
+caracole takes the audio of songs with no
 human sheet from YouTube, their cards say where that stands instead of offering
 to buy them ("No human sheet yet: caracole takes the audio from YouTube next",
 "Audio from YouTube: auto-chords works out the chords next", "Auto sheet from
@@ -1553,7 +1559,10 @@ shows only that artist's songs), the key ("Am"; a screen reader hears "Key A
 minor (from the tab)"), the status, Needs review when caracole isn't sure of
 the match, and one button: the sheet, or, on the page
 `caracole serve` serves, Fetch now for a wanted song (Pick the match for one
-that needs review first, and Removing… while caracole removes it). An auto
+that needs review first, and Removing… while caracole removes it). The title
+opens the sheet too, as a card's does; when Fetch now has the row's button,
+the sheet is the first of its files under "⋯", and on its card Open is a
+plain button beside Fetch now. An auto
 sheet's row says so by its ♪ mark (YouTube's, when its audio came from there)
 and its button, "Auto sheet PDF", rather than by a badge, so that a phone's
 second line keeps room for the artist. Its "⋯" button opens the rest: where a
@@ -1607,6 +1616,17 @@ it. `caracole serve` serves the same page, where Enter lists what the sites
 have under the box, with Get it, and a form to request a song by name (see
 below).
 
+On a touch screen every button, fold, chip, menu, letter and artist's name is
+at least 44 pixels each way, for a thumb, and so is each row's "⋯": a phone
+shows about eight rows to a screen. A card's title is a thumb's height too:
+a tap a little under it still opens the sheet, as the artist's name stands at
+the top of its own 44 pixels, which reach down from it. With a mouse they keep their compact
+sizes. Fields, menus and the Select boxes have an edge you can see against the
+page, in light and dark mode (3:1 at least, as WCAG 1.4.11 asks), while cards
+keep their soft border, and so does the search box. The pages `caracole serve`
+writes itself (Requests, Look up and its search box, a song's pick) do the
+same.
+
 **Songbooks** (see [Songbooks](#songbooks)), above the search box once there is
 one, lists each songbook: its songs in order, those without a sheet marked
 missing, and its files, the phone page first, then the PDF and the ChordPro
@@ -1614,13 +1634,21 @@ file. On the file on disk it names the `caracole songbook` commands that change
 it; `caracole serve` adds buttons. **Select**, beside the Cards/Rows switch (View on a phone), puts a
 box on each card, or on each row in the Rows view, where the source's mark
 was: tick songs in the order they go in the songbook (each box shows its
-place, and a screen reader says it: "Pick Creep by Radiohead, 2nd"), search,
-filter and switch views between ticks, and the bar at the bottom counts them,
-`3 selected`. Give the songbook a name and tap Make songbook, or pick a
-songbook there is in the menu (instead of New songbook) to Add to it; Clear
-unticks them all, and Select, pressed while the mode is on, leaves it. On the
-file on disk, which can't write anything, the bar shows the command to run
-where caracole runs, with Copy:
+place, and a screen reader says it: "Pick Creep by Radiohead, 2nd"). A tap
+anywhere on a card or a row ticks it, or unticks it: while you select, each
+song's Open, Files, Fetch now and Remove… are put away, a request's line
+still says how it goes but without its links (Details), and a tap on its
+title or its artist opens and filters nothing, so a tick never opens a file
+by mistake. Search, filter and switch views between ticks; the bar at the
+bottom counts them, `3 selected`. Give the songbook a name and tap Make
+songbook, or pick a songbook there is in the menu (instead of New songbook)
+to Add to it; Clear unticks them all. The × at the start of the bar, or
+Select pressed again, leaves the mode, and the ticks wait, unseen, for when
+you come back. On a phone the bar is one line,
+`× 3 selected · Make songbook…`, and its button unfolds the menu and the name
+field (its ▾, or Escape, folds them away again). On the file on disk, which
+can't write anything, Make songbook gives the command to run where caracole
+runs, folded under "The command to run", with Copy beside it:
 `caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
 each word in single quotes, so that no shell changes a `!`, a `$` or a quote
 in a name.
@@ -1955,8 +1983,9 @@ with it. A KEY that is no key exits with status 2.
   type, here as on the file, asking the server nothing. Enter (a phone's
   search key), or Search all, lists under the box, in place of the grid and
   its buttons: your songs that match first (up to five, as their rows, with
-  what their cards offer, then All N of your songs; and a close match the
-  filter missed, a typo say), then what caracole's offline indexes hold:
+  what their cards offer, a title opening its sheet as a card's does, then All
+  N of your songs; and a close match the filter missed, a typo say), then
+  what caracole's offline indexes hold:
   **Ultimate Guitar** (eight songs, and the artists the query names, as in
   [caracole search](#caracole-search): an artist's Songs lists all of theirs,
   fifty at a time, and All results goes back), **Guitar Pro on gtptabs.com**
@@ -2058,10 +2087,14 @@ with it. A KEY that is no key exits with status 2.
 - **Remove a song.** Each card's Remove… button (a row's, under its "⋯")
   opens a page that says what
   goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
-  it queues `caracole remove --yes "ARTIST - TITLE"`, and the card says
-  Removing… until it has run (a row, in place of its button); on `/jobs`
-  its line says "Removing from
-  caracole…", then "Removed". Keep it goes back to the library, and nothing
+  it queues `caracole remove --yes "ARTIST - TITLE"` and goes back to the
+  library as you left it (its search, filters and view), the song's card in
+  view, whose line says how it goes: "Queued…", "Removing from caracole…",
+  then "Removed", the card keeping only the song's name, and its size, so
+  that nothing under it moves, until you load the page again (a row, the
+  same). From then on the song counts nowhere: the numbers at the top, the
+  buttons' counts and the count over the list leave it out. Keep it goes
+  back there too, and nothing
   changes. A page older than a change to the library (the song merged into
   another since, say) removes nothing: reload the library.
 - **How it goes, on the page.** A request leaves you where you are. The
@@ -2102,7 +2135,8 @@ with it. A KEY that is no key exits with status 2.
   Two requests or more also show in a corner, folded to one line on every
   width ("2 requests · 1 to go"), so that it covers no card; it opens upwards
   to a line per song, and closes. Its one Details link opens the requests
-  page. A screen reader hears each card's line as
+  page. A songbook's change and a removal stay out of it: the card where
+  you asked says how each goes. A screen reader hears each card's line as
   it changes, to the last one, and Fetch now hands the keyboard focus to that
   line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.
@@ -2134,10 +2168,26 @@ with it. A KEY that is no key exits with status 2.
   in the order you ticked them. In the Songbooks section, ↑ and ↓ move a song,
   × takes it out, and Rename or delete renames the songbook or, once you tick
   the box, deletes it and the files caracole made of it; each runs its
-  `caracole songbook` command (see [Songbooks](#songbooks)), and the Requests
-  page shows how it went. A change that can't be made, such as a name another
-  songbook has, a song no longer in the library or a songbook deleted since
-  the page was made, is refused at once, and nothing runs.
+  `caracole songbook` command (see [Songbooks](#songbooks)) and leaves you
+  where you are. The songbook's card says how it goes, on a line under its
+  name ("Queued…", "Moving the song…", then "Moved"; "Renamed", "Taken out",
+  "Deleted"; once done, all but Deleted link the songbook's phone page, Open
+  songbook, as its line on `/jobs` does), and its buttons wait until it is
+  over, when the section is drawn again as songbooks.toml has it, the
+  keyboard focus back on the button you pressed. Make songbook (or Add to)
+  ends Select once the server has it, and the Songbooks section opens on the
+  songbook, a new one at its end ("Making the songbook…", then "Made · Open
+  songbook"), its foot at the bottom of the
+  screen (near the top of the page, it stretches down to it while it is
+  made): it fills in below the screen, then scrolls into view whole, so that
+  what is on the screen doesn't jump as it grows; stretched taller than what
+  it holds, it takes its own size at your next click or key. A deleted
+  songbook's card says Deleted, keeping its size, until you load the page
+  again. A change that can't be made, such as a name another songbook
+  has, a song no longer in the library or a
+  songbook deleted since the page was made, is refused at once, and nothing
+  runs: the card, or the Select bar, says why, and the bar keeps your ticks.
+  Without JavaScript, each sends you to its line on `/jobs`.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes

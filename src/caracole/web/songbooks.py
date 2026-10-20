@@ -16,6 +16,12 @@ the page's data, in the order picked; ``song`` is a song as songbooks.toml write
 ("Artist - Title"), so a song gone from the library can be moved or taken out too. ``--``
 ends the command's options, so a name may start with "-".
 
+A job's key is its command (``KEY``, then the command's words), so the same change sent twice
+is queued once; ``songbook_of`` reads back which songbook it changes, by its name before and
+after, for the page that follows it (app.py) and for its line (status.py): "Moving the song…",
+its step's label, while it runs; "Moved" once it is done (``DONE``), with its songbook's page to
+open (``songbook_page``), as a song's "Ready" has its sheet.
+
 A songbook's page, ``_songbooks/<folder>/songbook.html``, is one of the pages caracole wrote
 (app.py's ``written_pages``): it is sent only while it is the page caracole wrote there
 (``songbook.pages_written``, read by ``files.read_written_page``), with its own policy
@@ -29,10 +35,15 @@ from collections.abc import Callable, Mapping
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 ROUTES = ("/songbook/make", "/songbook/add", "/songbook/move", "/songbook/remove", "/songbook/rename",
           "/songbook/delete")
 MAX_POSITION = 100_000
+KEY = "songbook\x1f"  # a songbook job's key: this, then its command's words, this character between them
+# What a songbook job's line says once it is done, by its action.
+DONE = {"make": "Made", "add": "Added", "move": "Moved", "remove": "Taken out", "rename": "Renamed",
+        "delete": "Deleted"}
 
 
 class FormRefused(Exception):
@@ -84,7 +95,7 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
             raise FormRefused(409, "Taken", str(e)) from e
         songs = _songs(form, connect)
         count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
-        return _job(f'Make the songbook "{name}" ({count})', "Make the songbook", "make", name, *songs)
+        return _job(f'Make the songbook "{name}" ({count})', "Making the songbook", "make", name, *songs)
     book = find_songbook(books, name)
     if book is None:
         listed = ", ".join(f'"{b.name}"' for b in books)
@@ -94,7 +105,7 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
     if action == "add":
         songs = _songs(form, connect)
         count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
-        return _job(f'Add {count} to "{name}"', "Add to the songbook", "add", name, *songs)
+        return _job(f'Add {count} to "{name}"', "Adding to the songbook", "add", name, *songs)
     if action in ("move", "remove"):
         song = " ".join(form.get("song", "").split())
         if not song:
@@ -104,14 +115,15 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
             raise FormRefused(404, "Not in the songbook", f'"{song}" isn\'t in the songbook "{name}": reload the '
                                                           "library to see what it holds.")
         if action == "remove":
-            return _job(f'Take {entry} out of "{name}"', "Take the song out", "remove", name, entry)
+            return _job(f'Take {entry} out of "{name}"', "Taking the song out", "remove", name, entry)
         try:
             position = int(form.get("position", ""))
         except ValueError:
             position = 0
         if not 1 <= position <= MAX_POSITION:
             raise FormRefused(400, "Not a position", "A position is a whole number from 1, the first song.")
-        return _job(f'Move {entry} to {position} in "{name}"', "Move the song", "move", name, entry, str(position))
+        return _job(f'Move {entry} to {position} in "{name}"', "Moving the song", "move", name, entry,
+                    str(position))
     if action == "rename":
         try:
             new = check_name(form.get("new", ""))
@@ -121,13 +133,46 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
             check_free(books, new, but=book)
         except SongbookError as e:
             raise FormRefused(409, "Taken", str(e)) from e
-        return _job(f'Rename "{name}" to "{new}"', "Rename the songbook", "rename", name, new)
-    return _job(f'Delete the songbook "{name}"', "Delete the songbook", "delete", name)
+        return _job(f'Rename "{name}" to "{new}"', "Renaming the songbook", "rename", name, new)
+    return _job(f'Delete the songbook "{name}"', "Deleting the songbook", "delete", name)
 
 
 def _job(title: str, label: str, action: str, *args: str) -> SongbookJob:
+    """The job of one ``caracole songbook`` command; its label is its line while it runs ("Moving the song…")."""
     command = ("songbook", action, "--", *args)
-    return SongbookJob(title, "songbook\x1f" + "\x1f".join(command), [(label, command)])
+    return SongbookJob(title, KEY + "\x1f".join(command), [(label, command)])
+
+
+def songbook_of(key: str) -> dict[str, str | None] | None:
+    """The songbook a job's key changes: ``action`` (make, add, move, remove, rename, delete), its ``name``
+    as songbooks.toml has it, and ``after``, its name once the job is done (the new one for a rename, None
+    for a deletion); None for a job of anything else. A songbook's name holds no control character
+    (``songbook.check_name``), so the key's separators split it back."""
+    if not key.startswith(KEY):
+        return None
+    words = key[len(KEY):].split("\x1f")
+    if len(words) < 4 or words[0] != "songbook" or words[1] not in DONE or words[2] != "--":
+        return None
+    action, name = words[1], words[3]
+    after = words[4] if action == "rename" and len(words) > 4 else None if action == "delete" else name
+    return {"action": action, "name": name, "after": after}
+
+
+def songbook_page(conn: sqlite3.Connection, key: str) -> str | None:
+    """The page of the songbook a job's key changes, as it is named once the job is done (``after``),
+    relative to the library page: ``_songbooks/<folder>/songbook.html``, while caracole has written one
+    there (``songbook.written_page``, which a server sends); None for a job of anything else, a
+    deletion, or a songbook with no page."""
+    from caracole.library import safe_name
+    from caracole.songbook import FOLDER, HTML_NAME, written_page
+
+    book = songbook_of(key)
+    if book is None or book["after"] is None:
+        return None
+    folder = safe_name(str(book["after"]))
+    if written_page(conn, folder) is None:
+        return None
+    return f"{FOLDER}/{quote(folder, safe='')}/{HTML_NAME}"
 
 
 def _songs(form: Mapping[str, str], connect: Callable[[], sqlite3.Connection]) -> list[str]:
