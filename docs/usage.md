@@ -272,7 +272,8 @@ that turn out to be one song (斑馬斑馬 and 斑马斑马, say) become one.
 
 ### caracole add
 
-`caracole add ARTIST TITLE [--album ALBUM] [--duration M:SS]` appends the line
+`caracole add ARTIST TITLE [--album ALBUM] [--duration M:SS]` (or
+`caracole add "ARTIST - TITLE"`) appends the line
 for you, then syncs the file at once and rewrites `_todo.md` and
 `index.html`:
 
@@ -326,10 +327,28 @@ A song you [removed](#caracole-remove) comes back with `caracole add`, as new:
 `Added Radiohead - Creep to wanted.txt; back from its removal on 2026-10-19, as
 new; the next caracole run looks for it.`
 
+A song needs its artist: caracole looks it up by artist and title. Given one
+name with no " - " (`caracole add Wonderwall`), `caracole add` writes nothing
+and exits 2. It lists your songs of that title, then what
+`caracole search Wonderwall` lists first, five hits numbered as the search
+numbers them, each with its `caracole add "Oasis" "Wonderwall"` line, and
+`caracole search "Wonderwall" --add N` to add one by its number; the last line
+says what it takes, with `caracole add ARTIST "Wonderwall"` (or, for an
+artist's name alone, `caracole add "Oasis" TITLE`). Nothing asks a site who
+sang a title: the offline index answers, or you do.
+
+An artist such as "misc", "unknown" or "Various Artists" is no one's name, so
+nothing can be found by it: `caracole add misc 斑马` adds the line, and warns
+that caracole may never find the song, and that `caracole search "斑马"` lists
+the songs of that title with their artists.
+
 ### caracole get
 
 `caracole get "ARTIST - TITLE"` (or `caracole get ARTIST TITLE`) is for the
-song you want to play now. It does the nightly run's work for that song alone,
+song you want to play now. One name alone (`caracole get Wonderwall`) looks
+nothing up and exits 2: like `caracole add`, it lists your songs of that
+title and the offline index's songs, each with its
+`caracole get --ug oasis/wonderwall "Oasis - Wonderwall"` line. It does the nightly run's work for that song alone,
 at once, sheet first, and says where the sheet is the moment it is kept:
 
     $ caracole get "Radiohead - Creep"

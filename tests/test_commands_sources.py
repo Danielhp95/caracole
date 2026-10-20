@@ -375,6 +375,62 @@ def test_add_of_a_song_the_index_lacks_says_so_and_how_to_look_wider(tmp_path):
     assert song.match_decision == "not_found"
 
 
+WONDERWALL = ((6125, "oasis", "wonderwall", "chords"), (6126, "oasis", "wonderwall", "tabs"),
+              (7001, "oasis", "live-forever", "chords"), (2426561, "ryan-adams", "wonderwall", "chords"))
+
+
+def test_add_with_one_name_writes_nothing_and_offers_the_songs_of_that_title(tmp_path):
+    ug_index(tmp_path, *WONDERWALL)
+    result = run(tmp_path, "add", "Wonderwall")
+    assert result.exit_code == 2, result.output
+    assert not wanted_file(tmp_path).exists() and songs(tmp_path) == []
+    out = result.output
+    assert "  1. [UG] Oasis - Wonderwall · chords×1 tabs×1\n" in out
+    assert '     caracole add "Oasis" "Wonderwall"\n' in out and '     caracole add "Ryan Adams" "Wonderwall"\n' in out
+    assert 'Or add one by its number: caracole search "Wonderwall" --add N' in out
+    assert '"Wonderwall" is one name' in out and "nothing was added" in out
+    assert 'name its artist too: caracole add ARTIST "Wonderwall".' in out
+    assert run(tmp_path, "search", "Wonderwall", "--add", "2").exit_code == 0  # the same numbers
+    assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith("\nRyan Adams - Wonderwall\n")
+
+
+def test_add_with_an_artists_name_alone_offers_their_most_tabbed_songs(tmp_path):
+    ug_index(tmp_path, *WONDERWALL)
+    result = run(tmp_path, "add", "oasis")
+    assert result.exit_code == 2, result.output
+    assert "Oasis, an artist: 2 songs (3 tabs). The most tabbed:" in result.output
+    assert 'caracole add "Oasis" "Live Forever"' in result.output
+    assert 'give its title too: caracole add "oasis" TITLE.' in result.output  # an artist, so the title is missing
+    assert not wanted_file(tmp_path).exists()
+
+
+def test_add_with_one_name_and_no_index_says_what_it_takes(tmp_path):
+    result = run(tmp_path, "add", "斑马")
+    assert result.exit_code == 2, result.output
+    assert '"斑马" is one name' in result.output and "caracole add ARTIST TITLE" in result.output
+    assert not wanted_file(tmp_path).exists()
+
+
+def test_add_with_one_text_holding_a_dash_adds_the_song(tmp_path):
+    result = run(tmp_path, "add", "Radiohead - Creep")
+    assert result.exit_code == 0, result.output
+    assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith("\nRadiohead - Creep\n")
+    assert run(tmp_path, "add", " - Creep").exit_code == 2  # no artist
+    blank = run(tmp_path, "add", "  ")
+    assert blank.exit_code == 2 and "a song needs an artist and a title" in blank.output
+
+
+@pytest.mark.parametrize("artist", ["misc", "Unknown", "Various Artists"])
+def test_add_warns_when_the_artist_is_a_placeholder(tmp_path, artist):
+    # The owner's wanted.txt has "misc - 斑马": no one's name, so nothing can be found by it.
+    result = run(tmp_path, "add", artist, "斑马")
+    assert result.exit_code == 0, result.output
+    assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith(f"\n{artist} - 斑马\n")  # still added
+    out = " ".join(result.output.split())
+    assert f'"{artist}" is no one\'s name' in out and 'caracole search "斑马"' in out
+    assert "no one's name" not in run(tmp_path, "add", "Oasis", "Wonderwall").output
+
+
 def test_add_matches_nothing_against_an_index_that_isnt_built(tmp_path):
     result = run(tmp_path, "add", "Radiohead", "Creep")
     assert result.exit_code == 0, result.output

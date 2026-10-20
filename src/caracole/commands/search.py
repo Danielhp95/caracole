@@ -13,7 +13,9 @@ an artist leads, its most tabbed songs come first, then the songs titled like
 it; when a song does, the artists of that name are a line each, for
 ``--artist``. ``--artist NAME`` lists an artist's songs, ``--title TITLE`` a
 title's by any artist, and ``--add N`` numbers exactly what was printed
-(``_listing``).
+(``_listing``). ``offer_songs`` is what ``caracole add`` and ``caracole get``
+say to one name, which names no song: the same listing, each hit with its line
+to run.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ import textwrap
 from collections.abc import Callable
 from contextlib import closing, nullcontext
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 import typer
 
@@ -168,14 +170,7 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
         typer.echo(f"  Nothing yet: {_EMPTY_INDEX}.")
         return
     listing = _listing(conn, ask, limit)
-    known = _library_keys(conn)
-    n = 0
-    for part in listing.parts:
-        if isinstance(part, str):
-            typer.echo(part)
-        else:
-            n += 1
-            typer.echo(_index_lines(n, part, known))
+    _print_listing(listing, _library_keys(conn))
     hint = _hint(ask, listing, library[0][0] if library else None, _overrides(cfg))
     if hint:
         typer.echo("\n" + _wrap(hint))
@@ -218,6 +213,7 @@ class _Listing:
     songs: tuple[IndexHit, ...] = ()
     artists: tuple[ArtistHit, ...] = ()
     missing: bool = False
+    lead: str | None = None  # a search's: "artist" when an artist leads
 
     @property
     def hits(self) -> list[IndexHit]:
@@ -264,7 +260,20 @@ def _listing(conn: sqlite3.Connection, ask: _Ask, limit: int) -> _Listing:
     for a in others:
         parts += ["", f"  Also an artist: {a.artist}, {_count(a.songs, 'song')} ({_count(a.tabs, 'tab')})",
                   f"     caracole search --artist {_quote(a.artist)}"]
-    return _Listing(tuple(parts), found.songs, found.artists)
+    return _Listing(tuple(parts), found.songs, found.artists, lead=found.lead)
+
+
+def _print_listing(listing: _Listing, known: set[tuple[str, str]],
+                   paste: Callable[[IndexHit], str] | None = None) -> None:
+    """Its lines, and its hits numbered from 1, each with its line to run (``paste``, by default the
+    ``caracole add`` line)."""
+    n = 0
+    for part in listing.parts:
+        if isinstance(part, str):
+            typer.echo(part)
+        else:
+            n += 1
+            typer.echo(_index_lines(n, part, known, paste or _add_line))
 
 
 def _count(n: int, thing: str) -> str:
@@ -363,6 +372,74 @@ def _status(song: Song) -> str:
     if song.status == "wanted":
         return "wanted, needs review" if song.review else "wanted, no sheet yet"
     return song.status
+
+
+@dataclass(frozen=True)
+class _Offer:
+    """What ``caracole add`` or ``caracole get`` says to one name: the line to run for a hit and for a
+    song of yours (None: none), the line after the hits (None: none), what the command takes, and its
+    line for a song of that name with the missing half, the artist or the title."""
+
+    hit: Callable[[IndexHit], str]
+    mine: Callable[[Song], str | None]
+    after: Callable[[str], str] | None
+    takes: str
+    whole: Callable[[str, str], str]
+
+
+_OFFERS = {
+    "add": _Offer(lambda hit: _add_line(hit), lambda song: None,
+                  lambda text: f"Or add one by its number: caracole search {_quote(text)} --add N",
+                  'caracole add takes the artist and the title: caracole add ARTIST TITLE, or "ARTIST - TITLE"',
+                  lambda artist, title: f"caracole add {artist} {title}"),
+    "get": _Offer(lambda hit: f"caracole get --ug {hit.artist_key}/{hit.song_key} "
+                              f"{_quote(f'{hit.artist} - {hit.title}')}",
+                  lambda song: _get_yours(song),
+                  None,
+                  'caracole get takes a song as "Artist - Title", or as ARTIST TITLE',
+                  lambda artist, title: f"caracole get {_quote(f'{artist} - {title}')}"),
+}
+OFFERED = 5  # the songs offered for one name
+
+
+def _get_yours(song: Song) -> str | None:
+    """The line that gets a song of yours, none for one whose artist is a placeholder ("misc"):
+    nothing can be found by it."""
+    from caracole.normalize import placeholder_artist
+
+    return None if placeholder_artist(song.artist) else f"caracole get {_quote(song.display)}"
+
+
+def offer_songs(cfg: Config, text: str, command: str) -> NoReturn:
+    """``caracole add TEXT`` or ``caracole get TEXT`` for one name with no " - ": a song needs its
+    artist, and the name may be its title or an artist's, so nothing is written or looked up. It
+    prints your songs of that title and what ``caracole search TEXT`` lists first (its numbers), each
+    with the line that adds or gets it, and exits 2. It only reads, so it takes no lock."""
+    from caracole.search import STRONG, search_library
+
+    offer = _OFFERS[command]
+    lines, artist = 0, False  # lines to run printed; the name is an artist's
+    with closing(open_db(cfg)) as conn:
+        yours = [h.song for h in search_library(conn, text, OFFERED) if h.via != "artist" and h.score >= STRONG]
+        if yours:
+            typer.echo("In your library")
+        for song in yours:
+            line = offer.mine(song)
+            lines += line is not None
+            typer.echo(f"  {song.display} · {_status(song)}" + (f"\n     {line}" if line else ""))
+        if _index_built(conn):
+            listing = _listing(conn, _Ask(text), OFFERED)
+            artist = listing.lead == "artist"
+            typer.echo("On Ultimate Guitar (offline index)")
+            _print_listing(listing, _library_keys(conn) if command == "add" else set(), offer.hit)
+            lines += len(listing.hits)
+            if listing.hits and offer.after is not None:
+                typer.echo(offer.after(text))
+    whole = (f"give its title too: {offer.whole(_quote(text) if command == 'add' else text, 'TITLE')}" if artist
+             else f"name its artist too: {offer.whole('ARTIST', _quote(text) if command == 'add' else text)}")
+    then = f"Run one of the lines above, or {whole}" if lines else whole[:1].upper() + whole[1:]
+    what = "added" if command == "add" else "looked up"
+    fail(f'{offer.takes}. "{text}" is one name, so nothing was {what}. {then}.', 2)
 
 
 def _add_line(hit: IndexHit) -> str:

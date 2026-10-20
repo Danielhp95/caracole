@@ -50,6 +50,10 @@ def register(app: typer.Typer) -> None:
         progress: bool = typer.Option(False, "--progress", help="A JSON line per stage too, for caracole serve."),
     ) -> None:
         """Look one song up now: its sheet first, in seconds, then its lyrics, PDF and the rest."""
+        if len(song) == 1 and " - " not in song[0] and any(c.isalnum() for c in song[0]):
+            from caracole.commands.search import offer_songs  # one name: no song, so nothing is looked up
+
+            offer_songs(load_cfg(ctx), " ".join(song[0].split()), "get")
         artist, title = _artist_title(song)
         _check_pick(ug, tab)
         duration_ms = _duration(duration)

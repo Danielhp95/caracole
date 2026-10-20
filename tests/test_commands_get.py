@@ -139,6 +139,29 @@ def test_get_refuses_what_isnt_a_song_with_status_2(config, sites, args, said):
     assert sites.requests == []
 
 
+def test_get_with_a_title_alone_offers_its_ug_songs_and_looks_nothing_up(config, sites, conn):
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import mark_built, upsert_rows
+
+    when = datetime(2026, 10, 20, tzinfo=UTC)
+    upsert_rows(conn, [(6125, "oasis", "wonderwall", "chords", "oasis/wonderwall-chords-6125"),
+                       (2426561, "ryan-adams", "wonderwall", "chords", "ryan-adams/wonderwall-chords-2426561")],
+                "1", when)
+    mark_built(conn, when)
+    result = get(config, "Wonderwall")
+    assert result.exit_code == 2, result.output
+    assert '     caracole get --ug oasis/wonderwall "Oasis - Wonderwall"\n' in result.output
+    assert '     caracole get --ug ryan-adams/wonderwall "Ryan Adams - Wonderwall"\n' in result.output
+    assert 'a song as "Artist - Title"' in result.output and '"Wonderwall" is one name' in result.output
+    assert sites.requests == [] and find_song(conn, "oasis/wonderwall") is None
+    from conftest import add_song
+
+    add_song(conn, "misc", "Wonderwall")  # a placeholder artist: nothing can be found by it
+    mine = get(config, "Wonderwall").output
+    assert "misc - Wonderwall · wanted" in mine and 'caracole get "misc - Wonderwall"' not in mine
+
+
 def test_get_of_a_song_ignored_in_overrides_toml_exits_1(config, sites, conn, tmp_path):
     (tmp_path / "library").mkdir(exist_ok=True)
     (tmp_path / "library" / "overrides.toml").write_text('[ignore]\nsongs = ["Radiohead - Creep"]\n',
