@@ -54,8 +54,9 @@ QUALITIES: dict[str, frozenset[int]] = {
     }.items()
 }
 _BY_INTERVALS = {intervals: name for name, intervals in QUALITIES.items()}
-# How a made-up chord's quality is written, where that differs from its name.
-DISPLAY = {"mmaj7": "m(maj7)", "69": "6/9", "m69": "m6/9"}
+# How a made-up chord's quality is written, where that differs from its name. A flat fifth
+# goes in brackets: "Gb5" is a G-flat power chord, "G(b5)" is G, B and D-flat.
+DISPLAY = {"mmaj7": "m(maj7)", "69": "6/9", "m69": "m6/9", "b5": "(b5)"}
 
 _NATURAL = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 _LETTERS = "CDEFGAB"

@@ -5,7 +5,10 @@ from __future__ import annotations
 import pytest
 
 from caracole.viewer.theory import (
+    FLATS,
+    QUALITIES,
     SCALES,
+    SHARPS,
     Chord,
     Key,
     alternatives,
@@ -100,6 +103,21 @@ def test_six_nine_is_not_a_slash_chord():
 def test_the_suffix_is_kept_as_written_for_display():
     assert parse_chord("CM7").shown == "M7"
     assert parse_chord("Am7/G").shown == "m7"
+
+
+@pytest.mark.parametrize("quality", sorted(QUALITIES))
+def test_a_made_up_chords_name_reads_back_as_the_same_chord(quality):
+    # G with a flat fifth written "Gb5" reads as a G-flat power chord: the name must say G.
+    for names in (SHARPS, FLATS):
+        for root in range(12):
+            name = names[root] + Chord(root, quality).suffix
+            back = parse_chord(name)
+            assert back is not None and (back.root, back.quality) == (root, quality), name
+
+
+def test_a_flat_five_is_written_in_brackets():
+    assert named(Chord(7, "b5")) == "G(b5)"
+    assert named(Chord(7, "7b5")) == "G7b5"
 
 
 @pytest.mark.parametrize(
@@ -314,6 +332,7 @@ C_MINOR, C_MAJOR = Key(0, "aeolian"), Key(0, "ionian")
         ("F", Key(9, "aeolian"), "dorian", "F#dim"),
         ("E7", Key(9, "aeolian"), "dorian", "E7"),
         ("E7", Key(9, "aeolian"), "phrygian", "E7b5"),
+        ("G", C_MINOR, "phrygian", "G(b5)"),  # never "Gb5", a G-flat power chord
         ("Cmaj7#11", C_MAJOR, "dorian", "Cm7"),  # no such chord: the mode's own seventh chord
     ],
 )
