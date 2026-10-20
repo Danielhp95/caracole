@@ -106,12 +106,17 @@ def test_a_page_caracole_wrote_is_served_while_it_holds_those_bytes(library):
     assert lookup.asked == [("Soda Stereo", "De Música Ligera", "sheet.html")]
 
 
-def test_a_page_caracole_never_wrote_there_is_not_served_nor_opened(library):
+def test_a_page_caracole_never_wrote_there_is_not_served_nor_opened(library, monkeypatch):
+    from caracole.web import files
+
     (library / "_todo.html").write_bytes(PAGE)  # its bytes, at a path caracole wrote nothing at
     os.mkfifo(library / "Soda Stereo" / "trap.html")  # opened, it would hold the server up
+    opened = []
+    monkeypatch.setattr(files, "_open", lambda folder, parts: opened.append(parts) or os.open(os.devnull, 0))
     for path in ("_todo.html", "Soda Stereo/trap.html"):
         with pytest.raises(NotServed):
             read_written_page(library, path, wrote())
+    assert opened == []  # the record is asked first, and says nothing was written there
 
 
 @pytest.mark.parametrize("edited", [
