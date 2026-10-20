@@ -241,6 +241,11 @@ class WebApp:
             return _message(503, "overrides.toml can't be read", f"overrides.toml can't be read: {e}.")
         except (sqlite3.Error, OSError) as e:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
+        if pick is None and (song.status == "ignored" or song.key in overrides.ignore):
+            return _message(409, "Ignored", f"{song.display} is ignored in overrides.toml.")
+        if pick is None and song.review:
+            return _message(409, "Nothing to pick", f"{song.display} has no candidates to pick: caracole review "
+                                                    "offers a pin or an ignore.")
         if pick is None:
             return _message(409, "Nothing to pick", f"{song.display} doesn't need review: there's nothing to pick.")
         if not pick.choices:

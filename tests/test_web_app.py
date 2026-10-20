@@ -490,6 +490,21 @@ def test_the_pickers_page_of_a_song_that_needs_no_review_says_so(app, conn):
     assert 'action="/review"' not in text(response)
 
 
+def test_the_pickers_page_says_why_a_song_in_review_has_nothing_to_pick(app, conn, cfg):
+    from caracole.overrides import add_ignore
+
+    bare = add_song(conn, "Queen", "Bohemian Rhapsody")  # in review with no candidate
+    update_song(conn, bare.id, match_decision="review", review=True)
+    response = get(app, f"/review?song={bare.id}")
+    assert response.status == 409 and 'action="/review"' not in text(response)
+    assert "has no candidates to pick: caracole review offers a pin or an ignore" in shown(response)
+    assert "doesn't need review" not in shown(response)
+    creep = in_review(conn)
+    add_ignore(cfg.overrides_file, creep.display)
+    response = get(app, f"/review?song={creep.id}")
+    assert response.status == 409 and "Radiohead - Creep is ignored in overrides.toml" in shown(response)
+
+
 def test_a_request_that_ends_in_a_review_shows_its_picker_on_the_requests_page(app, conn, queue):
     post(app, "/request", {"artist": "Radiohead", "title": "Creep", "fetch": "1"})
     creep = in_review(conn)  # what its `caracole add` found
