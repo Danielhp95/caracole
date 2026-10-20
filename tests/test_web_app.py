@@ -446,6 +446,56 @@ def test_the_tab_you_pick_is_looked_up_now(app, queue):
         "get", "--progress", "--ug=radiohead/creep", f"--tab={tab}", "--", "Radiohead", "Creep")
 
 
+def acdc_index(conn):
+    from caracole.ug.index import mark_built, upsert_rows
+
+    rows = [(11, "acdc", "back-in-black", "chords"), (12, "acdc", "back-in-black", "tabs"),
+            (21, "song-dongye", "banma-banma", "chords"), (31, "r-e-m", "losing-my-religion", "chords")]
+    upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+
+
+def test_a_ug_hit_your_library_has_under_another_name_is_that_song(app, conn):
+    # UG's slugs make "Acdc", "Song Dongye" and "R E M": your library's names are the song's.
+    acdc_index(conn)
+    acdc = add_song(conn, "AC/DC", "Back In Black")
+    update_song(conn, acdc.id, match_decision="accept", match_artist_key="acdc", match_song_key="back-in-black")
+    banma = add_song(conn, "宋冬野", "斑马斑马")  # not matched yet: its names still meet UG's
+    rem = add_song(conn, "R.E.M.", "Losing My Religion")
+    for query, song in (("back in black", acdc), ("banma banma", banma), ("losing my religion", rem)):
+        [hit] = [h for h in as_json(get(app, "/api/search?q=" + query.replace(" ", "%20")))["index"]
+                 if h["song"] is not None]
+        assert hit["song"] == song.id, query
+        assert (hit["library"]["artist"], hit["library"]["title"]) == (song.artist, song.title)
+
+
+def test_getting_a_ug_hit_your_library_has_under_another_name_adds_no_second_song(app, cfg, conn, queue):
+    acdc_index(conn)
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("AC/DC - Back In Black\n", encoding="utf-8")
+    acdc = add_song(conn, "AC/DC", "Back In Black")
+    update_song(conn, acdc.id, match_decision="accept", match_artist_key="acdc", match_song_key="back-in-black")
+    # The page's names for the hit, from UG's slugs, and its pick: the server finds the song it is.
+    response = lookup(app, {"artist": "Acdc", "title": "Back In Black", "ug": "acdc/back-in-black"})
+    assert response.status == 202
+    assert cfg.wanted_file.read_text(encoding="utf-8") == "AC/DC - Back In Black\n"
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("get", "--progress", "--ug=acdc/back-in-black", "--", "AC/DC", "Back In Black")
+    assert job.song_key == acdc.key and "AC/DC - Back In Black" in job.title
+
+
+def test_get_it_now_on_a_song_of_your_library_adds_it_to_no_source(app, cfg, conn, queue):
+    # A song from Spotify alone stays Spotify's: once unliked, it is no longer wanted.
+    creep = add_song(conn, "Radiohead", "Creep", source="spotify", source_id="spotify:track:1")
+    response = lookup(app, {"song": str(creep.id)})
+    assert response.status == 202 and not cfg.wanted_file.exists()
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("get", "--progress", "--", "Radiohead", "Creep")
+    assert lookup(app, {"song": "999"}).status == 404
+    assert lookup(app, {"song": "x"}).status == 400
+
+
 def test_a_version_picked_while_the_first_lookup_runs_is_looked_up_too(cfg):
     import threading
 
@@ -497,6 +547,26 @@ def test_a_lookup_without_the_pages_script_lands_on_the_lookup_page(app, queue):
 def test_a_lookup_needs_the_form_token_like_every_write(app, queue):
     assert lookup(app, {"artist": "Radiohead", "title": "Creep"}, csrf="wrong").status == 403
     assert queue.snapshot() == []
+
+
+def test_the_lookup_pages_script_hears_a_refusal_as_data_and_is_told_to_reload(app, queue):
+    # A phone left open across a restart of the server sends the old form token.
+    stale = lookup(app, {"artist": "Radiohead", "title": "Creep"}, csrf="older")
+    assert stale.status == 403 and as_json(stale)["reload"] is True and "reload" in as_json(stale)["error"]
+    elsewhere = lookup(app, {"artist": "Radiohead", "title": "Creep"}, **{"sec-fetch-site": "cross-site"})
+    assert elsewhere.status == 403 and "another site" in as_json(elsewhere)["error"]
+    not_a_form = post(app, "/lookup", {"artist": "A", "title": "B"}, accept="application/json",
+                      **{"content-type": "text/plain"})
+    assert not_a_form.status == 415 and "error" in as_json(not_a_form)
+    assert queue.snapshot() == []
+
+
+def test_before_signing_in_the_api_and_the_lookups_answer_data(locked, conn):
+    response = get(locked, "/api/search?q=creep")
+    assert response.status == 401 and as_json(response)["reload"] is True
+    refused = lookup(locked, {"artist": "Radiohead", "title": "Creep"})
+    assert refused.status == 401 and "Sign in" in as_json(refused)["error"]
+    assert get(locked, "/lookup").status == 401 and 'action="/login"' in text(get(locked, "/lookup"))
 
 
 def test_a_job_is_served_as_data_with_each_step_and_its_state(app, queue):

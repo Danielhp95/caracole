@@ -22,7 +22,14 @@ there even when the queue is full or the server stops. A request and a fetch
 then queue their commands (jobs.py), and the answer sends the browser to the
 requests page. A song looked up now is one ``caracole get --progress``; asked
 for by the lookup page's script (``Accept: application/json``), the answer is
-the job's address as data (202), else the lookup page, which follows it.
+the job's address as data (202), else the lookup page, which follows it. A
+lookup of a song your library has (named by its id, or the UG song you
+picked is its match or its names' own: ``_Mine``) runs under that song's own
+names and writes nothing to wanted.txt: no second song for UG's spelling of
+it, and no new source for a song from Spotify. To a page's script (it
+accepts JSON, or asks ``/api/``), every refusal is data too: ``{"error": …,
+"reload": …}``, ``reload`` when the page must be reloaded (a form token older
+than the server, signing in).
 
 Searching reads, and sends no request: one search runs at a time, one asked
 for meanwhile wins over the older ones still waiting (``superseded``: the
@@ -137,6 +144,7 @@ class WebApp:
         self._tickets = itertools.count(1)
         self._newest = 0  # the newest search asked for
         self._found: OrderedDict[str, tuple[float, list[dict[str, Any]], str | None]] = OrderedDict()
+        self._song_forms: dict[tuple, tuple[frozenset[str], frozenset[str]]] = {}  # _Mine's, by a song's names
 
     def handle(self, request: Request) -> Response:
         return self.finish(self._route(request))
@@ -161,9 +169,13 @@ class WebApp:
         except (UnicodeDecodeError, ValueError):
             return _message(400, "Not an address", "That address can't be read.")
         method = request.method
+        data = _wants_json(request) or path.startswith("/api/")  # a page's script asks: it reads JSON
         if self._session is not None and not self._signed_in(request):
             if method == "POST" and path == "/login":
                 return self._sign_in(request)
+            if data:
+                return _json(401, {"error": "Sign in first: reload the page, and sign in with the access token.",
+                                   "reload": True})
             if method in ("GET", "HEAD"):
                 return _html(401, pages.sign_in_page(self.csrf))
             return _message(401, "Sign in first", "Sign in with the access token first.")
@@ -193,32 +205,38 @@ class WebApp:
         if method == "POST":
             handler = {"/request": self._request, "/fetch": self._fetch}.get(path)
             if path == "/lookup":
-                wants_json = _wants_json(request)
-                handler = lambda form: self._lookup(form, wants_json=wants_json)  # noqa: E731
+                handler = lambda form: self._lookup(form, wants_json=data)  # noqa: E731
             if handler is None:
                 return _message(404, "Not here", "There's nothing to send to at this address.")
-            form = self._form(request)
+            form = self._form(request, wants_json=data)
             return form if isinstance(form, Response) else handler(form)
         return Response(405, b"", [("Allow", "GET, HEAD, POST")])
 
-    def _form(self, request: Request) -> dict[str, str] | Response:
-        """The fields of a POSTed form, or why it is refused."""
+    def _form(self, request: Request, *, wants_json: bool = False) -> dict[str, str] | Response:
+        """The fields of a POSTed form, or why it is refused: as a page, or as data for a page's script,
+        which says to reload the page when its form token is older than the server."""
+
+        def refused(status: int, title: str, message: str, *, reload: bool = False) -> Response:
+            if wants_json:
+                return _json(status, {"error": message, "reload": reload})
+            return _message(status, title, message)
+
         headers = request.headers
         if not cross_origin_ok("POST", headers, headers.get("host")):
-            return _message(403, "Refused", "This came from another site, so caracole refused it.")
+            return refused(403, "Refused", "This came from another site, so caracole refused it.")
         kind = headers.get("content-type", "").split(";")[0].strip().lower()
         if kind != "application/x-www-form-urlencoded":
-            return _message(415, "Not a form", "caracole reads only forms sent from its own pages.")
+            return refused(415, "Not a form", "caracole reads only forms sent from its own pages.")
         if len(request.body) > MAX_BODY:
-            return _message(413, "Too long", "That form is too long.")
+            return refused(413, "Too long", "That form is too long.")
         try:
             fields = parse_qs(request.body.decode("utf-8"), keep_blank_values=True, max_num_fields=20)
         except (UnicodeDecodeError, ValueError):
-            return _message(400, "Not a form", "That form can't be read.")
+            return refused(400, "Not a form", "That form can't be read.")
         form = {name: values[0] for name, values in fields.items()}
         if not same_token(form.get("csrf"), self.csrf):
-            return _message(403, "Refused", "This form is older than the server, or not from its pages: "
-                                            "reload the library and try again.")
+            return refused(403, "Refused", "This form is older than the server, or not from its pages: "
+                                           "reload the page and try again.", reload=True)
         return form
 
     # --- an access token -------------------------------------------------------------------------
@@ -367,7 +385,8 @@ class WebApp:
     # --- a song looked up now, and search as you type ----------------------------------------------
 
     def _lookup(self, form: dict[str, str], *, wants_json: bool) -> Response:
-        """The song you picked on the lookup page, in wanted.txt at once, then looked up now."""
+        """The song you picked on the lookup page, looked up now: a song of your library as it is (``song``,
+        its id; or the one your pick or its name is already), else a new one, in wanted.txt at once."""
         from caracole.overrides import OverridesError, tab_id_from_url
 
         def refused(status: int, title: str, message: str) -> Response:
@@ -385,21 +404,55 @@ class WebApp:
                 tab_id_from_url(pick["tab"])
             except OverridesError as e:
                 return refused(400, "Not a pick", f"That isn't an Ultimate Guitar tab: {e}")
-        written = self._wanted_line(form)
-        if len(written) == 3:
-            return refused(*written)
-        line, note = written
-        steps = lookup_steps(line.artist, line.title, album=line.album, duration_ms=line.duration_ms,
+        found = self._library_song(form, (artist_key, song_key) if pick["ug"] else None)
+        if isinstance(found, tuple):
+            return refused(*found)
+        if found is not None:  # the song as your library has it: no second song, and no new source for it
+            artist, title, album, duration_ms, key = found.artist, found.title, None, None, found.key
+            note = f"In your library as {found.display}."
+        else:
+            written = self._wanted_line(form)
+            if len(written) == 3:
+                return refused(*written)
+            line, note = written
+            artist, title, album, duration_ms, key = line.artist, line.title, line.album, line.duration_ms, line.identity
+        steps = lookup_steps(artist, title, album=album, duration_ms=duration_ms,
                              ug=pick["ug"] or None, tab=pick["tab"] or None)
         try:
-            job, _ = self.queue.submit(f"Fetch {line.artist} - {line.title}", line.identity, steps, fetching=True,
-                                       note=note)
+            job, _ = self.queue.submit(f"Fetch {artist} - {title}", key, steps, fetching=True, note=note)
         except QueueFull:
             return refused(503, "The queue is full", f"{note} The queue is full, so it wasn't looked up now: the "
                                                      "nightly run looks for it, or ask again once the queue empties.")
         if wants_json:
             return _json(202, {"job": job.id, "url": f"/api/jobs/{job.id}"})
         return _redirect(f"/lookup?job={job.id}")
+
+    def _library_song(self, form: dict[str, str], ug: tuple[str, str] | None) -> Song | None | tuple[int, str, str]:
+        """The library song a lookup is about: the one ``song`` names; else the one your UG pick is (matched
+        to it, or by its names); else the one of the form's artist and title. None for a song new to the
+        library; (status, title, message) when it can't be told."""
+        from caracole.normalize import identity_key
+        from caracole.songs import find_song, get_song, list_songs
+
+        try:
+            with closing(self._connect()) as conn:
+                if form.get("song", "").strip():
+                    try:
+                        return get_song(conn, int(form["song"]))
+                    except ValueError:
+                        return 400, "Not a song", "Which song? The form names none."
+                    except KeyError:
+                        return 404, "No such song", "That song isn't in the library."
+                artist, title = form.get("artist", "").strip(), form.get("title", "").strip()
+                if ug is not None:
+                    found = _Mine(list_songs(conn), self._song_forms).song_for(*ug, artist, title)
+                    if found is not None:
+                        return found
+                if artist and title:
+                    return find_song(conn, identity_key(artist, title))
+                return None
+        except (sqlite3.Error, OSError) as e:
+            return 503, "The database can't be read", f"The database can't be read: {e}"
 
     def _search(self, query: str) -> Response:
         """Your library and the offline UG index, for a query typed into the lookup page."""
@@ -447,8 +500,13 @@ class WebApp:
             self._found[q] = (time.monotonic(), index, hint)
             while len(self._found) > CACHE_SIZE:
                 self._found.popitem(last=False)
-        mine = {(s.match_artist_key, s.match_song_key): s.id for s in list_songs(conn) if s.match_song_key}
-        hits = [{**hit, "song": mine.get(tuple(hit["ug"].split("/", 1)))} for hit in index]
+        mine = _Mine(list_songs(conn), self._song_forms)
+        hits = []
+        for hit in index:
+            song = mine.song_for(*hit["ug"].split("/", 1), hit["artist"], hit["title"])
+            hits.append({**hit, "song": song.id if song else None,
+                         "library": {"id": song.id, "artist": song.artist, "title": song.title,
+                                     "display": song.display} if song else None})
         return {"query": q, "library": library, "index": hits, "hint": hint}
 
     def _index_hits(self, conn: sqlite3.Connection, q: str) -> tuple[list[dict[str, Any]], str | None]:
@@ -470,6 +528,59 @@ class WebApp:
                          for t in sorted(song_tabs(conn, h.artist_key, h.song_key), key=rank)[:TABS_SHOWN]]}
                for h in hits]
         return out, bare_id_hint(q, hits)
+
+
+FORMS_KEPT = 10_000  # songs whose name forms _Mine keeps between two searches
+
+
+class _Mine:
+    """Your library's songs, to tell which one an Ultimate Guitar song of the offline index is.
+
+    As ``caracole search --add`` tells it (commands/search.py): the song matched
+    to it (an accepted or pinned match, a variant counted as its song), else the
+    song its names are, by identity key or by ``normalize.name_forms`` (UG's
+    "Acdc", "R E M" and "Song Dongye" are your AC/DC, R.E.M. and 宋冬野). A
+    review's keys are only a candidate's, often a cover by another artist, so
+    they make no song of yours. ``forms`` keeps each song's forms, by its names.
+    """
+
+    def __init__(self, songs: list[Song], forms: dict[tuple, tuple[frozenset[str], frozenset[str]]]):
+        from caracole.normalize import split_variant
+
+        self.songs = sorted(songs, key=lambda s: s.id)
+        self.by_key = {s.key: s for s in self.songs}
+        self.matched: dict[tuple[str, str], Song] = {}
+        for s in self.songs:
+            if s.match_decision in ("accept", "pinned") and s.match_artist_key and s.match_song_key:
+                self.matched.setdefault((s.match_artist_key, split_variant(s.match_song_key)[0]), s)
+        self.forms = forms
+
+    def song_for(self, artist_key: str, song_key: str, artist: str, title: str) -> Song | None:
+        from caracole.normalize import compact, identity_key, split_variant
+
+        base = split_variant(song_key)[0]
+        found = self.matched.get((artist_key, base)) or self.by_key.get(identity_key(artist, title))
+        if found is not None:
+            return found
+        wanted_artist, wanted_title = compact(artist_key), compact(base)
+        for song in self.songs:
+            artists, titles = self._forms_of(song)
+            if wanted_artist in artists and wanted_title in titles:
+                return song
+        return None
+
+    def _forms_of(self, song: Song) -> tuple[frozenset[str], frozenset[str]]:
+        from caracole.normalize import clean_title, compact, name_forms
+
+        names = (song.artist, tuple(song.artists), song.title)
+        forms = self.forms.get(names)
+        if forms is None:
+            if len(self.forms) >= FORMS_KEPT:
+                self.forms.clear()
+            artists = frozenset(compact(f) for a in dict.fromkeys(song.artists or [song.artist]) for f in name_forms(a))
+            forms = (artists, frozenset(compact(f) for f in name_forms(clean_title(song.title))))
+            self.forms[names] = forms
+        return forms
 
 
 def review_first(song: Song, overrides: Overrides) -> bool:
