@@ -33,7 +33,7 @@ from typing import Any, Iterable, Sequence
 from caracole.db import kv_delete, kv_get, kv_set
 from caracole.normalize import KEY_VERSION, display_key, identity_key, title_variant
 
-_JSON_COLUMNS = {"artists", "source_ids", "match_candidates", "lyrics_json"}
+_JSON_COLUMNS = {"artists", "source_ids", "match_candidates"}
 _BOOL_COLUMNS = {"review", "ug_dirty"}
 SHEET_FILE_NAMES = ("sheet.txt", "sheet (auto).txt")
 KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored keys were made with
@@ -82,7 +82,7 @@ class Song:
     ug_dirty: bool = True
     ug_checked_at: str | None = None
     lyrics_status: str = "pending"
-    lyrics_json: Any = None
+    lyrics_json: Any = None  # the raw JSON text; lyrics.lyrics_from_json decodes it
     lyrics_at: str | None = None
     lacuerda_checked_at: str | None = None
     audio_path: str | None = None
@@ -108,9 +108,7 @@ def _from_row(row: sqlite3.Row) -> Song:
     values: dict[str, Any] = {}
     for name in _COLUMNS:
         value = row[name]
-        if name == "lyrics_json":
-            values[name] = value  # kept as the raw JSON text; lyrics.lyrics_from_json decodes it
-        elif name in _JSON_COLUMNS and value is not None:
+        if name in _JSON_COLUMNS and value is not None:
             values[name] = json.loads(value)
         elif name in _BOOL_COLUMNS:
             values[name] = bool(value)
@@ -207,10 +205,7 @@ def upsert_song(
         return cur.lastrowid, True
 
     existing = _from_row(row)
-    ids = {k: list(v) for k, v in existing.source_ids.items()}
-    bucket = ids.setdefault(source, [])
-    if source_id not in bucket:
-        bucket.append(source_id)
+    ids = _add_ids({k: list(v) for k, v in existing.source_ids.items()}, {source: [source_id]})
     _remember(conn, source, source_id, said)
     fields = _resolve(conn, ids, existing)
     added = max(existing.added_at, added_at)
@@ -227,6 +222,14 @@ def upsert_song(
         ),
     )
     return existing.id, False
+
+
+def _add_ids(ids: dict[str, list[str]], more: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Add each id of ``more`` that ``ids`` lacks, after its source's ids there; return ``ids``."""
+    for source, values in more.items():
+        bucket = ids.setdefault(source, [])
+        bucket.extend(v for v in values if v not in bucket)
+    return ids
 
 
 def _fields_key(source: str, source_id: str) -> str:
@@ -302,7 +305,7 @@ def update_song(conn: sqlite3.Connection, song_id: int, **fields: Any) -> None:
         return
     values: list[Any] = []
     for name, value in fields.items():
-        if name in _JSON_COLUMNS and name != "lyrics_json" and value is not None:
+        if name in _JSON_COLUMNS and value is not None:
             value = json.dumps(value, ensure_ascii=False)
         elif name in _BOOL_COLUMNS:
             value = int(bool(value))
@@ -392,10 +395,8 @@ def mark_removed(conn: sqlite3.Connection, song: Song, removed_at: str) -> Remov
     source ids and the later time. The song's record itself is removal.py's to delete.
     """
     before = removed_song(conn, song.key)
-    ids: dict[str, list[str]] = {k: list(v) for k, v in (before.source_ids if before else {}).items()}
-    for source, values in song.source_ids.items():
-        bucket = ids.setdefault(source, [])
-        bucket.extend(v for v in values if v not in bucket)
+    ids = _add_ids({k: list(v) for k, v in (before.source_ids if before else {}).items()},
+                   song.source_ids)
     stone = RemovedSong(song.key, song.artist, song.title, ids,
                         max(removed_at, before.removed_at) if before else removed_at)
     _write_removed(conn, stone)
@@ -500,8 +501,6 @@ def _rekey_removed(conn: sqlite3.Connection) -> None:
     """Give every tombstone the key today's normalizer gives its song, as ``_rekey`` does the songs:
     tombstones that now share a key become one, with every source id and the latest time, and a
     wanted.txt source id, its line's key, follows the key."""
-    from caracole.wanted import SOURCE  # a source of songs: imported on use
-
     groups: dict[str, list[RemovedSong]] = {}
     for row in conn.execute("SELECT * FROM removed ORDER BY removed_at, key").fetchall():
         stone = _removed_from_row(row)
@@ -512,12 +511,8 @@ def _rekey_removed(conn: sqlite3.Connection) -> None:
         old_keys = {s.key for s in stones}
         ids: dict[str, list[str]] = {}
         for stone in stones:
-            for source, values in stone.source_ids.items():
-                bucket = ids.setdefault(source, [])
-                for value in values:
-                    value = key if source == SOURCE and value in old_keys else value
-                    if value not in bucket:
-                        bucket.append(value)
+            _add_ids(ids, {source: [key if source == _WANTED and v in old_keys else v for v in vs]
+                           for source, vs in stone.source_ids.items()})
         latest = stones[-1]
         conn.executemany("DELETE FROM removed WHERE key = ?", [(k,) for k in old_keys])
         _write_removed(conn, RemovedSong(key, latest.artist, latest.title, ids, latest.removed_at))
@@ -532,9 +527,7 @@ def _merge(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
     ``keep`` hasn't used move with them and stay where they are on disk. The
     rest goes with ``other``. The fetch step then picks again from all of it.
     """
-    for source, ids in other.source_ids.items():
-        bucket = keep.source_ids.setdefault(source, [])
-        bucket.extend(i for i in ids if i not in bucket)
+    _add_ids(keep.source_ids, other.source_ids)
     conn.execute(
         "UPDATE songs SET source_ids = ?, added_at = MAX(added_at, ?), album = COALESCE(album, ?), "
         "duration_ms = COALESCE(duration_ms, ?), isrc = COALESCE(isrc, ?), "
@@ -568,11 +561,11 @@ def _follow_wanted(conn: sqlite3.Connection, song_id: int, old_keys: set[str], k
     (``wanted.sync_wanted``) and of its word on the song's fields (``_remember``): all move
     from the song's old keys to its new one. Of several lines' words, one is kept, until the
     next sync says it again."""
-    from caracole.wanted import FIRST_SEEN_KEY, SOURCE  # a source of songs: imported on use
+    from caracole.wanted import FIRST_SEEN_KEY  # a source of songs: imported on use
 
     ids = get_song(conn, song_id).source_ids
-    if ids.get(SOURCE):
-        ids[SOURCE] = list(dict.fromkeys(key if i in old_keys else i for i in ids[SOURCE]))
+    if ids.get(_WANTED):
+        ids[_WANTED] = list(dict.fromkeys(key if i in old_keys else i for i in ids[_WANTED]))
         update_song(conn, song_id, source_ids=ids)
     for old in old_keys:
         seen = kv_get(conn, FIRST_SEEN_KEY + old)
@@ -580,11 +573,11 @@ def _follow_wanted(conn: sqlite3.Connection, song_id: int, old_keys: set[str], k
             current = kv_get(conn, FIRST_SEEN_KEY + key)
             kv_set(conn, FIRST_SEEN_KEY + key, min(seen, current) if current else seen)
             kv_delete(conn, FIRST_SEEN_KEY + old)
-    said = kv_get(conn, _fields_key(SOURCE, key))
+    said = kv_get(conn, _fields_key(_WANTED, key))
     for old in sorted(old_keys):
-        old_said = kv_get(conn, _fields_key(SOURCE, old))
+        old_said = kv_get(conn, _fields_key(_WANTED, old))
         if old_said is not None:
             if said is None:
                 said = old_said
-                kv_set(conn, _fields_key(SOURCE, key), said)
-            kv_delete(conn, _fields_key(SOURCE, old))
+                kv_set(conn, _fields_key(_WANTED, key), said)
+            kv_delete(conn, _fields_key(_WANTED, old))
