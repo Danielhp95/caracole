@@ -11,6 +11,7 @@ from pathlib import Path
 from caracole.viewer import build_viewer
 from caracole.viewer.book import BookSong, build_songbook
 
+from helpers.browser import CHROMIUM_MARKS
 from helpers.chromium import Chromium
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
@@ -22,6 +23,8 @@ LONG = "{title: Long Song}\n{artist: The Placeholders}\n" + "".join(
 )
 TINY = "{title: Tiny Song}\n{artist: The Placeholders}\n{comment: Verse}\n[G]Tiny [D]words\n\n{comment: Chorus}\n[C]Sing it [G]out\n"
 DESKTOP = "1280,800"
+
+pytestmark = CHROMIUM_MARKS  # every test here opens the page in Chromium
 
 # What the page shows: how many of the sheet's lines sit in its right half (a second column), and so on.
 LAYOUT = """(() => {
