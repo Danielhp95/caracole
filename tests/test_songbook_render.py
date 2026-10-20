@@ -444,6 +444,22 @@ def test_a_broken_songbooks_file_is_an_error_that_stops_nothing_else(conn, cfg, 
     assert (folder(cfg) / "songbook.pdf").exists()  # your songbooks stay until the file reads again
 
 
+def test_a_songbooks_file_nested_too_deep_stops_neither_the_render_nor_the_page(conn, cfg, two):
+    from datetime import UTC, datetime
+
+    from caracole.library_page import build_library_page
+    from caracole.overrides import Overrides
+
+    render(conn, cfg)
+    songbooks_file(cfg.library_dir).write_text("a = " + "[" * 1000 + "]" * 1000 + "\n", encoding="utf-8")
+    fake = FakeChordPro()
+    stats = render(conn, cfg, runner=fake)
+    assert stats.error and "songbooks.toml" in stats.error
+    assert fake.calls == [] and stats.removed == 0
+    page = build_library_page(conn, cfg, Overrides(), datetime(2026, 10, 18, 3, 41, tzinfo=UTC))
+    assert "songbooks.toml can't be read" in page
+
+
 def test_a_link_in_place_of_the_songbooks_folder_is_never_written_through(conn, cfg, two, tmp_path):
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()

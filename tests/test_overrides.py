@@ -592,3 +592,14 @@ def test_writers_report_a_broken_file_as_an_overrides_error(tmp_path):
         with pytest.raises(OverridesError, match=r"overrides\.toml: .*artist_url"):
             add()
     assert p.read_text(encoding="utf-8") == broken
+
+
+def test_a_file_nested_too_deep_is_an_overrides_error_and_is_left_alone(tmp_path):
+    deep = "x = " + "[" * 1000 + "]" * 1000 + "\n"  # tomllib and tomlkit raise RecursionError on it
+    p = write(tmp_path, deep)
+    with pytest.raises(OverridesError, match=r"overrides\.toml: "):
+        load_overrides(p)
+    for add in all_writers(p):
+        with pytest.raises(OverridesError, match=r"overrides\.toml: "):
+            add()
+    assert p.read_text(encoding="utf-8") == deep

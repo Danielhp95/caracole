@@ -12,6 +12,7 @@ from caracole.songbook import (
     FILE_NAME,
     Songbook,
     SongbookError,
+    SongbookFileError,
     add_to_songbook,
     check_name,
     delete_songbook,
@@ -250,6 +251,19 @@ def test_writers_refuse_a_broken_file_and_leave_it_alone(tmp_path):
     with pytest.raises(SongbookError):
         make_songbook(path, "Picnic", ["Radiohead - Creep"])
     assert path.read_text(encoding="utf-8") == "[Campfire\n"
+
+
+# Any synced device can write the file: tomllib and tomlkit raise RecursionError on this one.
+TOO_DEEP = "a = " + "[" * 1000 + "]" * 1000 + "\n"
+
+
+def test_a_file_nested_too_deep_is_a_file_error_and_is_left_alone(tmp_path):
+    path = write(tmp_path, TOO_DEEP)
+    with pytest.raises(SongbookFileError, match=r"songbooks\.toml: "):
+        load_songbooks(path)
+    with pytest.raises(SongbookFileError, match=r"songbooks\.toml: "):
+        make_songbook(path, "Picnic", ["Radiohead - Creep"])
+    assert path.read_text(encoding="utf-8") == TOO_DEEP
 
 
 def test_an_unchanged_file_is_not_written_again(tmp_path):

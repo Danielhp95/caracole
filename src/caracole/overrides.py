@@ -265,6 +265,9 @@ def _declared_twice(e: tomllib.TOMLDecodeError) -> str:
         return ""
 
 
+TOO_DEEP = "nested too deep for the TOML parser"  # tomllib and tomlkit raise RecursionError then
+
+
 def load_overrides(path: Path) -> Overrides:
     """Read overrides.toml; a missing file means no overrides. Every error names the file."""
     text = _read(path)
@@ -274,6 +277,8 @@ def load_overrides(path: Path) -> Overrides:
         return _parse(tomllib.loads(text))
     except tomllib.TOMLDecodeError as e:
         raise OverridesError(f"{path}: {e}{_declared_twice(e)}") from e
+    except RecursionError:  # any synced device can write the file: an OverridesError at worst
+        raise OverridesError(f"{path}: {TOO_DEEP}") from None
     except OverridesError as e:
         raise OverridesError(f"{path}: {e}") from e
 
@@ -368,6 +373,8 @@ def _edit(path: Path, change) -> None:
         doc = tomlkit.document() if old is None else tomlkit.parse(old)
     except TOMLKitError as e:
         raise OverridesError(f"{path}: {e}") from e
+    except RecursionError:
+        raise OverridesError(f"{path}: {TOO_DEEP}") from None
     change(doc)
     text = tomlkit.dumps(doc)
     if text == old:
