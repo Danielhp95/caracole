@@ -72,9 +72,8 @@ songs.py's, in the `removed` table).
   step's label is that line while it runs, "Fetching from Ultimate Guitar…"), app.py (the
   routes; `/jobs.json` and the forms answer the page's script in JSON; `written_pages`,
   each kind of page caracole writes into the library by file name, with its record and its
-  CSP: the sheet viewers), songbooks.py (the songbook forms, each queued as its
-  `caracole songbook` command, and songbook.html, read only while caracole's), pages.py,
-  server.py (`http.server`). The page is library_page.py's, with `WebControls`; its script
+  CSP: the sheet viewers and songbook.html), songbooks.py (the songbook forms, each queued as
+  its `caracole songbook` command), pages.py, server.py (`http.server`). The page is library_page.py's, with `WebControls`; its script
   posts the forms with fetch() and asks /jobs.json how they go.
 - `viewer/`: the sheet viewer render.py writes beside each PDF. page.py builds the page
   (`build_viewer`) from the song's .cho (sheet.py reads it back); theory.py names chords and

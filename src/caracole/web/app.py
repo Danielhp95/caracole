@@ -487,8 +487,6 @@ class WebApp:
                     return self._written_page(path[1:], page)
                 except NotServed:  # index.html links it all the same: say why it isn't sent
                     return _message(404, "Not sent", page.refused)
-            if path.rsplit("/", 1)[-1] == "songbook.html":  # songbooks.is_page
-                return self._songbook_page(path[1:])
             data, kind, download = read_library_file(self.cfg.library_dir, path[1:],
                                                      hidden=(self.cfg.state_dir, self.cfg.cache_dir))
         except NotServed:
@@ -510,22 +508,6 @@ class WebApp:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
         csp = f"{page.csp(data)}; {_FRAMES}"  # the policy of these very bytes, not this caracole's
         return Response(200, data, [("Content-Type", _HTML), ("Content-Security-Policy", csp)])
-
-    def _songbook_page(self, path: str) -> Response:
-        """A songbook's page, while it is still the one caracole wrote (songbooks.py), with its own
-        Content-Security-Policy, a sandbox; a 404 that says why otherwise."""
-        from caracole.songbook import PAGE_REFUSED
-        from caracole.web.songbooks import songbook_page
-
-        try:
-            with closing(self._connect()) as conn:
-                data, csp = songbook_page(conn, self.cfg.library_dir, path,
-                                          hidden=(self.cfg.state_dir, self.cfg.cache_dir))
-        except NotServed:  # index.html links it all the same: say why it isn't sent
-            return _message(404, "Not sent", PAGE_REFUSED)
-        except (sqlite3.Error, OSError) as e:  # DatabaseTooNew is an sqlite3.DatabaseError
-            return _message(503, "The database can't be read", f"The database can't be read: {e}")
-        return Response(200, data, [("Content-Type", _HTML), ("Content-Security-Policy", f"{csp}; {_FRAMES}")])
 
     # --- the forms ------------------------------------------------------------------------------
 
@@ -794,13 +776,17 @@ class WrittenPage:
 
 def written_pages() -> dict[str, WrittenPage]:
     """The pages caracole writes into the library, by file name: each song's sheet viewers
-    (render.py), served in a sandbox with their own policy (``viewer.viewer_csp``). A new kind
-    of page joins here with its own record."""
+    (render.py), served in a sandbox with their own policy (``viewer.viewer_csp``), and each
+    songbook's page (songbook.py, ``_songbooks/<folder>/songbook.html``), with its own
+    (``book.songbook_csp``). A new kind of page joins here with its own record."""
+    from caracole import songbook
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS
     from caracole.viewer import viewer_csp
+    from caracole.viewer.book import songbook_csp
 
     viewer = WrittenPage(_viewers_written, viewer_csp, _VIEWER_REFUSED)
-    return {HUMAN_OUTPUTS[2]: viewer, AUTO_OUTPUTS[2]: viewer}  # "sheet.html", "sheet (auto).html"
+    return {HUMAN_OUTPUTS[2]: viewer, AUTO_OUTPUTS[2]: viewer,  # "sheet.html", "sheet (auto).html"
+            songbook.HTML_NAME: WrittenPage(songbook.pages_written, songbook_csp, songbook.PAGE_REFUSED)}
 
 
 _VIEWER_REFUSED = ("This sheet viewer isn't the page caracole last wrote here (it was changed on a synced "

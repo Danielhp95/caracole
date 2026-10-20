@@ -371,6 +371,62 @@ def test_the_served_songbook_works_in_its_sandbox_in_a_real_browser(setup, campf
     assert re.search(r'id="fab"[^>]*>Key Bm · \+2</button>', dom)
 
 
+def test_the_songbook_page_is_one_of_the_pages_caracole_writes():
+    # Served as the sheet viewers are (files.read_written_page), by its own record and policy.
+    from caracole import songbook
+    from caracole.web.app import written_pages
+
+    page = written_pages()[songbook.HTML_NAME]
+    assert page.written is songbook.pages_written and page.csp is songbook_csp
+    assert page.refused == songbook.PAGE_REFUSED
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_served_songbook_keeps_a_songs_transposition_in_its_address_across_a_reload(setup, campfire, tmp_path):
+    # The sandbox has no storage: the viewer keeps a song's settings in the address, beside the song
+    # book.js opens ("#song-1=&t=3"), so a reload, and Back from the next song, find them again.
+    from helpers.chromium import Chromium
+
+    from caracole.web.server import make_server
+
+    app = WebApp(setup[1], JobQueue(lambda args, emit: 0), allowed=ALLOWED, csrf="tok")
+    server = make_server(app, "127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}{PAGE}"
+    chords = ("Array.from(document.querySelectorAll('#sheet .c[data-c]')).slice(0, 4)"
+              ".map((c) => c.textContent).join(' ')")
+    fab = "document.querySelector('#fab').textContent"
+    afresh = "window.before === undefined && document.documentElement.dataset.ready === '1'"  # a new page
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(url)
+            tab.wait_for("document.documentElement.dataset.view === 'contents'")
+            assert tab.eval("origin") == "null"  # in its sandbox
+            tab.eval("window.before = true; document.querySelector('#contents a[href=\"#song-1\"]').click()")
+            tab.wait_for(afresh)
+            assert tab.eval("location.hash") == "#song-1="  # as the viewer writes the address back
+            assert tab.eval(chords) == "Bm G D A" and tab.eval(fab) == "Key Bm · +2"  # Creep's [transpose]
+            tab.click("#fab")
+            tab.click("#up")  # a semitone more
+            assert tab.eval(chords) == "Cm Ab Eb Bb" and tab.eval(fab) == "Key Cm · +3"
+            assert tab.eval("location.hash") == "#song-1=&t=3"
+            tab.eval("window.before = true; setTimeout(() => location.reload(), 0)")
+            tab.wait_for(afresh)
+            assert tab.eval("document.documentElement.dataset.view") == "song"
+            assert tab.eval(chords) == "Cm Ab Eb Bb" and tab.eval(fab) == "Key Cm · +3"
+            tab.eval("window.before = true; document.querySelector('#song-1 a[rel=\"next\"]').click()")
+            tab.wait_for(afresh)
+            assert tab.eval("location.hash") == "#song-3="  # Hysteria has no sheet: De Música Ligera
+            assert "+" not in tab.eval(fab)  # in its own key: the settings were song 1's
+            tab.eval("history.back()")  # loaded again, or as it was left (the back-forward cache)
+            tab.wait_for("location.hash === '#song-1=&t=3' && document.documentElement.dataset.ready === '1' && "
+                         "document.documentElement.dataset.view === 'song'")
+            assert tab.eval(chords) == "Cm Ab Eb Bb" and tab.eval(fab) == "Key Cm · +3"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_the_served_library_page_links_the_songbook_page(app, campfire):
     body = get(app, "/").body.decode("utf-8")
     assert 'href="_songbooks/Campfire/songbook.html"' in body
