@@ -182,6 +182,43 @@ def test_a_served_viewer_works_in_its_sandbox(cfg, conn, tmp_path):
         server.server_close()
 
 
+def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
+    # The sandbox has no storage, so the transposition, the mode and the capo go in the page's
+    # address: a reload and Back keep them.
+    rendered_song(conn, cfg)
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    url = f"http://127.0.0.1:{server.server_address[1]}/" + quote("Soda Stereo/De Música Ligera/sheet.html")
+    chord = "document.querySelector('#sheet .c[data-c=\"0\"]').textContent"
+    fab = "document.querySelector('#fab').textContent"
+    afresh = "window.before === undefined && document.documentElement.dataset.ready === '1'"  # a new page
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(url)
+            tab.wait_for("document.documentElement.dataset.ready === '1'")
+            assert tab.eval("location.hash") == ""  # nothing changed yet
+            entries = tab.eval("history.length")
+            tab.click("#fab")
+            tab.click("#up")
+            tab.click("#up")
+            tab.eval("[...document.querySelectorAll('#modes .chip')].find((b) => "
+                     "b.firstChild.textContent === 'Minor').click()")
+            assert tab.eval("location.hash") == "#t=2&mode=aeolian"
+            assert tab.eval("history.length") == entries  # replaced, not an entry per tap
+            tab.eval("window.before = true; setTimeout(() => location.reload(), 0)")
+            tab.wait_for(afresh)
+            assert tab.eval(chord) == "Am" and tab.eval(fab) == "Key Am · +2"
+            tab.eval("document.querySelector('a.back').click()")  # to the library, and Back
+            tab.wait_for("document.title === 'caracole library'")
+            tab.eval("history.back()")
+            tab.wait_for(afresh)
+            assert tab.eval(chord) == "Am" and tab.eval(fab) == "Key Am · +2"
+            tab.eval("document.querySelector('#reset-all').click()")
+            assert tab.eval("location.hash") == "" and tab.eval(chord) == "G"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_path, monkeypatch):
     # The server is a newer caracole than the one that wrote the viewer: the page's own hashes
     # must go out with it, or the browser refuses its script until the next render.

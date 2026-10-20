@@ -460,6 +460,23 @@ SAVED_ALTERNATIVES = """
 
 
 @in_chromium
+def test_the_address_keeps_where_the_song_is_played(tmp_path):
+    # Read back as #t=, #mode= and #capo=, so a reload keeps them where the page has no storage.
+    hashes = run_in_page(build_viewer(UG_CHO), tmp_path, """
+      const before = location.hash;
+      q("#fab").click();
+      q("#up").click();
+      q("#up").click();
+      const up = location.hash;
+      [...document.querySelectorAll("#modes .chip")].find((b) => b.firstChild.textContent === "Minor").click();
+      const minor = location.hash;
+      q("#reset-all").click();
+      out = [before, up, minor, location.hash];
+    """, "#panel=1")
+    assert hashes == ["#panel=1", "#panel=1&t=2", "#panel=1&t=2&mode=aeolian", "#panel=1"]
+
+
+@in_chromium
 def test_a_chosen_chord_is_kept_as_itself_not_as_its_place_in_a_list(tmp_path):
     shown, changed, saved = run_in_page(build_viewer(UG_CHO), tmp_path, """
       const sheet = (i) => q('#sheet .c[data-c="' + i + '"]');
