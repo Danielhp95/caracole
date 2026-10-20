@@ -53,6 +53,7 @@ from caracole.viewer.theory import (
     map_chord,
     parse_chord,
     parse_key,
+    shapes_key,
     sounding,
     spelling,
 )
@@ -183,11 +184,13 @@ def _sha256(text: str) -> str:
 
 def _song_key(sheet: Sheet, chords: list[Chord | None], key: str | None,
               source: str | None) -> tuple[Key | None, str | None]:
-    if (found := parse_key(key)) is not None:
-        return found, _origin(source)
-    if (found := parse_key(sheet.key)) is not None:
-        return found, "from the sheet"
+    """The key of the shapes the sheet's chords are, and where it came from in words. A key named
+    for a sheet with a capo may be the one the song sounds in (``theory.shapes_key``)."""
     played = [chords[i] for i in _played(sheet) if chords[i] is not None]
+    if (found := parse_key(key)) is not None:
+        return shapes_key(found, sheet.capo or 0, played), _origin(source)
+    if (found := parse_key(sheet.key)) is not None:
+        return shapes_key(found, sheet.capo or 0, played), "from the sheet"
     found = estimate_key(played)
     return found, "estimated from the chords" if found else None
 

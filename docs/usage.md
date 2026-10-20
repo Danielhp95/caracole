@@ -1599,7 +1599,11 @@ browser keeps nothing, as when `caracole serve` sends it (see
 [caracole serve](#caracole-serve)). Its key is its sheet's, found as for
 info.json (see [The song's key](#the-songs-key)): the human sheet's from the
 tab, or estimated from its chords, and the auto sheet's heard in the audio;
-the page says which. Beside a human sheet, `sheet (auto).html` keeps to the
+the page says which. With a capo, a tab may name the key the song sounds in
+rather than the shapes' (F# for a song played in C shapes with capo 6): when
+the chords are in the named key lowered by the capo, the viewer takes them as
+the shapes and the named key as the sound ("C shapes · capo 6 · sounds F#").
+Beside a human sheet, `sheet (auto).html` keeps to the
 chords the model heard, which may be in another key than the tab (another
 transposition, or a capo).
 

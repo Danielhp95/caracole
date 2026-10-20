@@ -191,6 +191,16 @@ def test_with_a_capo_the_key_line_says_the_shapes_the_capo_and_the_key_it_sounds
     )
 
 
+def test_a_tabs_key_that_names_the_sound_is_not_taken_for_the_shapes():
+    # UG names the key of some tabs with a capo as the song sounds: "F#" for C shapes with capo 6.
+    sheet = to_chordpro("[ch]C[/ch]      [ch]Em[/ch]\nSynthetic words here\n[ch]F[/ch]     [ch]G[/ch]  [ch]C[/ch]\nand home",
+                        title="River", artist="Synthetic", key="F#", capo=6)
+    for html in (build_viewer(sheet), build_viewer(sheet, key="F#", key_source="tab")):
+        assert data_of(html)["key"]["tonic"] == 0  # C shapes
+        assert facts_of(html).startswith("<b>C</b> shapes · capo <b>6</b> · sounds <b>F#</b>")
+    assert data_of(build_viewer(UG_CHO))["key"]["tonic"] == 7  # G with capo 2, its chords in G: the shapes
+
+
 def test_without_a_capo_the_key_line_names_the_key():
     assert facts_of(build_viewer(MINOR)) == 'Key <b>Cm</b> <span class="from">from the sheet</span>'
     assert facts_of(build_viewer("{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n")) == "Capo <b>3</b>"

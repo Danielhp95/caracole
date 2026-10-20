@@ -526,3 +526,19 @@ def sounding(shapes: Key, capo: int) -> Key:
     """The key a song sounds in, played in ``shapes`` with the capo on fret ``capo`` (0 for none):
     E minor shapes with capo 2 sound in F# minor."""
     return Key((shapes.tonic + capo) % 12, shapes.mode)
+
+
+def shapes_key(named: Key, capo: int, played: list[Chord]) -> Key:
+    """The key of the shapes played, from the key a tab names for a sheet with the capo on fret
+    ``capo``, whose chords are ``played``.
+
+    Tabs name either key: most the shapes' (Em for a song played in Em shapes with capo 2), some
+    the one the song sounds in (UG's F# for a song played in C shapes with capo 6). The chords
+    tell which: when their key has the notes of the named key lowered by the capo, the tab named
+    the sound. Otherwise, and with no capo or no chords to go by, the named key is the shapes'.
+    """
+    if capo % 12 == 0:
+        return named
+    lowered = Key((named.tonic - capo) % 12, named.mode)
+    found = estimate_key(played)
+    return lowered if found is not None and scale(found) == scale(lowered) else named
