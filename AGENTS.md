@@ -107,9 +107,9 @@ songs.py's, in the `removed` table).
   per process), `add_song` and `subprocess_pythonpath`. helpers/browser.py's `dump_dom` opens
   pages in one Chromium per process, each in a fresh context, for a test marked `@in_chromium`
   (`touch=True`: a touch screen, where `pointer: coarse` matches; `media=`: dark mode);
-  helpers/targets.py measures a page's controls there: `small_targets`, any under 44 px.
-  helpers/locks.py `waiting_for` sees a command wait for caracole's lock. test_harness.py
-  tests what makes the suite fast. helpers/ug_pages.py
+  helpers/targets.py measures a page's controls there: `small_targets`, any under 44 px, and
+  `weak_edges`, a field's edge under 3:1. helpers/locks.py `waiting_for` sees a command wait
+  for caracole's lock. test_harness.py tests what makes the suite fast. helpers/ug_pages.py
   builds fake UG tab and artist pages, escaped the way UG escapes them
   (`from helpers.ug_pages import ...`). helpers/gtptabs_site.py is `FakeGtpTabs`, a fake
   gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7

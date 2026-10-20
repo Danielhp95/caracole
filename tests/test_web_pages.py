@@ -1,13 +1,13 @@
 """caracole/web/pages.py: the pages caracole serve writes itself (Requests, a song's pick, signing in, a
-removal), in Chromium: on a touch screen every control is a thumb's size (index.html's BASE_STYLE and
-PICKER_STYLE, which they share)."""
+removal), in Chromium: on a touch screen every control is a thumb's size, and every field has an edge an
+eye can find, in light and dark (index.html's BASE_STYLE and PICKER_STYLE, which they share)."""
 
 from __future__ import annotations
 
 import pytest
 from helpers import browser
 from helpers.browser import in_chromium
-from helpers.targets import UNFOLD, noted, noting, small_targets
+from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
 
 from caracole.web.jobs import Job, Step
 from caracole.web.pages import Pick, jobs_page, remove_page, review_page, sign_in_page
@@ -35,11 +35,13 @@ def pages() -> dict[str, str]:
 
 @pytest.mark.parametrize("name", ["requests", "pick", "sign-in", "remove"])
 @in_chromium
-def test_on_a_touch_screen_every_control_is_a_thumbs_size(tmp_path, name):
+def test_on_a_touch_screen_every_control_is_a_thumbs_size_and_every_field_has_an_edge(tmp_path, name):
     # The brand above the title goes where the Library link beside it goes, which is a thumb's size.
-    script = UNFOLD + noting("data-short", small_targets(".app a"))
+    script = UNFOLD + noting("data-short", small_targets(".app a")) + noting("data-weak", weak_edges())
     path = tmp_path / f"{name}.html"
     path.write_text(pages()[name].replace("</body>", f"<script>{script}</script>\n</body>"), encoding="utf-8")
-    dom = browser.dump_dom(path.as_uri(), (390, 844), mobile=True, touch=True)
-    short = noted(dom, "data-short")
-    assert short == [], short
+    for scheme in ("light", "dark"):
+        dom = browser.dump_dom(path.as_uri(), (390, 844), mobile=True, touch=True,
+                               media={"prefers-color-scheme": scheme})
+        short, weak = noted(dom, "data-short"), noted(dom, "data-weak")
+        assert short == [] and weak == [], (scheme, short, weak)

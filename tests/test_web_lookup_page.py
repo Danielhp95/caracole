@@ -358,9 +358,9 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
 
 
 @in_chromium
-def test_on_a_touch_phone_every_control_is_a_thumbs_size(cfg, live, phone):
+def test_on_a_touch_phone_every_control_is_a_thumbs_size_and_every_field_has_an_edge(cfg, live, phone):
     from helpers.rendered import rendered_song
-    from helpers.targets import UNFOLD, small_targets
+    from helpers.targets import UNFOLD, small_targets, weak_edges
 
     base, _ = live
     conn = db.connect(cfg.db_path)
@@ -374,3 +374,8 @@ def test_on_a_touch_phone_every_control_is_a_thumbs_size(cfg, live, phone):
     # The brand above the title goes where the Library link beside it goes, which is a thumb's size.
     short = phone.js(small_targets(".app a"))
     assert short == [], short
+    phone.js("document.activeElement.blur()")  # every field at rest, the search field too
+    for scheme in ("light", "dark"):
+        phone.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": scheme}])
+        weak = phone.js(weak_edges())  # the search field too: this page's own, a field like the others
+        assert weak == [], (scheme, weak)

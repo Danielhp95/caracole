@@ -1651,7 +1651,7 @@ def test_an_artists_name_shows_it_is_a_filter_on_its_card_and_its_row(conn, cfg,
                                 '<span class="filter-mark" aria-hidden="true"></span>'), who.group(1)
 
 
-# --- touch: a thumb's targets --------------------------------------------------------------------------
+# --- touch and edges: a thumb's targets, and fields an eye can find ------------------------------------
 
 
 def every_control(conn, cfg, *, served: bool = True) -> str:
@@ -1700,14 +1700,16 @@ document.body.setAttribute("data-command", String(!document.querySelector(".pick
 
 @in_chromium
 def test_the_select_bar_of_the_file_on_disk_and_its_command_on_a_touch_phone(conn, cfg, tmp_path):
-    from helpers.targets import UNFOLD, noted, noting, small_targets
+    from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
 
-    script = UNFOLD + MAKE_FROM_DISK + noting("data-short", small_targets(TITLES))
+    # The search field is the search bar's, which another change redraws.
+    script = (UNFOLD + MAKE_FROM_DISK + noting("data-short", small_targets(TITLES))
+              + noting("data-weak", weak_edges("#q")))
     html = with_script(every_control(conn, cfg, served=False), script)
     dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, size="390,844", touch=True)
     assert 'data-command="true"' in dom  # its Copy button is measured too
-    short = noted(dom, "data-short")
-    assert short == [], short
+    short, weak = noted(dom, "data-short"), noted(dom, "data-weak")
+    assert short == [] and weak == [], (short, weak)
 
 
 # The heights of the compact controls, as a mouse gets them.
@@ -1732,6 +1734,58 @@ def test_a_mouse_keeps_the_compact_controls(conn, cfg, tmp_path):
     heights = noted(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, "#view=rows", size="1280,800"),
                     "data-compact")
     assert all(h is not None and h < 44 for h in heights.values()), heights
+
+
+# The card's border against a field's, both as the browser draws them.
+BORDERS = """
+({ card: getComputedStyle(document.querySelector("#list .card")).borderTopColor,
+   field: getComputedStyle(document.querySelector(".request .f input")).borderTopColor })
+"""
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@in_chromium
+def test_fields_menus_and_select_boxes_have_an_edge_of_three_to_one(conn, cfg, tmp_path, scheme):
+    from helpers.targets import UNFOLD, noted, noting, weak_edges
+
+    select = 'document.querySelector(".pick-toggle").click();\n'  # its boxes, and its bar's name and menu
+    # The search field is the search bar's, which another change redraws.
+    script = UNFOLD + select + noting("data-weak", weak_edges("#q")) + noting("data-borders", BORDERS)
+    dom = dump_dom(write_library_page(cfg.library_dir, with_script(every_control(conn, cfg), script)), tmp_path,
+                   size="390,844", media={"prefers-color-scheme": scheme})
+    weak = noted(dom, "data-weak")
+    assert weak == [], weak
+    borders = noted(dom, "data-borders")
+    assert borders["card"] != borders["field"], borders  # a card keeps its soft border: it is no control
+
+
+def css_tokens(style: str, *, dark: bool) -> dict[str, str]:
+    """The colours of a stylesheet's first :root, or of its first :root for dark mode."""
+    light, _, rest = style.partition("@media (prefers-color-scheme: dark)")
+    root = re.search(r":root\s*\{(.*?)\}", rest if dark else light, re.S)
+    assert root, style[:500]
+    return dict(re.findall(r"(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b", root.group(1)))
+
+
+def contrast(a: str, b: str) -> float:
+    """WCAG's contrast ratio of two #rrggbb colours."""
+    def luminance(colour: str) -> float:
+        r, g, b = (int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        f = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in (r, g, b)]
+        return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
+
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+@pytest.mark.parametrize("dark", [False, True])
+def test_a_controls_edge_is_three_to_one_against_every_background_a_card_keeps_its_soft_border(dark):
+    from caracole.library_page import BASE_STYLE
+
+    tokens = css_tokens(BASE_STYLE, dark=dark)
+    for background in ("--bg", "--surface", "--raised"):
+        assert contrast(tokens["--control-edge"], tokens[background]) >= 3, (background, tokens)
+    assert contrast(tokens["--border"], tokens["--surface"]) < 3  # cards and dividers: no control's edge
 
 
 def row_of(shown: str, title: str) -> str:

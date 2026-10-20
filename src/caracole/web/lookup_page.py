@@ -45,7 +45,7 @@ STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }
 .lede { max-width: 72ch; margin: 2px 0 14px; color: var(--muted); }
 .search { position: sticky; top: 0; z-index: 2; padding: 10px 0; background: var(--bg); }
-.search input { width: 100%; height: 54px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--border-strong);
+.search input { width: 100%; height: 54px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--control-edge);
   background: var(--surface); color: var(--text); font: inherit; font-size: 1.15rem; box-shadow: var(--shadow); }
 .search input:focus { border-color: var(--focus); outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }

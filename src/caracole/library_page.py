@@ -36,8 +36,10 @@ instead, one compact line a song (two on a phone), remembered in the address
 On a touch screen (``pointer: coarse``) every control is a thumb's target, 44
 px each way at the least: buttons, folds, chips, menus, letters, a row's "⋯"
 and an artist's name; a mouse keeps the compact sizes, about twenty rows to a
-laptop's screen. ``BASE_STYLE`` and ``PICKER_STYLE`` carry them to the pages
-caracole serve writes itself (web/pages.py, web/lookup_page.py).
+laptop's screen. Fields, menus and the Select boxes have the ``--control-edge``
+colour, 3:1 or more against every background (WCAG 1.4.11); cards and dividers
+keep the soft ``--border``. ``BASE_STYLE`` and ``PICKER_STYLE`` carry both to
+the pages caracole serve writes itself (web/pages.py, web/lookup_page.py).
 
 Each file, link and row shows where it came from (icons.py): the site's own
 icon, inlined in the data as a ``data:`` URI (the CSP allows images from
@@ -529,8 +531,10 @@ def _haystack(texts: list[str]) -> str:
 
 # --- the page ---------------------------------------------------------------------------
 
-# Shared with the pages caracole serve writes itself (caracole/web/): colours, type, buttons. On a touch
-# screen (pointer: coarse) every button is a thumb's target, 44 px; a mouse keeps the compact ones.
+# Shared with the pages caracole serve writes itself (caracole/web/): colours, type, buttons. --border is
+# the soft line of cards and dividers; --control-edge, the edge that tells a field, a menu or a box from
+# what is around it, at 3:1 or more against every background (WCAG 1.4.11). On a touch screen
+# (pointer: coarse) every button is a thumb's target, 44 px; a mouse keeps the compact ones.
 BASE_STYLE = """
 :root {
   color-scheme: light dark;
@@ -541,6 +545,7 @@ BASE_STYLE = """
   --muted: #645f57;
   --border: #e3dfd6;
   --border-strong: #cdc7bb;
+  --control-edge: #8d877c;
   --accent: #b4441e;
   --accent-hover: #9a3915;
   --on-accent: #ffffff;
@@ -562,6 +567,7 @@ BASE_STYLE = """
     --muted: #aaa59c;
     --border: #34322f;
     --border-strong: #4b4844;
+    --control-edge: #7a756e;
     --accent: #f0895c;
     --accent-hover: #f5a47f;
     --on-accent: #1b0e07;
@@ -620,7 +626,7 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
 .badge.failed { color: var(--failed); background: var(--failed-bg); }
 .f { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .85rem; font-weight: 600; }
 .f em { font-style: normal; font-weight: 500; }
-.f input { width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border-strong);
+.f input { width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--control-edge);
   background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; font-weight: 400; }
 .f input:focus { border-color: var(--focus); outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
@@ -829,7 +835,7 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .chip.person { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: .9rem; }
 .controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 12px; margin-left: auto; }
-.sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border);
+.sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--control-edge);
   background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
 .jump { display: flex; gap: 2px; margin: 10px 0 0; padding: 2px 0; overflow-x: auto; scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
@@ -2431,7 +2437,7 @@ _SONGBOOK_STYLE = """
 .pick { display: none; }
 .selecting .card .mono { display: none; }
 .selecting .pick { flex: none; position: relative; display: grid; place-items: center; width: 44px; height: 44px;
-  border-radius: 12px; border: 2px solid var(--border-strong); background: var(--surface); cursor: pointer; }
+  border-radius: 12px; border: 2px solid var(--control-edge); background: var(--surface); cursor: pointer; }
 .pick input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .pick:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .pick-n { font-weight: 750; font-variant-numeric: tabular-nums; }
@@ -2459,7 +2465,7 @@ _SONGBOOK_STYLE = """
 .pickbar-form { display: flex; flex: 1 1 340px; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
 .pickbar-form label { display: flex; flex: 1 1 150px; min-width: 0; }
 .pickbar-form input, .pickbar-form select { width: 100%; min-width: 0; height: 44px; padding: 0 10px; border-radius: 10px;
-  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
+  border: 1px solid var(--control-edge); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
 .pick-error { flex-basis: 100%; margin: 0; color: var(--failed); font-size: .85rem; }
 .pick-error:empty { display: none; }
 .pick-command { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

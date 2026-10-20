@@ -1529,8 +1529,11 @@ to request songs (see below).
 On a touch screen every button, fold, chip, menu, letter and artist's name is
 at least 44 pixels each way, for a thumb, and so is each row's "⋯": a phone
 shows about eight rows to a screen. With a mouse they keep their compact
-sizes. The pages `caracole serve` writes itself (Requests, Look up, a song's
-pick) do the same.
+sizes. Fields, menus and the Select boxes have an edge you can see against the
+page, in light and dark mode (3:1 at least, as WCAG 1.4.11 asks), while cards
+keep their soft border, and so does the search box. The pages `caracole serve`
+writes itself (Requests, Look up and its search box, a song's pick) do the
+same.
 
 **Songbooks** (see [Songbooks](#songbooks)), above the search box once there is
 one, lists each songbook: its songs in order, those without a sheet marked
