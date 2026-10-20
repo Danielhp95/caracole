@@ -348,7 +348,7 @@ def test_the_script_runs_and_leaves_the_sheet_as_written(tmp_path):
     dom = dump_dom(build_viewer(UG_CHO), tmp_path)
     assert 'data-ready="1"' in dom
     assert chord_texts(dom) == {"0": "G", "1": "D", "2": "Em", "3": "C", "4": "G/B", "5": "Am", "6": "F"}
-    assert re.search(r'id="fab"[^>]*>G shapes · capo 2 · sounds A</button>', dom)
+    assert '<span class="vh" id="key-full">G shapes · capo 2 · sounds A</span>' in dom
 
 
 @in_chromium
@@ -357,15 +357,16 @@ def test_the_script_runs_and_leaves_the_sheet_as_written(tmp_path):
     [(UG_CHO, "G shapes · capo 2 · sounds A"), (WALL, "Em shapes · capo 2 · sounds F#m"), (MINOR, "Key Cm")],
     ids=["capo", "capo-on-open-shapes", "no-capo"],
 )
-def test_the_key_button_says_what_the_key_line_says(tmp_path, cho, label):
-    # The script writes the line the page came with, so nothing moves as it runs; the button and
-    # the settings' heading say the same: the shapes, the capo and the key the song sounds in.
+def test_the_bar_and_the_settings_say_what_the_key_line_says(tmp_path, cho, label):
+    # The script writes the line the page came with, so nothing moves as it runs; the bar (to a
+    # screen reader, whole) and the settings' heading say the same: the shapes, the capo and the
+    # key the song sounds in.
     html = build_viewer(cho)
-    facts, fab, heading = run_in_page(html, tmp_path, """
-      out = [q("#facts").textContent, q("#fab").textContent, q("#panel-title").textContent];
+    facts, said, heading = run_in_page(html, tmp_path, """
+      out = [q("#facts").textContent, q("#key-full").textContent, q("#panel-title").textContent];
     """)
     assert facts == unescape(re.sub(r"<[^>]+>", "", facts_of(html)))
-    assert fab == label and heading == label
+    assert said == label and heading == label
 
 
 @in_chromium
@@ -428,9 +429,9 @@ def test_every_song_has_a_capo_to_move(tmp_path):
     # Em shapes are open already, so no fret is suggested; the capo moves all the same, the chords
     # show the shapes to play with it, and the song keeps sounding in F#m.
     shown, offered, off, four, back = run_in_page(build_viewer(WALL), tmp_path, """
-      const look = () => [q('#sheet .c[data-c="0"]').textContent, q("#fab").textContent,
+      const look = () => [q('#sheet .c[data-c="0"]').textContent, q("#key-full").textContent,
                           q("#capo-at").textContent, location.hash];
-      q("#fab").click();
+      q("#more").click();
       const shown = q("#capo-row").getBoundingClientRect().height > 0 && q("#capo-up").offsetParent !== null;
       const offered = document.querySelectorAll("#capo .chip").length;
       q("#capo-down").click();
@@ -451,10 +452,10 @@ def test_every_song_has_a_capo_to_move(tmp_path):
 @in_chromium
 def test_a_sheet_with_no_key_moves_its_capo_too(tmp_path):
     before, after = run_in_page(build_viewer("{title: T}\n{artist: A}\n{capo: 1}\n[(G)]la [H7]lo\n"), tmp_path, """
-      const before = [q("#facts").textContent, q("#fab").textContent];
-      q("#fab").click();
+      const before = [q("#facts").textContent, q("#key-full").textContent];
+      q("#more").click();
       q("#capo-down").click();
-      out = [before, [q("#facts").textContent, q("#fab").textContent, location.hash]];
+      out = [before, [q("#facts").textContent, q("#key-full").textContent, location.hash]];
     """)
     assert before == ["Capo 1", "Transpose · capo 1"]
     assert after == ["No capo", "Transpose · no capo", "#capo=0"]
@@ -479,7 +480,7 @@ def phone_tab(browser, url: str, width: int = 390, height: int = 844):
 def test_the_capo_control_fits_a_phone_and_holds_still(tmp_path):
     # On a phone: the capo's buttons never move under a thumb that taps them again, though the
     # heading above them names other shapes at each fret, on one line or two; they are big enough
-    # to tap; and the longest key line still fits on the key button, with nothing scrolling sideways.
+    # to tap; and with the longest key line, the bar still fits, with nothing scrolling sideways.
     from helpers.chromium import Chromium
 
     def written(name: str, cho: str) -> str:
@@ -493,7 +494,7 @@ def test_the_capo_control_fits_a_phone_and_holds_still(tmp_path):
             " return r.getBoundingClientRect().height; })()")
     with Chromium(tmp_path / "profile") as browser:
         tab = phone_tab(browser, written("Wall", WALL))
-        tab.click("#fab")
+        tab.click("#more")
         heights, tops = set(), set()
         for button in ["#capo-up"] * 4 + ["#capo-down"] * 6:  # capo 2 up to 6, then down to none
             heights.add(round(tab.eval(text)))
@@ -505,11 +506,11 @@ def test_the_capo_control_fits_a_phone_and_holds_still(tmp_path):
         assert min(sizes) >= 44
 
         tab = phone_tab(browser, written("Long", UG_CHO) + "#mode=mixolydian&t=1")
-        assert tab.eval("document.querySelector('#fab').textContent") == (
+        assert tab.eval("document.querySelector('#key-full').textContent") == (
             "Ab mixolydian shapes · capo 2 · sounds Bb mixolydian · +1")
-        fab = tab.eval("(() => { const r = document.querySelector('#fab').getBoundingClientRect(); "
+        bar = tab.eval("(() => { const r = document.querySelector('#bar').getBoundingClientRect(); "
                        "return [r.left, r.right, innerWidth, document.documentElement.scrollWidth]; })()")
-        assert fab[0] >= 0 and fab[1] <= fab[2] == 390 and fab[3] <= fab[2]
+        assert bar[0] >= 0 and bar[1] <= bar[2] == 390 and bar[3] <= bar[2]
 
 
 @in_chromium
@@ -543,10 +544,10 @@ window.addEventListener("load", () => {
   const g = q('#sheet .c[data-c="0"]');
   out.push(g.textContent, g.classList.contains("changed"));
   q("#scrim").click();
-  q("#fab").click();
+  q("#more").click();
   q("#up").click();
   q("#up").click();
-  out.push(q('#sheet .c[data-c="1"]').textContent, g.textContent, q("#fab").textContent);
+  out.push(q('#sheet .c[data-c="1"]').textContent, g.textContent, q("#key-full").textContent);
   chip("#modes", "Minor").click();
   out.push(q('#sheet .c[data-c="1"]').textContent, g.textContent);
   q("#reset-all").click();
@@ -594,7 +595,7 @@ def test_the_address_keeps_where_the_song_is_played(tmp_path):
     # Read back as #t=, #mode= and #capo=, so a reload keeps them where the page has no storage.
     hashes = run_in_page(build_viewer(UG_CHO), tmp_path, """
       const before = location.hash;
-      q("#fab").click();
+      q("#more").click();
       q("#up").click();
       q("#up").click();
       const up = location.hash;
@@ -611,7 +612,7 @@ def test_the_address_keeps_the_text_size(tmp_path):
     # As fs=, read back on a reload, so the page keeps it where it has no storage (a server's
     # sandbox); the usual size leaves the address alone.
     hashes = run_in_page(build_viewer(UG_CHO), tmp_path, """
-      q("#fab").click();
+      q("#size").click();
       q("#bigger").click();
       const bigger = [location.hash, getComputedStyle(q("#sheet")).fontSize];
       q("#smaller").click();
@@ -675,14 +676,14 @@ def test_the_card_and_the_settings_take_the_focus_and_give_it_back(tmp_path):
       const visit = (opener, dialog, how) => {
         opener.focus();
         how();
-        const seen = [q(dialog).contains(document.activeElement), q(".page").inert, q("#fab").inert,
+        const seen = [q(dialog).contains(document.activeElement), q(".page").inert, q("#bar").inert,
                       q(dialog).getAttribute("aria-modal")];
         press(document.activeElement, "Escape");
         return seen.concat([q(dialog).hidden, document.activeElement === opener, q(".page").inert]);
       };
       const chord = q('#sheet .c[data-c="1"]');
       out = [visit(chord, "#card", () => press(chord, "Enter")),
-             visit(q("#fab"), "#panel", () => q("#fab").click())];
+             visit(q("#more"), "#panel", () => q("#more").click())];
     """)
     # focus inside, the page behind out of reach, a modal dialog; then closed, focus back, page back
     assert card == [True, True, True, "true", True, True, False]
@@ -698,10 +699,10 @@ def test_a_chord_is_easy_to_tap(tmp_path):
       const r = el.getBoundingClientRect();
       const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
       const box = [[cx - 12, cy], [cx + 12, cy], [cx, cy - 12], [cx, cy + 12]].map(([x, y]) => tapped(x, y) === el);
-      const fab = q("#fab").getBoundingClientRect();
+      const bar = q("#bar").getBoundingClientRect();
       const inView = [...document.querySelectorAll("#sheet .c")].filter((c) => {
         const b = c.getBoundingClientRect();
-        return b.top > 0 && b.bottom < innerHeight && !(b.right > fab.left && b.bottom > fab.top);
+        return b.top > 0 && b.bottom < bar.top;
       });
       // a neighbour's larger target never covers a chord's own name
       const own = inView.length > 5 && inView.every((c) => {
@@ -721,7 +722,7 @@ def test_a_capo_stays_on_its_fret_when_the_song_is_transposed(tmp_path):
     # As on a guitar: a semitone up with the capo where it is, and every shape goes up a semitone.
     out = run_in_page(build_viewer(UG_CHO), tmp_path, """
       q("#up").click();
-      out = [q('#sheet .c[data-c="0"]').textContent, q("#fab").textContent, location.hash];
+      out = [q('#sheet .c[data-c="0"]').textContent, q("#key-full").textContent, location.hash];
     """, "#t=3&capo=3")  # A shapes with the capo on fret 3, sounding C
     assert out == ["Bb", "Bb shapes · capo 3 · sounds Db · +4", "#t=4&capo=3"]
 
@@ -739,12 +740,6 @@ def test_tapping_through_the_controls(tmp_path):
         "Em", "Am",  # G minor: D becomes Dm, G Gm; still up two
         "G", "D",  # all back as written
     ]
-
-
-@in_chromium
-def test_a_sheet_without_chords_has_no_key_button(tmp_path):
-    dom = dump_dom(build_viewer("{title: T}\n{artist: A}\nOnly words\n"), tmp_path)
-    assert 'data-ready="1"' in dom and re.search(r'id="fab"[^>]*hidden', dom)
 
 
 @in_chromium

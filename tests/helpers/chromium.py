@@ -11,7 +11,7 @@ a port. Clicks are real mouse events, at the element's place on the screen::
     with Chromium(tmp_path / "profile") as browser:
         tab = browser.open("http://127.0.0.1:8737/Artist/Title/sheet.html")
         tab.wait_for("document.documentElement.dataset.ready === '1'")
-        tab.click("#fab")
+        tab.click("#more")
         tab.eval("document.querySelector('#panel').hidden")  # False
 
 ``Chromium`` skips the test when this machine can't run Chromium. Like helpers/browser.py's, it

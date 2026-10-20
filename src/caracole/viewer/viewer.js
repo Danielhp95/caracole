@@ -134,8 +134,8 @@
     return [["", keyName(shift()), " shapes", ""], ["capo ", String(capo), "", ""], ["sounds ", sounds, moved, ""]]
       .concat(key.from ? [["", "", "", "key " + key.from]] : []);
   };
-  // The same as one line of text, for the key button (``moved``: with the transposition) and
-  // the settings' heading; without a key, the button says Transpose and the capo.
+  // The same as one line of text, for a screen reader in the bar (``moved``: with the
+  // transposition) and the settings' heading; without a key, Transpose and the capo.
   const keyLabel = (moved) => {
     const shown = moved && state.t ? signed(state.t) : "";
     if (!key) {
@@ -145,6 +145,16 @@
     }
     return keyLine("").filter((part) => part[1] || !part[3]).map((part) => part[0] + part[1] + part[2])
       .concat(shown ? [shown] : []).join(" · ");
+  };
+  // In short, for the bar, between − and +: the key you play, and under it what it is
+  // (["Em", "shapes · capo 2"], ["Em", "key · +1"]); the key it sounds in is the key line's.
+  const keyShort = () => {
+    const capo = capoNow();
+    const moved = state.t ? [signed(state.t)] : [];
+    const capoPart = capo ? ["capo " + capo] : sheetCapo ? ["no capo"] : [];
+    if (!key) return ["Transpose", capoPart.concat(moved).join(" · ")];
+    if (capo) return [keyName(shift()), ["shapes"].concat(capoPart, moved).join(" · ")];
+    return [keyName(state.t + sheetCapo), ["key"].concat(capoPart, moved).join(" · ")];
   };
 
   // --- chord diagrams --------------------------------------------------------------------------
@@ -213,7 +223,8 @@
   };
 
   // --- drawing the page --------------------------------------------------------------------------
-  const fab = $("fab"), panel = $("panel"), card = $("card"), scrim = $("scrim"), pill = $("pill"), go = $("go");
+  const bar = $("bar"), panel = $("panel"), card = $("card"), scrim = $("scrim"), pill = $("pill"), go = $("go");
+  const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -237,8 +248,14 @@
       el.classList.toggle("changed", choice(i) >= 0);
     }
     doc.style.setProperty("--fs", state.fs + "px");
+    $("fs-now").textContent = state.fs + " px";
+    $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
+    $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
 
-    fab.textContent = keyLabel(true);
+    const [main, sub] = keyShort();
+    $("key-now").querySelector(".k").textContent = main;
+    $("key-now").querySelector(".d").textContent = sub;
+    $("key-full").textContent = keyLabel(true);
     $("panel-title").textContent = key ? keyLabel(false) : "Transpose";
     const box = $("facts");
     box.textContent = "";
@@ -299,6 +316,7 @@
     drawStrip();
     fit();
     save();
+    hush();  // the lines moved under the page's scroll position, not by your hand
   };
 
   // A chord may reach over the words after it, up to the next chord on its row: lyrics then
@@ -434,13 +452,14 @@
   let opener = null;
   const open = (which) => {
     if (panel.hidden && card.hidden) opener = document.activeElement;
+    showSizes(false);
     for (const other of [panel, card]) if (other !== which) other.hidden = true;
     which.hidden = false;
     scrim.hidden = false;
     pageEl.inert = true;
-    fab.inert = true;
+    bar.inert = true;
     pill.inert = true;
-    fab.setAttribute("aria-expanded", which === panel ? "true" : "false");
+    more.setAttribute("aria-expanded", which === panel ? "true" : "false");
     pauseScroll();
     which.querySelector("h2").focus({ preventScroll: true });
   };
@@ -450,9 +469,9 @@
     card.hidden = true;
     scrim.hidden = true;
     pageEl.inert = false;
-    fab.inert = false;
+    bar.inert = false;
     pill.inert = false;
-    fab.setAttribute("aria-expanded", "false");
+    more.setAttribute("aria-expanded", "false");
     for (const el of chordEls) el.classList.remove("on");
     if (wasOpen && opener && opener !== document.body && opener.isConnected) {
       opener.focus({ preventScroll: true });
@@ -461,8 +480,33 @@
   };
   scrim.addEventListener("click", close);
   for (const x of document.querySelectorAll("[data-close]")) x.addEventListener("click", close);
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
-  fab.addEventListener("click", () => (panel.hidden ? open(panel) : close()));
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!sizes.hidden) {
+      // The size box first, and the focus back to Aa when it was in there.
+      const inside = $("size-box").contains(document.activeElement);
+      showSizes(false);
+      if (inside) sizeButton.focus({ preventScroll: true });
+      return;
+    }
+    close();
+  });
+  more.addEventListener("click", () => (panel.hidden ? open(panel) : close()));
+
+  // --- Aa: the text size, in a box beside the song -------------------------------------------------
+  // Not a dialog: the song stays in view and within reach, and the box closes on Escape, on a tap
+  // anywhere else, or when the focus leaves it.
+  function showSizes(on) {
+    sizes.hidden = !on;
+    sizeButton.setAttribute("aria-expanded", on ? "true" : "false");
+  }
+  sizeButton.addEventListener("click", () => showSizes(sizes.hidden));
+  document.addEventListener("pointerdown", (e) => {
+    if (!sizes.hidden && !(e.target instanceof Node && $("size-box").contains(e.target))) showSizes(false);
+  }, true);
+  $("size-box").addEventListener("focusout", (e) => {
+    if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) showSizes(false);
+  });
 
   const sheet = $("sheet");
   sheet.addEventListener("click", (e) => {
@@ -491,6 +535,8 @@
   $("capo-down").addEventListener("click", () => moveCapo(capoNow() - 1));
   $("capo-up").addEventListener("click", () => moveCapo(capoNow() + 1));
   $("reset-capo").addEventListener("click", () => moveCapo(sheetCapo));
+  $("t-down").addEventListener("click", () => step(state.t - 1));
+  $("t-up").addEventListener("click", () => step(state.t + 1));
   $("smaller").addEventListener("click", () => { state.fs = Math.max(FS.min, state.fs - FS.step); render(); });
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
@@ -501,7 +547,7 @@
 
   // --- scrolling by itself, hands on the guitar ----------------------------------------------------
   // Off, counting down (3 s, for your hands to get to the guitar; pressed again, it starts at
-  // once), running, or paused. While it is on, the pill takes the key button's place: − and +
+  // once), running, or paused. While it is on, the pill takes the bar's place: − and +
   // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it. A
   // finger on the page, the wheel, a key that scrolls, a scroll by hand or a card opening pauses
   // it: the page is yours to read until you press ▶.
@@ -513,7 +559,8 @@
   const LABELS = { counting: "Start now", running: "Pause", paused: "Resume" };
   const showScroll = (said) => {
     pill.hidden = scroll.state === "off";
-    fab.hidden = count === 0 || scroll.state !== "off";  // nothing to transpose, or the pill there
+    bar.hidden = scroll.state !== "off";  // the pill there
+    if (!bar.hidden) slide(false);
     pill.dataset.state = scroll.state;
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
     $("tick").textContent = scroll.state === "counting"
@@ -521,7 +568,6 @@
     if (said !== undefined) $("scroll-status").textContent = said;
   };
   const drawSpeed = () => {
-    $("speed").textContent = String(state.speed);
     $("pill-speed").textContent = String(state.speed);
   };
   const setSpeed = (n) => {
@@ -626,11 +672,12 @@
     scroll.state = "off";
     showScroll("");
     letScreenSleep();
-    if (mine) fab.focus({ preventScroll: true });
+    if (mine) $("scroll").focus({ preventScroll: true });
   };
 
   $("scroll").addEventListener("click", () => {
     close();
+    showSizes(false);
     countdown();
     go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
   });
@@ -653,6 +700,57 @@
     if (SCROLL_KEYS.indexOf(e.key) >= 0 || (e.key === " " && !control)) pauseScroll();
   });
 
+  // --- the bar: away as you read down the song, back when you want it -----------------------------
+  // It slides away as you scroll down, and comes back as you scroll up, at the top and the end of
+  // the song, on a tap on the page (not on one of its controls) or when the keyboard's focus comes to
+  // it. Only your own scrolling moves it: none before you first touch the page (the browser, or the
+  // songbook, putting you back where you were), and none just after a change of key or text size,
+  // when the browser keeps the line you were reading in place by scrolling. It stays while the size
+  // box or a sheet is open, and while one of its controls has the keyboard's focus, which would
+  // otherwise go out of sight.
+  const reveal = { y: window.scrollY, quiet: 0, touched: false };
+  function hush() {
+    if (doc.dataset.ready === "1") reveal.quiet = performance.now() + 400;
+  }
+  function slide(away) {
+    bar.classList.toggle("away", away);
+    if (away) showSizes(false);
+  }
+  const keyboardIn = (el) => {
+    try {
+      return Boolean(el.querySelector(":focus-visible"));
+    } catch (err) {  // a browser without :focus-visible: any focus counts
+      return el.contains(document.activeElement);
+    }
+  };
+  for (const kind of ["touchstart", "pointerdown", "wheel", "keydown"]) {
+    window.addEventListener(kind, () => { reveal.touched = true; }, { passive: true, capture: true });
+  }
+  window.addEventListener("scroll", () => {
+    const y = window.scrollY, dy = y - reveal.y;
+    if (y <= 0 || window.innerHeight + y >= document.documentElement.scrollHeight - 2) {
+      slide(false);
+      reveal.y = y;
+      return;
+    }
+    if (!reveal.touched || performance.now() < reveal.quiet || !sizes.hidden || !panel.hidden || !card.hidden
+        || keyboardIn(bar)) {
+      reveal.y = y;
+      return;
+    }
+    if (Math.abs(dy) < 8) return;  // a few pixels add up before they count
+    slide(dy > 0);
+    reveal.y = y;
+  }, { passive: true });
+  document.addEventListener("click", (e) => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (target && !target.closest("#bar, #pill, .sheet-ui, a, button, summary, input, [role=button]")) slide(false);
+  });
+  bar.addEventListener("focusin", () => slide(false));
+
+  // Nothing to transpose and no other setting for a sheet without chords: Aa and ▶ alone.
+  $("keys").hidden = count === 0;
+  more.hidden = count === 0;
   showScroll();
   render();
   if (hash.get("panel") === "1") open(panel);

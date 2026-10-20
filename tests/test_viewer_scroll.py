@@ -24,15 +24,15 @@ from caracole.viewer import build_viewer, viewer_csp
 LONG = "{title: Long Song}\n{artist: Synthetic}\n" + "".join(
     f"[G]Synthetic line [D]number {n} [Em]made up to [C]scroll by\n" for n in range(160))
 
-# What the pill shows: whether it and the key button are there, what its first button says and
+# What the pill shows: whether it and the bar are there, what its first button says and
 # shows (the countdown's ring and number, ❚❚ or ▶), the speed, and where the page is.
 LOOK = """(() => {
   const q = (s) => document.querySelector(s);
   const shown = (el) => Boolean(el) && el.getClientRects().length > 0;
   const go = q("#go");
-  return {pill: shown(q("#pill")), fab: shown(q("#fab")), go: go.getAttribute("aria-label"),
+  return {pill: shown(q("#pill")), bar: shown(q("#bar")), go: go.getAttribute("aria-label"),
           icons: [...go.children].filter(shown).map((el) => el.getAttribute("class")),
-          tick: q("#tick").textContent, speed: q("#pill-speed").textContent, panelSpeed: q("#speed").textContent,
+          tick: q("#tick").textContent, speed: q("#pill-speed").textContent,
           y: Math.round(scrollY), hash: location.hash, focus: document.activeElement ? document.activeElement.id : "",
           status: q("#scroll-status").textContent, inert: q("#pill").inert};
 })()"""
@@ -104,8 +104,7 @@ def look(b: Browser) -> dict:
 
 
 def start_now(b: Browser) -> None:
-    """Start from the settings, then press again: no countdown."""
-    b.click("#fab")
+    """Start from the bar, then press again: no countdown."""
     b.click("#scroll")
     b.click("#go")
     assert look(b)["go"] == "Pause"
@@ -149,12 +148,9 @@ def test_the_pill_is_on_the_page_hidden_until_scrolling_starts():
     assert '<output id="pill-speed">6</output>' in inside
     # A live region outside the pill, there before it shows, says when it starts and stops.
     assert re.search(r'<p class="vh" id="scroll-status" role="status"></p>', html)
-    # The settings start it, at a speed set with − and +: no slider without a number.
-    row = re.search(r'<div class="row" id="scroll-row">(.*?)</div>', html, re.S).group(1)
-    assert '<button type="button" class="chip" id="scroll">Start</button>' in row
-    assert re.search(r'id="slower"[^>]*aria-label="Slower"', row) and re.search(r'id="faster"[^>]*aria-label="Faster"', row)
-    assert '<output id="speed">6</output>' in row
-    assert 'type="range"' not in html
+    # ▶ in the bar starts it; the pill's − and + set the speed, a number: no slider without one.
+    assert re.search(r'<button type="button" class="tool play" id="scroll" aria-label="Scroll by itself">', html)
+    assert 'id="speed"' not in html and 'type="range"' not in html
 
 
 # --- what the page keeps ---------------------------------------------------------------------------
@@ -181,26 +177,28 @@ def test_the_address_and_the_browser_keep_the_scroll_speed(tmp_path):
     # the browser's storage for each song where it has some.
     hashes, kept = run_in_page(build_viewer(LONG), tmp_path, """
       const seen = [location.hash];
-      q("#fab").click();
-      q("#faster").click();
-      q("#faster").click();
-      seen.push(location.hash, q("#speed").textContent, q("#pill-speed").textContent);
+      q("#scroll").click();
+      q("#pill-faster").click();
+      q("#pill-faster").click();
+      q("#pill-end").click();
+      seen.push(location.hash, q("#pill-speed").textContent);
+      q("#size").click();
       q("#bigger").click();
       seen.push(location.hash);
       const saved = JSON.parse(localStorage.getItem("caracole-viewer:" + location.pathname));
       out = [seen, [saved.speed, saved.fs]];
     """)
-    assert hashes == ["", "#speed=8", "8", "8", "#speed=8&fs=20"]
+    assert hashes == ["", "#speed=8", "8", "#speed=8&fs=20"]
     assert kept == [8, 20]
 
     read = run_in_page(build_viewer(LONG), tmp_path, """
-      out = [q("#speed").textContent, q("#pill-speed").textContent, location.hash];
+      out = [q("#pill-speed").textContent, location.hash];
     """, "#t=1&speed=11")
-    assert read == ["11", "11", "#t=1&speed=11"]
+    assert read == ["11", "#t=1&speed=11"]
 
     # Nothing the page can't do: a speed out of range is the page's own.
     for fragment in ("#speed=0", "#speed=31", "#speed=fast"):
-        odd = run_in_page(build_viewer(LONG), tmp_path, 'out = [q("#speed").textContent, location.hash];', fragment)
+        odd = run_in_page(build_viewer(LONG), tmp_path, 'out = [q("#pill-speed").textContent, location.hash];', fragment)
         assert odd == ["6", ""], fragment
 
 
@@ -228,7 +226,7 @@ def test_served_in_a_sandbox_a_reload_keeps_the_speed(tmp_path):
         server.shutdown()
         server.server_close()
     assert 'data-ready="1"' in dom  # its script ran, with no storage
-    assert '<output id="speed">9</output>' in dom and '<output id="pill-speed">9</output>' in dom
+    assert '<output id="pill-speed">9</output>' in dom
     assert re.search(r'<html[^>]*style="--fs: 22px;"', dom)  # and the text size beside it
 
 
@@ -239,7 +237,6 @@ def test_served_in_a_sandbox_a_reload_keeps_the_speed(tmp_path):
 def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_path):
     with viewer(tmp_path) as b:
         b.js(RECORD)
-        b.click("#fab")
         b.click("#scroll")
         pressed = b.js("performance.now()")
         counting = look(b)
@@ -253,16 +250,15 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
 
         b.click("#pill-end")
         b.js("moves.length = 0")
-        b.click("#fab")
         b.click("#scroll")
         b.click("#go")  # pressed again: no waiting
         again = b.js("performance.now()")
         assert b.wait("moves.length > 0", 1)
         soon = b.js("moves[0][0]") - again
 
-    # The settings close and the pill takes the key button's place, counting down on its first
-    # button, which has the focus: press it again to start at once.
-    assert counting["pill"] and not counting["fab"] and counting["focus"] == "go"
+    # The pill takes the bar's place, counting down on its first button, which has the focus:
+    # press it again to start at once.
+    assert counting["pill"] and not counting["bar"] and counting["focus"] == "go"
     assert counting["go"] == "Start now" and counting["tick"] == "3" and counting["icons"] == ["ring", "tick"]
     assert counting["status"] == "Scrolling in 3 seconds" and counting["y"] == 0
     assert ring == "drain"  # the ring empties as the seconds pass
@@ -305,14 +301,14 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
         assert b.wait("document.documentElement.dataset.ready === '1'")
         reloaded = look(b)
 
-    assert faster["go"] == "Pause" and faster["speed"] == faster["panelSpeed"] == "8"
+    assert faster["go"] == "Pause" and faster["speed"] == "8"
     assert faster["hash"] == "#speed=8"
     assert paused["go"] == "Resume" and paused["icons"] == ["i-play"] and paused["pill"]
     assert paused["status"] == "Paused" and still == paused["y"]
     assert resumed["go"] == "Start now" and resumed["tick"] == "3"  # a countdown again, to get your hands back
     assert card["go"] == "Resume" and card["inert"]
     assert after_card["pill"] and not after_card["inert"] and after_card["go"] == "Resume"
-    assert not ended["pill"] and ended["fab"] and ended["focus"] == "fab" and ended_still
+    assert not ended["pill"] and ended["bar"] and ended["focus"] == "scroll" and ended_still
     assert ended["status"] == ""
     assert reloaded["speed"] == "8" and not reloaded["pill"]  # kept; it doesn't start by itself
 
@@ -377,7 +373,6 @@ def test_it_scrolls_to_rounded_targets_so_no_step_is_lost_at_a_zoom(tmp_path):
 def test_the_screen_stays_on_while_it_scrolls(tmp_path):
     with viewer(tmp_path) as b:
         b.js(WAKE_LOCK)
-        b.click("#fab")
         b.click("#scroll")
         log = [list(b.js("wakeLog"))]  # counting down
         b.click("#go")
@@ -412,7 +407,6 @@ def test_the_pill_fits_a_phone_and_a_desktop_and_holds_still(tmp_path):
         && document.documentElement.scrollWidth <= innerWidth; })()"""
     for width, height, mobile in ((390, 844, True), (1280, 800, False)):
         with viewer(tmp_path, width=width, height=height, mobile=mobile) as b:
-            b.click("#fab")
             b.click("#scroll")
             boxes = {tuple(b.js(box))}  # counting down
             b.click("#go")
@@ -431,7 +425,6 @@ def test_the_pill_fits_a_phone_and_a_desktop_and_holds_still(tmp_path):
 @in_chromium
 def test_with_reduced_motion_the_countdown_does_not_move_but_scrolling_still_runs(tmp_path):
     with viewer(tmp_path, reduced=True) as b:
-        b.click("#fab")
         b.click("#scroll")
         counting = look(b)
         time.sleep(1.2)
@@ -447,8 +440,6 @@ def test_with_reduced_motion_the_countdown_does_not_move_but_scrolling_still_run
 @in_chromium
 def test_the_pill_answers_the_keyboard(tmp_path):
     with viewer(tmp_path, width=1280, height=800, mobile=False) as b:
-        b.js("document.querySelector('#fab').focus()")
-        b.press("Enter")
         b.js("document.querySelector('#scroll').focus()")
         b.press("Enter")
         counting = look(b)
@@ -464,4 +455,4 @@ def test_the_pill_answers_the_keyboard(tmp_path):
     assert counting["focus"] == "go" and counting["go"] == "Start now"
     assert running["go"] == "Pause" and running["focus"] == "go"
     assert slower["focus"] == "pill-slower" and slower["speed"] == "5" and slower["go"] == "Pause"
-    assert not ended["pill"] and ended["focus"] == "fab"
+    assert not ended["pill"] and ended["focus"] == "scroll"

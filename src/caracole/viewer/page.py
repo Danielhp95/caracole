@@ -390,10 +390,31 @@ def _words(text: str) -> list[str]:
     return words
 
 
-# The settings sheet and the chord card the script fills in; hidden until it runs. The pill steers
-# the scroll once it starts, in the key button's place: its first button counts down (a ring and
-# the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader.
-_CONTROLS = """<button type="button" class="fab" id="fab" hidden aria-controls="panel" aria-expanded="false">Key</button>
+# The bar at the foot of the page, the settings sheet and the chord card the script fills in; hidden
+# until it runs. The bar, in the order a keyboard reaches it: the song a semitone down or up, its key
+# in short between them (for the eye; whole for a screen reader); Aa, the text size in a box beside
+# it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
+# in the bar's place: its first button counts down (a ring and the seconds), pauses (❚❚) and resumes
+# (▶); the status line says so to a screen reader.
+_CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
+<div class="bar-in">
+<span class="keys" id="keys" role="group" aria-label="Transpose">
+<button type="button" class="step" id="t-down" aria-label="Transpose down a semitone">−</button>
+<output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
+<button type="button" class="step" id="t-up" aria-label="Transpose up a semitone">+</button>
+</span>
+<span class="size-box" id="size-box">
+<button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes">Aa</button>
+<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>
+<button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>
+<output id="fs-now">18 px</output>
+<button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
+</span>
+</span>
+<button type="button" class="tool play" id="scroll" aria-label="Scroll by itself"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg></button>
+<button type="button" class="tool" id="more" aria-label="More settings" aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.5" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13.5" cy="8" r="1.6"/></svg></button>
+</div>
+</div>
 <div class="pill" id="pill" role="group" aria-label="Scrolling by itself" hidden>
 <button type="button" class="go" id="go" aria-label="Pause"><svg class="ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="track" cx="22" cy="22" r="19"/><circle class="bar" cx="22" cy="22" r="19" pathLength="100"/></svg><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.6" height="12" rx="1"/><rect x="9.4" y="2" width="3.6" height="12" rx="1"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg><span class="tick" id="tick"></span></button>
 <button type="button" class="step" id="pill-slower" data-speed="-1" aria-label="Slower">−</button>
@@ -417,16 +438,8 @@ _CONTROLS = """<button type="button" class="fab" id="fab" hidden aria-controls="
 <span class="chips" id="capo"></span></div>
 <div class="row" id="mode-row" hidden><span class="lab">Mode</span><span class="chips" id="modes"></span>
 <p class="hint" id="mode-hint"></p></div>
-<div class="row"><span class="lab">Text</span>
-<span class="stepper"><button type="button" id="smaller" aria-label="Smaller text">A−</button>
-<button type="button" id="bigger" aria-label="Bigger text">A+</button></span></div>
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
-<div class="row" id="scroll-row"><span class="lab">Scroll</span>
-<button type="button" class="chip" id="scroll">Start</button>
-<span class="stepper"><button type="button" id="slower" data-speed="-1" aria-label="Slower">−</button>
-<output id="speed">6</output><button type="button" id="faster" data-speed="1" aria-label="Faster">+</button></span>
-<p class="hint">It counts down 3 seconds first: press the count to start at once. − and + change the speed as it scrolls; a touch pauses it.</p></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-modal="true" aria-labelledby="card-name">

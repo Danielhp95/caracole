@@ -40,7 +40,9 @@ body {
 }
 a { color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.page { max-width: 760px; margin: 0 auto; padding: 0 16px calc(96px + env(safe-area-inset-bottom)); }
+/* At the foot, room for the bar (53 px and the screen's safe area) and a little more: the song's
+   last lines, and the footer, end above it. */
+.page { max-width: 760px; margin: 0 auto; padding: 0 16px calc(72px + env(safe-area-inset-bottom)); }
 
 /* The title block. */
 .head { padding: 6px 0 4px; }
@@ -109,13 +111,49 @@ a { color: inherit; }
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600;
   text-decoration: none; }
 
-/* The key button, the settings sheet and the chord card: out of the way until wanted. */
-.fab { position: fixed; z-index: 5; right: max(16px, env(safe-area-inset-right));
-  bottom: calc(16px + env(safe-area-inset-bottom)); min-height: 46px; max-width: calc(100% - 32px); padding: 8px 18px;
-  border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit;
-  font-weight: 650; line-height: 1.25; font-variant-numeric: tabular-nums; box-shadow: 0 2px 12px rgb(0 0 0 / .14);
-  cursor: pointer; }
-/* Scrolling by itself: the pill that steers it, in the key button's place while it is on. Its
+/* The bar at the foot: the key between − and +, Aa, ▶ and ⋯, on a background of its own, so it
+   never sits over the words. It slides away as you scroll down (.away) and back as you scroll up;
+   the pill takes its place while the song scrolls by itself. */
+.bar { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0;
+  padding: 4px max(8px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  border-top: 1px solid var(--border); background: var(--surface); color: var(--text);
+  box-shadow: 0 -2px 12px rgb(0 0 0 / .06); transition: transform .2s ease; }
+.bar.away { transform: translateY(calc(100% + 14px)); }  /* its shadow out of sight too */
+@media (prefers-reduced-motion: reduce) { .bar { transition: none; } }
+.bar-in { display: flex; align-items: center; gap: 4px; max-width: 728px; margin: 0 auto; }
+.bar button { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0;
+  border-radius: 12px; background: none; color: inherit; font: inherit; line-height: 1; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; }
+.bar svg { width: 16px; height: 16px; fill: currentColor; }
+/* − Em +: the song a semitone down or up, its key in short between them; the rest sit at the end. */
+.keys { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; max-width: 240px;
+  border-radius: 12px; background: var(--raised); }
+.keys .step { font-size: 1.35rem; }
+.now { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 2px;
+  text-align: center; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.now .k, .now .d { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now .k { font-weight: 700; }
+.now .d { color: var(--muted); font-size: .72rem; }
+.now .d:empty { display: none; }
+.tool { font-weight: 650; }
+.bar .play { border-radius: 50%; background: var(--accent); color: var(--on-accent); }
+/* Aa: the text size in a small box over the bar, beside the song (nothing behind it is dimmed). */
+.size-box { position: relative; flex: none; margin-left: auto; }  /* Aa, ▶ and ⋯ at the end, keys or none */
+.bar #size[aria-expanded="true"] { background: var(--raised); }
+.sizes { position: absolute; z-index: 1; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface); box-shadow: 0 4px 18px rgb(0 0 0 / .16); white-space: nowrap; }
+.sizes output { min-width: 4.2em; text-align: center; font-size: .9rem; font-weight: 650;
+  font-variant-numeric: tabular-nums; }
+.sizes button[aria-disabled="true"] { opacity: .35; cursor: default; }
+/* Hover only where a pointer hovers: on a phone it would stay on the last button tapped. */
+@media (hover: hover) {
+  .bar button:hover { background: var(--raised); }
+  .keys .step:hover { background: var(--border); }
+  .bar .play:hover { background: var(--accent); }
+  .sizes button[aria-disabled="true"]:hover { background: none; }
+}
+/* Scrolling by itself: the pill that steers it, in the bar's place while it is on. Its
    first button counts down (a ring that empties, and the seconds), then shows ❚❚, or ▶ when paused;
    every state is the same size, so nothing moves under a thumb. */
 .pill { position: fixed; z-index: 5; right: max(16px, env(safe-area-inset-right));
@@ -201,7 +239,7 @@ a { color: inherit; }
   .sheet { columns: 2 28em; column-gap: 56px; }
 }
 @media print {
-  .fab, .pill, .scrim, .sheet-ui, .back, .strip, .foot, .noscript { display: none !important; }
+  .bar, .pill, .scrim, .sheet-ui, .back, .strip, .foot, .noscript { display: none !important; }
   body { background: #fff; color: #000; }
   .page { max-width: none; padding: 0; }
   .c { color: #b4441e; }
