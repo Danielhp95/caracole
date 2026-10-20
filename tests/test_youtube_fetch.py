@@ -305,6 +305,39 @@ def test_a_purchase_takes_the_youtube_audios_place(conn, ycfg, fake):
     assert yf.songs_for_youtube(conn, ycfg, Overrides(), NOW) == []
 
 
+def test_audio_gone_from_the_cache_is_taken_again_until_its_chords_are_done(conn, ycfg, fake):
+    import shutil
+
+    song = to_buy(conn)
+    creep_results(fake)
+    run(conn, ycfg)
+    shutil.rmtree(ycfg.cache_dir / "youtube")  # the cache folder emptied; Music/ has nothing to scan
+    before = len(fake.argvs())
+    run(conn, ycfg)
+    assert [a[-1] for a in fake.argvs()[before:]] == [watch_url(TOPIC)]  # the same pick, and no search
+    audio = Path(get_song(conn, song.id).audio_path)
+    assert audio.read_text() == "the topic upload"
+    auto_sheet(conn, ycfg, get_song(conn, song.id))
+    audio.unlink()
+    before = len(fake.argvs())
+    run(conn, ycfg)
+    assert len(fake.argvs()) == before  # its chords are done: its audio isn't needed again
+    after = get_song(conn, song.id)
+    assert after.audio_path is None and after.status == "found"
+    assert kv_get_json(conn, f"youtube:{song.id}")["audio"] is None
+
+
+def test_audio_no_song_or_record_names_goes(conn, ycfg, fake):
+    song = to_buy(conn)
+    creep_results(fake)
+    run(conn, ycfg)
+    kept = Path(get_song(conn, song.id).audio_path)
+    stray = ycfg.cache_dir / "youtube" / f"{song.id + 1}-{OTHER}.m4a"  # a song merged into another took its record
+    stray.write_bytes(b"left over")
+    run(conn, ycfg)
+    assert kept.is_file() and not stray.exists()
+
+
 # --- what the to-do page and index.html show -----------------------------------------------------
 
 

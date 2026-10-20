@@ -166,6 +166,22 @@ def test_one_song_by_hand(tmp_path, ntfy, fake, conn):
     assert f"Radiohead - Creep already has the audio of https://www.youtube.com/watch?v={TOPIC}" in again.output
 
 
+def test_a_song_whose_audio_is_gone_from_the_cache_gets_it_again(tmp_path, ntfy, fake, conn):
+    import shutil
+
+    song = to_buy(conn)
+    creep(fake)
+    config = write_config(tmp_path, fake)
+    assert invoke(config).exit_code == 0
+    for args in (("--song", "Radiohead - Creep"), ()):
+        shutil.rmtree(tmp_path / "cache" / "youtube")
+        result = invoke(config, *args)
+        assert result.exit_code == 0, result.output
+        assert "Radiohead - Creep: downloaded Creep (Radiohead - Topic)" in result.output
+        assert Path(get_song(conn, song.id).audio_path).read_text() == "topic"
+    assert [a[-1] for a in fake.argvs()].count(f"https://www.youtube.com/watch?v={TOPIC}") == 3
+
+
 @pytest.mark.parametrize("display,said", [
     ("Nobody - Nothing", 'No song "Nobody - Nothing" in the library'),
     ("Creep", 'expected "Artist - Title"'),

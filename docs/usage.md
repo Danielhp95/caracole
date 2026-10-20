@@ -1411,8 +1411,9 @@ The audio caracole takes from YouTube is not in the library: it stays in the
 cache folder, `cache_dir/youtube/<song id>-<video id>.m4a`, private and out of
 Syncthing's way, a few MB a song. caracole deletes a song's file there once a
 purchase or a human sheet takes its place, or `"none"` under `[youtube]` turns
-YouTube down for it; deleting the folder yourself costs only downloads, and
-only for songs that have no auto sheet yet.
+YouTube down for it, and any file there no song names; deleting the folder
+yourself costs only downloads, and only for songs that have no auto sheet yet:
+the next run, or `caracole youtube`, downloads their videos again.
 
 Folder names keep their accents and scripts, but never contain a path
 separator or a character file systems reserve: `AC/DC` becomes `AC-DC`.

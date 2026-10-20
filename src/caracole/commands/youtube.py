@@ -100,9 +100,9 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
                 fail(f"--url: {e}", 2)
         overrides = load_ovr(cfg)
         now = utcnow()
+        tidy(conn, cfg, overrides)  # lets go of audio no song needs, and of files gone from the cache
         song = _one_song(conn, cfg, display, overrides) if display else None
         if none and song is not None:
-            tidy(conn, cfg, overrides)  # lets go of the audio it has
             typer.echo(f"caracole won't take {song.display}'s audio from YouTube (\"none\" under [youtube]).")
             write_pages(conn, cfg, overrides, utcnow())
             return
