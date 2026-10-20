@@ -2436,8 +2436,12 @@ _SELECT_SCRIPT = r"""
     error.textContent = "";
     paintAll();
   };
-  // A box on each card, as the page's script puts them in the list (it keeps each card it made).
+  // A box on each card, as the page's script puts them in the list (it keeps each card it made), once
+  // Select is pressed: until then a card holds nothing to tick (the file's sends nothing, and a review's
+  // picker is the card's only choice).
+  const selecting = () => document.body.classList.contains("selecting");
   const decorate = () => {
+    if (!selecting()) return;
     for (const card of list.querySelectorAll("[data-id]")) {
       const id = card.dataset.id;
       if (!songs.has(id)) continue;
@@ -2457,15 +2461,15 @@ _SELECT_SCRIPT = r"""
     }
   };
   new MutationObserver(decorate).observe(list, { childList: true, subtree: true });
-  decorate();
 
   const setMode = (on) => {
     document.body.classList.toggle("selecting", on);
     toggle.setAttribute("aria-pressed", on ? "true" : "false");  // its name stays "Select": pressed or not
     bar.hidden = !on;
+    decorate();
     paintAll();
   };
-  toggle.addEventListener("click", () => setMode(!document.body.classList.contains("selecting")));
+  toggle.addEventListener("click", () => setMode(!selecting()));
   clear.addEventListener("click", () => {
     picked.length = 0;
     paintAll();
