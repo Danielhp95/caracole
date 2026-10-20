@@ -251,13 +251,19 @@ def _write_pages(conn: sqlite3.Connection, cfg: Config) -> None:
 
 
 def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None) -> None:
-    """Add the song with ``add_song``, then say in a line what was done and what the library has of it.
+    """Add the song with ``add_song``, then say what was done (``say_added``)."""
+    say_added(cfg, add_song(cfg, artist, title, album, duration_ms), album, duration_ms)
 
-    -v adds its line in wanted.txt, where the file is, and the song's key.
+
+def say_added(cfg: Config, added: AddedSong, album: str | None = None, duration_ms: int | None = None) -> None:
+    """Say in a line what ``add_song`` did and what the library has of the song: ``caracole add``'s
+    words, and ``caracole search --add``'s.
+
+    -v adds its line in wanted.txt, where the file is, and the song's key. ``album``
+    and ``duration_ms`` are what was asked for, which a listed line may lack.
     """
     from caracole.wanted import format_line
 
-    added = add_song(cfg, artist, title, album, duration_ms)
     line, path = added.line, cfg.wanted_file
     name = f"{line.artist} - {line.title}"
     done = f"{name} is in wanted.txt already" if added.listed else f"Added {name} to wanted.txt"

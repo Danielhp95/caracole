@@ -1032,7 +1032,8 @@ QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
 compares Chinese as pinyin. `--limit N` (or `-n N`) shows up to N hits from
 each place, 10 by default. `--add N` adds UG hit N to wanted.txt and syncs it,
-the same way `caracole add` does. N can be at most `--limit`, so only a hit the
+the same way `caracole add` does, and says so in the same one line (`-v` adds
+its line in wanted.txt and the song's key). N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another
 name is left alone. When nothing matches well, or the query has accented or
 non-Latin letters, the command also explains bare ids and prints the

@@ -376,6 +376,22 @@ def test_cli_add_appends_the_hit_to_wanted_and_syncs(tmp_path):
     assert "Stone Temple Pilots - Creep" in result.output and "wanted.txt" in result.output
 
 
+def test_cli_add_says_in_one_line_what_it_did_as_caracole_add_does(tmp_path):
+    seed(tmp_path)
+    result = run(tmp_path, "search", "creep", "--add", "2")
+    assert result.exit_code == 0, result.output
+    assert result.output == (
+        "Added Stone Temple Pilots - Creep to wanted.txt; the next `caracole run` looks for it.\n")
+    again = run(tmp_path, "-v", "search", "creep", "--add", "2")
+    assert again.exit_code == 0, again.output
+    assert ("Stone Temple Pilots - Creep is in wanted.txt already; the library has it, with no sheet yet.\n"
+            in again.output)
+    path = tmp_path / "lib" / "wanted.txt"
+    assert re.search(rf"wanted.txt line \d+ \({re.escape(str(path))}\): Stone Temple Pilots - Creep\n",
+                     again.output)  # at -v, where it is
+    assert "Song stone-temple-pilots/creep: already known, wanted" in again.output
+
+
 def test_cli_add_twice_keeps_one_line(tmp_path):
     seed(tmp_path)
     run(tmp_path, "search", "creep", "--add", "2")
@@ -429,7 +445,7 @@ def test_cli_add_names_the_hits_own_song_before_a_misspelled_review(tmp_path):
     result = run(tmp_path, "search", "creep", "--add", "1")
     assert result.exit_code == 0, result.output
     assert "Radio Head - Crep" not in result.output
-    assert "Radiohead - Creep is already in" in result.output
+    assert "Radiohead - Creep is in wanted.txt already" in result.output
 
 
 def test_cli_add_keeps_the_line_when_the_database_cannot_be_updated(tmp_path, monkeypatch):
@@ -443,7 +459,7 @@ def test_cli_add_keeps_the_line_when_the_database_cannot_be_updated(tmp_path, mo
     assert result.exit_code == 0, result.output
     wanted = (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
     assert wanted.endswith("\nStone Temple Pilots - Creep\n")  # the file is the source of truth
-    assert "The database couldn't be updated (database is locked)" in result.output
+    assert "the database couldn't be updated (database is locked)" in result.output
     assert "`caracole sync`" in result.output
 
 
