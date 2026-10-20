@@ -37,6 +37,8 @@ packages = ["src/caracole"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra"
+# tmp_path is in memory (tests/conftest.py): keep only the folders of tests that failed.
+tmp_path_retention_policy = "failed"
 filterwarnings = ["ignore::DeprecationWarning:pypinyin.*"]
 markers = [
   "chordpro: needs the chordpro binary on PATH",

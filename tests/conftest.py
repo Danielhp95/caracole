@@ -1,10 +1,29 @@
-"""Shared fixtures: a fresh database, a config rooted in tmp_path, and fake HTTP."""
+"""Shared fixtures: a fresh database, a config rooted in tmp_path, and fake HTTP. And how the
+suite runs: tmp_path in memory."""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+
+# tmp_path goes to a tmpfs unless --basetemp or PYTEST_DEBUG_TEMPROOT says otherwise. caracole
+# fsyncs every file it keeps and sqlite every commit: a few milliseconds each on a disk, nothing
+# in memory, and the suite runs nearly three times faster. pyproject.toml keeps only the folders
+# of tests that failed.
+MEMORY = Path("/dev/shm")
+
+
+def pytest_configure(config):
+    if config.option.basetemp or os.environ.get("PYTEST_DEBUG_TEMPROOT"):
+        return
+    if MEMORY.is_dir() and os.access(MEMORY, os.W_OK | os.X_OK):
+        # Read when the first tmp_path is made; pytest-xdist's workers make theirs in this one's.
+        os.environ["PYTEST_DEBUG_TEMPROOT"] = str(MEMORY)
+
+
+# --- fixtures ----------------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
@@ -17,11 +36,38 @@ def _forget_the_logs_secrets():
     logs.forget_secrets()
 
 
-@pytest.fixture
-def conn(tmp_path: Path):
+_migrated: dict[tuple, bytes] = {}
+
+
+def migrated_database() -> bytes:
+    """A new database's bytes, made once per process by db.connect for the migrations it has now
+    (a test may have patched them)."""
     from caracole import db
 
-    c = db.connect(tmp_path / "state" / "caracole.sqlite")
+    key = (db.SCHEMA_VERSION, tuple(sorted(db._MIGRATIONS.items())))
+    if key not in _migrated:
+        import tempfile
+
+        with tempfile.TemporaryDirectory(dir=os.environ.get("PYTEST_DEBUG_TEMPROOT")) as tmp:
+            path = Path(tmp) / "caracole.sqlite"
+            db.connect(path).close()  # the last connection to close folds the WAL into the file
+            _migrated[key] = path.read_bytes()
+    return _migrated[key]
+
+
+@pytest.fixture
+def conn(tmp_path: Path):
+    """A connection to tmp_path/state/caracole.sqlite: a copy of a database db.connect made, so
+    the migrations run once per process rather than once per test."""
+    from caracole import db
+
+    path = tmp_path / "state" / "caracole.sqlite"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)  # sqlite's own mode
+        with open(fd, "wb") as f:
+            f.write(migrated_database())
+    c = db.connect(path)
     yield c
     c.close()
 
@@ -62,6 +108,4 @@ def add_song(conn, artist="Soda Stereo", title="De Música Ligera", *, added_at=
 def subprocess_pythonpath(src) -> str:
     """PYTHONPATH for a child Python: ``src`` first, then the inherited path (inside a
     Nix build the dependencies arrive on PYTHONPATH)."""
-    import os
-
     return os.pathsep.join(p for p in (str(src), os.environ.get("PYTHONPATH")) if p)
