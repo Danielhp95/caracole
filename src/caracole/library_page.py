@@ -2285,9 +2285,9 @@ _SONGBOOK_STYLE = """
     max(16px, env(safe-area-inset-left)); }
 .pickbar-in { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: 1320px; margin: 0 auto; }
 .pick-count { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
-.pick-form { display: flex; flex: 1 1 340px; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
-.pick-form label { display: flex; flex: 1 1 150px; min-width: 0; }
-.pick-form input, .pick-form select { width: 100%; min-width: 0; height: 44px; padding: 0 10px; border-radius: 10px;
+.pickbar-form { display: flex; flex: 1 1 340px; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.pickbar-form label { display: flex; flex: 1 1 150px; min-width: 0; }
+.pickbar-form input, .pickbar-form select { width: 100%; min-width: 0; height: 44px; padding: 0 10px; border-radius: 10px;
   border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
 .pick-error { flex-basis: 100%; margin: 0; color: var(--failed); font-size: .85rem; }
 .pick-error:empty { display: none; }
@@ -2353,7 +2353,7 @@ _SELECT_SCRIPT = r"""
   const inner = el("div", "pickbar-in");
   const count = el("p", "pick-count");
   count.setAttribute("aria-live", "polite");
-  const form = el("form", "pick-form");
+  const form = el("form", "pickbar-form");
   const into = el("select", "pick-into");
   into.setAttribute("aria-label", "Into which songbook");
   into.appendChild(new Option("New songbook", ""));

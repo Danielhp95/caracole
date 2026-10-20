@@ -193,7 +193,7 @@ def test_select_mode_shows_the_command_to_make_the_songbook_on_the_page_on_disk(
       const numbers = ["Hysteria", "Creep", "De Música Ligera"].map((t) => card(t).querySelector(".pick-n").textContent);
       const count = q(".pick-count").textContent;
       q(".pick-name").value = "  Beach  nights ";
-      q(".pick-form button[type=submit]").click();
+      q(".pickbar-form button[type=submit]").click();
       out = {before, numbers, count, command: q(".pick-command code").textContent, shown: !q(".pick-command").hidden};
     """)
     assert out["before"] == [False, 3]  # the bar, and a box on each card
@@ -212,7 +212,7 @@ def test_the_command_to_copy_quotes_each_word_so_no_shell_expands_it(conn, cfg, 
       q(".pick-toggle").click();
       qa("#list article")[0].querySelector(".pick input").click();
       q(".pick-name").value = "It's $5!";
-      q(".pick-form button[type=submit]").click();
+      q(".pickbar-form button[type=submit]").click();
       out = q(".pick-command code").textContent;
     """)
     assert out == "caracole songbook make 'It'\\''s $5!' 'Rock'\\''n Band - Wow!Wow $HOME `id` \"x\"'"
@@ -228,8 +228,8 @@ def test_select_mode_can_add_to_a_songbook_there_is(library, tmp_path):
       into.value = "Campfire";
       into.dispatchEvent(new Event("change"));
       const nameShown = !q(".pick-name").closest("label").hidden;
-      const label = q(".pick-form button[type=submit]").textContent;
-      q(".pick-form button[type=submit]").click();
+      const label = q(".pickbar-form button[type=submit]").textContent;
+      q(".pickbar-form button[type=submit]").click();
       out = {nameShown, label, command: q(".pick-command code").textContent};
     """)
     assert out == {"nameShown": False, "label": "Add to Campfire",
@@ -242,7 +242,7 @@ def test_select_mode_posts_the_songbook_on_the_served_page(library, tmp_path):
     html = page(conn, cfg, WebControls(csrf="tok"))
     out = run_in_page(html, cfg, tmp_path, PICK + """
       pick("De Música Ligera"); pick("Creep");
-      const form = q(".pick-form");
+      const form = q(".pickbar-form");
       let sent = null;
       form.addEventListener("submit", (e) => {
         sent = {action: form.getAttribute("action"), method: form.method,
@@ -250,7 +250,7 @@ def test_select_mode_posts_the_songbook_on_the_served_page(library, tmp_path):
         e.preventDefault();
       });
       q(".pick-name").value = "Campfire 2";
-      q(".pick-form button[type=submit]").click();
+      q(".pickbar-form button[type=submit]").click();
       out = sent;
     """)
     ids = {s["display"]: s["id"] for s in data_of(html)["songs"]}
@@ -283,10 +283,10 @@ def test_select_mode_says_its_state_and_each_picks_place_to_a_screen_reader(libr
 def test_select_mode_needs_a_name_and_a_song(library, tmp_path):
     conn, cfg = library
     out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + """
-      const disabled = q(".pick-form button[type=submit]").disabled;
+      const disabled = q(".pickbar-form button[type=submit]").disabled;
       pick("Creep");
       q(".pick-name").value = "   ";
-      q(".pick-form button[type=submit]").click();
+      q(".pickbar-form button[type=submit]").click();
       out = {disabled, shown: !q(".pick-command").hidden, said: q(".pick-error").textContent};
     """)
     assert out["disabled"] and not out["shown"] and "name" in out["said"]
@@ -314,3 +314,28 @@ def test_picks_survive_a_search_and_select_mode_works_on_a_phone(library, tmp_pa
     assert out["target"][0] >= 44 and out["target"][1] >= 44  # a thumb's target
     assert out["scroll"] <= out["page"]  # nothing wider than the phone
     assert out["bar"][0] == 0 and out["bar"][1] == out["page"] and out["bar"][2] == out["height"]
+
+
+@in_chromium
+def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_path):
+    # The Select bar's form and a review's picker are two forms of the page: neither's style is the other's.
+    from caracole.songs import update_song
+
+    conn, cfg = library
+    crep = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, crep.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 89.4, "step": "fuzzy_artist"}])
+    out = run_in_page(page(conn, cfg, WebControls(csrf="tok")), cfg, tmp_path, """
+      const card = qa("#list article").find((a) => a.querySelector("h2").textContent === "Crep");
+      card.querySelector("details.picker").open = true;
+      const form = card.querySelector("details.picker form");
+      const radio = form.querySelector("input[type=radio]");
+      const box = form.querySelector("input[type=checkbox][name=fetch]");
+      q(".pick-toggle").click();
+      const bar = q(".pickbar form");
+      out = {form: getComputedStyle(form).display, radio: Math.round(radio.getBoundingClientRect().width),
+             box: Math.round(box.getBoundingClientRect().width), bar: getComputedStyle(bar).display,
+             name: Math.round(bar.querySelector("input[type=text]").getBoundingClientRect().height)};
+    """, size="390,844")
+    assert out["form"] == "grid" and out["radio"] < 40 and out["box"] < 40  # the picker's own look
+    assert out["bar"] == "flex" and out["name"] == 44  # and the bar's
