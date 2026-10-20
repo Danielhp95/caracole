@@ -189,6 +189,21 @@ def test_covers_live_karaoke_lessons_and_slowed_versions_lose_to_the_song_and_wi
     assert pick(CREEP, worse) == worse.id  # better than nothing
 
 
+def test_karaoke_in_the_style_of_the_artist_or_on_a_karaoke_channel_is_another_singers_version():
+    lyrics = v("lyrics", "Radiohead - Creep (Lyrics)", "a lyrics channel")
+    for karaoke in (v("style", "Creep - in the style of Radiohead", "KaraFun"),
+                    v("famous", "Creep (Made Famous by Radiohead)", "Sing King"),
+                    v("channel", "Radiohead - Creep", "Sing King"),
+                    v("karaoke", "Radiohead - Creep", "Zoom Karaoke Official"),
+                    v("nightcore", "Radiohead - Creep", "Nightcore Hits")):
+        assert pick(CREEP, karaoke, lyrics) == lyrics.id, karaoke
+        assert pick(CREEP, karaoke) == karaoke.id  # better than nothing
+    # A word the artist's own name holds is no version: the band Live on its own channel.
+    lightning = S("Live", "Lightning Crashes")
+    assert pick(lightning, v("own", "Live - Lightning Crashes", "LiveVEVO"),
+                v("lyrics", "Live - Lightning Crashes (Lyrics)", "lyrics")) == "ownxxxxxxxx"
+
+
 def test_a_song_thats_live_or_acoustic_takes_its_own_version():
     live = S("Radiohead", "Creep - Live")
     concert = v("concert", "Radiohead - Creep (Live)", "Radiohead")

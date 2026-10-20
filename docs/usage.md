@@ -858,7 +858,8 @@ as 官方, 歌词 or MV are left around it, or when it stands as a word of its o
 among others; never when it only starts a longer one (雨 isn't 雨下一整晚, nor
 晴天 晴天娃娃). A cover, a live, karaoke, instrumental, lesson, slowed, sped-up
 or remixed version loses to any other, unless the song itself is live or
-acoustic. Then a title that is exactly the song's beats one that only stands
+acoustic: by its title (karaoke "in the style of" the artist included) or by
+its channel's name (KaraFun, Sing King, any "Karaoke" or "Nightcore" channel). Then a title that is exactly the song's beats one that only stands
 among other words; then the closest length wins (within 2 seconds, LRCLIB's
 timed lyrics fit the audio), then the artist's "Topic" channel
 (YouTube's own upload of the release), official audio, the artist's own

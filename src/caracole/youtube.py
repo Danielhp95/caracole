@@ -199,7 +199,10 @@ _UNWANTED = re.compile(
     r"|노래방|\blesson\b|\btutorial\b|\bhow to play\b|\bchords?\b|\btabs?\b|\bguitar\b|教学|教學|吉他"
     r"|\bslowed\b|\breverb\b|\bsped up\b|\bspeed up\b|\bnightcore\b|\b8d\b|\bbass boosted\b|\b\d+ hours?\b"
     r"|\bloop\b|\breact(?:s|ion|ing)?\b|\bremix\b|\bmashup\b|\bparody\b|\bacoustic\b|\bpiano\b|\bdrum\b"
+    r"|\bin the style of\b|\b(?:as )?made famous by\b|\boriginally performed by\b"
 )
+# Channels that upload karaoke versions whatever their titles say ("Creep - in the style of Radiohead").
+_KARAOKE_CHANNEL = re.compile(r"karafun|sing ?king|sunfly|party ?tyme")
 _TOPIC = re.compile(r"^(.*\S)\s+-\s+topic$", re.IGNORECASE)
 _CHANNEL_SUFFIX = re.compile(r"\s*(?:vevo|official|oficial|officiel)(?:\s+channel)?$", re.IGNORECASE)
 _OWN_CHANNEL = ("", "vevo", "official", "oficial", "officiel", "music", "tv", "band", "channel", "officialchannel")
@@ -377,11 +380,14 @@ class _Names:
         tokens = slug_key(title).split("-")
         return any(tokens[: len(a)] == a or tokens[-len(a):] == a for a in (s.split("-") for s in self.artist_slugs))
 
-    def unwanted(self, title: str) -> bool:
+    def unwanted(self, title: str, channel: str = "") -> bool:
         """Whether the video is a version of the song other than the song's own: a cover, live,
-        karaoke, a lesson, slowed... A word the song's own title or artist holds doesn't count."""
-        folded = fold(title)
-        return any(not re.search(re.escape(m.group(0)), self.whole) for m in _UNWANTED.finditer(folded))
+        karaoke, a lesson, slowed..., by its title or its channel's name (a karaoke channel's
+        upload is karaoke). A word the song's own title or artist holds doesn't count."""
+        if _KARAOKE_CHANNEL.search(fold(channel)) and not _KARAOKE_CHANNEL.search(self.whole):
+            return True
+        return any(not re.search(re.escape(m.group(0)), self.whole)
+                   for text in (title, channel) for m in _UNWANTED.finditer(fold(text)))
 
 
 def _official(names: _Names, video: Video) -> int:
@@ -441,7 +447,7 @@ def choose(song: _Song, videos: Sequence[Video], expected: float | None, *,
             continue
         if not (names.channel_is_artist(video.channel) or names.artist_in(video.title)):
             continue
-        tier = 1 if names.unwanted(video.title) else 0
+        tier = 1 if names.unwanted(video.title, video.channel) else 0
         if names.variant and not re.search(rf"\b{names.variant}\b|unplugged", fold(video.title)):
             tier = max(tier, 1)
         ranked.append(((tier, -title, close, -_official(names, video), rank), video))
