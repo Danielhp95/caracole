@@ -2,7 +2,8 @@
 
 The standard library alone: overrides.py reads every ``[youtube]`` entry with it, which
 the web page writes, so a command that runs no yt-dlp never loads youtube.py or an HTTP
-client for it. youtube.py runs yt-dlp, and gives these names too.
+client for it. youtube.py runs yt-dlp, and checks every id it hands yt-dlp or reads from it
+with ``VIDEO_ID``.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 # The shape of a video's id, and the hosts its address may be on, as a browser shows them.
-_VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
+VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 _HOSTS = re.compile(r"(?:(?:www|m|music)\.)?youtube\.com")
 _SHORT_HOST = "youtu.be"
 _PATH_ID = re.compile(r"/(?:shorts|embed|live|v)/([A-Za-z0-9_-]{11})")
@@ -46,7 +47,7 @@ def video_id_from_url(url: Any) -> str | None:
             return None
     else:
         return None
-    return found if _VIDEO_ID.fullmatch(found) else None
+    return found if VIDEO_ID.fullmatch(found) else None
 
 
 def watch_url(video_id: str) -> str:

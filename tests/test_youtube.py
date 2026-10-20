@@ -22,9 +22,8 @@ from caracole.youtube import (
     choose,
     parse_search,
     search_query,
-    video_id_from_url,
-    watch_url,
 )
+from caracole.youtube_urls import video_id_from_url, watch_url
 
 ID = "dQw4w9WgXcQ"
 
