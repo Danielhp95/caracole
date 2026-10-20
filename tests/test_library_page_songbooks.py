@@ -577,3 +577,44 @@ def test_the_cross_leaves_select_mode_and_keeps_the_picks(library, tmp_path):
     assert out["left"] == {"bar": True, "pressed": "false", "focus": True, "open": True}
     assert out["count"] == "1 selected" and out["creep"]  # back in, the picks are as they were
     assert not out["fields"]  # and the bar is one line again
+
+
+@in_chromium
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+def test_on_the_file_the_command_to_run_folds_away_beside_copy(library, tmp_path, size):
+    from caracole.songs import update_song
+
+    conn, cfg = library
+    hysteria = next(s for s in data_of(page(conn, cfg))["songs"] if s["title"] == "Hysteria")
+    update_song(conn, hysteria["id"], match_decision="not_found")  # its card says what to run to find it
+    out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + BAR + """
+      const hint = card("Hysteria").querySelector(".pick-hint").checkVisibility();
+      pick("Creep"); pick("Hysteria");
+      if (q(".pick-open").checkVisibility()) q(".pick-open").click();
+      const before = bar().height;
+      q(".pick-name").value = "Friday set";
+      q(".pickbar-form button[type=submit]").click();
+      const fold = q(".pick-command details");
+      const copy = q(".pick-command button");
+      const made = {height: bar().height, open: fold.open, code: q(".pick-command code").checkVisibility(),
+                    copy: [copy.textContent, copy.checkVisibility(), copy.getAttribute("aria-label")],
+                    summary: fold.querySelector("summary").textContent,
+                    lines: Math.round(box(fold.querySelector("summary")).height),
+                    command: q(".pick-command code").textContent};
+      fold.querySelector("summary").click();
+      out = {before, made, hint, opened: {code: q(".pick-command code").checkVisibility(), height: bar().height,
+                                          where: fold.querySelector(".hint").textContent},
+             page: innerHeight, scroll: document.documentElement.scrollWidth, width: innerWidth};
+    """, size=size)
+    made = out["made"]
+    assert made["command"] == "caracole songbook make 'Friday set' 'Radiohead - Creep' 'Muse - Hysteria'"
+    # Folded, under the fields: one line, Copy beside it.
+    assert not made["open"] and not made["code"]
+    assert made["copy"] == ["Copy", True, "Copy the command"]
+    assert made["summary"] == "The command to run" and made["lines"] <= 44
+    assert made["height"] - out["before"] <= 56, out
+    # Unfolded, the command shows, where to run it, and the bar still leaves most of the screen to the songs.
+    assert out["opened"]["code"] and out["opened"]["height"] <= out["page"] * 0.6
+    assert out["opened"]["where"] == "Run it where caracole runs:"
+    assert not out["hint"]  # the not-found song's own command is put away while picking
+    assert out["scroll"] <= out["width"]

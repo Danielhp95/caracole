@@ -1553,8 +1553,9 @@ to Add to it; Clear unticks them all. The × at the start of the bar, or
 Select pressed again, leaves the mode, and the ticks stay for when you come
 back. On a phone the bar is one line, `× 3 selected · Make songbook…`, and
 its button unfolds the menu and the name field (its ▾, or Escape, folds them
-away again). On the file on disk, which can't write anything, the bar shows
-the command to run where caracole runs, with Copy:
+away again). On the file on disk, which can't write anything, Make songbook
+gives the command to run where caracole runs, folded under "The command to
+run", with Copy beside it:
 `caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
 each word in single quotes, so that no shell changes a `!`, a `$` or a quote
 in a name.

@@ -2467,7 +2467,7 @@ _SONGBOOK_STYLE = """
 }
 .pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .selecting .page { padding-bottom: 104px; }
-.selecting:has(.pickbar.open) .page { padding-bottom: 300px; }
+.selecting:has(.pickbar.open, .pick-command:not([hidden])) .page { padding-bottom: 300px; }
 .pickbar { position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--border);
   background: var(--surface); box-shadow: 0 -6px 24px rgb(0 0 0 / 14%);
   padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom))
@@ -2487,8 +2487,19 @@ _SONGBOOK_STYLE = """
   border: 1px solid var(--control-edge); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
 .pick-error { flex-basis: 100%; margin: 0; color: var(--failed); font-size: .85rem; }
 .pick-error:empty { display: none; }
-.pick-command { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.pick-command code { flex: 1 1 260px; padding: 8px 10px; user-select: all; }
+/* The file's command to run: folded, on one line beside Copy; unfolded, it scrolls within the bar. */
+.pick-command { flex-basis: 100%; display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.pick-command details { flex: 1 1 0; min-width: 0; }
+.pick-command summary { display: flex; align-items: center; min-height: 36px; color: var(--muted); font-size: .88rem;
+  font-weight: 600; list-style: none; cursor: pointer; }
+.pick-command summary::-webkit-details-marker { display: none; }
+.pick-command summary::before { content: "›"; flex: none; display: inline-block; width: 1em; font-size: 1.15rem;
+  line-height: 1; text-align: center; }
+.pick-command details[open] > summary::before { transform: rotate(90deg); }
+.pick-command .hint { margin-top: 2px; }
+.pick-command code { display: block; max-height: 30vh; margin-top: 4px; padding: 8px 10px; overflow-y: auto;
+  user-select: all; -webkit-user-select: all; }
+.pick-command .btn { flex: none; }
 @media (max-width: 719px) {
   .pick-open { display: inline-flex; }
   .pickbar:not(.open) .pickbar-form, .pickbar:not(.open) .pick-command { display: none; }
@@ -2501,7 +2512,7 @@ _SONGBOOK_STYLE = """
     clip-path: polygon(0 0, 100% 0, 50% 100%); }
 }
 @media (pointer: coarse) {
-  .sb-more > summary { min-height: 44px; }
+  .sb-more > summary, .pick-command summary { min-height: 44px; }
 }
 """
 
@@ -2511,7 +2522,8 @@ _SONGBOOK_STYLE = """
 # anywhere on a card picks it (the stylesheet puts its files and actions away, and lets the taps through
 # to the card). The bar is one line: on a phone, "2 selected · Make songbook…", which unfolds the menu
 # and the name field. On caracole serve the bar posts the songbook (the server's token, the songs' ids
-# in the order picked); on the file on disk it shows the caracole songbook command to run instead.
+# in the order picked); on the file on disk it shows the caracole songbook command to run instead,
+# folded beside Copy.
 _SELECT_SCRIPT = r"""
 (() => {
   "use strict";
@@ -2603,14 +2615,19 @@ _SELECT_SCRIPT = r"""
   clear.type = "button";
   const error = el("p", "pick-error");
   error.setAttribute("role", "alert");
+  // The file's command, folded: one line of the bar, which Copy copies without unfolding it.
   const command = el("div", "pick-command");
   command.hidden = true;
+  const commandFold = el("details");
+  commandFold.appendChild(el("summary", null, "The command to run"));
+  commandFold.appendChild(el("p", "hint", "Run it where caracole runs:"));
   const commandText = el("code");
+  commandFold.appendChild(commandText);
   const copy = el("button", "btn small", "Copy");
   copy.type = "button";
-  command.appendChild(el("span", "hint", "Run this where caracole runs:"));
-  command.appendChild(commandText);
-  command.appendChild(copy);
+  copy.setAttribute("aria-label", "Copy the command");
+  copy.title = "Copy the command, to run where caracole runs";
+  command.append(commandFold, copy);
   const fields = {};
   if (server) {
     form.method = "post";
@@ -2736,15 +2753,20 @@ _SELECT_SCRIPT = r"""
   });
   into.addEventListener("change", paintAll);
   copy.addEventListener("click", () => {
-    const text = commandText.textContent;
+    // Without the clipboard (refused, or none), the command unfolds, selected, to copy by hand.
+    const byHand = () => {
+      commandFold.open = true;
+      const range = document.createRange();
+      range.selectNodeContents(commandText);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => { copy.textContent = "Copied"; }, () => {});
+      navigator.clipboard.writeText(commandText.textContent).then(() => { copy.textContent = "Copied"; }, byHand);
+    } else {
+      byHand();
     }
-    const range = document.createRange();
-    range.selectNodeContents(commandText);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
   });
   form.addEventListener("submit", (e) => {
     const existing = into.value;
@@ -2771,6 +2793,7 @@ _SELECT_SCRIPT = r"""
     const words = ["caracole songbook", existing ? "add" : "make", shellQuote(name)];
     for (const id of picked) words.push(shellQuote(songs.get(id).display));
     commandText.textContent = words.join(" ");
+    commandFold.open = false;
     command.hidden = false;
     copy.textContent = "Copy";
   });
