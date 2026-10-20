@@ -384,14 +384,15 @@ def render_all(
     Ignored songs are left alone. A song that fails (a ``RenderError``, or a
     file that can't be read or written) is logged and counted, and the others
     go on. The pass is recorded in kv ``render:status`` for the to-do page:
-    ``{"at", "rendered", "failed": [display keys], "font_error"}``, stamped with
-    ``now`` (by default the current time). ``force`` renders every PDF again,
-    up to date or not; ``runner`` runs chordpro (tests pass a fake).
+    ``{"at", "rendered", "failed": [display keys], "font_error", "no_font":
+    {display key: the first letter its sheet needs a CJK font for}}``, stamped
+    with ``now`` (by default the current time). ``force`` renders every PDF
+    again, up to date or not; ``runner`` runs chordpro (tests pass a fake).
 
-    With ``song_ids``, only those songs (``caracole get`` renders its one
-    song), and the stats are theirs alone. The record stays the last full
-    pass's (``_status_after``): their names leave its ``failed`` list and go
-    back on when they failed now; a font error this pass hit replaces its own.
+    With ``song_ids``, only those songs (``caracole get`` and ``caracole render
+    --song`` render their one song), and the stats are theirs alone. The record
+    stays the last full pass's (``_status_after``): their names leave its
+    ``failed`` list and ``no_font``, and go back on as this pass found them.
 
     ``between`` is called between two songs, in no transaction: bulk work hands
     caracole's lock to a waiting lookup there (``_common.hand_over``), as a pass
@@ -400,7 +401,7 @@ def render_all(
     """
     stats = RenderStats()
     failed: list[str] = []
-    no_font: list[str] = []
+    no_font: dict[str, str] = {}
     font, font_problem = _cjk_font(cfg.cjk_font)
     handed = False
     songs = list_songs(conn) if song_ids is None else _songs_of(conn, song_ids)
@@ -432,15 +433,17 @@ def render_all(
         if any(d.viewer_failed for d in done):
             failed.append(song.display)
         if missing := next((d.missing for d in done if d.outcome == "no font"), None):
-            no_font.append(f"{song.display} ({missing} U+{ord(missing):04X})")
+            no_font[song.display] = missing
     stats.failed = len(failed)
     if no_font:
         stats.font_error = _font_error(no_font, font_problem)
         log.warning("%s", stats.font_error)
     at = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    status = {"at": at, "rendered": stats.rendered, "failed": failed, "font_error": stats.font_error}
+    status = {"at": at, "rendered": stats.rendered, "failed": failed, "font_error": stats.font_error,
+              "no_font": no_font}
     if song_ids is not None:
-        status = _status_after(kv_get_json(conn, STATUS_KEY, default=None), status, {s.display for s in songs})
+        status = _status_after(kv_get_json(conn, STATUS_KEY, default=None), status, {s.display for s in songs},
+                               font_problem)
     kv_set_json(conn, STATUS_KEY, status)
     return stats
 
@@ -457,16 +460,22 @@ def _songs_of(conn: sqlite3.Connection, song_ids: Collection[int]) -> list[Song]
     return sorted(songs, key=lambda s: (s.added_at, s.id), reverse=True)
 
 
-def _status_after(stored: Any, status: dict[str, Any], names: set[str]) -> dict[str, Any]:
+def _status_after(stored: Any, status: dict[str, Any], names: set[str], font_problem: str | None) -> dict[str, Any]:
     """kv ``render:status`` after a pass over some songs (``names``: theirs), whose own record is
-    ``status``: the last full pass's record, with those songs' failures brought up to date and the
-    font error this pass hit, if any. With no record yet, ``status`` itself."""
+    ``status``: the last full pass's record, with those songs' failures, and the sheets that wait
+    for a font, brought up to date. With no record yet, ``status`` itself."""
     if not isinstance(stored, dict):
         return status
     before = stored.get("failed")
     others = [name for name in before if str(name) not in names] if isinstance(before, list) else []
-    return {**stored, "failed": others + status["failed"],
-            "font_error": status["font_error"] or stored.get("font_error")}
+    waiting = stored.get("no_font")
+    if isinstance(waiting, dict):
+        no_font = {name: letter for name, letter in waiting.items()
+                   if name not in names and isinstance(letter, str) and len(letter) == 1} | status["no_font"]
+        font = {"no_font": no_font, "font_error": _font_error(no_font, font_problem) if no_font else None}
+    else:  # recorded by a caracole that kept no "no_font": the font error this pass hit, if any
+        font = {"font_error": status["font_error"] or stored.get("font_error")}
+    return {**stored, "failed": others + status["failed"], **font}
 
 
 @dataclass(frozen=True)
@@ -853,9 +862,11 @@ def _cjk_font(path: Path | None) -> tuple[Path | None, str | None]:
     return path, None
 
 
-def _font_error(songs: list[str], problem: str | None = None, shown: int = 3) -> str:
-    """One line for every sheet that has no PDF for want of a usable CJK font."""
-    names = ", ".join(songs[:shown])
-    more = f" and {len(songs) - shown} more" if len(songs) > shown else ""
+def _font_error(songs: Mapping[str, str], problem: str | None = None, shown: int = 3) -> str:
+    """One line for every sheet that has no PDF for want of a usable CJK font (``songs``: each one's
+    first letter that needs it)."""
+    listed = [f"{name} ({letter} U+{ord(letter):04X})" for name, letter in songs.items()]
+    names = ", ".join(listed[:shown])
+    more = f" and {len(listed) - shown} more" if len(listed) > shown else ""
     reason = f"{problem}; " if problem else ""
     return f"{reason}{FONT_HINT} to render {names}{more}"

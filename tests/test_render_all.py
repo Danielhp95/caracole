@@ -1153,6 +1153,7 @@ def test_status_recorded_for_the_todo_page(conn, cfg):
         "rendered": 1,
         "failed": ["Soda Stereo - Persiana Americana"],
         "font_error": stats.font_error,
+        "no_font": {"宋冬野 - 斑马斑马": "斑"},  # its first letter the built-in fonts lack
     }
 
 
@@ -1277,7 +1278,42 @@ def test_a_font_error_of_a_pass_over_some_songs_is_the_one_shown(conn, cfg):
     assert stats.font_error is not None and "宋冬野 - 斑马斑马" in stats.font_error
     assert kv_get_json(conn, "render:status") == {
         "at": "2026-10-18T03:30:00Z", "rendered": 0, "failed": [], "font_error": stats.font_error,
+        "no_font": {"宋冬野 - 斑马斑马": "斑"},
     }
+
+
+def test_a_pass_over_some_songs_keeps_the_others_that_wait_for_a_font(conn, cfg, tmp_path):
+    first = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, first, ZH_SHEET, tab_id=1, tonality="")
+    second = add_song(conn, "宋冬野", "安和桥")
+    human_sheet(conn, cfg, second, ZH_SHEET, tab_id=2, tonality="")
+    render(conn, cfg)  # no CJK font: neither gets a PDF
+
+    def waiting() -> list[str]:
+        shown = kv_get_json(conn, "render:status")["font_error"] or ""
+        return [s.display for s in (first, second) if s.display in shown]
+
+    assert waiting() == [first.display, second.display]
+    render(conn, cfg, now=LATER, song_ids={first.id})  # still no font: both still wait
+    assert waiting() == [first.display, second.display]
+    cfg = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
+    render(conn, cfg, now=LATER, song_ids={first.id})  # its PDF made: the other one alone waits
+    assert waiting() == [second.display]
+    render(conn, cfg, now=LATER, song_ids={second.id})
+    assert kv_get_json(conn, "render:status")["font_error"] is None
+
+
+def test_a_record_kept_before_no_font_keeps_its_font_error_until_a_pass_hits_one(conn, cfg):
+    old = {"at": "2026-10-18T03:30:00Z", "rendered": 0, "failed": [], "font_error": "set cjk_font to render X"}
+    kv_set_json(conn, "render:status", old)  # by a caracole that kept no "no_font"
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, tab_id=1)
+    render(conn, cfg, now=LATER, song_ids={song.id})
+    assert kv_get_json(conn, "render:status") == old
+    zh = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, zh, ZH_SHEET, tab_id=2, tonality="")
+    stats = render(conn, cfg, now=LATER, song_ids={zh.id})
+    assert kv_get_json(conn, "render:status") == {**old, "font_error": stats.font_error}
 
 
 def test_a_pass_over_some_songs_before_any_full_pass_records_itself(conn, cfg):
@@ -1288,7 +1324,7 @@ def test_a_pass_over_some_songs_before_any_full_pass_records_itself(conn, cfg):
 
     assert kv_get_json(conn, "render:status") == {
         "at": "2026-10-18T03:30:00Z", "rendered": 0, "failed": ["Soda Stereo - Persiana Americana"],
-        "font_error": None,
+        "font_error": None, "no_font": {},
     }
 
 

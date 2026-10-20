@@ -1412,10 +1412,11 @@ when it has something in it:
   Songs you have, and songs you removed, aren't suggested.
 - **PDFs.** The last render of the library (the nightly run's, or `caracole
   render`'s): how many PDFs were made or failed, a font problem if there is
-  one, and the sheets that failed. A lookup (`caracole get`) renders its own
-  song alone and leaves that record as it was, but for its song: it takes the
-  song off the sheets that failed, or puts it back on, and a font problem it
-  meets is the one shown.
+  one, with the sheets it keeps from a PDF, and the sheets that failed. A
+  lookup (`caracole get`) and `caracole render --song` (the last step of a
+  pick in `caracole serve`) render their own song alone and leave that record
+  as it was, but for their song: they take it off the sheets that failed or
+  wait for a font, or put it back on.
 - **Sources.** Whether Spotify is off, synced, not fully set up (the client
   secret missing, say), or needs `caracole auth spotify`, and how many songs
   wanted.txt has, with the lines it couldn't read; for a wanted.txt it
