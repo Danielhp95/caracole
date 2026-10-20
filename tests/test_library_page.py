@@ -764,6 +764,40 @@ def test_the_served_page_offers_a_remove_on_every_card(conn, cfg, tmp_path):
     assert "/remove" not in listing(dump_dom(path, tmp_path))
 
 
+# Notes how a card's Removing… note and a card's Fetching… line look.
+LOOKS = """
+(() => {
+  const look = (node) => {
+    const style = getComputedStyle(node);
+    return [style.marginTop, style.marginBottom, style.color, style.fontWeight].join(" ");
+  };
+  const removing = document.querySelector(".foot .busy");
+  const fetching = document.querySelector(".progress");
+  document.body.setAttribute("data-removing", removing ? look(removing) : "none");
+  document.body.setAttribute("data-fetching", fetching ? look(fetching) : "none");
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_cards_removing_note_looks_like_its_fetching_line(conn, cfg, tmp_path):
+    # Remove's note in the card's foot and the request's line above it are both "something runs": one look,
+    # with no paragraph margins that push the foot down.
+    from caracole.library_page import WebControls
+
+    fetching = add_song(conn, "Oasis", "Wonderwall")
+    going = add_song(conn, "The Beatles", "Yesterday")
+    controls = WebControls(csrf="tok", busy=frozenset({fetching.id}), active=2, removing=frozenset({going.id}))
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    dom = dump_dom(write_library_page(cfg.library_dir, with_script(html, LOOKS)), tmp_path)
+    removing = re.search(r'<body[^>]*data-removing="([^"]*)"', dom).group(1)
+    line = re.search(r'<body[^>]*data-fetching="([^"]*)"', dom).group(1)
+    assert removing != "none" and line != "none", dom[-1500:]
+    top, bottom, *color, weight = removing.split(" ")
+    assert (top, bottom) == ("0px", "0px")
+    assert color == line.split(" ")[2:-1] and int(weight) >= 600
+
+
 def with_script(html: str, script: str) -> str:
     """The page with a test's script after its own, allowed by its hash."""
     csp = csp_of(html)

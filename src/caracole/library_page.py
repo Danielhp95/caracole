@@ -594,6 +594,7 @@ body.with-tray .page { padding-bottom: 16rem; }
 .foot { display: flex; justify-content: flex-end; margin-top: auto; }
 .more + .foot { margin-top: 0; }
 .foot form { margin: 0; }
+.busy { margin: 0; color: var(--wanted); font-size: .88rem; font-weight: 600; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.quiet:hover { border-color: var(--border); color: var(--failed); }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
