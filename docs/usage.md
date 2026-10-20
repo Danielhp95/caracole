@@ -1211,7 +1211,8 @@ in `Library/_songbooks/<name>/`:
   then every song's sheet in order, in caracole's look and each in its own key
   (`[transpose]`), all from one chordpro run, with the Chinese font when a song
   needs it. A song without a sheet keeps its place: the contents name it
-  ("Hysteria · Muse · missing: no sheet yet"), and its page says so.
+  ("Hysteria · Muse · missing: no sheet yet"), and its page says so. Its
+  document title, the name a PDF viewer or a phone shows, is the songbook's.
 - **`songbook.html`**: one page for the phone, which opens from the synced
   folder and loads nothing. It opens on the contents; tap a song to open it in
   the sheet viewer, with everything the viewer does (chord shapes,

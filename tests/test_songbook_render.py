@@ -120,6 +120,16 @@ def test_the_pdf_opens_on_a_title_page_then_the_contents(conn, cfg, two):
     assert template.startswith("{title: Campfire}\n{artist: 2 songs}")
     assert "{new_page}" in template and "{comment: Contents}" in template
     assert config["pdf"]["pagealign-songs"] == 0  # no blank page before a song
+    assert config["pdf"]["info"]["title"] == "Campfire"  # the document's name, not its first song's
+
+
+def test_the_pdfs_document_title_is_the_songbooks_name_never_a_substitution(conn, cfg, two):
+    make(cfg, "Camp %{title} {fire}", "Radiohead - Creep")
+    fake = FakeChordPro()
+    render(conn, cfg, runner=fake, only="Camp %{title} {fire}")
+    call = pdf_call(fake)
+    book = next(Path(a.split("=", 1)[1]) for a in call if a.startswith("--config=") and a != f"--config={STYLE_FILE}")
+    assert json.loads(fake.text(book))["pdf"]["info"]["title"] == "Camp %(title) (fire)"  # as its title page has it
 
 
 def test_each_song_is_in_its_transposition(conn, cfg, two):
@@ -492,6 +502,8 @@ def test_the_real_pdf_has_a_title_page_contents_and_every_song_in_its_key(conn, 
     pdf = folder(cfg, "Picnic") / "songbook.pdf"
     data = pdf.read_bytes()
     assert data.startswith(b"%PDF") and len(re.findall(rb"/Type\s*/Page\b", data)) == 5  # title, contents, 3 songs
+    info = re.search(rb"\b%s 0 obj(.*?)endobj" % re.search(rb"/Info (\d+) 0 R", data).group(1), data, re.DOTALL)
+    assert re.search(rb"/Title\s*\(Picnic\)", info.group(1))  # the name a viewer or a phone shows
     strings = drawn(pdf)
     assert "Picnic" in strings and "Contents" in strings
     for text in ("Creep", "Hysteria", "Muse · missing: no sheet yet", "De Música Ligera · Soda Stereo"):

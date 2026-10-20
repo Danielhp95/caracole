@@ -708,7 +708,7 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
     else:
         pdf_inputs = {
             "name": book.name, "songs": [(e.title, e.artist, e.cho, e.transpose, e.missing) for e in entries],
-            "style": _style(), "book": BOOK_CONFIG, "font": str(pdf_font) if pdf_font else None, "v": 1,
+            "style": _style(), "book": BOOK_CONFIG, "font": str(pdf_font) if pdf_font else None, "v": 2,
         }
         make(PDF_NAME, pdf_inputs, lambda: _pdf(cfg, book, entries, runner, font=pdf_font) if playable else None)
 
@@ -878,13 +878,24 @@ def _contents_file(book: Songbook, entries: Sequence[Entry]) -> str:
             "A caracole songbook\n{new_page}\n{comment: Contents}\n")
 
 
+def _book_config(book: Songbook) -> dict[str, Any]:
+    """BOOK_CONFIG, and the PDF's document title (its Info /Title, the name a viewer or a phone shows):
+    the songbook's name, whose braces are swapped as on its title page (``directive_text``), so no
+    ``%{...}`` in it reads as a substitution. chordpro's own is ``%{title}``, the first song's title."""
+    info = {"title": " ".join(book.name.split()).translate(_BRACES)}
+    return {**BOOK_CONFIG, "pdf": {**BOOK_CONFIG["pdf"], "info": info}}
+
+
+_BRACES = str.maketrans("{}", "()")
+
+
 def _pdf(cfg: Config, book: Songbook, entries: Sequence[Entry], runner: Runner, *, font: Path | None) -> bytes:
     """songbook.pdf: every song, in order, through one chordpro run, in caracole's look."""
     with _workspace(cfg) as tmp:
         files = _write_songs(tmp, entries)
         (tmp / CONTENTS_TEMPLATE).write_text(_contents_file(book, entries), encoding="utf-8")
         config = tmp / BOOK_CONFIG_NAME
-        config.write_text(json.dumps(BOOK_CONFIG, ensure_ascii=False), encoding="utf-8")
+        config.write_text(json.dumps(_book_config(book), ensure_ascii=False), encoding="utf-8")
         out = tmp / PDF_NAME
         cmd = [cfg.chordpro_bin, "--nodefaultconfigs", f"--config={STYLE_FILE}", f"--config={config}"]
         if font is not None:
