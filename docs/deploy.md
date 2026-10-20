@@ -311,6 +311,10 @@ sudo install -o caracole -g caracole -m 0600 \
 sudo systemctl start caracole.timer
 ```
 
+The database runs in WAL mode with `synchronous = NORMAL`: a commit doesn't wait for the
+disk, so a power cut or a kernel crash may lose the last few changes (a song just added, a
+run's last records), never the database itself; the next run does that work again.
+
 The cache is left out. Losing it costs only requests:
 the index lives in the database, so nothing needs building again, and the
 pages caracole had cached are fetched again as songs need them, within the

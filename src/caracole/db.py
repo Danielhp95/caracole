@@ -257,6 +257,9 @@ def connect(path: Path) -> sqlite3.Connection:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")
+        # No fsync on each commit: a crash of the machine may lose the last commits, never the
+        # database (WAL), and the owner chose the speed.
+        conn.execute("PRAGMA synchronous = NORMAL")
         conn.execute("PRAGMA busy_timeout = 30000")
         _migrate(conn, path)
     except BaseException:

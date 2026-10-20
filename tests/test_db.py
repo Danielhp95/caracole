@@ -229,6 +229,12 @@ def test_a_version_5_database_gains_the_lacuerda_index_and_keeps_its_ug_keys(tmp
     assert columns(path.with_name("caracole.sqlite.v5.bak"), "lacuerda_index") == ([], 5)
 
 
+def test_the_journal_trades_the_last_writes_before_a_power_cut_for_speed(conn):
+    # WAL with synchronous NORMAL: a crash of the machine may lose the last commits, never the database.
+    assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    assert conn.execute("PRAGMA synchronous").fetchone()[0] == 1  # NORMAL
+
+
 def test_a_savepoint_undoes_its_whole_block_and_nests(conn):
     def kv(key):
         return db.kv_get(conn, key)
