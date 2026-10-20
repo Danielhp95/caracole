@@ -40,10 +40,11 @@ server.
     caracole remove "Oasis - Wonderwall"   # gone for good, until you add it again
 
 Then open `~/Tabs/_todo.md`, or `~/Tabs/index.html` to browse. `caracole serve`
-serves that page at `http://127.0.0.1:8737/`, with a form to request a song and
-fetch it now, a button on each song to remove it, and a lookup page that
-searches as you type and shows the sheet of the song you pick within seconds;
-the song's card says how a request goes, on one line. Settings go in
+serves that page at `http://127.0.0.1:8737/`, where Enter in its search box
+also lists what Ultimate Guitar, gtptabs.com and MuseScore have (from
+caracole's offline indexes) with a Get it on each, a form to request a song by
+name, and a button on each song to remove it; the song's card, or the result's
+row, says how a request goes, on one line. Settings go in
 `~/.config/caracole/caracole.toml`, and none are needed to start. Commands,
 settings and overrides are explained in
 [docs/usage.md](docs/usage.md).

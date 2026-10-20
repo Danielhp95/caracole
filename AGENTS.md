@@ -67,7 +67,16 @@ songs.py's, in the `removed` table).
   sheet, then `Progress.readable`), with interactive clients; `--progress` prints a JSON line
   per event (`get.progress_line`) for caracole serve.
   The logic of `caracole review`, `caracole search`, `caracole remove` and `caracole songbook`
-  is in review.py, search.py, removal.py and songbook.py; search.py's prefilter reads
+  is in review.py, search.py, removal.py and songbook.py. search.py reads a query as a
+  title, an artist or both (each hit's `via`); `find_index` (with your songs, `found`)
+  answers `caracole search` and `/api/search`: the artists a query
+  names (`ArtistHit`, never a catch-all), the index's songs, `lead` and `best` (what Enter
+  may act on, None for no clear song), with
+  `artist_songs` and `library_by_artist`; tab counts are its only popularity, and Chinese
+  pinyin counts only as whole words of a key, as in match.py. `search_gtptabs` and
+  `search_musescore` read gtptabs.com's and MuseScore's tables (`SiteHit`; MuseScore's by
+  exact title keys alone, the query's or what it leaves beside the artist of a song of that
+  title, `_known_song`: a possible match), never the sites. Its prefilter reads
   ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
   must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
@@ -84,8 +93,10 @@ songs.py's, in the `removed` table).
   from which commands ran: a step's label is that line while it runs, "Adding to the
   library…", and a lookup's running stage has one of its own, `status.STAGE_LINES`), app.py (the routes; `/jobs.json` and the forms answer the page's script in
   JSON, every refusal as data; `/api/search` for search as you type, through search.py's
-  public functions, one at a time, the newest first, an older one's SQL interrupted once a
-  newer waits (`set_progress_handler`); `/api/jobs[/<id>]`; every `/api/` read refused to
+  public functions (`find_index`, `found`, `search_gtptabs`, `search_musescore`; `skipped`, the
+  sites it left out and why), one at a time, the newest first, an older one's
+  SQL interrupted once a newer waits (`set_progress_handler`); `/api/artist?key=` an
+  artist's songs, 50 at a time; `/api/jobs[/<id>]`; every `/api/` read refused to
   another site's fetch, `security.own_page_read`; `POST /lookup`, which runs a song your
   library has, by its id or found from the UG pick (`_Mine`: its match, or its names'
   `name_forms`), under its own names and writes no wanted.txt line for it;
@@ -94,10 +105,15 @@ songs.py's, in the `removed` table).
   forms, each queued as its `caracole songbook` command), lookup_page.py (the lookup page:
   its script, `createElement` and `textContent` only, allowed by hash, connects to the
   server alone; its results are the library's rows, `library_page.ROWS_SCRIPT` and
-  `ROWS_STYLE` through `window.caracole.resultRow`, and a song you have opens its viewer),
+  `ROWS_STYLE` through its row builders, `ugHit` and `artistHit` too, and a song you have opens its viewer;
+  Enter acts on `/api/search`'s `best`, or opens the leading artist's songs, and never
+  spends a request without one),
   pages.py, server.py (`http.server`). The library page is
   library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
-  /jobs.json how they go.
+  /jobs.json how they go. Its one bar filters your songs as you type and, on Enter or Search
+  all, lists `/api/search`'s answer under them (served; the file shows the `caracole search`
+  line to run), each result's Get it a `POST /lookup` whose `view` the page tracks in the
+  result's row; Enter never spends a request.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
@@ -122,7 +138,9 @@ songs.py's, in the `removed` table).
   for chordpro (`rendered_song`), so its viewer is one caracole wrote; helpers/chromium.py
   drives a headless Chromium of the test's own over the DevTools protocol (a pipe, the standard
   library), for a page whose CSP refuses a test's script; helpers/browser.py's `Browser` is the
-  same with typing, Enter, clicks and the layout read back, for the lookup page's tests. Both
+  same with typing, Enter, clicks and the layout read back, for the lookup page's tests and the
+  library page's bar (test_web_page_search.py: a real `caracole serve`, its queue running a fake
+  `caracole get`). Both
   resolve no host name (`helpers.browser.NO_LOOKUPS`), and their tests are `@in_chromium` too.
   fixtures/ holds UG, LaCuerda, LRCLIB,
   gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
@@ -167,7 +185,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_viewer_layout.py, test_viewer_preamble.py, test_viewer_shapes.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py), and the shared browser itself (test_harness.py) | neither |
+| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_viewer_layout.py, test_viewer_preamble.py, test_viewer_shapes.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py, test_web_page_search.py), and the shared browser itself (test_harness.py) | neither |
 
 Before a change is done:
 

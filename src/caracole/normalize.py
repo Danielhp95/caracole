@@ -156,6 +156,20 @@ def compact(key: str) -> str:
     return key.replace("-", "")
 
 
+# What one writes for an artist one doesn't know, as folded words: no one's name ("misc - 斑马").
+_PLACEHOLDER_ARTISTS = frozenset({
+    "", "misc", "miscellaneous", "unknown", "unknown-artist", "unknown-artists", "various", "various-artists",
+    "va", "v-a", "na", "n-a", "none", "anon", "anonymous", "artist", "desconocido", "anonimo", "varios",
+    "varios-artistas",
+})
+
+
+def placeholder_artist(name: str) -> bool:
+    """Whether an artist, as written, stands for an artist one doesn't know ("misc", "unknown",
+    "Various Artists"): no one's name, so nothing can be found by it. "The Unknown" is a name."""
+    return "-".join(w for w in _SPLIT.split(_APOSTROPHES.sub("", fold(name))) if w) in _PLACEHOLDER_ARTISTS
+
+
 def split_variant(song_key: str) -> tuple[str, str | None]:
     """Split a trailing variant label off a song key: ``x-intro`` → (``x``, ``intro``)."""
     head, sep, last = song_key.rpartition("-")

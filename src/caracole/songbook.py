@@ -221,8 +221,9 @@ def find_library_song(conn: sqlite3.Connection, text: str) -> Found | None:
 
     First by its "Artist - Title" (``find_entry_song``), then by a search of the library
     (``search.search_library``: pinyin for Chinese, a typo), when one song answers it well
-    (``search.STRONG``) and no other comes close. Only for what you type: an entry of
-    songbooks.toml is found by ``find_entry_song`` alone.
+    (``search.STRONG``) by its title, or by its artist and title, and no other comes close.
+    An artist's name alone names no song, even with one song of theirs in the library. Only
+    for what you type: an entry of songbooks.toml is found by ``find_entry_song`` alone.
     """
     song = find_entry_song(conn, text)
     if song is not None:
@@ -230,7 +231,8 @@ def find_library_song(conn: sqlite3.Connection, text: str) -> Found | None:
     from caracole.search import STRONG, search_library  # rapidfuzz, only when a search is needed
 
     hits = search_library(conn, text, limit=2)
-    if hits and hits[0].score >= STRONG and (len(hits) == 1 or hits[1].score <= hits[0].score - SEARCH_MARGIN):
+    if hits and hits[0].score >= STRONG and hits[0].via != "artist" and (
+            len(hits) == 1 or hits[1].score <= hits[0].score - SEARCH_MARGIN):
         return Found(hits[0].song, exact=False)
     return None
 

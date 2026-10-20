@@ -22,6 +22,41 @@ folded, apostrophes, "and" and a leading "the" dropped), and Chinese is also
 compared as pinyin: "宋冬野" meets UG's ``song-dongye``, and "ban ma" finds
 斑马，斑马. A Chinese word's syllables are matched in order with ``%``
 between them, so ``song-dongye``, ``songdongye`` and ``song-dong-ye`` all match.
+As in the matcher (match.py), pinyin counts only where it is words of a name:
+each Chinese word's pinyin must be a whole run of the artist's or the title's
+words, hyphens aside, never letters inside a word (斑马 is in neither
+``suburban-male`` nor ``band-maid``), and a pinyin match of only part of a
+name tops out below a strong hit.
+
+**Either one.** A query may be the artist alone, the title alone, or both, in
+any order: each hit says which reading scored it (``via``: "title",
+"artist" or "both"; a tie goes to the title, then both), with the score it
+always had. ``find_index`` gives the index's answer, and ``found`` the one
+the pages show, with your songs (``search_library``): your songs, the
+artists the query names (``ArtistHit``: the query as the artist's whole name
+scores 90 or more, never a catch-all's, with its songs and tabs counted and
+its most tabbed songs), and the index's songs, those it holds only
+through an artist's name folded into that artist's row. ``lead`` says which
+comes first, and ``best`` is the one row Enter may act on: a song of yours read
+by its title (or both), not under a placeholder artist such as "misc", else
+the first song of the index if it scores 90 or more by its title (or both) and
+isn't a catch-all's, and None when an artist leads or nothing is that good.
+Beside an artist whose whole name is the query, one whose name is only near it
+("Beagles" for "eagles") is left out, with the songs only its name matched.
+``artist_songs`` lists all of an artist's songs, and ``library_by_artist``
+yours. The only popularity the index holds is how many
+tabs a song or an artist has, so that orders the ties, and the artist with a
+more tabbed song than any song titled like it leads. Nothing here asks any
+site: an artist the index doesn't know is the user's to type.
+
+**Other sites' indexes.** ``search_gtptabs`` reads gtptabs.com's song pages
+(``gtptabs_index``, from its sitemaps), scored as the index's songs are, and
+``search_musescore`` MuseScore's (``musescore_index``), which give a title
+alone: a page there is one whose whole title is the query, or the query less
+an artist's name on either side, where that artist has a song of that title in
+the Ultimate Guitar index, gtptabs.com's or your library; a possible match,
+never more. Both only read the local tables: nothing here asks gtptabs.com or MuseScore
+anything, and MuseScore's pages are for the user to open.
 
 UG's sitemaps list artists with accented or non-Latin names only by bare ids,
 so the index can't see their tabs; ``bare_id_hint`` says what to do then.
@@ -38,12 +73,21 @@ import re
 import sqlite3
 from collections import Counter
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from typing import Iterable, Mapping, NamedTuple, Sequence
 
 from rapidfuzz import fuzz
 
-from caracole.match import SHOW_WORDS, is_catch_all
-from caracole.normalize import clean_title, fold, has_han, name_forms, romanize, split_variant
+from caracole.match import CATCH_ALL_PREFIX, SHOW_WORDS, is_catch_all
+from caracole.normalize import (
+    clean_title,
+    compact,
+    fold,
+    has_han,
+    name_forms,
+    placeholder_artist,
+    romanize,
+    split_variant,
+)
 from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
 from caracole.songs import Song, list_songs
 from caracole.ug.key_search import rows_like
@@ -52,20 +96,29 @@ from caracole.ug.lookup import IndexTab, song_tabs
 MIN_SCORE = 70  # below this a hit is noise
 STRONG = 90  # a hit this good is the song you meant
 PARTIAL_SCALE = 0.9  # a query that is only part of a name tops out at 90
+PINYIN_PARTIAL_SCALE = 0.85  # in pinyin, at 85: short syllables are no proof, so never a strong hit
 TYPE_ORDER = ("chords", "tabs", "guitar-pro", "power")
 MAX_PATTERNS = 2
 SHOWN_CANDIDATES = 3  # a review's candidates shown under its song: the rest are in `caracole review`
+READINGS = ("title", "both", "artist")  # how a query may name a song; a tie goes to the first
+TOP_SONGS = 3  # an artist row's most tabbed songs
+ARTIST_ROWS, SONG_ROWS = 3, 8  # what ``find_index`` gives by default
+SITE_ROWS = 5  # a site's pages search_gtptabs and search_musescore give by default
+SITE_ROWS_READ = 2000  # rows of gtptabs_index the prefilter reads, at most
 
 _WORD_SPLIT = re.compile(r"[\W_]+")
 _APOSTROPHES = re.compile(r"['’‘`´ʼ]")
+_SHELL_SPECIAL = re.compile(r'(["\\$`])')
 
 
 @dataclass(frozen=True)
 class LibraryHit:
-    """A song of yours that matches the query; ``score`` is 0–100."""
+    """A song of yours that matches the query; ``score`` is 0–100, and ``via`` the reading that
+    gave it: the query as the song's "title", its "artist", or "both"."""
 
     song: Song
     score: float
+    via: str = "both"
 
 
 @dataclass(frozen=True)
@@ -77,7 +130,8 @@ class IndexHit:
     ``counts`` gives the tabs per type, best type first. ``url`` is a sample
     tab page. ``artist`` and ``title`` are made from UG's own slugs, which keep
     a leading "the" and an "and" that the keys drop, to show and to paste into
-    ``caracole add``.
+    ``caracole add``. ``via`` is the reading of the query that scored it, as
+    ``LibraryHit``'s.
     """
 
     artist_key: str
@@ -88,12 +142,93 @@ class IndexHit:
     labels: tuple[str, ...] = ()
     artist: str = ""
     title: str = ""
+    via: str = "both"
 
     @property
     def catch_all(self) -> bool:
         """Whether UG files this song under a catch-all artist (``misc-musicals``…), the show's name
         in its title: added under UG's names, the song's artist would be that catch-all."""
         return is_catch_all(self.artist_key)
+
+    @property
+    def tabs(self) -> int:
+        return sum(self.counts.values())
+
+
+@dataclass(frozen=True)
+class ArtistHit:
+    """An artist of the offline UG index the query names: an artist reading of ``STRONG`` or more.
+
+    ``artist`` is the name as UG's slugs write it ("The Beatles" keeps its
+    "The"); ``songs`` counts its songs (a song's variants with it) and ``tabs``
+    its rows; ``top`` holds its ``TOP_SONGS`` most tabbed songs, most first.
+    Never one of UG's catch-alls (``misc-…``), which are no one's name.
+    """
+
+    artist_key: str
+    artist: str
+    score: float
+    songs: int
+    tabs: int
+    top: tuple[IndexHit, ...] = ()
+
+    @property
+    def top_tabs(self) -> int:
+        """The tabs of its most tabbed song: what an artist is weighed by against a song of its name."""
+        return self.top[0].tabs if self.top else 0
+
+
+@dataclass(frozen=True)
+class IndexFound:
+    """What the offline index answers a query (``find_index``).
+
+    ``songs`` leaves out the songs of an artist in ``artists`` that only its
+    name matched: they are in its row. ``lead`` is "artist" when the first
+    artist outweighs the first song (a better score, or the same and a more
+    tabbed song of its own), "song" otherwise, None for no hit; ``best`` is
+    the first song when it scores ``STRONG`` or more by its title (or both)
+    and isn't a catch-all's (added under UG's names, its artist would be no
+    one's), and None when an artist leads.
+    """
+
+    artists: tuple[ArtistHit, ...] = ()
+    songs: tuple[IndexHit, ...] = ()
+    lead: str | None = None
+    best: IndexHit | None = None
+
+
+@dataclass(frozen=True)
+class Found:
+    """``found``'s answer: your songs, then the index's artists and songs, what comes first, and the
+    row Enter may act on (``best``: a song of yours first, as it costs no request)."""
+
+    library: tuple[LibraryHit, ...]
+    artists: tuple[ArtistHit, ...]
+    songs: tuple[IndexHit, ...]
+    lead: str | None
+    best: LibraryHit | IndexHit | None
+
+
+@dataclass(frozen=True)
+class SiteHit:
+    """A page of another site's offline index the query matches.
+
+    ``source`` is "gtptabs" (a song page of gtptabs.com: an artist and a title,
+    named from its slugs, its uploads of the title counted in ``uploads``) or
+    "musescore" (a song page of MuseScore: a title alone, as its sitemaps give
+    it, so ``artist`` is "" and the page a possible match). ``url`` is the page,
+    for the user to open; ``score`` and ``via`` are as ``IndexHit``'s.
+    """
+
+    source: str
+    title: str
+    url: str
+    score: float
+    artist: str = ""
+    artist_key: str = ""
+    title_key: str = ""
+    uploads: int = 1
+    via: str = "title"
 
 
 def display_from_keys(artist_key: str, song_key: str) -> tuple[str, str]:
@@ -113,58 +248,228 @@ def did_you_mean(song: Song, limit: int = SHOWN_CANDIDATES) -> list[dict]:
     return [c for c in song.match_candidates or [] if c.get("artist_key") and c.get("song_key")][:limit]
 
 
-def search_library(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[LibraryHit]:
-    """Your songs that match ``query``, best first, whatever their status."""
-    queries = [_Query(form) for form in _forms(query)]
+def search_library(conn: sqlite3.Connection, query: str, limit: int = 10, *,
+                   reading: str | None = None) -> list[LibraryHit]:
+    """Your songs that match ``query``, best first, whatever their status; with ``reading``
+    ("title"), only as that reading scores them."""
+    queries = _queries(query)
     if not queries:
         return []
     hits = []
     for song in list_songs(conn):
-        score = _song_score(queries, song)
+        score, via = _song_reading(queries, song, reading)
         if score >= MIN_SCORE:
-            hits.append(LibraryHit(song, round(score, 1)))
+            hits.append(LibraryHit(song, round(score, 1), via))
     hits.sort(key=lambda h: (-h.score, h.song.display.casefold(), h.song.id))
     return hits[:limit]
 
 
 def search_index(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[IndexHit]:
-    """Songs in the offline UG index that match ``query``, best first.
+    """Songs in the offline UG index that match ``query``, best first, by any reading.
 
     Ties go to the song with more tabs, which is usually the one you mean
-    ("creep" is Radiohead's before Stone Temple Pilots').
+    ("creep" is Radiohead's before Stone Temple Pilots'), then to the artist
+    with more of the rows.
     """
-    tokens = _tokens(query)
-    patterns = _patterns(tokens)
+    scored, _ = _scored_rows(conn, query)
+    return _hits(conn, scored[:limit])
+
+
+def find_index(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS, songs: int = SONG_ROWS,
+               reading: str | None = None) -> IndexFound:
+    """The offline index's artists and songs for ``query`` (``IndexFound``); with ``reading`` "title",
+    songs of that title alone, by any artist, and no artist rows."""
+    scored, named = _scored_rows(conn, query, reading)
+    if any(n.score >= 100 for n in named.values()):
+        # A name only near the query's ("Beagles" for "eagles") is noise beside the one that is it: its row goes,
+        # and the songs only its name matched.
+        near = {k for k, n in named.items() if n.score < 100}
+        named = {k: n for k, n in named.items() if k not in near}
+        scored = [s for s in scored if not (s.via == "artist" and s.artist_key in near)]
+    rows: list[ArtistHit] = []
+    if artists > 0:
+        # Weighed first by what the rows hold of each (every row of an artist whose key a pattern
+        # matched), then counted exactly for the few that may be shown.
+        order = sorted(named, key=lambda k: (-named[k].score, -named[k].top, -named[k].tabs, k))
+        rows = [a for a in (_artist_hit(conn, k, named[k].score) for k in order[:artists + 2]) if a is not None]
+        rows = sorted(rows, key=lambda a: (-a.score, -a.top_tabs, -a.tabs, a.artist_key))[:artists]
+    shown = {a.artist_key for a in rows}
+    hits = _hits(conn, [s for s in scored if not (s.via == "artist" and s.artist_key in shown)][:songs])
+    if not rows and not hits:
+        return IndexFound()
+    if rows and (not hits or (rows[0].score, rows[0].top_tabs) > (hits[0].score, hits[0].tabs)):
+        return IndexFound(tuple(rows), tuple(hits), "artist", None)
+    first = hits[0]
+    # Never one only an artist's name matched, nor one of a catch-all's: its artist is no one's name.
+    best = first if first.score >= STRONG and first.via != "artist" and not first.catch_all else None
+    return IndexFound(tuple(rows), tuple(hits), "song", best)
+
+
+def found(library: Sequence[LibraryHit], index: IndexFound) -> Found:
+    """Your songs with the index's answer: a song of yours read by its title (or both) at ``STRONG``
+    or more comes first and is ``best``; one read only by its artist is never the song you meant,
+    nor one under a placeholder artist ("misc - 斑马"), which nothing can find."""
+    yours = next((h for h in library
+                  if h.via != "artist" and h.score >= STRONG and not placeholder_artist(h.song.artist)), None)
+    if yours is not None:
+        return Found(tuple(library), index.artists, index.songs, "song", yours)
+    lead = index.lead or ("song" if library else None)
+    return Found(tuple(library), index.artists, index.songs, lead, index.best)
+
+
+def artist_songs(conn: sqlite3.Connection, artist_key: str, *, limit: int = 50, offset: int = 0,
+                 title: str | None = None) -> tuple[list[IndexHit], int]:
+    """Every song of an artist of the offline index, most tabbed first (a song's variants counted
+    with it): ``limit`` of them from ``offset``, and how many there are. With ``title``, only those
+    whose title it matches, best first."""
+    groups = [(100.0, base, n) for base, n in _artist_groups(conn, artist_key)]
+    via = "artist"
+    queries = _queries(title or "")
+    if queries:
+        scored = [(max(q.score("", base.replace("-", " ")) for q in queries), base, n) for _, base, n in groups]
+        groups = sorted((g for g in scored if g[0] >= MIN_SCORE), key=lambda g: (-g[0], -g[2], g[1]))
+        via = "title"
+    page = groups[max(offset, 0):max(offset, 0) + max(limit, 0)]
+    hits = (_index_hit(conn, artist_key, base, score, via) for score, base, _ in page)
+    return [h for h in hits if h is not None], len(groups)
+
+
+def search_gtptabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
+    """gtptabs.com's song pages that match ``query``, best first, by any reading, as the index's songs
+    are scored; a title's uploads under one artist ("-2", "-3") are one hit, on its first upload's page.
+    Ties go to the title uploaded more often. The artist is named as Ultimate Guitar's index names them
+    (``_gtptabs_artist``), the title from its slug."""
+    from caracole.gtptabs import page_url
+
+    patterns = _patterns(_tokens(query))
     if not patterns:
         return []
-    queries = [_Query(form) for form in _forms(query)]
-    # Every row whose artist or song key matches a pattern, read from the keys' trigram index.
-    rows = rows_like(conn, patterns)
-    groups: dict[tuple[str, str], int] = {}
-    for artist_key, song_key, n in rows:
-        key = (artist_key, split_variant(song_key)[0])
-        groups[key] = groups.get(key, 0) + n
-
+    queries = _queries(query)
+    # The page's path holds the artist's slug and the title's, whose words the keys are made of: one
+    # LIKE a pattern over one column, the cheapest scan of a table without a trigram index.
+    where = " OR ".join("path LIKE ?" for _ in patterns)
+    rows = conn.execute(
+        f"SELECT path, artist_key, title_key, base_key FROM gtptabs_index WHERE title_key != '' AND ({where}) "
+        "LIMIT ?", (*patterns, SITE_ROWS_READ))
+    groups: dict[tuple[str, str], list[tuple[bool, str]]] = {}
+    for path, artist_key, title_key, base in rows:
+        groups.setdefault((artist_key, base), []).append((title_key != base, path))
     scored = []
-    for (artist_key, base), n in groups.items():
-        artist, title = artist_key.replace("-", " "), base.replace("-", " ")
-        score = max(q.score(artist, title) for q in queries)
-        if is_catch_all(artist_key):  # no one's name: the title holds the show's, so it is scored alone
-            show = " ".join(w for w in base.split("-") if w not in SHOW_WORDS)
-            score = max(score, *(q.score("", t) for q in queries for t in (title, show) if t))
+    for (artist_key, base), pages in groups.items():
+        score, via = _reading(q.readings(artist_key.replace("-", " "), base.replace("-", " ")) for q in queries)
         if score >= MIN_SCORE:
-            scored.append((score, n, artist_key, base))
+            scored.append((score, len(pages), artist_key, base, min(pages)[1], via))
     scored.sort(key=lambda s: (-s[0], -s[1], s[2], s[3]))
-
+    names: dict[str, str] = {}
     hits = []
-    for score, _, artist_key, base in scored[:limit]:
-        hit = _index_hit(conn, artist_key, base, score)
-        if hit is not None:
-            hits.append(hit)
+    for score, uploads, artist_key, base, path, via in scored[:max(limit, 0)]:
+        if artist_key not in names:
+            names[artist_key] = _gtptabs_artist(conn, artist_key)
+        hits.append(SiteHit("gtptabs", _title_words(base), page_url(path), round(score, 1), names[artist_key],
+                            artist_key, base, uploads, via))
     return hits
 
 
-def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = None,
+def _gtptabs_artist(conn: sqlite3.Connection, artist_key: str) -> str:
+    """A gtptabs.com artist's name: as Ultimate Guitar's slugs write it, under the key or the key with its
+    first word last (gtptabs.com files people last name first: "Elton John" is ``john-elton``), else
+    from the key as it is."""
+    words = artist_key.split("-")
+    for key in dict.fromkeys([artist_key, "-".join(words[1:] + words[:1])]):
+        row = conn.execute("SELECT path FROM ug_index WHERE artist_key = ? AND path != '' LIMIT 1", (key,)).fetchone()
+        if row is not None:
+            slug = row[0].partition("/")[0]
+            if slug:
+                return _title_words(slug)
+    return _title_words(artist_key)
+
+
+def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
+    """MuseScore's song pages whose title is the query, or the query with an artist's name on either side
+    ("oasis wonderwall", "live forever oasis"): the sitemaps give titles alone, so each is a possible match.
+    A run of the query's words is a title only when the rest names the artist of a song by that title, one
+    the Ultimate Guitar index, gtptabs.com's or your library has (``_known_song``): "oasis live forever" is
+    never a page titled "Oasis" or "Forever". The whole query first, then the longer titles; a title's pages
+    oldest first, as ``musescore.song_pages`` lists a song's. Exact keys alone, so it reads the title index,
+    never every row."""
+    from caracole.musescore import SongPage, title_key
+
+    words = _tokens(query)
+    runs = [(words, [])] + [(words[:n], words[n:]) for n in range(len(words) - 1, 0, -1)] + \
+        [(words[-n:], words[:-n]) for n in range(len(words) - 1, 0, -1)]
+    runs.sort(key=lambda run: -len(run[0]))  # stable: the whole query, then each length's start before its end
+    hits: list[SiteHit] = []
+    seen: set[str] = set()
+    mine: list[set[tuple[str, str]]] = []  # your songs' artists and titles, read once, when a run needs them
+    for run, rest in runs:
+        text = " ".join(run)
+        for key in (title_key(text), title_key(romanize(text)) if has_han(text) else ""):  # its slugs are ASCII
+            if not key or key in seen:
+                continue
+            rows = conn.execute("SELECT page_id, path, title_key FROM musescore_index WHERE title_key = ? "
+                                "ORDER BY page_id LIMIT ?", (key, max(limit, 0))).fetchall()
+            if not rows or (rest and not _known_song(conn, " ".join(rest), key, mine)):
+                continue
+            seen.add(key)
+            for row in rows:
+                page = SongPage(*row)
+                hits.append(SiteHit("musescore", _title_words(key), page.url, 100.0, title_key=key,
+                                    via="both" if rest else "title"))
+        if len(hits) >= limit:
+            break
+    return hits[:max(limit, 0)]
+
+
+def _known_song(conn: sqlite3.Connection, artist: str, title_key: str, mine: list[set[tuple[str, str]]]) -> bool:
+    """Whether ``artist`` names the artist of a song titled ``title_key`` (a MuseScore title key) in the
+    Ultimate Guitar index, gtptabs.com's (which files people last name first) or your library. ``mine``
+    caches your songs' (artist form, title key) pairs, filled on the first call that needs them."""
+    from caracole.musescore import title_key as key_of
+
+    forms = [f for f in name_forms(artist) if f and not no_ones(f) and not placeholder_artist(f)]
+    for form in forms:
+        if conn.execute("SELECT 1 FROM ug_index WHERE artist_key = ? AND song_key = ? LIMIT 1",
+                        (form, title_key)).fetchone() is not None:
+            return True
+        words = form.split("-")
+        filed = list(dict.fromkeys([form, "-".join([words[-1], *words[:-1]])]))  # as gtptabs.artist_keys files them
+        if conn.execute(f"SELECT 1 FROM gtptabs_index WHERE artist_key IN ({', '.join('?' * len(filed))}) "
+                        "AND base_key = ? LIMIT 1", (*filed, title_key)).fetchone() is not None:
+            return True
+    if not forms:
+        return False
+    if not mine:
+        pairs = set()
+        for song in list_songs(conn):
+            titles = {key_of(song.title), key_of(romanize(song.title))} - {""}
+            for name in dict.fromkeys(song.artists or [song.artist]):
+                pairs |= {(compact(f), t) for f in name_forms(name) for t in titles}
+        mine.append(pairs)
+    return any((compact(f), title_key) in mine[0] for f in forms)
+
+
+def no_ones(artist_key: str) -> bool:
+    """Whether an artist key is no one's name: every ``misc-…`` of UG's, ``misc-mashups`` too (two
+    songs in one title), which never makes an artist row."""
+    return artist_key.startswith(CATCH_ALL_PREFIX)
+
+
+def library_by_artist(songs: Sequence[Song], name: str, artist_key: str | None = None) -> list[Song]:
+    """Your songs by an artist, as ``name`` or UG's ``artist_key`` writes them (``normalize.name_forms``:
+    UG's "Song Dongye" is your 宋冬野), or matched to that artist's songs; by title."""
+    wanted = {compact(f) for f in name_forms(name)} | ({compact(artist_key)} if artist_key else set())
+    wanted.discard("")
+    mine = []
+    for song in songs:
+        forms = {compact(f) for a in dict.fromkeys(song.artists or [song.artist]) for f in name_forms(a)}
+        matched = artist_key is not None and song.match_decision in ("accept", "pinned") \
+            and song.match_artist_key == artist_key
+        if forms & wanted or matched:
+            mine.append(song)
+    return sorted(mine, key=lambda s: (clean_title(s.title).casefold(), s.id))
+
+
+def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: str | None = None,
                  overrides: Overrides | None = None) -> str | None:
     """What to do when the index can't see an artist, or None when the search went fine.
 
@@ -172,7 +477,12 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = N
     Maná, 宋冬野) have no slugged rows in UG's sitemaps. The hint names the
     ``[artist_url]`` override, with a line to paste for ``artist`` (by default
     the query itself). It's given when nothing matches well, and, more briefly,
-    for a query with such letters even when something does.
+    for a query with such letters even when something does. ``hits`` are the
+    search's songs and artists. A query that is the line's key may be a title
+    as well as an artist's name: the hint then says so, and that caracole
+    needs the song's artist too, which no site is asked for. With ``artist``
+    (``caracole search --artist``, or a song of yours the query found), the
+    name is known to be the artist's.
 
     ``overrides`` is the file's (None when there is none to read). As on the
     to-do page, a table or a key declared twice makes it unreadable, so the line
@@ -209,13 +519,17 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit], *, artist: str | None = N
             f"their tab pages, and paste its address, as your browser shows it, into overrides.toml"
             f"{where}:\n\n{block}"
         )
-    return (
-        f"{lead} Find the artist's page on ultimate-guitar.com once, or one of their tab pages, and "
+    find = "Find the artist's page" if artist else f"If {shown} is the artist's name, find their page"
+    hint = (
+        f"{lead} {find} on ultimate-guitar.com once, or one of their tab pages, and "
         f"paste its address, as your browser shows it (an artist page's ends in the artist's number, "
         f"as …/artist/634073 does), into overrides.toml{where}:\n\n{block}\n\n"
         "The key is the artist's name as your songs write it, so take any title words out of it. "
         "Then add the song with `caracole add`; the nightly run looks for its tabs on that page."
     )
+    if not artist:  # the query may be the song's title: no site is asked for its artist
+        hint += f"\n\nIf {shown} is a title, caracole needs its artist too: `caracole add ARTIST {_shell(shown)}`."
+    return hint
 
 
 # --- words, pinyin and scores -----------------------------------------------------------
@@ -273,12 +587,37 @@ def _patterns(tokens: list[str]) -> list[str]:
     return patterns[:MAX_PATTERNS]
 
 
-class _Query:
-    """One form of a query, ready to be scored against many songs."""
+def _queries(text: str) -> list[_Query]:
+    """The query's forms, ready to be scored: its words, and for Chinese its pinyin too, which carries
+    each Chinese word's pinyin (``_Query.runs``) for the rule that pinyin counts only as words."""
+    forms = _forms(text)
+    if len(forms) < 2:
+        return [_Query(f) for f in forms]
+    runs = tuple("".join(fold(s) for s in romanize(t).split()) for t in _tokens(text) if has_han(t))
+    return [_Query(forms[0]), _Query(forms[1], runs)]
 
-    def __init__(self, text: str):
+
+class _Query:
+    """One form of a query, ready to be scored against many songs.
+
+    ``runs`` is set on the pinyin form of a Chinese query: each Chinese word's
+    pinyin, its syllables written together ("宋冬野" is ``songdongye``). That
+    form counts for a song only where each of them is a whole run of the
+    artist's words or of the title's (``holds``), as in the matcher, and a part
+    of a name it matches tops out at ``PINYIN_PARTIAL_SCALE``, below a strong hit.
+    """
+
+    def __init__(self, text: str, runs: tuple[str, ...] = ()):
         self.text = text
         self.compact = text.replace(" ", "")
+        self.runs = runs
+
+    def holds(self, *names: str) -> bool:
+        """Whether each Chinese word's pinyin is a whole run of the words of one of ``names`` (space-
+        separated words), hyphens aside: ``song dongye``, ``songdongye`` and ``song dong ye`` hold
+        宋冬野, and ``suburban male`` holds no 斑马. True for a form with no Chinese."""
+        words = [name.split() for name in names]
+        return all(any(_holds(w, run) for w in words) for run in self.runs)
 
     def score(self, artist: str, title: str) -> float:
         """How well this query matches a song, 0–100 (artist and title are space-separated words).
@@ -289,30 +628,166 @@ class _Query:
         Everything is compared once more without spaces, so "ac dc" meets
         "acdc" and "banma" meets "ban ma".
         """
-        q = self.text
-        full = f"{artist} {title}"
-        best = max(fuzz.ratio(q, title), fuzz.ratio(q, artist), fuzz.token_sort_ratio(q, full))
-        if len(q) < len(full):
-            best = max(best, PARTIAL_SCALE * fuzz.partial_ratio(q, full))
-        qc = self.compact
+        return max(self.readings(artist, title))
+
+    def readings(self, artist: str, title: str) -> tuple[float, float, float]:
+        """``score`` split by the reading that gives it, in ``READINGS``' order: the query as the
+        song's title, as both its names (their words in any order), as its artist. A part of the
+        names counts for the title or the artist when it lies within that name, else for both:
+        the same comparisons as one score, so the best of the three is ``score``."""
+        if self.runs and not self.holds(artist, title):
+            return (0.0, 0.0, 0.0)
+        q, qc = self.text, self.compact
         a, t = artist.replace(" ", ""), title.replace(" ", "")
-        best = max(best, fuzz.ratio(qc, t), fuzz.ratio(qc, a), fuzz.ratio(qc, a + t))
-        if len(qc) < len(a) + len(t):
-            best = max(best, PARTIAL_SCALE * fuzz.partial_ratio(qc, a + t))
-        return best
+        full = f"{artist} {title}"
+        by = {"title": max(fuzz.ratio(q, title), fuzz.ratio(qc, t)),
+              "both": max(fuzz.token_sort_ratio(q, full), fuzz.ratio(qc, a + t)),
+              "artist": max(fuzz.ratio(q, artist), fuzz.ratio(qc, a))}
+        scale = PINYIN_PARTIAL_SCALE if self.runs else PARTIAL_SCALE
+        # Spaced, the title starts after the artist and a space; compact, right after the artist.
+        for needle, names, edge, gap in ((q, full, len(artist), 1), (qc, a + t, len(a), 0)):
+            if len(needle) < len(names):
+                part = fuzz.partial_ratio_alignment(needle, names)
+                where = ("title" if part.dest_start >= edge else
+                         "artist" if part.dest_end <= edge + gap else "both")
+                by[where] = max(by[where], scale * part.score)
+        return by["title"], by["both"], by["artist"]
+
+    def name(self, artist: str) -> float:
+        """How well this query is an artist's whole name, never a part of it: what makes an artist row."""
+        if self.runs and not self.holds(artist):
+            return 0.0
+        return max(fuzz.ratio(self.text, artist), fuzz.ratio(self.compact, artist.replace(" ", "")))
 
 
-def _song_score(queries: list[_Query], song: Song) -> float:
-    """The best score over a song's artists, each paired with its title, plain and in pinyin."""
+def _holds(words: list[str], run: str) -> bool:
+    """Whether ``run`` is some consecutive ``words`` written together."""
+    for i in range(len(words)):
+        joined = ""
+        for word in words[i:]:
+            joined += word
+            if joined == run:
+                return True
+            if not run.startswith(joined):
+                break
+    return False
+
+
+def _reading(scores: Iterable[tuple[float, float, float]], reading: str | None = None) -> tuple[float, str]:
+    """The best of several (title, both, artist) readings, and which reading it is; a tie goes to the
+    title, then both. With ``reading``, that reading's alone."""
+    best, via = 0.0, READINGS[0]
+    for triple in scores:
+        for name, score in zip(READINGS, triple):
+            if score > best and reading in (None, name):
+                best, via = score, name
+    return best, via
+
+
+def _song_reading(queries: list[_Query], song: Song, reading: str | None = None) -> tuple[float, str]:
+    """The best score over a song's artists, each paired with its title, plain and in pinyin, and the
+    reading that gave it."""
     titles = _forms(clean_title(song.title)) or [""]
-    best = 0.0
+    scores = []
     for artist in dict.fromkeys(song.artists or [song.artist]):
         artists = _forms(artist) or [""]
         # Plain words with plain words, pinyin with pinyin (a form missing on one side is its plain one).
         for a, t in {(artists[0], titles[0]), (artists[-1], titles[-1])}:
-            for q in queries:
-                best = max(best, q.score(a, t))
-    return best
+            scores += [q.readings(a, t) for q in queries]
+    return _reading(scores, reading)
+
+
+# --- the index's rows, scored ------------------------------------------------------------------
+
+
+class _Row(NamedTuple):
+    """A song of the rows the prefilter read (its variants with it), scored."""
+
+    score: float
+    tabs: int
+    artist_tabs: int  # the artist's tabs among the rows
+    artist_key: str
+    base: str
+    via: str
+
+
+class _Named(NamedTuple):
+    """An artist of the rows whose whole name the query is, with what the rows hold of theirs."""
+
+    score: float
+    top: int  # the tabs of its most tabbed song
+    tabs: int
+
+
+def _scored_rows(conn: sqlite3.Connection, query: str,
+                 reading: str | None = None) -> tuple[list[_Row], dict[str, _Named]]:
+    """Every song of the rows the prefilter reads scored against the query, best first (ties to more
+    tabs, then to the artist with more of the rows), and the artists the query names (none with
+    ``reading``)."""
+    patterns = _patterns(_tokens(query))
+    if not patterns:
+        return [], {}
+    queries = _queries(query)
+    # Every row whose artist or song key matches a pattern, read from the keys' trigram index.
+    groups: dict[tuple[str, str], int] = {}
+    for artist_key, song_key, n in rows_like(conn, patterns):
+        key = (artist_key, split_variant(song_key)[0])
+        groups[key] = groups.get(key, 0) + n
+    tabs: dict[str, int] = {}
+    top: dict[str, int] = {}
+    for (artist_key, _), n in groups.items():
+        tabs[artist_key] = tabs.get(artist_key, 0) + n
+        top[artist_key] = max(top.get(artist_key, 0), n)
+
+    scored = []
+    for (artist_key, base), n in groups.items():
+        artist, title = artist_key.replace("-", " "), base.replace("-", " ")
+        score, via = _reading((q.readings(artist, title) for q in queries), reading)
+        if is_catch_all(artist_key):  # no one's name: the title holds the show's, so it is scored alone
+            show = " ".join(w for w in base.split("-") if w not in SHOW_WORDS)
+            alone = max((q.score("", t) for q in queries for t in (title, show) if t), default=0.0)
+            if alone > score:
+                score, via = alone, "title"
+        if score >= MIN_SCORE:
+            scored.append(_Row(score, n, tabs[artist_key], artist_key, base, via))
+    scored.sort(key=lambda s: (-s.score, -s.tabs, -s.artist_tabs, s.artist_key, s.base))
+
+    named: dict[str, _Named] = {}
+    if reading is None:
+        for artist_key in tabs:
+            if no_ones(artist_key):
+                continue
+            score = max(q.name(artist_key.replace("-", " ")) for q in queries)
+            if score >= STRONG:
+                named[artist_key] = _Named(score, top[artist_key], tabs[artist_key])
+    return scored, named
+
+
+def _hits(conn: sqlite3.Connection, rows: Sequence[_Row]) -> list[IndexHit]:
+    hits = (_index_hit(conn, r.artist_key, r.base, r.score, r.via) for r in rows)
+    return [h for h in hits if h is not None]
+
+
+def _artist_groups(conn: sqlite3.Connection, artist_key: str) -> list[tuple[str, int]]:
+    """Each song of an artist with its tabs (a song's variants counted with it), most tabbed first."""
+    groups: dict[str, int] = {}
+    for song_key, n in conn.execute(
+        "SELECT song_key, COUNT(*) FROM ug_index WHERE artist_key = ? GROUP BY song_key", (artist_key,)
+    ):
+        base = split_variant(song_key)[0]
+        groups[base] = groups.get(base, 0) + n
+    return sorted(groups.items(), key=lambda g: (-g[1], g[0]))
+
+
+def _artist_hit(conn: sqlite3.Connection, artist_key: str, score: float) -> ArtistHit | None:
+    """An artist with its songs and tabs counted and its most tabbed songs; None for no tab of theirs."""
+    groups = _artist_groups(conn, artist_key)
+    if not groups:
+        return None
+    top = tuple(h for h in (_index_hit(conn, artist_key, base, score, "artist") for base, _ in groups[:TOP_SONGS])
+                if h is not None)
+    name = top[0].artist if top else _title_words(artist_key)
+    return ArtistHit(artist_key, name, round(score, 1), len(groups), sum(n for _, n in groups), top)
 
 
 # --- index hits ---------------------------------------------------------------------------
@@ -328,7 +803,14 @@ def index_song(conn: sqlite3.Connection, artist_key: str, song_key: str, score: 
     return _index_hit(conn, artist_key, song_key, score)
 
 
-def _index_hit(conn: sqlite3.Connection, artist_key: str, song_key: str, score: float) -> IndexHit | None:
+def index_artist(conn: sqlite3.Connection, artist_key: str) -> ArtistHit | None:
+    """One artist of the index as ``find_index`` gives it (score 100): its songs and tabs counted, its most
+    tabbed songs and its name as UG writes it. None when the index has no tab of theirs."""
+    return _artist_hit(conn, artist_key, 100.0)
+
+
+def _index_hit(conn: sqlite3.Connection, artist_key: str, song_key: str, score: float,
+               via: str = "both") -> IndexHit | None:
     """Every tab of the song, counted per type, with a sample page and names to show."""
     tabs = song_tabs(conn, artist_key, song_key)
     if not tabs:
@@ -338,7 +820,7 @@ def _index_hit(conn: sqlite3.Connection, artist_key: str, song_key: str, score: 
     labels = tuple(sorted({t.label for t in tabs if t.label}))
     sample = min(tabs, key=lambda t: (t.label is not None, _type_rank(t.type), t.tab_id))
     artist, title = _names_from_path(sample) or display_from_keys(artist_key, song_key)
-    return IndexHit(artist_key, song_key, ordered, round(score, 1), sample.url, labels, artist, title)
+    return IndexHit(artist_key, song_key, ordered, round(score, 1), sample.url, labels, artist, title, via)
 
 
 def _names_from_path(tab: IndexTab) -> tuple[str, str] | None:
@@ -356,6 +838,11 @@ def _names_from_path(tab: IndexTab) -> tuple[str, str] | None:
         song_slug = song_slug[: -len(tab.label) - 1]
     artist, title = display_from_keys(artist_slug, song_slug)
     return (artist, title) if artist and title else None
+
+
+def _shell(s: str) -> str:
+    """Double-quoted for a POSIX shell, as the lines to paste are printed."""
+    return '"' + _SHELL_SPECIAL.sub(r"\\\1", s) + '"'
 
 
 def _title_words(key: str) -> str:

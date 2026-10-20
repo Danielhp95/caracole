@@ -70,8 +70,10 @@ def register(app: typer.Typer) -> None:
     @app.command("add")
     def add_cmd(
         ctx: typer.Context,
-        artist: str = typer.Argument(..., help="The artist, as you'd write it."),
-        title: str = typer.Argument(..., help="The song's title."),
+        artist: str = typer.Argument(
+            ..., help='The artist, as you\'d write it; or the whole song, as "ARTIST - TITLE".'
+        ),
+        title: str | None = typer.Argument(None, help="The song's title."),
         album: str | None = typer.Option(
             None, "--album", help="The album; it makes the lyrics lookup exact."
         ),
@@ -84,7 +86,16 @@ def register(app: typer.Typer) -> None:
     ) -> None:
         """Add a song to wanted.txt, then sync wanted.txt into the library."""
         duration_ms = _duration_ms(duration)
-        _add(load_cfg(ctx), artist, title, album, duration_ms)
+        cfg = load_cfg(ctx)
+        if title is None:  # one text: "Artist - Title", else one name, which names no song
+            artist, sep, title = artist.partition(" - ")
+            if not sep and not any(c.isalnum() for c in artist):
+                fail("can't add this song: a song needs an artist and a title", 2)
+            if not sep:
+                from caracole.commands.search import offer_songs
+
+                offer_songs(cfg, " ".join(artist.split()), "add")
+        _add(cfg, artist, title, album, duration_ms)
 
     @app.command("sync")
     def sync_cmd(ctx: typer.Context) -> None:
@@ -341,8 +352,16 @@ def _write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides | N
 
 
 def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None) -> None:
-    """Add the song with ``add_song``, then say what was done (``say_added``)."""
+    """Add the song with ``add_song``, then say what was done (``say_added``), and when its artist is
+    a placeholder such as "misc", that nothing can be found by it."""
+    from caracole.normalize import placeholder_artist
+
     say_added(cfg, add_song(cfg, artist, title, album, duration_ms), album, duration_ms)
+    if placeholder_artist(artist):
+        name = " ".join(title.split())
+        _warn(f'"{" ".join(artist.split())}" is no one\'s name, and caracole looks a song up by its artist: '
+              f'it may never find this one. If you don\'t know the artist, caracole search "{name}" lists the '
+              "songs of that title with theirs; then write the artist into its line in wanted.txt.")
 
 
 def say_added(cfg: Config, added: AddedSong, album: str | None = None, duration_ms: int | None = None) -> None:

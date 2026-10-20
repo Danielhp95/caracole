@@ -203,6 +203,38 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     assert sha(scripts[0]) in csp_of(html) and sha(styles[0]) in csp_of(html)
 
 
+def bar_of(html):
+    found = re.search(r'<div class="searchbar"[^>]*>.*?</div>\n</div>', html, re.S)
+    assert found, html[:3000]
+    return found.group(0)
+
+
+def test_the_bar_has_a_search_all_button_and_a_status_line_in_both_pages(conn, cfg):
+    from caracole.library_page import WebControls
+
+    add_song(conn, "Radiohead", "Creep")
+    for html in (page(conn, cfg), build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))):
+        bar = bar_of(JSON_BLOCK.sub("", html))
+        assert re.search(r'<button type="button" id="all" class="btn all"[^>]*>Search all</button>', bar)
+        status = re.search(r'<p class="bar-status" id="bar-status"[^>]*>', bar)
+        assert status and 'aria-live="polite"' in status.group(0)
+        assert re.search(r'<input id="q"[^>]*aria-describedby="bar-status"', bar, re.S)
+        assert re.search(r'<section class="results" id="results" aria-label="Search results">', html)
+
+
+def test_the_request_form_is_under_the_results_not_above_the_bar(conn, cfg):
+    from caracole.library_page import WebControls
+
+    html = JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok")))
+    bar, results, form = html.index('id="q"'), html.index('id="results"'), html.index('action="/request"')
+    assert bar < results < form < html.index('class="toolbar"')
+    box = re.search(r'<details class="request" id="request-box">\s*<summary>(.*?)</summary>', html, re.S)
+    assert box and "Not in the list? Request it by name" in box.group(1)
+    # The songs just requested show under the bar in both modes, above the results and the grid.
+    assert html.index('id="q"') < html.index('id="requested"') < html.index('id="results"')
+    assert 'href="/lookup"' not in html  # the bar is the way in: no Look up link in the masthead
+
+
 # --- files ---------------------------------------------------------------------------
 
 
@@ -510,6 +542,17 @@ def test_haystack_holds_folded_text_and_pinyin_for_han(conn, cfg):
     assert "acdc" in songs[initials.display]["search"] and "ac/dc" in songs[initials.display]["search"]
 
 
+def test_each_song_carries_its_titles_initials_for_the_search_box(conn, cfg):
+    wish = add_song(conn, "Pink Floyd", "Wish You Were Here")
+    dont = add_song(conn, "Queen", "Don't Stop Me Now")
+    one = add_song(conn, "Radiohead", "Creep")
+    han = add_song(conn, "宋冬野", "斑马，斑马")
+    songs = songs_of(page(conn, cfg))
+    assert songs[wish.display]["initials"] == "wywh" and songs[dont.display]["initials"] == "dsmn"
+    assert songs[han.display]["initials"] == "bmbm"  # by pinyin
+    assert "initials" not in songs[one.display]  # one word: no initials worth typing
+
+
 def test_the_page_folds_queries_with_the_same_letters_as_the_haystack(conn, cfg):
     s = add_song(conn, "Røyksopp", "Ståle Straße")
     data = data_of(page(conn, cfg))
@@ -811,6 +854,7 @@ MEASURE = """
     widths: cards.map((c) => Math.round(box(c).width)),
     page: window.innerWidth,
     scroll: document.documentElement.scrollWidth,
+    view: document.getElementById("view-toggle").getClientRects().length > 0,
   }));
 })();
 """
@@ -852,18 +896,24 @@ def test_cards_fill_a_desktop_row_and_stack_on_a_phone(conn, cfg, tmp_path):
 
 
 @in_chromium
-def test_the_letter_strip_lists_the_artists_initials(conn, cfg, tmp_path):
+def test_the_letter_strip_lists_the_artists_initials_once_there_are_many_songs(conn, cfg, tmp_path):
     for artist, title in (("The Beatles", "Yesterday"), ("Radiohead", "Creep"), ("Soda Stereo", "Música"),
                           ("宋冬野", "斑马，斑马")):
         add_song(conn, artist, title)
+    few = write_library_page(cfg.library_dir, page(conn, cfg))
+    assert re.search(r'<nav[^>]*id="jump"[^>]*hidden', dump_dom(few, tmp_path))  # four songs: scroll, no letters
+    for n in range(36):
+        add_song(conn, "Radiohead", f"Song {n}")
     path = write_library_page(cfg.library_dir, page(conn, cfg))
     dom = dump_dom(path, tmp_path)
     strip = re.search(r'<nav[^>]*id="jump"[^>]*>(.*?)</nav>', dom, re.S)
-    assert strip, dom[-2000:]
+    assert strip and "hidden" not in strip.group(0)[:60], dom[-2000:]
     assert re.findall(r"<button[^>]*>([^<]+)</button>", strip.group(1)) == ["B", "R", "S"]
     shown = listing(dump_dom(path, tmp_path, "#sort=recent"))
-    assert shown.count("<article") == 4
+    assert shown.count("<article") == 40
     assert re.search(r'<nav[^>]*id="jump"[^>]*hidden', dump_dom(path, tmp_path, "#sort=recent"))
+    # A search that shows a few of them leaves the letters out too.
+    assert re.search(r'<nav[^>]*id="jump"[^>]*hidden', dump_dom(path, tmp_path, "#q=creep"))
 
 
 @in_chromium
@@ -1823,3 +1873,216 @@ def test_a_rows_states_fit_its_row_and_its_pick_opens_the_picker_where_it_is(con
     assert plain < states["rows"]["Bohemian Rhapsody"]["height"] <= plain + 30, states
     assert states["open"] and states["panel"] and states["expanded"] == "true", states
     assert states["focus"] == "radiohead/creep", states
+
+
+# --- the bar: type to filter, Enter for the sites ----------------------------------------------------
+
+
+@pytest.fixture
+def driven(tmp_path):
+    """A page driven as you would, typing and pressing keys (helpers/browser.py's Browser)."""
+    from helpers.browser import Browser, BrowserError
+
+    try:
+        page = Browser(tmp_path / "chrome")
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    yield page
+    page.close()
+
+
+SHOWN_TITLES = "[...document.querySelectorAll('#list article h2')].map((h) => h.textContent)"
+COMPOSING_ENTER = ("document.getElementById('q').dispatchEvent(new KeyboardEvent('keydown', "
+                   "{ key: 'Enter', keyCode: 229, isComposing: true, bubbles: true, cancelable: true }))")
+
+
+@in_chromium
+def test_enter_on_the_file_page_shows_the_line_to_run_and_asks_nothing(conn, cfg, driven):
+    add_song(conn, "Radiohead", "Creep")
+    add_song(conn, "Pink Floyd", "Wish You Were Here")
+    add_song(conn, "Oasis", "Wonderwall")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    driven.open(path.as_uri())
+    driven.js("document.getElementById('q').focus()")
+    driven.type("wywh")  # a title's initials find it
+    assert driven.wait(f"{SHOWN_TITLES}.join() === 'Wish You Were Here'")
+    assert "Enter" in driven.js("document.getElementById('bar-status').textContent")
+    driven.js(COMPOSING_ENTER)  # the Enter that ends a pinyin word: still typing
+    assert driven.js("document.getElementById('results').hidden") is True
+    driven.press("Enter")
+    assert driven.wait("!document.getElementById('results').hidden")
+    assert driven.js("document.querySelector('#results .file-answer code').textContent") == "caracole search 'wywh'"
+    assert "caracole serve" in driven.js("document.querySelector('#results .file-answer').textContent")
+    assert driven.js(f"{SHOWN_TITLES}.join()") == "Wish You Were Here"  # the songs stay where they are
+    assert driven.js("location.hash").endswith("all=1")
+    driven.press("Escape")
+    assert driven.wait("document.getElementById('results').hidden")
+    assert driven.js("document.getElementById('q').value") == "wywh"  # Escape leaves the answer, not the search
+    # Nothing was asked of anyone: no fetch, no image, no script but the page's own.
+    assert driven.js("performance.getEntriesByType('resource').length") == 0
+
+
+@in_chromium
+def test_with_none_of_your_songs_matching_the_file_page_says_what_to_run_at_once(conn, cfg, tmp_path):
+    add_song(conn, "Radiohead", "Creep")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    dom = dump_dom(path, tmp_path, "#q=" + quote("karma police"))
+    shown = listing(dom)
+    assert "No songs match “karma police”." in shown
+    assert "<code>caracole search 'karma police'</code>" in shown and "Copy</button>" in shown
+    assert re.search(r'<button type="button" id="all" class="btn all primary"', dom)  # the way on, prominent
+
+
+
+@in_chromium
+def test_a_key_filters_your_songs_alone_as_the_sites_know_no_keys(conn, cfg, driven):
+    from caracole.library_page import WebControls
+
+    keep_sheet_json(conn, cfg, add_song(conn, "Soda Stereo", "De Música Ligera"), AM_F_C_G)
+    add_song(conn, "Radiohead", "Creep")
+    served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=0))
+    status = "document.getElementById('bar-status').textContent"
+    for html in (page(conn, cfg), served):
+        path = write_library_page(cfg.library_dir, html)
+        driven.send("Page.navigate", url="about:blank")
+        driven.open(path.as_uri() + "#q=" + quote("a minor") + "&all=1")  # an address asking the sites for a key
+        assert driven.wait(f"{SHOWN_TITLES}.join() === 'De Música Ligera'")
+        assert driven.js(status) == "A key filters your songs alone: the sites know no keys"
+        assert driven.js("document.getElementById('results').hidden") is True
+        assert driven.js("document.getElementById('all').disabled") is True
+        driven.js("document.getElementById('q').focus()")
+        driven.press("Enter")
+        assert driven.js("document.getElementById('results').hidden") is True  # still your songs alone
+        driven.js("document.getElementById('q').select()")
+        driven.type("f# minor")  # no song in that key: nothing below to run or press
+        assert driven.wait(f"{status} === 'None of yours match: the sites know no keys'")
+        assert driven.js(f"{SHOWN_TITLES}.length") == 0
+        driven.press("Enter")
+        assert driven.js("document.querySelectorAll('.file-answer, #list .btn.primary').length") == 0
+        assert driven.js("document.getElementById('results').hidden") is True
+        assert driven.js("location.hash.includes('all=1')") is False
+        driven.js("document.getElementById('q').select()")
+        driven.type("creep")  # no key: the sites again
+        assert driven.wait("!document.getElementById('all').disabled")
+        assert "know no keys" not in driven.js(status)
+
+
+# --- the header on a phone, and the bar that stays at the top ----------------------------------------
+
+
+@pytest.fixture
+def phone_page(tmp_path):
+    from helpers.browser import Browser, BrowserError
+
+    try:
+        page = Browser(tmp_path / "chrome-phone", width=390, height=844, mobile=True)
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    yield page
+    page.close()
+
+
+FIRST_SONG = "document.querySelector('#list article').getBoundingClientRect().top"
+SHOWN = "((e) => !!e && e.getClientRects().length > 0)"
+
+
+@in_chromium
+def test_on_a_phone_the_first_song_starts_on_the_first_screen(conn, cfg, phone_page):
+    from caracole.library_page import WebControls
+
+    for n, (artist, title) in enumerate((("Radiohead", "Creep"), ("Oasis", "Wonderwall"), ("Muse", "Hysteria"))):
+        song = add_song(conn, artist, title)
+        if n:
+            update_song(conn, song.id, status="found")
+    served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
+    for html in (served, page(conn, cfg)):
+        path = write_library_page(cfg.library_dir, html)
+        phone_page.open(path.as_uri())
+        top = phone_page.js(FIRST_SONG)
+        assert top < 400, top  # under the header, the bar and one row of buttons: more than half the screen is songs
+        assert phone_page.js("document.documentElement.scrollWidth <= innerWidth")
+        # The numbers sit beside the title, and the buttons are one row that scrolls sideways.
+        title = phone_page.js("document.querySelector('h1').getBoundingClientRect().top")
+        stats = phone_page.js("document.getElementById('summary').getBoundingClientRect().top")
+        assert abs(title - stats) < 16, (title, stats)
+        tops = phone_page.js("[...document.querySelectorAll('.toolbar .chip')].filter((c) => c.offsetParent)"
+                             ".map((c) => Math.round(c.getBoundingClientRect().top))")
+        assert len(tops) >= 4 and max(tops) - min(tops) < 8, tops  # one row
+        # No song needs review: no Needs review button. Key, Sort and Cards/Rows wait under View.
+        assert not phone_page.js(f"{SHOWN}(document.querySelector('.chip[data-show=\"review\"]'))")
+        assert not phone_page.js(f"{SHOWN}(document.getElementById('sort'))")
+        toggle = "document.getElementById('view-toggle')"
+        assert phone_page.js(f"{toggle}.getAttribute('aria-expanded')") == "false"
+        assert phone_page.js(f"{toggle}.getBoundingClientRect().height") >= 44
+        phone_page.click("#view-toggle")
+        assert phone_page.wait(f"{SHOWN}(document.getElementById('sort')) && {SHOWN}(document.querySelector('.views'))")
+        assert phone_page.js(f"{toggle}.getAttribute('aria-expanded')") == "true"
+        heights = phone_page.js("[...document.querySelectorAll('.toolbar .chip, #view-panel button, #view-panel select')]"
+                                ".filter((e) => e.getClientRects().length).map((e) => e.getBoundingClientRect().height)")
+        assert heights and min(heights) >= 44, heights  # a thumb's worth each
+        phone_page.click("#view-toggle")
+
+
+
+@in_chromium
+def test_on_a_phone_the_row_of_buttons_fades_where_it_goes_on_out_of_sight(conn, cfg, phone_page):
+    from caracole.library_page import WebControls
+
+    for n, (artist, title) in enumerate((("Radiohead", "Creep"), ("Oasis", "Wonderwall"), ("Muse", "Hysteria"))):
+        song = add_song(conn, artist, title)
+        update_song(conn, song.id, status="found" if n else "wanted", review=bool(n == 2))
+    served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
+    phone_page.open(write_library_page(cfg.library_dir, served).as_uri())
+    row = "document.querySelector('.chips')"
+    mask = f"(getComputedStyle({row}).maskImage || getComputedStyle({row}).webkitMaskImage || 'none')"
+    assert phone_page.js(f"{row}.scrollWidth > {row}.clientWidth")  # Needs review is out of sight
+    assert phone_page.wait(f"{row}.classList.contains('more-end')")
+    assert "gradient" in phone_page.js(mask) and not phone_page.js(f"{row}.classList.contains('more-start')")
+    phone_page.js(f"{row}.scrollLeft = {row}.scrollWidth")  # at its end: the fade moves to where it came from
+    assert phone_page.wait(f"!{row}.classList.contains('more-end') && {row}.classList.contains('more-start')")
+    assert "gradient" in phone_page.js(mask)
+
+
+@in_chromium
+def test_on_a_desktop_the_view_controls_sit_in_the_toolbar_and_needs_review_shows_once_a_song_does(
+        conn, cfg, tmp_path):
+    add_song(conn, "Radiohead", "Creep")
+    in_review(conn)
+    path = write_library_page(cfg.library_dir, measured(page(conn, cfg)))
+    dom = dump_dom(path, tmp_path, size="1280,900")
+    assert not re.search(r'data-show="review"[^>]*hidden', dom)
+    toolbar = re.search(r'<div class="toolbar">(.*?)<nav class="jump"', dom, re.S).group(1)
+    assert 'id="view-panel"' in toolbar and 'id="sort"' in toolbar
+    assert layout_of(dom)["view"] is False  # no View button: it all fits
+
+
+STUCK = """
+(() => {
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  setTimeout(() => {
+    const bar = document.querySelector(".searchbar");
+    const box = bar.getBoundingClientRect();
+    document.body.setAttribute("data-bar", JSON.stringify({
+      stuck: bar.classList.contains("stuck"), shadow: getComputedStyle(bar).boxShadow,
+      left: box.left, right: box.right, top: box.top, page: innerWidth,
+    }));
+  }, 300);
+})();
+"""
+
+
+@in_chromium
+def test_the_bar_kept_at_the_top_has_an_edge_and_covers_the_page_side_to_side(conn, cfg, tmp_path):
+    for n in range(30):
+        add_song(conn, "Radiohead", f"Song {n}")
+    html = page(conn, cfg)
+    csp = csp_of(html)
+    html = html.replace(csp, csp.replace("script-src ", f"script-src {sha(STUCK)} ")).replace(
+        "</body>", f"<script>{STUCK}</script>\n</body>")
+    path = write_library_page(cfg.library_dir, html)
+    at_top = json.loads(__import__("html").unescape(re.search(r'data-bar="([^"]*)"', dump_dom(path, tmp_path)).group(1)))
+    assert at_top["stuck"] and at_top["shadow"] != "none" and at_top["top"] == 0
+    for size in ("390,844", "1280,900"):
+        bar = json.loads(__import__("html").unescape(
+            re.search(r'data-bar="([^"]*)"', dump_dom(path, tmp_path, size=size)).group(1)))
+        assert bar["left"] <= 0 and bar["right"] >= bar["page"], (size, bar)  # nothing shows beside it

@@ -359,10 +359,45 @@ def test_several_requests_show_as_one_short_list(serve, cfg, conn, tmp_path):
     assert [name for name, _ in lines] == ["Muse - Hysteria", "Oasis - Wonderwall", "Radiohead - Creep"]
     assert all("Ready" in said for _, said in lines), lines
     assert "3 requests" in tray.group(1) and 'href="jobs"' in tray.group(1)
+    # One Details link, the list's own: its lines say how each goes, and the cards link their details.
+    assert tray.group(1).count(">Details<") == 1 and "jobs?job=" not in tray.group(1)
     # The lines in the list aren't read out a second time: the cards' are.
     assert 'role="status"' not in tray.group(1)
-    # On a desktop the list is open.
-    assert 'aria-expanded="true"' in tray.group(1) and not re.search(r'<ol[^>]*id="tray-list"[^>]*hidden', dom)
+    # Folded, on a desktop too: a pill in the corner, over no card.
+    assert 'aria-expanded="false"' in tray.group(1) and re.search(r'<ol[^>]*id="tray-list"[^>]*hidden', dom)
+
+
+OPENS_THE_TRAY = """
+const opened = () => {
+  const tray = document.getElementById("tray");
+  if (tray.hidden || !/all done/.test(tray.textContent)) return setTimeout(opened, 50);
+  const folded = tray.getBoundingClientRect();
+  document.getElementById("tray-toggle").click();
+  const head = document.querySelector(".tray-head").getBoundingClientRect();
+  const list = document.getElementById("tray-list").getBoundingClientRect();
+  document.body.setAttribute("data-tray", JSON.stringify({
+    folded: [folded.width, folded.height, folded.bottom], head: [head.top, head.bottom], list: [list.top, list.bottom],
+    page: [innerWidth, innerHeight], expanded: document.getElementById("tray-toggle").getAttribute("aria-expanded"),
+  }));
+};
+opened();
+"""
+
+
+@pytest.mark.parametrize("size", ["1280,900", "390,844"])
+def test_the_list_of_requests_is_a_pill_that_opens_upwards(serve, cfg, conn, tmp_path, size):
+    for artist, title in (("Radiohead", "Creep"), ("Oasis", "Wonderwall")):
+        song = add_song(conn, artist, title)
+        update_song(conn, song.id, match_decision="accept", match_artist_key=artist.lower(),
+                    match_song_key=title.lower())
+    script = clicks_in_turn("Creep", "Wonderwall").replace("next();\n})();", "next();\n" + OPENS_THE_TRAY + "})();")
+    url = serve(FakeCaracole(cfg), script)
+
+    tray = attribute(dump_dom(url, tmp_path, size=size), "data-tray")
+    width, height, bottom = tray["folded"]
+    assert width <= 340 and height <= 56, tray  # one line, as narrow as its words (the box was 416 px)
+    assert bottom >= tray["page"][1] - 40, tray  # in the corner
+    assert tray["expanded"] == "true" and tray["list"][1] <= tray["head"][0] + 1, tray  # open: above its head
 
 
 def test_a_failed_request_says_why_in_one_sentence_with_its_details(serve, cfg, conn, tmp_path):

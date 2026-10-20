@@ -244,13 +244,21 @@ HITS = "document.querySelectorAll('#results .hit').length"
 
 @in_chromium
 def test_enter_right_after_typing_looks_up_what_you_typed_not_the_results_before(cfg, live, browser):
+    import time
+
     base, queue = live
     index_songs(cfg, [("eagles", "hotel-california", 9), ("eagles", "desperado", 3), ("eagles", "take-it-easy", 2)])
     browser.open(base + "/lookup")
     browser.type("eagles")
     assert browser.wait(f"{HITS} > 0")
-    assert browser.js("document.querySelector('#results .hit .row-title').textContent") == "Hotel California"
+    # An artist's name alone: the artist comes first, its most tabbed song said.
+    assert browser.js("document.querySelector('#results .hit .row-title').textContent") == "Eagles"
+    assert "Hotel California" in browser.js("document.querySelector('#results .artist-hit').textContent")
     browser.type(" desperado")
+    browser.js("document.getElementById('q').dispatchEvent(new KeyboardEvent('keydown', "
+               "{ key: 'Enter', keyCode: 229, isComposing: true, bubbles: true, cancelable: true }))")
+    time.sleep(0.5)
+    assert queue.snapshot() == []  # the Enter that ends a pinyin word is still typing
     browser.press("Enter")  # at once: the results on the screen are still the ones for "eagles"
     args = posted(queue)
     assert args[-2:] == ("Eagles", "Desperado"), args
@@ -352,3 +360,91 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
     assert browser.wait("document.querySelector('h1') && document.querySelector('h1').textContent === "
                         "'De Música Ligera'")
     assert queue.snapshot() == []  # opening it asked for nothing
+
+
+ARTIST_NAME = "(document.querySelector('#results .artist-head h2') || {}).textContent"
+
+
+@in_chromium
+def test_enter_on_an_artists_name_lists_their_songs_and_asks_for_nothing(cfg, live, browser):
+    base, queue = live
+    index_songs(cfg, [("eagles", "hotel-california", 9), ("eagles", "desperado", 3), ("third-day", "eagles", 2)])
+    browser.open(base + "/lookup")
+    browser.type("eagles")
+    assert browser.wait(f"{HITS} > 0")
+    browser.press("Enter")
+    assert browser.wait(f"{ARTIST_NAME} === 'Eagles'")
+    titles = browser.js("[...document.querySelectorAll('#results .hit .row-title')].map(t => t.textContent)")
+    assert titles == ["Hotel California", "Desperado"]  # theirs, the most tabbed first: not Third Day's Eagles
+    assert browser.js("document.getElementById('status').textContent") == "Eagles: 2 songs."
+    browser.press("Enter")  # again: still nothing asked for
+    import time
+
+    time.sleep(0.5)
+    assert queue.snapshot() == []
+    browser.click("#results .artist-head button")  # All results
+    assert browser.wait("document.querySelector('#results .artist-hit') !== null")
+    assert browser.js("document.activeElement.id") == "q"
+
+
+@in_chromium
+def test_the_songs_of_an_artist_row_can_be_listed_and_got(cfg, live, browser):
+    base, queue = live
+    index_songs(cfg, [("wonderwall", "in-april", 2), ("oasis", "wonderwall", 9), ("ryan-adams", "wonderwall", 3)]
+                + [("wonderwall", f"song-{n:02d}", 1) for n in range(60)])
+    browser.open(base + "/lookup")
+    browser.type("wonderwall")
+    assert browser.wait(f"{HITS} > 0")
+    rows = browser.js("[...document.querySelectorAll('#results .hit .row-title')].map(t => t.textContent)")
+    assert rows == ["Wonderwall", "Wonderwall", "Wonderwall"] and browser.js(
+        "[...document.querySelectorAll('#results .hit')].pop().classList.contains('artist-hit')")  # after the songs
+    browser.click("#results .artist-hit button.primary")  # Songs
+    assert browser.wait(f"{ARTIST_NAME} === 'Wonderwall'")
+    assert browser.js("document.activeElement.textContent") == "Wonderwall"  # the list's heading, for a reader
+    assert browser.js(HITS) == 50 and browser.js("document.querySelector('.more-songs button').textContent") == (
+        "Show more (11 left)")
+    browser.click(".more-songs button")
+    assert browser.wait(f"{HITS} === 61 && !document.querySelector('.more-songs')")
+    browser.click("#results .hit button.primary")  # its most tabbed song, In April: looked up now
+    args = posted(queue)
+    assert args[-2:] == ("Wonderwall", "In April") and "--ug=wonderwall/in-april" in args
+
+
+@in_chromium
+def test_enter_with_no_clear_best_asks_for_nothing_and_says_so(cfg, live, browser):
+    import time
+
+    base, queue = live
+    index_songs(cfg, [("radiohead", "karma-police", 3)])
+    browser.open(base + "/lookup")
+    browser.type("police karma")
+    assert browser.wait(f"{HITS} > 0")
+    browser.press("Enter")
+    assert browser.wait("/Nothing stands out/.test(document.getElementById('status').textContent)")
+    time.sleep(0.5)
+    assert queue.snapshot() == []
+
+
+NO_SIDEWAYS = "document.documentElement.scrollWidth <= innerWidth"
+
+
+@in_chromium
+def test_an_artists_list_fits_a_phone_and_its_buttons_take_a_thumb(cfg, live, phone):
+    base, _ = live
+    index_songs(cfg, [("the-red-hot-chili-peppers-and-friends-of-the-band", f"a-rather-long-song-title-{n}", 3 - n % 3)
+                      for n in range(60)])
+    phone.open(base + "/lookup")
+    phone.type("the red hot chili peppers and friends of the band")
+    assert phone.wait(f"{HITS} > 0")
+    assert phone.js(NO_SIDEWAYS)
+    phone.press("Enter")
+    assert phone.wait("document.querySelector('#results .artist-head') !== null")
+    assert phone.js(NO_SIDEWAYS)
+    heights = phone.js("[...document.querySelectorAll('.artist-head .btn, .more-songs .btn')]"
+                       ".map(b => b.getBoundingClientRect().height)")
+    assert len(heights) == 2 and min(heights) >= 44, heights
+    small = phone.js("[...document.querySelectorAll('#results .row .btn, #results .row .row-more')]"
+                     ".filter(b => b.getClientRects().length)"
+                     ".map(b => [b.textContent.trim(), Math.round(b.getBoundingClientRect().width),"
+                     " Math.round(b.getBoundingClientRect().height)]).filter(([, w, h]) => w < 44 || h < 44)")
+    assert small == [], small  # each song's Get it and its "⋯" too

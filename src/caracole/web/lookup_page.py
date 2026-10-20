@@ -3,8 +3,13 @@
 It searches your library and the offline Ultimate Guitar index as you type
 (``GET /api/search``: 5–25 ms a query on a full index, up to about 0.15 s for
 very common words, ug/key_search.py), so finding
-a song costs no request to any site. Enter picks the first result of the
-query typed, never of an older one still on the screen. Picking a song, or
+a song costs no request to any site. A query may be an artist's name alone or
+a title alone: an artist it names is a row of its own, whose Songs lists all
+their songs (``GET /api/artist``), and comes first when it leads. Enter acts
+on the answer of the query typed, never of an older one still on the screen:
+its ``best`` row, the song you meant; when an artist leads, that artist's
+songs; when nothing stands out, nothing, so a guess never spends a request.
+Picking a song, or
 one of its versions, looks it up now (``POST /lookup``: one ``caracole get``,
 which records the pick in overrides.toml; a song your library has, under any
 name, is posted as that song, by its id), and the page follows the request
@@ -15,9 +20,10 @@ says what the running stage waits for, and the reasons of the stages left are
 listed, not hidden in tooltips. A song of your library with a sheet opens at
 once, with no request at all.
 
-Its results are the library's own rows, as index.html's Rows view draws them:
-the page runs ``library_page.ROWS_SCRIPT`` before its own script and builds
-each result with ``window.caracole.resultRow``, with the mark of where it came
+Its results are the library's own rows, as index.html's Rows view and its
+search of the sites draw them: the page runs ``library_page.ROWS_SCRIPT``
+before its own script and builds each result with its row builders
+(``resultRow``, ``ugHit``, ``artistHit``), with the mark of where it came
 from (``icons.page_icons``, inlined as index.html inlines them) and its other
 actions under the row's "⋯" (an Ultimate Guitar song's versions; a song of
 your library's files). A song of your library opens as its card does: its
@@ -53,8 +59,20 @@ STYLE = BASE_STYLE + ROWS_STYLE + """
 .group { margin: 18px 0 6px; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
 .rows.hits { margin-top: 6px; }
-.versions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .hint { max-width: 72ch; color: var(--muted); font-size: .85rem; white-space: pre-wrap; }
+.artist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
+  margin: 18px 0 0; }
+.artist-head h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.artist-head h2:focus { outline: none; }
+.more-songs { margin: 10px 0 0; }
+@media (pointer: coarse) {
+  .artist-head .btn, .more-songs .btn, .rows .row .btn { min-height: 44px; }
+  .rows .row .row-more { width: 44px; height: 44px; }
+  .rows .row { grid-template-columns: 20px minmax(0, 1fr) auto 44px; }
+}
+@media (pointer: coarse) and (min-width: 900px) {
+  .rows .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 44px; }
+}
 details.by-name { margin: 22px 0 0; }
 details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 600; cursor: pointer; }
 .by-name form { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: 1fr; }
@@ -62,8 +80,6 @@ details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 60
   background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: var(--bar, 112px); }
 .reader-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
 .reader h2 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
-.version { display: inline-flex; align-items: center; gap: 4px; }
-.on-ug { color: var(--muted); font-size: .78rem; }
 details.why { margin: 0 0 10px; color: var(--muted); font-size: .85rem; }
 details.why summary { cursor: pointer; }
 details.why ul { margin: 6px 0 0; padding-left: 1.2em; }
@@ -105,7 +121,6 @@ const whyList = document.getElementById("why-list");
 const fileLinks = document.getElementById("files");
 const sheetText = document.getElementById("sheet");
 const MIN = 3;
-const KINDS = {"chords": "Chords", "tabs": "Tab", "guitar-pro": "Guitar Pro", "power": "Power Tab"};
 const STATUS = {"found": "Found", "wanted": "Wanted", "ignored": "Ignored"};
 // The library's own rows and marks (library_page.ROWS_SCRIPT, run before this script), as index.html has them.
 const ICONS = (() => {
@@ -115,7 +130,9 @@ const rowKit = caracoleRows(ICONS);
 window.caracole = Object.freeze({resultRow: rowKit.resultRow, sourceMark: rowKit.sourceMark, icons: ICONS});
 let typed = 0, inflight = null, timer = null, polling = null, shown = "", lastStages = "";
 let shownFor = null;  // the query the results on the screen answer
-let enterFor = null;  // a query Enter was pressed for before its results came: its first one is picked then
+let shownData = null;  // their answer: what Enter acts on (best) and what leads
+let artistOpen = null;  // the artist whose songs are listed in place of the results
+let enterFor = null;  // a query Enter was pressed for before its results came: acted on then
 let scrolled = false;  // the sheet was brought into view once already
 
 function el(tag, cls, text) {
@@ -128,16 +145,12 @@ function href(path) { return "/" + path.split("/").map(encodeURIComponent).join(
 function letters(s) { return (s.match(/[\p{L}\p{N}]/gu) || []).length; }
 function han(s) { return /\p{Script=Han}/u.test(s); }
 function typedText() { return q.value.trim().replace(/\s+/g, " "); }
-function button(label, cls, onclick, aria) {
-  const b = el("button", "btn " + (cls || "small"), label);
-  b.type = "button";
-  if (aria) b.setAttribute("aria-label", aria);
-  b.addEventListener("click", onclick);
-  return b;
-}
-function counts(c) {
-  const names = {"chords": "chords", "tabs": "tabs", "guitar-pro": "Guitar Pro", "power": "Power Tab"};
-  return Object.entries(c).map(([k, n]) => n + " " + (names[k] || k)).join(" · ");
+const button = rowKit.button;  // a button as index.html makes them (ROWS_SCRIPT's)
+const many = rowKit.many;  // "1 song", "1,234 songs"
+function group(title, rows) {
+  const list = el("div", "rows hits");
+  for (const row of rows) list.append(row);
+  return [el("h2", "group", title), list];
 }
 // The sticky search box covers the top of the page: what is scrolled into view lands below it.
 function measureBar() { document.documentElement.style.setProperty("--bar", Math.ceil(bar.offsetHeight + 8) + "px"); }
@@ -169,34 +182,99 @@ function search() {
 
 function show(data, text) {
   results.replaceChildren();
-  const n = data.library.length + data.index.length;
+  artistOpen = null;
+  const artists = Array.isArray(data.artists) ? data.artists : [];
+  const n = data.library.length + data.index.length + artists.length;
   status.textContent = n ? "" : "Nothing matches.";
-  if (data.library.length) {
-    results.append(el("h2", "group", "In your library"));
-    const list = el("div", "rows hits");
-    for (const s of data.library) list.append(librarySong(s));
-    results.append(list);
-  }
-  if (data.index.length) {
-    results.append(el("h2", "group", "On Ultimate Guitar"));
-    const list = el("div", "rows hits");
-    for (const h of data.index) list.append(ugSong(h));
-    results.append(list);
-  }
-  if (data.hint) results.append(el("p", "hint", data.hint));
+  if (data.library.length) results.append(...group("In your library", data.library.map(librarySong)));
+  // The artists the query names: first when one leads ("oasis"), after the songs when a song does ("wonderwall").
+  const named = artists.length ? group("Artists on Ultimate Guitar", artists.map(artistRow)) : [];
+  if (data.lead === "artist") results.append(...named);
+  if (data.index.length) results.append(...group("On Ultimate Guitar", data.index.map(ugSong)));
+  if (data.lead !== "artist") results.append(...named);
+  if (data.hint) results.append(rowKit.prose("hint", data.hint));
   shownFor = text;
-  if (enterFor === text) { enterFor = null; pickFirst(); }
+  shownData = data;
+  if (enterFor === text) { enterFor = null; pickBest(); }
 }
 
-function pickFirst() {  // a row's main action: a song of yours opens, an Ultimate Guitar song is looked up
-  const first = results.querySelector(".row-action .primary");
-  if (first) first.click();
+// Enter: the answer's best row, its main action (a song of yours opens, an Ultimate Guitar song is looked up);
+// when an artist leads, that artist's songs; when nothing stands out, nothing: a guess never spends a request.
+function pickBest() {
+  const data = shownData;
+  if (!data || artistOpen) return;
+  const best = data.best;
+  if (best) {
+    const row = [...results.querySelectorAll(".hit")].find(r =>
+      (best.library !== undefined && best.library !== null && r.dataset.song === String(best.library)) ||
+      (typeof best.ug === "string" && r.dataset.ug === best.ug));
+    const main = row && row.querySelector(".row-action .primary");
+    if (main) { main.click(); return; }
+  }
+  const artists = Array.isArray(data.artists) ? data.artists : [];
+  if (data.lead === "artist" && artists.length) { openArtist(artists[0], false); return; }
+  if (results.querySelector(".hit")) status.textContent = "Nothing stands out: pick one, or type more.";
+}
+
+// An artist of the offline index, with its most tabbed songs said: Songs lists every one (ROWS_SCRIPT's row).
+function artistRow(a) { return rowKit.artistHit(a, () => openArtist(a, true)); }
+
+function getArtist(key, offset, signal) {
+  return fetch("/api/artist?key=" + encodeURIComponent(key) + "&offset=" + offset,
+               {signal, headers: {"Accept": "application/json"}})
+    .then(r => r.json())
+    .then(data => { if (data.error) { status.textContent = data.error; return null; } return data; })
+    .catch(e => { if (e.name !== "AbortError") status.textContent = "The list failed: " + e.message; return null; });
+}
+
+// An artist's songs in place of the results, yours by them first; typing again, or All results, brings those back.
+function openArtist(a, focus) {
+  const mine = ++typed;
+  if (inflight) inflight.abort();
+  inflight = new AbortController();
+  status.textContent = "Listing " + a.artist + "'s songs…";
+  getArtist(a.artist_key, 0, inflight.signal).then(data => { if (data && mine === typed) showArtist(data, focus); });
+}
+
+function showArtist(data, focus) {
+  results.replaceChildren();
+  artistOpen = data.artist_key;
+  const head = el("div", "artist-head");
+  const name = el("h2", null, data.artist);
+  name.tabIndex = -1;
+  head.append(name, button("All results", "small", backToSearch, "Back to all the results"));
+  results.append(head);
+  status.textContent = data.artist + ": " + many(data.total, "song") + ".";  // one line: nothing below it moves
+  if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
+  const [heading, list] = group("On Ultimate Guitar, the most tabbed first", data.songs.map(ugSong));
+  results.append(heading, list);
+  let listed = data.songs.length;
+  if (listed < data.total) {
+    const box = el("p", "more-songs");
+    const more = button("Show more (" + (data.total - listed) + " left)", "small", () => {
+      more.disabled = true;
+      getArtist(data.artist_key, listed).then(page => {
+        more.disabled = false;
+        if (!page || artistOpen !== data.artist_key) return;
+        for (const h of page.songs) list.append(ugSong(h));
+        listed += page.songs.length;
+        if (listed >= page.total || !page.songs.length) box.remove();
+        else more.textContent = "Show more (" + (page.total - listed) + " left)";
+      });
+    }, "Show more of " + data.artist + "'s songs");
+    box.append(more);
+    results.append(box);
+  }
+  if (focus) name.focus();
+}
+
+function backToSearch() {
+  if (shownData) show(shownData, shownFor);
+  q.focus();
 }
 
 // A song's sheet viewer or PDF, as its card opens it: a link of the library's, relative to this page.
-function opener(files) {
-  return (Array.isArray(files) ? files : []).find(f => f && f.primary && /[.](html|pdf)$/i.test(f.name || "")) || null;
-}
+const opener = rowKit.opener;
 
 // A song of your library, as its row in index.html: its viewer (else its PDF) opens at once; a sheet with
 // neither is read here; a song without one is looked up now. Its other files, and Fetch again, under "⋯".
@@ -223,56 +301,15 @@ function librarySong(s) {
     more: [here.childNodes.length ? here : null, {heading: "Files", links: others}].filter(Boolean),
   });
   row.classList.add("hit");
+  row.dataset.song = String(s.id);
   const main = row.querySelector(".row-action a");
   if (main) main.setAttribute("aria-label", opens.label + " of " + s.display);
   return row;
 }
 
-// An Ultimate Guitar song of the offline index, with UG's mark: Get it, and its versions under "⋯".
-function ugSong(h) {
-  // A song your library has (under its own names, maybe): looked up as that song, never as a second one.
-  const mine = h.library;
-  const display = mine ? mine.display : h.artist + " - " + h.title;
-  const pick = extra => Object.assign(mine ? {song: mine.id} : {artist: h.artist, title: h.title}, {ug: h.ug}, extra);
-  const get = button(mine ? "Get it again" : "Get it", "small primary", () => lookUp(pick({}), display),
-                     (mine ? "Get " + display + " again" : "Get " + display) + " from Ultimate Guitar");
-  const more = [];
-  if (h.tabs.length) {
-    const versions = el("ul", "versions");
-    const nth = {};
-    for (const t of h.tabs) {
-      // Numbered within its kind, in the index's order (no ratings there): "Chords 2 of 13 · acoustic".
-      nth[t.type] = (nth[t.type] || 0) + 1;
-      const kind = KINDS[t.type] || t.type;
-      const name = kind + " " + nth[t.type] + " of " + (h.counts[t.type] || nth[t.type]) + (t.label ? " · " + t.label : "");
-      const item = el("li", "version");
-      item.append(button(name, "small", () => lookUp(pick({tab: t.url}), display), "Get " + name + ", " + display));
-      const ug = el("a", "on-ug", "on UG");
-      ug.href = /^https:[/][/]/i.test(t.url) ? t.url : "#";
-      ug.target = "_blank";
-      ug.rel = "noopener noreferrer";
-      ug.setAttribute("aria-label", name + ", " + display + ", on Ultimate Guitar");
-      item.append(ug);
-      versions.append(item);
-    }
-    const box = el("div", "row-group");
-    box.append(el("p", "subhead", "Versions"), versions);
-    more.push(box);
-  }
-  const opens = mine ? opener(mine.links) : null;
-  if (opens) more.push({heading: "In your library", links: [{label: opens.label, href: opens.href, source: opens.source}]});
-  const row = window.caracole.resultRow({
-    title: h.title, artist: h.artist, source: "ug", facts: counts(h.counts),
-    badges: mine ? [{kind: "found", text: "In your library"}] : [], action: get, more,
-  });
-  row.classList.add("hit");
-  const dots = row.querySelector(".row-more");
-  if (dots && h.tabs.length) {  // what "⋯" holds, said: its versions
-    dots.title = "Versions of " + display;
-    dots.setAttribute("aria-label", "Versions of " + display);
-  }
-  return row;
-}
+// An Ultimate Guitar song of the offline index, with UG's mark: Get it, and its versions under "⋯", as index.html
+// draws it (ROWS_SCRIPT's row); a song your library has, under its own names maybe, is looked up as that song.
+function ugSong(h) { return rowKit.ugHit(h, (pick, display) => lookUp(pick, display)); }
 
 q.addEventListener("input", () => {
   enterFor = null;
@@ -281,12 +318,12 @@ q.addEventListener("input", () => {
   timer = setTimeout(search, 120);
 });
 q.addEventListener("keydown", e => {
-  if (e.key !== "Enter") return;
+  if (e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;  // the Enter ending a pinyin word types
   e.preventDefault();
   if (results.hidden) { expand(); return; }  // after a pick: the results again, not the pick again
   const text = typedText();
-  if (text === shownFor) { pickFirst(); return; }
-  // The results on the screen answer an older query: search now, and pick the first of its answer.
+  if (text === shownFor) { pickBest(); return; }
+  // The results on the screen answer an older query: search now, and act on its answer.
   enterFor = text;
   clearTimeout(timer);
   search();

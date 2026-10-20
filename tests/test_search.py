@@ -367,6 +367,103 @@ def test_library_search_without_a_match(conn):
     assert search_library(conn, "zzzz qqqq") == []
 
 
+# --- gtptabs.com's and MuseScore's offline indexes -------------------------------------------
+
+
+def gtptabs_pages(conn, *urls):
+    """gtptabs.com's song pages, as its sitemaps list them (gtptabs.parse_page_url makes the rows)."""
+    from caracole.gtptabs import parse_page_url
+
+    rows = [parse_page_url(u) for u in urls]
+    conn.executemany("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) "
+                     "VALUES (?, ?, ?, ?, ?, '1')", [tuple(r) for r in rows])
+
+
+def musescore_pages(conn, *urls):
+    from caracole.musescore import parse_song_url
+
+    conn.executemany("INSERT INTO musescore_index (page_id, path, title_key, sitemap) VALUES (?, ?, ?, '1')",
+                     [tuple(parse_song_url(u)) for u in urls])
+
+
+GTP = "https://gtptabs.com/tabs/"
+
+
+def test_gtptabs_pages_are_found_by_artist_and_title_or_either_alone(conn):
+    from caracole.search import search_gtptabs
+
+    gtptabs_pages(conn, GTP + "18/radiohead/creep.html", GTP + "18/radiohead/creep-2.html",
+                  GTP + "18/radiohead/karma-police.html", GTP + "20/stone-temple-pilots/creep.html",
+                  GTP + "13/metallica/creeping-death.html", GTP + "18/radiohead.html")
+    hits = search_gtptabs(conn, "radiohead creep")
+    assert [(h.artist_key, h.title_key) for h in hits][:1] == [("radiohead", "creep")]
+    first = hits[0]
+    assert (first.source, first.artist, first.title, first.uploads) == ("gtptabs", "Radiohead", "Creep", 2)
+    assert first.url == GTP + "18/radiohead/creep.html"  # the first upload's page, never an artist page
+    assert {(h.artist_key, h.title_key) for h in search_gtptabs(conn, "creep")} >= {
+        ("radiohead", "creep"), ("stone-temple-pilots", "creep")}
+    assert [h.title_key for h in search_gtptabs(conn, "radiohead")] == ["creep", "karma-police"]
+    assert search_gtptabs(conn, "zzzz qqqq") == [] and search_gtptabs(conn, " — ") == []
+    assert len(search_gtptabs(conn, "creep", limit=1)) == 1
+
+
+def test_a_gtptabs_artist_filed_last_name_first_is_named_as_ultimate_guitar_names_them(conn):
+    from caracole.search import search_gtptabs
+
+    index(conn, [(1, "elton-john", "your-song", "chords")])
+    gtptabs_pages(conn, GTP + "10/john-elton/your-song.html", GTP + "2/beatles-the/yesterday.html")
+    [elton] = search_gtptabs(conn, "your song")
+    assert (elton.artist, elton.title) == ("Elton John", "Your Song")  # not "John Elton", the site's filing
+    [beatles] = search_gtptabs(conn, "yesterday")
+    assert beatles.artist == "Beatles"  # no UG row: from its key
+
+
+def test_musescore_pages_are_found_by_their_whole_title_alone(conn):
+    from caracole.search import search_musescore
+
+    index(conn, [(1, "oasis", "wonderwall", "chords"), (2, "oasis", "live-forever", "chords")])
+    musescore_pages(conn, "https://musescore.com/song/wonderwall-1524", "https://musescore.com/song/wonderwall-99",
+                    "https://musescore.com/song/creep-7", "https://musescore.com/song/live_forever-8")
+    hits = search_musescore(conn, "wonderwall")
+    assert [(h.source, h.title, h.artist, h.url) for h in hits] == [
+        ("musescore", "Wonderwall", "", "https://musescore.com/song/wonderwall-99"),
+        ("musescore", "Wonderwall", "", "https://musescore.com/song/wonderwall-1524")]
+    # The artist's words around the title are left for it, the sitemaps naming no artist: Oasis has a Wonderwall.
+    assert [h.url for h in search_musescore(conn, "oasis wonderwall")][:1] == ["https://musescore.com/song/wonderwall-99"]
+    assert [h.title for h in search_musescore(conn, "live forever oasis")] == ["Live Forever"]
+    assert search_musescore(conn, "wonder") == []  # a part of a word is no title
+    musescore_pages(conn, "https://musescore.com/song/ban_ma_ban_ma-5")
+    assert [h.url for h in search_musescore(conn, "斑马，斑马")] == ["https://musescore.com/song/ban_ma_ban_ma-5"]
+    assert len(search_musescore(conn, "wonderwall", limit=1)) == 1
+
+
+
+def test_a_musescore_title_is_never_a_word_of_the_query_that_leaves_no_known_song(conn):
+    from caracole.search import search_musescore
+
+    index(conn, [(1, "oasis", "live-forever", "chords"), (2, "eagles", "hotel-california", "chords"),
+                 (3, "hotel", "lobby", "chords"), (4, "forever", "young", "chords")])
+    musescore_pages(conn, *(f"https://musescore.com/song/{title}-{n}" for n, title in enumerate(
+        ["oasis", "hotel_california", "eagles", "the", "california", "live", "forever", "live_forever"], 1)))
+
+    def titles(query):
+        return [h.title for h in search_musescore(conn, query)]
+
+    # A run of the query's words is a title only when the rest names the artist of a song by that title:
+    # "Forever" leaves "oasis live", no one's name, and "Oasis" leaves "live forever", no one's song.
+    assert titles("oasis live forever") == ["Live Forever"]
+    assert titles("the eagles hotel california") == ["Hotel California"]
+    assert titles("hotel california") == ["Hotel California"]  # Hotel, an artist, has no song "California"
+    assert titles("eagles") == ["Eagles"]  # a whole query is a title whoever sings it
+    assert titles("california eagles") == []  # Eagles have no "California"
+    gtptabs_pages(conn, GTP + "10/john-elton/your-song.html")
+    musescore_pages(conn, "https://musescore.com/song/your_song-9")
+    assert titles("elton john your song") == ["Your Song"]  # gtptabs.com's, filed last name first
+    assert titles("forever live") == []  # Forever's one song is "Young"
+    add_song(conn, "Forever", "Live")  # a song of yours names its artist too
+    assert titles("forever live") == ["Live"]
+
+
 # --- caracole search -----------------------------------------------------------------
 
 
@@ -837,3 +934,349 @@ def test_a_catch_all_hit_is_scored_on_its_title_alone(conn):
         assert keys(hits)[0] == ("misc-musicals", EPIC[2]) and hits[0].score >= 95, (query, hits)
         assert bare_id_hint(query, hits) is None  # a strong hit: no word of artists UG can't see
     assert keys(search_index(conn, "hamilton my shot"))[0] == ("misc-musicals", "hamilton-my-shot")
+
+
+# --- an artist alone, or a title alone ----------------------------------------------------------
+
+# The band Wonderwall, Oasis and a song titled Oasis, a mashup filed under misc-mashups, and two keys
+# that hold the letters of "ban ma" inside words: noise for 斑马.
+EITHER = ROWS + PINYIN_ROWS + [
+    (20001, "wonderwall", "in-april", "chords"), (20002, "wonderwall", "in-april", "tabs"),
+    (20011, "oasis", "wonderwall", "chords"), (20012, "oasis", "wonderwall", "chords"),
+    (20013, "oasis", "wonderwall", "tabs"), (20014, "oasis", "live-forever", "chords"),
+    (20021, "ryan-adams", "wonderwall", "chords"),
+    (20031, "misc-mashups", "oasis-wonderwall", "chords"),
+    (20041, "frenzal-rhomb", "suburban-male", "chords"),
+    (20051, "band-maid", "thrill", "chords"),
+]
+
+
+def test_each_hit_says_which_reading_of_the_query_it_answers(conn):
+    index(conn, EITHER)
+    creep = search_index(conn, "creep")
+    assert [(h.song_key, h.via) for h in creep[:2]] == [("creep", "title"), ("creep", "title")]
+    assert ("creeping-death", "title") in [(h.song_key, h.via) for h in creep]  # a part of the title
+    assert [h.via for h in search_index(conn, "radiohead creep")][:1] == ["both"]
+    assert {(h.song_key, h.via) for h in search_index(conn, "radiohead")} == {
+        ("creep", "artist"), ("karma-police", "artist")}
+    assert [h.score for h in creep[:3]] == [100, 100, 90]  # the scores are what they were
+
+
+def test_an_artist_alone_gives_the_artist_with_its_songs_and_tabs_counted(conn):
+    from caracole.search import find_index
+
+    index(conn, EITHER)
+    found = find_index(conn, "oasis")
+    [oasis] = found.artists
+    assert (oasis.artist_key, oasis.artist, oasis.score, oasis.songs, oasis.tabs) == ("oasis", "Oasis", 100, 2, 4)
+    assert [h.song_key for h in oasis.top] == ["wonderwall", "live-forever"]  # the most tabbed first
+    assert dict(oasis.top[0].counts) == {"chords": 2, "tabs": 1}
+    # Its songs are in its row: what is left is songs with the word in their title.
+    assert [(h.artist_key, h.song_key, h.via) for h in found.songs] == [
+        ("misc-mashups", "oasis-wonderwall", "title")]
+    assert found.lead == "artist"
+
+
+def test_a_title_alone_lists_that_title_by_every_artist_before_an_artist_of_that_name(conn):
+    from caracole.search import find_index
+
+    index(conn, EITHER)
+    found = find_index(conn, "wonderwall")
+    assert [(h.artist_key, h.song_key) for h in found.songs] == [
+        ("oasis", "wonderwall"), ("ryan-adams", "wonderwall"), ("misc-mashups", "oasis-wonderwall")]
+    assert [h.via for h in found.songs] == ["title", "title", "title"]
+    # The band Wonderwall is an artist row, its song in it, not a song between the others.
+    [band] = found.artists
+    assert (band.artist_key, band.songs, band.tabs, [h.song_key for h in band.top]) == (
+        "wonderwall", 1, 2, ["in-april"])
+    assert found.lead == "song" and found.best.song_key == "wonderwall" and found.best.artist_key == "oasis"
+
+
+def test_an_artist_with_more_tabbed_songs_leads_songs_titled_like_it(conn):
+    from caracole.search import find_index
+
+    index(conn, EITHER + [(20061, "a-great-big-world", "oasis", "chords")])
+    found = find_index(conn, "oasis")
+    assert found.lead == "artist" and found.best is None  # Enter shows the artist, it looks nothing up
+    assert [(h.artist_key, h.score, h.via) for h in found.songs][:1] == [("a-great-big-world", 100, "title")]
+    index(conn, [(20062 + i, "a-great-big-world", "oasis", "tabs") for i in range(4)])
+    found = find_index(conn, "oasis")  # now the song titled Oasis has more tabs than Oasis's best one
+    assert found.lead == "song" and found.best.artist_key == "a-great-big-world"
+
+
+
+def test_an_artist_only_near_the_querys_name_is_left_out_beside_the_one_it_is(conn):
+    from caracole.search import find_index
+
+    index(conn, [(1, "eagles", "hotel-california", "chords"), (2, "eagles", "desperado", "chords"),
+                 (3, "beagles", "the-ballad", "chords")])
+    found = find_index(conn, "eagles")
+    assert [a.artist_key for a in found.artists] == ["eagles"]
+    assert "beagles" not in {h.artist_key for h in found.songs}  # nor the songs only its name matched
+    assert [a.artist_key for a in find_index(conn, "beagle").artists] == ["beagles"]  # none exact: the nearest
+
+
+def test_artist_songs_lists_every_song_most_tabbed_first_variants_with_their_song(conn):
+    from caracole.search import artist_songs
+
+    index(conn, EITHER)
+    hits, total = artist_songs(conn, "radiohead")
+    assert total == 2 and [h.song_key for h in hits] == ["creep", "karma-police"]
+    assert dict(hits[0].counts) == {"chords": 3, "tabs": 2, "guitar-pro": 1} and hits[0].labels == ("acoustic",)
+    assert (hits[0].artist, hits[0].title) == ("Radiohead", "Creep")
+    assert [h.song_key for h in artist_songs(conn, "radiohead", limit=1)[0]] == ["creep"]
+    assert [h.song_key for h in artist_songs(conn, "radiohead", limit=1, offset=1)[0]] == ["karma-police"]
+    assert artist_songs(conn, "nobody-at-all") == ([], 0)
+
+
+def test_artist_songs_can_be_narrowed_to_titles(conn):
+    from caracole.search import artist_songs
+
+    index(conn, EITHER)
+    hits, total = artist_songs(conn, "oasis", title="live")
+    assert (total, [h.song_key for h in hits]) == (1, ["live-forever"])
+
+
+def test_a_catch_all_is_never_an_artist_row(conn):
+    from caracole.search import find_index
+
+    index(conn, EITHER + [EPIC, (77, "misc-musicals", "hamilton-my-shot", "chords")])
+    for query in ("misc musicals", "misc mashups"):
+        found = find_index(conn, query)
+        assert found.artists == () and found.lead != "artist", query
+
+
+def test_pinyin_never_matches_inside_a_word(conn):
+    # "斑马" is ban ma: in suburban-male and band-maid only inside words, never as words of their own.
+    index(conn, EITHER)
+    assert keys(search_index(conn, "斑马")) == [("song-dongye", "ban-ma-ban-ma")]
+    add_song(conn, "Frenzal Rhomb", "Suburban Male")
+    add_song(conn, "宋冬野", "斑马，斑马")
+    assert [h.song.artist for h in search_library(conn, "斑马")] == ["宋冬野"]
+
+
+def test_a_pinyin_match_of_part_of_a_name_is_never_strong(conn):
+    # Short syllables are no proof: a part of a title in pinyin is a hit, never the song Enter takes.
+    from caracole.search import find_index
+
+    index(conn, EITHER + [(20071, "anju-panta", "banma-phulyo", "chords")])
+    found = find_index(conn, "斑马")
+    assert {h.song_key for h in found.songs} == {"ban-ma-ban-ma", "banma-phulyo"}
+    assert all(h.score < 90 for h in found.songs) and found.best is None
+    assert find_index(conn, "斑马，斑马").best.song_key == "ban-ma-ban-ma"  # the whole title is
+
+
+def test_a_chinese_artist_alone_is_an_artist_row_however_ug_hyphenates_it(conn):
+    from caracole.search import find_index
+
+    index(conn, EITHER)
+    [artist] = find_index(conn, "宋冬野").artists
+    assert (artist.artist_key, artist.songs, artist.artist) == ("song-dongye", 1, "Song Dongye")
+
+
+def test_best_is_none_for_a_weak_hit_and_when_an_artist_leads(conn):
+    from caracole.search import find_index
+
+    index(conn, EITHER)
+    assert find_index(conn, "creep").best.artist_key == "radiohead"
+    assert find_index(conn, "radiohead").best is None
+    weak = find_index(conn, "police karma")
+    assert weak.songs and all(h.score < 90 for h in weak.songs) and weak.best is None
+    nothing = find_index(conn, "zzzz qqqq")
+    assert (nothing.artists, nothing.songs, nothing.lead, nothing.best) == ((), (), None, None)
+
+
+def test_library_hits_say_their_reading_too(conn):
+    add_song(conn, "Radiohead", "Creep")
+    add_song(conn, "Oasis", "Wonderwall")
+    assert [(h.song.title, h.via) for h in search_library(conn, "creep")] == [("Creep", "title")]
+    assert [(h.song.title, h.via) for h in search_library(conn, "radiohead")] == [("Creep", "artist")]
+    assert [(h.song.title, h.via) for h in search_library(conn, "radiohead creep")] == [("Creep", "both")]
+
+
+
+def find(conn, query):
+    """Your songs with the index's answer, as /api/search puts them together."""
+    from caracole.search import find_index, found
+
+    return found(search_library(conn, query, 5), find_index(conn, query))
+
+def test_find_takes_your_song_before_an_artist_and_never_one_read_as_its_artist(conn):
+    index(conn, EITHER)
+    add_song(conn, "Oasis", "Wonderwall")
+    found = find(conn, "wonderwall")
+    assert [h.song.title for h in found.library] == ["Wonderwall"]
+    assert found.best is found.library[0]  # yours, which costs no request
+    by_artist = find(conn, "oasis")
+    assert by_artist.library[0].via == "artist" and by_artist.best is None and by_artist.lead == "artist"
+
+
+def test_a_hint_for_a_bare_query_reads_it_as_an_artist_or_a_title():
+    hint = bare_id_hint("斑马斑马", [])
+    assert "If 斑马斑马 is the artist's name" in hint and '"斑马斑马" = "https://www.ultimate-guitar.com/artist/' in hint
+    assert 'If 斑马斑马 is a title, caracole needs its artist too: `caracole add ARTIST "斑马斑马"`' in hint
+    as_artist = bare_id_hint("斑马斑马", [], artist="斑马斑马")  # caracole search --artist
+    assert "Find the artist's page" in as_artist and "is a title" not in as_artist
+    assert "is a title" not in bare_id_hint("宋冬野 斑马", [], artist="宋冬野")  # the artist is known
+
+
+def _score_before_readings(q: str, artist: str, title: str) -> float:
+    """``_Query.score`` as it was before it was split into readings."""
+    from rapidfuzz import fuzz
+
+    full = f"{artist} {title}"
+    best = max(fuzz.ratio(q, title), fuzz.ratio(q, artist), fuzz.token_sort_ratio(q, full))
+    if len(q) < len(full):
+        best = max(best, 0.9 * fuzz.partial_ratio(q, full))
+    qc, a, t = q.replace(" ", ""), artist.replace(" ", ""), title.replace(" ", "")
+    best = max(best, fuzz.ratio(qc, t), fuzz.ratio(qc, a), fuzz.ratio(qc, a + t))
+    if len(qc) < len(a) + len(t):
+        best = max(best, 0.9 * fuzz.partial_ratio(qc, a + t))
+    return best
+
+
+def test_the_readings_split_the_score_a_query_always_had():
+    from caracole.search import _Query
+
+    names = [("radiohead", "creep"), ("metallica", "creeping death"), ("soda stereo", "de musica ligera"),
+             ("oasis", "wonderwall"), ("wonderwall", "in april"), ("misc mashups", "oasis wonderwall"),
+             ("", "epic the musical not sorry for loving you"), ("acdc", "highway to hell"), ("r e m", "losing")]
+    for query in ("creep", "radiohead", "radiohead creep", "creep radiohed", "musica", "oasis wonderwall",
+                  "wonderwall", "ac dc", "epic not sorry", "rem losing", "in april wonderwall", "x"):
+        q = _Query(query)
+        for artist, title in names:
+            assert max(q.readings(artist, title)) == q.score(artist, title) == pytest.approx(
+                _score_before_readings(query, artist, title)), (query, artist, title)
+
+
+def test_a_catch_alls_song_is_never_what_enter_takes(conn):
+    # Added under UG's names, its artist would be "Misc Musicals": the song is to be added as you know it.
+    from caracole.search import find_index
+
+    index(conn, ROWS + [EPIC, NEAR_EPIC])
+    found = find_index(conn, "epic not sorry for loving you")
+    assert found.songs[0].artist_key == "misc-musicals" and found.songs[0].score >= 90
+    assert found.lead == "song" and found.best is None
+
+
+# --- caracole search: an artist alone, a title alone, --artist and --title ----------------------
+
+
+def ug_part(output: str) -> str:
+    return output.partition("On Ultimate Guitar (offline index)")[2]
+
+
+def test_cli_an_artist_alone_says_how_many_songs_it_has_and_lists_the_most_tabbed(tmp_path):
+    seed(tmp_path, rows=EITHER)
+    result = run(tmp_path, "search", "oasis")
+    assert result.exit_code == 0, result.output
+    ug = ug_part(result.output)
+    assert "  Oasis, an artist: 2 songs (4 tabs). The most tabbed:\n  1. [UG] Oasis - Wonderwall · chords×2 tabs×1" in ug
+    assert "  2. [UG] Oasis - Live Forever · chords×1" in ug
+    assert "caracole search --artist" not in ug  # both of its songs are shown
+    # Then the songs with the word in their title, numbered on.
+    assert ug.index("Live Forever") < ug.index("Songs titled like oasis") < ug.index("3. [UG] Misc Mashups - Oasis Wonderwall")
+
+
+def test_cli_an_artist_with_more_songs_than_shown_says_how_to_list_them_all(tmp_path):
+    many = [(30000 + i, "oasis", f"song-{i:02d}", "chords") for i in range(5)]
+    seed(tmp_path, rows=EITHER + many)
+    ug = ug_part(run(tmp_path, "search", "oasis").output)
+    assert "Oasis, an artist: 7 songs (9 tabs). The most tabbed:" in ug
+    assert "  2. [UG] Oasis - Live Forever" in ug and "  3. [UG] Oasis - Song 00" in ug  # its three most tabbed
+    assert "Song 01" not in ug
+    assert '     All 7: caracole search --artist "Oasis"\n' in ug
+
+
+def test_cli_a_title_alone_lists_the_songs_and_says_it_is_an_artist_too(tmp_path):
+    seed(tmp_path, rows=EITHER)
+    result = run(tmp_path, "search", "wonderwall")
+    assert result.exit_code == 0, result.output
+    ug = ug_part(result.output)
+    assert "  1. [UG] Oasis - Wonderwall" in ug and "  2. [UG] Ryan Adams - Wonderwall" in ug
+    assert "In April" not in ug  # the band Wonderwall's song is in its own line, not between the others
+    assert ('  Also an artist: Wonderwall, 1 song (2 tabs)\n'
+            '     caracole search --artist "Wonderwall"\n') in ug
+
+
+def test_cli_add_numbers_what_the_search_printed(tmp_path):
+    seed(tmp_path, rows=EITHER + [(20061, "a-great-big-world", "oasis", "chords")])
+    ug = ug_part(run(tmp_path, "search", "oasis").output)
+    assert "  3. [UG] A Great Big World - Oasis" in ug
+    result = run(tmp_path, "search", "oasis", "--add", "3")
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8").endswith("\nA Great Big World - Oasis\n")
+
+
+def test_cli_search_artist_lists_its_songs_with_limit_and_add(tmp_path):
+    conn = seed(tmp_path, rows=EITHER)
+    add_song(conn, "Oasis", "Wonderwall")
+    result = run(tmp_path, "search", "--artist", "oasis")
+    assert result.exit_code == 0, result.output
+    library, ug = result.output.split("On Ultimate Guitar (offline index)")
+    assert "Oasis - Wonderwall" in library and "Radiohead" not in library  # yours by them, first
+    assert "  Oasis: 2 songs (4 tabs), the most tabbed first:\n  1. [UG] Oasis - Wonderwall" in ug
+    assert "  2. [UG] Oasis - Live Forever" in ug and "Misc Mashups" not in ug and "Ryan Adams" not in ug
+    cut = ug_part(run(tmp_path, "search", "--artist", "oasis", "--limit", "1").output)
+    assert "  1. [UG] Oasis - Wonderwall" in cut and "2. " not in cut
+    assert "  … and 1 more: see them with --limit 2" in cut
+    narrowed = ug_part(run(tmp_path, "search", "--artist", "oasis", "live").output)  # words: its titles
+    assert "  1. [UG] Oasis - Live Forever" in narrowed and "Wonderwall" not in narrowed
+    added = run(tmp_path, "search", "--artist", "oasis", "--add", "2")
+    assert added.exit_code == 0, added.output
+    assert (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8").endswith("\nOasis - Live Forever\n")
+
+
+def test_cli_search_artist_the_index_lacks_lists_yours_and_hints_with_its_name(tmp_path):
+    conn = seed(tmp_path, rows=ROWS)
+    add_song(conn, "宋冬野", "斑马，斑马")
+    result = run(tmp_path, "search", "--artist", "宋冬野")
+    assert result.exit_code == 0, result.output
+    library, ug = result.output.split("On Ultimate Guitar (offline index)")
+    assert "宋冬野 - 斑马，斑马" in library
+    assert "No artist named 宋冬野 in the offline index" in ug
+    out = " ".join(ug.split())
+    assert "Find the artist's page" in out and '"宋冬野" = "https://www.ultimate-guitar.com/artist/' in out
+    assert "is a title" not in out
+
+
+def test_cli_search_title_lists_that_title_by_any_artist(tmp_path):
+    seed(tmp_path, rows=EITHER)
+    result = run(tmp_path, "search", "--title", "wonderwall")
+    assert result.exit_code == 0, result.output
+    ug = ug_part(result.output)
+    assert "  1. [UG] Oasis - Wonderwall" in ug and "  2. [UG] Ryan Adams - Wonderwall" in ug
+    assert "Also an artist" not in ug and "In April" not in ug
+    radiohead = ug_part(run(tmp_path, "search", "--title", "radiohead").output)
+    assert "Creep" not in radiohead  # the artist's name is no title
+
+
+@pytest.mark.parametrize("args", [
+    ("--title", "creep", "radiohead"),  # --title is the title: no other words
+    ("--key", "Am", "--artist", "radiohead"),
+    ("--key", "Am", "--title", "creep"),
+    ("--artist", " "),
+])
+def test_cli_title_with_a_query_and_key_with_a_name_are_usage_errors(tmp_path, args):
+    seed(tmp_path, rows=EITHER)
+    result = run(tmp_path, "search", *args)
+    assert result.exit_code == 2, result.output
+
+
+def test_cli_hint_never_keys_a_line_by_a_placeholder_artist(tmp_path):
+    # The owner's wanted.txt has "misc - 斑马": the song's artist is no one's name, so the query is.
+    conn = seed(tmp_path, rows=ROWS)
+    add_song(conn, "misc", "斑马")
+    out = " ".join(run(tmp_path, "search", "斑马").output.split())
+    assert '"misc" = ' not in out
+    assert '"斑马" = "https://www.ultimate-guitar.com/artist/' in out
+    assert 'If 斑马 is a title, caracole needs its artist too: `caracole add ARTIST "斑马"`' in out
+
+
+def test_a_song_of_yours_under_a_placeholder_artist_is_never_what_enter_takes(conn):
+    # The owner's "misc - 斑马": looked up under "misc", it can't be found, so Enter would spend requests on it.
+    index(conn, EITHER)
+    add_song(conn, "misc", "斑马")
+    answer = find(conn, "斑马")
+    assert [h.song.artist for h in answer.library] == ["misc"] and answer.library[0].score >= 90
+    assert answer.best is None  # and the index's partial pinyin match is no clear song either
