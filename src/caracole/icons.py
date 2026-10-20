@@ -105,6 +105,42 @@ SOURCES: Mapping[str, Source] = {
 }
 
 
+# Files caracole makes from another it kept, which come from where that one came from.
+_MADE_FROM = {"sheet.pdf": "sheet.txt", "sheet.cho": "sheet.txt",
+              "sheet (auto).pdf": "sheet (auto).txt", "sheet (auto).cho": "sheet (auto).txt"}
+_LYRICS_FILES = ("lyrics.txt", "lyrics.lrc")
+SHEETS = ("sheet.txt", "sheet (auto).txt")  # a song's sheet, the human one first
+
+
+def kept_sources(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
+    """Where each kept file came from, by song and file name: its version's provider."""
+    found: dict[int, dict[str, str]] = {}
+    for song_id, name, provider in conn.execute(
+        "SELECT f.song_id, f.name, v.provider FROM files f JOIN versions v ON v.id = f.version_id"
+    ):
+        found.setdefault(song_id, {})[name] = provider
+    return found
+
+
+def source_of(name: str, kept: Mapping[str, str]) -> str | None:
+    """Where a song's file ``name`` came from, given its ``kept`` files' sources (``kept_sources``):
+    a file it made from one kept comes from where that did; lyrics from LRCLIB; an auto sheet
+    from the audio model. None for a file of caracole's own (info.json), or one put there by hand."""
+    if name in kept:
+        return kept[name]
+    if name in _LYRICS_FILES:
+        return LYRICS
+    base = _MADE_FROM.get(name, name)
+    if base in kept:
+        return kept[base]
+    return AUTO if base == "sheet (auto).txt" else None
+
+
+def sheet_source(kept: Mapping[str, str]) -> str | None:
+    """Where a song's sheet came from: its human sheet's source, else its auto sheet's."""
+    return next((kept[name] for name in SHEETS if name in kept), None)
+
+
 def source_name(key: str) -> str:
     """A source as people call it; an unknown one by its key."""
     return SOURCES[key].name if key in SOURCES else key

@@ -976,7 +976,21 @@ artist's cards share a coloured monogram, and the artist's name under a title
 shows only that artist's songs ("Queen" leaves out ABBA's "Dancing Queen"),
 until you take its chip off. "Find it elsewhere" opens a song's MuseScore
 pages, each a possible match, as on the to-do page, and, for a song without a
-sheet, its search and buy links.
+sheet, its search and buy links. Next to its status, a card shows where its
+sheet came from, by the site's own icon, and a file from somewhere else
+carries its own: the lyrics LRCLIB's, a Guitar Pro file gtptabs.com's (see
+[Where each file came from](#where-each-file-came-from)).
+
+The Cards/Rows switch, beside the Key menu, shows the songs as rows instead:
+one line a song on a laptop, about twenty to a screen, and two lines on a
+phone. A row has the sheet's mark, the title, the artist (which, as on a card,
+shows only that artist's songs), the key ("Am"; a screen reader hears "Key A
+minor (from the tab)"), the status, and one button: the sheet, or, on the page
+`caracole serve` serves, Fetch now for a wanted song. Its "⋯" button opens the
+rest: the other files, the Guitar Pro pages, MuseScore's pages, and the search
+and buy links. The search, the status buttons, the Key menu, the sort and the
+letters work the same in both, and the address remembers the choice
+(`#view=rows`), as it does the rest: a bookmark opens the page as you left it.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or
@@ -995,7 +1009,9 @@ offline index doesn't know. `caracole serve` serves the same page with a form
 to request songs (see below).
 
 Each song's entry in the page's data (the `<script type="application/json"
-id="songs">` block) has the same `key` and `key_source` as its info.json.
+id="songs">` block) has the same `key` and `key_source` as its info.json, and
+`source`, where its sheet came from (`ug`, `lacuerda`, `auto`…); each of its
+files has its own `source`.
 
 On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
@@ -1102,7 +1118,8 @@ do:
 - **Fetch it now.** Ticked, as it is by default, the request also runs
   `caracole match` (offline), `caracole fetch --song "ARTIST - TITLE"` and
   `caracole render` (offline), so a sheet can be there in a minute or two.
-  Each wanted song's card has a Fetch now button that does the same, except
+  Each wanted song's card, and its row in the Rows view, has a Fetch now
+  button that does the same, except
   on a song that needs review: it says Review first, since `caracole fetch`
   waits for `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
   overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for

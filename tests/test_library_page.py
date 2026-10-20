@@ -233,7 +233,8 @@ def test_a_songs_musescore_pages_are_linked_as_possible_matches(conn, cfg):
     html = page(conn, cfg, Overrides(ignore=frozenset({ignored.key})))
     cards = songs_of(html)
     assert cards[oasis.display]["museScore"] == [
-        {"label": "wonderwall-680101 (possible match)", "href": "https://musescore.com/song/wonderwall-680101"}]
+        {"label": "wonderwall-680101 (possible match)", "href": "https://musescore.com/song/wonderwall-680101",
+         "source": "musescore"}]
     assert cards[ignored.display]["museScore"] == []
     assert '"Scores on MuseScore"' in html  # the card's heading for them
     off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
@@ -786,3 +787,343 @@ def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(co
     shown = listing(dump_dom(plain, tmp_path, "#artist=queen&q=dancing"))
     assert "No songs of Queen match “dancing”" in shown and "every artist" in shown
     assert "caracole search" not in shown
+
+
+# --- where each file came from: the sites' icons ----------------------------------------------
+
+
+def test_each_file_says_where_it_came_from_and_the_song_where_its_sheet_did(conn, cfg):
+    from caracole.lacuerda_fetch import SHEET_DOCS
+
+    ug = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, ug, "Words\n")
+    gtp = upsert_version(conn, provider="gtptabs", tab_id="12", song_id=ug.id, slot="guitar", kind="guitar-pro",
+                         rating=4, votes=0, version=1, label=None, url="https://gtptabs.com/tabs/r/creep.html",
+                         raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=ug, version_id=gtp, name="guitar-1.gp5", data=b"gp5", rank=1)
+    score = upsert_version(conn, provider="inbox", tab_id="score", song_id=ug.id, slot="guitar", kind="score",
+                           rating=0, votes=0, version=1, label=None, url="", raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=ug, version_id=score, name="score-1.mscz", data=b"ms", rank=1)
+    put(cfg, ug, "sheet.pdf", "sheet.cho", "lyrics.txt", "lyrics.lrc", "info.json")
+    spanish = add_song(conn, "Soda Stereo", "De Música Ligera")
+    lc = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/de_musica_ligera", song_id=spanish.id,
+                        slot="sheet", kind="acordes", rating=0, votes=0, version=1, label=None,
+                        url="https://acordes.lacuerda.net/soda_stereo/de_musica_ligera.shtml", raw={}, now="x")
+    for name in SHEET_DOCS:
+        keep_file(conn, cfg.library_dir, song=spanish, version_id=lc, name=name, data=name.encode(), rank=1)
+    auto = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, auto, "sheet (auto).txt", "sheet (auto).pdf")
+    wanted = add_song(conn, "Oasis", "Wonderwall")
+
+    songs = songs_of(page(conn, cfg))
+    files = {f["name"]: f.get("source") for f in songs[ug.display]["files"]}
+    assert files == {"sheet.pdf": "ug", "sheet.txt": "ug", "sheet.cho": "ug", "lyrics.txt": "lrclib",
+                     "lyrics.lrc": "lrclib", "guitar-1.gp5": "gtptabs", "score-1.mscz": "inbox", "info.json": None}
+    assert songs[ug.display]["source"] == "ug"
+    assert songs[spanish.display]["source"] == "lacuerda"
+    assert songs[auto.display]["source"] == "auto"
+    assert {f["name"]: f["source"] for f in songs[auto.display]["files"]} == {
+        "sheet (auto).pdf": "auto", "sheet (auto).txt": "auto"}
+    assert songs[wanted.display]["source"] is None
+
+
+def test_links_to_other_sites_name_them(conn, cfg):
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
+    set_picks(conn, s.id, ["guitar-pro"], [v])
+    song = songs_of(page(conn, cfg))[s.display]
+    assert [g["source"] for g in song["guitarPro"]] == ["ug"]
+    assert {link["label"]: link.get("source") for link in song["links"]} == {"Chordify": None, "YouTube": "youtube"}
+
+
+def test_the_page_inlines_the_icons_kept_and_allows_images_from_data_alone(conn, cfg):
+    from helpers.icon_files import png
+
+    from caracole import icons
+
+    icons.keep_icon(cfg.cache_dir, "ug", icons.sanitize(png(32)))
+    html = page(conn, cfg)
+    shown = data_of(html)["icons"]
+    assert shown["ug"]["src"] == icons.icon_uri(cfg.cache_dir, "ug")
+    assert shown["lacuerda"] == {"name": "LaCuerda", "letters": "LC"}  # its badge, until it has an icon
+    assert shown["auto"]["glyph"] is True
+    csp = csp_of(html)
+    assert "img-src data:;" in csp + ";" and "default-src 'none'" in csp
+    assert not re.search(r"data:image/png;base64,[A-Za-z0-9+/]", JSON_BLOCK.sub("", html))  # only in the data
+
+
+def sourced_library(conn, cfg):
+    """Creep's sheet from UG (whose icon is kept), De Música Ligera's from LaCuerda (no icon yet),
+    斑马，斑马's from the audio model, and Wonderwall wanted."""
+    from helpers.icon_files import png
+
+    from caracole import icons
+    from caracole.lacuerda_fetch import SHEET_DOCS
+
+    icons.keep_icon(cfg.cache_dir, "ug", icons.sanitize(png(32)))
+    creep = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, creep, "Words\n", raw={"tonality_name": "G"})
+    put(cfg, creep, "sheet.pdf", "lyrics.txt")
+    update_song(conn, creep.id, status="found")
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    lc = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/de_musica_ligera", song_id=soda.id,
+                        slot="sheet", kind="acordes", rating=0, votes=0, version=1, label=None,
+                        url="https://acordes.lacuerda.net/soda_stereo/de_musica_ligera.shtml", raw={}, now="x")
+    for name in SHEET_DOCS:
+        data = AM_F_C_G.encode() if name.endswith(".txt") else json.dumps({"content": AM_F_C_G}).encode()
+        keep_file(conn, cfg.library_dir, song=soda, version_id=lc, name=name, data=data, rank=1)
+    update_song(conn, soda.id, status="found")
+    auto = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, auto, "sheet (auto).txt")
+    update_song(conn, auto.id, status="found")
+    add_song(conn, "Oasis", "Wonderwall")
+    return creep
+
+
+# Notes each icon on the page: its source, its accessible name, and whether the image loaded.
+MARKS = """
+(() => {
+  const marks = Array.from(document.querySelectorAll("#list .source")).map((m) => ({
+    source: m.dataset.source, tag: m.tagName.toLowerCase(), text: m.textContent,
+    name: m.getAttribute("alt") || m.getAttribute("aria-label"), role: m.getAttribute("role"),
+    loaded: m.tagName === "IMG" ? m.complete && m.naturalWidth > 0 : null,
+    link: m.closest("a") ? m.closest("a").textContent : null,
+  }));
+  document.body.setAttribute("data-marks", JSON.stringify(marks));
+})();
+"""
+
+
+def marks_of(dom: str) -> list[dict]:
+    import html as html_module
+
+    found = re.search(r'data-marks="([^"]*)"', dom)
+    assert found, dom[-2000:]
+    return json.loads(html_module.unescape(found.group(1)))
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tmp_path):
+    sourced_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), MARKS))
+    marks = marks_of(dump_dom(path, tmp_path))
+    ug = [m for m in marks if m["source"] == "ug"]
+    assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from Ultimate Guitar" for m in ug), ug
+    # The card says once where its sheet came from; its files from there carry no mark of their own...
+    assert [m["link"] for m in ug] == [None], ug
+    # ...and a file from elsewhere does, as the link's last word: "Lyrics from LRCLIB".
+    assert any(m["source"] == "lrclib" and m["link"] == "LyricsLR" for m in marks), marks
+    lc = [m for m in marks if m["source"] == "lacuerda"]
+    assert lc and all(m["tag"] == "span" and m["role"] == "img" and m["text"] == "LC" and
+                      m["name"] == "from LaCuerda" for m in lc), lc
+    assert any(m["source"] == "lrclib" and m["text"] == "LR" for m in marks)
+    assert any(m["source"] == "auto" and m["text"] == "♪" and m["name"] == "from the audio (auto-chords)"
+               for m in marks)
+    assert any(m["source"] == "youtube" for m in marks)  # Wonderwall's search link
+
+
+def row_of(shown: str, title: str) -> str:
+    found = re.search(r'<article class="row"[^>]*>(?:(?!</article>).)*?' + re.escape(title) + r".*?</article>",
+                      shown, re.S)
+    assert found, shown[-2000:]
+    return found.group(0)
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_rows_view_shows_a_song_a_row_with_its_source_key_status_and_main_action(conn, cfg, tmp_path):
+    sourced_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    dom = dump_dom(path, tmp_path, "#view=rows")
+    shown = listing(dom)
+    assert shown.count('<article class="row"') == 4 and 'class="card"' not in shown
+    assert re.search(r'<button[^>]*data-view="rows"[^>]*aria-pressed="true"', dom)
+    creep = row_of(shown, "Creep")
+    assert re.search(r'<h2 class="row-title"[^>]*>Creep</h2>', creep)
+    assert 'alt="from Ultimate Guitar"' in creep and ">Radiohead</button>" in creep
+    assert "Key G major (from the tab)" in creep and ">Found<" in creep
+    main = re.search(r'<div class="row-action"><a ([^>]*)>Sheet PDF</a>', creep)
+    assert main and 'href="Radiohead/Creep/sheet.pdf"' in main.group(1)
+    assert 'aria-label="Sheet PDF of Creep by Radiohead"' in main.group(1)
+    # The other files wait behind a small button, closed.
+    more = re.search(r'<button class="row-more"[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"', creep)
+    assert more and re.search(rf'<div class="row-panel" id="{more.group(1)}" hidden', creep)
+    assert ">More for Creep<" in creep and "Lyrics" in creep.split("row-panel", 1)[1]
+    soda = row_of(shown, "De Música Ligera")
+    assert 'aria-label="from LaCuerda"' in soda and ">Sheet text<" in soda
+    wonderwall = row_of(shown, "Wonderwall")
+    assert ">Wanted<" in wonderwall and "row-action" in wonderwall and "Find the chords" in wonderwall
+
+
+# Measures the rows: each one's top and height, the page's width and how far it scrolls sideways.
+ROWS = """
+(() => {
+  const rows = Array.from(document.querySelectorAll("#list .row"));
+  const box = (node) => node.getBoundingClientRect();
+  document.body.setAttribute("data-layout", JSON.stringify({
+    tops: rows.map((r) => Math.round(box(r).top + window.scrollY)),
+    heights: rows.map((r) => Math.round(box(r).height)),
+    titles: rows.map((r) => Math.round(box(r.querySelector("h2")).top)),
+    actions: rows.map((r) => r.querySelector(".row-action > *") ? Math.round(box(r.querySelector(".row-action > *")).top) : null),
+    widths: rows.map((r) => Math.round(box(r).width)),
+    page: window.innerWidth,
+    screen: window.innerHeight,
+    scroll: document.documentElement.scrollWidth,
+  }));
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_many_rows_fit_on_a_screen_and_a_phones_rows_wrap_to_two_lines(conn, cfg, tmp_path):
+    for n in range(24):
+        s = add_song(conn, f"Artist With A Long Name {n:02d}", f"A Song Title That Goes On For A While {n:02d}")
+        keep_sheet_json(conn, cfg, s, "Words\n", raw={"tonality_name": "F#m"}, tab_id=100 + n)
+        put(cfg, s, "sheet.pdf", "lyrics.txt")
+        update_song(conn, s.id, status="found", review=n % 5 == 0)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ROWS))
+
+    wide = layout_of(dump_dom(path, tmp_path, "#view=rows", size="1280,900"))
+    assert len(wide["tops"]) == 24 and wide["scroll"] <= wide["page"], wide
+    assert all(abs(t - a) <= 8 for t, a in zip(wide["titles"], wide["actions"])), wide  # one line each
+    assert wide["screen"] // max(wide["heights"]) >= 20, wide  # a screen holds 20 rows, against 9 cards
+
+    phone = layout_of(dump_dom(path, tmp_path, "#view=rows", size="390,844"))
+    assert phone["scroll"] <= phone["page"], phone  # nothing wider than the screen
+    assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
+    # Two lines at most, with buttons a thumb can hit: nine rows to a screen, against three cards.
+    assert phone["screen"] // max(phone["heights"]) >= 9, phone
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_filters_sort_key_menu_artist_and_letters_work_in_rows_in_a_real_browser(conn, cfg, tmp_path):
+    for tab_id, (artist, title, key) in enumerate((("Queen", "Bohemian Rhapsody", "Bb"),
+                                                    ("Queen", "Don't Stop Me Now", "F"),
+                                                    ("ABBA", "Dancing Queen", "A"),
+                                                    ("Radiohead", "Creep", "G")), start=1):
+        s = add_song(conn, artist, title)
+        keep_sheet_json(conn, cfg, s, "Words\n", raw={"tonality_name": key}, tab_id=tab_id)
+        update_song(conn, s.id, status="found" if tab_id != 4 else "wanted")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+
+    def titles(fragment):
+        shown = listing(dump_dom(path, tmp_path, fragment))
+        assert 'class="card"' not in shown
+        return sorted(re.findall(r'<h2 class="row-title"[^>]*>([^<]*)</h2>', shown))
+
+    assert titles("#view=rows") == ["Bohemian Rhapsody", "Creep", "Dancing Queen", "Don't Stop Me Now"]
+    assert titles("#view=rows&artist=queen") == ["Bohemian Rhapsody", "Don't Stop Me Now"]
+    assert titles("#view=rows&key=G") == ["Creep"]
+    assert titles("#view=rows&show=wanted") == ["Creep"]
+    assert titles("#view=rows&q=dancing") == ["Dancing Queen"]
+    shown = listing(dump_dom(path, tmp_path, "#view=rows&sort=title"))
+    assert re.findall(r'<h2 class="row-title"[^>]*>([^<]*)</h2>', shown) == [
+        "Bohemian Rhapsody", "Creep", "Dancing Queen", "Don't Stop Me Now"]
+    strip = re.search(r'<nav[^>]*id="jump"[^>]*>(.*?)</nav>', dump_dom(path, tmp_path, "#view=rows&sort=title"), re.S)
+    assert re.findall(r"<button[^>]*>([^<]+)</button>", strip.group(1)) == ["B", "C", "D"]
+
+
+# Switches to rows and back, jumps to "R", opens a row's other links, and clicks an artist; notes each step.
+ROW_CLICKS = """
+(() => {
+  const notes = {};
+  const view = (name) => document.querySelector('[data-view="' + name + '"]');
+  view("rows").click();
+  notes.rows = { hash: location.hash, rows: document.querySelectorAll("#list .row").length,
+                 cards: document.querySelectorAll("#list .card").length,
+                 pressed: view("rows").getAttribute("aria-pressed") };
+  Array.from(document.querySelectorAll("#jump button")).find((b) => b.textContent === "R").click();
+  const focused = document.activeElement.closest("article");
+  notes.jump = focused ? focused.className + ":" + focused.querySelector("h2").textContent : "none";
+  const row = Array.from(document.querySelectorAll("#list .row"))
+    .find((r) => r.querySelector("h2").textContent === "Creep");
+  const more = row.querySelector(".row-more");
+  more.click();
+  const panel = document.getElementById(more.getAttribute("aria-controls"));
+  notes.opened = { expanded: more.getAttribute("aria-expanded"), hidden: panel.hidden,
+                   links: Array.from(panel.querySelectorAll("a")).map((a) => a.firstChild.textContent) };
+  more.click();
+  notes.closed = { expanded: more.getAttribute("aria-expanded"), hidden: panel.hidden };
+  row.querySelector("button.artist").click();
+  notes.artist = { hash: location.hash, titles: Array.from(document.querySelectorAll("#list .row h2"))
+    .map((h) => h.textContent) };
+  view("cards").click();
+  notes.cards = { hash: location.hash, cards: document.querySelectorAll("#list .card").length };
+  document.body.setAttribute("data-notes", JSON.stringify(notes));
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_view_toggle_is_remembered_and_a_rows_controls_work_from_the_keyboard(conn, cfg, tmp_path):
+    import html as html_module
+
+    creep = add_song(conn, "Radiohead", "Creep")
+    put(cfg, creep, "sheet.pdf", "lyrics.txt", "tab.txt")
+    add_song(conn, "Radiohead", "Lucky")
+    add_song(conn, "The Beatles", "Yesterday")
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ROW_CLICKS))
+    dom = dump_dom(path, tmp_path)
+    notes = json.loads(html_module.unescape(re.search(r'data-notes="([^"]*)"', dom).group(1)))
+    assert notes["rows"] == {"hash": "#view=rows", "rows": 3, "cards": 0, "pressed": "true"}, notes
+    assert notes["jump"] == "row:Creep", notes  # the next Tab goes on from the row jumped to
+    assert notes["opened"] == {"expanded": "true", "hidden": False, "links": ["Lyrics", "Tab"]}, notes
+    assert notes["closed"] == {"expanded": "false", "hidden": True}, notes
+    assert "view=rows" in notes["artist"]["hash"] and "artist=radiohead" in notes["artist"]["hash"], notes
+    assert sorted(notes["artist"]["titles"]) == ["Creep", "Lucky"], notes
+    assert "view=" not in notes["cards"]["hash"] and notes["cards"]["cards"] == 2, notes
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_pages_rows_offer_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
+    from caracole.library_page import WebControls
+
+    wanted = add_song(conn, "Radiohead", "Creep")
+    busy = add_song(conn, "Oasis", "Wonderwall")
+    held = add_song(conn, "Queen", "Bohemian Rhapsody")
+    update_song(conn, held.id, review=True)
+    controls = WebControls(csrf="tok", busy=frozenset({busy.id}), active=1, held=frozenset({held.id}))
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, "#view=rows"))
+    creep = row_of(shown, "Creep")
+    form = re.search(r'<div class="row-action"><form[^>]*action="/fetch"[^>]*>(.*?)</form>', creep, re.S)
+    assert form and f'name="song" value="{wanted.id}"' in form.group(1) and 'name="csrf" value="tok"' in form.group(1)
+    assert 'aria-label="Fetch Creep by Radiohead now"' in form.group(1)
+    assert "Fetching" in row_of(shown, "Wonderwall") and "/fetch" not in row_of(shown, "Wonderwall")
+    assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", row_of(shown, "Bohemian Rhapsody"))
+
+
+# What another list on the page (the served page's type-ahead) does with the row renderer.
+RESULT_ROWS = """
+(() => {
+  const list = document.createElement("div");
+  list.className = "rows";
+  list.id = "results";
+  list.appendChild(window.caracole.resultRow({
+    title: "Creep", artist: "Radiohead", source: "ug", facts: "chords×3 tabs×2",
+    action: { label: "Chords", href: "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169" },
+    more: [{ heading: "Tabs", links: [{ label: "Tab", href: "javascript:alert(1)", source: "ug" }] }],
+  }));
+  list.appendChild(window.caracole.resultRow({ title: "Nameless" }));
+  document.body.appendChild(list);
+  document.body.setAttribute("data-api", Object.keys(window.caracole).sort().join(","));
+})();
+"""
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_row_renderer_takes_any_search_result_in_a_real_browser(conn, cfg, tmp_path):
+    from helpers.icon_files import png
+
+    from caracole import icons
+
+    icons.keep_icon(cfg.cache_dir, "ug", icons.sanitize(png(32)))
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), RESULT_ROWS))
+    dom = dump_dom(path, tmp_path)
+    assert re.search(r'data-api="icons,resultRow,sourceMark"', dom)
+    results = re.search(r'<div class="rows" id="results">(.*?)</div>\s*</body>', dom, re.S).group(1)
+    creep = row_of(results, "Creep")
+    assert 'alt="from Ultimate Guitar"' in creep and "chords×3 tabs×2" in creep
+    main = re.search(r'<div class="row-action"><a ([^>]*)>Chords ↗</a>', creep)
+    assert main and 'target="_blank"' in main.group(1) and 'rel="noopener noreferrer"' in main.group(1)
+    assert "javascript:" not in creep and 'href="#"' in creep  # an unsafe link goes nowhere
+    assert "row-more" not in row_of(results, "Nameless")  # nothing more to show, no button
