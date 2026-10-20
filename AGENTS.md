@@ -68,8 +68,8 @@ songs.py's, in the `removed` table).
   per event (`get.progress_line`) for caracole serve.
   The logic of `caracole review`, `caracole search`, `caracole remove` and `caracole songbook`
   is in review.py, search.py, removal.py and songbook.py. search.py reads a query as a
-  title, an artist or both (each hit's `via`); `find_index` (with your songs, `found`, or
-  both at once, `find`) answers `caracole search` and `/api/search`: the artists a query
+  title, an artist or both (each hit's `via`); `find_index` (with your songs, `found`)
+  answers `caracole search` and `/api/search`: the artists a query
   names (`ArtistHit`, never a catch-all), the index's songs, `lead` and `best` (what Enter
   may act on, None for no clear song), with
   `artist_songs` and `library_by_artist`; tab counts are its only popularity, and Chinese

@@ -31,10 +31,11 @@ name tops out below a strong hit.
 **Either one.** A query may be the artist alone, the title alone, or both, in
 any order: each hit says which reading scored it (``via``: "title",
 "artist" or "both"; a tie goes to the title, then both), with the score it
-always had. ``find`` gives the answer the pages and the commands show: your
-songs, the artists the query names (``ArtistHit``: the query as the artist's
-whole name scores 90 or more, never a catch-all's, with its songs and tabs
-counted and its most tabbed songs), and the index's songs, those it holds only
+always had. ``find_index`` gives the index's answer, and ``found`` the one
+the pages show, with your songs (``search_library``): your songs, the
+artists the query names (``ArtistHit``: the query as the artist's whole name
+scores 90 or more, never a catch-all's, with its songs and tabs counted and
+its most tabbed songs), and the index's songs, those it holds only
 through an artist's name folded into that artist's row. ``lead`` says which
 comes first, and ``best`` is the one row Enter may act on: a song of yours read
 by its title (or both), not under a placeholder artist such as "misc", else
@@ -101,7 +102,7 @@ MAX_PATTERNS = 2
 SHOWN_CANDIDATES = 3  # a review's candidates shown under its song: the rest are in `caracole review`
 READINGS = ("title", "both", "artist")  # how a query may name a song; a tie goes to the first
 TOP_SONGS = 3  # an artist row's most tabbed songs
-ARTIST_ROWS, LIBRARY_ROWS, SONG_ROWS = 3, 5, 8  # what ``find`` gives by default
+ARTIST_ROWS, SONG_ROWS = 3, 8  # what ``find_index`` gives by default
 SITE_ROWS = 5  # a site's pages search_gtptabs and search_musescore give by default
 SITE_ROWS_READ = 2000  # rows of gtptabs_index the prefilter reads, at most
 
@@ -198,7 +199,7 @@ class IndexFound:
 
 @dataclass(frozen=True)
 class Found:
-    """``find``'s answer: your songs, then the index's artists and songs, what comes first, and the
+    """``found``'s answer: your songs, then the index's artists and songs, what comes first, and the
     row Enter may act on (``best``: a song of yours first, as it costs no request)."""
 
     library: tuple[LibraryHit, ...]
@@ -302,13 +303,6 @@ def find_index(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_RO
     # Never one only an artist's name matched, nor one of a catch-all's: its artist is no one's name.
     best = first if first.score >= STRONG and first.via != "artist" and not first.catch_all else None
     return IndexFound(tuple(rows), tuple(hits), "song", best)
-
-
-def find(conn: sqlite3.Connection, query: str, *, library: int = LIBRARY_ROWS, artists: int = ARTIST_ROWS,
-         songs: int = SONG_ROWS) -> Found:
-    """Your library and the offline index for ``query``, as the pages and the commands show it."""
-    mine = tuple(search_library(conn, query, library))
-    return found(mine, find_index(conn, query, artists=artists, songs=songs))
 
 
 def found(library: Sequence[LibraryHit], index: IndexFound) -> Found:
@@ -810,7 +804,7 @@ def index_song(conn: sqlite3.Connection, artist_key: str, song_key: str, score: 
 
 
 def index_artist(conn: sqlite3.Connection, artist_key: str) -> ArtistHit | None:
-    """One artist of the index as ``find`` gives it (score 100): its songs and tabs counted, its most
+    """One artist of the index as ``find_index`` gives it (score 100): its songs and tabs counted, its most
     tabbed songs and its name as UG writes it. None when the index has no tab of theirs."""
     return _artist_hit(conn, artist_key, 100.0)
 

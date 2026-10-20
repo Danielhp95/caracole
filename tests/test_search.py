@@ -1094,9 +1094,14 @@ def test_library_hits_say_their_reading_too(conn):
     assert [(h.song.title, h.via) for h in search_library(conn, "radiohead creep")] == [("Creep", "both")]
 
 
-def test_find_takes_your_song_before_an_artist_and_never_one_read_as_its_artist(conn):
-    from caracole.search import find
 
+def find(conn, query):
+    """Your songs with the index's answer, as /api/search puts them together."""
+    from caracole.search import find_index, found
+
+    return found(search_library(conn, query, 5), find_index(conn, query))
+
+def test_find_takes_your_song_before_an_artist_and_never_one_read_as_its_artist(conn):
     index(conn, EITHER)
     add_song(conn, "Oasis", "Wonderwall")
     found = find(conn, "wonderwall")
@@ -1270,8 +1275,6 @@ def test_cli_hint_never_keys_a_line_by_a_placeholder_artist(tmp_path):
 
 def test_a_song_of_yours_under_a_placeholder_artist_is_never_what_enter_takes(conn):
     # The owner's "misc - 斑马": looked up under "misc", it can't be found, so Enter would spend requests on it.
-    from caracole.search import find
-
     index(conn, EITHER)
     add_song(conn, "misc", "斑马")
     answer = find(conn, "斑马")

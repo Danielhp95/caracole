@@ -909,13 +909,11 @@ class WebApp:
                 return _json(503, {"query": q, "error": f"The database can't be read: {e}"})
 
     def _found_for(self, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
-        """The search's answer (``search.find``'s): your songs, the artists the query names, the index's
+        """The search's answer (``search.found``'s): your songs, the artists the query names, the index's
         songs, which leads, and the row Enter may act on (``best``: a song of yours by its id, or an
         Ultimate Guitar song by its keys; None for none). A song of your library comes as its card
         has it (``_rows``)."""
-        from caracole.search import LibraryHit, found, search_library
-
-        from caracole.search import search_gtptabs, search_musescore
+        from caracole.search import LibraryHit, found, search_gtptabs, search_library, search_musescore
         from caracole.songs import list_songs
 
         mine = search_library(conn, q, LIBRARY_HITS)

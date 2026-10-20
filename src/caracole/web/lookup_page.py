@@ -145,14 +145,8 @@ function href(path) { return "/" + path.split("/").map(encodeURIComponent).join(
 function letters(s) { return (s.match(/[\p{L}\p{N}]/gu) || []).length; }
 function han(s) { return /\p{Script=Han}/u.test(s); }
 function typedText() { return q.value.trim().replace(/\s+/g, " "); }
-function button(label, cls, onclick, aria) {
-  const b = el("button", "btn " + (cls || "small"), label);
-  b.type = "button";
-  if (aria) b.setAttribute("aria-label", aria);
-  b.addEventListener("click", onclick);
-  return b;
-}
-function plural(n, word) { return Number(n || 0).toLocaleString("en") + " " + word + (n === 1 ? "" : "s"); }
+const button = rowKit.button;  // a button as index.html makes them (ROWS_SCRIPT's)
+const many = rowKit.many;  // "1 song", "1,234 songs"
 function group(title, rows) {
   const list = el("div", "rows hits");
   for (const row of rows) list.append(row);
@@ -250,7 +244,7 @@ function showArtist(data, focus) {
   name.tabIndex = -1;
   head.append(name, button("All results", "small", backToSearch, "Back to all the results"));
   results.append(head);
-  status.textContent = data.artist + ": " + plural(data.total, "song") + ".";  // one line: nothing below it moves
+  status.textContent = data.artist + ": " + many(data.total, "song") + ".";  // one line: nothing below it moves
   if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
   const [heading, list] = group("On Ultimate Guitar, the most tabbed first", data.songs.map(ugSong));
   results.append(heading, list);
