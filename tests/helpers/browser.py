@@ -42,9 +42,10 @@ DESKTOP = ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS")
 
 
 def in_chromium(test):
-    """For a test that opens pages in Chromium: marked slow, and skipped without Chromium."""
+    """For a test that opens pages in Chromium: marked slow, skipped without Chromium, and given
+    conftest.py's ``_chromium``, which keeps the browser's profile in the run's basetemp."""
     test = pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")(test)
-    return pytest.mark.slow(test)
+    return pytest.mark.usefixtures("_chromium")(pytest.mark.slow(test))
 
 
 class BrowserError(RuntimeError):
@@ -183,6 +184,9 @@ class Browser:
             self.process.wait()
 
 
+# Where the profiles go: a folder in the run's basetemp, from conftest.py's _chromium, so that
+# pytest clears a profile with the run's other folders, even one a killed test process left.
+profiles: Path | None = None
 _browser: Browser | None = None
 _profile: Path | None = None
 
@@ -190,16 +194,17 @@ _profile: Path | None = None
 def browser() -> Browser:
     """This process's browser, started on first use; skips the test when Chromium can't run here.
 
-    conftest.py closes it when the session ends; a browser whose pipes close (its test process
-    killed, say) quits by itself."""
+    conftest.py's _chromium closes it when the session ends; a browser whose pipes close (its test
+    process killed, say) quits by itself."""
     global _browser, _profile
     if _browser is not None and _browser.process.poll() is None:
         return _browser
     if CHROMIUM is None:
         pytest.skip("chromium not found on PATH")
+    if profiles is None:
+        pytest.fail("a test that opens pages in Chromium is marked @in_chromium", pytrace=False)
     close()
-    _profile = Path(tempfile.mkdtemp(prefix="caracole-chromium-",
-                                     dir=os.environ.get("PYTEST_DEBUG_TEMPROOT")))
+    _profile = Path(tempfile.mkdtemp(prefix="profile-", dir=profiles))
     try:
         _browser = Browser(CHROMIUM, _profile)
         _browser.call("Browser.getVersion")

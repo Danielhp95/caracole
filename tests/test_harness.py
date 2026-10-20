@@ -293,6 +293,24 @@ def test_the_browser_looks_up_no_host_and_stays_off_the_desktop(tmp_path, monkey
 
 
 @in_chromium
+def test_the_browsers_profile_goes_with_the_runs_other_folders(tmp_path_factory):
+    # Under the basetemp, where pytest clears it with the rest, even after a test process died
+    # without closing its browser.
+    browser.browser()
+    assert browser._profile.is_dir()
+    assert browser._profile.is_relative_to(tmp_path_factory.getbasetemp())
+
+
+def test_a_test_that_opens_pages_without_in_chromium_fails(monkeypatch):
+    # Its browser's profile would have no folder in the basetemp, and the test no slow marker.
+    monkeypatch.setattr(browser, "CHROMIUM", "chromium")  # found, or the test would only skip
+    monkeypatch.setattr(browser, "_browser", None)  # this process's own, if any, is put back
+    monkeypatch.setattr(browser, "profiles", None)
+    with pytest.raises(pytest.fail.Exception, match="@in_chromium"):
+        browser.browser()
+
+
+@in_chromium
 def test_a_page_gets_the_window_asked_for_and_its_timers_run(tmp_path):
     page = tmp_path / "page.html"
     page.write_text(PAGE, encoding="utf-8")

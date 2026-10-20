@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import gc
 import os
-import sys
 from pathlib import Path
 
 import pytest
@@ -83,13 +82,18 @@ def pytest_collection_finish(session):
     gc.freeze()
 
 
-def pytest_sessionfinish(session):
-    browser = sys.modules.get("helpers.browser")  # imported by a test that opened a page
-    if browser is not None:
-        browser.close()
-
-
 # --- fixtures ----------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def _chromium(tmp_path_factory):
+    """What a test marked @in_chromium gets (helpers/browser.py): this process's browser keeps its
+    profile in the run's basetemp, and quits when the session ends."""
+    from helpers import browser
+
+    browser.profiles = tmp_path_factory.mktemp("chromium")
+    yield
+    browser.close()
 
 
 @pytest.fixture(autouse=True)
