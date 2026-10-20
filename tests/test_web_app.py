@@ -446,6 +446,38 @@ def test_the_tab_you_pick_is_looked_up_now(app, queue):
         "get", "--progress", "--ug=radiohead/creep", f"--tab={tab}", "--", "Radiohead", "Creep")
 
 
+def test_a_version_picked_while_the_first_lookup_runs_is_looked_up_too(cfg):
+    import threading
+
+    started, release = threading.Event(), threading.Event()
+    ran = []
+
+    def runner(args, emit):
+        ran.append(list(args))
+        started.set()
+        release.wait(10)
+        return 0
+
+    queue = JobQueue(runner)
+    queue.start()
+    try:
+        app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+        tab = "https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-6789"
+        first = as_json(lookup(app, {"artist": "Oasis", "title": "Wonderwall", "ug": "oasis/wonderwall"}))
+        assert started.wait(5)  # it runs now, and its sheet is on the screen
+        pick = lookup(app, {"artist": "Oasis", "title": "Wonderwall", "ug": "oasis/wonderwall", "tab": tab})
+        assert pick.status == 202 and as_json(pick)["job"] != first["job"]
+        release.set()
+        for _ in range(100):
+            if len(ran) == 2 and not queue.active_count():
+                break
+            threading.Event().wait(0.05)
+    finally:
+        release.set()
+        queue.stop()
+    assert [a for a in ran[1] if a.startswith("--tab")] == [f"--tab={tab}"]
+
+
 @pytest.mark.parametrize("fields,said", [
     ({"artist": "Radiohead", "title": "Creep", "ug": "radiohead"}, "Ultimate Guitar song"),
     ({"artist": "Radiohead", "title": "Creep", "tab": "https://example.com/tab/1"}, "tab"),

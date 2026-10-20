@@ -15,7 +15,9 @@ them.
 A step that exits non-zero fails its job, and the job's other steps are
 skipped. The queue holds ``limit`` jobs waiting or running, one per song (a
 lookup takes the place of the song's waiting add, since ``caracole get`` adds
-the song itself, or follows it once it runs), and remembers the last ``keep``
+the song itself, or follows it once it runs; a version you pick meanwhile
+takes the place of the song's waiting lookup, or follows the running one),
+and remembers the last ``keep``
 finished ones, in memory only: a request is in wanted.txt from the moment it's
 made, so a restart loses no song, only the lookup that would have come before
 the nightly run. ``Job.as_json`` is a job as data, for the page that shows a
@@ -162,6 +164,16 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
     return [("Look it up now", (*args, "--", artist, title))]
 
 
+def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
+    """The Ultimate Guitar song and tab a lookup's ``caracole get`` was given (``--ug``, ``--tab``), if any."""
+    picked: list[str] = []
+    for step in steps:
+        if step.args[:1] == (LOOKUP,):
+            options = step.args[:step.args.index("--")] if "--" in step.args else step.args
+            picked += [arg for arg in options if arg.startswith(("--ug=", "--tab="))]
+    return tuple(picked)
+
+
 def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages: a lookup's, all waiting; none for other commands."""
     if not any(step.args[:1] == (LOOKUP,) for step in steps):
@@ -198,21 +210,31 @@ class JobQueue:
         run (one ``caracole add``, whatever its album: the server wrote
         wanted.txt already), and a lookup takes the add's place, since
         ``caracole get`` adds the song itself. One asked for while the add
-        runs comes after it, as a job of its own. Raises QueueFull when
-        ``limit`` jobs are waiting or running.
+        runs comes after it, as a job of its own.
+
+        A lookup of a song or tab you picked (``--ug``, ``--tab``) that the
+        song's jobs don't look up yet is never dropped: it takes the place of
+        the song's lookup that still waits, or comes after the one that runs,
+        as a job of its own. Raises QueueFull when ``limit`` jobs are waiting
+        or running.
         """
+        new = [Step(label, tuple(args)) for label, args in steps]
         with self._lock:
             mine = [job for job in self._jobs if job.active and job.song_key == song_key]
             enough = next((job for job in mine if job.fetching), None)  # a fetch does the most
             if enough is None and not fetching and mine:
                 enough = mine[0]
+            waiting = next((job for job in mine if job.state == "queued"), None)
+            picked = _pick(new)
+            if picked:  # your pick: only the song's last job, looking it up already, does as much
+                last = waiting or next((job for job in mine if job.state == "running"), None)
+                enough = last if last is not None and _pick(last.steps) == picked else None
             if enough is not None:
                 return copy.deepcopy(enough), False
-            new = [Step(label, tuple(args)) for label, args in steps]
-            waiting = next((job for job in mine if job.state == "queued"), None)
             if waiting is not None:
-                if any(step.args[:1] == (LOOKUP,) for step in new):
-                    waiting.steps = [s for s in waiting.steps if s.args[:1] != ("add",)]
+                if any(step.args[:1] == (LOOKUP,) for step in new):  # one `caracole get` does it all
+                    waiting.steps = [s for s in waiting.steps if s.args[:1] not in (("add",), (LOOKUP,))]
+                    waiting.stages = []
                 runs = {step.args[0] for step in waiting.steps}
                 waiting.steps += [step for step in new if step.args[0] not in runs]
                 waiting.stages = waiting.stages or _stages(waiting.steps)

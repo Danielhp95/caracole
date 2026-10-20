@@ -146,6 +146,53 @@ def test_a_lookup_asked_for_while_the_songs_add_runs_comes_after_it():
     assert [j.state for j in queue.snapshot()] == ["done", "done"]
 
 
+TAB_A = "https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-6789"
+TAB_B = "https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-6790"
+
+
+def test_a_version_picked_while_the_songs_lookup_runs_is_looked_up_after_it():
+    # Get it, read the first sheet, find it's the wrong version, pick another while the lookup goes on.
+    picked = []
+    calls = []
+
+    def runner(args, emit):
+        if not picked:
+            picked.append(queue.submit("Fetch Oasis - Wonderwall", "oasis/wonderwall",
+                                       lookup_steps("Oasis", "Wonderwall", ug="oasis/wonderwall", tab=TAB_A),
+                                       fetching=True))
+        calls.append(list(args))
+        return 0
+
+    queue = JobQueue(runner)
+    first, _ = queue.submit("Fetch Oasis - Wonderwall", "oasis/wonderwall",
+                            lookup_steps("Oasis", "Wonderwall", ug="oasis/wonderwall"), fetching=True)
+    queue.run_pending()
+    [(pick, new)] = picked
+    assert new and pick.id != first.id
+    assert [c for c in calls[1] if c.startswith("--tab")] == [f"--tab={TAB_A}"]
+    assert [j.state for j in queue.snapshot()] == ["done", "done"]
+
+
+def test_a_newer_pick_replaces_the_one_still_waiting_and_the_same_pick_is_the_same_job():
+    queue = JobQueue(FakeRunner())
+    first, _ = queue.submit("Fetch Oasis - Wonderwall", "oasis/wonderwall",
+                            lookup_steps("Oasis", "Wonderwall", ug="oasis/wonderwall"), fetching=True)
+    pick, new = queue.submit("Fetch Oasis - Wonderwall", "oasis/wonderwall",
+                             lookup_steps("Oasis", "Wonderwall", ug="oasis/wonderwall", tab=TAB_A), fetching=True)
+    assert not new and pick.id == first.id  # nothing ran yet: the waiting job looks the pick up instead
+    assert [s.args for s in pick.steps] == [lookup_steps("Oasis", "Wonderwall", ug="oasis/wonderwall", tab=TAB_A)[0][1]]
+    same, new_same = queue.submit("Fetch Oasis - Wonderwall", "oasis/wonderwall",
+                                  lookup_steps("Oasis", "Wonderwall", ug="oasis/wonderwall", tab=TAB_A), fetching=True)
+    assert not new_same and same.id == first.id
+    plain, new_plain = queue.submit("Fetch Oasis - Wonderwall", "oasis/wonderwall",
+                                    lookup_steps("Oasis", "Wonderwall"), fetching=True)
+    assert not new_plain and plain.id == first.id  # no pick: the waiting one does as much
+    other, _ = queue.submit("Fetch Oasis - Wonderwall", "oasis/wonderwall",
+                            lookup_steps("Oasis", "Wonderwall", tab=TAB_B), fetching=True)
+    assert other.id == first.id and other.steps[0].args[2] == f"--tab={TAB_B}"
+    assert queue.active_count() == 1
+
+
 PROGRESS = "caracole-progress: "
 
 
