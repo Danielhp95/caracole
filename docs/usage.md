@@ -873,10 +873,14 @@ auto sheet's source. The to-do page and index.html say where each song stands.
 
 **Errors are never misses** here either: a network error, a timeout (2 minutes
 for a search, 15 for a download) or anything else yt-dlp fails on leaves the
-song for the next run. A video YouTube won't give without a login (private,
-removed, age-restricted, members-only) is passed over for the next pick; one you
-pasted waits for another paste, and is never asked for again meanwhile. A song
-with audio from another video keeps it until then.
+song for the next run, after the songs whose last try didn't fail. A video
+YouTube won't give without a login (private, removed, age-restricted,
+members-only, DRM-protected) is passed over for the next pick; one you pasted
+waits for another paste, and is never asked for again meanwhile. A song with
+audio from another video keeps it until then. So is a video whose download
+failed 3 times for any reason but the network (a format YouTube no longer
+offers, say): the next run searches again, without that one, and the song is no
+miss.
 
 ## The to-do page
 

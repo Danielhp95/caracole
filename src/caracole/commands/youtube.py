@@ -183,7 +183,7 @@ def _has_it(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> bool:
 
 
 def _line(song: Song, outcome: str, record: Record) -> str:
-    from caracole.youtube_fetch import DOWNLOADED_NOW, MISSED, PASSED_OVER
+    from caracole.youtube_fetch import DOWNLOADED_NOW, GAVE_UP, MISSED, PASSED_OVER
 
     video = record.video
     if outcome == DOWNLOADED_NOW and video is not None:
@@ -197,6 +197,8 @@ def _line(song: Song, outcome: str, record: Record) -> str:
             return (f"{song.display}: the video under [youtube] can't be downloaded ({record.unusable_reason}); "
                     "paste another with --url")
         return f"{song.display}: its video can't be downloaded; the next run picks another"
+    if outcome == GAVE_UP:  # the error says what comes next
+        return f"{song.display}: failed ({record.error})"
     return f"{song.display}: failed ({record.error}); tried again on the next run"
 
 

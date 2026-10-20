@@ -274,6 +274,24 @@ def test_a_block_cools_youtube_down_alerts_once_and_exits_0(tmp_path, ntfy, fake
     assert again.exit_code == 0 and "cooling down" in again.output and len(fake.argvs()) == 1
 
 
+def test_a_download_that_fails_the_same_way_every_time_gives_way_to_another_pick(tmp_path, ntfy, fake, conn):
+    to_buy(conn)
+    creep(fake)
+    fake.video(TOPIC, stderr="ERROR: [youtube] XFkzRNyygfk: Requested format is not available", exit=1)
+    config = write_config(tmp_path, fake)
+    first = invoke(config)
+    assert first.exit_code == 0, first.output
+    assert ("Radiohead - Creep: failed ([youtube] XFkzRNyygfk: Requested format is not available); tried again on "
+            "the next run") in first.output
+    for _ in range(yf.GIVE_UP_AFTER - 2):
+        invoke(config)
+    last = invoke(config)
+    assert last.exit_code == 0, last.output
+    assert (f"(https://www.youtube.com/watch?v={TOPIC} failed {yf.GIVE_UP_AFTER} times: the next run picks another)"
+            in last.output)
+    assert "tried again on the next run" not in last.output
+
+
 def test_a_spent_budget_says_so(tmp_path, ntfy, fake, conn):
     to_buy(conn)
     creep(fake)

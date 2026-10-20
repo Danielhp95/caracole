@@ -399,6 +399,9 @@ def test_a_bot_check_a_429_or_a_403_is_a_block_and_nothing_more_runs(fake, tmp_p
     "ERROR: [youtube] dQw4w9WgXcQ: Sign in to confirm your age. This video may be inappropriate for some users.",
     "ERROR: [youtube] dQw4w9WgXcQ: The uploader has not made this video available in your country",
     "ERROR: [youtube] dQw4w9WgXcQ: Join this channel to get access to members-only content like this video",
+    "ERROR: [youtube] dQw4w9WgXcQ: This video is DRM protected",
+    "ERROR: [youtube] dQw4w9WgXcQ: This video is not available",
+    "ERROR: [youtube] dQw4w9WgXcQ: This video is unavailable",
 ])
 def test_a_video_that_cant_be_had_without_logging_in_is_unavailable_not_a_block(fake, tmp_path, stderr):
     fake.video(ID, stderr=stderr, exit=1)

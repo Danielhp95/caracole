@@ -23,7 +23,9 @@ Errors are never misses. Only a search that answered without a video that fits m
 song a miss, asked about again after 30 days. A video YouTube won't give without a login
 (``VideoUnavailable``) is passed over for the next search's pick; a pasted one waits for
 another paste. A block propagates and a spent budget ends the pass; any other error
-leaves the song for the next run.
+leaves the song for the next run, after the songs whose last try didn't fail. A video
+whose download fails ``GIVE_UP_AFTER`` times, the network aside, is given up as one
+YouTube won't give: the next run searches again, or waits for another paste.
 
 The route is off, and nothing is asked of YouTube, without auto-chords: this caracole
 must have torch, librosa and beat_this, both model files, and yt-dlp (``route_problem``).
@@ -33,6 +35,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -56,6 +59,10 @@ log = logging.getLogger(__name__)
 RECORD_PREFIX = "youtube:"  # + song id, in songs._PER_SONG_KV
 AUDIO_FOLDER = "youtube"  # in cache_dir
 RECHECK_AFTER = timedelta(days=30)  # a song whose search found nothing that fits
+GIVE_UP_AFTER = 3  # downloads of one video that failed, the network aside, before it is given up
+# yt-dlp's words for a network that failed, rather than the video: no count against it.
+_NETWORK = re.compile(r"\[Errno|Temporary failure|timed out|Connection (?:reset|refused|aborted)|Network is unreachable"
+                      r"|Remote end closed|HTTP Error 5\d\d", re.IGNORECASE)
 _PART_PREFIX = ".part-"  # a download's own folder, until its file is in place
 HUMAN_SHEET, AUTO_SHEET = "sheet.txt", "sheet (auto).txt"
 
@@ -68,8 +75,14 @@ MISSING = "missing"  # the search found no video that fits, lately
 UNUSABLE = "unusable"  # the pasted video can't be had without a login
 DECLINED = "declined"  # [youtube] says "none"
 
-# What one song's turn came to.
-DOWNLOADED_NOW, MISSED, PASSED_OVER = "downloaded", "missing", "unavailable"
+# What one song's turn came to; GAVE_UP and "error" come with an error.
+DOWNLOADED_NOW, MISSED, PASSED_OVER, GAVE_UP = "downloaded", "missing", "unavailable", "gave up"
+
+
+class DownloadsFailed(ProviderError):
+    """The video's download failed ``GIVE_UP_AFTER`` times, the network aside: a searched video
+    is passed over for the next search's pick, a pasted one waits for another paste. An error
+    all the same, never a miss."""
 
 
 def autochords_missing() -> list[str]:
@@ -113,7 +126,8 @@ def audio_dir(cfg: Config) -> Path:
 class Record:
     """kv ``youtube:<song id>``: the video picked or pasted (``source``), the file its audio
     went to, when its search last found nothing, the videos passed over, the last error,
-    and a pasted video that can't be had."""
+    a pasted video that can't be had, and how many downloads of each video failed (the
+    network aside) since it last came."""
 
     video: Video | None = None
     source: str | None = None  # "search" or "pasted"
@@ -126,12 +140,14 @@ class Record:
     error_at: str | None = None
     unusable: str | None = None
     unusable_reason: str | None = None
+    failures: dict[str, int] = field(default_factory=dict)
 
     def as_json(self) -> dict[str, Any]:
         out: dict[str, Any] = {"video": self.video.as_json() if self.video else None, "source": self.source,
                                "audio": self.audio, "downloaded_at": self.downloaded_at, "query": self.query,
                                "skip": self.skip, "error": self.error, "error_at": self.error_at,
-                               "unusable": self.unusable, "unusable_reason": self.unusable_reason}
+                               "unusable": self.unusable, "unusable_reason": self.unusable_reason,
+                               "failures": self.failures}
         if self.missing_at:
             out["missing_at"] = self.missing_at
         return out
@@ -145,13 +161,15 @@ def load_record(conn: sqlite3.Connection, song_id: int) -> Record:
     raw = kv_get_json(conn, f"{RECORD_PREFIX}{song_id}")
     if not isinstance(raw, dict):
         return Record()
-    skip = raw.get("skip")
+    skip, failures = raw.get("skip"), raw.get("failures")
     return Record(
         video=Video.from_json(raw.get("video")), source=_text(raw.get("source")), audio=_text(raw.get("audio")),
         downloaded_at=_text(raw.get("downloaded_at")), missing_at=_text(raw.get("missing_at")),
         query=_text(raw.get("query")), skip=[s for s in skip if isinstance(s, str)] if isinstance(skip, list) else [],
         error=_text(raw.get("error")), error_at=_text(raw.get("error_at")), unusable=_text(raw.get("unusable")),
         unusable_reason=_text(raw.get("unusable_reason")),
+        failures={k: n for k, n in failures.items() if isinstance(k, str) and isinstance(n, int)}
+        if isinstance(failures, dict) else {},
     )
 
 
@@ -209,15 +227,19 @@ def _to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
 
 
 def songs_for_youtube(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> list[Song]:
-    """The songs due for their audio from YouTube, newest first (see the module docstring)."""
+    """The songs due for their audio from YouTube, newest first, those whose last try failed
+    after the others, so they never hold up the rest (see the module docstring)."""
     now = _utc(now)
     songs = list_songs(conn)
     buy = {s.id for s in _to_buy(conn, songs, overrides, now)}
-    due = []
+    due: list[Song] = []
+    failed: set[int] = set()
     for song in songs:
         if _ignored(song, overrides) or _declined(song, overrides):
             continue
         record = load_record(conn, song.id)
+        if record.error:
+            failed.add(song.id)
         pasted = overrides.youtube.get(song.key)
         if _own_audio(song, record):
             if (pasted and (record.video is None or pasted != record.video.id) and record.unusable != pasted
@@ -230,7 +252,7 @@ def songs_for_youtube(conn: sqlite3.Connection, cfg: Config, overrides: Override
                 due.append(song)
         elif not _recent(record.missing_at, now):
             due.append(song)
-    return due
+    return sorted(due, key=lambda s: s.id in failed)  # stable: newest first within each
 
 
 def expected_seconds(song: Song) -> float | None:
@@ -274,7 +296,7 @@ def youtube_pass(
     """Take the audio of the due songs (or of ``songs``) from YouTube; see the module docstring.
 
     ``on_song`` hears each song's outcome (``DOWNLOADED_NOW``, ``MISSED``, ``PASSED_OVER``,
-    or "error") with its record. ``ProviderBlocked`` propagates; ``BudgetExhausted`` ends
+    ``GAVE_UP`` or "error") with its record. ``ProviderBlocked`` propagates; ``BudgetExhausted`` ends
     the pass (``budget_exhausted``); any other ``ProviderError`` leaves its song for the
     next run. Before any of it, audio no song needs any more goes (``tidy``).
     """
@@ -298,7 +320,7 @@ def youtube_pass(
             _save(conn, song.id, record)
             log.warning("YouTube for %s: %s", song.display, e)
             if on_song is not None:
-                on_song(song, "error", record)
+                on_song(song, GAVE_UP if isinstance(e, DownloadsFailed) else "error", record)
             continue
         stats.tried += 1
         stats.downloaded += outcome == DOWNLOADED_NOW
@@ -340,21 +362,53 @@ def _one(conn: sqlite3.Connection, runner: YtDlp, cfg: Config, song: Song, overr
             record.skip.append(video.id)
             record.video = record.source = None
         record.error = record.error_at = None
+        record.failures.pop(video.id, None)
         _save(conn, song.id, record)
         log.info("YouTube for %s: %s can't be had (%s)", song.display, video.url, e.message)
         return PASSED_OVER
+    except ProviderBlocked:
+        raise
+    except ProviderError as e:
+        given_up = _count_failure(record, video, source, e)
+        _save(conn, song.id, record)
+        if given_up is not None:
+            raise given_up from e
+        raise
     old = record.audio if _own_audio(song, record) else None
     update_song(conn, song.id, audio_path=str(path), audio_mtime=path.stat().st_mtime)
     record.video = Video(video.id, got.title or video.title, got.channel or video.channel,
                          got.duration if got.duration is not None else video.duration)
     record.source, record.audio, record.downloaded_at = source, str(path), stamp
     record.error = record.error_at = record.unusable = record.unusable_reason = None
+    record.failures.pop(video.id, None)
     _save(conn, song.id, record)
     if old and old != str(path):
         _delete(Path(old))
     log.info("YouTube for %s: %s (%s, %s) downloaded", song.display, record.video.url, record.video.title,
              record.video.channel)
     return DOWNLOADED_NOW
+
+
+def _count_failure(record: Record, video: Video, source: str, error: ProviderError) -> DownloadsFailed | None:
+    """Count a failed download against its video, unless the network failed; at ``GIVE_UP_AFTER``,
+    give the video up (a searched one goes to ``skip``, and the next run searches again; a pasted
+    one is unusable) and return the error that says so."""
+    reason = error.message or str(error)
+    if _NETWORK.search(reason):
+        return None
+    failed = record.failures[video.id] = record.failures.get(video.id, 0) + 1
+    if failed < GIVE_UP_AFTER:
+        return None
+    del record.failures[video.id]
+    if source == "pasted":
+        record.unusable, record.unusable_reason = video.id, f"its download failed {failed} times: {reason}"
+        then = "it waits for another video under [youtube]"
+    else:
+        record.skip.append(video.id)
+        record.video = record.source = None
+        then = "the next run picks another"
+    return DownloadsFailed(PROVIDER, error.url, error.status,
+                           f"{reason} ({video.url} failed {failed} times: {then})")
 
 
 def _download(runner: YtDlp, cfg: Config, song: Song, video: Video) -> tuple[Path, Video]:

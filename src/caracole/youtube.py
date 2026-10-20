@@ -464,7 +464,8 @@ _BLOCKED = re.compile(r"not a bot|HTTP Error 4(?:03|29)|Too Many Requests|rate[-
 # A video that can't be had without logging in, or at all.
 _UNAVAILABLE = re.compile(
     r"Video unavailable|Private video|confirm your age|age[- ]restricted|available in your country"
-    r"|members[- ]only|has been removed|has been terminated|copyright|live event will begin|Premieres in",
+    r"|members[- ]only|has been removed|has been terminated|copyright|live event will begin|Premieres in"
+    r"|DRM protected|This video is (?:un|not )available",
     re.IGNORECASE,
 )
 _STATUS = re.compile(r"HTTP Error (\d{3})")

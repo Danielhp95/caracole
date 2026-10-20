@@ -246,6 +246,54 @@ def test_an_error_is_no_miss_and_the_song_waits_for_the_next_run(conn, ycfg, fak
     assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [song.id]
 
 
+def test_a_picked_video_whose_download_fails_the_same_way_every_night_gives_way_to_the_next(conn, ycfg, fake):
+    song = to_buy(conn)
+    creep_results(fake)
+    fake.video(TOPIC, stderr="ERROR: [youtube] XFkzRNyygfk: Requested format is not available", exit=1)
+    for night in range(yf.GIVE_UP_AFTER):
+        stats = run(conn, ycfg, now=NOW + timedelta(days=night))
+        assert (stats.errors, stats.missing) == (1, 0)
+    record = kv_get_json(conn, f"youtube:{song.id}")
+    assert record["skip"] == [TOPIC] and record["video"] is None and "missing_at" not in record  # no miss
+    assert "Requested format is not available" in record["error"]
+    assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [song.id]
+    run(conn, ycfg, now=NOW + timedelta(days=yf.GIVE_UP_AFTER))
+    assert get_song(conn, song.id).audio_path.endswith(f"-{LYRICS}.m4a")  # searched again: the next pick
+    assert [a[-1] for a in fake.argvs()].count("ytsearch8:Radiohead Creep") == 2
+
+
+def test_a_network_error_never_counts_against_the_picked_video(conn, ycfg, fake):
+    song = to_buy(conn)
+    creep_results(fake)
+    fake.video(TOPIC, stderr="ERROR: [youtube] XFkzRNyygfk: Unable to download webpage: <urlopen error [Errno -3] "
+                             "Temporary failure in name resolution>", exit=1)
+    for night in range(yf.GIVE_UP_AFTER + 1):
+        run(conn, ycfg, now=NOW + timedelta(days=night))
+    record = kv_get_json(conn, f"youtube:{song.id}")
+    assert record["video"]["id"] == TOPIC and record["skip"] == []
+
+
+def test_a_pasted_video_whose_download_fails_the_same_way_every_night_waits_for_another_paste(conn, ycfg, fake):
+    song = to_buy(conn)
+    fake.video(OTHER, stderr="ERROR: [youtube] oNOFfl3Hx3s: Requested format is not available", exit=1)
+    o = Overrides(youtube={song.key: OTHER})
+    for night in range(yf.GIVE_UP_AFTER):
+        assert [s.id for s in yf.songs_for_youtube(conn, ycfg, o, NOW)] == [song.id]
+        run(conn, ycfg, o, now=NOW + timedelta(days=night))
+    assert yf.songs_for_youtube(conn, ycfg, o, NOW) == []
+    state = yf.song_state(conn, ycfg, get_song(conn, song.id), o, NOW)
+    assert state.state == yf.UNUSABLE and "Requested format is not available" in state.detail
+
+
+def test_songs_whose_last_try_failed_come_after_the_others(conn, ycfg, fake):
+    failing = to_buy(conn, added_at="2026-10-02T00:00:00Z")  # the newest
+    other = to_buy(conn, "Radiohead", "Karma Police", added_at="2026-10-01T00:00:00Z")
+    assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [failing.id, other.id]
+    fake.search("Radiohead Creep", stderr="ERROR: Unable to download API page: HTTP Error 502: Bad Gateway", exit=1)
+    run(conn, ycfg, songs=[get_song(conn, failing.id)])
+    assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [other.id, failing.id]
+
+
 def test_a_block_stops_the_pass_and_marks_no_song(conn, ycfg, fake):
     first = to_buy(conn, added_at="2026-10-02T00:00:00Z")
     second = to_buy(conn, "Radiohead", "Karma Police", added_at="2026-10-01T00:00:00Z")
