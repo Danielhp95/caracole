@@ -21,6 +21,7 @@ a killed lookup left soon stops counting.
 from __future__ import annotations
 
 import fcntl
+import functools
 import logging
 import os
 import random
@@ -33,16 +34,17 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
-import httpx
 import typer
 
 from caracole import db, logs
 from caracole.config import Config, ConfigError, ProviderPolicy, load_config
 from caracole.health import EventLog
-from caracole.http import Event, PoliteClient
 from caracole.overrides import Overrides, OverridesError, load_overrides
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_client``)
+    import httpx
+
+    from caracole.http import Event, PoliteClient
     from caracole.youtube import YtDlp
 
 LOCK_NAME = "caracole.lock"  # in the state directory
@@ -350,45 +352,53 @@ def transport_for(provider: str) -> httpx.BaseTransport | None:
     return None
 
 
-class _LockedClient(PoliteClient):
-    """A PoliteClient holding caracole's lock until it is closed.
+@functools.cache
+def _locked_client() -> type[PoliteClient]:
+    """The class of ``make_client``'s clients, made the first time a command makes one: a
+    command that sends no request never imports PoliteClient, and with it httpx."""
+    from caracole.http import PoliteClient
 
-    Bulk work's (``yields``) spends each pause handing the lock to a lookup that
-    waits (``hand_over``); after one, its pause starts again, whole.
-    """
+    class _LockedClient(PoliteClient):
+        """A PoliteClient holding caracole's lock until it is closed.
 
-    def __init__(self, *args, lock: Path, cfg: Config | None = None, conn: sqlite3.Connection | None = None,
-                 yields: bool = False, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._lock: Path | None = lock
-        self._cfg = cfg
-        self._conn = conn
-        self._yields = yields and cfg is not None
+        Bulk work's (``yields``) spends each pause handing the lock to a lookup that
+        waits (``hand_over``); after one, its pause starts again, whole.
+        """
 
-    @property
-    def handoffs(self) -> int:
-        """How many times this process has handed caracole's lock to a lookup (``_common.handoffs``)."""
-        return _handoffs
+        def __init__(self, *args, lock: Path, cfg: Config | None = None,
+                     conn: sqlite3.Connection | None = None, yields: bool = False, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._lock: Path | None = lock
+            self._cfg = cfg
+            self._conn = conn
+            self._yields = yields and cfg is not None
 
-    def _wait(self, seconds: float) -> None:
-        if not self._yields:
-            super()._wait(seconds)
-            return
-        assert self._cfg is not None
+        @property
+        def handoffs(self) -> int:
+            """How many times this process has handed caracole's lock to a lookup (``_common.handoffs``)."""
+            return _handoffs
 
-        def again() -> float:
-            self._last_request = self._clock()
-            return self._rng.uniform(*self.policy.delay)
+        def _wait(self, seconds: float) -> None:
+            if not self._yields:
+                super()._wait(seconds)
+                return
+            assert self._cfg is not None
 
-        _patient_sleep(self._cfg, self._conn, seconds, again, self._sleep)
+            def again() -> float:
+                self._last_request = self._clock()
+                return self._rng.uniform(*self.policy.delay)
 
-    def close(self) -> None:
-        try:
-            super().close()
-        finally:
-            if self._lock is not None:
-                _release(self._lock)
-                self._lock = None
+            _patient_sleep(self._cfg, self._conn, seconds, again, self._sleep)
+
+        def close(self) -> None:
+            try:
+                super().close()
+            finally:
+                if self._lock is not None:
+                    _release(self._lock)
+                    self._lock = None
+
+    return _LockedClient
 
 
 _SENT = ("ok", "not_modified", "blocked", "error")  # events that were requests
@@ -498,7 +508,7 @@ def make_client(
             if on_event is not None:
                 on_event(event)
 
-        return _LockedClient(
+        return _locked_client()(
             provider,
             policy,
             cfg.cache_dir,

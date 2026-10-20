@@ -573,3 +573,22 @@ def test_registering_the_commands_imports_neither_the_matcher_nor_the_index():
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          env={"PYTHONPATH": subprocess_pythonpath(src)})
     assert out.stdout.strip() == "[]"
+
+
+@pytest.mark.slow
+def test_a_command_that_sends_no_request_imports_no_http_client(tmp_path):
+    # httpx imports its own command line, and with it rich and pygments: a third of a start.
+    # A [youtube] entry, which the web page writes, is read without the yt-dlp runner either.
+    overrides = tmp_path / "overrides.toml"
+    overrides.write_text('[youtube]\n"Radiohead - Creep" = "youtu.be/XFkzRNyygfk"\n', encoding="utf-8")
+    code = (
+        "import sys; from pathlib import Path; import caracole.cli\n"
+        "from caracole.overrides import load_overrides\n"
+        f"print(dict(load_overrides(Path({str(overrides)!r})).youtube))\n"
+        "print(sorted(m for m in sys.modules if m.startswith(('httpx', 'rich', 'caracole.http'))"
+        " or m == 'caracole.youtube'))\n"
+    )
+    src = Path(__file__).resolve().parents[1] / "src"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
+                         env={"PYTHONPATH": subprocess_pythonpath(src)})
+    assert out.stdout.splitlines() == ["{'radiohead/creep': 'XFkzRNyygfk'}", "[]"]

@@ -238,7 +238,12 @@ Traps:
   `test_commands_index_match.py::test_registering_the_commands_imports_neither_the_matcher_nor_the_index`
   fails when importing `caracole.cli` loads rapidfuzz, `caracole.match` or `caracole.ug`; the
   `test_registering_the_command*` tests of fetch, lyrics, sources, autochords and youtube do
-  the same.
+  the same. httpx, with the rich and pygments it brings, is a third of a start: http.py
+  imports it inside the functions that use it, and `_common` makes its client class on first
+  use (`_locked_client`).
+  `test_commands_index_match.py::test_a_command_that_sends_no_request_imports_no_http_client`
+  fails when importing `caracole.cli` and reading a `[youtube]` entry (youtube_urls.py) loads
+  httpx, rich, `caracole.http` or `caracole.youtube`.
 - Branch from `caracole-v1`, the default branch (`main` holds only the first design commit).
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:

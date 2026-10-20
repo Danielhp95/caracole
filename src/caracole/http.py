@@ -31,12 +31,15 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Callable, Collection, Mapping, Protocol, runtime_checkable
-
-import httpx
+from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Protocol, runtime_checkable
 
 from caracole.config import ProviderPolicy
 from caracole.logs import request_line
+
+# httpx, with the rich and pygments it imports, is a third of a caracole's start: each function
+# that uses it imports it, so a command that sends no request never does.
+if TYPE_CHECKING:
+    import httpx
 
 log = logging.getLogger(__name__)  # a line per request, at information (-v)
 
@@ -250,6 +253,8 @@ ROBOTS_CRAWL_DELAY: dict[str, float] = {}
 
 def crawl_delay(url: str) -> float:
     """The seconds robots.txt asks between two requests to ``url``'s host (``ROBOTS_CRAWL_DELAY``), or 0."""
+    import httpx
+
     try:
         host = httpx.URL(url).host
     except (httpx.InvalidURL, ValueError):
@@ -272,6 +277,8 @@ def robots_disallows(url: str) -> str | None:
     broken host) can't be asked for either, so it is closed too, by ``NOT_A_URL``:
     one such link in UG's JSON or a sitemap is skipped, and never ends the run.
     """
+    import httpx
+
     try:
         u = httpx.URL(url)
         host, target = u.host, u.raw_path.decode("ascii")
@@ -306,12 +313,16 @@ def _redirect_problem(origin: str, target: str, hops: int) -> str | None:
 
 def _status_line(status: int) -> str:
     """"503 Service Unavailable"."""
+    import httpx
+
     reason = httpx.codes.get_reason_phrase(status)
     return f"{status} {reason}" if reason else str(status)
 
 
 def _site(url: str) -> str:
     """A URL's site: the last two labels of its host (each provider is on a plain .com or .net domain)."""
+    import httpx
+
     return ".".join(httpx.URL(url).host.split(".")[-2:])
 
 
@@ -358,6 +369,8 @@ class PoliteClient:
         clock: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ):
+        import httpx
+
         self.provider = provider
         self.policy = policy
         self.cache_root = cache_dir / "http" / provider
@@ -394,6 +407,8 @@ class PoliteClient:
     ) -> Response:
         """GET ``url``; see the class docstring. ``max_age`` refetches cached copies older than it,
         but serves the stale copy when this run's budget is spent."""
+        import httpx
+
         try:
             full = str(httpx.URL(url, params=params)) if params else url
         except (httpx.InvalidURL, ValueError):
@@ -485,6 +500,8 @@ class PoliteClient:
 
     def _send(self, url: str, request: httpx.Request) -> httpx.Response:
         """One network request, a redirect hop included: within the budget, after the pause."""
+        import httpx
+
         if self._blocked is not None:
             raise ProviderBlocked(self.provider, url, self._blocked.status, "blocked earlier this run")
         if self._unavailable:

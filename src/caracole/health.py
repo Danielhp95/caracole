@@ -13,10 +13,12 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from caracole.db import kv_get_json, kv_set_json
-from caracole.http import Event
+
+if TYPE_CHECKING:
+    from caracole.http import Event
 
 COOLDOWN_BASE = timedelta(hours=24)
 # A cooldown counts from the blocked run's start, and the timer (nix/module.nix)
