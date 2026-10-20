@@ -1892,6 +1892,8 @@ def driven(tmp_path):
 
 
 SHOWN_TITLES = "[...document.querySelectorAll('#list article h2')].map((h) => h.textContent)"
+COMPOSING_ENTER = ("document.getElementById('q').dispatchEvent(new KeyboardEvent('keydown', "
+                   "{ key: 'Enter', keyCode: 229, isComposing: true, bubbles: true, cancelable: true }))")
 
 
 @in_chromium
@@ -1905,6 +1907,8 @@ def test_enter_on_the_file_page_shows_the_line_to_run_and_asks_nothing(conn, cfg
     driven.type("wywh")  # a title's initials find it
     assert driven.wait(f"{SHOWN_TITLES}.join() === 'Wish You Were Here'")
     assert "Enter" in driven.js("document.getElementById('bar-status').textContent")
+    driven.js(COMPOSING_ENTER)  # the Enter that ends a pinyin word: still typing
+    assert driven.js("document.getElementById('results').hidden") is True
     driven.press("Enter")
     assert driven.wait("!document.getElementById('results').hidden")
     assert driven.js("document.querySelector('#results .file-answer code').textContent") == "caracole search 'wywh'"

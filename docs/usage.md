@@ -1541,7 +1541,8 @@ many each key has, and puts the spellings of one key together ("F# / Gb
 minor"); and you can sort by artist, by title or by when songs were added.
 Sorted by artist or title, with more than 40 songs shown, a row of letters
 jumps to the first song under each. A line under the box says what Enter does. **Enter**, or **Search all**
-beside the box, searches the sites too: the file on disk, which can ask
+beside the box, searches the sites too (the Enter that ends a word typed with
+an input method, pinyin say, only ends the word): the file on disk, which can ask
 nothing of anyone, shows under the box the `caracole search` line to run where
 caracole runs, with Copy, and leaves your songs as they are; Escape takes it
 away. When nothing in the library matches, the page shows that line at once

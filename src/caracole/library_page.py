@@ -2561,7 +2561,10 @@ _SCRIPT = r"""
     found.append(head, mineBox, sitesBox);
   }
   allButton.addEventListener("click", enterAll);
+  // A key that ends an input method's word (pinyin, kana) is still typing, never a command.
+  const composing = (e) => e.isComposing || e.keyCode === 229;
   input.addEventListener("keydown", (e) => {
+    if (composing(e)) return;
     if (e.key === "Enter") {
       e.preventDefault();
       enterAll();
@@ -2574,6 +2577,7 @@ _SCRIPT = r"""
     }
   });
   document.addEventListener("keydown", (e) => {
+    if (composing(e)) return;
     const typing = document.activeElement === input;
     if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();

@@ -244,6 +244,8 @@ HITS = "document.querySelectorAll('#results .hit').length"
 
 @in_chromium
 def test_enter_right_after_typing_looks_up_what_you_typed_not_the_results_before(cfg, live, browser):
+    import time
+
     base, queue = live
     index_songs(cfg, [("eagles", "hotel-california", 9), ("eagles", "desperado", 3), ("eagles", "take-it-easy", 2)])
     browser.open(base + "/lookup")
@@ -253,6 +255,10 @@ def test_enter_right_after_typing_looks_up_what_you_typed_not_the_results_before
     assert browser.js("document.querySelector('#results .hit .row-title').textContent") == "Eagles"
     assert "Hotel California" in browser.js("document.querySelector('#results .artist-hit').textContent")
     browser.type(" desperado")
+    browser.js("document.getElementById('q').dispatchEvent(new KeyboardEvent('keydown', "
+               "{ key: 'Enter', keyCode: 229, isComposing: true, bubbles: true, cancelable: true }))")
+    time.sleep(0.5)
+    assert queue.snapshot() == []  # the Enter that ends a pinyin word is still typing
     browser.press("Enter")  # at once: the results on the screen are still the ones for "eagles"
     args = posted(queue)
     assert args[-2:] == ("Eagles", "Desperado"), args

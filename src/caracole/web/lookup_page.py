@@ -319,7 +319,7 @@ q.addEventListener("input", () => {
   timer = setTimeout(search, 120);
 });
 q.addEventListener("keydown", e => {
-  if (e.key !== "Enter") return;
+  if (e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;  // the Enter ending a pinyin word types
   e.preventDefault();
   if (results.hidden) { expand(); return; }  // after a pick: the results again, not the pick again
   const text = typedText();
