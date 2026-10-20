@@ -851,7 +851,8 @@ _SCRIPT = r"""
       if (old.parentNode) old.replaceWith(fresh);
       return fresh;
     }
-    const focused = old.contains(document.activeElement) && !kept.contains(document.activeElement);
+    const at = document.activeElement;
+    const focused = at !== old && old.contains(at) && !kept.contains(at);  // on something that goes
     const drawn = progressIn(fresh);  // where fresh has its line
     for (const child of Array.from(old.childNodes)) if (child !== kept) child.remove();
     let before = true;
@@ -861,6 +862,7 @@ _SCRIPT = r"""
       else old.appendChild(child);
     }
     old.className = fresh.className;
+    old.tabIndex = fresh.tabIndex;
     for (const name of Object.keys(old.dataset)) delete old.dataset[name];
     Object.assign(old.dataset, fresh.dataset);
     if (focused && old.isConnected) focusOn(kept);
