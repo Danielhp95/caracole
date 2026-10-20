@@ -1639,16 +1639,28 @@ _SCRIPT = r"""
   };
 
   let setArtist = () => {};
+  // An artist's monogram, in that artist's colour (one of eight), which a screen reader skips.
+  const monogram = (letters, hue) => {
+    const mono = el("span", "mono hue-" + (Number.isInteger(hue) && hue >= 0 && hue < 8 ? hue : 0), letters || "");
+    mono.setAttribute("aria-hidden", "true");
+    return mono;
+  };
+  // A card's head without its links or badges: the monogram, the title and the artist (a removed song's card;
+  // a requested song's, before the library has it).
+  const plainHead = (letters, hue, title, artist) => {
+    const head = el("div", "head");
+    const names = el("div", "names");
+    names.append(el("h2", null, title), el("p", "by", artist));
+    head.append(monogram(letters, hue), names);
+    return head;
+  };
   const makeCard = (s) => {
     const card = el("article", "card");
     card.dataset.status = String(s.status);
     card.dataset.id = String(s.id);
     card.tabIndex = -1;  // the A-Z strip moves the focus to it
     const head = el("div", "head");
-    const hue = Number.isInteger(s.hue) && s.hue >= 0 && s.hue < 8 ? s.hue : 0;
-    const mono = el("span", "mono hue-" + hue, s.monogram || "");
-    mono.setAttribute("aria-hidden", "true");
-    head.appendChild(mono);
+    head.appendChild(monogram(s.monogram, s.hue));
     const names = el("div", "names");
     const primary = primaryOf(s);
     names.appendChild(primary ? titleLink(primary.href, el("h2", null, s.title)) : el("h2", null, s.title));
@@ -1766,22 +1778,23 @@ _SCRIPT = r"""
 
   // Rows: one compact line a song (resultRow, from ROWS_SCRIPT: the seam the module docstring describes).
   // A row is an article titled by its h2; the A-Z strip moves the focus to it.
-  // A song's main action in its row, as its card has it: on the served page, a wanted song's fetch, or the
-  // button that opens its picker; nothing while its request waits or runs (the row's line says how it goes);
-  // Removing… while caracole removes it. Undefined when the server has none for it: its sheet is then the
-  // row's button (sheetAction), as it is on the file.
+  // A song's main action in its row, as its card has it, when the server's control holds the row's button
+  // (``held``): a wanted song's fetch, or the button that opens its picker; Removing… while caracole removes it;
+  // no button at all (``action`` null) while its request, or its removal, waits or runs, as the row's line
+  // then says how it goes. Not held, the row's button is its sheet (sheetAction), as it is on the file.
   const serverAction = (s, picker) => {
+    const held = (action) => ({ held: true, action });
     if (server && removing.has(Number(s.id))) {
       const job = jobOfSong(s.id);
-      if (job && job.kind === "remove") return null;  // the row's line says how it goes
+      if (job && job.kind === "remove") return held(null);
       const going = el("a", "row-busy", "Removing…");
       going.href = "/jobs";
       going.title = "See the requests";
-      return going;
+      return held(going);
     }
     if (server && s.status === "wanted") {
       const job = jobOfSong(s.id);
-      if ((job && isActive(job)) || busy.has(Number(s.id))) return null;
+      if ((job && isActive(job)) || busy.has(Number(s.id))) return held(null);
       if (s.fetchable === false && picker && picker.querySelector("form")) {
         // caracole fetch would refuse it until the match is picked: this opens the picker, in the row's panel.
         const pick = el("button", "btn small row-pick", "Pick the match");
@@ -1789,18 +1802,18 @@ _SCRIPT = r"""
         pick.setAttribute("aria-label", "Pick the match for " + String(s.title) + " by " + String(s.artist));
         pick.title = "Which Ultimate Guitar song this is: caracole isn't sure";
         pick.addEventListener("click", () => showPicker(picker));
-        return pick;
+        return held(pick);
       }
       if (s.fetchable === false) {
-        const held = el("button", "btn small", "Review first");
-        held.type = "button";
-        held.disabled = true;
-        held.title = "caracole review settles this match; then it can be fetched";
-        return held;
+        const later = el("button", "btn small", "Review first");
+        later.type = "button";
+        later.disabled = true;
+        later.title = "caracole review settles this match; then it can be fetched";
+        return held(later);
       }
-      return fetchForm(s);
+      return held(fetchForm(s));
     }
-    return undefined;
+    return { held: false, action: null };
   };
   // The row's button for its sheet: the primary one, as Fetch now is, named for what it opens ("Sheet viewer").
   const sheetAction = (s, primary) => {
@@ -1840,9 +1853,9 @@ _SCRIPT = r"""
     }
     // The sheet is the row's button unless the server's control has its place (Fetch now beside an auto
     // sheet): then it leads the files, and the title opens it all the same.
-    const held = serverAction(s, picker);
-    const action = held !== undefined ? held : primary ? sheetAction(s, primary) : null;
-    const listed = held !== undefined ? files : files.filter((f) => f !== primary);
+    const control = serverAction(s, picker);
+    const action = control.held ? control.action : primary ? sheetAction(s, primary) : null;
+    const listed = control.held ? files : files.filter((f) => f !== primary);
     more.push({ heading: "Files", links: listed.map((f) => elsewhere(s, f)) },
       { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },
@@ -2284,15 +2297,7 @@ _SCRIPT = r"""
     }
     const card = el("article", "card gone");
     card.tabIndex = -1;
-    const head = el("div", "head");
-    const hue = Number.isInteger(s.hue) && s.hue >= 0 && s.hue < 8 ? s.hue : 0;
-    const mono = el("span", "mono hue-" + hue, s.monogram || "");
-    mono.setAttribute("aria-hidden", "true");
-    head.appendChild(mono);
-    const names = el("div", "names");
-    names.append(el("h2", null, s.title), el("p", "by", artist));
-    head.appendChild(names);
-    card.appendChild(head);
+    card.appendChild(plainHead(s.monogram, s.hue, s.title, artist));
     return card;
   };
   const removed = (id) => {
@@ -2540,15 +2545,7 @@ _SCRIPT = r"""
     const requestedGrid = byId("requested-grid");
     const placeholder = (artist, title) => {
       const card = el("article", "card pending");
-      const head = el("div", "head");
-      const mono = el("span", "mono", (artist.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase());
-      mono.setAttribute("aria-hidden", "true");
-      head.appendChild(mono);
-      const names = el("div", "names");
-      names.appendChild(el("h2", null, title));
-      names.appendChild(el("p", "by", artist));
-      head.appendChild(names);
-      card.appendChild(head);
+      card.appendChild(plainHead((artist.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase(), 0, title, artist));
       showLine(progressIn(card), { line: { tone: "queued", text: "Sending…" } });
       return card;
     };
