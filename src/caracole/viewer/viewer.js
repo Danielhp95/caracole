@@ -388,8 +388,20 @@
     $("prev").disabled = shown.at <= 0;
     $("next").disabled = shown.at >= shapes.list.length - 1;
     const capoNote = state.capo === null ? "" : state.capo ? " With the capo on fret " + state.capo + "." : " With no capo.";
-    const note = (shown.at < shapes.mine ? "As the tab plays it." : shapes.note) + capoNote;
-    $("shape-note").textContent = note.trim();
+    // The shape's note, and a hidden copy of the note on the chord's other shapes (viewer.css): from the
+    // tab's shapes to chords-db's, the card keeps its height, and ‹ › stay under the thumb.
+    const tabs = shown.at < shapes.mine;
+    const said = (mine) => ((mine ? "As the tab plays it." : shapes.note) + capoNote).trim();
+    const noteBox = $("shape-note");
+    noteBox.textContent = "";
+    const line = (text, room) => {
+      if (!text) return;
+      const span = noteBox.appendChild(document.createElement("span"));
+      span.textContent = text;
+      if (room) span.className = "room";
+    };
+    line(said(tabs));
+    if (shapes.mine && shapes.mine < shapes.list.length) line(said(!tabs), true);
 
     const altBox = $("alts");
     altBox.textContent = "";

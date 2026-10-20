@@ -152,6 +152,11 @@ a { color: inherit; }
 .hint { flex-basis: 100%; margin: 2px 0 0; color: var(--muted); font-size: .82rem; }
 .hint:empty { display: none; }
 .center { text-align: center; }
+/* A chord's shape note, over a hidden copy of the note its other shapes have (viewer.js): one
+   height for both, so the card never moves from shape to shape. */
+#shape-note:not(:empty) { display: grid; }
+#shape-note > span { grid-area: 1 / 1; }
+#shape-note .room { visibility: hidden; }
 input[type="range"] { flex: 1 1 120px; accent-color: var(--accent); min-height: 44px; }
 .shape { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 4px 0; }
 .round { border-radius: 50%; padding: 0; font-size: 1.3rem; }

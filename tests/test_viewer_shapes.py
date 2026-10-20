@@ -14,6 +14,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from caracole.viewer import build_viewer
 from caracole.viewer.book import BookSong, build_songbook
 from caracole.viewer.voicings import load_voicings
@@ -104,7 +106,7 @@ CARD = """(() => ({
   name: document.getElementById("card-name").textContent,
   dots: document.querySelectorAll("#diagram .dg-dot").length,
   fingers: document.querySelectorAll("#diagram .dg-finger").length,
-  note: document.getElementById("shape-note").textContent,
+  note: document.getElementById("shape-note").innerText,
   count: document.querySelector("#diagram .count").textContent,
 }))()"""
 
@@ -152,3 +154,26 @@ def test_a_chord_the_tab_gave_no_shape_for_shows_chords_dbs(tmp_path):
     with Chromium(tmp_path / "profile") as browser:
         seen = opened(browser, build_viewer(LEGEND), tmp_path, f"#t=2&chord={CADD9}").eval(CARD)
     assert seen["name"] == "Dadd9" and seen["note"] == "" and seen["count"] == f"1 of {len(DB['add9'][2])}", seen
+
+
+# Where the card and its parts are on the screen: top and height.
+CARD_PLACE = """(() => Object.fromEntries(["card", "card-name", "prev", "diagram", "next"].map((id) => {
+  const r = document.getElementById(id).getBoundingClientRect();
+  return [id, [Math.round(r.top), Math.round(r.height)]];
+})))()"""
+
+
+@in_chromium
+@pytest.mark.parametrize("size", ["390,844", "1280,800"], ids=["phone", "desktop"])
+def test_stepping_from_the_tabs_shape_to_chords_dbs_never_moves_the_card(tmp_path, size):
+    # The card stands on the foot of the screen: a note on the tab's shape alone would move it, and ‹ ›
+    # from under the thumb, between two taps.
+    with Chromium(tmp_path / "profile", size=size) as browser:
+        tab = opened(browser, build_viewer(LEGEND), tmp_path, f"#chord={CADD9}")
+        places, notes = [tab.eval(CARD_PLACE)], [tab.eval(CARD)["note"]]
+        for button in ("#next", "#next", "#prev", "#prev"):
+            tab.click(button)
+            places.append(tab.eval(CARD_PLACE))
+            notes.append(tab.eval(CARD)["note"])
+    assert notes == ["As the tab plays it.", "", "", "", "As the tab plays it."]
+    assert all(place == places[0] for place in places), places
