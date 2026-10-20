@@ -3,8 +3,8 @@
     GET  /, /index.html   the library page, with its forms (library_page, WebControls)
     GET  /jobs            the requests, a line each, and what each command printed
                           (?job=N: its output open; ?refresh=0: no reloading)
-    GET  /jobs.json       the requests, a line each, for the page's script (?cards=N,M: with the
-                          cards of those jobs' songs, once the jobs are over)
+    GET  /jobs.json       the requests, a line each, for the page's script (?jobs=N,M: only those
+                          jobs, each with its song's card once it is over)
     GET  /<file>          a file of the library (files.py)
     POST /request         a song for wanted.txt; with ``fetch``, fetched now too
     POST /fetch           fetch a song of the library now, unless it needs review first
@@ -33,7 +33,7 @@ import json
 import secrets
 import sqlite3
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -62,7 +62,7 @@ if TYPE_CHECKING:
 
 MAX_BODY = 16 * 1024
 TOKEN_HEADER = "x-caracole-form-token"  # /jobs.json's form token
-MAX_CARDS = 50  # cards one /jobs.json answer holds
+MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
 _COMMON_HEADERS = [
     ("X-Content-Type-Options", "nosniff"),
@@ -128,6 +128,8 @@ class WebApp:
         self.csrf = csrf or secrets.token_urlsafe(32)
         self._session = session_value(access_token) if access_token else None
         self._wanted = threading.Lock()  # one append to wanted.txt at a time, of the server's threads
+        self._ended: dict[int, tuple[int | None, SongFacts | None]] = {}  # job id -> its song's id and facts
+        self._ended_lock = threading.Lock()
 
     def handle(self, request: Request) -> Response:
         response = self._route(request)
@@ -258,8 +260,8 @@ class WebApp:
         try:
             overrides = _overrides_or_none(self.cfg)
             with closing(self._connect()) as conn:
-                due = _due_songs(conn, overrides)
-                facts = {job.id: self._song_of(conn, overrides, job, due)[1] for job in jobs}
+                self._forget_ended(jobs)
+                facts = {job.id: self._song_of(conn, overrides, job)[1] for job in jobs}
         except (sqlite3.Error, OSError):  # the lines say only how the jobs went, then
             pass
         lines = {job.id: job_line(job, facts.get(job.id), ahead=_ahead(jobs, job)) for job in jobs}
@@ -272,10 +274,7 @@ class WebApp:
             return _message(403, "Refused", "This came from another site, so caracole refused it.")
         if not same_token(request.headers.get(TOKEN_HEADER), self.csrf):
             return _message(403, "Refused", "caracole serve has restarted since this page was opened: reload it.")
-        wanted: set[int] = set()
-        for part in parse_qs(urlsplit(request.target).query).get("cards", [""])[0].split(","):
-            if part.strip().isdigit() and len(wanted) < MAX_CARDS:
-                wanted.add(int(part))
+        asked = _job_ids(parse_qs(urlsplit(request.target).query).get("jobs"))
         from caracole.overrides import OverridesError, load_overrides
 
         try:
@@ -284,9 +283,11 @@ class WebApp:
             return _message(503, "overrides.toml can't be read",
                             f"overrides.toml can't be read: {e}. Fix it, then reload this page.")
         jobs = self.queue.snapshot()
+        only = None if asked is None else [job for job in jobs if job.id in asked]
         try:
             with closing(self._connect()) as conn:
-                views = self._views(conn, overrides, jobs, cards=frozenset(wanted))
+                self._forget_ended(jobs)
+                views = self._views(conn, overrides, jobs, only=only, cards=asked or frozenset())
         except (sqlite3.Error, OSError) as e:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
         return _json(200, {"active": sum(j.active for j in jobs), "jobs": views})
@@ -300,36 +301,67 @@ class WebApp:
         ``overrides`` None (overrides.toml unreadable) leaves the cards out.
         """
         from caracole.library_page import song_cards
+        from caracole.songs import get_song
 
         views = []
-        due = _due_songs(conn, overrides)
         for job in jobs if only is None else only:
-            song, facts = self._song_of(conn, overrides, job, due)
-            view = _view(job, jobs, song, facts)
-            if job.id in cards and not job.active and song is not None and overrides is not None:
+            song_id, facts = self._song_of(conn, overrides, job)
+            view = _view(job, jobs, song_id, facts)
+            if job.id in cards and not job.active and song_id is not None and overrides is not None:
+                try:
+                    song = get_song(conn, song_id)  # as it is now
+                except KeyError:
+                    views.append(view)
+                    continue
                 card = song_cards(conn, self.cfg, overrides, datetime.now(UTC).replace(microsecond=0), [song])[0]
                 card["fetchable"] = not review_first(song, overrides)
                 view["card"] = card
             views.append(view)
         return views
 
-    def _song_of(self, conn: sqlite3.Connection, overrides: Overrides | None, job: Job,
-                 due: Callable[[], frozenset[int]]) -> tuple[Song | None, SongFacts | None]:
-        """The job's song, and what its line needs to know of it; None while the library has no such song.
+    def _song_of(self, conn: sqlite3.Connection, overrides: Overrides | None,
+                 job: Job) -> tuple[int | None, SongFacts | None]:
+        """The id of the job's song, and what its line needs to know of it; None while the library has
+        no such song.
 
-        A fetch that is over and left no sheet asks ``due`` whether the nightly fetch would still
-        fetch the song: then it waits (a block, a spent budget, an error), and isn't missing.
+        A fetch that is over and left no sheet is "Not found" only if it looked the
+        song up during the job (``ug.fetch.checked_since``): a cooldown, a block, a
+        spent budget or an error looks nothing up, and the song isn't missing. A job
+        that is over doesn't change, so its answer is worked out once (``_ended``).
         """
+        over = not job.active
+        if over:
+            with self._ended_lock:
+                ended = self._ended.get(job.id)
+            if ended is not None:
+                return ended
         from caracole.library_page import sheet_href
         from caracole.songs import find_song
 
         song = find_song(conn, job.song_key)
-        if song is None:
-            return None, None
-        ignored = song.status == "ignored" or (overrides is not None and song.key in overrides.ignore)
-        sheet = sheet_href(self.cfg.library_dir, song)
-        to_fetch = job.state == "done" and job.fetching and not sheet and song.id in due()
-        return song, SongFacts(sheet=sheet, review=bool(song.review), to_fetch=to_fetch, ignored=ignored)
+        facts = None
+        if song is not None:
+            ignored = song.status == "ignored" or (overrides is not None and song.key in overrides.ignore)
+            sheet = sheet_href(self.cfg.library_dir, song)
+            checked_now = False
+            if over and job.fetching and not sheet and job.started_at is not None:
+                from caracole.ug.fetch import checked_since
+
+                checked_now = checked_since(conn, song, job.started_at)
+            facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
+                              checked_now=checked_now, ignored=ignored)
+        answer = (song.id if song is not None else None, facts)
+        if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known
+            with self._ended_lock:
+                self._ended[job.id] = answer
+        return answer
+
+    def _forget_ended(self, jobs: list[Job]) -> None:
+        """Let go of the jobs the queue no longer remembers (``jobs``: the whole queue)."""
+        kept = {job.id for job in jobs}
+        with self._ended_lock:
+            for job_id in [i for i in self._ended if i not in kept]:
+                del self._ended[job_id]
 
     def _queued(self, job: Job) -> Response:
         """A request queued: to the browser, its line on /jobs; to the page's script, the job itself."""
@@ -455,27 +487,24 @@ def _ahead(jobs: list[Job], job: Job) -> int:
     return sum(1 for j in jobs if j.active and j.id < job.id)
 
 
-def _view(job: Job, jobs: list[Job], song: Song | None, facts: SongFacts | None) -> dict[str, Any]:
+def _view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None) -> dict[str, Any]:
     """A job as /jobs.json gives it; ``jobs`` is the whole queue."""
-    return {"id": job.id, "display": job.display or job.title, "songId": song.id if song else None,
+    return {"id": job.id, "display": job.display or job.title, "songId": song_id,
             "state": job.state, "fetching": job.fetching,
             "line": job_line(job, facts, ahead=_ahead(jobs, job)).as_json(), "details": details_href(job.id)}
 
 
-def _due_songs(conn: sqlite3.Connection, overrides: Overrides | None) -> Callable[[], frozenset[int]]:
-    """The songs the nightly fetch would fetch (``songs_to_fetch``), worked out once, when first asked."""
-    found: list[frozenset[int]] = []
-
-    def due() -> frozenset[int]:
-        if not found:
-            from caracole.overrides import Overrides
-            from caracole.ug.fetch import songs_to_fetch
-
-            songs = songs_to_fetch(conn, overrides or Overrides(), datetime.now(UTC).replace(microsecond=0))
-            found.append(frozenset(s.id for s in songs))
-        return found[0]
-
-    return due
+def _job_ids(values: list[str] | None) -> frozenset[int] | None:
+    """The jobs ``?jobs=N,M`` asks about (plain digits only, ``MAX_ASKED`` at most); None when the
+    address asks about none in particular."""
+    if values is None:
+        return None
+    ids: set[int] = set()
+    for part in values[0].split(","):
+        part = part.strip()
+        if part.isascii() and part.isdigit() and len(ids) < MAX_ASKED:
+            ids.add(int(part))
+    return frozenset(ids)
 
 
 def _overrides_or_none(cfg: Config) -> Overrides | None:

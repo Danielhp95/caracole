@@ -1497,6 +1497,26 @@ def fetch_due(
     return dirty or due or undone or _recheck_due(conn, song, overrides, now, artist_page_max_age)
 
 
+def checked_since(conn: sqlite3.Connection, song: Song, since: datetime) -> bool:
+    """Whether a fetch settled the song at ``since`` or after, so what it lacks now, UG lacks.
+
+    A matched song is settled once its fetch finished (``ug_checked_at``, which
+    a block, a spent budget or an error never sets); a song with no match yet,
+    once its artist's UG page was read for it. Both are written to the second.
+    """
+    since = since.astimezone(UTC).replace(microsecond=0)
+    if song.ug_checked_at:
+        try:
+            if _parse_iso(song.ug_checked_at) >= since:
+                return True
+        except ValueError:
+            pass
+    if song.match_decision in ("accept", "pinned"):
+        return False
+    checked = _last_checked(conn, song.id)
+    return checked is not None and checked >= since
+
+
 def fetch_songs(
     ctx: FetchContext,
     songs: Iterable[Song],

@@ -1086,10 +1086,15 @@ do:
   library…", "Looking it up…", "Fetching from Ultimate Guitar…", "Rendering
   the sheet…"), then how it ended:
   - **Ready · Open sheet**, and the card shows the song's files;
-  - **Not found · see the to-do page**, when Ultimate Guitar had no sheet;
-  - **Needs review · see the to-do page**;
-  - **Not fetched yet: it waits for the next run**, when a block, a spent
-    budget or an error stopped the fetch: an error is never a miss;
+  - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
+    the fetch looked the song up during the request and found none, or the
+    index has no such song (and its artist's UG page isn't known);
+  - **Needs review · see the to-do page**, when caracole isn't sure which UG
+    song it is;
+  - **Not fetched yet · Details**, when a cooldown, a block, a spent budget
+    or an error stopped the fetch before it looked the song up: an error is
+    never a miss, and the song waits for the next run (Details says if it
+    doesn't);
   - **Added: the nightly run looks for it**, for a request without Fetch it
     now;
   - or, when a command failed, its error in one sentence, with a **Details**

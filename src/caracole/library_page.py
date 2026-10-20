@@ -799,20 +799,23 @@ _SCRIPT = r"""
   const isActive = (view) => view.state === "queued" || view.state === "running";
   const jobOfSong = (id) => (songJob.has(Number(id)) ? views.get(songJob.get(Number(id))) : null);
   // A request's line, written into p only when it changed, so a screen reader hears each change once.
+  // Its link says where to go next; details, the request's output on /jobs, follows it.
   const showLine = (p, view) => {
     const line = view && view.line && typeof view.line === "object" ? view.line : {};
     const to = line.link && typeof line.link === "object" ? line.link : null;
-    const key = String(line.tone) + "|" + String(line.text) + "|" + (to ? String(to.href) : "");
+    const more = typeof line.details === "string" ? line.details : "";
+    const key = [line.tone, line.text, to ? to.href : "", more].map(String).join("|");
     if (p.dataset.key === key) return;
     p.dataset.key = key;
     p.dataset.tone = String(line.tone || "");
     p.textContent = "";
     p.appendChild(el("span", null, line.text || ""));
-    if (to) {
+    for (const go of [to, more ? { label: "Details", href: more } : null]) {
+      if (!go) continue;
       const dot = el("span", "dot", "·");
       dot.setAttribute("aria-hidden", "true");
       p.appendChild(dot);
-      p.appendChild(link(to, null, false));
+      p.appendChild(link(go, null, false));
     }
   };
   // A card's line, made the first time: role="status" has it read out when it changes.
@@ -1264,7 +1267,7 @@ _SCRIPT = r"""
   const poll = () => {
     timer = 0;
     const ask = pending();
-    fetch("jobs.json?cards=" + ask.join(","), {
+    fetch("jobs.json?jobs=" + ask.join(","), {
       credentials: "same-origin", cache: "no-store",
       headers: { Accept: "application/json", "X-Caracole-Form-Token": String(server.csrf || "") },
     }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
