@@ -35,7 +35,8 @@ instead, one compact line a song (two on a phone), remembered in the address
 
 On a touch screen (``pointer: coarse``) every control is a thumb's target, 44
 px each way at the least: buttons, folds, chips, menus, letters, a row's "⋯"
-and an artist's name; a mouse keeps the compact sizes, about twenty rows to a
+and an artist's name (a card's at the top of its box, under its title, whose
+target reaches down to it); a mouse keeps the compact sizes, about twenty rows to a
 laptop's screen. Fields, menus and the Select boxes have the ``--control-edge``
 colour, 3:1 or more against every background (WCAG 1.4.11); cards and dividers
 keep the soft ``--border``. ``BASE_STYLE`` and ``PICKER_STYLE`` carry both to
@@ -950,6 +951,12 @@ body.with-tray .page { padding-bottom: 16rem; }
 @media (pointer: coarse) {
   .more > summary, .chip, .sort select, .views button { min-height: 44px; }
   .jump button { min-width: 44px; height: 44px; }
+  /* A card's title and its artist share the thumb's height between them: the title's target reaches up into
+     the card's padding and down to the artist's name, which stands at the top of its own 44 px, so that a tap
+     a little under the title opens the sheet and never filters the list. */
+  .card .title-link { padding: 14px 0 8px; margin: -14px 0 -8px; }
+  .card .byline { align-items: flex-start; margin-top: 8px; }
+  .card .byline .artist { align-items: baseline; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .plus { transition: transform .15s; }

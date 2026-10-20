@@ -1637,6 +1637,49 @@ def test_lean_cards_fit_a_phone_and_their_titles_keep_a_line_of_their_own(conn, 
         assert laid["screen"] // cards["Creep"]["height"] >= 3, cards
 
 
+# What a tap lands on between each card's title and its artist's name (under the narrower of the two, every
+# pixel from the title's text down to the name's), how tall the title's target is, and how far the artist's
+# target reaches above its name.
+TITLE_AND_ARTIST = """
+(() => {
+  const cards = {};
+  for (const c of document.querySelectorAll("#list .card")) {
+    const link = c.querySelector(".title-link");
+    if (!link) continue;
+    c.scrollIntoView({ block: "center" });
+    const artist = c.querySelector("button.artist");
+    const title = link.querySelector("h2").getBoundingClientRect();
+    const name = artist.querySelector(".artist-name").getBoundingClientRect();
+    const box = artist.getBoundingClientRect();
+    const x = title.left + Math.min(title.width, name.width) / 2;
+    const between = new Set();
+    for (let y = Math.ceil(title.bottom); y < Math.floor(name.top); y += 1) {
+      const hit = document.elementFromPoint(x, y);
+      between.add(artist.contains(hit) ? "artist" : link.contains(hit) ? "title" : "neither");
+    }
+    cards[link.textContent] = { between: Array.from(between).sort(), link: Math.round(link.getBoundingClientRect().height),
+      above: Math.round(name.top - box.top), artist: Math.round(box.height) };
+  }
+  document.body.setAttribute("data-heads", JSON.stringify(cards));
+})();
+"""
+
+
+@in_chromium
+def test_on_a_touch_phone_a_tap_just_under_a_cards_title_opens_it_and_the_artist_reaches_down(conn, cfg, tmp_path):
+    from helpers.targets import noted
+
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), TITLE_AND_ARTIST))
+    heads = noted(dump_dom(path, tmp_path, size="390,844", touch=True), "data-heads")
+    assert set(heads) == {"Creep", "Wonderwall"}, heads
+    for title, head in heads.items():
+        # Right under the title's text is the title's: a tap a little low opens the sheet, never the filter.
+        assert head["between"] == ["title"], (title, head)
+        # The title's target is a thumb's height, and so is the artist's, which reaches down from its name.
+        assert head["link"] >= 44 and head["artist"] >= 44 and head["above"] <= 2, (title, head)
+
+
 @in_chromium
 def test_an_artists_name_shows_it_is_a_filter_on_its_card_and_its_row(conn, cfg, tmp_path):
     filed_library(conn, cfg)
