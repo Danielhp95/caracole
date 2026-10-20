@@ -925,6 +925,42 @@ def test_the_served_page_picks_a_candidate_with_a_form_in_place_of_review_first(
     assert re.search(r"<button[^>]*disabled[^>]*>Review first</button>", plain) and "picker" not in plain
 
 
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_picker_of_a_song_being_fetched_is_read_only_until_its_request_ends(conn, cfg, tmp_path):
+    # POST /review would refuse a pick while the song's request waits or runs: the card offers none.
+    from caracole.library_page import WebControls
+
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    s = in_review(conn)
+    controls = WebControls(csrf="tok", busy=frozenset({s.id}), active=1, held=frozenset({s.id}))
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    card = card_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    assert 'action="/review"' not in card and "<input" not in card
+    picker = re.search(r'<details class="picker">.*?</details>', card, re.S).group(0)
+    choices = re.search(r'<ol class="choices"[^>]*>(.*?)</ol>', picker, re.S)
+    assert choices and re.findall(r'<span class="choice-name">([^<]*)</span>', choices.group(1)) == [
+        "1. Radiohead – Creep", "2. Jeff Buckley – Creep", "3. Misc Musicals – Creep The Musical"]
+    assert '<p class="pick-hint">A request for this song is running: pick one once it ends.</p>' in picker
+    assert "Fetching…" in card
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_found_song_in_review_gets_the_picker_too(conn, cfg, tmp_path):
+    # A sheet from elsewhere (LaCuerda, say) while its UG match waits for review: no Fetch now, but a pick.
+    from caracole.library_page import WebControls
+
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    s = in_review(conn)
+    update_song(conn, s.id, status="found")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", held=frozenset({s.id})))
+    card = card_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    assert 'data-status="found"' in card and "/fetch" not in card
+    form = re.search(r'<form[^>]*action="/review"[^>]*>(.*?)</form>', card, re.S)
+    assert form and f'name="song" value="{s.id}"' in form.group(1)
+    radios = re.findall(r'<input type="radio" name="pick" value="([^"]*)"', form.group(1))
+    assert radios == ["radiohead/creep", "jeff-buckley/creep", "misc-musicals/creep-the-musical", "none"]
+
+
 # Opens the first picker by its summary, as a click or Enter does, then notes where the focus went.
 OPEN_PICKER = """
 (() => {
