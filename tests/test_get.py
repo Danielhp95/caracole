@@ -322,6 +322,21 @@ def test_the_tab_you_pick_is_pinned_and_kept(cfg, conn, sites):
     assert sites.ug()[0] == f"{TAB}radiohead/creep-chords-103"
 
 
+def test_a_picked_version_replaces_only_the_pins_of_its_kind(cfg, conn, sites):
+    # You pinned a chords sheet, then pick a Guitar Pro version: the sheet you chose stays yours.
+    from caracole.overrides import add_pin
+
+    serve_creep(sites, conn)
+    upsert_rows(conn, [(301, "radiohead", "creep", "guitar-pro", "radiohead/creep-guitar-pro-301")], "1", NOW)
+    add_pin(cfg.overrides_file, "Radiohead - Creep", [f"{TAB}radiohead/creep-chords-102"])
+
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep", tab=f"{TAB}radiohead/creep-guitar-pro-301")
+    assert sorted(load_overrides(cfg.overrides_file).pin["radiohead/creep"]) == [102, 301]
+
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep", tab=f"{TAB}radiohead/creep-chords-103")
+    assert sorted(load_overrides(cfg.overrides_file).pin["radiohead/creep"]) == [103, 301]  # chords for chords
+
+
 def test_a_song_the_matcher_isnt_sure_of_says_so_and_still_gets_its_lyrics(cfg, conn, sites):
     two_creeps(sites, conn)
     sites.lyrics[("Somebody", "Creep")] = "\n".join(LINES)

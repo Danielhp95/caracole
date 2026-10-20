@@ -8,7 +8,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 
 - ``song``: the song, found in the library or added to wanted.txt as
   ``caracole add`` adds it, then synced; the Ultimate Guitar song you picked
-  recorded under ``[match]`` in overrides.toml, and the tab under ``[pin]``.
+  recorded under ``[match]`` in overrides.toml, and the tab under ``[pin]``,
+  in place of the song's pin of its kind group alone (``_other_pins``).
 - ``match``: matched against the offline index, alone.
 - ``sheet``: Ultimate Guitar's sheet, from as few pages as can be: one page
   lists every version of its kind with its rating, and the best rated is kept
@@ -355,7 +356,7 @@ class _Lookup:
                 picked.append(f"[match] {req.ug}")
             if req.tab:
                 tab_id = tab_id_from_url(req.tab)
-                add_pin(self.cfg.overrides_file, song.display, [req.tab])
+                add_pin(self.cfg.overrides_file, song.display, [req.tab, *self._other_pins(song, tab_id)])
                 picked.append(f"[pin] tab {tab_id}")
             if picked:
                 self.overrides = load_overrides(self.cfg.overrides_file)
@@ -367,6 +368,25 @@ class _Lookup:
         if tell is not None:
             tell(song.id, song.display)
         return said + (f"; recorded in overrides.toml: {', '.join(picked)}" if picked else "")
+
+    def _other_pins(self, song, tab_id: int) -> list[str]:
+        """The song's pins that stay beside a tab you pick, as written: those of another kind group (a
+        chords sheet beside a Guitar Pro pick), by the offline index's types. A pin of the pick's group,
+        or of a kind the index doesn't know on either side, is replaced; the pick goes first anyway."""
+        from caracole.ug.fetch import CHORDS_KINDS, GUITAR_PRO_KINDS, TAB_KINDS
+
+        def group(tab: int) -> tuple[str, ...] | None:
+            row = self.conn.execute("SELECT type FROM ug_index WHERE tab_id = ?", (tab,)).fetchone()
+            kinds = (CHORDS_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)  # the groups a pin replaces (ug/fetch.py)
+            return next((g for g in kinds if row is not None and row[0] in g), None)
+
+        mine = group(tab_id)
+        if mine is None:
+            return []
+        pasted = self.overrides.pin_urls.get(song.key, ())
+        return [pasted[i] if i < len(pasted) else str(pin)
+                for i, pin in enumerate(self.overrides.pin.get(song.key, ()))
+                if group(pin) not in (None, mine)]
 
     def match(self) -> tuple[str, str] | str:
         from caracole.match import match_all

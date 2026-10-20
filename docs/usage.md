@@ -330,7 +330,10 @@ Options:
   `caracole search` shows it (`stone-temple-pilots/creep`): it is recorded
   under `[match]` in overrides.toml, so the matcher never asks you about it.
 - `--tab URL` is the tab to use, its page's address or its id: it is
-  recorded under `[pin]`.
+  recorded under `[pin]`, in place of the song's pin of the same kind (a
+  chords sheet, a text tab, a Guitar Pro or Power Tab file, by the offline
+  index), and beside its pins of the other kinds: a Guitar Pro version picked
+  after a chords sheet keeps the sheet you chose.
 - `--album ALBUM` and `--duration M:SS`, for a song new to the library, as in
   `caracole add`.
 - `--progress` adds a JSON line per stage, which `caracole serve` reads.
