@@ -23,7 +23,9 @@ by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
 The songs are one grid of cards, as many columns as the screen holds, in every
 order: a section per artist left one narrow card per row on a desktop. Each
 card has its artist's monogram, in a colour of that artist's, and an A-Z strip
-jumps to the first card of a letter. A Cards/Rows toggle shows them as rows
+jumps to the first card of a letter. A card's title opens its sheet (its
+viewer, else its PDF, else its text), as a row's does. A Cards/Rows toggle
+shows them as rows
 instead, one compact line a song (two on a phone), remembered in the address
 (``#view=rows``) as the search, the filters, the sort and the key are.
 
@@ -42,6 +44,8 @@ element, the same as a song's row, to put in a ``<div class="rows">``.
 ``result`` is a plain object, every field optional:
 
 - ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button;
+- ``href``: what the title opens (the row's sheet, as its button does), the same way as
+  ``action``'s link; out of the Tab order, since the button says what it opens;
 - ``source``: a key of the data's ``icons`` (``icons.SOURCES``: "ug", "lacuerda"…);
 - ``key`` ("A minor"), and ``keyText``, what a screen reader hears for it;
 - ``status``, which the row's ``data-status`` gets; ``badges``: ``[{kind, text}]``,
@@ -675,6 +679,9 @@ ROWS_STYLE = """
 .btn.sourced { gap: 7px; }
 .btn.sourced .source { order: -1; }
 .badges .source { align-self: center; }
+/* A title that opens the sheet: the heading as it was, underlined under the pointer. */
+.title-link { display: block; width: fit-content; max-width: 100%; color: inherit; text-decoration: none; }
+.title-link:hover > h2 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .rows { margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
   box-shadow: var(--shadow); }
 /* Below 900px a row is two lines: the title and the main action, then the artist with the key and
@@ -687,6 +694,9 @@ ROWS_STYLE = """
 .row > .source { grid-area: src; justify-self: center; }
 .row-title { grid-area: title; min-width: 0; margin: 0; overflow: hidden; font-size: .98rem; line-height: 1.3;
   white-space: nowrap; text-overflow: ellipsis; }
+/* A row's title link fills its line: as easy to hit as the button beside it. */
+.row > .title-link { grid-area: title; display: flex; align-items: center; align-self: stretch; width: auto;
+  min-width: 0; }
 .row-sub { grid-area: sub; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
 .row-artist { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
   font-size: .86rem; white-space: nowrap; text-overflow: ellipsis; }
@@ -939,6 +949,20 @@ const caracoleRows = (icons) => {
   };
   let rowSerial = 0;
   const isWeb = (href) => /^https?:/i.test(String(href || ""));
+  // A title that opens what its card's or its row's main button opens: around the heading, so the heading
+  // stays the song's name alone. Out of the Tab order: the button, which says what it opens, is the keyboard's.
+  const titleLink = (href, heading) => {
+    const external = isWeb(href);
+    const a = el("a", "title-link");
+    a.href = safeHref(href, external);
+    if (external) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
+    a.tabIndex = -1;
+    a.appendChild(heading);
+    return a;
+  };
   const shortKey = (key) => String(key).replace(/ minor$/, "m").replace(/ major$/, "");
   const linkGroup = (group) => {
     if (group instanceof Node) return group;
@@ -960,7 +984,7 @@ const caracoleRows = (icons) => {
     if (r.status) row.dataset.status = String(r.status);
     const heading = el("h2", "row-title", title);
     heading.title = title;
-    row.appendChild(heading);
+    row.appendChild(r.href ? titleLink(r.href, heading) : heading);
     // The artist and the key, the status and the badges: one wrapping line under the title on a phone,
     // where badges that don't fit go under the artist, never over it; their own columns on a desktop.
     const sub = el("div", "row-sub");
@@ -1023,7 +1047,7 @@ const caracoleRows = (icons) => {
     }
     return row;
   };
-  return { resultRow, sourceMark, link };
+  return { resultRow, sourceMark, link, titleLink };
 };
 """
 
@@ -1158,10 +1182,13 @@ _SCRIPT = r"""
   // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
-  const { sourceMark, link, resultRow } = caracoleRows(ICONS);  // ROWS_SCRIPT, which the lookup page shares
+  const { sourceMark, link, resultRow, titleLink } = caracoleRows(ICONS);  // ROWS_SCRIPT, which the lookup page shares
   // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
+  // The file a song opens with, from its title: its viewer, else its PDF, else its text (the data marks it
+  // primary).
+  const primaryOf = (s) => listOf(s.files).find((f) => f && f.primary) || null;
 
   // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py): where
   // that stands, and the video its audio came from.
@@ -1524,7 +1551,8 @@ _SCRIPT = r"""
     mono.setAttribute("aria-hidden", "true");
     head.appendChild(mono);
     const names = el("div", "names");
-    names.appendChild(el("h2", null, s.title));
+    const primary = primaryOf(s);
+    names.appendChild(primary ? titleLink(primary.href, el("h2", null, s.title)) : el("h2", null, s.title));
     const artists = listOf(s.artists);
     const who = el("button", "artist", artists.length > 1 ? artists.join(", ") : s.artist);
     who.type = "button";
@@ -1627,10 +1655,11 @@ _SCRIPT = r"""
 
   // Rows: one compact line a song (resultRow, from ROWS_SCRIPT: the seam the module docstring describes).
   // A row is an article titled by its h2; the A-Z strip moves the focus to it.
-  // A song's main action in its row, as its card has it: its sheet; on the served page, a wanted song's
-  // fetch, or the button that opens its picker; nothing while its request waits or runs (the row's line
-  // says how it goes); Removing… while caracole removes it.
-  const songAction = (s, primary, picker) => {
+  // A song's main action in its row, as its card has it: on the served page, a wanted song's fetch, or the
+  // button that opens its picker; nothing while its request waits or runs (the row's line says how it goes);
+  // Removing… while caracole removes it. Undefined when the server has none for it: its sheet is then the
+  // row's button (sheetAction), as it is on the file.
+  const serverAction = (s, picker) => {
     if (server && removing.has(Number(s.id))) {
       const going = el("a", "row-busy", "Removing…");
       going.href = "/jobs";
@@ -1658,15 +1687,18 @@ _SCRIPT = r"""
       }
       return fetchForm(s);
     }
-    if (!primary) return null;
-    const open = link({ label: primary.label, href: primary.href }, "btn small", false);
+    return undefined;
+  };
+  // The row's button for its sheet: the primary one, as Fetch now is, named for what it opens ("Sheet viewer").
+  const sheetAction = (s, primary) => {
+    const open = link({ label: primary.label, href: primary.href }, "btn small primary", false);
     open.setAttribute("aria-label", String(primary.label) + " of " + String(s.title) + " by " + String(s.artist));
     return open;
   };
   const songRow = (s) => {
     const id = Number(s.id);
     const files = listOf(s.files);
-    const primary = files.find((f) => f && f.primary) || null;
+    const primary = primaryOf(s);
     const more = [];
     // What a card shows under its facts, in the row's panel: the picker, or the note that says why not.
     const picker = SHOWS.review(s) && listOf(s.candidates).length > 0 ? makePicker(s) : null;
@@ -1693,7 +1725,12 @@ _SCRIPT = r"""
       look.appendChild(lookLink(s, "btn small"));
       more.push(look);
     }
-    more.push({ heading: "Files", links: files.filter((f) => f !== primary).map((f) => elsewhere(s, f)) },
+    // The sheet is the row's button unless the server's control has its place (Fetch now beside an auto
+    // sheet): then it leads the files, and the title opens it all the same.
+    const held = serverAction(s, picker);
+    const action = held !== undefined ? held : primary ? sheetAction(s, primary) : null;
+    const listed = held !== undefined ? files : files.filter((f) => f !== primary);
+    more.push({ heading: "Files", links: listed.map((f) => elsewhere(s, f)) },
       { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },
       { heading: "Find the chords", links: listOf(s.links) },
@@ -1710,13 +1747,14 @@ _SCRIPT = r"""
     const keyed = typeof s.key === "string" && s.key;
     const row = resultRow({
       title: s.title,
+      href: primary ? primary.href : "",
       artist: artists.length > 1 ? artists.join(", ") : s.artist,
       source: s.source,
       status: s.status,
       key: keyed ? s.key : "",
       keyText: keyed ? keyText(s) : "",
       badges,
-      action: songAction(s, primary, picker),
+      action,
       more,
       onArtist: () => {
         setArtist(String(s.sortArtist || ""));

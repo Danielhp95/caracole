@@ -347,6 +347,9 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
     assert marks == ["ug", "ug"]  # your song's sheet came from UG, and so does the UG song
     main = browser.js("document.querySelector('#results .hit .row-action .primary').getAttribute('href')")
     assert main == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.html"
+    # Its title opens the same, as in index.html; an Ultimate Guitar song's title opens nothing (Get it asks).
+    titles = browser.js("[...document.querySelectorAll('#results .hit .title-link')].map(a => a.getAttribute('href'))")
+    assert titles == [main]
     browser.press("Enter")  # the first result: your song, opened as its card opens it
     assert browser.wait("location.pathname.endsWith('/sheet.html')")
     assert browser.wait("document.querySelector('h1') && document.querySelector('h1').textContent === "

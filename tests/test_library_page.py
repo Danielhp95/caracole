@@ -1357,6 +1357,154 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
     assert all(m["colour"] == m["text_colour"] for m in badges if m["text"] in ("LC", "LR", "YT")), badges
 
 
+# --- a song's title opens its sheet, as its row's button, the primary one, does ------------------------
+
+
+def filed_library(conn, cfg):
+    """Creep, found, with every kind of file and a Guitar Pro version to download; Wonderwall, found, its
+    PDF alone; The Underworld, wanted and in review (two badges); Yesterday, wanted, with no file."""
+    creep = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, creep, "Words\n", raw={"tonality_name": "G"})
+    put(cfg, creep, "sheet.html", "sheet.pdf", "sheet.cho", "lyrics.txt", "lyrics.lrc", "guitar-1.gp5", "tab.txt",
+        "info.json")
+    set_picks(conn, creep.id, ["guitar-pro"], [version(conn, creep, 555890, slot="guitar", kind="guitar-pro")])
+    update_song(conn, creep.id, status="found")
+    wonderwall = add_song(conn, "Oasis", "Wonderwall")
+    put(cfg, wonderwall, "sheet.pdf")
+    update_song(conn, wonderwall.id, status="found")
+    underworld = add_song(conn, "Epic", "The Underworld")
+    update_song(conn, underworld.id, review=True)
+    add_song(conn, "The Beatles", "Yesterday")
+    return creep
+
+
+def served_auto_sheet(conn, cfg):
+    """斑马，斑马, wanted, with an auto sheet, on the page caracole serve serves."""
+    from caracole.library_page import WebControls
+
+    s = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, s, "sheet (auto).txt", "sheet (auto).html", "sheet (auto).pdf")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    return write_library_page(cfg.library_dir, html)
+
+
+AUTO_VIEWER = r'href="[^"]*/sheet%20%28auto%29\.html"'
+
+
+def link_texts(html: str) -> list[str]:
+    """The text of each button-like link (its label, before any mark of where it came from)."""
+    return re.findall(r'<a class="btn[^"]*"[^>]*>([^<]*)', html)
+
+
+@in_chromium
+def test_a_songs_title_opens_its_sheet_on_its_card_and_its_row_whose_button_is_the_primary_one(conn, cfg,
+                                                                                               tmp_path):
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+
+    cards = listing(dump_dom(path, tmp_path))
+    # The title opens the viewer, else the PDF: out of the Tab order, as the card's button opens the same.
+    title = re.search(r'<a class="title-link" ([^>]*)><h2>Creep</h2></a>', card_of(cards, "Creep"))
+    assert title and 'href="Radiohead/Creep/sheet.html"' in title.group(1) and 'tabindex="-1"' in title.group(1)
+    wonderwall = card_of(cards, "Wonderwall")
+    assert re.search(r'<a class="title-link" href="Oasis/Wonderwall/sheet.pdf"[^>]*><h2>Wonderwall</h2></a>',
+                     wonderwall), wonderwall
+    assert "title-link" not in card_of(cards, "Yesterday")  # no file: a plain title
+
+    rows = listing(dump_dom(path, tmp_path, "#view=rows"))
+    creep = row_of(rows, "Creep")
+    title = re.search(r'<a class="title-link" ([^>]*)><h2 class="row-title"[^>]*>Creep</h2></a>', creep)
+    assert title and 'href="Radiohead/Creep/sheet.html"' in title.group(1) and 'tabindex="-1"' in title.group(1)
+    # The row's button opens the same, and is the primary one, as Fetch now is on a wanted song's row.
+    main = re.search(r'<div class="row-action"><a class="btn small primary" ([^>]*)>Sheet viewer</a>', creep)
+    assert main and 'href="Radiohead/Creep/sheet.html"' in main.group(1), creep
+    assert 'aria-label="Sheet viewer of Creep by Radiohead"' in main.group(1)
+    assert "title-link" not in row_of(rows, "Yesterday")
+
+
+# Notes how each row is laid out: how tall its title's link is against its button, how many lines its title
+# takes, and its button's colour against a primary button's.
+ROW_LAYOUT = """
+(() => {
+  const box = (n) => n.getBoundingClientRect();
+  const rows = {};
+  for (const r of document.querySelectorAll("#list .row")) {
+    const h2 = r.querySelector("h2");
+    const title = r.querySelector(".title-link");
+    const main = r.querySelector(".row-action > a");
+    rows[h2.textContent] = {
+      title: title ? Math.round(box(title).height) : null,
+      button: main ? Math.round(box(main).height) : null,
+      lines: Math.round(box(h2).height / parseFloat(getComputedStyle(h2).lineHeight)),
+      colour: main ? getComputedStyle(main).backgroundColor : null,
+    };
+  }
+  const primary = document.createElement("a");
+  primary.className = "btn primary";
+  document.body.appendChild(primary);
+  document.body.setAttribute("data-rows", JSON.stringify({ rows, accent: getComputedStyle(primary).backgroundColor,
+    page: innerWidth, scroll: document.documentElement.scrollWidth }));
+  primary.remove();
+})();
+"""
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+@in_chromium
+def test_a_rows_title_is_as_easy_to_hit_as_its_button(conn, cfg, tmp_path, size):
+    import html as html_module
+
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ROW_LAYOUT))
+    found = re.search(r'data-rows="([^"]*)"', dump_dom(path, tmp_path, "#view=rows", size=size))
+    assert found
+    laid = json.loads(html_module.unescape(found.group(1)))
+    rows = laid["rows"]
+    assert laid["scroll"] <= laid["page"], laid
+    # The title's link fills its line, as tall as the button beside it, and the title stays on one line.
+    for title in ("Creep", "Wonderwall"):
+        assert rows[title]["title"] >= rows[title]["button"] > 0 and rows[title]["lines"] == 1, rows
+        assert rows[title]["colour"] == laid["accent"], rows  # the sheet is the row's primary button
+    assert rows["Yesterday"]["title"] is None, rows
+
+
+@in_chromium
+def test_a_wanted_songs_auto_sheet_opens_from_its_rows_title_and_leads_its_files(conn, cfg, tmp_path):
+    row = row_of(listing(dump_dom(served_auto_sheet(conn, cfg), tmp_path, "#view=rows")), "斑马，斑马")
+    assert re.search(r'<div class="row-action"><form[^>]*action="/fetch"', row), row
+    # Fetch now has the row's button: its title opens the auto sheet, which also leads its files under "⋯".
+    assert re.search(r'<a class="title-link" ' + AUTO_VIEWER + r' tabindex="-1">', row), row
+    assert link_texts(panel_of(row))[:1] == ["Auto sheet viewer"], row
+
+
+# The row renderer's title link, as another list uses it: a relative link, a site's, and one that isn't safe.
+TITLE_ROWS = """
+(() => {
+  const list = document.createElement("div");
+  list.className = "rows";
+  list.id = "results";
+  for (const [title, href] of [["Here", "Radiohead/Creep/sheet.html"], ["There", "https://example.org/creep"],
+                               ["Nowhere", "javascript:alert(1)"], ["Plain", ""]]) {
+    list.appendChild(window.caracole.resultRow({ title, href }));
+  }
+  document.body.appendChild(list);
+})();
+"""
+
+
+@in_chromium
+def test_a_result_rows_title_opens_what_its_href_says(conn, cfg, tmp_path):
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), TITLE_ROWS))
+    results = re.search(r'<div class="rows" id="results">(.*?)</div>\s*</body>', dump_dom(path, tmp_path), re.S).group(1)
+    here = re.search(r'<a class="title-link" ([^>]*)><h2 class="row-title"[^>]*>Here</h2>', results)
+    assert here and 'href="Radiohead/Creep/sheet.html"' in here.group(1) and "target" not in here.group(1)
+    there = re.search(r'<a class="title-link" ([^>]*)><h2 class="row-title"[^>]*>There</h2>', results)
+    assert there and 'href="https://example.org/creep"' in there.group(1)
+    assert 'target="_blank"' in there.group(1) and 'rel="noopener noreferrer"' in there.group(1)
+    assert "javascript:" not in results and re.search(r'href="#"[^>]*><h2 class="row-title"[^>]*>Nowhere<', results)
+    assert re.search(r'<article class="row" tabindex="-1"><h2 class="row-title"[^>]*>Plain</h2>', results), results
+
+
 def row_of(shown: str, title: str) -> str:
     found = re.search(r'<article class="row"[^>]*>(?:(?!</article>).)*?' + re.escape(title) + r".*?</article>",
                       shown, re.S)

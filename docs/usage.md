@@ -1449,9 +1449,10 @@ has its status, its key and where the key came from ("Key A minor (from the
 tab)", "Key C major (estimated from the chords)", "(from the audio)": see
 [The song's key](#the-songs-key)), its transposition, and links to its files:
 the sheet viewer first (see [The sheet viewer](#the-sheet-viewer)), then the
-PDF. A Guitar Pro file caracole downloaded names its site, as
-`Guitar Pro 1 · gtptabs.com`, and a score its format, as `Score 1 (MuseScore)`;
-a score's PDF is never the card's main link, which is the sheet's. Each
+PDF; its title opens the first. A Guitar Pro file caracole downloaded names
+its site, as `Guitar Pro 1 · gtptabs.com`, and a score its format, as
+`Score 1 (MuseScore)`; a score's PDF is never the card's main link, which is
+the sheet's. Each
 artist's cards share a coloured monogram, and the artist's name under a title
 shows only that artist's songs ("Queen" leaves out ABBA's "Dancing Queen"),
 until you take its chip off. "Find it elsewhere" opens a song's MuseScore
@@ -1473,7 +1474,9 @@ shows only that artist's songs), the key ("Am"; a screen reader hears "Key A
 minor (from the tab)"), the status, Needs review when caracole isn't sure of
 the match, and one button: the sheet, or, on the page
 `caracole serve` serves, Fetch now for a wanted song (Pick the match for one
-that needs review first, and Removing… while caracole removes it). An auto
+that needs review first, and Removing… while caracole removes it). The title
+opens the sheet too, as a card's does; when Fetch now has the row's button,
+the sheet is the first of its files under "⋯". An auto
 sheet's row says so by its ♪ mark (YouTube's, when its audio came from there)
 and its button, "Auto sheet PDF", rather than by a badge, so that a phone's
 second line keeps room for the artist. Its "⋯" button opens the rest: where a
@@ -1755,9 +1758,10 @@ with it. A KEY that is no key exits with status 2.
   one, so a song from Spotify alone stays Spotify's. The results are the
   library's own rows, as in its Rows view, each with the mark of where it
   came from: an Ultimate Guitar song has UG's, and its versions under "⋯"; a
-  song of your library has its sheet's, and opens as its card does, at once
-  and with no request: its sheet viewer, else its PDF (Enter opens the first
-  one), with its other files, Read it here and Fetch again under "⋯". One with
+  song of your library has its sheet's, and opens as its card does, from its
+  title or its button, at once and with no request: its sheet viewer, else
+  its PDF (Enter opens the first one), with its other files, Read it here and
+  Fetch again under "⋯". One with
   a sheet and neither is read on the page (Read). "Not in the list?" looks a song up by its
   name. `/lookup?q=WORDS` opens it with that search. A page left open across a
   restart of the server says to reload it, since its form token is no longer

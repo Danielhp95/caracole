@@ -20,10 +20,10 @@ the page runs ``library_page.ROWS_SCRIPT`` before its own script and builds
 each result with ``window.caracole.resultRow``, with the mark of where it came
 from (``icons.page_icons``, inlined as index.html inlines them) and its other
 actions under the row's "⋯" (an Ultimate Guitar song's versions; a song of
-your library's files). A song of your library opens as its card does: its
-sheet viewer, else its PDF (a page caracole serves only while it is the one
-caracole wrote, ``app.written_pages``); one with a sheet and neither is read
-on the page.
+your library's files). A song of your library opens as its card does, from
+its title or its button: its sheet viewer, else its PDF (a page caracole
+serves only while it is the one caracole wrote, ``app.written_pages``); one
+with a sheet and neither is read on the page.
 
 Like index.html it builds every element with ``createElement`` and
 ``textContent``, never ``innerHTML``: names come from UG's slugs and your own
@@ -218,7 +218,7 @@ function librarySong(s) {
   const badges = [{kind: s.status, text: STATUS[s.status] || s.status}];
   if (s.review) badges.push({kind: "review", text: "Needs review"});
   const row = window.caracole.resultRow({
-    title: s.title, artist: s.artist, source: s.source, status: s.status,
+    title: s.title, href: opens ? opens.href : "", artist: s.artist, source: s.source, status: s.status,
     key: typeof s.key === "string" ? s.key : "", badges, action,
     more: [here.childNodes.length ? here : null, {heading: "Files", links: others}].filter(Boolean),
   });
