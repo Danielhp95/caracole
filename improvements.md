@@ -88,6 +88,16 @@ On NixOS, `services.caracole.web.enable = true` runs it as `caracole-web.service
 
 Ignore all comments about "legally buying a song". If a song is not found, allow for a "download and extract chords" pipeline that will download the song from youtube via yt-dlp (as a build dependency)
 
+**Done in [0183d3b](https://github.com/Danielhp95/caracole/commit/0183d3b).** A song with no human sheet now gets its audio from YouTube, and the auto-chords unit makes its chords.
+- **The pick:** each night, after the scan, the new youtube step asks yt-dlp's search for `ytsearch8:<artist> <title>`. It takes the upload whose title and channel name the song (names in two scripts match; a Chinese, Japanese or Korean title must stand on its own in the video's title, never as the start of a longer one), whose length is within 20 s of the song's, and that isn't a cover, live, karaoke, lesson or slowed version. The artist's Topic channel and official audio come first.
+- **The audio** goes, as m4a, into caracole's cache (`cache_dir/youtube/`), never into the synced library. Then caracole-autochords writes `sheet (auto).txt`, whose first line names the video; on the page its mark is YouTube's. A purchase or a human sheet found later takes its place, and the audio is deleted. Remove deletes it too.
+- **The limits:** 6 yt-dlp runs a night (about three songs), 15–30 s apart, no cookies, no login, none of caracole's secrets in yt-dlp's environment. A bot check, a 429 or a 403 is a block, with the usual cooldown and one ntfy alert. A video that fails 3 times is given up, and the next run searches again.
+- **Where:** only where auto-chords is on (`services.caracole.autochords.enable = true`; that package has yt-dlp with ffmpeg and deno). `[providers.youtube] enabled = false` turns it off.
+- **Fixing a pick:** `"Artist - Title" = "<video URL>"` (or `"none"`) under `[youtube]` in overrides.toml, or `caracole youtube --song "Artist - Title" --url URL` (or `--none`). `caracole youtube` alone runs the step by hand.
+- **The to-do page:** the buy list becomes "No human sheet found yet", each song with its state, plus "Nothing on YouTube for these" with the lines to paste.
+
+This route goes against YouTube's robots.txt and terms. It is your choice, and AGENTS.md records it as the one scoped exception.
+
 ## faster songs lookups
 
 For UG, have the 10-20 second slow polling for when building the index, but remove it when we are searching. For la cuerda / muse score, don't wait until the end of the day to trigger a search. do it immediately. This tool will not be used simply as a library for me to have downloaded tabs. It will also be used to quickly look up tabs on the spot. As a replacement for ultimate guitar. So I need it to be fast and responsive. Design how to fasten this look-up process so that it feels as fast as looking up a tab in ultimate guitar
