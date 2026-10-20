@@ -53,6 +53,7 @@ from caracole.viewer.theory import (
     map_chord,
     parse_chord,
     parse_key,
+    sounding,
     spelling,
 )
 from caracole.viewer.voicings import page_voicings, voicing_keys
@@ -259,12 +260,25 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
 # --- the page ------------------------------------------------------------------------------------
 
 
+def _facts(key: Key | None, origin: str | None, capo: int) -> str:
+    """The key line under the title, as HTML, as viewer.js writes it for the sheet as written.
+
+    With a capo it says the key of the shapes played, the capo and the key the song sounds in,
+    as Cifra Club's key line does ("Em shapes · capo 2 · sounds F#m"): "Key Em" alone would read
+    as the song's key. Without one, the key ("Key Em"). Each says where the key came from.
+    """
+    source = escape(origin or "")
+    if key is None:
+        return f"Capo <b>{capo}</b>" if capo else ""
+    if not capo:
+        return f"Key <b>{escape(key_name(key))}</b>" + (f' <span class="from">{source}</span>' if source else "")
+    return (
+        f"<b>{escape(key_name(key))}</b> shapes · capo <b>{capo}</b> · sounds <b>{escape(key_name(sounding(key, capo)))}</b>"
+        + (f' · <span class="from">key {source}</span>' if source else "")
+    )
+
+
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None) -> str:
-    facts = []
-    if key is not None:
-        facts.append(f"Key <b>{escape(key_name(key))}</b> <span class=\"from\">{escape(origin or '')}</span>")
-    if sheet.capo:
-        facts.append(f"Capo <b>{sheet.capo}</b>")
     notice = (
         '<p class="notice">Auto-generated, unverified: caracole heard these chords in the recording.</p>\n'
         if sheet.auto else ""
@@ -276,7 +290,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
         f"<h1>{escape(title)}</h1>\n"
         + (f'<p class="artist">{escape(sheet.artist)}</p>\n' if sheet.artist else "")
-        + f'<p class="facts" id="facts">{" · ".join(facts)}</p>\n</header>\n'
+        + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
         + notice
         + '<div class="strip" id="strip" hidden></div>\n'
         + f'<article class="sheet" id="sheet"{lang}>\n{_sheet_html(sheet)}</article>\n'
@@ -376,14 +390,17 @@ def _words(text: str) -> list[str]:
 _CONTROLS = """<button type="button" class="fab" id="fab" hidden aria-controls="panel" aria-expanded="false">Key</button>
 <div class="scrim" id="scrim" hidden></div>
 <section class="sheet-ui panel" id="panel" hidden role="dialog" aria-modal="true" aria-labelledby="panel-title">
-<header class="ui-head"><h2 id="panel-title" tabindex="-1">Key <span id="key-now"></span></h2>
+<header class="ui-head"><h2 id="panel-title" tabindex="-1">Key</h2>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="row"><span class="lab">Transpose</span>
 <span class="stepper"><button type="button" id="down" aria-label="Down a semitone">−</button>
 <output id="shift">0</output><button type="button" id="up" aria-label="Up a semitone">+</button></span>
 <button type="button" class="link" id="reset-t">Reset</button><p class="hint" id="shift-hint"></p></div>
-<div class="row" id="capo-row" hidden><span class="lab">Capo</span><span class="chips" id="capo"></span>
-<p class="hint" id="capo-hint"></p></div>
+<div class="row" id="capo-row"><span class="lab">Capo</span>
+<span class="stepper"><button type="button" id="capo-down" aria-label="Capo down a fret">−</button>
+<output id="capo-at">0</output><button type="button" id="capo-up" aria-label="Capo up a fret">+</button></span>
+<button type="button" class="link" id="reset-capo">Reset</button><p class="hint" id="capo-hint"></p>
+<span class="chips" id="capo"></span></div>
 <div class="row" id="mode-row" hidden><span class="lab">Mode</span><span class="chips" id="modes"></span>
 <p class="hint" id="mode-hint"></p></div>
 <div class="row"><span class="lab">Text</span>

@@ -88,6 +88,14 @@ def test_each_song_says_where_it_is_and_links_its_neighbours():
     assert 'lang="zh"' in last
 
 
+def test_each_song_says_what_its_capo_means_as_its_sheet_html_does():
+    html = page()
+    first = re.search(r'<p class="facts" id="facts-1">(.*?)</p>', html).group(1)
+    minor = re.search(r'<p class="facts" id="facts-3">(.*?)</p>', html).group(1)
+    assert first == '<b>G</b> shapes · capo <b>2</b> · sounds <b>A</b> · <span class="from">key from the sheet</span>'
+    assert minor == 'Key <b>Am</b> <span class="from">from the tab</span>'
+
+
 def test_the_pager_is_above_each_sheet_and_after_it_too():
     songs = re.finditer(r'<section class="song" id="song-(\d+)".*?<script type="application/json" id="data-\1">',
                         page(), re.DOTALL)  # a sheet's parts are sections too: up to the song's data
@@ -287,7 +295,7 @@ def test_the_page_remembers_the_song_and_each_songs_own_settings(tmp_path):
     """
     dom = open_page(page(), tmp_path, "#song-3", harness=harness, budget=15000)
     three, one, again, here, shown = result_of(dom)
-    assert three == "Key Cm · +3" and one == "Key G" and again == "Key Cm · +3"
+    assert three == "Key Cm · +3" and one == "G shapes · capo 2 · sounds A" and again == "Key Cm · +3"
     assert "Minor Song" in here
     assert shown == ["song-3"]
 

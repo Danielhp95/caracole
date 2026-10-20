@@ -516,7 +516,13 @@ def capo_hints(key: Key, limit: int = 2, *, capo: int = 0) -> list[tuple[int, Ke
     """
     if _open(key):
         return []
-    sounding = key.tonic + capo
-    hints = [(fret, Key((sounding - fret) % 12, key.mode))
+    sounds = sounding(key, capo).tonic
+    hints = [(fret, Key((sounds - fret) % 12, key.mode))
              for fret in range(capo + MAX_CAPO + 1) if fret != capo]
     return [(fret, shapes) for fret, shapes in hints if _open(shapes)][:limit]
+
+
+def sounding(shapes: Key, capo: int) -> Key:
+    """The key a song sounds in, played in ``shapes`` with the capo on fret ``capo`` (0 for none):
+    E minor shapes with capo 2 sound in F# minor."""
+    return Key((shapes.tonic + capo) % 12, shapes.mode)

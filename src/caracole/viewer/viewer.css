@@ -111,15 +111,18 @@ a { color: inherit; }
 
 /* The key button, the settings sheet and the chord card: out of the way until wanted. */
 .fab { position: fixed; z-index: 5; right: max(16px, env(safe-area-inset-right));
-  bottom: calc(16px + env(safe-area-inset-bottom)); min-height: 46px; padding: 0 18px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 650;
-  font-variant-numeric: tabular-nums; box-shadow: 0 2px 12px rgb(0 0 0 / .14); cursor: pointer; }
+  bottom: calc(16px + env(safe-area-inset-bottom)); min-height: 46px; max-width: calc(100% - 32px); padding: 8px 18px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit;
+  font-weight: 650; line-height: 1.25; font-variant-numeric: tabular-nums; box-shadow: 0 2px 12px rgb(0 0 0 / .14);
+  cursor: pointer; }
 .scrim { position: fixed; inset: 0; z-index: 6; background: rgb(0 0 0 / .22); }
 .sheet-ui { position: fixed; z-index: 7; left: 0; right: 0; bottom: 0; max-width: 620px; max-height: 80vh;
   margin: 0 auto; padding: 6px 16px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto;
   border-radius: 18px 18px 0 0; background: var(--surface); box-shadow: 0 -6px 28px rgb(0 0 0 / .2); }
 .ui-head { display: flex; align-items: center; gap: 8px; }
-.ui-head h2 { margin: 0; font-size: 1.15rem; }
+/* Room for two lines, as tall as the close button: a heading that wraps at one capo and not at
+   the next moves nothing under it. */
+.ui-head h2 { display: flex; align-items: center; min-height: 2.4em; margin: 0; font-size: 1.15rem; line-height: 1.2; }
 .ui-head h2:focus { outline: none; }  /* where focus lands as it opens; not a control */
 .x { flex: none; margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
   color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
@@ -132,6 +135,7 @@ a { color: inherit; }
   border: 1px solid var(--border); background: var(--raised); color: var(--text); font: inherit; font-size: .95rem;
   cursor: pointer; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips:empty { display: none; }
 .chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .chip small { display: block; font-size: .7rem; opacity: .75; }
 .link { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--accent); font: inherit;

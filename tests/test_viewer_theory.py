@@ -18,6 +18,7 @@ from caracole.viewer.theory import (
     map_chord,
     parse_chord,
     parse_key,
+    sounding,
     spelling,
 )
 
@@ -434,3 +435,16 @@ def test_a_capo_hint_offers_open_chord_shapes_for_an_awkward_key(key, hints):
 def test_a_capo_hint_may_lower_or_take_off_the_sheets_capo(shapes, capo, hints):
     # The frets are where the capo goes (0: none), from the key the song sounds in.
     assert [(fret, key_name(k)) for fret, k in capo_hints(shapes, capo=capo)] == hints
+
+
+@pytest.mark.parametrize(
+    ("shapes", "capo", "sounds"),
+    [
+        (Key(4, "aeolian"), 2, "F#m"),  # Em shapes with capo 2, as Wonderwall is played
+        (Key(7, "ionian"), 0, "G"),  # no capo: the shapes' key
+        (Key(9, "ionian"), 3, "C"),
+        (Key(2, "dorian"), 11, "C# dorian"),
+    ],
+)
+def test_a_capo_raises_the_key_the_song_sounds_in(shapes, capo, sounds):
+    assert key_name(sounding(shapes, capo)) == sounds

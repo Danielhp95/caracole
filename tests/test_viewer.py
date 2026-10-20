@@ -8,6 +8,7 @@ import http.server
 import json
 import re
 import threading
+from html import unescape
 from pathlib import Path
 
 import pytest
@@ -24,12 +25,23 @@ MINOR = to_chordpro(
     "[ch]Cm[/ch]      [ch]Ab[/ch]\nTiny minor words\n[ch]Bb[/ch]     [ch]G7[/ch]\nand back home",
     title="Minor", artist="Placeholders", key="Cm",
 )
+WALL = to_chordpro(
+    "[ch]Em7[/ch]      [ch]G[/ch]\nSynthetic words go here\n[ch]Dsus4[/ch]     [ch]A7sus4[/ch]\nmade up for the test\n"
+    "[ch]Cadd9[/ch]  [ch]D[/ch]  [ch]Em7[/ch]\nand home",
+    title="Wall", artist="Synthetic", capo=2,
+)  # Em shapes with capo 2, as Wonderwall is played: open shapes already, so no capo hint
 
 
 def data_of(html: str) -> dict:
     found = re.search(r'<script type="application/json" id="song">(.*?)</script>', html, re.S)
     assert found, "no song data"
     return json.loads(found.group(1))
+
+
+def facts_of(html: str) -> str:
+    found = re.search(r'<p class="facts" id="facts">(.*?)</p>', html, re.S)
+    assert found, "no key line"
+    return found.group(1)
 
 
 def sheet_of(html: str) -> str:
@@ -167,6 +179,22 @@ def test_then_a_key_estimated_from_the_chords():
     cho = UG_CHO.replace("{key: G}\n", "")
     data = data_of(build_viewer(cho, key="soda stereo|de musica ligera", key_source=None))
     assert data["key"] == {"tonic": 7, "mode": "ionian", "from": "estimated from the chords"}
+
+
+def test_with_a_capo_the_key_line_says_the_shapes_the_capo_and_the_key_it_sounds_in():
+    # "Key Em · Capo 2" read as the song's key; Em is the shapes', and the song sounds in F#m.
+    assert facts_of(build_viewer(WALL)) == (
+        '<b>Em</b> shapes · capo <b>2</b> · sounds <b>F#m</b> · <span class="from">key estimated from the chords</span>'
+    )
+    assert facts_of(build_viewer(UG_CHO)) == (
+        '<b>G</b> shapes · capo <b>2</b> · sounds <b>A</b> · <span class="from">key from the sheet</span>'
+    )
+
+
+def test_without_a_capo_the_key_line_names_the_key():
+    assert facts_of(build_viewer(MINOR)) == 'Key <b>Cm</b> <span class="from">from the sheet</span>'
+    assert facts_of(build_viewer("{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n")) == "Capo <b>3</b>"
+    assert facts_of(build_viewer("{title: T}\n{artist: A}\nOnly words\n")) == ""
 
 
 def test_a_sheet_without_chords_has_no_key():
@@ -310,7 +338,24 @@ def test_the_script_runs_and_leaves_the_sheet_as_written(tmp_path):
     dom = dump_dom(build_viewer(UG_CHO), tmp_path)
     assert 'data-ready="1"' in dom
     assert chord_texts(dom) == {"0": "G", "1": "D", "2": "Em", "3": "C", "4": "G/B", "5": "Am", "6": "F"}
-    assert re.search(r'id="fab"[^>]*>Key G</button>', dom)
+    assert re.search(r'id="fab"[^>]*>G shapes · capo 2 · sounds A</button>', dom)
+
+
+@in_chromium
+@pytest.mark.parametrize(
+    ("cho", "label"),
+    [(UG_CHO, "G shapes · capo 2 · sounds A"), (WALL, "Em shapes · capo 2 · sounds F#m"), (MINOR, "Key Cm")],
+    ids=["capo", "capo-on-open-shapes", "no-capo"],
+)
+def test_the_key_button_says_what_the_key_line_says(tmp_path, cho, label):
+    # The script writes the line the page came with, so nothing moves as it runs; the button and
+    # the settings' heading say the same: the shapes, the capo and the key the song sounds in.
+    html = build_viewer(cho)
+    facts, fab, heading = run_in_page(html, tmp_path, """
+      out = [q("#facts").textContent, q("#fab").textContent, q("#panel-title").textContent];
+    """)
+    assert facts == unescape(re.sub(r"<[^>]+>", "", facts_of(html)))
+    assert fab == label and heading == label
 
 
 @in_chromium
@@ -344,7 +389,7 @@ def test_the_page_works_served_in_a_sandbox(tmp_path):
 def test_transposing_renames_every_chord(tmp_path):
     dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=2")
     assert chord_texts(dom) == {"0": "A", "1": "E", "2": "F#m", "3": "D", "4": "A/C#", "5": "Bm", "6": "G"}
-    assert "Key <b>A</b> (+2)" in dom
+    assert "<b>A</b> shapes · capo <b>2</b> · sounds <b>B</b> (+2)" in dom  # the sheet has capo 2
     dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=-4")  # down to Eb: flats
     assert chord_texts(dom)["2"] == "Cm" and chord_texts(dom)["0"] == "Eb"
 
@@ -353,7 +398,7 @@ def test_transposing_renames_every_chord(tmp_path):
 def test_a_capo_shows_the_shapes_to_play(tmp_path):
     dom = dump_dom(build_viewer(UG_CHO), tmp_path, "#t=3&capo=3")  # Bb shapes; capo 3: A shapes
     assert chord_texts(dom)["0"] == "A"
-    assert "Capo <b>3</b>, A shapes" in dom
+    assert "<b>A</b> shapes · capo <b>3</b> · sounds <b>C</b> (+3)" in dom
 
 
 @in_chromium
@@ -365,7 +410,96 @@ def test_a_capo_may_come_off(tmp_path):
     """, "#t=-2")  # G shapes with capo 2, down two: F shapes, sounding G
     chips, chord, facts = out
     assert chips == ["No capoG shapes", "Capo 3E shapes"]
-    assert chord == "G" and "No capo, G shapes" in facts
+    assert chord == "G" and facts == "Key G (−2) from the sheet · no capo"
+
+
+@in_chromium
+def test_every_song_has_a_capo_to_move(tmp_path):
+    # Em shapes are open already, so no fret is suggested; the capo moves all the same, the chords
+    # show the shapes to play with it, and the song keeps sounding in F#m.
+    shown, offered, off, four, back = run_in_page(build_viewer(WALL), tmp_path, """
+      const look = () => [q('#sheet .c[data-c="0"]').textContent, q("#fab").textContent,
+                          q("#capo-at").textContent, location.hash];
+      q("#fab").click();
+      const shown = q("#capo-row").getBoundingClientRect().height > 0 && q("#capo-up").offsetParent !== null;
+      const offered = document.querySelectorAll("#capo .chip").length;
+      q("#capo-down").click();
+      q("#capo-down").click();
+      q("#capo-down").click();  // no lower than none
+      const off = look().concat([q("#facts").textContent]);
+      for (let i = 0; i < 4; i++) q("#capo-up").click();
+      const four = look().concat([q("#mode-hint").textContent]);
+      q("#reset-capo").click();
+      out = [shown, offered, off, four, look()];
+    """)
+    assert shown and offered == 0
+    assert off == ["F#m7", "Key F#m · no capo", "0", "#capo=0", "Key F#m estimated from the chords · no capo"]
+    assert four == ["Dm7", "Dm shapes · capo 4 · sounds F#m", "4", "#capo=4", "F#m: the natural minor."]
+    assert back == ["Em7", "Em shapes · capo 2 · sounds F#m", "2", ""]
+
+
+@in_chromium
+def test_a_sheet_with_no_key_moves_its_capo_too(tmp_path):
+    before, after = run_in_page(build_viewer("{title: T}\n{artist: A}\n{capo: 1}\n[(G)]la [H7]lo\n"), tmp_path, """
+      const before = [q("#facts").textContent, q("#fab").textContent];
+      q("#fab").click();
+      q("#capo-down").click();
+      out = [before, [q("#facts").textContent, q("#fab").textContent, location.hash]];
+    """)
+    assert before == ["Capo 1", "Transpose · capo 1"]
+    assert after == ["No capo", "Transpose · no capo", "#capo=0"]
+
+
+def phone_tab(browser, url: str, width: int = 390, height: int = 844):
+    """A tab of ``browser`` (helpers.chromium) as wide as a phone's screen, at ``url``, once the
+    viewer's script ran: headless Chromium's own window is never narrower than 500 px."""
+    from helpers.chromium import Tab
+
+    target = browser.send("Target.createTarget", url="about:blank")["targetId"]
+    session = browser.send("Target.attachToTarget", targetId=target, flatten=True)["sessionId"]
+    browser.send("Emulation.setDeviceMetricsOverride", session, width=width, height=height, deviceScaleFactor=2,
+                 mobile=True)
+    browser.send("Page.navigate", session, url=url)
+    tab = Tab(browser, session)
+    tab.wait_for("document.documentElement.dataset.ready === '1'")
+    return tab
+
+
+@in_chromium
+def test_the_capo_control_fits_a_phone_and_holds_still(tmp_path):
+    # On a phone: the capo's buttons never move under a thumb that taps them again, though the
+    # heading above them names other shapes at each fret, on one line or two; they are big enough
+    # to tap; and the longest key line still fits on the key button, with nothing scrolling sideways.
+    from helpers.chromium import Chromium
+
+    def written(name: str, cho: str) -> str:
+        page = tmp_path / "Artist" / name / "sheet.html"
+        page.parent.mkdir(parents=True)
+        page.write_text(build_viewer(cho), encoding="utf-8")
+        return page.as_uri()
+
+    box = "(() => { const r = document.querySelector('%s').getBoundingClientRect(); return [r.top, r.width, r.height]; })()"
+    text = ("(() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('#panel-title'));"
+            " return r.getBoundingClientRect().height; })()")
+    with Chromium(tmp_path / "profile") as browser:
+        tab = phone_tab(browser, written("Wall", WALL))
+        tab.click("#fab")
+        heights, tops = set(), set()
+        for button in ["#capo-up"] * 4 + ["#capo-down"] * 6:  # capo 2 up to 6, then down to none
+            heights.add(round(tab.eval(text)))
+            tops.add(round(tab.eval(box % "#capo-up")[0]))
+            tab.click(button)
+        sizes = [min(tab.eval(box % s)[1:]) for s in ("#capo-down", "#capo-up", "#reset-capo")]
+        assert len(heights) > 1  # the heading wrapped at some frets and not at others...
+        assert len(tops) == 1  # ...and the buttons stayed where they were
+        assert min(sizes) >= 44
+
+        tab = phone_tab(browser, written("Long", UG_CHO) + "#mode=mixolydian&t=1")
+        assert tab.eval("document.querySelector('#fab').textContent") == (
+            "Ab mixolydian shapes · capo 2 · sounds Bb mixolydian · +1")
+        fab = tab.eval("(() => { const r = document.querySelector('#fab').getBoundingClientRect(); "
+                       "return [r.left, r.right, innerWidth, document.documentElement.scrollWidth]; })()")
+        assert fab[0] >= 0 and fab[1] <= fab[2] == 390 and fab[3] <= fab[2]
 
 
 @in_chromium
@@ -527,13 +661,13 @@ def test_a_chord_is_easy_to_tap(tmp_path):
 
 
 @in_chromium
-def test_a_capo_no_longer_on_offer_goes_before_the_chords_are_named(tmp_path):
+def test_a_capo_stays_on_its_fret_when_the_song_is_transposed(tmp_path):
+    # As on a guitar: a semitone up with the capo where it is, and every shape goes up a semitone.
     out = run_in_page(build_viewer(UG_CHO), tmp_path, """
-      q("#up").click();  // Bb to B: capo 3, with A shapes, is no longer offered
-      out = [q('#sheet .c[data-c="0"]').textContent, q("#facts").textContent, q("#fab").textContent];
-    """, "#t=3&capo=3")
-    chord, facts, fab = out
-    assert chord == "B" and "A shapes" not in facts and fab == "Key B · +4"
+      q("#up").click();
+      out = [q('#sheet .c[data-c="0"]').textContent, q("#fab").textContent, location.hash];
+    """, "#t=3&capo=3")  # A shapes with the capo on fret 3, sounding C
+    assert out == ["Bb", "Bb shapes · capo 3 · sounds Db · +4", "#t=4&capo=3"]
 
 
 @in_chromium
@@ -545,7 +679,7 @@ def test_tapping_through_the_controls(tmp_path):
         "G", False,  # the card opens on the chord
         "Em", "Play Em for every G",  # an alternative, tried
         "Em", True,  # and played everywhere, marked as changed
-        "E", "F#m", "Key A · +2",  # up two semitones, the alternative too
+        "E", "F#m", "A shapes · capo 2 · sounds B · +2",  # up two semitones, the alternative too
         "Em", "Am",  # G minor: D becomes Dm, G Gm; still up two
         "G", "D",  # all back as written
     ]

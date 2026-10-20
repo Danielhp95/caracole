@@ -1562,14 +1562,24 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   [chords-db](https://github.com/tombatossals/chords-db) by David Rubert (MIT
   licence, whose notice is at the foot of every page); a chord it has no
   shape for shows the closest one, saying so.
-- **The key button** (bottom right) opens the settings. **Transpose** moves
-  every chord, its shapes and the key by semitones; Reset goes back to the
-  song's `[transpose]`, where the viewer starts, like the PDF. In an awkward
-  key, **Capo** offers frets where open shapes play it (Bb: capo 1 with A
-  shapes, capo 3 with G shapes); tap one, and the chords show the shapes to
-  play with the capo on. The sheet's own capo counts: the fret shown is where
-  the capo goes, and it may be lower than the sheet's, or no capo at all (a
-  sheet in G shapes with capo 2, transposed down two: no capo, G shapes).
+- **The key line** under the title says how the song is played. With a capo,
+  it names the key of the shapes you play, the capo and the key the song
+  sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
+  "Key Em". Each says where the key came from.
+- **The key button** (bottom right) says the same, with the transposition
+  ("Em shapes · capo 2 · sounds F#m · +1"), and opens the settings.
+  **Transpose** moves every chord, its shapes and the key by semitones; Reset
+  goes back to the song's `[transpose]`, where the viewer starts, like the
+  PDF. **Capo**, on every song, moves the capo a fret at a time, from none to
+  the 11th; Reset puts it back where the sheet has it. The song sounds the same
+  wherever the capo is, and the chords show the shapes to play there: Em shapes
+  with capo 2 become F#m shapes with no capo, or Dm shapes with capo 4. The
+  capo stays on its fret when you transpose, as on a guitar, so the shapes
+  move instead. In an awkward key it also suggests frets where open shapes play
+  it (Bb: capo 1 with A shapes, capo 3 with G shapes); tap one to play them.
+  The fret suggested is where the capo goes, and it may be lower than the
+  sheet's, or no capo at all (a sheet in G shapes with capo 2, transposed down
+  two: no capo, G shapes).
 - **Instead, in the key**: the chord's card also lists chords to play in its
   place that keep to the key: colours on the same root (a seventh, add9, sus2,
   a sixth), an inversion, and chords that share most of its notes (Am or Em
