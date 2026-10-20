@@ -68,6 +68,7 @@ ladder found before, or record a miss: it is no evidence that UG lacks a song.
 
 from __future__ import annotations
 
+import bisect
 import itertools
 import sqlite3
 from collections.abc import Collection, Iterable, Iterator
@@ -175,6 +176,8 @@ class IndexView:
         self._titles: list[str] | None = None
         self._compact_titles: list[str] | None = None
         self._catch_all: list[tuple[str, str, int]] | None = None
+        self._catch_all_text = ""  # each base key of catch_all_songs() as a line "-base-"
+        self._catch_all_starts: list[int] = []  # where each line starts
 
     def artist_keys(self) -> list[str]:
         """Every artist key in the index, sorted."""
@@ -282,7 +285,24 @@ class IndexView:
                 key = (artist_key, split_variant(song_key)[0])
                 tabs[key] = tabs.get(key, 0) + n
             self._catch_all = sorted((a, s, n) for (a, s), n in tabs.items())
+            lines = [f"-{s}-\n" for _, s, _ in self._catch_all]
+            self._catch_all_text = "".join(lines)
+            self._catch_all_starts = [0, *itertools.accumulate(map(len, lines))][:-1]
         return self._catch_all
+
+    def catch_all_holding(self, needles: Iterable[str]) -> list[tuple[str, str, int]]:
+        """The ``catch_all_songs()`` whose line ``-base-`` holds any of ``needles``, in the same order.
+        A needle that ends in a newline holds the line's end: ``-my-shot-\\n`` is a title that ends in
+        ``my-shot``. A search of one text per needle, instead of a test of each of 90,000 titles."""
+        songs = self.catch_all_songs()
+        text, starts = self._catch_all_text, self._catch_all_starts
+        found: set[int] = set()
+        for needle in needles:
+            i = text.find(needle)
+            while i != -1:
+                found.add(bisect.bisect_right(starts, i) - 1)
+                i = text.find(needle, i + 1)
+        return [songs[i] for i in sorted(found)]
 
     def tab_keys(self, tab_id: int) -> tuple[str, str] | None:
         """The (artist key, song key) a tab is indexed under, if it is indexed."""
@@ -588,8 +608,10 @@ def _catch_all_hits(song: Song, index: IndexView, title: _Forms, rank: int) -> l
     names = [n for a in (song.artists or [song.artist]) for n in _forms(a).keys if _names_something(n.split("-"))]
     endings = [k for k in title.own if k.count("-") >= 1 and _names_something(k.split("-"))]
     hits = []
-    for artist_key, base, tabs in index.catch_all_songs():
-        padded = f"-{base}-"  # a cheap test first: a few thousand titles per song
+    # Only a title that holds a name, or ends in an ending, can score.
+    for artist_key, base, tabs in index.catch_all_holding([*(f"-{n}-" for n in names),
+                                                           *(f"-{e}-\n" for e in endings)]):
+        padded = f"-{base}-"
         if artist_key in PERFORMER_CATCH_ALLS:  # "performer-title": a name elsewhere is a word of the title
             held = [n for n in names if padded.startswith(f"-{n}-")]
         else:

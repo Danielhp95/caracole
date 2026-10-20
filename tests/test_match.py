@@ -477,6 +477,37 @@ def test_performers_catch_alls_hold_the_performers_name_at_the_start_of_the_titl
     assert match(conn, "Jorge Rivera-Herrans", "Red Sarah").decision == "not_found"
 
 
+def test_the_catch_all_titles_holding_a_name_or_an_ending_come_in_their_order(conn):
+    index(conn, (1, "misc-musicals", "hamilton-my-shot", "chords"), (2, "misc-musicals", "hamilton-my-shot", "tabs"),
+          (3, "misc-originals", "my-shot-at-love", "chords"), (4, "misc-cartoons", "frozen-let-it-go", "chords"),
+          (5, "misc-cartoons", "my-shot", "chords"), (6, "misc-soundtrack", "shot-in-the-dark", "chords"),
+          (7, "misc-praise-songs", "my-shot", "chords"))
+    view = IndexView(conn)
+    assert view.catch_all_holding(["-my-shot-\n", "-frozen-"]) == [
+        ("misc-cartoons", "frozen-let-it-go", 1), ("misc-cartoons", "my-shot", 1),
+        ("misc-musicals", "hamilton-my-shot", 2)]
+    assert view.catch_all_holding(["-shot-"]) == [
+        ("misc-cartoons", "my-shot", 1), ("misc-musicals", "hamilton-my-shot", 2),
+        ("misc-originals", "my-shot-at-love", 1), ("misc-soundtrack", "shot-in-the-dark", 1)]
+    assert view.catch_all_holding(["-sho-"]) == view.catch_all_holding([]) == []
+
+
+def test_a_performers_title_that_holds_the_name_past_its_start_is_no_match_where_a_shows_is(conn):
+    index(conn, (1, "misc-originals", "robert-muecke-kiss-you", "chords"),
+          (2, "misc-musicals", "robert-muecke-kiss-you", "chords"))
+    r = match(conn, "Kiss", "You")
+    assert r.candidates == (MatchCandidate("misc-musicals", "robert-muecke-kiss-you", 100.0, "catch_all"),)
+
+
+def test_a_shows_title_that_is_your_title_alone_does_not_end_in_it(conn):
+    # What comes before the ending is the show's name: a title with nothing before it is no show's song.
+    index(conn, (1, "misc-musicals", "not-sorry-for-loving-you", "chords"), EPIC,
+          (2, "jorge-rivera-herrans", "not-sorry-for-loving-me", "chords"))
+    r = match(conn, "Jorge Rivera-Herrans", "Not Sorry for Loving You")
+    assert [(c.song_key, c.step) for c in r.candidates] == [
+        ("epic-the-musical-not-sorry-for-loving-you", "catch_all"), ("not-sorry-for-loving-me", "fuzzy_title")]
+
+
 def test_catch_alls_that_file_the_bare_title_are_left_to_the_title_alone(conn):
     # misc-praise-songs, misc-traditional, misc-christmas and misc-children hold no one's name.
     index(conn, (1, "misc-praise-songs", "how-great-is-our-god", "chords"),
