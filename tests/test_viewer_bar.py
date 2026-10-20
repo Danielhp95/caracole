@@ -118,7 +118,7 @@ def test_the_bar_says_the_key_in_short_and_a_screen_reader_hears_it_whole(tmp_pa
     page = tmp_path / "Artist" / "Title" / "sheet.html"
     page.parent.mkdir(parents=True)
     page.write_text(build_viewer(cho), encoding="utf-8")
-    dom = browser.dump_dom(page.as_uri() + fragment, (390, 844))
+    dom = browser.dump_dom(page.as_uri() + fragment, (390, 844), hide_scrollbars=True)  # a phone's, over the page
     assert re.search(r'<div class="bar" id="bar"(?![^>]*hidden)', dom)  # there once the script ran
     found = re.search(r'<output class="now" id="key-now"[^>]*><span class="k" aria-hidden="true">([^<]*)</span>'
                       r'<span class="d" aria-hidden="true">([^<]*)</span><span class="vh" id="key-full">([^<]*)</span>',
@@ -314,7 +314,7 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
       const fits = (s) => { const e = document.querySelector(s); return e.scrollWidth <= e.clientWidth; };
       return {height: Math.round(bar.height), bottom: Math.round(bar.bottom), left: bar.left, right: bar.right,
               width: innerWidth, page: document.documentElement.scrollWidth, smallest: Math.min(...buttons),
-              main: fits('#key-now .k'), sub: fits('#key-now .d')};
+              main: fits('#key-now .k'), sub: fits('#key-now .d'), said: document.querySelector('#key-now .d').textContent};
     })()"""
     end = """(() => { scrollTo(0, document.documentElement.scrollHeight);
       const last = [...document.querySelectorAll('.foot > *')].pop().getBoundingClientRect();
@@ -328,7 +328,9 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
         assert m["left"] == 0 and m["right"] == width and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44, (width, m)
         if width >= 390:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1")
-            assert m["main"] and m["sub"], (width, m)
+            assert m["main"] and m["sub"] and m["said"] == "shapes · capo 2 · +1", (width, m)
+        else:  # with no room for "shapes", the capo and the transposition, whole
+            assert m["sub"] and m["said"] == "capo 2 · +1", (width, m)
         assert clear, width
 
 

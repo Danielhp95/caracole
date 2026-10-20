@@ -1575,7 +1575,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   playing: `− Em +`, `Aa`, `▶` and `⋯`. − and + move every chord, its shapes
   and the key a semitone at a time, with the key you play between them in
   short: "Em" over "shapes · capo 2" (or "key" with no capo), and "· +1"
-  once transposed; a screen reader hears the whole line ("Em shapes · capo 2
+  once transposed, or "capo 2 · +1" on a screen too narrow for all of it;
+  a screen reader hears the whole line ("Em shapes · capo 2
   · sounds F#m · +1"). **Aa** opens a small box over the bar with the text
   size and A− and A+, nothing dimmed behind it; a tap anywhere else, or
   Escape, closes it. **▶** scrolls the song by itself (below). **⋯** opens the

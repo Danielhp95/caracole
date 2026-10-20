@@ -146,15 +146,25 @@
     return keyLine("").filter((part) => part[1] || !part[3]).map((part) => part[0] + part[1] + part[2])
       .concat(shown ? [shown] : []).join(" · ");
   };
-  // In short, for the bar, between − and +: the key you play, and under it what it is
-  // (["Em", "shapes · capo 2"], ["Em", "key · +1"]); the key it sounds in is the key line's.
+  // In short, for the bar, between − and +: the key you play, and under it what it is, the capo
+  // and the transposition (["Em", "shapes", ["capo 2"]], ["Em", "key", ["+1"]]); the key it sounds
+  // in is the key line's.
   const keyShort = () => {
     const capo = capoNow();
-    const moved = state.t ? [signed(state.t)] : [];
-    const capoPart = capo ? ["capo " + capo] : sheetCapo ? ["no capo"] : [];
-    if (!key) return ["Transpose", capoPart.concat(moved).join(" · ")];
-    if (capo) return [keyName(shift()), ["shapes"].concat(capoPart, moved).join(" · ")];
-    return [keyName(state.t + sheetCapo), ["key"].concat(capoPart, moved).join(" · ")];
+    const rest = (capo ? ["capo " + capo] : sheetCapo ? ["no capo"] : []).concat(state.t ? [signed(state.t)] : []);
+    if (!key) return ["Transpose", "", rest];
+    if (capo) return [keyName(shift()), "shapes", rest];
+    return [keyName(state.t + sheetCapo), "key", rest];
+  };
+  // The line under the key, whole where there is room ("shapes · capo 2 · +1"); on a narrow screen
+  // the capo and the transposition alone ("capo 2 · +1"), so that neither is cut off. Fitted again
+  // when the bar comes back into view or the window changes.
+  let keyUnder = ["", []];
+  const fitKey = () => {
+    const line = $("key-now").querySelector(".d");
+    const [what, rest] = keyUnder;
+    line.textContent = (what ? [what] : []).concat(rest).join(" · ");
+    if (what && rest.length && line.scrollWidth > line.clientWidth) line.textContent = rest.join(" · ");
   };
 
   // --- chord diagrams --------------------------------------------------------------------------
@@ -261,9 +271,10 @@
     $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
     $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
 
-    const [main, sub] = keyShort();
+    const [main, what, rest] = keyShort();
     $("key-now").querySelector(".k").textContent = main;
-    $("key-now").querySelector(".d").textContent = sub;
+    keyUnder = [what, rest];
+    fitKey();
     $("key-full").textContent = keyLabel(true);
     $("panel-title").textContent = key ? keyLabel(false) : "Transpose";
     const box = $("facts");
@@ -352,11 +363,12 @@
     cancelAnimationFrame(fitting);
     fitting = requestAnimationFrame(() => {
       fit();
+      fitKey();
       place();
       dock();
     });
   });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit, () => {});
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fit(); fitKey(); }, () => {});
 
   const drawStrip = () => {
     const strip = $("strip");
@@ -491,7 +503,10 @@
     const away = moving() && !there;
     if (bar.hidden !== away) {
       bar.hidden = away;
-      if (!away) slide(false);
+      if (!away) {
+        slide(false);
+        fitKey();
+      }
     }
     if (there) {
       doc.dataset.dock = there.id;
