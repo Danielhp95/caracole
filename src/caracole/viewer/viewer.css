@@ -206,6 +206,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 /* Room for two lines, as tall as the close button: a heading that wraps at one capo and not at
    the next moves nothing under it. */
 .ui-head h2 { display: flex; align-items: center; min-height: 2.4em; margin: 0; font-size: 1.15rem; line-height: 1.2; }
+.panel .ui-head { padding-bottom: 6px; }  /* the second line clear of the line under it */
 .ui-head h2:focus { outline: none; }  /* where focus lands as it opens; not a control */
 .x { flex: none; margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
   color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }

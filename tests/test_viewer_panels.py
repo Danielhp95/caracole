@@ -157,6 +157,19 @@ def test_from_900_px_wide_the_settings_are_a_rail_beside_the_song(tmp_path, widt
     assert [closed["sheet"][k] for k in ("left", "right")] == [before["sheet"][k] for k in ("left", "right")]
 
 
+@in_chromium
+@pytest.mark.parametrize("size", [PHONE, DESKTOP], ids=["phone", "desktop"])
+def test_a_heading_on_two_lines_clears_the_line_under_it(tmp_path, size):
+    measure = """(() => { const h = document.querySelector('#panel-title'), range = document.createRange();
+      range.selectNodeContents(h);
+      const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
+      return [lines, range.getBoundingClientRect().bottom, document.querySelector('#panel .row').getBoundingClientRect().top]; })()"""
+    with viewer(tmp_path, written(tmp_path) + "#t=1&mode=dorian", **size) as b:
+        b.click("#more")
+        lines, text, row = b.js(measure)
+    assert lines == 2 and text <= row - 4  # "Ab dorian shapes · capo 2 · sounds" / "Bb dorian"
+
+
 # --- a chord's card ------------------------------------------------------------------------------------
 
 
