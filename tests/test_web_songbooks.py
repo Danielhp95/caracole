@@ -399,6 +399,33 @@ def test_a_songbook_change_says_what_runs_then_what_it_did(setup, campfire):
         assert (job_line(job, None).tone, job_line(job, None).text) == (tone, done)  # not a song "Added"
 
 
+@pytest.mark.slow
+def test_a_songbook_made_says_made_with_its_page_to_open_and_never_that_the_nightly_run_looks(app, setup, queue):
+    songs = setup[3]
+    post(app, "/songbook/make", {"name": "Beach nights", "songs": f"{songs['hysteria'].id},{songs['soda'].id}"},
+         accept=JSON)
+    queue.run_pending()
+    line = jobs_json(app, "1")["jobs"][0]["line"]
+    assert (line["tone"], line["text"]) == ("ready", "Made"), line
+    assert line["link"] == {"label": "Open songbook", "href": "_songbooks/Beach%20nights/songbook.html"}
+    assert get(app, "/" + line["link"]["href"]).status == 200  # the page caracole wrote, which it serves
+    jobs = get(app, "/jobs").body.decode("utf-8")
+    assert 'Made · <a href="_songbooks/Beach%20nights/songbook.html">Open songbook</a>' in jobs
+    assert "nightly run" not in jobs  # a song's line, "Added: the nightly run looks for it", misleads here
+    # Added to, then renamed: its page, under its new name. Deleted: no page to open, nor the older lines.
+    for n, path, fields, done, page in [
+        (2, "/songbook/add", {"name": "Beach nights", "songs": str(songs["creep"].id)}, "Added",
+         "_songbooks/Beach%20nights/songbook.html"),
+        (3, "/songbook/rename", {"name": "Beach nights", "new": "Picnic"}, "Renamed", "_songbooks/Picnic/songbook.html"),
+        (4, "/songbook/delete", {"name": "Picnic"}, "Deleted", None),
+    ]:
+        post(app, path, fields, accept=JSON)
+        queue.run_pending()
+        line = jobs_json(app, str(n))["jobs"][0]["line"]
+        assert (line["text"], line["link"] and line["link"]["href"]) == (done, page), line
+    assert [view["line"]["link"] for view in jobs_json(app, "1,2,3")["jobs"]] == [None, None, None]
+
+
 def test_once_its_job_is_over_the_songbooks_section_comes_with_it_drawn_again(setup, campfire):
     _, cfg, _, songs = setup
     queue = JobQueue(Edits(cfg.library_dir))

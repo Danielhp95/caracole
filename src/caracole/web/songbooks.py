@@ -19,7 +19,8 @@ ends the command's options, so a name may start with "-".
 A job's key is its command (``KEY``, then the command's words), so the same change sent twice
 is queued once; ``songbook_of`` reads back which songbook it changes, by its name before and
 after, for the page that follows it (app.py) and for its line (status.py): "Moving the song…",
-its step's label, while it runs; "Moved" once it is done (``DONE``).
+its step's label, while it runs; "Moved" once it is done (``DONE``), with its songbook's page to
+open (``songbook_page``), as a song's "Ready" has its sheet.
 
 A songbook's page, ``_songbooks/<folder>/songbook.html``, is one of the pages caracole wrote
 (app.py's ``written_pages``): it is sent only while it is the page caracole wrote there
@@ -34,6 +35,7 @@ from collections.abc import Callable, Mapping
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 ROUTES = ("/songbook/make", "/songbook/add", "/songbook/move", "/songbook/remove", "/songbook/rename",
           "/songbook/delete")
@@ -154,6 +156,23 @@ def songbook_of(key: str) -> dict[str, str | None] | None:
     action, name = words[1], words[3]
     after = words[4] if action == "rename" and len(words) > 4 else None if action == "delete" else name
     return {"action": action, "name": name, "after": after}
+
+
+def songbook_page(conn: sqlite3.Connection, key: str) -> str | None:
+    """The page of the songbook a job's key changes, as it is named once the job is done (``after``),
+    relative to the library page: ``_songbooks/<folder>/songbook.html``, while caracole has written one
+    there (``songbook.written_page``, which a server sends); None for a job of anything else, a
+    deletion, or a songbook with no page."""
+    from caracole.library import safe_name
+    from caracole.songbook import FOLDER, HTML_NAME, written_page
+
+    book = songbook_of(key)
+    if book is None or book["after"] is None:
+        return None
+    folder = safe_name(str(book["after"]))
+    if written_page(conn, folder) is None:
+        return None
+    return f"{FOLDER}/{quote(folder, safe='')}/{HTML_NAME}"
 
 
 def _songs(form: Mapping[str, str], connect: Callable[[], sqlite3.Connection]) -> list[str]:

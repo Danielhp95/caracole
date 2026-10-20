@@ -2159,11 +2159,13 @@ with it. A KEY that is no key exits with status 2.
   `caracole songbook` command (see [Songbooks](#songbooks)) and leaves you
   where you are. The songbook's card says how it goes, on a line under its
   name ("Queued…", "Moving the song…", then "Moved"; "Renamed", "Taken out",
-  "Deleted"), and its buttons wait until it is over, when the section is
-  drawn again as songbooks.toml has it, the keyboard focus back on the
-  button you pressed. Make songbook (or Add to) ends Select once the server
-  has it, and the Songbooks section opens on the songbook, a new one at its
-  end ("Making the songbook…", then "Made"), its foot at the bottom of the
+  "Deleted"; once done, all but Deleted link the songbook's phone page, Open
+  songbook, as its line on `/jobs` does), and its buttons wait until it is
+  over, when the section is drawn again as songbooks.toml has it, the
+  keyboard focus back on the button you pressed. Make songbook (or Add to)
+  ends Select once the server has it, and the Songbooks section opens on the
+  songbook, a new one at its end ("Making the songbook…", then "Made · Open
+  songbook"), its foot at the bottom of the
   screen (near the top of the page, it stretches down to it while it is
   made): it fills in below the screen, then scrolls into view whole, so that
   what is on the screen doesn't jump as it grows; stretched taller than what

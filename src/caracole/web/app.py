@@ -395,14 +395,17 @@ class WebApp:
             opened = None
         jobs = self.queue.snapshot()
         facts: dict[int, SongFacts | None] = {}
+        books: dict[int, str | None] = {}
         try:
             overrides = _overrides_or_none(self.cfg)
             with closing(self._connect()) as conn:
                 self._forget_ended(jobs)
                 facts = {job.id: self._song_of(conn, overrides, job)[1] for job in jobs}
+                books = {job.id: _songbook_page(conn, job) for job in jobs}
         except (sqlite3.Error, OSError):  # the lines say only how the jobs went, then
             pass
-        lines = {job.id: job_line(job, facts.get(job.id), ahead=_ahead(jobs, job)) for job in jobs}
+        lines = {job.id: job_line(job, facts.get(job.id), ahead=_ahead(jobs, job), songbook_page=books.get(job.id))
+                 for job in jobs}
         still = query.get("refresh") == ["0"]
         return _html(200, pages.jobs_page(jobs, lines, opened=opened, refresh=not still, picks=self._picks(jobs),
                                           csrf=self.csrf))
@@ -447,7 +450,7 @@ class WebApp:
         section: dict[str, Any] | None = None  # drawn once, for every songbook job that asks
         for job in jobs if only is None else only:
             song_id, facts = self._song_of(conn, overrides, job)
-            view = _view(job, jobs, song_id, facts)
+            view = _view(job, jobs, song_id, facts, songbook_page=_songbook_page(conn, job))
             if job.id in cards and not job.active and "songbook" in view and overrides is not None:
                 section = section or self._songbooks(conn, overrides)
                 view["songbooks"] = section
@@ -1253,16 +1256,25 @@ def _ahead(jobs: list[Job], job: Job) -> int:
     return sum(1 for j in jobs if j.active and j.id < job.id)
 
 
-def _view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None) -> dict[str, Any]:
+def _songbook_page(conn: sqlite3.Connection, job: Job) -> str | None:
+    """A songbook's change that is done: its songbook's page, for its line to open; None for any other job."""
+    from caracole.web.songbooks import songbook_page
+
+    return songbook_page(conn, job.song_key) if job.state == "done" else None
+
+
+def _view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None, *,
+          songbook_page: str | None = None) -> dict[str, Any]:
     """A job as /jobs.json gives it; ``jobs`` is the whole queue. ``kind`` says what it is about: a song
-    ("song"), a song's removal ("remove"), or a songbook ("songbook", which ``songbook`` names)."""
+    ("song"), a song's removal ("remove"), or a songbook ("songbook", which ``songbook`` names), whose
+    ``songbook_page`` its line links once it is done."""
     from caracole.web.songbooks import songbook_of
 
     songbook = songbook_of(job.song_key)
     kind = "remove" if job.song_key.startswith(REMOVING) else "songbook" if songbook is not None else "song"
+    line = job_line(job, facts, ahead=_ahead(jobs, job), songbook_page=songbook_page)
     view = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
-            "state": job.state, "fetching": job.fetching,
-            "line": job_line(job, facts, ahead=_ahead(jobs, job)).as_json(), "details": details_href(job.id)}
+            "state": job.state, "fetching": job.fetching, "line": line.as_json(), "details": details_href(job.id)}
     if songbook is not None:
         view["songbook"] = songbook
     return view
