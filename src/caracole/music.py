@@ -158,12 +158,18 @@ def _names(artist: str, title: str) -> _Names:
 
 
 def _score(a: _Names, b: _Names) -> float:
-    """How alike two songs' names are, 0-100: the lower of the artist and title scores."""
+    """How alike two songs' names are, 0-100: the lower of the artist and title scores.
+
+    A title too far off for any decision (``_matches`` looks at nothing under MATCH_CUTOFF -
+    MATCH_MARGIN) is the score, the artists not compared: most of a Music/ folder is other songs.
+    """
+    title = max((fuzz.ratio(x, y) for x in a.titles for y in b.titles), default=0.0)
+    if title < MATCH_CUTOFF - MATCH_MARGIN:
+        return title
     artist = max(
         (max(fuzz.ratio(x, y), fuzz.token_set_ratio(x, y)) for x in a.artists for y in b.artists),
         default=0.0,
     )
-    title = max((fuzz.ratio(x, y) for x in a.titles for y in b.titles), default=0.0)
     return min(artist, title)
 
 

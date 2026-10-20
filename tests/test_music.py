@@ -204,6 +204,26 @@ def test_a_file_as_close_to_two_songs_links_to_neither(conn, tmp_path):
     assert get_song(conn, one.id).audio_path is None and get_song(conn, two.id).audio_path is None
 
 
+def tagged_lamento(conn, tmp_path, other_artist: str):
+    # A tag cut short: "Lamento Bolivia" scores 94 on the song's title and 88 on the other's, a lead
+    # of 6, under MATCH_MARGIN. A title that close is a rival only when its artist is close too.
+    song = add_song(conn, "Enanitos Verdes", "Lamento Boliviano", duration_ms=None)
+    other = add_song(conn, other_artist, "Lamento Bolivariano", duration_ms=None)
+    make_wav(tmp_path / "music" / "x.wav", artist="Enanitos Verdes", title="Lamento Bolivia")
+    scan_music(conn, tmp_path / "music")
+    return get_song(conn, song.id), get_song(conn, other.id)
+
+
+def test_a_title_almost_as_close_by_the_same_artist_links_neither_song(conn, tmp_path):
+    song, other = tagged_lamento(conn, tmp_path, "Enanitos Verdes")
+    assert song.audio_path is None and other.audio_path is None
+
+
+def test_a_title_almost_as_close_by_another_artist_is_no_rival(conn, tmp_path):
+    song, other = tagged_lamento(conn, tmp_path, "Rafael Hernández")
+    assert song.audio_path is not None and other.audio_path is None
+
+
 def test_a_second_copy_of_the_track_leaves_the_link_alone(conn, tmp_path):
     s = add_song(conn, "Radiohead", "Creep", duration_ms=None)
     music = tmp_path / "music"
