@@ -1937,9 +1937,11 @@ _SCRIPT = r"""
 
   const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
   const arrived = new Map();  // song id -> the card data of a song new to the library since the page loaded
+  // A song removed since the page loaded counts nowhere, though its card says Removed until the next load.
+  const counted = (s) => s.status !== "removed";
   const summarize = () => {
     const by = { found: 0, wanted: 0, ignored: 0 };
-    const every = songs.concat(Array.from(arrived.values()));
+    const every = songs.concat(Array.from(arrived.values())).filter(counted);
     for (const s of every) if (own.call(by, s.status)) by[s.status] += 1;
     const summary = byId("summary");
     summary.textContent = "";
@@ -1961,8 +1963,9 @@ _SCRIPT = r"""
 
   // How many of the songs the search and filters match each button would show; a card drawn again changes it.
   let matchingNow = [];
+  let shownNow = [];
   const tallyChips = () => {
-    const tally = { all: matchingNow.length, found: 0, wanted: 0, review: 0 };
+    const tally = { all: matchingNow.filter((i) => counted(songs[i])).length, found: 0, wanted: 0, review: 0 };
     for (const i of matchingNow) {
       for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
     }
@@ -1970,6 +1973,12 @@ _SCRIPT = r"""
       chip.setAttribute("aria-pressed", String(chip.dataset.show === state.show));
       chip.querySelector(".n").textContent = String(tally[chip.dataset.show]);
     }
+  };
+  // How many songs the list shows, of how many.
+  const tell = () => {
+    const total = songs.filter(counted).length;
+    const n = shownNow.filter((i) => counted(songs[i])).length;
+    count.textContent = n === total ? plural(total, "song") : n + " of " + plural(total, "song");
   };
 
   const render = () => {
@@ -2073,8 +2082,8 @@ _SCRIPT = r"""
     } else if (!shown.length) {
       list.appendChild(el("p", "empty", state.show === "review" ? "Nothing needs review." : "No songs here."));
     }
-    count.textContent = shown.length === songs.length ? plural(songs.length, "song")
-      : shown.length + " of " + plural(songs.length, "song");
+    shownNow = shown;
+    tell();
   };
 
   let frame = 0;
@@ -2293,6 +2302,7 @@ _SCRIPT = r"""
     rows.set(i, rows.has(i) ? refill(rows.get(i), goneItem(songs[i], true)) : goneItem(songs[i], true));
     summarize();
     tallyChips();
+    tell();
   };
 
   // --- caracole serve: the songbooks' forms ---------------------------------------------------------

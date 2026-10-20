@@ -1841,7 +1841,9 @@ with it. A KEY that is no key exits with status 2.
   library as you left it (its search, filters and view), the song's card in
   view, whose line says how it goes: "Queued…", "Removing from caracole…",
   then "Removed", the card keeping only the song's name until you load the
-  page again (a row, the same). Keep it goes back there too, and nothing
+  page again (a row, the same). From then on the song counts nowhere: the
+  numbers at the top, the buttons' counts and the count over the list leave
+  it out. Keep it goes back there too, and nothing
   changes. A page older than a change to the library (the song merged into
   another since, say) removes nothing: reload the library.
 - **How it goes, on the page.** A request leaves you where you are. The

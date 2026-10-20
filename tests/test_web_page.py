@@ -982,6 +982,13 @@ def test_a_songbook_change_on_its_way_when_the_page_loads_shows_on_its_songbook(
 
 # --- Remove ---------------------------------------------------------------------------------------------
 
+# The library in numbers, as the masthead, the buttons above the list and the count under them say it.
+COUNTS = """(() => ({
+  summary: Array.from(document.querySelectorAll("#summary .stat")).map((s) => s.textContent),
+  chips: Object.fromEntries(Array.from(document.querySelectorAll(".chip[data-show]"))
+    .map((c) => [c.dataset.show, c.querySelector(".n").textContent])),
+  count: document.getElementById("count").textContent }))()"""
+
 
 @pytest.mark.parametrize("left,size", [("#show=wanted", "390,844"), ("#view=rows", "390,844"), ("#q=creep", "1280,800")])
 def test_remove_it_goes_back_to_the_library_where_the_song_says_removing_then_removed(serve, cfg, conn, tmp_path,
@@ -991,9 +998,11 @@ def test_remove_it_goes_back_to_the_library_where_the_song_says_removing_then_re
     # removal goes: no requests page.
     from caracole.songbook import make_songbook, songbooks_file
 
-    for n in range(12):
+    for n in range(8):
         add_song(conn, "Band", f"Song {n:02}")
     creep = add_song(conn, "Radiohead", "Creep")
+    for n in range(4):  # under Creep, on the screen with it
+        add_song(conn, "Wilco", f"Tune {n}")
     make_songbook(songbooks_file(cfg.library_dir), "Campfire", [f"Band - Song {n:02}" for n in range(6)])
     url = serve(FakeCaracole(cfg), "(() => {})();\n")
     item = f'#list [data-id="{creep.id}"]'
@@ -1022,5 +1031,13 @@ def test_remove_it_goes_back_to_the_library_where_the_song_says_removing_then_re
         gone = page.js("""(() => { const c = document.querySelector('#list .gone');
             return [c.querySelector('h2').textContent, c.querySelectorAll('a, button, form').length,
                     c.querySelector('.progress').getAttribute('role')]; })()""")
+        page.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
+        counts = page.js(COUNTS)
     assert gone == ["Creep", 0, "status"]  # nothing left to open or to ask for
     assert find_song(conn, creep.key) is None
+    # It counts no more: the masthead, the buttons and the count agree on twelve songs left.
+    searched = left == "#q=creep"
+    assert counts == {"summary": ["12 songs", "0 found", "12 wanted"],
+                      "chips": {"all": "0" if searched else "12", "found": "0", "wanted": "0" if searched else "12",
+                                "review": "0"},
+                      "count": "0 of 12 songs" if searched else "12 songs"}, counts
