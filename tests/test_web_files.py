@@ -176,3 +176,32 @@ def test_a_page_too_large_is_not_served(library, monkeypatch):
     monkeypatch.setattr(files, "MAX_BYTES", len(PAGE) - 1)
     with pytest.raises(NotServed):
         read_written_page(library, VIEWER, wrote())
+
+
+def test_a_record_kept_as_lists_serves_the_page_and_an_odd_one_none(library):
+    # A kind's lookup may give its records as JSON gives them, as lists: they count all the same.
+    import hashlib
+
+    (library / VIEWER).write_bytes(PAGE)
+    sha = hashlib.sha256(PAGE).hexdigest()
+    assert read_written_page(library, VIEWER, lambda parts: [[sha, len(PAGE)]]) == PAGE
+    for odd in ([None], [[sha]], [[sha, str(len(PAGE))]], [[sha, len(PAGE), "x"]], [{"sha256": sha}],
+                [[sha, True]], [[None, len(PAGE)]]):
+        with pytest.raises(NotServed):
+            read_written_page(library, VIEWER, lambda parts, odd=odd: odd)
+
+
+def test_a_page_that_cant_be_read_is_not_served(library, monkeypatch):
+    # A disk error reading the page is the page's, not the database's: the server answers 404 for it.
+    import errno
+
+    from caracole.web import files
+
+    (library / VIEWER).write_bytes(PAGE)
+
+    def fails(fd):
+        raise OSError(errno.EIO, "Input/output error")
+
+    monkeypatch.setattr(files.os, "fstat", fails)
+    with pytest.raises(NotServed):
+        read_written_page(library, VIEWER, wrote())

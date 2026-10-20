@@ -469,6 +469,21 @@ def test_a_viewer_not_served_says_why_and_what_to_do(app, conn, cfg):
     assert "no such page or file" in other and "sheet viewer" not in other
 
 
+def test_a_viewer_that_cant_be_read_doesnt_blame_the_database(app, conn, cfg, monkeypatch):
+    import errno
+
+    from caracole.web import files
+
+    rendered_song(conn, cfg)
+
+    def fails(fd):
+        raise OSError(errno.EIO, "Input/output error")
+
+    monkeypatch.setattr(files.os, "fstat", fails)
+    response = get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html"))
+    assert response.status == 404 and "database" not in shown(response)
+
+
 def test_a_link_in_a_viewers_place_is_not_followed(app, conn, cfg, tmp_path):
     song = rendered_song(conn, cfg)
     folder = song_dir(cfg.library_dir, song)

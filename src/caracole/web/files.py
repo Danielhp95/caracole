@@ -45,8 +45,9 @@ DOWNLOADS = frozenset(GP_EXTENSIONS)
 
 
 # The lookup of a kind of page caracole writes: given a path's parts, the SHA-256 and the length of
-# each page caracole recorded writing there, none when it wrote none (read_written_page).
-Written = Callable[[tuple[str, ...]], Iterable[tuple[str, int]]]
+# each page caracole recorded writing there, none when it wrote none (read_written_page). Each is a
+# pair, a tuple or a list (as JSON keeps one); any other record counts as none.
+Written = Callable[[tuple[str, ...]], Iterable[tuple[str, int] | list[str | int]]]
 
 
 class NotServed(Exception):
@@ -79,22 +80,38 @@ def read_written_page(library_dir: Path, path: str, written: Written, *, hidden:
     checks one, and nothing is opened for a path with no record. The file is then
     opened as any file is (no link followed, at any step), and must be a regular
     file of a recorded length, whose bytes, read once, have its SHA-256: the test
-    ``library.holds`` makes, on the very bytes served.
+    ``library.holds`` makes, on the very bytes served. A page that can't be read (a
+    disk error) is NotServed too: the error is the page's, not the record's.
     """
     parts = _parts(library_dir, path, hidden)
-    records = set(written(tuple(parts)))
+    records = _records(written(tuple(parts)))
     if not records:
         raise NotServed(path)
-    with open(_open(library_dir, parts), "rb") as f:
-        info = os.fstat(f.fileno())
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
-            raise NotServed(path)
-        if not any(size == info.st_size for _, size in records):
-            raise NotServed(path)
-        data = f.read(MAX_BYTES + 1)
+    try:
+        with open(_open(library_dir, parts), "rb") as f:
+            info = os.fstat(f.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
+                raise NotServed(path)
+            if not any(size == info.st_size for _, size in records):
+                raise NotServed(path)
+            data = f.read(MAX_BYTES + 1)
+    except OSError as e:
+        raise NotServed(path) from e
     if (hashlib.sha256(data).hexdigest(), len(data)) not in records:
         raise NotServed(path)
     return data
+
+
+def _records(found: Iterable[object]) -> set[tuple[str, int]]:
+    """A lookup's records, as (SHA-256, length) pairs; a list counts as a tuple, and anything
+    but a pair of a string and a whole number is left out."""
+    records = set()
+    for record in found:
+        if isinstance(record, (tuple, list)) and len(record) == 2:
+            sha, size = record
+            if isinstance(sha, str) and type(size) is int:
+                records.add((sha, size))
+    return records
 
 
 def _parts(library_dir: Path, path: str, hidden: Iterable[Path]) -> list[str]:
