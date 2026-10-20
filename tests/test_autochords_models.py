@@ -8,7 +8,9 @@ cover the pure helpers and run anywhere.
 
 from __future__ import annotations
 
+import functools
 import importlib
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -40,6 +42,11 @@ def _imports(*names: str) -> bool:
     return True
 
 
+def _installed(*names: str) -> bool:
+    """Whether each package is there, without importing it."""
+    return all(importlib.util.find_spec(name) is not None for name in names)
+
+
 def _model_file(env_var: str, name: str) -> Path | None:
     value = os.environ.get(env_var)
     if value:
@@ -47,12 +54,35 @@ def _model_file(env_var: str, name: str) -> Path | None:
     return next(MODELS_DIR.rglob(name), None) if MODELS_DIR is not None and MODELS_DIR.is_dir() else None
 
 
-HAVE_LIBS = _imports("numpy", "soundfile", "torch", "librosa", "beat_this")
+# Found when pytest collects this module, loaded only by the first test that needs them: every
+# pytest-xdist worker collects it, and torch, librosa and beat_this cost each one that loads
+# them seconds and a gigabyte or more.
+LIBS = ("numpy", "soundfile", "torch", "librosa", "beat_this")
+HAVE_LIBS = _installed(*LIBS)
 BTC_WEIGHTS = _model_file("CARACOLE_BTC_WEIGHTS", "btc_model_large_voca.pt")
 BTC_MAJMIN_WEIGHTS = _model_file("CARACOLE_BTC_MAJMIN_WEIGHTS", "btc_model.pt")
 BEAT_CHECKPOINT = _model_file("CARACOLE_BEAT_CHECKPOINT", "final0.ckpt")
 
-needs_libs = pytest.mark.skipif(not HAVE_LIBS, reason="needs torch, librosa and beat_this")
+
+@functools.cache
+def libs_load() -> bool:
+    """Whether torch, librosa and beat_this import, now that a test needs them."""
+    return HAVE_LIBS and _imports(*LIBS)
+
+
+@pytest.fixture(scope="session")
+def _libs():
+    if not libs_load():
+        pytest.skip("torch, librosa or beat_this won't load")
+
+
+def needs_libs(test):
+    """For a test that needs torch, librosa and beat_this: skipped without them, or when one won't
+    load (a native library missing)."""
+    test = pytest.mark.skipif(not HAVE_LIBS, reason="needs torch, librosa and beat_this")(test)
+    return pytest.mark.usefixtures("_libs")(test)
+
+
 needs_btc = pytest.mark.skipif(BTC_WEIGHTS is None, reason="no BTC weights")
 needs_beat_this = pytest.mark.skipif(BEAT_CHECKPOINT is None, reason="no beat_this checkpoint")
 

@@ -9,7 +9,7 @@
       pkgs = nixpkgs.legacyPackages.${system};
       python = pkgs.python3;
       runtimeDeps = ps: with ps; [ httpx selectolax rapidfuzz spotipy typer mutagen tomlkit pypinyin ];
-      testDeps = ps: with ps; [ pytest ];
+      testDeps = ps: with ps; [ pytest pytest-xdist ];
       autochordsDeps = ps: with ps; [ torch torchaudio beat-this librosa numpy scipy soundfile pyyaml ];
       devPython = python.withPackages (ps: runtimeDeps ps ++ testDeps ps);
       devPythonAutochords = python.withPackages (ps: runtimeDeps ps ++ testDeps ps ++ autochordsDeps ps);

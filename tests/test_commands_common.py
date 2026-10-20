@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 import typer
+from helpers.locks import waiting_for
 from typer.testing import CliRunner
 
 from caracole import db
@@ -235,7 +236,8 @@ def test_a_second_caracole_waits_for_the_first_and_says_so(cfg, capsys):
         thread = threading.Thread(target=second)
         thread.start()
         assert started.wait(5)
-        assert not done.wait(0.5)  # waiting, not running beside it
+        # waiting, not running beside it
+        assert waiting_for(lock_path(cfg), thread.is_alive) and not done.is_set()
     assert done.wait(5)
     thread.join(5)
     said = "Another caracole is running (pid 4242: run); waiting for it to finish."
@@ -288,7 +290,7 @@ def test_a_client_waits_for_another_caracole(cfg, conn):
     with another_caracole(cfg):
         thread = threading.Thread(target=make)
         thread.start()
-        assert not made.wait(0.5)
+        assert waiting_for(lock_path(cfg), thread.is_alive) and not made.is_set()
     assert made.wait(5)
     thread.join(5)
     clients[0].close()

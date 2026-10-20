@@ -191,6 +191,7 @@ def test_a_bug_exits_1_and_leaves_its_traceback_in_the_log_behind_one_line(tmp_p
     assert second == "Traceback (most recent call last):" and rest[-1] == "KeyError: 'boom'"
 
 
+@pytest.mark.slow
 def test_under_systemd_every_line_carries_its_journal_priority(tmp_path):
     # As caracole.service runs it: stdout and stderr both the journal's stream, which JOURNAL_STREAM names.
     # A real process, as the journal is told apart by the file stdout and stderr are. Its library is empty,

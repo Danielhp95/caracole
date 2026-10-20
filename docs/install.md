@@ -494,8 +494,9 @@ cd caracole
 With Nix:
 
 ```sh
-nix develop                                         # Python, the dependencies, pytest, chordpro, ruff, sqlite3
-pytest -q
+nix develop                                         # Python, the dependencies, pytest, pytest-xdist, chordpro, ruff, sqlite3
+pytest -q                                           # every test, on up to 12 cores
+pytest -q -m "not slow"                             # all but the browser, chordpro, model and second-process tests
 nix develop .#autochords -c pytest -m autochords    # the model tests, with the model files
 ```
 
@@ -507,7 +508,7 @@ first, and torch too if you want the auto-chords tests:
 
 ```sh
 python3 -m venv .venv
-.venv/bin/pip install -e . pytest                   # -e '.[autochords]' for auto-chords
+.venv/bin/pip install -e . pytest pytest-xdist      # -e '.[autochords]' for auto-chords
 CARACOLE_CJK_FONT=/usr/local/share/caracole/FusionKaiJ-Regular.ttf .venv/bin/pytest -q
 .venv/bin/caracole --help
 ```
@@ -517,9 +518,9 @@ under root. Tests that need a program or a file skip without it:
 
 | Without | These tests skip |
 |---|---|
-| `chordpro` on PATH | the real PDFs: test_render.py and test_render_all.py (marked `chordpro`), two in test_chordpro.py |
+| `chordpro` on PATH | the real PDFs (marked `chordpro`): in test_render.py and test_render_all.py, two in test_chordpro.py |
 | `CARACOLE_CJK_FONT` | the two Chinese PDFs |
 | torch, librosa and beat_this, or `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` | the model tests (marked `autochords`) |
-| `ffmpeg`, `chromium` | one `.m4a` test, two `index.html` tests in a browser |
+| `ffmpeg`, `chromium` | one `.m4a` test; the `index.html` and `sheet.html` tests in a browser |
 
 [AGENTS.md](../AGENTS.md#development) lists every such test and variable.

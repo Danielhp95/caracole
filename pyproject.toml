@@ -37,10 +37,13 @@ packages = ["src/caracole"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra"
+# tmp_path is in memory (tests/conftest.py): keep only the folders of tests that failed.
+tmp_path_retention_policy = "failed"
 filterwarnings = ["ignore::DeprecationWarning:pypinyin.*"]
 markers = [
-  "chordpro: needs the chordpro binary on PATH",
+  "chordpro: needs the chordpro binary on PATH (and is slow)",
   "autochords: needs torch, beat-this and librosa",
+  "slow: a real browser, chordpro or another process; the quick loop is -m 'not slow'",
 ]
 
 [tool.ruff]

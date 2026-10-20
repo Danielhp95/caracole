@@ -1237,6 +1237,7 @@ def caracole_render(cfg, chordpro: Path, *args: str):
     )
 
 
+@pytest.mark.slow
 def test_render_command_renders_skips_and_forces(conn, cfg, fake_chordpro):
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     human_sheet(conn, cfg, song)
@@ -1251,6 +1252,7 @@ def test_render_command_renders_skips_and_forces(conn, cfg, fake_chordpro):
     assert "1 rendered, 0 up to date, 0 failed" in forced.output
 
 
+@pytest.mark.slow
 def test_render_command_exits_1_when_a_sheet_fails(conn, cfg, fake_chordpro, caplog):
     bad = add_song(conn, "Soda Stereo", "Persiana Americana")
     human_sheet(conn, cfg, bad, tab_id=1)

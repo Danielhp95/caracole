@@ -7,12 +7,12 @@ import hashlib
 import http.server
 import json
 import re
-import shutil
-import subprocess
 import threading
 from pathlib import Path
 
 import pytest
+from helpers import browser
+from helpers.browser import in_chromium
 
 from caracole.chordpro import to_chordpro
 from caracole.viewer import build_viewer, info_key, key_heard, viewer_csp
@@ -281,14 +281,11 @@ def test_capo_hints_are_given_for_each_transposition():
 
 # --- in a real browser ---------------------------------------------------------------------------
 
-CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
-in_chromium = pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
-
-
 def dump_dom(html: str, tmp_path: Path, fragment: str = "") -> str:
     """The page's DOM after its script ran; skips the test when this machine can't run Chromium.
 
-    Each call has a profile of its own, so nothing a page kept in localStorage carries over."""
+    Each call has a browser context of its own (helpers/browser.py), as fresh as a new profile, so
+    nothing a page kept in localStorage carries over."""
     page = tmp_path / "Artist" / "Title" / "sheet.html"
     page.parent.mkdir(parents=True, exist_ok=True)
     page.write_text(html, encoding="utf-8")
@@ -297,19 +294,7 @@ def dump_dom(html: str, tmp_path: Path, fragment: str = "") -> str:
 
 def dump_url(url: str, tmp_path: Path) -> str:
     """The DOM of the page at ``url`` after its script ran, in Chromium (see dump_dom)."""
-    profile = tmp_path / f"chrome-{len(list(tmp_path.glob('chrome-*')))}"
-    try:
-        result = subprocess.run(
-            [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={profile}", "--window-size=390,844", "--virtual-time-budget=3000",
-             "--dump-dom", url],
-            capture_output=True, text=True, timeout=60,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        pytest.skip(f"chromium couldn't run: {e}")
-    if result.returncode != 0 or "<html" not in result.stdout:
-        pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
-    return result.stdout
+    return browser.dump_dom(url, (390, 844))
 
 
 def chord_texts(dom: str) -> dict[str, str]:
@@ -344,7 +329,8 @@ def test_the_page_works_served_in_a_sandbox(tmp_path):
             pass
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Server)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    # shutdown() returns at the next poll: every 10 ms, not every 500
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
     try:
         dom = dump_url(f"http://127.0.0.1:{server.server_port}/Artist/Title/sheet.html#t=2", tmp_path)
     finally:
