@@ -1634,7 +1634,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 
 - **Chords over the lyrics**, in bold rust. A long line wraps between words,
   never between a chord and its syllable, and a chord reaches over the words
-  after it, so the lyrics read without gaps.
+  after it, so the lyrics read without gaps. A chord never reaches past the
+  edge of the screen: at the end of a row with less room left than the chord
+  is wide, it goes on to the next row with its words.
 - **The tab's notes**: what a tab says before its first section or its first
   riff (the tabber's comments, a link, a chord legend) is shown small and
   muted, two lines of it; **More** opens the rest, and works without
@@ -1645,28 +1647,64 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   window to show it whole in two columns is shown in two, side by side; a
   longer one stays in one, as it would otherwise run down the first column
   and back up the second. The viewer measures again when the window or the
-  text size changes.
+  text size changes, and when the settings' rail opens beside the song.
 - **Tap a chord** for its fingerings: up to four shapes from chords-db, after
   any the sheet gives, with the fingers, the barre and the fret they start on
   (swipe, or ‹ ›, for the next). Every place the chord is played lights up
-  while its card is open. The shapes come from
-  [chords-db](https://github.com/tombatossals/chords-db) by David Rubert (MIT
-  licence, whose notice is at the foot of every page); a chord it has no
+  while its card is open. The card leaves the song in view: on a phone it
+  sits at the foot, above the bar, about 200 px tall, and the song scrolls
+  under it (a chord tapped where the card comes up moves above it, with its
+  words); from 900 px wide it opens next to the chord, and goes with it as
+  the page scrolls. It keeps its size from one shape to the next. Tap another
+  chord and the card shows that one; × or Escape closes it. The shapes come
+  from [chords-db](https://github.com/tombatossals/chords-db) by David Rubert
+  (MIT licence, whose notice is at the foot of every page); a chord it has no
   shape for shows the closest one, saying so. A shape the sheet gives comes
   first, on the card ("As the tab plays it") and in the strip: a tab's chord
   legend (`Cadd9 (x32033)`, `Dsus4/F# 2x0233`), which gives no fingers (they
   show where chords-db has the same shape), or a ChordPro `{define}` in a
   sheet of yours. It counts only for the very chord it was given for, and only
   where it plays that chord: transposed, Cadd9 becomes a Dadd9, with
-  chords-db's shapes.
-- **The key button** (bottom right) opens the settings. **Transpose** moves
-  every chord, its shapes and the key by semitones; Reset goes back to the
-  song's `[transpose]`, where the viewer starts, like the PDF. In an awkward
-  key, **Capo** offers frets where open shapes play it (Bb: capo 1 with A
-  shapes, capo 3 with G shapes); tap one, and the chords show the shapes to
-  play with the capo on. The sheet's own capo counts: the fret shown is where
-  the capo goes, and it may be lower than the sheet's, or no capo at all (a
-  sheet in G shapes with capo 2, transposed down two: no capo, G shapes).
+  chords-db's shapes, and so does a capo moved off the sheet's fret.
+- **The key line** under the title says how the song is played. With a capo,
+  it names the key of the shapes you play, the capo and the key the song
+  sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
+  "Key Em". Each says where the key came from.
+- **The bar** at the foot of the page holds what you reach for while
+  playing: `− Em +`, `Aa`, `▶` and `⋯`. − and + move every chord, its shapes
+  and the key a semitone at a time, with the key you play between them in
+  short: "Em" over "shapes · capo 2" (or "key" with no capo), and "· +1"
+  once transposed, or "capo 2 · +1" on a screen too narrow for all of it;
+  a screen reader hears the whole line ("Em shapes · capo 2
+  · sounds F#m · +1"). **Aa** opens a small box over the bar with the text
+  size and A− and A+, nothing dimmed behind it; a tap anywhere else, or
+  Escape, closes it. **▶** scrolls the song by itself (below). **⋯** opens the
+  settings. The bar slides away as you scroll down the song, and comes back
+  when you scroll up, tap the page or reach the end, where the song's last
+  lines and the footer end above it. It stays while the browser puts you
+  back where you were in the song, and while the keyboard's focus is on one
+  of its buttons; Tab reaches each of them from the end of the page, and
+  brings the bar back.
+- **The settings** (⋯), headed by the key line, leave the song in view, so
+  you see its chords change as you transpose, move the capo or change the
+  mode: on a phone they sit at the foot, above the bar, in at most 45 % of
+  the screen, and the song scrolls under them; from 900 px wide they are a
+  rail beside the song, which moves over for them. Nothing behind them is
+  dimmed or out of reach. A chord's card opened with them covers them on a
+  phone, and sits by its chord beside them on a wider screen; Escape closes
+  the card first, then the settings, and gives the focus back to what opened
+  each. Among them: **Transpose**, as − and + do, with the semitones counted; Reset goes back to the song's
+  `[transpose]`, where the viewer starts, like the PDF. **Capo**, on every
+  song, moves the capo a fret at a time, from none to
+  the 11th; Reset puts it back where the sheet has it. The song sounds the same
+  wherever the capo is, and the chords show the shapes to play there: Em shapes
+  with capo 2 become F#m shapes with no capo, or Dm shapes with capo 4. The
+  capo stays on its fret when you transpose, as on a guitar, so the shapes
+  move instead. In an awkward key it also suggests frets where open shapes play
+  it (Bb: capo 1 with A shapes, capo 3 with G shapes); tap one to play them.
+  The fret suggested is where the capo goes, and it may be lower than the
+  sheet's, or no capo at all (a sheet in G shapes with capo 2, transposed down
+  two: no capo, G shapes).
 - **Instead, in the key**: the chord's card also lists chords to play in its
   place that keep to the key: colours on the same root (a seventh, add9, sus2,
   a sixth), an inversion, and chords that share most of its notes (Am or Em
@@ -1676,19 +1714,42 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Phrygian, Lydian, Mixolydian, Locrian). Each chord's notes move to the same
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
   the key, such as the G major chord's B in C minor, stays where it is.
-- Text size, every chord's shape in a strip above the song (the shapes alone,
-  large enough to read at a glance: tap one for its card, with the fingers),
-  and scrolling by itself (with the screen kept on, where the browser allows
-  it).
+- Every chord's shape in a strip above the song (Show all, in the
+  settings): the shapes alone, large enough to read at a glance; tap one for
+  its card, with the fingers. Reset everything, at the foot of the settings,
+  puts the transposition, the mode, the capo and the chords played instead
+  back as the viewer starts them.
+- **Scrolling by itself**: ▶ in the bar counts down 3 seconds to give you
+  time to get your hands on the guitar (press the count to start at once),
+  then scrolls the song at a steady pace, with the screen kept on where the
+  browser allows it. While it is on, a pill steers it, just above the bar's
+  place: − and + change the speed (1 to 30) as it scrolls, ❚❚ pauses and ▶
+  goes on after another countdown, and × ends it. The bar is out of the way
+  while the song scrolls, and back under the pill while it is paused, so you
+  can transpose or change the text size before going on; the pill stays
+  where it is, so a second tap lands on it again. A finger on the
+  page, the mouse wheel, a key that scrolls, a
+  scroll by hand or a chord's card pauses it, so the page is yours to read
+  until you press ▶, which stays within reach (above the card, on a phone,
+  with the bar kept under the card while the song scrolls on);
+  it pauses at the end of the song too. A bigger text
+  scrolls as much faster, so a speed keeps its pace through the song. With
+  reduced motion asked for in your system's settings, the countdown shows the
+  seconds alone, with no ring.
 
-The viewer remembers its settings for each song in the browser. It keeps the
-transposition, the mode and the capo in its address too
-(`sheet.html#t=2&mode=aeolian`), so a reload or Back keeps them where the
-browser keeps nothing, as when `caracole serve` sends it (see
+The viewer remembers its settings for each song in the browser, the scroll
+speed and the text size among them. It keeps the transposition, the mode, the
+capo, the text size and the scroll speed in its address too
+(`sheet.html#t=2&mode=aeolian&fs=20&speed=8`), so a reload or Back keeps them
+where the browser keeps nothing, as when `caracole serve` sends it (see
 [caracole serve](#caracole-serve)). Its key is its sheet's, found as for
 info.json (see [The song's key](#the-songs-key)): the human sheet's from the
 tab, or estimated from its chords, and the auto sheet's heard in the audio;
-the page says which. Beside a human sheet, `sheet (auto).html` keeps to the
+the page says which. With a capo, a tab may name the key the song sounds in
+rather than the shapes' (F# for a song played in C shapes with capo 6): when
+the chords are in the named key lowered by the capo, the viewer takes them as
+the shapes and the named key as the sound ("C shapes · capo 6 · sounds F#").
+Beside a human sheet, `sheet (auto).html` keeps to the
 chords the model heard, which may be in another key than the tab (another
 transposition, or a capo).
 
@@ -2086,7 +2147,8 @@ caracole wrote there, as recorded when it wrote it (anyone with a synced device
 could put a page of their own in the library), and in a sandbox: its scripts
 run, but it can reach neither the server nor your sign-in, and keeps no
 storage, so the song it shows is the one in its address (`#song-3`), where the
-viewer keeps the song's transposition, mode and capo too (`#song-3=&t=2`). Edited
+viewer keeps the song's transposition, mode, capo, text size and scroll speed
+too (`#song-3=&t=2&fs=20&speed=8`). Edited
 on a device, or replaced by a link, it gets a page saying so until the next
 `caracole render` (or `caracole songbook render`) writes it again.
 
@@ -2104,8 +2166,9 @@ of its own, with no cookie and no way to ask the server for anything. The
 header allows the script and style the page itself was written with, so a
 viewer an older caracole wrote keeps working after an upgrade until the next
 render writes it again. It works as it does from the folder, but keeps only
-the transposition, the mode and the capo, in its address: a reload or Back
-keeps them, and opening it again from the library starts afresh. Its links to
+the transposition, the mode, the capo, the text size and the scroll speed, in
+its address: a reload or Back keeps them, and opening it again from the library starts
+afresh. Its links to
 the PDF and back to the library work with an access token too: the sign-in
 cookie goes with a link followed from another page, but not with a form
 another site posts or anything it loads from the server.
@@ -2157,20 +2220,21 @@ in `Library/_songbooks/<name>/`:
   key the song opens in, its `[transpose]` applied, and its sheet's capo); tap
   a song to open it in the sheet viewer, with everything the viewer does
   (chord shapes, transposition, chords to play instead, modes, scrolling by
-  itself), each song in its own key and keeping its own settings. Previous and
-  Next name the songs they go to ("‹ Hotel California", "Next: little wolf ›",
-  a title too long for the phone cut short with "…"), above each song and
-  again at its end, where on a phone Next has a row of its own, with room for
-  the title. They, a swipe across the sheet or the arrow keys go from
-  song to song, skipping the missing ones, and Contents goes back. Opened again, the page takes you back
+  itself), each song in its own key and keeping its own settings, its scroll
+  speed and text size among them. Previous and Next name the songs they go to
+  ("‹ Hotel California", "Next: little wolf ›", a title too long for the phone
+  cut short with "…"), above each song and again at its end, where on a phone
+  Next has a row of its own, with room for the title. They, a swipe across the
+  sheet or the arrow keys go from song to song, skipping the missing ones, and
+  Contents goes back. Opened again, the page takes you back
   to the song you had open, where you were in it, and its address names it
   (`#song-3`); the contents mark it as
   "last opened". Without JavaScript, or printed, it is every song one after
   the other. Served by `caracole serve`, it runs in a sandbox without the
   browser's storage: each song keeps its address (`#song-3`), and the
-  viewer keeps the song's transposition, mode and capo there
-  (`#song-3=&t=2`), so a reload or Back keeps them, but not your place or
-  its other settings; the next song opens in its own key.
+  viewer keeps the song's transposition, mode, capo, text size and scroll
+  speed there (`#song-3=&t=2&fs=20&speed=8`), so a reload or Back keeps them, but not your place
+  or its other settings; the next song opens in its own key.
 - **`songbook.cho`**: every song's ChordPro, in its key, split by
   `{new_song}`, to import into a songbook app such as SongbookPro or OnSong.
   chordpro writes it, so the chords are already transposed; songs without a

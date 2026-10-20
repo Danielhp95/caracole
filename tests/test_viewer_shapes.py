@@ -27,6 +27,8 @@ FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 UG_CHO = (FIXTURES / "ug_sheet.cho").read_text(encoding="utf-8")  # G, D, Em, C, G/B, Am, F; no legend
 LEGEND = (FIXTURES / "legend_sheet.cho").read_text(encoding="utf-8")  # a Wonderwall-like legend, made-up words
 CADD9 = 3  # its index among the legend sheet's chords: Em7, G, A7sus4, Cadd9, Dsus4, Dsus4/F#
+CAPO = "With the capo on fret 2."  # the legend sheet's capo, which every shape of it is played with
+TABS = "As the tab plays it. " + CAPO
 NONE = "000000"  # a tab says nothing of the fingers
 DB = load_voicings()
 
@@ -144,8 +146,8 @@ def test_the_card_shows_the_tabs_shape_first_then_chords_dbs(tmp_path):
         first = tab.eval(CARD)
         tab.click("#next")
         second = tab.eval(CARD)
-    assert first == {"name": "Cadd9", "dots": 4, "fingers": 0, "note": "As the tab plays it.", "count": "1 of 5"}
-    assert second == {"name": "Cadd9", "dots": 3, "fingers": 3, "note": "", "count": "2 of 5"}  # chords-db's x32030
+    assert first == {"name": "Cadd9", "dots": 4, "fingers": 0, "note": TABS, "count": "1 of 5"}
+    assert second == {"name": "Cadd9", "dots": 3, "fingers": 3, "note": CAPO, "count": "2 of 5"}  # chords-db's x32030
 
 
 @in_chromium
@@ -153,7 +155,7 @@ def test_a_chord_the_tab_gave_no_shape_for_shows_chords_dbs(tmp_path):
     # The tab's x32033 is a Cadd9's: up two, the chord is a Dadd9, which the tab gave no shape for.
     with Chromium(tmp_path / "profile") as browser:
         seen = opened(browser, build_viewer(LEGEND), tmp_path, f"#t=2&chord={CADD9}").eval(CARD)
-    assert seen["name"] == "Dadd9" and seen["note"] == "" and seen["count"] == f"1 of {len(DB['add9'][2])}", seen
+    assert seen["name"] == "Dadd9" and seen["note"] == CAPO and seen["count"] == f"1 of {len(DB['add9'][2])}", seen
 
 
 # Where the card and its parts are on the screen: top and height.
@@ -175,5 +177,5 @@ def test_stepping_from_the_tabs_shape_to_chords_dbs_never_moves_the_card(tmp_pat
             tab.click(button)
             places.append(tab.eval(CARD_PLACE))
             notes.append(tab.eval(CARD)["note"])
-    assert notes == ["As the tab plays it.", "", "", "", "As the tab plays it."]
+    assert notes == [TABS, CAPO, CAPO, CAPO, TABS]
     assert all(place == places[0] for place in places), places

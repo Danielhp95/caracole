@@ -391,7 +391,7 @@ def test_the_served_songbook_works_in_its_sandbox_in_a_real_browser(setup, campf
     sheet = re.search(r'<article[^>]*id="sheet"[^>]*>(.*?)</article>', dom, re.DOTALL).group(1)
     chords = re.findall(r'<b class="c[^"]*" data-c="\d+"[^>]*>([^<]*)</b>', sheet)
     assert chords[:4] == ["Bm", "G", "D", "A"]  # Creep's Am, F, C, G, up 2: its [transpose]
-    assert re.search(r'id="fab"[^>]*>Key Bm · \+2</button>', dom)
+    assert '<span class="vh" id="key-full">Key Bm · +2</span>' in dom
 
 
 def test_the_songbook_page_is_one_of_the_pages_caracole_writes():
@@ -419,7 +419,7 @@ def test_a_served_songbook_keeps_a_songs_transposition_in_its_address_across_a_r
     url = f"http://127.0.0.1:{server.server_address[1]}{PAGE}"
     chords = ("Array.from(document.querySelectorAll('#sheet .c[data-c]')).slice(0, 4)"
               ".map((c) => c.textContent).join(' ')")
-    fab = "document.querySelector('#fab').textContent"
+    key = "document.querySelector('#key-full').textContent"
     afresh = "window.before === undefined && document.documentElement.dataset.ready === '1'"  # a new page
     try:
         with Chromium(tmp_path / "profile") as browser:
@@ -429,23 +429,22 @@ def test_a_served_songbook_keeps_a_songs_transposition_in_its_address_across_a_r
             tab.eval("window.before = true; document.querySelector('#contents a[href=\"#song-1\"]').click()")
             tab.wait_for(afresh)
             assert tab.eval("location.hash") == "#song-1="  # as the viewer writes the address back
-            assert tab.eval(chords) == "Bm G D A" and tab.eval(fab) == "Key Bm · +2"  # Creep's [transpose]
-            tab.click("#fab")
-            tab.click("#up")  # a semitone more
-            assert tab.eval(chords) == "Cm Ab Eb Bb" and tab.eval(fab) == "Key Cm · +3"
+            assert tab.eval(chords) == "Bm G D A" and tab.eval(key) == "Key Bm · +2"  # Creep's [transpose]
+            tab.click("#t-up")  # a semitone more, from the bar
+            assert tab.eval(chords) == "Cm Ab Eb Bb" and tab.eval(key) == "Key Cm · +3"
             assert tab.eval("location.hash") == "#song-1=&t=3"
             tab.eval("window.before = true; setTimeout(() => location.reload(), 0)")
             tab.wait_for(afresh)
             assert tab.eval("document.documentElement.dataset.view") == "song"
-            assert tab.eval(chords) == "Cm Ab Eb Bb" and tab.eval(fab) == "Key Cm · +3"
+            assert tab.eval(chords) == "Cm Ab Eb Bb" and tab.eval(key) == "Key Cm · +3"
             tab.eval("window.before = true; document.querySelector('#song-1 a[rel=\"next\"]').click()")
             tab.wait_for(afresh)
             assert tab.eval("location.hash") == "#song-3="  # Hysteria has no sheet: De Música Ligera
-            assert "+" not in tab.eval(fab)  # in its own key: the settings were song 1's
+            assert "+" not in tab.eval(key)  # in its own key: the settings were song 1's
             tab.eval("history.back()")  # loaded again, or as it was left (the back-forward cache)
             tab.wait_for("location.hash === '#song-1=&t=3' && document.documentElement.dataset.ready === '1' && "
                          "document.documentElement.dataset.view === 'song'")
-            assert tab.eval(chords) == "Cm Ab Eb Bb" and tab.eval(fab) == "Key Cm · +3"
+            assert tab.eval(chords) == "Cm Ab Eb Bb" and tab.eval(key) == "Key Cm · +3"
     finally:
         server.shutdown()
         server.server_close()

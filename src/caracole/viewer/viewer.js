@@ -26,11 +26,17 @@
     aeolian: ["Minor", "the natural minor"],
     locrian: ["Locrian", "tense and unstable"],
   };
-  const FS = { min: 13, max: 30, step: 2 };
+  const FS = { min: 13, max: 30, step: 2, start: 18 };
+  // The scroll's speed, 1 to 30: ``px`` pixels a second a step at the usual text size (see pace()).
+  const SPEED = { min: 1, max: 30, start: 6, px: 2 };
+  // The capo goes on any fret up to the 11th (past it the shapes come round again), or the sheet's.
+  const CAPO_MAX = Math.max(11, Number(data.capoSheet) || 0);
 
   // --- the state: where the song is played, kept per page ------------------------------------
-  // capo: the fret chosen among the hints (0 for no capo), or null to play the sheet's shapes.
-  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null, fs: 18, strip: false };
+  // capo: the fret the capo is on (0 for none), or null for the sheet's own. It stays there
+  // through a transposition, as on a guitar: the shapes move instead.
+  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null, fs: FS.start, strip: false,
+    speed: SPEED.start };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -38,14 +44,17 @@
   const validMode = (m) => Boolean(key) && data.modes.indexOf(m) >= 0;
   const clampT = (t) => Math.max(-11, Math.min(11, Math.round(Number(t) || 0)));
   const fretOf = (v) => (v === null || v === undefined || v === "" || !(Number(v) >= 0) ? null
-    : Math.round(Number(v)));
+    : Math.min(CAPO_MAX, Math.round(Number(v))));
+  const sizeOf = (v) => (Number(v) >= FS.min && Number(v) <= FS.max ? Math.round(Number(v)) : null);
+  const speedOf = (v) => (Number(v) >= SPEED.min && Number(v) <= SPEED.max ? Math.round(Number(v)) : null);
   try {
     const saved = JSON.parse(localStorage.getItem(store) || "null");
     if (saved && typeof saved === "object") {
       if (saved.base === data.transpose) state.t = clampT(saved.t);  // a new [transpose] starts afresh
       if (validMode(saved.mode)) state.mode = saved.mode;
       if (saved.alt && typeof saved.alt === "object" && saved.chords === sheetChords) state.alt = saved.alt;
-      if (Number(saved.fs) >= FS.min && Number(saved.fs) <= FS.max) state.fs = Number(saved.fs);
+      if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
+      if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
       state.strip = saved.strip === true;
       state.capo = fretOf(saved.capo);
     }
@@ -54,18 +63,23 @@
   if (hash.has("t")) state.t = clampT(hash.get("t"));
   if (validMode(hash.get("mode"))) state.mode = hash.get("mode");
   if (hash.has("capo")) state.capo = fretOf(hash.get("capo"));
+  if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
+  if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
   const save = () => {
     try {
       localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose, chords: sheetChords }, state)));
     } catch (err) { /* private mode, or a server's sandbox */ }
-    // The address keeps where the song is played too, read back above: without storage (a
-    // server's sandbox), a reload and Back still keep it. Replaced, so Back isn't a step per tap.
+    // The address keeps where the song is played too, and the text size and the scroll speed,
+    // read back above: without storage (a server's sandbox), a reload and Back still keep them.
+    // Replaced, so Back isn't a step per tap.
     try {
       const params = new URLSearchParams(location.hash.slice(1));
       const keep = (name, value, kept) => (kept ? params.set(name, String(value)) : params.delete(name));
       keep("t", state.t, state.t !== (Number(data.transpose) || 0));
       keep("mode", state.mode, state.mode !== null);
       keep("capo", state.capo, state.capo !== null);
+      keep("fs", state.fs, state.fs !== FS.start);
+      keep("speed", state.speed, state.speed !== SPEED.start);
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -77,8 +91,9 @@
   const modeNow = () => (key ? state.mode || key.mode : "");
   const asWritten = () => !state.mode || (key && state.mode === key.mode);
   const sheetCapo = Number(data.capoSheet) || 0;
+  const capoNow = () => (state.capo === null ? sheetCapo : state.capo);
   // The chords are named for the shapes played: with another capo, as many semitones off.
-  const shift = () => state.t - (state.capo === null ? 0 : state.capo - sheetCapo);
+  const shift = () => state.t - (capoNow() - sheetCapo);
   const names = (s) => (key ? data.names[modeNow()][mod12(key.tonic + s)] : data.names[""]).split(" ");
   const keyName = (s) => (key ? data.keyNames[modeNow()][mod12(key.tonic + s)] : "");
   const choices = () => state.alt[modeNow()] || {};
@@ -106,6 +121,51 @@
     return nameOf(rep, shift());
   };
   const capoHints = () => (key ? data.capo[modeNow()][mod12(state.t)] : []);
+  // Where the song is played, as Cifra Club's key line says it: with a capo, the key of the
+  // shapes, the capo and the key the song sounds in ("Em shapes · capo 2 · sounds F#m"), as
+  // "Key Em" alone would read as the song's key; with none, the key. Each part is
+  // [before, in bold, after, where the key came from]; ``moved`` says the transposition.
+  // page.py writes the same line for the sheet as written.
+  const keyLine = (moved) => {
+    const capo = capoNow();
+    if (!key) return capo ? [["Capo ", String(capo), "", ""]] : sheetCapo ? [["No capo", "", "", ""]] : [];
+    const sounds = keyName(state.t + sheetCapo);
+    if (!capo) return [["Key ", sounds, moved, key.from]].concat(sheetCapo ? [["no capo", "", "", ""]] : []);
+    return [["", keyName(shift()), " shapes", ""], ["capo ", String(capo), "", ""], ["sounds ", sounds, moved, ""]]
+      .concat(key.from ? [["", "", "", "key " + key.from]] : []);
+  };
+  // The same as one line of text, for a screen reader in the bar (``moved``: with the
+  // transposition) and the settings' heading; without a key, Transpose and the capo.
+  const keyLabel = (moved) => {
+    const shown = moved && state.t ? signed(state.t) : "";
+    if (!key) {
+      const capo = capoNow();
+      return ["Transpose" + (shown ? " " + shown : "")]
+        .concat(capo ? ["capo " + capo] : sheetCapo ? ["no capo"] : []).join(" · ");
+    }
+    return keyLine("").filter((part) => part[1] || !part[3]).map((part) => part[0] + part[1] + part[2])
+      .concat(shown ? [shown] : []).join(" · ");
+  };
+  // In short, for the bar, between − and +: the key you play, and under it what it is, the capo
+  // and the transposition (["Em", "shapes", ["capo 2"]], ["Em", "key", ["+1"]]); the key it sounds
+  // in is the key line's.
+  const keyShort = () => {
+    const capo = capoNow();
+    const rest = (capo ? ["capo " + capo] : sheetCapo ? ["no capo"] : []).concat(state.t ? [signed(state.t)] : []);
+    if (!key) return ["Transpose", "", rest];
+    if (capo) return [keyName(shift()), "shapes", rest];
+    return [keyName(state.t + sheetCapo), "key", rest];
+  };
+  // The line under the key, whole where there is room ("shapes · capo 2 · +1"); on a narrow screen
+  // the capo and the transposition alone ("capo 2 · +1"), so that neither is cut off. Fitted again
+  // when the bar comes back into view or the window changes.
+  let keyUnder = ["", []];
+  const fitKey = () => {
+    const line = $("key-now").querySelector(".d");
+    const [what, rest] = keyUnder;
+    line.textContent = (what ? [what] : []).concat(rest).join(" · ");
+    if (what && rest.length && line.scrollWidth > line.clientWidth) line.textContent = rest.join(" · ");
+  };
 
   // --- chord diagrams --------------------------------------------------------------------------
   const NS = "http://www.w3.org/2000/svg";
@@ -178,7 +238,8 @@
   };
 
   // --- drawing the page --------------------------------------------------------------------------
-  const fab = $("fab"), panel = $("panel"), card = $("card"), scrim = $("scrim");
+  const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
+  const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -193,41 +254,49 @@
     b.addEventListener("click", onClick);
     return b;
   };
+  // A row of chips drawn anew, as one of them is pressed: the focus, when it was on one, goes to the
+  // one in its place, and stays in the settings or the card rather than falling back to the page.
+  const refill = (box, chips) => {
+    const at = Array.prototype.indexOf.call(box.children, document.activeElement);
+    box.textContent = "";
+    for (const chip of chips) box.appendChild(chip);
+    const to = at >= 0 ? box.children[Math.min(at, box.children.length - 1)] : null;
+    if (to) to.focus({ preventScroll: true });
+  };
 
   const render = () => {
-    // A capo no longer on offer (after a transposition or a mode change) goes before the
-    // chords are named: they are named for the shapes played with it.
-    if (state.capo !== null && !capoHints().some((h) => h[0] === state.capo)) state.capo = null;
+    if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
     for (const el of chordEls) {
       const i = el.dataset.c;
       el.textContent = label(i, current(i));
       el.classList.toggle("changed", choice(i) >= 0);
     }
     doc.style.setProperty("--fs", state.fs + "px");
+    $("fs-now").textContent = state.fs + " px";
+    $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
+    $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
 
-    const shapes = state.capo === null ? null : capoHints().find((h) => h[0] === state.capo);
-    fab.textContent = key ? "Key " + keyName(state.t) + (state.t ? " · " + signed(state.t) : "")
-      : state.t ? "Transpose " + signed(state.t) : "Transpose";
-    $("key-now").textContent = key ? keyName(state.t) : "";
-    $("panel-title").firstChild.textContent = key ? "Key " : "Transpose";
-    const facts = [];
-    if (key) facts.push(["Key ", keyName(state.t), state.t ? " (" + signed(state.t) + ")" : "", key.from]);
-    if (shapes && shapes[0]) facts.push(["Capo ", String(shapes[0]), ", " + shapes[1] + " shapes", ""]);
-    else if (shapes) facts.push(["", "No capo", ", " + shapes[1] + " shapes", ""]);
-    else if (sheetCapo) facts.push(["Capo ", String(sheetCapo), "", ""]);
+    const [main, what, rest] = keyShort();
+    $("key-now").querySelector(".k").textContent = main;
+    keyUnder = [what, rest];
+    fitKey();
+    $("key-full").textContent = keyLabel(true);
+    $("panel-title").textContent = key ? keyLabel(false) : "Transpose";
     const box = $("facts");
     box.textContent = "";
-    facts.forEach((f, n) => {
+    keyLine(state.t ? " (" + signed(state.t) + ")" : "").forEach((f, n) => {
       if (n) box.appendChild(document.createTextNode(" · "));
-      box.appendChild(document.createTextNode(f[0]));
-      const b = document.createElement("b");
-      b.textContent = f[1];
-      box.appendChild(b);
+      if (f[0]) box.appendChild(document.createTextNode(f[0]));
+      if (f[1]) {
+        const b = document.createElement("b");
+        b.textContent = f[1];
+        box.appendChild(b);
+      }
       if (f[2]) box.appendChild(document.createTextNode(f[2]));
       if (f[3]) {
         const from = document.createElement("span");
         from.className = "from";
-        from.textContent = " " + f[3];
+        from.textContent = (f[0] || f[1] ? " " : "") + f[3];
         box.appendChild(from);
       }
     });
@@ -235,49 +304,42 @@
     $("shift").textContent = signed(state.t);
     $("shift-hint").textContent = data.transpose
       ? "Your PDF is transposed " + signed(data.transpose) + "; Reset goes back there." : "";
+    $("capo-at").textContent = String(capoNow());
     const hints = capoHints();
-    $("capo-row").hidden = !hints.length;
-    const capoBox = $("capo");
-    capoBox.textContent = "";
-    for (const [fret, shapesKey] of hints) {
-      capoBox.appendChild(button(fret ? "Capo " + fret : "No capo", state.capo === fret, () => {
-        state.capo = state.capo === fret ? null : fret;
-        render();
-      }, shapesKey + " shapes"));
-    }
-    $("capo-hint").textContent = hints.length
-      ? (state.capo === null
-        ? (sheetCapo ? "Easier shapes with the capo elsewhere: tap one to show them."
-          : "Easier shapes with a capo: tap one to show them.")
-        : "The chords show the shapes to play " + (state.capo ? "with the capo on." : "with no capo."))
-      : "";
+    refill($("capo"), hints.map(([fret, shapesKey]) => button(fret ? "Capo " + fret : "No capo", state.capo === fret, () => {
+      state.capo = state.capo === fret ? null : fret;
+      render();
+    }, shapesKey + " shapes")));
+    // The same words wherever the capo is, so the row keeps its height under your thumb.
+    $("capo-hint").textContent = "Wherever the capo is, the song sounds the same: the chords show the shapes to play."
+      + (hints.length ? " Easier shapes:" : "");
 
     $("mode-row").hidden = !key;
-    const modeBox = $("modes");
-    modeBox.textContent = "";
+    refill($("modes"), key ? data.modes.map((mode) => button((MODES[mode] || [mode])[0], modeNow() === mode, () => {
+      state.mode = mode === key.mode ? null : mode;
+      render();
+    }, mode === key.mode ? "as written" : "")) : []);
     if (key) {
-      for (const mode of data.modes) {
-        const info = MODES[mode] || [mode, ""];
-        modeBox.appendChild(button(info[0], modeNow() === mode, () => {
-          state.mode = mode === key.mode ? null : mode;
-          render();
-          if (!card.hidden) drawCard();
-        }, mode === key.mode ? "as written" : ""));
-      }
       const info = MODES[modeNow()] || ["", ""];
-      $("mode-hint").textContent = keyName(state.t) + ": " + info[1] + "." +
+      $("mode-hint").textContent = keyName(state.t + sheetCapo) + ": " + info[1] + "." +
         (asWritten() ? "" : " Each chord moves to the same degree of the new scale.");
     }
 
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
+    drawSpeed();
     drawStrip();
-    layout();
+    layout();  // fit() too
+    if (!card.hidden) drawCard();  // an open card follows the key, the mode and the capo
+    dock();
     save();
+    hush();  // the lines moved under the page's scroll position, not by your hand
   };
 
   // A chord may reach over the words after it, up to the next chord on its row: lyrics then
-  // read without gaps. Where two chords would touch, the first one's column is widened.
+  // read without gaps. Where two chords would touch, the first one's column is widened. A chord
+  // never reaches past the line's edge, which would widen the page: where the row has less room
+  // left than the chord is wide, its column takes the chord's width, and goes on to the next row.
   const sheetEl = $("sheet");
   const fit = () => {
     sheetEl.classList.add("tight");
@@ -289,7 +351,8 @@
       kids.forEach((col, k) => {
         if (!col.classList.contains("s")) return;
         const box = col.getBoundingClientRect();
-        const need = col.firstElementChild.offsetWidth + space;
+        const chord = col.firstElementChild.offsetWidth;
+        const need = chord + space;
         let room = right - box.left;  // no chord after it on its row: up to the edge
         for (let m = k + 1; m < kids.length; m++) {
           const next = kids[m].getBoundingClientRect();
@@ -299,7 +362,9 @@
             break;
           }
         }
-        if (room < need) col.lastElementChild.style.minWidth = Math.ceil(box.width + need - room) + "px";
+        let width = room < need ? box.width + need - room : 0;
+        if (box.left + chord > right + 0.5) width = Math.max(width, chord);  // past the edge: on to the next row
+        if (width) col.lastElementChild.style.minWidth = Math.ceil(width) + "px";
       });
     }
   };
@@ -330,11 +395,17 @@
   let fitting = 0;
   window.addEventListener("resize", () => {
     cancelAnimationFrame(fitting);
-    fitting = requestAnimationFrame(layout);
+    fitting = requestAnimationFrame(() => {
+      layout();
+      fitKey();
+      place();
+      dock();
+    });
   });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout, () => {});
-  // The tab's preamble opened or folded again (page.py): the song moves, and may no longer fit two columns.
-  for (const fold of sheetEl.querySelectorAll("details")) fold.addEventListener("toggle", layout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { layout(); fitKey(); }, () => {});
+  // The tab's preamble opened or folded again (page.py): the song moves, and may no longer fit two
+  // columns; an open card goes with its chord.
+  for (const fold of sheetEl.querySelectorAll("details")) fold.addEventListener("toggle", () => { layout(); place(); });
   // Printed, the notes print whole: where the stylesheet can't show a folded one's text (no
   // ::details-content), they open for the printout and fold again after it.
   if (!(window.CSS && CSS.supports && CSS.supports("selector(::details-content)"))) {
@@ -362,21 +433,36 @@
       const name = label(String(i), rep);
       if (shapes.list.length) b.appendChild(diagram(shapes.list[0], name, true));
       b.appendChild(document.createTextNode(name));
-      b.addEventListener("click", () => openCard(String(i)));
+      b.addEventListener("click", () => openCard(String(i), b));
       strip.appendChild(b);
     }
   };
 
   // --- the chord card: shapes, and chords to play instead ----------------------------------------
-  const shown = { i: null, pick: -1, at: 0 };
-  const openCard = (i) => {
+  // ``el`` is the chord tapped (or the strip's button): the card is placed by it, from 900 px wide,
+  // and the focus goes back to it. Another chord tapped while the card is open fills it in its place.
+  const shown = { i: null, pick: -1, at: 0, el: null };
+  const openCard = (i, el) => {
     if (!own.call(written, i)) return;
     shown.i = i;
     shown.pick = choice(i);
     shown.at = 0;
-    for (const el of chordEls) el.classList.toggle("on", el.dataset.c === i);
-    open(card);
-    drawCard();
+    shown.el = el || chordEls.find((c) => c.dataset.c === i) || null;
+    for (const c of chordEls) c.classList.toggle("on", c.dataset.c === i);
+    drawCard();  // filled before it takes the focus, so a screen reader hears the chord
+    open(card, el || null);
+    // On a phone, a chord tapped where the card now docks comes up above it (the dock's scroll padding),
+    // lit, with the words of its line; one in sight already stays where it is.
+    if (!wide.matches && shown.el && el) {
+      (shown.el.closest(".l") || shown.el).scrollIntoView({ block: "nearest", behavior: calm.matches ? "auto" : "smooth" });
+    }
+  };
+  // What the card is placed by: the chord, or the strip's button for it, which the strip draws anew.
+  const anchor = () => {
+    if (shown.el && shown.el.isConnected) return shown.el;
+    const again = $("strip").children[Number(shown.i)];
+    if (shown.el && again) return (shown.el = again);
+    return chordEls.find((c) => c.dataset.c === shown.i) || $("sheet");
   };
   const drawCard = () => {
     const i = shown.i;
@@ -400,7 +486,7 @@
     }
     $("prev").disabled = shown.at <= 0;
     $("next").disabled = shown.at >= shapes.list.length - 1;
-    const capoNote = state.capo === null ? "" : state.capo ? " With the capo on fret " + state.capo + "." : " With no capo.";
+    const capoNote = capoNow() ? " With the capo on fret " + capoNow() + "." : sheetCapo ? " With no capo." : "";
     // The shape's note, and a hidden copy of the note on the chord's other shapes (viewer.css): from the
     // tab's shapes to chords-db's, the card keeps its height, and ‹ › stay under the thumb.
     const tabs = shown.at < shapes.mine;
@@ -417,16 +503,21 @@
     if (shapes.mine && shapes.mine < shapes.list.length) line(said(!tabs), true);
 
     const altBox = $("alts");
-    altBox.textContent = "";
     $("alts-title").hidden = !list.length;
-    if (list.length) {
-      altBox.appendChild(button(label(i, base(i)), shown.pick < 0, () => pick(-1), "as written"));
-      list.forEach((alt, j) => altBox.appendChild(button(label(i, alt), shown.pick === j, () => pick(j))));
-    }
+    refill(altBox, list.length ? [button(label(i, base(i)), shown.pick < 0, () => pick(-1), "as written")]
+      .concat(list.map((alt, j) => button(label(i, alt), shown.pick === j, () => pick(j)))) : []);
     const use = $("use");
+    const using = document.activeElement === use;
     use.hidden = shown.pick === choice(i);
+    // Played for every one, it hides: the focus goes to the chord now played.
+    if (using && use.hidden) {
+      const played = altBox.querySelector('[aria-pressed="true"]');
+      if (played) played.focus({ preventScroll: true });
+    }
     const was = label(i, base(i));
     use.textContent = shown.pick >= 0 ? "Play " + name + " for every " + was : "Back to " + was + " everywhere";
+    place();
+    dock();
   };
   const pick = (j) => {
     shown.pick = j;
@@ -440,7 +531,6 @@
     else delete mine[shown.i];
     state.alt[mode] = mine;
     render();
-    drawCard();
   });
   $("prev").addEventListener("click", () => { shown.at = Math.max(0, shown.at - 1); drawCard(); });
   $("next").addEventListener("click", () => { shown.at += 1; drawCard(); });
@@ -453,51 +543,155 @@
     if (Math.abs(dx) > 36) (dx < 0 ? $("next") : $("prev")).click();
   });
 
-  // --- the sheets that slide up ------------------------------------------------------------------
-  // Each is a modal dialog: it takes the focus (its heading), the page behind is out of reach
-  // (inert) while it is open, and closing it gives the focus back to what opened it.
+  // --- the settings and a chord's card: beside the song, never over it ------------------------------
+  // Neither is modal: nothing dims the song and the page stays within reach, so you see the chords
+  // change as you transpose and tap one chord after another. On a phone each docks at the foot, above
+  // the bar, the one opened last over the other, and the song scrolls under it; from 900 px wide
+  // (viewer.css) the settings are a rail beside the song and the card a popover by its chord. Each
+  // takes the focus as it opens (its heading); Escape closes the one on top, and the focus goes back
+  // to what opened it when it was in there.
   const pageEl = document.querySelector(".page");
-  let opener = null;
-  const open = (which) => {
-    if (panel.hidden && card.hidden) opener = document.activeElement;
-    for (const other of [panel, card]) if (other !== which) other.hidden = true;
+  const wide = window.matchMedia("(min-width: 900px)");
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const layers = [];  // the open ones, the last on top: {el, opener}
+  const topLayer = () => (layers.length ? layers[layers.length - 1].el : null);
+  const inSight = (which) => !which.hidden && (wide.matches || topLayer() === which);
+  // On a phone the page leaves room under the song for the one docked at its foot, so the end of
+  // the song comes up above it, and the pill rides above it (--dock: its height). The bar is out of
+  // the way while the song moves by itself, unless one is docked on it: then nothing moves as the
+  // scroll pauses and resumes. Paused, or at the end of the song, it is back, under the pill.
+  function dock() {
+    const there = wide.matches ? null : topLayer();
+    const away = moving() && !there;
+    if (bar.hidden !== away) {
+      bar.hidden = away;
+      if (!away) {
+        slide(false);
+        fitKey();
+      }
+    }
+    if (there) {
+      doc.dataset.dock = there.id;
+      doc.style.setProperty("--dock", there.offsetHeight + "px");
+    } else if (doc.dataset.dock) {
+      delete doc.dataset.dock;
+      doc.style.removeProperty("--dock");
+    }
+  }
+  // From 900 px wide the card is a popover by its chord: under it, or above it where the bar leaves
+  // no room below, and across it, within the song's column. It is placed in the page, so it goes
+  // with its chord as the page scrolls.
+  function place() {
+    if (card.hidden || !wide.matches) return;
+    const a = anchor().getBoundingClientRect();
+    const column = pageEl.getBoundingClientRect();
+    const width = card.offsetWidth, height = card.offsetHeight, gap = 8;
+    const floor = bar.hidden || bar.classList.contains("away") ? window.innerHeight : bar.getBoundingClientRect().top;
+    let top = a.bottom + gap;
+    if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
+    const left = Math.max(column.left + gap, Math.min(a.left - 16, column.right - gap - width));
+    card.style.setProperty("--pop-top", Math.round(top + window.scrollY) + "px");
+    card.style.setProperty("--pop-left", Math.round(left + window.scrollX) + "px");
+  }
+  const restack = () => {
+    const rail = doc.dataset.panel;
+    for (const which of [panel, card]) which.classList.toggle("top", which === topLayer());
+    more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
+    if (panel.hidden) delete doc.dataset.panel;
+    else doc.dataset.panel = "open";
+    if (wide.matches && rail !== doc.dataset.panel) layout();  // the song's column narrows beside the rail
+    place();
+    dock();
+  };
+  const open = (which, opener) => {
+    const at = layers.findIndex((layer) => layer.el === which);
+    if (at >= 0) layers.splice(at, 1);  // open already: on top again
+    layers.push({ el: which, opener: opener instanceof Element && opener !== document.body ? opener : null });
+    showSizes(false);
     which.hidden = false;
-    scrim.hidden = false;
-    pageEl.inert = true;
-    fab.inert = true;
-    fab.setAttribute("aria-expanded", which === panel ? "true" : "false");
-    stopScroll();
+    slide(false);  // the bar it sits on
+    restack();
+    pauseScroll();
     which.querySelector("h2").focus({ preventScroll: true });
   };
-  const close = () => {
-    const wasOpen = !(panel.hidden && card.hidden);
-    panel.hidden = true;
-    card.hidden = true;
-    scrim.hidden = true;
-    pageEl.inert = false;
-    fab.inert = false;
-    fab.setAttribute("aria-expanded", "false");
-    for (const el of chordEls) el.classList.remove("on");
-    if (wasOpen && opener && opener !== document.body && opener.isConnected) {
-      opener.focus({ preventScroll: true });
-    }
-    opener = null;
+  const close = (which) => {
+    const at = layers.findIndex((layer) => layer.el === which);
+    if (at < 0) return;
+    const opener = layers.splice(at, 1)[0].opener;
+    const active = document.activeElement;
+    const mine = !active || active === document.body || which.contains(active);
+    which.hidden = true;
+    if (which === card) for (const el of chordEls) el.classList.remove("on");
+    restack();
+    if (!mine) return;  // the focus is somewhere else of yours: it stays there
+    let to = opener && opener.isConnected ? opener : null;
+    if (!to && opener && which === card) to = anchor();  // the strip drew its button anew
+    if (!to && topLayer()) to = topLayer().querySelector("h2");
+    if (to) to.focus({ preventScroll: true });
   };
-  scrim.addEventListener("click", close);
-  for (const x of document.querySelectorAll("[data-close]")) x.addEventListener("click", close);
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
-  fab.addEventListener("click", () => (panel.hidden ? open(panel) : close()));
+  const closeAll = () => {
+    while (layers.length) close(topLayer());
+  };
+  for (const x of document.querySelectorAll("[data-close]")) x.addEventListener("click", () => close(x.closest(".sheet-ui")));
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!sizes.hidden) {
+      // The size box first, and the focus back to Aa when it was in there.
+      const inside = $("size-box").contains(document.activeElement);
+      showSizes(false);
+      if (inside) sizeButton.focus({ preventScroll: true });
+      return;
+    }
+    if (layers.length) close(topLayer());
+  });
+  // ⋯ closes the settings where you see them, and brings them up from under a card on a phone.
+  more.addEventListener("click", () => (inSight(panel) ? close(panel) : open(panel, more)));
+
+  // In the focus order the card comes after its chord, wherever it is on the page: Tab from its last
+  // control goes on to what follows the chord, and Shift+Tab from its first back to the chord.
+  const reachable = (el) => el.tabIndex >= 0 && !el.disabled && el.getClientRects().length > 0
+    && getComputedStyle(el).visibility === "visible";
+  const FOCUSABLE = "a[href], button, input, select, textarea, summary, [tabindex]";
+  card.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+    const from = anchor();
+    if (!from || from === $("sheet") || card.contains(from)) return;
+    const mine = Array.from(card.querySelectorAll(FOCUSABLE)).filter(reachable);
+    const here = document.activeElement;
+    const edge = e.shiftKey ? here === $("card-name") || here === mine[0] : here === mine[mine.length - 1];
+    if (!edge) return;
+    const to = e.shiftKey ? from : Array.from(document.querySelectorAll(FOCUSABLE)).find((el) => !card.contains(el)
+      && !from.contains(el) && Boolean(from.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) && reachable(el));
+    if (!to) return;
+    e.preventDefault();
+    to.focus();
+  });
+
+  // --- Aa: the text size, in a box beside the song -------------------------------------------------
+  // Not a dialog: the song stays in view and within reach, and the box closes on Escape, on a tap
+  // anywhere else, or when the focus leaves it.
+  function showSizes(on) {
+    sizes.hidden = !on;
+    sizeButton.setAttribute("aria-expanded", on ? "true" : "false");
+  }
+  sizeButton.addEventListener("click", () => showSizes(sizes.hidden));
+  document.addEventListener("pointerdown", (e) => {
+    if (!sizes.hidden && !(e.target instanceof Node && $("size-box").contains(e.target))) showSizes(false);
+  }, true);
+  $("size-box").addEventListener("focusout", (e) => {
+    if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) showSizes(false);
+  });
 
   const sheet = $("sheet");
   sheet.addEventListener("click", (e) => {
     const el = e.target.closest(".c");
-    if (el) openCard(el.dataset.c);
+    if (el) openCard(el.dataset.c, el);
   });
   sheet.addEventListener("keydown", (e) => {
     const el = e.target.closest(".c");
     if (el && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
-      openCard(el.dataset.c);
+      openCard(el.dataset.c, el);
     }
   });
 
@@ -507,7 +701,16 @@
   };
   $("down").addEventListener("click", () => step(state.t - 1));
   $("up").addEventListener("click", () => step(state.t + 1));
-  $("reset-t").addEventListener("click", () => { state.capo = null; step(data.transpose); });
+  $("reset-t").addEventListener("click", () => step(data.transpose));
+  const moveCapo = (fret) => {
+    state.capo = Math.max(0, Math.min(CAPO_MAX, fret));
+    render();
+  };
+  $("capo-down").addEventListener("click", () => moveCapo(capoNow() - 1));
+  $("capo-up").addEventListener("click", () => moveCapo(capoNow() + 1));
+  $("reset-capo").addEventListener("click", () => moveCapo(sheetCapo));
+  $("t-down").addEventListener("click", () => step(state.t - 1));
+  $("t-up").addEventListener("click", () => step(state.t + 1));
   $("smaller").addEventListener("click", () => { state.fs = Math.max(FS.min, state.fs - FS.step); render(); });
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
@@ -517,50 +720,216 @@
   });
 
   // --- scrolling by itself, hands on the guitar ----------------------------------------------------
-  let scrolling = false, last = 0, carry = 0, wake = null;
-  const scrollButton = $("scroll");
-  const frame = (now) => {
-    if (!scrolling) return;
-    if (last) {
-      carry += ((now - last) / 1000) * Number($("speed").value) * 9;
-      const px = Math.floor(carry);
-      if (px > 0) {
-        window.scrollBy(0, px);
-        carry -= px;
-      }
-      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) stopScroll();
-    }
-    last = now;
-    if (scrolling) requestAnimationFrame(frame);
+  // Off, counting down (3 s, for your hands to get to the guitar; pressed again, it starts at
+  // once), running, or paused. While it is on, the pill steers it, above the bar's place: − and +
+  // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
+  // bar is out of the way while it counts down and runs (dock()). A finger on the page, the wheel, a
+  // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it: the page and
+  // the bar are yours until you press ▶, which stays within reach with the card open.
+  const COUNTDOWN = 3000;
+  const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
+  const moving = () => scroll.state === "counting" || scroll.state === "running";
+  // Pixels a second: a bigger text scrolls as much faster, so a speed keeps its pace through the song.
+  const pace = () => (state.speed * SPEED.px * state.fs) / FS.start;
+  const LABELS = { counting: "Start now", running: "Pause", paused: "Resume" };
+  const showScroll = (said) => {
+    pill.hidden = scroll.state === "off";
+    if (scroll.state === "off") delete doc.dataset.pill;
+    else doc.dataset.pill = scroll.state;  // room under the song for the pill
+    dock();  // the bar, away or back
+    pill.dataset.state = scroll.state;
+    go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
+    $("tick").textContent = scroll.state === "counting"
+      ? String(Math.max(1, Math.ceil((scroll.ends - performance.now()) / 1000))) : "";
+    if (said !== undefined) $("scroll-status").textContent = said;
   };
-  const startScroll = () => {
-    scrolling = true;
-    last = 0;
-    carry = 0;
-    scrollButton.setAttribute("aria-pressed", "true");
-    scrollButton.textContent = "Stop";
+  const drawSpeed = () => {
+    $("pill-speed").textContent = String(state.speed);
+  };
+  const setSpeed = (n) => {
+    state.speed = Math.max(SPEED.min, Math.min(SPEED.max, n));
+    drawSpeed();
+    save();
+  };
+
+  // The screen stays on while it counts down and scrolls. A browser lets go of the lock when the
+  // page is hidden; it is asked for again when the page shows.
+  let wake = null, asking = false;
+  const holdScreen = () => {
+    if (wake || asking || !navigator.wakeLock) return;
+    asking = true;
     try {
-      if (navigator.wakeLock) navigator.wakeLock.request("screen").then((l) => { wake = l; }, () => {});
-    } catch (err) { /* no wake lock here */ }
-    close();
+      navigator.wakeLock.request("screen").then((lock) => {
+        asking = false;
+        if (!moving()) {
+          lock.release().catch(() => {});
+          return;
+        }
+        wake = lock;
+        lock.addEventListener("release", () => { if (wake === lock) wake = null; });
+      }, () => { asking = false; });
+    } catch (err) {
+      asking = false;  // no wake lock here
+    }
+  };
+  const letScreenSleep = () => {
+    const lock = wake;
+    wake = null;
+    if (lock) lock.release().catch(() => {});
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && moving()) holdScreen();
+  });
+
+  const countdown = () => {
+    clearTimeout(scroll.timer);
+    scroll.state = "counting";
+    scroll.ends = performance.now() + COUNTDOWN;
+    const tick = () => {
+      const left = scroll.ends - performance.now();
+      if (left <= 0) {
+        run();
+        return;
+      }
+      showScroll();
+      scroll.timer = setTimeout(tick, left % 1000 || 1000);
+    };
+    tick();
+    showScroll("Scrolling in " + COUNTDOWN / 1000 + " seconds");
+    holdScreen();
+  };
+  // Each frame scrolls to a whole pixel counted from where it began, Math.round(from + travelled),
+  // never a pixel on from where the page is: a browser that rounds a scroll to its device pixels
+  // (WebKit at a zoom other than 100 %, bug 281786) would lose every such step and stall.
+  const run = () => {
+    clearTimeout(scroll.timer);
+    scroll.state = "running";
+    scroll.from = scroll.at = window.scrollY;
+    scroll.travelled = 0;
+    scroll.last = 0;
+    const loop = ++scroll.loop;
+    const frame = (now) => {
+      if (scroll.state !== "running" || loop !== scroll.loop) return;
+      // Moved some other way (the scroll bar, a search in the page, a link): yours to read.
+      if (Math.abs(window.scrollY - scroll.at) > 3) {
+        pauseScroll();
+        return;
+      }
+      if (scroll.last) {
+        // A frame long in coming (a tab in the background) moves no further than a quarter second.
+        scroll.travelled += (Math.min(now - scroll.last, 250) / 1000) * pace();
+        const y = Math.round(scroll.from + scroll.travelled);
+        if (y !== Math.round(scroll.at)) {
+          window.scrollTo(0, y);
+          scroll.at = window.scrollY;
+        }
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+          pauseScroll("Paused at the end of the song");
+          return;
+        }
+      }
+      scroll.last = now;
+      requestAnimationFrame(frame);
+    };
+    showScroll("Scrolling");
+    holdScreen();
     requestAnimationFrame(frame);
   };
-  function stopScroll() {
-    if (!scrolling) return;
-    scrolling = false;
-    scrollButton.setAttribute("aria-pressed", "false");
-    scrollButton.textContent = "Start";
-    if (wake) wake.release().catch(() => {});
-    wake = null;
+  function pauseScroll(said) {
+    if (!moving()) return;
+    clearTimeout(scroll.timer);
+    scroll.state = "paused";
+    showScroll(said || "Paused");
+    letScreenSleep();
   }
-  scrollButton.addEventListener("click", () => (scrolling ? stopScroll() : startScroll()));
-  window.addEventListener("touchstart", (e) => {
-    if (scrolling && !e.target.closest(".fab")) stopScroll();
-  }, { passive: true });
+  const endScroll = () => {
+    const mine = pill.contains(document.activeElement);
+    clearTimeout(scroll.timer);
+    scroll.state = "off";
+    showScroll("");
+    letScreenSleep();
+    if (mine) $("scroll").focus({ preventScroll: true });
+  };
 
-  fab.hidden = count === 0;  // nothing to transpose
+  $("scroll").addEventListener("click", () => {
+    closeAll();
+    showSizes(false);
+    countdown();
+    go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
+  });
+  go.addEventListener("click", () => {
+    if (scroll.state === "counting") run();
+    else if (scroll.state === "running") pauseScroll();
+    else countdown();
+  });
+  $("pill-end").addEventListener("click", endScroll);
+  for (const b of document.querySelectorAll("[data-speed]")) {
+    b.addEventListener("click", () => setSpeed(state.speed + Number(b.dataset.speed)));
+  }
+  window.addEventListener("touchstart", (e) => {
+    if (!(e.target instanceof Element && e.target.closest("#pill"))) pauseScroll();
+  }, { passive: true });
+  window.addEventListener("wheel", () => pauseScroll(), { passive: true });
+  const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"];
+  document.addEventListener("keydown", (e) => {
+    const control = e.target instanceof Element && e.target.closest("button, a, [role=button], summary, input");
+    if (SCROLL_KEYS.indexOf(e.key) >= 0 || (e.key === " " && !control)) pauseScroll();
+  });
+
+  // --- the bar: away as you read down the song, back when you want it -----------------------------
+  // It slides away as you scroll down, and comes back as you scroll up, at the top and the end of
+  // the song, on a tap on the page (not on one of its controls) or when the keyboard's focus comes to
+  // it. Only your own scrolling moves it: none before you first touch the page (the browser, or the
+  // songbook, putting you back where you were), and none just after a change of key or text size,
+  // when the browser keeps the line you were reading in place by scrolling. It stays while the size
+  // box or a sheet is open, and while one of its controls has the keyboard's focus, which would
+  // otherwise go out of sight.
+  const reveal = { y: window.scrollY, quiet: 0, touched: false };
+  function hush() {
+    if (doc.dataset.ready === "1") reveal.quiet = performance.now() + 400;
+  }
+  function slide(away) {
+    bar.classList.toggle("away", away);
+    if (away) showSizes(false);
+  }
+  const keyboardIn = (el) => {
+    try {
+      return Boolean(el.querySelector(":focus-visible"));
+    } catch (err) {  // a browser without :focus-visible: any focus counts
+      return el.contains(document.activeElement);
+    }
+  };
+  for (const kind of ["touchstart", "pointerdown", "wheel", "keydown"]) {
+    window.addEventListener(kind, () => { reveal.touched = true; }, { passive: true, capture: true });
+  }
+  window.addEventListener("scroll", () => {
+    const y = window.scrollY, dy = y - reveal.y;
+    if (y <= 0 || window.innerHeight + y >= document.documentElement.scrollHeight - 2) {
+      slide(false);
+      reveal.y = y;
+      return;
+    }
+    if (!reveal.touched || performance.now() < reveal.quiet || !sizes.hidden || !panel.hidden || !card.hidden
+        || keyboardIn(bar)) {
+      reveal.y = y;
+      return;
+    }
+    if (Math.abs(dy) < 8) return;  // a few pixels add up before they count
+    slide(dy > 0);
+    reveal.y = y;
+  }, { passive: true });
+  document.addEventListener("click", (e) => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (target && !target.closest("#bar, #pill, .sheet-ui, a, button, summary, input, [role=button]")) slide(false);
+  });
+  bar.addEventListener("focusin", () => slide(false));
+
+  // Nothing to transpose and no other setting for a sheet without chords: Aa and ▶ alone.
+  $("keys").hidden = count === 0;
+  more.hidden = count === 0;
+  showScroll();
   render();
-  if (hash.get("panel") === "1") open(panel);
+  if (hash.get("panel") === "1") open(panel, null);
   if (hash.has("chord")) openCard(String(hash.get("chord")));
   doc.dataset.ready = "1";
 })();
