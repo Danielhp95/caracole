@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Iterable, Sequence
 
-from caracole.db import kv_delete, kv_get, kv_set
+from caracole.db import kv_delete, kv_get, kv_set, savepoint
 from caracole.normalize import KEY_VERSION, display_key, identity_key, title_variant
 
 _JSON_COLUMNS = {"artists", "source_ids", "match_candidates"}
@@ -467,16 +467,10 @@ def rekey_songs(conn: sqlite3.Connection) -> int:
     are re-keyed too (``_rekey_removed``). All in one savepoint; returns how many
     songs were re-keyed or merged into another.
     """
-    conn.execute("SAVEPOINT rekey_songs")
-    try:
+    with savepoint(conn, "rekey_songs"):
         changed = _rekey(conn)
         _rekey_removed(conn)
         kv_set(conn, KEY_VERSION_KV, str(KEY_VERSION))
-    except BaseException:
-        conn.execute("ROLLBACK TO rekey_songs")
-        conn.execute("RELEASE rekey_songs")
-        raise
-    conn.execute("RELEASE rekey_songs")
     return changed
 
 

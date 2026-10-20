@@ -21,14 +21,13 @@ rows, keys and when it was last checked) and ``<provider>:index:complete_at``.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from caracole import normalize
-from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json
+from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 from caracole.http import Client, ProviderError, Response
 from caracole.ug.sitemap import iter_locs
 
@@ -149,7 +148,7 @@ def _store(conn: sqlite3.Connection, site: Site, name: str, rows: list[Sequence[
     """Put one sitemap's rows in place of those it gave before, and record it, in one transaction."""
     columns = ", ".join((*site.columns, "sitemap"))
     marks = ", ".join("?" for _ in range(len(site.columns) + 1))
-    with _savepoint(conn, "site_index_store"):
+    with savepoint(conn, "site_index_store"):
         conn.execute(f"DELETE FROM {site.table} WHERE sitemap = ?", (name,))
         conn.executemany(f"INSERT OR REPLACE INTO {site.table} ({columns}) VALUES ({marks})",
                          [(*row, name) for row in rows])
@@ -159,7 +158,7 @@ def _store(conn: sqlite3.Connection, site: Site, name: str, rows: list[Sequence[
 
 def _forget(conn: sqlite3.Connection, site: Site, name: str) -> None:
     """A sitemap the index no longer lists: its rows go, and its record."""
-    with _savepoint(conn, "site_index_forget"):
+    with savepoint(conn, "site_index_forget"):
         conn.execute(f"DELETE FROM {site.table} WHERE sitemap = ?", (name,))
         indexed = sitemaps(conn, site)
         indexed.pop(name, None)
@@ -178,18 +177,6 @@ def _validators(headers: Mapping[str, str]) -> dict[str, str | None]:
 
 def _validators_of(entry: Mapping[str, Any]) -> dict[str, str | None]:
     return {"etag": entry.get("etag"), "last_modified": entry.get("last_modified")}
-
-
-@contextmanager
-def _savepoint(conn: sqlite3.Connection, name: str) -> Iterator[None]:
-    conn.execute(f"SAVEPOINT {name}")
-    try:
-        yield
-    except BaseException:
-        conn.execute(f"ROLLBACK TO {name}")
-        conn.execute(f"RELEASE {name}")
-        raise
-    conn.execute(f"RELEASE {name}")
 
 
 def _utc(dt: datetime) -> datetime:

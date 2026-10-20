@@ -71,8 +71,7 @@ from __future__ import annotations
 import bisect
 import itertools
 import sqlite3
-from collections.abc import Collection, Iterable, Iterator
-from contextlib import contextmanager
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -80,6 +79,7 @@ from rapidfuzz import fuzz, process
 from rapidfuzz.distance import OSA
 
 from caracole.config import MatchPolicy
+from caracole.db import savepoint
 from caracole.normalize import (
     GENERIC_WORDS,
     clean_title,
@@ -816,18 +816,6 @@ def _save(conn: sqlite3.Connection, song: Song, new: MatchResult, now: str) -> N
         refresh_status(conn, song.id, ignored=False)
 
 
-@contextmanager
-def _transaction(conn: sqlite3.Connection) -> Iterator[None]:
-    conn.execute("SAVEPOINT match_all")
-    try:
-        yield
-    except BaseException:
-        conn.execute("ROLLBACK TO match_all")
-        conn.execute("RELEASE match_all")
-        raise
-    conn.execute("RELEASE match_all")
-
-
 def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolicy, *,
               dry_run: bool = False, song_ids: Collection[int] | None = None,
               songs: Iterable[Song] | None = None) -> list[MatchChange]:
@@ -864,7 +852,7 @@ def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolic
         changes.append(MatchChange(song, song.match_decision, new))
     if not dry_run:
         now = utc_now_iso()
-        with _transaction(conn):
+        with savepoint(conn, "match_all"):
             for c in changes:
                 if c.song.id not in kept:
                     _save(conn, c.song, c.new, now)

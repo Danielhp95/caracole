@@ -33,7 +33,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from caracole.config import Config
-from caracole.db import kv_delete, kv_get_json
+from caracole.db import kv_delete, kv_get_json, savepoint
 from caracole.library import song_dir
 from caracole.songs import SOURCE_FIELDS_KV, Song, delete_song_kv, list_songs, mark_removed
 
@@ -149,8 +149,7 @@ def remove_song(conn: sqlite3.Connection, cfg: Config, plan: RemovalPlan, *, now
         raise RemovalError(f"wanted.txt can't be rewritten ({e.strerror or e}). Nothing was removed.") from e
     result.wanted_lines.sort()
     stamp = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    conn.execute("SAVEPOINT remove_song")
-    try:
+    with savepoint(conn, "remove_song"):
         mark_removed(conn, song, stamp)
         delete_song_kv(conn, song.id)
         for source, ids in song.source_ids.items():
@@ -159,11 +158,6 @@ def remove_song(conn: sqlite3.Connection, cfg: Config, plan: RemovalPlan, *, now
         for key in _wanted_keys(song):
             kv_delete(conn, FIRST_SEEN_KEY + key)
         conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))  # its versions and files go with it
-    except BaseException:
-        conn.execute("ROLLBACK TO remove_song")
-        conn.execute("RELEASE remove_song")
-        raise
-    conn.execute("RELEASE remove_song")
     if plan.folder_problem is None:
         _delete_files(cfg.library_dir, plan, result)
     for path in plan.youtube_audio:

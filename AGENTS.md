@@ -388,7 +388,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `_MIGRATIONS`. `_migrate` copies an existing database to `caracole.sqlite.v<N>.bak`
   (`VACUUM INTO`), then runs each script in one `BEGIN IMMEDIATE` transaction with its
   `PRAGMA user_version` (a script never begins or commits one itself). A newer database
-  raises `DatabaseTooNew`, and `_common.open_db` exits 2 (tests/test_db.py).
+  raises `DatabaseTooNew`, and `_common.open_db` exits 2 (tests/test_db.py). Writes that
+  apply whole or not at all go in `db.savepoint(conn, name)`, which nests in a caller's:
+  the connection is in autocommit mode, where `with conn:` opens no transaction
+  (`test_db.py::test_a_savepoint_undoes_its_whole_block_and_nests`, tests/test_versions.py).
 - **overrides.toml** is written only through the `add_*` functions of overrides.py: tomlkit,
   so the user's comments and layout survive, then `library.write_atomic`. It is read only
   as a regular file (`test_overrides.py::test_writers_preserve_comments_and_roundtrip`).
