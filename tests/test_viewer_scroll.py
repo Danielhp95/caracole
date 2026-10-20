@@ -318,6 +318,44 @@ def test_a_touch_a_wheel_a_key_or_a_scroll_by_hand_pauses_and_keeps_the_pill(tmp
 
 
 @in_chromium
+def test_paused_or_at_the_end_the_bar_is_back_under_the_pill(tmp_path):
+    # The bar keeps out of the way while the song moves by itself; a pause, by a touch or at the end of
+    # the song, brings it back, the pill above it where it was, so nothing moves under the thumb.
+    boxes = """(() => { const box = (s) => { const el = document.querySelector(s);
+        if (el.hidden || !el.getClientRects().length) return null;
+        const r = el.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom].map(Math.round); };
+      const last = [...document.querySelectorAll('.foot > *')].pop().getBoundingClientRect();
+      return {bar: box('#bar'), pill: box('#pill'), foot: Math.round(last.bottom)}; })()"""
+    with viewer(tmp_path) as b:
+        start_now(b)
+        time.sleep(0.3)
+        running = b.js(boxes)
+        tap(b, "#sheet .w")
+        touched, touched_at = look(b), b.js(boxes)
+        b.click("#t-up")  # the bar's controls work while it waits
+        transposed = look(b)
+        b.click("#go")  # ▶: counting down, the bar out of the way again
+        counting = b.js(boxes)
+
+        b.click("#go")  # at once
+        b.js("window.scrollTo(0, document.documentElement.scrollHeight - innerHeight - 20)")
+        assert b.wait("document.querySelector('#go').getAttribute('aria-label') === 'Resume'", 2)  # by hand
+        b.click("#go")
+        b.click("#go")
+        assert b.wait("document.querySelector('#scroll-status').textContent === 'Paused at the end of the song'", 5)
+        end, end_at = look(b), b.js(boxes)
+    assert running["bar"] is None and running["pill"]
+    assert touched["go"] == "Resume" and touched["bar"] and touched["pill"]
+    bar, pill = touched_at["bar"], touched_at["pill"]
+    assert bar[3] == 844 and pill[3] <= bar[1]  # the bar at the foot, the pill above it...
+    assert pill == running["pill"]  # ...where it was
+    assert transposed["go"] == "Resume" and transposed["hash"] == "#t=1"
+    assert counting["bar"] is None and counting["pill"] == running["pill"]
+    assert end["go"] == "Resume" and end["bar"] and end_at["pill"] == running["pill"]
+    assert end_at["foot"] <= end_at["pill"][1]  # the song's end clear of both
+
+
+@in_chromium
 def test_it_scrolls_to_rounded_targets_so_no_step_is_lost_at_a_zoom(tmp_path):
     # Speed 30 is 60 px a second at the usual text size, and a bigger text scrolls faster in
     # step with it: the same speed keeps the same pace through the song.

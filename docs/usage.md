@@ -1621,12 +1621,16 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Scrolling by itself**: ▶ in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the
-  browser allows it. While it is on, a pill takes the bar's place: − and +
-  change the speed (1 to 30) as it scrolls, ❚❚ pauses and ▶ goes on after
-  another countdown, and × ends it and brings the bar back. A finger on the
+  browser allows it. While it is on, a pill steers it, just above the bar's
+  place: − and + change the speed (1 to 30) as it scrolls, ❚❚ pauses and ▶
+  goes on after another countdown, and × ends it. The bar is out of the way
+  while the song scrolls, and back under the pill while it is paused, so you
+  can transpose or change the text size before going on; the pill stays
+  where it is, so a second tap lands on it again. A finger on the
   page, the mouse wheel, a key that scrolls, a
   scroll by hand or a chord's card pauses it, so the page is yours to read
-  until you press ▶, which stays within reach (above the card, on a phone);
+  until you press ▶, which stays within reach (above the card, on a phone,
+  with the bar kept under the card while the song scrolls on);
   it pauses at the end of the song too. A bigger text
   scrolls as much faster, so a speed keeps its pace through the song. With
   reduced motion asked for in your system's settings, the countdown shows the

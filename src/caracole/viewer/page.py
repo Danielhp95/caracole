@@ -394,8 +394,8 @@ def _words(text: str) -> list[str]:
 # until it runs. The bar, in the order a keyboard reaches it: the song a semitone down or up, its key
 # in short between them (for the eye; whole for a screen reader); Aa, the text size in a box beside
 # it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
-# in the bar's place: its first button counts down (a ring and the seconds), pauses (❚❚) and resumes
-# (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
+# above the bar's place, the bar out of the way while the song moves: its first button counts down (a
+# ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
 # modal: nothing dims the song or takes it out of reach while they are open (viewer.js).
 _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <div class="bar-in">

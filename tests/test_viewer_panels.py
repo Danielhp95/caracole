@@ -253,20 +253,28 @@ def test_an_open_card_follows_the_key_and_the_mode(tmp_path):
 
 
 @in_chromium
-def test_while_the_song_scrolls_by_itself_a_card_docks_at_the_foot_under_the_pill(tmp_path):
+def test_while_the_song_scrolls_by_itself_a_card_docks_on_the_bar_under_the_pill(tmp_path):
     with viewer(tmp_path) as b:
         b.click("#scroll")
         b.click("#go")  # at once
         time.sleep(0.4)
+        alone = look(b)
         tap_at(b, *chord(b, "C", above=600)[:2])  # pauses it, and opens the card
         docked = look(b)
         paused = b.js("document.querySelector('#go').getAttribute('aria-label')")
         b.click("#go")  # ▶, beside the card
         again = b.js("document.querySelector('#go').getAttribute('aria-label')")
+        resumed = look(b)
+        b.click("#card .x")
+        closed = look(b)
     card, pill = docked["card"], docked["pill"]
-    assert docked["name"] == "C" and docked["bar"] is None and paused == "Resume"
-    assert card["bottom"] == 844 and pill["bottom"] <= card["top"]  # the card at the foot, the pill above it
-    assert again == "Start now" and not docked["inert"]
+    assert alone["bar"] is None and alone["pill"]["bottom"] == 844 - 53 - 12  # above where the bar was
+    assert docked["name"] == "C" and paused == "Resume" and not docked["inert"]
+    assert card["bottom"] == docked["bar"]["top"] and pill["bottom"] <= card["top"]  # on the bar, the pill above
+    # Counting down again with the card open, nothing moves under the thumb: the bar stays under the card.
+    assert again == "Start now"
+    assert [resumed[k] for k in ("card", "pill", "bar")] == [docked[k] for k in ("card", "pill", "bar")]
+    assert closed["card"] is None and closed["bar"] is None and closed["pill"] == alone["pill"]
 
 
 # --- both open: Escape, and the focus ---------------------------------------------------------------------

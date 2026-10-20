@@ -480,9 +480,16 @@
   const topLayer = () => (layers.length ? layers[layers.length - 1].el : null);
   const inSight = (which) => !which.hidden && (wide.matches || topLayer() === which);
   // On a phone the page leaves room under the song for the one docked at its foot, so the end of
-  // the song comes up above it, and the pill rides above it (--dock: its height).
+  // the song comes up above it, and the pill rides above it (--dock: its height). The bar is out of
+  // the way while the song moves by itself, unless one is docked on it: then nothing moves as the
+  // scroll pauses and resumes. Paused, or at the end of the song, it is back, under the pill.
   function dock() {
     const there = wide.matches ? null : topLayer();
+    const away = moving() && !there;
+    if (bar.hidden !== away) {
+      bar.hidden = away;
+      if (!away) slide(false);
+    }
     if (there) {
       doc.dataset.dock = there.id;
       doc.style.setProperty("--dock", there.offsetHeight + "px");
@@ -634,10 +641,11 @@
 
   // --- scrolling by itself, hands on the guitar ----------------------------------------------------
   // Off, counting down (3 s, for your hands to get to the guitar; pressed again, it starts at
-  // once), running, or paused. While it is on, the pill takes the bar's place: − and +
-  // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it. A
-  // finger on the page, the wheel, a key that scrolls, a scroll by hand or a card opening pauses
-  // it: the page is yours to read until you press ▶, which stays within reach with the card open.
+  // once), running, or paused. While it is on, the pill steers it, above the bar's place: − and +
+  // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
+  // bar is out of the way while it counts down and runs (dock()). A finger on the page, the wheel, a
+  // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it: the page and
+  // the bar are yours until you press ▶, which stays within reach with the card open.
   const COUNTDOWN = 3000;
   const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
   const moving = () => scroll.state === "counting" || scroll.state === "running";
@@ -646,11 +654,9 @@
   const LABELS = { counting: "Start now", running: "Pause", paused: "Resume" };
   const showScroll = (said) => {
     pill.hidden = scroll.state === "off";
-    bar.hidden = scroll.state !== "off";  // the pill there
     if (scroll.state === "off") delete doc.dataset.pill;
-    else doc.dataset.pill = scroll.state;  // a docked card sits at the very foot, the pill over it
-    if (!bar.hidden) slide(false);
-    dock();
+    else doc.dataset.pill = scroll.state;  // room under the song for the pill
+    dock();  // the bar, away or back
     pill.dataset.state = scroll.state;
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
     $("tick").textContent = scroll.state === "counting"
