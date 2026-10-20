@@ -426,14 +426,17 @@ def _download(runner: YtDlp, cfg: Config, song: Song, video: Video) -> tuple[Pat
     return path, got.video
 
 
-def tidy(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> None:
+def tidy(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> bool:
     """Let go of YouTube audio no song needs: a song whose ``[youtube]`` says "none", or that
     has a human sheet now, is unlinked from it, and a file no song's audio is any more (a
     purchase took its place) goes, with any download a stopped caracole left half-done and
     any file no song or record names (a song merged into another took its record).
 
     A song whose file is gone from the cache is unlinked from it too, as the scan unlinks a
-    purchase that is gone: one with no auto sheet yet is due again, for the video it had."""
+    purchase that is gone: one with no auto sheet yet is due again, for the video it had.
+
+    Whether a song or its record changed, which the pages show."""
+    changed = False
     root = audio_dir(cfg)
     if root.is_dir():
         for leftover in root.glob(f"{_PART_PREFIX}*"):
@@ -452,12 +455,14 @@ def tidy(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> None:
             _delete(Path(record.audio))
             record.audio = None
             _save(conn, song.id, record)
+            changed = True
         else:
             named.add(Path(record.audio).name)
     if root.is_dir():
         for path in root.iterdir():
             if path.name not in named and not path.name.startswith(_PART_PREFIX) and not path.is_dir():
                 _delete(path)
+    return changed
 
 
 def _delete(path: Path) -> None:

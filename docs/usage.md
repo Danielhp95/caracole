@@ -784,7 +784,8 @@ and cache.
   purchase linked, and says so when the song has that video's audio already. `--url` first writes the video
   under `[youtube]` in overrides.toml, so the song's audio comes from it; `--none`
   writes `"none"` there, lets go of any audio the song had from YouTube, and asks
-  nothing. It needs the flake's `packages.autochords`, which has auto-chords and
+  nothing, so it works with YouTube off too, and for a song not in the library
+  yet. It needs the flake's `packages.autochords`, which has auto-chords and
   yt-dlp: without them, or without the model files, it asks nothing and exits 1.
   Turned off, it asks nothing and says so. A cooldown, a block or a spent budget
   exits 0. The chords come next, from `caracole autochords`.
@@ -794,7 +795,8 @@ rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
 `todo`, `add`, `search --add`, `sync` and `autochords`; `review` when an
 answer changed something; and `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
 `musescore` and `youtube` when they did something or were blocked, so that
-Provider health shows the cooldown.
+Provider health shows the cooldown (`youtube` also when it let go of audio no
+song needs any more, with nothing to download).
 A page caracole can't write ends the command with status 1 and
 `can't write …/_todo.md: Permission denied`, its own work saved first; for
 `add`, `search --add` and `sync` that is only a warning.

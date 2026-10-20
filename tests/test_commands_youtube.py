@@ -249,6 +249,47 @@ def test_none_turns_youtube_down_for_the_song_and_lets_go_of_its_audio(tmp_path,
     assert len(fake.argvs()) == calls
 
 
+def test_audio_let_go_with_nothing_due_rewrites_the_pages(tmp_path, ntfy, fake, conn):
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    song = to_buy(conn)
+    creep(fake)
+    config = write_config(tmp_path, fake)
+    assert invoke(config).exit_code == 0
+    v = upsert_version(conn, provider="ug", tab_id="1", song_id=song.id, slot="sheet", kind="chords", rating=5,
+                       votes=9, version=1, label=None, url="u", raw={}, now="x")
+    keep_file(conn, tmp_path / "lib", song=get_song(conn, song.id), version_id=v, name="sheet.txt", data=b"[C]x",
+              rank=1)  # a human sheet turned up: the audio from YouTube isn't needed any more
+    update_song(conn, song.id, status="found", match_decision="accept")
+    page = tmp_path / "lib" / "_todo.md"
+    page.unlink()
+    result = invoke(config)
+    assert result.exit_code == 0 and "No song is waiting for audio from YouTube." in result.output
+    assert get_song(conn, song.id).audio_path is None
+    assert page.is_file()  # the pages say so
+    page.unlink()
+    assert invoke(config).exit_code == 0 and not page.exists()  # nothing changed: nothing written
+
+
+@pytest.mark.parametrize("off", ["turned off", "no models"])
+def test_none_is_written_ahead_of_time_with_youtube_off(tmp_path, ntfy, fake, conn, off):
+    song = to_buy(conn)
+    config = write_config(tmp_path, fake, enabled=off != "turned off", models=off != "no models")
+    result = invoke(config, "--song", "Radiohead - Creep", "--none")
+    assert result.exit_code == 0, result.output
+    assert "caracole won't take Radiohead - Creep's audio from YouTube" in result.output
+    assert load_overrides(tmp_path / "lib" / "overrides.toml").youtube == {song.key: None}
+    assert (tmp_path / "lib" / "_todo.md").is_file() and fake.argvs() == []
+
+
+def test_none_is_written_for_a_song_not_in_the_library_yet(tmp_path, ntfy, fake, conn):
+    result = invoke(write_config(tmp_path, fake), "--song", "Radiohead - Airbag", "--none")
+    assert result.exit_code == 0, result.output
+    assert 'once "Radiohead - Airbag" is in the library' in result.output
+    assert load_overrides(tmp_path / "lib" / "overrides.toml").youtube == {"radiohead/airbag": None}
+
+
 @pytest.mark.parametrize("args,said", [
     (("--url", "https://youtu.be/XFkzRNyygfk"), "--url and --none need --song"),
     (("--song", "Radiohead - Creep", "--url", "https://vimeo.com/1"), "YouTube video's address"),

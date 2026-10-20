@@ -6,7 +6,9 @@ budget. With ``--song "Artist - Title"`` it takes that song's audio, even when i
 found nothing lately, unless it has a human sheet, is ignored or has a purchase linked;
 ``--url`` first writes the video to use under ``[youtube]`` in overrides.toml, and
 ``--none`` writes "none" there, lets go of any audio the song has from YouTube, and asks
-YouTube nothing.
+YouTube nothing: it does so with YouTube off too, and for a song not in the library yet.
+Audio let go of with nothing to download (a human sheet came, a file is gone) rewrites
+the pages all the same.
 
 As the other steps' commands do, it leaves YouTube alone while it cools down after a
 block; a block starts (or extends) the cooldown and sends one ntfy alert, and like a
@@ -85,6 +87,9 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
     from caracole.overrides import OverridesError, add_youtube
     from caracole.youtube_fetch import route_problem, songs_for_youtube, tidy, youtube_pass
 
+    if none and display is not None:  # asks YouTube nothing: written even with YouTube off
+        _decline(cfg, display)
+        return
     if not cfg.provider(PROVIDER).enabled:
         typer.echo(f"YouTube is off ([providers.{PROVIDER}] enabled = false); nothing was asked.")
         return
@@ -95,29 +100,28 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
     # Under caracole's lock from the start: overrides.toml is in the library, and a run this waited
     # for may have been blocked meanwhile.
     with exclusive(cfg, "youtube"), closing(open_db(cfg)) as conn:
-        if display is not None and (url is not None or none):
+        if display is not None and url is not None:
             try:
-                add_youtube(cfg.overrides_file, display, "none" if none else url or "")
+                add_youtube(cfg.overrides_file, display, url)
             except OverridesError as e:
                 fail(f"--url: {e}", 2)
         overrides = load_ovr(cfg)
         now = utcnow()
-        tidy(conn, cfg, overrides)  # lets go of audio no song needs, and of files gone from the cache
+        tidied = tidy(conn, cfg, overrides)  # lets go of audio no song needs, and of files gone from the cache
         song = _one_song(conn, cfg, display, overrides) if display else None
-        if none and song is not None:
-            typer.echo(f"caracole won't take {song.display}'s audio from YouTube (\"none\" under [youtube]).")
-            write_pages(conn, cfg, overrides, utcnow())
-            return
-        if song is not None and _has_it(conn, song, overrides):
-            return
         songs = [song] if song is not None else songs_for_youtube(conn, cfg, overrides, now)
-        if not songs:
+        if song is not None and _has_it(conn, song, overrides):
+            songs = []
+        elif not songs:
             typer.echo("No song is waiting for audio from YouTube.")
-            return
-        if is_cooling(conn, PROVIDER, now):
+        elif is_cooling(conn, PROVIDER, now):
             until = get_state(conn, PROVIDER).cooldown_until
             typer.echo(f"YouTube is cooling down after a block until {_when(until)}; caracole won't ask it before "
                        "then.")
+            songs = []
+        if not songs:
+            if tidied:  # audio let go of: the pages say so
+                write_pages(conn, cfg, overrides, utcnow())
             return
         runner = make_youtube(cfg, conn, run_id_for(now))
         try:
@@ -143,6 +147,30 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
     if stats.downloaded:
         typer.echo("Next, `caracole autochords` works out the chords from the audio (the caracole-autochords unit "
                    "runs it after each nightly run).")
+
+
+def _decline(cfg: Config, display: str) -> None:
+    """``--none``: "none" under ``[youtube]`` for the song, any audio it has from YouTube let go
+    of, and the pages rewritten. It asks YouTube nothing, so it is written with YouTube off, or
+    for a song not in the library yet."""
+    from caracole.overrides import OverridesError, add_youtube, override_key
+    from caracole.songs import find_song
+    from caracole.youtube_fetch import tidy
+
+    with exclusive(cfg, "youtube"), closing(open_db(cfg)) as conn:
+        try:
+            add_youtube(cfg.overrides_file, display, "none")
+        except OverridesError as e:
+            fail(f"--song: {e}", 2)
+        overrides = load_ovr(cfg)
+        tidy(conn, cfg, overrides)
+        song = find_song(conn, override_key(display))
+        if song is not None:
+            typer.echo(f"caracole won't take {song.display}'s audio from YouTube (\"none\" under [youtube]).")
+        else:
+            typer.echo(f'"none" is under [youtube]: caracole won\'t take the audio from YouTube once "{display}" '
+                       "is in the library.")
+        write_pages(conn, cfg, overrides, utcnow())
 
 
 def _one_song(conn: sqlite3.Connection, cfg: Config, display: str, overrides: Overrides) -> Song:
