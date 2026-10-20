@@ -20,7 +20,8 @@
     POST /fetch           look a song of the library up now, unless it needs review first
     POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``) you picked
     POST /review          a song in review's answer, as ``caracole review --song`` writes it
-    POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued
+    POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued, and
+                          back to the library, at the song's card
     POST /songbook/…      make a songbook, add to it, move or take out a song, rename it, delete it
                           (songbooks.py); a songbook's page, _songbooks/<folder>/songbook.html, is
                           one of the ``written_pages``
@@ -64,7 +65,19 @@ when asked: the server writes no overrides.toml itself. The candidates the
 page showed must be the song's now, and the song's own request goes first.
 
 A songbook form queues its ``caracole songbook`` command the same way
-(songbooks.py), and the answer sends the browser to the requests page.
+(songbooks.py): to a form, the answer is its line on /jobs; to the page's
+script, its job, as a fetch's, which names the songbook it changes
+(``songbook``: its name before and after); once the job is over, /jobs.json
+gives it with the Songbooks section as the library page would draw it now
+(``songbooks``: its HTML and the songbooks for the Select bar), which the
+page puts in place of its own. A job says what it is about (``kind``: a
+song's, a removal's, a songbook's), so the page shows each where it belongs.
+
+A removal, confirmed, goes back to the library page as it was left (``back``:
+its search, filters and view, the part of its address after #, which the
+card's Remove… sends along), at the song's card (``song=ID``), whose line
+says how the removal goes, as a fetch's does: the job names its song even
+once the song is gone.
 
 Searching reads, and sends no request: one search runs at a time, one asked
 for meanwhile wins over the older ones still waiting (``superseded``: the
@@ -80,6 +93,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import re
 import secrets
 import sqlite3
 import threading
@@ -135,6 +149,8 @@ LIBRARY_HITS, INDEX_HITS, TABS_SHOWN, SITE_HITS = 5, 8, 24, 5
 ARTIST_PAGE = 50  # an artist's songs /api/artist gives at a time
 CACHE_SIZE, CACHE_SECONDS = 128, 300.0  # the offline index's answers kept
 SEARCH_CHECK_STEPS = 20_000  # SQLite steps between two looks for a newer search, a millisecond or so
+# The library page's own address after #, as its script writes it (URLSearchParams' characters alone).
+_BACK = re.compile(r"[A-Za-z0-9%*._~+=&-]{0,512}")
 _COMMON_HEADERS = [
     ("X-Content-Type-Options", "nosniff"),
     ("X-Frame-Options", "DENY"),
@@ -357,10 +373,9 @@ class WebApp:
                 held = frozenset(s.id for s in list_songs(conn) if review_first(s, overrides))
                 removing = _song_ids(conn, {job.song_key.removeprefix(REMOVING) for job in jobs
                                             if job.active and job.song_key.startswith(REMOVING)})
-                # A removal's card says Removing… in its foot (``removing``); as a job of the page's
-                # script, with no song of the library behind it, it would be a song just requested.
-                active = tuple(self._views(conn, overrides, jobs, only=[
-                    j for j in jobs if j.active and not j.song_key.startswith(REMOVING)]))
+                # Every request on its way, which the page's script shows where it belongs (``kind``): a
+                # song's on its card, a removal's on its song's, a songbook's change on its songbook's.
+                active = tuple(self._views(conn, overrides, jobs, only=[j for j in jobs if j.active]))
                 controls = WebControls(self.csrf, busy, self.queue.active_count(), held, removing=removing,
                                        jobs=active)
                 html = build_library_page(conn, self.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
@@ -419,7 +434,8 @@ class WebApp:
     def _views(self, conn: sqlite3.Connection, overrides: Overrides | None, jobs: list[Job], *,
                only: list[Job] | None = None, cards: frozenset[int] = frozenset()) -> list[dict[str, Any]]:
         """Each job (of ``only``, else every one) as the page's script reads it: its song, its line and,
-        for a job in ``cards`` that is over, its song's card as the page draws it now.
+        for a job in ``cards`` that is over, its song's card as the page draws it now, or, for a
+        songbook's change, the Songbooks section (``songbooks``).
 
         ``jobs`` is the whole queue, newest first, for the jobs ahead of a queued one;
         ``overrides`` None (overrides.toml unreadable) leaves the cards out.
@@ -428,9 +444,13 @@ class WebApp:
         from caracole.songs import get_song
 
         views = []
+        section: dict[str, Any] | None = None  # drawn once, for every songbook job that asks
         for job in jobs if only is None else only:
             song_id, facts = self._song_of(conn, overrides, job)
             view = _view(job, jobs, song_id, facts)
+            if job.id in cards and not job.active and "songbook" in view and overrides is not None:
+                section = section or self._songbooks(conn, overrides)
+                view["songbooks"] = section
             if job.id in cards and not job.active and song_id is not None and overrides is not None:
                 try:
                     song = get_song(conn, song_id)  # as it is now
@@ -442,6 +462,14 @@ class WebApp:
                 view["card"] = card
             views.append(view)
         return views
+
+    def _songbooks(self, conn: sqlite3.Connection, overrides: Overrides) -> dict[str, Any]:
+        """The Songbooks section as the library page draws it now (``html``; hidden, with no songbook), and
+        the songbooks for its Select bar (``books``)."""
+        from caracole.library_page import WebControls, songbooks_section
+
+        html, books = songbooks_section(conn, self.cfg, overrides, WebControls(self.csrf))
+        return {"html": html, "books": books}
 
     def _song_of(self, conn: sqlite3.Connection, overrides: Overrides | None,
                  job: Job) -> tuple[int | None, SongFacts | None]:
@@ -462,7 +490,8 @@ class WebApp:
         from caracole.library_page import sheet_href
         from caracole.songs import find_song
 
-        song = find_song(conn, job.song_key)
+        removal = job.song_key.startswith(REMOVING)
+        song = find_song(conn, job.song_key.removeprefix(REMOVING))
         facts = None
         if song is not None:
             ignored = song.status == "ignored" or (overrides is not None and song.key in overrides.ignore)
@@ -480,7 +509,8 @@ class WebApp:
                 picker = f"review?song={song.id}" if candidates_of(song) else None  # the card's, or its page
             facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
                               checked_now=checked_now, ignored=ignored, picker=picker)
-        answer = (song.id if song is not None else None, facts)
+        # A removal's song is gone once it is done: the job knows which it was.
+        answer = (song.id if song is not None else job.song_id if removal else None, facts)
         if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known
             with self._ended_lock:
                 self._ended[job.id] = answer
@@ -618,7 +648,7 @@ class WebApp:
                 queued, _ = self.queue.submit(job.title, job.key, job.steps)
             except QueueFull:
                 return _message(503, "The queue is full", "The queue is full: try again once it empties.")
-            return _redirect(f"/jobs#job-{queued.id}")
+            return self._queued(queued, f"/jobs#job-{queued.id}")  # its songbook's card says how it goes
 
         return handle
 
@@ -709,7 +739,8 @@ class WebApp:
         return self._queued(job)
 
     def _remove(self, form: dict[str, str]) -> Response:
-        """Say what removing a song takes and leaves, and ask; confirmed, queue ``caracole remove --yes``.
+        """Say what removing a song takes and leaves, and ask; confirmed, queue ``caracole remove --yes``
+        and go back to the library, at the song's card, as ``back`` left it (``_library_at``).
 
         The confirmation carries the song's key: a song id the database gave
         another song since the question was asked removes nothing.
@@ -722,6 +753,7 @@ class WebApp:
         except ValueError:
             return _message(400, "Not a song", "Which song? The form names none.")
         confirmed = form.get("confirm") == "1"
+        back = _back(form.get("back", ""))
         try:
             with closing(self._connect()) as conn:
                 song = get_song(conn, song_id)
@@ -733,16 +765,17 @@ class WebApp:
         if plan is not None:
             goes, stays, notes = describe(plan, self.cfg)
             return _html(200, pages.remove_page(song.display, song.id, song.key, self.csrf, goes, stays, notes,
-                                                waiting=self.queue.active_count()))
+                                                waiting=self.queue.active_count(), back=back,
+                                                library=_library_at(back, song.id)))
         if form.get("key") != song.key:
             return _message(409, "Not that song", "The library changed since this page was made, so nothing was "
                                                   "removed: reload the library and try again.")
         try:
-            job, _ = self.queue.submit(f"Remove {song.display}", REMOVING + song.key, remove_steps(song.display),
-                                       display=song.display)
+            self.queue.submit(f"Remove {song.display}", REMOVING + song.key, remove_steps(song.display),
+                              display=song.display, song_id=song.id)
         except QueueFull:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
-        return _redirect(f"/jobs#job-{job.id}")
+        return _redirect(_library_at(back, song.id))  # its card says Removing…, then Removed
 
     def _review(self, form: dict[str, str]) -> Response:
         """A song in review's answer, from the picker: ``caracole review --song`` queued with it.
@@ -1221,10 +1254,32 @@ def _ahead(jobs: list[Job], job: Job) -> int:
 
 
 def _view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None) -> dict[str, Any]:
-    """A job as /jobs.json gives it; ``jobs`` is the whole queue."""
-    return {"id": job.id, "display": job.display or job.title, "songId": song_id,
+    """A job as /jobs.json gives it; ``jobs`` is the whole queue. ``kind`` says what it is about: a song
+    ("song"), a song's removal ("remove"), or a songbook ("songbook", which ``songbook`` names)."""
+    from caracole.web.songbooks import songbook_of
+
+    songbook = songbook_of(job.song_key)
+    kind = "remove" if job.song_key.startswith(REMOVING) else "songbook" if songbook is not None else "song"
+    view = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
             "state": job.state, "fetching": job.fetching,
             "line": job_line(job, facts, ahead=_ahead(jobs, job)).as_json(), "details": details_href(job.id)}
+    if songbook is not None:
+        view["songbook"] = songbook
+    return view
+
+
+def _back(text: str) -> str:
+    """The library page's address after # that a form sends along (``back``), as its script wrote it, without
+    a song to show (``song=``); "" for anything else, which is no address of the page's."""
+    text = text.removeprefix("#")
+    if not _BACK.fullmatch(text):
+        return ""
+    return "&".join(part for part in text.split("&") if part and not part.startswith("song="))
+
+
+def _library_at(back: str, song_id: int) -> str:
+    """The library page as ``back`` (``_back``) left it, at a song's card."""
+    return f"/#{back}&song={song_id}" if back else f"/#song={song_id}"
 
 
 def _nothing_to_ask(conn: sqlite3.Connection, song: Song, overrides: Overrides | None) -> bool:

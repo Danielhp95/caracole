@@ -382,7 +382,8 @@ def test_remove_asks_first_on_a_page_that_says_what_goes_and_what_stays(app, con
 def test_confirming_queues_caracole_remove_for_that_song(app, conn, cfg, queue):
     creep = a_kept_song(conn, cfg)
     response = post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"})
-    assert response.status == 303 and header(response, "location") == "/jobs#job-1"
+    # Back to the library, at the song's card, which says how its removal goes.
+    assert response.status == 303 and header(response, "location") == f"/#song={creep.id}"
     job = queue.snapshot()[0]
     assert job.title == "Remove Radiohead - Creep" and not job.fetching
     assert [s.args for s in job.steps] == [("remove", "--yes", "--", "Radiohead - Creep")]
@@ -402,22 +403,52 @@ def test_a_removal_confirmed_for_another_song_than_the_id_now_names_is_refused(a
     assert post(app, "/remove", {"song": "x"}).status == 400
 
 
-def test_a_removal_says_how_it_goes_on_jobs_and_never_shows_as_a_song_just_requested(app, conn, cfg, queue):
+def test_a_removal_says_how_it_goes_on_jobs_and_on_the_songs_own_card(app, conn, cfg, queue):
     creep = a_kept_song(conn, cfg)
     post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"})
-    # The card says Removing… in its foot; the page's script gets no job of it, which, with no song of the
-    # library behind it, would be a card under "Just requested".
+    # The page's script follows it on the song's card: a removal, of that song, never a song just requested.
     server = json.loads(JSON_BLOCK.search(text(get(app, "/"))).group(1))["server"]
-    assert server["removing"] == [creep.id] and server["jobs"] == []
+    assert server["removing"] == [creep.id]
+    [view] = server["jobs"]
+    assert view["kind"] == "remove" and view["songId"] == creep.id and view["line"]["text"] == "Queued…"
     (job_id, item), = JOB_ITEM.findall(text(get(app, "/jobs")))
     line = re.search(r'<p class="line">(.*?)</p>', item, re.S).group(1)
     assert "Radiohead - Creep" in line and "Remove Radiohead" not in line and "Queued…" in line
     queue.run_pending()
+    conn.execute("DELETE FROM songs WHERE id = ?", (creep.id,))  # as caracole remove does
     (job_id, item), = JOB_ITEM.findall(text(get(app, "/jobs")))
     line = re.search(r'<p class="line">(.*?)</p>', item, re.S).group(1)
     assert "Removed" in line and "Added" not in line  # not a request that added a song
     [view] = answer(get_json(app, f"/jobs.json?jobs={job_id}"))["jobs"]
     assert view["line"]["text"] == "Removed" and view["display"] == "Radiohead - Creep"
+    # Its song is gone, and the view still names it: the page knows which card says Removed.
+    assert view["songId"] == creep.id and view["kind"] == "remove" and "card" not in view
+
+
+@pytest.mark.parametrize("back,address", [
+    ("", "/#song={id}"),
+    ("view=rows&q=creep+radio&show=found", "/#view=rows&q=creep+radio&show=found&song={id}"),
+    ("q=m%C3%BAsica&artist=soda+stereo&sort=recent&key=A+minor", "/#q=m%C3%BAsica&artist=soda+stereo&sort=recent"
+                                                                  "&key=A+minor&song={id}"),
+    ("#view=rows", "/#view=rows&song={id}"),  # location.hash, as it is
+    ("view=rows\r\nSet-Cookie: x=1", "/#song={id}"),  # anything else is no address of the library's
+    ('view="><script>', "/#song={id}"),
+    ("q=" + "a" * 600, "/#song={id}"),
+])
+def test_removing_goes_back_to_the_library_as_you_left_it(app, conn, cfg, queue, back, address):
+    # The card's Remove… sends the library's address (its search, filters and view: the part after #) along;
+    # the question's Keep it, and Remove it, go back there, to the song's card.
+    creep = a_kept_song(conn, cfg)
+    want = address.format(id=creep.id)
+    asked = text(post(app, "/remove", {"song": str(creep.id), "back": back}))
+    form = re.search(r'<form[^>]*action="/remove"[^>]*>(.*?)</form>', asked, re.S).group(1)
+    keep = re.search(r'<a class="btn" href="([^"]*)">Keep it</a>', form).group(1)
+    assert keep.replace("&amp;", "&") == want
+    kept = re.search(r'name="back" value="([^"]*)"', form)
+    assert (kept.group(1).replace("&amp;", "&") if kept else "") == want.removeprefix("/#").removesuffix(
+        f"song={creep.id}").removesuffix("&")
+    response = post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1", "back": back})
+    assert response.status == 303 and header(response, "location") == want
 
 
 @pytest.mark.parametrize("csrf,headers", [(None, {}), ("tok", {"sec-fetch-site": "cross-site"})])
@@ -435,7 +466,7 @@ def test_a_request_from_the_pages_script_is_answered_with_its_job_not_a_redirect
     response = post(app, "/request", {"artist": " Radiohead ", "title": "Creep", "fetch": "1"}, accept=JSON)
     assert response.status == 200 and header(response, "location") is None
     assert answer(response) == {"job": {
-        "id": 1, "display": "Radiohead - Creep", "songId": None, "state": "queued", "fetching": True,
+        "id": 1, "display": "Radiohead - Creep", "songId": None, "kind": "song", "state": "queued", "fetching": True,
         "line": {"tone": "queued", "text": "Queued…", "link": None, "details": None}, "details": "jobs?job=1#job-1"}}
     assert queue.snapshot()[0].display == "Radiohead - Creep"
 

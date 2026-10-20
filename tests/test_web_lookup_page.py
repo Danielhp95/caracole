@@ -355,6 +355,9 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
     assert marks == ["ug", "ug"]  # your song's sheet came from UG, and so does the UG song
     main = browser.js("document.querySelector('#results .hit .row-action .primary').getAttribute('href')")
     assert main == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.html"
+    # Its title opens the same, as in index.html; an Ultimate Guitar song's title opens nothing (Get it asks).
+    titles = browser.js("[...document.querySelectorAll('#results .hit .title-link')].map(a => a.getAttribute('href'))")
+    assert titles == [main]
     browser.press("Enter")  # the first result: your song, opened as its card opens it
     assert browser.wait("location.pathname.endsWith('/sheet.html')")
     assert browser.wait("document.querySelector('h1') && document.querySelector('h1').textContent === "
@@ -448,3 +451,27 @@ def test_an_artists_list_fits_a_phone_and_its_buttons_take_a_thumb(cfg, live, ph
                      ".map(b => [b.textContent.trim(), Math.round(b.getBoundingClientRect().width),"
                      " Math.round(b.getBoundingClientRect().height)]).filter(([, w, h]) => w < 44 || h < 44)")
     assert small == [], small  # each song's Get it and its "⋯" too
+
+
+@in_chromium
+def test_on_a_touch_phone_every_control_is_a_thumbs_size_and_every_field_has_an_edge(cfg, live, phone):
+    from helpers.rendered import rendered_song
+    from helpers.targets import UNFOLD, small_targets, weak_edges
+
+    base, _ = live
+    conn = db.connect(cfg.db_path)
+    rendered_song(conn, cfg)  # a song of yours, its files under its row's "⋯"
+    conn.close()
+    index_songs(cfg, [("soda-stereo", "de-musica-ligera", 3)])  # and UG's, its versions under its "⋯"
+    phone.open(base + "/lookup")
+    phone.type("musica ligera")
+    assert phone.wait(f"{HITS} >= 2")
+    phone.js("(() => {" + UNFOLD + "})()")
+    # The brand above the title goes where the Library link beside it goes, which is a thumb's size.
+    short = phone.js(small_targets(".app a"))
+    assert short == [], short
+    phone.js("document.activeElement.blur()")  # every field at rest, the search field too
+    for scheme in ("light", "dark"):
+        phone.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": scheme}])
+        weak = phone.js(weak_edges())  # the search field too: this page's own, a field like the others
+        assert weak == [], (scheme, weak)

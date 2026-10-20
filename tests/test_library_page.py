@@ -656,13 +656,15 @@ def test_the_nightly_todo_step_also_writes_index_html(conn, cfg):
 NARROWEST_WINDOW = 500  # a --window-size narrower than this, headless Chromium widens to it
 
 
-def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,900") -> str:
+def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,900", *, touch: bool = False,
+             media: dict[str, str] | None = None) -> str:
     """The page's DOM after its script ran, laid out in a window of ``size`` ("width,height"), in a
     browser context of its own (helpers/browser.py); skips the test when this machine can't run
-    Chromium. A phone's width, narrower than any window, is laid out as a phone's screen."""
+    Chromium. A phone's width, narrower than any window, is laid out as a phone's screen; ``touch``,
+    on a touch screen; ``media``, with media features such as ``{"prefers-color-scheme": "dark"}``."""
     width, height = (int(n) for n in size.split(","))
     return browser.dump_dom(path.as_uri() + fragment, (width, height), hide_scrollbars=True,
-                            mobile=width < NARROWEST_WINDOW)
+                            mobile=width < NARROWEST_WINDOW, touch=touch, media=media)
 
 
 def listing(dom: str) -> str:
@@ -1407,6 +1409,484 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
     assert all(m["colour"] == m["text_colour"] for m in badges if m["text"] in ("LC", "LR", "YT")), badges
 
 
+# --- a song's title opens its sheet, as its row's button, the primary one, does ------------------------
+
+
+def filed_library(conn, cfg):
+    """Creep, found, with every kind of file and a Guitar Pro version to download; Wonderwall, found, its
+    PDF alone; The Underworld, wanted and in review (two badges); Yesterday, wanted, with no file."""
+    creep = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, creep, "Words\n", raw={"tonality_name": "G"})
+    put(cfg, creep, "sheet.html", "sheet.pdf", "sheet.cho", "lyrics.txt", "lyrics.lrc", "guitar-1.gp5", "tab.txt",
+        "info.json")
+    set_picks(conn, creep.id, ["guitar-pro"], [version(conn, creep, 555890, slot="guitar", kind="guitar-pro")])
+    update_song(conn, creep.id, status="found")
+    wonderwall = add_song(conn, "Oasis", "Wonderwall")
+    put(cfg, wonderwall, "sheet.pdf")
+    update_song(conn, wonderwall.id, status="found")
+    underworld = add_song(conn, "Epic", "The Underworld")
+    update_song(conn, underworld.id, review=True)
+    add_song(conn, "The Beatles", "Yesterday")
+    return creep
+
+
+def served_auto_sheet(conn, cfg):
+    """斑马，斑马, wanted, with an auto sheet, on the page caracole serve serves."""
+    from caracole.library_page import WebControls
+
+    s = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, s, "sheet (auto).txt", "sheet (auto).html", "sheet (auto).pdf")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    return write_library_page(cfg.library_dir, html)
+
+
+AUTO_VIEWER = r'href="[^"]*/sheet%20%28auto%29\.html"'
+
+
+def link_texts(html: str) -> list[str]:
+    """The text of each button-like link (its label, before any mark of where it came from)."""
+    return re.findall(r'<a class="btn[^"]*"[^>]*>([^<]*)', html)
+
+
+@in_chromium
+def test_a_songs_title_opens_its_sheet_on_its_card_and_its_row_whose_button_is_the_primary_one(conn, cfg,
+                                                                                               tmp_path):
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+
+    cards = listing(dump_dom(path, tmp_path))
+    # The title opens the viewer, else the PDF: out of the Tab order, as the card's button opens the same.
+    title = re.search(r'<a class="title-link" ([^>]*)><h2>Creep</h2></a>', card_of(cards, "Creep"))
+    assert title and 'href="Radiohead/Creep/sheet.html"' in title.group(1) and 'tabindex="-1"' in title.group(1)
+    wonderwall = card_of(cards, "Wonderwall")
+    assert re.search(r'<a class="title-link" href="Oasis/Wonderwall/sheet.pdf"[^>]*><h2>Wonderwall</h2></a>',
+                     wonderwall), wonderwall
+    assert "title-link" not in card_of(cards, "Yesterday")  # no file: a plain title
+
+    rows = listing(dump_dom(path, tmp_path, "#view=rows"))
+    creep = row_of(rows, "Creep")
+    title = re.search(r'<a class="title-link" ([^>]*)><h2 class="row-title"[^>]*>Creep</h2></a>', creep)
+    assert title and 'href="Radiohead/Creep/sheet.html"' in title.group(1) and 'tabindex="-1"' in title.group(1)
+    # The row's button opens the same, and is the primary one, as Fetch now is on a wanted song's row.
+    main = re.search(r'<div class="row-action"><a class="btn small primary" ([^>]*)>Sheet viewer</a>', creep)
+    assert main and 'href="Radiohead/Creep/sheet.html"' in main.group(1), creep
+    assert 'aria-label="Sheet viewer of Creep by Radiohead"' in main.group(1)
+    assert "title-link" not in row_of(rows, "Yesterday")
+
+
+# Notes how each row is laid out: how tall its title's link is against its button, how many lines its title
+# takes, and its button's colour against a primary button's.
+ROW_LAYOUT = """
+(() => {
+  const box = (n) => n.getBoundingClientRect();
+  const rows = {};
+  for (const r of document.querySelectorAll("#list .row")) {
+    const h2 = r.querySelector("h2");
+    const title = r.querySelector(".title-link");
+    const main = r.querySelector(".row-action > a");
+    rows[h2.textContent] = {
+      title: title ? Math.round(box(title).height) : null,
+      button: main ? Math.round(box(main).height) : null,
+      lines: Math.round(box(h2).height / parseFloat(getComputedStyle(h2).lineHeight)),
+      colour: main ? getComputedStyle(main).backgroundColor : null,
+    };
+  }
+  const primary = document.createElement("a");
+  primary.className = "btn primary";
+  document.body.appendChild(primary);
+  document.body.setAttribute("data-rows", JSON.stringify({ rows, accent: getComputedStyle(primary).backgroundColor,
+    page: innerWidth, scroll: document.documentElement.scrollWidth }));
+  primary.remove();
+})();
+"""
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+@in_chromium
+def test_a_rows_title_is_as_easy_to_hit_as_its_button(conn, cfg, tmp_path, size):
+    import html as html_module
+
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), ROW_LAYOUT))
+    found = re.search(r'data-rows="([^"]*)"', dump_dom(path, tmp_path, "#view=rows", size=size))
+    assert found
+    laid = json.loads(html_module.unescape(found.group(1)))
+    rows = laid["rows"]
+    assert laid["scroll"] <= laid["page"], laid
+    # The title's link fills its line, as tall as the button beside it, and the title stays on one line.
+    for title in ("Creep", "Wonderwall"):
+        assert rows[title]["title"] >= rows[title]["button"] > 0 and rows[title]["lines"] == 1, rows
+        assert rows[title]["colour"] == laid["accent"], rows  # the sheet is the row's primary button
+    assert rows["Yesterday"]["title"] is None, rows
+
+
+@in_chromium
+def test_a_wanted_songs_auto_sheet_opens_from_its_rows_title_and_leads_its_files(conn, cfg, tmp_path):
+    row = row_of(listing(dump_dom(served_auto_sheet(conn, cfg), tmp_path, "#view=rows")), "斑马，斑马")
+    assert re.search(r'<div class="row-action"><form[^>]*action="/fetch"', row), row
+    # Fetch now has the row's button: its title opens the auto sheet, which also leads its files under "⋯".
+    assert re.search(r'<a class="title-link" ' + AUTO_VIEWER + r' tabindex="-1">', row), row
+    assert link_texts(panel_of(row))[:1] == ["Auto sheet viewer"], row
+
+
+# The row renderer's title link, as another list uses it: a relative link, a site's, and one that isn't safe.
+TITLE_ROWS = """
+(() => {
+  const list = document.createElement("div");
+  list.className = "rows";
+  list.id = "results";
+  for (const [title, href] of [["Here", "Radiohead/Creep/sheet.html"], ["There", "https://example.org/creep"],
+                               ["Nowhere", "javascript:alert(1)"], ["Plain", ""]]) {
+    list.appendChild(window.caracole.resultRow({ title, href }));
+  }
+  document.body.appendChild(list);
+})();
+"""
+
+
+@in_chromium
+def test_a_result_rows_title_opens_what_its_href_says(conn, cfg, tmp_path):
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), TITLE_ROWS))
+    results = re.search(r'<div class="rows" id="results">(.*?)</div>\s*</body>', dump_dom(path, tmp_path), re.S).group(1)
+    here = re.search(r'<a class="title-link" ([^>]*)><h2 class="row-title"[^>]*>Here</h2>', results)
+    assert here and 'href="Radiohead/Creep/sheet.html"' in here.group(1) and "target" not in here.group(1)
+    there = re.search(r'<a class="title-link" ([^>]*)><h2 class="row-title"[^>]*>There</h2>', results)
+    assert there and 'href="https://example.org/creep"' in there.group(1)
+    assert 'target="_blank"' in there.group(1) and 'rel="noopener noreferrer"' in there.group(1)
+    assert "javascript:" not in results and re.search(r'href="#"[^>]*><h2 class="row-title"[^>]*>Nowhere<', results)
+    assert re.search(r'<article class="row" tabindex="-1"><h2 class="row-title"[^>]*>Plain</h2>', results), results
+
+
+# --- a card opens its sheet from one button; its other files fold away ---------------------------------
+
+
+@in_chromium
+def test_a_card_opens_its_sheet_from_one_button_and_its_other_files_fold_away(conn, cfg, tmp_path):
+    filed_library(conn, cfg)
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+
+    creep = card_of(shown, "Creep")
+    assert creep.count('<details class="more files">') == 1, creep
+    top, files = creep.split('<details class="more files">')
+    files = files.split("</details>", 1)[0]
+    # One button opens the viewer, as the title does, named for the song.
+    assert link_texts(top) == ["Open"], top
+    opened = re.search(r'<a class="btn primary" ([^>]*)>Open</a>', top)
+    assert 'href="Radiohead/Creep/sheet.html"' in opened.group(1)
+    assert 'aria-label="Open Creep by Radiohead"' in opened.group(1) and 'title="Sheet viewer"' in opened.group(1)
+    # Every other file, and the Guitar Pro versions to download, under Files: closed, small.
+    assert files.startswith("<summary>Files</summary>"), files
+    assert link_texts(files) == ["Sheet PDF", "Sheet text", "ChordPro", "Lyrics", "Timed lyrics", "Guitar Pro 1",
+                                 "Tab", "Info", "Guitar Pro ver 1 · 4.5★ · 12 votes ↗"], files
+    assert '<p class="subhead">Guitar Pro to download</p>' in files
+    assert all(cls.startswith("btn small") for cls in re.findall(r'<a class="([^"]*)"', files)), files
+
+    # A sheet with no viewer opens its PDF, and says so.
+    wonderwall = card_of(shown, "Wonderwall")
+    opened = re.search(r'<a class="btn primary" ([^>]*)>Open PDF</a>', wonderwall)
+    assert opened and 'href="Oasis/Wonderwall/sheet.pdf"' in opened.group(1), wonderwall
+    assert 'aria-label="Open PDF of Wonderwall by Oasis"' in opened.group(1)
+    assert "more files" not in wonderwall  # nothing else to fold away
+    # A song with no file has nothing to open.
+    yesterday = card_of(shown, "Yesterday")
+    assert ">Open" not in yesterday and "more files" not in yesterday
+
+
+@in_chromium
+def test_a_wanted_songs_card_keeps_fetch_now_its_one_primary_button(conn, cfg, tmp_path):
+    card = card_of(listing(dump_dom(served_auto_sheet(conn, cfg), tmp_path)), "斑马，斑马")
+    # Fetch now is the card's one primary button, as it is the row's; the auto sheet opens beside it.
+    assert 'action="/fetch"' in card and card.count("btn primary") == 1, card
+    assert re.search(r'<a class="btn" ' + AUTO_VIEWER + r"[^>]*>Open</a>", card), card
+
+
+@in_chromium
+def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_skips_the_title(conn, cfg, tmp_path):
+    from helpers.browser import Browser, BrowserError
+
+    creep = filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    try:
+        phone = Browser(tmp_path / "chrome", width=390, height=844, mobile=True)
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    card = f'#list .card[data-id="{creep.id}"]'
+    with phone:
+        phone.open(path.as_uri())
+        assert phone.wait(f"document.querySelector({json.dumps(card)}) !== null")
+        q = f"document.querySelector({json.dumps(card)})"
+        # A thumb's target: Files, and each file once it's open.
+        assert phone.js(f"{q}.querySelector('details.files > summary').getBoundingClientRect().height") >= 44
+        phone.click(card + " details.files > summary")
+        assert phone.wait(f"{q}.querySelector('details.files').open")
+        heights = phone.js(f"Array.from({q}.querySelectorAll('details.files a')).map((a) => a.getBoundingClientRect().height)")
+        assert len(heights) == 9 and min(heights) >= 44, heights
+        # From the artist, Tab goes to Open: the title opens the same, and isn't a stop of its own.
+        phone.js(f"{q}.querySelector('button.artist').focus()")
+        phone.press("Tab")
+        assert phone.js("document.activeElement.textContent") == "Open"
+        phone.click(card + " .title-link")
+        assert phone.wait("location.pathname.endsWith('/Radiohead/Creep/sheet.html')")
+
+
+# --- a card's title keeps its line: its badges go beside its artist ------------------------------------
+
+
+# Notes how each card is laid out: its height, how many lines its title takes, where its badges are against
+# its title and its artist, how tall its artist and its Files are, and how many buttons it shows.
+CARD_LAYOUT = """
+(() => {
+  const box = (n) => n.getBoundingClientRect();
+  const cards = {};
+  for (const c of document.querySelectorAll("#list .card")) {
+    const h2 = c.querySelector("h2");
+    const title = box(h2);
+    const artist = box(c.querySelector("button.artist"));
+    const badges = box(c.querySelector(".badges"));
+    const files = c.querySelector("details.files > summary");
+    cards[h2.textContent] = {
+      height: Math.round(box(c).height),
+      lines: Math.round(title.height / parseFloat(getComputedStyle(h2).lineHeight)),
+      alone: badges.top >= title.bottom - 1,  // nothing beside the title: the badges are under it
+      apart: badges.left >= artist.right - 1 || badges.top >= artist.bottom - 1,  // beside the artist, or under
+      artist: Math.round(artist.height),
+      buttons: Array.from(c.querySelectorAll(".btn")).filter((b) => b.checkVisibility()).length,
+      files: files ? Math.round(box(files).height) : null,
+    };
+  }
+  document.body.setAttribute("data-cards", JSON.stringify({ cards, page: innerWidth, screen: innerHeight,
+    scroll: document.documentElement.scrollWidth }));
+})();
+"""
+
+
+@pytest.mark.parametrize("size,touch", [("390,844", False), ("390,844", True), ("1280,800", False)])
+@in_chromium
+def test_lean_cards_fit_a_phone_and_their_titles_keep_a_line_of_their_own(conn, cfg, tmp_path, size, touch):
+    import html as html_module
+
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), CARD_LAYOUT))
+    dom = dump_dom(path, tmp_path, size=size, touch=touch)
+    found = re.search(r'data-cards="([^"]*)"', dom)
+    assert found, dom[-2000:]
+    laid = json.loads(html_module.unescape(found.group(1)))
+    cards = laid["cards"]
+    assert laid["page"] == int(size.split(",")[0]) and laid["scroll"] <= laid["page"], laid
+    assert cards["Creep"]["buttons"] == 1 and cards["Creep"]["files"], cards  # Open; the rest folded
+    # The badges go on the artist's line, or under it: two of them leave the title its whole line.
+    assert all(card["alone"] and card["apart"] for card in cards.values()), cards
+    assert cards["The Underworld"]["lines"] == 1, cards
+    if touch:
+        # The artist, which shows that artist's songs alone, is a thumb's target, on the line it shares.
+        assert min(card["artist"] for card in cards.values()) >= 44, cards
+    else:
+        assert max(card["artist"] for card in cards.values()) < 44, cards  # a mouse's: the line of text
+    if laid["page"] < 480:
+        # Three cards to a phone's screen, the fullest too, where its eight files and more made it 1.5.
+        assert laid["screen"] // cards["Creep"]["height"] >= 3, cards
+
+
+# What a tap lands on between each card's title and its artist's name (under the narrower of the two, every
+# pixel from the title's text down to the name's), how tall the title's target is, and how far the artist's
+# target reaches above its name.
+TITLE_AND_ARTIST = """
+(() => {
+  const cards = {};
+  for (const c of document.querySelectorAll("#list .card")) {
+    const link = c.querySelector(".title-link");
+    if (!link) continue;
+    c.scrollIntoView({ block: "center" });
+    const artist = c.querySelector("button.artist");
+    const title = link.querySelector("h2").getBoundingClientRect();
+    const name = artist.querySelector(".artist-name").getBoundingClientRect();
+    const box = artist.getBoundingClientRect();
+    const x = title.left + Math.min(title.width, name.width) / 2;
+    const between = new Set();
+    for (let y = Math.ceil(title.bottom); y < Math.floor(name.top); y += 1) {
+      const hit = document.elementFromPoint(x, y);
+      between.add(artist.contains(hit) ? "artist" : link.contains(hit) ? "title" : "neither");
+    }
+    cards[link.textContent] = { between: Array.from(between).sort(), link: Math.round(link.getBoundingClientRect().height),
+      above: Math.round(name.top - box.top), artist: Math.round(box.height) };
+  }
+  document.body.setAttribute("data-heads", JSON.stringify(cards));
+})();
+"""
+
+
+@in_chromium
+def test_on_a_touch_phone_a_tap_just_under_a_cards_title_opens_it_and_the_artist_reaches_down(conn, cfg, tmp_path):
+    from helpers.targets import noted
+
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), TITLE_AND_ARTIST))
+    heads = noted(dump_dom(path, tmp_path, size="390,844", touch=True), "data-heads")
+    assert set(heads) == {"Creep", "Wonderwall"}, heads
+    for title, head in heads.items():
+        # Right under the title's text is the title's: a tap a little low opens the sheet, never the filter.
+        assert head["between"] == ["title"], (title, head)
+        # The title's target is a thumb's height, and so is the artist's, which reaches down from its name.
+        assert head["link"] >= 44 and head["artist"] >= 44 and head["above"] <= 2, (title, head)
+
+
+@in_chromium
+def test_an_artists_name_shows_it_is_a_filter_on_its_card_and_its_row(conn, cfg, tmp_path):
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    for fragment, find in (("", card_of), ("#view=rows", row_of)):
+        shown = find(listing(dump_dom(path, tmp_path, fragment)), "Creep")
+        who = re.search(r'<button class="artist[^"]*" type="button" title="Show only Radiohead\'s songs">(.*?)</button>',
+                        shown)
+        assert who, shown
+        # The name, then a filter's mark that a screen reader skips: the button's title says what it does.
+        assert who.group(1) == ('<span class="artist-name">Radiohead</span>'
+                                '<span class="filter-mark" aria-hidden="true"></span>'), who.group(1)
+
+
+# --- touch and edges: a thumb's targets, and fields an eye can find ------------------------------------
+
+
+def every_control(conn, cfg, *, served: bool = True) -> str:
+    """The page caracole serve serves (``served``; else the file on disk), with a control of every kind:
+    filed_library's songs (every file, a Guitar Pro version to download, a song in review, one with no
+    file), a review's candidates to pick, a wanted song with an auto sheet, a songbook, the form to
+    request a song, and the A-Z strip, which takes 40 songs shown (``JUMP_FROM``)."""
+    from caracole.library_page import WebControls
+    from caracole.songbook import FILE_NAME, make_songbook
+
+    filed_library(conn, cfg)
+    index_tabs(conn, (1, "radiohead", "creep", "chords"), (3, "radiohead", "creep", "tabs"))
+    in_review(conn)
+    auto = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, auto, "sheet (auto).txt", "sheet (auto).html", "sheet (auto).pdf")
+    for n in range(35):  # wanted, no file: last in the artists' order
+        add_song(conn, "Zucchero", f"Song {n:02d}")
+    make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Radiohead - Creep", "Oasis - Wonderwall"])
+    controls = WebControls(csrf="tok") if served else None
+    return build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+
+
+# A card's title opens what its Open button opens, which is a thumb's size (WCAG 2.5.8's equivalent).
+TITLES = ".card .title-link"
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+@pytest.mark.parametrize("view", ["", "#view=rows"])
+@in_chromium
+def test_on_a_touch_screen_every_control_is_a_thumbs_size(conn, cfg, tmp_path, size, view):
+    from helpers.targets import UNFOLD, noted, noting, small_targets
+
+    html = with_script(every_control(conn, cfg), UNFOLD + noting("data-short", small_targets(TITLES)))
+    dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, view, size=size, touch=True)
+    short = noted(dom, "data-short")
+    assert short == [], short
+
+
+# On the file on disk, Select a song, name a songbook and make it: the bar then shows the command to run. On a
+# phone the name field waits under "Make songbook…".
+MAKE_FROM_DISK = """
+document.querySelector(".pick-toggle").click();
+document.querySelector("#list .pick input").click();
+if (document.querySelector(".pick-open").checkVisibility()) document.querySelector(".pick-open").click();
+document.querySelector(".pick-name").value = "Campfire 2";
+document.querySelector(".pickbar-form button[type=submit]").click();
+document.body.setAttribute("data-command", String(!document.querySelector(".pick-command").hidden));
+"""
+
+
+@in_chromium
+def test_the_select_bar_of_the_file_on_disk_and_its_command_on_a_touch_phone(conn, cfg, tmp_path):
+    from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
+
+    # The search field is the search bar's, which another change redraws. While selecting, a card is one
+    # target, its artist's name no target of its own.
+    exempt = TITLES + ", .selecting [data-picker] .artist"
+    script = (UNFOLD + MAKE_FROM_DISK + noting("data-short", small_targets(exempt))
+              + noting("data-weak", weak_edges("#q")))
+    html = with_script(every_control(conn, cfg, served=False), script)
+    dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, size="390,844", touch=True)
+    assert 'data-command="true"' in dom  # its Copy button is measured too
+    short, weak = noted(dom, "data-short"), noted(dom, "data-weak")
+    assert short == [] and weak == [], (short, weak)
+
+
+# The heights of the compact controls, as a mouse gets them.
+COMPACT = """
+(() => {
+  const tall = (selector) => {
+    const node = Array.from(document.querySelectorAll(selector)).find((n) => n.checkVisibility());
+    return node ? Math.round(node.getBoundingClientRect().height) : null;
+  };
+  return { row: tall("#list .row-action .btn"), more: tall("#list .row-more"), artist: tall("#list button.artist"),
+           file: tall("#list .row-panel .btn.small"), view: tall(".views button"), letter: tall("#jump button"),
+           chip: tall(".chip"), menu: tall("#sort") };
+})()
+"""
+
+
+@in_chromium
+def test_a_mouse_keeps_the_compact_controls(conn, cfg, tmp_path):
+    from helpers.targets import UNFOLD, noted, noting
+
+    html = with_script(every_control(conn, cfg), UNFOLD + noting("data-compact", COMPACT))
+    heights = noted(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, "#view=rows", size="1280,800"),
+                    "data-compact")
+    assert all(h is not None and h < 44 for h in heights.values()), heights
+
+
+# The card's border against a field's, both as the browser draws them.
+BORDERS = """
+({ card: getComputedStyle(document.querySelector("#list .card")).borderTopColor,
+   field: getComputedStyle(document.querySelector(".request .f input")).borderTopColor })
+"""
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@in_chromium
+def test_fields_menus_and_select_boxes_have_an_edge_of_three_to_one(conn, cfg, tmp_path, scheme):
+    from helpers.targets import UNFOLD, noted, noting, weak_edges
+
+    select = 'document.querySelector(".pick-toggle").click();\n'  # its boxes, and its bar's name and menu
+    # The search field is the search bar's, which another change redraws.
+    script = UNFOLD + select + noting("data-weak", weak_edges("#q")) + noting("data-borders", BORDERS)
+    dom = dump_dom(write_library_page(cfg.library_dir, with_script(every_control(conn, cfg), script)), tmp_path,
+                   size="390,844", media={"prefers-color-scheme": scheme})
+    weak = noted(dom, "data-weak")
+    assert weak == [], weak
+    borders = noted(dom, "data-borders")
+    assert borders["card"] != borders["field"], borders  # a card keeps its soft border: it is no control
+
+
+def css_tokens(style: str, *, dark: bool) -> dict[str, str]:
+    """The colours of a stylesheet's first :root, or of its first :root for dark mode."""
+    light, _, rest = style.partition("@media (prefers-color-scheme: dark)")
+    root = re.search(r":root\s*\{(.*?)\}", rest if dark else light, re.S)
+    assert root, style[:500]
+    return dict(re.findall(r"(--[\w-]+):\s*(#[0-9a-fA-F]{6})\b", root.group(1)))
+
+
+def contrast(a: str, b: str) -> float:
+    """WCAG's contrast ratio of two #rrggbb colours."""
+    def luminance(colour: str) -> float:
+        r, g, b = (int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        f = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in (r, g, b)]
+        return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
+
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+@pytest.mark.parametrize("dark", [False, True])
+def test_a_controls_edge_is_three_to_one_against_every_background_a_card_keeps_its_soft_border(dark):
+    from caracole.library_page import BASE_STYLE
+
+    tokens = css_tokens(BASE_STYLE, dark=dark)
+    for background in ("--bg", "--surface", "--raised"):
+        assert contrast(tokens["--control-edge"], tokens[background]) >= 3, (background, tokens)
+    assert contrast(tokens["--border"], tokens["--surface"]) < 3  # cards and dividers: no control's edge
+
+
 def row_of(shown: str, title: str) -> str:
     found = re.search(r'<article class="row"[^>]*>(?:(?!</article>).)*?' + re.escape(title) + r".*?</article>",
                       shown, re.S)
@@ -1424,7 +1904,7 @@ def test_the_rows_view_shows_a_song_a_row_with_its_source_key_status_and_main_ac
     assert re.search(r'<button[^>]*data-view="rows"[^>]*aria-pressed="true"', dom)
     creep = row_of(shown, "Creep")
     assert re.search(r'<h2 class="row-title"[^>]*>Creep</h2>', creep)
-    assert 'alt="from Ultimate Guitar"' in creep and ">Radiohead</button>" in creep
+    assert 'alt="from Ultimate Guitar"' in creep and '<span class="artist-name">Radiohead</span>' in creep
     assert "Key G major (from the tab)" in creep and ">Found<" in creep
     main = re.search(r'<div class="row-action"><a ([^>]*)>Sheet PDF</a>', creep)
     assert main and 'href="Radiohead/Creep/sheet.pdf"' in main.group(1)
@@ -1445,6 +1925,8 @@ ROWS = """
 (() => {
   const rows = Array.from(document.querySelectorAll("#list .row"));
   const box = (node) => node.getBoundingClientRect();
+  // The artist's name: in the button that shows that artist's songs alone, or the row's text.
+  const name = (r) => r.querySelector(".row-artist .artist-name") || r.querySelector(".row-artist");
   const lines = (r) => {
     const parts = r.querySelectorAll(".row-title, .row-artist, .row-meta > *, .row-action > *, .row-more, .row > .source");
     const middles = Array.from(parts).filter((p) => box(p).height > 0)
@@ -1456,8 +1938,8 @@ ROWS = """
     heights: rows.map((r) => Math.round(box(r).height)),
     titles: rows.map((r) => Math.round(box(r.querySelector("h2")).top)),
     actions: rows.map((r) => r.querySelector(".row-action > *") ? Math.round(box(r.querySelector(".row-action > *")).top) : null),
-    artists: rows.map((r) => r.querySelector(".row-artist") ? Math.round(box(r.querySelector(".row-artist")).width) : null),
-    whole: rows.map((r) => r.querySelector(".row-artist") ? r.querySelector(".row-artist").scrollWidth : null),
+    artists: rows.map((r) => name(r) ? Math.round(box(name(r)).width) : null),
+    whole: rows.map((r) => name(r) ? name(r).scrollWidth : null),
     lines: rows.map(lines),
     widths: rows.map((r) => Math.round(box(r).width)),
     page: window.innerWidth,
@@ -1547,6 +2029,12 @@ def test_many_rows_fit_on_a_screen_and_a_phones_rows_wrap_to_two_lines(conn, cfg
     assert set(phone["lines"]) == {2} and min(phone["artists"]) > 40, phone
     # Two lines at most, with buttons a thumb can hit: nine rows to a screen, against three cards.
     assert phone["screen"] // max(phone["heights"]) >= 9, phone
+    # On a touch screen each row's button, "⋯" and artist are a thumb's size: eight rows still.
+    touch = layout_of(dump_dom(path, tmp_path, "#view=rows", size="390,844", touch=True))
+    assert set(touch["lines"]) == {2} and touch["scroll"] <= touch["page"], touch
+    assert touch["screen"] // max(touch["heights"]) >= 8, touch
+    tablet = layout_of(dump_dom(path, tmp_path, "#view=rows", size="1280,800", touch=True))
+    assert set(tablet["lines"]) == {1}, tablet  # one line each, as with a mouse
 
 
 @in_chromium

@@ -24,13 +24,28 @@ by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
 The songs are one grid of cards, as many columns as the screen holds, in every
 order: a section per artist left one narrow card per row on a desktop. Each
 card has its artist's monogram, in a colour of that artist's, and an A-Z strip
-jumps to the first card of a letter once more than 40 songs show. On a phone
-the header is short (the numbers beside the title, one row of buttons that
-scrolls sideways, Key, Sort and the view under View), so the first song starts
-on the first screen; the bar stays at the top, with an edge once the page
-scrolls under it. A Cards/Rows toggle shows them as rows
+jumps to the first card of a letter once more than 40 songs show. A card's
+title and its one Open button open its sheet (its viewer, else its PDF, else
+its text); its other files, and the Guitar Pro versions to download from UG,
+fold under Files, as a row's "⋯" folds them. The title keeps its line: the
+artist goes under it, with the badges at the end of that line or under it. The
+artist's name, marked with a funnel (``artistFilter``, ROWS_SCRIPT's), shows
+that artist's songs alone, on a card and on a row. On a phone the header is
+short (the numbers beside the title, one row of buttons that scrolls sideways,
+Key, Sort and the view under View), so the first song starts on the first
+screen; the bar stays at the top, with an edge once the page scrolls under it.
+A Cards/Rows toggle shows them as rows
 instead, one compact line a song (two on a phone), remembered in the address
 (``#view=rows``) as the search, the filters, the sort and the key are.
+
+On a touch screen (``pointer: coarse``) every control is a thumb's target, 44
+px each way at the least: buttons, folds, chips, menus, letters, a row's "⋯"
+and an artist's name (a card's at the top of its box, under its title, whose
+target reaches down to it); a mouse keeps the compact sizes, about twenty rows to a
+laptop's screen. Fields, menus and the Select boxes have the ``--control-edge``
+colour, 3:1 or more against every background (WCAG 1.4.11); cards and dividers
+keep the soft ``--border``. ``BASE_STYLE`` and ``PICKER_STYLE`` carry both to
+the pages caracole serve writes itself (web/pages.py, web/lookup_page.py).
 
 Each file, link and row shows where it came from (icons.py): the site's own
 icon, inlined in the data as a ``data:`` URI (the CSP allows images from
@@ -46,7 +61,10 @@ serve's lookup page, web/lookup_page.py, which runs ``ROWS_SCRIPT`` and has
 element, the same as a song's row, to put in a ``<div class="rows">``.
 ``result`` is a plain object, every field optional:
 
-- ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button;
+- ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button that
+  shows it filters (a funnel after the name), as on a card;
+- ``href``: what the title opens (the row's sheet, as its button does), the same way as
+  ``action``'s link; out of the Tab order, since the button says what it opens;
 - ``source``: a key of the data's ``icons`` (``icons.SOURCES``: "ug", "lacuerda"…);
 - ``key`` ("A minor"), and ``keyText``, what a screen reader hears for it;
 - ``status``, which the row's ``data-status`` gets; ``badges``: ``[{kind, text}]``,
@@ -88,6 +106,23 @@ Look in the index and Remove… under its "⋯". A song new to the library gets 
 bar, and two requests or more also show in a corner, folded to one line that opens upwards. Without
 JavaScript the forms post as forms. The file on disk has none of it, and lets
 no form be sent and nothing be asked.
+
+Remove…'s question is a page of the server's; Remove it, and Keep it, come back
+to this page as it was left (Remove… sends the address after # along, ``back``),
+at the song's card: ``song=ID`` in the address, which the script scrolls to and
+focuses, then drops. The card's line follows the removal ("Removing from
+caracole…", then "Removed"), and the card is then a ``gone`` one, its name
+alone, until the page is loaded again.
+
+The Songbooks section's forms, and the Select bar's Make songbook, post with
+fetch() too: the songbook's card says how its change goes on a line under its
+name, its buttons waiting (a song moves by its place now), a new songbook's
+card at the section's end, which opens on it; once the change is over the
+section is drawn again from the server's own HTML (``songbooks_section``,
+which ``/jobs.json`` gives with the job: the script's ``drawSongbooks`` reads
+it with DOMParser, which runs no script, and keeps each card that shows a line
+where it is, so that its line goes on being read out). On the served page the
+section is there even before the first songbook, hidden.
 
 A song in review carries its candidates (``review_choices``), numbered as
 ``caracole review`` numbers them, and its card a picker (the script's
@@ -190,7 +225,8 @@ class WebControls:
     ``removing`` holds the songs with a removal queued or running, whose cards
     say so instead of offering Remove; ``jobs`` are the requests queued or
     running, as ``/jobs.json`` gives them, so their cards show their progress
-    from the start.
+    from the start: a song's, a removal's on its song's card, and a songbook's
+    change on its songbook's (``kind``).
     """
 
     csrf: str
@@ -543,7 +579,10 @@ def _haystack(texts: list[str]) -> str:
 
 # --- the page ---------------------------------------------------------------------------
 
-# Shared with the pages caracole serve writes itself (caracole/web/): colours, type, buttons.
+# Shared with the pages caracole serve writes itself (caracole/web/): colours, type, buttons. --border is
+# the soft line of cards and dividers; --control-edge, the edge that tells a field, a menu or a box from
+# what is around it, at 3:1 or more against every background (WCAG 1.4.11). On a touch screen
+# (pointer: coarse) every button is a thumb's target, 44 px; a mouse keeps the compact ones.
 BASE_STYLE = """
 :root {
   color-scheme: light dark;
@@ -554,6 +593,7 @@ BASE_STYLE = """
   --muted: #645f57;
   --border: #e3dfd6;
   --border-strong: #cdc7bb;
+  --control-edge: #8d877c;
   --accent: #b4441e;
   --accent-hover: #9a3915;
   --on-accent: #ffffff;
@@ -575,6 +615,7 @@ BASE_STYLE = """
     --muted: #aaa59c;
     --border: #34322f;
     --border-strong: #4b4844;
+    --control-edge: #7a756e;
     --accent: #f0895c;
     --accent-hover: #f5a47f;
     --on-accent: #1b0e07;
@@ -633,7 +674,7 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
 .badge.failed { color: var(--failed); background: var(--failed-bg); }
 .f { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .85rem; font-weight: 600; }
 .f em { font-style: normal; font-weight: 500; }
-.f input { width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border-strong);
+.f input { width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--control-edge);
   background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; font-weight: 400; }
 .f input:focus { border-color: var(--focus); outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
@@ -644,6 +685,9 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
   .page { padding: 0 24px 64px; }
   .masthead { padding-top: 32px; }
   .masthead h1 { font-size: 2.1rem; }
+}
+@media (pointer: coarse) {
+  .btn, .btn.small { min-height: 44px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .btn, .navlink { transition: background-color .12s, border-color .12s; }
@@ -685,6 +729,9 @@ label.choice-pick { cursor: pointer; }
   cursor: pointer; }
 .pick-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .pick-hint { margin: 0; color: var(--muted); font-size: .82rem; }
+@media (pointer: coarse) {
+  .picker > summary:not(.btn), .choice-link { min-height: 44px; }
+}
 """
 
 # A list's rows and the marks of where each thing came from: index.html's Rows view, and the results of
@@ -704,11 +751,23 @@ ROWS_STYLE = """
 .btn.sourced { gap: 7px; }
 .btn.sourced .source { order: -1; }
 .badges .source { align-self: center; }
+/* An artist's name that shows that artist's songs alone: a button, the name and a filter's mark (a funnel),
+   so that it shows it is one without a pointer to hover it. */
+.artist { display: inline-flex; align-items: center; gap: 5px; min-width: 0; margin: 0; padding: 0; border: 0;
+  background: none; color: var(--muted); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; }
+.artist-name { min-width: 0; overflow-wrap: anywhere; }
+.artist:hover { color: var(--text); }
+.artist:hover .artist-name { text-decoration: underline; text-underline-offset: 2px; }
+.filter-mark { flex: none; width: .7em; height: .75em; background: currentColor; opacity: .8;
+  clip-path: polygon(0 0, 100% 0, 60% 48%, 60% 90%, 40% 100%, 40% 48%); }
+/* A title that opens the sheet: the heading as it was, underlined under the pointer. */
+.title-link { display: block; width: fit-content; max-width: 100%; color: inherit; text-decoration: none; }
+.title-link:hover > h2 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .rows { margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
   box-shadow: var(--shadow); }
 /* Below 900px a row is two lines: the title and the main action, then the artist with the key and
    badges (.row-sub, as wide as the row but for the "⋯" button), the artist at least 3rem wide. */
-.row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 34px;
+.row { --row-more: 34px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto var(--row-more);
   grid-template-areas: "src title act act" ". sub sub more"; align-items: center; gap: 2px 10px;
   min-width: 0; padding: 8px 10px 8px 12px; border-top: 1px solid var(--border); scroll-margin-top: 84px; }
 .row:first-child { border-top: 0; }
@@ -716,10 +775,13 @@ ROWS_STYLE = """
 .row > .source { grid-area: src; justify-self: center; }
 .row-title { grid-area: title; min-width: 0; margin: 0; overflow: hidden; font-size: .98rem; line-height: 1.3;
   white-space: nowrap; text-overflow: ellipsis; }
+/* A row's title link fills its line: as easy to hit as the button beside it. */
+.row > .title-link { grid-area: title; display: flex; align-items: center; align-self: stretch; width: auto;
+  min-width: 0; }
 .row-sub { grid-area: sub; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
 .row-artist { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
   font-size: .86rem; white-space: nowrap; text-overflow: ellipsis; }
-.row .artist { margin: 0; }
+.row-artist .artist-name { overflow: hidden; text-overflow: ellipsis; }
 .row-meta { flex: 0 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
   gap: 4px 6px; min-width: 0; margin: 0 0 0 auto; color: var(--muted); font-size: .82rem; }
 .row-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -732,7 +794,7 @@ ROWS_STYLE = """
 /* A request's line: a line of the row's own, under the title, the artist and the button. */
 .row > .progress { grid-column: 2 / -1; font-size: .85rem; }
 .row-panel .foot { margin-top: 2px; }
-.row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: 34px; height: 30px;
+.row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: var(--row-more); height: 30px;
   padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted);
   font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
 .row-more:hover, .row-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
@@ -745,13 +807,22 @@ ROWS_STYLE = """
 .version { display: inline-flex; align-items: center; gap: 4px; }
 .on-ug { color: var(--muted); font-size: .78rem; }
 @media (min-width: 900px) {
-  .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px;
+  .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem var(--row-more);
     grid-template-areas: "src title artist meta act more"; padding: 3px 10px 3px 12px; }
   .row-sub { display: contents; }
   .row-artist { grid-area: artist; justify-self: start; max-width: 100%; }
   .row-meta { grid-area: meta; margin: 0; }
   .row .btn { min-height: 30px; }
   .row-more { height: 28px; }
+}
+/* A thumb's targets: a row's button, its "⋯" and its artist (on a phone the title's line and the artist's,
+   two thumbs high), and a version's page on UG beside its button; a mouse keeps the compact rows. */
+@media (pointer: coarse) {
+  .row { --row-more: 44px; padding-top: 4px; padding-bottom: 4px; }
+  .row .btn, .row-busy { min-height: 44px; }
+  .row-more { height: 44px; }
+  .artist { min-width: 44px; min-height: 44px; }
+  .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }
 """
 
@@ -846,14 +917,6 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .command { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .command code { flex: 1 1 240px; padding: 8px 10px; user-select: all; }
 .empty + .btn.primary { margin-top: 4px; }
-@media (pointer: coarse) {
-  .results .btn, .results .row .btn, .file-answer .btn, .list .empty ~ .btn { min-height: 44px; }
-  .results .row .row-more { width: 44px; height: 44px; }
-  .results .row { grid-template-columns: 20px minmax(0, 1fr) auto 44px; }
-}
-@media (pointer: coarse) and (min-width: 900px) {
-  .results .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 44px; }
-}
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 /* One row of buttons that scrolls sideways on a phone; Key, Sort and the view under View there. */
 .chips { display: flex; flex: 1 1 0; flex-wrap: nowrap; gap: 8px; min-width: 0; margin: -4px; padding: 4px;
@@ -879,7 +942,7 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .chip.person { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: .9rem; }
 .controls { display: flex; flex: none; justify-content: flex-end; gap: 8px; }
-.sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border);
+.sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--control-edge);
   background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
 .jump { display: flex; gap: 2px; margin: 10px 0 0; padding: 2px 0; overflow-x: auto; scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
@@ -892,6 +955,9 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
   border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: 84px; }
 .card[data-status="ignored"] { opacity: .7; }
+/* A song caracole removed while the page was open: it says so, and nothing more, until the page is loaded again. */
+.card.gone { border-style: dashed; box-shadow: none; }
+.gone h2 { color: var(--muted); }
 .head { display: flex; align-items: flex-start; gap: 12px; }
 .mono { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
   font-size: .95rem; font-weight: 700; letter-spacing: .02em; color: var(--h0); background: var(--h0-bg); }
@@ -904,10 +970,10 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .hue-7 { color: var(--h7); background: var(--h7-bg); }
 .names { flex: 1; min-width: 0; }
 .card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
-.artist { display: inline; margin: 2px 0 0; padding: 0; border: 0; background: none; color: var(--muted); font: inherit;
-  font-size: .9rem; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
-.artist:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex: none; max-width: 42%; }
+/* Under the title, which keeps its line: the artist, then the badges, at the end of its line or under it. */
+.byline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px; }
+.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0;
+  margin-left: auto; }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--muted); font-size: .85rem; }
 .facts .key, .facts .transpose { color: var(--text); font-weight: 600; }
 .note { margin: 0; color: var(--review); font-size: .85rem; }
@@ -952,6 +1018,8 @@ body.with-tray .page { padding-bottom: 88px; }
   text-align: center; }
 .more[open] > summary::before { transform: rotate(90deg); }
 .more > .subhead { margin: 8px 0 6px; }
+.more > summary + .actions { margin-top: 6px; }
+.more + .more { margin-top: 0; }  /* Files, then Find it elsewhere: one fold under the other */
 .foot { display: flex; justify-content: flex-end; margin-top: auto; }
 .more + .foot { margin-top: 0; }
 .foot form { margin: 0; }
@@ -973,14 +1041,23 @@ body.with-tray .page { padding-bottom: 88px; }
   .view-panel:not(.open) { display: none; }
   .view-panel .sort { margin-left: 0; }
 }
-@media (pointer: coarse) {
-  .view-toggle, .masthead.lib .navlink, .toolbar .chip, .view-panel .views button, .view-panel select { min-height: 44px; }
-}
 @media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
   .searchbar { margin: 0 -24px; padding: 12px 24px 8px; }
   .masthead.lib { grid-template-areas: "app links" "title links"; align-items: end; padding: 28px 0 8px; }
   .chips { flex-wrap: wrap; overflow: visible; }
+}
+/* A thumb's targets: the pages' links, the chips and View, the menus, Cards/Rows, a card's folds and the
+   letters. Every .btn has its 44 px from BASE_STYLE, and a row's from ROWS_STYLE. */
+@media (pointer: coarse) {
+  .masthead.lib .navlink, .more > summary, .chip, .sort select, .views button { min-height: 44px; }
+  .jump button { min-width: 44px; height: 44px; }
+  /* A card's title and its artist share the thumb's height between them: the title's target reaches up into
+     the card's padding and down to the artist's name, which stands at the top of its own 44 px, so that a tap
+     a little under the title opens the sheet and never filters the list. */
+  .card .title-link { padding: 14px 0 8px; margin: -14px 0 -8px; }
+  .card .byline { align-items: flex-start; margin-top: 8px; }
+  .card .byline .artist { align-items: baseline; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .plus span { transition: transform .15s; }
@@ -1049,6 +1126,33 @@ const caracoleRows = (icons) => {
   };
   let rowSerial = 0;
   const isWeb = (href) => /^https?:/i.test(String(href || ""));
+  // A title that opens what its card's or its row's main button opens: around the heading, so the heading
+  // stays the song's name alone. Out of the Tab order: the button, which says what it opens, is the keyboard's.
+  const titleLink = (href, heading) => {
+    const external = isWeb(href);
+    const a = el("a", "title-link");
+    a.href = safeHref(href, external);
+    if (external) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
+    a.tabIndex = -1;
+    a.appendChild(heading);
+    return a;
+  };
+  // An artist's name that shows that artist's songs alone (``whose``, for its title): a button, the name and a
+  // filter's mark (a funnel, drawn by the stylesheet), which a screen reader skips.
+  const artistFilter = (name, whose, onArtist, cls) => {
+    const who = el("button", cls ? "artist " + cls : "artist");
+    who.type = "button";
+    who.title = "Show only " + whose + "'s songs";
+    who.appendChild(el("span", "artist-name", name));
+    const mark = el("span", "filter-mark");
+    mark.setAttribute("aria-hidden", "true");
+    who.appendChild(mark);
+    who.addEventListener("click", onArtist);
+    return who;
+  };
   const shortKey = (key) => String(key).replace(/ minor$/, "m").replace(/ major$/, "");
   const linkGroup = (group) => {
     if (group instanceof Node) return group;
@@ -1070,16 +1174,12 @@ const caracoleRows = (icons) => {
     if (r.status) row.dataset.status = String(r.status);
     const heading = el("h2", "row-title", title);
     heading.title = title;
-    row.appendChild(heading);
+    row.appendChild(r.href ? titleLink(r.href, heading) : heading);
     // The artist and the key, the status and the badges: one wrapping line under the title on a phone,
     // where badges that don't fit go under the artist, never over it; their own columns on a desktop.
     const sub = el("div", "row-sub");
     if (artist && typeof r.onArtist === "function") {
-      const who = el("button", "artist row-artist", artist);
-      who.type = "button";
-      who.title = "Show only " + artist + "'s songs";
-      who.addEventListener("click", r.onArtist);
-      sub.appendChild(who);
+      sub.appendChild(artistFilter(artist, artist, r.onArtist, "row-artist"));
     } else if (artist) {
       sub.appendChild(el("span", "row-artist", artist));
     }
@@ -1268,7 +1368,8 @@ const caracoleRows = (icons) => {
     else parts.forEach((part, i) => { if (part) p.appendChild(i % 2 ? el("code", null, part) : document.createTextNode(part)); });
     return p;
   };
-  return { resultRow, sourceMark, link, button, many, counts, opener, ugHit, artistHit, siteHit, prose };
+  return { resultRow, sourceMark, link, titleLink, artistFilter, button, many, counts, opener, ugHit, artistHit,
+    siteHit, prose };
 };
 """
 
@@ -1419,10 +1520,25 @@ _SCRIPT = r"""
   // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
-  const { sourceMark, link, resultRow, button, many, ugHit, artistHit, siteHit, prose } = caracoleRows(ICONS);  // ROWS_SCRIPT
+  // ROWS_SCRIPT's, which the lookup page shares
+  const { sourceMark, link, resultRow, titleLink, artistFilter, button, many, ugHit, artistHit, siteHit, prose } =
+    caracoleRows(ICONS);
   // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
+  // The file a song opens with, from its title and its card's one button: its viewer, else its PDF, else its
+  // text (the data marks it primary).
+  const primaryOf = (s) => listOf(s.files).find((f) => f && f.primary) || null;
+  // A card's button for it: "Open" for the viewer, "Open PDF" and "Open text" for the others. The card's
+  // primary one unless it has another (a wanted song's Fetch now, which its row's button is too).
+  const openButton = (s, f, lead) => {
+    const kind = /\.html$/i.test(String(f.name || "")) ? "" : /\.pdf$/i.test(String(f.name || "")) ? "PDF" : "text";
+    const text = kind ? "Open " + kind : "Open";
+    const open = link({ label: text, href: f.href }, lead ? "btn primary" : "btn", false);
+    open.setAttribute("aria-label", text + (kind ? " of " : " ") + String(s.title) + " by " + String(s.artist));
+    open.title = String(f.label || "");  // "Sheet viewer", "Auto sheet PDF"
+    return open;
+  };
 
   // The song has no human sheet, and caracole takes its audio from YouTube (youtube_fetch.py): where
   // that stands, and the video its audio came from.
@@ -1484,13 +1600,16 @@ _SCRIPT = r"""
     });
     return form;
   };
-  // Every card's "Remove…": caracole serve answers with what goes and what stays, and asks.
+  // Every card's "Remove…": caracole serve answers with what goes and what stays, and asks. Its answers go
+  // back to the library as you leave it (`back`: the address after #, its search, filters and view).
   const removeForm = (s) => {
     const form = el("form", "remove");
     form.setAttribute("method", "post");
     form.setAttribute("action", "/remove");
     form.appendChild(hidden("csrf", String(server.csrf || "")));
     form.appendChild(hidden("song", Number(s.id)));
+    const back = form.appendChild(hidden("back", ""));
+    form.addEventListener("submit", () => { back.value = location.hash.slice(1); });
     const go = el("button", "btn small quiet", "Remove…");
     go.type = "submit";
     go.setAttribute("aria-label", "Remove " + String(s.title) + " by " + String(s.artist) + " from caracole");
@@ -1774,27 +1893,40 @@ _SCRIPT = r"""
   };
 
   let setArtist = () => {};
+  // An artist's monogram, in that artist's colour (one of eight), which a screen reader skips.
+  const monogram = (letters, hue) => {
+    const mono = el("span", "mono hue-" + (Number.isInteger(hue) && hue >= 0 && hue < 8 ? hue : 0), letters || "");
+    mono.setAttribute("aria-hidden", "true");
+    return mono;
+  };
+  // A card's head without its links or badges: the monogram, the title and the artist (a removed song's card;
+  // a requested song's, before the library has it).
+  const plainHead = (letters, hue, title, artist) => {
+    const head = el("div", "head");
+    const names = el("div", "names");
+    names.append(el("h2", null, title), el("p", "by", artist));
+    head.append(monogram(letters, hue), names);
+    return head;
+  };
   const makeCard = (s) => {
     const card = el("article", "card");
     card.dataset.status = String(s.status);
     card.dataset.id = String(s.id);
     card.tabIndex = -1;  // the A-Z strip moves the focus to it
     const head = el("div", "head");
-    const hue = Number.isInteger(s.hue) && s.hue >= 0 && s.hue < 8 ? s.hue : 0;
-    const mono = el("span", "mono hue-" + hue, s.monogram || "");
-    mono.setAttribute("aria-hidden", "true");
-    head.appendChild(mono);
+    head.appendChild(monogram(s.monogram, s.hue));
     const names = el("div", "names");
-    names.appendChild(el("h2", null, s.title));
+    const primary = primaryOf(s);
+    names.appendChild(primary ? titleLink(primary.href, el("h2", null, s.title)) : el("h2", null, s.title));
     const artists = listOf(s.artists);
-    const who = el("button", "artist", artists.length > 1 ? artists.join(", ") : s.artist);
-    who.type = "button";
-    who.title = "Show only " + String(s.artist) + "'s songs";
-    who.addEventListener("click", () => {
-      setArtist(String(s.sortArtist || ""));
-      window.scrollTo(0, 0);
-    });
-    names.appendChild(who);
+    // The artist, then the badges: at the end of the artist's line, or under it, never beside the title.
+    const byline = el("div", "byline");
+    byline.appendChild(artistFilter(artists.length > 1 ? artists.join(", ") : String(s.artist), String(s.artist),
+      () => {
+        setArtist(String(s.sortArtist || ""));
+        window.scrollTo(0, 0);
+      }));
+    names.appendChild(byline);
     head.appendChild(names);
     const badges = el("div", "badges");
     const mark = sourceMark(s.source);  // where its sheet came from
@@ -1802,7 +1934,7 @@ _SCRIPT = r"""
     badges.appendChild(el("span", "badge " + String(s.status), label(STATUS_TEXT, s.status) || s.status));
     if (SHOWS.review(s)) badges.appendChild(el("span", "badge review", "Needs review"));
     if (s.auto) badges.appendChild(el("span", "badge auto", "Auto sheet"));
-    head.appendChild(badges);
+    byline.appendChild(badges);
     card.appendChild(head);
 
     const facts = el("p", "facts");
@@ -1854,9 +1986,21 @@ _SCRIPT = r"""
       }
       if (s.notFound) actions.appendChild(lookLink(s));
     }
-    for (const f of listOf(s.files)) actions.appendChild(link(elsewhere(s, f), f.primary ? "btn primary" : "btn", false));
+    if (primary) actions.appendChild(openButton(s, primary, !actions.querySelector(".btn.primary")));
     if (actions.childNodes.length) card.appendChild(actions);
-    linkRow(card, "Guitar Pro to download", listOf(s.guitarPro), "btn small");
+    // The other files, and the Guitar Pro versions to download, folded away as a row's "⋯" folds them.
+    const others = listOf(s.files).filter((f) => f && f !== primary).map((f) => elsewhere(s, f));
+    if (others.length || listOf(s.guitarPro).length) {
+      const files = el("details", "more files");
+      files.appendChild(el("summary", null, "Files"));
+      if (others.length) {
+        const line = el("div", "actions");
+        for (const f of others) line.appendChild(link(f, "btn small", false));
+        files.appendChild(line);
+      }
+      linkRow(files, "Guitar Pro to download", listOf(s.guitarPro), "btn small");
+      card.appendChild(files);
+    }
     if (listOf(s.museScore).length || listOf(s.links).length || listOf(s.buy).length) {
       const more = el("details", "more");
       more.appendChild(el("summary", null, "Find it elsewhere"));
@@ -1867,16 +2011,16 @@ _SCRIPT = r"""
     }
     if (server) {
       const foot = el("div", "foot");
-      if (removing.has(Number(s.id))) {
+      if (!removing.has(Number(s.id))) {
+        foot.appendChild(removeForm(s));
+      } else if (!job || job.kind !== "remove") {  // a removal the page follows says how it goes on its line
         const note = el("p", "busy", "Removing… ");
         const jobs = el("a", null, "see the requests");
         jobs.href = "/jobs";
         note.appendChild(jobs);
         foot.appendChild(note);
-      } else {
-        foot.appendChild(removeForm(s));
       }
-      card.appendChild(foot);
+      if (foot.childNodes.length) card.appendChild(foot);
     }
     return card;
   };
@@ -1888,19 +2032,23 @@ _SCRIPT = r"""
 
   // Rows: one compact line a song (resultRow, from ROWS_SCRIPT: the seam the module docstring describes).
   // A row is an article titled by its h2; the A-Z strip moves the focus to it.
-  // A song's main action in its row, as its card has it: its sheet; on the served page, a wanted song's
-  // fetch, or the button that opens its picker; nothing while its request waits or runs (the row's line
-  // says how it goes); Removing… while caracole removes it.
-  const songAction = (s, primary, picker) => {
+  // A song's main action in its row, as its card has it, when the server's control holds the row's button
+  // (``held``): a wanted song's fetch, or the button that opens its picker; Removing… while caracole removes it;
+  // no button at all (``action`` null) while its request, or its removal, waits or runs, as the row's line
+  // then says how it goes. Not held, the row's button is its sheet (sheetAction), as it is on the file.
+  const serverAction = (s, picker) => {
+    const held = (action) => ({ held: true, action });
     if (server && removing.has(Number(s.id))) {
+      const job = jobOfSong(s.id);
+      if (job && job.kind === "remove") return held(null);
       const going = el("a", "row-busy", "Removing…");
       going.href = "/jobs";
       going.title = "See the requests";
-      return going;
+      return held(going);
     }
     if (server && s.status === "wanted") {
       const job = jobOfSong(s.id);
-      if ((job && isActive(job)) || busy.has(Number(s.id))) return null;
+      if ((job && isActive(job)) || busy.has(Number(s.id))) return held(null);
       if (s.fetchable === false && picker && picker.querySelector("form")) {
         // caracole fetch would refuse it until the match is picked: this opens the picker, in the row's panel.
         const pick = el("button", "btn small row-pick", "Pick the match");
@@ -1908,26 +2056,29 @@ _SCRIPT = r"""
         pick.setAttribute("aria-label", "Pick the match for " + String(s.title) + " by " + String(s.artist));
         pick.title = "Which Ultimate Guitar song this is: caracole isn't sure";
         pick.addEventListener("click", () => showPicker(picker));
-        return pick;
+        return held(pick);
       }
       if (s.fetchable === false) {
-        const held = el("button", "btn small", "Review first");
-        held.type = "button";
-        held.disabled = true;
-        held.title = "caracole review settles this match; then it can be fetched";
-        return held;
+        const later = el("button", "btn small", "Review first");
+        later.type = "button";
+        later.disabled = true;
+        later.title = "caracole review settles this match; then it can be fetched";
+        return held(later);
       }
-      return fetchForm(s);
+      return held(fetchForm(s));
     }
-    if (!primary) return null;
-    const open = link({ label: primary.label, href: primary.href }, "btn small", false);
+    return { held: false, action: null };
+  };
+  // The row's button for its sheet: the primary one, as Fetch now is, named for what it opens ("Sheet viewer").
+  const sheetAction = (s, primary) => {
+    const open = link({ label: primary.label, href: primary.href }, "btn small primary", false);
     open.setAttribute("aria-label", String(primary.label) + " of " + String(s.title) + " by " + String(s.artist));
     return open;
   };
   const songRow = (s) => {
     const id = Number(s.id);
     const files = listOf(s.files);
-    const primary = files.find((f) => f && f.primary) || null;
+    const primary = primaryOf(s);
     const more = [];
     // What a card shows under its facts, in the row's panel: the picker, or the note that says why not.
     const picker = SHOWS.review(s) && listOf(s.candidates).length > 0 ? makePicker(s) : null;
@@ -1954,7 +2105,12 @@ _SCRIPT = r"""
       look.appendChild(lookLink(s, "btn small"));
       more.push(look);
     }
-    more.push({ heading: "Files", links: files.filter((f) => f !== primary).map((f) => elsewhere(s, f)) },
+    // The sheet is the row's button unless the server's control has its place (Fetch now beside an auto
+    // sheet): then it leads the files, and the title opens it all the same.
+    const control = serverAction(s, picker);
+    const action = control.held ? control.action : primary ? sheetAction(s, primary) : null;
+    const listed = control.held ? files : files.filter((f) => f !== primary);
+    more.push({ heading: "Files", links: listed.map((f) => elsewhere(s, f)) },
       { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },
       { heading: "Find the chords", links: listOf(s.links) },
@@ -1971,13 +2127,14 @@ _SCRIPT = r"""
     const keyed = typeof s.key === "string" && s.key;
     const row = resultRow({
       title: s.title,
+      href: primary ? primary.href : "",
       artist: artists.length > 1 ? artists.join(", ") : s.artist,
       source: s.source,
       status: s.status,
       key: keyed ? s.key : "",
       keyText: keyed ? keyText(s) : "",
       badges,
-      action: songAction(s, primary, picker),
+      action,
       more,
       onArtist: () => {
         setArtist(String(s.sortArtist || ""));
@@ -2050,9 +2207,11 @@ _SCRIPT = r"""
 
   const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
   const arrived = new Map();  // song id -> the card data of a song new to the library since the page loaded
+  // A song removed since the page loaded counts nowhere, though its card says Removed until the next load.
+  const counted = (s) => s.status !== "removed";
   const summarize = () => {
     const by = { found: 0, wanted: 0, ignored: 0 };
-    const every = songs.concat(Array.from(arrived.values()));
+    const every = songs.concat(Array.from(arrived.values())).filter(counted);
     for (const s of every) if (own.call(by, s.status)) by[s.status] += 1;
     const summary = byId("summary");
     summary.textContent = "";
@@ -2086,8 +2245,9 @@ _SCRIPT = r"""
   }
   // How many of the songs the search and filters match each button would show; a card drawn again changes it.
   let matchingNow = [];
+  let shownNow = [];
   const tallyChips = () => {
-    const tally = { all: matchingNow.length, found: 0, wanted: 0, review: 0 };
+    const tally = { all: matchingNow.filter((i) => counted(songs[i])).length, found: 0, wanted: 0, review: 0 };
     for (const i of matchingNow) {
       for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
     }
@@ -2099,6 +2259,12 @@ _SCRIPT = r"""
       chip.hidden = chip.dataset.show === "review" && !reviewing && state.show !== "review";
     }
     chipEdges();
+  };
+  // How many songs the list shows, of how many.
+  const tell = () => {
+    const total = songs.filter(counted).length;
+    const n = shownNow.filter((i) => counted(songs[i])).length;
+    count.textContent = n === total ? plural(total, "song") : n + " of " + plural(total, "song");
   };
 
   const render = () => {
@@ -2213,8 +2379,8 @@ _SCRIPT = r"""
     } else if (!shown.length) {
       list.appendChild(el("p", "empty", state.show === "review" ? "Nothing needs review." : "No songs here."));
     }
-    count.textContent = shown.length === songs.length ? plural(songs.length, "song")
-      : shown.length + " of " + plural(songs.length, "song");
+    shownNow = shown;
+    tell();
     drawResults(query, answerInList);
   };
 
@@ -2639,9 +2805,10 @@ _SCRIPT = r"""
   const trayToggle = byId("tray-toggle");
   const trayItems = new Map();  // job id -> its line in the list of requests
   let trayClosed = false;
-  // The list of requests, once there are two or more: one line each, not read out (the cards' lines are).
+  // The list of requests, once there are two or more: one line each, not read out (the cards' lines are). A
+  // songbook's change, or a removal, is left out: its card, where it was asked for, says how it goes.
   const trayShow = (view) => {
-    if (!tray) return;
+    if (!tray || view.kind === "songbook" || view.kind === "remove") return;
     const id = Number(view.id);
     let item = trayItems.get(id);
     if (!item) {
@@ -2660,8 +2827,20 @@ _SCRIPT = r"""
     tray.hidden = trayClosed || shown.length < 2;
     document.body.classList.toggle("with-tray", !tray.hidden);
   };
-  // The cards drawn again from what the library has now: a request is over. Each keeps its line.
+  // The cards drawn again from what the library has now: a request is over. Each keeps its line. A removal
+  // done leaves its song's card saying so; a songbook's change, the Songbooks section drawn again.
   const redraw = (view) => {
+    if (view.kind === "remove" && songOf(view) !== null) {
+      removing.delete(songOf(view));
+      if (view.state === "done") {
+        removed(songOf(view));
+        return;
+      }
+    }
+    if (view.kind === "songbook" && view.songbooks && typeof view.songbooks === "object") {
+      drawSongbooks(view);
+      return;
+    }
     const data = view.card && typeof view.card === "object" ? view.card : null;
     if (!data) return;
     const i = byIndex.get(Number(data.id));
@@ -2680,6 +2859,10 @@ _SCRIPT = r"""
     tallyChips();  // the grid itself stays as it is: a card the filter now hides goes at the next search
   };
   const songOf = (view) => (view.songId === null || view.songId === undefined ? null : Number(view.songId));
+  // Whether a job that is over brings what the page draws again: its song's card (none for a song the library
+  // hasn't got), or the Songbooks section, for a songbook's change; a removal's song is gone, or as it was.
+  const drawable = (view) => (view.kind === "songbook" ? Boolean(view.songbooks)
+    : view.kind === "remove" || Boolean(view.card) || songOf(view) === null);
   const apply = (view) => {
     const id = Number(view.id);
     views.set(id, view);
@@ -2688,7 +2871,7 @@ _SCRIPT = r"""
       if (!songJob.has(song) || songJob.get(song) <= id) songJob.set(song, id);
       if (!isActive(view)) busy.delete(song);
     }
-    if (!isActive(view) && !settled.has(id) && (view.card || song === null)) {
+    if (!isActive(view) && !settled.has(id) && drawable(view)) {
       settled.add(id);
       redraw(view);
     }
@@ -2735,6 +2918,201 @@ _SCRIPT = r"""
       nav.appendChild(badge);
     }
     badge.textContent = String(n);
+  };
+
+  // A song caracole removed: its card, and its row, say so until the page is loaded again, with nothing left to
+  // open, fetch or pick (its files are gone, and so is its data-id, which the Select mode finds songs by).
+  const goneItem = (s, asRow) => {
+    const artist = listOf(s.artists).length > 1 ? listOf(s.artists).join(", ") : String(s.artist);
+    if (asRow) {
+      const row = resultRow({ title: s.title, artist, status: "removed" });
+      row.classList.add("gone");
+      return row;
+    }
+    const card = el("article", "card gone");
+    card.tabIndex = -1;
+    card.appendChild(plainHead(s.monogram, s.hue, s.title, artist));
+    return card;
+  };
+  const removed = (id) => {
+    const i = byIndex.get(id);
+    if (i === undefined) return;
+    songs[i] = Object.assign({}, songs[i], { status: "removed" });
+    // Drawn again where it is, as tall as it was: what is under it doesn't move, seconds after the tap.
+    const gone = (old, asRow) => {
+      const fresh = goneItem(songs[i], asRow);
+      if (!old) return fresh;
+      const tall = old.isConnected ? old.getBoundingClientRect().height : 0;
+      const kept = refill(old, fresh);
+      if (tall) kept.style.minHeight = tall + "px";
+      return kept;
+    };
+    cards.set(i, gone(cards.get(i), false));
+    rows.set(i, gone(rows.get(i), true));
+    summarize();
+    tallyChips();
+    tell();
+  };
+
+  // --- caracole serve: the songbooks' forms ---------------------------------------------------------
+  // ↑, ↓, × and Rename or delete in the Songbooks section, and the Select bar's Make songbook (or Add to),
+  // post with fetch() as Fetch now does: the songbook's card says how its change goes, on a line under its
+  // name, its buttons put away until the change is over (each moves a song by its place now); a songbook on
+  // its way gets a card at the end of the section. Once a change is over, /jobs.json gives the section as
+  // the server draws it now (the job's `songbooks`): the HTML the page was served with, read by DOMParser,
+  // which runs no script of it, and put in place card by card, a card with a line kept where it is around
+  // it, so that its line goes on being read out to the last. The section is in the served page even with
+  // no songbook, hidden, for the first one. Without JavaScript the forms post as forms, and the server
+  // answers with the requests page.
+  const SONGBOOK_FORM = /^\/songbook\/(make|add|move|remove|rename|delete)$/;
+  // job id -> {book: the songbook it changes, card: its card, focus: the button sent, reveal: from the Select bar}
+  const bookJobs = new Map();
+  const shelf = () => {
+    const section = byId("songbooks");
+    const details = section ? section.querySelector(":scope > details") : null;
+    const list = details ? details.querySelector(":scope > .sb-list") : null;
+    return list ? { section, details, list } : null;
+  };
+  const bookCard = (name) => {
+    const at = shelf();
+    return (at && Array.from(at.list.children).find((c) => c.dataset.songbook === name)) || null;
+  };
+  // A songbook card's line, under its name, made the first time, as a song card's is (progressIn).
+  const bookLine = (card) => {
+    let p = card.querySelector(".progress");
+    if (!p) {
+      p = el("p", "progress");
+      p.setAttribute("role", "status");
+      const head = card.querySelector(".sb-head");
+      if (head) head.after(p);
+      else card.prepend(p);
+    }
+    return p;
+  };
+  const lockBook = (card, on) => {
+    card.classList.toggle("sb-busy", on);
+    for (const control of card.querySelectorAll("form button, form input")) control.disabled = on;
+    const at = document.activeElement;
+    if (on && at && at.disabled && card.contains(at)) focusOn(bookLine(card));  // a disabled button drops it
+  };
+  // Deleted, or never made: a songbook's card says so where it was, as tall as it was, so that what is under it
+  // doesn't move, until the page is loaded again.
+  const goneBook = (card) => {
+    const line = bookLine(card);
+    const tall = card.isConnected ? card.getBoundingClientRect().height : 0;
+    if (tall) card.style.minHeight = tall + "px";
+    if (card.contains(document.activeElement) && !line.contains(document.activeElement)) focusOn(line);
+    for (const child of Array.from(card.children)) {
+      if (!child.classList.contains("sb-head") && child !== line) child.remove();
+    }
+    card.classList.remove("sb-busy");
+    card.classList.add("sb-gone");
+  };
+  // The card that shows a songbook's change (a new songbook's, made for it at the end of the section): its
+  // line says how the change goes, the newest change's alone, and its buttons wait until it is over.
+  const bookSpot = (view, hint, focus) => {
+    const book = view.songbook && typeof view.songbook === "object" ? view.songbook : null;
+    const at = shelf();
+    if (!book || !at) return null;
+    let card = bookCard(String(book.name));
+    if (!card) {
+      card = el("article", "sb-card");
+      card.dataset.songbook = String(book.name);
+      const head = el("div", "sb-head");
+      head.append(el("h2", null, String(book.name)), el("p", "hint", hint || ""));
+      card.appendChild(head);
+      at.list.appendChild(card);
+      at.section.hidden = false;
+    }
+    bookLine(card);
+    if (isActive(view)) lockBook(card, true);
+    for (const [id, other] of spots) if (other === card) spots.delete(id);
+    spots.set(Number(view.id), card);
+    bookJobs.set(Number(view.id), { book, card, focus: focus || "" });
+    return card;
+  };
+  const drawSongbooks = (view) => {
+    const at = shelf();
+    if (!at) return;
+    const page = new DOMParser().parseFromString(String(view.songbooks.html || ""), "text/html");
+    const fresh = page.querySelector("#songbooks > details");
+    const count = at.details.querySelector(":scope > summary .n");
+    const counted = fresh ? fresh.querySelector(":scope > summary .n") : null;
+    if (count) count.textContent = counted ? counted.textContent : "0";
+    // What the section says besides its songbooks: a songbooks.toml that can't be read.
+    for (const part of Array.from(at.details.children)) {
+      if (part.tagName !== "SUMMARY" && part !== at.list) part.remove();
+    }
+    for (const part of fresh ? Array.from(fresh.children) : []) {
+      if (part.tagName !== "SUMMARY" && !part.classList.contains("sb-list")) {
+        at.details.insertBefore(document.importNode(part, true), at.list);
+      }
+    }
+    const job = bookJobs.get(Number(view.id));
+    if (job && job.book.action === "rename" && view.state === "done") job.card.dataset.songbook = String(job.book.after);
+    const old = Array.from(at.list.children);
+    const kept = old.filter((c) => c.querySelector(".progress"));  // a change's line: read out to the last
+    const order = (fresh ? Array.from(fresh.querySelectorAll(":scope > .sb-list > .sb-card")) : []).map((f) => {
+      const card = document.importNode(f, true);
+      const was = kept.find((c) => c.dataset.songbook === card.dataset.songbook);
+      if (!was) return card;
+      bookLine(card);  // where its line goes
+      return refill(was, card);
+    });
+    for (const card of kept) {
+      if (order.indexOf(card) >= 0) continue;
+      goneBook(card);
+      order.splice(Math.min(old.indexOf(card), order.length), 0, card);
+    }
+    for (const card of old) if (order.indexOf(card) < 0) card.remove();
+    let before = null;
+    for (const card of order) {  // in the server's order, a card kept moved only if its place changed
+      const next = before ? before.nextElementSibling : at.list.firstElementChild;
+      if (card !== next) at.list.insertBefore(card, next);
+      before = card;
+    }
+    at.section.hidden = !order.length && !at.details.querySelector(".sb-error");
+    for (const [id, other] of bookJobs) {  // the songbooks of changes still on their way wait
+      if (id !== Number(view.id) && other.card.isConnected && views.has(id) && isActive(views.get(id))) {
+        lockBook(other.card, true);
+      }
+    }
+    // The focus waited on the line: back on the button it was sent with, where it is now (↓ again, say).
+    if (job && job.focus && document.activeElement === job.card.querySelector(".progress")) {
+      const again = Array.from(job.card.querySelectorAll("button"))
+        .find((b) => !b.disabled && (b.getAttribute("aria-label") || b.textContent) === job.focus);
+      if (again) again.focus();
+    }
+    // Made, or added to, from the Select bar: the songbook scrolls into view whole, if its line is still where
+    // you left it (scrolling moves nothing on the page, as a card growing over what is on the screen would).
+    if (job && job.reveal && view.state === "done" && job.card.isConnected) {
+      const at = bookLine(job.card).getBoundingClientRect();
+      if (at.top >= 0 && at.bottom <= window.innerHeight) {
+        job.card.scrollIntoView({ block: "nearest", behavior: smooth() });
+      }
+    }
+    // A card stretched while its change ran keeps that height while it is taller than what it holds now, until
+    // your next click or key, when what moves under it moves for you.
+    if (job && job.reveal && !isActive(view) && job.card.style.minHeight) {
+      const card = job.card;
+      const stretched = card.style.minHeight;
+      card.style.minHeight = "";
+      const holds = card.getBoundingClientRect().height;  // no frame drawn in between: nothing moves
+      card.style.minHeight = stretched;
+      if (holds >= parseFloat(stretched)) {
+        card.style.minHeight = "";
+      } else {
+        const release = () => {
+          document.removeEventListener("click", release, true);
+          document.removeEventListener("keydown", release, true);
+          if (!card.classList.contains("sb-gone")) card.style.minHeight = "";
+        };
+        document.addEventListener("click", release, true);
+        document.addEventListener("keydown", release, true);
+      }
+    }
+    // The Select bar's menu of songbooks follows.
+    document.dispatchEvent(new CustomEvent("caracole:songbooks", { detail: { books: listOf(view.songbooks.books) } }));
   };
 
   let timer = 0;
@@ -2801,15 +3179,7 @@ _SCRIPT = r"""
     const requestedGrid = byId("requested-grid");
     const placeholder = (artist, title) => {
       const card = el("article", "card pending");
-      const head = el("div", "head");
-      const mono = el("span", "mono", (artist.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase());
-      mono.setAttribute("aria-hidden", "true");
-      head.appendChild(mono);
-      const names = el("div", "names");
-      names.appendChild(el("h2", null, title));
-      names.appendChild(el("p", "by", artist));
-      head.appendChild(names);
-      card.appendChild(head);
+      card.appendChild(plainHead((artist.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase(), 0, title, artist));
       showLine(progressIn(card), { line: { tone: "queued", text: "Sending…" } });
       return card;
     };
@@ -2873,7 +3243,9 @@ _SCRIPT = r"""
       if (!view || typeof view !== "object") continue;
       watched.add(Number(view.id));
       const song = songOf(view);
-      if (requestedGrid && isActive(view) && (song === null || !byIndex.has(song))) {
+      if (view.kind === "songbook") {
+        bookSpot(view);  // a songbook's change: on its songbook's card
+      } else if (requestedGrid && isActive(view) && view.kind === "song" && (song === null || !byIndex.has(song))) {
         // A song new to the library, on its way since before this page loaded: its card under the form.
         const [artist, ...title] = String(view.display || "").split(" - ");
         const spot = title.length ? placeholder(artist, title.join(" - ")) : placeholder("", artist);
@@ -2985,10 +3357,79 @@ _SCRIPT = r"""
         });
       });
     }
+    // The songbooks' forms, and the Select bar's, once its own script has checked it (an unchecked form is
+    // stopped there): posted as the page's script, they leave you where you are.
+    document.addEventListener("submit", (e) => {
+      const form = e.target;
+      if (e.defaultPrevented || !(form instanceof HTMLFormElement)) return;
+      if (!SONGBOOK_FORM.test(form.getAttribute("action") || "")) return;
+      e.preventDefault();
+      const bar = form.closest(".pickbar");
+      const card = bar ? null : form.closest(".sb-card");
+      const sent = e.submitter ? e.submitter.getAttribute("aria-label") || e.submitter.textContent : "";
+      const songs = form.elements.namedItem("songs");
+      const many = songs ? String(songs.value).split(",").filter(Boolean).length : 0;
+      const sending = send(form);  // the form read as it is, before its fields wait
+      if (card) {
+        showLine(bookLine(card), { line: { tone: "queued", text: "Sending…" } });
+        lockBook(card, true);
+      }
+      const answered = (view, refusal) => {
+        // The Select bar says why the server refused it; told it is on its way, it lets the picks go.
+        if (bar) form.dispatchEvent(new CustomEvent("caracole:sent", { detail: { ok: Boolean(view), error: refusal } }));
+        if (!view) {
+          if (card) {
+            lockBook(card, false);
+            showLine(bookLine(card), { line: { tone: "failed", text: refusal } });
+          }
+          return;
+        }
+        const spot = bookSpot(view, plural(many, "song"), sent);
+        if (spot && bar) {  // from the Select bar, the section opens on the songbook
+          shelf().details.open = true;
+          // Its foot at the screen's (its head at the top, if it is taller than the screen): what it gains once
+          // the change is over, its files and its songs, grows below the screen, and nothing on it moves then;
+          // the page scrolls it into view whole after that (drawSongbooks). Near the top of the page, which
+          // can't scroll that far, it is stretched to the screen's foot instead, now, as you tap.
+          const box = spot.getBoundingClientRect();
+          const taller = box.height > window.innerHeight * 0.75;
+          const reach = window.innerHeight - 16 - (box.top + window.scrollY);
+          if (!taller && reach > box.height) spot.style.minHeight = reach + "px";
+          spot.scrollIntoView({ block: taller ? "start" : "end", behavior: smooth() });
+          focusOn(bookLine(spot));
+          bookJobs.get(Number(view.id)).reveal = true;
+        }
+        track(view);
+      };
+      sending.then((answer) => {
+        const view = answer.ok && answer.body && answer.body.job;
+        answered(view && view.songbook ? view : null, failure(answer).line.text);
+      }, () => answered(null, UNREACHABLE.line.text));
+    });
     schedule();
   }
   summarize();
   render();
+  // Back from a page of caracole serve's about a song (Remove's question): its card in view, and the focus
+  // on it, as the A-Z strip leaves it; the address keeps the rest. In the next frame, once every script
+  // has drawn what it draws above the list (the Songbooks section, opened as it was left).
+  let back = NaN;
+  try {
+    back = Number(new URLSearchParams(location.hash.slice(1)).get("song"));
+  } catch (err) {
+    // A malformed address: nothing to show.
+  }
+  if (back) {
+    requestAnimationFrame(() => {
+      const i = byIndex.get(back);
+      const item = i === undefined ? null : (state.view === "rows" ? rows : cards).get(i);
+      if (item && item.isConnected) {
+        item.scrollIntoView({ block: "center" });
+        item.focus({ preventScroll: true });
+      }
+      save();
+    });
+  }
 })();
 """
 
@@ -3006,7 +3447,7 @@ _SONGBOOK_STYLE = """
 .sb-list { display: grid; gap: 12px; padding: 0 16px 16px;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
 .sb-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
-  border-radius: 14px; background: var(--bg); }
+  border-radius: 14px; background: var(--bg); scroll-margin: 84px 0 16px; }
 .sb-card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
 .sb-songs { margin: 0; padding: 0; list-style: none; }
 .sb-songs li { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 2px 0;
@@ -3024,7 +3465,12 @@ _SONGBOOK_STYLE = """
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 1rem;
   cursor: pointer; }
 .sb-btn:hover { border-color: var(--border-strong); }
-.sb-more > summary { min-height: 40px; color: var(--muted); font-size: .85rem; font-weight: 600; cursor: pointer; }
+/* While a change of the songbook is on its way (its line under its name says how it goes), its buttons wait. */
+.sb-btn:disabled { color: var(--muted); border-style: dashed; cursor: default; }
+.sb-gone { align-self: start; border-style: dashed; }
+.sb-gone h2 { color: var(--muted); }
+.sb-more > summary { min-height: 40px; align-content: center; color: var(--muted); font-size: .85rem; font-weight: 600;
+  cursor: pointer; }
 .sb-more form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
 .sb-more .f { flex: 1 1 180px; }
 .sb-sure { display: flex; flex: 1 1 100%; align-items: center; gap: 10px; min-height: 44px; font-size: .9rem; }
@@ -3033,45 +3479,98 @@ _SONGBOOK_STYLE = """
 .pick { display: none; }
 .selecting .card .mono { display: none; }
 .selecting .pick { flex: none; position: relative; display: grid; place-items: center; width: 44px; height: 44px;
-  border-radius: 12px; border: 2px solid var(--border-strong); background: var(--surface); cursor: pointer; }
+  border-radius: 12px; border: 2px solid var(--control-edge); background: var(--surface); cursor: pointer; }
 .pick input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .pick:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .pick-n { font-weight: 750; font-variant-numeric: tabular-nums; }
-.card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+/* Picked, while selecting: out of the mode the picks wait, unseen, for when it is on again. */
+.selecting .card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+/* While selecting, a card or a row is one target: a tap anywhere on it lands on it, and the Select script
+   picks it or lets it go; only its box takes a tap of its own. What opens a file or acts on the song is put
+   away, and so are the lines that say what to do about its match and the links of its request's line (which
+   still says how the request goes), so that a pick never opens or fetches anything; a key pressed on what
+   stays (its artist's filter) still does what it says. */
+.selecting [data-picker] { cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none;
+  user-select: none; }
+.selecting [data-picker] * { pointer-events: none; }
+.selecting [data-picker] .pick, .selecting [data-picker] .pick * { pointer-events: auto; }
+.selecting [data-picker] > .actions, .selecting [data-picker] > .more, .selecting [data-picker] > .foot,
+.selecting [data-picker] > .picker, .selecting [data-picker] > .row-action, .selecting [data-picker] > .row-more,
+.selecting [data-picker] > .row-panel, .selecting [data-picker] > .note, .selecting [data-picker] > .pick-hint,
+.selecting [data-picker] .filter-mark, .selecting [data-picker] .progress a,
+.selecting [data-picker] .progress .dot { display: none; }
+.selecting [data-picker] .artist { min-height: 0; }  /* no target of its own: the card is */
 /* A row's box stands where its source's mark was, beside the title and the artist (both lines on a phone). */
-.selecting .row { grid-template-columns: 34px minmax(0, 1fr) auto 34px; }
+.selecting .row { grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "src title" "src sub"; }
 .selecting .row > .source { display: none; }
-.selecting .row > .pick { grid-column: 1; grid-row: 1 / span 2; align-self: center; width: 34px; height: 34px;
-  border-radius: 10px; }
-.row.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+.selecting .row > .pick { grid-area: src; align-self: center; }
+.selecting .row.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
 @media (min-width: 900px) {
-  .selecting .row { grid-template-columns: 34px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px; }
-  .selecting .row > .pick { grid-row: 1; }
+  .selecting .row { grid-template-columns: 44px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem);
+    grid-template-areas: "src title artist meta"; }
 }
 .pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.selecting .page { padding-bottom: 260px; }
+.selecting .page { padding-bottom: 104px; }
+.selecting:has(.pickbar.open, .pick-command:not([hidden])) .page { padding-bottom: 300px; }
 .pickbar { position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--border);
   background: var(--surface); box-shadow: 0 -6px 24px rgb(0 0 0 / 14%);
   padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom))
     max(16px, env(safe-area-inset-left)); }
+/* One line: the way out, the count, then the songbook's menu, its name and the buttons; on a phone a
+   "Make songbook…" button in their place, which unfolds them under the line (.open), the bar growing upwards. */
 .pickbar-in { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: 1320px; margin: 0 auto; }
-.pick-count { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pick-done { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-left: -8px; padding: 0;
+  border: 0; border-radius: 12px; background: none; color: var(--muted); font: inherit; font-size: 1.5rem;
+  line-height: 1; cursor: pointer; }
+.pick-done:hover { background: var(--raised); color: var(--text); }
+.pick-count { margin: 0 auto 0 0; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pick-open { display: none; }
 .pickbar-form { display: flex; flex: 1 1 340px; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
 .pickbar-form label { display: flex; flex: 1 1 150px; min-width: 0; }
 .pickbar-form input, .pickbar-form select { width: 100%; min-width: 0; height: 44px; padding: 0 10px; border-radius: 10px;
-  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
+  border: 1px solid var(--control-edge); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
 .pick-error { flex-basis: 100%; margin: 0; color: var(--failed); font-size: .85rem; }
 .pick-error:empty { display: none; }
-.pick-command { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.pick-command code { flex: 1 1 260px; padding: 8px 10px; user-select: all; }
+/* The file's command to run: folded, on one line beside Copy; unfolded, it scrolls within the bar. */
+.pick-command { flex-basis: 100%; display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.pick-command details { flex: 1 1 0; min-width: 0; }
+.pick-command summary { display: flex; align-items: center; min-height: 36px; color: var(--muted); font-size: .88rem;
+  font-weight: 600; list-style: none; cursor: pointer; }
+.pick-command summary::-webkit-details-marker { display: none; }
+.pick-command summary::before { content: "›"; flex: none; display: inline-block; width: 1em; font-size: 1.15rem;
+  line-height: 1; text-align: center; }
+.pick-command details[open] > summary::before { transform: rotate(90deg); }
+.pick-command .hint { margin-top: 2px; }
+.pick-command code { display: block; max-height: 30vh; margin-top: 4px; padding: 8px 10px; overflow-y: auto;
+  user-select: all; -webkit-user-select: all; }
+.pick-command .btn { flex: none; }
+@media (max-width: 719px) {
+  .pick-open { display: inline-flex; }
+  .pickbar:not(.open) .pickbar-form, .pickbar:not(.open) .pick-command { display: none; }
+  .pickbar-form { flex-basis: 100%; }
+  /* Unfolded, the button is a caret that folds the fields away: the bar's one primary button makes the songbook. */
+  .pickbar.open .pick-open { position: relative; width: 44px; min-height: 44px; padding: 0; }
+  .pickbar.open .pick-open .pick-open-text { position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; }
+  .pickbar.open .pick-open::after { content: ""; width: 12px; height: 7px; background: currentColor;
+    clip-path: polygon(0 0, 100% 0, 50% 100%); }
+}
+@media (pointer: coarse) {
+  .sb-more > summary, .pick-command summary { min-height: 44px; }
+}
 """
 
 # The Select mode: a box on each card (any element of #list with a data-id: a row too), and a bar to
 # name the songbook. It goes with the page's own script, after it: it finds the cards by their song's
-# id and builds everything with createElement and textContent, as the page does. On caracole serve
-# the bar posts the songbook (the server's token, the songs' ids in the order picked); on the file on
-# disk it shows the caracole songbook command to run instead.
+# id and builds everything with createElement and textContent, as the page does. While it is on, a tap
+# anywhere on a card picks it (the stylesheet puts its files and actions away, and lets the taps through
+# to the card). The bar is one line: on a phone, "2 selected · Make songbook…", which unfolds the menu
+# and the name field. On caracole serve the bar posts the songbook (the server's token, the songs' ids
+# in the order picked), with the page's script (its "caracole:sent" says how the server answered: on
+# its way, the picks go and the mode ends; refused, the bar says why), and its menu follows the
+# Songbooks section as the page draws it again ("caracole:songbooks"); on the file on disk it shows
+# the caracole songbook command to run instead, folded beside Copy.
 _SELECT_SCRIPT = r"""
 (() => {
   "use strict";
@@ -3087,8 +3586,8 @@ _SELECT_SCRIPT = r"""
   const songs = new Map((Array.isArray(data.songs) ? data.songs : []).map((s) => [String(s.id), s]));
   if (!list || !toolbar || !songs.size) return;
   const server = data.server && typeof data.server === "object" ? data.server : null;
-  const books = (Array.isArray(data.songbooks) ? data.songbooks : []).map((b) => String(b && b.name || ""))
-    .filter(Boolean);
+  const names = (list) => (Array.isArray(list) ? list : []).map((b) => String(b && b.name || "")).filter(Boolean);
+  const books = names(data.songbooks);
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -3098,6 +3597,7 @@ _SELECT_SCRIPT = r"""
   // Each word in single quotes, each ' written '\'': bash and zsh expand ! even in double quotes.
   const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
   const picked = [];  // song ids, in the order they were picked: the songbook's order
+  let sending = false;  // on caracole serve, until the server answers the bar's form
 
   // Remember whether the Songbooks section was open, across reloads (the served page comes back to it).
   const shelf = document.querySelector("#songbooks > details");
@@ -3123,9 +3623,25 @@ _SELECT_SCRIPT = r"""
   bar.hidden = true;
   bar.setAttribute("aria-label", "Make a songbook");
   const inner = el("div", "pickbar-in");
+  // The way out, as the Select button is, which the page has scrolled away by now: the picks stay.
+  const done = el("button", "pick-done");
+  done.type = "button";
+  done.setAttribute("aria-label", "Leave Select");
+  done.title = "Leave Select (the picks stay)";
+  const cross = el("span", null, "×");
+  cross.setAttribute("aria-hidden", "true");
+  done.appendChild(cross);
   const count = el("p", "pick-count");
   count.setAttribute("aria-live", "polite");
   const form = el("form", "pickbar-form");
+  form.id = "pickbar-form";
+  // On a phone the menu and the name wait under this button, so that the bar is one line while you pick.
+  const unfold = el("button", "btn primary pick-open");
+  unfold.type = "button";
+  unfold.setAttribute("aria-expanded", "false");
+  unfold.setAttribute("aria-controls", form.id);
+  const unfoldText = el("span", "pick-open-text", "Make songbook…");
+  unfold.appendChild(unfoldText);
   const into = el("select", "pick-into");
   into.setAttribute("aria-label", "Into which songbook");
   into.appendChild(new Option("New songbook", ""));
@@ -3147,14 +3663,19 @@ _SELECT_SCRIPT = r"""
   clear.type = "button";
   const error = el("p", "pick-error");
   error.setAttribute("role", "alert");
+  // The file's command, folded: one line of the bar, which Copy copies without unfolding it.
   const command = el("div", "pick-command");
   command.hidden = true;
+  const commandFold = el("details");
+  commandFold.appendChild(el("summary", null, "The command to run"));
+  commandFold.appendChild(el("p", "hint", "Run it where caracole runs:"));
   const commandText = el("code");
+  commandFold.appendChild(commandText);
   const copy = el("button", "btn small", "Copy");
   copy.type = "button";
-  command.appendChild(el("span", "hint", "Run this where caracole runs:"));
-  command.appendChild(commandText);
-  command.appendChild(copy);
+  copy.setAttribute("aria-label", "Copy the command");
+  copy.title = "Copy the command, to run where caracole runs";
+  command.append(commandFold, copy);
   const fields = {};
   if (server) {
     form.method = "post";
@@ -3169,7 +3690,7 @@ _SELECT_SCRIPT = r"""
     fields.csrf.value = String(server.csrf || "");
   }
   form.append(intoLabel, nameLabel, submit, clear, error);
-  inner.append(count, form, command);
+  inner.append(done, count, unfold, form, command);
   bar.appendChild(inner);
   document.body.appendChild(bar);
 
@@ -3195,9 +3716,10 @@ _SELECT_SCRIPT = r"""
   const paintAll = () => {
     for (const card of list.querySelectorAll("[data-picker]")) paint(card);
     count.textContent = picked.length + " selected";
-    submit.disabled = !picked.length;
+    submit.disabled = sending || !picked.length;
     const existing = into.value;
     submit.textContent = existing ? "Add to " + existing : "Make songbook";
+    unfoldText.textContent = submit.textContent + "…";
     nameLabel.hidden = Boolean(existing);
     command.hidden = true;
   };
@@ -3233,30 +3755,90 @@ _SELECT_SCRIPT = r"""
     }
   };
   new MutationObserver(decorate).observe(list, { childList: true, subtree: true });
+  // A tap anywhere on a card while selecting: the stylesheet lets it through to the card itself, all but a
+  // tap on its box, which ticks it alone. A key pressed on the card's artist, say, has that for its target, and
+  // does what the artist's button says.
+  list.addEventListener("click", (e) => {
+    const card = e.target;
+    if (!selecting() || !(card instanceof HTMLElement) || !card.dataset.picker) return;
+    const box = card.querySelector(".pick input");
+    if (box) box.click();  // its change event picks the song, or lets it go
+  });
+
+  // On a phone: whether the menu and the name show, unfolded under the bar's line by its button.
+  const folds = () => getComputedStyle(unfold).display !== "none";
+  const setOpen = (on, focus) => {
+    bar.classList.toggle("open", on);
+    unfold.setAttribute("aria-expanded", on ? "true" : "false");
+    unfold.className = on ? "btn pick-open" : "btn primary pick-open";  // open, the button that makes it leads
+    if (on && focus) (nameLabel.hidden ? into : nameInput).focus();
+  };
+  unfold.addEventListener("click", () => setOpen(!bar.classList.contains("open"), true));
+  bar.addEventListener("keydown", (e) => {
+    // A name may hold a "/", which elsewhere on the page goes to the search box.
+    if (e.key === "/" && e.target === nameInput) e.stopPropagation();
+    if (e.key === "Escape" && bar.classList.contains("open") && folds()) {
+      setOpen(false);
+      unfold.focus();
+    }
+  });
 
   const setMode = (on) => {
     document.body.classList.toggle("selecting", on);
     toggle.setAttribute("aria-pressed", on ? "true" : "false");  // its name stays "Select": pressed or not
+    const inBar = bar.contains(document.activeElement);
     bar.hidden = !on;
+    setOpen(false);
+    if (!on && inBar) toggle.focus({ preventScroll: true });  // not lost with the bar
     decorate();
     paintAll();
   };
   toggle.addEventListener("click", () => setMode(!selecting()));
+  done.addEventListener("click", () => setMode(false));
   clear.addEventListener("click", () => {
     picked.length = 0;
     paintAll();
   });
   into.addEventListener("change", paintAll);
-  copy.addEventListener("click", () => {
-    const text = commandText.textContent;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => { copy.textContent = "Copied"; }, () => {});
+  // The songbooks there are now, once the page has drawn the section again: the menu keeps its choice.
+  document.addEventListener("caracole:songbooks", (e) => {
+    const now = names(e.detail && e.detail.books);
+    const chosen = into.value;
+    while (into.options.length > 1) into.remove(1);
+    for (const name of now) into.appendChild(new Option(name, name));
+    into.value = now.indexOf(chosen) >= 0 ? chosen : "";
+    intoLabel.hidden = !now.length;
+    paintAll();
+  });
+  // The server's answer to the bar's form: on its way, the picks go and the mode ends (the page shows the
+  // songbook in its section); refused, the bar says why, and the picks stay.
+  form.addEventListener("caracole:sent", (e) => {
+    sending = false;
+    if (e.detail && e.detail.ok) {
+      picked.length = 0;
+      nameInput.value = "";
+      into.value = "";
+      setMode(false);
+    } else {
+      error.textContent = String(e.detail && e.detail.error || "");
+      paintAll();
     }
-    const range = document.createRange();
-    range.selectNodeContents(commandText);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
+  });
+  copy.addEventListener("click", () => {
+    // Without the clipboard (refused, or none), the command unfolds, selected, to copy by hand.
+    const byHand = () => {
+      commandFold.open = true;
+      const range = document.createRange();
+      range.selectNodeContents(commandText);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(commandText.textContent).then(() => { copy.textContent = "Copied"; }, byHand);
+    } else {
+      byHand();
+    }
   });
   form.addEventListener("submit", (e) => {
     const existing = into.value;
@@ -3277,12 +3859,15 @@ _SELECT_SCRIPT = r"""
       form.setAttribute("action", existing ? "/songbook/add" : "/songbook/make");
       fields.name.value = name;
       fields.songs.value = picked.join(",");
-      return;  // the server queues caracole songbook, and its requests page shows how it went
+      sending = true;
+      submit.disabled = true;
+      return;  // the page's script posts it, and its songbook's card says how it goes
     }
     e.preventDefault();
     const words = ["caracole songbook", existing ? "add" : "make", shellQuote(name)];
     for (const id of picked) words.push(shellQuote(songs.get(id).display));
     commandText.textContent = words.join(" ");
+    commandFold.open = false;
     command.hidden = false;
     copy.textContent = "Copy";
   });
@@ -3456,8 +4041,10 @@ def songbooks_section(conn: sqlite3.Connection, cfg: Config, overrides: Override
     Each songbook lists its songs in order, the missing ones marked, and links its files. On
     caracole serve (``controls``) each song can move up or down or be taken out, and the songbook
     renamed or deleted, by forms that post to the server; the file on disk says which command does it.
-    No songbook, no section; a songbooks.toml that can't be read is said there, and costs the rest of
-    the page nothing.
+    No songbook, no section (on caracole serve, a hidden one, where the page's script shows the first
+    songbook made); a songbooks.toml that can't be read is said there, and costs the rest of the page
+    nothing. Each card is named by its songbook (``data-songbook``), which the served page's script
+    finds it by.
     """
     from caracole.songbook import SongbookError, load_songbooks, songbooks_file
 
@@ -3468,16 +4055,17 @@ def songbooks_section(conn: sqlite3.Connection, cfg: Config, overrides: Override
                 "the songbooks are back; until then each keeps its files.</p>\n")
         return _songbooks_wrap("!", body), []
     if not books:
-        return "", []
+        return (_songbooks_wrap("0", '<div class="sb-list">\n</div>\n', hidden=True) if controls else ""), []
     cards = "".join(_songbook_card(conn, cfg, overrides, book, controls) for book in books)
     body = f'<div class="sb-list">\n{cards}</div>\n'
     return _songbooks_wrap(str(len(books)), body), [{"name": b.name, "songs": len(b.songs)} for b in books]
 
 
-def _songbooks_wrap(count: str, body: str) -> str:
+def _songbooks_wrap(count: str, body: str, *, hidden: bool = False) -> str:
     return (
-        '<section class="songbooks" id="songbooks" aria-labelledby="songbooks-title">\n<details>\n'
-        '<summary><span class="sb-icon" aria-hidden="true">♪</span><span id="songbooks-title">Songbooks</span>'
+        f'<section class="songbooks" id="songbooks" aria-labelledby="songbooks-title"{" hidden" if hidden else ""}>'
+        '\n<details>\n<summary><span class="sb-icon" aria-hidden="true">♪</span>'
+        '<span id="songbooks-title">Songbooks</span>'
         f' <span class="n">{count}</span></summary>\n{body}</details>\n</section>\n'
     )
 
@@ -3526,7 +4114,8 @@ def _songbook_card(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, 
         more = ('<p class="hint">Change it with <code>caracole songbook add</code>, <code>remove</code>, '
                 "<code>move</code>, <code>rename</code> or <code>delete</code>, or in songbooks.toml.</p>\n")
     return (
-        f'<article class="sb-card">\n<div><h2>{esc(book.name)}</h2><p class="hint">{songs}</p></div>\n'
+        f'<article class="sb-card" data-songbook="{esc(book.name, quote=True)}">\n'
+        f'<div class="sb-head"><h2>{esc(book.name)}</h2><p class="hint">{songs}</p></div>\n'
         + files + f'<ol class="sb-songs">\n{chr(10).join(rows)}\n</ol>\n' + more + "</article>\n"
     )
 

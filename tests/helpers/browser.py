@@ -157,9 +157,12 @@ class SharedBrowser:
     # --- pages -----------------------------------------------------------------------------
 
     def dump_dom(self, url: str, size: tuple[int, int], *, hide_scrollbars: bool = False,
-                 mobile: bool = False, budget_ms: int = 3000) -> str:
+                 mobile: bool = False, touch: bool = False, media: dict[str, str] | None = None,
+                 budget_ms: int = 3000) -> str:
         """The DOM of the page at ``url`` after its script ran, as ``--dump-dom`` prints it;
-        ``mobile``: laid out on a phone's screen of ``size`` (``Emulation.setDeviceMetricsOverride``)."""
+        ``mobile``: laid out on a phone's screen of ``size`` (``Emulation.setDeviceMetricsOverride``);
+        ``touch``: a touch screen, where ``(pointer: coarse)`` matches; ``media``: media features as
+        ``{"prefers-color-scheme": "dark"}`` (``Emulation.setEmulatedMedia``)."""
         self._events.clear()  # the pages before this one's
         context = self.call("Target.createBrowserContext")["browserContextId"]
         try:
@@ -172,6 +175,11 @@ class SharedBrowser:
             if mobile:
                 self.call("Emulation.setDeviceMetricsOverride", session, width=width, height=height,
                           deviceScaleFactor=1, mobile=True)
+            if touch:
+                self.call("Emulation.setTouchEmulationEnabled", session, enabled=True, maxTouchPoints=5)
+            if media:
+                self.call("Emulation.setEmulatedMedia", session,
+                          features=[{"name": k, "value": v} for k, v in media.items()])
             # The clock stands still while the page loads, so the budget is the page's alone.
             self.call("Emulation.setVirtualTimePolicy", session, policy="pause")
             self.call("Page.navigate", session, url=url)
@@ -247,13 +255,13 @@ def close() -> None:
 
 
 def dump_dom(url: str, size: tuple[int, int], *, hide_scrollbars: bool = False, mobile: bool = False,
-             budget_ms: int = 3000) -> str:
+             touch: bool = False, media: dict[str, str] | None = None, budget_ms: int = 3000) -> str:
     """The DOM of the page at ``url`` after its script ran, in this process's Chromium, its timers
-    run for ``budget_ms`` of virtual time. A browser that failed is closed, so the next test starts
-    another."""
+    run for ``budget_ms`` of virtual time (``SharedBrowser.dump_dom`` says what the rest does). A
+    browser that failed is closed, so the next test starts another."""
     try:
-        return browser().dump_dom(url, size, hide_scrollbars=hide_scrollbars, mobile=mobile,
-                                  budget_ms=budget_ms)
+        return browser().dump_dom(url, size, hide_scrollbars=hide_scrollbars, mobile=mobile, touch=touch,
+                                  media=media, budget_ms=budget_ms)
     except BrowserError:
         close()
         raise
