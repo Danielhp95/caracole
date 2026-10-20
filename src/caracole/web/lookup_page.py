@@ -15,19 +15,33 @@ says what the running stage waits for, and the reasons of the stages left are
 listed, not hidden in tooltips. A song of your library with a sheet opens at
 once, with no request at all.
 
+Its results are the library's own rows, as index.html's Rows view draws them:
+the page runs ``library_page.ROWS_SCRIPT`` before its own script and builds
+each result with ``window.caracole.resultRow``, with the mark of where it came
+from (``icons.page_icons``, inlined as index.html inlines them) and its other
+actions under the row's "⋯" (an Ultimate Guitar song's versions; a song of
+your library's files). A song of your library opens as its card does: its
+sheet viewer, else its PDF (a page caracole serves only while it is the one
+caracole wrote, ``app.written_pages``); one with a sheet and neither is read
+on the page.
+
 Like index.html it builds every element with ``createElement`` and
 ``textContent``, never ``innerHTML``: names come from UG's slugs and your own
-wanted.txt. Its one script and stylesheet are allowed by their hashes, it may
-connect to the server alone, and it loads nothing else.
+wanted.txt. Its two scripts and its stylesheet are allowed by their hashes,
+its images are the icons' data: URIs, it may connect to the server alone, and
+it loads nothing else.
 """
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from html import escape
+from typing import Any
 
-from caracole.library_page import BASE_STYLE, sha256_source
+from caracole.library_page import BASE_STYLE, ROWS_SCRIPT, ROWS_STYLE, sha256_source
 
-STYLE = BASE_STYLE + """
+STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }
 .lede { max-width: 72ch; margin: 2px 0 14px; color: var(--muted); }
 .search { position: sticky; top: 0; z-index: 2; padding: 10px 0; background: var(--bg); }
@@ -38,15 +52,8 @@ STYLE = BASE_STYLE + """
 .status { min-height: 1.4em; margin: 6px 2px 0; color: var(--muted); font-size: .85rem; }
 .group { margin: 18px 0 6px; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
-.hits { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.hit { padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
-.hit-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.names { flex: 1 1 14rem; min-width: 0; }
-.title { font-weight: 650; overflow-wrap: anywhere; }
-.artist { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
-.counts { color: var(--muted); font-size: .8rem; }
-.acts { display: flex; flex-wrap: wrap; gap: 6px; }
-.versions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; padding: 0; list-style: none; }
+.rows.hits { margin-top: 6px; }
+.versions { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .hint { max-width: 72ch; color: var(--muted); font-size: .85rem; white-space: pre-wrap; }
 details.by-name { margin: 22px 0 0; }
 details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 600; cursor: pointer; }
@@ -99,6 +106,13 @@ const fileLinks = document.getElementById("files");
 const sheetText = document.getElementById("sheet");
 const MIN = 3;
 const KINDS = {"chords": "Chords", "tabs": "Tab", "guitar-pro": "Guitar Pro", "power": "Power Tab"};
+const STATUS = {"found": "Found", "wanted": "Wanted", "ignored": "Ignored"};
+// The library's own rows and marks (library_page.ROWS_SCRIPT, run before this script), as index.html has them.
+const ICONS = (() => {
+  try { return JSON.parse(document.getElementById("icons").textContent || "{}") || {}; } catch (e) { return {}; }
+})();
+const rowKit = caracoleRows(ICONS);
+window.caracole = Object.freeze({resultRow: rowKit.resultRow, sourceMark: rowKit.sourceMark, icons: ICONS});
 let typed = 0, inflight = null, timer = null, polling = null, shown = "", lastStages = "";
 let shownFor = null;  // the query the results on the screen answer
 let enterFor = null;  // a query Enter was pressed for before its results came: its first one is picked then
@@ -159,13 +173,13 @@ function show(data, text) {
   status.textContent = n ? "" : "Nothing matches.";
   if (data.library.length) {
     results.append(el("h2", "group", "In your library"));
-    const list = el("ul", "hits");
+    const list = el("div", "rows hits");
     for (const s of data.library) list.append(librarySong(s));
     results.append(list);
   }
   if (data.index.length) {
     results.append(el("h2", "group", "On Ultimate Guitar"));
-    const list = el("ul", "hits");
+    const list = el("div", "rows hits");
     for (const h of data.index) list.append(ugSong(h));
     results.append(list);
   }
@@ -174,63 +188,90 @@ function show(data, text) {
   if (enterFor === text) { enterFor = null; pickFirst(); }
 }
 
-function pickFirst() {
-  const first = results.querySelector("button.primary");
+function pickFirst() {  // a row's main action: a song of yours opens, an Ultimate Guitar song is looked up
+  const first = results.querySelector(".row-action .primary");
   if (first) first.click();
 }
 
-function librarySong(s) {
-  const li = el("li", "hit"), head = el("div", "hit-head"), names = el("div", "names"), acts = el("div", "acts");
-  names.append(el("div", "title", s.title), el("div", "artist", s.artist));
-  head.append(names, el("span", "badge " + s.status, s.status));
-  if (s.files.sheet) acts.append(button("Read", "small primary", () => read(s.display, s.files), "Read " + s.display));
-  const again = s.files.sheet ? "Fetch again" : "Get it now";
-  acts.append(button(again, "small", () => lookUp({song: s.id}, s.display),
-                     s.files.sheet ? "Fetch " + s.display + " again" : "Get " + s.display + " now"));
-  head.append(acts);
-  li.append(head);
-  return li;
+// A song's sheet viewer or PDF, as its card opens it: a link of the library's, relative to this page.
+function opener(files) {
+  return (Array.isArray(files) ? files : []).find(f => f && f.primary && /[.](html|pdf)$/i.test(f.name || "")) || null;
 }
 
+// A song of your library, as its row in index.html: its viewer (else its PDF) opens at once; a sheet with
+// neither is read here; a song without one is looked up now. Its other files, and Fetch again, under "⋯".
+function librarySong(s) {
+  const files = Array.isArray(s.links) ? s.links : [];
+  const opens = opener(files);
+  const again = () => button(s.files.sheet ? "Fetch again" : "Get it now", "small", () => lookUp({song: s.id}, s.display),
+                             s.files.sheet ? "Fetch " + s.display + " again" : "Get " + s.display + " now");
+  const reading = (label, aria) => button(label, "small" + (opens ? "" : " primary"), () => read(s.display, s.files), aria);
+  let action;
+  if (opens) action = {label: opens.label, href: opens.href};
+  else if (s.files.sheet) action = reading("Read", "Read " + s.display);
+  else action = again();
+  const here = el("div", "actions");
+  if (opens && s.files.sheet) here.append(reading("Read it here", "Read " + s.display + " here"));
+  if (s.files.sheet) here.append(again());
+  const others = files.filter(f => f && f !== opens)
+    .map(f => ({label: f.label, href: f.href, source: f.source === s.source ? null : f.source}));
+  const badges = [{kind: s.status, text: STATUS[s.status] || s.status}];
+  if (s.review) badges.push({kind: "review", text: "Needs review"});
+  const row = window.caracole.resultRow({
+    title: s.title, artist: s.artist, source: s.source, status: s.status,
+    key: typeof s.key === "string" ? s.key : "", badges, action,
+    more: [here.childNodes.length ? here : null, {heading: "Files", links: others}].filter(Boolean),
+  });
+  row.classList.add("hit");
+  const main = row.querySelector(".row-action a");
+  if (main) main.setAttribute("aria-label", opens.label + " of " + s.display);
+  return row;
+}
+
+// An Ultimate Guitar song of the offline index, with UG's mark: Get it, and its versions under "⋯".
 function ugSong(h) {
-  const li = el("li", "hit"), head = el("div", "hit-head"), names = el("div", "names"), acts = el("div", "acts");
-  names.append(el("div", "title", h.title), el("div", "artist", h.artist), el("div", "counts", counts(h.counts)));
-  head.append(names);
   // A song your library has (under its own names, maybe): looked up as that song, never as a second one.
   const mine = h.library;
   const display = mine ? mine.display : h.artist + " - " + h.title;
   const pick = extra => Object.assign(mine ? {song: mine.id} : {artist: h.artist, title: h.title}, {ug: h.ug}, extra);
-  acts.append(button(mine ? "Get it again" : "Get it", "small primary", () => lookUp(pick({}), display),
-                     (mine ? "Get " + display + " again" : "Get " + display) + " from Ultimate Guitar"));
-  const versions = el("ul", "versions");
-  versions.hidden = true;
-  const nth = {};
-  for (const t of h.tabs) {
-    // Numbered within its kind, in the index's order (no ratings there): "Chords 2 of 13 · acoustic".
-    nth[t.type] = (nth[t.type] || 0) + 1;
-    const kind = KINDS[t.type] || t.type;
-    const name = kind + " " + nth[t.type] + " of " + (h.counts[t.type] || nth[t.type]) + (t.label ? " · " + t.label : "");
-    const item = el("li", "version");
-    item.append(button(name, "small", () => lookUp(pick({tab: t.url}), display), "Get " + name + ", " + display));
-    const ug = el("a", "on-ug", "on UG");
-    ug.href = t.url;
-    ug.target = "_blank";
-    ug.rel = "noopener noreferrer";
-    ug.setAttribute("aria-label", name + ", " + display + ", on Ultimate Guitar");
-    item.append(ug);
-    versions.append(item);
-  }
+  const get = button(mine ? "Get it again" : "Get it", "small primary", () => lookUp(pick({}), display),
+                     (mine ? "Get " + display + " again" : "Get " + display) + " from Ultimate Guitar");
+  const more = [];
   if (h.tabs.length) {
-    const toggle = button("Versions", "small", () => {
-      versions.hidden = !versions.hidden;
-      toggle.setAttribute("aria-expanded", String(!versions.hidden));
-    }, "Versions of " + display);
-    toggle.setAttribute("aria-expanded", "false");
-    acts.append(toggle);
+    const versions = el("ul", "versions");
+    const nth = {};
+    for (const t of h.tabs) {
+      // Numbered within its kind, in the index's order (no ratings there): "Chords 2 of 13 · acoustic".
+      nth[t.type] = (nth[t.type] || 0) + 1;
+      const kind = KINDS[t.type] || t.type;
+      const name = kind + " " + nth[t.type] + " of " + (h.counts[t.type] || nth[t.type]) + (t.label ? " · " + t.label : "");
+      const item = el("li", "version");
+      item.append(button(name, "small", () => lookUp(pick({tab: t.url}), display), "Get " + name + ", " + display));
+      const ug = el("a", "on-ug", "on UG");
+      ug.href = /^https:[/][/]/i.test(t.url) ? t.url : "#";
+      ug.target = "_blank";
+      ug.rel = "noopener noreferrer";
+      ug.setAttribute("aria-label", name + ", " + display + ", on Ultimate Guitar");
+      item.append(ug);
+      versions.append(item);
+    }
+    const box = el("div", "row-group");
+    box.append(el("p", "subhead", "Versions"), versions);
+    more.push(box);
   }
-  head.append(acts);
-  li.append(head, versions);
-  return li;
+  const opens = mine ? opener(mine.links) : null;
+  if (opens) more.push({heading: "In your library", links: [{label: opens.label, href: opens.href, source: opens.source}]});
+  const row = window.caracole.resultRow({
+    title: h.title, artist: h.artist, source: "ug", facts: counts(h.counts),
+    badges: mine ? [{kind: "found", text: "In your library"}] : [], action: get, more,
+  });
+  row.classList.add("hit");
+  const dots = row.querySelector(".row-more");
+  if (dots && h.tabs.length) {  // what "⋯" holds, said: its versions
+    dots.title = "Versions of " + display;
+    dots.setAttribute("aria-label", "Versions of " + display);
+  }
+  return row;
 }
 
 q.addEventListener("input", () => {
@@ -409,7 +450,8 @@ q.focus();
 """
 
 LOOKUP_CSP = (
-    f"default-src 'none'; script-src {sha256_source(SCRIPT)}; style-src {sha256_source(STYLE)}; "
+    f"default-src 'none'; script-src {sha256_source(ROWS_SCRIPT)} {sha256_source(SCRIPT)}; "
+    f"style-src {sha256_source(STYLE)}; img-src data:; "
     "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 )
 
@@ -459,14 +501,16 @@ _BODY = """<body>
 """
 
 
-def lookup_page(csrf: str) -> str:
-    """The whole page, with the form token every POST carries."""
+def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None) -> str:
+    """The whole page, with the form token every POST carries and each source's mark (``icons.page_icons``)."""
     token = escape(csrf, quote=True)
+    data = json.dumps(dict(icons or {}), ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     return (
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
         f"<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
         + _BODY.replace("__CSRF__", token)
-        + f"<script>{SCRIPT}</script>\n</body>\n</html>\n"
+        + f'<script type="application/json" id="icons">{data}</script>\n'
+        + f"<script>{ROWS_SCRIPT}</script>\n<script>{SCRIPT}</script>\n</body>\n</html>\n"
     )

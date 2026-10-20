@@ -1347,6 +1347,30 @@ def test_the_search_answers_json_from_your_library_and_the_offline_index(app, co
     assert (second["ug"], second["song"]) == ("stone-temple-pilots/creep", None)
 
 
+def test_a_library_song_found_comes_as_its_card_has_it_its_viewer_first(app, cfg, conn):
+    # The lookup page draws it as index.html's row does: its viewer opens it, and every file says where it
+    # came from. Its links are the card's, relative to the library, as the server serves them.
+    from helpers.rendered import rendered_song
+
+    from caracole.ug.index import mark_built, upsert_rows
+
+    song = rendered_song(conn, cfg)  # Soda Stereo - De Música Ligera, a UG sheet in G, rendered
+    upsert_rows(conn, [(85053, "soda-stereo", "de-musica-ligera", "chords", "soda-stereo/de-musica-ligera-chords-1")],
+                "1", datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+    data = as_json(get(app, "/api/search?q=musica%20ligera"))
+    [mine] = data["library"]
+    assert (mine["id"], mine["source"], mine["key"]) == (song.id, "ug", "G")
+    [primary] = [f for f in mine["links"] if f["primary"]]
+    assert (primary["name"], primary["href"]) == ("sheet.html", "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.html")
+    assert {"sheet.pdf", "sheet.txt"} <= {f["name"] for f in mine["links"]}
+    assert mine["files"]["viewer"] == "Soda Stereo/De Música Ligera/sheet.html"  # the page's reader, as before
+    # Its Ultimate Guitar song names it, with its links too.
+    [hit] = [h for h in data["index"] if h["song"] == song.id]
+    assert [f["href"] for f in hit["library"]["links"] if f["primary"]] == [primary["href"]]
+    assert get(app, "/" + primary["href"]).status == 200  # the viewer caracole wrote, served
+
+
 def test_a_search_of_fewer_than_three_letters_looks_nowhere(app, conn):
     creep_index(conn)
     assert as_json(get(app, "/api/search?q=cr")) == {"query": "cr", "library": [], "index": [], "short": True}

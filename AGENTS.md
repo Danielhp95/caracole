@@ -93,7 +93,9 @@ songs.py's, in the `removed` table).
   its record and its CSP: the sheet viewers and songbook.html), songbooks.py (the songbook
   forms, each queued as its `caracole songbook` command), lookup_page.py (the lookup page:
   its script, `createElement` and `textContent` only, allowed by hash, connects to the
-  server alone), pages.py, server.py (`http.server`). The library page is
+  server alone; its results are the library's rows, `library_page.ROWS_SCRIPT` and
+  `ROWS_STYLE` through `window.caracole.resultRow`, and a song you have opens its viewer),
+  pages.py, server.py (`http.server`). The library page is
   library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
   /jobs.json how they go.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py

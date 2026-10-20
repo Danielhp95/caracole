@@ -259,7 +259,7 @@ def test_enter_right_after_typing_looks_up_what_you_typed_not_the_results_before
     browser.open(base + "/lookup")
     browser.type("eagles")
     assert browser.wait(f"{HITS} > 0")
-    assert browser.js("document.querySelector('#results .hit .title').textContent") == "Hotel California"
+    assert browser.js("document.querySelector('#results .hit .row-title').textContent") == "Hotel California"
     browser.type(" desperado")
     browser.press("Enter")  # at once: the results on the screen are still the ones for "eagles"
     args = posted(queue)
@@ -336,3 +336,29 @@ def test_on_a_phone_the_sheet_you_picked_is_on_the_screen_once_it_arrives(cfg, l
     time.sleep(0.8)  # any smooth scroll ends
     top, bar, height = phone.js(SHEET_TOP)
     assert bar - 1 <= top and top + 24 <= height, (top, bar, height)  # its first line, below the search box
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(cfg, live, browser):
+    from helpers.rendered import rendered_song
+
+    base, queue = live
+    conn = db.connect(cfg.db_path)
+    rendered_song(conn, cfg)  # Soda Stereo - De Música Ligera, its viewer the one caracole wrote
+    conn.close()
+    index_songs(cfg, [("soda-stereo", "de-musica-ligera", 2)])
+    browser.open(base + "/lookup")
+    browser.type("musica ligera")
+    assert browser.wait(f"{HITS} >= 2")
+    # index.html's own row renderer and source marks (library_page.ROWS_SCRIPT): one look for every list.
+    assert browser.js("Object.keys(window.caracole).sort().join()") == "icons,resultRow,sourceMark"
+    assert browser.js("document.querySelectorAll('#results .rows > article.row.hit').length") >= 2
+    marks = browser.js("[...document.querySelectorAll('#results .hit > .source')].map(m => m.dataset.source)")
+    assert marks == ["ug", "ug"]  # your song's sheet came from UG, and so does the UG song
+    main = browser.js("document.querySelector('#results .hit .row-action .primary').getAttribute('href')")
+    assert main == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.html"
+    browser.press("Enter")  # the first result: your song, opened as its card opens it
+    assert browser.wait("location.pathname.endsWith('/sheet.html')")
+    assert browser.wait("document.querySelector('h1') && document.querySelector('h1').textContent === "
+                        "'De Música Ligera'")
+    assert queue.snapshot() == []  # opening it asked for nothing

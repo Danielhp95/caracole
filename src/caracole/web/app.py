@@ -239,9 +239,10 @@ class WebApp:
             if path in ("/", "/index.html"):
                 return self._library()
             if path == "/lookup":
+                from caracole.icons import page_icons
                 from caracole.web.lookup_page import LOOKUP_CSP, lookup_page
 
-                return _html(200, lookup_page(self.csrf), csp=LOOKUP_CSP)
+                return _html(200, lookup_page(self.csrf, page_icons(self.cfg.cache_dir)), csp=LOOKUP_CSP)
             if path == "/jobs":
                 return self._jobs_page(parse_qs(urlsplit(request.target).query))
             if path == "/jobs.json":
@@ -886,14 +887,15 @@ class WebApp:
                 return _json(503, {"query": q, "error": f"The database can't be read: {e}"})
 
     def _found_for(self, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
+        """The search's answer. A song of your library comes as its card has it (``result_cards``): its
+        files (``links``, its viewer the primary one), where its sheet came from, its key; and the files
+        its sheet can be read in on the page (``files``)."""
         from caracole.get import readable_files
+        from caracole.library_page import result_cards
         from caracole.search import search_library
         from caracole.songs import list_songs
 
-        library = [{"id": h.song.id, "display": h.song.display, "artist": h.song.artist, "title": h.song.title,
-                    "status": h.song.status, "score": h.score,
-                    "files": readable_files(conn, self.cfg.library_dir, h.song)}
-                   for h in search_library(conn, q, LIBRARY_HITS)]
+        found = search_library(conn, q, LIBRARY_HITS)
         cached = self._found.get(q)
         if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
             index, hint = cached[1], cached[2]
@@ -903,12 +905,16 @@ class WebApp:
             while len(self._found) > CACHE_SIZE:
                 self._found.popitem(last=False)
         mine = _Mine(list_songs(conn), self._song_forms)
-        hits = []
-        for hit in index:
-            song = mine.song_for(*hit["ug"].split("/", 1), hit["artist"], hit["title"])
-            hits.append({**hit, "song": song.id if song else None,
-                         "library": {"id": song.id, "artist": song.artist, "title": song.title,
-                                     "display": song.display} if song else None})
+        owners = [mine.song_for(*hit["ug"].split("/", 1), hit["artist"], hit["title"]) for hit in index]
+        cards = result_cards(conn, self.cfg, list({s.id: s for s in [h.song for h in found] + owners if s}.values()))
+        library = [{"id": h.song.id, "display": h.song.display, "artist": h.song.artist, "title": h.song.title,
+                    "status": h.song.status, "review": bool(h.song.review), "score": h.score,
+                    "files": readable_files(conn, self.cfg.library_dir, h.song), **cards[h.song.id]}
+                   for h in found]
+        hits = [{**hit, "song": song.id if song else None,
+                 "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
+                             "links": cards[song.id]["links"]} if song else None}
+                for hit, song in zip(index, owners)]
         return {"query": q, "library": library, "index": hits, "hint": hint}
 
     def _index_hits(self, conn: sqlite3.Connection, q: str) -> tuple[list[dict[str, Any]], str | None]:

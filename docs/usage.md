@@ -1752,8 +1752,13 @@ with it. A KEY that is no key exits with status 2.
   (UG's slugs write AC/DC as "Acdc" and 宋冬野 as "Song Dongye"), says Get it
   again and is looked up as your song: no second song, and no line added to
   wanted.txt. Nor does Get it now or Fetch again on a song of your library add
-  one, so a song from Spotify alone stays Spotify's. A song of your library
-  with a sheet opens at once (Read). "Not in the list?" looks a song up by its
+  one, so a song from Spotify alone stays Spotify's. The results are the
+  library's own rows, as in its Rows view, each with the mark of where it
+  came from: an Ultimate Guitar song has UG's, and its versions under "⋯"; a
+  song of your library has its sheet's, and opens as its card does, at once
+  and with no request: its sheet viewer, else its PDF (Enter opens the first
+  one), with its other files, Read it here and Fetch again under "⋯". One with
+  a sheet and neither is read on the page (Read). "Not in the list?" looks a song up by its
   name. `/lookup?q=WORDS` opens it with that search. A page left open across a
   restart of the server says to reload it, since its form token is no longer
   the server's.
