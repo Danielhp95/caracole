@@ -1455,12 +1455,14 @@ lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files and the
 Guitar Pro versions to download from Ultimate Guitar. A Guitar Pro file
 caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`, and a
 score its format, as `Score 1 (MuseScore)`; a score's PDF is never what a
-card opens, which is the sheet. Each
-artist's cards share a coloured monogram, and the artist's name under a title
-shows only that artist's songs ("Queen" leaves out ABBA's "Dancing Queen"),
-until you take its chip off. "Find it elsewhere" opens a song's MuseScore
-pages, each a possible match, as on the to-do page, and, for a song without a
-sheet, its search and buy links. When caracole takes the audio of songs with no
+card opens, which is the sheet. A card's title has its line to itself: the
+artist goes under it, with the badges at the end of that line, or under it
+when they don't fit. Each artist's cards share a coloured monogram, and the
+artist's name, marked with a funnel, shows only that artist's songs ("Queen"
+leaves out ABBA's "Dancing Queen"), until you take its chip off. "Find it
+elsewhere" opens a song's MuseScore pages, each a possible match, as on the
+to-do page, and, for a song without a sheet, its search and buy links. When
+caracole takes the audio of songs with no
 human sheet from YouTube, their cards say where that stands instead of offering
 to buy them ("No human sheet yet: caracole takes the audio from YouTube next",
 "Audio from YouTube: auto-chords works out the chords next", "Auto sheet from

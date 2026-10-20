@@ -1577,6 +1577,72 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_ski
         assert phone.wait("location.pathname.endsWith('/Radiohead/Creep/sheet.html')")
 
 
+# --- a card's title keeps its line: its badges go beside its artist ------------------------------------
+
+
+# Notes how each card is laid out: its height, how many lines its title takes, where its badges are against
+# its title and its artist, how tall its Files is, and how many buttons it shows.
+CARD_LAYOUT = """
+(() => {
+  const box = (n) => n.getBoundingClientRect();
+  const cards = {};
+  for (const c of document.querySelectorAll("#list .card")) {
+    const h2 = c.querySelector("h2");
+    const title = box(h2);
+    const artist = box(c.querySelector("button.artist"));
+    const badges = box(c.querySelector(".badges"));
+    const files = c.querySelector("details.files > summary");
+    cards[h2.textContent] = {
+      height: Math.round(box(c).height),
+      lines: Math.round(title.height / parseFloat(getComputedStyle(h2).lineHeight)),
+      alone: badges.top >= title.bottom - 1,  // nothing beside the title: the badges are under it
+      apart: badges.left >= artist.right - 1 || badges.top >= artist.bottom - 1,  // beside the artist, or under
+      buttons: Array.from(c.querySelectorAll(".btn")).filter((b) => b.checkVisibility()).length,
+      files: files ? Math.round(box(files).height) : null,
+    };
+  }
+  document.body.setAttribute("data-cards", JSON.stringify({ cards, page: innerWidth, screen: innerHeight,
+    scroll: document.documentElement.scrollWidth }));
+})();
+"""
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+@in_chromium
+def test_lean_cards_fit_a_phone_and_their_titles_keep_a_line_of_their_own(conn, cfg, tmp_path, size):
+    import html as html_module
+
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), CARD_LAYOUT))
+    dom = dump_dom(path, tmp_path, size=size)
+    found = re.search(r'data-cards="([^"]*)"', dom)
+    assert found, dom[-2000:]
+    laid = json.loads(html_module.unescape(found.group(1)))
+    cards = laid["cards"]
+    assert laid["page"] == int(size.split(",")[0]) and laid["scroll"] <= laid["page"], laid
+    assert cards["Creep"]["buttons"] == 1 and cards["Creep"]["files"], cards  # Open; the rest folded
+    # The badges go on the artist's line, or under it: two of them leave the title its whole line.
+    assert all(card["alone"] and card["apart"] for card in cards.values()), cards
+    assert cards["The Underworld"]["lines"] == 1, cards
+    if laid["page"] < 480:
+        # Three cards to a phone's screen, the fullest too, where its eight files and more made it 1.5.
+        assert laid["screen"] // cards["Creep"]["height"] >= 3, cards
+
+
+@in_chromium
+def test_an_artists_name_shows_it_is_a_filter_on_its_card_and_its_row(conn, cfg, tmp_path):
+    filed_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    for fragment, find in (("", card_of), ("#view=rows", row_of)):
+        shown = find(listing(dump_dom(path, tmp_path, fragment)), "Creep")
+        who = re.search(r'<button class="artist[^"]*" type="button" title="Show only Radiohead\'s songs">(.*?)</button>',
+                        shown)
+        assert who, shown
+        # The name, then a filter's mark that a screen reader skips: the button's title says what it does.
+        assert who.group(1) == ('<span class="artist-name">Radiohead</span>'
+                                '<span class="filter-mark" aria-hidden="true"></span>'), who.group(1)
+
+
 def row_of(shown: str, title: str) -> str:
     found = re.search(r'<article class="row"[^>]*>(?:(?!</article>).)*?' + re.escape(title) + r".*?</article>",
                       shown, re.S)
@@ -1594,7 +1660,7 @@ def test_the_rows_view_shows_a_song_a_row_with_its_source_key_status_and_main_ac
     assert re.search(r'<button[^>]*data-view="rows"[^>]*aria-pressed="true"', dom)
     creep = row_of(shown, "Creep")
     assert re.search(r'<h2 class="row-title"[^>]*>Creep</h2>', creep)
-    assert 'alt="from Ultimate Guitar"' in creep and ">Radiohead</button>" in creep
+    assert 'alt="from Ultimate Guitar"' in creep and '<span class="artist-name">Radiohead</span>' in creep
     assert "Key G major (from the tab)" in creep and ">Found<" in creep
     main = re.search(r'<div class="row-action"><a ([^>]*)>Sheet PDF</a>', creep)
     assert main and 'href="Radiohead/Creep/sheet.pdf"' in main.group(1)
@@ -1615,6 +1681,8 @@ ROWS = """
 (() => {
   const rows = Array.from(document.querySelectorAll("#list .row"));
   const box = (node) => node.getBoundingClientRect();
+  // The artist's name: in the button that shows that artist's songs alone, or the row's text.
+  const name = (r) => r.querySelector(".row-artist .artist-name") || r.querySelector(".row-artist");
   const lines = (r) => {
     const parts = r.querySelectorAll(".row-title, .row-artist, .row-meta > *, .row-action > *, .row-more, .row > .source");
     const middles = Array.from(parts).filter((p) => box(p).height > 0)
@@ -1626,8 +1694,8 @@ ROWS = """
     heights: rows.map((r) => Math.round(box(r).height)),
     titles: rows.map((r) => Math.round(box(r.querySelector("h2")).top)),
     actions: rows.map((r) => r.querySelector(".row-action > *") ? Math.round(box(r.querySelector(".row-action > *")).top) : null),
-    artists: rows.map((r) => r.querySelector(".row-artist") ? Math.round(box(r.querySelector(".row-artist")).width) : null),
-    whole: rows.map((r) => r.querySelector(".row-artist") ? r.querySelector(".row-artist").scrollWidth : null),
+    artists: rows.map((r) => name(r) ? Math.round(box(name(r)).width) : null),
+    whole: rows.map((r) => name(r) ? name(r).scrollWidth : null),
     lines: rows.map(lines),
     widths: rows.map((r) => Math.round(box(r).width)),
     page: window.innerWidth,

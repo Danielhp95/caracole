@@ -26,7 +26,10 @@ card has its artist's monogram, in a colour of that artist's, and an A-Z strip
 jumps to the first card of a letter. A card's title and its one Open button
 open its sheet (its viewer, else its PDF, else its text); its other files, and
 the Guitar Pro versions to download from UG, fold under Files, as a row's
-"⋯" folds them. A Cards/Rows toggle shows them as rows
+"⋯" folds them. The title keeps its line: the artist goes under it, with the
+badges at the end of that line or under it. The artist's name, marked with a
+funnel (``artistFilter``, ROWS_SCRIPT's), shows that artist's songs alone, on a
+card and on a row. A Cards/Rows toggle shows them as rows
 instead, one compact line a song (two on a phone), remembered in the address
 (``#view=rows``) as the search, the filters, the sort and the key are.
 
@@ -44,7 +47,8 @@ serve's lookup page, web/lookup_page.py, which runs ``ROWS_SCRIPT`` and has
 element, the same as a song's row, to put in a ``<div class="rows">``.
 ``result`` is a plain object, every field optional:
 
-- ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button;
+- ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button that
+  shows it filters (a funnel after the name), as on a card;
 - ``href``: what the title opens (the row's sheet, as its button does), the same way as
   ``action``'s link; out of the Tab order, since the button says what it opens;
 - ``source``: a key of the data's ``icons`` (``icons.SOURCES``: "ug", "lacuerda"…);
@@ -680,6 +684,15 @@ ROWS_STYLE = """
 .btn.sourced { gap: 7px; }
 .btn.sourced .source { order: -1; }
 .badges .source { align-self: center; }
+/* An artist's name that shows that artist's songs alone: a button, the name and a filter's mark (a funnel),
+   so that it shows it is one without a pointer to hover it. */
+.artist { display: inline-flex; align-items: center; gap: 5px; min-width: 0; margin: 0; padding: 0; border: 0;
+  background: none; color: var(--muted); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; }
+.artist-name { min-width: 0; overflow-wrap: anywhere; }
+.artist:hover { color: var(--text); }
+.artist:hover .artist-name { text-decoration: underline; text-underline-offset: 2px; }
+.filter-mark { flex: none; width: .7em; height: .75em; background: currentColor; opacity: .8;
+  clip-path: polygon(0 0, 100% 0, 60% 48%, 60% 90%, 40% 100%, 40% 48%); }
 /* A title that opens the sheet: the heading as it was, underlined under the pointer. */
 .title-link { display: block; width: fit-content; max-width: 100%; color: inherit; text-decoration: none; }
 .title-link:hover > h2 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
@@ -701,7 +714,7 @@ ROWS_STYLE = """
 .row-sub { grid-area: sub; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
 .row-artist { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
   font-size: .86rem; white-space: nowrap; text-overflow: ellipsis; }
-.row .artist { margin: 0; }
+.row-artist .artist-name { overflow: hidden; text-overflow: ellipsis; }
 .row-meta { flex: 0 1 auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
   gap: 4px 6px; min-width: 0; margin: 0 0 0 auto; color: var(--muted); font-size: .82rem; }
 .row-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -820,10 +833,10 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .hue-7 { color: var(--h7); background: var(--h7-bg); }
 .names { flex: 1; min-width: 0; }
 .card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
-.artist { display: inline; margin: 2px 0 0; padding: 0; border: 0; background: none; color: var(--muted); font: inherit;
-  font-size: .9rem; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
-.artist:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex: none; max-width: 42%; }
+/* Under the title, which keeps its line: the artist, then the badges, at the end of its line or under it. */
+.byline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px; }
+.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0;
+  margin-left: auto; }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--muted); font-size: .85rem; }
 .facts .key, .facts .transpose { color: var(--text); font-weight: 600; }
 .note { margin: 0; color: var(--review); font-size: .85rem; }
@@ -970,6 +983,19 @@ const caracoleRows = (icons) => {
     a.appendChild(heading);
     return a;
   };
+  // An artist's name that shows that artist's songs alone (``whose``, for its title): a button, the name and a
+  // filter's mark (a funnel, drawn by the stylesheet), which a screen reader skips.
+  const artistFilter = (name, whose, onArtist, cls) => {
+    const who = el("button", cls ? "artist " + cls : "artist");
+    who.type = "button";
+    who.title = "Show only " + whose + "'s songs";
+    who.appendChild(el("span", "artist-name", name));
+    const mark = el("span", "filter-mark");
+    mark.setAttribute("aria-hidden", "true");
+    who.appendChild(mark);
+    who.addEventListener("click", onArtist);
+    return who;
+  };
   const shortKey = (key) => String(key).replace(/ minor$/, "m").replace(/ major$/, "");
   const linkGroup = (group) => {
     if (group instanceof Node) return group;
@@ -996,11 +1022,7 @@ const caracoleRows = (icons) => {
     // where badges that don't fit go under the artist, never over it; their own columns on a desktop.
     const sub = el("div", "row-sub");
     if (artist && typeof r.onArtist === "function") {
-      const who = el("button", "artist row-artist", artist);
-      who.type = "button";
-      who.title = "Show only " + artist + "'s songs";
-      who.addEventListener("click", r.onArtist);
-      sub.appendChild(who);
+      sub.appendChild(artistFilter(artist, artist, r.onArtist, "row-artist"));
     } else if (artist) {
       sub.appendChild(el("span", "row-artist", artist));
     }
@@ -1054,7 +1076,7 @@ const caracoleRows = (icons) => {
     }
     return row;
   };
-  return { resultRow, sourceMark, link, titleLink };
+  return { resultRow, sourceMark, link, titleLink, artistFilter };
 };
 """
 
@@ -1189,7 +1211,8 @@ _SCRIPT = r"""
   // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
-  const { sourceMark, link, resultRow, titleLink } = caracoleRows(ICONS);  // ROWS_SCRIPT, which the lookup page shares
+  // ROWS_SCRIPT's, which the lookup page shares
+  const { sourceMark, link, resultRow, titleLink, artistFilter } = caracoleRows(ICONS);
   // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -1571,14 +1594,14 @@ _SCRIPT = r"""
     const primary = primaryOf(s);
     names.appendChild(primary ? titleLink(primary.href, el("h2", null, s.title)) : el("h2", null, s.title));
     const artists = listOf(s.artists);
-    const who = el("button", "artist", artists.length > 1 ? artists.join(", ") : s.artist);
-    who.type = "button";
-    who.title = "Show only " + String(s.artist) + "'s songs";
-    who.addEventListener("click", () => {
-      setArtist(String(s.sortArtist || ""));
-      window.scrollTo(0, 0);
-    });
-    names.appendChild(who);
+    // The artist, then the badges: at the end of the artist's line, or under it, never beside the title.
+    const byline = el("div", "byline");
+    byline.appendChild(artistFilter(artists.length > 1 ? artists.join(", ") : String(s.artist), String(s.artist),
+      () => {
+        setArtist(String(s.sortArtist || ""));
+        window.scrollTo(0, 0);
+      }));
+    names.appendChild(byline);
     head.appendChild(names);
     const badges = el("div", "badges");
     const mark = sourceMark(s.source);  // where its sheet came from
@@ -1586,7 +1609,7 @@ _SCRIPT = r"""
     badges.appendChild(el("span", "badge " + String(s.status), label(STATUS_TEXT, s.status) || s.status));
     if (SHOWS.review(s)) badges.appendChild(el("span", "badge review", "Needs review"));
     if (s.auto) badges.appendChild(el("span", "badge auto", "Auto sheet"));
-    head.appendChild(badges);
+    byline.appendChild(badges);
     card.appendChild(head);
 
     const facts = el("p", "facts");
