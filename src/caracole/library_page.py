@@ -1154,9 +1154,19 @@ const caracoleRows = (icons) => {
   const opener = (files) => listOf(files).find((f) => f && f.primary && /[.](html|pdf)$/i.test(String(f.name || "")))
     || null;
   const yours = (hit) => (hit && hit.library && typeof hit.library === "object" ? hit.library : null);
+  // Under a hit's "⋯", given ``later(pick, display, row, button)``: the song into wanted.txt under the site's
+  // names, for the nightly run to look up (index.html's results; /lookup gets songs now alone).
+  const laterGroup = (later, pick, display, row) => {
+    const box = el("div", "row-group later");
+    const go = button("Add for tonight's run", "small", (e) => later(pick, display, row(), e.currentTarget),
+      "Add " + display + " for tonight's run");
+    go.title = "Into wanted.txt, as caracole add writes it: the nightly run looks it up";
+    box.appendChild(go);
+    return box;
+  };
   // An Ultimate Guitar song: Get it (Get it again for a song of yours, looked up as that song), and its
   // versions under "⋯", each numbered within its kind ("Chords 2 of 13"), with a link to look at it on UG.
-  const ugHit = (h, get) => {
+  const ugHit = (h, get, later) => {
     const hit = h && typeof h === "object" ? h : {};
     const mine = yours(hit);
     const artist = String(hit.artist || "");
@@ -1194,6 +1204,7 @@ const caracoleRows = (icons) => {
     }
     const opens = mine ? opener(mine.links) : null;
     if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+    if (later && !mine) more.push(laterGroup(later, { artist, title }, display, () => row));
     row = resultRow({ title, artist, source: "ug", facts: counts(hit.counts),
       badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
     row.classList.add("hit");
@@ -1220,7 +1231,7 @@ const caracoleRows = (icons) => {
   // A page of gtptabs.com's index (a song with a Guitar Pro file there): Get it looks the song up as
   // caracole get does, whose gtptabs.com stage downloads one file for a song that has none; or MuseScore's,
   // a title alone, which caracole never fetches: a link to open.
-  const siteHit = (h, get) => {
+  const siteHit = (h, get, later) => {
     const hit = h && typeof h === "object" ? h : {};
     const title = String(hit.title || "");
     let row = null;
@@ -1238,9 +1249,10 @@ const caracoleRows = (icons) => {
         (mine ? "Get " + display + " again" : "Get " + display) + ", with a Guitar Pro file from gtptabs.com");
       main.title = "Looks the song up now, as caracole get does: its sheet, then a Guitar Pro file from gtptabs.com";
       const uploads = Number(hit.uploads) || 1;
+      const more = [{ heading: "On gtptabs.com", links: [{ label: "Its page", href: hit.url, source: "gtptabs" }] }];
+      if (later && !mine) more.push(laterGroup(later, { artist, title }, display, () => row));
       row = resultRow({ title, artist, source: "gtptabs", facts: uploads > 1 ? many(uploads, "upload") : "Guitar Pro",
-        badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main,
-        more: [{ heading: "On gtptabs.com", links: [{ label: "Its page", href: hit.url, source: "gtptabs" }] }] });
+        badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
     }
     row.classList.add("hit");
     row.dataset.source = String(hit.source || "");
@@ -2362,6 +2374,7 @@ _SCRIPT = r"""
   let settleSpots = () => {};
   let prefill = () => {};
   let getIt = () => {};
+  let later = () => {};
 
   // Your songs that match what is typed, whatever the buttons show: the page's own rows, with what their cards
   // offer; then the server's close matches the filter missed.
@@ -2464,10 +2477,10 @@ _SCRIPT = r"""
     // The artists the query names: first when one leads ("oasis"), after the songs when a song does.
     const named = artists.length ? group("Artists on Ultimate Guitar", artists.map((a) => artistHit(a, openArtist))) : [];
     if (data.lead === "artist") box.append(...named);
-    if (index.length) box.append(...group("Ultimate Guitar · " + many(index.length, "song"), index.map((h) => ugHit(h, getIt))));
+    if (index.length) box.append(...group("Ultimate Guitar · " + many(index.length, "song"), index.map((h) => ugHit(h, getIt, later))));
     if (data.lead !== "artist") box.append(...named);
     if (gtp.length) {
-      box.append(...group("Guitar Pro on gtptabs.com · " + many(gtp.length, "song"), gtp.map((h) => siteHit(h, getIt))));
+      box.append(...group("Guitar Pro on gtptabs.com · " + many(gtp.length, "song"), gtp.map((h) => siteHit(h, getIt, later))));
     }
     if (ms.length) {
       box.append(...group("MuseScore · " + many(ms.length, "page") + " by that title", ms.map((h) => siteHit(h, getIt))));
@@ -2527,7 +2540,7 @@ _SCRIPT = r"""
     box.appendChild(head);
     const theirs = listOf(page.library).map((x) => byIndex.get(Number(x && x.id))).filter((i) => i !== undefined);
     if (theirs.length) box.append(...group("Yours by " + page.artist, theirs.map(rowFor)));
-    const [heading, rows] = group("Ultimate Guitar, the most tabbed first", listOf(page.songs).map((h) => ugHit(h, getIt)));
+    const [heading, rows] = group("Ultimate Guitar, the most tabbed first", listOf(page.songs).map((h) => ugHit(h, getIt, later)));
     box.appendChild(heading);
     box.appendChild(rows);
     let listed = listOf(page.songs).length;
@@ -2538,7 +2551,7 @@ _SCRIPT = r"""
         artistPage(String(page.artist_key), listed).then((next) => {
           go.disabled = false;
           if (!next || !rows.isConnected) return;
-          for (const h of listOf(next.songs)) rows.appendChild(ugHit(h, getIt));
+          for (const h of listOf(next.songs)) rows.appendChild(ugHit(h, getIt, later));
           listed += listOf(next.songs).length;
           if (listed >= next.total || !listOf(next.songs).length) more.remove();
           else go.textContent = "Show more (" + (next.total - listed) + " left)";
@@ -2798,35 +2811,42 @@ _SCRIPT = r"""
       showLine(progressIn(card), { line: { tone: "queued", text: "Sending…" } });
       return card;
     };
-    // A result's Get it: the song looked up now (POST /lookup, one caracole get), its line in the result's own
-    // row, from "Sending…" to its sheet; a version picked under "⋯" too.
-    getIt = (pick, display, row, go) => {
+    // A result's request, its line in the result's own row, from "Sending…" on: ``view`` finds the job in the
+    // answer.
+    const askFrom = (path, fields, names, row, go, view) => {
       if (!row) return;
       const line = progressIn(row);  // in the page before its first words, so they are read out
       showLine(line, { line: { tone: "queued", text: "Sending…" } });
       if (row.contains(document.activeElement)) focusOn(line);  // a disabled button would drop it
       if (go) go.disabled = true;
       const body = new URLSearchParams({ csrf: String(server.csrf || "") });
-      for (const name of ["song", "artist", "title", "ug", "tab"]) {
-        if (pick && pick[name] !== undefined && pick[name] !== null && pick[name] !== "") body.set(name, String(pick[name]));
+      for (const name of names) {
+        if (fields && fields[name] !== undefined && fields[name] !== null && fields[name] !== "") {
+          body.set(name, String(fields[name]));
+        }
       }
-      fetch("lookup", { method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" } })
+      fetch(path, { method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" } })
         .then((r) => r.json().catch(() => null).then((answer) => ({ ok: r.ok, status: r.status, body: answer })))
         .then((reply) => {
-          const view = reply.ok && reply.body && reply.body.view;
+          const job = reply.ok && reply.body && view(reply.body);
           if (go) go.disabled = false;
-          if (!view || typeof view !== "object") {
+          if (!job || typeof job !== "object") {
             showLine(progressIn(row), failure(reply));
             return;
           }
-          if (go && go.closest(".row-action")) go.remove();  // its line takes the button's place
-          spots.set(Number(view.id), row);
-          track(view);
+          if (go && go.closest(".row-action, .later")) go.remove();  // its line takes the button's place
+          spots.set(Number(job.id), row);
+          track(job);
         }, () => {
           if (go) go.disabled = false;
           showLine(progressIn(row), UNREACHABLE);
         });
     };
+    // Get it: the song looked up now (POST /lookup, one caracole get), to its sheet; a version picked under "⋯" too.
+    getIt = (pick, display, row, go) => askFrom("lookup", pick, ["song", "artist", "title", "ug", "tab"], row, go,
+      (answer) => answer.view);
+    // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).
+    later = (pick, display, row, go) => askFrom("request", pick, ["artist", "title"], row, go, (answer) => answer.job);
     // Back to your songs: a request's row in the results that is a song new to the library becomes its card
     // under the bar, which goes on saying how it goes; a song the grid has says it on its own card.
     settleSpots = () => {

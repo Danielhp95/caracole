@@ -214,6 +214,27 @@ def test_get_it_looks_the_song_up_and_its_row_says_how_it_goes(cfg, live, browse
 
 
 
+
+def test_a_hit_can_be_added_for_tonights_run_instead_of_got_now(cfg, live, browser):
+    base, queue, _ = live
+    sites(cfg, **{**WONDERWALL, "gtptabs": [*WONDERWALL["gtptabs"], "https://gtptabs.com/tabs/18/ryan-adams/wonderwall.html"]})
+    library(cfg, ("Oasis", "Wonderwall"))
+    browser.open(base + "#q=wonderwall&all=1")
+    assert browser.wait(f"{HITS} >= 5")
+    later = "#results .hit[data-ug='{}'] .row-panel .later button"
+    assert browser.js(f"document.querySelector(\"{later.format('oasis/wonderwall')}\")") is None  # yours already
+    browser.click("#results .hit[data-ug='ryan-adams/wonderwall'] .row-more")
+    browser.click(later.format("ryan-adams/wonderwall"))
+    args = posted(queue)
+    assert args == ("add", "--", "Ryan Adams", "Wonderwall")  # into wanted.txt, as caracole add writes it
+    assert "Ryan Adams - Wonderwall" in cfg.wanted_file.read_text(encoding="utf-8")
+    assert browser.wait("!!document.querySelector(\"#results .hit[data-ug='ryan-adams/wonderwall'] .progress\")")
+    # gtptabs.com's songs too; MuseScore's pages are links alone.
+    assert browser.js("[...document.querySelectorAll('#results .hit[data-source=\"gtptabs\"]')]"
+                      ".map((h) => !!h.querySelector('.row-panel .later button'))") == [False, True]  # Oasis's is yours
+    assert browser.js("document.querySelector('#results .hit[data-source=\"musescore\"] .later')") is None
+
+
 def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, **WONDERWALL)

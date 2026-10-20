@@ -1861,8 +1861,11 @@ with it. A KEY that is no key exits with status 2.
   is kept the row is the song's, with its sheet as its button. A song your
   library has already, under its own names (UG's slugs write AC/DC as "Acdc"
   and 宋冬野 as "Song Dongye"), says In your library and Get it again, and is
-  looked up as your song: no second song, and no line added to wanted.txt. Back
-  to your songs, a song new to the library gets a card of its own under the box
+  looked up as your song: no second song, and no line added to wanted.txt. A
+  song your library hasn't, from Ultimate Guitar or gtptabs.com, also has **Add
+  for tonight's run** under "⋯": it goes into wanted.txt under the site's names,
+  as Request does with Fetch it now unticked, and the nightly run looks it up.
+  Back to your songs, a song new to the library gets a card of its own under the box
   ("Just requested").
 
   `/lookup`, the lookup page, still answers: the same search of your library
