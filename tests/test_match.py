@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 
 from caracole.config import MatchPolicy
-from caracole.match import IndexSong, IndexView, MatchCandidate, MatchResult, match_all, match_song
+from caracole.match import IndexTitle, IndexView, MatchCandidate, MatchResult, match_all, match_song
 from caracole.overrides import Overrides
 from caracole.songs import get_song, update_song
 from caracole.ug.index import mark_built
@@ -38,21 +38,22 @@ def summary(r: MatchResult):
 # --- the index view ---------------------------------------------------------------------
 
 
-def test_index_view_groups_tabs_by_song_and_splits_variant_labels(conn):
+def test_index_view_groups_tabs_by_title_with_their_variant_keys(conn):
     index(conn, (3, "oasis", "wonderwall", "guitar-pro"), (1, "oasis", "wonderwall", "chords"),
-          (2, "oasis", "wonderwall-acoustic", "chords"), (4, "radiohead", "creep", "chords"))
+          (2, "oasis", "wonderwall-acoustic", "chords"), (5, "oasis", "wonderwall-ii", "chords"),
+          (6, "oasis", "champagne-supernova", "chords"), (4, "radiohead", "creep", "chords"),
+          (7, "liam-gallagher", "wonderwall-live", "chords"))
     view = IndexView(conn)
-    assert view.songs_for_artist("oasis") == [
-        IndexSong("wonderwall", "wonderwall", None, ((1, "chords"), (3, "guitar-pro"))),
-        IndexSong("wonderwall-acoustic", "wonderwall", "acoustic", ((2, "chords"),)),
+    assert view.titles_for_artist("oasis") == [
+        IndexTitle("champagne-supernova", ("champagne-supernova",), 1),
+        IndexTitle("wonderwall", ("wonderwall", "wonderwall-acoustic"), 3),
+        IndexTitle("wonderwall-ii", ("wonderwall-ii",), 1),
     ]
-    assert view.songs_for_artist("nobody") == []
-    assert view.artist_keys() == ["oasis", "radiohead"]
-    assert view.title_keys() == ["creep", "wonderwall"]
-    assert view.songs_for_title("wonderwall") == [
-        ("oasis", IndexSong("wonderwall", "wonderwall", None, ((1, "chords"), (3, "guitar-pro")))),
-        ("oasis", IndexSong("wonderwall-acoustic", "wonderwall", "acoustic", ((2, "chords"),))),
-    ]
+    assert view.titles_for_artist("nobody") == []
+    assert view.artist_keys() == ["liam-gallagher", "oasis", "radiohead"]
+    assert view.title_keys() == ["champagne-supernova", "creep", "wonderwall", "wonderwall-ii"]
+    assert view.artists_for_title("wonderwall") == {"liam-gallagher": 1, "oasis": 3}
+    assert view.artists_for_title("nothing") == {}
 
 
 ARTIST_KEYS = ("x", "xy", "acdc", "abba", "nobody", "")

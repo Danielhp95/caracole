@@ -135,22 +135,24 @@ def is_catch_all(artist_key: str) -> bool:
 
 
 @dataclass(frozen=True)
-class IndexSong:
-    """One song key of an artist in the index, with every tab (id, type) listed under it."""
+class IndexTitle:
+    """One title of an artist in the index: its base key, the song keys filed under it (``creep``,
+    ``creep-acoustic``), and how many tabs they list."""
 
-    song_key: str
     base_key: str
-    label: str | None
-    tabs: tuple[tuple[int, str], ...]
+    song_keys: tuple[str, ...]
+    tabs: int
 
 
-def _songs_of(rows: Iterable[tuple[str, int, str]]) -> list[IndexSong]:
-    """Group rows of (song_key, tab_id, type), sorted by song key, into songs."""
-    songs = []
-    for song_key, group in itertools.groupby(rows, key=lambda r: r[0]):
-        base, label = split_variant(song_key)
-        songs.append(IndexSong(song_key, base, label, tuple((r[1], r[2]) for r in group)))
-    return songs
+def _titles_of(rows: Iterable[tuple[str, int]]) -> list[IndexTitle]:
+    """Group (song key, tabs) rows, sorted by song key, by base key, in the order each base first comes."""
+    keys: dict[str, list[str]] = {}
+    tabs: dict[str, int] = {}
+    for song_key, n in rows:
+        base = split_variant(song_key)[0]
+        keys.setdefault(base, []).append(song_key)
+        tabs[base] = tabs.get(base, 0) + n
+    return [IndexTitle(base, tuple(k), tabs[base]) for base, k in keys.items()]
 
 
 class IndexView:
@@ -161,7 +163,7 @@ class IndexView:
     answers whether it has an artist and which artists read the same without
     hyphens, so matching a song whose artist UG has (``caracole add``, a lookup)
     never loads them. The title keys (about 720,000), which only title-only
-    matching needs, are loaded once too, on first use. An artist's songs are read
+    matching needs, are loaded once too, on first use. An artist's titles are read
     when a song first asks for that artist.
     """
 
@@ -171,7 +173,7 @@ class IndexView:
         self._artist_set: frozenset[str] = frozenset()
         self._by_compact: dict[str, tuple[str, ...]] = {}
         self._compact_artists: list[str] | None = None
-        self._songs: dict[str, list[IndexSong]] = {}
+        self._titles_by_artist: dict[str, list[IndexTitle]] = {}
         self._tabs: dict[str, int] = {}
         self._titles: list[str] | None = None
         self._compact_titles: list[str] | None = None
@@ -227,16 +229,16 @@ class IndexView:
             n = self._tabs[artist_key] = row[0]
         return n
 
-    def songs_for_artist(self, artist_key: str) -> list[IndexSong]:
-        """The artist's songs, one per song key (variant keys such as ``x-acoustic`` are their own)."""
-        songs = self._songs.get(artist_key)
-        if songs is None:
+    def titles_for_artist(self, artist_key: str) -> list[IndexTitle]:
+        """The artist's titles, variant keys such as ``x-acoustic`` with their ``x``."""
+        titles = self._titles_by_artist.get(artist_key)
+        if titles is None:
             rows = self.conn.execute(
-                "SELECT song_key, tab_id, type FROM ug_index WHERE artist_key = ? ORDER BY song_key, tab_id",
+                "SELECT song_key, COUNT(*) FROM ug_index WHERE artist_key = ? GROUP BY song_key ORDER BY song_key",
                 (artist_key,),
             )
-            songs = self._songs[artist_key] = _songs_of(tuple(r) for r in rows)
-        return songs
+            titles = self._titles_by_artist[artist_key] = _titles_of((r[0], r[1]) for r in rows)
+        return titles
 
     def title_keys(self) -> list[str]:
         """Every title in the index as a base key (``creep-acoustic`` is ``creep``), sorted."""
@@ -255,18 +257,20 @@ class IndexView:
         """The title keys that read ``compact_key`` once hyphens are removed."""
         return [t for t, c in zip(self.title_keys(), self.compact_title_keys(), strict=True) if c == compact_key]
 
-    def songs_for_title(self, title_key: str) -> list[tuple[str, IndexSong]]:
-        """Every (artist key, song) whose base key is ``title_key``."""
+    def artists_for_title(self, title_key: str) -> dict[str, int]:
+        """Every artist key with a title whose base key is ``title_key``, with its tabs, by artist key."""
         # A range instead of LIKE, so the song_key index serves the variant keys too.
         rows = self.conn.execute(
-            "SELECT artist_key, song_key, tab_id, type FROM ug_index "
-            "WHERE song_key = ? OR (song_key > ? AND song_key < ?) ORDER BY artist_key, song_key, tab_id",
+            "SELECT artist_key, song_key, COUNT(*) FROM ug_index "
+            "WHERE song_key = ? OR (song_key > ? AND song_key < ?) GROUP BY artist_key, song_key "
+            "ORDER BY artist_key, song_key",
             (title_key, title_key + "-", title_key + "."),
-        ).fetchall()
-        out = []
-        for artist_key, group in itertools.groupby(rows, key=lambda r: r[0]):
-            out += [(artist_key, s) for s in _songs_of((r[1], r[2], r[3]) for r in group) if s.base_key == title_key]
-        return out
+        )
+        tabs: dict[str, int] = {}
+        for artist_key, song_key, n in rows:
+            if split_variant(song_key)[0] == title_key:
+                tabs[artist_key] = tabs.get(artist_key, 0) + n
+        return tabs
 
     def catch_all_songs(self) -> list[tuple[str, str, int]]:
         """(artist key, base key, tabs) of every song of the catch-all artists step 4 reads
@@ -399,11 +403,12 @@ def _own_artists(song: Song, index: IndexView, overrides: Overrides) -> list[tup
     for name in song.artists or [song.artist]:
         for a in overrides.alias.get(slug_key(name), ()):
             add(a, alias=True)
-        for form in _forms(name).keys:
+        forms = _forms(name).keys
+        for form in forms:
             add(form)
             for a in index.compact_artists(compact(form)):
                 add(a)
-        for form in _forms(name).keys:
+        for form in forms:
             for alt in _article_forms(form):
                 add(alt)
     return list(keys.items())
@@ -412,13 +417,10 @@ def _own_artists(song: Song, index: IndexView, overrides: Overrides) -> list[tup
 def _title_hits(index: IndexView, artist_key: str, title: _Forms, rank: int, *, exact_step: str,
                 fuzzy_step: str = "fuzzy_title", cap: float | None = None) -> list[_Hit]:
     """Score every title of one artist, grouped by base key."""
-    groups: dict[str, list[IndexSong]] = {}
-    for s in index.songs_for_artist(artist_key):
-        groups.setdefault(s.base_key, []).append(s)
     compact_pinyin = [compact(p) for p in title.pinyin]
     hits = []
-    for base, members in groups.items():
-        keys = {base, *(m.song_key for m in members)}
+    for t in index.titles_for_artist(artist_key):
+        base, keys = t.base_key, {t.base_key, *t.song_keys}
         if any(k in keys or compact(k) == compact(base) for k in title.keys):
             score, step = 100.0, exact_step
         else:
@@ -427,8 +429,7 @@ def _title_hits(index: IndexView, artist_key: str, title: _Forms, rank: int, *, 
             step = fuzzy_step
         if cap is not None:
             score = min(score, cap)
-        tabs = sum(len(m.tabs) for m in members)
-        hits.append(_Hit(MatchCandidate(artist_key, base, round(score, 1), step), rank, tabs))
+        hits.append(_Hit(MatchCandidate(artist_key, base, round(score, 1), step), rank, t.tabs))
     return hits
 
 
@@ -491,10 +492,8 @@ def _title_only(index: IndexView, title: _Forms, policy: MatchPolicy, rank: int 
             scores[key] = 100.0
     hits = []
     for key, score in scores.items():
-        tabs: dict[str, int] = {}
-        for artist_key, s in index.songs_for_title(key):
-            tabs[artist_key] = tabs.get(artist_key, 0) + len(s.tabs)
-        hits += [_Hit(MatchCandidate(a, key, round(score, 1), "title_only"), rank, n) for a, n in tabs.items()]
+        hits += [_Hit(MatchCandidate(a, key, round(score, 1), "title_only"), rank, n)
+                 for a, n in index.artists_for_title(key).items()]
     return _ranked(hits)
 
 
@@ -537,16 +536,12 @@ def _title_score(title: _Forms, key: str) -> float:
 def _word_hits(index: IndexView, artist_key: str, title: _Forms, rank: int, *, step: str,
                cap: float | None = None) -> list[_Hit]:
     """The artist's titles that hold yours word for word, or that yours holds."""
-    groups: dict[str, list[IndexSong]] = {}
-    for s in index.songs_for_artist(artist_key):
-        groups.setdefault(s.base_key, []).append(s)
     hits = []
-    for base, members in groups.items():
-        score = max(_word_score(k, u) for k in title.keys for u in {base, *(m.song_key for m in members)})
+    for t in index.titles_for_artist(artist_key):
+        score = max(_word_score(k, u) for k in title.keys for u in {t.base_key, *t.song_keys})
         if score:
-            tabs = sum(len(m.tabs) for m in members)
             score = score if cap is None else min(score, cap)
-            hits.append(_Hit(MatchCandidate(artist_key, base, round(score, 1), step), rank, tabs))
+            hits.append(_Hit(MatchCandidate(artist_key, t.base_key, round(score, 1), step), rank, t.tabs))
     return hits
 
 
