@@ -2715,8 +2715,9 @@ _SONGBOOK_STYLE = """
 .picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 /* While selecting, a card or a row is one target: a tap anywhere on it lands on it, and the Select script
    picks it or lets it go; only its box takes a tap of its own. What opens a file or acts on the song is put
-   away, and so are the lines that say what to do about its match, so that a pick never opens or fetches
-   anything; a key pressed on what stays (its artist's filter, its request's line) still does what it says. */
+   away, and so are the lines that say what to do about its match and the links of its request's line (which
+   still says how the request goes), so that a pick never opens or fetches anything; a key pressed on what
+   stays (its artist's filter) still does what it says. */
 .selecting [data-picker] { cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none;
   user-select: none; }
 .selecting [data-picker] * { pointer-events: none; }
@@ -2724,7 +2725,8 @@ _SONGBOOK_STYLE = """
 .selecting [data-picker] > .actions, .selecting [data-picker] > .more, .selecting [data-picker] > .foot,
 .selecting [data-picker] > .picker, .selecting [data-picker] > .row-action, .selecting [data-picker] > .row-more,
 .selecting [data-picker] > .row-panel, .selecting [data-picker] > .note, .selecting [data-picker] > .pick-hint,
-.selecting [data-picker] .filter-mark { display: none; }
+.selecting [data-picker] .filter-mark, .selecting [data-picker] .progress a,
+.selecting [data-picker] .progress .dot { display: none; }
 .selecting [data-picker] .artist { min-height: 0; }  /* no target of its own: the card is */
 /* A row's box stands where its source's mark was, beside the title and the artist (both lines on a phone). */
 .selecting .row { grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "src title" "src sub"; }

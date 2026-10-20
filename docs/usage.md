@@ -1544,7 +1544,8 @@ box on each card, or on each row in the Rows view, where the source's mark
 was: tick songs in the order they go in the songbook (each box shows its
 place, and a screen reader says it: "Pick Creep by Radiohead, 2nd"). A tap
 anywhere on a card or a row ticks it, or unticks it: while you select, each
-song's Open, Files, Fetch now and Remove… are put away, and a tap on its
+song's Open, Files, Fetch now and Remove… are put away, a request's line
+still says how it goes but without its links (Details), and a tap on its
 title or its artist opens and filters nothing, so a tick never opens a file
 by mistake. Search, filter and switch views between ticks; the bar at the
 bottom counts them, `3 selected`. Give the songbook a name and tap Make

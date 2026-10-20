@@ -424,11 +424,17 @@ def test_while_selecting_a_card_shows_no_file_or_action_and_a_tap_anywhere_lands
         {"artist_key": "radiohead", "song_key": "creep", "score": 89.4, "step": "fuzzy_artist"}])
     karma = add_song(conn, "Radiohead", "Karma Police")  # in review, no candidates: a note says what to do
     update_song(conn, karma.id, review=True, match_decision="review")
-    out = run_in_page(page(conn, cfg, WebControls(csrf="tok")), cfg, tmp_path, CARD_TARGETS + """
+    # Hysteria's fetch runs: its line links its details, which a tap would no more reach than a file.
+    hysteria = next(s for s in data_of(page(conn, cfg))["songs"] if s["title"] == "Hysteria")
+    running = {"id": 7, "kind": "song", "songId": hysteria["id"], "state": "running", "display": "Muse - Hysteria",
+               "line": {"tone": "running", "text": "Fetching from Ultimate Guitar…", "details": "/jobs#job-7"}}
+    controls = WebControls(csrf="tok", busy=frozenset({hysteria["id"]}), active=1, jobs=(running,))
+    out = run_in_page(page(conn, cfg, controls), cfg, tmp_path, CARD_TARGETS + """
       const byTitle = (title) => qa("#list [data-id]").find((a) => a.querySelector("h2").textContent === title);
       const titles = ["Creep", "Hysteria", "Crep", "Karma Police"];
       const before = titles.map((t) => targets(byTitle(t)).controls.length);
       const note = byTitle("Karma Police").querySelector(".note").checkVisibility();
+      const details = byTitle("Hysteria").querySelector(".progress a").checkVisibility();
       q(".pick-toggle").click();
       const cards = Object.fromEntries(titles.map((t) => [t, targets(byTitle(t))]));
       q('button[data-view="rows"]').click();
@@ -437,12 +443,13 @@ def test_while_selecting_a_card_shows_no_file_or_action_and_a_tap_anywhere_lands
       q(".pick-toggle").click();
       q('button[data-view="cards"]').click();
       const after = titles.map((t) => targets(byTitle(t)).controls.length);
-      out = {before, note, cards, rows, after};
+      out = {before, note, details, cards, rows, after};
     """, size=size)
-    # Before: Open, Files, Fetch now, the picker, the note's link to the to-do page, Remove… Selecting: the title
-    # (a link to the sheet, or none) and the artist's filter, which a key still works, without its funnel; a tap
-    # anywhere lands on the card, which picks it.
-    assert min(out["before"]) >= 3 and out["note"], out["before"]
+    # Before: Open, Files, Fetch now, the picker, the note's link to the to-do page, a request's Details, Remove…
+    # Selecting: the title (a link to the sheet, or none) and the artist's filter, which a key still works,
+    # without its funnel; a request's line says how it goes, without its links; a tap anywhere lands on the
+    # card, which picks it.
+    assert min(out["before"]) >= 3 and out["note"] and out["details"], out["before"]
     for kind in ("cards", "rows"):
         shown = out[kind]
         assert shown["Creep"]["controls"] == ["title-link", "artist" if kind == "cards" else "artist row-artist"]
