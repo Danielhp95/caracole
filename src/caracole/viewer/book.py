@@ -50,7 +50,7 @@ from caracole.viewer.theory import key_name, parse_chord
 
 HERE = Path(__file__).parent
 LIBRARY_PAGE = "../../index.html"  # Library/_songbooks/<name>/songbook.html -> Library/index.html
-VERSION = 1  # of the page's markup: a new one makes every songbook.html again
+VERSION = 2  # of the page's markup: a new one makes every songbook.html again
 
 
 @dataclass(frozen=True)
@@ -206,17 +206,10 @@ def _song(song: BookSong, n: int, total: int, prev: int | None, nxt: int | None)
         if sheet.auto else ""
     )
     lang = ' lang="zh"' if has_han(song.title + sheet.title + "".join(_texts(sheet))) else ""
-    pager = (
-        '<nav class="pager" aria-label="Songs">'
-        + (f'<a href="#song-{prev}" rel="prev">‹ Previous</a>' if prev else '<span class="none"></span>')
-        + '<a href="#contents">Contents</a>'
-        + (f'<a href="#song-{nxt}" rel="next">Next ›</a>' if nxt else '<span class="none"></span>')
-        + "</nav>\n"
-    )
     html = (
         f'<section class="song" id="song-{n}" data-n="{n}" data-id="{escape(song.id)}" '
         f'aria-labelledby="title-{n}">\n<header class="head">\n'
-        + pager
+        + _pager("Songs", prev, nxt)
         + f'<p class="pos">Song {n} of {total}</p>\n'
         + f'<h2 class="title" id="title-{n}">{escape(song.title)}</h2>\n'
         + (f'<p class="artist">{escape(song.artist)}</p>\n' if song.artist else "")
@@ -224,5 +217,17 @@ def _song(song: BookSong, n: int, total: int, prev: int | None, nxt: int | None)
         + notice
         + f'<div class="strip" id="strip-{n}" hidden></div>\n'
         + f'<article class="sheet" id="sheet-{n}"{lang}>\n{_sheet_html(sheet)}</article>\n'
+        + _pager("Songs, after the sheet", prev, nxt)  # at the end of a long sheet, no scrolling back up
     )
     return html, data
+
+
+def _pager(label: str, prev: int | None, nxt: int | None) -> str:
+    """Previous, Contents and Next: above a song's sheet, and again after it, each named for a screen reader."""
+    return (
+        f'<nav class="pager" aria-label="{escape(label)}">'
+        + (f'<a href="#song-{prev}" rel="prev">‹ Previous</a>' if prev else '<span class="none"></span>')
+        + '<a href="#contents">Contents</a>'
+        + (f'<a href="#song-{nxt}" rel="next">Next ›</a>' if nxt else '<span class="none"></span>')
+        + "</nav>\n"
+    )

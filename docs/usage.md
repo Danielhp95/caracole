@@ -1217,9 +1217,9 @@ in `Library/_songbooks/<name>/`:
   folder and loads nothing. It opens on the contents; tap a song to open it in
   the sheet viewer, with everything the viewer does (chord shapes,
   transposition, chords to play instead, modes, scrolling by itself), each
-  song in its own key and keeping its own settings. Next and Previous, a swipe
-  across the sheet or the arrow keys go from song to song, skipping the
-  missing ones, and Contents goes back. Opened again, the page takes you back
+  song in its own key and keeping its own settings. Next and Previous (above
+  each song, and again at its end), a swipe across the sheet or the arrow keys
+  go from song to song, skipping the missing ones, and Contents goes back. Opened again, the page takes you back
   to the song you had open, where you were in it; the contents mark it as
   "last opened". Without JavaScript, or printed, it is every song one after
   the other. Served by `caracole serve`, it runs in a sandbox without the

@@ -89,6 +89,17 @@ def test_each_song_says_where_it_is_and_links_its_neighbours():
     assert 'lang="zh"' in last
 
 
+def test_the_pager_is_above_each_sheet_and_after_it_too():
+    songs = re.finditer(r'<section class="song" id="song-(\d+)".*?<script type="application/json" id="data-\1">',
+                        page(), re.DOTALL)  # a sheet's parts are sections too: up to the song's data
+    sections = [m.group(0) for m in songs]
+    assert len(sections) == 3
+    for section in sections:
+        pagers = re.findall(r'<nav class="pager" aria-label="([^"]+)">', section)
+        assert len(pagers) == 2 and len(set(pagers)) == 2  # each named, for a screen reader
+        assert re.search(r'</article>\n<nav class="pager"', section)  # the end of a long sheet: no scrolling back
+
+
 def test_the_page_links_the_pdf_and_the_chordpro_file_when_there_are_some():
     html = page()
     assert 'href="songbook.pdf"' in html and 'href="songbook.cho"' in html
@@ -273,6 +284,16 @@ def test_the_page_remembers_the_song_and_each_songs_own_settings(tmp_path):
     assert three == "Key Cm · +3" and one == "Key G" and again == "Key Cm · +3"
     assert "Minor Song" in here
     assert shown == ["song-3"]
+
+
+@in_chromium
+def test_the_files_are_linked_once_wherever_you_are(tmp_path):
+    harness = """
+      const shown = (s) => Array.from(document.querySelectorAll(s)).filter((el) => el.offsetParent !== null).length;
+      out = [shown(".toc .files a"), shown(".foot a.pdf"), shown("section.song nav.pager")];
+    """
+    assert result_of(open_page(page(), tmp_path, harness=harness)) == [2, 0, 0]  # the contents' own, alone
+    assert result_of(open_page(page(), tmp_path, "#song-3", harness=harness)) == [0, 2, 2]  # at the sheet's end
 
 
 @in_chromium

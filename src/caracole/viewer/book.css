@@ -33,6 +33,9 @@ html[data-view="song"] .book-head .artist { display: none; }
 .pager a[rel="prev"] { justify-self: start; }
 .pager a[rel="next"] { justify-self: end; }
 .pager a:hover { border-color: var(--muted); }
+.sheet + .pager { margin: 22px 0 6px; }
+/* The contents link the files themselves: the footer's links are for the end of a song. */
+html[data-view="contents"] .foot .pdf { display: none; }
 
 @media print {
   .pager, .toc .files, .book-head .back { display: none !important; }
