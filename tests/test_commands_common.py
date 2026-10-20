@@ -452,6 +452,8 @@ def test_bulk_work_after_a_lookup_keeps_the_long_pause(cfg, conn, site, pauses):
 
 
 def test_a_waiting_lookup_says_whom_it_waits_for_and_is_announced(cfg, capsys):
+    import time
+
     took = threading.Event()
 
     def lookup():
@@ -461,7 +463,12 @@ def test_a_waiting_lookup_says_whom_it_waits_for_and_is_announced(cfg, capsys):
     with another_caracole(cfg):
         thread = threading.Thread(target=lookup)
         thread.start()
-        assert not took.wait(0.5)
+        # A lookup tries for the lock without blocking on it, so /proc/locks never lists it waiting
+        # (helpers.locks.waiting_for): its ticket says it waits, as soon as it does.
+        deadline = time.monotonic() + 5
+        while not _common.lookups_waiting(cfg) and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert not took.is_set()  # waiting, not running beside it
         assert _common.lookups_waiting(cfg)  # what the nightly run checks in its pauses
     assert took.wait(5)
     thread.join(5)
