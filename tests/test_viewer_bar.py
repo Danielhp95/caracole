@@ -109,12 +109,21 @@ def key(b: Browser, name: str, code: int) -> None:
 
 
 def tap(b: Browser, selector: str) -> None:
-    """A finger on the middle of the first element ``selector`` finds in view, clear of the bar."""
+    """A finger on the first element ``selector`` finds in view, clear of the bar, with no chord within
+    a finger's reach: Chrome hit-tests a touch over an area, and a word beside a chord's larger target
+    would open the chord's card. On the word's last line of text, as its box reaches up into the row
+    of chords."""
     box = b.js(f"""(() => {{
+      const at = (r) => [r.x + r.width / 2, r.bottom - Math.min(8, r.height / 2)];
+      const near = [[0, 0], [-12, 0], [12, 0], [0, -12], [0, 12], [-9, -9], [9, -9], [-9, 9], [9, 9]];
       const el = [...document.querySelectorAll({selector!r})].find((e) => {{
-        const r = e.getBoundingClientRect(); return r.width && r.top >= 0 && r.bottom <= innerHeight - 120; }});
-      if (!el) return null;
-      const r = el.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }})()""")
+        const r = e.getBoundingClientRect();
+        if (!r.width || r.top < 0 || r.bottom > innerHeight - 120) return false;
+        const [x, y] = at(r);
+        if (!e.contains(document.elementFromPoint(x, y))) return false;
+        return near.every(([dx, dy]) => {{ const hit = document.elementFromPoint(x + dx, y + dy);
+          return !(hit && hit.closest(".c")); }}); }});
+      return el ? at(el.getBoundingClientRect()) : null; }})()""")
     assert box, f"nothing in view is {selector}"
     b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": box[0], "y": box[1]}])
     b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
@@ -424,8 +433,10 @@ def test_a_songbook_song_has_the_bar_and_its_next_and_previous_too(tmp_path):
         clear = b.js("""(() => { scrollTo(0, document.documentElement.scrollHeight);
           const next = [...document.querySelectorAll('#song-1 a[rel="next"]')].pop().getBoundingClientRect();
           return next.bottom <= document.querySelector('#bar').getBoundingClientRect().top; })()""")
+        b.js("window.before = true")  # gone once the page loads again for the next song
         b.click("#song-1 .sheet + .pager a[rel='next']")
-        assert b.wait("location.hash.startsWith('#song-2') && document.documentElement.dataset.ready === '1'", 5)
+        assert b.wait("window.before === undefined && location.hash.startsWith('#song-2')"
+                      " && document.documentElement.dataset.ready === '1'", 5)
         assert settled(b, "shown")
         next_song = bar(b)
     assert on_song["where"] == "shown" and on_song["main"] == "G"
