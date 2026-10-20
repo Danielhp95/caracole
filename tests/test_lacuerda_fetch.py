@@ -87,7 +87,9 @@ class FakeLaCuerda:
     """acordes.lacuerda.net: pages by URL, every request recorded.
 
     By default it has Soda Stereo's artist page and the page of "De Música
-    Ligera" version 3, the best "acordes" version that page lists.
+    Ligera" version 3, the best "acordes" version that page lists. Its listings
+    of every artist (which the nightly step reads after the sheets) it doesn't
+    have: each answers LaCuerda's 404 page.
     """
 
     def __init__(self, pages=None):
@@ -107,6 +109,8 @@ class FakeLaCuerda:
         slug = request.url.path.strip("/")
         if request.url.path.endswith("/") and "/" not in slug:
             return httpx.Response(200, text=soft_404(slug), headers=html)
+        if request.url.path.startswith("/tabs/"):
+            return httpx.Response(404, text=fixture("not_found.html"), headers=html)
         raise AssertionError(f"unexpected request: {url}")
 
     def client(self, cache_dir: Path, *, budget: int = 30, now: datetime = NOW) -> PoliteClient:
@@ -291,6 +295,34 @@ def test_an_http_404_for_an_artist_page_moves_on_too(conn, tmp_path):
     site.pages[f"{BASE}/fito_y_fitipaldis/"] = (404, fixture("song.html"))
     spanish_song(conn, "Fito y Fitipaldis", "Por la boca vive el pez")
     assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, kept=1)
+
+
+def test_the_slug_lacuerdas_listings_give_an_artist_is_asked_first(conn, tmp_path):
+    # LaCuerda files Enanitos Verdes as enanitos, which no rule makes of the name: the index knows it.
+    from caracole import lacuerda_index
+    from caracole.lacuerda import LCArtist
+
+    enanitos, lamento = f"{BASE}/enanitos/", f"{BASE}/enanitos/lamento_boliviano.shtml"
+    page = artist_page("Enanitos Verdes", "enanitos", ("lamento_boliviano", "Lamento Boliviano", "R-1"))
+    site = FakeLaCuerda({enanitos: (200, page), lamento: (200, fixture("version.html"))})
+    lacuerda_index.store_artists(conn, "tabs/e/index0.html", [LCArtist("enanitos", "Enanitos Verdes", 151)])
+    song = spanish_song(conn, "Los Enanitos Verdes", "Lamento Boliviano")
+    assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, kept=1)
+    assert site.requests == [enanitos, lamento]
+    (v,) = lacuerda_versions(conn, song)
+    assert v.tab_id == "enanitos/lamento_boliviano-1"
+
+
+def test_an_artist_page_read_puts_its_songs_in_the_index(conn, tmp_path):
+    # Read from LaCuerda or from the cache, the page's songs are what a search can then suggest.
+    from caracole import lacuerda_index
+
+    spanish_song(conn)
+    run(FakeLaCuerda(), conn, tmp_path)
+    (hit,) = lacuerda_index.find(conn, "persiana americana").songs
+    assert (hit.artist, hit.title, hit.url) == ("Soda Stereo", "Persiana Americana",
+                                                f"{BASE}/soda_stereo/persiana_americana")
+    assert len(lacuerda_index.artist_songs(conn, "soda_stereo")) == 14
 
 
 def test_an_artist_lacuerda_does_not_have_is_a_miss(conn, tmp_path):
@@ -914,7 +946,9 @@ def test_the_nightly_lacuerda_step_reports_the_counts(conn, cfg, tmp_path):
     services = Services(clients={"lacuerda": client}, spotify=None, notifier=Notifier(None, None))
     steps = [s for s in default_steps() if s.name == "lacuerda"]
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
-    assert report.steps == {"lacuerda": "2 tried, 1 sheet kept, 1 not on LaCuerda, 0 errors"}
+    # Then the listings of every artist, which this LaCuerda hasn't: the index holds the songs of the page read.
+    assert report.steps == {"lacuerda": "2 tried, 1 sheet kept, 1 not on LaCuerda, 0 errors; "
+                                        "artist index: 0 pages read, 0 artists, 14 songs"}
     assert (cfg.library_dir / "Soda Stereo" / "De Música Ligera" / "sheet.txt").is_file()
 
 
@@ -940,7 +974,8 @@ def test_a_kept_sheet_scored_tonight_gives_lacuerda_its_chance(conn, cfg, tmp_pa
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
 
     assert report.steps == {"fetch": "0 songs done, 0 failed, 1 kept sheet rescored",
-                            "lacuerda": "1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors"}
+                            "lacuerda": "1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors; "
+                                        "artist index: 0 pages read, 0 artists, 14 songs"}
     (v,) = lacuerda_versions(conn, song)
     assert v.coverage == 0.5 and files_of(conn, song)["sheet.txt"] == v.id
 
@@ -963,6 +998,6 @@ def test_tonights_lyrics_score_tonights_lacuerda_sheet(conn, cfg, tmp_path):
     services = Services(clients=clients, spotify=None, notifier=Notifier(None, None))
     steps = [s for s in default_steps() if s.name in ("lyrics", "lacuerda")]
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
-    assert report.steps["lacuerda"] == "1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors"
+    assert report.steps["lacuerda"].startswith("1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors; ")
     (v,) = lacuerda_versions(conn, song)
     assert v.coverage == 1.0

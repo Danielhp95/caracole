@@ -7,9 +7,11 @@ in the last 30 days (``songs.lacuerda_checked_at``); or, whatever its sheet and
 the date, when the library lost the LaCuerda sheet kept for it (deleted on a
 synced device, cut short by a power cut), which is then written again. Per song:
 
-1. **The artist page.** Its slugs are tried best guess first; a 404, or
-   LaCuerda's HTTP 200 "aqui llega:" body, moves on to the next. The page is
-   cached for 30 days, so one fetch serves every song by the artist.
+1. **The artist page.** The slugs LaCuerda's listings give the artist's name
+   (lacuerda_index.py) are tried first, then the slugs built from it, best
+   guess first; a 404, or LaCuerda's HTTP 200 "aqui llega:" body, moves on to
+   the next. The page is cached for 30 days, so one fetch serves every song by
+   the artist, and its songs go into the index, for searches to suggest.
 2. **The version.** The title is matched against the page's list, and the best
    "acordes" (Letra y Acordes) version is fetched; version pages are cached
    forever. No artist page, no matching title, no acordes version or a version
@@ -56,10 +58,13 @@ from caracole.lacuerda import (
     is_missing_artist_page,
     looks_spanish,
     match_title,
+    parse_artist_name,
     parse_artist_page,
+    parse_popularity,
     parse_version_page,
     version_url,
 )
+from caracole.lacuerda_index import artist_slugs, store_songs
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, write_info
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title
@@ -130,7 +135,7 @@ def lacuerda_sheets(
     songs = [s for s in _songs_to_try(conn, library_dir, rank, now, overrides) if only is None or s.id in only]
     for i, song in enumerate(songs):
         try:
-            sheet = _find_sheet(client, song.artists[0], song.title, now, fetched)
+            sheet = _find_sheet(conn, client, song.artists[0], song.title, now, fetched)
         except ProviderBlocked:
             raise
         except BudgetExhausted:
@@ -234,10 +239,10 @@ class _Sheet:
 
 
 def _find_sheet(
-    client: Client, artist: str, title: str, now: datetime, fetched: set[str]
+    conn: sqlite3.Connection, client: Client, artist: str, title: str, now: datetime, fetched: set[str]
 ) -> _Sheet | None:
     """The best "acordes" version LaCuerda has of a song, or None when it has none."""
-    found = _artist_songs(client, artist, now, fetched)
+    found = _artist_songs(conn, client, artist, now, fetched)
     if found is None:
         return None
     slug, songs = found
@@ -251,22 +256,26 @@ def _find_sheet(
 
 
 def _artist_songs(
-    client: Client, artist: str, now: datetime, fetched: set[str]
+    conn: sqlite3.Connection, client: Client, artist: str, now: datetime, fetched: set[str]
 ) -> tuple[str, list[LCSong]] | None:
-    """The first artist page LaCuerda has among the artist's slugs, with its songs.
+    """The first artist page LaCuerda has among the artist's slugs, with its songs, which go into
+    the index (``lacuerda_index.store_songs``).
 
-    A 404, or LaCuerda's HTTP 200 "aqui llega:" body, means no artist by that
-    slug: the next slug is tried. None when no slug has a page.
+    The slugs are those LaCuerda's listings give the name, then those built from it. A 404,
+    or LaCuerda's HTTP 200 "aqui llega:" body, means no artist by that slug: the next slug is
+    tried. None when no slug has a page.
     """
-    for slug in artist_slug_candidates(artist):
+    for slug in dict.fromkeys([*artist_slugs(conn, artist), *artist_slug_candidates(artist)]):
         url = artist_url(slug)
         resp = client.get(url, accept=_ACCEPT, max_age=ARTIST_PAGE_MAX_AGE)
         if _stale(resp, now):
             # PoliteClient serves a copy past max_age only once the budget is spent.
             # It is no answer for today: stop as the next request would have.
             raise BudgetExhausted(PROVIDER)
-        songs = _read(client, resp, url, _artist_page_songs, fetched)
-        if songs is not None:
+        page = _read(client, resp, url, _artist_page_songs, fetched)
+        if page is not None:
+            songs, html = page
+            store_songs(conn, slug, parse_artist_name(html), songs, parse_popularity(html))
             return slug, songs
     return None
 
@@ -293,11 +302,11 @@ def _read[T](
     return read(client.get(url, accept=_ACCEPT, cache=False), url)
 
 
-def _artist_page_songs(resp: Response, url: str) -> list[LCSong] | None:
-    """The songs on an artist page; None when LaCuerda has no artist by that slug."""
+def _artist_page_songs(resp: Response, url: str) -> tuple[list[LCSong], str] | None:
+    """The songs on an artist page, and the page; None when LaCuerda has no artist by that slug."""
     if resp.status == 404 or is_missing_artist_page(resp.text):
         return None
-    return parse_artist_page(resp.text, url=url)
+    return parse_artist_page(resp.text, url=url), resp.text
 
 
 def _version_sheet(resp: Response, url: str) -> str | None:

@@ -66,7 +66,7 @@ from caracole.report import (
     todo_count,
     unreadable_wanted,
 )
-from caracole.songs import ensure_current_keys
+from caracole.songs import ensure_current_keys, list_songs
 
 log = logging.getLogger(__name__)
 PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs", "musescore")
@@ -301,22 +301,38 @@ def _fetch(ctx: StepContext) -> StepResult:
 
 
 def _lacuerda(ctx: StepContext) -> StepResult:
+    from caracole import lacuerda_index
     from caracole.lacuerda_fetch import lacuerda_sheets
 
-    s = lacuerda_sheets(ctx.conn, ctx.services.client("lacuerda"), ctx.cfg.library_dir, ctx.cfg.rank, ctx.now,
-                        overrides=ctx.overrides)
+    client = ctx.services.client("lacuerda")
+    s = lacuerda_sheets(ctx.conn, client, ctx.cfg.library_dir, ctx.cfg.rank, ctx.now, overrides=ctx.overrides)
+    # The artist listings, for searches to suggest LaCuerda's artists, get what the sheets left of the budget;
+    # as MuseScore's sitemaps, only once the library has a song, so that an empty one asks no site.
+    wanted = any(song.status != "ignored" and song.key not in ctx.overrides.ignore for song in list_songs(ctx.conn))
+    ix = (lacuerda_index.index_pass(ctx.conn, client, ctx.now) if wanted and not s.budget_exhausted
+          else lacuerda_index.IndexStats())
     if s.errors:
         record_error(ctx.conn, "lacuerda", ctx.now, f"{plural(s.errors, 'song')} failed this run")
-    tail = " (budget spent)" if s.budget_exhausted else ""
-    return StepResult(
+    if ix.errors:
+        record_error(ctx.conn, "lacuerda", ctx.now, "its artist listings couldn't be read this run")
+    spent = s.budget_exhausted or ix.budget_exhausted
+    tail = " (budget spent)" if spent else ""
+    artists, songs = lacuerda_index.index_size(ctx.conn)
+    result = StepResult(
         title="LaCuerda",
-        done=_counted((s.kept, "sheet kept" if s.kept == 1 else "sheets kept"), _songs(s.missing, "not there")),
+        done=_counted((s.kept, "sheet kept" if s.kept == 1 else "sheets kept"), _songs(s.missing, "not there"),
+                      (ix.pages, "page of artists read" if ix.pages == 1 else "pages of artists read")),
         failures=[Failure.of(song, e) for song, e in s.failures],
         retry="{songs} will be looked for on LaCuerda again on the next run",
-        spent=["lacuerda"] if s.budget_exhausted else [],
+        spent=["lacuerda"] if spent else [],
         status=(f"{s.tried} tried, {plural(s.kept, 'sheet')} kept, {s.missing} not on LaCuerda, "
-                f"{plural(s.errors, 'error')}{tail}"),
+                f"{plural(s.errors, 'error')}; artist index: {plural(ix.pages, 'page')} read, "
+                f"{plural(artists, 'artist')}, {plural(songs, 'song')}{tail}"),
     )
+    if ix.errors:
+        result.problems.append(Problem("LaCuerda's artist listings couldn't be read this run; they are asked for "
+                                       "again on the next run, and the log says why."))
+    return result
 
 
 def _gtptabs(ctx: StepContext) -> StepResult:

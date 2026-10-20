@@ -8,10 +8,12 @@ reach the network.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import httpx
 import pytest
+from helpers.lacuerda_site import listing_page
 from typer.testing import CliRunner
 
 import caracole.pipeline as pipeline
@@ -25,15 +27,18 @@ OUTSIDE_SETTINGS = (
 )
 NTFY = "https://ntfy.example/caracole-test"
 SONG = "epic - I'm not sorry for loving you"
+LISTING = re.compile(r"/tabs/([a-z_]+)/index(\d+)\.html")
 
 
 class Sites:
-    """LRCLIB answers every request with ``lrclib`` (503: overloaded, as live); UG and LaCuerda
-    must not be asked at all, and gtptabs.com and MuseScore are turned off; ntfy takes every post."""
+    """LRCLIB answers every request with ``lrclib`` (503: overloaded, as live); LaCuerda has three
+    pages of artists for each initial, as its listings of every artist are paged; UG must not be
+    asked at all, and gtptabs.com and MuseScore are turned off; ntfy takes every post."""
 
     def __init__(self, lrclib: int = 503):
         self.lrclib = lrclib
-        self.requests: list[str] = []
+        self.requests: list[str] = []  # LRCLIB's
+        self.lacuerda: list[str] = []
         self.posts: list[httpx.Request] = []
 
     def transport(self, provider: str) -> httpx.BaseTransport:
@@ -41,9 +46,15 @@ class Sites:
             if provider == "ntfy":
                 self.posts.append(request)
                 return httpx.Response(200, json={"id": "x"})
-            self.requests.append(str(request.url))
+            listing = LISTING.fullmatch(request.url.path)
+            if provider == "lacuerda" and listing:
+                self.lacuerda.append(str(request.url))
+                letter, start = listing.group(1), int(listing.group(2))
+                artists = [(f"{letter}_{start}", f"Artista {letter} {start}", 1)]
+                return httpx.Response(200, text=listing_page(artists, pages=3, page=start // 100))
             if provider != "lrclib":
                 raise AssertionError(f"unexpected {provider} request: {request.url}")
+            self.requests.append(str(request.url))
             return httpx.Response(self.lrclib, json={"name": "ServerOverloaded"})
 
         return httpx.MockTransport(handler)
@@ -104,10 +115,12 @@ def the_users_night(tmp_path: Path) -> str:
         "Until then, no song is matched or looked for on Ultimate Guitar.\n"
         "\n"
         "Songs: 1 in wanted.txt, 1 new.\n"
+        "LaCuerda: 30 pages of artists read.\n"
         "\n"
         f"1 thing on your to-do page needs you: {tmp_path / 'lib' / '_todo.md'}\n"
         "LRCLIB didn't answer (HTTP 503), so the lyrics of 1 song will be tried again on the next run.\n"
-        "Requests: Ultimate Guitar 0 of 60, LRCLIB 2 of 200, LaCuerda 0 of 30.\n"
+        "Requests: Ultimate Guitar 0 of 60, LRCLIB 2 of 200, "
+        "LaCuerda 30 of 30 (used up: the rest waits for the next run).\n"
         "Took 3 s.\n"
     )
 
@@ -119,6 +132,11 @@ def test_one_song_no_index_and_lrclib_down_reads_as_a_short_report(tmp_path, sit
     assert result.stdout == the_users_night(tmp_path)
     assert result.stderr == ""  # nothing went wrong that the report doesn't say
     assert len(sites.requests) == 2  # /api/get, then /api/search
+    # LaCuerda's listings of every artist, three pages an initial, as far as its budget goes: the next
+    # night goes on from the eleventh initial.
+    assert sites.lacuerda[:4] == [f"https://acordes.lacuerda.net/tabs/{p}" for p in (
+        "_num/index0.html", "_num/index100.html", "_num/index200.html", "a/index0.html")]
+    assert len(sites.lacuerda) == 30
 
 
 def test_lrclib_down_for_many_songs_is_one_line(tmp_path, sites, clock):

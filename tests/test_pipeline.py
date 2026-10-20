@@ -4,9 +4,11 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
+from caracole import lacuerda_index as li
 from caracole.db import kv_get_json
 from caracole.health import get_state, is_cooling, record_block
 from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
+from caracole.lacuerda import LCArtist
 from caracole.notify import Notifier
 from caracole.pipeline import PROVIDERS, RunReport, Services, Step, run_pipeline
 
@@ -665,6 +667,7 @@ def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, mo
         return lf.LaCuerdaStats(tried=2, kept=1, missing=0, errors=1, budget_exhausted=False)
 
     monkeypatch.setattr(lf, "lacuerda_sheets", fake)
+    monkeypatch.setattr(li, "index_pass", lambda conn_, client, now: li.IndexStats())
     o = Overrides(block=frozenset({1}))
     out = Outbox()
     ctx = StepContext(cfg=cfg, conn=conn, overrides=o, now=NOW, run_id="r", services=services(out),
@@ -673,6 +676,76 @@ def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, mo
     assert seen["overrides"] is o
     assert "1 error" in summary
     assert get_state(conn, "lacuerda").last_error is not None
+
+
+def lacuerda_step(conn, cfg, monkeypatch, sheets, index, *, songs=True):
+    """The default lacuerda step with its two passes faked, for a library with a song (or none): what it
+    returns, and the passes it made."""
+    from conftest import add_song
+
+    import caracole.lacuerda_fetch as lf
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext, _lacuerda
+
+    made = []
+
+    def fake_sheets(*args, **kwargs):
+        made.append("sheets")
+        return sheets
+
+    def fake_index(conn_, client, now):
+        made.append("index")
+        assert (client, now) == (ctx.services.client("lacuerda"), NOW)  # the sheets' client: one budget
+        return index
+
+    monkeypatch.setattr(lf, "lacuerda_sheets", fake_sheets)
+    monkeypatch.setattr(li, "index_pass", fake_index)
+    if songs:
+        add_song(conn, "Radiohead", "Creep")
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
+                      report=RunReport(run_id="r", started="r"))
+    return _lacuerda(ctx), made
+
+
+def test_the_lacuerda_step_reads_the_artist_listings_with_what_the_sheets_left_of_the_budget(conn, cfg, monkeypatch):
+    import caracole.lacuerda_fetch as lf
+
+    li.store_artists(conn, "tabs/e/index0.html", [LCArtist("estopa", "Estopa", 159)])
+    result, made = lacuerda_step(conn, cfg, monkeypatch, lf.LaCuerdaStats(tried=1, kept=1), li.IndexStats(pages=3))
+    assert made == ["sheets", "index"]
+    assert result.done == ["1 sheet kept", "3 pages of artists read"]
+    assert result.status == ("1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors; "
+                             "artist index: 3 pages read, 1 artist, 0 songs")
+    assert result.spent == [] and result.problems == []
+
+
+def test_the_lacuerda_step_leaves_the_listings_when_the_sheets_spent_the_budget(conn, cfg, monkeypatch):
+    import caracole.lacuerda_fetch as lf
+
+    result, made = lacuerda_step(conn, cfg, monkeypatch, lf.LaCuerdaStats(tried=3, budget_exhausted=True),
+                                 li.IndexStats(pages=3))
+    assert made == ["sheets"]
+    assert result.spent == ["lacuerda"]
+    assert result.status.endswith("artist index: 0 pages read, 0 artists, 0 songs (budget spent)")
+
+
+def test_the_lacuerda_step_reads_no_listing_for_an_empty_library(conn, cfg, monkeypatch):
+    import caracole.lacuerda_fetch as lf
+
+    result, made = lacuerda_step(conn, cfg, monkeypatch, lf.LaCuerdaStats(), li.IndexStats(pages=3), songs=False)
+    assert made == ["sheets"] and result.done == []
+
+
+def test_the_lacuerda_step_says_when_the_listings_spent_the_budget_or_failed(conn, cfg, monkeypatch):
+    import caracole.lacuerda_fetch as lf
+
+    result, _ = lacuerda_step(conn, cfg, monkeypatch, lf.LaCuerdaStats(), li.IndexStats(pages=1, budget_exhausted=True))
+    assert (result.done, result.spent) == (["1 page of artists read"], ["lacuerda"])
+    result, _ = lacuerda_step(conn, cfg, monkeypatch, lf.LaCuerdaStats(), li.IndexStats(errors=1))
+    assert [p.text for p in result.problems] == [
+        "LaCuerda's artist listings couldn't be read this run; they are asked for again on the next run, "
+        "and the log says why."]
+    assert get_state(conn, "lacuerda").last_error == "its artist listings couldn't be read this run"
 
 
 def test_default_scan_step_says_how_many_links_the_inbox_refused(conn, cfg, tmp_path):

@@ -8,7 +8,8 @@ in Traditional characters, as its records of the song are.
 
 Each night is ``caracole run``'s steps, with UG's own budget and pauses, minus the index refresh
 (it would ask for sitemaps: the index here is complete, without the artist, as UG's is) and the
-render. Nothing here reaches the network.
+render; LaCuerda's listings of every artist were read the night before, so LaCuerda is asked
+nothing. Nothing here reaches the network.
 """
 
 from __future__ import annotations
@@ -30,6 +31,8 @@ from helpers.ug_pages import (
     song_dongye_tab,
 )
 
+from caracole import lacuerda_index
+from caracole.db import kv_set
 from caracole.http import PoliteClient, robots_disallows
 from caracole.library import song_dir
 from caracole.notify import Notifier
@@ -98,13 +101,14 @@ def no_request(request: httpx.Request) -> httpx.Response:
 
 @pytest.fixture
 def library(cfg, conn):
-    """A complete UG index without the artist, and wanted.txt with the user's line."""
+    """A complete UG index without the artist, LaCuerda's listings read, and wanted.txt with the user's line."""
     conn.executemany(
         "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
         "VALUES (?, ?, ?, 'chords', 'last', '2026-10-01T00:00:00Z', ?)",
         [(1, "radiohead", "creep", "radiohead/creep-chords-1"), (2, "oasis", "wonderwall", "oasis/wonderwall-chords-2")],
     )
     mark_built(conn, NIGHT - timedelta(days=1))
+    kv_set(conn, lacuerda_index.COMPLETE_KEY, "2026-10-18T03:30:00Z")  # read a night before, so not due
     cfg.library_dir.mkdir(parents=True, exist_ok=True)
     cfg.wanted_file.write_text("# the songs I'm learning\n宋冬野 - 斑马斑马\n", encoding="utf-8")
     return cfg

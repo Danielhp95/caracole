@@ -35,7 +35,7 @@ an earlier one failed:
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), rank.py, coverage.py, versions.py |
-| lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the step) |
+| lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` is for searches, not wired in yet, `artist_slugs` for the sheets) |
 | scan | music.py (Music/), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
@@ -113,7 +113,9 @@ songs.py's, in the `removed` table).
   gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7
   and Power Tab files (a format's magic header, then filler). helpers/musescore_site.py
   is `FakeMuseScore`, its song sitemaps and the challenge Cloudflare answers caracole
-  with (`challenge()`). helpers/fake_ytdlp.py is `FakeYtDlp`, a yt-dlp the test writes as a
+  with (`challenge()`). helpers/lacuerda_site.py is `LaCuerdaSite`, LaCuerda's listings
+  of every artist (`listing_page`, with `Last-Modified` and 304s) and artist pages
+  (`artist_page`). helpers/fake_ytdlp.py is `FakeYtDlp`, a yt-dlp the test writes as a
   script that answers from a plan and logs its arguments, and `route_on`, a config with the
   YouTube route on (auto-chords' packages taken to be there, model files, the fake).
   helpers/rendered.py keeps a sheet and renders it with a stand-in
@@ -233,7 +235,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (`config.ProviderPolicy`; `_common.make_client` picks one).
   - **Bulk work**: the nightly run (its index refresh included), `caracole index build`
     and every command but `caracole get`. Budgets per run: `ug` 60, `lrclib` 200,
-    `lacuerda` 30, `gtptabs` 20, `musescore` 10 requests, `youtube` 6 yt-dlp runs
+    `lacuerda` 30 (its sheets first, then its listings of every artist), `gtptabs` 20,
+    `musescore` 10 requests, `youtube` 6 yt-dlp runs
     (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100 (`BUILD_BUDGET`,
     commands/index.py). Then `BudgetExhausted`. Between any two requests to a provider, a
     random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore,
@@ -295,7 +298,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `test_gtptabs_fetch.py::test_a_spent_budget_is_no_miss`). On gtptabs.com only an artist
   page that answered without a candidate is a miss, asked about again after 30 days; on
   YouTube only a search that answered without a video that fits (youtube_fetch.py,
-  `test_youtube_fetch.py::test_an_error_is_no_miss_and_the_song_waits_for_the_next_run`). A
+  `test_youtube_fetch.py::test_an_error_is_no_miss_and_the_song_waits_for_the_next_run`); of
+  LaCuerda's listings only a page that answers 404 loses its artists, never one that errs or
+  won't parse (`test_lacuerda_index.py::test_a_page_that_wont_parse_is_an_error_and_its_artists_stay`). A
   block or a spent budget exits 0; a bug exits 1, which fires the unit's ntfy alert.
 - **Slugged tabs only at their slugged URL**, as UG answers 404 for them at `/tab/{id}`:
   the index keeps each tab's sitemap path (`ug_index.path`), from which ug/page.py
@@ -330,9 +335,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   song's one `inbox` version of kind `score`; a MusicXML header is read with
   `musicxml.header`, up to the part list only.
 - **Chinese is compared as pinyin** (`normalize.romanize`, with pypinyin) in match.py,
-  coverage.py, music.py, search.py, library_page.py and ug/fetch.py; identity keys also fold
+  coverage.py, music.py, search.py, library_page.py, ug/fetch.py and lacuerda_index.py
+  (whose keys are pinyin); identity keys also fold
   Traditional characters to Simplified. Where a name caracole didn't write meets yours (UG's
-  artist pages and slugs, purchases' tags, downloads), it is compared by `normalize.name_forms`,
+  artist pages and slugs, LaCuerda's listings, purchases' tags, downloads), it is compared by `normalize.name_forms`,
   which also gives the parts of a name in two scripts ("Song Dongye (宋冬野)"); forms are for
   comparing and never make a key. A change to `clean_title`, `slug_key` or
   `identity_key` that can change a key bumps `normalize.KEY_VERSION`:
@@ -342,7 +348,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   change when a sitemap is parsed again, and the keys of a table site_index.py fills
   (`gtptabs_index`, `musescore_index`) at its next refresh, which parses every sitemap
   again, an unchanged one from the cache
-  (`test_gtptabs_fetch.py::test_new_keys_read_the_sitemaps_again_even_when_they_are_unchanged`).
+  (`test_gtptabs_fetch.py::test_new_keys_read_the_sitemaps_again_even_when_they_are_unchanged`);
+  `lacuerda_index` keys are made again from the names it stores, with no request
+  (`lacuerda_index.ensure_current_keys`, at its next refresh or store).
   Name new per-song kv keys `<prefix><song id>` (or `<prefix><song id>:<more>`) and add the
   prefix to `songs._PER_SONG_KV`, so a merge or a removal deletes them (`songs.delete_song_kv`).
 - **A removed song stays removed until you ask for it again.** `caracole remove` (removal.py)

@@ -18,6 +18,7 @@ from pathlib import Path
 import httpx
 import pytest
 from conftest import add_song, subprocess_pythonpath
+from helpers.lacuerda_site import listing_page
 from typer.testing import CliRunner
 
 from caracole import db
@@ -73,7 +74,8 @@ class FakeLrclib:
 
 
 class FakeLaCuerda:
-    """Pages by URL; an unknown artist gets LaCuerda's HTTP 200 "aqui llega" body."""
+    """Pages by URL; an unknown artist gets LaCuerda's HTTP 200 "aqui llega" body, and a listing of
+    artists it doesn't have its 404 page."""
 
     def __init__(self, pages=None, status: int | None = None):
         self.pages = dict(pages or {})
@@ -90,6 +92,8 @@ class FakeLaCuerda:
         slug = request.url.path.strip("/")
         if request.url.path.endswith("/") and "/" not in slug:
             return httpx.Response(200, text=f"aqui llega:../tabs/{slug[0]}/{slug}/index.html")
+        if request.url.path.startswith("/tabs/"):
+            return httpx.Response(404, text=(LACUERDA_FIXTURES / "not_found.html").read_text(encoding="utf-8"))
         raise AssertionError(f"unexpected request: {url}")
 
 
@@ -450,6 +454,87 @@ def test_lacuerda_spent_budget_is_no_failure(tmp_path, sites):
     assert song(tmp_path, song_id).lacuerda_checked_at is None
 
 
+# --- caracole lacuerda --index ------------------------------------------------------------
+
+LISTING = "https://acordes.lacuerda.net/tabs/{}/index{}.html"
+
+
+def listings(sites) -> None:
+    """E's listing on two pages, and S's on one; every other initial has none."""
+    pages = {("e", 0): [("ebenezer", "Ebenezer", 268), ("enanitos", "Enanitos Verdes", 151)],
+             ("e", 100): [("estopa", "Estopa", 159)], ("s", 0): [("soda_stereo", "Soda Stereo", 89)]}
+    for (letter, start), artists in pages.items():
+        count = 2 if letter == "e" else 1
+        sites.lacuerda.pages[LISTING.format(letter, start)] = listing_page(artists, pages=count, page=start // 100)
+
+
+def test_lacuerda_index_reads_every_listing_and_says_what_the_index_holds(tmp_path, sites):
+    listings(sites)
+    soda = (LACUERDA_FIXTURES / "artist.html").read_text(encoding="utf-8")
+    sites.lacuerda.pages[SODA] = soda
+    spanish_song(tmp_path)  # a song LaCuerda would be asked about: --index leaves it be
+    result = run(tmp_path, "lacuerda", "--index")
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines() == ["Index: 3 pages of artists read.",
+                                          "LaCuerda: 4 artists and 0 songs in the index."]
+    assert len(sites.lacuerda.requests) == 29 and SODA not in sites.lacuerda.requests
+    result = run(tmp_path, "lacuerda", "--index")
+    assert result.stdout == "LaCuerda's artist index is up to date: 4 artists and 0 songs.\n"
+    assert len(sites.lacuerda.requests) == 29
+
+
+def test_lacuerda_index_with_a_spent_budget_leaves_the_rest_for_the_next_run(tmp_path, sites):
+    listings(sites)
+    result = run(tmp_path, "lacuerda", "--index", budgets={"lacuerda": 6})
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines() == [
+        "Index: 1 page of artists read.",
+        "LaCuerda: 2 artists and 0 songs in the index.",
+        "LaCuerda's budget of 6 requests per run is spent; the next run reads the rest of its listings.",
+    ]
+
+
+def test_lacuerda_index_errors_are_counted_and_asked_again(tmp_path, sites):
+    sites.lacuerda.status = 500
+    result = run(tmp_path, "lacuerda", "--index")
+    assert result.exit_code == 0, result.output
+    assert "LaCuerda: 0 artists and 0 songs in the index, 1 error; the next run asks again." in result.stdout
+
+
+def test_lacuerda_index_block_starts_a_cooldown(tmp_path, sites):
+    sites.lacuerda.status = 403
+    result = run(tmp_path, "lacuerda", "--index", ntfy=True)
+    assert result.exit_code == 0, result.output
+    assert "LaCuerda blocked caracole" in result.stdout
+    conn = open_db(tmp_path)
+    try:
+        assert is_cooling(conn, "lacuerda", datetime.now(UTC))
+    finally:
+        conn.close()
+    (alert,) = sites.ntfy.posts
+    assert alert.headers["Title"] == "caracole: lacuerda blocked"
+
+
+def test_lacuerda_index_asks_nothing_while_lacuerda_cools_down(tmp_path, sites):
+    conn = open_db(tmp_path)
+    try:
+        record_block(conn, "lacuerda", datetime.now(UTC), "lacuerda: 403: HTTP 403")
+    finally:
+        conn.close()
+    result = run(tmp_path, "lacuerda", "--index")
+    assert "LaCuerda is cooling down" in result.stdout
+    assert sites.lacuerda.requests == []
+
+
+def test_lacuerda_without_index_reads_no_listing(tmp_path, sites):
+    listings(sites)
+    sites.lacuerda.pages.update(soda_pages())
+    spanish_song(tmp_path)
+    result = run(tmp_path, "lacuerda")
+    assert result.exit_code == 0, result.output
+    assert sites.lacuerda.requests == [SODA, DML_3]
+
+
 # --- the pages -----------------------------------------------------------------------------
 
 STALE = "as an earlier run left it\n"
@@ -536,8 +621,8 @@ def test_nothing_to_do_leaves_the_pages_alone(tmp_path, sites, command):
 def test_registering_the_commands_imports_neither_pass(tmp_path):
     # Every command module is imported on every start; the passes wait for their command.
     src = Path(__file__).resolve().parents[1] / "src"
-    passes = ("caracole.lyrics", "caracole.lacuerda", "caracole.lacuerda_fetch", "caracole.gtptabs",
-              "caracole.gtptabs_fetch", "caracole.musescore", "caracole.musescore_fetch")
+    passes = ("caracole.lyrics", "caracole.lacuerda", "caracole.lacuerda_fetch", "caracole.lacuerda_index",
+              "caracole.gtptabs", "caracole.gtptabs_fetch", "caracole.musescore", "caracole.musescore_fetch")
     code = (
         "import sys, typer\n"
         "from caracole.commands import lyrics\n"
