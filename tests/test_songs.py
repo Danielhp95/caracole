@@ -418,6 +418,34 @@ def test_a_source_never_heard_again_keeps_only_what_no_other_source_said(conn):
         "Pablo Honey", None)
 
 
+def test_a_source_saying_the_same_again_writes_nothing(conn):
+    # Every sync hands every song over again; one nothing changed for is left as it is.
+    song_id, _ = line(conn, album="Pablo Honey")
+    track(conn)
+    before = conn.total_changes
+    assert line(conn, album="Pablo Honey") == (song_id, False)  # its added_at is older: no news either
+    assert track(conn) == (song_id, False)
+    assert conn.total_changes == before
+    line(conn, album="Pablo Honey (Deluxe)")  # the line's album edited
+    assert conn.total_changes > before
+    assert fields(conn) == ("Pablo Honey (Deluxe)", 238000, "GBAYE9200070", None)
+    upsert_song(conn, artists=["Radiohead"], title="Creep", album="Pablo Honey", duration_ms=238000,
+                isrc="GBAYE9200070", source="spotify", source_id="tCreep", added_at="2026-10-15T00:00:00Z")
+    assert get_song(conn, song_id).added_at == "2026-10-15T00:00:00Z"  # liked again since: newer
+
+
+def test_a_second_sync_of_an_unchanged_wanted_txt_writes_nothing(conn, tmp_path):
+    from caracole.wanted import sync_wanted
+
+    path = tmp_path / "wanted.txt"
+    path.write_text("Radiohead - Creep | Pablo Honey | 3:58\nSoda Stereo - Signos\n", encoding="utf-8")
+    sync_wanted(conn, path, datetime(2026, 10, 18, tzinfo=UTC))
+    before = conn.total_changes
+    stats = sync_wanted(conn, path, datetime(2026, 10, 19, tzinfo=UTC))
+    assert (stats.seen, stats.new) == (2, 0)
+    assert conn.total_changes == before
+
+
 def test_re_keying_carries_what_a_wanted_line_said(conn):
     # Said under the key an older normalizer gave the line; it still outranks Spotify after.
     from caracole.songs import SOURCE_FIELDS_KV

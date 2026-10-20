@@ -166,7 +166,8 @@ def upsert_song(
     The existing record is the one that has this source id already, else the
     one with the song's identity key. Merging keeps the newest ``added_at``
     and adds the source id. The display artist and title of the first source
-    are kept, and so is its key.
+    are kept, and so is its key. A source saying nothing new (every sync hands
+    every song over again) leaves the record as it is: nothing is written.
 
     The album, duration, ISRC and variant (read from the title) given here are
     this source id's word now, kept in kv (``SOURCE_FIELDS_KV``); the song
@@ -212,11 +213,16 @@ def upsert_song(
         bucket.append(source_id)
     _remember(conn, source, source_id, said)
     fields = _resolve(conn, ids, existing)
+    added = max(existing.added_at, added_at)
+    if ids == existing.source_ids and added == existing.added_at and all(
+        fields[name] == getattr(existing, name) for name in _SOURCE_FIELDS
+    ):
+        return existing.id, False
     conn.execute(
         "UPDATE songs SET source_ids = ?, added_at = ?, album = ?, duration_ms = ?, isrc = ?, "
         "variant = ?, updated_at = ? WHERE id = ?",
         (
-            json.dumps(ids, ensure_ascii=False), max(existing.added_at, added_at), fields["album"],
+            json.dumps(ids, ensure_ascii=False), added, fields["album"],
             fields["duration_ms"], fields["isrc"], fields["variant"], now, existing.id,
         ),
     )
