@@ -435,7 +435,7 @@ def test_a_request_from_the_pages_script_is_answered_with_its_job_not_a_redirect
     response = post(app, "/request", {"artist": " Radiohead ", "title": "Creep", "fetch": "1"}, accept=JSON)
     assert response.status == 200 and header(response, "location") is None
     assert answer(response) == {"job": {
-        "id": 1, "display": "Radiohead - Creep", "songId": None, "state": "queued", "fetching": True,
+        "id": 1, "display": "Radiohead - Creep", "songId": None, "kind": "song", "state": "queued", "fetching": True,
         "line": {"tone": "queued", "text": "Queued…", "link": None, "details": None}, "details": "jobs?job=1#job-1"}}
     assert queue.snapshot()[0].display == "Radiohead - Creep"
 

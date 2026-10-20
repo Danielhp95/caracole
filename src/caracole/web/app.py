@@ -57,7 +57,13 @@ when asked: the server writes no overrides.toml itself. The candidates the
 page showed must be the song's now, and the song's own request goes first.
 
 A songbook form queues its ``caracole songbook`` command the same way
-(songbooks.py), and the answer sends the browser to the requests page.
+(songbooks.py): to a form, the answer is its line on /jobs; to the page's
+script, its job, as a fetch's, which names the songbook it changes
+(``songbook``: its name before and after); once the job is over, /jobs.json
+gives it with the Songbooks section as the library page would draw it now
+(``songbooks``: its HTML and the songbooks for the Select bar), which the
+page puts in place of its own. A job says what it is about (``kind``: a
+song's, a removal's, a songbook's), so the page shows each where it belongs.
 
 Searching reads, and sends no request: one search runs at a time, one asked
 for meanwhile wins over the older ones still waiting (``superseded``: the
@@ -401,7 +407,8 @@ class WebApp:
     def _views(self, conn: sqlite3.Connection, overrides: Overrides | None, jobs: list[Job], *,
                only: list[Job] | None = None, cards: frozenset[int] = frozenset()) -> list[dict[str, Any]]:
         """Each job (of ``only``, else every one) as the page's script reads it: its song, its line and,
-        for a job in ``cards`` that is over, its song's card as the page draws it now.
+        for a job in ``cards`` that is over, its song's card as the page draws it now, or, for a
+        songbook's change, the Songbooks section (``songbooks``).
 
         ``jobs`` is the whole queue, newest first, for the jobs ahead of a queued one;
         ``overrides`` None (overrides.toml unreadable) leaves the cards out.
@@ -410,9 +417,13 @@ class WebApp:
         from caracole.songs import get_song
 
         views = []
+        section: dict[str, Any] | None = None  # drawn once, for every songbook job that asks
         for job in jobs if only is None else only:
             song_id, facts = self._song_of(conn, overrides, job)
             view = _view(job, jobs, song_id, facts)
+            if job.id in cards and not job.active and "songbook" in view and overrides is not None:
+                section = section or self._songbooks(conn, overrides)
+                view["songbooks"] = section
             if job.id in cards and not job.active and song_id is not None and overrides is not None:
                 try:
                     song = get_song(conn, song_id)  # as it is now
@@ -424,6 +435,14 @@ class WebApp:
                 view["card"] = card
             views.append(view)
         return views
+
+    def _songbooks(self, conn: sqlite3.Connection, overrides: Overrides) -> dict[str, Any]:
+        """The Songbooks section as the library page draws it now (``html``; hidden, with no songbook), and
+        the songbooks for its Select bar (``books``)."""
+        from caracole.library_page import WebControls, songbooks_section
+
+        html, books = songbooks_section(conn, self.cfg, overrides, WebControls(self.csrf))
+        return {"html": html, "books": books}
 
     def _song_of(self, conn: sqlite3.Connection, overrides: Overrides | None,
                  job: Job) -> tuple[int | None, SongFacts | None]:
@@ -596,7 +615,7 @@ class WebApp:
                 queued, _ = self.queue.submit(job.title, job.key, job.steps)
             except QueueFull:
                 return _message(503, "The queue is full", "The queue is full: try again once it empties.")
-            return _redirect(f"/jobs#job-{queued.id}")
+            return self._queued(queued, f"/jobs#job-{queued.id}")  # its songbook's card says how it goes
 
         return handle
 
@@ -1097,10 +1116,18 @@ def _ahead(jobs: list[Job], job: Job) -> int:
 
 
 def _view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None) -> dict[str, Any]:
-    """A job as /jobs.json gives it; ``jobs`` is the whole queue."""
-    return {"id": job.id, "display": job.display or job.title, "songId": song_id,
+    """A job as /jobs.json gives it; ``jobs`` is the whole queue. ``kind`` says what it is about: a song
+    ("song"), a song's removal ("remove"), or a songbook ("songbook", which ``songbook`` names)."""
+    from caracole.web.songbooks import songbook_of
+
+    songbook = songbook_of(job.song_key)
+    kind = "remove" if job.song_key.startswith(REMOVING) else "songbook" if songbook is not None else "song"
+    view = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
             "state": job.state, "fetching": job.fetching,
             "line": job_line(job, facts, ahead=_ahead(jobs, job)).as_json(), "details": details_href(job.id)}
+    if songbook is not None:
+        view["songbook"] = songbook
+    return view
 
 
 def _nothing_to_ask(conn: sqlite3.Connection, song: Song, overrides: Overrides | None) -> bool:

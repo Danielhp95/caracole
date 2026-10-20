@@ -91,7 +91,9 @@ songs.py's, in the `removed` table).
   `name_forms`), under its own names and writes no wanted.txt line for it;
   `written_pages`, each kind of page caracole writes into the library by file name, with
   its record and its CSP: the sheet viewers and songbook.html), songbooks.py (the songbook
-  forms, each queued as its `caracole songbook` command), lookup_page.py (the lookup page:
+  forms, each queued as its `caracole songbook` command; `songbook_of` reads a job's key back,
+  the songbook it changes, and once it is over `/jobs.json` gives the Songbooks section drawn
+  again, which the page puts in place of its own), lookup_page.py (the lookup page:
   its script, `createElement` and `textContent` only, allowed by hash, connects to the
   server alone; its results are the library's rows, `library_page.ROWS_SCRIPT` and
   `ROWS_STYLE` through `window.caracole.resultRow`, and a song you have opens its viewer),

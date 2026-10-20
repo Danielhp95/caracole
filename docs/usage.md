@@ -1909,10 +1909,19 @@ with it. A KEY that is no key exits with status 2.
   in the order you ticked them. In the Songbooks section, ↑ and ↓ move a song,
   × takes it out, and Rename or delete renames the songbook or, once you tick
   the box, deletes it and the files caracole made of it; each runs its
-  `caracole songbook` command (see [Songbooks](#songbooks)), and the Requests
-  page shows how it went. A change that can't be made, such as a name another
-  songbook has, a song no longer in the library or a songbook deleted since
-  the page was made, is refused at once, and nothing runs.
+  `caracole songbook` command (see [Songbooks](#songbooks)) and leaves you
+  where you are. The songbook's card says how it goes, on a line under its
+  name ("Queued…", "Moving the song…", then "Moved"; "Renamed", "Taken out",
+  "Deleted"), and its buttons wait until it is over, when the section is
+  drawn again as songbooks.toml has it, the keyboard focus back on the
+  button you pressed. Make songbook (or Add to) ends Select once the server
+  has it, and the Songbooks section opens on the songbook, a new one at its
+  end ("Making the songbook…", then "Made"). A deleted songbook's card says
+  Deleted until you load the page again. A change that can't be made, such
+  as a name another songbook has, a song no longer in the library or a
+  songbook deleted since the page was made, is refused at once, and nothing
+  runs: the card, or the Select bar, says why, and the bar keeps your ticks.
+  Without JavaScript, each sends you to its line on `/jobs`.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes

@@ -74,6 +74,15 @@ def test_the_page_lists_no_songbooks_section_without_songbooks(conn, cfg):
     assert 'id="songbooks"' not in html and data_of(html)["songbooks"] == []
 
 
+def test_the_served_page_without_songbooks_keeps_a_hidden_place_for_the_first(conn, cfg):
+    # caracole serve's page shows a songbook the Select bar makes where the section would be.
+    add_song(conn, "Radiohead", "Creep")
+    html = page(conn, cfg, WebControls(csrf="tok"))
+    assert '<section class="songbooks" id="songbooks" aria-labelledby="songbooks-title" hidden>' in html
+    assert '<div class="sb-list">' in section(html) and '<span class="n">0</span>' in section(html)
+    assert data_of(html)["songbooks"] == []
+
+
 def test_a_songbook_not_made_yet_says_so(conn, cfg):
     add_song(conn, "Radiohead", "Creep")
     make_songbook(songbooks_file(cfg.library_dir), "Campfire", ["Radiohead - Creep"])
