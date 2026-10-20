@@ -57,7 +57,8 @@ class Polls:
 
 class FakeCaracole:
     """The job's commands, faked: ``add`` syncs wanted.txt, ``fetch`` keeps a sheet.pdf once the page has
-    seen it run. A song in ``fail`` fails its fetch with that error, as the CLI says one. With ``slow_add``,
+    seen it run, ``review --pick`` settles the song's match on the candidate picked once the page has asked
+    once. A song in ``fail`` fails its fetch with that error, as the CLI says one. With ``slow_add``,
     ``add`` too waits for the page to ask twice; the next ``down`` times the page asks, the server answers 503.
     """
 
@@ -77,6 +78,13 @@ class FakeCaracole:
                 if self.slow_add:
                     self.polls.wait(2, timeout=30)
                 sync_wanted(conn, self.cfg.wanted_file, datetime.now(UTC))
+            elif args[0] == "review":
+                said = dict(arg.removeprefix("--").split("=", 1) for arg in args[1:] if "=" in arg)
+                self.polls.wait(1)
+                artist_key, song_key = said["pick"].split("/")
+                song = find_song(conn, override_key(said["song"]))
+                update_song(conn, song.id, match_decision="accept", review=False, match_artist_key=artist_key,
+                            match_song_key=song_key)
             elif args[0] == "fetch":
                 display = args[-1].removeprefix("--song=")
                 self.polls.wait(2)
@@ -430,3 +438,132 @@ def test_asking_again_shows_on_the_same_card(serve, cfg, conn, tmp_path):
     assert attribute(dom, "data-again") == ["queued"]  # asked again: the same card says so
     assert len(re.findall(r"<article", requested)) == 1, requested
     assert "Simon &amp; Garfunkel" in requested and 'data-tone="ready"' in requested
+
+
+# --- the picker on a card ---------------------------------------------------------------------------
+
+CANDIDATES = [{"artist_key": "radiohead", "song_key": "creep", "score": 88, "step": "fuzzy"},
+              {"artist_key": "radiohead", "song_key": "creep-acoustic", "score": 86, "step": "fuzzy"}]
+
+
+def in_review(conn):
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="review", match_candidates=CANDIDATES, review=True)
+    return creep
+
+
+def picks(title: str, ref: str) -> str:
+    """The test script: on the card titled so, the picker opened, the candidate ``ref`` chosen, and Pick; it
+    notes (data-both) if the card ever offered a pick while its line said how the request goes."""
+    return "(() => {\n" + WATCH + f"""
+new MutationObserver(() => {{
+  const c = cardOf({json.dumps(title)});
+  const p = c && c.querySelector(".progress");
+  if (p && /Queued|Writing|Fetching/.test(p.textContent) && c.querySelector("form.pick-form")) {{
+    document.body.setAttribute("data-both", "1");
+  }}
+}}).observe(document.body, {{ subtree: true, childList: true, characterData: true }});
+const card = cardOf({json.dumps(title)});
+card.querySelector("details.picker").open = true;
+card.querySelector('input[name="pick"][value={json.dumps(ref)}]').checked = true;
+card.querySelector("form.pick-form button[type=submit]").click();
+""" + "})();\n"
+
+
+def test_a_pick_on_a_card_shows_how_it_goes_there_then_the_sheet(serve, cfg, conn, tmp_path):
+    # As Fetch now: the page stays where it is, the picker gives way to the card's line, and the card is drawn
+    # again once the request is over, from what the library has then.
+    in_review(conn)
+    url = serve(FakeCaracole(cfg), picks("Creep", "radiohead/creep"))
+
+    dom = dump_dom(url, tmp_path)
+
+    assert '<main class="list" id="list">' in dom  # still the library: no other page
+    seen = attribute(dom, "data-seen")
+    assert "Writing the answer to overrides.toml…" in seen and "Fetching from Ultimate Guitar…" in seen, seen
+    shown = card(dom, "Creep")
+    line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
+    assert 'data-tone="ready"' in line and "Open sheet" in line
+    assert ">Sheet PDF</a>" in shown and 'class="picker"' not in shown and "Needs review" not in shown
+    assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
+
+
+# Clicks the "Pick the match" of Creep's line once it shows, then notes where the page is, whether the
+# card's picker is open, and which candidate has the focus.
+FOLLOWS_THE_LINE = """
+const timer = setInterval(() => {
+  const go = Array.from(cardOf("Creep").querySelectorAll(".progress a")).find((a) => a.textContent === "Pick the match");
+  if (!go) return;
+  clearInterval(timer);
+  go.click();
+  setTimeout(() => {
+    const at = document.activeElement;
+    document.body.setAttribute("data-after", JSON.stringify({
+      path: location.pathname, href: go.getAttribute("href"),
+      open: cardOf("Creep").querySelector("details.picker").open,
+      focus: at && at.name === "pick" ? at.value : null,
+    }));
+  }, 300);
+}, 50);
+"""
+
+
+def test_a_request_that_ends_in_a_review_offers_its_picker_on_the_card(serve, cfg, conn, tmp_path):
+    # Its fetch refused the song as needing review: the card's line says Needs review, and its link opens the
+    # card's own picker, here, rather than its page.
+    creep = in_review(conn)
+
+    def fetch_it(app):
+        from caracole.web.jobs import fetch_steps
+
+        app.queue.submit("Fetch Radiohead - Creep", creep.key, fetch_steps(creep.display), fetching=True,
+                         display=creep.display)
+
+    error = '"Radiohead - Creep" needs review first: run `caracole review`.'
+    url = serve(FakeCaracole(cfg, fail={"Radiohead - Creep": error}), "(() => {\n" + WATCH + FOLLOWS_THE_LINE
+                + "})();\n", before=fetch_it)
+
+    dom = dump_dom(url, tmp_path)
+
+    shown = card(dom, "Creep")
+    line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
+    assert 'data-tone="review"' in line and "Needs review" in line and "needs review first" not in line
+    assert attribute(dom, "data-after") == {"path": "/", "href": f"review?song={creep.id}", "open": True,
+                                            "focus": "radiohead/creep"}
+    assert 'action="/review"' in shown and 'action="/fetch"' not in shown
+
+
+def test_a_requests_picker_on_the_requests_page_takes_the_requests_whole_width(serve, cfg, conn, tmp_path):
+    # A request is a line with its Output folded beside it; the picker under it spans the whole request, not
+    # the line's column alone.
+    from helpers.chromium import Chromium
+
+    from caracole.web.jobs import fetch_steps
+
+    creep = in_review(conn)
+
+    def refuses(args, emit):
+        if args[0] == "fetch":
+            emit('error: "Radiohead - Creep" needs review first: run `caracole review`.')
+            return 1
+        return 0
+
+    refuses.down, refuses.polls = 0, Polls()
+
+    def ended_in_a_review(app):
+        app.queue.submit("Fetch Radiohead - Creep", creep.key, fetch_steps(creep.display), fetching=True,
+                         display=creep.display)
+        app.queue.run_pending()
+
+    url = serve(refuses, "", before=ended_in_a_review)
+    with Chromium(tmp_path / "profile") as browser:
+        tab = browser.open(url + "jobs?refresh=0")
+        tab.wait_for("document.querySelector('#job-1 .waits form.pick-form') !== null")
+        widths = tab.eval("""(() => {
+          const job = document.querySelector("#job-1");
+          const style = getComputedStyle(job);
+          const inside = job.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+          return [document.querySelector("#job-1 .waits").getBoundingClientRect().width, inside];
+        })()""")
+    waits, inside = widths
+    assert waits >= inside - 1, widths

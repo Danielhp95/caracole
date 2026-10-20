@@ -45,6 +45,10 @@ score, why the matcher thought of it and a link to its UG page. On the file
 it is read-only, with the ``caracole review --song`` line that picks one;
 served, it is a radio group posted to ``/review`` (web/app.py), in place of the
 "Review first" button, and opening it takes the focus to the first candidate.
+A pick posts with fetch() as the other forms do, and the card's line says how
+it goes; while any request of the song waits or runs, the picker offers no
+pick, and the line's "Pick the match" (a request that ended in a review)
+opens it.
 A song not found carries ``notFound``, and its served card links to
 ``/review?song=ID``, which offers what ``caracole search`` finds for it: a
 search per song would cost every page a moment each.
@@ -949,9 +953,26 @@ _SCRIPT = r"""
       const dot = el("span", "dot", "·");
       dot.setAttribute("aria-hidden", "true");
       p.appendChild(dot);
-      p.appendChild(link(go, null, false));
+      const a = link(go, null, false);
+      if (go === to) a.addEventListener("click", (e) => pickHere(e, p));
+      p.appendChild(a);
     }
     if (focused) focusOn(p);  // its link is gone: the focus stays on the line
+  };
+  // A song in review's line sends you to its picker (review?song=ID): on a card that has the picker, it opens
+  // that one, where you are, rather than the picker's own page. The list of requests has none: it goes there.
+  const pickHere = (e, p) => {
+    const card = p.closest("article");
+    const box = card && card.querySelector("details.picker");
+    const href = e.currentTarget.getAttribute("href") || "";
+    if (!box || !box.querySelector("form") || !/^review\?song=\d+$/.test(href)) return;
+    e.preventDefault();
+    if (!box.open) {
+      box.open = true;  // its toggle takes the focus to the first candidate
+      return;
+    }
+    const first = box.querySelector("input[name=pick]:checked") || box.querySelector("input[name=pick]");
+    if (first) first.focus();
   };
   const focusOn = (p) => {
     p.tabIndex = -1;
@@ -1070,7 +1091,8 @@ _SCRIPT = r"""
     const cands = listOf(s.candidates).filter((c) => c && c.ref);
     const box = el("details", "picker");
     const question = "Which Ultimate Guitar song is “" + String(s.title) + "” by " + String(s.artist) + "?";
-    const pickable = Boolean(server) && !busy.has(Number(s.id));
+    const job = server ? jobOfSong(s.id) : null;
+    const pickable = Boolean(server) && !busy.has(Number(s.id)) && !(job && isActive(job));
     const many = plural(cands.length, "candidate");
     const summary = el("summary", pickable ? "btn picker-open" : "picker-open", pickable ? "Pick the match" : many);
     if (pickable) summary.appendChild(el("span", "picker-n", "· " + many));
@@ -1120,6 +1142,28 @@ _SCRIPT = r"""
     form.appendChild(el("p", "pick-hint", "Your answer goes into overrides.toml, as caracole review writes it. " +
       "Fetch it now then asks Ultimate Guitar for the song picked; None of these fetches nothing."));
     box.appendChild(form);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const card = form.closest("article");
+      const line = progressIn(card);  // in the page before its first words, so they are read out
+      showLine(line, { line: { tone: "queued", text: "Sending…" } });
+      if (form.contains(document.activeElement)) focusOn(line);  // a disabled button would drop it
+      go.disabled = true;
+      send(form).then((answer) => {
+        const view = answer.ok && answer.body && answer.body.job;
+        if (!view) {
+          go.disabled = false;
+          showLine(progressIn(card), failure(answer));
+          return;
+        }
+        const i = byIndex.get(Number(s.id));
+        if (card && (i === undefined || cards.get(i) !== card)) spots.set(Number(view.id), card);
+        track(view);  // its line takes the picker's place
+      }, () => {
+        go.disabled = false;
+        showLine(progressIn(card), UNREACHABLE);
+      });
+    });
     // Opened, the picker takes the focus to its candidates: the arrow keys then move between them.
     box.addEventListener("toggle", () => {
       if (!box.open) return;
@@ -1547,6 +1591,12 @@ _SCRIPT = r"""
       if (button && isActive(view)) {
         if (button.contains(document.activeElement)) focusOn(p);  // the line takes the button's place
         button.remove();
+      }
+      const picker = card.querySelector("form.pick-form");
+      if (picker && isActive(view)) {  // POST /review would refuse a pick now: the card is drawn again after
+        const box = picker.closest("details.picker");
+        if (box.contains(document.activeElement)) focusOn(p);
+        box.remove();
       }
     }
     trayShow(view);

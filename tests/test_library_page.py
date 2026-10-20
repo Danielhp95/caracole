@@ -1020,6 +1020,27 @@ def test_the_served_picker_of_a_song_being_fetched_is_read_only_until_its_reques
 
 
 @pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_picker_is_read_only_while_any_request_of_its_song_waits(conn, cfg, tmp_path):
+    # POST /review refuses a pick while any request of the song waits or runs, not only a fetch: a pick
+    # without Fetch it now, say, or an add. The card's line says how that request goes; the picker waits.
+    from caracole.library_page import WebControls
+
+    index_tabs(conn, (1, "radiohead", "creep", "chords"))
+    s = in_review(conn)
+    job = {"id": 4, "display": "Radio Head - Crep", "songId": s.id, "state": "queued", "fetching": False,
+           "line": {"tone": "queued", "text": "Queued behind 1 request…", "link": None, "details": None},
+           "details": "jobs?job=4#job-4"}
+    controls = WebControls(csrf="tok", active=2, held=frozenset({s.id}), jobs=(job,))
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+    card = card_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    assert re.findall(r'<form[^>]*action="([^"]*)"', card) == ["/remove"]
+    picker = re.search(r'<details class="picker">.*?</details>', card, re.S).group(0)
+    assert "<input" not in picker
+    assert '<p class="pick-hint">A request for this song is running: pick one once it ends.</p>' in picker
+    assert card.index('class="progress"') < card.index('class="picker"')  # its line, above the picker
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
 def test_a_found_song_in_review_gets_the_picker_too(conn, cfg, tmp_path):
     # A sheet from elsewhere (LaCuerda, say) while its UG match waits for review: no Fetch now, but a pick.
     from caracole.library_page import WebControls

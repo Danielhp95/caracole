@@ -1372,14 +1372,18 @@ do:
   --pick ARTIST/SONG`, which writes what answering that number in `caracole
   review` writes (`[match]`, and `[alias]` where the number would add one),
   matches again and rewrites the pages; or, for None of these, `--none` with
-  the candidates you saw, which go under `[reject]`. With Fetch it now ticked,
+  the candidates you saw, which go under `[reject]`. As a request does, the
+  pick leaves you where you are: the picker gives way to the card's line,
+  which says "Writing the answer to overrides.toml…", then how the rest goes
+  (below). With Fetch it now ticked,
   as it is by default, a pick then runs `caracole fetch --song` and
   `caracole render`; None of these fetches nothing, and caracole goes on
   looking for the song: if the matcher finds others, the song is back in
   review with those, and its card offers them to pick from, with no Fetch now
   until one is picked. The candidates must still be the ones the page showed
   (the nightly run may have matched the song again: reload the page then),
-  and a song whose own request waits or runs gets its pick once that ends. A
+  and a song whose own request waits or runs gets its pick once that ends:
+  until then its card lists the candidates without a form. A
   review without candidates keeps its Review first button: `caracole review`
   offers it a pin or an ignore. With the keyboard, Enter opens the picker and
   takes the focus to the first candidate, the arrow keys choose, and Tab
@@ -1407,8 +1411,10 @@ do:
   - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
     the fetch looked the song up during the request and found none, or the
     index has no such song (and its artist's UG page isn't known);
-  - **Needs review · see the to-do page**, when caracole isn't sure which UG
-    song it is;
+  - **Needs review · Pick the match**, when caracole isn't sure which UG
+    song it is and has candidates for it: the link opens the card's picker
+    (from the corner's list of requests, the picker's own page); without
+    candidates, **Needs review · see the to-do page**;
   - **Not fetched yet · Details**, when a cooldown, a block, a spent budget
     or an error stopped the fetch before it looked the song up: an error is
     never a miss, and the song waits for the next run (Details says if it
@@ -1437,14 +1443,15 @@ do:
   one waits or runs; Stop refreshing keeps it still. A request that ended in a
   review (`caracole add` found only candidates) shows the song's picker under
   its line, so you pick at once. With Fetch it now ticked, its `caracole
-  fetch` refused the song until it's picked: its line then says Needs review,
-  not the fetch's error, and in its output the fetch Waits for a pick. While
+  fetch` refused the song until it's picked: its line then says Needs review
+  · Pick the match, not the fetch's error, and in its output the fetch Waits
+  for a pick. While
   the page refreshes itself, which would undo a choice half made, it shows a
   Pick the match link to the picker's own page, `/review?song=ID`, instead of
   the picker. One whose song the index didn't match links to what `caracole
   search` finds for it (Look in the index, above).
 - **Without JavaScript**, the forms still work: a request sends you to its
-  line on `/jobs`, its output open.
+  line on `/jobs`, its output open; a pick, to its line.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes

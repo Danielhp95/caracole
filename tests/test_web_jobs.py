@@ -174,7 +174,7 @@ def test_a_job_that_mustnt_join_another_gets_the_songs_job_unchanged(state):
             asked.append(queue.submit("Pick", "radiohead|creep", review, fetching=True, join=False))
         return 0
 
-    review = [("Write the answer to overrides.toml", ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"))]
+    review = [("Writing the answer to overrides.toml", ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"))]
     queue = JobQueue(runner)
     add, _ = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"))
     if state == "queued":

@@ -13,7 +13,9 @@ ran. So a job of other commands reads the same way:
   needs review, or wasn't found, says so instead, as a done one would: those
   are the fetch's usual refusals, worded for a terminal.
 - **Done**: "Ready", with a link to the song's sheet; "Needs review", with a
-  link to the to-do page; "Not found", with that link, only for a song the
+  link to the song's picker when its review has candidates to pick from
+  ("Pick the match"), else to the to-do page; "Not found", with the to-do
+  page's link, only for a song the
   fetch looked up during this request (``SongFacts.checked_now``); or "Not
   fetched yet", for one it didn't (a cooldown, a block, a spent budget or an
   error, all of which exit 0): an error is never a miss. A removal
@@ -46,6 +48,8 @@ class SongFacts:
     its match needs review, ``not_found`` that its match found it nowhere in
     the index, ``checked_now`` that a fetch looked it up since the job started
     (``ug.fetch.checked_since``), and ``ignored`` that overrides.toml ignores it.
+    ``picker`` is the link to its picker (``review?song=ID``) while its review
+    has candidates to pick from.
     """
 
     sheet: str | None = None
@@ -53,6 +57,7 @@ class SongFacts:
     not_found: bool = False
     checked_now: bool = False
     ignored: bool = False
+    picker: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,7 +92,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
     if job.state == "failed":
         if job.fetching and song is not None and not song.sheet:
             if song.review:
-                return Line("review", "Needs review", ("see the to-do page", TODO), details)
+                return Line("review", "Needs review", _review_link(song), details)
             if song.not_found:
                 return Line("missing", "Not found", ("see the to-do page", TODO), details)
         return Line("failed", _failure(job.steps), details=details)
@@ -98,12 +103,17 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
     if song is not None and song.ignored:
         return Line("added", "Ignored in overrides.toml")
     if song is not None and song.review:
-        return Line("review", "Needs review", ("see the to-do page", TODO))
+        return Line("review", "Needs review", _review_link(song))
     if not job.fetching or song is None:
         return Line("added", "Added: the nightly run looks for it")
     if song.checked_now:
         return Line("missing", "Not found", ("see the to-do page", TODO))
     return Line("waiting", "Not fetched yet", details=details)
+
+
+def _review_link(song: SongFacts) -> tuple[str, str]:
+    """Where a song in review goes next: its picker, or, with no candidates to pick, the to-do page."""
+    return ("Pick the match", song.picker) if song.picker else ("see the to-do page", TODO)
 
 
 def _failure(steps: list[Step]) -> str:

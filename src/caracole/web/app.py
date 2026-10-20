@@ -31,7 +31,8 @@ page and shows the song's progress on its card; a refusal is then
 ``{"error": "one sentence"}``, with the same status.
 
 A pick from the picker is ``caracole review --song "A - T" --pick ARTIST/SONG``
-(or ``--none --seen ARTIST/SONG…``), queued like a fetch, and fetched after it
+(or ``--none --seen ARTIST/SONG…``), queued and answered like a fetch (to the
+page's script, its job; to a form, its line on /jobs), and fetched after it
 when asked: the server writes no overrides.toml itself. The candidates the
 page showed must be the song's now, and the song's own request goes first.
 """
@@ -381,8 +382,13 @@ class WebApp:
                 from caracole.ug.fetch import checked_since
 
                 checked_now = checked_since(conn, song, job.started_at)
+            picker = None
+            if song.review and not ignored:
+                from caracole.review import candidates_of
+
+                picker = f"review?song={song.id}" if candidates_of(song) else None  # the card's, or its page
             facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
-                              checked_now=checked_now, ignored=ignored)
+                              checked_now=checked_now, ignored=ignored, picker=picker)
         answer = (song.id if song is not None else None, facts)
         if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known
             with self._ended_lock:
@@ -396,9 +402,10 @@ class WebApp:
             for job_id in [i for i in self._ended if i not in kept]:
                 del self._ended[job_id]
 
-    def _queued(self, job: Job) -> Response:
-        """A request queued: to the browser, its line on /jobs; to the page's script, the job itself."""
-        response = _redirect(f"/{details_href(job.id)}")
+    def _queued(self, job: Job, location: str | None = None) -> Response:
+        """A request queued: to the browser, its line on /jobs (its output open, unless ``location`` says
+        where else); to the page's script, the job itself."""
+        response = _redirect(location or f"/{details_href(job.id)}")
         jobs = self.queue.snapshot()
         job = next((j for j in jobs if j.id == job.id), job)
         try:
@@ -664,13 +671,13 @@ class WebApp:
                 title += ", and fetch it"
                 steps += [step for step in fetch_steps(song.display) if step[1][0] != "match"]
         try:  # never into the song's own request, nor after its fetch: checked under the queue's lock
-            job, new = self.queue.submit(title, song.key, steps, fetching=fetch, join=False)
+            job, new = self.queue.submit(title, song.key, steps, fetching=fetch, join=False, display=song.display)
         except QueueFull:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
         if not new:
             return _message(409, "Wait for its request",
                             f"A request for {song.display} is waiting or running: pick once it ends.")
-        return _redirect(f"/jobs#job-{job.id}")
+        return self._queued(job, f"/jobs#job-{job.id}")  # the card's line says how it goes, as Fetch now's
 
 
 def review_first(song: Song, overrides: Overrides) -> bool:

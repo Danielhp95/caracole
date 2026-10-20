@@ -785,6 +785,37 @@ def test_a_pick_queues_caracole_review_then_the_fetch(app, conn, queue):
     assert job.title == "Pick radiohead/creep for Radiohead - Creep, and fetch it"
 
 
+def test_a_pick_from_the_pages_script_is_answered_with_its_job_and_names_its_song(app, conn, queue):
+    # The card's picker posts as the page's script, which stays on the page and shows the pick on the card's
+    # line, as Fetch now does; a form without the script still goes to the request on /jobs.
+    creep = in_review(conn)
+    fields = {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN, "fetch": "1"}
+    response = post(app, "/review", fields, accept=JSON)
+    assert response.status == 200 and header(response, "location") is None
+    job = answer(response)["job"]
+    assert (job["id"], job["songId"], job["display"], job["fetching"]) == (1, creep.id, "Radiohead - Creep", True)
+    assert job["line"] == {"tone": "queued", "text": "Queued…", "link": None, "details": None}
+    # Like every request, it is the song's on /jobs and in the page's list of requests; its title says the pick.
+    [queued] = queue.snapshot()
+    assert queued.display == "Radiohead - Creep"
+    assert queued.title == "Pick radiohead/creep for Radiohead - Creep, and fetch it"
+    item = job_item(text(get(app, "/jobs")), 1)
+    assert '<span class="song">Radiohead - Creep</span>' in item and "Pick radiohead/creep for" in item
+    # A refusal is one sentence, as the card's line says it.
+    again = post(app, "/review", fields, accept=JSON)
+    assert again.status == 409 and answer(again) == {
+        "error": "A request for Radiohead - Creep is waiting or running: pick once it ends."}
+
+
+def test_a_pick_says_on_the_cards_line_that_it_writes_the_answer(app, conn, queue):
+    # A step's label is what the card says while it runs (status.py): "Writing the answer to overrides.toml…".
+    from caracole.web.jobs import review_steps
+
+    assert review_steps("Radiohead - Creep", pick="radiohead/creep") == [
+        ("Writing the answer to overrides.toml", ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"))]
+    assert review_steps("Radiohead - Creep", seen=["a/b"])[0][0] == "Writing the answer to overrides.toml"
+
+
 def test_a_pick_without_fetch_only_answers(app, conn, queue):
     creep = in_review(conn)
     assert post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep-acoustic",
@@ -1124,9 +1155,17 @@ def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cf
     assert [s.state for s in job.steps] == ["done", "done", "failed", "skipped"], runner.outputs
     assert "needs review first" in runner.outputs[2]
     article = job_item(text(get(app, "/jobs")), 1)
-    # Its line, the one its card shows (status.py), says the song needs review: no failure.
+    # Its line, the one its card shows (status.py), says the song needs review and sends you to its picker,
+    # not to the to-do page: no failure.
+    from caracole.songs import list_songs
+
+    [song] = list_songs(conn)
     line = re.search(r'<p class="line">(.*?)</p>', article, re.S).group(0)
     assert '<span class="says review">Needs review' in line and "Failed" not in line and "error" not in line
+    assert f'<a href="review?song={song.id}">Pick the match</a>' in line and "to-do" not in line
+    view = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"][0]
+    assert view["line"]["link"] == {"label": "Pick the match", "href": f"review?song={song.id}"}
+    assert view["card"]["candidates"]  # the card it is drawn again as has the picker the line names
     fetch = re.search(r'<li class="step [^"]*"><div class="step-head"><span>Fetching from Ultimate Guitar</span>.*?</li>',
                       article, re.S).group(0)
     assert '<span class="badge review">Waits for a pick</span>' in fetch and "Failed" not in fetch

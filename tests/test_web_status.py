@@ -113,6 +113,20 @@ def test_a_fetch_that_fails_on_a_song_in_review_or_not_found_says_so_not_the_com
     assert job_line(added, SongFacts(not_found=True)).tone == "failed"  # it fetched nothing
 
 
+def test_a_song_in_review_with_candidates_links_to_its_picker_not_the_to_do_page():
+    # Its picker (the card's, or /review?song=ID) answers the review: that is where to go next.
+    picker = "review?song=7"
+    review = job("failed", states=["done", "done", "failed", "skipped"],
+                 outputs=[[], [], ['error: "Radiohead - Creep" needs review first: run `caracole review`.'], []])
+    assert job_line(review, SongFacts(review=True, picker=picker)) == Line(
+        "review", "Needs review", ("Pick the match", picker), details=details_href(3))
+    done = job("done", states=["done"] * 4)
+    assert job_line(done, SongFacts(review=True, picker=picker)) == Line(
+        "review", "Needs review", ("Pick the match", picker))
+    # A review without candidates has nothing to pick: caracole review offers a pin or an ignore.
+    assert job_line(done, SongFacts(review=True)).link == ("see the to-do page", "_todo.md")
+
+
 def test_a_failure_without_an_error_line_names_its_step():
     crashed = job("failed", states=["done", "failed", "skipped", "skipped"], outputs=[[], ["Traceback …"]])
     assert job_line(crashed, None).text == "Looking it up failed."

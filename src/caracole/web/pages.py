@@ -29,7 +29,8 @@ from caracole.web.jobs import Job, Step
 from caracole.web.status import Line
 
 PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
-.waits { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.waits { display: grid; grid-column: 1 / -1; gap: 8px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border); }  /* under the whole request: its line and its Output */
 .waits > p { margin: 0; color: var(--review); font-weight: 600; }
 .step-note { margin: 6px 0 0; color: var(--review); font-size: .85rem; }
 .pick-page { max-width: 46rem; }

@@ -107,7 +107,7 @@ def review_steps(display: str, *, pick: str | None = None,
     ARTIST/SONG), or, without it, none of the candidates ``seen``. It matches again and rewrites
     the pages itself, so a fetch after it needs no ``caracole match``."""
     answer = (f"--pick={pick}",) if pick is not None else ("--none", *(f"--seen={ref}" for ref in seen))
-    return [("Write the answer to overrides.toml", ("review", f"--song={display}", *answer))]
+    return [("Writing the answer to overrides.toml", ("review", f"--song={display}", *answer))]
 
 
 class JobQueue:
