@@ -425,6 +425,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   gtptabs.com, MuseScore or YouTube for pages or writes the library takes it;
   `search`, `match --dry-run`, `index stats`, `remove --list`, `songbook list` and
   `songbook show` only read and never wait.
+  `add` writes its wanted.txt line first, and a `--lacuerda` pick (overrides.toml is in the
+  library) only once it holds the lock, failing when the lock file can't be opened
+  (`test_commands_sources.py::test_add_with_lacuerda_writes_no_pick_without_caracoles_lock`).
   `review` and `remove` take it only after their questions (commands/library.py,
   commands/remove.py), so the nightly run never waits for an answer
   (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`,
