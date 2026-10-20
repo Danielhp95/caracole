@@ -4,6 +4,7 @@ suite runs: tmp_path in memory."""
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,12 @@ def pytest_configure(config):
     if MEMORY.is_dir() and os.access(MEMORY, os.W_OK | os.X_OK):
         # Read when the first tmp_path is made; pytest-xdist's workers make theirs in this one's.
         os.environ["PYTEST_DEBUG_TEMPROOT"] = str(MEMORY)
+
+
+def pytest_sessionfinish(session):
+    browser = sys.modules.get("helpers.browser")  # imported by a test that opened a page
+    if browser is not None:
+        browser.close()
 
 
 # --- fixtures ----------------------------------------------------------------------------------

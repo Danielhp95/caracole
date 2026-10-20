@@ -1,16 +1,20 @@
-"""The suite's own machinery: conftest.py's database, and the helper that waits on
-caracole's lock (helpers/locks.py). Each makes the suite faster; these tests say it still
-tests the same."""
+"""The suite's own machinery: conftest.py's database, and the helpers that wait on
+caracole's lock (helpers/locks.py) and open pages in Chromium (helpers/browser.py). Each
+makes the suite faster; these tests say it still tests the same."""
 
 from __future__ import annotations
 
 import fcntl
 import os
+import re
 import sqlite3
 import threading
 import time
+from pathlib import Path
 
 import conftest
+from helpers import browser
+from helpers.browser import in_chromium
 from helpers.locks import waiting_for
 
 from caracole import db
@@ -103,3 +107,62 @@ def test_a_command_still_busy_after_the_timeout_counts_as_waiting(tmp_path):
     lock = tmp_path / "caracole.lock"
     lock.touch()
     assert waiting_for(lock, lambda: True, timeout=0.05)
+
+
+# --- pages in Chromium -------------------------------------------------------------------------
+
+
+PAGE = """<!doctype html><html><body><script>
+document.body.dataset.seen = localStorage.getItem("harness") || "nothing";
+localStorage.setItem("harness", "kept");
+document.body.dataset.kept = localStorage.getItem("harness");
+document.body.dataset.width = String(window.innerWidth);
+setTimeout(() => { document.body.dataset.later = "ran"; }, 2500);
+</script></body></html>
+"""
+
+
+def data(dom: str, name: str) -> str | None:
+    found = re.search(rf'data-{name}="([^"]*)"', dom)
+    return found.group(1) if found else None
+
+
+@in_chromium
+def test_each_page_opens_as_in_a_new_profile(tmp_path):
+    page = tmp_path / "page.html"
+    page.write_text(PAGE, encoding="utf-8")
+    first = browser.dump_dom(page.as_uri(), (800, 600))
+    second = browser.dump_dom(page.as_uri(), (800, 600))
+    assert data(first, "kept") == "kept"  # the page could keep something
+    assert data(first, "seen") == data(second, "seen") == "nothing"  # and the next page never sees it
+
+
+@in_chromium
+def test_the_browser_looks_up_no_host_and_stays_off_the_desktop(tmp_path, monkeypatch):
+    # Left alone, Chromium asks DNS for Google's update servers and connects to them, and to the
+    # desktop's display and session bus. Twelve of them starting at once kept nscd busy for
+    # seconds, and with it every process asking it for a user or a host: chordpro among them.
+    for name, value in (("DISPLAY", ":0"), ("WAYLAND_DISPLAY", "wayland-1"),
+                        ("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1000/bus")):
+        monkeypatch.setenv(name, value)
+    browser.close()  # a browser of its own, started with this environment
+    try:
+        process = browser.browser().process
+        args = process.args
+        listed = Path(f"/proc/{process.pid}/environ").read_bytes().decode(errors="replace")
+        environ = dict(line.split("=", 1) for line in listed.split("\0") if "=" in line)
+    finally:
+        browser.close()
+    assert "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1" in args
+    assert not {"DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS"} & environ.keys()
+
+
+@in_chromium
+def test_a_page_gets_the_window_asked_for_and_its_timers_run(tmp_path):
+    page = tmp_path / "page.html"
+    page.write_text(PAGE, encoding="utf-8")
+    # Narrower than the 500 pixels chromium --window-size gives at the least.
+    dom = browser.dump_dom(page.as_uri(), (390, 844), hide_scrollbars=True)
+    assert data(dom, "width") == "390"
+    assert data(dom, "later") == "ran"  # within the three seconds --virtual-time-budget gave
+    assert dom.startswith("<!DOCTYPE html>")

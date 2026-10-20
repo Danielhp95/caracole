@@ -2,13 +2,13 @@ import base64
 import hashlib
 import json
 import re
-import shutil
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote, unquote
 
 import pytest
+from helpers import browser
+from helpers.browser import in_chromium
 from typer.testing import CliRunner
 
 from caracole import db
@@ -491,24 +491,11 @@ def test_the_nightly_todo_step_also_writes_index_html(conn, cfg):
 
 # --- in a real browser ---------------------------------------------------------------------
 
-CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
-
-
 def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,900") -> str:
-    """The page's DOM after its script ran; skips the test when this machine can't run Chromium."""
-    url = path.as_uri() + fragment
-    try:
-        result = subprocess.run(
-            [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-             f"--user-data-dir={tmp_path / 'chrome'}", f"--window-size={size}", "--hide-scrollbars",
-             "--virtual-time-budget=3000", "--dump-dom", url],
-            capture_output=True, text=True, timeout=60,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        pytest.skip(f"chromium couldn't run: {e}")
-    if result.returncode != 0 or "<html" not in result.stdout:
-        pytest.skip(f"chromium couldn't run: {result.stderr[-500:]}")
-    return result.stdout
+    """The page's DOM after its script ran, in a browser context of its own (helpers/browser.py);
+    skips the test when this machine can't run Chromium."""
+    width, height = (int(n) for n in size.split(","))
+    return browser.dump_dom(path.as_uri() + fragment, (width, height), hide_scrollbars=True)
 
 
 def listing(dom: str) -> str:
@@ -518,7 +505,7 @@ def listing(dom: str) -> str:
     return found.group(1)
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_page_renders_and_filters_in_a_real_browser(conn, cfg, tmp_path):
     s = add_song(conn, "宋冬野", "斑马，斑马")
     put(cfg, s, "lyrics.txt")
@@ -537,7 +524,7 @@ def test_the_page_renders_and_filters_in_a_real_browser(conn, cfg, tmp_path):
         assert title in shown
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_apostrophes_and_empty_results_in_a_real_browser(conn, cfg, tmp_path):
     add_song(conn, "Queen", "Don't Stop Me Now")
     oasis = add_song(conn, "Oasis", "Don’t Look Back in Anger")
@@ -561,7 +548,7 @@ def test_apostrophes_and_empty_results_in_a_real_browser(conn, cfg, tmp_path):
     assert "caracole search \"guns n' roses\"" in shown
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_keys_show_with_their_source_and_filter_in_a_real_browser(conn, cfg, tmp_path):
     soda = add_song(conn, "Soda Stereo", "De Música Ligera")
     keep_sheet_json(conn, cfg, soda, AM_F_C_G)
@@ -586,7 +573,7 @@ def test_keys_show_with_their_source_and_filter_in_a_real_browser(conn, cfg, tmp
     assert shown.count("<article") == 1 and "De Música Ligera" in shown
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_key_typed_in_the_search_box_finds_that_key_only_in_a_real_browser(conn, cfg, tmp_path):
     soda = add_song(conn, "Soda Stereo", "De Música Ligera")
     keep_sheet_json(conn, cfg, soda, AM_F_C_G)
@@ -615,7 +602,7 @@ def test_a_key_typed_in_the_search_box_finds_that_key_only_in_a_real_browser(con
     assert "No songs match" in shown and "caracole search" not in shown  # the index has no keys
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_key_menu_puts_the_spellings_of_one_key_together_in_a_real_browser(conn, cfg, tmp_path):
     keyed = {("Muse", "Hysteria"): "F#m", ("Radiohead", "Lucky"): "Gbm", ("Daft Punk", "Get Lucky"): "Fm",
              ("Queen", "Bohemian Rhapsody"): "Bb", ("Oasis", "Wonderwall"): "A#"}
@@ -669,7 +656,7 @@ def layout_of(dom: str) -> dict:
     return json.loads(html_module.unescape(found.group(1)))
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_cards_fill_a_desktop_row_and_stack_on_a_phone(conn, cfg, tmp_path):
     # One song per artist: each artist used to get a section of its own, one narrow card wide.
     for artist, title in (("Radiohead", "Creep"), ("Soda Stereo", "De Música Ligera"), ("Oasis", "Wonderwall"),
@@ -688,7 +675,7 @@ def test_cards_fill_a_desktop_row_and_stack_on_a_phone(conn, cfg, tmp_path):
     assert all(w >= phone["page"] - 40 for w in phone["widths"]), phone
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_letter_strip_lists_the_artists_initials(conn, cfg, tmp_path):
     for artist, title in (("The Beatles", "Yesterday"), ("Radiohead", "Creep"), ("Soda Stereo", "Música"),
                           ("宋冬野", "斑马，斑马")):
@@ -703,7 +690,7 @@ def test_the_letter_strip_lists_the_artists_initials(conn, cfg, tmp_path):
     assert re.search(r'<nav[^>]*id="jump"[^>]*hidden', dump_dom(path, tmp_path, "#sort=recent"))
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_the_served_page_offers_a_fetch_for_wanted_songs(conn, cfg, tmp_path):
     from caracole.library_page import WebControls
 
@@ -744,7 +731,7 @@ JUMP = """
 """
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_a_screen_reader_hears_each_cards_song_and_a_jump_moves_the_focus(conn, cfg, tmp_path):
     from caracole.library_page import WebControls
 
@@ -778,7 +765,7 @@ ARTIST_CLICK = """
 """
 
 
-@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+@in_chromium
 def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(conn, cfg, tmp_path):
     import html as html_module
 

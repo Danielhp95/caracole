@@ -75,8 +75,9 @@ and `search --key`).
 - `tests/`: named after what they cover (test_fetch.py is ug/fetch.py's), and
   `test_commands_*.py` for the CLI. conftest.py has the `conn` and `cfg` fixtures (every
   directory under `tmp_path`, which is in /dev/shm; `conn` copies a database migrated once
-  per process), `add_song` and `subprocess_pythonpath`. helpers/locks.py `waiting_for` sees
-  a command wait for caracole's lock. test_harness.py tests what makes the suite fast.
+  per process), `add_song` and `subprocess_pythonpath`. helpers/browser.py opens pages in
+  one Chromium per process, each in a fresh context; helpers/locks.py `waiting_for` sees a
+  command wait for caracole's lock. test_harness.py tests what makes the suite fast.
   helpers/ug_pages.py
   builds fake UG tab and artist pages, escaped the way UG escapes them
   (`from helpers.ug_pages import ...`). helpers/gtptabs_site.py is `FakeGtpTabs`, a fake
@@ -111,7 +112,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html` and `sheet.html` in a real browser (test_library_page.py, test_viewer.py) | neither |
+| `chromium` on PATH | `index.html` and `sheet.html` in a real browser (test_library_page.py, test_viewer.py, test_harness.py) | neither |
 
 Before a change is done:
 
