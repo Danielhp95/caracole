@@ -284,7 +284,6 @@ def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -
     Only a hit the same search shows can be added: ``n`` up to ``limit``.
     """
     from caracole.search import search_index
-    from caracole.wanted import format_line
 
     if not _index_built(conn):
         fail(f"--add {n}: {_EMPTY_INDEX}", 2)
@@ -305,25 +304,4 @@ def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -
     if other is not None:  # adding it would make a second record of the same song
         typer.echo(f"Already in your library as {other.display} ({_status(other)}); wanted.txt is unchanged.")
         return
-    added = sources.add_song(cfg, hit.artist, hit.title, conn=conn)
-    line, path = added.line, cfg.wanted_file
-    written = format_line(line.artist, line.title, line.album, line.duration_ms)
-    if added.listed:
-        typer.echo(f"{written} is already in {path}, line {line.line_no}.")
-    else:
-        typer.echo(f"Added to {path}, line {line.line_no}:\n  {written}")
-    if added.db_error is not None:  # the line is in the file, which is the source of truth
-        typer.secho(
-            f"The database couldn't be updated ({added.db_error}); "
-            "the next `caracole sync` or `caracole run` adds it.",
-            err=True, fg=typer.colors.YELLOW,
-        )
-        return
-    if added.known is None:
-        typer.echo(f"Song {line.identity}: new; the next `caracole run` looks for it.")
-    else:
-        typer.echo(f"Song {line.identity}: already in your library ({_status(added.known)}).")
-    for text in sources.match_lines(added.match):
-        typer.echo(text)
-    for problem in added.problems:
-        typer.secho(problem, err=True, fg=typer.colors.YELLOW)
+    sources.say_added(cfg, sources.add_song(cfg, hit.artist, hit.title, conn=conn))  # as `caracole add` says it

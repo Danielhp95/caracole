@@ -131,7 +131,7 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
         body = urlencode({"csrf": "tok", "artist": "Radiohead", "title": "Creep"}).encode()
         status, headers, _ = ask(server, "POST", "/request", body=body, headers={
             "Content-Type": "application/x-www-form-urlencoded", "Sec-Fetch-Site": "same-origin"})
-        assert status == 303 and headers["Location"] == "/jobs#job-1"
+        assert status == 303 and headers["Location"] == "/jobs?job=1#job-1"
         assert "Radiohead - Creep" in (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
         for _ in range(200):
             job = queue.snapshot()[0]
@@ -139,8 +139,11 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
                 break
             time.sleep(0.05)
         assert job.state == "done", [s.output for s in job.steps]
-        # The server wrote the line; caracole add found it there and synced it into the database.
-        assert job.steps[0].output[0].startswith("Already in "), job.steps[0].output
+        # The server wrote the line; caracole add found it there and synced it into the database. It ran
+        # at -v, so the requests page has the detail too.
+        output = job.steps[0].output
+        assert "Radiohead - Creep is in wanted.txt already; the next `caracole run` looks for it." in output, output
+        assert any(line.startswith("wanted.txt line ") for line in output), output
         conn = db.connect(cfg.db_path)
         try:
             assert [tuple(r) for r in conn.execute("SELECT artist, title FROM songs")] == [("Radiohead", "Creep")]

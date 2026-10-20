@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
@@ -79,8 +80,9 @@ def ug(monkeypatch):
     return site
 
 
-def run(tmp_path, *args, budget=60):
-    return CliRunner().invoke(build_app(), ["--config", str(write_config(tmp_path, budget=budget)), "fetch", *args])
+def run(tmp_path, *args, budget=60, root=()):
+    config = str(write_config(tmp_path, budget=budget))
+    return CliRunner().invoke(build_app(), ["--config", config, *root, "fetch", *args])
 
 
 def connect(tmp_path):
@@ -220,8 +222,117 @@ def test_song_option_fetches_that_song_even_when_nothing_changed(tmp_path, ug):
 
     assert result.exit_code == 0, result.output
     assert ug.requests == [SIGNOS]
-    assert "Soda Stereo - Signos: sheet 201 (1 request)" in result.output
+    assert result.output == "Soda Stereo - Signos: sheet 201\n"  # one line for one song
     assert get_song(conn, persiana).ug_dirty is True
+
+
+def test_song_option_says_the_rest_at_v(tmp_path, ug):
+    conn, _, _ = two_songs(tmp_path, ug)
+
+    result = run(tmp_path, "--song", "Soda Stereo - Signos", root=("-v",))
+
+    assert result.exit_code == 0, result.output
+    assert "Soda Stereo - Signos: sheet 201\n" in result.output
+    assert f"Ultimate Guitar GET {SIGNOS} → 200" in result.output  # a line per request
+    assert "1 song done, 0 failed, 1 UG request." in result.output
+
+
+def test_song_option_says_in_a_line_why_nothing_came(tmp_path, ug):
+    conn, persiana, _ = two_songs(tmp_path, ug)
+    ug.pages[PERSIANA] = (200, "<html><body>maintenance</body></html>")  # no js-store: an error, no miss
+
+    result = run(tmp_path, "--song", "Soda Stereo - Persiana Americana")
+
+    assert result.exit_code == 0, result.output
+    [line] = result.output.splitlines()
+    assert line.startswith("Soda Stereo - Persiana Americana: not fetched (") and line.endswith(
+        "); it waits for the next run.")
+    assert get_song(conn, persiana).ug_dirty is True
+
+
+def test_song_option_says_when_the_budget_ran_out_first(tmp_path, ug):
+    conn, _, signos = two_songs(tmp_path, ug)
+    other = f"{TAB}soda-stereo/signos-chords-202"
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+                 "VALUES (202, 'soda-stereo', 'signos', 'chords', 'last', '2026-10-01T00:00:00Z', ?)",
+                 ("soda-stereo/signos-chords-202",))
+    ug.pages[other] = tab_page(202, "Signos", other)
+
+    result = run(tmp_path, "--song", "Soda Stereo - Signos", budget=1)
+
+    assert result.exit_code == 0, result.output
+    assert result.output == ("Soda Stereo - Signos: not fetched; the UG budget of 1 request is spent, "
+                             "so it waits for the next run.\n")
+
+
+def cut_short(how, tmp_path, ug, conn):
+    """Stop ``--song``'s fetch of Signos before it is done: ``how`` is error, budget, block or cooldown."""
+    budget = 60
+    if how == "error":
+        ug.pages[SIGNOS] = (200, "<html><body>maintenance</body></html>")  # no js-store: a ProviderError
+    elif how == "budget":
+        other = f"{TAB}soda-stereo/signos-chords-202"
+        conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+                     "VALUES (202, 'soda-stereo', 'signos', 'chords', 'last', '2026-10-01T00:00:00Z', ?)",
+                     ("soda-stereo/signos-chords-202",))
+        ug.pages[other] = tab_page(202, "Signos", other)
+        budget = 1
+    elif how == "block":
+        ug.pages[SIGNOS] = (403, "<html><body>Forbidden</body></html>")
+    else:
+        from caracole.commands._common import utcnow
+
+        record_block(conn, "ug", utcnow(), "HTTP 403")
+    return run(tmp_path, "--song", "Soda Stereo - Signos", budget=budget)
+
+
+@pytest.mark.parametrize("how,said", [
+    ("error", "; it waits for the next run."),
+    ("budget", "so it waits for the next run."),
+    ("block", "Nothing was marked not found."),
+    ("cooldown", "Soda Stereo - Signos waits for the first run after that."),
+])
+def test_song_option_cut_short_on_a_clean_song_sends_it_to_the_next_run(tmp_path, ug, how, said):
+    # Fetched before and clean, so the nightly run wouldn't fetch it: asked for now and cut short, it would
+    # wait for nothing. It is marked to fetch, so the next run really does.
+    from caracole.commands._common import utcnow
+    from caracole.overrides import Overrides
+    from caracole.ug.fetch import songs_to_fetch
+
+    conn, _, signos = two_songs(tmp_path, ug)
+    update_song(conn, signos, ug_dirty=False, ug_checked_at="2026-10-01T00:00:00Z")
+
+    result = cut_short(how, tmp_path, ug, conn)
+
+    assert result.exit_code == 0, result.output
+    [line] = result.output.splitlines()
+    assert line.endswith(said), line
+    assert get_song(conn, signos).ug_dirty is True
+    assert signos in [s.id for s in songs_to_fetch(conn, Overrides(), utcnow())]
+    assert get_song(conn, signos).ug_checked_at == "2026-10-01T00:00:00Z"  # it wasn't looked up now
+
+
+def test_song_option_cut_short_says_so_when_the_next_run_wont_fetch_it(tmp_path, ug):
+    # Not found in the index, looked up on its artist's page a week ago: the nightly run reads that page for
+    # it again in 30 days, not tonight, so the line can't say it waits for the next run.
+    from caracole.commands._common import utcnow
+
+    conn = connect(tmp_path)
+    song_id, _ = upsert_song(conn, artists=["Soda Stereo"], title="Signos", album=None, duration_ms=None, isrc=None,
+                             source="wanted", source_id="signos", added_at="2026-10-01T00:00:00Z")
+    update_song(conn, song_id, match_decision="not_found")
+    page = "https://www.ultimate-guitar.com/artist/soda_stereo_2946"
+    remember_artist_url(conn, "soda-stereo", page)
+    ug.pages[artist_page_url(page, kind="chords")] = (500, "<html><body>Server error</body></html>")
+    week_ago = (utcnow() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    db.kv_set(conn, f"ug:artist_page_checked:{song_id}", week_ago)
+
+    result = run(tmp_path, "--song", "Soda Stereo - Signos")  # its page answers 500: an error
+
+    assert result.exit_code == 0, result.output
+    [line] = result.output.splitlines()
+    assert line.startswith("Soda Stereo - Signos: not fetched (") and line.endswith("); ask for it again later.")
+    assert db.kv_get(conn, f"ug:artist_page_checked:{song_id}") == week_ago
 
 
 @pytest.mark.parametrize("decision,message", [

@@ -61,10 +61,15 @@ songs.py's, in the `removed` table).
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed; `read_written_page`, a page
   caracole wrote, while it holds the bytes a lookup says it wrote), jobs.py (the queue: each
-  request runs the `caracole` CLI in a child process, one command at a time), app.py (the
-  routes; `written_pages`, each kind of page caracole writes into the library by file
-  name, with its record and its CSP: the sheet viewers), pages.py, server.py
-  (`http.server`). The page is library_page.py's, with `WebControls`.
+  request runs the `caracole` CLI at `-v` in a child process, one command at a time),
+  status.py (the one line a request shows on its card and on /jobs, read from the job's
+  steps and, once it is over, from the song's state, never from which commands ran: a
+  step's label is that line while it runs, "Fetching from Ultimate Guitar…"), app.py (the
+  routes; `/jobs.json` and the forms answer the page's script in JSON; `written_pages`,
+  each kind of page caracole writes into the library by file name, with its record and its
+  CSP: the sheet viewers), pages.py, server.py (`http.server`). The page is
+  library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
+  /jobs.json how they go.
 - `viewer/`: the sheet viewer render.py writes beside each PDF. page.py builds the page
   (`build_viewer`) from the song's .cho (sheet.py reads it back); theory.py names chords and
   keys, guesses keys, changes modes and finds alternatives; voicings.py and voicings.json are
@@ -119,7 +124,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html` and `sheet.html` in a real browser (test_library_page.py, test_viewer.py), and a viewer `caracole serve` sends (test_web_server.py) | neither |
+| `chromium` on PATH | `index.html` and `sheet.html` in a real browser (test_library_page.py, test_viewer.py), a viewer `caracole serve` sends (test_web_server.py), and the page served by a real `caracole serve` (test_web_page.py) | neither |
 
 Before a change is done:
 

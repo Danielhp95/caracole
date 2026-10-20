@@ -239,21 +239,31 @@ for you, then syncs the file at once and rewrites `_todo.md` and
 `index.html`:
 
     $ caracole add 宋冬野 斑马斑马 --album 安和桥北 --duration 4:13
-    Added to /home/you/Tabs/wanted.txt, line 16:
-      宋冬野 - 斑马斑马 | 安和桥北 | 4:13
-    Song 宋冬野/斑马斑马: new; the next `caracole run` looks for it
+    Added 宋冬野 - 斑马斑马 to wanted.txt; the next `caracole run` looks for it.
+    Not in the offline Ultimate Guitar index under this name: `caracole search` with a few of its words looks wider.
+
+It says in one line what it did and what the library has of the song: "is in
+wanted.txt already" for a song listed before, and "the library has it, with a
+sheet" (or "with no sheet yet", or "ignored by overrides.toml") for a song the
+library knew, from Spotify, say. `caracole -v add …` also prints the song's
+line in wanted.txt, with its number and the file's path, and the song's key in
+the library:
+
+    $ caracole -v add 宋冬野 斑马斑马 --album 安和桥北 --duration 4:13
+    wanted.txt line 16 (/home/you/Tabs/wanted.txt): 宋冬野 - 斑马斑马 | 安和桥北 | 4:13
+    Added 宋冬野 - 斑马斑马 to wanted.txt; the next `caracole run` looks for it.
+    Song 宋冬野/斑马斑马: new
+    Not in the offline Ultimate Guitar index under this name: `caracole search` with a few of its words looks wider.
 
 Then it matches the song against the offline index, as the nightly match
 step would (see [caracole match](#caracole-match---dry-run)), saves the match
-and says what it found: the UG song it matched
+and says what it found, on the lines after that one: the UG song it matched
 (`On Ultimate Guitar: radiohead/creep (exact)`), that the index has nothing
 under that name, or, when it isn't sure, the candidates, each with its score,
 the step that found it and a page, as `caracole review` lists them:
 
     $ caracole add epic "I'm not sorry for loving you"
-    Added to /home/you/Tabs/wanted.txt, line 17:
-      epic - I'm not sorry for loving you
-    Song epic/im-not-sorry-for-loving-you: new; the next `caracole run` looks for it
+    Added epic - I'm not sorry for loving you to wanted.txt; the next `caracole run` looks for it.
     Not sure which Ultimate Guitar song it is. Did you mean:
       1) 94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)  https://tabs.ultimate-guitar.com/tab/misc-musicals/epic-the-musical-not-sorry-for-loving-you-chords-4742072
       2) 82  bill-fox/im-not-over-loving-you (title_only)  https://tabs.ultimate-guitar.com/tab/bill-fox/im-not-over-loving-you-chords-1066803
@@ -263,10 +273,11 @@ The review is saved, so `caracole review` can settle it at once. Nothing is
 matched while the index is empty (it says to run `caracole index build`) or
 overrides.toml can't be read, and an incomplete index records no miss: the
 song may be in a sitemap not read yet. `caracole search --add` matches the song
-it adds the same way.
+it adds the same way, and says what it did in the same words.
 
-A song that is already listed isn't added twice, and its line stays as it is:
-edit the line to change its album or duration, and the next sync changes the
+A song that is already listed isn't added twice, and its line stays as it is
+(a second line says so when you gave another album or duration): edit the line
+to change its album or duration, and the next sync changes the
 song. The file is the source of truth, so the line is written first, before
 `caracole add` waits for any other caracole to finish. When the database can't be
 updated, the line is kept all the same, a warning says why, and the next sync
@@ -274,8 +285,8 @@ adds the song. The first `caracole add` creates the file, with a header that
 explains the format.
 
 A song you [removed](#caracole-remove) comes back with `caracole add`, as new:
-`Song radiohead/creep: back from its removal on 2026-10-19, as new; the next
-caracole run looks for it`.
+`Added Radiohead - Creep to wanted.txt; back from its removal on 2026-10-19, as
+new; the next caracole run looks for it.`
 
 ### caracole remove
 
@@ -780,11 +791,18 @@ and cache.
   page before, and songs whose chords the index can't offer (bare ids, or
   pages robots.txt closes). Per song it prints what it kept, as
   `Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)`,
-  or `nothing kept`. `--song` fetches that one song now, even when nothing
-  about it changed; the song must be in the library and matched, or not found
-  or reviewed on its title alone or on names that aren't quite UG's, with its
-  artist page known. A cooldown, a
-  block or a spent budget exits 0.
+  or `nothing kept`, then the totals. `--song` fetches that one song now, even
+  when nothing about it changed; the song must be in the library and matched,
+  or not found or reviewed on its title alone or on names that aren't quite
+  UG's, with its artist page known. It
+  prints that song's line alone, without the count (`Artist - Title: sheet
+  101`), or why nothing came: `not fetched (the error); it waits for the next
+  run`, or that the budget was spent first, or UG's cooldown. A `--song` cut
+  short that way marks a matched song to fetch, so the next run fetches it
+  even if it was fetched before and nothing changed; a song looked up on its
+  artist's page lately waits for that page's next reading instead, and the
+  line says to ask for it again later. `-v` adds the requests, the count and
+  the totals. A cooldown, a block or a spent budget exits 0.
 - **`caracole lacuerda`** looks on LaCuerda for Spanish songs (judged by their
   lyrics, or by their title until there are lyrics) that have no complete
   sheet, at most once in 30 days per song. Like `caracole fetch`, it first
@@ -1256,7 +1274,8 @@ QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
 compares Chinese as pinyin. `--limit N` (or `-n N`) shows up to N hits from
 each place, 10 by default. `--add N` adds UG hit N to wanted.txt and syncs it,
-the same way `caracole add` does. N can be at most `--limit`, so only a hit the
+the same way `caracole add` does, and says so in the same one line (`-v` adds
+its line in wanted.txt and the song's key). N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another
 name is left alone. A hit under a catch-all artist is refused (exit 2, nothing
 written), with the same advice as its hit. When nothing matches well, or the query has accented or
@@ -1310,10 +1329,46 @@ do:
   Removing… until it has run. Keep it goes back to the library, and nothing
   changes. A page older than a change to the library (the song merged into
   another since, say) removes nothing: reload the library.
-- **Requests**, the page at `/jobs`, lists each request, the commands it
-  runs and what each printed (the newest request's output open), and
-  refreshes itself every 10 seconds while one waits or runs. Stop refreshing
-  keeps it still, so an output stays open to read.
+- **How it goes, on the page.** A request leaves you where you are. The
+  song's card, or for a song new to the library a card of its own under the
+  form ("Just requested"), says on one line how its request goes: "Queued…"
+  (or "Queued behind 2 requests…"), then what runs ("Adding to the
+  library…", "Looking it up…", "Fetching from Ultimate Guitar…", "Rendering
+  the sheet…"), then how it ended:
+  - **Ready · Open sheet**, and the card shows the song's files;
+  - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
+    the fetch looked the song up during the request and found none, or the
+    index has no such song (and its artist's UG page isn't known);
+  - **Needs review · see the to-do page**, when caracole isn't sure which UG
+    song it is;
+  - **Not fetched yet · Details**, when a cooldown, a block, a spent budget
+    or an error stopped the fetch before it looked the song up: an error is
+    never a miss, and the song waits for the next run (Details says if it
+    doesn't);
+  - **Added: the nightly run looks for it**, for a request without Fetch it
+    now;
+  - or, when a command failed, its error in one sentence, with a **Details**
+    link to what it printed.
+
+  A song asked for again shows on the card it has there already, and a
+  refused request's card goes at the next request. A request still on its
+  way when you reload the page keeps its card. When the server stops
+  answering, the lines say so after a few tries ("caracole serve can't be
+  reached; trying again…"), until it answers again.
+
+  Two requests or more also show as one short list in a corner, a line per
+  song, which folds up or closes; on a phone it starts folded, a single
+  line. A screen reader hears each card's line as
+  it changes, to the last one, and Fetch now hands the keyboard focus to that
+  line as it goes. The page asks the server how its requests go every 1.5 seconds
+  while one waits or runs (`/jobs.json`), less often in a background tab.
+- **Requests**, the page at `/jobs`, has one line per request, the same as
+  its card's, with the commands it ran and what each printed folded away
+  under it (they run at `-v`, so that is the whole story). A card's Details
+  link opens that request's output. It refreshes itself every 10 seconds while
+  one waits or runs; Stop refreshing keeps it still.
+- **Without JavaScript**, the forms still work: a request sends you to its
+  line on `/jobs`, its output open.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
@@ -1361,7 +1416,12 @@ Who can reach it:
 - Every form must come from the server's own page: it carries a token the
   server makes when it starts, and a request from another site is refused
   (403). A form posted from a page older than the server's last start is
-  refused too; reload the page.
+  refused too; reload the page. `/jobs.json`, which the page's script reads,
+  is refused the same way, and needs the same token in an
+  `X-Caracole-Form-Token` header: a card then says the server has restarted.
+  Only the served page may ask the server anything from its script (its
+  Content-Security-Policy has `connect-src 'self'`); `index.html` on disk asks
+  nothing of anyone.
 - `--token-file FILE` asks each browser once for the access token in FILE (16
   characters or more, such as `openssl rand -base64 24`), then remembers it in
   a cookie. Without the option, a `web_token` credential from systemd
@@ -1645,9 +1705,7 @@ lyrics without timings.
 **1. Add it.**
 
     $ caracole add 宋冬野 斑马斑马 --album 安和桥北 --duration 4:13
-    Added to /home/you/Tabs/wanted.txt, line 16:
-      宋冬野 - 斑马斑马 | 安和桥北 | 4:13
-    Song 宋冬野/斑马斑马: new; the next `caracole run` looks for it
+    Added 宋冬野 - 斑马斑马 to wanted.txt; the next `caracole run` looks for it.
     Not in the offline Ultimate Guitar index under this name: `caracole search` with a few of its words looks wider.
 
 The album and duration make the lyrics lookup exact. Written "斑马，斑马",

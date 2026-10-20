@@ -144,9 +144,14 @@ def test_add_creates_wanted_txt_and_the_song(tmp_path):
     text = path.read_text(encoding="utf-8")
     assert text.startswith(HEADER)
     assert text.endswith("\nSoda Stereo - De Música Ligera | 3:33\n")
-    assert f"Added to {path}, line {text.count(chr(10))}:" in result.output
-    assert "\n  Soda Stereo - De Música Ligera | 3:33\n" in result.output
-    assert "Song soda-stereo/de-musica-ligera: new" in result.output
+    # One line says it all; -v says where, and the song's key.
+    assert result.output == (
+        "Added Soda Stereo - De Música Ligera to wanted.txt; the next `caracole run` looks for it.\n")
+    (tmp_path / "v").mkdir()
+    verbose = run(tmp_path / "v", "-v", "add", "Soda Stereo", "De Música Ligera", "--duration", "213")
+    vpath = wanted_file(tmp_path / "v")
+    assert f"wanted.txt line {text.count(chr(10))} ({vpath}): Soda Stereo - De Música Ligera | 3:33" in verbose.output
+    assert "Song soda-stereo/de-musica-ligera: new" in verbose.output
     [song] = songs(tmp_path)
     assert (song.key, song.duration_ms, song.source_ids) == (
         "soda-stereo/de-musica-ligera",
@@ -160,8 +165,7 @@ def test_add_a_chinese_song_with_album_and_duration(tmp_path):
     assert result.exit_code == 0, result.output
     text = wanted_file(tmp_path).read_text(encoding="utf-8")
     assert text.endswith("\n宋冬野 - 斑马斑马 | 安和桥北 | 4:13\n")
-    assert "\n  宋冬野 - 斑马斑马 | 安和桥北 | 4:13\n" in result.output
-    assert "Song 宋冬野/斑马斑马: new" in result.output
+    assert result.output == "Added 宋冬野 - 斑马斑马 to wanted.txt; the next `caracole run` looks for it.\n"
     [song] = songs(tmp_path)
     assert (song.artist, song.title, song.album, song.duration_ms) == (
         "宋冬野",
@@ -178,21 +182,21 @@ def test_add_appends_to_the_file_and_syncs_all_of_it(tmp_path):
     assert path.read_text(encoding="utf-8") == (
         "# mine\nSoda Stereo - De Música Ligera\nRadiohead - Creep\n"
     )
-    assert f"Added to {path}, line 3:" in result.output
+    assert result.output.startswith("Added Radiohead - Creep to wanted.txt")
     assert {s.key for s in songs(tmp_path)} == {"soda-stereo/de-musica-ligera", "radiohead/creep"}
 
 
 def test_add_a_song_already_listed_leaves_the_file_alone(tmp_path):
     path = wanted_file(tmp_path, "Oasis - Wonderwall\n宋冬野 - 斑马，斑马 | 安和桥北\n")
     before = path.read_bytes()
-    result = run(tmp_path, "add", "宋冬野", "斑马斑马", "--duration", "4:13")
+    result = run(tmp_path, "-v", "add", "宋冬野", "斑马斑马", "--duration", "4:13")
     assert result.exit_code == 0, result.output
     assert path.read_bytes() == before
-    assert f"Already in {path}, line 2:" in result.output
-    assert "\n  宋冬野 - 斑马，斑马 | 安和桥北\n" in result.output
+    # Listed, but never synced until now.
+    assert "宋冬野 - 斑马，斑马 is in wanted.txt already; the next `caracole run` looks for it.\n" in result.output
     # The duration given isn't on that line, and wasn't written: say how to change it.
-    assert "edit" in result.output
-    assert "Song 宋冬野/斑马斑马: new" in result.output  # listed, but never synced until now
+    assert "Its line stays as it is: edit it to change the album or the duration.\n" in result.output
+    assert f"wanted.txt line 2 ({path}): 宋冬野 - 斑马，斑马 | 安和桥北" in result.output  # at -v
     assert {s.key: s.album for s in songs(tmp_path)}["宋冬野/斑马斑马"] == "安和桥北"
 
 
@@ -201,10 +205,22 @@ def test_add_twice_says_the_song_is_listed_and_known(tmp_path):
     assert first.exit_code == 0, first.output
     again = run(tmp_path, "add", "radiohead", "CREEP")
     assert again.exit_code == 0, again.output
-    assert "Already in" in again.output
-    assert "Song radiohead/creep: already known, no sheet yet" in again.output
+    assert again.output == "Radiohead - Creep is in wanted.txt already; the library has it, with no sheet yet.\n"
     assert "edit" not in again.output  # nothing was given that the line lacks
     assert wanted_file(tmp_path).read_text(encoding="utf-8").count("Creep") == 1
+
+
+def test_add_says_what_the_library_has_of_a_song_it_knew(tmp_path):
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    from caracole.songs import update_song
+    from conftest import add_song as insert
+
+    creep = insert(conn, "Radiohead", "Creep", source="spotify")
+    update_song(conn, creep.id, status="found")
+    conn.close()
+    result = run(tmp_path, "add", "Radiohead", "Creep")
+    assert result.exit_code == 0, result.output
+    assert result.output == "Added Radiohead - Creep to wanted.txt; the library has it, with a sheet.\n"
 
 
 def test_add_mentions_lines_of_wanted_txt_it_cannot_read(tmp_path):
@@ -241,7 +257,7 @@ def test_add_keeps_the_line_when_the_database_is_out_of_reach(tmp_path):
     result = run(tmp_path, "add", "Radiohead", "Creep")
     assert result.exit_code == 0, result.output
     assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith("\nRadiohead - Creep\n")
-    assert "Added to" in result.output
+    assert "Added Radiohead - Creep to wanted.txt" in result.output
     assert "`caracole sync`" in result.output  # the next sync adds it to the database
 
 
@@ -561,7 +577,7 @@ def test_a_page_it_cant_write_is_a_warning_and_the_songs_are_synced(tmp_path, ar
     assert result.exit_code == 0, result.output
     assert f"can't write {tmp_path / 'lib' / '_todo.md'}: Is a directory" in result.output
     assert [s.key for s in songs(tmp_path)] == ["radiohead/creep"]
-    said = "Song radiohead/creep: new" if args[0] == "add" else "wanted.txt 1 song, 1 new"
+    said = "Radiohead - Creep is in wanted.txt already" if args[0] == "add" else "wanted.txt 1 song, 1 new"
     assert said in result.output
 
 

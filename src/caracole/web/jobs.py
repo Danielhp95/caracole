@@ -1,7 +1,10 @@
 """The requests ``caracole serve`` queues, each a few caracole commands, run one at a time.
 
 A job is a list of steps; a step is one run of the ``caracole`` command line, in
-a child process with the server's environment and config. A request is
+a child process with the server's environment and config, at ``-v``, so the
+requests page has the whole story. A step's label is what the song's card says
+while it runs ("Fetching from Ultimate Guitar…": status.py), and a job keeps
+the song it is for (``display``), for the page's list of requests. A request is
 ``caracole add``; fetching a song now adds ``caracole match`` (offline), ``caracole
 fetch --song`` and ``caracole render`` (offline). Each command takes caracole's
 lock, waits behind a nightly run that holds it, keeps the pause after the last
@@ -57,6 +60,7 @@ class Job:
     steps: list[Step]
     fetching: bool = False
     note: str = ""
+    display: str = ""  # "Artist - Title"; its title when none was given
     state: str = "queued"  # queued, running, done, failed
     queued_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
@@ -77,15 +81,15 @@ def add_steps(artist: str, title: str, *, album: str | None = None,
         args.append(f"--album={album}")
     if duration_ms is not None:
         args.append(f"--duration={format_duration(duration_ms)}")
-    return [("Add to the library", (*args, "--", artist, title))]
+    return [("Adding to the library", (*args, "--", artist, title))]
 
 
 def fetch_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
     """Fetch one song now: match it (offline), fetch it from UG, render its PDF (offline)."""
     return [
-        ("Match against the index", ("match",)),
-        ("Fetch from Ultimate Guitar", ("fetch", f"--song={display}")),
-        ("Render the PDF", ("render",)),
+        ("Looking it up", ("match",)),
+        ("Fetching from Ultimate Guitar", ("fetch", f"--song={display}")),
+        ("Rendering the sheet", ("render",)),
     ]
 
 
@@ -115,7 +119,7 @@ class JobQueue:
     # --- what the pages ask -------------------------------------------------------------------
 
     def submit(self, title: str, song_key: str, steps: Sequence[tuple[str, Sequence[str]]], *,
-               fetching: bool = False, note: str = "") -> tuple[Job, bool]:
+               fetching: bool = False, note: str = "", display: str = "") -> tuple[Job, bool]:
         """Queue a job, and say whether it is new: one per song, unless a fetch must come after an add.
 
         A song's waiting or running job that does as much (a fetch, or the new
@@ -143,7 +147,7 @@ class JobQueue:
             if sum(job.active for job in self._jobs) >= self._limit:
                 raise QueueFull(f"{self._limit} requests are waiting already")
             job = Job(self._next_id, title, song_key, [Step(label, tuple(args)) for label, args in steps],
-                      fetching=fetching, note=note)
+                      fetching=fetching, note=note, display=display or title)
             self._next_id += 1
             self._jobs.append(job)
             self._wake.notify_all()
@@ -257,7 +261,7 @@ def child_env(base: Mapping[str, str] | None = None) -> dict[str, str]:
 
 
 class CaracoleRunner:
-    """Runs ``python -P -m caracole [--config FILE] ARGS…`` and hands each line it prints to ``emit``.
+    """Runs ``python -P -m caracole -v [--config FILE] ARGS…`` and hands each line it prints to ``emit``.
 
     ``-m`` alone would put the working directory first on the child's
     ``sys.path``, which the ``caracole`` script never does: started from the
@@ -266,7 +270,8 @@ class CaracoleRunner:
     """
 
     def __init__(self, config_path: Path | None, *, python: str = sys.executable):
-        self._argv = [python, "-P", "-m", "caracole", *(["--config", str(config_path)] if config_path else [])]
+        self._argv = [python, "-P", "-m", "caracole", "-v",
+                      *(["--config", str(config_path)] if config_path else [])]
         self._env = child_env()
         self._lock = threading.Lock()
         self._process: subprocess.Popen[str] | None = None

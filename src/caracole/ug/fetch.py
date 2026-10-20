@@ -1473,21 +1473,50 @@ def songs_to_fetch(
       sheet or a tab that match found: unless their artist's page finds them
       again, those go (``process_song``).
     """
-    out = []
-    for song in list_songs(conn):
-        if _ignored(song, overrides):
-            continue
-        matched = song.match_decision in ("accept", "pinned")
-        dirty = matched and (song.ug_dirty or _block_changed(conn, song, overrides.block))
-        due = (
-            needs_artist_page(song)
-            and not _checked_within(conn, song.id, now, artist_page_max_age)
-            and artist_is_known(conn, song, overrides)
-        )
-        undone = not matched and _undone(conn, song.id)
-        if dirty or due or undone or _recheck_due(conn, song, overrides, now, artist_page_max_age):
-            out.append(song)
-    return out
+    return [song for song in list_songs(conn)
+            if fetch_due(conn, song, overrides, now, artist_page_max_age=artist_page_max_age)]
+
+
+def fetch_due(
+    conn: sqlite3.Connection,
+    song: Song,
+    overrides: Overrides,
+    now: datetime,
+    *,
+    artist_page_max_age: timedelta = ARTIST_PAGE_MAX_AGE,
+) -> bool:
+    """Whether this run should fetch the song: ``songs_to_fetch``, for one song."""
+    if _ignored(song, overrides):
+        return False
+    matched = song.match_decision in ("accept", "pinned")
+    dirty = matched and (song.ug_dirty or _block_changed(conn, song, overrides.block))
+    due = (
+        needs_artist_page(song)
+        and not _checked_within(conn, song.id, now, artist_page_max_age)
+        and artist_is_known(conn, song, overrides)
+    )
+    undone = not matched and _undone(conn, song.id)
+    return dirty or due or undone or _recheck_due(conn, song, overrides, now, artist_page_max_age)
+
+
+def checked_since(conn: sqlite3.Connection, song: Song, since: datetime) -> bool:
+    """Whether a fetch settled the song at ``since`` or after, so what it lacks now, UG lacks.
+
+    A matched song is settled once its fetch finished (``ug_checked_at``, which
+    a block, a spent budget or an error never sets); a song with no match yet,
+    once its artist's UG page was read for it. Both are written to the second.
+    """
+    since = since.astimezone(UTC).replace(microsecond=0)
+    if song.ug_checked_at:
+        try:
+            if _parse_iso(song.ug_checked_at) >= since:
+                return True
+        except ValueError:
+            pass
+    if song.match_decision in ("accept", "pinned"):
+        return False
+    checked = _last_checked(conn, song.id)
+    return checked is not None and checked >= since
 
 
 def fetch_songs(

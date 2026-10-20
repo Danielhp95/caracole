@@ -160,8 +160,10 @@ def test_the_page_on_disk_has_no_forms_and_lets_none_be_sent(conn, cfg):
     add_song(conn, "Radiohead", "Creep")
     html = page(conn, cfg)
     assert "form-action 'none'" in csp_of(html)
+    assert "connect-src" not in csp_of(html)  # default-src 'none': the file asks nothing of anyone
     assert "<form" not in JSON_BLOCK.sub("", html)
     assert "server" not in data_of(html)
+    assert 'id="requested"' not in html and 'id="tray"' not in html
 
 
 def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
@@ -170,7 +172,11 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     wanted = add_song(conn, "Radiohead", "Creep")
     found = add_song(conn, "Soda Stereo", "De Música Ligera")
     update_song(conn, found.id, status="found")
-    controls = WebControls(csrf='t0k"<en', busy=frozenset({wanted.id}), active=2, removing=frozenset({found.id}))
+    job = {"id": 4, "display": "Radiohead - Creep", "songId": wanted.id, "state": "running", "fetching": True,
+           "line": {"tone": "running", "text": "Fetching from Ultimate Guitar…", "link": None},
+           "details": "jobs?job=4#job-4"}
+    controls = WebControls(csrf='t0k"<en', busy=frozenset({wanted.id}), active=2, removing=frozenset({found.id}),
+                           jobs=(job,))
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
     shell = JSON_BLOCK.sub("", html)
     form = re.search(r'<form[^>]*action="/request"[^>]*>(.*?)</form>', shell, re.S)
@@ -183,7 +189,13 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     assert "inputmode" not in duration and "m:ss or seconds" in form.group(1)
     assert 'href="/jobs"' in shell
     assert "form-action 'self'" in csp_of(html) and "form-action 'none'" not in csp_of(html)
-    assert data_of(html)["server"] == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id]}
+    # Its script may ask the server how the requests go, and nothing else.
+    assert "connect-src 'self'" in csp_of(html) and "default-src 'none'" in csp_of(html)
+    assert data_of(html)["server"] == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id],
+                                       "jobs": [job]}
+    # Where the songs just requested go, and the list of requests.
+    assert re.search(r'<section class="requested" id="requested"[^>]*hidden>', shell)
+    assert re.search(r'<aside class="tray" id="tray"[^>]*hidden>', shell)
     # Still one script and one style, each allowed by its hash.
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     styles = re.findall(r"<style>(.*?)</style>", html, re.S)

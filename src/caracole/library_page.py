@@ -28,8 +28,15 @@ jumps to the first card of a letter.
 ``caracole serve`` serves the same page with ``controls`` (``WebControls``): a
 form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
 button on each card (the server asks before it removes anything), and a CSP
-that lets the forms post to the server (``form-action 'self'``). The file on
-disk has neither, and lets no form be sent.
+that lets the forms post to the server (``form-action 'self'``) and the script
+ask it how its requests go (``connect-src 'self'``). The script posts the forms
+with fetch(), so the page stays where it is: each song's card shows its
+request's one line (web/status.py), from ``/jobs.json``, asked every 1.5 s
+while one waits or runs, and is drawn again from the song's new data once the
+request is over. A song new to the library gets a card of its own under the
+form, and two requests or more also show as a short list in a corner. Without
+JavaScript the forms post as forms. The file on disk has none of it, and lets
+no form be sent and nothing be asked.
 """
 
 from __future__ import annotations
@@ -101,7 +108,9 @@ class WebControls:
     ``active`` is how many requests are queued or running, for the masthead;
     ``held`` holds the songs a fetch must wait for a review of, whose cards say so;
     ``removing`` holds the songs with a removal queued or running, whose cards
-    say so instead of offering Remove.
+    say so instead of offering Remove; ``jobs`` are the requests queued or
+    running, as ``/jobs.json`` gives them, so their cards show their progress
+    from the start.
     """
 
     csrf: str
@@ -109,6 +118,7 @@ class WebControls:
     active: int = 0
     held: frozenset[int] = frozenset()
     removing: frozenset[int] = frozenset()
+    jobs: tuple[dict[str, Any], ...] = ()
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
@@ -117,15 +127,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
 
     With ``controls``, the page ``caracole serve`` serves: the same, with its forms.
     """
-    pages = _guitar_pro_pages(conn)
-    sources = _downloaded(conn)
-    library = list_songs(conn)
-    keys = {s.id: song_key(conn, cfg.library_dir, s) for s in library}
-    to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
-    musescore = cfg.provider("musescore").enabled
-    songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
-                   sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [])
-             for s in library]
+    songs = song_cards(conn, cfg, overrides, now)
     data: dict[str, Any] = {
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "fold": {c: fold(c) for c in _TRANSLITERATED},
@@ -133,17 +135,39 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     }
     if controls is not None:
         data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
-                          "removing": sorted(controls.removing)}
+                          "removing": sorted(controls.removing), "jobs": list(controls.jobs)}
         for song in songs:
             song["fetchable"] = song["id"] not in controls.held
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
-    csp = _CSP.replace("__FORMS__", "'self'" if controls is not None else "'none'")
+    # The page caracole serve serves may also ask it how its requests go (connect-src); the file can't.
+    csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'") if controls is not None
+           else _CSP.replace("__FORMS__", "'none'"))
     return (
         _HEAD.replace("__CSP__", csp).replace("__STYLE__", _STYLE)
         + _BODY.replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
         + f'<script type="application/json" id="songs">{payload}</script>\n'
         + f"<script>{_SCRIPT}</script>\n</body>\n</html>\n"
     )
+
+
+def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime,
+               songs: list[Song] | None = None) -> list[dict[str, Any]]:
+    """The cards' data, as the page's JSON holds it: of every song, or of ``songs``."""
+    pages = _guitar_pro_pages(conn)
+    sources = _downloaded(conn)
+    library = list_songs(conn) if songs is None else songs
+    keys = {s.id: song_key(conn, cfg.library_dir, s) for s in library}
+    to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
+    musescore = cfg.provider("musescore").enabled
+    return [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
+                  sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [])
+            for s in library]
+
+
+def sheet_href(library_dir: Path, song: Song) -> str | None:
+    """The link to the song's sheet, its card's main file (relative to index.html), or None without one."""
+    names = _file_names(song_dir(library_dir, song))
+    return next((f["href"] for f in _files(library_dir, song, names, {}) if f["primary"]), None)
 
 
 def write_library_page(library_dir: Path, html: str) -> Path:
@@ -525,7 +549,36 @@ _STYLE = BASE_STYLE + """
 .facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--muted); font-size: .85rem; }
 .facts .key, .facts .transpose { color: var(--text); font-weight: 600; }
 .note { margin: 0; color: var(--review); font-size: .85rem; }
-.busy { margin: 0; color: var(--wanted); font-size: .88rem; font-weight: 600; }
+.progress { margin: 0; color: var(--muted); font-size: .9rem; font-weight: 600; overflow-wrap: anywhere; }
+.progress::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px;
+  border-radius: 50%; background: currentColor; vertical-align: .05em; }
+.progress[data-tone="queued"], .progress[data-tone="running"], .progress[data-tone="waiting"] { color: var(--wanted); }
+.progress[data-tone="ready"] { color: var(--found); }
+.progress[data-tone="review"] { color: var(--review); }
+.progress[data-tone="failed"] { color: var(--failed); }
+.progress a { padding: 6px 0; color: inherit; text-underline-offset: 2px; }
+.progress .dot { margin: 0 .4em; opacity: .6; }
+.requested { margin-top: 14px; }
+.requested .grid { margin-top: 6px; }
+.card .by { margin: 2px 0 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.tray { position: fixed; z-index: 3; right: 16px; bottom: 16px; left: 16px; max-width: 26rem; margin-left: auto;
+  border: 1px solid var(--border-strong); border-radius: 16px; background: var(--surface);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 18%); }
+.tray-head { display: flex; align-items: center; gap: 2px; padding: 2px 4px; }
+.tray-toggle { flex: 1; min-width: 0; min-height: 44px; padding: 0 10px; border: 0; border-radius: 12px;
+  background: none; color: var(--text); font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
+.tray-toggle::after { content: "▾"; display: inline-block; margin-left: 6px; color: var(--muted); }
+.tray-toggle[aria-expanded="false"]::after { transform: rotate(-90deg); }
+.tray-all { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; color: var(--muted);
+  font-size: .85rem; font-weight: 600; }
+.tray-close { flex: none; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
+  color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
+.tray-list { display: grid; gap: 8px; max-height: min(40vh, 18rem); margin: 0; padding: 0 14px 12px;
+  overflow-y: auto; list-style: none; }
+.tray-list li { display: grid; gap: 1px; min-width: 0; }
+.tray-song { overflow: hidden; font-size: .9rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.tray .progress { font-size: .85rem; }
+body.with-tray .page { padding-bottom: 16rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .actions form { margin: 0; }
 .subhead { margin: 2px 0 -2px; color: var(--muted); font-size: .75rem; font-weight: 650; letter-spacing: .06em;
@@ -550,7 +603,9 @@ _STYLE = BASE_STYLE + """
 }
 @media (prefers-reduced-motion: no-preference) {
   .plus { transition: transform .15s; }
+  .progress[data-tone="running"]::before { animation: pulse 1.2s ease-in-out infinite; }
 }
+@keyframes pulse { 50% { opacity: .25; } }
 """
 
 _SCRIPT = r"""
@@ -719,6 +774,28 @@ _SCRIPT = r"""
     go.setAttribute("aria-label", "Fetch " + String(s.title) + " by " + String(s.artist) + " now");
     go.title = "Ask Ultimate Guitar for this song now, politely";
     form.appendChild(go);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const card = form.closest("article");
+      const line = progressIn(card);  // in the page before its first words, so they are read out
+      showLine(line, { line: { tone: "queued", text: "Sending…" } });
+      if (form.contains(document.activeElement)) focusOn(line);  // a disabled button would drop it
+      go.disabled = true;
+      send(form).then((answer) => {
+        const view = answer.ok && answer.body && answer.body.job;
+        if (!view) {
+          go.disabled = false;
+          showLine(progressIn(card), failure(answer));
+          return;
+        }
+        const i = byIndex.get(Number(s.id));
+        if (card && (i === undefined || cards.get(i) !== card)) spots.set(Number(view.id), card);
+        track(view);  // its line takes the button's place
+      }, () => {
+        go.disabled = false;
+        showLine(progressIn(card), UNREACHABLE);
+      });
+    });
     return form;
   };
   // Every card's "Remove…": caracole serve answers with what goes and what stays, and asks.
@@ -735,6 +812,98 @@ _SCRIPT = r"""
     form.appendChild(go);
     return form;
   };
+
+  // --- caracole serve: requests answered on the page ------------------------------------------
+  // The forms post with fetch(), so the page stays where it is, and each song's card says on one line how its
+  // request goes. /jobs.json gives each request's line, and a request's card once it is over; the page asks
+  // it every POLL ms while one it shows waits or runs. Without JavaScript the forms post as forms, and the
+  // server sends the browser to the request on /jobs.
+  const POLL = 1500;
+  const BACKGROUND_POLL = 6000;  // a page in a background tab asks less often
+  const UNREACHABLE = { line: { tone: "failed", text: "caracole serve can't be reached: is it running?" } };
+  const UNREACHABLE_NOW = "caracole serve can't be reached; trying again…";
+  const MISSES = 3;  // asked in vain this many times in a row, the lines say so
+  const views = new Map();  // job id -> what the server last said of it
+  const songJob = new Map();  // song id -> the newest job of the song this page shows
+  const watched = new Set();  // the jobs this page shows: asked for here, or waiting or running when it loaded
+  const settled = new Set();  // watched jobs that are over, their cards drawn again
+  const spots = new Map();  // job id -> a card outside the grid that shows it (#requested's)
+  const byIndex = new Map(songs.map((s, i) => [Number(s.id), i]));  // song id -> its place in songs
+  const isActive = (view) => view.state === "queued" || view.state === "running";
+  const jobOfSong = (id) => (songJob.has(Number(id)) ? views.get(songJob.get(Number(id))) : null);
+  // A request's line, written into p only when it changed, so a screen reader hears each change once.
+  // Its link says where to go next; details, the request's output on /jobs, follows it.
+  const showLine = (p, view) => {
+    const line = view && view.line && typeof view.line === "object" ? view.line : {};
+    const to = line.link && typeof line.link === "object" ? line.link : null;
+    const more = typeof line.details === "string" ? line.details : "";
+    const key = [line.tone, line.text, to ? to.href : "", more].map(String).join("|");
+    if (p.dataset.key === key) return;
+    const focused = p !== document.activeElement && p.contains(document.activeElement);
+    p.dataset.key = key;
+    p.dataset.tone = String(line.tone || "");
+    p.textContent = "";
+    p.appendChild(el("span", null, line.text || ""));
+    for (const go of [to, more ? { label: "Details", href: more } : null]) {
+      if (!go) continue;
+      const dot = el("span", "dot", "·");
+      dot.setAttribute("aria-hidden", "true");
+      p.appendChild(dot);
+      p.appendChild(link(go, null, false));
+    }
+    if (focused) focusOn(p);  // its link is gone: the focus stays on the line
+  };
+  const focusOn = (p) => {
+    p.tabIndex = -1;
+    p.focus({ preventScroll: true });
+  };
+  // A card's line, made the first time: role="status" has it read out when it changes. A live region
+  // put in the page with its text already in it is not read out, so a card keeps its line from the first
+  // text to the last (refill), and only that text changes.
+  const progressIn = (card) => {
+    let p = card.querySelector(".progress");
+    if (!p) {
+      p = el("p", "progress");
+      p.setAttribute("role", "status");
+      const after = card.querySelector(".facts") || card.querySelector(".head");
+      if (after) after.after(p);
+      else card.appendChild(p);
+    }
+    return p;
+  };
+  // The card old, drawn again as fresh (makeCard's) where it is, around its own line, which never leaves
+  // the page; returns old. The focus, if it was on something of old's that goes, moves to the line.
+  const refill = (old, fresh) => {
+    const kept = old.querySelector(".progress");
+    if (!kept) {
+      if (old.parentNode) old.replaceWith(fresh);
+      return fresh;
+    }
+    const at = document.activeElement;
+    const focused = at !== old && old.contains(at) && !kept.contains(at);  // on something that goes
+    const drawn = progressIn(fresh);  // where fresh has its line
+    for (const child of Array.from(old.childNodes)) if (child !== kept) child.remove();
+    let before = true;
+    for (const child of Array.from(fresh.childNodes)) {
+      if (child === drawn) before = false;
+      else if (before) old.insertBefore(child, kept);
+      else old.appendChild(child);
+    }
+    old.className = fresh.className;
+    old.tabIndex = fresh.tabIndex;
+    for (const name of Object.keys(old.dataset)) delete old.dataset[name];
+    Object.assign(old.dataset, fresh.dataset);
+    if (focused && old.isConnected) focusOn(kept);
+    return old;
+  };
+  const failure = (answer) => ({ line: { tone: "failed", text: (answer.body && answer.body.error) ||
+    "caracole serve answered " + answer.status + ": reload the page." } });
+  // A form, posted as the page's script: the answer is the job, or {error}, never a page.
+  const send = (form) => fetch(form.getAttribute("action"), {
+    method: "POST", body: new URLSearchParams(new FormData(form)), credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })));
+  let track = () => {};
 
   let setArtist = () => {};
   const makeCard = (s) => {
@@ -786,14 +955,13 @@ _SCRIPT = r"""
       card.appendChild(note);
     }
 
+    // Served by caracole serve: how the song's request goes, on one line, and Fetch now unless one runs.
+    const job = server ? jobOfSong(s.id) : null;
+    if (job) showLine(progressIn(card), job);
     const actions = el("div", "actions");
     if (server && s.status === "wanted" && !removing.has(Number(s.id))) {  // removing: its foot says so
-      if (busy.has(Number(s.id))) {
-        const note = el("p", "busy", "Fetching… ");
-        const jobs = el("a", null, "see the requests");
-        jobs.href = "/jobs";
-        note.appendChild(jobs);
-        card.appendChild(note);
+      if ((job && isActive(job)) || busy.has(Number(s.id))) {
+        if (!job) showLine(progressIn(card), { line: { tone: "running", text: "Fetching…" } });
       } else if (s.fetchable === false) {
         // caracole fetch would refuse it: the match needs review first (the note above says how).
         const held = el("button", "btn", "Review first");
@@ -876,17 +1044,20 @@ _SCRIPT = r"""
   };
 
   const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
+  const arrived = new Map();  // song id -> the card data of a song new to the library since the page loaded
   const summarize = () => {
     const by = { found: 0, wanted: 0, ignored: 0 };
-    for (const s of songs) if (own.call(by, s.status)) by[s.status] += 1;
+    const every = songs.concat(Array.from(arrived.values()));
+    for (const s of every) if (own.call(by, s.status)) by[s.status] += 1;
     const summary = byId("summary");
+    summary.textContent = "";
     const stat = (n, word) => {
       const item = el("li", "stat");
       item.appendChild(el("b", null, n));
       item.appendChild(document.createTextNode(" " + word));
       summary.appendChild(item);
     };
-    stat(songs.length, songs.length === 1 ? "song" : "songs");
+    stat(every.length, every.length === 1 ? "song" : "songs");
     stat(by.found, "found");
     stat(by.wanted, "wanted");
     if (by.ignored) stat(by.ignored, "ignored");
@@ -895,6 +1066,19 @@ _SCRIPT = r"""
   };
   const smooth = () => (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ? "auto" : "smooth");
+
+  // How many of the songs the search and filters match each button would show; a card drawn again changes it.
+  let matchingNow = [];
+  const tallyChips = () => {
+    const tally = { all: matchingNow.length, found: 0, wanted: 0, review: 0 };
+    for (const i of matchingNow) {
+      for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
+    }
+    for (const chip of chips) {
+      chip.setAttribute("aria-pressed", String(chip.dataset.show === state.show));
+      chip.querySelector(".n").textContent = String(tally[chip.dataset.show]);
+    }
+  };
 
   const render = () => {
     const query = parseQuery(state.q);
@@ -905,15 +1089,9 @@ _SCRIPT = r"""
       query.keys.every((k) => songKeys[i] === k) &&
       query.either.every((e) => songKeys[i] === e.key || (e.word && hay[i].indexOf(e.word) >= 0)) &&
       query.words.every((w) => hay[i].indexOf(w) >= 0));
-    const tally = { all: matching.length, found: 0, wanted: 0, review: 0 };
-    for (const i of matching) {
-      for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
-    }
+    matchingNow = matching;
+    tallyChips();
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
-    for (const chip of chips) {
-      chip.setAttribute("aria-pressed", String(chip.dataset.show === state.show));
-      chip.querySelector(".n").textContent = String(tally[chip.dataset.show]);
-    }
     sort.value = state.sort;
     keySelect.value = state.key;
     clear.hidden = !state.q;
@@ -1065,6 +1243,273 @@ _SCRIPT = r"""
       setQuery("");
     }
   });
+  // --- caracole serve: what the page does with a request's answers ----------------------------
+  const tray = byId("tray");
+  const trayList = byId("tray-list");
+  const traySum = byId("tray-sum");
+  const trayToggle = byId("tray-toggle");
+  const trayItems = new Map();  // job id -> its line in the list of requests
+  let trayClosed = false;
+  // The list of requests, once there are two or more: one line each, not read out (the cards' lines are).
+  const trayShow = (view) => {
+    if (!tray) return;
+    const id = Number(view.id);
+    let item = trayItems.get(id);
+    if (!item) {
+      item = el("li");
+      item.appendChild(el("span", "tray-song", view.display || ""));
+      item.appendChild(el("p", "progress"));
+      trayItems.set(id, item);
+      trayList.prepend(item);
+    }
+    showLine(item.querySelector(".progress"), view);
+    const shown = Array.from(trayItems.keys()).map((n) => views.get(n)).filter(Boolean);
+    const going = shown.filter(isActive).length;
+    traySum.textContent = plural(shown.length, "request") + (going ? " · " + going + " to go" : " · all done");
+    tray.hidden = trayClosed || shown.length < 2;
+    document.body.classList.toggle("with-tray", !tray.hidden);
+  };
+  // The cards drawn again from what the library has now: a request is over. Each keeps its line.
+  const redraw = (view) => {
+    const data = view.card && typeof view.card === "object" ? view.card : null;
+    if (!data) return;
+    const i = byIndex.get(Number(data.id));
+    if (i !== undefined) {
+      songs[i] = data;
+      songKeys[i] = keyId(data.key);
+      hay[i] = String(data.search || "");
+      if (cards.has(i)) cards.set(i, refill(cards.get(i), makeCard(data)));  // else drawn when shown
+    } else {
+      arrived.set(Number(data.id), data);  // counted, and shown under the form until the next load
+    }
+    const spot = spots.get(Number(view.id));
+    if (spot) spots.set(Number(view.id), refill(spot, makeCard(data)));
+    summarize();
+    tallyChips();  // the grid itself stays as it is: a card the filter now hides goes at the next search
+  };
+  const songOf = (view) => (view.songId === null || view.songId === undefined ? null : Number(view.songId));
+  const apply = (view) => {
+    const id = Number(view.id);
+    views.set(id, view);
+    const song = songOf(view);
+    if (song !== null) {
+      if (!songJob.has(song) || songJob.get(song) <= id) songJob.set(song, id);
+      if (!isActive(view)) busy.delete(song);
+    }
+    if (!isActive(view) && !settled.has(id) && (view.card || song === null)) {
+      settled.add(id);
+      redraw(view);
+    }
+    paint(view);
+  };
+  // The job's line on the cards that show it, and in the list of requests.
+  const paint = (view) => {
+    const id = Number(view.id);
+    const song = songOf(view);
+    const i = song !== null && songJob.get(song) === id ? byIndex.get(song) : undefined;
+    for (const card of [i === undefined ? null : cards.get(i), spots.get(id)]) {
+      if (!card) continue;
+      const p = progressIn(card);
+      showLine(p, view);
+      const button = card.querySelector("form.fetch");
+      if (button && isActive(view)) {
+        if (button.contains(document.activeElement)) focusOn(p);  // the line takes the button's place
+        button.remove();
+      }
+    }
+    trayShow(view);
+  };
+  const requestsCount = (n) => {
+    const nav = document.querySelector('.navlink[href="/jobs"]');
+    if (!nav) return;
+    let badge = nav.querySelector(".n");
+    if (!n) {
+      if (badge) badge.remove();
+      return;
+    }
+    if (!badge) {
+      badge = el("span", "n");
+      nav.appendChild(badge);
+    }
+    badge.textContent = String(n);
+  };
+
+  let timer = 0;
+  let misses = 0;
+  let stopped = false;
+  const pending = () => Array.from(watched).filter((id) => !settled.has(id));
+  const schedule = (delay) => {
+    if (timer || stopped || !pending().length) return;
+    timer = setTimeout(poll, delay !== undefined ? delay : document.hidden ? BACKGROUND_POLL : POLL);
+  };
+  // The server can't answer this page any more (it restarted, or signs in again): say so on each line.
+  const stop = (text) => {
+    stopped = true;
+    for (const id of pending()) apply(Object.assign({}, views.get(id), { line: { tone: "failed", text } }));
+  };
+  const poll = () => {
+    timer = 0;
+    const ask = pending();
+    fetch("jobs.json?jobs=" + ask.join(","), {
+      credentials: "same-origin", cache: "no-store",
+      headers: { Accept: "application/json", "X-Caracole-Form-Token": String(server.csrf || "") },
+    }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
+      .then((answer) => {
+        if (answer.status === 401 || answer.status === 403) {
+          stop(failure(answer).line.text);
+          return;
+        }
+        if (!answer.ok || !answer.body) {
+          const e = new Error(String(answer.status));
+          e.said = answer.body && typeof answer.body.error === "string" ? answer.body.error : "";
+          throw e;
+        }
+        misses = 0;
+        requestsCount(Number(answer.body.active) || 0);
+        const seen = new Set();
+        for (const view of listOf(answer.body.jobs)) {
+          if (!view || typeof view !== "object" || !watched.has(Number(view.id))) continue;
+          seen.add(Number(view.id));
+          apply(view);
+        }
+        for (const id of ask) if (!seen.has(id)) settled.add(id);  // forgotten: the server keeps the last few
+        schedule();
+      })
+      .catch((e) => {
+        // The server is restarting, or the network is down: ask again, less and less often. From the third
+        // miss in a row the lines say so, until an answer gives them back.
+        misses += 1;
+        if (misses >= MISSES) {
+          const text = e && e.said ? String(e.said) + " Trying again…" : UNREACHABLE_NOW;
+          for (const id of pending()) paint(Object.assign({}, views.get(id), { line: { tone: "waiting", text } }));
+        }
+        schedule(Math.min(POLL * 2 ** misses, 30000));
+      });
+  };
+  track = (view) => {
+    watched.add(Number(view.id));
+    trayClosed = false;
+    apply(view);
+    schedule();
+  };
+
+  if (server) {
+    const requested = byId("requested");
+    const requestedGrid = byId("requested-grid");
+    const placeholder = (artist, title) => {
+      const card = el("article", "card pending");
+      const head = el("div", "head");
+      const mono = el("span", "mono", (artist.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase());
+      mono.setAttribute("aria-hidden", "true");
+      head.appendChild(mono);
+      const names = el("div", "names");
+      names.appendChild(el("h2", null, title));
+      names.appendChild(el("p", "by", artist));
+      head.appendChild(names);
+      card.appendChild(head);
+      showLine(progressIn(card), { line: { tone: "queued", text: "Sending…" } });
+      return card;
+    };
+    for (const view of listOf(server.jobs)) {
+      if (!view || typeof view !== "object") continue;
+      watched.add(Number(view.id));
+      const song = songOf(view);
+      if (requestedGrid && isActive(view) && (song === null || !byIndex.has(song))) {
+        // A song new to the library, on its way since before this page loaded: its card under the form.
+        const [artist, ...title] = String(view.display || "").split(" - ");
+        const spot = title.length ? placeholder(artist, title.join(" - ")) : placeholder("", artist);
+        requestedGrid.appendChild(spot);  // newest first, as they come
+        requested.hidden = false;
+        spots.set(Number(view.id), spot);
+      }
+      apply(view);
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && timer) {
+        clearTimeout(timer);
+        timer = 0;
+        poll();
+      }
+    });
+    if (tray) {
+      if (!window.matchMedia("(min-width: 720px)").matches) {  // on a phone the cards say it: folded
+        trayToggle.setAttribute("aria-expanded", "false");
+        trayList.hidden = true;
+      }
+      trayToggle.addEventListener("click", () => {
+        const open = trayToggle.getAttribute("aria-expanded") !== "true";
+        trayToggle.setAttribute("aria-expanded", String(open));
+        trayList.hidden = !open;
+      });
+      byId("tray-close").addEventListener("click", () => {
+        for (const [id, item] of trayItems) {
+          if (!isActive(views.get(id) || {})) {
+            item.remove();
+            trayItems.delete(id);
+          }
+        }
+        trayClosed = true;
+        tray.hidden = true;
+        document.body.classList.remove("with-tray");
+      });
+    }
+    // The request form: a card for the song at once, above the grid, which says how its request goes.
+    const requestForm = document.querySelector("form.request-form");
+    const refused = new Set();  // the cards of requests the server refused, gone at the next one
+    // The card #requested shows already for the job's song (or, before the song is in the library, for the
+    // same "Artist - Title"), if any: asked for again, it is the one that says how this request goes.
+    const spotOf = (view) => {
+      const song = songOf(view);
+      for (const [id, card] of spots) {
+        const was = views.get(id);
+        if (!was || !card.isConnected || !requestedGrid.contains(card)) continue;
+        const same = song !== null && songOf(was) !== null ? songOf(was) === song : was.display === view.display;
+        if (same) return [id, card];
+      }
+      return null;
+    };
+    if (requestForm && requested) {
+      requestForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        for (const card of refused) card.remove();
+        refused.clear();
+        const field = (name) => requestForm.elements.namedItem(name);
+        const typed = (name) => String(field(name).value || "").trim().replace(/\s+/g, " ");
+        let spot = placeholder(typed("artist"), typed("title"));
+        requestedGrid.prepend(spot);
+        requested.hidden = false;
+        const button = requestForm.querySelector('button[type="submit"]');
+        button.disabled = true;
+        send(requestForm).then((answer) => {
+          button.disabled = false;
+          const view = answer.ok && answer.body && answer.body.job;
+          if (!view) {
+            showLine(progressIn(spot), failure(answer));
+            refused.add(spot);
+            return;
+          }
+          for (const name of ["artist", "title", "album", "duration"]) field(name).value = "";
+          const id = Number(view.id);
+          const shown = spots.has(id) ? [id, spots.get(id)] : spotOf(view);
+          if (shown) {  // asked for again: its card says how it goes, where it is, its line still in the page
+            spot.remove();
+            spot = shown[1];
+            if (shown[0] !== id) spots.delete(shown[0]);
+          } else {
+            const i = songOf(view) === null ? undefined : byIndex.get(songOf(view));
+            if (i !== undefined) spot = refill(spot, makeCard(songs[i]));  // a song the library has: its card
+          }
+          spots.set(id, spot);
+          track(view);
+        }, () => {
+          button.disabled = false;
+          showLine(progressIn(spot), UNREACHABLE);
+          refused.add(spot);
+        });
+      });
+    }
+    schedule();
+  }
   summarize();
   render();
 })();
@@ -1167,6 +1612,19 @@ _REQUEST = """<details class="request">
       come with the nightly run.</p>
   </form>
 </details>
+<section class="requested" id="requested" aria-label="Songs you just requested" hidden>
+  <p class="subhead">Just requested</p>
+  <div class="grid" id="requested-grid"></div>
+</section>
+<aside class="tray" id="tray" aria-label="Your requests" hidden>
+  <div class="tray-head">
+    <button type="button" class="tray-toggle" id="tray-toggle" aria-expanded="true" aria-controls="tray-list"><span
+      id="tray-sum">Requests</span></button>
+    <a class="tray-all" href="jobs">Details</a>
+    <button type="button" class="tray-close" id="tray-close" aria-label="Close this list">×</button>
+  </div>
+  <ol class="tray-list" id="tray-list"></ol>
+</aside>
 """
 
 
