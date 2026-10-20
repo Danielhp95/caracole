@@ -475,6 +475,6 @@ under root. Tests that need a program or a file skip without it:
 | `chordpro` on PATH | the real PDFs (marked `chordpro`): in test_render.py and test_render_all.py, two in test_chordpro.py |
 | `CARACOLE_CJK_FONT` | the two Chinese PDFs |
 | torch, librosa and beat_this, or `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` | the model tests (marked `autochords`) |
-| `ffmpeg`, `chromium` | one `.m4a` test, two `index.html` tests in a browser |
+| `ffmpeg`, `chromium` | one `.m4a` test; the `index.html` and `sheet.html` tests in a browser |
 
 [AGENTS.md](../AGENTS.md#development) lists every such test and variable.
