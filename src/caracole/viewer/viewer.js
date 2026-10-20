@@ -130,7 +130,8 @@
     if (rep[2] !== null) note = (note ? note + " " : "") + "Play " + n[mod12(rep[2] + s)] + " in the bass.";
     return { list, note };
   };
-  const diagram = (position, title) => {
+  // A position as a diagram; the strip's (bare) leave the fingers out, too small to read there.
+  const diagram = (position, title, bare) => {
     const frets = String(position[0]);
     const fingers = String(position[1]);
     const first = Number(position[2]) || 1;
@@ -164,7 +165,7 @@
       } else {
         const y = top + (Number(f) - 0.5) * row;
         svg("circle", { class: "dg-dot", cx: x, cy: y, r: 4.2 }, root);
-        if (fingers[s] && fingers[s] !== "0") {
+        if (!bare && fingers[s] && fingers[s] !== "0") {
           svg("text", { class: "dg-finger", x: x, y: y + 0.3 }, root).textContent = fingers[s];
         }
       }
@@ -340,7 +341,7 @@
       const b = document.createElement("button");
       b.type = "button";
       const name = label(String(i), rep);
-      if (shapes.list.length) b.appendChild(diagram(shapes.list[0], name));
+      if (shapes.list.length) b.appendChild(diagram(shapes.list[0], name, true));
       b.appendChild(document.createTextNode(name));
       b.addEventListener("click", () => openCard(String(i)));
       strip.appendChild(b);

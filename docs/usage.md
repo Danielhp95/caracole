@@ -1585,8 +1585,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Phrygian, Lydian, Mixolydian, Locrian). Each chord's notes move to the same
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
   the key, such as the G major chord's B in C minor, stays where it is.
-- Text size, every chord's shape in a strip above the song, and scrolling by
-  itself (with the screen kept on, where the browser allows it).
+- Text size, every chord's shape in a strip above the song (the shapes alone,
+  large enough to read at a glance: tap one for its card, with the fingers),
+  and scrolling by itself (with the screen kept on, where the browser allows
+  it).
 
 The viewer remembers its settings for each song in the browser. It keeps the
 transposition, the mode and the capo in its address too

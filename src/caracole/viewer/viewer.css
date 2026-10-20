@@ -92,13 +92,13 @@ a { color: inherit; }
   font: .78em/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .gap { height: .65em; }
 
-/* Every chord's shape at a glance. */
+/* Every chord's shape at a glance: large enough to read, without the fingers (the card has them). */
 .strip { display: flex; gap: 6px; margin: 14px -16px 0; padding: 4px 16px 6px; overflow-x: auto;
   scrollbar-width: thin; }
 .strip button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 4px 2px;
   border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: .82rem;
   font-weight: 700; cursor: pointer; }
-.strip svg { width: 58px; height: auto; }
+.strip svg { width: 76px; height: auto; }
 
 .foot { margin-top: 32px; color: var(--muted); font-size: .8rem; }
 .foot p { margin: 6px 0 0; }
