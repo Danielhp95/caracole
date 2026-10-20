@@ -6,7 +6,9 @@ from caracole.config import MatchPolicy
 from caracole.match import IndexTitle, IndexView, MatchCandidate, MatchResult, match_all, match_song
 from caracole.overrides import Overrides
 from caracole.songs import get_song, update_song
-from caracole.ug.index import mark_built
+from caracole.normalize import compact
+from caracole.ug.index import mark_built, upsert_rows
+from caracole.ug.sitemap import IndexRow, classify_tab_url
 from caracole.versions import picks, set_picks, song_versions, upsert_version
 
 from conftest import add_song
@@ -77,6 +79,32 @@ def test_index_view_reads_artists_from_the_index_until_a_step_needs_them_all(con
     assert view.artist_keys()[:2] == ["a-c-d-c", "abba"]
     assert [view.compact_artists(k) for k in ARTIST_KEYS] == compacts
     assert [view.has_artist(k) for k in ("x", "x-y", "acd", "nobody")] == known
+
+
+# Slugs as UG may write them: hyphens leading, trailing or doubled, fullwidth (U+FF0D) or small
+# (U+FE63), which NFKD makes hyphens, and Chinese letters on both sides of one.
+AWKWARD_SLUGS = ("--x--y-z-", "x\uff0dyz", "xy\ufe63\ufe63z", "x\ufe63y\uff0dz-", "-xyz-", "\u5b8b-\u51ac\u91ce-",
+                 "-\u5b8b\uff0d\u51ac\u91ce", "song--\u51ac-\u91ce-x-")
+
+
+def test_the_index_keeps_no_stray_hyphen_so_compact_artists_ranges_find_every_key(conn):
+    # compact_artists asks the index for the keys that start acd, ac-d, a-cd or a-c-d, which finds
+    # every key reading "acdc" only while none starts or ends with a hyphen or holds two in a row.
+    # The index's one writer stores the keys of the sitemaps' tab URLs (ug_slug_key), whatever
+    # hyphens UG's slugs hold.
+    rows = [classify_tab_url(f"https://tabs.ultimate-guitar.com/tab/{slug}/{slug}-chords-{i}")
+            for i, slug in enumerate(AWKWARD_SLUGS, 1)]
+    assert all(isinstance(r, IndexRow) for r in rows)
+    upsert_rows(conn, rows, "1", datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+    keys = {r[0] for r in conn.execute("SELECT artist_key FROM ug_index UNION SELECT song_key FROM ug_index")}
+    assert keys == {"x-y-z", "x-yz", "xy-z", "xyz", "\u5b8b\u51ac\u91ce", "song-\u51ac\u91ce-x"}
+    assert all(k == k.strip("-") and "--" not in k for k in keys)
+    view = IndexView(conn)
+    ranged = {k: view.compact_artists(compact(k)) for k in sorted(keys)}
+    view.artist_keys()
+    assert {k: view.compact_artists(compact(k)) for k in sorted(keys)} == ranged
+    assert ranged["xyz"] == ("x-y-z", "x-yz", "xy-z", "xyz")
+    assert ranged["song-\u51ac\u91ce-x"] == ("song-\u51ac\u91ce-x",)
 
 
 def test_an_exact_match_never_loads_every_artist_key(conn):
