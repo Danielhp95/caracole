@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+from helpers.zips import dated_entry
 
 from caracole.config import ProviderPolicy
 from caracole.http import PoliteClient
@@ -50,8 +51,8 @@ def gp7_file(score: bool = True) -> bytes:
     """A Guitar Pro 7 file: a zip holding Content/score.gpif (or, ``score=False``, some other zip)."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("VERSION", "7.0")
-        z.writestr("Content/score.gpif" if score else "Content/notes.txt", FILLER.decode())
+        z.writestr(dated_entry(z, "VERSION"), "7.0")
+        z.writestr(dated_entry(z, "Content/score.gpif" if score else "Content/notes.txt"), FILLER.decode())
     return buf.getvalue()
 
 

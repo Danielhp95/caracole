@@ -135,6 +135,9 @@ Traps:
   unit setting changes together with its expectation in nix/module-check.nix.
 - `ruff check --select E4,E7,E9,F src tests` is clean; ruff's default rules and
   `ruff format --check` are not. Don't reformat code you aren't changing.
+- Every pytest-xdist worker collects the suite itself and must find the same test ids:
+  parametrize with nothing that changes between processes, such as a zip's clock-dated entries
+  (helpers/zips.py `dated_entry`), random values or a set's order.
 
 ## How work is done here
 
