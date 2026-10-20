@@ -1380,6 +1380,43 @@ def test_render_command_renders_one_song_with_song(conn, cfg, fake_chordpro):
     assert unknown.exit_code == 1 and 'No song "Soda Stereo - Zoom" in the library' in unknown.output
 
 
+@pytest.mark.slow
+def test_render_command_with_song_counts_no_songbook_that_fails(conn, cfg, fake_chordpro):
+    # A synced device's folder where a songbook's PDF goes: that songbook fails at every render.
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    other = add_song(conn, "Soda Stereo", "Signos")
+    human_sheet(conn, cfg, other, tab_id=3)
+    (cfg.library_dir / "songbooks.toml").write_text('["Rock"]\nsongs = ["Soda Stereo - Signos"]\n',
+                                                     encoding="utf-8")
+    (cfg.library_dir / "_songbooks" / "Rock" / "songbook.pdf").mkdir(parents=True)
+    night = caracole_render(cfg, fake_chordpro)
+    assert night.exit_code == 1 and "Songbooks: 0 rendered, 0 up to date, 1 failed" in night.output
+
+    result = caracole_render(cfg, fake_chordpro, "--song", good.display)
+
+    assert result.exit_code == 0, result.output
+    assert "0 rendered, 1 up to date, 0 failed" in result.output
+    assert "Songbooks: 0 rendered, 0 up to date, 1 failed" in result.output  # said, but not the song's
+    assert pdf_of(cfg, good).is_file()
+
+
+@pytest.mark.slow
+def test_render_command_with_song_counts_no_songbooks_file_that_cant_be_read(conn, cfg, fake_chordpro):
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    cfg.library_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.library_dir / "songbooks.toml").write_text("[[[not toml\n", encoding="utf-8")
+
+    result = caracole_render(cfg, fake_chordpro, "--song", good.display)
+
+    assert result.exit_code == 0, result.output
+    assert "1 rendered, 0 up to date, 0 failed" in result.output
+    assert "Songbooks: songbooks.toml can't be read" in result.output
+    assert pdf_of(cfg, good).is_file()
+    assert caracole_render(cfg, fake_chordpro).exit_code == 1  # the library's render counts it
+
+
 def test_render_command_forces_one_songs_pdfs_alone(conn, cfg, fake_chordpro, monkeypatch):
     import caracole.render
     import caracole.songbook

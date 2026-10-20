@@ -1069,10 +1069,10 @@ and cache.
   link in its place. So annotate a copy, not `sheet.pdf`. `--force` makes them
   all again (the song's alone, with `--song`). With `--song`, as after a pick
   in `caracole serve`, only that song's failure counts: another sheet that
-  fails, or waits for a font, is not its own, and the to-do page keeps telling
-  of the last render of the library. After an upgrade from a caracole that didn't record what it
-  wrote, or that drew its PDFs another way, the first render makes every PDF
-  once more. The viewer is written again whenever it would change, at every
+  fails, or waits for a font, is not its own, nor is a songbook, and the to-do
+  page keeps telling of the last render of the library. After an upgrade from
+  a caracole that didn't record what it wrote, or that drew its PDFs another
+  way, the first render makes every PDF once more. The viewer is written again whenever it would change, at every
   render. A song that no longer keeps its human sheet (its UG match was
   undone, say) loses the `sheet.cho`, `sheet.pdf` and `sheet.html` made from
   it; one you put where caracole never rendered one stays. A sheet that never
@@ -1092,7 +1092,7 @@ and cache.
   [songbooks](#songbooks)' files that need it, and says how that went on a
   line of its own, `Songbooks: 1 rendered, 2 up to date, 0 failed`, when there
   are songbooks; a songbook that couldn't be made, or a songbooks.toml that
-  can't be read, exits 1 too.
+  can't be read, exits 1 too, but not with `--song`: that line still says so.
 - **`caracole todo`** rewrites `_todo.md` and `index.html` from the database.
 - **`caracole icons`** fetches the icon of each site `index.html` has none for
   yet, now, then rewrites `_todo.md` and `index.html`. It prints a line a site:
@@ -1964,7 +1964,8 @@ with it. A KEY that is no key exits with status 2.
   which says "Writing the answer to overrides.toml…", then how the rest goes
   (below). With Fetch it now ticked,
   as it is by default, a pick then runs `caracole fetch --song` and
-  `caracole render --song`, for that song alone, at the nightly pace; None of these fetches nothing, and caracole goes on
+  `caracole render --song`, for that song alone, at the nightly pace; None of
+  these fetches nothing, and caracole goes on
   looking for the song: if the matcher finds others, the song is back in
   review with those, and its card offers them to pick from, with no Fetch now
   until one is picked. The candidates must still be the ones the page showed

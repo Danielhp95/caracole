@@ -1,9 +1,9 @@
 """``caracole render``: a ChordPro file and a PDF, in your key, for every kept sheet.
 
 ``--song`` renders one song's sheets alone, as the step after a web pick's
-fetch does (web/jobs.py), so another song's failure is not its own. Then it
-rewrites _todo.md, which says when the PDFs were last made and which failed,
-and index.html, which links them.
+fetch does (web/jobs.py), so another song's failure is not its own, and
+neither is a songbook's. Then it rewrites _todo.md, which says when the PDFs
+were last made and which failed, and index.html, which links them.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def register(app: typer.Typer) -> None:
         song's, with --song); then the files of every songbook that needs them (caracole songbook).
 
         Exits 1 when a sheet or a songbook could not be rendered, or songbooks.toml can't be read; a
-        warning says which and why.
+        warning says which and why. With --song, only when that song's sheets could not be.
         """
         from caracole.render import render_all
         from caracole.songbook import render_songbooks
@@ -58,7 +58,7 @@ def register(app: typer.Typer) -> None:
             typer.echo(f"Songbooks: songbooks.toml can't be read: {books.error}")
         elif books.rendered or books.skipped or books.failed:
             typer.echo(f"Songbooks: {songbooks_line(books)}")
-        if stats.failed or books.failed or books.error:
+        if stats.failed or (not song and (books.failed or books.error)):
             raise typer.Exit(1)
 
 
