@@ -84,7 +84,8 @@ and `search --key`).
   defaults `CARACOLE_CJK_FONT`; `withAutochords` adds the extra, the model files and
   `yt-dlp` on PATH), autochords.nix (the model files, fixed-output), module.nix
   (`services.caracole`: units, timer, `caracole-admin`; with auto-chords on, the nightly
-  unit runs the auto-chords package, for its youtube step), module-check.nix
+  unit runs the auto-chords package, for its youtube step, and caracole-web and
+  `caracole-admin` run it too, so their pages agree), module-check.nix
   (`checks.module`).
 - `docs/`: usage.md (configuration, commands, the to-do page, overrides.toml, the library
   folder), deploy.md (the NixOS host), install.md, and the design files above.

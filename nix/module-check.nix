@@ -139,6 +139,13 @@ let
       };
     }
   ];
+  # caracole-web with auto-chords on: it shows the pages the nightly run writes.
+  webAutochords = evalSystem [
+    stubbed
+    configured
+    autochordsOn
+    { services.caracole.web.enable = true; }
+  ];
   # caracole-web on every address, with no access token.
   webOpen = evalSystem [
     stubbed
@@ -323,6 +330,8 @@ let
   webSc = web.serviceConfig;
   webConfigFile = toml.generate "caracole.toml" webDefault.services.caracole.settings;
   tailnetWeb = webTailnet.systemd.services.caracole-web;
+  webAutochordsUnit = webAutochords.systemd.services.caracole-web;
+  webAutochordsConfigFile = toml.generate "caracole.toml" webAutochords.services.caracole.settings;
   findAdmin =
     system: lib.findFirst (p: lib.getName p == "caracole-admin") null system.environment.systemPackages;
   admin = findAdmin nuc;
@@ -445,6 +454,15 @@ let
     "caracole-web.service listens where web.address and web.port say, answering to web.allowedHosts" =
       lib.hasSuffix " serve --address 100.64.0.7 --port 8740 --allow-host nuc.example.ts.net --allow-host nuc"
         tailnetWeb.serviceConfig.ExecStart;
+    # Its pages and the commands it runs (add, match, fetch, render) rewrite _todo.md and index.html,
+    # which say whether caracole takes audio from YouTube (src/caracole/youtube_fetch.py
+    # route_problem): with auto-chords on, they must say it as the nightly run does.
+    "with auto-chords on, caracole-web.service runs the auto-chords package, with the model paths" =
+      webAutochordsUnit.serviceConfig.ExecStart
+      == "${lib.getExe stubAutochords} --config ${webAutochordsConfigFile} serve --address 127.0.0.1 --port 8737"
+      && webAutochordsUnit.environment.CARACOLE_BTC_WEIGHTS == "/models/btc.pt"
+      && webAutochordsUnit.environment.CARACOLE_BEAT_CHECKPOINT == "/models/beat_this.ckpt"
+      && webAutochordsUnit.serviceConfig.MemoryDenyWriteExecute;
     "caracole-web.service is hardened as caracole.service is, MemoryDenyWriteExecute included" =
       hardened webSc && webSc.MemoryDenyWriteExecute && webSc.RestrictNamespaces;
     "caracole-web.service runs as caracole, with a group-writable umask" = sameUser webSc;

@@ -570,7 +570,10 @@ song ([usage.md](usage.md), "caracole serve"). A request runs caracole commands
 in the unit, one at a time and each under caracole's lock, so the unit has the
 nightly run's sandbox, folders and network. Of the credentials it gets
 `web_token` alone: neither the server nor the commands it runs read Spotify or
-ntfy. It starts at boot and restarts when it fails.
+ntfy. It starts at boot and restarts when it fails. With auto-chords on, it
+runs the `autochords` package, as the nightly run does, so the library page and
+the to-do page it rewrites say what the nightly run's say about audio from
+YouTube (section 6); none of its commands runs yt-dlp or imports torch.
 
 On the tailnet, with an access token:
 

@@ -128,8 +128,10 @@ let
   # (src/caracole/youtube_fetch.py) only when it could make chords of it: when
   # it finds auto-chords' packages, its model files and yt-dlp, which the
   # auto-chords package has. So with auto-chords on, the run is that package's,
-  # with the model paths, as caracole-admin is. It never imports torch, and
-  # yt-dlp's deno runs without its JIT, so MemoryDenyWriteExecute stays.
+  # with the model paths, as caracole-admin and caracole-web are: their pages
+  # say whether caracole takes that audio, so they must find what the run
+  # finds. None of them imports torch, and yt-dlp's deno runs without its JIT,
+  # so MemoryDenyWriteExecute stays.
   runPackage = if cfg.autochords.enable then cfg.autochords.package else cfg.package;
   runEnv = cacheEnv // lib.optionalAttrs cfg.autochords.enable modelEnv;
 
@@ -410,7 +412,8 @@ in
           yt-dlp. Its wrapper defaults CARACOLE_BTC_WEIGHTS and
           CARACOLE_BEAT_CHECKPOINT to the model files fetched by
           nix/autochords.nix, so the offline unit needs nothing else. With
-          auto-chords on, the nightly run and caracole-admin run it too.
+          auto-chords on, the nightly run, caracole-web and caracole-admin run
+          it too.
         '';
       };
 
@@ -635,7 +638,9 @@ in
     # caracole commands in this unit, one at a time, each under caracole's lock,
     # so it has the nightly run's folders, network and sandbox. Of the
     # credentials it gets web_token alone: neither the server nor the commands
-    # it runs (add, match, fetch, render) read Spotify or ntfy.
+    # it runs (add, match, fetch, render) read Spotify or ntfy. With auto-chords
+    # on, it runs the nightly run's package (runPackage), and none of those
+    # commands runs yt-dlp.
     systemd.services.caracole-web = lib.mkIf cfg.web.enable {
       description = "caracole web: the library page and song requests";
       wantedBy = [ "multi-user.target" ];
@@ -648,14 +653,14 @@ in
       startLimitIntervalSec = 600;
       startLimitBurst = 30;
       unitConfig.RequiresMountsFor = writable;
-      environment = cacheEnv;
+      environment = runEnv;
       serviceConfig =
         sandbox
         // identity
         // paths
         // {
           Type = "exec";
-          ExecStart = "${lib.getExe cfg.package} --config ${configFile} serve ${webArgs}";
+          ExecStart = "${lib.getExe runPackage} --config ${configFile} serve ${webArgs}";
           LoadCredential = lib.optional (
             cfg.credentials ? web_token
           ) "web_token:${cfg.credentials.web_token}";
