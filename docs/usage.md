@@ -933,9 +933,9 @@ and cache.
   there; its badge stands in, and the site is asked again in a week`, or why it
   asked nothing (turned off, cooling down). Unlike the run's icons step, it
   also tries a site whose last try failed less than a week ago, and YouTube,
-  which has no provider of its own: at most 4 requests, at the usual 10–20 s
-  pace. What a site answered less than a week ago still comes from the cache,
-  so running it again sooner asks that site nothing. A block cools that site
+  with its provider's budget and pace (15–30 s), unless `[providers.youtube]
+  enabled = false` turned it off. What a site answered less than a week ago
+  still comes from the cache, so running it again sooner asks that site nothing. A block cools that site
   down, as any block does, and the others are still asked. A block or an error
   exits 0.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
@@ -1480,8 +1480,8 @@ it, it has none, or it wasn't asked yet) shows a small lettered badge instead:
 UG, LC, LR, GT, MS, YT. A site that gave no icon, or failed, is asked again a
 week later, its answers older than a week asked for once more, so a site that
 puts an icon up later gets it then; a spent budget or a cooldown leaves it for
-the next run. YouTube has no provider of its own, so the nightly run doesn't
-ask it. `caracole icons` asks now (see
+the next run. The nightly run doesn't ask YouTube: its youtube step runs
+yt-dlp, which fetches no icon. `caracole icons` asks now (see
 [One step at a time](#one-step-at-a-time)), and deleting `icons/` in the cache
 folder makes caracole read them again from its cache of the answers, however
 old, with no request.

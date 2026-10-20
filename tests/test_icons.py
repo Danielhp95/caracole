@@ -532,6 +532,15 @@ def test_caracole_icons_says_when_a_site_has_none_and_leaves_one_turned_off_alon
     assert "LRCLIB: no icon there; its badge stands in, and the site is asked again in a week" in result.output
 
 
+def test_caracole_icons_leaves_youtube_alone_once_its_provider_is_turned_off(tmp_path, monkeypatch):
+    # YouTube's provider is yt-dlp's (youtube.py): turned off, caracole asks YouTube for nothing.
+    sites = icon_sites()
+    result = icons_command(tmp_path, monkeypatch, sites, "[providers.youtube]\nenabled = false\n")
+    assert result.exit_code == 0, result.output
+    assert not sites["youtube"].asked and "YouTube: turned off ([providers.youtube] enabled = false)" in result.output
+    assert "Ultimate Guitar: icon fetched" in result.output
+
+
 def test_caracole_icons_answered_from_the_cache_alone_leaves_a_sites_strikes_as_they_are(tmp_path, monkeypatch):
     # Only a site that answered one of this run's requests had a good run (pipeline._record_ok):
     # an answer from the cache must not undo a block's backoff.
