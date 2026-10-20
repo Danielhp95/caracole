@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from caracole.config import Config
+from caracole.config import DEFAULT_PROVIDERS, Config
 from caracole.db import kv_get_json
 from caracole.health import get_state
 from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS, SCORE_KIND
@@ -32,7 +32,7 @@ from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, VIDEO_SHAPE, Overrides
 from caracole.songs import Song, list_removed, list_songs
-from caracole.ug.fetch import artist_is_known, needs_artist_page, pasted_page_problem, songs_to_fetch
+from caracole.ug.fetch import artist_is_known, fetch_due, needs_artist_page, pasted_page_problem
 from caracole.ug.index import index_state
 from caracole.ug.lookup import song_tabs
 from caracole.youtube import Video
@@ -48,11 +48,10 @@ from caracole.youtube_fetch import (
     videos_by_audio,
 )
 
-PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs", "musescore", "youtube")
+PROVIDERS = tuple(DEFAULT_PROVIDERS)
 SCORES_TITLE = "Scores on MuseScore"
 NO_SHEET_TITLE = "No human sheet found yet"  # the buy list, when caracole takes the audio from YouTube
 NOTHING_TITLE = "Nothing on YouTube for these"
-GUITAR_KINDS = ("guitar-pro", "power", "tabs")
 NEW_FILES_FOR = timedelta(days=7)  # how long a file downloaded from gtptabs.com is listed as new
 _MD_SPECIAL = "\\`*_[]<>|"
 _KIND_NAMES = {"guitar-pro": "Guitar Pro", "power": "Power Tab", "tabs": "Tab", "chords": "Chords"}
@@ -64,12 +63,8 @@ def md(s: str) -> str:
     return "".join("\\" + c if c in _MD_SPECIAL else c for c in s)
 
 
-def ug_url(tab_id: int | str) -> str:
-    return f"https://tabs.ultimate-guitar.com/tab/{tab_id}"
-
-
 def search_links(artist: str, title: str) -> dict[str, str]:
-    """Links for things caracole won't do itself: buying, Chordify, Songsterr, YouTube, a UG search."""
+    """Links for things caracole won't do itself: buying, Chordify, Songsterr, YouTube."""
     q = f"{artist} {clean_title(title)}"
     lesson = f"{q} 吉他教学" if has_han(q) else f"{q} guitar lesson"
     return {
@@ -79,7 +74,6 @@ def search_links(artist: str, title: str) -> dict[str, str]:
         "chordify": f"https://chordify.net/search/{quote(q)}",
         "songsterr": f"https://www.songsterr.com/?pattern={quote(q)}",
         "youtube": f"https://www.youtube.com/results?search_query={quote(lesson)}",
-        "ug_search": f"https://www.ultimate-guitar.com/search.php?search_type=title&value={quote(q)}",
     }
 
 
@@ -153,7 +147,7 @@ def _leads_elsewhere(song: Song) -> bool:
     return any(c.get("step") in _LEADS_ELSEWHERE for c in song.match_candidates or [])
 
 
-def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due: set[int]) -> str | None:
+def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime) -> str | None:
     """What to do when no candidate is right, for a review whose candidates all come from steps that
     never accept: other artists' songs of the title (probably covers), and names that aren't quite
     UG's. The index has nothing surer of the song's own artist, and its UG page may (A6)."""
@@ -172,7 +166,7 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
         return (f"{head}. If none is the song you want{spelt}, UG {lists} {artist} only by bare ids: find the "
                 "artist's page, or one of their tab pages (see Artists to find below), and paste its address "
                 "under `[artist_url]`, and caracole looks for the song there.")
-    if song.id in due:
+    if fetch_due(conn, song, overrides, now):
         return (f"{head}. caracole looks for it on {artist}'s UG page in the next run: wait for that before "
                 "you pick one.")
     return (f"{head}. caracole didn't find it on {artist}'s UG page either. Pick one only if it is the "
@@ -221,13 +215,13 @@ def _alias_line(artist: str, akey: str, overrides: Overrides) -> list[str]:
     return [f"{_toml_str(artist)} = [{listed}]  # in place of the artist's line under [alias]"]
 
 
-def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, due: set[int]) -> list[str]:
+def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, now: datetime) -> list[str]:
     items: list[str] = []
     for s in songs:
         if not s.review or s.status == "ignored":
             continue
         items += [f"### {md(s.display)}", ""]
-        note = _covers_note(conn, s, overrides, due)
+        note = _covers_note(conn, s, overrides, now)
         if note:
             items += [note, ""]
         refs: list[str] = []
@@ -342,7 +336,6 @@ def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrid
     and, for a song not found, the index is complete. Songs not matched yet,
     reviews and songs whose audio you have are neither.
     """
-    due = {s.id for s in songs_to_fetch(conn, overrides, now)}
     partial = index_state(conn) == "partial"
     buy, waiting = [], 0
     for s in songs:
@@ -351,7 +344,7 @@ def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrid
         if s.match_decision not in ("accept", "pinned", "not_found"):
             continue
         unfetched = s.match_decision != "not_found" and not s.ug_checked_at
-        if s.id in due or unfetched or _lacuerda_due(s):
+        if unfetched or fetch_due(conn, s, overrides, now) or _lacuerda_due(s):
             waiting += 1
         elif not (partial and s.match_decision == "not_found"):  # see _setup
             buy.append(s)
@@ -834,7 +827,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     if setup:
         out += _section("Setup problems", setup)
 
-    review = _review(conn, songs, overrides, {s.id for s in songs_to_fetch(conn, overrides, now)})
+    review = _review(conn, songs, overrides, now)
     if review:
         # The count is of songs, not lines, so the header is built here rather than by _section.
         out += [f"## Review ({sum(1 for s in songs if s.review and s.status != 'ignored')})", "",

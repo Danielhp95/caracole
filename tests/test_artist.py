@@ -16,7 +16,7 @@ def soda_page():
 
 def test_artist_identity():
     page = soda_page()
-    assert (page.artist_id, page.name, page.url) == (2946, "Soda Stereo", SODA)
+    assert (page.artist_id, page.name) == (2946, "Soda Stereo")
 
 
 def test_typed_tabs_in_order_and_pro_links_skipped():
@@ -84,74 +84,39 @@ def test_pagination():
     assert (page.page, page.pages) == (1, 6)
 
 
-def test_filters_map_kinds_to_absolute_urls():
-    assert soda_page().filters == {
-        "chords": SODA + "?filter=chords",
-        "tabs": SODA + "?filter=tabs",
-        "guitar-pro": SODA + "?filter=guitar_pro",
-        "power": SODA + "?filter=power",
-    }
+def test_filters_name_the_kinds_ug_offers_a_list_of():
+    # The fixture's bar also offers official, bass, drums, video and ukulele lists,
+    # none a kind caracole reads.
+    assert soda_page().filters == {"chords", "tabs", "guitar-pro", "power"}
 
 
-def test_relative_links_resolve_against_the_page_url():
-    html = (FIXTURES / "artist.html").read_text(encoding="utf-8")
-    page = parse_artist_page(
-        html, url="https://www.ultimate-guitar.test/artist/soda_stereo_2946?page=2"
-    )
-    assert (
-        page.filters["chords"]
-        == "https://www.ultimate-guitar.test/artist/soda_stereo_2946?filter=chords"
-    )
+def test_absolute_filter_links_name_kinds_as_relative_ones_do():
+    types = [
+        {"name": "Chords", "url": SODA + "?filter=chords"},
+        {"name": "Power", "url": "/artist/soda_stereo_2946?filter=power&page=2"},
+        {"name": "Bass", "url": SODA + "?filter=bass"},
+        {"name": "All", "url": SODA},
+    ]
+    data = {"artist": {"id": 2946, "name": "Soda Stereo"}, "other_tabs": []}
+    data["filters"] = {"types": types}
+    assert parse_artist_page(store_page_html(data)).filters == {"chords", "power"}
 
 
-def test_url_follows_the_path_of_ugs_own_links():
-    data = {
-        "artist": {"id": 3, "name": "X", "name_stripped": "x"},
-        "other_tabs": [],
-        "pagination": {"pages": [{"page": 1, "url": "/artist/renamed_3"}], "current": 1},
-    }
-    page = parse_artist_page(
-        store_page_html(data), url="https://www.ultimate-guitar.com/artist/x_3?filter=tabs"
-    )
-    assert page.url == "https://www.ultimate-guitar.com/artist/renamed_3"
-
-
-def test_url_from_page_url_when_page_has_no_links():
-    data = {"artist": {"id": 3, "name": "X"}, "other_tabs": []}
-    page = parse_artist_page(
-        store_page_html(data), url="https://www.ultimate-guitar.com/artist/x_3?filter=tabs"
-    )
-    assert page.url == "https://www.ultimate-guitar.com/artist/x_3"
-
-
-def test_url_from_name_and_id_without_links_or_page_url():
-    data = {"artist": {"id": 3, "name": "X", "name_stripped": "x"}, "other_tabs": []}
-    assert (
-        parse_artist_page(store_page_html(data)).url == "https://www.ultimate-guitar.com/artist/x_3"
-    )
-
-
-@pytest.mark.parametrize("stripped", [{"name_stripped": ""}, {}])
-def test_url_from_the_id_alone_without_a_stripped_name(stripped):
-    # UG addresses some artists by their number alone (/artist/634073), never as /artist/_634073.
-    data = {"artist": {"id": 634073, "name": "Song Dongye (宋冬野)", **stripped}, "other_tabs": []}
-    assert parse_artist_page(store_page_html(data)).url == "https://www.ultimate-guitar.com/artist/634073"
-
-
-def test_an_artist_page_addressed_by_its_number_alone():
-    # 宋冬野's page, as read live on 2026-10-19: UG's own links are bare /artist/634073 ones.
+def test_a_page_with_bare_number_links_and_no_stripped_name_still_parses():
+    # 宋冬野's page, as read live on 2026-10-19: an empty name_stripped, and every link on it a
+    # bare /artist/634073 one. The kinds its filter bar offers come from those links' queries.
     tabs = [version_dict(4180894, song="斑马 斑马 Banma Banma Zebra Zebra", artist="Song Dongye (宋冬野)")]
     html = make_artist_page_html(634073, "Song Dongye (宋冬野)", tabs, path="/artist/634073", stripped="")
     page = parse_artist_page(html, url="https://www.ultimate-guitar.com/artist/634073?filter=chords")
-    base = "https://www.ultimate-guitar.com/artist/634073"
-    assert (page.artist_id, page.name, page.url, page.pages) == (634073, "Song Dongye (宋冬野)", base, 1)
-    assert page.filters == {"chords": base + "?filter=chords"}
+    assert (page.artist_id, page.name, page.pages) == (634073, "Song Dongye (宋冬野)", 1)
+    assert page.filters == {"chords"}
 
 
 def test_single_page_without_pagination():
     data = {"artist": {"id": 3, "name": "X", "name_stripped": "x"}, "other_tabs": [version_dict(1)]}
     page = parse_artist_page(store_page_html(data))
-    assert (page.page, page.pages, page.filters, [t.tab_id for t in page.tabs]) == (1, 1, {}, [1])
+    assert (page.page, page.pages, [t.tab_id for t in page.tabs]) == (1, 1, [1])
+    assert page.filters == frozenset()
 
 
 def test_helper_artist_page_round_trip():
@@ -161,16 +126,12 @@ def test_helper_artist_page_round_trip():
         version_dict(2, type="Pro", part="intro", song="安和桥", artist="宋冬野"),
     ]
     page = parse_artist_page(make_artist_page_html(5, "宋冬野", tabs, page=2, pages=3))
-    base = "https://www.ultimate-guitar.com/artist/宋冬野_5"
-    assert (page.artist_id, page.name, page.url, page.page, page.pages) == (5, "宋冬野", base, 2, 3)
+    assert (page.artist_id, page.name, page.page, page.pages) == (5, "宋冬野", 2, 3)
     assert [(t.tab_id, t.song_name, t.kind, t.label) for t in page.tabs] == [
         (1, "斑马斑马", "chords", None),
         (2, "安和桥", "guitar-pro", "intro"),
     ]
-    assert page.filters == {
-        "chords": base + "?filter=chords",
-        "guitar-pro": base + "?filter=guitar_pro",
-    }
+    assert page.filters == {"chords", "guitar-pro"}
 
 
 def test_missing_store_is_parse_error():
