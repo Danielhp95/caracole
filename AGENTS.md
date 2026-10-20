@@ -316,16 +316,16 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
   that won't parse (`PageParseError`, `GtpTabsParseError`, `LaCuerdaParseError`,
   `LrclibParseError`) never makes a song not found, its lyrics missing or its Guitar Pro
-  file a miss: the song waits for the next run
-  (http.py, pipeline.py, ug/fetch.py, lyrics.py, gtptabs_fetch.py;
-  `test_pipeline.py::test_ug_block_cools_down_and_never_marks_not_found`,
+  file a miss: the song waits for the next run (http.py, pipeline.py, ug/fetch.py, lyrics.py,
+  gtptabs_fetch.py; `test_pipeline.py::test_ug_block_cools_down_and_never_marks_not_found`,
   `test_fetch.py::test_parse_error_is_not_a_miss`,
   `test_gtptabs_fetch.py::test_a_spent_budget_is_no_miss`). A cached answer that won't
-  parse is asked for once more, past the cache, before it is an error, so a bad night isn't
-  replayed every night after: `http.read_once_more` for LRCLIB, LaCuerda and gtptabs.com,
-  ug/fetch.py's `_get_page` for UG
+  parse is asked for once more, past the cache, before it is an error, so a bad night
+  isn't replayed every night after: `http.read_once_more` for LRCLIB, LaCuerda and
+  gtptabs.com, ug/fetch.py's `_get_page` for UG
   (`test_lyrics_pending.py::test_a_cached_answer_that_isnt_json_is_asked_for_once_more`).
-  On gtptabs.com only an artist page that answered without a candidate is a miss, asked about again after 30 days; on
+  On gtptabs.com only an artist page that answered without a candidate is a miss, asked
+  about again after 30 days; on
   YouTube only a search that answered without a video that fits (youtube_fetch.py,
   `test_youtube_fetch.py::test_an_error_is_no_miss_and_the_song_waits_for_the_next_run`); of
   LaCuerda's listings only a page that answers 404 loses its artists, never one that errs or
