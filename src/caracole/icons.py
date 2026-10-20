@@ -27,8 +27,10 @@ Fetching is a request like any other: through the provider's ``PoliteClient`` (r
 budget, pause, every 200 and 404 cached forever), never while it cools down. A site is
 asked for ``/favicon.ico`` first (where every source's was, by hand, on 2026-10-19), then,
 when that gives no icon, its home page, for a ``<link rel="icon">`` or an
-``apple-touch-icon`` on the same site. A site that gave no icon is asked again after
-``RETRY`` only; what it answered before comes from the cache.
+``apple-touch-icon`` on the same site. A site that gave no icon, or failed, is left alone
+for ``RETRY``; then its answers older than that are asked for again (``_look``), so a site
+that puts an icon up later gets it within a week or so, and no URL is asked twice a week.
+An icon the cache holds is read again from it, however old, without a request.
 """
 
 from __future__ import annotations
@@ -418,8 +420,9 @@ def fetch_icons(conn: sqlite3.Connection, cache_dir: Path, clients: Mapping[str,
     has nothing from is never asked). A source with no client waits, and so does one whose
     budget is spent: nothing marks it, so the next run asks. Any other end without an icon
     (none there, an error) is noted in kv ``icon:asked:<source>``, and the site is left alone
-    for ``wait`` (None: ask now). A block raises, as any block does: the caller cools the
-    provider down.
+    for ``wait`` (None: ask now). Either way what a site answered less than ``RETRY`` ago
+    comes from the cache (``_look``): asking now retries an error, not an answer. A block
+    raises, as any block does: the caller cools the provider down.
     """
     from caracole.db import kv_delete, kv_get, kv_set
     from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
@@ -474,40 +477,49 @@ CANDIDATES = 2  # icon links of a home page tried at most
 
 
 def _look(client: Client, source: Source) -> bytes | None:
-    """The site's icon: its favicon, else the first of its home page's icon links that is one, of
-    those robots.txt leaves open."""
+    """The site's icon: what the cache holds first, however old, and what it doesn't asked for;
+    then, when that gives none, the same again with the answers older than ``RETRY`` asked for
+    once more. So an icon kept is read again for free, and a miss is asked again a week on,
+    never sooner: at most one request a URL a week."""
+    icon = _find(client, source, None)
+    return icon if icon is not None else _find(client, source, RETRY)
+
+
+def _find(client: Client, source: Source, max_age: timedelta | None) -> bytes | None:
+    """The site's favicon, else the first of its home page's icon links that is one, of those
+    robots.txt leaves open; a cached answer older than ``max_age`` is asked for again."""
     from caracole.http import robots_disallows
 
     assert source.icon is not None and source.site is not None
-    icon = _icon_at(client, source.icon)
+    icon = _icon_at(client, source.icon, max_age)
     if icon is not None:
         return icon
-    home = _page(client, source.site)
+    home = _page(client, source.site, max_age)
     if home is None:
         return None
     links = [u for u in _icon_links(home, source.site) if u != source.icon and robots_disallows(u) is None]
     for url in links[:CANDIDATES]:
-        icon = _icon_at(client, url)
+        icon = _icon_at(client, url, max_age)
         if icon is not None:
             return icon
     return None
 
 
-def _page(client: Client, url: str) -> bytes | None:
+def _page(client: Client, url: str, max_age: timedelta | None) -> bytes | None:
     """The body of a 200 for ``url``, or None for a 404 or a URL robots.txt closes (never asked)."""
     from caracole.http import RobotsClosed, robots_disallows
 
     if robots_disallows(url) is not None:
         return None
     try:
-        resp = client.get(url, accept=(200, 404))
+        resp = client.get(url, accept=(200, 404), max_age=max_age)
     except RobotsClosed:  # a redirect to a closed URL
         return None
     return resp.content if resp.status == 200 else None
 
 
-def _icon_at(client: Client, url: str) -> bytes | None:
-    body = _page(client, url)
+def _icon_at(client: Client, url: str, max_age: timedelta | None) -> bytes | None:
+    body = _page(client, url, max_age)
     return sanitize(body) if body is not None else None
 
 

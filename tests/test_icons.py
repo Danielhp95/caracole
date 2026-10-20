@@ -238,14 +238,15 @@ class Site:
         status, body = self.pages.get(target, (404, b"not here"))
         return httpx.Response(status, content=body)
 
-    def client(self, cache_dir: Path) -> PoliteClient:
+    def client(self, cache_dir: Path, now: datetime | None = None) -> PoliteClient:
+        """A client whose clock (what its cache's answers are dated by) says ``now``, else the time."""
         return PoliteClient(self.provider, ProviderPolicy(budget=self.budget, delay=(0.0, 0.0)), cache_dir,
                             user_agent="caracole-test", transport=httpx.MockTransport(self.handler),
-                            sleep=lambda s: None)
+                            sleep=lambda s: None, wall_clock=lambda: now or datetime.now(UTC))
 
 
 def fetch(conn, cache, *sites, now=NOW, **kw):
-    return icons.fetch_icons(conn, cache, {s.provider: s.client(cache) for s in sites}, now, **kw)
+    return icons.fetch_icons(conn, cache, {s.provider: s.client(cache, now) for s in sites}, now, **kw)
 
 
 def test_a_sites_favicon_is_asked_for_once_and_kept(conn, tmp_path):
@@ -301,7 +302,28 @@ def test_a_site_with_no_icon_gets_its_badge_and_is_asked_again_only_after_a_week
     fetch(conn, tmp_path, site, now=NOW + timedelta(days=6))
     assert len(site.asked) == 2  # left alone
     later = fetch(conn, tmp_path, site, now=NOW + timedelta(days=8))
-    assert later.missing == ["lrclib"] and len(site.asked) == 2  # asked again, from the cache: no request
+    assert later.missing == ["lrclib"] and len(site.asked) == 4  # asked again: its answers are a week old
+
+
+def test_a_site_that_puts_an_icon_up_later_gets_it_at_the_next_weeks_try(conn, tmp_path):
+    site = Site("lacuerda", {"/": (200, b"<html><head><title>no icon</title></head></html>")})
+    assert fetch(conn, tmp_path, site).missing == ["lacuerda"]
+    site.pages["/favicon.ico"] = (200, ico((32, bmp_image(32))))
+    # Asked now, as caracole icons asks: what the site answered less than a week ago stands.
+    assert fetch(conn, tmp_path, site, now=NOW + timedelta(days=2), wait=None).missing == ["lacuerda"]
+    assert len(site.asked) == 2
+    later = fetch(conn, tmp_path, site, now=NOW + timedelta(days=9))
+    assert later.fetched == ["lacuerda"] and site.asked[2:] == ["acordes.lacuerda.net/favicon.ico"]
+    assert icons.icon_uri(tmp_path, "lacuerda") is not None
+
+
+def test_an_icon_kept_in_the_cache_is_read_again_from_it_however_old(conn, tmp_path):
+    # Deleting cache_dir/icons/ makes caracole read the icons again from the answers it keeps.
+    ug = Site("ug", {"/favicon.ico": (200, png(32))})
+    assert fetch(conn, tmp_path, ug).fetched == ["ug"]
+    (tmp_path / "icons" / "ug.png").unlink()
+    assert fetch(conn, tmp_path, ug, now=NOW + timedelta(days=60)).fetched == ["ug"]
+    assert len(ug.asked) == 1
 
 
 def test_a_spent_budget_leaves_the_icon_for_the_next_run_unmarked(conn, tmp_path):
@@ -483,7 +505,7 @@ def test_caracole_icons_says_when_a_site_has_none_and_leaves_one_turned_off_alon
     result = icons_command(tmp_path, monkeypatch, sites, "[providers.gtptabs]\nenabled = false\n")
     assert result.exit_code == 0, result.output
     assert not sites["gtptabs"].asked and "gtptabs.com: turned off" in result.output
-    assert "LRCLIB: no icon there; its badge stands in" in result.output
+    assert "LRCLIB: no icon there; its badge stands in, and the site is asked again in a week" in result.output
 
 
 def test_caracole_icons_answered_from_the_cache_alone_leaves_a_sites_strikes_as_they_are(tmp_path, monkeypatch):

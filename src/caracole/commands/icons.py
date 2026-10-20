@@ -1,9 +1,11 @@
 """``caracole icons``: fetch the sites' icons that index.html lacks, now, then rewrite the pages.
 
 The nightly run does this as its icons step, with its own clients; this command
-asks each site that has no icon kept, even one asked less than a week ago, with
-a client of its own (``make_client``: caracole's lock, the provider's budget and
-pauses, its cooldown). A site with no provider of its own yet (YouTube) gets
+asks each site that has no icon kept, even one whose last try was less than a
+week ago, with a client of its own (``make_client``: caracole's lock, the
+provider's budget and pauses, its cooldown). What a site answered less than a
+week ago still comes from the cache (``icons._look``), so asking again sooner
+retries an error, never an answer. A site with no provider of its own yet (YouTube) gets
 ``ICON_POLICY``. A block cools that provider down as any block does, and the
 other sites are still asked; a block or an error exits 0. A site that answered a
 request of this command's had a good run (``record_ok``), as the nightly run
@@ -83,7 +85,7 @@ def _outcome(key: str, run: IconRun) -> str:
     if key in run.fetched:
         return "icon fetched"
     if key in run.missing:
-        return "no icon there; its badge stands in"
+        return "no icon there; its badge stands in, and the site is asked again in a week"
     if key in run.errors:
         return "couldn't be asked (the log says why, at -v); its badge stands in until the next try"
     return "its request budget is spent; asked on the next run"
