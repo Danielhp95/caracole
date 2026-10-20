@@ -74,7 +74,7 @@ and `search --key`).
   beat_this; run.py runs them over the library.
 - `tests/`: named after what they cover (test_fetch.py is ug/fetch.py's), and
   `test_commands_*.py` for the CLI. conftest.py has the `conn` and `cfg` fixtures (every
-  directory under `tmp_path`, which is in /dev/shm; `conn` copies a database migrated once
+  directory under `tmp_path`, in /dev/shm if it will do; `conn` copies a database migrated once
   per process), `add_song` and `subprocess_pythonpath`. helpers/browser.py opens pages in
   one Chromium per process, each in a fresh context; helpers/locks.py `waiting_for` sees a
   command wait for caracole's lock. test_harness.py tests what makes the suite fast.
@@ -108,6 +108,8 @@ Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at 
 `slow` marks a test that starts a browser (`helpers.browser.in_chromium`), chordpro
 (`@pytest.mark.chordpro` adds `slow`) or another process: mark a new one too. The whole
 suite stays the gate before a commit.
+tmp_path is in /dev/shm, and stays on disk with `--basetemp` or `PYTEST_DEBUG_TEMPROOT`, or
+when /dev/shm is noexec or has less than 1 GB free (a container's).
 
 Both shells set `CARACOLE_CJK_FONT` to the packages' font. `.#autochords` adds torch,
 beat-this and librosa, and sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` to the

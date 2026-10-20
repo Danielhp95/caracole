@@ -15,6 +15,9 @@ import pytest
 # in memory, and the suite runs nearly three times faster. pyproject.toml keeps only the folders
 # of tests that failed.
 MEMORY = Path("/dev/shm")
+# What MEMORY must have free. Docker and podman give a container's /dev/shm 64 MB, and the
+# Chromium of each test process wants its share of it too.
+MEMORY_FREE = 1 << 30
 # Workers for -n auto. Each imports and collects the whole suite before its first test, and past
 # a dozen they cost more than they save: on 24 cores, the suite takes 6.5 s on 12, 8 s on 24.
 MAX_WORKERS = 12
@@ -49,9 +52,22 @@ def pytest_xdist_auto_num_workers(config):
 def pytest_configure(config):
     if config.option.basetemp or os.environ.get("PYTEST_DEBUG_TEMPROOT"):
         return
-    if MEMORY.is_dir() and os.access(MEMORY, os.W_OK | os.X_OK):
+    if memory_will_do():
         # Read when the first tmp_path is made; pytest-xdist's workers make theirs in this one's.
         os.environ["PYTEST_DEBUG_TEMPROOT"] = str(MEMORY)
+
+
+def memory_will_do() -> bool:
+    """Whether tmp_path can go to MEMORY: a folder this user can write, mounted so that the
+    programs a test writes there run (a fake chordpro), with MEMORY_FREE to spare. Docker and
+    podman mount /dev/shm noexec, and so do hardened hosts: tmp_path then stays on disk."""
+    try:
+        mounted = os.statvfs(MEMORY)
+    except OSError:
+        return False
+    return (MEMORY.is_dir() and os.access(MEMORY, os.W_OK | os.X_OK)
+            and not mounted.f_flag & os.ST_NOEXEC
+            and mounted.f_bavail * mounted.f_frsize >= MEMORY_FREE)
 
 
 def pytest_collection_modifyitems(items):

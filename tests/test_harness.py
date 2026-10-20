@@ -1,5 +1,5 @@
-"""The suite's own machinery: conftest.py's database and its pytest-xdist defaults, and the
-helpers that wait on caracole's lock (helpers/locks.py) and open pages in Chromium
+"""The suite's own machinery: conftest.py's database, its pytest-xdist defaults and tmp_path in
+memory, and the helpers that wait on caracole's lock (helpers/locks.py) and open pages in Chromium
 (helpers/browser.py). Each makes the suite faster; these tests say it still tests the same."""
 
 from __future__ import annotations
@@ -123,6 +123,47 @@ def test_auto_means_the_cores_up_to_a_dozen(monkeypatch):
     assert conftest.pytest_xdist_auto_num_workers(None) == 3
     monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "5")
     assert conftest.pytest_xdist_auto_num_workers(None) is None  # pytest-xdist's own hook reads it
+
+
+# --- tmp_path in memory ------------------------------------------------------------------------
+
+
+GiB = 1 << 30
+
+
+def tmp_root_given(monkeypatch, tmp_path, *, noexec=False, free=16 * GiB, basetemp=None,
+                   missing=False) -> str | None:
+    """Where pytest_configure puts tmp_path when /dev/shm (here tmp_path) is a tmpfs so mounted:
+    the PYTEST_DEBUG_TEMPROOT it sets, or None for pytest's own."""
+
+    def statvfs(path):
+        assert Path(path) == tmp_path
+        if missing:
+            raise FileNotFoundError(path)
+        return SimpleNamespace(f_flag=os.ST_NOSUID | os.ST_NODEV | (os.ST_NOEXEC if noexec else 0),
+                               f_frsize=4096, f_bsize=4096, f_bavail=free // 4096)
+
+    monkeypatch.setattr(conftest, "MEMORY", tmp_path)
+    monkeypatch.setattr(os, "statvfs", statvfs)
+    monkeypatch.delenv("PYTEST_DEBUG_TEMPROOT", raising=False)  # restored when the test ends
+    conftest.pytest_configure(SimpleNamespace(option=SimpleNamespace(basetemp=basetemp)))
+    return os.environ.get("PYTEST_DEBUG_TEMPROOT")
+
+
+def test_tmp_path_goes_to_a_roomy_tmpfs_that_runs_programs(monkeypatch, tmp_path):
+    assert tmp_root_given(monkeypatch, tmp_path) == str(tmp_path)
+
+
+@pytest.mark.parametrize("mounted", [
+    # Docker's and podman's /dev/shm: a test's fake chordpro couldn't run there.
+    pytest.param({"noexec": True, "free": 64 << 20}, id="docker"),
+    pytest.param({"noexec": True}, id="noexec"),  # hardened hosts
+    pytest.param({"free": GiB - 4096}, id="under a gigabyte free"),
+    pytest.param({"missing": True}, id="no /dev/shm"),
+    pytest.param({"basetemp": "/var/tmp/given"}, id="--basetemp"),
+])
+def test_tmp_path_stays_on_disk_where_memory_wont_do(monkeypatch, tmp_path, mounted):
+    assert tmp_root_given(monkeypatch, tmp_path, **mounted) is None
 
 
 # --- waiting for the lock ----------------------------------------------------------------------
