@@ -6,9 +6,10 @@
                           (?job=N: its output open; ?refresh=0: no reloading)
     GET  /jobs.json       the requests, a line each, for the page's script (?jobs=N,M: only those
                           jobs, each with its song's card once it is over)
-    GET  /api/search?q=   your library and the offline UG index, as JSON (search.py): your songs, the
-                          artists the query names, the index's songs, which comes first and the
-                          row Enter may act on
+    GET  /api/search?q=   your library and the offline indexes, as JSON (search.py): your songs, the
+                          artists the query names, the UG index's songs, which comes first and the
+                          row Enter may act on; gtptabs.com's and MuseScore's pages, and the
+                          sites not searched, with why
     GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
                           ``offset``, and yours by them
     GET  /api/jobs[/<id>] the requests as data: each step with its state (Job.as_json)
@@ -41,7 +42,9 @@ answer sends the browser to the request on /jobs, and a lookup's to the lookup
 page, which follows it. The library page's script asks for JSON (``Accept:
 application/json``) and gets the job, as /jobs.json gives it, so it stays on the
 page and shows the song's progress on its card; the lookup page's gets the
-job's address (202), which it follows on /api/jobs. To a page's script (it
+job's address (202), which it follows on /api/jobs, and the job as the library
+page reads it (``view``), so that a result's Get it there shows how it goes in
+its row. To a page's script (it
 accepts JSON, or asks ``/api/``), a refusal is then ``{"error": "one
 sentence"}``, with the same status, and ``"reload": true`` when the page must
 be reloaded (a form token older than the server, signing in).
@@ -65,9 +68,12 @@ A songbook form queues its ``caracole songbook`` command the same way
 
 Searching reads, and sends no request: one search runs at a time, one asked
 for meanwhile wins over the older ones still waiting (``superseded``: the
-page asks again if it still wants it), and the offline index's answers are
+page asks again if it still wants it), and the offline indexes' answers are
 kept a few minutes. A query of fewer than three letters (two in Chinese)
-looks nowhere.
+looks nowhere. Of gtptabs.com and MuseScore it reads only the tables their
+sitemaps filled (``search.search_gtptabs``, ``search.search_musescore``), and
+says why it left a site out (``skipped``): turned off, its index still empty,
+MuseScore blocking caracole, or LaCuerda, which has no offline index at all.
 """
 
 from __future__ import annotations
@@ -116,7 +122,7 @@ from caracole.web.status import SongFacts, details_href, job_line
 
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
-    from caracole.search import IndexFound, IndexHit, LibraryHit
+    from caracole.search import IndexFound, IndexHit, LibraryHit, SiteHit
     from caracole.songs import Song
 
 MAX_BODY = 16 * 1024
@@ -125,7 +131,7 @@ MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
 PICK_LIMITS = {"ug": 300, "tab": 600}
 QUERY_LIMIT = 200  # characters of a search
-LIBRARY_HITS, INDEX_HITS, TABS_SHOWN = 5, 8, 24
+LIBRARY_HITS, INDEX_HITS, TABS_SHOWN, SITE_HITS = 5, 8, 24, 5
 ARTIST_PAGE = 50  # an artist's songs /api/artist gives at a time
 CACHE_SIZE, CACHE_SECONDS = 128, 300.0  # the offline index's answers kept
 SEARCH_CHECK_STEPS = 20_000  # SQLite steps between two looks for a newer search, a millisecond or so
@@ -198,10 +204,10 @@ class WebApp:
         self._searching = threading.Lock()  # one search at a time
         self._tickets = itertools.count(1)
         self._newest = 0  # the newest search asked for
-        # A query's answer from the offline index, kept a while: (when, the answer, its songs and artists as
-        # JSON, the hint).
+        # A query's answer from the offline indexes, kept a while: (when, the answer, its songs and artists as
+        # JSON, the hint, gtptabs.com's and MuseScore's pages).
         self._found: OrderedDict[str, tuple[float, IndexFound, list[dict[str, Any]], list[dict[str, Any]],
-                                            str | None]] = OrderedDict()
+                                            str | None, list[SiteHit], list[SiteHit]]] = OrderedDict()
         self._song_forms: dict[tuple, tuple[frozenset[str], frozenset[str]]] = {}  # _Mine's, by a song's names
 
     def handle(self, request: Request) -> Response:
@@ -491,14 +497,18 @@ class WebApp:
         """A request queued: to the browser, its line on /jobs (its output open, unless ``location`` says
         where else); to the page's script, the job itself."""
         response = _redirect(location or f"/{details_href(job.id)}")
+        response.data = {"job": self._job_view(job)}
+        return response
+
+    def _job_view(self, job: Job) -> dict[str, Any]:
+        """A job just queued, as /jobs.json gives it to the library page's script."""
         jobs = self.queue.snapshot()
         job = next((j for j in jobs if j.id == job.id), job)
         try:
             with closing(self._connect()) as conn:
-                response.data = {"job": self._views(conn, _overrides_or_none(self.cfg), jobs, only=[job])[0]}
+                return self._views(conn, _overrides_or_none(self.cfg), jobs, only=[job])[0]
         except (sqlite3.Error, OSError):  # the job is queued all the same
-            response.data = {"job": _view(job, jobs, None, None)}
-        return response
+            return _view(job, jobs, None, None)
 
     def _picker(self, song_field: str) -> Response:
         """A song in review's picker, on a page of its own."""
@@ -838,8 +848,8 @@ class WebApp:
         except QueueFull:
             return refused(503, "The queue is full", f"{note} The queue is full, so it wasn't looked up now: the "
                                                      "nightly run looks for it, or ask again once the queue empties.")
-        if wants_json:
-            return _json(202, {"job": job.id, "url": f"/api/jobs/{job.id}"})
+        if wants_json:  # the lookup page follows its address; the library page, its line (view)
+            return _json(202, {"job": job.id, "url": f"/api/jobs/{job.id}", "view": self._job_view(job)})
         return _redirect(f"/lookup?job={job.id}")
 
     def _library_song(self, form: dict[str, str], ug: tuple[str, str] | None) -> Song | None | tuple[int, str, str]:
@@ -905,22 +915,68 @@ class WebApp:
         has it (``_rows``)."""
         from caracole.search import LibraryHit, found, search_library
 
+        from caracole.search import search_gtptabs, search_musescore
+        from caracole.songs import list_songs
+
         mine = search_library(conn, q, LIBRARY_HITS)
+        skipped = self._skipped(conn)
+        left_out = {s["source"] for s in skipped}
         cached = self._found.get(q)
         if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
-            index_found, index, artists, hint = cached[1:]
+            index_found, index, artists, hint, gtptabs, musescore = cached[1:]
         else:
             index_found, index, artists, hint = self._index_hits(conn, q)
-            self._found[q] = (time.monotonic(), index_found, index, artists, hint)
+            gtptabs = search_gtptabs(conn, q, SITE_HITS) if "gtptabs" not in left_out else []
+            musescore = search_musescore(conn, q, SITE_HITS) if "musescore" not in left_out else []
+            self._found[q] = (time.monotonic(), index_found, index, artists, hint, gtptabs, musescore)
             while len(self._found) > CACHE_SIZE:
                 self._found.popitem(last=False)
         answer = found(mine, index_found)
-        library, hits = self._rows(conn, mine, index)
+        songs = list_songs(conn)
+        library, hits = self._rows(conn, mine, index, songs)
         best = answer.best
         pick = None if best is None else (
             {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
         return {"query": q, "library": library, "index": hits, "artists": artists, "lead": answer.lead,
-                "best": pick, "hint": hint}
+                "best": pick, "hint": hint,
+                "gtptabs": self._gtptabs_rows(conn, gtptabs if "gtptabs" not in left_out else [], songs),
+                "musescore": [{"source": h.source, "title": h.title, "url": h.url, "score": h.score}
+                              for h in (musescore if "musescore" not in left_out else [])],
+                "skipped": skipped}
+
+    def _gtptabs_rows(self, conn: sqlite3.Connection, hits: Sequence[SiteHit], songs: list[Song]) -> list[dict[str, Any]]:
+        """gtptabs.com's pages as the page draws them; one your library has (``_Mine``, by its names) names it,
+        so that Get it looks it up as that song."""
+        from caracole.library_page import result_cards
+
+        owners_of = _Mine(songs, self._song_forms)
+        owners = [owners_of.song_for(h.artist_key, h.title_key, h.artist, h.title) for h in hits]
+        cards = result_cards(conn, self.cfg, list({s.id: s for s in owners if s}.values()))
+        return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "uploads": h.uploads,
+                 "score": h.score, "via": h.via, "song": song.id if song else None,
+                 "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
+                             "links": cards[song.id]["links"]} if song else None}
+                for h, song in zip(hits, owners)]
+
+    def _skipped(self, conn: sqlite3.Connection) -> list[dict[str, str]]:
+        """The sites a search leaves out, and why: one turned off, one whose index the nightly run hasn't
+        filled yet (MuseScore's, while it blocks caracole), and LaCuerda, which has no offline index."""
+        from caracole.health import get_state
+
+        left = []
+        for source, name, table in (("gtptabs", "gtptabs.com", "gtptabs_index"),
+                                    ("musescore", "MuseScore", "musescore_index")):
+            if not self.cfg.provider(source).enabled:
+                why = "turned off in caracole.toml"
+            elif conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() is not None:
+                continue
+            elif source == "musescore" and get_state(conn, source).strikes:
+                why = "MuseScore is blocking caracole, so its index is empty"
+            else:
+                why = "its index is empty: the nightly run reads its sitemaps"
+            left.append({"source": source, "name": name, "why": why})
+        left.append({"source": "lacuerda", "name": "LaCuerda", "why": "no offline index: Get it asks LaCuerda too"})
+        return left
 
     def _rows(self, conn: sqlite3.Connection, mine: Sequence[LibraryHit], index: list[dict[str, Any]],
               songs: list[Song] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

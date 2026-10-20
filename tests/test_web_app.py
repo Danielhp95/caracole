@@ -1423,6 +1423,75 @@ def test_api_artist_lists_an_artists_songs_and_yours(app, conn):
     assert get(app, "/api/artist").status == 400 and get(app, "/api/artist?key=oasis&offset=x").status == 400
 
 
+def site_pages(conn, gtptabs=(), musescore=()):
+    """gtptabs.com's and MuseScore's song pages, as their sitemaps list them."""
+    from caracole.gtptabs import parse_page_url
+    from caracole.musescore import parse_song_url
+
+    conn.executemany("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) "
+                     "VALUES (?, ?, ?, ?, ?, '1')", [tuple(parse_page_url(u)) for u in gtptabs])
+    conn.executemany("INSERT INTO musescore_index (page_id, path, title_key, sitemap) VALUES (?, ?, ?, '1')",
+                     [tuple(parse_song_url(u)) for u in musescore])
+
+
+def test_the_search_lists_gtptabs_and_musescore_pages_each_capped(app, conn):
+    creep_index(conn)
+    mine = add_song(conn, "Radiohead", "Creep")
+    site_pages(conn, gtptabs=[f"https://gtptabs.com/tabs/{n}/band-{n}/creep.html" for n in range(1, 8)]
+               + ["https://gtptabs.com/tabs/18/radiohead/creep.html"],
+               musescore=[f"https://musescore.com/song/creep-{n}" for n in range(1, 8)])
+    assert len(as_json(get(app, "/api/search?q=creep"))["gtptabs"]) == 5
+    data = as_json(get(app, "/api/search?q=radiohead%20creep"))
+    gtp = data["gtptabs"]
+    assert gtp[0]["artist"] == "Radiohead" and gtp[0]["title"] == "Creep" and gtp[0]["source"] == "gtptabs"
+    assert gtp[0]["url"] == "https://gtptabs.com/tabs/18/radiohead/creep.html" and gtp[0]["uploads"] == 1
+    assert gtp[0]["song"] == mine.id and gtp[0]["library"]["id"] == mine.id  # yours: Get it looks it up as yours
+    assert all(h["song"] is None and h["library"] is None for h in gtp[1:])
+    ms = data["musescore"]
+    assert len(ms) == 5 and {h["title"] for h in ms} == {"Creep"}
+    assert ms[0]["url"] == "https://musescore.com/song/creep-1" and "artist" not in ms[0]  # a title alone
+    assert data["skipped"] == [{"source": "lacuerda", "name": "LaCuerda",
+                                "why": "no offline index: Get it asks LaCuerda too"}]
+
+
+def test_the_search_says_which_sites_it_left_out_and_why(app, cfg, conn):
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+    from caracole.health import record_block
+
+    creep_index(conn)
+    skipped = {s["source"]: s["why"] for s in as_json(get(app, "/api/search?q=creep"))["skipped"]}
+    assert "index is empty" in skipped["gtptabs"] and "index is empty" in skipped["musescore"]
+    record_block(conn, "musescore", datetime(2026, 10, 19, tzinfo=UTC), "HTTP 403: a challenge")
+    assert "blocking caracole" in {s["source"]: s["why"] for s in as_json(
+        get(app, "/api/search?q=creeps"))["skipped"]}["musescore"]
+    off = dataclasses.replace(cfg, providers={**cfg.providers,
+                                              "gtptabs": ProviderPolicy(20, (10.0, 20.0), False),
+                                              "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
+    site_pages(conn, gtptabs=["https://gtptabs.com/tabs/18/radiohead/creep.html"],
+               musescore=["https://musescore.com/song/creep-1"])
+    data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=creep"))
+    assert data["gtptabs"] == [] and data["musescore"] == []
+    reasons = {s["source"]: s["why"] for s in data["skipped"]}
+    assert reasons["gtptabs"] == reasons["musescore"] == "turned off in caracole.toml"
+
+
+def test_a_search_asks_no_site_and_takes_no_lock(app, conn, monkeypatch):
+    from caracole.commands import _common
+
+    def never(*args, **kwargs):
+        raise AssertionError("a search asked a site, or took the lock")
+
+    monkeypatch.setattr(_common, "make_client", never)
+    monkeypatch.setattr(_common, "exclusive", never)
+    creep_index(conn)
+    site_pages(conn, gtptabs=["https://gtptabs.com/tabs/18/radiohead/creep.html"],
+               musescore=["https://musescore.com/song/creep-1"])
+    response = get(app, "/api/search?q=creep")
+    assert response.status == 200 and as_json(response)["gtptabs"] and as_json(response)["musescore"]
+
+
 def test_a_search_of_fewer_than_three_letters_looks_nowhere(app, conn):
     creep_index(conn)
     assert as_json(get(app, "/api/search?q=cr")) == {"query": "cr", "library": [], "index": [], "short": True}
@@ -1446,7 +1515,10 @@ def test_the_ug_song_you_pick_is_looked_up_now(app, cfg, queue, conn):
     response = lookup(app, {"artist": "Stone Temple Pilots", "title": "Creep", "ug": "stone-temple-pilots/creep"})
     assert response.status == 202
     data = as_json(response)
-    assert data == {"job": 1, "url": "/api/jobs/1"}
+    assert (data["job"], data["url"]) == (1, "/api/jobs/1")
+    # The library page follows it as it follows a request: the job as /jobs.json gives it.
+    assert data["view"]["id"] == 1 and data["view"]["display"] == "Stone Temple Pilots - Creep"
+    assert data["view"]["line"]["text"].startswith("Queued") and data["view"]["fetching"] is True
     assert "Stone Temple Pilots - Creep" in cfg.wanted_file.read_text(encoding="utf-8")  # at once, as a request
     job = queue.snapshot()[0]
     assert [s.args for s in job.steps] == [

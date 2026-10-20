@@ -73,7 +73,9 @@ songs.py's, in the `removed` table).
   names (`ArtistHit`, never a catch-all), the index's songs, `lead` and `best` (what Enter
   may act on, None for no clear song), with
   `artist_songs` and `library_by_artist`; tab counts are its only popularity, and Chinese
-  pinyin counts only as whole words of a key, as in match.py. Its prefilter reads
+  pinyin counts only as whole words of a key, as in match.py. `search_gtptabs` and
+  `search_musescore` read gtptabs.com's and MuseScore's tables (`SiteHit`; MuseScore's by
+  exact title keys alone, a possible match), never the sites. Its prefilter reads
   ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
   must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
@@ -90,7 +92,8 @@ songs.py's, in the `removed` table).
   from which commands ran: a step's label is that line while it runs, "Adding to the
   library…", and a lookup's running stage has one of its own, `status.STAGE_LINES`), app.py (the routes; `/jobs.json` and the forms answer the page's script in
   JSON, every refusal as data; `/api/search` for search as you type, through search.py's
-  public functions (`find_index`, `found`), one at a time, the newest first, an older one's
+  public functions (`find_index`, `found`, `search_gtptabs`, `search_musescore`; `skipped`, the
+  sites it left out and why), one at a time, the newest first, an older one's
   SQL interrupted once a newer waits (`set_progress_handler`); `/api/artist?key=` an
   artist's songs, 50 at a time; `/api/jobs[/<id>]`; every `/api/` read refused to
   another site's fetch, `security.own_page_read`; `POST /lookup`, which runs a song your

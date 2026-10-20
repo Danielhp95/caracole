@@ -367,6 +367,75 @@ def test_library_search_without_a_match(conn):
     assert search_library(conn, "zzzz qqqq") == []
 
 
+# --- gtptabs.com's and MuseScore's offline indexes -------------------------------------------
+
+
+def gtptabs_pages(conn, *urls):
+    """gtptabs.com's song pages, as its sitemaps list them (gtptabs.parse_page_url makes the rows)."""
+    from caracole.gtptabs import parse_page_url
+
+    rows = [parse_page_url(u) for u in urls]
+    conn.executemany("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) "
+                     "VALUES (?, ?, ?, ?, ?, '1')", [tuple(r) for r in rows])
+
+
+def musescore_pages(conn, *urls):
+    from caracole.musescore import parse_song_url
+
+    conn.executemany("INSERT INTO musescore_index (page_id, path, title_key, sitemap) VALUES (?, ?, ?, '1')",
+                     [tuple(parse_song_url(u)) for u in urls])
+
+
+GTP = "https://gtptabs.com/tabs/"
+
+
+def test_gtptabs_pages_are_found_by_artist_and_title_or_either_alone(conn):
+    from caracole.search import search_gtptabs
+
+    gtptabs_pages(conn, GTP + "18/radiohead/creep.html", GTP + "18/radiohead/creep-2.html",
+                  GTP + "18/radiohead/karma-police.html", GTP + "20/stone-temple-pilots/creep.html",
+                  GTP + "13/metallica/creeping-death.html", GTP + "18/radiohead.html")
+    hits = search_gtptabs(conn, "radiohead creep")
+    assert [(h.artist_key, h.title_key) for h in hits][:1] == [("radiohead", "creep")]
+    first = hits[0]
+    assert (first.source, first.artist, first.title, first.uploads) == ("gtptabs", "Radiohead", "Creep", 2)
+    assert first.url == GTP + "18/radiohead/creep.html"  # the first upload's page, never an artist page
+    assert {(h.artist_key, h.title_key) for h in search_gtptabs(conn, "creep")} >= {
+        ("radiohead", "creep"), ("stone-temple-pilots", "creep")}
+    assert [h.title_key for h in search_gtptabs(conn, "radiohead")] == ["creep", "karma-police"]
+    assert search_gtptabs(conn, "zzzz qqqq") == [] and search_gtptabs(conn, " — ") == []
+    assert len(search_gtptabs(conn, "creep", limit=1)) == 1
+
+
+def test_a_gtptabs_artist_filed_last_name_first_is_named_as_ultimate_guitar_names_them(conn):
+    from caracole.search import search_gtptabs
+
+    index(conn, [(1, "elton-john", "your-song", "chords")])
+    gtptabs_pages(conn, GTP + "10/john-elton/your-song.html", GTP + "2/beatles-the/yesterday.html")
+    [elton] = search_gtptabs(conn, "your song")
+    assert (elton.artist, elton.title) == ("Elton John", "Your Song")  # not "John Elton", the site's filing
+    [beatles] = search_gtptabs(conn, "yesterday")
+    assert beatles.artist == "Beatles"  # no UG row: from its key
+
+
+def test_musescore_pages_are_found_by_their_whole_title_alone(conn):
+    from caracole.search import search_musescore
+
+    musescore_pages(conn, "https://musescore.com/song/wonderwall-1524", "https://musescore.com/song/wonderwall-99",
+                    "https://musescore.com/song/creep-7", "https://musescore.com/song/live_forever-8")
+    hits = search_musescore(conn, "wonderwall")
+    assert [(h.source, h.title, h.artist, h.url) for h in hits] == [
+        ("musescore", "Wonderwall", "", "https://musescore.com/song/wonderwall-99"),
+        ("musescore", "Wonderwall", "", "https://musescore.com/song/wonderwall-1524")]
+    # The artist's words around the title are left for it: the sitemaps name no artist.
+    assert [h.url for h in search_musescore(conn, "oasis wonderwall")][:1] == ["https://musescore.com/song/wonderwall-99"]
+    assert [h.title for h in search_musescore(conn, "live forever oasis")] == ["Live Forever"]
+    assert search_musescore(conn, "wonder") == []  # a part of a word is no title
+    musescore_pages(conn, "https://musescore.com/song/ban_ma_ban_ma-5")
+    assert [h.url for h in search_musescore(conn, "斑马，斑马")] == ["https://musescore.com/song/ban_ma_ban_ma-5"]
+    assert len(search_musescore(conn, "wonderwall", limit=1)) == 1
+
+
 # --- caracole search -----------------------------------------------------------------
 
 

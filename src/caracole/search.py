@@ -46,6 +46,14 @@ tabs a song or an artist has, so that orders the ties, and the artist with a
 more tabbed song than any song titled like it leads. Nothing here asks any
 site: an artist the index doesn't know is the user's to type.
 
+**Other sites' indexes.** ``search_gtptabs`` reads gtptabs.com's song pages
+(``gtptabs_index``, from its sitemaps), scored as the index's songs are, and
+``search_musescore`` MuseScore's (``musescore_index``), which give a title
+alone: a page there is one whose whole title is the query, or the query with
+words on either side left for the artist, a possible match, never more. Both
+only read the local tables: nothing here asks gtptabs.com or MuseScore
+anything, and MuseScore's pages are for the user to open.
+
 UG's sitemaps list artists with accented or non-Latin names only by bare ids,
 so the index can't see their tabs; ``bare_id_hint`` says what to do then.
 
@@ -91,6 +99,8 @@ SHOWN_CANDIDATES = 3  # a review's candidates shown under its song: the rest are
 READINGS = ("title", "both", "artist")  # how a query may name a song; a tie goes to the first
 TOP_SONGS = 3  # an artist row's most tabbed songs
 ARTIST_ROWS, LIBRARY_ROWS, SONG_ROWS = 3, 5, 8  # what ``find`` gives by default
+SITE_ROWS = 5  # a site's pages search_gtptabs and search_musescore give by default
+SITE_ROWS_READ = 2000  # rows of gtptabs_index the prefilter reads, at most
 
 _WORD_SPLIT = re.compile(r"[\W_]+")
 _APOSTROPHES = re.compile(r"['’‘`´ʼ]")
@@ -195,6 +205,28 @@ class Found:
     best: LibraryHit | IndexHit | None
 
 
+@dataclass(frozen=True)
+class SiteHit:
+    """A page of another site's offline index the query matches.
+
+    ``source`` is "gtptabs" (a song page of gtptabs.com: an artist and a title,
+    named from its slugs, its uploads of the title counted in ``uploads``) or
+    "musescore" (a song page of MuseScore: a title alone, as its sitemaps give
+    it, so ``artist`` is "" and the page a possible match). ``url`` is the page,
+    for the user to open; ``score`` and ``via`` are as ``IndexHit``'s.
+    """
+
+    source: str
+    title: str
+    url: str
+    score: float
+    artist: str = ""
+    artist_key: str = ""
+    title_key: str = ""
+    uploads: int = 1
+    via: str = "title"
+
+
 def display_from_keys(artist_key: str, song_key: str) -> tuple[str, str]:
     """An artist and a title made from UG keys or slugs: each word capitalized.
 
@@ -297,6 +329,84 @@ def artist_songs(conn: sqlite3.Connection, artist_key: str, *, limit: int = 50, 
     page = groups[max(offset, 0):max(offset, 0) + max(limit, 0)]
     hits = (_index_hit(conn, artist_key, base, score, via) for score, base, _ in page)
     return [h for h in hits if h is not None], len(groups)
+
+
+def search_gtptabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
+    """gtptabs.com's song pages that match ``query``, best first, by any reading, as the index's songs
+    are scored; a title's uploads under one artist ("-2", "-3") are one hit, on its first upload's page.
+    Ties go to the title uploaded more often. The artist is named as Ultimate Guitar's index names them
+    (``_gtptabs_artist``), the title from its slug."""
+    from caracole.gtptabs import page_url
+
+    patterns = _patterns(_tokens(query))
+    if not patterns:
+        return []
+    queries = _queries(query)
+    # The page's path holds the artist's slug and the title's, whose words the keys are made of: one
+    # LIKE a pattern over one column, the cheapest scan of a table without a trigram index.
+    where = " OR ".join("path LIKE ?" for _ in patterns)
+    rows = conn.execute(
+        f"SELECT path, artist_key, title_key, base_key FROM gtptabs_index WHERE title_key != '' AND ({where}) "
+        "LIMIT ?", (*patterns, SITE_ROWS_READ))
+    groups: dict[tuple[str, str], list[tuple[bool, str]]] = {}
+    for path, artist_key, title_key, base in rows:
+        groups.setdefault((artist_key, base), []).append((title_key != base, path))
+    scored = []
+    for (artist_key, base), pages in groups.items():
+        score, via = _reading(q.readings(artist_key.replace("-", " "), base.replace("-", " ")) for q in queries)
+        if score >= MIN_SCORE:
+            scored.append((score, len(pages), artist_key, base, min(pages)[1], via))
+    scored.sort(key=lambda s: (-s[0], -s[1], s[2], s[3]))
+    names: dict[str, str] = {}
+    hits = []
+    for score, uploads, artist_key, base, path, via in scored[:max(limit, 0)]:
+        if artist_key not in names:
+            names[artist_key] = _gtptabs_artist(conn, artist_key)
+        hits.append(SiteHit("gtptabs", _title_words(base), page_url(path), round(score, 1), names[artist_key],
+                            artist_key, base, uploads, via))
+    return hits
+
+
+def _gtptabs_artist(conn: sqlite3.Connection, artist_key: str) -> str:
+    """A gtptabs.com artist's name: as Ultimate Guitar's slugs write it, under the key or the key with its
+    first word last (gtptabs.com files people last name first: "Elton John" is ``john-elton``), else
+    from the key as it is."""
+    words = artist_key.split("-")
+    for key in dict.fromkeys([artist_key, "-".join(words[1:] + words[:1])]):
+        row = conn.execute("SELECT path FROM ug_index WHERE artist_key = ? AND path != '' LIMIT 1", (key,)).fetchone()
+        if row is not None:
+            slug = row[0].partition("/")[0]
+            if slug:
+                return _title_words(slug)
+    return _title_words(artist_key)
+
+
+def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
+    """MuseScore's song pages whose title is the query, or the query with words on either side left for
+    the artist ("oasis wonderwall", "live forever oasis"): the sitemaps give titles alone, so each is a
+    possible match. The whole query first, then the longer titles; a title's pages oldest first, as
+    ``musescore.song_pages`` lists a song's. Exact keys alone, so it reads the title index, never every row."""
+    from caracole.musescore import SongPage, title_key
+
+    words = _tokens(query)
+    runs = [words] + [words[:n] for n in range(len(words) - 1, 0, -1)] + [words[-n:] for n in range(len(words) - 1, 0, -1)]
+    runs.sort(key=lambda run: -len(run))  # stable: the whole query, then each length's start before its end
+    hits: list[SiteHit] = []
+    seen: set[str] = set()
+    for run in runs:
+        text = " ".join(run)
+        score = 100.0 * len(run) / len(words)
+        for key in (title_key(text), title_key(romanize(text)) if has_han(text) else ""):  # its slugs are ASCII
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            for row in conn.execute("SELECT page_id, path, title_key FROM musescore_index WHERE title_key = ? "
+                                    "ORDER BY page_id LIMIT ?", (key, max(limit, 0))):
+                page = SongPage(*row)
+                hits.append(SiteHit("musescore", _title_words(key), page.url, round(score, 1), title_key=key))
+        if len(hits) >= limit:
+            break
+    return hits[:max(limit, 0)]
 
 
 def no_ones(artist_key: str) -> bool:
