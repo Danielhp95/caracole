@@ -134,3 +134,7 @@ It's great that the cli allows for disambiguation by having differnet alternativ
 ## Allow for disambiguation on the browser
 
 It's great that the cli allows for disambiguation by having differnet alternatives and then selecitng number, surface this in the browser too
+
+## Design pass
+
+After finishing, do a /deep-research for what is the best UX design for this type of application for feature discoverability, usability, snappyness and overall user experience design. Take inspiration from ultimate guitar and other websites that already present this kind of information. Do a research too on lightweight javascript frameworks (like d3.js or other alterntaives) to come up with cool and useful designs. Find anti-patterns in the current implementation and remove them too. Essentially, do a strong design pass with /deep-research
