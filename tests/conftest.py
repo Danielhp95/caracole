@@ -3,6 +3,7 @@ suite runs: tmp_path in memory, and the whole suite on several cores (pytest-xdi
 
 from __future__ import annotations
 
+import gc
 import os
 import sys
 from pathlib import Path
@@ -57,6 +58,13 @@ def pytest_collection_modifyitems(items):
     for item in items:
         if item.get_closest_marker("chordpro"):
             item.add_marker(pytest.mark.slow)
+
+
+def pytest_collection_finish(session):
+    # What collection made (every module, test and fixture) lives until the session ends: frozen,
+    # the garbage collector stops walking it on each pass, and the quick loop ends half a second
+    # sooner.
+    gc.freeze()
 
 
 def pytest_sessionfinish(session):

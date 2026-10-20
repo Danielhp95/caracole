@@ -5,6 +5,7 @@ helpers that wait on caracole's lock (helpers/locks.py) and open pages in Chromi
 from __future__ import annotations
 
 import fcntl
+import gc
 import os
 import re
 import sqlite3
@@ -106,6 +107,12 @@ def test_the_whole_suite_runs_on_workers_unless_told_otherwise(given, expected):
     parsed = config(**given)
     conftest.pytest_cmdline_main(parsed)
     assert (parsed.option.numprocesses, parsed.option.dist) == expected
+
+
+def test_what_collection_made_is_out_of_the_garbage_collectors_way():
+    # Every module, test and fixture lives for the whole session: gc.freeze() after collection
+    # spares the collector walking them each time it looks for cycles.
+    assert gc.get_freeze_count() > 10_000
 
 
 def test_auto_means_the_cores_up_to_a_dozen(monkeypatch):
