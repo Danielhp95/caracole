@@ -161,10 +161,11 @@ class IndexView:
     The artist keys (about 150,000) are loaded once, when a step first needs them
     all: steps 3 and 4 compare names with every one. Until then the index itself
     answers whether it has an artist and which artists read the same without
-    hyphens, so matching a song whose artist UG has (``caracole add``, a lookup)
-    never loads them. The title keys (about 720,000), which only title-only
-    matching needs, are loaded once too, on first use. An artist's titles are read
-    when a song first asks for that artist.
+    hyphens, so matching a song that steps 1 and 2 settle (an override, or its
+    title accepted under its own artist: ``caracole add``, a lookup) never loads
+    them; one they leave to step 3 does. The title keys (about 720,000), which
+    only title-only matching needs, are loaded once too, on first use. An
+    artist's titles are read when a song first asks for that artist.
     """
 
     def __init__(self, conn: sqlite3.Connection):
@@ -203,9 +204,10 @@ class IndexView:
         if not compact_key:
             return ()
         if self._artists is None:
-            # A key never starts or ends with a hyphen, nor holds two in a row: one that reads
-            # ``acdc`` starts with acd, ac-d, a-cd or a-c-d, a range of keys each. UNION, as SQLite
-            # reads an OR of ranges as a full scan.
+            # A key never starts or ends with a hyphen, nor holds two in a row (ug_slug_key's, which
+            # the index's one writer, ug/index.py's upsert_rows of sitemap rows, stores): one that
+            # reads ``acdc`` starts with acd, ac-d, a-cd or a-c-d, a range of keys each. UNION, as
+            # SQLite reads an OR of ranges as a full scan.
             head = compact_key[:3]
             starts = ["".join(c + sep for c, sep in zip(head, (*seps, ""), strict=True))
                       for seps in itertools.product(("", "-"), repeat=len(head) - 1)]
