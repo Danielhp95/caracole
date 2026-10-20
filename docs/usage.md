@@ -896,7 +896,10 @@ and the next four after a third. A block in a command counts the same way,
 from when the command started. A run or a command the site answers without a
 block starts the count again. Neither a block, nor a spent budget, nor any
 other error from a site marks a song not found or its lyrics missing: the
-song waits for the next run. Caracole never works around a block: no proxies,
+song waits for the next run. An answer that won't read but was cached all the
+same (a maintenance notice served as a page, say) is asked for once more,
+past the cache, by the next run that needs it: from UG, LaCuerda,
+gtptabs.com and LRCLIB alike. Caracole never works around a block: no proxies,
 no retries from elsewhere. A tab page UG keeps serving without its data is
 asked for again after 7 days, then twice as long each time, up to 90 days;
 meanwhile the song is filled from its other versions.

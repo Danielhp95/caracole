@@ -214,6 +214,66 @@ def test_an_error_on_the_search_fallback_is_not_a_miss(conn, tmp_path):
     assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
 
 
+class Glitchy(FakeLrclib):
+    """``FakeLrclib`` whose endpoints ("get", "search") answer their first requests from
+    ``first``, as ``(status, text)``, before they answer as LRCLIB does."""
+
+    def __init__(self, records=(), *, first, **kw):
+        super().__init__(records, **kw)
+        self.first = {endpoint: list(answers) for endpoint, answers in first.items()}
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        endpoint = request.url.path.removeprefix("/api/")
+        if not self.first.get(endpoint):
+            return super().handler(request)
+        self.requests.append((endpoint, dict(request.url.params)))
+        status, text = self.first[endpoint].pop(0)
+        return httpx.Response(status, text=text)
+
+
+NOTICE = (200, "<html><title>Maintenance</title></html>")  # a 200, so cached like a record
+
+
+@pytest.mark.parametrize("glitch", [NOTICE, (200, "[]")], ids=["not JSON", "no object"])
+def test_a_cached_answer_that_isnt_json_is_asked_for_once_more(conn, tmp_path, glitch):
+    # Answers are cached forever: the notice would fail the song, from the cache, every night.
+    lrclib = Glitchy([record()], first={"get": [glitch]})
+    song = add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=213000)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(errors=1)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(found=1)
+    assert lrclib.endpoints() == ["get", "get"]
+    assert get_song(conn, song.id).lyrics_status == "found"
+
+
+def test_an_answer_still_not_json_when_asked_again_is_an_error_for_one_more_request(conn, tmp_path):
+    lrclib = Glitchy([record()], first={"get": [NOTICE, NOTICE]})
+    song = add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=213000)
+    run(lrclib, conn, tmp_path)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(errors=1)
+    assert lrclib.endpoints() == ["get", "get"]
+    stored = get_song(conn, song.id)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
+
+
+def test_a_503_that_isnt_json_when_asked_again_still_falls_back_to_the_search(conn, tmp_path):
+    # LRCLIB answers a miss with 503; a proxy's 503 page is no JSON, and is no error either.
+    lrclib = Glitchy([record()], first={"get": [NOTICE, (503, "Service Unavailable")]})
+    song = add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=213000)
+    run(lrclib, conn, tmp_path)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(found=1)
+    assert lrclib.endpoints() == ["get", "get", "search"]
+    assert get_song(conn, song.id).lyrics_status == "found"
+
+
+def test_a_cached_search_that_isnt_json_is_asked_for_once_more(conn, tmp_path):
+    lrclib = Glitchy([record()], first={"search": [NOTICE]})
+    song = add_song(conn, "Soda Stereo", "De Música Ligera", album="Otro Disco", duration_ms=213000)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(errors=1)  # /api/get misses: another album
+    assert run(lrclib, conn, tmp_path) == LyricsStats(found=1)
+    assert lrclib.endpoints() == ["get", "search", "get", "search"]  # the second search: once more
+    assert get_song(conn, song.id).lyrics_status == "found"
+
+
 def test_a_block_propagates_and_marks_nothing(conn, tmp_path):
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     with pytest.raises(ProviderBlocked):
