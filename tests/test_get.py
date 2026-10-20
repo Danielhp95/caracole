@@ -485,3 +485,27 @@ def test_progress_lines_are_json_a_server_can_read():
     assert read_progress_line("Sheet: Radiohead/Creep/sheet.txt") is None
     assert read_progress_line(PROGRESS_PREFIX + "{not json") is None
     assert json.loads(line[len(PROGRESS_PREFIX):]) == {"stage": "sheet", "state": "done", "detail": "tab 101"}
+
+
+@pytest.mark.parametrize("how", ["cooldown", "block", "error"])
+def test_a_clean_song_whose_lookup_ug_cut_short_is_owed_a_fetch_by_the_nightly_run(cfg, conn, sites, how):
+    # A card's Fetch now on a song fetched before (clean: nothing new to fetch at night). A cooldown, a block
+    # or an error leaves it to the nightly run, as `caracole fetch --song` does: marked to fetch, so the
+    # card's "Not fetched yet" waits for something.
+    from caracole.songs import update_song
+
+    from conftest import add_song
+
+    serve_creep(sites, conn)
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="accept", match_step="exact", match_artist_key="radiohead",
+                match_song_key="creep", ug_dirty=False, ug_checked_at="2026-10-01T00:00:00Z")
+    if how == "cooldown":
+        record_block(conn, "ug", datetime.now(UTC), "HTTP 403")
+    for url in [u for u in sites.pages if "ultimate-guitar.com" in u]:
+        sites.pages[url] = (403, "Forbidden") if how == "block" else (500, "Oops") if how == "error" else sites.pages[url]
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.states()["sheet"] in ("skipped", "failed")
+    assert get_song(conn, creep.id).ug_dirty is True

@@ -63,7 +63,10 @@ class SongFacts:
     ``sheet`` is the link to its sheet (its card's main file), ``review`` says
     its match needs review, ``not_found`` that its match found it nowhere in
     the index, ``checked_now`` that a fetch looked it up since the job started
-    (``ug.fetch.checked_since``), and ``ignored`` that overrides.toml ignores it.
+    (``ug.fetch.checked_since``), or that a lookup found Ultimate Guitar can't be
+    asked about it at all (not in the index, its artist's page unknown, which
+    ``caracole fetch --song`` refuses as such), and ``ignored`` that
+    overrides.toml ignores it.
     ``picker`` is the link to its picker (``review?song=ID``) while its review
     has candidates to pick from.
     """
@@ -102,7 +105,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
         return Line("queued", f"Queued behind {_count(ahead, 'request')}…" if ahead else "Queued…")
     if job.state == "running":
         if job.stages:
-            return Line("running", _stage_line(job.stages))
+            return Line("running", _stage_line(job.stages, new=song is None))
         step = next((s for s in job.steps if s.state == "running"), None) or next(
             (s for s in job.steps if s.state == "waiting"), None)
         return Line("running", f"{step.label}…" if step else "Running…")
@@ -134,14 +137,17 @@ def _review_link(song: SongFacts) -> tuple[str, str]:
     return ("Pick the match", song.picker) if song.picker else ("see the to-do page", TODO)
 
 
-def _stage_line(stages: list[Stage]) -> str:
-    """A running lookup's line: its running stage's, else the next one's, as between two steps."""
+def _stage_line(stages: list[Stage], *, new: bool = False) -> str:
+    """A running lookup's line: its running stage's, else the next one's, as between two steps. ``new``: a
+    song the library doesn't have yet, which the song stage adds, as ``caracole add`` would."""
     stage = next((s for s in stages if s.state == "running"), None) or next(
         (s for s in stages if s.state == "waiting"), None)
     if stage is None:
         return "Running…"
     if stage.state == "running" and stage.detail.startswith(_WAITING):
         return "Waiting for another caracole…"
+    if stage.name == "song" and new:
+        return "Adding to the library…"
     return f"{STAGE_LINES.get(stage.name, stage.label)}…"
 
 

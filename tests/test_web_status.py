@@ -168,7 +168,8 @@ def lookup_job(state="running", stages=None):
 
 def test_a_running_lookup_says_its_running_stage_as_a_steps_label_would():
     # One `caracole get` does what match, fetch and render did: the card still says which part runs.
-    assert job_line(lookup_job(), None) == Line("running", "Finding the song…")
+    assert job_line(lookup_job(), SongFacts()) == Line("running", "Finding the song…")
+    assert job_line(lookup_job(), None) == Line("running", "Adding to the library…")  # a song new to the library
     sheet = lookup_job(stages={"song": ("done", "in the library"), "match": ("done", "matched to radiohead/creep"),
                                "sheet": ("running", "")})
     assert job_line(sheet, None) == Line("running", "Fetching from Ultimate Guitar…")

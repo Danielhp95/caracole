@@ -372,6 +372,9 @@ between two requests to a site, six requests to a site at most, and sixty an
 hour for every lookup together. What it leaves undone, the nightly run does.
 A site cooling down after a block is left alone; a block, a spent budget or a
 site's error leaves the song to the nightly run, never not found, and exits 0.
+When that cuts Ultimate Guitar short, a matched song is marked to fetch, as
+`caracole fetch --song` marks it, so the nightly run fetches it even if it was
+fetched before.
 A nightly run that holds caracole's lock lets the lookup go first at its next
 pause ([One caracole at a time](#one-step-at-a-time)).
 
@@ -1854,9 +1857,9 @@ with it. A KEY that is no key exits with status 2.
   one waits or runs; Stop refreshing keeps it still. A request that ended in a
   review (`caracole add` found only candidates) shows the song's picker under
   its line, so you pick at once; with Fetch it now ticked, its lookup has no
-  UG song to fetch until then, and its line says Needs review · Pick the match.
-  A pick's own `caracole fetch`, which refuses a song still in review, Waits
-  for a pick in its output. While
+  UG song to fetch until then: its line says Needs review · Pick the match,
+  not a failure, and in its output the lookup's sheet stage Waits for a pick.
+  While
   the page refreshes itself, which would undo a choice half made, it shows a
   Pick the match link to the picker's own page, `/review?song=ID`, instead of
   the picker. One whose song the index didn't match links to what `caracole

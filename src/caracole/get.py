@@ -253,17 +253,20 @@ class _Lookup:
 
         why = self._usable(provider)
         if why is not None:
+            self._owed(provider)
             return "skipped", why
         client = self.client(provider)
         try:
             return work(client)
         except ProviderBlocked as e:
+            self._owed(provider)
             state = record_block(self.conn, e.provider, self.now, str(e))
             self.blocked.add(e.provider)
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
             return "skipped", (f"{NAMES[e.provider]} blocked caracole ({e}): no more requests to it until {until}. "
                                "Nothing was marked not found.")
         except BudgetExhausted as e:
+            self._owed(provider)
             p = self.cfg.provider(e.provider)
             if e.provider in self.kept_for_sheets:
                 spent = self._kept_for_sheets(e.provider)
@@ -273,9 +276,23 @@ class _Lookup:
                 spent = f"the lookup's {p.lookup_requests} requests to {NAMES[e.provider]} are spent"
             return "skipped", f"{spent}; the nightly run does the rest"
         except ProviderError as e:
+            self._owed(provider)
             record_error(self.conn, e.provider, self.now, str(e))
             self.failed.add(e.provider)  # as in a nightly step: an error ends the site's part for this lookup
             return "failed", f"{NAMES.get(e.provider, e.provider)} failed ({e}); the nightly run tries again"
+
+    def _owed(self, provider: str) -> None:
+        """A song whose Ultimate Guitar part a cooldown, a block, a spent budget or an error cut short is
+        marked to fetch, as ``caracole fetch --song`` marks it: asked for, it is owed a fetch at night,
+        even when it was clean (fetched before, nothing new). caracole serve's line then says Not fetched
+        yet, and the nightly run does fetch it."""
+        from caracole.songs import get_song, update_song
+
+        if provider != "ug" or self.song is None:
+            return
+        song = get_song(self.conn, self.song.id)
+        if song.match_decision in ("accept", "pinned") and not song.ug_dirty:
+            update_song(self.conn, song.id, ug_dirty=True)
 
     def after_the_sheet(self, provider: str, work: Callable[[Any], tuple[str, str] | str]) -> tuple[str, str] | str:
         """Ask a site for what follows the sheet, which the nightly run would do anyway: within what leaves

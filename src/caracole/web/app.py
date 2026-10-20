@@ -452,7 +452,8 @@ class WebApp:
             if over and job.fetching and not sheet and job.started_at is not None:
                 from caracole.ug.fetch import checked_since
 
-                checked_now = checked_since(conn, song, job.started_at)
+                checked_now = checked_since(conn, song, job.started_at) or (
+                    bool(job.stages) and _nothing_to_ask(conn, song, overrides))
             picker = None
             if song.review and not ignored:
                 from caracole.review import candidates_of
@@ -1094,6 +1095,16 @@ def _view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | Non
     return {"id": job.id, "display": job.display or job.title, "songId": song_id,
             "state": job.state, "fetching": job.fetching,
             "line": job_line(job, facts, ahead=_ahead(jobs, job)).as_json(), "details": details_href(job.id)}
+
+
+def _nothing_to_ask(conn: sqlite3.Connection, song: Song, overrides: Overrides | None) -> bool:
+    """Whether Ultimate Guitar can't be asked about the song at all: the offline index doesn't have it, and
+    its artist's UG page isn't known. ``caracole fetch --song`` refuses such a song; a lookup's sheet stage
+    skips it, and what it lacks, UG lacks as far as caracole can tell: not found, not a wait."""
+    from caracole.ug.fetch import artist_is_known
+
+    return (song.match_decision == "not_found" and overrides is not None
+            and not artist_is_known(conn, song, overrides))
 
 
 def _job_ids(values: list[str] | None) -> frozenset[int] | None:

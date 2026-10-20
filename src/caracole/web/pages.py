@@ -26,7 +26,7 @@ from html import escape
 from typing import Any
 
 from caracole.library_page import BASE_STYLE, PICKER_STYLE, sha256_source
-from caracole.web.jobs import Job, Step
+from caracole.web.jobs import Job, Stage, Step
 from caracole.web.status import Line
 
 PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
@@ -248,10 +248,15 @@ _NEEDS_REVIEW = "needs review first"
 
 def _waits_for_pick(job: Job, pick: Pick | None) -> bool:
     """Whether a finished request stopped only because its song needs a pick first: the one step that
-    failed is its ``caracole fetch --song``, which refused the song as needing review, and the song's
-    picker (``pick``) is right under it. Fetch it now is ticked by default, so a request whose
-    ``caracole add`` found only candidates ends this way."""
-    if pick is None or pick.search or job.state != "failed":
+    failed is its ``caracole fetch --song``, which refused the song as needing review, or, for a lookup
+    (one ``caracole get``, Fetch it now's), its sheet stage was skipped; and the song's picker (``pick``)
+    is right under it. Fetch it now is ticked by default, so a request whose match found only candidates
+    ends this way."""
+    if pick is None or pick.search:
+        return False
+    if job.stages:
+        return job.state == "done" and any(s.name == "sheet" and s.state == "skipped" for s in job.stages)
+    if job.state != "failed":
         return False
     failed = [step for step in job.steps if step.state == "failed"]
     return (len(failed) == 1 and failed[0].args[:1] == ("fetch",)
@@ -289,9 +294,7 @@ def _job(job: Job, line: Line | None, *, opened: bool = False, waits: str = "", 
     stages = ""
     if job.stages:  # a lookup's, as `caracole get --progress` reports them
         stages = '<ol class="steps stages">' + "".join(
-            f'<li class="step {escape(s.state)}"><div class="step-head"><span>{escape(s.label)}</span>'
-            f'{_badge(s.state)}</div>' + (f'<p class="meta">{escape(s.detail)}</p>' if s.detail else "") + "</li>"
-            for s in job.stages) + "</ol>"
+            _stage(s, picking=picking and s.name == "sheet" and s.state == "skipped") for s in job.stages) + "</ol>"
     steps = "".join(_step(step, picking=picking and step.state == "failed") for step in job.steps)
     return (
         f'<li class="job" id="job-{job.id}">'
@@ -299,6 +302,16 @@ def _job(job: Job, line: Line | None, *, opened: bool = False, waits: str = "", 
         f'<details class="output"{" open" if opened else ""}><summary>Output</summary>'
         f'<p class="meta">{meta}</p>{stages}<ol class="steps">{steps}</ol></details>{waits}</li>\n'
     )
+
+
+def _stage(stage: Stage, *, picking: bool = False) -> str:
+    """A lookup's stage: its label, how it went and why; with ``picking``, the sheet that waits for a pick."""
+    note = ('<p class="step-note">Not fetched yet: its Ultimate Guitar sheet waits for the match. Pick it below, '
+            "with Fetch it now ticked, and it is fetched then.</p>") if picking else ""
+    badge = _badge("review", "Waits for a pick") if picking else _badge(stage.state)
+    detail = f'<p class="meta">{escape(stage.detail)}</p>' if stage.detail else ""
+    return (f'<li class="step {escape(stage.state)}"><div class="step-head"><span>{escape(stage.label)}</span>'
+            f"{badge}</div>{note}{detail}</li>")
 
 
 def _step(step: Step, *, picking: bool = False) -> str:
