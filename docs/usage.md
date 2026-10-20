@@ -1145,30 +1145,45 @@ with it. A KEY that is no key exits with status 2.
 
 `caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
 [--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with three things the file on disk can't
-do:
+`http://127.0.0.1:8737/` by default, with what the file on disk can't do:
 
+- **Look up**, the page at `/lookup`, is for the song you want to play now,
+  the way you would look it up on Ultimate Guitar. Type a song or an artist:
+  it searches your library and the offline index as you type (a few
+  milliseconds a query; see [caracole search](#caracole-search)), asking no
+  site anything. Pick a song with Get it, or one of its versions (Versions
+  lists its chords, tabs and Guitar Pro pages by id): it is looked up at once,
+  as `caracole get --ug … [--tab …]` does it, and the song or tab you picked
+  is recorded in overrides.toml (`[match]`, `[pin]`), so nothing waits for a
+  review. The page follows the request stage by stage and shows the sheet the
+  moment it is kept, then links its PDF; the lyrics and the rest fill in after.
+  A song of your library with a sheet opens at once (Read). "Not in the list?"
+  looks a song up by its name. `/lookup?q=WORDS` opens it with that search.
 - **Request a song.** The form at the top takes an artist, a title and,
   optionally, the album and the length. The song goes into wanted.txt at once,
   as `caracole add ARTIST TITLE` writes it (a song listed already is left as
   it is), then `caracole add` runs to put it in the library.
-- **Fetch it now.** Ticked, as it is by default, the request also runs
-  `caracole match` (offline), `caracole fetch --song "ARTIST - TITLE"` and
-  `caracole render` (offline), so a sheet can be there in a minute or two.
-  Each wanted song's card has a Fetch now button that does the same, except
-  on a song that needs review: it says Review first, since `caracole fetch`
-  waits for `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
-  overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for
-  the nightly run.
+- **Fetch it now.** Ticked, as it is by default, the request is looked up at
+  once instead, as `caracole get` does it: its sheet in seconds, then its PDF,
+  lyrics and the rest. Each wanted song's card has a Fetch now button that does
+  the same, except on a song that needs review: it says Review first, since
+  only you can say which Ultimate Guitar song it is (pick it on the lookup
+  page, or with `caracole review`, or a `[match]`, `[pin]` or `[reject]` entry
+  in overrides.toml).
 - **Requests**, the page at `/jobs`, lists each request, the commands it
-  runs and what each printed (the newest request's output open), and
-  refreshes itself every 10 seconds while one waits or runs. Stop refreshing
-  keeps it still, so an output stays open to read.
+  runs and what each printed (the newest request's output open), a lookup's
+  stages with their states, and refreshes itself every 10 seconds while one
+  waits or runs. Stop refreshing keeps it still, so an output stays open to
+  read. `/api/jobs` and `/api/jobs/N` give the same as JSON: each request's
+  steps (a lookup's stages), each with its state, its song and the library
+  files its sheet can be read in.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
-caracole's lock (behind a nightly run, it waits), keeps the pause after the
-last request any caracole sent, and keeps the budgets and cooldowns. The
+caracole's lock, keeps the pause after the last request any caracole sent, and
+keeps the budgets and cooldowns. A lookup keeps the interactive pace (about a
+second between two requests to a site, six for the song, sixty an hour), and
+a nightly run holding the lock lets it go first at its next pause. The
 queue holds 20 requests and one per song: asking again for a song gives its
 request, and Fetch it now on a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart

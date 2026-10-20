@@ -1,6 +1,7 @@
 """caracole/web/app.py: the routes of caracole serve, without a socket."""
 
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -150,11 +151,10 @@ def test_a_request_is_written_to_wanted_txt_exactly_as_caracole_add_writes_it(ap
     assert job.title == "Fetch Soda Stereo - De Música | Ligera #1" and job.fetching
     line_no = re.search(r"Added to .*, line (\d+):", result.output).group(1)
     assert job.note == f"Added to wanted.txt, line {line_no}."
+    # One `caracole get`, which adds the song itself: the sheet first, at the lookup pace.
     assert [s.args for s in job.steps] == [
-        ("add", "--album=Canción Animal", "--duration=3:33", "--", "Soda Stereo", "De Música | Ligera #1"),
-        ("match",),
-        ("fetch", "--song=Soda Stereo - De Música | Ligera #1"),
-        ("render",),
+        ("get", "--progress", "--album=Canción Animal", "--duration=3:33", "--", "Soda Stereo",
+         "De Música | Ligera #1"),
     ]
 
 
@@ -173,8 +173,7 @@ def test_fetch_it_now_on_a_song_whose_add_still_waits_fetches_it_too(app, queue)
     job = queue.snapshot()[0]
     assert job.fetching and job.title == "Fetch Radiohead - Creep"
     queue.run_pending()
-    assert queue._runner.calls == [["add", "--", "Radiohead", "Creep"], ["match"],
-                                   ["fetch", "--song=Radiohead - Creep"], ["render"]]
+    assert queue._runner.calls == [["get", "--progress", "--", "Radiohead", "Creep"]]  # it adds the song too
 
 
 def test_the_cards_fetch_now_on_a_song_whose_add_still_waits_fetches_it_too(app, conn, queue):
@@ -182,7 +181,7 @@ def test_the_cards_fetch_now_on_a_song_whose_add_still_waits_fetches_it_too(app,
     post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
     assert post(app, "/fetch", {"song": str(creep.id)}).status == 303
     queue.run_pending()
-    assert [c[0] for c in queue._runner.calls] == ["add", "match", "fetch", "render"]
+    assert [c[0] for c in queue._runner.calls] == ["get"]
 
 
 def test_a_song_listed_already_is_left_as_it_is(app, cfg, queue):
@@ -230,12 +229,12 @@ def test_a_full_queue_still_keeps_the_song_in_wanted_txt(app, cfg, queue):
 # --- fetching a song now ------------------------------------------------------------------------
 
 
-def test_fetch_now_queues_match_fetch_and_render_for_that_song(app, conn, queue):
+def test_fetch_now_looks_that_song_up_now(app, conn, queue):
     creep = add_song(conn, "Radiohead", "Creep")
     response = post(app, "/fetch", {"song": str(creep.id)})
     assert response.status == 303 and header(response, "location") == "/jobs#job-1"
     job = queue.snapshot()[0]
-    assert [s.args for s in job.steps] == [("match",), ("fetch", "--song=Radiohead - Creep"), ("render",)]
+    assert [s.args for s in job.steps] == [("get", "--progress", "--", "Radiohead", "Creep")]
     assert job.fetching and job.song_key == creep.key
 
 
@@ -331,7 +330,8 @@ def test_the_requests_page_lists_each_job_and_its_output(app, queue):
     queue.run_pending()
     body = text(get(app, "/jobs"))
     assert 'http-equiv="refresh"' not in body
-    assert "Done" in body and "Fetch from Ultimate Guitar" in body and "<pre>ok" in body
+    assert "Done" in body and "Look it up now" in body and "<pre>ok" in body
+    assert "The sheet" in body  # a lookup's stages, each with its state
 
 
 def test_the_requests_page_can_stop_refreshing_so_an_output_can_be_read(app, queue):
@@ -357,6 +357,124 @@ def test_the_newest_requests_output_is_open_and_the_older_ones_closed(app, queue
 def test_the_requests_page_with_nothing_queued(app):
     body = text(get(app, "/jobs"))
     assert "No requests yet" in body
+
+
+# --- looking a song up as you type ---------------------------------------------------------------
+
+
+def as_json(response):
+    import json
+
+    assert header(response, "content-type") == "application/json; charset=utf-8"
+    return json.loads(response.body)
+
+
+def creep_index(conn):
+    from caracole.ug.index import mark_built, upsert_rows
+
+    rows = [(4169, "radiohead", "creep", "chords"), (4170, "radiohead", "creep", "chords"),
+            (4172, "radiohead", "creep", "tabs"), (4174, "radiohead", "creep-acoustic", "guitar-pro"),
+            (5001, "stone-temple-pilots", "creep", "chords"), (9, "oasis", "wonderwall", "chords")]
+    upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+
+
+def test_the_lookup_page_is_served_with_its_script(app):
+    response = get(app, "/lookup")
+    assert response.status == 200 and header(response, "content-type") == "text/html; charset=utf-8"
+    body = text(response)
+    assert 'id="q"' in body and 'data-csrf="tok"' in body
+    csp = header(response, "content-security-policy")
+    assert "connect-src 'self'" in csp and "script-src 'sha256-" in csp and "frame-ancestors 'none'" in csp
+    assert "unsafe-inline" not in csp and "innerHTML" not in body
+    assert 'href="/lookup"' in text(get(app, "/"))  # the library page links it
+
+
+def test_the_search_answers_json_from_your_library_and_the_offline_index(app, conn):
+    creep_index(conn)
+    mine = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, mine.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    data = as_json(get(app, "/api/search?q=creep"))
+    assert data["query"] == "creep"
+    assert [h["display"] for h in data["library"]] == ["Radiohead - Creep"]
+    assert data["library"][0]["id"] == mine.id and data["library"][0]["status"] == "wanted"
+    first, second = data["index"][:2]
+    assert (first["artist"], first["title"], first["ug"]) == ("Radiohead", "Creep", "radiohead/creep")
+    assert first["counts"] == {"chords": 2, "tabs": 1, "guitar-pro": 1} and first["song"] == mine.id
+    assert [t["id"] for t in first["tabs"]][:2] == [4169, 4170]  # chords first
+    assert first["tabs"][0] == {"id": 4169, "type": "chords", "label": None,
+                                "url": "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169"}
+    assert (second["ug"], second["song"]) == ("stone-temple-pilots/creep", None)
+
+
+def test_a_search_of_fewer_than_three_letters_looks_nowhere(app, conn):
+    creep_index(conn)
+    assert as_json(get(app, "/api/search?q=cr")) == {"query": "cr", "library": [], "index": [], "short": True}
+    assert as_json(get(app, "/api/search"))["short"] is True
+
+
+def test_a_search_with_an_empty_index_says_so(app, conn):
+    data = as_json(get(app, "/api/search?q=creep"))
+    assert data["index"] == [] and "caracole index build" in data["hint"]
+
+
+def test_the_search_answers_only_to_the_servers_names(app, conn):
+    assert app.handle(Request("GET", "/api/search?q=creep", {"host": "evil.example"})).status == 421
+
+
+def lookup(app, fields, **headers):
+    return post(app, "/lookup", fields, accept="application/json", **headers)
+
+
+def test_the_ug_song_you_pick_is_looked_up_now(app, cfg, queue, conn):
+    response = lookup(app, {"artist": "Stone Temple Pilots", "title": "Creep", "ug": "stone-temple-pilots/creep"})
+    assert response.status == 202
+    data = as_json(response)
+    assert data == {"job": 1, "url": "/api/jobs/1"}
+    assert "Stone Temple Pilots - Creep" in cfg.wanted_file.read_text(encoding="utf-8")  # at once, as a request
+    job = queue.snapshot()[0]
+    assert [s.args for s in job.steps] == [
+        ("get", "--progress", "--ug=stone-temple-pilots/creep", "--", "Stone Temple Pilots", "Creep")]
+    assert job.fetching and job.title == "Fetch Stone Temple Pilots - Creep"
+
+
+def test_the_tab_you_pick_is_looked_up_now(app, queue):
+    tab = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4170"
+    assert lookup(app, {"artist": "Radiohead", "title": "Creep", "ug": "radiohead/creep", "tab": tab}).status == 202
+    assert queue.snapshot()[0].steps[0].args == (
+        "get", "--progress", "--ug=radiohead/creep", f"--tab={tab}", "--", "Radiohead", "Creep")
+
+
+@pytest.mark.parametrize("fields,said", [
+    ({"artist": "Radiohead", "title": "Creep", "ug": "radiohead"}, "Ultimate Guitar song"),
+    ({"artist": "Radiohead", "title": "Creep", "tab": "https://example.com/tab/1"}, "tab"),
+    ({"artist": "", "title": "Creep"}, "artist and a title"),
+])
+def test_a_pick_that_isnt_one_is_refused(app, cfg, queue, fields, said):
+    response = lookup(app, fields)
+    assert response.status == 400 and said in as_json(response)["error"]
+    assert queue.snapshot() == [] and not cfg.wanted_file.exists()
+
+
+def test_a_lookup_without_the_pages_script_lands_on_the_lookup_page(app, queue):
+    response = post(app, "/lookup", {"artist": "Radiohead", "title": "Creep"})
+    assert response.status == 303 and header(response, "location") == "/lookup?job=1"
+
+
+def test_a_lookup_needs_the_form_token_like_every_write(app, queue):
+    assert lookup(app, {"artist": "Radiohead", "title": "Creep"}, csrf="wrong").status == 403
+    assert queue.snapshot() == []
+
+
+def test_a_job_is_served_as_data_with_each_step_and_its_state(app, queue):
+    lookup(app, {"artist": "Radiohead", "title": "Creep"})
+    data = as_json(get(app, "/api/jobs/1"))
+    assert data["id"] == 1 and data["state"] == "queued"
+    assert [s["name"] for s in data["steps"]][:3] == ["song", "match", "sheet"]
+    assert all(s["state"] == "waiting" for s in data["steps"])
+    assert [j["id"] for j in as_json(get(app, "/api/jobs"))["jobs"]] == [1]
+    assert get(app, "/api/jobs/9").status == 404 and get(app, "/api/jobs/x").status == 404
 
 
 # --- the library's files ----------------------------------------------------------------------

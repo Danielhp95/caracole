@@ -56,7 +56,8 @@ def page(title: str, body: str, *, head: str = "") -> str:
         '<div class="page">\n<header class="masthead">\n  <div>\n'
         '    <p class="app"><a href="/">caracole</a></p>\n'
         f"    <h1>{escape(title)}</h1>\n  </div>\n"
-        '  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a></nav>\n</header>\n'
+        '  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a>'
+        '<a class="navlink" href="/lookup">Look up</a></nav>\n</header>\n'
         f"{body}\n</div>\n</body>\n</html>\n"
     )
 
@@ -75,8 +76,9 @@ def jobs_page(jobs: list[Job], *, refresh: bool = True) -> str:
     else:
         note = 'This page stays as it is: <a href="/jobs">refresh it</a> to see how they go.'
     lede = (
-        '<p class="lede">Requests run one at a time, each a caracole command under its lock, with the same '
-        f"pauses between requests as from a terminal. {note}</p>"
+        '<p class="lede">Requests run one at a time, each a caracole command under its lock, as from a '
+        "terminal: a song looked up now is one <code>caracole get</code>, a few requests about a second apart. "
+        f"{note}</p>"
     )
     if not jobs:
         items = '<p class="empty">No requests yet. Request a song from <a href="/">the library</a>.</p>'
@@ -98,11 +100,19 @@ def _job(job: Job, *, newest: bool = False) -> str:
     meta = f"Requested {_when(job.queued_at)}"
     if job.note:
         meta += f" · {escape(job.note)}"
+    if job.seconds_to_sheet is not None:
+        meta += f" · sheet readable after {job.seconds_to_sheet:.1f} s"
+    stages = ""
+    if job.stages:  # a lookup's, as `caracole get --progress` reports them
+        stages = '  <ol class="steps stages">' + "".join(
+            f'<li class="step {escape(s.state)}"><div class="step-head"><span>{escape(s.label)}</span>'
+            f'{_badge(s.state)}</div>' + (f'<p class="meta">{escape(s.detail)}</p>' if s.detail else "") + "</li>"
+            for s in job.stages) + "</ol>\n"
     steps = "".join(_step(step, shown=newest) for step in job.steps)
     return (
         f'<article class="job" id="job-{job.id}">\n'
         f'  <div class="job-head"><h2>{escape(job.title)}</h2>{_badge(job.state)}</div>\n'
-        f'  <p class="meta">{meta}</p>\n  <ol class="steps">{steps}</ol>\n</article>\n'
+        f'  <p class="meta">{meta}</p>\n{stages}  <ol class="steps">{steps}</ol>\n</article>\n'
     )
 
 

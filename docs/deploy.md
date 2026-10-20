@@ -548,8 +548,10 @@ or build the package with `caracole.override { cjkFont = "…"; }`.
 ## 8. The library page over HTTP
 
 `services.caracole.web` runs `caracole serve` as `caracole-web.service`: the
-library page, a form to request songs, and a Fetch now button on each wanted
-song ([usage.md](usage.md), "caracole serve"). A request runs caracole commands
+library page, a form to request songs, a Fetch now button on each wanted
+song, and the lookup page (`/lookup`), which searches as you type and shows a
+sheet seconds after you pick a song ([usage.md](usage.md), "caracole serve").
+A request runs caracole commands
 in the unit, one at a time and each under caracole's lock, so the unit has the
 nightly run's sandbox, folders and network. Of the credentials it gets
 `web_token` alone: neither the server nor the commands it runs read Spotify or
@@ -592,10 +594,11 @@ Make the token with `openssl rand -base64 24` and store it with
   address gone, stops it after 30 starts in 10 minutes, about 5 minutes of
   tries: then the unit is `failed`, ntfy says so once, and
   `sudo systemctl restart caracole-web` starts it again once it's fixed.
-- **Politeness.** The server sends no request of its own. Fetch now runs
-  `caracole match`, `caracole fetch --song` and `caracole render`, which wait
-  behind a nightly run, keep the pauses between requests and the budgets, and
-  leave a site alone while it cools down.
+- **Politeness.** The server sends no request of its own: searching reads the
+  offline index. A lookup, and Fetch now, run `caracole get`, at the
+  interactive pace (a few requests about a second apart, sixty an hour per
+  site), which a nightly run lets go first at its next pause; it keeps the
+  budgets, and leaves a site alone while it cools down.
 
 ## Logs
 

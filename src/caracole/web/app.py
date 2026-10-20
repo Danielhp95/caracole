@@ -1,10 +1,14 @@
 """The routes of ``caracole serve``, as one function from a request to a response.
 
     GET  /, /index.html   the library page, with its forms (library_page, WebControls)
+    GET  /lookup          look a song up as you type (lookup_page.py), and read its sheet
     GET  /jobs            the requests, and what each command printed (?refresh=0: no reloading)
+    GET  /api/search?q=   your library and the offline UG index, as JSON (search.py)
+    GET  /api/jobs[/<id>] the requests as data: each step with its state (Job.as_json)
     GET  /<file>          a file of the library (files.py)
-    POST /request         a song for wanted.txt; with ``fetch``, fetched now too
-    POST /fetch           fetch a song of the library now, unless it needs review first
+    POST /request         a song for wanted.txt; with ``fetch``, looked up now too
+    POST /fetch           look a song of the library up now, unless it needs review first
+    POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``) you picked
     GET, POST /login      the sign-in page, with an access token
 
 Every request must name the server by a name it answers to (421 otherwise).
@@ -16,26 +20,38 @@ A request is written to wanted.txt at once, with ``wanted.append_wanted``, the
 function ``caracole add`` writes it with, and before the database: the line is
 there even when the queue is full or the server stops. A request and a fetch
 then queue their commands (jobs.py), and the answer sends the browser to the
-requests page.
+requests page. A song looked up now is one ``caracole get --progress``; asked
+for by the lookup page's script (``Accept: application/json``), the answer is
+the job's address as data (202), else the lookup page, which follows it.
+
+Searching reads, and sends no request: one search runs at a time, one asked
+for meanwhile wins over the older ones still waiting (``superseded``: the
+page asks again if it still wants it), and the offline index's answers are
+kept a few minutes. A query of fewer than three letters (two in Chinese)
+looks nowhere.
 """
 
 from __future__ import annotations
 
+import itertools
+import json
 import secrets
 import sqlite3
 import threading
+import time
+from collections import OrderedDict
 from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from caracole import db
 from caracole.config import Config
 from caracole.web import pages
 from caracole.web.files import NotServed, read_library_file
-from caracole.web.jobs import JobQueue, QueueFull, add_steps, fetch_steps
+from caracole.web.jobs import JobQueue, QueueFull, add_steps, lookup_steps
 from caracole.web.security import (
     SESSION_COOKIE,
     answers_to,
@@ -52,6 +68,10 @@ if TYPE_CHECKING:
 
 MAX_BODY = 16 * 1024
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
+PICK_LIMITS = {"ug": 300, "tab": 600}
+QUERY_LIMIT = 200  # characters of a search
+LIBRARY_HITS, INDEX_HITS, TABS_SHOWN = 5, 8, 24
+CACHE_SIZE, CACHE_SECONDS = 128, 300.0  # the offline index's answers kept
 _COMMON_HEADERS = [
     ("X-Content-Type-Options", "nosniff"),
     ("X-Frame-Options", "DENY"),
@@ -87,6 +107,15 @@ def _message(status: int, title: str, message: str) -> Response:
     return _html(status, pages.message_page(title, message))
 
 
+def _json(status: int, data: Any) -> Response:
+    return Response(status, json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                    [("Content-Type", "application/json; charset=utf-8")])
+
+
+def _wants_json(request: Request) -> bool:
+    return "application/json" in request.headers.get("accept", "")
+
+
 def _redirect(location: str, *extra: tuple[str, str]) -> Response:
     return Response(303, b"", [("Location", location), *extra])
 
@@ -102,6 +131,10 @@ class WebApp:
         self.csrf = csrf or secrets.token_urlsafe(32)
         self._session = session_value(access_token) if access_token else None
         self._wanted = threading.Lock()  # one append to wanted.txt at a time, of the server's threads
+        self._searching = threading.Lock()  # one search at a time
+        self._tickets = itertools.count(1)
+        self._newest = 0  # the newest search asked for
+        self._found: OrderedDict[str, tuple[float, list[dict[str, Any]], str | None]] = OrderedDict()
 
     def handle(self, request: Request) -> Response:
         return self.finish(self._route(request))
@@ -135,14 +168,28 @@ class WebApp:
         if method in ("GET", "HEAD"):
             if path in ("/", "/index.html"):
                 return self._library()
+            if path == "/lookup":
+                from caracole.web.lookup_page import LOOKUP_CSP, lookup_page
+
+                return _html(200, lookup_page(self.csrf), csp=LOOKUP_CSP)
             if path == "/jobs":
                 still = parse_qs(urlsplit(request.target).query).get("refresh") == ["0"]
                 return _html(200, pages.jobs_page(self.queue.snapshot(), refresh=not still))
+            if path == "/api/search":
+                return self._search(parse_qs(urlsplit(request.target).query).get("q", [""])[0])
+            if path == "/api/jobs":
+                return _json(200, {"jobs": [job.as_json() for job in self.queue.snapshot()]})
+            if path.startswith("/api/jobs/"):
+                job = self.queue.job(int(path[10:])) if path[10:].isdigit() else None
+                return _json(200, job.as_json()) if job is not None else _json(404, {"error": "no such request"})
             if path == "/login":
                 return _redirect("/")
             return self._file(path)
         if method == "POST":
             handler = {"/request": self._request, "/fetch": self._fetch}.get(path)
+            if path == "/lookup":
+                wants_json = _wants_json(request)
+                handler = lambda form: self._lookup(form, wants_json=wants_json)  # noqa: E731
             if handler is None:
                 return _message(404, "Not here", "There's nothing to send to at this address.")
             form = self._form(request)
@@ -226,41 +273,50 @@ class WebApp:
 
     # --- the forms ------------------------------------------------------------------------------
 
-    def _request(self, form: dict[str, str]) -> Response:
-        """A song for wanted.txt, as ``caracole add`` writes it, and its commands queued."""
+    def _wanted_line(self, form: dict[str, str]) -> tuple[Any, str] | tuple[int, str, str]:
+        """The form's song written to wanted.txt, as ``caracole add`` writes it, with a note of where;
+        or why it isn't, as (status, title, message)."""
         from caracole.wanted import append_wanted, find_wanted, parse_duration
 
         values = {name: form.get(name, "").strip() for name in LIMITS}
         for name, value in values.items():
             if len(value) > LIMITS[name]:
-                return _message(400, "Too long", f"The {name} is too long: {LIMITS[name]} characters at most.")
+                return 400, "Too long", f"The {name} is too long: {LIMITS[name]} characters at most."
         artist, title, album = values["artist"], values["title"], values["album"] or None
         if not artist or not title:
-            return _message(400, "Not a song", "A song needs an artist and a title.")
+            return 400, "Not a song", "A song needs an artist and a title."
         duration_ms = None
         if values["duration"]:
             try:
                 duration_ms = parse_duration(values["duration"])
             except ValueError as e:
-                return _message(400, "Not a length", f"The length is a {e}.")
+                return 400, "Not a length", f"The length is a {e}."
             if duration_ms is None:
-                return _message(400, "Not a length", f"The length {values['duration']!r} isn't a duration: "
-                                                     "write m:ss, h:mm:ss or whole seconds.")
+                return 400, "Not a length", (f"The length {values['duration']!r} isn't a duration: "
+                                             "write m:ss, h:mm:ss or whole seconds.")
         path = self.cfg.wanted_file
         with self._wanted:
             try:
                 listed = find_wanted(path, artist, title) is not None
                 line = append_wanted(path, artist, title, album, duration_ms)
             except ValueError as e:  # a song the file can't hold, such as an artist with " - " in it
-                return _message(400, "Not added", f"caracole can't add this song: {e}")
+                return 400, "Not added", f"caracole can't add this song: {e}"
             except OSError as e:
-                return _message(500, "Not added", f"wanted.txt can't be written: {e.strerror or e}")
-        note = f"{'Already in' if listed else 'Added to'} wanted.txt, line {line.line_no}."
+                return 500, "Not added", f"wanted.txt can't be written: {e.strerror or e}"
+        return line, f"{'Already in' if listed else 'Added to'} wanted.txt, line {line.line_no}."
+
+    def _request(self, form: dict[str, str]) -> Response:
+        """A song for wanted.txt, as ``caracole add`` writes it, and its commands queued."""
+        written = self._wanted_line(form)
+        if len(written) == 3:
+            return _message(*written)
+        line, note = written
         display = f"{line.artist} - {line.title}"
         fetch = form.get("fetch") in ("1", "on", "yes")
-        steps = add_steps(line.artist, line.title, album=line.album, duration_ms=line.duration_ms)
-        if fetch:
-            steps += fetch_steps(display)
+        if fetch:  # `caracole get` adds the song itself
+            steps = lookup_steps(line.artist, line.title, album=line.album, duration_ms=line.duration_ms)
+        else:
+            steps = add_steps(line.artist, line.title, album=line.album, duration_ms=line.duration_ms)
         try:
             job, _ = self.queue.submit(f"{'Fetch' if fetch else 'Add'} {display}", line.identity, steps,
                                        fetching=fetch, note=note)
@@ -297,11 +353,108 @@ class WebApp:
                             f"caracole isn't sure which Ultimate Guitar song {song.display} is, so it can't "
                             "fetch it yet: run caracole review, or settle it in overrides.toml, then fetch it.")
         try:
-            job, _ = self.queue.submit(f"Fetch {song.display}", song.key, fetch_steps(song.display),
+            job, _ = self.queue.submit(f"Fetch {song.display}", song.key, lookup_steps(song.artist, song.title),
                                        fetching=True)
         except QueueFull:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
         return _redirect(f"/jobs#job-{job.id}")
+
+    # --- a song looked up now, and search as you type ----------------------------------------------
+
+    def _lookup(self, form: dict[str, str], *, wants_json: bool) -> Response:
+        """The song you picked on the lookup page, in wanted.txt at once, then looked up now."""
+        from caracole.overrides import OverridesError, tab_id_from_url
+
+        def refused(status: int, title: str, message: str) -> Response:
+            return _json(status, {"error": message}) if wants_json else _message(status, title, message)
+
+        pick = {name: form.get(name, "").strip() for name in PICK_LIMITS}
+        for name, value in pick.items():
+            if len(value) > PICK_LIMITS[name]:
+                return refused(400, "Too long", f"The {name} is too long: {PICK_LIMITS[name]} characters at most.")
+        artist_key, sep, song_key = pick["ug"].partition("/")
+        if pick["ug"] and (not sep or not artist_key or not song_key or "/" in song_key):
+            return refused(400, "Not a pick", f"{pick['ug']!r} isn't an Ultimate Guitar song (artist-key/song-key).")
+        if pick["tab"]:
+            try:
+                tab_id_from_url(pick["tab"])
+            except OverridesError as e:
+                return refused(400, "Not a pick", f"That isn't an Ultimate Guitar tab: {e}")
+        written = self._wanted_line(form)
+        if len(written) == 3:
+            return refused(*written)
+        line, note = written
+        steps = lookup_steps(line.artist, line.title, album=line.album, duration_ms=line.duration_ms,
+                             ug=pick["ug"] or None, tab=pick["tab"] or None)
+        try:
+            job, _ = self.queue.submit(f"Fetch {line.artist} - {line.title}", line.identity, steps, fetching=True,
+                                       note=note)
+        except QueueFull:
+            return refused(503, "The queue is full", f"{note} The queue is full, so it wasn't looked up now: the "
+                                                     "nightly run looks for it, or ask again once the queue empties.")
+        if wants_json:
+            return _json(202, {"job": job.id, "url": f"/api/jobs/{job.id}"})
+        return _redirect(f"/lookup?job={job.id}")
+
+    def _search(self, query: str) -> Response:
+        """Your library and the offline UG index, for a query typed into the lookup page."""
+        from caracole.normalize import has_han
+
+        q = " ".join(query.split())[:QUERY_LIMIT]
+        letters = sum(c.isalnum() for c in q)
+        if letters < (2 if has_han(q) else 3):
+            return _json(200, {"query": q, "library": [], "index": [], "short": True})
+        ticket = next(self._tickets)
+        self._newest = ticket
+        with self._searching:
+            if ticket != self._newest:  # typed on meanwhile: the newer query goes first
+                return _json(200, {"query": q, "superseded": True})
+            try:
+                with closing(self._connect()) as conn:
+                    return _json(200, self._found_for(conn, q))
+            except (sqlite3.Error, OSError) as e:
+                return _json(503, {"query": q, "error": f"The database can't be read: {e}"})
+
+    def _found_for(self, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
+        from caracole.get import readable_files
+        from caracole.search import search_library
+        from caracole.songs import list_songs
+
+        library = [{"id": h.song.id, "display": h.song.display, "artist": h.song.artist, "title": h.song.title,
+                    "status": h.song.status, "score": h.score,
+                    "files": readable_files(conn, self.cfg.library_dir, h.song)}
+                   for h in search_library(conn, q, LIBRARY_HITS)]
+        cached = self._found.get(q)
+        if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
+            index, hint = cached[1], cached[2]
+        else:
+            index, hint = self._index_hits(conn, q)
+            self._found[q] = (time.monotonic(), index, hint)
+            while len(self._found) > CACHE_SIZE:
+                self._found.popitem(last=False)
+        mine = {(s.match_artist_key, s.match_song_key): s.id for s in list_songs(conn) if s.match_song_key}
+        hits = [{**hit, "song": mine.get(tuple(hit["ug"].split("/", 1)))} for hit in index]
+        return {"query": q, "library": library, "index": hits, "hint": hint}
+
+    def _index_hits(self, conn: sqlite3.Connection, q: str) -> tuple[list[dict[str, Any]], str | None]:
+        from caracole.search import TYPE_ORDER, bare_id_hint, search_index
+        from caracole.ug.index import index_count
+        from caracole.ug.lookup import song_tabs
+
+        if index_count(conn) == 0:
+            return [], "The offline Ultimate Guitar index is empty: run caracole index build once (about 10 minutes)."
+        hits = search_index(conn, q, INDEX_HITS)
+
+        def rank(t) -> tuple:
+            return (TYPE_ORDER.index(t.type) if t.type in TYPE_ORDER else len(TYPE_ORDER), t.label is not None,
+                    t.tab_id)
+
+        out = [{"artist": h.artist, "title": h.title, "ug": f"{h.artist_key}/{h.song_key}", "counts": dict(h.counts),
+                "score": h.score, "url": h.url, "labels": list(h.labels),
+                "tabs": [{"id": t.tab_id, "type": t.type, "label": t.label, "url": t.url}
+                         for t in sorted(song_tabs(conn, h.artist_key, h.song_key), key=rank)[:TABS_SHOWN]]}
+               for h in hits]
+        return out, bare_id_hint(q, hits)
 
 
 def review_first(song: Song, overrides: Overrides) -> bool:

@@ -139,6 +139,31 @@ def read_progress_line(line: str) -> dict[str, Any] | None:
     return event if isinstance(event, dict) else None
 
 
+def kept_sheet(conn, song):
+    """The song's kept sheet (a ``library.KeptFile``): the human one, else the auto-chords one; or None."""
+    from caracole.library import kept_files
+    from caracole.songs import SHEET_FILE_NAMES
+
+    kept = {f.name: f for f in kept_files(conn, song.id)}
+    return next((kept[n] for n in SHEET_FILE_NAMES if n in kept), None)
+
+
+def readable_files(conn, library_dir: Path, song) -> dict[str, str]:
+    """Where the song's sheet can be read, as paths in the library: ``sheet`` (its text), and ``pdf`` and
+    ``viewer`` (render's HTML viewer) when they are there. Empty without a kept sheet."""
+    from caracole.library import song_dir
+
+    kept = kept_sheet(conn, song)
+    if kept is None:
+        return {}
+    folder, base, stem = song_dir(library_dir, song), Path(kept.path).parent, Path(kept.name).stem
+    files = {"sheet": kept.path}
+    for name, file in (("pdf", f"{stem}.pdf"), ("viewer", f"{stem}.html")):
+        if (folder / file).is_file():
+            files[name] = (base / file).as_posix()
+    return files
+
+
 class _Stop(Exception):
     """The lookup can't go on (an ignored song, a pick that isn't one): said in the song's stage."""
 
@@ -245,28 +270,14 @@ class _Lookup:
     # --- what can be read -----------------------------------------------------------------------------
 
     def _kept_sheet(self):
-        from caracole.library import kept_files
-        from caracole.songs import SHEET_FILE_NAMES
-
-        if self.song is None:
-            return None
-        kept = {f.name: f for f in kept_files(self.conn, self.song.id)}
-        return next((kept[n] for n in SHEET_FILE_NAMES if n in kept), None)
+        return kept_sheet(self.conn, self.song) if self.song is not None else None
 
     def _check_readable(self) -> None:
         """Say the sheet is readable when one is kept, and again when it, its PDF or its viewer changes."""
-        from caracole.library import song_dir
-
         kept = self._kept_sheet()
         if kept is None:
             return
-        folder = song_dir(self.cfg.library_dir, self.song)
-        base = Path(kept.path).parent
-        stem = Path(kept.name).stem  # "sheet", or "sheet (auto)"
-        files = {"sheet": kept.path}
-        for name, file in (("pdf", f"{stem}.pdf"), ("viewer", f"{stem}.html")):
-            if (folder / file).is_file():
-                files[name] = (base / file).as_posix()
+        files = readable_files(self.conn, self.cfg.library_dir, self.song)
         if files == self.result.files and kept.version_id == self.sheet_version:
             return
         first = self.result.seconds_to_sheet is None

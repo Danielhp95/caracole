@@ -65,9 +65,13 @@ and `search --key`).
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`).
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed), jobs.py (the queue: each
-  request runs the `caracole` CLI in a child process, one command at a time), app.py (the
-  routes), pages.py, server.py (`http.server`). The page is library_page.py's, with
-  `WebControls`.
+  request runs the `caracole` CLI in a child process, one command at a time; a lookup is
+  one `caracole get --progress`, whose JSON lines become `Job.stages`, and `Job.as_json` is
+  a job as data), app.py (the routes: `/api/search` for search as you type, through
+  search.py's public functions, one at a time, the newest first; `/api/jobs[/<id>]`;
+  `POST /lookup`), lookup_page.py (the lookup page: its script, `createElement` and
+  `textContent` only, allowed by hash, connects to the server alone), pages.py, server.py
+  (`http.server`). The library page is library_page.py's, with `WebControls`.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.

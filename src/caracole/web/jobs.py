@@ -2,19 +2,24 @@
 
 A job is a list of steps; a step is one run of the ``caracole`` command line, in
 a child process with the server's environment and config. A request is
-``caracole add``; fetching a song now adds ``caracole match`` (offline), ``caracole
-fetch --song`` and ``caracole render`` (offline). Each command takes caracole's
-lock, waits behind a nightly run that holds it, keeps the pause after the last
-request any caracole sent, and keeps its budget and cooldowns, exactly as from
-a terminal. One worker thread runs the jobs in order, so the server never runs
-two commands at once: it can be no more aggressive than someone typing them.
+``caracole add``; a song looked up now is one ``caracole get --progress``
+(``lookup_steps``), a single process for the whole lookup, whose JSON lines
+become the job's ``stages`` (get.py's: the song, the match, the sheet, ...),
+its song and the library files it can be read in, and stay out of the step's
+output. Each command takes caracole's lock (a lookup lets a nightly run hand
+it over at its next pause), keeps its pace, budgets and cooldowns, exactly as
+from a terminal. One worker thread runs the jobs in order, so the server never
+runs two commands at once: it can be no more aggressive than someone typing
+them.
 
 A step that exits non-zero fails its job, and the job's other steps are
 skipped. The queue holds ``limit`` jobs waiting or running, one per song (a
-fetch joins the song's waiting add, or follows it once it runs), and
-remembers the last ``keep`` finished ones, in memory only: a request is in
-wanted.txt from the moment it's made, so a restart loses no song, only the
-fetch that would have come before the nightly run.
+lookup takes the place of the song's waiting add, since ``caracole get`` adds
+the song itself, or follows it once it runs), and remembers the last ``keep``
+finished ones, in memory only: a request is in wanted.txt from the moment it's
+made, so a restart loses no song, only the lookup that would have come before
+the nightly run. ``Job.as_json`` is a job as data, for the page that shows a
+request's progress.
 """
 
 from __future__ import annotations
@@ -28,6 +33,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+from caracole.get import read_progress_line
 
 Runner = Callable[[Sequence[str], Callable[[str], None]], int]
 LIMIT = 20  # jobs waiting or running
@@ -50,6 +58,16 @@ class Step:
 
 
 @dataclass
+class Stage:
+    """A stage of a lookup (get.py's ``STAGES``), as its ``caracole get --progress`` reports it."""
+
+    name: str
+    label: str
+    state: str = "waiting"  # waiting, running, done, skipped, failed
+    detail: str = ""
+
+
+@dataclass
 class Job:
     id: int
     title: str
@@ -61,10 +79,54 @@ class Job:
     queued_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    stages: list[Stage] = field(default_factory=list)  # a lookup's
+    song_id: int | None = None
+    song_display: str | None = None
+    files: dict[str, str] = field(default_factory=dict)  # name -> path in the library, once readable
+    seconds_to_sheet: float | None = None
 
     @property
     def active(self) -> bool:
         return self.state in ("queued", "running")
+
+    def as_json(self) -> dict[str, Any]:
+        """The job as plain data: its steps, each with a state (a lookup's stages; else its commands)."""
+        if self.stages:
+            steps = [{"name": s.name, "label": s.label, "state": s.state, "detail": s.detail} for s in self.stages]
+        else:
+            steps = [{"name": s.args[0] if s.args else "", "label": s.label, "state": s.state, "detail": ""}
+                     for s in self.steps]
+
+        def when(dt: datetime | None) -> str | None:
+            return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ") if dt else None
+
+        return {
+            "id": self.id, "title": self.title, "state": self.state, "active": self.active, "note": self.note,
+            "queued_at": when(self.queued_at), "started_at": when(self.started_at),
+            "finished_at": when(self.finished_at), "steps": steps,
+            "commands": [{"label": s.label, "args": list(s.args), "state": s.state, "code": s.code}
+                         for s in self.steps],
+            "song": {"id": self.song_id, "display": self.song_display} if self.song_id is not None else None,
+            "files": dict(self.files), "seconds_to_sheet": self.seconds_to_sheet,
+        }
+
+    def heard(self, event: Mapping[str, Any]) -> None:
+        """Take in one event of ``caracole get --progress`` (get.py)."""
+        if isinstance(event.get("stage"), str):
+            stage = next((s for s in self.stages if s.name == event["stage"]), None)
+            if stage is None:
+                stage = Stage(event["stage"], event["stage"])
+                self.stages.append(stage)
+            stage.state = str(event.get("state") or stage.state)
+            stage.detail = str(event.get("detail") or "")
+        song = event.get("song")
+        if isinstance(song, Mapping) and isinstance(song.get("id"), int):
+            self.song_id, self.song_display = song["id"], str(song.get("display") or "")
+        files = event.get("files")
+        if isinstance(files, Mapping):
+            self.files = {str(k): str(v) for k, v in files.items()}
+            if self.seconds_to_sheet is None and isinstance(event.get("seconds"), (int, float)):
+                self.seconds_to_sheet = float(event["seconds"])
 
 
 def add_steps(artist: str, title: str, *, album: str | None = None,
@@ -80,13 +142,33 @@ def add_steps(artist: str, title: str, *, album: str | None = None,
     return [("Add to the library", (*args, "--", artist, title))]
 
 
-def fetch_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
-    """Fetch one song now: match it (offline), fetch it from UG, render its PDF (offline)."""
-    return [
-        ("Match against the index", ("match",)),
-        ("Fetch from Ultimate Guitar", ("fetch", f"--song={display}")),
-        ("Render the PDF", ("render",)),
-    ]
+LOOKUP = "get"  # the command of a lookup
+
+
+def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_ms: int | None = None,
+                 ug: str | None = None, tab: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
+    """Look one song up now: ``caracole get --progress``, one process for every stage (get.py)."""
+    from caracole.wanted import format_duration
+
+    args = [LOOKUP, "--progress"]
+    if album:
+        args.append(f"--album={album}")
+    if duration_ms is not None:
+        args.append(f"--duration={format_duration(duration_ms)}")
+    if ug:
+        args.append(f"--ug={ug}")
+    if tab:
+        args.append(f"--tab={tab}")
+    return [("Look it up now", (*args, "--", artist, title))]
+
+
+def _stages(steps: Sequence[Step]) -> list[Stage]:
+    """A job's stages: a lookup's, all waiting; none for other commands."""
+    if not any(step.args[:1] == (LOOKUP,) for step in steps):
+        return []
+    from caracole.get import STAGES
+
+    return [Stage(name, label) for name, label in STAGES]
 
 
 class JobQueue:
@@ -114,9 +196,10 @@ class JobQueue:
         job fetches nothing) is the answer. A fetch joins a song's add that
         still waits: the add gets the fetch's steps of the commands it doesn't
         run (one ``caracole add``, whatever its album: the server wrote
-        wanted.txt already). One asked for while the add runs comes after it,
-        as a job of its own. Raises QueueFull when ``limit`` jobs are waiting
-        or running.
+        wanted.txt already), and a lookup takes the add's place, since
+        ``caracole get`` adds the song itself. One asked for while the add
+        runs comes after it, as a job of its own. Raises QueueFull when
+        ``limit`` jobs are waiting or running.
         """
         with self._lock:
             mine = [job for job in self._jobs if job.active and job.song_key == song_key]
@@ -125,17 +208,20 @@ class JobQueue:
                 enough = mine[0]
             if enough is not None:
                 return copy.deepcopy(enough), False
+            new = [Step(label, tuple(args)) for label, args in steps]
             waiting = next((job for job in mine if job.state == "queued"), None)
             if waiting is not None:
+                if any(step.args[:1] == (LOOKUP,) for step in new):
+                    waiting.steps = [s for s in waiting.steps if s.args[:1] != ("add",)]
                 runs = {step.args[0] for step in waiting.steps}
-                waiting.steps += [Step(label, tuple(args)) for label, args in steps if args[0] not in runs]
+                waiting.steps += [step for step in new if step.args[0] not in runs]
+                waiting.stages = waiting.stages or _stages(waiting.steps)
                 waiting.title, waiting.fetching = title, True
                 waiting.note = waiting.note or note
                 return copy.deepcopy(waiting), False
             if sum(job.active for job in self._jobs) >= self._limit:
                 raise QueueFull(f"{self._limit} requests are waiting already")
-            job = Job(self._next_id, title, song_key, [Step(label, tuple(args)) for label, args in steps],
-                      fetching=fetching, note=note)
+            job = Job(self._next_id, title, song_key, new, fetching=fetching, note=note, stages=_stages(new))
             self._next_id += 1
             self._jobs.append(job)
             self._wake.notify_all()
@@ -145,6 +231,11 @@ class JobQueue:
         """Every job remembered, newest first, as copies."""
         with self._lock:
             return copy.deepcopy(self._jobs[::-1])
+
+    def job(self, job_id: int) -> Job | None:
+        """A job remembered, as a copy; None for one never queued, or forgotten."""
+        with self._lock:
+            return next((copy.deepcopy(j) for j in self._jobs if j.id == job_id), None)
 
     def active_count(self) -> int:
         with self._lock:
@@ -206,7 +297,11 @@ class JobQueue:
                 step.state = "running"
 
             def emit(line: str, step: Step = step) -> None:
+                event = read_progress_line(line) if step.args[:1] == (LOOKUP,) else None
                 with self._lock:
+                    if event is not None:  # a lookup's progress: data, not output
+                        job.heard(event)
+                        return
                     step.output.append(line)
                     if len(step.output) > self._max_lines:
                         del step.output[0]
@@ -224,6 +319,11 @@ class JobQueue:
         with self._lock:
             job.state = "failed" if failed or any(s.state != "done" for s in job.steps) else "done"
             job.finished_at = datetime.now(UTC)
+            for stage in job.stages:  # a lookup that ended early: nothing is left running or waiting
+                if stage.state == "running":
+                    stage.state = "failed" if job.state == "failed" else "done"
+                elif stage.state == "waiting":
+                    stage.state = "skipped"
             self._forget()
 
     def _forget(self) -> None:

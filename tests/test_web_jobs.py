@@ -1,5 +1,6 @@
 """caracole/web/jobs.py: the queue of requests, run one caracole command at a time."""
 
+import json
 import sys
 import threading
 from pathlib import Path
@@ -12,7 +13,7 @@ from caracole.web.jobs import (
     QueueFull,
     add_steps,
     child_env,
-    fetch_steps,
+    lookup_steps,
 )
 
 from conftest import subprocess_pythonpath
@@ -37,43 +38,46 @@ class FakeRunner:
         self.terminated = True
 
 
-def test_a_request_is_caracole_add_and_a_fetch_is_match_fetch_render():
+def test_a_request_is_caracole_add_and_a_lookup_is_one_caracole_get():
     assert add_steps("Radiohead", "Creep") == [("Add to the library", ("add", "--", "Radiohead", "Creep"))]
     assert add_steps("-rf", "--help", album="OK Computer", duration_ms=239000) == [
         ("Add to the library", ("add", "--album=OK Computer", "--duration=3:59", "--", "-rf", "--help"))]
-    assert fetch_steps("Radiohead - Creep") == [
-        ("Match against the index", ("match",)),
-        ("Fetch from Ultimate Guitar", ("fetch", "--song=Radiohead - Creep")),
-        ("Render the PDF", ("render",)),
-    ]
+    # One process for the whole lookup, which reports its stages as JSON lines.
+    assert lookup_steps("Radiohead", "Creep") == [("Look it up now", ("get", "--progress", "--", "Radiohead", "Creep"))]
+    assert lookup_steps("-rf", "--help", album="OK Computer", duration_ms=239000, ug="radiohead/creep",
+                        tab="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169") == [
+        ("Look it up now", ("get", "--progress", "--album=OK Computer", "--duration=3:59", "--ug=radiohead/creep",
+                            "--tab=https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169", "--", "-rf",
+                            "--help"))]
 
 
 def test_jobs_run_their_steps_in_order_one_job_at_a_time():
     runner = FakeRunner()
     queue = JobQueue(runner)
-    first, new = queue.submit("Fetch Radiohead - Creep", "radiohead|creep",
-                              add_steps("Radiohead", "Creep") + fetch_steps("Radiohead - Creep"), fetching=True)
+    first, new = queue.submit("Get Radiohead - Creep", "radiohead|creep",
+                              add_steps("Radiohead", "Creep") + lookup_steps("Radiohead", "Creep"), fetching=True)
     second, _ = queue.submit("Add Oasis - Wonderwall", "oasis|wonderwall", add_steps("Oasis", "Wonderwall"))
     assert new and [j.state for j in queue.snapshot()] == ["queued", "queued"]
     queue.run_pending()
-    assert [c[0] for c in runner.calls] == ["add", "match", "fetch", "render", "add"]
+    assert [c[0] for c in runner.calls] == ["add", "get", "add"]
     jobs = {j.id: j for j in queue.snapshot()}
     assert jobs[first.id].state == "done" and jobs[second.id].state == "done"
-    assert [s.state for s in jobs[first.id].steps] == ["done"] * 4
-    assert jobs[first.id].steps[2].output == ["ran fetch"] and jobs[first.id].steps[2].code == 0
+    assert [s.state for s in jobs[first.id].steps] == ["done"] * 2
+    assert jobs[first.id].steps[1].output == ["ran get"] and jobs[first.id].steps[1].code == 0
     assert jobs[first.id].started_at is not None and jobs[first.id].finished_at is not None
 
 
 def test_a_step_that_fails_stops_its_job():
-    runner = FakeRunner(codes={"match": 1}, lines={"match": ["The UG index is empty: run `caracole index build` first."]})
+    runner = FakeRunner(codes={"add": 1}, lines={"add": ["can't update wanted.txt: Permission denied"]})
     queue = JobQueue(runner)
-    job, _ = queue.submit("Fetch Radiohead - Creep", "radiohead|creep", fetch_steps("Radiohead - Creep"))
+    job, _ = queue.submit("Get Radiohead - Creep", "radiohead|creep",
+                          add_steps("Radiohead", "Creep") + lookup_steps("Radiohead", "Creep"))
     queue.run_pending()
     done = queue.snapshot()[0]
     assert done.state == "failed"
-    assert [(s.state, s.code) for s in done.steps] == [("failed", 1), ("skipped", None), ("skipped", None)]
-    assert [c[0] for c in runner.calls] == ["match"]
-    assert "index is empty" in done.steps[0].output[0]
+    assert [(s.state, s.code) for s in done.steps] == [("failed", 1), ("skipped", None)]
+    assert [c[0] for c in runner.calls] == ["add"]
+    assert "Permission denied" in done.steps[0].output[0]
 
 
 def test_a_runner_that_raises_fails_the_job_and_the_queue_goes_on():
@@ -89,53 +93,44 @@ def test_a_runner_that_raises_fails_the_job_and_the_queue_goes_on():
 
 def test_one_job_per_song_at_a_time():
     queue = JobQueue(FakeRunner())
-    job, new = queue.submit("Fetch Radiohead - Creep", "radiohead|creep", fetch_steps("Radiohead - Creep"))
-    again, new_again = queue.submit("Fetch Radiohead - Creep", "radiohead|creep", fetch_steps("Radiohead - Creep"))
+    job, new = queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"))
+    again, new_again = queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"))
     assert new and not new_again and again.id == job.id
     queue.run_pending()
-    later, new_later = queue.submit("Fetch Radiohead - Creep", "radiohead|creep", fetch_steps("Radiohead - Creep"))
+    later, new_later = queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"))
     assert new_later and later.id != job.id  # the first one is done
 
 
-def test_a_fetch_joins_a_waiting_add_of_the_same_song():
+def test_a_lookup_takes_the_place_of_a_waiting_add_of_the_same_song():
+    # `caracole get` adds the song itself: one process, not two start-ups.
     queue = JobQueue(FakeRunner())
     add, _ = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"),
                           note="Added to wanted.txt, line 3.")
-    fetch, new = queue.submit("Fetch Radiohead - Creep", "radiohead|creep",
-                              add_steps("Radiohead", "Creep") + fetch_steps("Radiohead - Creep"), fetching=True)
-    assert not new and fetch.id == add.id
-    assert fetch.title == "Fetch Radiohead - Creep" and fetch.fetching and fetch.note == "Added to wanted.txt, line 3."
-    assert [s.args[0] for s in fetch.steps] == ["add", "match", "fetch", "render"]  # the add once
+    lookup, new = queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"),
+                               fetching=True)
+    assert not new and lookup.id == add.id
+    assert lookup.title == "Get Radiohead - Creep" and lookup.fetching and lookup.note == "Added to wanted.txt, line 3."
+    assert [s.args[0] for s in lookup.steps] == ["get"]
+    assert [s.name for s in lookup.stages][:3] == ["song", "match", "sheet"]
     assert queue.fetching_keys() == {"radiohead|creep"} and queue.active_count() == 1
 
 
-def test_a_fetch_that_joins_an_add_runs_caracole_add_once_whatever_its_album():
-    # The server wrote wanted.txt already; a second `caracole add` would leave the line as it is.
+def test_an_add_never_replaces_a_lookup_of_the_same_song():
     queue = JobQueue(FakeRunner())
-    queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep", album="Pablo Honey"))
-    job, _ = queue.submit("Fetch Radiohead - Creep", "radiohead|creep",
-                          add_steps("Radiohead", "Creep") + fetch_steps("Radiohead - Creep"), fetching=True)
-    assert [s.args for s in job.steps] == [("add", "--album=Pablo Honey", "--", "Radiohead", "Creep"), ("match",),
-                                           ("fetch", "--song=Radiohead - Creep"), ("render",)]
-
-
-def test_an_add_never_replaces_a_fetch_of_the_same_song():
-    queue = JobQueue(FakeRunner())
-    fetch, _ = queue.submit("Fetch Radiohead - Creep", "radiohead|creep", fetch_steps("Radiohead - Creep"),
-                            fetching=True)
+    lookup, _ = queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"),
+                             fetching=True)
     add, new = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"))
-    assert not new and add.id == fetch.id and add.title == "Fetch Radiohead - Creep"
-    assert [s.args[0] for s in add.steps] == ["match", "fetch", "render"]
+    assert not new and add.id == lookup.id and add.title == "Get Radiohead - Creep"
+    assert [s.args[0] for s in add.steps] == ["get"]
 
 
-def test_a_fetch_asked_for_while_the_songs_add_runs_comes_after_it():
+def test_a_lookup_asked_for_while_the_songs_add_runs_comes_after_it():
     asked = []
     calls = []
 
     def runner(args, emit):  # requests that arrive while `caracole add` runs
         if args[0] == "add" and not asked:
-            asked.append(queue.submit("Fetch Radiohead - Creep", "radiohead|creep",
-                                      add_steps("Radiohead", "Creep") + fetch_steps("Radiohead - Creep"),
+            asked.append(queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"),
                                       fetching=True))
             asked.append(queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep")))
         calls.append(args[0])
@@ -144,11 +139,80 @@ def test_a_fetch_asked_for_while_the_songs_add_runs_comes_after_it():
     queue = JobQueue(runner)
     first, _ = queue.submit("Add Radiohead - Creep", "radiohead|creep", add_steps("Radiohead", "Creep"))
     queue.run_pending()
-    (fetch, new), (again, new_again) = asked
-    assert new and fetch.id != first.id and fetch.fetching
-    assert not new_again and again.id == fetch.id  # it joins the fetch, which does more
-    assert calls == ["add", "add", "match", "fetch", "render"]
+    (lookup, new), (again, new_again) = asked
+    assert new and lookup.id != first.id and lookup.fetching
+    assert not new_again and again.id == lookup.id  # it joins the lookup, which does more
+    assert calls == ["add", "get"]
     assert [j.state for j in queue.snapshot()] == ["done", "done"]
+
+
+PROGRESS = "caracole-progress: "
+
+
+def lookup_output():
+    """What `caracole get --progress` prints for a song looked up now."""
+    events = [
+        {"stage": "song", "state": "running", "detail": ""},
+        {"song": {"id": 7, "display": "Radiohead - Creep"}},
+        {"stage": "song", "state": "done", "detail": "added to wanted.txt, line 16"},
+        {"stage": "sheet", "state": "running", "detail": ""},
+        {"stage": "sheet", "state": "done", "detail": "tab 101 from Ultimate Guitar"},
+        {"files": {"sheet": "Radiohead/Creep/sheet.txt"}, "seconds": 2.25},
+        {"stage": "lyrics", "state": "running", "detail": ""},
+    ]
+    lines = [PROGRESS + json.dumps(e) for e in events]
+    return lines[:5] + ["Sheet: tab 101 from Ultimate Guitar: /lib/Radiohead/Creep/sheet.txt"] + lines[5:]
+
+
+def test_a_lookups_progress_becomes_its_stages_and_stays_out_of_its_output():
+    queue = JobQueue(FakeRunner(lines={"get": lookup_output()}))
+    queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"), fetching=True)
+    queue.run_pending()
+    job = queue.snapshot()[0]
+    states = {s.name: (s.state, s.detail) for s in job.stages}
+    assert states["song"] == ("done", "added to wanted.txt, line 16")
+    assert states["sheet"] == ("done", "tab 101 from Ultimate Guitar")
+    assert states["lyrics"][0] == "done" and states["pdf"][0] == "skipped"  # the fake stopped there, as it ended
+    assert (job.song_id, job.files, job.seconds_to_sheet) == (7, {"sheet": "Radiohead/Creep/sheet.txt"}, 2.25)
+    assert job.steps[0].output == ["Sheet: tab 101 from Ultimate Guitar: /lib/Radiohead/Creep/sheet.txt"]
+
+
+def test_a_job_is_data_its_steps_each_with_a_state():
+    queue = JobQueue(FakeRunner(lines={"get": lookup_output()}))
+    job, _ = queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"),
+                          fetching=True)
+    queued = queue.job(job.id).as_json()
+    assert queued["state"] == "queued" and queued["steps"][0] == {
+        "name": "song", "label": "Find the song", "state": "waiting", "detail": ""}
+    queue.run_pending()
+    data = queue.job(job.id).as_json()
+    json.dumps(data)  # plain data
+    assert (data["id"], data["title"], data["state"]) == (job.id, "Get Radiohead - Creep", "done")
+    assert data["steps"][2] == {"name": "sheet", "label": "The sheet", "state": "done",
+                                "detail": "tab 101 from Ultimate Guitar"}
+    assert data["song"] == {"id": 7, "display": "Radiohead - Creep"}
+    assert data["files"] == {"sheet": "Radiohead/Creep/sheet.txt"} and data["seconds_to_sheet"] == 2.25
+    assert data["commands"] == [{"label": "Look it up now", "args": ["get", "--progress", "--", "Radiohead", "Creep"],
+                                 "state": "done", "code": 0}]
+    assert queue.job(999) is None
+
+
+def test_a_lookup_that_ends_early_leaves_no_stage_running():
+    lines = [PROGRESS + json.dumps({"stage": "song", "state": "running", "detail": ""}), "Traceback (most recent ..."]
+    queue = JobQueue(FakeRunner(codes={"get": 1}, lines={"get": lines}))
+    queue.submit("Get A - B", "a|b", lookup_steps("A", "B"), fetching=True)
+    queue.run_pending()
+    job = queue.snapshot()[0]
+    assert job.state == "failed"
+    assert [s.state for s in job.stages] == ["failed"] + ["skipped"] * (len(job.stages) - 1)
+
+
+def test_a_job_of_commands_is_data_too():
+    queue = JobQueue(FakeRunner())
+    job, _ = queue.submit("Add Oasis - Wonderwall", "oasis|wonderwall", add_steps("Oasis", "Wonderwall"))
+    data = queue.job(job.id).as_json()
+    assert data["steps"] == [{"name": "add", "label": "Add to the library", "state": "waiting", "detail": ""}]
+    assert data["song"] is None and data["files"] == {}
 
 
 def test_the_queue_holds_a_limited_number_of_requests():
@@ -171,7 +235,7 @@ def test_finished_jobs_are_forgotten_beyond_a_few():
 
 def test_the_songs_being_fetched_are_those_of_queued_or_running_fetches():
     queue = JobQueue(FakeRunner())
-    queue.submit("Fetch Radiohead - Creep", "radiohead|creep", fetch_steps("Radiohead - Creep"), fetching=True)
+    queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"), fetching=True)
     queue.submit("Add Oasis - Wonderwall", "oasis|wonderwall", add_steps("Oasis", "Wonderwall"))
     assert queue.fetching_keys() == {"radiohead|creep"}
     assert queue.active_count() == 2
@@ -189,8 +253,8 @@ def test_a_snapshot_is_a_copy():
 
 
 def test_a_steps_output_keeps_its_last_lines():
-    queue = JobQueue(FakeRunner(lines={"match": [f"line {n}" for n in range(1000)]}), max_lines=50)
-    queue.submit("Fetch A - B", "a|b", fetch_steps("A - B"))
+    queue = JobQueue(FakeRunner(lines={"get": [f"line {n}" for n in range(1000)]}), max_lines=50)
+    queue.submit("Get A - B", "a|b", lookup_steps("A", "B"))
     queue.run_pending()
     step = queue.snapshot()[0].steps[0]
     assert step.output == [f"line {n}" for n in range(950, 1000)] and step.dropped == 950
