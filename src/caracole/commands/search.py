@@ -63,23 +63,25 @@ def register(app: typer.Typer) -> None:
         ),
         limit: int = typer.Option(10, "--limit", "-n", min=1, help="Hits to show from each place."),
         add: int | None = typer.Option(
-            None, "--add", metavar="N", min=1, help="Add Ultimate Guitar hit N to wanted.txt."
+            None, "--add", metavar="N", min=1,
+            help="Add hit N to wanted.txt, numbered as listed: Ultimate Guitar's, then LaCuerda's (as your "
+                 "pick there).",
         ),
         key: str | None = typer.Option(
             None, "--key", metavar="KEY",
-            help='Only your songs in this key, in either case: "A minor", am, F#, "La menor". The offline index '
-                 "has no keys, so it isn't searched.",
+            help='Only your songs in this key, in either case: "A minor", am, F#, "La menor". The offline '
+                 "indexes have no keys, so they aren't searched.",
         ),
         artist: str | None = typer.Option(
             None, "--artist", metavar="NAME",
-            help="Only this artist's songs: yours, then the offline index's, most tabbed first. QUERY words "
-                 "then search their titles.",
+            help="Only this artist's songs: yours, then the offline indexes', most tabbed (on LaCuerda, most "
+                 "popular) first. QUERY words then search their titles.",
         ),
         title: str | None = typer.Option(
             None, "--title", metavar="TITLE", help="Only songs of this title, by any artist."
         ),
     ) -> None:
-        """Search your library and the offline Ultimate Guitar index (no network)."""
+        """Search your library and the offline Ultimate Guitar and LaCuerda indexes (no network)."""
         ask = _ask(" ".join(" ".join(query or []).split()), artist, title, key)
         in_key = None if key is None else _wanted_key(key, add)
         cfg = load_cfg(ctx)
@@ -116,7 +118,7 @@ def _ask(text: str, artist: str | None, title: str | None, key: str | None) -> _
             if not re.search(r"\w", named[option]):
                 fail(f"{option}: nothing to search for in {value!r}", 2)
     if named and key is not None:
-        fail(f"--key searches your songs by their key, and the offline index has none: it can't go with "
+        fail(f"--key searches your songs by their key, and the offline indexes have none: it can't go with "
              f"{' or '.join(named)}", 2)
     if "--artist" in named:  # words of their titles: --title's, or QUERY's
         return _Ask(" ".join(w for w in (text, named.get("--title", "")) if w), artist=named["--artist"])
@@ -143,7 +145,7 @@ def _wanted_key(key: str, add: int | None) -> str:
     if found is None:
         fail(f"--key: {key!r} is not a key; write one as A minor, Am, F#, Bb or La menor", 2)
     if add is not None:
-        fail("--add adds an Ultimate Guitar hit, and the offline index has no keys: "
+        fail("--add adds a hit of the offline indexes, and they have no keys: "
              "search without --key to add one", 2)
     return found
 
@@ -425,8 +427,8 @@ def _hint(ask: _Ask, listing: _Listing, mine: LibraryHit | None, overrides: Over
     if ask.title is not None:
         if any(h.score >= STRONG for h in listing.songs):
             return None
-        return (f"No song titled {ask.title} in the offline index matches well (UG's sitemaps list some artists "
-                f"only by bare ids, and their songs aren't in it). caracole needs the song's artist to look it "
+        return (f"No song titled {ask.title} in the offline Ultimate Guitar index matches well (UG's sitemaps "
+                f"list some artists only by bare ids, and their songs aren't in it). caracole needs the song's artist to look it "
                 f"up: `caracole add ARTIST {_quote(ask.title)}`.")
     # A song of yours the query found names the artist; "misc", which the owner writes for one they
     # don't know, names no one.

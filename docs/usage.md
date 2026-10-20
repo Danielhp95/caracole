@@ -1967,12 +1967,12 @@ more there are:
     In your library, in A minor
       [LaCuerda] Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
 
-    The offline Ultimate Guitar index has no keys: search it without --key.
+    The offline Ultimate Guitar and LaCuerda indexes have no keys: search them without --key.
 
 KEY is written the way tabs write keys, in either case: `"A minor"`, `Am`,
 `am`, `F#`, `"Bb major"`, `bbm` (B flat minor), `"La menor"`; any spelling of
 the same key matches (`Gbm` finds F# minor). The
-offline index knows no keys, so `--key` leaves it out, and `--add` can't go
+offline indexes know no keys, so `--key` leaves them out, and `--add` can't go
 with it. A KEY that is no key exits with status 2.
 
 ### caracole serve

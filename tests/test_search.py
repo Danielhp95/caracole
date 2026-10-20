@@ -159,6 +159,8 @@ def test_chinese_query_without_pinyin_rows_finds_nothing_and_hints_at_artist_url
     assert hits == []
     hint = bare_id_hint("宋冬野", hits)
     assert hint is not None and "[artist_url]" in hint and "bare" in hint
+    # It follows LaCuerda's hits too, which may match well: it names the index it means.
+    assert hint.startswith("Nothing in the offline Ultimate Guitar index matches well.")
 
 
 def test_no_hint_for_a_plain_query_with_a_good_hit(conn):

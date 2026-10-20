@@ -643,8 +643,8 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: st
         return None
     lead = (
         "UG's sitemaps list artists with accented or non-Latin names only by bare ids." if strong else
-        "Nothing in the offline index matches well. UG's sitemaps list some artists only by bare "
-        "ids, usually because of accents or non-Latin letters (Joaquín Sabina, Maná, 宋冬野), so "
+        "Nothing in the offline Ultimate Guitar index matches well. UG's sitemaps list some artists only "
+        "by bare ids, usually because of accents or non-Latin letters (Joaquín Sabina, Maná, 宋冬野), so "
         "caracole can't see their tabs."
     )
     shown = artist or " ".join(query.split())
