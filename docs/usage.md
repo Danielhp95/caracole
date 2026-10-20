@@ -331,7 +331,8 @@ A song needs its artist: caracole looks it up by artist and title. Given one
 name with no " - " (`caracole add Wonderwall`), `caracole add` writes nothing
 and exits 2. It lists your songs of that title, then what
 `caracole search Wonderwall` lists first, five hits numbered as the search
-numbers them, each with its `caracole add "Oasis" "Wonderwall"` line, and
+numbers them, each with its `caracole add "Oasis" "Wonderwall"` line (a hit
+scoring under 90 has none: it may well be another song), and
 `caracole search "Wonderwall" --add N` to add one by its number; the last line
 says what it takes, with `caracole add ARTIST "Wonderwall"` (or, for an
 artist's name alone, `caracole add "Oasis" TITLE`). Nothing asks a site who
@@ -347,7 +348,7 @@ the songs of that title with their artists.
 `caracole get "ARTIST - TITLE"` (or `caracole get ARTIST TITLE`) is for the
 song you want to play now. One name alone (`caracole get Wonderwall`) looks
 nothing up and exits 2: like `caracole add`, it lists your songs of that
-title and the offline index's songs, each with its
+title and the offline index's songs, each scoring 90 or more with its
 `caracole get --ug oasis/wonderwall "Oasis - Wonderwall"` line. It does the nightly run's work for that song alone,
 at once, sheet first, and says where the sheet is the moment it is kept:
 
@@ -1743,7 +1744,9 @@ When a song leads, the songs come first, and an artist of that name is a
 line of its own: `caracole search wonderwall` lists Oasis's, Ryan Adams's and
 Cartel's Wonderwall, then `Also an artist: Wonderwall, 9 songs (13 tabs)`
 with its `caracole search --artist "Wonderwall"` line; the band's songs are
-left out of the list. The offline index knows no ratings, so the number of
+left out of the list. Beside an artist whose name is the query, one whose name
+is only near it is left out, with its songs: `caracole search eagles` lists no
+Beagles. The offline index knows no ratings, so the number of
 tabs is what puts the song you probably mean first (Radiohead's Creep before
 Stone Temple Pilots'). A catch-all such as `misc-musicals` is never an
 artist.

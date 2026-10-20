@@ -264,9 +264,9 @@ def _listing(conn: sqlite3.Connection, ask: _Ask, limit: int) -> _Listing:
 
 
 def _print_listing(listing: _Listing, known: set[tuple[str, str]],
-                   paste: Callable[[IndexHit], str] | None = None) -> None:
+                   paste: Callable[[IndexHit], str | None] | None = None) -> None:
     """Its lines, and its hits numbered from 1, each with its line to run (``paste``, by default the
-    ``caracole add`` line)."""
+    ``caracole add`` line; None for none)."""
     n = 0
     for part in listing.parts:
         if isinstance(part, str):
@@ -414,7 +414,7 @@ def offer_songs(cfg: Config, text: str, command: str) -> NoReturn:
     """``caracole add TEXT`` or ``caracole get TEXT`` for one name with no " - ": a song needs its
     artist, and the name may be its title or an artist's, so nothing is written or looked up. It
     prints your songs of that title and what ``caracole search TEXT`` lists first (its numbers), each
-    with the line that adds or gets it, and exits 2. It only reads, so it takes no lock."""
+    scoring ``STRONG`` or more with the line that adds or gets it, and exits 2. It only reads, so it takes no lock."""
     from caracole.search import STRONG, search_library
 
     offer = _OFFERS[command]
@@ -431,8 +431,11 @@ def offer_songs(cfg: Config, text: str, command: str) -> NoReturn:
             listing = _listing(conn, _Ask(text), OFFERED)
             artist = listing.lead == "artist"
             typer.echo("On Ultimate Guitar (offline index)")
-            _print_listing(listing, _library_keys(conn) if command == "add" else set(), offer.hit)
-            lines += len(listing.hits)
+            # A weak hit is listed, numbered as caracole search numbers it, with no line to run: it may well be
+            # another song.
+            _print_listing(listing, _library_keys(conn) if command == "add" else set(),
+                           lambda hit: offer.hit(hit) if hit.score >= STRONG else None)
+            lines += sum(h.score >= STRONG for h in listing.hits)
             if listing.hits and offer.after is not None:
                 typer.echo(offer.after(text))
     whole = (f"give its title too: {offer.whole(_quote(text) if command == 'add' else text, 'TITLE')}" if artist
@@ -448,7 +451,7 @@ def _add_line(hit: IndexHit) -> str:
 
 
 def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]],
-                 paste: Callable[[IndexHit], str] = _add_line) -> str:
+                 paste: Callable[[IndexHit], str | None] = _add_line) -> str:
     """A numbered hit: the name and its tabs per type, a sample page, and how to add it (``paste``)."""
     from caracole.normalize import identity_key
 
@@ -463,7 +466,8 @@ def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]],
         return f"{head}\n     in your library"
     if hit.catch_all:  # added under UG's names, the song's artist would be "Misc Musicals"
         return f"{head}\n{_catch_all_note(hit, 'this hit')}"
-    return f"{head}\n     {paste(hit)}"
+    line = paste(hit)
+    return head if line is None else f"{head}\n     {line}"
 
 
 _ADD_AS_YOU_KNOW_IT = 'caracole add "<the show or singer>" "<the song>"'

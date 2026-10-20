@@ -162,6 +162,23 @@ def test_get_with_a_title_alone_offers_its_ug_songs_and_looks_nothing_up(config,
     assert "misc - Wonderwall · wanted" in mine and 'caracole get "misc - Wonderwall"' not in mine
 
 
+
+def test_get_with_one_name_gives_no_line_to_run_for_a_weak_hit(config, sites, conn):
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import mark_built, upsert_rows
+
+    when = datetime(2026, 10, 20, tzinfo=UTC)
+    upsert_rows(conn, [(9001, "anju-panta", "banma-phulyo-fullai-ful", "chords",
+                        "anju-panta/banma-phulyo-fullai-ful-chords-9001")], "1", when)
+    mark_built(conn, when)
+    result = get(config, "斑马")
+    assert result.exit_code == 2, result.output
+    assert "Anju Panta - Banma Phulyo Fullai Ful" in result.output  # listed, as caracole search numbers it
+    assert "caracole get --ug" not in result.output  # but no line to run: it may well be another song
+    assert "Run one of the lines above" not in result.output and "Name its artist too" in result.output
+
+
 def test_get_of_a_song_ignored_in_overrides_toml_exits_1(config, sites, conn, tmp_path):
     (tmp_path / "library").mkdir(exist_ok=True)
     (tmp_path / "library" / "overrides.toml").write_text('[ignore]\nsongs = ["Radiohead - Creep"]\n',

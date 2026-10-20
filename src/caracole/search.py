@@ -40,6 +40,8 @@ comes first, and ``best`` is the one row Enter may act on: a song of yours read
 by its title (or both), not under a placeholder artist such as "misc", else
 the first song of the index if it scores 90 or more by its title (or both) and
 isn't a catch-all's, and None when an artist leads or nothing is that good.
+Beside an artist whose whole name is the query, one whose name is only near it
+("Beagles" for "eagles") is left out, with the songs only its name matched.
 ``artist_songs`` lists all of an artist's songs, and ``library_by_artist``
 yours. The only popularity the index holds is how many
 tabs a song or an artist has, so that orders the ties, and the artist with a
@@ -277,6 +279,12 @@ def find_index(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_RO
     """The offline index's artists and songs for ``query`` (``IndexFound``); with ``reading`` "title",
     songs of that title alone, by any artist, and no artist rows."""
     scored, named = _scored_rows(conn, query, reading)
+    if any(n.score >= 100 for n in named.values()):
+        # A name only near the query's ("Beagles" for "eagles") is noise beside the one that is it: its row goes,
+        # and the songs only its name matched.
+        near = {k for k, n in named.items() if n.score < 100}
+        named = {k: n for k, n in named.items() if k not in near}
+        scored = [s for s in scored if not (s.via == "artist" and s.artist_key in near)]
     rows: list[ArtistHit] = []
     if artists > 0:
         # Weighed first by what the rows hold of each (every row of an artist whose key a pattern

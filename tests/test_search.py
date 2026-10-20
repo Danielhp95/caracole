@@ -1004,6 +1004,18 @@ def test_an_artist_with_more_tabbed_songs_leads_songs_titled_like_it(conn):
     assert found.lead == "song" and found.best.artist_key == "a-great-big-world"
 
 
+
+def test_an_artist_only_near_the_querys_name_is_left_out_beside_the_one_it_is(conn):
+    from caracole.search import find_index
+
+    index(conn, [(1, "eagles", "hotel-california", "chords"), (2, "eagles", "desperado", "chords"),
+                 (3, "beagles", "the-ballad", "chords")])
+    found = find_index(conn, "eagles")
+    assert [a.artist_key for a in found.artists] == ["eagles"]
+    assert "beagles" not in {h.artist_key for h in found.songs}  # nor the songs only its name matched
+    assert [a.artist_key for a in find_index(conn, "beagle").artists] == ["beagles"]  # none exact: the nearest
+
+
 def test_artist_songs_lists_every_song_most_tabbed_first_variants_with_their_song(conn):
     from caracole.search import artist_songs
 
