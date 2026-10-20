@@ -30,7 +30,7 @@
   };
 
   const hash = location.hash.replace(/^#/, "");
-  const asked = /^song-(\d+)(?:&|$)/.exec(hash);
+  const asked = /^song-(\d+)=?(?:&|$)/.exec(hash);  // the viewer may add its settings: "song-3=&t=2"
   let current = asked ? sections.find((s) => s.dataset.n === asked[1]) || null : null;
   if (!current && !hash) current = sections.find((s) => s.dataset.id === book.at) || null;  // where you were
   harvest();

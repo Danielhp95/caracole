@@ -196,6 +196,15 @@ def test_the_page_opens_on_its_contents(tmp_path):
 
 
 @in_chromium
+def test_the_song_in_the_address_opens_whatever_else_the_address_keeps(tmp_path):
+    # The viewer may keep its settings in the address as parameters (#song-3=&t=1, as URLSearchParams
+    # writes a song's name back), where a sandbox gives it no storage.
+    for fragment in ("#song-3=&t=1", "#song-3&mode=dorian"):
+        dom = open_page(page(), tmp_path, fragment)
+        assert 'data-view="song"' in dom and visible_songs(dom) == ["3"], fragment
+
+
+@in_chromium
 def test_a_song_opens_alone_in_the_viewer_in_its_own_key(tmp_path):
     dom = open_page(page(), tmp_path, "#song-3")
     assert 'data-view="song"' in dom and 'data-ready="1"' in dom  # the viewer ran, on this song
