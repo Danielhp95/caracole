@@ -379,7 +379,8 @@ In order:
    chords with its rating, and the best rated is kept at once: one or two
    requests. Without one there, LaCuerda's, for a song LaCuerda would be asked
    about tonight. From here on the sheet is readable.
-4. **The PDF**, as `caracole render` makes it.
+4. **The PDF**, as `caracole render` makes it, for this song alone: another
+   song's failed PDF, or one waiting for a CJK font, isn't this one's.
 5. **The lyrics**, from LRCLIB.
 6. **Ultimate Guitar again**, as the nightly run would: the top sheets are
    scored against the lyrics, and a more complete one replaces the first;
@@ -1058,8 +1059,9 @@ and cache.
   `_inbox` is a link itself, it is refused the same way, and nothing in the
   folder it points at is read, filed or deleted. The nightly run's scan line
   ends with the same count (`, 1 symbolic link refused`).
-- **`caracole render [--force]`** writes `sheet.cho`, `sheet.pdf` and
-  `sheet.html` next to every kept sheet, transposed as `[transpose]` says.
+- **`caracole render [--force] [--song "ARTIST - TITLE"]`** writes
+  `sheet.cho`, `sheet.pdf` and `sheet.html` next to every kept sheet, or the
+  one song's with `--song`, transposed as `[transpose]` says.
   The PDF has the artist, the key and the capo on one line under the title
   ("Soda Stereo · Key Bm · Capo 2"), the chord diagrams above the song, bold
   chords in rust over the lyrics, and section names on a light band.
@@ -1068,12 +1070,16 @@ and cache.
   sheet, its transposition, the font or caracole's PDF style changes, or when
   it is no longer the PDF caracole wrote: deleted, cut short, edited, or a
   link in its place. So annotate a copy, not `sheet.pdf`. `--force` makes them
-  all again. After an upgrade from a caracole that didn't record what it
-  wrote, or that drew its PDFs another way, the first render makes every PDF
-  once more. The viewer is written again whenever it would change, at every
-  render. A song that no longer keeps its human sheet (its UG match was
-  undone, say) loses the `sheet.cho`, `sheet.pdf` and `sheet.html` made from
-  it; one you put where caracole never rendered one stays. A sheet that never
+  all again (the song's alone, with `--song`). With `--song`, as after a pick
+  in `caracole serve`, only that song's failure counts: another sheet that
+  fails, or waits for a font, is not its own, nor is a songbook, and the to-do
+  page keeps telling of the last render of the library. After an upgrade from
+  a caracole that didn't record what it wrote, or that drew its PDFs another
+  way, the first render makes every PDF once more. The viewer is written
+  again whenever it would change, at every render. A song that no longer
+  keeps its human sheet (its UG match was undone, say) loses the `sheet.cho`,
+  `sheet.pdf` and `sheet.html` made from it; one you put where caracole never
+  rendered one stays. A sheet that never
   got a PDF (waiting for a font, or chordpro failed on it) loses its
   `sheet.cho` and `sheet.html` while they are still as caracole wrote them.
   chordpro works on a copy, in a private folder in the cache, and the new PDF
@@ -1090,7 +1096,7 @@ and cache.
   [songbooks](#songbooks)' files that need it, and says how that went on a
   line of its own, `Songbooks: 1 rendered, 2 up to date, 0 failed`, when there
   are songbooks; a songbook that couldn't be made, or a songbooks.toml that
-  can't be read, exits 1 too.
+  can't be read, exits 1 too, but not with `--song`: that line still says so.
 - **`caracole todo`** rewrites `_todo.md` and `index.html` from the database.
 - **`caracole icons`** fetches the icon of each site `index.html` has none for
   yet, now, then rewrites `_todo.md` and `index.html`. It prints a line a site:
@@ -1408,8 +1414,13 @@ when it has something in it:
 - **Suggestions from your Spotify top tracks**, with `suggest_top_tracks`.
   Add the ones you want to learn to your Learn playlist or to wanted.txt.
   Songs you have, and songs you removed, aren't suggested.
-- **PDFs.** The last render: how many PDFs were made or failed, a font
-  problem if there is one, and the sheets that failed.
+- **PDFs.** The last render of the library (the nightly run's, or `caracole
+  render`'s): how many PDFs were made or failed, a font problem if there is
+  one, with the sheets it keeps from a PDF, and the sheets that failed. A
+  lookup (`caracole get`) and `caracole render --song` (the last step of a
+  pick in `caracole serve`) render their own song alone and leave that record
+  as it was, but for their song: they take it off the sheets that failed or
+  wait for a font, or put it back on.
 - **Sources.** Whether Spotify is off, synced, not fully set up (the client
   secret missing, say), or needs `caracole auth spotify`, and how many songs
   wanted.txt has, with the lines it couldn't read; for a wanted.txt it
@@ -2023,7 +2034,8 @@ with it. A KEY that is no key exits with status 2.
   which says "Writing the answer to overrides.toml…", then how the rest goes
   (below). With Fetch it now ticked,
   as it is by default, a pick then runs `caracole fetch --song` and
-  `caracole render`, at the nightly pace; None of these fetches nothing, and caracole goes on
+  `caracole render --song`, for that song alone, at the nightly pace; None of
+  these fetches nothing, and caracole goes on
   looking for the song: if the matcher finds others, the song is back in
   review with those, and its card offers them to pick from, with no Fetch now
   until one is picked. The candidates must still be the ones the page showed

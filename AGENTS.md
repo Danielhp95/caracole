@@ -36,7 +36,7 @@ an earlier one failed:
 | lyrics | lyrics.py |
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), rank.py, coverage.py, versions.py |
 | lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` is for searches, not wired in yet, `artist_slugs` for the sheets) |
-| scan | music.py (Music/), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
+| scan | music.py (Music/; `Names`, how alike a file's names and a song's are, for purchases and the inbox), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
 | youtube | youtube.py (picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_urls.py (a video's address, the standard library alone: overrides.py's `[youtube]`), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
@@ -62,7 +62,7 @@ songs.py's, in the `removed` table).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `make_youtube`,
-  `write_pages`, `fail`, `warn`.
+  `write_pages`, `fail`, `warn`, `song_named` (the song a `--song` names).
   `caracole get` (commands/get.py) is one song looked up now, in one process: get.py runs
   the run's steps for that song alone (`only=` / `songs=` of lyrics.py, lacuerda_fetch.py,
   gtptabs_fetch.py and `match.match_all`), sheet first (one versions page and the best-rated
@@ -250,6 +250,8 @@ Traps:
   `test_commands_index_match.py::test_a_command_that_sends_no_request_imports_no_http_client`
   fails when importing `caracole.cli` and reading a `[youtube]` entry (youtube_urls.py) loads
   httpx, rich, `caracole.http` or `caracole.youtube`.
+  music.py imports mutagen in `read_audio` alone: inbox.py, which the pages import,
+  scores names with its `Names` (`test_music.py::test_the_pages_load_no_tag_reader`).
 - Branch from `caracole-v1`, the default branch (`main` holds only the first design commit).
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:
@@ -418,7 +420,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `test_songbook_render.py::test_a_broken_songbooks_file_is_an_error_that_stops_nothing_else`).
 - **The library is synced**: Syncthing and every device can write to it. Read a file there
   with `library.read_regular` (or `open_regular`: no symbolic link followed, regular files
-  only), and write one with `library.write_atomic`: a random temporary name opened
+  only; `dir_fd=` for a name in a folder opened without following a link, as inbox.py reads
+  `_inbox/`; `read_json` for its JSON, where whatever a device wrote is a ValueError at worst,
+  never the RecursionError that would stop a pass over every song, as it is an `OverridesError`
+  or a `SongbookFileError` in overrides.toml or songbooks.toml), and write one with
+  `library.write_atomic`: a random temporary name opened
   exclusively, then a rename. Never `mkstemp`, whose mode 0600 hides files from Syncthing.
   Nothing private or bulky goes there: the database, the Spotify token, the lock, the HTTP
   cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in

@@ -183,7 +183,8 @@ def info_json(cfg, song) -> dict:
 
 def render(conn, cfg, ovr=None, **kwargs) -> RenderStats:
     kwargs.setdefault("runner", FakeChordPro())
-    return render_all(conn, cfg, ovr or Overrides(), now=NOW, **kwargs)
+    kwargs.setdefault("now", NOW)
+    return render_all(conn, cfg, ovr or Overrides(), **kwargs)
 
 
 # --- what gets written ------------------------------------------------------------------
@@ -991,6 +992,20 @@ def test_unreadable_sheet_json_fails_that_song_only(conn, cfg, caplog, doc):
     assert "sheet.json" in caplog.text
 
 
+def test_a_sheet_json_nested_too_deep_fails_that_song_only(conn, cfg, caplog):
+    # Any synced device can write one, and the decoder raises RecursionError on it, not ValueError:
+    # the song it stops comes first (the newest is rendered first), and the pass goes on after it.
+    good = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-01T00:00:00Z")
+    human_sheet(conn, cfg, good, tab_id=2)
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana", added_at="2026-10-02T00:00:00Z")
+    human_sheet(conn, cfg, bad, tab_id=1)
+    (song_dir(cfg.library_dir, bad) / "sheet.json").write_bytes(b"[" * 100_000 + b"]" * 100_000)
+    stats = render(conn, cfg)
+    assert (stats.rendered, stats.failed) == (1, 1)
+    assert pdf_of(cfg, good).is_file() and not pdf_of(cfg, bad).exists()
+    assert "nested too deep" in caplog.text
+
+
 @pytest.mark.parametrize("data", [None, b"\xff\xfe not UTF-8"], ids=["missing", "not-utf8"])
 def test_unreadable_auto_sheet_fails_that_song_only(conn, cfg, caplog, data):
     bad = add_song(conn, "Placeholder Band", "Synthetic Song")
@@ -1138,6 +1153,7 @@ def test_status_recorded_for_the_todo_page(conn, cfg):
         "rendered": 1,
         "failed": ["Soda Stereo - Persiana Americana"],
         "font_error": stats.font_error,
+        "no_font": {"宋冬野 - 斑马斑马": "斑"},  # its first letter the built-in fonts lack
     }
 
 
@@ -1195,6 +1211,121 @@ def test_info_json_keeps_the_render_entry_when_another_step_rewrites_it(conn, cf
     render(conn, cfg)
     write_info(conn, cfg.library_dir, get_song(conn, song.id))  # as the fetch step does
     assert info_json(cfg, song).get("render") == {"transpose": 0, "pdf": "sheet (auto).pdf"}
+
+
+# --- a pass over some songs (a lookup's one song) --------------------------------------------
+
+LATER = datetime(2026, 10, 18, 12, 0, tzinfo=UTC)
+
+
+def test_a_pass_over_some_songs_renders_those_alone(conn, cfg):
+    mine = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, mine, tab_id=1)
+    other = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, other, tab_id=2)
+    run = FakeChordPro()
+
+    stats = render(conn, cfg, runner=run, song_ids={mine.id, 9999})  # 9999: no such song (merged, removed)
+
+    assert stats == RenderStats(rendered=1) and len(run.calls) == 1
+    assert pdf_of(cfg, mine).is_file()
+    assert not any((song_dir(cfg.library_dir, other) / name).exists()
+                   for name in ("sheet.cho", "sheet.pdf", "sheet.html"))
+
+
+def test_a_pass_over_some_songs_leaves_the_last_full_pass_on_the_todo_page(conn, cfg):
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, bad, tab_id=1)
+    zh = add_song(conn, "宋冬野", "斑马斑马")  # no CJK font: no PDF, and the pass's font error
+    human_sheet(conn, cfg, zh, ZH_SHEET, tab_id=2, tonality="")
+    run = FakeChordPro(fail=("Persiana",))
+    render(conn, cfg, runner=run)
+    nightly = kv_get_json(conn, "render:status")
+    assert nightly["failed"] == ["Soda Stereo - Persiana Americana"] and nightly["font_error"]
+    new = add_song(conn, "Soda Stereo", "Signos")
+    human_sheet(conn, cfg, new, tab_id=3)
+
+    stats = render(conn, cfg, runner=run, now=LATER, song_ids={new.id})
+
+    assert stats == RenderStats(rendered=1)
+    assert kv_get_json(conn, "render:status") == nightly  # its time, its counts, the others' failures
+
+
+def test_a_pass_over_some_songs_brings_their_own_failures_up_to_date(conn, cfg):
+    first = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, first, tab_id=1)
+    second = add_song(conn, "Soda Stereo", "Signos")
+    human_sheet(conn, cfg, second, tab_id=2)
+    render(conn, cfg, runner=FakeChordPro(fail=("Persiana", "Signos")))
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Signos", "Soda Stereo - Persiana Americana"]
+
+    render(conn, cfg, runner=FakeChordPro(fail=("Signos",)), now=LATER, song_ids={first.id})  # renders now
+    status = kv_get_json(conn, "render:status")
+    assert status["failed"] == ["Soda Stereo - Signos"]
+    assert (status["at"], status["rendered"]) == ("2026-10-18T03:30:00Z", 0)
+
+    render(conn, cfg, runner=FakeChordPro(fail=("Persiana",)), force=True, song_ids={first.id})  # fails again
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Signos", "Soda Stereo - Persiana Americana"]
+
+
+def test_a_font_error_of_a_pass_over_some_songs_is_the_one_shown(conn, cfg):
+    render(conn, cfg)  # an empty library: a record, no font error
+    zh = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, zh, ZH_SHEET, tonality="")
+
+    stats = render(conn, cfg, now=LATER, song_ids={zh.id})
+
+    assert stats.font_error is not None and "宋冬野 - 斑马斑马" in stats.font_error
+    assert kv_get_json(conn, "render:status") == {
+        "at": "2026-10-18T03:30:00Z", "rendered": 0, "failed": [], "font_error": stats.font_error,
+        "no_font": {"宋冬野 - 斑马斑马": "斑"},
+    }
+
+
+def test_a_pass_over_some_songs_keeps_the_others_that_wait_for_a_font(conn, cfg, tmp_path):
+    first = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, first, ZH_SHEET, tab_id=1, tonality="")
+    second = add_song(conn, "宋冬野", "安和桥")
+    human_sheet(conn, cfg, second, ZH_SHEET, tab_id=2, tonality="")
+    render(conn, cfg)  # no CJK font: neither gets a PDF
+
+    def waiting() -> list[str]:
+        shown = kv_get_json(conn, "render:status")["font_error"] or ""
+        return [s.display for s in (first, second) if s.display in shown]
+
+    assert waiting() == [first.display, second.display]
+    render(conn, cfg, now=LATER, song_ids={first.id})  # still no font: both still wait
+    assert waiting() == [first.display, second.display]
+    cfg = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
+    render(conn, cfg, now=LATER, song_ids={first.id})  # its PDF made: the other one alone waits
+    assert waiting() == [second.display]
+    render(conn, cfg, now=LATER, song_ids={second.id})
+    assert kv_get_json(conn, "render:status")["font_error"] is None
+
+
+def test_a_record_kept_before_no_font_keeps_its_font_error_until_a_pass_hits_one(conn, cfg):
+    old = {"at": "2026-10-18T03:30:00Z", "rendered": 0, "failed": [], "font_error": "set cjk_font to render X"}
+    kv_set_json(conn, "render:status", old)  # by a caracole that kept no "no_font"
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, tab_id=1)
+    render(conn, cfg, now=LATER, song_ids={song.id})
+    assert kv_get_json(conn, "render:status") == old
+    zh = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, zh, ZH_SHEET, tab_id=2, tonality="")
+    stats = render(conn, cfg, now=LATER, song_ids={zh.id})
+    assert kv_get_json(conn, "render:status") == {**old, "font_error": stats.font_error}
+
+
+def test_a_pass_over_some_songs_before_any_full_pass_records_itself(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, song)
+
+    render(conn, cfg, runner=FakeChordPro(fail=("Persiana",)), song_ids={song.id})
+
+    assert kv_get_json(conn, "render:status") == {
+        "at": "2026-10-18T03:30:00Z", "rendered": 0, "failed": ["Soda Stereo - Persiana Americana"],
+        "font_error": None, "no_font": {},
+    }
 
 
 # --- caracole render ---------------------------------------------------------------------------
@@ -1264,6 +1395,91 @@ def test_render_command_exits_1_when_a_sheet_fails(conn, cfg, fake_chordpro, cap
     # The warning says which song and why; the command then needs to add nothing.
     assert "no PDF for Soda Stereo - Persiana Americana" in caplog.text
     assert "Unhandled fonts detected" in caplog.text
+
+
+@pytest.mark.slow
+def test_render_command_renders_one_song_with_song(conn, cfg, fake_chordpro):
+    # The step after a web pick's fetch: another song's sheet that fails is not its failure.
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, bad, tab_id=1)
+    assert caracole_render(cfg, fake_chordpro).exit_code == 1  # the night's render
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+
+    result = caracole_render(cfg, fake_chordpro, "--song", "Soda Stereo - De Música Ligera")
+
+    assert result.exit_code == 0, result.output
+    assert "1 rendered, 0 up to date, 0 failed" in result.output
+    assert pdf_of(cfg, good).is_file()
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Persiana Americana"]
+    unknown = caracole_render(cfg, fake_chordpro, "--song", "Soda Stereo - Zoom")
+    assert unknown.exit_code == 1 and 'No song "Soda Stereo - Zoom" in the library' in unknown.output
+
+
+def test_render_command_with_song_refuses_a_name_that_is_none_and_an_ignored_song(conn, cfg, fake_chordpro):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    bad = caracole_render(cfg, fake_chordpro, "--song", "no dash here")
+    assert bad.exit_code == 2, bad.output
+    cfg.overrides_file.write_text(f'[ignore]\nsongs = ["{song.display}"]\n', encoding="utf-8")
+    ignored = caracole_render(cfg, fake_chordpro, "--song", song.display)
+    assert ignored.exit_code == 1 and f'"{song.display}" is ignored in overrides.toml.' in ignored.output
+    assert not pdf_of(cfg, song).exists()
+
+
+@pytest.mark.slow
+def test_render_command_with_song_counts_no_songbook_that_fails(conn, cfg, fake_chordpro):
+    # A synced device's folder where a songbook's PDF goes: that songbook fails at every render.
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    other = add_song(conn, "Soda Stereo", "Signos")
+    human_sheet(conn, cfg, other, tab_id=3)
+    (cfg.library_dir / "songbooks.toml").write_text('["Rock"]\nsongs = ["Soda Stereo - Signos"]\n',
+                                                     encoding="utf-8")
+    (cfg.library_dir / "_songbooks" / "Rock" / "songbook.pdf").mkdir(parents=True)
+    night = caracole_render(cfg, fake_chordpro)
+    assert night.exit_code == 1 and "Songbooks: 0 rendered, 0 up to date, 1 failed" in night.output
+
+    result = caracole_render(cfg, fake_chordpro, "--song", good.display)
+
+    assert result.exit_code == 0, result.output
+    assert "0 rendered, 1 up to date, 0 failed" in result.output
+    assert "Songbooks: 0 rendered, 0 up to date, 1 failed" in result.output  # said, but not the song's
+    assert pdf_of(cfg, good).is_file()
+
+
+@pytest.mark.slow
+def test_render_command_with_song_counts_no_songbooks_file_that_cant_be_read(conn, cfg, fake_chordpro):
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    cfg.library_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.library_dir / "songbooks.toml").write_text("[[[not toml\n", encoding="utf-8")
+
+    result = caracole_render(cfg, fake_chordpro, "--song", good.display)
+
+    assert result.exit_code == 0, result.output
+    assert "1 rendered, 0 up to date, 0 failed" in result.output
+    assert "Songbooks: songbooks.toml can't be read" in result.output
+    assert pdf_of(cfg, good).is_file()
+    assert caracole_render(cfg, fake_chordpro).exit_code == 1  # the library's render counts it
+
+
+def test_render_command_forces_one_songs_pdfs_alone(conn, cfg, fake_chordpro, monkeypatch):
+    import caracole.render
+    import caracole.songbook
+    from caracole.songbook import SongbookStats
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    calls = []
+    monkeypatch.setattr(caracole.render, "render_all", lambda conn, cfg, overrides, **kwargs: calls.append(
+        ("sheets", kwargs["force"], kwargs["song_ids"])) or RenderStats())
+    monkeypatch.setattr(caracole.songbook, "render_songbooks", lambda conn, cfg, overrides, *, force: calls.append(
+        ("songbooks", force)) or SongbookStats())
+
+    assert caracole_render(cfg, fake_chordpro, "--force", "--song", song.display).exit_code == 0
+    assert caracole_render(cfg, fake_chordpro, "--force").exit_code == 0
+
+    assert calls == [("sheets", True, {song.id}), ("songbooks", False), ("sheets", True, None), ("songbooks", True)]
 
 
 def test_render_command_a_missing_font_is_no_failure(conn, cfg, fake_chordpro, caplog):

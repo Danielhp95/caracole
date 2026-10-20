@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 from datetime import UTC, datetime
 
 import pytest
@@ -234,6 +235,34 @@ def test_the_estimate_weighs_each_chord_by_its_duration():
     # The same four chords: the one that rings longest is home.
     assert estimate_key([("Am", 1.0), ("C", 20.0), ("G", 4.0), ("F", 4.0), ("C", 20.0)]) == "C"
     assert estimate_key([("C", 1.0), ("Am", 20.0), ("G", 4.0), ("F", 4.0), ("Am", 20.0)]) == "A minor"
+
+
+def test_between_the_first_and_last_chord_only_how_long_each_chord_sounds_counts():
+    # The same chords in another order, a chord's time split or summed: the same key.
+    assert estimate_key([("Am", 1.0), ("C", 10.0), ("G", 4.0), ("C", 10.0), ("F", 4.0), ("C", 20.0)]) == "C"
+    assert estimate_key([("C", 1.0), ("G", 2.0), ("Am", 15.0), ("F", 4.0), ("Am", 5.0), ("G", 2.0),
+                         ("Am", 20.0)]) == "A minor"
+    rnd = random.Random(9)
+    names = ["C", "Cm", "C7", "D", "Dm", "E", "Em", "E7", "F", "F#m", "G", "Gsus4", "A", "Am", "Bb",
+             "Bm", "Bm7b5", "Eb", "F5", "Bdim", "Caug", "E/G#", "N.C."]
+    for _ in range(100):
+        pool = rnd.sample(names, rnd.randint(3, 7))
+        chords = [name for name in pool if name != "N.C."]
+        first, last = ((rnd.choice(chords), float(rnd.randint(1, 4))) for _ in range(2))
+        middle = [(rnd.choice(pool), float(rnd.randint(0, 4))) for _ in range(rnd.randint(2, 40))]
+        key = estimate_key([first, *middle, last])
+        rnd.shuffle(middle)
+        summed: dict[str, float] = {}
+        for name, weight in middle:
+            summed[name] = summed.get(name, 0.0) + weight
+        # whole numbers of beats: every sum is exact, in any order
+        assert estimate_key([first, *middle, last]) == key
+        assert estimate_key([first, *summed.items(), last]) == key
+
+
+def test_a_chord_name_is_parsed_once_and_its_answer_cannot_be_changed():
+    assert _chord("C7") is _chord("C7")  # cached: a sheet repeats a handful of chords
+    assert isinstance(_chord("C7")[3], tuple)  # shared by every caller, so never a list
 
 
 @pytest.mark.parametrize(

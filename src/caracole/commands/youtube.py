@@ -38,6 +38,7 @@ from caracole.commands._common import (
     make_youtube,
     open_db,
     run_id_for,
+    song_named,
     utcnow,
     write_pages,
 )
@@ -175,19 +176,9 @@ def _decline(cfg: Config, display: str) -> None:
 
 def _one_song(conn: sqlite3.Connection, cfg: Config, display: str, overrides: Overrides) -> Song:
     """The song ``--song`` names, if YouTube may be asked for its audio; otherwise say why not."""
-    from caracole.overrides import OverridesError, override_key
-    from caracole.songs import find_song
     from caracole.youtube_fetch import youtube_audio
 
-    try:
-        key = override_key(display)
-    except OverridesError as e:
-        fail(str(e), 2)
-    song = find_song(conn, key)
-    if song is None:
-        fail(f'No song "{display}" in the library. Add it with `caracole add` first.')
-    if song.status == "ignored" or key in overrides.ignore:
-        fail(f'"{song.display}" is ignored in overrides.toml.')
+    song = song_named(conn, display, overrides)
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = 'sheet.txt'", (song.id,)).fetchone():
         fail(f'"{song.display}" has a human sheet: caracole takes no audio from YouTube for it.')
     if song.audio_path and youtube_audio(conn, song) is None:  # a purchase, linked from Music/

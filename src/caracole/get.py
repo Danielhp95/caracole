@@ -17,7 +17,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   one, LaCuerda's, for a song LaCuerda would be asked about tonight. The sheet
   is readable from here on (``Progress.readable``).
 - ``pdf``: ChordPro and the PDF (render.py), and the HTML viewer where render
-  writes one.
+  writes one, for this song alone (``render_all``'s ``song_ids``): another
+  song's failure, or its wait for a CJK font, is not this one's.
 - ``lyrics``: LRCLIB.
 - ``ug``: Ultimate Guitar again, as the nightly run would: the top sheets
   scored against the lyrics (a better one replaces the first), guitar parts
@@ -478,7 +479,8 @@ class _Lookup:
 
         if self._kept_sheet() is None:
             return "skipped", "no sheet yet"
-        stats = render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now)
+        stats = render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now,
+                           song_ids={self.song.id})
         if stats.font_error:
             return "failed", stats.font_error
         if stats.failed:
@@ -573,7 +575,8 @@ class _Lookup:
         from caracole.todo import write_pages
 
         if self._kept_sheet() is not None:
-            render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now)
+            render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now,
+                       song_ids={self.song.id})
         write_pages(self.conn, self.cfg, self.overrides, self.now)
         return "_todo.md and index.html rewritten"
 

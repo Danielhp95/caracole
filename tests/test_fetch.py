@@ -2750,13 +2750,15 @@ def test_rescore_follows_the_rank_policy(conn, tmp_path, line_match, expected):
     assert get_version(conn, vid).coverage == pytest.approx(expected)
 
 
-@pytest.mark.parametrize("damage", ["corrupt", "missing", "no content"])
+@pytest.mark.parametrize("damage", ["corrupt", "nested too deep", "missing", "no content"])
 def test_rescore_skips_a_sheet_json_it_cannot_read(conn, tmp_path, damage):
     song = accepted(conn)
     vid = keep_sheet(conn, tmp_path, song, sheet("lacuerda sheet", LINES))
     doc = song_dir(tmp_path / "lib", song) / "sheet.json"
     if damage == "corrupt":
         doc.write_text("{not json", encoding="utf-8")
+    elif damage == "nested too deep":  # any synced device can write one: RecursionError, not ValueError
+        doc.write_text("[" * 100_000 + "]" * 100_000, encoding="utf-8")
     elif damage == "missing":
         doc.unlink()
     else:

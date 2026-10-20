@@ -30,6 +30,16 @@ def test_fold_strips_accents_and_transliterates():
     assert fold("Ærøskøbing Straße") == "aeroskobing strasse"
 
 
+def test_fold_gives_ascii_what_the_unicode_path_gives_it():
+    # An "é" sends the rest of the string through NFKD, the marks and the transliteration.
+    for c in range(128):
+        assert fold(chr(c)) == fold("é" + chr(c))[1:] == chr(c).lower()
+    every = "".join(map(chr, range(128)))
+    assert fold(every) == fold("é" + every)[1:]
+    assert fold("ÀB") == "ab"
+    assert fold("Bà") == "ba"
+
+
 @pytest.mark.parametrize(
     "raw,clean",
     [

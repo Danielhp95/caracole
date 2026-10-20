@@ -23,7 +23,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import mutagen
 from rapidfuzz import fuzz
 
 from caracole.lyrics import song_lyrics
@@ -93,6 +92,8 @@ def _from_name(path: Path) -> tuple[str | None, str | None]:
 
 def read_audio(path: Path) -> AudioFile:
     """Tags and duration of an audio file, falling back to its name when there are no tags."""
+    import mutagen  # here, not on import: inbox.py, which the pages import, compares names with Names
+
     try:
         f = mutagen.File(path, easy=True)
     except (mutagen.MutagenError, OSError, ValueError):
@@ -119,19 +120,14 @@ def _duration_ok(af: AudioFile, seconds: float | None) -> bool:
     return abs(af.duration_s - seconds) <= DURATION_TOLERANCE_S
 
 
-def _own_seconds(song: Song) -> float | None:
-    return song.duration_ms / 1000 if song.duration_ms else None
-
-
 def _expected_seconds(song: Song) -> float | None:
     """How long a fuzzy match's file must be: the song's own duration, else LRCLIB's.
 
     A wanted.txt line rarely gives a duration; LRCLIB's then keeps an album
     sibling with a close title out.
     """
-    seconds = _own_seconds(song)
-    if seconds is not None:
-        return seconds
+    if song.duration_s is not None:
+        return song.duration_s
     try:
         lyrics = song_lyrics(song)
     except (TypeError, ValueError):  # stored lyrics that can't be read: no duration
@@ -140,31 +136,40 @@ def _expected_seconds(song: Song) -> float | None:
 
 
 @dataclass(frozen=True)
-class _Names:
-    """An artist's and a title's keys: slugs, plus pinyin slugs for Chinese names, and each part of a
-    name tagged in two scripts (``normalize.name_forms``)."""
+class Names:
+    """An artist's and a title's forms, as a purchase or a download meets a song: slugs, plus pinyin
+    slugs for Chinese names, and each part of a name tagged in two scripts (``normalize.name_forms``).
+    The artist's are words, hyphens as spaces, for ``token_set_ratio``."""
 
     artists: tuple[str, ...]
     titles: tuple[str, ...]
 
+    @classmethod
+    def of(cls, artist: str, title: str) -> Names:
+        return cls(tuple(k.replace("-", " ") for k in name_forms(artist)), name_forms(clean_title(title)))
 
-def _forms(text: str) -> tuple[str, ...]:
-    return name_forms(text)
+    def title_score(self, other: Names) -> float:
+        """How alike the titles are, 0-100."""
+        return max((fuzz.ratio(x, y) for x in self.titles for y in other.titles), default=0.0)
 
+    def artist_score(self, other: Names) -> float:
+        """How alike the artists are, 0-100, compared as words and whole."""
+        return max(
+            (max(fuzz.ratio(x, y), fuzz.token_set_ratio(x, y)) for x in self.artists for y in other.artists),
+            default=0.0,
+        )
 
-def _names(artist: str, title: str) -> _Names:
-    artists = tuple(k.replace("-", " ") for k in _forms(artist))  # words, for token_set_ratio
-    return _Names(artists, _forms(clean_title(title)))
+    def score(self, other: Names) -> float:
+        """How alike two songs' names are, 0-100: the lower of the artist and title scores.
 
-
-def _score(a: _Names, b: _Names) -> float:
-    """How alike two songs' names are, 0-100: the lower of the artist and title scores."""
-    artist = max(
-        (max(fuzz.ratio(x, y), fuzz.token_set_ratio(x, y)) for x in a.artists for y in b.artists),
-        default=0.0,
-    )
-    title = max((fuzz.ratio(x, y) for x in a.titles for y in b.titles), default=0.0)
-    return min(artist, title)
+        A title too far off for any decision is the score, the artists not compared: most of a
+        Music/ folder is other songs. Exact from MATCH_CUTOFF - MATCH_MARGIN up, all ``_matches``
+        looks at, and inbox.py at its cutoff of 90.
+        """
+        title = self.title_score(other)
+        if title < MATCH_CUTOFF - MATCH_MARGIN:
+            return title
+        return min(self.artist_score(other), title)
 
 
 @dataclass(frozen=True)
@@ -195,16 +200,16 @@ def _matches(audio: Sequence[AudioFile], songs: Sequence[Song]) -> list[_Match]:
         song = by_key.get(identity_key(af.artist, af.title))
         if song is None:
             rest.append(af)
-        elif _duration_ok(af, _own_seconds(song)):
+        elif _duration_ok(af, song.duration_s):
             found.append(_Match(song.id, af, exact=True))
     exact = {m.song_id for m in found}
-    names = {s.id: _names(s.artist, s.title) for s in songs}
+    names = {s.id: Names.of(s.artist, s.title) for s in songs}
     seconds = {s.id: _expected_seconds(s) for s in songs}
     claims: dict[int, list[tuple[float, tuple[str, ...], AudioFile]]] = {}
     for af in rest:
-        own = _names(af.artist or "", af.title or "")
+        own = Names.of(af.artist or "", af.title or "")
         scored = sorted(
-            ((_score(own, names[s.id]), s.id) for s in songs if _duration_ok(af, seconds[s.id])),
+            ((own.score(names[s.id]), s.id) for s in songs if _duration_ok(af, seconds[s.id])),
             reverse=True,
         )
         if not scored or scored[0][0] < MATCH_CUTOFF:

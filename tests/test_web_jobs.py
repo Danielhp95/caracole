@@ -47,7 +47,7 @@ def test_a_request_is_caracole_add_and_a_fetch_is_match_fetch_render():
     assert fetch_steps("Radiohead - Creep") == [
         ("Looking it up", ("match",)),
         ("Fetching from Ultimate Guitar", ("fetch", "--song=Radiohead - Creep")),
-        ("Rendering the sheet", ("render",)),
+        ("Rendering the sheet", ("render", "--song=Radiohead - Creep")),
     ]
 
 
@@ -168,7 +168,7 @@ def test_a_fetch_that_joins_an_add_runs_caracole_add_once_whatever_its_album():
     job, _ = queue.submit("Fetch Radiohead - Creep", "radiohead|creep",
                           add_steps("Radiohead", "Creep") + fetch_steps("Radiohead - Creep"), fetching=True)
     assert [s.args for s in job.steps] == [("add", "--album=Pablo Honey", "--", "Radiohead", "Creep"), ("match",),
-                                           ("fetch", "--song=Radiohead - Creep"), ("render",)]
+                                           ("fetch", "--song=Radiohead - Creep"), ("render", "--song=Radiohead - Creep")]
 
 
 def test_an_add_never_replaces_a_fetch_of_the_same_song():

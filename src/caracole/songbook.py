@@ -289,6 +289,9 @@ def _read(path: Path) -> str | None:
         raise SongbookFileError(f"{path}: line {line} is not valid UTF-8 (save the file as UTF-8)") from e
 
 
+TOO_DEEP = "nested too deep for the TOML parser"  # tomllib and tomlkit raise RecursionError then
+
+
 def load_songbooks(path: Path) -> list[Songbook]:
     """The songbooks in songbooks.toml, in the file's order; none when there is no file. Every error
     names the file."""
@@ -299,6 +302,8 @@ def load_songbooks(path: Path) -> list[Songbook]:
         return _parse(tomllib.loads(text))
     except tomllib.TOMLDecodeError as e:
         raise SongbookFileError(f"{path}: {e}") from e
+    except RecursionError:  # what a synced device wrote stops nothing else
+        raise SongbookFileError(f"{path}: {TOO_DEEP}") from None
     except SongbookError as e:
         raise SongbookFileError(f"{path}: {e}") from e
 
@@ -351,6 +356,8 @@ def _edit[T](path: Path, change: Callable[[Any, list[Songbook]], T]) -> T:
         doc = tomlkit.parse(old) if old is not None and old.strip() else _new_document()
     except (tomllib.TOMLDecodeError, TOMLKitError, SongbookError) as e:
         raise SongbookFileError(f"{path}: {e}") from e
+    except RecursionError:
+        raise SongbookFileError(f"{path}: {TOO_DEEP}") from None
     result = change(doc, books)
     text = tomlkit.dumps(doc)
     if text != old:

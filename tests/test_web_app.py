@@ -789,7 +789,7 @@ def test_a_pick_queues_caracole_review_then_the_fetch(app, conn, queue):
     assert [s.args for s in job.steps] == [
         ("review", "--song=Radiohead - Creep", "--pick=radiohead/creep"),
         ("fetch", "--song=Radiohead - Creep"),
-        ("render",),
+        ("render", "--song=Radiohead - Creep"),
     ]
     assert job.fetching and job.song_key == creep.key
     assert job.title == "Pick radiohead/creep for Radiohead - Creep, and fetch it"
@@ -1066,7 +1066,7 @@ def test_a_pick_of_a_search_hit_queues_caracole_review_then_the_fetch(app, conn,
     assert [s.args for s in queue.snapshot()[0].steps] == [
         ("review", "--song=Radio Head - Crep", "--pick=radiohead/creep"),
         ("fetch", "--song=Radio Head - Crep"),
-        ("render",),
+        ("render", "--song=Radio Head - Crep"),
     ]
 
 

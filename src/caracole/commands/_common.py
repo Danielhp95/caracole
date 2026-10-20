@@ -119,6 +119,29 @@ def load_ovr(cfg: Config) -> Overrides:
         fail(f"overrides: {e}", 2)
 
 
+if TYPE_CHECKING:
+    from caracole.songs import Song
+
+
+def song_named(conn: sqlite3.Connection, display: str, overrides: Overrides) -> Song:
+    """The song a command's ``--song`` names (fetch, render, youtube), one not ignored; otherwise
+    say why there is none: a name that isn't "Artist - Title" exits 2, a song not in the library
+    or ignored 1. Each command adds its own checks."""
+    from caracole.overrides import override_key
+    from caracole.songs import find_song
+
+    try:
+        key = override_key(display)
+    except OverridesError as e:
+        fail(str(e), 2)
+    song = find_song(conn, key)
+    if song is None:
+        fail(f'No song "{display}" in the library. Add it with `caracole add` first.')
+    if song.status == "ignored" or key in overrides.ignore:
+        fail(f'"{song.display}" is ignored in overrides.toml.')
+    return song
+
+
 def utcnow() -> datetime:
     return datetime.now(UTC).replace(microsecond=0)
 

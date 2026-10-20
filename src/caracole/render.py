@@ -27,8 +27,9 @@ Two kinds of font come out wrong, so ``render_pdf`` refuses them up front:
 (every glyph record has an even length). A CFF-flavoured ``.otf`` works too;
 PDF::API2 embeds those whole, so the PDFs are larger.
 
-``render_all`` gives every kept sheet in the library a ChordPro file, a PDF and
-a viewer (a phone-friendly page, see caracole/viewer) beside it:
+``render_all`` gives every kept sheet in the library (or a few songs', as a
+lookup's) a ChordPro file, a PDF and a viewer (a phone-friendly page, see
+caracole/viewer) beside it:
 
 - a human sheet (``sheet.txt``, from UG or LaCuerda) is rendered from the
   ``content`` of the ``sheet.json`` next to it, with the key UG gives the
@@ -88,14 +89,13 @@ directory, and the PDF then goes into the song's folder in one rename.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import sqlite3
 import struct
 import subprocess
 import tempfile
 import unicodedata
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -112,6 +112,7 @@ from caracole.library import (
     NotRegularFile,
     holds,
     kept_files,
+    read_json,
     read_regular,
     song_dir,
     write_atomic,
@@ -120,7 +121,7 @@ from caracole.library import (
 from caracole.keys import sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
-from caracole.songs import Song, get_song, list_songs
+from caracole.songs import Song, ensure_current_keys, get_song, list_songs
 from caracole.ug.page import json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
@@ -376,15 +377,22 @@ def render_all(
     force: bool = False,
     now: datetime | None = None,
     between: Callable[[], bool] | None = None,
+    song_ids: Collection[int] | None = None,
 ) -> RenderStats:
     """Write every kept sheet as ChordPro and render it to a PDF in the song's key.
 
     Ignored songs are left alone. A song that fails (a ``RenderError``, or a
     file that can't be read or written) is logged and counted, and the others
     go on. The pass is recorded in kv ``render:status`` for the to-do page:
-    ``{"at", "rendered", "failed": [display keys], "font_error"}``, stamped with
-    ``now`` (by default the current time). ``force`` renders every PDF again,
-    up to date or not; ``runner`` runs chordpro (tests pass a fake).
+    ``{"at", "rendered", "failed": [display keys], "font_error", "no_font":
+    {display key: the first letter its sheet needs a CJK font for}}``, stamped
+    with ``now`` (by default the current time). ``force`` renders every PDF
+    again, up to date or not; ``runner`` runs chordpro (tests pass a fake).
+
+    With ``song_ids``, only those songs (``caracole get`` and ``caracole render
+    --song`` render their one song), and the stats are theirs alone. The record
+    stays the last full pass's (``_status_after``): their names leave its
+    ``failed`` list and ``no_font``, and go back on as this pass found them.
 
     ``between`` is called between two songs, in no transaction: bulk work hands
     caracole's lock to a waiting lookup there (``_common.hand_over``), as a pass
@@ -393,10 +401,11 @@ def render_all(
     """
     stats = RenderStats()
     failed: list[str] = []
-    no_font: list[str] = []
+    no_font: dict[str, str] = {}
     font, font_problem = _cjk_font(cfg.cjk_font)
     handed = False
-    for n, listed in enumerate(list_songs(conn)):
+    songs = list_songs(conn) if song_ids is None else _songs_of(conn, song_ids)
+    for n, listed in enumerate(songs):
         if n and between is not None and between():
             handed = True
             try:
@@ -424,16 +433,49 @@ def render_all(
         if any(d.viewer_failed for d in done):
             failed.append(song.display)
         if missing := next((d.missing for d in done if d.outcome == "no font"), None):
-            no_font.append(f"{song.display} ({missing} U+{ord(missing):04X})")
+            no_font[song.display] = missing
     stats.failed = len(failed)
     if no_font:
         stats.font_error = _font_error(no_font, font_problem)
         log.warning("%s", stats.font_error)
     at = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    kv_set_json(conn, STATUS_KEY, {
-        "at": at, "rendered": stats.rendered, "failed": failed, "font_error": stats.font_error,
-    })
+    status = {"at": at, "rendered": stats.rendered, "failed": failed, "font_error": stats.font_error,
+              "no_font": no_font}
+    if song_ids is not None:
+        status = _status_after(kv_get_json(conn, STATUS_KEY, default=None), status, {s.display for s in songs},
+                               font_problem)
+    kv_set_json(conn, STATUS_KEY, status)
     return stats
+
+
+def _songs_of(conn: sqlite3.Connection, song_ids: Collection[int]) -> list[Song]:
+    """The songs of ``song_ids`` the library still has, newest first as ``list_songs`` gives them."""
+    ensure_current_keys(conn)
+    songs = []
+    for song_id in song_ids:
+        try:
+            songs.append(get_song(conn, song_id))
+        except KeyError:  # merged into another song, or removed
+            continue
+    return sorted(songs, key=lambda s: (s.added_at, s.id), reverse=True)
+
+
+def _status_after(stored: Any, status: dict[str, Any], names: set[str], font_problem: str | None) -> dict[str, Any]:
+    """kv ``render:status`` after a pass over some songs (``names``: theirs), whose own record is
+    ``status``: the last full pass's record, with those songs' failures, and the sheets that wait
+    for a font, brought up to date. With no record yet, ``status`` itself."""
+    if not isinstance(stored, dict):
+        return status
+    before = stored.get("failed")
+    others = [name for name in before if str(name) not in names] if isinstance(before, list) else []
+    waiting = stored.get("no_font")
+    if isinstance(waiting, dict):
+        no_font = {name: letter for name, letter in waiting.items()
+                   if name not in names and isinstance(letter, str) and len(letter) == 1} | status["no_font"]
+        font = {"no_font": no_font, "font_error": _font_error(no_font, font_problem) if no_font else None}
+    else:  # recorded by a caracole that kept no "no_font": the font error this pass hit, if any
+        font = {"font_error": status["font_error"] or stored.get("font_error")}
+    return {**stored, "failed": others + status["failed"], **font}
 
 
 @dataclass(frozen=True)
@@ -720,8 +762,8 @@ def _human_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) ->
     """The sheet the fetch step kept: the markup in sheet.json, the key UG gives the version."""
     path = (library_dir / kept.path).with_name("sheet.json")
     try:
-        doc = json.loads(_read_text(path))
-    except ValueError as e:  # not JSON
+        doc = read_json(path)
+    except (OSError, ValueError) as e:  # ValueError: not UTF-8, not JSON, or nested too deep
         raise RenderError(f"cannot read {path}: {e}") from e
     content = doc.get("content") if isinstance(doc, Mapping) else None
     if not isinstance(content, str) or not content.strip():
@@ -820,9 +862,11 @@ def _cjk_font(path: Path | None) -> tuple[Path | None, str | None]:
     return path, None
 
 
-def _font_error(songs: list[str], problem: str | None = None, shown: int = 3) -> str:
-    """One line for every sheet that has no PDF for want of a usable CJK font."""
-    names = ", ".join(songs[:shown])
-    more = f" and {len(songs) - shown} more" if len(songs) > shown else ""
+def _font_error(songs: Mapping[str, str], problem: str | None = None, shown: int = 3) -> str:
+    """One line for every sheet that has no PDF for want of a usable CJK font (``songs``: each one's
+    first letter that needs it)."""
+    listed = [f"{name} ({letter} U+{ord(letter):04X})" for name, letter in songs.items()]
+    names = ", ".join(listed[:shown])
+    more = f" and {len(listed) - shown} more" if len(listed) > shown else ""
     reason = f"{problem}; " if problem else ""
     return f"{reason}{FONT_HINT} to render {names}{more}"

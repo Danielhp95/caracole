@@ -69,7 +69,7 @@ from caracole.http import (
     RobotsClosed,
     robots_disallows,
 )
-from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_regular, write_info
+from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_json, write_info
 from caracole.lyrics import song_lyrics
 from caracole.match import REVIEW_ONLY_STEPS
 from caracole.normalize import clean_title, compact, listing_forms, name_forms, slug_key, without_featuring
@@ -1734,7 +1734,7 @@ def _unranked_rivals(conn: sqlite3.Connection, song_id: int, kept_id: int) -> bo
 def _kept_markup(conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int) -> str | None:
     """The markup in the song's kept ``sheet.json``, if it is that version's and can be read.
 
-    It is read only as a regular file, never through a link (``library.read_regular``):
+    It is read only as a regular file, never through a link (``library.read_json``):
     whatever another device planted there instead is no sheet, as a missing one is.
     """
     doc_file = next((f for f in kept_files(conn, song.id) if f.name == SHEET_FILES[1]), None)
@@ -1742,8 +1742,8 @@ def _kept_markup(conn: sqlite3.Connection, library_dir: Path, song: Song, versio
         return None
     path = library_dir / doc_file.path
     try:
-        doc = json.loads(read_regular(path).decode("utf-8"))
-    except (OSError, ValueError) as e:  # ValueError: not UTF-8, or not JSON
+        doc = read_json(path)
+    except (OSError, ValueError) as e:  # ValueError: not UTF-8, not JSON, or nested too deep
         log.warning("cannot score %s: %s", path, e)
         return None
     content = doc.get("content") if isinstance(doc, dict) else None

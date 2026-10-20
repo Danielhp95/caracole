@@ -21,21 +21,18 @@ link in place of ``_inbox`` itself, and nothing it points at is touched.
 
 from __future__ import annotations
 
-import errno
 import hashlib
 import itertools
 import os
 import re
 import sqlite3
-import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rapidfuzz import fuzz
-
-from caracole.library import NotRegularFile, keep_file, song_dir
+from caracole.library import NotRegularFile, keep_file, read_regular, song_dir
+from caracole.music import Names
 from caracole.musicxml import header
-from caracole.normalize import clean_title, compact, has_other_script, identity_key, name_forms, slug_key
+from caracole.normalize import clean_title, compact, has_other_script, identity_key, slug_key
 from caracole.songs import Song, get_song, list_songs, utc_now_iso
 from caracole.versions import VersionRow, picks, upsert_version
 
@@ -49,7 +46,7 @@ _VERSION = re.compile(r"\(\s*ver\.?\s*(\d+)[^)]*\)", re.IGNORECASE)
 _PARENS = re.compile(r"\s*\([^)]*\)")
 _GUITAR_FILE = re.compile(r"guitar-(\d+)\.", re.IGNORECASE)
 _SCORE_FILE = re.compile(r"score-(\d+)(\.[A-Za-z0-9]+)")
-MATCH_CUTOFF = 90
+MATCH_CUTOFF = 90  # music.Names.score is exact from 82 up (test_inbox.py)
 
 
 @dataclass
@@ -83,8 +80,10 @@ def _open_picks(conn: sqlite3.Connection, song_id: int) -> list[VersionRow]:
 
 
 def _songs_with_open_picks(conn: sqlite3.Connection) -> list[tuple[Song, list[VersionRow]]]:
+    marks = ", ".join("?" for _ in GUITAR_FILE_KINDS)
     ids = [r[0] for r in conn.execute(
-        "SELECT DISTINCT song_id FROM versions WHERE kind IN ('guitar-pro', 'power') AND pick_rank IS NOT NULL"
+        f"SELECT DISTINCT song_id FROM versions WHERE kind IN ({marks}) AND pick_rank IS NOT NULL",
+        GUITAR_FILE_KINDS,
     )]
     out = []
     for sid in ids:
@@ -102,34 +101,13 @@ def _match(artist: str | None, title: str, candidates: list[tuple[Song, list[Ver
         for song, open_picks in candidates:
             if song.key == key:
                 return song, open_picks
-    titles = name_forms(clean_title(title))
-    best, best_score = None, 0.0
-    for song, open_picks in candidates:
-        score = _title_score(titles, song)
-        if artist:
-            score = min(score, _artist_score(artist, song.artist))
-        if score >= MATCH_CUTOFF and score > best_score:
-            best, best_score = (song, open_picks), score
-    if best is None or artist:
-        return best
-    # A name without an artist is only trusted when exactly one song fits.
-    fits = [c for c in candidates if _title_score(titles, c[0]) >= MATCH_CUTOFF]
-    return best if len(fits) == 1 else None
-
-
-def _title_score(titles: tuple[str, ...], song: Song) -> float:
-    """How alike a download's title forms and a song's title are, 0-100."""
-    return max((fuzz.ratio(t, s) for t in titles for s in name_forms(clean_title(song.title))), default=0.0)
-
-
-def _artist_score(artist: str, other: str) -> float:
-    """How alike two artists' names are, compared as words (``token_set_ratio``) and whole."""
-    words = [k.replace("-", " ") for k in name_forms(other)]
-    return max(
-        (max(fuzz.ratio(a, b), fuzz.token_set_ratio(a, b))
-         for a in (k.replace("-", " ") for k in name_forms(artist)) for b in words),
-        default=0.0,
-    )
+    own = Names.of(artist or "", title)
+    alike = own.score if artist else own.title_score
+    scored = ((alike(Names.of(song.artist, song.title)), (song, open_picks)) for song, open_picks in candidates)
+    fits = [(score, c) for score, c in scored if score >= MATCH_CUTOFF]
+    if not fits or (not artist and len(fits) > 1):
+        return None  # a name without an artist is only trusted when exactly one song fits
+    return max(fits, key=lambda fit: fit[0])[1]  # the first of the closest
 
 
 def _choose_pick(open_picks: list[VersionRow], version: int | None, ext: str) -> VersionRow:
@@ -155,12 +133,7 @@ def guitar_number(conn: sqlite3.Connection, library_dir: Path, song: Song, rank:
     That file is never replaced. A number is taken by any kept file, or any file
     in the folder, named ``guitar-N.*``, whatever its extension.
     """
-    names = {r[0] for r in conn.execute("SELECT name FROM files WHERE song_id = ?", (song.id,))}
-    try:
-        names.update(os.listdir(song_dir(library_dir, song)))
-    except FileNotFoundError:
-        pass
-    taken = {int(m.group(1)) for n in names if (m := _GUITAR_FILE.match(n))}
+    taken = {int(m.group(1)) for n in _names_taken(conn, library_dir, song) if (m := _GUITAR_FILE.match(n))}
     if rank not in taken:
         return rank
     return next(n for n in itertools.count(1) if n not in taken)
@@ -170,13 +143,21 @@ def score_number(conn: sqlite3.Connection, library_dir: Path, song: Song, ext: s
     """The N of a new ``score-N<ext>`` file: the lowest number no file of the song with that
     extension holds, kept or put in the folder by hand. The formats of one score so take one
     number: ``score-1.mscz`` beside ``score-1.pdf``."""
+    taken = {
+        int(m.group(1)) for n in _names_taken(conn, library_dir, song)
+        if (m := _SCORE_FILE.fullmatch(n)) and m.group(2).lower() == ext
+    }
+    return next(n for n in itertools.count(1) if n not in taken)
+
+
+def _names_taken(conn: sqlite3.Connection, library_dir: Path, song: Song) -> set[str]:
+    """The names of the song's files: every kept one's, and every one in its folder."""
     names = {r[0] for r in conn.execute("SELECT name FROM files WHERE song_id = ?", (song.id,))}
     try:
         names.update(os.listdir(song_dir(library_dir, song)))
     except FileNotFoundError:
         pass
-    taken = {int(m.group(1)) for n in names if (m := _SCORE_FILE.fullmatch(n)) and m.group(2).lower() == ext}
-    return next(n for n in itertools.count(1) if n not in taken)
+    return names
 
 
 def _score_song(conn: sqlite3.Connection, name: str, ext: str, data: bytes) -> Song | None:
@@ -212,19 +193,24 @@ def _score_version(conn: sqlite3.Connection, song: Song) -> int:
     )
 
 
-def _read_entry(inbox_fd: int, name: str) -> bytes:
-    """The bytes of the regular file ``name`` in the inbox open at ``inbox_fd``, read the way
-    ``library.read_regular`` reads a path: never through a link, never waiting on a FIFO."""
-    try:
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=inbox_fd)
-    except OSError as e:
-        if e.errno == errno.ELOOP:  # O_NOFOLLOW's answer for a link
-            raise NotRegularFile(e.errno, "a symbolic link, which caracole doesn't follow", name) from None
-        raise
-    with open(fd, "rb") as f:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise NotRegularFile(errno.EINVAL, "not a regular file", name)
-        return f.read()
+def _place(conn: sqlite3.Connection, library_dir: Path, entry: str, ext: str,
+           data: bytes) -> tuple[Song, int, str, int] | None:
+    """Where the download ``entry`` goes: its song, the version it is kept for, its name in the
+    song's folder and its rank. None when it is no song's."""
+    if ext in SCORE_EXTENSIONS:
+        song = _score_song(conn, entry, ext, data)
+        if song is None:
+            return None
+        n = score_number(conn, library_dir, song, ext)
+        return song, _score_version(conn, song), f"score-{n}{ext}", n
+    artist, title, version = parse_download_name(entry)
+    found = _match(artist, title, _songs_with_open_picks(conn))
+    if found is None:
+        return None
+    song, open_picks = found
+    chosen = _choose_pick(open_picks, version, ext)
+    rank = chosen.pick_rank or 1
+    return song, chosen.id, f"guitar-{guitar_number(conn, library_dir, song, rank)}{ext}", rank
 
 
 def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
@@ -261,7 +247,7 @@ def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
                 stats.unmatched.append(path)
                 continue
             try:
-                data = _read_entry(inbox_fd, entry)
+                data = read_regular(Path(entry), dir_fd=inbox_fd)
             except NotRegularFile:  # swapped for a link since it was listed
                 stats.refused.append(path)
                 continue
@@ -270,30 +256,12 @@ def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
                 os.unlink(entry, dir_fd=inbox_fd)
                 stats.duplicates.append(path)
                 continue
-            if ext in SCORE_EXTENSIONS:
-                song = _score_song(conn, entry, ext, data)
-                if song is None:
-                    stats.unmatched.append(path)
-                    continue
-                n = score_number(conn, library_dir, song, ext)
-                name = f"score-{n}{ext}"
-                if keep_file(conn, library_dir, song=song, version_id=_score_version(conn, song), name=name,
-                             data=data, rank=n):
-                    stats.filed.append(song_dir(library_dir, song) / name)
-                else:
-                    stats.duplicates.append(path)
-                os.unlink(entry, dir_fd=inbox_fd)
-                continue
-            artist, title, version = parse_download_name(entry)
-            found = _match(artist, title, _songs_with_open_picks(conn))
-            if found is None:
+            placed = _place(conn, library_dir, entry, ext, data)
+            if placed is None:
                 stats.unmatched.append(path)
                 continue
-            song, open_picks = found
-            chosen = _choose_pick(open_picks, version, ext)
-            name = f"guitar-{guitar_number(conn, library_dir, song, chosen.pick_rank or 1)}{ext}"
-            if keep_file(conn, library_dir, song=song, version_id=chosen.id, name=name, data=data,
-                         rank=chosen.pick_rank or 1):
+            song, version_id, name, rank = placed
+            if keep_file(conn, library_dir, song=song, version_id=version_id, name=name, data=data, rank=rank):
                 stats.filed.append(song_dir(library_dir, song) / name)
             else:
                 stats.duplicates.append(path)

@@ -23,6 +23,7 @@ import stat
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from caracole.db import kv_get_json
 from caracole.normalize import clean_title
@@ -89,7 +90,7 @@ class NotRegularFile(OSError):
     """A path caracole won't open: a symbolic link, a directory, a FIFO or a device."""
 
 
-def open_regular(path: Path, flags: int = os.O_RDONLY) -> int:
+def open_regular(path: Path, flags: int = os.O_RDONLY, *, dir_fd: int | None = None) -> int:
     """A descriptor for the regular file at ``path``, never opened through a symbolic link.
 
     The library is writable by the Syncthing group and every synced device, so a
@@ -97,11 +98,13 @@ def open_regular(path: Path, flags: int = os.O_RDONLY) -> int:
     Spotify token, the credentials): read, they would be copied into the
     library; written, they would be destroyed. The file is opened without
     following a link and without waiting on a FIFO, then checked on the open
-    descriptor, so it can't be swapped in between. Raises NotRegularFile,
-    FileNotFoundError when nothing is there, or another OSError.
+    descriptor, so it can't be swapped in between. With ``dir_fd``, a folder's
+    descriptor, ``path`` is a name in that folder (the inbox's, opened without
+    following a link). Raises NotRegularFile, FileNotFoundError when nothing is
+    there, or another OSError.
     """
     try:
-        fd = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK)
+        fd = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
     except OSError as e:
         if e.errno == errno.ELOOP:  # O_NOFOLLOW's answer for a link
             link = "a symbolic link, which caracole doesn't follow"
@@ -113,10 +116,26 @@ def open_regular(path: Path, flags: int = os.O_RDONLY) -> int:
     return fd
 
 
-def read_regular(path: Path) -> bytes:
-    """The bytes of the regular file at ``path``, never read through a link (``open_regular``)."""
-    with open(open_regular(path), "rb") as f:
+def read_regular(path: Path, *, dir_fd: int | None = None) -> bytes:
+    """The bytes of the regular file at ``path`` (in the folder open at ``dir_fd``, when given),
+    never read through a link (``open_regular``)."""
+    with open(open_regular(path, dir_fd=dir_fd), "rb") as f:
         return f.read()
+
+
+def read_json(path: Path) -> Any:
+    """The JSON in the regular file at ``path``, never read through a link (``read_regular``).
+
+    Any synced device can write the file, so whatever it holds raises ValueError at worst: not
+    UTF-8, not JSON, or nested too deep for the decoder (which raises RecursionError, and that
+    would stop a pass over every song). Nothing there, a link or no regular file raises
+    OSError (FileNotFoundError, NotRegularFile).
+    """
+    text = read_regular(path).decode("utf-8")
+    try:
+        return json.loads(text)
+    except RecursionError:
+        raise ValueError("nested too deep for the JSON decoder") from None
 
 
 def holds(path: Path, sha256: str, size: int | None = None) -> bool:
