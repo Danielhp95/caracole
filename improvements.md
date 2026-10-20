@@ -178,10 +178,44 @@ It's great that the cli allows for disambiguation by having differnet alternativ
 
 After finishing, do a /deep-research for what is the best UX design for this type of application for feature discoverability, usability, snappyness and overall user experience design. Take inspiration from ultimate guitar and other websites that already present this kind of information. Do a research too on lightweight javascript frameworks (like d3.js or other alterntaives) to come up with cool and useful designs. Find anti-patterns in the current implementation and remove them too. Essentially, do a strong design pass with /deep-research
 
+**Done in [7ea6aa0](https://github.com/Danielhp95/caracole/commit/7ea6aa0), [baa4af4](https://github.com/Danielhp95/caracole/commit/baa4af4) and [9be8b7c](https://github.com/Danielhp95/caracole/commit/9be8b7c)**, with the search bar below.
+- **The research:** 20 sources and 16 verified findings, plus an audit of every page in a headless browser at phone and desktop sizes. It found OnSong's and SongbookPro's patterns and the phone chord sites' layouts. Its conclusion was to stay with hand-written JavaScript and SVG: Alpine's standard build won't run under the pages' CSP, SVGuitar is about 100 KB, and View Transitions don't run in the served viewer's sandbox.
+- **Sheet viewer:**
+  - A bottom bar `[− Em +] [Aa] [▶] [⋯]` replaces the one Key button, and hides while you scroll down.
+  - The key line says what the capo means: "Em shapes · capo 2 · sounds F#m".
+  - Settings dock at the bottom on a phone, or sit as a rail beside the song on a computer. A chord's card is docked and keeps its place while you step through shapes, with the sheet's own shapes first.
+  - Two columns only when the song fits; the tab's notes folded to two lines; bigger strip diagrams.
+  - The text size kept in the address; no sideways scroll at any size.
+  - Autoscroll got a pill, a countdown and a per-song speed.
+- **Library page:**
+  - One Open per card, with the other files under Files; titles open the sheet.
+  - 44 px targets on touch, and edges of 3:1 on fields and boxes.
+  - A one-line Select bar on a phone, where a tap picks a card.
+  - Songbook changes and Make songbook stay on the page and say what they did ("Made · Open songbook"); Remove comes back to the library.
+  - A phone header that leaves the first screen to the songs.
+- **Songbook page:** "Next: <title> ›" and the key and capo of each song in the contents.
+
 ## Searching only by artist or songname
 
 Sometimes one does not know the artist, we need to allow for either or scenarios for searching
 
+**Done in [17a74d8](https://github.com/Danielhp95/caracole/commit/17a74d8).** A query without " - " is read as a title, an artist or both, and each hit says which.
+- **Artist rows,** such as "Oasis · 195 songs", list all of that artist's songs; when one artist's name matches exactly, near names are left out.
+- **Chinese titles** match pinyin only as whole words, so "斑马" no longer brings back unrelated names.
+- **On the command line:** `caracole search --artist NAME` and `--title TITLE`. `caracole add` or `get` given one name writes nothing; it lists the candidates with the lines to run and exits 2, and warns on placeholder artists such as `misc`.
+- **Enter** acts only on a clear best match, never on a guess.
+- **Popularity** is a song's tab count, the only signal offline.
+- **The songbook bug** that took "Oasis" for "Oasis - Wonderwall" is fixed.
+
 ## Unify search and "request a song" so that we have both of them on the same bar
 
 typing will filter from what we have in our library, and pressing enter will return whatever are the most likely matches from the different sources
+
+**Done in [17a74d8](https://github.com/Danielhp95/caracole/commit/17a74d8).** The library page has one search box.
+- **Typing** filters your songs as before; title initials count too.
+- **Enter or "Search all"** lists, under your songs, the most likely matches from Ultimate Guitar's index, gtptabs.com's and MuseScore's (titles only, while MuseScore lets caracole read its sitemaps), with artist rows. "Search all" is offered prominently when none of your songs match.
+- The list follows your typing, the newest answer winning, and says which sites weren't searched and why.
+- **Each result has Get it,** with its progress in its own row, and "Add for tonight's run" under ⋯. Enter never spends a request by itself.
+- **On index.html opened from disk,** Enter shows the `caracole search` line to run.
+- **LaCuerda** is joining the list from its new local index ([4e2a750](https://github.com/Danielhp95/caracole/commit/4e2a750)); its artist listings fill over the nightly runs.
+
