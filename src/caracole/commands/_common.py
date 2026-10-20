@@ -525,13 +525,16 @@ def make_youtube(
 ) -> YtDlp:
     """yt-dlp for one run (youtube.py), as ``make_client`` makes a provider's client: it holds
     caracole's lock until it is closed, its first run keeps the pause after the last one any
-    caracole made, and every run is logged to ``events``. Every caller closes it."""
+    caracole made, and every run is logged to ``events``. Every caller closes it.
+
+    It is bulk work: each pause, its first included, hands the lock to a lookup that waits
+    meanwhile (``hand_over``), then starts again, whole."""
     from caracole.youtube import PROVIDER, YtDlp
 
     lock = _acquire(cfg, "youtube downloads")
     try:
         policy = cfg.provider(PROVIDER)
-        _pause_after_last_request(conn, PROVIDER, policy.delay)
+        _pause_after_last_request(conn, PROVIDER, policy.delay, cfg=cfg)
         log = EventLog(conn, run_id)
 
         def logged(event: Event) -> None:
@@ -539,7 +542,10 @@ def make_youtube(
             if on_event is not None:
                 on_event(event)
 
-        return YtDlp(cfg.ytdlp_bin, policy, cfg.cache_dir, on_event=logged, sleep=lambda s: sleep(s),
+        def pause(seconds: float) -> None:
+            _patient_sleep(cfg, conn, seconds, lambda: random.uniform(*policy.delay), lambda s: sleep(s))
+
+        return YtDlp(cfg.ytdlp_bin, policy, cfg.cache_dir, on_event=logged, sleep=pause,
                      on_close=lambda: _release(lock))
     except BaseException:
         _release(lock)

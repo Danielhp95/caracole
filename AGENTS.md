@@ -377,9 +377,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   dropped once it holds it; one its process left, or untouched for `TICKET_STALE` s, a
   lookup killed while it waited, no longer counts). Bulk work hands the lock over
   (`_common.hand_over`, never inside a transaction): it lets go of the flock, takes it back
-  once the lookup is done, and goes on. It does so in two places. Its clients spend each
-  pause looking for a waiting lookup (every `HANDOFF_SLICE` s), then pause a whole `delay`
-  again. Work that sends no request does it between two songs (a `between` callback):
+  once the lookup is done, and goes on. It does so in two places. Its clients, and the
+  yt-dlp runner of `make_youtube` between two runs, spend each pause looking for a waiting
+  lookup (every `HANDOFF_SLICE` s), then pause a whole `delay` again
+  (`test_commands_common.py::test_the_youtube_steps_pauses_hand_the_lock_to_a_waiting_lookup_too`).
+  Work that sends no request does it between two songs (a `between` callback):
   `autochords_pending` (commands/autochords.py) and `render_all` (pipeline.py's render step,
   commands/render.py). A bulk caller
   holding state across a handoff re-reads it after one: ug/fetch.py `fetch_songs` reads each

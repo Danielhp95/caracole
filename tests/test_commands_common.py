@@ -578,3 +578,27 @@ def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, c
     _, sent, handoffs = second.split()
     assert float(sent) >= released + 3.5  # the run waited a whole pause again after the lookup
     assert int(handoffs) == 1
+
+
+def test_the_youtube_steps_pauses_hand_the_lock_to_a_waiting_lookup_too(cfg, conn, tmp_path, monkeypatch):
+    # The nightly run's youtube step holds caracole's lock for minutes, 15 to 30 seconds between two yt-dlp
+    # runs: a lookup waiting meanwhile goes first in that pause, as in a client's, and the pause starts again.
+    import dataclasses
+
+    from helpers.fake_ytdlp import FakeYtDlp
+
+    fake = FakeYtDlp(tmp_path / "bin")
+    on = dataclasses.replace(cfg, ytdlp_bin=fake.bin)
+    handed, naps = [], []
+    monkeypatch.setattr(_common, "hand_over", lambda c, k=None: handed.append(k is conn) or len(handed) == 1)
+    monkeypatch.setattr(_common, "sleep", naps.append)
+    with exclusive(on, "run"):
+        runs = _common.make_youtube(on, conn, "2026-10-19T03:30:00Z")
+        try:
+            runs.search("Radiohead Creep")
+            runs.search("Oasis Wonderwall")  # after a pause, in which the lookup went first
+        finally:
+            runs.close()
+    assert handed and handed[0] is True  # asked, with the run's connection, during the pause
+    assert sum(naps) >= on.provider("youtube").delay[0]  # then a whole pause again
+    assert len(fake.calls()) == 2
