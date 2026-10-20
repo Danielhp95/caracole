@@ -267,6 +267,30 @@ def test_enter_right_after_typing_looks_up_what_you_typed_not_the_results_before
 
 
 @pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_a_page_left_open_across_a_restart_says_to_reload_it(cfg, browser):
+    queue = JobQueue(FakeGet(cfg))
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    server = make_server(app, "127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        index_songs(cfg, [("radiohead", "creep", 2)])
+        browser.open(f"http://127.0.0.1:{server.server_address[1]}/lookup")
+        app.csrf = "the restarted server's"  # the page still holds the old form token
+        browser.type("creep")
+        assert browser.wait(f"{HITS} > 0")
+        browser.click("#results .hit button.primary")
+        assert browser.wait("/reload/i.test(document.getElementById('said').textContent)")
+        said = browser.js("document.getElementById('said').textContent")
+        link = browser.js("[...document.querySelectorAll('#files a')].map(a => a.textContent).join()")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert "older than the server" in said and "Unexpected token" not in said
+    assert link == "Reload the page"
+    assert queue.snapshot() == []
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
 def test_your_librarys_song_found_on_ug_under_another_name_is_looked_up_as_itself(cfg, live, browser):
     from caracole.songs import update_song
 
