@@ -60,7 +60,7 @@ songs.py's, in the `removed` table).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `make_youtube`,
-  `write_pages`, `fail`, `warn`.
+  `write_pages`, `fail`, `warn`, `song_named` (the song a `--song` names).
   `caracole get` (commands/get.py) is one song looked up now, in one process: get.py runs
   the run's steps for that song alone (`only=` / `songs=` of lyrics.py, lacuerda_fetch.py,
   gtptabs_fetch.py and `match.match_all`), sheet first (one versions page and the best-rated

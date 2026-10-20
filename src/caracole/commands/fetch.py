@@ -32,6 +32,7 @@ from caracole.commands._common import (
     make_client,
     open_db,
     run_id_for,
+    song_named,
     utcnow,
     write_pages,
 )
@@ -157,18 +158,10 @@ def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> S
     review of other artists' songs of its title or of names that aren't quite
     UG's, ``match.REVIEW_ONLY_STEPS``) is looked up on its artist's UG page.
     """
-    from caracole.overrides import OverridesError, override_key
-    from caracole.songs import find_song
     from caracole.ug.fetch import artist_is_known, needs_artist_page, pasted_page_problem
 
-    try:
-        key = override_key(display)
-    except OverridesError as e:
-        fail(str(e), 2)
-    song = find_song(conn, key)
-    if song is None:
-        fail(f'No song "{display}" in the library. Add it with `caracole add` first.')
-    if song.status == "ignored" or song.match_decision == "ignored" or key in overrides.ignore:
+    song = song_named(conn, display, overrides)
+    if song.match_decision == "ignored":
         fail(f'"{song.display}" is ignored in overrides.toml.')
     artist_page = needs_artist_page(song)
     if song.match_decision == "review" and not artist_page:

@@ -1416,6 +1416,17 @@ def test_render_command_renders_one_song_with_song(conn, cfg, fake_chordpro):
     assert unknown.exit_code == 1 and 'No song "Soda Stereo - Zoom" in the library' in unknown.output
 
 
+def test_render_command_with_song_refuses_a_name_that_is_none_and_an_ignored_song(conn, cfg, fake_chordpro):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    bad = caracole_render(cfg, fake_chordpro, "--song", "no dash here")
+    assert bad.exit_code == 2, bad.output
+    cfg.overrides_file.write_text(f'[ignore]\nsongs = ["{song.display}"]\n', encoding="utf-8")
+    ignored = caracole_render(cfg, fake_chordpro, "--song", song.display)
+    assert ignored.exit_code == 1 and f'"{song.display}" is ignored in overrides.toml.' in ignored.output
+    assert not pdf_of(cfg, song).exists()
+
+
 @pytest.mark.slow
 def test_render_command_with_song_counts_no_songbook_that_fails(conn, cfg, fake_chordpro):
     # A synced device's folder where a songbook's PDF goes: that songbook fails at every render.

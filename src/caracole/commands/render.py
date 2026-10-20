@@ -8,19 +8,13 @@ were last made and which failed, and index.html, which links them.
 
 from __future__ import annotations
 
-import sqlite3
 from contextlib import closing
-from typing import TYPE_CHECKING
 
 import typer
 
 from caracole.commands import _common
-from caracole.commands._common import exclusive, fail, load_cfg, load_ovr, open_db, utcnow, write_pages
+from caracole.commands._common import exclusive, load_cfg, load_ovr, open_db, song_named, utcnow, write_pages
 from caracole.commands.songbook import songbooks_line
-
-if TYPE_CHECKING:
-    from caracole.overrides import Overrides
-    from caracole.songs import Song
 
 
 def register(app: typer.Typer) -> None:
@@ -46,7 +40,7 @@ def register(app: typer.Typer) -> None:
         cfg = load_cfg(ctx)
         overrides = load_ovr(cfg)
         with exclusive(cfg, "render"), closing(open_db(cfg)) as conn:
-            song_ids = {_one_song(conn, song, overrides).id} if song else None
+            song_ids = {song_named(conn, song, overrides).id} if song else None
             # A waiting lookup goes between two songs: --force renders every PDF, minutes of work.
             stats = render_all(conn, cfg, overrides, force=force, between=lambda: _common.hand_over(cfg, conn),
                                song_ids=song_ids)
@@ -60,20 +54,3 @@ def register(app: typer.Typer) -> None:
             typer.echo(f"Songbooks: {songbooks_line(books)}")
         if stats.failed or (not song and (books.failed or books.error)):
             raise typer.Exit(1)
-
-
-def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> Song:
-    """The song ``--song`` names; otherwise say why there is none to render."""
-    from caracole.overrides import OverridesError, override_key
-    from caracole.songs import find_song
-
-    try:
-        key = override_key(display)
-    except OverridesError as e:
-        fail(str(e), 2)
-    found = find_song(conn, key)
-    if found is None:
-        fail(f'No song "{display}" in the library. Add it with `caracole add` first.')
-    if found.status == "ignored" or key in overrides.ignore:
-        fail(f'"{found.display}" is ignored in overrides.toml.')
-    return found
