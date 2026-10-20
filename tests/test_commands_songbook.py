@@ -90,6 +90,13 @@ def test_make_refuses_a_name_taken_and_a_name_that_cant_be_a_folder(setup):
     assert result.exit_code == 1 and "dot" in result.output
 
 
+def test_make_keeps_a_song_named_twice_once_and_says_so(setup):
+    result = run(setup, "make", "Gig", "Muse - Hysteria", "Soda Stereo - De Música Ligera", "muse - hysteria")
+    assert result.exit_code == 0, result.output
+    assert 'Made the songbook "Gig": 2 songs.' in result.output and "Muse - Hysteria is in it already" in result.output
+    assert books(setup) == [Songbook("Gig", ("Muse - Hysteria", "Soda Stereo - De Música Ligera"))]
+
+
 def test_make_needs_songs(setup):
     result = run(setup, "make", "Campfire")
     assert result.exit_code == 2

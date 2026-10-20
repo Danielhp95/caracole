@@ -1262,7 +1262,8 @@ songbook's files stay as they are, and everything else goes on.
   title written any way, or by a search of your library that one song answers
   well ("ban ma ban ma" for 宋冬野 - 斑马，斑马, or a typo), and it says which
   song it took: `Took 宋冬野 - 斑马，斑马 for "ban ma ban ma"`. The songbook keeps
-  each song as the library names it. A song the library hasn't got is refused,
+  each song as the library names it, and a song named twice once, where it is
+  first (`Muse - Hysteria is in it already`). A song the library hasn't got is refused,
   with what you may have meant, and nothing is written:
   `No song "Radiohed - Karma" in the library: did you mean "Radiohead - Karma Police"?`
   A name another songbook has is refused too.

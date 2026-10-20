@@ -138,6 +138,13 @@ def test_make_writes_a_new_songbook(tmp_path):
     assert '"Radiohead - Creep",\n' in text  # one song a line, to edit by hand
 
 
+def test_make_keeps_a_song_named_twice_once_where_it_first_is(tmp_path):
+    path = tmp_path / FILE_NAME
+    made = make_songbook(path, "Gig", ["Oasis - Wonderwall", "Radiohead - Creep", "oasis - wonderwall"])
+    assert made.songs == ("Oasis - Wonderwall", "Radiohead - Creep")
+    assert load_songbooks(path) == [made]
+
+
 def test_make_refuses_a_name_taken_in_any_case(tmp_path):
     path = write(tmp_path, HAND_WRITTEN)
     with pytest.raises(SongbookError, match="already"):

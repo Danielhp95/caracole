@@ -397,9 +397,14 @@ def check_free(books: Sequence[Songbook], name: str, *, but: Songbook | None = N
 
 
 def make_songbook(path: Path, name: str, entries: Sequence[str]) -> Songbook:
-    """Add a songbook of these songs, in this order, after the others; return it."""
+    """Add a songbook of these songs, in this order, after the others; return it. A song named twice
+    (``same_entry``) is in it once, where it is first named, as ``add_to_songbook`` keeps it."""
     clean = check_name(name)
-    songs = [_entry(e, f"[{_quoted(clean)}]") for e in entries]
+    songs: list[str] = []
+    for text in entries:
+        entry = _entry(text, f"[{_quoted(clean)}]")
+        if not any(same_entry(entry, s) for s in songs):
+            songs.append(entry)
 
     def change(doc, books: list[Songbook]) -> Songbook:
         check_free(books, clean)

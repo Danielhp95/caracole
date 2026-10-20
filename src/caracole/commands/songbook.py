@@ -63,6 +63,11 @@ def register(app: typer.Typer) -> None:
             found = _songs(conn, songs)
             made = _do(lambda: make_songbook(_file(cfg), name, [f.song.display for f in found]))
             typer.echo(f'Made the songbook "{made.name}": {_count(len(made.songs))}.')
+            seen: set[int] = set()
+            for f in found:  # a song named twice is in it once
+                if f.song.id in seen:
+                    typer.echo(f"{f.song.display} is in it already")
+                seen.add(f.song.id)
             _say_found(songs, found)
             _render(cfg, conn, made.name)
 
