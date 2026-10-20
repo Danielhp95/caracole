@@ -780,8 +780,8 @@ and cache.
   `Radiohead - Creep: downloaded Creep (Radiohead - Topic), https://www.youtube.com/watch?v=…`,
   then `YouTube: 1 downloaded, 0 not there, 0 unavailable, 0 errors (2 yt-dlp runs of 6).`
   `--song` takes that song's audio now, even when its search found nothing
-  lately; it refuses a song that has a human sheet or is ignored, and says so
-  when the song has that video's audio already. `--url` first writes the video
+  lately; it refuses a song that has a human sheet, is ignored or has a
+  purchase linked, and says so when the song has that video's audio already. `--url` first writes the video
   under `[youtube]` in overrides.toml, so the song's audio comes from it; `--none`
   writes `"none"` there, lets go of any audio the song had from YouTube, and asks
   nothing. It needs the flake's `packages.autochords`, which has auto-chords and

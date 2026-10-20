@@ -208,6 +208,19 @@ def test_a_song_with_a_human_sheet_or_ignored_gets_nothing_from_youtube(tmp_path
     assert fake.argvs() == []
 
 
+def test_a_song_whose_purchase_is_linked_gets_nothing_from_youtube(tmp_path, ntfy, fake, conn):
+    song = to_buy(conn)
+    creep(fake)
+    bought = tmp_path / "music" / "Radiohead - Creep.flac"
+    bought.parent.mkdir(parents=True)
+    bought.write_bytes(b"bought")
+    update_song(conn, song.id, audio_path=str(bought), audio_mtime=bought.stat().st_mtime)
+    result = invoke(write_config(tmp_path, fake), "--song", "Radiohead - Creep")
+    assert result.exit_code == 1
+    assert '"Radiohead - Creep" has its audio already (Radiohead - Creep.flac' in result.output
+    assert fake.argvs() == [] and get_song(conn, song.id).audio_path == str(bought)
+
+
 def test_a_pasted_url_is_written_to_overrides_and_downloaded(tmp_path, ntfy, fake, conn):
     song = to_buy(conn)
     fake.video(OTHER, "Radiohead - Creep (Live)", "someone", 300, data="live")

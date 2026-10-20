@@ -3,9 +3,10 @@
 Without ``--song`` it makes the same pass as the step (youtube_fetch.py): the songs with
 no human sheet that are due for their audio from YouTube, newest first, within the
 budget. With ``--song "Artist - Title"`` it takes that song's audio, even when its search
-found nothing lately; ``--url`` first writes the video to use under ``[youtube]`` in
-overrides.toml, and ``--none`` writes "none" there, lets go of any audio the song has
-from YouTube, and asks YouTube nothing.
+found nothing lately, unless it has a human sheet, is ignored or has a purchase linked;
+``--url`` first writes the video to use under ``[youtube]`` in overrides.toml, and
+``--none`` writes "none" there, lets go of any audio the song has from YouTube, and asks
+YouTube nothing.
 
 As the other steps' commands do, it leaves YouTube alone while it cools down after a
 block; a block starts (or extends) the cooldown and sends one ntfy alert, and like a
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 from contextlib import closing
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import typer
@@ -147,6 +149,7 @@ def _one_song(conn: sqlite3.Connection, cfg: Config, display: str, overrides: Ov
     """The song ``--song`` names, if YouTube may be asked for its audio; otherwise say why not."""
     from caracole.overrides import OverridesError, override_key
     from caracole.songs import find_song
+    from caracole.youtube_fetch import youtube_audio
 
     try:
         key = override_key(display)
@@ -159,6 +162,10 @@ def _one_song(conn: sqlite3.Connection, cfg: Config, display: str, overrides: Ov
         fail(f'"{song.display}" is ignored in overrides.toml.')
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = 'sheet.txt'", (song.id,)).fetchone():
         fail(f'"{song.display}" has a human sheet: caracole takes no audio from YouTube for it.')
+    if song.audio_path and youtube_audio(conn, song) is None:  # a purchase, linked from Music/
+        audio = Path(song.audio_path)
+        shown = f"{audio.relative_to(cfg.music_dir)} in Music/" if audio.is_relative_to(cfg.music_dir) else audio
+        fail(f'"{song.display}" has its audio already ({shown}): caracole takes none from YouTube for it.')
     return song
 
 
