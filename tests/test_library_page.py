@@ -854,6 +854,7 @@ MEASURE = """
     widths: cards.map((c) => Math.round(box(c).width)),
     page: window.innerWidth,
     scroll: document.documentElement.scrollWidth,
+    view: document.getElementById("view-toggle").getClientRects().length > 0,
   }));
 })();
 """
@@ -895,18 +896,24 @@ def test_cards_fill_a_desktop_row_and_stack_on_a_phone(conn, cfg, tmp_path):
 
 
 @in_chromium
-def test_the_letter_strip_lists_the_artists_initials(conn, cfg, tmp_path):
+def test_the_letter_strip_lists_the_artists_initials_once_there_are_many_songs(conn, cfg, tmp_path):
     for artist, title in (("The Beatles", "Yesterday"), ("Radiohead", "Creep"), ("Soda Stereo", "Música"),
                           ("宋冬野", "斑马，斑马")):
         add_song(conn, artist, title)
+    few = write_library_page(cfg.library_dir, page(conn, cfg))
+    assert re.search(r'<nav[^>]*id="jump"[^>]*hidden', dump_dom(few, tmp_path))  # four songs: scroll, no letters
+    for n in range(36):
+        add_song(conn, "Radiohead", f"Song {n}")
     path = write_library_page(cfg.library_dir, page(conn, cfg))
     dom = dump_dom(path, tmp_path)
     strip = re.search(r'<nav[^>]*id="jump"[^>]*>(.*?)</nav>', dom, re.S)
-    assert strip, dom[-2000:]
+    assert strip and "hidden" not in strip.group(0)[:60], dom[-2000:]
     assert re.findall(r"<button[^>]*>([^<]+)</button>", strip.group(1)) == ["B", "R", "S"]
     shown = listing(dump_dom(path, tmp_path, "#sort=recent"))
-    assert shown.count("<article") == 4
+    assert shown.count("<article") == 40
     assert re.search(r'<nav[^>]*id="jump"[^>]*hidden', dump_dom(path, tmp_path, "#sort=recent"))
+    # A search that shows a few of them leaves the letters out too.
+    assert re.search(r'<nav[^>]*id="jump"[^>]*hidden', dump_dom(path, tmp_path, "#q=creep"))
 
 
 @in_chromium
@@ -1920,3 +1927,100 @@ def test_with_none_of_your_songs_matching_the_file_page_says_what_to_run_at_once
     assert "No songs match “karma police”." in shown
     assert "<code>caracole search 'karma police'</code>" in shown and "Copy</button>" in shown
     assert re.search(r'<button type="button" id="all" class="btn all primary"', dom)  # the way on, prominent
+
+
+# --- the header on a phone, and the bar that stays at the top ----------------------------------------
+
+
+@pytest.fixture
+def phone_page(tmp_path):
+    from helpers.browser import Browser, BrowserError
+
+    try:
+        page = Browser(tmp_path / "chrome-phone", width=390, height=844, mobile=True)
+    except BrowserError as e:
+        pytest.skip(f"chromium couldn't run: {e}")
+    yield page
+    page.close()
+
+
+FIRST_SONG = "document.querySelector('#list article').getBoundingClientRect().top"
+SHOWN = "((e) => !!e && e.getClientRects().length > 0)"
+
+
+@in_chromium
+def test_on_a_phone_the_first_song_starts_on_the_first_screen(conn, cfg, phone_page):
+    from caracole.library_page import WebControls
+
+    for n, (artist, title) in enumerate((("Radiohead", "Creep"), ("Oasis", "Wonderwall"), ("Muse", "Hysteria"))):
+        song = add_song(conn, artist, title)
+        if n:
+            update_song(conn, song.id, status="found")
+    served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
+    for html in (served, page(conn, cfg)):
+        path = write_library_page(cfg.library_dir, html)
+        phone_page.open(path.as_uri())
+        top = phone_page.js(FIRST_SONG)
+        assert top < 400, top  # under the header, the bar and one row of buttons: more than half the screen is songs
+        assert phone_page.js("document.documentElement.scrollWidth <= innerWidth")
+        # The numbers sit beside the title, and the buttons are one row that scrolls sideways.
+        title = phone_page.js("document.querySelector('h1').getBoundingClientRect().top")
+        stats = phone_page.js("document.getElementById('summary').getBoundingClientRect().top")
+        assert abs(title - stats) < 16, (title, stats)
+        tops = phone_page.js("[...document.querySelectorAll('.toolbar .chip')].filter((c) => c.offsetParent)"
+                             ".map((c) => Math.round(c.getBoundingClientRect().top))")
+        assert len(tops) >= 4 and max(tops) - min(tops) < 8, tops  # one row
+        # No song needs review: no Needs review button. Key, Sort and Cards/Rows wait under View.
+        assert not phone_page.js(f"{SHOWN}(document.querySelector('.chip[data-show=\"review\"]'))")
+        assert not phone_page.js(f"{SHOWN}(document.getElementById('sort'))")
+        toggle = "document.getElementById('view-toggle')"
+        assert phone_page.js(f"{toggle}.getAttribute('aria-expanded')") == "false"
+        assert phone_page.js(f"{toggle}.getBoundingClientRect().height") >= 44
+        phone_page.click("#view-toggle")
+        assert phone_page.wait(f"{SHOWN}(document.getElementById('sort')) && {SHOWN}(document.querySelector('.views'))")
+        assert phone_page.js(f"{toggle}.getAttribute('aria-expanded')") == "true"
+
+
+@in_chromium
+def test_on_a_desktop_the_view_controls_sit_in_the_toolbar_and_needs_review_shows_once_a_song_does(
+        conn, cfg, tmp_path):
+    add_song(conn, "Radiohead", "Creep")
+    in_review(conn)
+    path = write_library_page(cfg.library_dir, measured(page(conn, cfg)))
+    dom = dump_dom(path, tmp_path, size="1280,900")
+    assert not re.search(r'data-show="review"[^>]*hidden', dom)
+    toolbar = re.search(r'<div class="toolbar">(.*?)<nav class="jump"', dom, re.S).group(1)
+    assert 'id="view-panel"' in toolbar and 'id="sort"' in toolbar
+    assert layout_of(dom)["view"] is False  # no View button: it all fits
+
+
+STUCK = """
+(() => {
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  setTimeout(() => {
+    const bar = document.querySelector(".searchbar");
+    const box = bar.getBoundingClientRect();
+    document.body.setAttribute("data-bar", JSON.stringify({
+      stuck: bar.classList.contains("stuck"), shadow: getComputedStyle(bar).boxShadow,
+      left: box.left, right: box.right, top: box.top, page: innerWidth,
+    }));
+  }, 300);
+})();
+"""
+
+
+@in_chromium
+def test_the_bar_kept_at_the_top_has_an_edge_and_covers_the_page_side_to_side(conn, cfg, tmp_path):
+    for n in range(30):
+        add_song(conn, "Radiohead", f"Song {n}")
+    html = page(conn, cfg)
+    csp = csp_of(html)
+    html = html.replace(csp, csp.replace("script-src ", f"script-src {sha(STUCK)} ")).replace(
+        "</body>", f"<script>{STUCK}</script>\n</body>")
+    path = write_library_page(cfg.library_dir, html)
+    at_top = json.loads(__import__("html").unescape(re.search(r'data-bar="([^"]*)"', dump_dom(path, tmp_path)).group(1)))
+    assert at_top["stuck"] and at_top["shadow"] != "none" and at_top["top"] == 0
+    for size in ("390,844", "1280,900"):
+        bar = json.loads(__import__("html").unescape(
+            re.search(r'data-bar="([^"]*)"', dump_dom(path, tmp_path, size=size)).group(1)))
+        assert bar["left"] <= 0 and bar["right"] >= bar["page"], (size, bar)  # nothing shows beside it

@@ -1463,8 +1463,13 @@ as another spelling.
 overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
-loads nothing from the network. It shows every song as a card, in a grid as
-wide as the screen: one column on a phone, three or four on a laptop. A card
+loads nothing from the network. Its header is short, so that on a phone the
+first song starts well within the first screen: the library's numbers beside
+its title, the pages on the line above, the search box, then one row of
+buttons, which scrolls sideways on a phone. The search box stays at the top as
+the page scrolls under it, with an edge to show it. It shows every song as a
+card, in a grid as wide as the screen: one column on a phone, three or four on
+a laptop. A card
 has its status, its key and where the key came from ("Key A minor (from the
 tab)", "Key C major (estimated from the chords)", "(from the audio)": see
 [The song's key](#the-songs-key)), its transposition, and links to its files:
@@ -1485,7 +1490,9 @@ status, a card shows where its sheet came from, by the site's own icon, and a
 file from somewhere else carries its own: the lyrics LRCLIB's, a Guitar Pro
 file gtptabs.com's (see [Where each file came from](#where-each-file-came-from)).
 
-The Cards/Rows switch, beside the Key menu, shows the songs as rows instead:
+The Cards/Rows switch, beside the Key menu (on a phone under View, with the
+Key and Sort menus: View says the key chosen there, "View · A minor"), shows
+the songs as rows instead:
 one line a song on a laptop, about twenty to a screen, and two lines on a
 phone: the title and the button, then the artist, the key and the status. A
 row has the sheet's mark, the title, the artist (which, as on a card,
@@ -1527,12 +1534,13 @@ initials, typed whole, find it too: "wywh" finds "Wish You Were Here", "bmbm"
 minor", "F# major", "bbm", and "gb minor", which also finds the songs in F#
 minor; or "minor" for every song in a minor key. A key written as a chord, such
 as "am", also finds the names with "am" in them ("I Am the Walrus"). The
-buttons show all songs, or only those found, wanted or needing review; the Key
+buttons show all songs, or only those found, wanted or needing review (that
+button only while a song needs review); the Key
 menu, there once a song has a key, shows only the songs in one key, with how
 many each key has, and puts the spellings of one key together ("F# / Gb
 minor"); and you can sort by artist, by title or by when songs were added.
-Sorted by artist or title, a row of letters jumps to the first song under
-each. A line under the box says what Enter does. **Enter**, or **Search all**
+Sorted by artist or title, with more than 40 songs shown, a row of letters
+jumps to the first song under each. A line under the box says what Enter does. **Enter**, or **Search all**
 beside the box, searches the sites too: the file on disk, which can ask
 nothing of anyone, shows under the box the `caracole search` line to run where
 caracole runs, with Copy, and leaves your songs as they are; Escape takes it
@@ -1548,7 +1556,7 @@ below).
 one, lists each songbook: its songs in order, those without a sheet marked
 missing, and its files, the phone page first, then the PDF and the ChordPro
 file. On the file on disk it names the `caracole songbook` commands that change
-it; `caracole serve` adds buttons. **Select**, beside the Sort menu, puts a
+it; `caracole serve` adds buttons. **Select**, beside the Cards/Rows switch (View on a phone), puts a
 box on each card, or on each row in the Rows view, where the source's mark
 was: tick songs in the order they go in the songbook (each box shows its
 place, and a screen reader says it: "Pick Creep by Radiohead, 2nd"), search,

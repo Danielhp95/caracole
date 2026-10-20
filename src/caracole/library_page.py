@@ -24,7 +24,11 @@ by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
 The songs are one grid of cards, as many columns as the screen holds, in every
 order: a section per artist left one narrow card per row on a desktop. Each
 card has its artist's monogram, in a colour of that artist's, and an A-Z strip
-jumps to the first card of a letter. A Cards/Rows toggle shows them as rows
+jumps to the first card of a letter once more than 40 songs show. On a phone
+the header is short (the numbers beside the title, one row of buttons that
+scrolls sideways, Key, Sort and the view under View), so the first song starts
+on the first screen; the bar stays at the top, with an edge once the page
+scrolls under it. A Cards/Rows toggle shows them as rows
 instead, one compact line a song (two on a phone), remembered in the address
 (``#view=rows``) as the search, the filters, the sort and the key are.
 
@@ -775,6 +779,16 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
   }
 }
 .summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+/* The library's header: caracole and the pages on one line, the title with its numbers beside it on the next. */
+.masthead.lib { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "app links" "title title";
+  align-items: center; gap: 2px 12px; padding: 10px 0 6px; }
+.masthead.lib .app { grid-area: app; margin: 0; }
+.masthead.lib .links { grid-area: links; flex-wrap: nowrap; }
+.masthead.lib .navlink { min-height: 40px; padding: 0 13px; font-size: .9rem; }
+.title-line { grid-area: title; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; min-width: 0; }
+.title-line .summary { gap: 0; margin: 0; }
+.title-line .stat { padding: 0; background: none; }
+.title-line .stat + .stat::before { content: "·"; margin: 0 6px; color: var(--muted); }
 .stat { padding: 3px 10px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: .82rem;
   font-variant-numeric: tabular-nums; }
 .stat b { color: var(--text); font-weight: 650; }
@@ -791,7 +805,10 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; cursor: pointer; }
 .check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .hint { margin: 0; color: var(--muted); font-size: .85rem; }
-.searchbar { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 12px 0 10px; }
+/* Kept at the top, side to side across the page, with an edge once the page scrolls under it (.stuck). */
+.searchbar { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 10px 16px 8px; background: var(--bg); }
+.searchbar.stuck { box-shadow: 0 1px 0 var(--border-strong), 0 8px 16px -10px rgb(0 0 0 / 35%); }
+.bar-edge { height: 0; }
 .field { position: relative; }
 .field input {
   width: 100%; height: 50px; padding: 0 48px 0 16px; border-radius: 14px; border: 1px solid var(--border);
@@ -836,7 +853,15 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
   .results .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 44px; }
 }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+/* One row of buttons that scrolls sideways on a phone; Key, Sort and the view under View there. */
+.chips { display: flex; flex: 1 1 0; flex-wrap: nowrap; gap: 8px; min-width: 0; margin: -4px; padding: 4px;
+  overflow-x: auto; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; }
+.view-panel { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 12px; }
+.toolbar .view-toggle { display: none; }
+.view-toggle::after { content: "▾"; color: var(--muted); }
+.view-toggle[aria-expanded="true"]::after { content: "▴"; }
 .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .9rem;
   cursor: pointer; }
@@ -845,7 +870,7 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
 .chip.person { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: .9rem; }
-.controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 12px; margin-left: auto; }
+.controls { display: flex; flex: none; justify-content: flex-end; gap: 8px; }
 .sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
 .jump { display: flex; gap: 2px; margin: 10px 0 0; padding: 2px 0; overflow-x: auto; scrollbar-width: none; }
@@ -931,8 +956,21 @@ body.with-tray .page { padding-bottom: 16rem; }
   color: var(--muted); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
 .views button:hover { color: var(--text); }
 .views button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
-""" + ROWS_STYLE + """@media (min-width: 720px) {
+""" + ROWS_STYLE + """.card, .list .row { scroll-margin-top: 108px; }  /* below the bar kept at the top */
+@media (max-width: 719px) {
+  .toolbar .view-toggle { display: inline-flex; }
+  .view-panel { flex-basis: 100%; justify-content: flex-start; }
+  .view-panel:not(.open) { display: none; }
+  .view-panel .sort { margin-left: 0; }
+}
+@media (pointer: coarse) {
+  .view-toggle, .masthead.lib .navlink { min-height: 44px; }
+}
+@media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
+  .searchbar { margin: 0 -24px; padding: 12px 24px 8px; }
+  .masthead.lib { grid-template-areas: "app links" "title links"; align-items: end; padding: 28px 0 8px; }
+  .chips { flex-wrap: wrap; overflow: visible; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .plus { transition: transform .15s; }
@@ -1225,6 +1263,9 @@ _SCRIPT = r"""
   const jump = byId("jump");
   const chips = Array.from(document.querySelectorAll(".chip[data-show]"));
   const artistChip = byId("artist");
+  const viewToggle = byId("view-toggle");
+  const viewPanel = byId("view-panel");
+  const JUMP_FROM = 40;  // songs shown before the A-Z strip is worth its room: fewer, and a thumb scrolls
 
   let data;
   try {
@@ -2004,9 +2045,12 @@ _SCRIPT = r"""
     for (const i of matchingNow) {
       for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
     }
+    // Needs review, only while a song does (or while it is the one pressed).
+    const reviewing = songs.some((s) => SHOWS.review(s)) || Array.from(arrived.values()).some((s) => SHOWS.review(s));
     for (const chip of chips) {
       chip.setAttribute("aria-pressed", String(chip.dataset.show === state.show));
       chip.querySelector(".n").textContent = String(tally[chip.dataset.show]);
+      chip.hidden = chip.dataset.show === "review" && !reviewing && state.show !== "review";
     }
   };
 
@@ -2022,6 +2066,8 @@ _SCRIPT = r"""
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
     sort.value = state.sort;
     keySelect.value = state.key;
+    // On a phone Key, Sort and the view are under View, which says a key chosen there.
+    viewToggle.textContent = state.key && keyGroup(state.key) ? "View · " + keyGroup(state.key).name : "View";
     for (const button of viewButtons) button.setAttribute("aria-pressed", String(button.dataset.view === state.view));
     clear.hidden = !state.q;
     artistChip.hidden = !state.artist;
@@ -2063,7 +2109,7 @@ _SCRIPT = r"""
       });
       jump.appendChild(to);
     }
-    jump.hidden = firsts.size < 2;
+    jump.hidden = firsts.size < 2 || shown.length < JUMP_FROM;
 
     if (!songs.length) {
       list.appendChild(el("p", "empty", "No songs yet."));
@@ -2150,6 +2196,19 @@ _SCRIPT = r"""
     render();
     save();
   });
+  viewToggle.addEventListener("click", () => {
+    const open = viewToggle.getAttribute("aria-expanded") !== "true";
+    viewToggle.setAttribute("aria-expanded", String(open));
+    viewPanel.classList.toggle("open", open);
+  });
+  // The bar kept at the top gets its edge once the page scrolls under it.
+  const edge = byId("bar-edge");
+  const bar = document.querySelector(".searchbar");
+  if (edge && bar && "IntersectionObserver" in window) {
+    new IntersectionObserver((seen) => {
+      bar.classList.toggle("stuck", !seen[seen.length - 1].isIntersecting);
+    }).observe(edge);
+  }
   input.value = state.q;
   input.addEventListener("input", () => {
     state.q = input.value;
@@ -3185,15 +3244,16 @@ _HEAD = """<!doctype html>
 
 _BODY = """<body>
 <div class="page">
-<header class="masthead">
-  <div>
-    <p class="app">caracole</p>
+<header class="masthead lib">
+  <p class="app">caracole</p>
+  <div class="title-line">
     <h1>Your library</h1>
     <ul class="summary" id="summary" aria-label="The library in numbers"></ul>
   </div>
   <nav class="links" aria-label="Pages">__NAV__</nav>
 </header>
-__SONGBOOKS__<div class="searchbar" role="search">
+__SONGBOOKS__<div class="bar-edge" id="bar-edge" aria-hidden="true"></div>
+<div class="searchbar" role="search">
   <label class="visually-hidden" for="q">Search your songs</label>
   <div class="bar-row">
     <div class="field">
@@ -3217,6 +3277,10 @@ __REQUEST__</section>
     <button type="button" class="chip person" id="artist" hidden></button>
   </div>
   <div class="controls">
+    <button type="button" class="chip view-toggle" id="view-toggle" aria-expanded="false"
+      aria-controls="view-panel">View</button>
+  </div>
+  <div class="view-panel" id="view-panel">
   <div class="views" role="group" aria-label="View">
     <button type="button" data-view="cards" aria-pressed="true">Cards</button>
     <button type="button" data-view="rows" aria-pressed="false">Rows</button>
