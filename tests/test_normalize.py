@@ -493,3 +493,18 @@ def test_forms_are_for_comparing_and_keys_stay_as_they_were():
     # Forms never change a song's key, so no re-keying (KEY_VERSION) comes with them.
     assert KEY_VERSION == 2
     assert identity_key(SONG_DONGYE_UG, BANMA_UG) == "song-dongye-宋冬野/斑马斑马-banma-banma-zebra-zebra"
+
+
+@pytest.mark.parametrize("name", ["misc", "Misc.", "MISC", "unknown", "Unknown Artist", "various", "Various Artists",
+                                  "V.A.", "n/a", "?", "anonymous", "desconocido", "varios"])
+def test_a_placeholder_for_an_artist_you_dont_know_is_no_ones_name(name):
+    from caracole.normalize import placeholder_artist
+
+    assert placeholder_artist(name)
+
+
+@pytest.mark.parametrize("name", ["Oasis", "宋冬野", "The Unknown", "Misc Musicals", "Various Cruelties", "Traditional"])
+def test_an_artists_name_is_no_placeholder(name):
+    from caracole.normalize import placeholder_artist
+
+    assert not placeholder_artist(name)

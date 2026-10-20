@@ -7,6 +7,13 @@ through ``caracole add``'s own path (``sources.add_song``): appended to
 wanted.txt, which is then synced. A hit under a catch-all artist
 (``misc-musicals``…) has no such line, and ``--add`` refuses it: under UG's
 names, the song's artist would be "Misc Musicals".
+
+A query may be an artist alone or a title alone (``search.find_index``): when
+an artist leads, its most tabbed songs come first, then the songs titled like
+it; when a song does, the artists of that name are a line each, for
+``--artist``. ``--artist NAME`` lists an artist's songs, ``--title TITLE`` a
+title's by any artist, and ``--add N`` numbers exactly what was printed
+(``_listing``).
 """
 
 from __future__ import annotations
@@ -15,7 +22,9 @@ import re
 import sqlite3
 import sys
 import textwrap
+from collections.abc import Callable
 from contextlib import closing, nullcontext
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import typer
@@ -29,7 +38,7 @@ if TYPE_CHECKING:
     from caracole.config import Config
     from caracole.keys import SongKey
     from caracole.overrides import Overrides
-    from caracole.search import IndexHit, LibraryHit
+    from caracole.search import ArtistHit, IndexHit, LibraryHit
     from caracole.songs import Song
 
 _SHELL_SPECIAL = re.compile(r'(["\\$`])')
@@ -52,20 +61,63 @@ def register(app: typer.Typer) -> None:
             help='Only your songs in this key, in either case: "A minor", am, F#, "La menor". The offline index '
                  "has no keys, so it isn't searched.",
         ),
+        artist: str | None = typer.Option(
+            None, "--artist", metavar="NAME",
+            help="Only this artist's songs: yours, then the offline index's, most tabbed first. QUERY words "
+                 "then search their titles.",
+        ),
+        title: str | None = typer.Option(
+            None, "--title", metavar="TITLE", help="Only songs of this title, by any artist."
+        ),
     ) -> None:
         """Search your library and the offline Ultimate Guitar index (no network)."""
-        text = " ".join(" ".join(query or []).split())
-        if (text or key is None) and not re.search(r"\w", text):
-            fail(f"nothing to search for in {text!r}", 2)
+        ask = _ask(" ".join(" ".join(query or []).split()), artist, title, key)
         in_key = None if key is None else _wanted_key(key, add)
         cfg = load_cfg(ctx)
         # Only --add writes (wanted.txt, then the library), so only it waits for another caracole.
         lock = nullcontext() if add is None else exclusive(cfg, "search --add")
         with lock, closing(open_db(cfg)) as conn:
             if add is None:
-                _search(cfg, conn, text, limit, in_key)
+                _search(cfg, conn, ask, limit, in_key)
             else:
-                _add(cfg, conn, text, add, limit)
+                _add(cfg, conn, ask, add, limit)
+
+
+@dataclass(frozen=True)
+class _Ask:
+    """What a search asks for: ``text`` (QUERY's words), or an artist's songs (``artist``, ``text``
+    then words of their titles), or a title's (``title``)."""
+
+    text: str
+    artist: str | None = None
+    title: str | None = None
+
+    def __str__(self) -> str:
+        if self.artist is not None:
+            return f"--artist {self.artist!r}" + (f" {self.text!r}" if self.text else "")
+        return f"--title {self.title!r}" if self.title is not None else repr(self.text)
+
+
+def _ask(text: str, artist: str | None, title: str | None, key: str | None) -> _Ask:
+    """The search asked for; a usage error for one that asks nothing, or two things at once."""
+    named = {}
+    for option, value in (("--artist", artist), ("--title", title)):
+        if value is not None:
+            named[option] = " ".join(value.split())
+            if not re.search(r"\w", named[option]):
+                fail(f"{option}: nothing to search for in {value!r}", 2)
+    if named and key is not None:
+        fail(f"--key searches your songs by their key, and the offline index has none: it can't go with "
+             f"{' or '.join(named)}", 2)
+    if "--artist" in named:  # words of their titles: --title's, or QUERY's
+        return _Ask(" ".join(w for w in (text, named.get("--title", "")) if w), artist=named["--artist"])
+    if "--title" in named:
+        if text:
+            fail(f"--title takes the whole title: search for {text!r} without it, or put it in the title", 2)
+        return _Ask("", title=named["--title"])
+    if (text or key is None) and not re.search(r"\w", text):
+        fail(f"nothing to search for in {text!r}", 2)
+    return _Ask(text)
 
 
 def _wanted_key(key: str, add: int | None) -> str:
@@ -87,21 +139,20 @@ def _wanted_key(key: str, add: int | None) -> str:
     return found
 
 
-def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int, key: str | None = None) -> None:
+def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: str | None = None) -> None:
     from caracole.icons import kept_sources
     from caracole.keys import key_name, song_key
-    from caracole.search import STRONG, bare_id_hint, search_index, search_library
 
     kept = kept_sources(conn)  # where each song's sheet came from, for its tag
-    more = 0  # songs in the key that --limit leaves out
-    if key is None:
-        typer.echo("In your library")
-        hits = search_library(conn, text, limit)
-        library = [(hit, song_key(conn, cfg.library_dir, hit.song)) for hit in hits]
-    else:
+    if key is not None:
         typer.echo(f"In your library, in {key_name(key)}")
-        in_key = _in_key(cfg, conn, text, key)
+        in_key = _in_key(cfg, conn, ask.text, key)
         library, more = in_key[:limit], max(len(in_key) - limit, 0)
+    else:
+        typer.echo("In your library" + (f", by {ask.artist}" if ask.artist is not None else ""))
+        hits = _library_hits(conn, ask, limit)
+        library = [(hit, song_key(conn, cfg.library_dir, hit.song)) for hit in hits[:limit]]
+        more = max(len(hits) - limit, 0) if ask.artist is not None else 0  # songs by the artist left out
     for hit, found in library:
         typer.echo(_library_line(cfg, hit, found, kept.get(hit.song.id, {})))
     if not library:
@@ -116,17 +167,131 @@ def _search(cfg: Config, conn: sqlite3.Connection, text: str, limit: int, key: s
     if not _index_built(conn):
         typer.echo(f"  Nothing yet: {_EMPTY_INDEX}.")
         return
-    hits = search_index(conn, text, limit)
+    listing = _listing(conn, ask, limit)
     known = _library_keys(conn)
-    for n, hit in enumerate(hits, start=1):
-        typer.echo(_index_lines(n, hit, known))
-    if not hits:
-        typer.echo("  nothing matches")
-    best = library[0][0] if library else None
-    artist = best.song.artist if best is not None and best.score >= STRONG else None
-    hint = bare_id_hint(text, hits, artist=artist, overrides=_overrides(cfg))
+    n = 0
+    for part in listing.parts:
+        if isinstance(part, str):
+            typer.echo(part)
+        else:
+            n += 1
+            typer.echo(_index_lines(n, part, known))
+    hint = _hint(ask, listing, library[0][0] if library else None, _overrides(cfg))
     if hint:
         typer.echo("\n" + _wrap(hint))
+
+
+def _library_hits(conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[LibraryHit]:
+    """Your songs the search asks for, best first: those matching the words, or of the title (up to
+    ``limit``), or every one by the artist (``search.library_by_artist``; with ``text``, those whose
+    titles it matches)."""
+    from caracole.search import LibraryHit, library_by_artist, search_library
+    from caracole.songs import list_songs
+
+    if ask.title is not None:
+        return search_library(conn, ask.title, limit, reading="title")
+    if ask.artist is None:
+        return search_library(conn, ask.text, limit)
+    named = _named_artist(conn, ask.artist)
+    theirs = library_by_artist(list_songs(conn), ask.artist, named.artist_key if named else None)
+    if not ask.text:
+        return [LibraryHit(s, 100.0, "artist") for s in theirs]
+    ids = {s.id for s in theirs}
+    return [h for h in search_library(conn, ask.text, sys.maxsize, reading="title") if h.song.id in ids]
+
+
+def _named_artist(conn: sqlite3.Connection, name: str) -> ArtistHit | None:
+    """The offline index's artist ``name`` names: the first artist row a search for it gives."""
+    from caracole.search import find_index
+
+    artists = find_index(conn, name, songs=0).artists
+    return artists[0] if artists else None
+
+
+@dataclass(frozen=True)
+class _Listing:
+    """What the search prints of the offline index: lines, with the hits between them, numbered in
+    order. ``songs`` and ``artists`` are what its hint weighs; ``missing`` says the index has no
+    artist ``--artist`` names."""
+
+    parts: tuple[str | IndexHit, ...]
+    songs: tuple[IndexHit, ...] = ()
+    artists: tuple[ArtistHit, ...] = ()
+    missing: bool = False
+
+    @property
+    def hits(self) -> list[IndexHit]:
+        return [p for p in self.parts if not isinstance(p, str)]
+
+
+def _listing(conn: sqlite3.Connection, ask: _Ask, limit: int) -> _Listing:
+    """The offline index's answer as the search prints it, at most ``limit`` hits, numbered as
+    ``--add`` takes them. An artist that leads comes first, with its most tabbed songs; any other
+    artist the query names is a line, to list with ``--artist``."""
+    from caracole.search import artist_songs, find_index
+
+    if ask.artist is not None:
+        named = _named_artist(conn, ask.artist)
+        if named is None:
+            return _Listing((f"  No artist named {ask.artist} in the offline index",), missing=True)
+        hits, total = artist_songs(conn, named.artist_key, limit=limit, title=ask.text or None)
+        head = (f"  {named.artist}'s songs titled like {ask.text}:" if ask.text else
+                f"  {named.artist}: {_count(named.songs, 'song')} ({_count(named.tabs, 'tab')}), the most tabbed "
+                "first:")
+        parts: list[str | IndexHit] = [head, *hits] if hits else [head, "  nothing matches"]
+        if total > len(hits):
+            parts.append(f"  … and {total - len(hits)} more: see them with --limit {total}")
+        return _Listing(tuple(parts), tuple(hits), (named,))
+    if ask.title is not None:
+        songs = find_index(conn, ask.title, songs=limit, artists=0, reading="title").songs
+        return _Listing(tuple(songs) or ("  nothing matches",), songs)
+    found = find_index(conn, ask.text, songs=limit)
+    parts = []
+    others = found.artists
+    if found.lead == "artist":
+        lead, *others = found.artists
+        top = lead.top[:limit]
+        parts += [f"  {lead.artist}, an artist: {_count(lead.songs, 'song')} ({_count(lead.tabs, 'tab')}). "
+                  "The most tabbed:", *top]
+        if lead.songs > len(top):
+            parts.append(f"     All {lead.songs:,}: caracole search --artist {_quote(lead.artist)}")
+        rest = found.songs[:max(limit - len(top), 0)]
+        if rest:
+            heading = f"Songs titled like {ask.text}" if all(h.via == "title" for h in rest) else "Other songs"
+            parts += ["", f"  {heading}:", *rest]
+    else:
+        parts += found.songs[:limit] or ["  nothing matches"]
+    for a in others:
+        parts += ["", f"  Also an artist: {a.artist}, {_count(a.songs, 'song')} ({_count(a.tabs, 'tab')})",
+                  f"     caracole search --artist {_quote(a.artist)}"]
+    return _Listing(tuple(parts), found.songs, found.artists)
+
+
+def _count(n: int, thing: str) -> str:
+    return f"{n:,} {thing}" + ("" if n == 1 else "s")
+
+
+def _hint(ask: _Ask, listing: _Listing, mine: LibraryHit | None, overrides: Overrides | None) -> str | None:
+    """The bare-id hint (``search.bare_id_hint``) for the name the search asked about: with
+    ``--artist``, that artist's, when the index has no such artist; with ``--title``, that caracole
+    needs the song's artist, when no song of that title matches well."""
+    from caracole.normalize import placeholder_artist
+    from caracole.search import STRONG, bare_id_hint
+
+    if ask.artist is not None:
+        return bare_id_hint(ask.artist, [], artist=ask.artist, overrides=overrides) if listing.missing else None
+    if ask.title is not None:
+        if any(h.score >= STRONG for h in listing.songs):
+            return None
+        return (f"No song titled {ask.title} in the offline index matches well (UG's sitemaps list some artists "
+                f"only by bare ids, and their songs aren't in it). caracole needs the song's artist to look it "
+                f"up: `caracole add ARTIST {_quote(ask.title)}`.")
+    # A song of yours the query found names the artist; "misc", which the owner writes for one they
+    # don't know, names no one.
+    artist = mine.song.artist if mine is not None and mine.score >= STRONG else None
+    if artist is not None and placeholder_artist(artist):
+        artist = None
+    return bare_id_hint(ask.text, [*listing.songs, *listing.artists], artist=artist, overrides=overrides)
 
 
 def _overrides(cfg: Config) -> Overrides | None:
@@ -200,8 +365,14 @@ def _status(song: Song) -> str:
     return song.status
 
 
-def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]]) -> str:
-    """A numbered hit: the name and its tabs per type, a sample page, and how to add it."""
+def _add_line(hit: IndexHit) -> str:
+    """The line that adds a hit: ``caracole add "Artist" "Title"``."""
+    return f"caracole add {_quote(hit.artist)} {_quote(hit.title)}"
+
+
+def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]],
+                 paste: Callable[[IndexHit], str] = _add_line) -> str:
+    """A numbered hit: the name and its tabs per type, a sample page, and how to add it (``paste``)."""
     from caracole.normalize import identity_key
 
     counts = " ".join(f"{kind}×{count}" for kind, count in hit.counts.items())
@@ -215,7 +386,7 @@ def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]]) -> str:
         return f"{head}\n     in your library"
     if hit.catch_all:  # added under UG's names, the song's artist would be "Misc Musicals"
         return f"{head}\n{_catch_all_note(hit, 'this hit')}"
-    return f"{head}\n     caracole add {_quote(hit.artist)} {_quote(hit.title)}"
+    return f"{head}\n     {paste(hit)}"
 
 
 _ADD_AS_YOU_KNOW_IT = 'caracole add "<the show or singer>" "<the song>"'
@@ -292,23 +463,21 @@ def _index_built(conn: sqlite3.Connection) -> bool:
     return conn.execute("SELECT 1 FROM ug_index LIMIT 1").fetchone() is not None
 
 
-def _add(cfg: Config, conn: sqlite3.Connection, text: str, n: int, limit: int) -> None:
+def _add(cfg: Config, conn: sqlite3.Connection, ask: _Ask, n: int, limit: int) -> None:
     """Add UG hit ``n`` of the search the way ``caracole add`` adds a song, and say what happened.
 
-    Only a hit the same search shows can be added: ``n`` up to ``limit``.
+    Only a hit the same search shows can be added: ``n`` up to ``limit``, numbered as it printed them.
     """
-    from caracole.search import search_index
-
     if not _index_built(conn):
         fail(f"--add {n}: {_EMPTY_INDEX}", 2)
     if n > limit:  # a hit you never saw, such as --add 12 typed for --add 2
         shown = "the first hit is" if limit == 1 else f"the first {limit} hits are"
         fail(f"--add {n}: only {shown} shown; see hit {n} with --limit {n} first, then add it with "
              f"--limit {n} --add {n}", 2)
-    hits = search_index(conn, text, limit)
+    hits = _listing(conn, ask, limit).hits
     if not 1 <= n <= len(hits):
         found = f"only {len(hits)} hit{'s' if len(hits) != 1 else ''}" if hits else "nothing"
-        fail(f"--add {n}: Ultimate Guitar has {found} for {text!r}", 2)
+        fail(f"--add {n}: Ultimate Guitar has {found} for {ask}", 2)
     hit = hits[n - 1]
     if hit.catch_all:  # under UG's names, the song's artist would be the catch-all, as "Misc Musicals"
         fail(_catch_all_note(hit, f"{hit.artist_key}/{hit.song_key}", head=f"--add {n} adds nothing: ",

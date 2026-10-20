@@ -1043,3 +1043,117 @@ def test_a_catch_alls_song_is_never_what_enter_takes(conn):
     found = find_index(conn, "epic not sorry for loving you")
     assert found.songs[0].artist_key == "misc-musicals" and found.songs[0].score >= 90
     assert found.lead == "song" and found.best is None
+
+
+# --- caracole search: an artist alone, a title alone, --artist and --title ----------------------
+
+
+def ug_part(output: str) -> str:
+    return output.partition("On Ultimate Guitar (offline index)")[2]
+
+
+def test_cli_an_artist_alone_says_how_many_songs_it_has_and_lists_the_most_tabbed(tmp_path):
+    seed(tmp_path, rows=EITHER)
+    result = run(tmp_path, "search", "oasis")
+    assert result.exit_code == 0, result.output
+    ug = ug_part(result.output)
+    assert "  Oasis, an artist: 2 songs (4 tabs). The most tabbed:\n  1. [UG] Oasis - Wonderwall · chords×2 tabs×1" in ug
+    assert "  2. [UG] Oasis - Live Forever · chords×1" in ug
+    assert "caracole search --artist" not in ug  # both of its songs are shown
+    # Then the songs with the word in their title, numbered on.
+    assert ug.index("Live Forever") < ug.index("Songs titled like oasis") < ug.index("3. [UG] Misc Mashups - Oasis Wonderwall")
+
+
+def test_cli_an_artist_with_more_songs_than_shown_says_how_to_list_them_all(tmp_path):
+    many = [(30000 + i, "oasis", f"song-{i:02d}", "chords") for i in range(5)]
+    seed(tmp_path, rows=EITHER + many)
+    ug = ug_part(run(tmp_path, "search", "oasis").output)
+    assert "Oasis, an artist: 7 songs (9 tabs). The most tabbed:" in ug
+    assert "  2. [UG] Oasis - Live Forever" in ug and "  3. [UG] Oasis - Song 00" in ug  # its three most tabbed
+    assert "Song 01" not in ug
+    assert '     All 7: caracole search --artist "Oasis"\n' in ug
+
+
+def test_cli_a_title_alone_lists_the_songs_and_says_it_is_an_artist_too(tmp_path):
+    seed(tmp_path, rows=EITHER)
+    result = run(tmp_path, "search", "wonderwall")
+    assert result.exit_code == 0, result.output
+    ug = ug_part(result.output)
+    assert "  1. [UG] Oasis - Wonderwall" in ug and "  2. [UG] Ryan Adams - Wonderwall" in ug
+    assert "In April" not in ug  # the band Wonderwall's song is in its own line, not between the others
+    assert ('  Also an artist: Wonderwall, 1 song (2 tabs)\n'
+            '     caracole search --artist "Wonderwall"\n') in ug
+
+
+def test_cli_add_numbers_what_the_search_printed(tmp_path):
+    seed(tmp_path, rows=EITHER + [(20061, "a-great-big-world", "oasis", "chords")])
+    ug = ug_part(run(tmp_path, "search", "oasis").output)
+    assert "  3. [UG] A Great Big World - Oasis" in ug
+    result = run(tmp_path, "search", "oasis", "--add", "3")
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8").endswith("\nA Great Big World - Oasis\n")
+
+
+def test_cli_search_artist_lists_its_songs_with_limit_and_add(tmp_path):
+    conn = seed(tmp_path, rows=EITHER)
+    add_song(conn, "Oasis", "Wonderwall")
+    result = run(tmp_path, "search", "--artist", "oasis")
+    assert result.exit_code == 0, result.output
+    library, ug = result.output.split("On Ultimate Guitar (offline index)")
+    assert "Oasis - Wonderwall" in library and "Radiohead" not in library  # yours by them, first
+    assert "  Oasis: 2 songs (4 tabs), the most tabbed first:\n  1. [UG] Oasis - Wonderwall" in ug
+    assert "  2. [UG] Oasis - Live Forever" in ug and "Misc Mashups" not in ug and "Ryan Adams" not in ug
+    cut = ug_part(run(tmp_path, "search", "--artist", "oasis", "--limit", "1").output)
+    assert "  1. [UG] Oasis - Wonderwall" in cut and "2. " not in cut
+    assert "  … and 1 more: see them with --limit 2" in cut
+    narrowed = ug_part(run(tmp_path, "search", "--artist", "oasis", "live").output)  # words: its titles
+    assert "  1. [UG] Oasis - Live Forever" in narrowed and "Wonderwall" not in narrowed
+    added = run(tmp_path, "search", "--artist", "oasis", "--add", "2")
+    assert added.exit_code == 0, added.output
+    assert (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8").endswith("\nOasis - Live Forever\n")
+
+
+def test_cli_search_artist_the_index_lacks_lists_yours_and_hints_with_its_name(tmp_path):
+    conn = seed(tmp_path, rows=ROWS)
+    add_song(conn, "宋冬野", "斑马，斑马")
+    result = run(tmp_path, "search", "--artist", "宋冬野")
+    assert result.exit_code == 0, result.output
+    library, ug = result.output.split("On Ultimate Guitar (offline index)")
+    assert "宋冬野 - 斑马，斑马" in library
+    assert "No artist named 宋冬野 in the offline index" in ug
+    out = " ".join(ug.split())
+    assert "Find the artist's page" in out and '"宋冬野" = "https://www.ultimate-guitar.com/artist/' in out
+    assert "is a title" not in out
+
+
+def test_cli_search_title_lists_that_title_by_any_artist(tmp_path):
+    seed(tmp_path, rows=EITHER)
+    result = run(tmp_path, "search", "--title", "wonderwall")
+    assert result.exit_code == 0, result.output
+    ug = ug_part(result.output)
+    assert "  1. [UG] Oasis - Wonderwall" in ug and "  2. [UG] Ryan Adams - Wonderwall" in ug
+    assert "Also an artist" not in ug and "In April" not in ug
+    radiohead = ug_part(run(tmp_path, "search", "--title", "radiohead").output)
+    assert "Creep" not in radiohead  # the artist's name is no title
+
+
+@pytest.mark.parametrize("args", [
+    ("--title", "creep", "radiohead"),  # --title is the title: no other words
+    ("--key", "Am", "--artist", "radiohead"),
+    ("--key", "Am", "--title", "creep"),
+    ("--artist", " "),
+])
+def test_cli_title_with_a_query_and_key_with_a_name_are_usage_errors(tmp_path, args):
+    seed(tmp_path, rows=EITHER)
+    result = run(tmp_path, "search", *args)
+    assert result.exit_code == 2, result.output
+
+
+def test_cli_hint_never_keys_a_line_by_a_placeholder_artist(tmp_path):
+    # The owner's wanted.txt has "misc - 斑马": the song's artist is no one's name, so the query is.
+    conn = seed(tmp_path, rows=ROWS)
+    add_song(conn, "misc", "斑马")
+    out = " ".join(run(tmp_path, "search", "斑马").output.split())
+    assert '"misc" = ' not in out
+    assert '"斑马" = "https://www.ultimate-guitar.com/artist/' in out
+    assert 'If 斑马 is a title, caracole needs its artist too: `caracole add ARTIST "斑马"`' in out

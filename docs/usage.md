@@ -1048,9 +1048,10 @@ and cache.
   exits 0.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
-- **`caracole search [QUERY]... [--limit N] [--add N] [--key KEY]`** searches
-  your library and the offline UG index; `--key` finds your songs in one key
-  (see [caracole search](#caracole-search)).
+- **`caracole search [QUERY]... [--limit N] [--add N] [--key KEY] [--artist NAME]
+  [--title TITLE]`** searches your library and the offline UG index, by an
+  artist, a title or both; `--key` finds your songs in one key (see
+  [caracole search](#caracole-search)).
 - **`caracole autochords`** writes `sheet (auto).txt` from audio you bought, for
   songs with no human sheet (see [the worked example](#a-worked-example)), then
   rewrites `_todo.md` and `index.html`. It needs the flake's
@@ -1636,8 +1637,8 @@ old, with no request.
 
 ### caracole search
 
-`caracole search [QUERY]... [--limit N] [--add N] [--key KEY]` looks in
-two places, and sends no request:
+`caracole search [QUERY]... [--limit N] [--add N] [--key KEY] [--artist NAME]
+[--title TITLE]` looks in two places, and sends no request:
 
     $ caracole search creep
     In your library
@@ -1681,7 +1682,37 @@ two places, and sends no request:
          then pick this hit in `caracole review`:
            caracole add "<the show or singer>" "<the song>"
 
-QUERY is words of the artist, the title or both. Matching ignores case,
+QUERY is words of the artist, the title or both, so a song whose artist you
+don't know is found by its title alone, and an artist by their name alone.
+When the query is an artist's name, and that artist has a song with more tabs
+than any song titled like it, the artist leads: the number of their songs and
+tabs, their three most tabbed songs, then the songs titled like it, all
+numbered in one list:
+
+    $ caracole search oasis
+    …
+    On Ultimate Guitar (offline index)
+      Oasis, an artist: 195 songs (1,193 tabs). The most tabbed:
+      1. [UG] Oasis - Dont Look Back In Anger · chords×10 tabs×12 guitar-pro×9 power×1
+         https://tabs.ultimate-guitar.com/tab/oasis/dont-look-back-in-anger-chords-6097
+         caracole add "Oasis" "Dont Look Back In Anger"
+      …
+         All 195: caracole search --artist "Oasis"
+
+      Songs titled like oasis:
+      4. [UG] A Great Big World - Oasis · chords×4
+      …
+
+When a song leads, the songs come first, and an artist of that name is a
+line of its own: `caracole search wonderwall` lists Oasis's, Ryan Adams's and
+Cartel's Wonderwall, then `Also an artist: Wonderwall, 9 songs (13 tabs)`
+with its `caracole search --artist "Wonderwall"` line; the band's songs are
+left out of the list. The offline index knows no ratings, so the number of
+tabs is what puts the song you probably mean first (Radiohead's Creep before
+Stone Temple Pilots'). A catch-all such as `misc-musicals` is never an
+artist.
+
+Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
 compares Chinese as pinyin, as whole words only, as the matcher does: 斑马
 finds a title written `ban-ma` or `banma`, never the letters inside
@@ -1694,7 +1725,8 @@ love you" about 0.15 s): such a word is in tens of thousands of names, so it
 brings in only the thousand shortest of them, which hold its exact titles and
 artists, and the names every word of the query is in; the first hits are the
 same as when every name was ranked. `--limit N` (or `-n N`) shows up to N hits from
-each place, 10 by default. `--add N` adds UG hit N to wanted.txt and syncs it,
+each place, 10 by default. `--add N` adds UG hit N, numbered as the same
+search printed it, to wanted.txt and syncs it,
 the same way `caracole add` does, and says so in the same one line (`-v` adds
 its line in wanted.txt and the song's key). N can be at most `--limit`, so only a hit the
 search shows can be added, and a hit your library already has under another
@@ -1703,10 +1735,26 @@ written), with the same advice as its hit. When nothing matches well, or the que
 non-Latin letters, the command also explains bare ids and prints the
 `[artist_url]` line to paste, for the artist's page or one of their tab pages,
 with the table's header only while overrides.toml has no `[artist_url]`
-entries. For an artist whose page overrides.toml has already, under any form
+entries. The line is keyed by the artist of a song of yours the query finds,
+never by a placeholder such as "misc" (a line `misc - 斑马` in wanted.txt),
+else by the query itself; a query may be a title, so the hint then adds that
+caracole needs the song's artist too (`caracole add ARTIST "斑马"`): nothing
+asks a site who sang it. For an artist whose page overrides.toml has already, under any form
 of their name, it gives no line and says so. The search reads
 overrides.toml for this hint alone, and still works when the file can't be
 read.
+
+`--artist NAME` lists one artist's songs: yours by them first (their name
+in any form, so `--artist 宋冬野` finds your 宋冬野 songs, and UG's "Song
+Dongye" is the same artist), then all of theirs in the offline index, most
+tabbed first, numbered for `--add`, `--limit` of them, with how many more
+there are (`… and 365 more: see them with --limit 368`). QUERY words given
+with it search their titles: `caracole search --artist oasis live`. For an
+artist the index lacks (UG lists 宋冬野 only by a bare id), it prints the
+`[artist_url]` line to paste, keyed by NAME. `--title TITLE` lists songs of
+that title by any artist, by tabs, never an artist's songs: it takes the
+whole title, so it can't go with QUERY words (exit 2); with `--artist`, it
+searches that artist's titles. Neither goes with `--key` (exit 2).
 
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
