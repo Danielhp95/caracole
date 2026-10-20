@@ -35,7 +35,8 @@ A block cools its site down and ends that site's stages; a spent budget (the
 lookup's or the hour's) and a provider's error leave the song to the nightly
 run; neither is a failure, and neither makes a song not found. The lookup holds
 caracole's lock throughout, and a nightly run that holds it lets the lookup go
-first at its next pause (``_common.hand_over``).
+first at its next pause, or between two songs for work that sends no request
+(auto-chords, the PDF pass; ``_common.hand_over``).
 """
 
 from __future__ import annotations
@@ -577,7 +578,7 @@ class _Lookup:
 
         def waiting(holder: str) -> None:
             self.progress.stage("song", "running", f"waiting for another caracole ({holder}), which lets a "
-                                                   "lookup go first at its next pause")
+                                                   "lookup go first at its next pause, or between two songs")
 
         with exclusive(self.cfg, f"get {self.request.display}", interactive=True, on_wait=waiting):
             with closing(db.connect(self.cfg.db_path)) as conn:

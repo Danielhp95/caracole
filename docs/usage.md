@@ -878,7 +878,7 @@ request any caracole sent there, so the pauses hold whichever caracole sends.
 
 A lookup (`caracole get`) never waits behind a whole run: it says
 `Another caracole is running (pid 4242: run); it lets a lookup go first at its
-next pause.`, and the run, which spends most of its time in its 10–20 second
+next pause, or between two songs.`, and the run, which spends most of its time in its 10–20 second
 pauses, lets go of the lock in the pause it is in, takes it back once the
 lookup is done, and waits a whole pause again before its next request. The
 run then reads each song again before its turn, and overrides.toml too, so a

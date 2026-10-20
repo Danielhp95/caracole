@@ -464,7 +464,8 @@ def test_a_waiting_lookup_says_whom_it_waits_for_and_is_announced(cfg, capsys):
     assert took.wait(5)
     thread.join(5)
     assert not _common.lookups_waiting(cfg)  # it took the lock: its announcement went
-    assert "Another caracole is running (pid 4242: run); it lets a lookup go first" in capsys.readouterr().err
+    assert ("Another caracole is running (pid 4242: run); it lets a lookup go first at its next pause, "
+            "or between two songs.") in capsys.readouterr().err
 
 
 def test_an_announcement_a_dead_lookup_left_is_not_waited_for(cfg):

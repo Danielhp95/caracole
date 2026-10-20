@@ -348,6 +348,45 @@ def test_a_song_the_matcher_isnt_sure_of_says_so_and_still_gets_its_lyrics(cfg, 
     assert sites.ug() == [] and progress.states()["lyrics"] == "done"
 
 
+def test_a_lookup_waiting_for_the_lock_says_where_it_is_let_in(cfg, conn, sites):
+    # Shown on the lookup page while it waits: behind auto-chords it is let in between two songs, not in a pause.
+    import fcntl
+    import os
+    import threading
+
+    from caracole.get import LookupRequest
+    from caracole.get import look_up as run
+
+    serve_creep(sites, conn)
+    details: list[str] = []
+    waiting = threading.Event()
+
+    class Heard(Progress):
+        def stage(self, name, state, detail=""):
+            super().stage(name, state, detail)
+            if name == "song" and state == "running" and detail:
+                details.append(detail)
+                waiting.set()
+
+    cfg.state_dir.mkdir(parents=True, exist_ok=True)
+    fd = os.open(cfg.state_dir / _common.LOCK_NAME, os.O_RDWR | os.O_CREAT)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    os.write(fd, b"4242 autochords\n")
+    done: list = []
+    thread = threading.Thread(target=lambda: done.append(
+        run(cfg, LookupRequest(artist="Radiohead", title="Creep"), Heard(sites), runner=FakeRunner(), now=NOW)))
+    thread.start()
+    try:
+        assert waiting.wait(10)
+    finally:
+        os.close(fd)
+        thread.join(30)
+    assert done and done[0].sheet is not None
+    [said] = details
+    assert "pid 4242: autochords" in said
+    assert "at its next pause" in said and "between two songs" in said
+
+
 # --- errors are never misses ---------------------------------------------------------------------------
 
 

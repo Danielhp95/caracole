@@ -156,7 +156,8 @@ def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = 
             if on_wait is not None:
                 on_wait(holder)
             if interactive:
-                warn(f"Another caracole is running ({holder}); it lets a lookup go first at its next pause.")
+                warn(f"Another caracole is running ({holder}); it lets a lookup go first at its next pause, "
+                     "or between two songs.")
                 _wait_announced(cfg, what, fd)
             else:
                 warn(f"Another caracole is running ({holder}); waiting for it to finish.")
@@ -328,7 +329,7 @@ def exclusive(cfg: Config, what: str, *, fatal: bool = True, interactive: bool =
     without the state folder (``caracole add``).
 
     ``interactive``: a lookup, which announces that it waits, so that bulk work
-    hands the lock over at its next pause (``hand_over``). ``on_wait`` hears
+    hands the lock over at its next pause, or between two songs (``hand_over``). ``on_wait`` hears
     whom it waits for, when it must.
     """
     path = _acquire(cfg, what, fatal=fatal, interactive=interactive, on_wait=on_wait)
