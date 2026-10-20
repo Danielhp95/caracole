@@ -602,8 +602,9 @@ _PIPE_FDS = ("import os, sys; os.dup2(int(sys.argv[1]), 3); os.dup2(int(sys.argv
 
 def phone_dom(url: str, tmp_path: Path, width: int, height: int, timeout: float = 60.0) -> str:
     """The DOM of ``url`` on a phone's screen of ``width`` × ``height`` CSS pixels
-    (``Emulation.setDeviceMetricsOverride``, over ``--remote-debugging-pipe``), once its scripts
-    ran and a frame was drawn."""
+    (``Emulation.setDeviceMetricsOverride``, over ``--remote-debugging-pipe``), once it loaded and its
+    timers ran for 3 s of its own clock (``Emulation.setVirtualTimePolicy``), as dump_dom's
+    ``--virtual-time-budget`` lets them: a test's script that notes what it sees after a timeout runs."""
     import os
     import select
     import sys
@@ -668,10 +669,13 @@ def phone_dom(url: str, tmp_path: Path, width: int, height: int, timeout: float 
         ask("Page.navigate", {"url": url}, session)
         while not any(m.get("method") == "Page.loadEventFired" and m.get("sessionId") == session for m in heard):
             heard.append(hear())
-        done = ask("Runtime.evaluate", {
-            "expression": "new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0)))"
-                          ".then(() => document.documentElement.outerHTML)",
-            "awaitPromise": True, "returnByValue": True}, session)
+        # Then, as --virtual-time-budget does for dump_dom, the page's timers run, 3 s of its own clock.
+        ask("Emulation.setVirtualTimePolicy", {"policy": "pauseIfNetworkFetchesPending", "budget": 3000}, session)
+        while not any(m.get("method") == "Emulation.virtualTimeBudgetExpired" and m.get("sessionId") == session
+                      for m in heard):
+            heard.append(hear())
+        done = ask("Runtime.evaluate", {"expression": "document.documentElement.outerHTML", "returnByValue": True},
+                   session)
         return done["result"]["value"]
     finally:
         try:
