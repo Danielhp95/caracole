@@ -1240,7 +1240,15 @@ const caracoleRows = (icons) => {
     row.dataset.source = String(hit.source || "");
     return row;
   };
-  return { resultRow, sourceMark, link, button, many, counts, opener, ugHit, artistHit, siteHit };
+  // A paragraph of the server's, its commands in backticks as the terminal prints them: those as code.
+  const prose = (cls, text) => {
+    const p = el("p", cls);
+    const parts = String(text).split("`");
+    if (parts.length % 2 === 0) p.textContent = String(text);  // a backtick unpaired: as it is
+    else parts.forEach((part, i) => { if (part) p.appendChild(i % 2 ? el("code", null, part) : document.createTextNode(part)); });
+    return p;
+  };
+  return { resultRow, sourceMark, link, button, many, counts, opener, ugHit, artistHit, siteHit, prose };
 };
 """
 
@@ -1391,7 +1399,7 @@ _SCRIPT = r"""
   // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
-  const { sourceMark, link, resultRow, button, many, ugHit, artistHit, siteHit } = caracoleRows(ICONS);  // ROWS_SCRIPT
+  const { sourceMark, link, resultRow, button, many, ugHit, artistHit, siteHit, prose } = caracoleRows(ICONS);  // ROWS_SCRIPT
   // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -2450,7 +2458,7 @@ _SCRIPT = r"""
       box.appendChild(el("p", "skipped", "Not searched: " +
         left.map((x) => String(x.name || x.source) + " (" + String(x.why || "") + ")").join("; ") + "."));
     }
-    if (typeof data.hint === "string" && data.hint) box.appendChild(el("p", "hint index-hint", data.hint));
+    if (typeof data.hint === "string" && data.hint) box.appendChild(prose("hint index-hint", data.hint));
     sitesBox.replaceChildren(box);
     const parts = [];
     if (index.length || artists.length) parts.push((index.length + artists.length) + " on Ultimate Guitar");

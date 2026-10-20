@@ -13,6 +13,7 @@ import json
 import threading
 import time
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 import pytest
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
@@ -301,6 +302,18 @@ def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, l
     assert args[-2:] == ("Muse", "Hysteria")
     assert browser.wait("!document.getElementById('requested').hidden && "
                         "document.querySelector('#requested article h2').textContent === 'Hysteria'")
+
+
+
+def test_the_line_for_an_artist_the_index_cant_see_shows_its_commands_as_code(cfg, live, browser):
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    for url, hint in ((base + "#q=" + quote("宋冬野") + "&all=1", "#results .index-hint"),
+                      (base + "lookup?q=" + quote("宋冬野"), "#results .hint")):
+        browser.open(url)
+        assert browser.wait(f"!!document.querySelector('{hint}')"), url
+        assert "`" not in browser.js(f"document.querySelector('{hint}').textContent")
+        assert "caracole add" in browser.js(f"[...document.querySelectorAll('{hint} code')].map((c) => c.textContent)")
 
 
 NO_SIDEWAYS = "document.documentElement.scrollWidth <= innerWidth"

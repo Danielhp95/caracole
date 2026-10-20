@@ -198,7 +198,7 @@ function show(data, text) {
   if (data.lead === "artist") results.append(...named);
   if (data.index.length) results.append(...group("On Ultimate Guitar", data.index.map(ugSong)));
   if (data.lead !== "artist") results.append(...named);
-  if (data.hint) results.append(el("p", "hint", data.hint));
+  if (data.hint) results.append(rowKit.prose("hint", data.hint));
   shownFor = text;
   shownData = data;
   if (enterFor === text) { enterFor = null; pickBest(); }
