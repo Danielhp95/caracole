@@ -25,7 +25,10 @@ written ``\\u003c``:
   that mode on each tonic, ``theory.spelling``), ``keyNames``, and ``capo`` hints
   for each transposition (``theory.capo_hints``: the fret the capo goes on, 0 for
   none, which may be below the sheet's own, and the shapes' key);
-- ``voicings``: the fingerings of every chord the page can show, on every root.
+- ``voicings``: the fingerings of every chord the page can show, on every root;
+- ``shapes``: the fingerings the sheet gives its chords (its chord legend, its ``{define}``),
+  first, before chords-db's (``voicings.sheet_shapes``), by the chord as shown: the script
+  shows them for that very chord alone, not once it is transposed into another.
 """
 
 from __future__ import annotations
@@ -57,7 +60,14 @@ from caracole.viewer.theory import (
     parse_key,
     spelling,
 )
-from caracole.viewer.voicings import chord_legend, page_voicings, voicing_keys
+from caracole.viewer.voicings import (
+    Position,
+    chord_legend,
+    page_voicings,
+    parse_define,
+    sheet_shapes,
+    voicing_keys,
+)
 
 HERE = Path(__file__).parent
 LIBRARY_PAGE = "../../index.html"  # Library/<artist>/<title>/sheet.html -> Library/index.html
@@ -255,7 +265,21 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
                 for t in range(12)
             ]
     data["voicings"] = page_voicings(needed)
+    data["shapes"] = sheet_shapes(_given_shapes(sheet))
     return data
+
+
+def _given_shapes(sheet: Sheet) -> list[tuple[Chord, Position]]:
+    """The fingerings the sheet gives its chords, in order: its ``{define}``s, then its chord
+    legend's lines, wherever they are (a legend's line in a tab too)."""
+    given = [found for value in sheet.defines if (found := parse_define(value))]
+    for section in sheet.sections:
+        for line in section.lines:
+            if isinstance(line, Tab):
+                given += [entry for text in line.lines for entry in chord_legend(text)]
+            elif not isinstance(line, Blank):
+                given += chord_legend(_written(line, sheet.chords))
+    return given
 
 
 # --- the page ------------------------------------------------------------------------------------

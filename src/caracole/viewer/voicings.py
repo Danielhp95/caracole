@@ -18,7 +18,9 @@ The data is filed by quality and root: ``data[quality][root]`` is the root's pos
 C/E is ``data["/4"][0]`` and Am/G ``data["m/10"][9]``.
 
 A tab may give fingerings of its own, in a chord legend before the song ("Cadd9 (x32033)"):
-``parse_fingering`` reads one as a position, and ``chord_legend`` a legend's line.
+``parse_fingering`` reads one as a position, and ``chord_legend`` a legend's line; a ChordPro
+sheet with ``{define}`` (``parse_define``). ``sheet_shapes`` puts each chord's own first, before
+chords-db's, and keeps only those that play their chord (``plays``).
 """
 
 from __future__ import annotations
@@ -81,7 +83,7 @@ def subset_chords_db(doc: dict[str, Any]) -> dict[str, list[list[Position]]]:
             chord = Chord(root, quality, bass)
             positions: list[Position] = []
             for p in map(_compact, entry["positions"]):
-                if p and _plays(p, chord) and all(p[0] != q[0] for q in positions):
+                if p and plays(p, chord) and all(p[0] != q[0] for q in positions):
                     positions.append(p)  # the first fingering of the same frets
             if positions:
                 data.setdefault(key, [[] for _ in range(12)])[root] = positions[:MAX_POSITIONS]
@@ -111,7 +113,7 @@ def _compact(position: dict[str, Any]) -> Position | None:
     ]
 
 
-def _plays(position: Position, chord: Chord) -> bool:
+def plays(position: Position, chord: Chord) -> bool:
     """Whether the position sounds its chord: no other note, the root, and a slash chord's bass lowest."""
     notes = notes_of(position)
     pcs = {n % 12 for n in notes}
@@ -174,6 +176,73 @@ def chord_legend(line: str) -> list[tuple[Chord, Position]]:
         entries.append((chord, position))
         at = m.end()
     return entries
+
+
+# A {define}'s frets and fingers (ChordPro's: "-1", "N" or "x" for a string not played, frets counted
+# from the base fret, which is 1), and its base fret, wherever they come in it.
+_DEFINED = r"(?:-1|[xXnN]|\d+)"
+_DEFINE_FRETS = re.compile(rf"\bfrets((?:\s+{_DEFINED}){{6}})(?!\S)")
+_DEFINE_FINGERS = re.compile(r"\bfingers((?:\s+\S+){6})(?!\S)")
+_DEFINE_BASE = re.compile(r"\bbase-fret\s+(\d+)(?!\S)")
+
+
+def parse_define(value: str) -> tuple[Chord, Position] | None:
+    """The chord a ChordPro ``{define}`` (or ``{chord}``) names, and its position:
+    "Cadd9 base-fret 1 frets x 3 2 0 3 3 fingers 0 2 1 0 3 4". None when it names no chord
+    caracole reads, or gives no guitar fingering that fits a diagram (a keyboard's ``keys``,
+    a ``copy`` of another chord)."""
+    name, rest = (value.split(None, 1) + ["", ""])[:2]
+    chord = parse_chord(name) if name else None
+    frets_found = _DEFINE_FRETS.search(rest)
+    if chord is None or frets_found is None:
+        return None
+    frets = ["x" if f in ("-1", "x", "X", "n", "N") else f for f in frets_found.group(1).split()]
+    if all(f == "x" for f in frets) or any(f != "x" and int(f) > _FRET_SPAN for f in frets):
+        return None
+    fingers_found = _DEFINE_FINGERS.search(rest)
+    fingers = fingers_found.group(1).split() if fingers_found else ["0"] * len(TUNING)
+    base_found = _DEFINE_BASE.search(rest)
+    base = max(1, int(base_found.group(1))) if base_found else 1
+    fingers = [f if len(f) == 1 and f in "123456789" else "0" for f in fingers]  # "-", "x": none
+    return chord, ["".join(frets), "".join(fingers), base, []]
+
+
+def sheet_shapes(given: list[tuple[Chord, Position]]) -> dict[str, dict[str, Any]]:
+    """The shapes a sheet gives its chords (``chord_legend``, ``parse_define``), first, then
+    chords-db's: ``{"own": how many are the sheet's, "list": positions}``, filed by the chord as it
+    is shown, "<root>,<suffix>,<bass>" ("0,add9," for Cadd9, "2,sus4,6" for Dsus4/F#). A shape
+    that doesn't play its chord is left out, and one shape is shown once: one chords-db has too
+    is chords-db's, with its fingers, unless the sheet gave fingers of its own."""
+    data = load_voicings()
+    shapes: dict[str, dict[str, Any]] = {}
+    for chord, position in given:
+        if not plays(position, chord):
+            continue
+        key = f"{chord.root},{chord.suffix},{'' if chord.bass is None else chord.bass}"
+        if key not in shapes:
+            # chords-db's, as the viewer shows them (viewer.js shapesOf): the slash chord's own, else its quality's
+            fingering, _, slash = voicing_keys(chord)
+            filed = [data[k][chord.root] for k in (slash, fingering) if k in data and data[k][chord.root]]
+            shapes[key] = {"own": 0, "list": list(filed[0]) if filed else []}
+        entry = shapes[key]
+        frets = _absolute(position)
+        same = next((i for i, p in enumerate(entry["list"]) if _absolute(p) == frets), None)
+        if same is not None and same < entry["own"]:
+            continue  # the sheet gave it already
+        if same is not None:
+            known = entry["list"].pop(same)
+            if not position[1].strip("0"):  # the sheet said nothing of the fingers: chords-db's
+                position = known
+        entry["list"].insert(entry["own"], position)
+        entry["own"] += 1
+    return shapes
+
+
+def _absolute(position: Position) -> tuple[int | None, ...]:
+    """The frets a position holds, counted from the nut (None for a muted string): the same
+    shape written from another base fret is the same."""
+    frets, _, base, _ = position
+    return tuple(None if f == "x" else int(f) + base - 1 if int(f) else 0 for f in frets)
 
 
 @lru_cache(maxsize=1)

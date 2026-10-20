@@ -108,3 +108,10 @@ def test_a_capo_that_is_no_number_is_none():
     assert parse_sheet("{title: T}\n{capo: ²}\n").capo is None  # a digit to str.isdigit, not to int
     assert parse_sheet("{title: T}\n{capo: ٣}\n").capo is None  # nor an Arabic-Indic three
     assert parse_sheet("{title: T}\n{capo: 3}\n").capo == 3
+
+
+def test_the_chords_a_sheet_defines_are_kept_as_written():
+    sheet = parse_sheet("{title: T}\n{define: Cadd9 base-fret 1 frets x 3 2 0 3 3 fingers 0 2 1 0 3 4}\n"
+                        "{chord: G frets 3 2 0 0 3 3}\n{define: }\n[Cadd9]la\n")
+    assert sheet.defines == ["Cadd9 base-fret 1 frets x 3 2 0 3 3 fingers 0 2 1 0 3 4", "G frets 3 2 0 0 3 3"]
+    assert [s.lines for s in sheet.sections] == [[Lyrics([(0, "la")])]]  # neither a line nor a section

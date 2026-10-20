@@ -115,12 +115,16 @@
     if (parent) parent.appendChild(node);
     return node;
   };
+  // A chord's shapes: those the sheet gives that very chord first (page.py's "shapes": "mine" of them),
+  // then chords-db's; the note goes with chords-db's.
   const shapesOf = (rep, s) => {
-    if (!rep) return { list: [], note: "" };
+    if (!rep) return { list: [], note: "", mine: 0 };
     const pc = mod12(rep[0] + s);
     const n = names(s);
+    const which = pc + "," + rep[1] + "," + (rep[2] === null ? "" : mod12(rep[2] + s));
+    const given = data.shapes && own.call(data.shapes, which) ? data.shapes[which] : { list: null, own: 0 };
     const slash = rep[5] && data.voicings[rep[5]] ? data.voicings[rep[5]][pc] : null;
-    if (slash && slash.length) return { list: slash, note: "" };
+    if (slash && slash.length) return { list: given.list || slash, note: "", mine: given.own };
     const list = data.voicings[rep[3]] ? data.voicings[rep[3]][pc] || [] : [];
     let note = "";
     if (rep[4]) {
@@ -128,7 +132,7 @@
       note = "No shape for this chord here: " + n[pc] + q + " is the closest.";
     }
     if (rep[2] !== null) note = (note ? note + " " : "") + "Play " + n[mod12(rep[2] + s)] + " in the bass.";
-    return { list, note };
+    return { list: given.list || list, note, mine: given.own };
   };
   // A position as a diagram; the strip's (bare) leave the fingers out, too small to read there.
   const diagram = (position, title, bare) => {
@@ -384,7 +388,7 @@
     $("prev").disabled = shown.at <= 0;
     $("next").disabled = shown.at >= shapes.list.length - 1;
     const capoNote = state.capo === null ? "" : state.capo ? " With the capo on fret " + state.capo + "." : " With no capo.";
-    const note = shapes.note + capoNote;
+    const note = (shown.at < shapes.mine ? "As the tab plays it." : shapes.note) + capoNote;
     $("shape-note").textContent = note.trim();
 
     const altBox = $("alts");

@@ -10,7 +10,9 @@ from caracole.viewer.voicings import (
     chord_legend,
     load_voicings,
     notes_of,
+    parse_define,
     parse_fingering,
+    plays,
     subset_chords_db,
     voicing_keys,
 )
@@ -196,3 +198,34 @@ def test_a_chord_legends_line_gives_each_chord_its_fingering(line, entries):
 ])
 def test_any_other_line_is_no_legend(line):
     assert chord_legend(line) == []
+
+
+@pytest.mark.parametrize(
+    ("value", "chord", "position"),
+    [
+        ("Cadd9 base-fret 1 frets x 3 2 0 3 3 fingers 0 2 1 0 3 4", "Cadd9", ["x32033", "021034", 1, []]),
+        ("Ab base-fret 4 frets 1 3 3 2 1 1", "Ab", ["133211", NO_FINGERS, 4, []]),  # counted from the base fret
+        ("Am7 frets x 0 2 0 1 0", "Am7", ["x02010", NO_FINGERS, 1, []]),
+        ("D/F# frets 2 N 0 2 3 2 base-fret 1", "D/F#", ["2x0232", NO_FINGERS, 1, []]),
+        ("G frets 3 2 0 0 3 3 fingers 2 1 - - 3 4", "G", ["320033", "210034", 1, []]),
+        ("Em frets -1 2 2 0 0 0", "Em", ["x22000", NO_FINGERS, 1, []]),
+    ],
+)
+def test_a_define_directive_gives_its_chord_a_position(value, chord, position):
+    assert parse_define(value) == (parse_chord(chord), position)
+
+
+@pytest.mark.parametrize("value", [
+    "Cadd9", "Cadd9 base-fret 1", "Cadd9 frets x 3 2", "Hm frets x 0 2 2 1 0", "Cfoo frets x 3 2 0 3 3",
+    "C frets x 3 2 0 1 12",  # a fret beyond the diagram's
+    "C frets x x x x x x", "C keys 0 4 7", "C copy D", "",
+])
+def test_any_other_define_gives_none(value):
+    assert parse_define(value) is None
+
+
+def test_a_fingering_plays_a_chord_when_it_sounds_its_notes_alone():
+    assert plays(parse_fingering("x32033"), parse_chord("Cadd9"))
+    assert plays(parse_fingering("2x0233"), parse_chord("Dsus4/F#"))  # the bass lowest
+    assert not plays(parse_fingering("x32033"), parse_chord("G"))  # a C in a G chord
+    assert not plays(parse_fingering("xx0233"), parse_chord("Dsus4/F#"))  # no F# in the bass
