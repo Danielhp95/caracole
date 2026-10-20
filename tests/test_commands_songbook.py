@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -219,6 +220,38 @@ def test_a_song_gone_from_the_library_is_shown_missing_and_moved_or_taken_out_al
     assert removed.output.splitlines()[0] == "Removed Radiohead - Karma Police Live"
     assert "Removed Radiohead - Karma Police\n" not in removed.output
     assert books(setup)[0].songs == ("Radiohead - Karma Police", "Oasis - Wonderwall")
+
+
+def test_a_song_caracole_remove_takes_out_of_the_library_is_missing_from_its_songbook(setup):
+    # caracole remove deletes the song's record and its files, never a songbook's entry: the songbook goes
+    # on, listing the song as missing until you take it out, and every file of it is made again.
+    toml, cfg, conn = setup
+    made = run(setup, "make", "Campfire", "Soda Stereo - De Música Ligera", "宋冬野 - 斑马，斑马")
+    assert made.exit_code == 0, made.output
+    gone = CliRunner().invoke(build_app(), ["--config", str(toml), "remove", "--yes",
+                                            "Soda Stereo - De Música Ligera"], env={"CARACOLE_CJK_FONT": None})
+    assert gone.exit_code == 0, gone.output
+    assert conn.execute("SELECT count(*) FROM songs WHERE title = 'De Música Ligera'").fetchone()[0] == 0
+    assert books(setup) == [Songbook("Campfire", ("Soda Stereo - De Música Ligera", "宋冬野 - 斑马，斑马"))]
+
+    shown = run(setup, "show", "Campfire").output.splitlines()
+    assert shown[1:3] == ["  1. Soda Stereo - De Música Ligera (missing: not in the library)", "  2. 宋冬野 - 斑马，斑马"]
+    index = (cfg.library_dir / "index.html").read_text(encoding="utf-8")  # caracole remove rewrote it
+    assert re.search(r'<li class="missing">.*?De Música Ligera.*?missing: not in the library', index)
+
+    rendered = run(setup, "render", "Campfire")
+    assert rendered.exit_code == 0, rendered.output
+    assert "1 rendered, 0 up to date, 0 failed" in rendered.output
+    pdf = (folder(setup) / "songbook.pdf").read_text(encoding="utf-8")  # the stand-in's: its inputs
+    assert "{title: De Música Ligera}\n{artist: Soda Stereo · missing: not in the library}" in pdf
+    cho = (folder(setup) / "songbook.cho").read_text(encoding="utf-8")
+    assert "De Música Ligera" not in cho and "斑马" in cho  # an app gets the songs it can play
+    page =(folder(setup) / "songbook.html").read_text(encoding="utf-8")
+    assert re.search(r'<li class="missing">.*?De Música Ligera.*?Missing: not in the library', page, re.S)
+
+    out = run(setup, "remove", "Campfire", "Soda Stereo - De Música Ligera")  # taken out by its name
+    assert out.exit_code == 0, out.output
+    assert books(setup)[0].songs == ("宋冬野 - 斑马，斑马",)
 
 
 def test_a_song_the_songbook_lacks_is_still_found_by_a_search_of_the_library(setup, gig):

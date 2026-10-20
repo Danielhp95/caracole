@@ -216,6 +216,28 @@ def test_a_song_gone_from_the_library_goes_alone_never_with_the_song_whose_title
     assert books(setup) == [Songbook("Gig", ("Radiohead - Karma Police", "Muse - Hysteria"))]
 
 
+def test_a_song_the_page_removes_from_the_library_stays_in_its_songbook_as_missing(app, setup, queue, campfire):
+    # The page's Remove runs caracole remove, which leaves songbooks.toml alone: the songbook lists the song
+    # as missing, its page is still served, and its × takes the song out.
+    _, cfg, conn, songs = setup
+    creep = songs["creep"]
+    assert post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"}).status == 303
+    queue.run_pending()
+    assert [job.state for job in queue.snapshot()] == ["done"]
+    assert conn.execute("SELECT count(*) FROM songs WHERE id = ?", (creep.id,)).fetchone()[0] == 0
+    page = get(app, "/").body.decode("utf-8")
+    listed = re.search(r'<ol class="sb-songs">.*?</ol>', page, re.S).group(0)
+    assert re.search(r'<li class="missing"><span class="sb-n">1</span>.*?Creep.*?missing: not in the library', listed)
+    assert 'aria-label="Take Creep out of Campfire"' in listed and 'value="Radiohead - Creep"' in listed
+    assert get(app, PAGE).status == 200  # the page caracole wrote, until the next render writes it again
+
+    assert post(app, "/songbook/remove", {"name": "Campfire", "song": "Radiohead - Creep"}).status == 303
+    queue.run_pending()
+    assert all(job.state == "done" for job in queue.snapshot())
+    assert books(setup) == [Songbook("Campfire", ("Muse - Hysteria", "Soda Stereo - De Música Ligera"))]
+    assert get(app, PAGE).status == 200  # written again, without it
+
+
 def test_the_same_change_sent_twice_is_queued_once(app, setup, queue, campfire):
     fields = {"name": "Campfire", "song": "Muse - Hysteria", "position": "1"}
     post(app, "/songbook/move", fields)

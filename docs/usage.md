@@ -339,6 +339,10 @@ say), nothing is removed and it exits 1.
   made none. Nothing outside the song's folder is deleted. The audio you
   bought, in Music/, is never touched: the song lets go of it. overrides.toml
   keeps its entries for the song, which apply again if you ask for it again.
+  So does songbooks.toml: a [songbook](#songbooks) with the song lists it as
+  missing, "not in the library", until you take it out (`caracole songbook
+  remove`, or × on `caracole serve`) or ask for the song again; its files
+  keep the song's sheet until the next render makes them again.
 - **It stays out.** caracole remembers the song as removed, so neither the
   nightly run nor `caracole sync` brings it back: not from wanted.txt (its
   line is gone), not from your Liked Songs or a playlist that still lists it
