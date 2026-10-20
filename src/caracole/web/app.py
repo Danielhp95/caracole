@@ -1018,8 +1018,9 @@ class WebApp:
     @staticmethod
     def _hit_json(conn: sqlite3.Connection, h: IndexHit) -> dict[str, Any]:
         """An Ultimate Guitar song of the index as the page draws it: its names, its tabs per type and
-        its first ``TABS_SHOWN`` tabs, chords first."""
-        from caracole.search import TYPE_ORDER
+        its first ``TABS_SHOWN`` tabs, chords first; ``no_ones`` when its artist is one of UG's ``misc-…``
+        keys, no one's name (``search.no_ones``)."""
+        from caracole.search import TYPE_ORDER, no_ones
         from caracole.ug.lookup import song_tabs
 
         def rank(t) -> tuple:
@@ -1027,7 +1028,7 @@ class WebApp:
                     t.tab_id)
 
         return {"artist": h.artist, "title": h.title, "ug": f"{h.artist_key}/{h.song_key}", "counts": dict(h.counts),
-                "score": h.score, "url": h.url, "labels": list(h.labels), "via": h.via,
+                "score": h.score, "url": h.url, "labels": list(h.labels), "via": h.via, "no_ones": no_ones(h.artist_key),
                 "tabs": [{"id": t.tab_id, "type": t.type, "label": t.label, "url": t.url}
                          for t in sorted(song_tabs(conn, h.artist_key, h.song_key), key=rank)[:TABS_SHOWN]]}
 

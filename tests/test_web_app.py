@@ -1408,6 +1408,18 @@ def test_api_search_gives_artists_readings_and_what_enter_takes(app, conn):
     assert weak["best"] is None
 
 
+
+def test_api_search_says_a_hit_under_a_misc_artist_is_no_ones(app, conn):
+    from caracole.ug.index import mark_built, upsert_rows
+
+    rows = [(11, "oasis", "wonderwall", "chords"), (31, "misc-mashups", "oasis-wonderwall", "chords")]
+    upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1", datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+    data = as_json(get(app, "/api/search?q=oasis%20wonderwall"))
+    assert {h["ug"]: h["no_ones"] for h in data["index"]} == {
+        "oasis/wonderwall": False, "misc-mashups/oasis-wonderwall": True}  # added under UG's names, it'd be no one's
+
+
 def test_api_artist_lists_an_artists_songs_and_yours(app, conn):
     either_index(conn)
     mine = add_song(conn, "Oasis", "Wonderwall")

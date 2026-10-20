@@ -1864,7 +1864,9 @@ with it. A KEY that is no key exits with status 2.
   looked up as your song: no second song, and no line added to wanted.txt. A
   song your library hasn't, from Ultimate Guitar or gtptabs.com, also has **Add
   for tonight's run** under "⋯": it goes into wanted.txt under the site's names,
-  as Request does with Fetch it now unticked, and the nightly run looks it up.
+  as Request does with Fetch it now unticked, and the nightly run looks it up
+  (not a song under one of UG's `misc-…` names, which are no one's: request it
+  by name as you know it).
   Back to your songs, a song new to the library gets a card of its own under the box
   ("Just requested").
 

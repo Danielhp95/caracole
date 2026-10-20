@@ -1158,6 +1158,7 @@ const caracoleRows = (icons) => {
   // names, for the nightly run to look up (index.html's results; /lookup gets songs now alone).
   const laterGroup = (later, pick, display, row) => {
     const box = el("div", "row-group later");
+    box.appendChild(el("p", "subhead", "Later"));
     const go = button("Add for tonight's run", "small", (e) => later(pick, display, row(), e.currentTarget),
       "Add " + display + " for tonight's run");
     go.title = "Into wanted.txt, as caracole add writes it: the nightly run looks it up";
@@ -1204,7 +1205,8 @@ const caracoleRows = (icons) => {
     }
     const opens = mine ? opener(mine.links) : null;
     if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
-    if (later && !mine) more.push(laterGroup(later, { artist, title }, display, () => row));
+    // Not under one of UG's misc-… names ("Misc Mashups"): no one's, the song would never be found by it.
+    if (later && !mine && !hit.no_ones) more.push(laterGroup(later, { artist, title }, display, () => row));
     row = resultRow({ title, artist, source: "ug", facts: counts(hit.counts),
       badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
     row.classList.add("hit");
