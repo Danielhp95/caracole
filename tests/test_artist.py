@@ -102,8 +102,9 @@ def test_absolute_filter_links_name_kinds_as_relative_ones_do():
     assert parse_artist_page(store_page_html(data)).filters == {"chords", "power"}
 
 
-def test_an_artist_page_addressed_by_its_number_alone():
-    # 宋冬野's page, as read live on 2026-10-19: UG's own links are bare /artist/634073 ones.
+def test_a_page_with_bare_number_links_and_no_stripped_name_still_parses():
+    # 宋冬野's page, as read live on 2026-10-19: an empty name_stripped, and every link on it a
+    # bare /artist/634073 one. The kinds its filter bar offers come from those links' queries.
     tabs = [version_dict(4180894, song="斑马 斑马 Banma Banma Zebra Zebra", artist="Song Dongye (宋冬野)")]
     html = make_artist_page_html(634073, "Song Dongye (宋冬野)", tabs, path="/artist/634073", stripped="")
     page = parse_artist_page(html, url="https://www.ultimate-guitar.com/artist/634073?filter=chords")
