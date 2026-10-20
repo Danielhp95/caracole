@@ -1567,14 +1567,16 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   longer one stays in one, as it would otherwise run down the first column
   and back up the second. The viewer measures again when the window or the
   text size changes.
-- **Tap a chord** for its fingerings: up to four shapes, with the fingers, the
-  barre and the fret they start on (swipe, or ‹ ›, for the next). Every place
-  the chord is played lights up while its card is open. The shapes come from
+- **Tap a chord** for its fingerings: up to four shapes from chords-db, after
+  any the sheet gives, with the fingers, the barre and the fret they start on
+  (swipe, or ‹ ›, for the next). Every place the chord is played lights up
+  while its card is open. The shapes come from
   [chords-db](https://github.com/tombatossals/chords-db) by David Rubert (MIT
   licence, whose notice is at the foot of every page); a chord it has no
   shape for shows the closest one, saying so. A shape the sheet gives comes
   first, on the card ("As the tab plays it") and in the strip: a tab's chord
-  legend (`Cadd9 (x32033)`, `Dsus4/F# 2x0233`), or a ChordPro `{define}` in a
+  legend (`Cadd9 (x32033)`, `Dsus4/F# 2x0233`), which gives no fingers (they
+  show where chords-db has the same shape), or a ChordPro `{define}` in a
   sheet of yours. It counts only for the very chord it was given for, and only
   where it plays that chord: transposed, Cadd9 becomes a Dadd9, with
   chords-db's shapes.
