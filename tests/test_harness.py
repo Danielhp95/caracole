@@ -1,11 +1,17 @@
-"""The suite's own machinery: conftest.py's database. It makes the suite faster; these
-tests say it still tests the same."""
+"""The suite's own machinery: conftest.py's database, and the helper that waits on
+caracole's lock (helpers/locks.py). Each makes the suite faster; these tests say it still
+tests the same."""
 
 from __future__ import annotations
 
+import fcntl
+import os
 import sqlite3
+import threading
+import time
 
 import conftest
+from helpers.locks import waiting_for
 
 from caracole import db
 
@@ -54,3 +60,46 @@ def test_a_patched_migration_gets_a_database_of_its_own(monkeypatch, tmp_path):
         c.close()
     monkeypatch.undo()
     assert conftest.migrated_database() == before
+
+
+# --- waiting for the lock ----------------------------------------------------------------------
+
+
+def test_a_wait_for_the_lock_is_seen_as_soon_as_it_starts(tmp_path):
+    lock = tmp_path / "caracole.lock"
+    held = os.open(lock, os.O_RDWR | os.O_CREAT)
+    fcntl.flock(held, fcntl.LOCK_EX)
+
+    def wait():
+        fd = os.open(lock, os.O_RDWR)  # an open file of its own, as another caracole has
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        finally:
+            os.close(fd)
+
+    thread = threading.Thread(target=wait, daemon=True)
+    try:
+        thread.start()
+        start = time.monotonic()
+        assert waiting_for(lock, thread.is_alive, timeout=30)
+        assert time.monotonic() - start < 10  # seen in /proc/locks, not given up on after 30 s
+    finally:
+        os.close(held)
+    thread.join(10)
+    assert not thread.is_alive()
+
+
+def test_a_command_that_never_waited_is_not_waiting(tmp_path):
+    lock = tmp_path / "caracole.lock"
+    lock.touch()
+    thread = threading.Thread(target=lambda: None)
+    thread.start()
+    thread.join()
+    assert not waiting_for(lock, thread.is_alive)
+
+
+def test_a_command_still_busy_after_the_timeout_counts_as_waiting(tmp_path):
+    # Where /proc/locks says nothing, all a test can tell: the command hasn't finished.
+    lock = tmp_path / "caracole.lock"
+    lock.touch()
+    assert waiting_for(lock, lambda: True, timeout=0.05)

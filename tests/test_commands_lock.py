@@ -23,6 +23,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from helpers.locks import waiting_for
 from helpers.ug_pages import make_tab_page_html, version_dict
 from typer.testing import CliRunner
 
@@ -103,6 +104,7 @@ class Started:
 
     def __init__(self, config: Path, args: list[str]):
         self.result = None
+        self.lock = config.parent / "state" / "caracole.lock"  # the config's state_dir
         self.thread = threading.Thread(target=self._run, args=(config, args), daemon=True)
         self.thread.start()
 
@@ -110,8 +112,7 @@ class Started:
         self.result = CliRunner().invoke(build_app(), ["--config", str(config), *args])
 
     def still_waiting(self) -> bool:
-        self.thread.join(0.5)
-        return self.thread.is_alive()
+        return waiting_for(self.lock, self.thread.is_alive)
 
     def finished(self):
         self.thread.join(15)
@@ -369,8 +370,8 @@ def test_the_nightly_run_waits_for_another_caracole_process(tmp_path, config):
             cwd=tmp_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         try:
-            with pytest.raises(subprocess.TimeoutExpired):
-                run.wait(3)  # it waits for the lock
+            lock = tmp_path / "state" / "caracole.lock"
+            assert waiting_for(lock, lambda: run.poll() is None, timeout=3)  # it waits for the lock
             assert not todo.exists()
         except BaseException:
             run.kill()

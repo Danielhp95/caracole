@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from helpers.locks import waiting_for
 from typer.testing import CliRunner
 
 from caracole.autochords import ChordSegment
@@ -941,8 +942,7 @@ def test_command_waits_for_another_caracole(tmp_path, monkeypatch, models_import
     thread = threading.Thread(target=lambda: results.append(invoke(config)))
     try:
         thread.start()
-        thread.join(0.5)
-        assert thread.is_alive() and not (tmp_path / "lib" / "_todo.md").exists()
+        assert waiting_for(lock, thread.is_alive) and not (tmp_path / "lib" / "_todo.md").exists()
     finally:
         os.close(fd)
     thread.join(10)
