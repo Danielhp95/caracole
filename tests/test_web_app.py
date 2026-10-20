@@ -883,6 +883,13 @@ def picker_of(body: str) -> str:
     return found.group(1)
 
 
+def job_item(body: str, job_id: int) -> str:
+    """A request on /jobs: its line, its folded output and what waits under it (JOB_ITEM)."""
+    items = dict(JOB_ITEM.findall(body))
+    assert str(job_id) in items, body[-2000:]
+    return items[str(job_id)]
+
+
 def test_the_picker_has_a_page_of_its_own_with_no_script(app, conn):
     conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
                  "(7, 'radiohead', 'creep', 'chords', '1', 'x', 'radiohead/creep-chords-7')")
@@ -948,7 +955,7 @@ def test_a_request_that_ends_in_a_review_shows_its_picker_on_the_requests_page(a
     assert 'action="/review"' not in text(get(app, "/jobs"))  # not while it runs
     queue.run_pending()
     body = text(get(app, "/jobs"))
-    job = re.search(r'<article class="job" id="job-1">.*?</article>', body, re.S).group(0)
+    job = job_item(body, 1)
     assert "isn't sure which Ultimate Guitar song" in job
     form = picker_of(job)
     assert f'name="song" value="{creep.id}"' in form and 'value="radiohead/creep" required' in form
@@ -962,10 +969,10 @@ def test_while_the_requests_page_refreshes_it_links_to_the_picker_instead(app, c
     queue.run_pending()
     post(app, "/request", {"artist": "Oasis", "title": "Wonderwall"})  # waits: the page refreshes
     body = text(get(app, "/jobs"))
-    job = re.search(r'<article class="job" id="job-1">.*?</article>', body, re.S).group(0)
+    job = job_item(body, 1)
     assert 'action="/review"' not in job and f'href="/review?song={creep.id}"' in job
     still = text(get(app, "/jobs?refresh=0"))
-    assert 'action="/review"' in re.search(r'<article class="job" id="job-1">.*?</article>', still, re.S).group(0)
+    assert 'action="/review"' in job_item(still, 1)
 
 
 def test_a_request_whose_song_was_picked_since_shows_no_picker(app, conn, queue):
@@ -1036,7 +1043,7 @@ def test_a_request_that_ends_not_found_links_to_its_search_hits(app, conn, queue
     post(app, "/request", {"artist": "Radio Head", "title": "Crep"})
     crep = not_found(conn)
     queue.run_pending()
-    job = re.search(r'<article class="job" id="job-1">.*?</article>', text(get(app, "/jobs")), re.S).group(0)
+    job = job_item(text(get(app, "/jobs")), 1)
     assert f'href="/review?song={crep.id}"' in job and 'action="/review"' not in job
 
 
@@ -1116,14 +1123,17 @@ def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cf
     [job] = queue.snapshot()
     assert [s.state for s in job.steps] == ["done", "done", "failed", "skipped"], runner.outputs
     assert "needs review first" in runner.outputs[2]
-    article = re.search(r'<article class="job" id="job-1">.*?</article>', text(get(app, "/jobs")), re.S).group(0)
-    head = re.search(r'<div class="job-head">.*?</div>', article, re.S).group(0)
-    assert '<span class="badge review">Pick the match</span>' in head and "Failed" not in head
-    fetch = re.search(r'<li class="step [^"]*"><div class="step-head"><span>Fetch from Ultimate Guitar</span>.*?</li>',
+    article = job_item(text(get(app, "/jobs")), 1)
+    # Its line, the one its card shows (status.py), says the song needs review: no failure.
+    line = re.search(r'<p class="line">(.*?)</p>', article, re.S).group(0)
+    assert '<span class="says review">Needs review' in line and "Failed" not in line and "error" not in line
+    fetch = re.search(r'<li class="step [^"]*"><div class="step-head"><span>Fetching from Ultimate Guitar</span>.*?</li>',
                       article, re.S).group(0)
     assert '<span class="badge review">Waits for a pick</span>' in fetch and "Failed" not in fetch
     assert "Pick it below" in shown_text(fetch)
-    assert "<details open>" not in fetch  # the command's own words are there, closed
+    # The command's own words are there, folded away with the request's output; the picker is below it.
+    assert "needs review first" in fetch and '<details class="output">' in article
+    assert article.index('<form class="pick-form"') > article.index("</details>")
     assert picker_of(article)
 
 
@@ -1139,7 +1149,7 @@ def test_a_request_whose_fetch_failed_otherwise_still_shows_failed(cfg, conn):
     post(app, "/request", {"artist": "Radiohead", "title": "Creep", "fetch": "1"})
     creep = in_review(conn)
     queue.run_pending()
-    article = re.search(r'<article class="job" id="job-1">.*?</article>', text(get(app, "/jobs")), re.S).group(0)
+    article = job_item(text(get(app, "/jobs")), 1)
     assert '<span class="badge failed">Failed</span>' in article and "Waits for a pick" not in article
     assert f'name="song" value="{creep.id}"' in picker_of(article)
 

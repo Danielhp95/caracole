@@ -1007,8 +1007,11 @@ def test_the_served_picker_of_a_song_being_fetched_is_read_only_until_its_reques
     controls = WebControls(csrf="tok", busy=frozenset({s.id}), active=1, held=frozenset({s.id}))
     html = build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
     card = card_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
-    assert 'action="/review"' not in card and "<input" not in card
+    # The card's one form is its foot's Remove…: no pick, and no input but Remove's.
+    assert re.findall(r'<form[^>]*action="([^"]*)"', card) == ["/remove"]
     picker = re.search(r'<details class="picker">.*?</details>', card, re.S).group(0)
+    assert "<input" not in picker and "<input" not in card.replace(re.search(
+        r'<form[^>]*action="/remove".*?</form>', card, re.S).group(0), "")
     choices = re.search(r'<ol class="choices"[^>]*>(.*?)</ol>', picker, re.S)
     assert choices and re.findall(r'<span class="choice-name">([^<]*)</span>', choices.group(1)) == [
         "1. Radiohead – Creep", "2. Jeff Buckley – Creep", "3. Misc Musicals – Creep The Musical"]
