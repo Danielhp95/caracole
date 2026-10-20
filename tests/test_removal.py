@@ -183,6 +183,59 @@ def test_the_audio_you_bought_is_never_deleted(conn, cfg):
     assert audio.read_bytes() == b"fLaC"
 
 
+def youtube_audio(conn, cfg, song, video_id="XFkzRNyygfk"):
+    """The audio youtube_fetch.py took for the song, in caracole's cache, linked as a purchase is."""
+    audio = cfg.cache_dir / "youtube" / f"{song.id}-{video_id}.m4a"
+    audio.parent.mkdir(parents=True, exist_ok=True)
+    audio.write_bytes(b"aac")
+    db.kv_set_json(conn, f"youtube:{song.id}", {
+        "video": {"id": video_id, "title": "Creep", "channel": "Radiohead - Topic"}, "source": "search",
+        "audio": str(audio)})
+    return audio
+
+
+def test_the_audio_caracole_took_from_youtube_goes_with_the_song(conn, cfg):
+    from caracole.removal import describe
+
+    song = creep(conn, cfg)
+    audio = youtube_audio(conn, cfg, song)
+    other = add_song(conn, "Oasis", "Wonderwall")
+    theirs = youtube_audio(conn, cfg, other, "6hzrDeceEKc")
+    update_song(conn, song.id, audio_path=str(audio), audio_mtime=audio.stat().st_mtime)
+    update_song(conn, other.id, audio_path=str(theirs), audio_mtime=theirs.stat().st_mtime)
+    plan, result = plan_and_remove(conn, cfg, get_song(conn, song.id))
+    assert plan.audio is None and plan.youtube_audio == (str(audio),)  # caracole's, not a purchase of yours
+    goes, stays, _ = describe(plan, cfg)
+    assert any("audio caracole took from YouTube" in line for line in goes), goes
+    assert not any("you bought" in line for line in stays), stays
+    assert not audio.exists() and result.errors == []
+    assert db.kv_get(conn, f"youtube:{song.id}") is None
+    assert theirs.read_bytes() == b"aac"  # another song's stays
+
+
+def test_a_purchase_stays_and_the_youtube_audio_it_replaced_goes(conn, cfg):
+    # A purchase linked later took the YouTube audio's place; the next youtube step would have tidied it.
+    song = creep(conn, cfg)
+    left = youtube_audio(conn, cfg, song)
+    bought = cfg.music_dir / "Radiohead" / "Creep.flac"
+    bought.parent.mkdir(parents=True)
+    bought.write_bytes(b"fLaC")
+    update_song(conn, song.id, audio_path=str(bought))
+    plan, _ = plan_and_remove(conn, cfg, get_song(conn, song.id))
+    assert plan.audio == str(bought) and plan.youtube_audio == (str(left),)
+    assert bought.read_bytes() == b"fLaC" and not left.exists()
+
+
+def test_a_youtube_record_naming_a_file_outside_caracoles_cache_deletes_nothing(conn, cfg):
+    song = creep(conn, cfg)
+    mine = cfg.music_dir / "Creep.m4a"
+    mine.parent.mkdir(parents=True)
+    mine.write_bytes(b"mine")
+    db.kv_set_json(conn, f"youtube:{song.id}", {"video": {"id": "XFkzRNyygfk"}, "audio": str(mine)})
+    plan, _ = plan_and_remove(conn, cfg, song)
+    assert plan.youtube_audio == () and mine.read_bytes() == b"mine"
+
+
 def test_a_wanted_txt_caracole_cant_read_stops_the_removal_before_anything_goes(conn, cfg, tmp_path):
     from caracole.removal import RemovalError, plan_removal, remove_song
 

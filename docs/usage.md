@@ -329,7 +329,9 @@ say), nothing is removed and it exits 1.
   `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
   Then the folder, and the artist's folder, once empty. Syncthing then
   deletes them on every device. And the song's record: its match, its
-  versions, its lyrics and what caracole remembered about it.
+  versions, its lyrics and what caracole remembered about it, and the audio
+  caracole took from YouTube for it (see [Audio from YouTube](#audio-from-youtube)),
+  from caracole's cache.
 - **What stays.** Any other file in the folder, a file of yours, a folder, a
   symbolic link (never followed), stays where it is, and the command names
   it; so does a `sheet.pdf` or `lyrics.txt` you put in a folder where caracole

@@ -327,8 +327,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (render.py). tests/test_library_safety.py. A removal deletes only what caracole
   wrote in the song's folder (`removal._caracoles`: kept files, the outputs of a kept sheet or
   of a render record, LRCLIB's lyrics, info.json), by name, through descriptors opened with
-  `O_NOFOLLOW` from the library down, and names everything it leaves; it never touches Music/
-  (tests/test_removal.py).
+  `O_NOFOLLOW` from the library down, and names everything it leaves; it never touches Music/,
+  and deletes the song's audio taken from YouTube from the cache (tests/test_removal.py).
 - **One caracole at a time**: `_common.exclusive` holds an flock on `state_dir/caracole.lock`,
   re-entrant within a process, and the clients of `make_client` and the yt-dlp runner of
   `make_youtube` hold it until closed. Every command that asks UG, LRCLIB, LaCuerda,
