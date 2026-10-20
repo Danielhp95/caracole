@@ -123,6 +123,13 @@ def test_find_song_by_key(conn):
     assert find_song(conn, "nobody/nothing") is None
 
 
+@pytest.mark.parametrize("song_id", [2**63, -2**63 - 1, 2**70, -2**70])
+def test_an_id_no_sqlite_integer_can_hold_is_no_song(conn, song_id):
+    add_song(conn)
+    with pytest.raises(KeyError, match="no song with id"):
+        get_song(conn, song_id)
+
+
 def test_refresh_status_found_requires_kept_sheet(conn):
     s = add_song(conn)
     assert refresh_status(conn, s.id, ignored=False) == "wanted"

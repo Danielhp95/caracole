@@ -120,6 +120,9 @@ def _from_row(row: sqlite3.Row) -> Song:
 
 
 def get_song(conn: sqlite3.Connection, song_id: int) -> Song:
+    """The song with this id; KeyError for none, an id no SQLite integer can hold among them."""
+    if not -(2**63) <= song_id < 2**63:  # sqlite3 would raise OverflowError
+        raise KeyError(f"no song with id {song_id}")
     row = conn.execute("SELECT * FROM songs WHERE id = ?", (song_id,)).fetchone()
     if row is None:
         raise KeyError(f"no song with id {song_id}")
