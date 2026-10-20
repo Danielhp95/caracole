@@ -7,8 +7,8 @@ beside it and to the library's index.html two folders up. A server may serve it
 too, only while it is the page caracole wrote, with ``viewer_csp(page)`` as its header.
 
 The sheet itself is static HTML, so it reads without the script, and prints. What a tab
-says before its first section (its tabber's notes, a link, a chord legend) is folded
-after two lines, in a ``<details>`` that opens without the script too. Every
+says before its first section or riff (its tabber's notes, a link, a chord legend) is
+folded after two lines, in a ``<details>`` that opens without the script too. Every
 text from the sheet is escaped. The script (viewer.js) relabels the chords from the
 song data in a ``<script type="application/json">`` block, whose every ``<`` is
 written ``\\u003c``:
@@ -336,28 +336,40 @@ def _texts(sheet: Sheet) -> list[str]:
 
 
 def _sheet_html(sheet: Sheet) -> str:
+    sections = list(sheet.sections)
     pre = _preamble(sheet)
+    if pre is not None:  # what follows it in its section, a riff and on, stays a section of the song
+        rest = sections[0].lines[len(pre.lines):]
+        while rest and isinstance(rest[0], Blank):
+            rest = rest[1:]
+        sections[:1] = [Section(None, lines=rest)] if rest else []
     return ((_preamble_html(pre, sheet.chords) if pre else "")
-            + "".join(_section_html(s, sheet.chords) for s in sheet.sections if s is not pre))
+            + "".join(_section_html(s, sheet.chords) for s in sections))
 
 
 def _preamble(sheet: Sheet) -> Section | None:
     """What a tab says before its first section (its tabber's notes, a link, a chord legend), or None:
-    an unlabelled first section, before another, with nothing played in it. Its lines are text and
-    chords given with their fingerings (``voicings.chord_legend``); chords alone there are the song's
-    intro, words sung there its first verse, and a tab its riff, and none of it is folded away."""
+    an unlabelled first section, before another, up to its first tab (UG's first label is often inside
+    it: "[Intro]"), with nothing played in it. Its lines are text and chords given with their
+    fingerings (``voicings.chord_legend``); chords alone there are the song's intro and words sung
+    there its first verse, and none of it is folded away."""
     first = sheet.sections[0] if len(sheet.sections) > 1 else None
     if first is None or first.label or first.chorus:
         return None
-    return first if all(not _played_line(line, sheet.chords) for line in first.lines) else None
+    lines: list[Line] = []
+    for line in first.lines:
+        if isinstance(line, Tab):
+            break
+        if _played_line(line, sheet.chords):
+            return None
+        lines.append(line)
+    while lines and isinstance(lines[-1], Blank):
+        lines.pop()
+    return Section(None, lines=lines) if lines else None
 
 
 def _played_line(line: Line, names: list[str]) -> bool:
-    if isinstance(line, (Text, Blank)):
-        return False
-    if isinstance(line, Tab):
-        return True
-    return not chord_legend(_written(line, names))
+    return not isinstance(line, (Text, Blank)) and not chord_legend(_written(line, names))
 
 
 def _preamble_html(section: Section, names: list[str]) -> str:

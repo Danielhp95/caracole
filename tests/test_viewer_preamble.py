@@ -63,11 +63,22 @@ VERSE = "\n{comment: Verse}\n[G]Sung words [D]here\n"
     HEAD + "A note\n[G]Sung words [D]here\n\n{comment: Chorus}\n[C]More words\n",  # a verse before the first label
     HEAD + "[G] [D] [Em] [*x2]\n" + VERSE,  # the intro's chords, unlabelled
     HEAD + "A note\nand another\nand a third\n[G] [D] [Em] [*x2]\n" + VERSE,  # notes, then the intro's chords
-    HEAD + "A note\nand another\nThe riff:\n{start_of_tab}\ne|--3--2--0--|\n{end_of_tab}\n" + VERSE,
-], ids=["no-preamble", "no-section", "a-verse", "the-intro", "notes-then-the-intro", "notes-then-a-riff"])
+    HEAD + "{start_of_tab}\ne|--3--2--0--|\n{end_of_tab}\nA note after it\n" + VERSE,  # a riff first
+], ids=["no-preamble", "no-section", "a-verse", "the-intro", "notes-then-the-intro", "a-riff-first"])
 def test_nothing_the_song_plays_is_folded(cho):
     sheet = sheet_of(build_viewer(cho))
     assert "<details" not in sheet and 'class="pre"' not in sheet
+
+
+def test_the_notes_before_a_riff_are_folded_and_the_riff_stays_where_it_was():
+    # UG often opens on a tab, its first label inside it ("[Intro]"): the notes before it are the preamble.
+    riff = "{start_of_tab}\n[Intro] (x2)\ne|-0---0---|\n{end_of_tab}\n[G]Sung words\n"
+    sheet = sheet_of(build_viewer(HEAD + "* = play softer\n** = hard strums\nand a third note\n\n" + riff + VERSE))
+    fold, rest = sheet.split("</details>\n", 1)
+    assert fold.startswith('<details class="pre">') and "and a third note" in fold and "e|-0" not in fold
+    assert rest.startswith('<section class="sec">\n<pre class="tab">[Intro] (x2)\ne|-0---0---|</pre>\n'
+                           '<p class="l"><span class="s"><b class="c" data-c="0"')
+    assert rest.count("<section") == 2  # the riff's, then the verse
 
 
 @pytest.mark.parametrize("legend", [
