@@ -10,7 +10,6 @@ from typer.testing import CliRunner
 from caracole.cli import build_app
 from caracole.library import song_dir
 from caracole.songs import update_song
-from caracole.viewer import viewer_csp
 from caracole.web.app import Request, WebApp
 from caracole.web.jobs import JobQueue
 from caracole.web.security import session_value
@@ -21,6 +20,7 @@ from helpers.rendered import rendered_song
 HOST = "localhost:8737"
 ALLOWED = frozenset({"localhost", "127.0.0.1", "::1"})
 JSON_BLOCK = re.compile(r'<script type="application/json" id="songs">(.*?)</script>', re.S)
+META_POLICY = re.compile(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">')
 
 
 class Recorder:
@@ -395,11 +395,31 @@ def test_the_viewer_caracole_wrote_is_served_in_a_sandbox(app, conn, cfg):
         assert response.body == (song_dir(cfg.library_dir, one) / name).read_bytes()
         assert header(response, "content-type") == "text/html; charset=utf-8"
         policies = [v for k, v in response.headers if k.lower() == "content-security-policy"]
-        assert policies == [f"{viewer_csp()}; frame-ancestors 'none'"]  # the sandbox, and no framing
+        own = META_POLICY.search(text(response)).group(1)
+        assert policies == [f"sandbox allow-scripts; {own}; frame-ancestors 'none'"]  # a sandbox, no framing
         assert header(response, "x-frame-options") == "DENY" and header(response, "cache-control") == "no-store"
         assert header(response, "x-content-type-options") == "nosniff"
         assert header(response, "content-disposition") is None
         assert app.handle(Request("HEAD", links[name], {"host": HOST})).status == 200
+
+
+def test_a_viewer_written_before_an_upgrade_goes_out_with_its_own_policy(app, conn, cfg, monkeypatch):
+    # The viewer on disk carries the hashes of the script and style it was written with; a newer
+    # caracole's would make the browser refuse them, until the next render writes it again.
+    from caracole.library_page import sha256_source
+    from caracole.viewer import page
+
+    rendered_song(conn, cfg)
+    style, script = page._assets()
+    monkeypatch.setattr(page, "_assets", lambda: (style + "\n.new {}", script + "\n// a new release"))
+    response = get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html"))
+    assert response.status == 200
+    sent = text(response)
+    policy = header(response, "content-security-policy")
+    assert f"script-src {sha256_source(re.search(r'<script>(.*?)</script>', sent, re.S).group(1))};" in policy
+    assert f"style-src {sha256_source(re.search(r'<style>(.*?)</style>', sent, re.S).group(1))};" in policy
+    assert policy.startswith("sandbox allow-scripts; default-src 'none'; ")
+    assert policy.endswith("; frame-ancestors 'none'")
 
 
 def test_a_planted_page_is_not_served(app, conn, cfg):

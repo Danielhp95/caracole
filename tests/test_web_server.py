@@ -179,3 +179,25 @@ def test_a_served_viewer_works_in_its_sandbox(cfg, conn, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_path, monkeypatch):
+    # The server is a newer caracole than the one that wrote the viewer: the page's own hashes
+    # must go out with it, or the browser refuses its script until the next render.
+    from caracole.viewer import page
+
+    rendered_song(conn, cfg)
+    style, script = page._assets()
+    monkeypatch.setattr(page, "_assets", lambda: (style + "\n.new {}", script + "\n// a new release"))
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    url = f"http://127.0.0.1:{server.server_address[1]}/" + quote("Soda Stereo/De Música Ligera/sheet.html")
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(url)
+            tab.wait_for("document.documentElement.dataset.ready === '1'")  # its script ran
+            assert tab.eval("getComputedStyle(document.querySelector('#fab')).position") == "fixed"  # its style
+            tab.click("#fab")
+            assert tab.eval("document.querySelector('#panel').hidden") is False
+    finally:
+        server.shutdown()
+        server.server_close()

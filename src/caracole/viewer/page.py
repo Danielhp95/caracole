@@ -4,7 +4,7 @@ The page is one self-contained file. It opens from the synced library folder wit
 no server: it loads nothing (a Content-Security-Policy with the hashes of its one
 script and one stylesheet makes the browser enforce that) and links only to the PDF
 beside it and to the library's index.html two folders up. A server may serve it
-too, only while it is the page caracole wrote, with ``viewer_csp()`` as its header.
+too, only while it is the page caracole wrote, with ``viewer_csp(page)`` as its header.
 
 The sheet itself is static HTML, so it reads without the script, and prints. Every
 text from the sheet is escaped. The script (viewer.js) relabels the chords from the
@@ -31,9 +31,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 import unicodedata
 from functools import lru_cache
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -131,18 +132,36 @@ def build_viewer(
     )
 
 
-def viewer_csp() -> str:
-    """The Content-Security-Policy header a server sends with a viewer caracole wrote.
+def viewer_csp(page: bytes) -> str:
+    """The Content-Security-Policy header a server sends with ``page``, a viewer caracole wrote.
 
-    It is the page's own policy (its one script and one stylesheet, by their hashes, and
-    nothing else to load, no form to send, no base to change) with a sandbox, which a
-    ``<meta>`` policy can't set: the page then runs in an origin of its own, with no cookie
-    and no way to ask the server for anything. Its script still runs; it can't remember
-    settings there, and does without. Serve only a viewer still as caracole wrote it
-    (``render.written_file``, ``library.holds``): anyone with a synced device can put a page
-    of their own in the library.
+    It is the page's own policy, as its ``<meta>`` tag holds it (its one script and one
+    stylesheet, by their hashes, and nothing else to load, no form to send, no base to
+    change), with a sandbox, which a ``<meta>`` policy can't set: the page then runs in an
+    origin of its own, with no cookie and no way to ask the server for anything. Its script
+    still runs; it can't remember settings there, and does without.
+
+    The policy is the page's, not this caracole's: a viewer written before an upgrade carries
+    the hashes of the script and style it was written with, and keeps them until the next
+    render writes it again. A page whose policy can't be read, or would not fit in a header,
+    gets a sandbox that runs and loads nothing (``_NOTHING``).
+
+    Serve only a viewer still as caracole wrote it (``render.written_file``, ``library.holds``):
+    anyone with a synced device can put a page of their own in the library, and its policy too.
     """
-    return "sandbox allow-scripts; " + _policy()
+    found = _META_POLICY.search(page)
+    try:
+        policy = unescape(found.group(1).decode("utf-8")) if found else ""
+    except UnicodeDecodeError:
+        policy = ""
+    return "sandbox allow-scripts; " + policy if _HEADER_TEXT.fullmatch(policy) else _NOTHING
+
+
+# The page's own policy, as build_viewer writes it; what a header may hold (no line break);
+# and the header for a page whose policy can't be read: a sandbox that runs and loads nothing.
+_META_POLICY = re.compile(rb'<meta http-equiv="Content-Security-Policy" content="([^"<>]*)">')
+_HEADER_TEXT = re.compile(r"[ -~]+")
+_NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
 
 
 def _policy() -> str:

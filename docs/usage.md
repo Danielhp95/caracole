@@ -1147,8 +1147,11 @@ symbolic link in a viewer's place, and a viewer in a folder that is no song's
 in the database. The next `caracole render` writes an edited viewer again. The
 server sends a viewer in a sandbox (its Content-Security-Policy header): the
 page runs its own script and style and nothing else, in an origin of its own,
-with no cookie and no way to ask the server for anything. It works as it does
-from the folder, but it can't remember its settings. With an access token, its
+with no cookie and no way to ask the server for anything. The header allows
+the script and style the page itself was written with, so a viewer an older
+caracole wrote keeps working after an upgrade until the next render writes it
+again. It works as it does from the folder, but it can't remember its
+settings. With an access token, its
 links to the PDF and back to the library open the sign-in page, because the
 sandboxed page sends no cookie: use the card's PDF link and the browser's Back
 button instead.

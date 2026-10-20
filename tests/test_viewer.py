@@ -96,7 +96,29 @@ def test_a_server_sends_the_pages_own_policy_in_a_sandbox():
     # origin of its own, with no cookie and no way to ask the server for anything.
     html = build_viewer(UG_CHO)
     meta = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
-    assert viewer_csp() == "sandbox allow-scripts; " + meta
+    assert viewer_csp(html.encode("utf-8")) == "sandbox allow-scripts; " + meta
+
+
+def test_a_page_goes_out_with_the_policy_it_was_written_with(monkeypatch):
+    # A newer caracole's script and style have other hashes; the page holds its own.
+    from caracole.viewer import page
+
+    written = build_viewer(UG_CHO)
+    meta = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', written).group(1)
+    style, script = page._assets()
+    monkeypatch.setattr(page, "_assets", lambda: (style + "\n.new {}", script + "\n// a new release"))
+    assert build_viewer(UG_CHO) != written
+    assert viewer_csp(written.encode("utf-8")) == "sandbox allow-scripts; " + meta
+
+
+@pytest.mark.parametrize("written", [
+    b"<!doctype html><title>No policy</title><script>alert(1)</script>",
+    b'<meta http-equiv="Content-Security-Policy" content="default-src *&#13;&#10;X-Evil: 1">',  # no header split
+    b'<meta http-equiv="Content-Security-Policy" content="">',
+    b"\xff\xfe not even text",
+])
+def test_a_page_without_a_policy_to_send_runs_nothing(written):
+    assert viewer_csp(written) == "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
 
 
 def test_the_page_loads_nothing_and_links_only_beside_itself():
@@ -314,7 +336,7 @@ def test_the_page_works_served_in_a_sandbox(tmp_path):
         def do_GET(self):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Security-Policy", viewer_csp())
+            self.send_header("Content-Security-Policy", viewer_csp(page))
             self.end_headers()
             self.wfile.write(page)
 

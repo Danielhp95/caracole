@@ -239,7 +239,7 @@ class WebApp:
                                          hidden=(self.cfg.state_dir, self.cfg.cache_dir))
         except (sqlite3.Error, OSError) as e:  # DatabaseTooNew is an sqlite3.DatabaseError
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
-        csp = f"{page.csp()}; {_FRAMES}"
+        csp = f"{page.csp(data)}; {_FRAMES}"  # the policy of these very bytes, not this caracole's
         return Response(200, data, [("Content-Type", _HTML), ("Content-Security-Policy", csp)])
 
     # --- the forms ------------------------------------------------------------------------------
@@ -344,17 +344,19 @@ class WrittenPage:
     ``written`` is its record: given the database, the library folder and a path's parts,
     the SHA-256 and the length of each such page caracole wrote there, [] for none.
     ``csp`` gives the Content-Security-Policy it is served with, which ``frame-ancestors
-    'none'`` joins.
+    'none'`` joins, from the page's bytes as read and found as written: a page written by an
+    older caracole carries the hashes of that one's script and style, which a policy built by
+    this one wouldn't allow. Those bytes are caracole's own, so reading them is safe.
     """
 
     written: Callable[[sqlite3.Connection, Path, tuple[str, ...]], list[tuple[str, int]]]
-    csp: Callable[[], str]
+    csp: Callable[[bytes], str]
 
 
 def written_pages() -> dict[str, WrittenPage]:
     """The pages caracole writes into the library, by file name: each song's sheet viewers
-    (render.py), served in a sandbox (``viewer.viewer_csp``). A new kind of page joins here
-    with its own record."""
+    (render.py), served in a sandbox with their own policy (``viewer.viewer_csp``). A new kind
+    of page joins here with its own record."""
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS
     from caracole.viewer import viewer_csp
 
