@@ -1955,8 +1955,8 @@ def test_a_key_filters_your_songs_alone_as_the_sites_know_no_keys(conn, cfg, dri
         assert driven.js("document.getElementById('results').hidden") is True  # still your songs alone
         driven.js("document.getElementById('q').select()")
         driven.type("f# minor")  # no song in that key: nothing below to run or press
-        assert driven.wait(f"{SHOWN_TITLES}.length === 0")
-        assert driven.js(status) == "None of yours match: the sites know no keys"
+        assert driven.wait(f"{status} === 'None of yours match: the sites know no keys'")
+        assert driven.js(f"{SHOWN_TITLES}.length") == 0
         driven.press("Enter")
         assert driven.js("document.querySelectorAll('.file-answer, #list .btn.primary').length") == 0
         assert driven.js("document.getElementById('results').hidden") is True
