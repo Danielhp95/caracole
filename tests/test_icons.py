@@ -484,3 +484,33 @@ def test_caracole_icons_says_when_a_site_has_none_and_leaves_one_turned_off_alon
     assert result.exit_code == 0, result.output
     assert not sites["gtptabs"].asked and "gtptabs.com: turned off" in result.output
     assert "LRCLIB: no icon there; its badge stands in" in result.output
+
+
+def test_caracole_icons_answered_from_the_cache_alone_leaves_a_sites_strikes_as_they_are(tmp_path, monkeypatch):
+    # Only a site that answered one of this run's requests had a good run (pipeline._record_ok):
+    # an answer from the cache must not undo a block's backoff.
+    from caracole import db
+    from caracole.db import kv_set_json
+    from caracole.health import get_state
+
+    sites = icon_sites()
+    sites["musescore"].pages = {"/": (200, b"<html><head><title>no icon links</title></head></html>")}
+    first = icons_command(tmp_path, monkeypatch, sites)
+    assert "MuseScore: no icon there" in first.output, first.output
+    assert len(sites["musescore"].asked) == 2
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    assert get_state(conn, "musescore").last_ok is not None  # it answered, so it was a good run
+    # Three blocks in a row since, and the last cooldown just over.
+    ended = (datetime.now(UTC) - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    kv_set_json(conn, "provider:musescore", {"strikes": 3, "cooldown_until": ended, "last_ok": None,
+                                             "last_error": "HTTP 403", "last_error_at": ended})
+    conn.commit()
+    conn.close()
+    again = icons_command(tmp_path, monkeypatch, sites)
+    assert again.exit_code == 0, again.output
+    assert "MuseScore: no icon there" in again.output
+    assert len(sites["musescore"].asked) == 2  # every answer from the cache: nothing sent
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    state = get_state(conn, "musescore")
+    conn.close()
+    assert (state.strikes, state.last_ok) == (3, None) and state.cooldown_until is not None

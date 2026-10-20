@@ -5,7 +5,9 @@ asks each site that has no icon kept, even one asked less than a week ago, with
 a client of its own (``make_client``: caracole's lock, the provider's budget and
 pauses, its cooldown). A site with no provider of its own yet (YouTube) gets
 ``ICON_POLICY``. A block cools that provider down as any block does, and the
-other sites are still asked; a block or an error exits 0.
+other sites are still asked; a block or an error exits 0. A site that answered a
+request of this command's had a good run (``record_ok``), as the nightly run
+counts one; an answer from the cache alone leaves its health as it was.
 """
 
 from __future__ import annotations
@@ -68,7 +70,9 @@ def register(app: typer.Typer) -> None:
                         continue
                     finally:
                         client.close()
-                    if run.fetched or run.missing:
+                    if client.requests_made and (run.fetched or run.missing):
+                        # The site answered this run: a good run, as the nightly run records one. An
+                        # answer from the cache alone says nothing of it, and leaves its strikes.
                         record_ok(conn, key, now)
                     typer.echo(f"{source.name}: {_outcome(key, run)}")
             todo, page = write_pages(conn, cfg, overrides, utcnow())
