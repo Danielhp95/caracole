@@ -1677,6 +1677,7 @@ _SCRIPT = r"""
         window.scrollTo(0, 0);
       },
     });
+    row.dataset.id = String(s.id);  // as a card's: the Select mode finds the song's row by it
     // How the song's request goes, on a line of the row's own, as on its card.
     const job = server ? jobOfSong(id) : null;
     if (job) {
@@ -2276,7 +2277,17 @@ _SONGBOOK_STYLE = """
 .pick:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .pick-n { font-weight: 750; font-variant-numeric: tabular-nums; }
 .card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.card.picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+/* A row's box stands where its source's mark was, beside the title and the artist (both lines on a phone). */
+.selecting .row { grid-template-columns: 34px minmax(0, 1fr) auto 34px; }
+.selecting .row > .source { display: none; }
+.selecting .row > .pick { grid-column: 1; grid-row: 1 / span 2; align-self: center; width: 34px; height: 34px;
+  border-radius: 10px; }
+.row.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+@media (min-width: 900px) {
+  .selecting .row { grid-template-columns: 34px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px; }
+  .selecting .row > .pick { grid-row: 1; }
+}
 .pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .selecting .page { padding-bottom: 260px; }
 .pickbar { position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--border);

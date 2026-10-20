@@ -316,6 +316,54 @@ def test_picks_survive_a_search_and_select_mode_works_on_a_phone(library, tmp_pa
     assert out["bar"][0] == 0 and out["bar"][1] == out["page"] and out["bar"][2] == out["height"]
 
 
+ROWS_PICK = """
+  const row = (title) => qa("#list .row").find((a) => a.querySelector(".row-title").textContent === title);
+  const pickRow = (title) => { row(title).querySelector(".pick input").click(); };
+  q(".pick-toggle").click();
+"""
+
+
+@in_chromium
+@pytest.mark.parametrize("size", ["390,844", "1280,900"])
+def test_select_mode_picks_rows_too_and_keeps_the_picks_across_the_views(library, tmp_path, size):
+    conn, cfg = library
+    html = page(conn, cfg, WebControls(csrf="tok"))
+    out = run_in_page(html, cfg, tmp_path, ROWS_PICK + """
+      const boxes = qa("#list .row .pick").filter((p) => p.offsetParent).length;
+      pickRow("Hysteria"); pickRow("Creep");
+      const numbers = ["Hysteria", "Creep", "De Música Ligera"].map((t) => row(t).querySelector(".pick-n").textContent);
+      const picked = qa("#list .row.picked").map((r) => r.querySelector(".row-title").textContent);
+      const box = row("Creep").querySelector(".pick").getBoundingClientRect();
+      const title = row("Creep").querySelector(".row-title").getBoundingClientRect();
+      const mark = row("Creep").querySelector(".source");
+      const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const scroll = document.documentElement.scrollWidth;
+      q('button[data-view="cards"]').click();  // the cards show the same picks, in the same order
+      await Promise.resolve();  // the boxes come with the list's observer, once the cards are in
+      const card = (title) => qa("#list article.card").find((a) => a.querySelector("h2").textContent === title);
+      const cards = ["Hysteria", "Creep"].map((t) => card(t).querySelector(".pick-n").textContent);
+      card("De Música Ligera").querySelector(".pick input").click();
+      q('button[data-view="rows"]').click();
+      await Promise.resolve();
+      const third = row("De Música Ligera").querySelector(".pick-n").textContent;
+      out = {boxes, numbers, picked, cards, third, count: q(".pick-count").textContent,
+             box: [Math.round(box.width), Math.round(box.height)], apart: !overlaps(box, title),
+             mark: mark ? mark.offsetParent === null : true, scroll, page: window.innerWidth};
+    """, size=size, fragment="#view=rows")
+    assert out["boxes"] == 3  # a box on each row
+    assert out["numbers"] == ["1", "2", ""] and out["picked"] == ["Hysteria", "Creep"]  # by artist: Muse, Radiohead
+    assert out["cards"] == ["1", "2"] and out["third"] == "3" and out["count"] == "3 selected"
+    assert out["box"][0] >= 34 and out["box"][1] >= 34 and out["apart"]  # a target of its own, beside the title
+    assert out["mark"]  # the box stands where the source's mark was
+    assert out["scroll"] <= out["page"]
+
+
+def test_each_row_carries_its_songs_id():
+    from caracole.library_page import _SCRIPT
+
+    assert "row.dataset.id = String(s.id);" in _SCRIPT  # the Select mode finds the rows by it
+
+
 @in_chromium
 def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_path):
     # The Select bar's form and a review's picker are two forms of the page: neither's style is the other's.
