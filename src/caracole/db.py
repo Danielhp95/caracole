@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -241,8 +243,9 @@ class DatabaseTooNew(sqlite3.DatabaseError):
 def connect(path: Path) -> sqlite3.Connection:
     """Open (creating if needed) the database, apply migrations, and return it.
 
-    Rows are ``sqlite3.Row``; statements commit automatically (autocommit mode)
-    unless the caller opens a transaction with ``with conn:``.
+    Rows are ``sqlite3.Row``; each statement commits on its own (autocommit mode),
+    where ``with conn:`` opens no transaction: writes that apply whole or not at
+    all go in a ``savepoint``.
 
     Each migration applies whole or not at all, after the database is copied to
     ``<name>.v<N>.bak`` (N: the version it's migrated from). A database newer
@@ -290,6 +293,23 @@ def _migrate(conn: sqlite3.Connection, path: Path) -> None:
             if conn.in_transaction:
                 conn.execute("ROLLBACK")
             raise
+
+
+@contextmanager
+def savepoint(conn: sqlite3.Connection, name: str) -> Iterator[None]:
+    """The block's writes, all or none: a transaction of its own, or one nested in the caller's.
+
+    Any exception, a Ctrl-C too, undoes the block and goes on up; a caller's
+    savepoint around it can still undo it. ``name`` is a constant identifier.
+    """
+    conn.execute(f"SAVEPOINT {name}")
+    try:
+        yield
+    except BaseException:
+        conn.execute(f"ROLLBACK TO {name}")
+        conn.execute(f"RELEASE {name}")
+        raise
+    conn.execute(f"RELEASE {name}")
 
 
 def kv_get(conn: sqlite3.Connection, key: str) -> str | None:

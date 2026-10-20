@@ -229,6 +229,32 @@ def test_a_version_5_database_gains_the_lacuerda_index_and_keeps_its_ug_keys(tmp
     assert columns(path.with_name("caracole.sqlite.v5.bak"), "lacuerda_index") == ([], 5)
 
 
+def test_a_savepoint_undoes_its_whole_block_and_nests(conn):
+    def kv(key):
+        return db.kv_get(conn, key)
+
+    with db.savepoint(conn, "outer"):
+        db.kv_set(conn, "a", "1")
+        with pytest.raises(KeyboardInterrupt):  # any exception, a Ctrl-C too
+            with db.savepoint(conn, "inner"):
+                db.kv_set(conn, "b", "2")
+                db.kv_set(conn, "a", "changed")
+                raise KeyboardInterrupt
+        assert conn.in_transaction and (kv("a"), kv("b")) == ("1", None)
+        with db.savepoint(conn, "inner"):
+            db.kv_set(conn, "c", "3")
+    assert not conn.in_transaction
+    assert (kv("a"), kv("b"), kv("c")) == ("1", None, "3")
+
+    with pytest.raises(ValueError):
+        with db.savepoint(conn, "outer"):
+            db.kv_set(conn, "d", "4")
+            db.kv_delete(conn, "a")
+            raise ValueError
+    assert not conn.in_transaction
+    assert (kv("a"), kv("d")) == ("1", None)
+
+
 def test_the_substring_index_follows_the_rows_a_sitemap_adds_or_renames(conn):
     from datetime import UTC, datetime
 
