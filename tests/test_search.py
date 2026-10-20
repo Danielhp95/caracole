@@ -742,13 +742,29 @@ def test_cli_shows_a_reviews_first_candidates_under_its_song(tmp_path):
     assert "cover-1" not in library  # three at most: `caracole review` and the to-do page have them all
 
 
+def test_cli_a_review_with_a_sheet_from_elsewhere_keeps_its_tag_and_its_candidates(tmp_path):
+    conn = seed(tmp_path, rows=ROWS + [EPIC, NEAR_EPIC])
+    s = epic_review(conn)
+    lc = upsert_version(conn, provider="lacuerda", tab_id="epic/not_sorry", song_id=s.id, slot="sheet",
+                        kind="acordes", rating=0, votes=0, version=1, label=None,
+                        url="https://acordes.lacuerda.net/epic/not_sorry.shtml", raw={}, now="x")
+    keep_file(conn, tmp_path / "lib", song=s, version_id=lc, name="sheet.txt", data=b"LaCuerda's\n", rank=1)
+    update_song(conn, s.id, status="found")
+    result = run(tmp_path, "search", "epic")
+    assert result.exit_code == 0, result.output
+    library = result.output.partition("On Ultimate Guitar (offline index)")[0]
+    assert "\n  [LaCuerda] epic - I'm not sorry for loving you · found · " in library
+    assert ("     Did you mean (`caracole review` settles it):\n"
+            "       94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)\n") in library
+
+
 def test_cli_says_a_hit_is_under_ugs_catch_all_artist(tmp_path):
     seed(tmp_path, rows=ROWS + [EPIC, NEAR_EPIC])
     result = run(tmp_path, "search", "epic", "not", "sorry", "for", "loving", "you")
     assert result.exit_code == 0, result.output
     ug = result.output.partition("On Ultimate Guitar (offline index)")[2]
     first, second = ug.split("\n  2. ", 1)
-    assert "1. Misc Musicals - Epic The Musical Not Sorry For Loving You" in first
+    assert "1. [UG] Misc Musicals - Epic The Musical Not Sorry For Loving You" in first
     # Added under UG's names, the song's artist would be "Misc Musicals": no line to paste does that.
     assert 'caracole add "Misc Musicals"' not in first
     assert ("misc-musicals is UG's catch-all artist, no one's name: add the song as you know it, then pick "

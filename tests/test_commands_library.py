@@ -469,7 +469,7 @@ def test_review_song_lists_a_song_not_founds_search_hits_numbered_as_pick_takes_
     assert "leonard-cohen/hallelujah" not in hits and set(hits) >= {"leonard-cohen/hallelujah-anthem",
                                                                      "leonard-cohen/hallelujah-for-two"}
     searched = run(tmp_path, "search", "Leonard Cohenn Hallelujah").output
-    assert "  2. Leonard Cohen - Hallelujah Anthem" in searched and hits["leonard-cohen/hallelujah-anthem"] == "1"
+    assert "  2. [UG] Leonard Cohen - Hallelujah Anthem" in searched and hits["leonard-cohen/hallelujah-anthem"] == "1"
     # The search it ran, as you'd type it: the title as caracole compares it, "(Live)" left out.
     assert 'caracole search "Leonard Cohenn Hallelujah"' in listed.output
     assert f'caracole review --song "{HALLELUJAH}" --pick N' in listed.output
