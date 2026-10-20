@@ -49,8 +49,9 @@ stdout and ntfy: a new step plugs in by returning one. The log goes to stderr, s
 by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities, redacted secrets).
 
 Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`),
-http.py (`PoliteClient`, robots rules), health.py (cooldowns, `events`), normalize.py (keys,
-pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy),
+http.py (`PoliteClient`, robots rules, `stale` and `read_once_more` for cached answers),
+health.py (cooldowns, `events`), normalize.py (keys, pinyin), overrides.py, library.py (song
+folders, safe file access), notify.py (ntfy),
 site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's and
 MuseScore's), keys.py (a song's musical key and its source, for info.json, `index.html`
 and `search --key`), removal.py (`caracole remove` and the web page's Remove: a song's

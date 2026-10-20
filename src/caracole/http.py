@@ -133,6 +133,46 @@ class Client(Protocol):
     ) -> Response: ...
 
 
+# --- reading a provider's answers ---------------------------------------------
+
+
+def stale(resp: Response, now: datetime, max_age: timedelta) -> bool:
+    """Whether ``resp`` is a cached copy older than ``max_age`` at ``now`` (a naive time is UTC),
+    or of unknown age. A fresh answer never is. ``PoliteClient`` serves such a copy only once the
+    run's budget is spent: no answer for today, so its caller stops as the next request would have.
+    """
+    if not resp.from_cache:
+        return False
+    if not resp.fetched_at:
+        return True
+    fetched = datetime.strptime(resp.fetched_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    return (now.replace(tzinfo=UTC) if now.tzinfo is None else now) - fetched > max_age
+
+
+def read_once_more[T](
+    client: Client, resp: Response, url: str, read: Callable[[Response], T],
+    unreadable: type[ProviderError], *, fetched: set[str] | None = None, **get: Any,
+) -> T:
+    """``read(resp)``, where ``resp`` answered ``url``; a cached answer ``read`` can't read
+    (it raises ``unreadable``) is asked for once more, past the cache, and read again.
+
+    A 200 is cached, so a maintenance notice or a cut-short page would otherwise fail the
+    song, from the cache, on every run. A fresh answer that fails is an error, and so is one
+    for a URL this pass fetched already (``fetched``, which gains each URL fetched). ``get``
+    goes to the second ``client.get``: what the first was given (``params``, ``accept``).
+    """
+    if fetched is not None and not resp.from_cache:
+        fetched.add(url)
+    try:
+        return read(resp)
+    except unreadable:
+        if not resp.from_cache or (fetched is not None and url in fetched):
+            raise
+    if fetched is not None:
+        fetched.add(url)
+    return read(client.get(url, cache=False, **get))
+
+
 # --- the polite client --------------------------------------------------------
 
 _CACHED_STATUSES = (200, 404)
@@ -441,10 +481,7 @@ class PoliteClient:
     # -- internals ---------------------------------------------------------
 
     def _older_than(self, cached: Response, max_age: timedelta) -> bool:
-        if not cached.fetched_at:
-            return True
-        fetched = datetime.strptime(cached.fetched_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
-        return self._wall_clock() - fetched > max_age
+        return stale(cached, self._wall_clock(), max_age)
 
     def _send(self, url: str, request: httpx.Request) -> httpx.Response:
         """One network request, a redirect hop included: within the budget, after the pause."""

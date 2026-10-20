@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from collections.abc import Callable, Collection
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -47,6 +47,8 @@ from caracole.http import (
     ProviderError,
     ProviderUnavailable,
     Response,
+    read_once_more,
+    stale,
 )
 from caracole.lacuerda import (
     PROVIDER,
@@ -251,7 +253,8 @@ def _find_sheet(
     if lc_song is None or n is None:
         return None
     url = version_url(slug, lc_song.slug, n)
-    markup = _read(client, client.get(url, accept=_ACCEPT), url, _version_sheet, fetched)
+    markup = read_once_more(client, client.get(url, accept=_ACCEPT), url, _version_sheet, LaCuerdaParseError,
+                            fetched=fetched, accept=_ACCEPT)
     return _Sheet(slug, lc_song, n, url, markup) if markup is not None else None
 
 
@@ -268,11 +271,10 @@ def _artist_songs(
     for slug in dict.fromkeys([*artist_slugs(conn, artist), *artist_slug_candidates(artist)]):
         url = artist_url(slug)
         resp = client.get(url, accept=_ACCEPT, max_age=ARTIST_PAGE_MAX_AGE)
-        if _stale(resp, now):
-            # PoliteClient serves a copy past max_age only once the budget is spent.
-            # It is no answer for today: stop as the next request would have.
-            raise BudgetExhausted(PROVIDER)
-        page = _read(client, resp, url, _artist_page_songs, fetched)
+        if stale(resp, now, ARTIST_PAGE_MAX_AGE):
+            raise BudgetExhausted(PROVIDER)  # no answer for today: stop as the next request would have
+        page = read_once_more(client, resp, url, _artist_page_songs, LaCuerdaParseError, fetched=fetched,
+                              accept=_ACCEPT)
         if page is not None:
             songs, html = page
             store_songs(conn, slug, parse_artist_name(html), songs, parse_popularity(html))
@@ -280,46 +282,16 @@ def _artist_songs(
     return None
 
 
-def _read[T](
-    client: Client, resp: Response, url: str, read: Callable[[Response, str], T],
-    fetched: set[str],
-) -> T:
-    """``read(resp, url)``; a cached page it can't read is fetched once more and read again.
-
-    A 200 is cached (version pages forever, artist pages for 30 days), so a
-    maintenance notice or a half-rendered page would otherwise fail the song,
-    from the cache, on every run. A fresh copy that fails too is an error, and
-    a page already fetched in this pass (``fetched``) isn't fetched again.
-    """
-    if not resp.from_cache:
-        fetched.add(url)
-    try:
-        return read(resp, url)
-    except LaCuerdaParseError:
-        if not resp.from_cache or url in fetched:
-            raise
-    fetched.add(url)
-    return read(client.get(url, accept=_ACCEPT, cache=False), url)
-
-
-def _artist_page_songs(resp: Response, url: str) -> tuple[list[LCSong], str] | None:
+def _artist_page_songs(resp: Response) -> tuple[list[LCSong], str] | None:
     """The songs on an artist page, and the page; None when LaCuerda has no artist by that slug."""
     if resp.status == 404 or is_missing_artist_page(resp.text):
         return None
-    return parse_artist_page(resp.text, url=url), resp.text
+    return parse_artist_page(resp.text, url=resp.url), resp.text
 
 
-def _version_sheet(resp: Response, url: str) -> str | None:
+def _version_sheet(resp: Response) -> str | None:
     """The sheet on a version page; None when the page is gone (listed by a cached artist page)."""
-    return None if resp.status == 404 else parse_version_page(resp.text, url=url)
-
-
-def _stale(resp: Response, now: datetime) -> bool:
-    """Whether a cached artist page is older than ``ARTIST_PAGE_MAX_AGE``."""
-    if not resp.from_cache or not resp.fetched_at:
-        return False
-    fetched = datetime.strptime(resp.fetched_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
-    return _utc(now) - fetched > ARTIST_PAGE_MAX_AGE
+    return None if resp.status == 404 else parse_version_page(resp.text, url=resp.url)
 
 
 # --- keeping the sheet -------------------------------------------------------------------

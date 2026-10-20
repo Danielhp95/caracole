@@ -12,8 +12,11 @@ from caracole.http import (
     ProviderBlocked,
     ProviderError,
     ProviderUnavailable,
+    Response,
     is_challenge,
+    read_once_more,
 )
+from caracole.http import stale as is_stale
 
 NORMAL_PAGE = (
     b"<html><head><title>DE MUSICA LIGERA CHORDS</title></head><body>"
@@ -655,6 +658,109 @@ def test_max_age_refetches_stale_copies_and_falls_back_when_budget_is_spent(tmp_
     clock[0] += timedelta(days=40)
     stale = client.get(url, max_age=timedelta(days=30))  # budget spent: the stale copy beats nothing
     assert stale.from_cache and stale.content == b"v2" and len(rec.requests) == 2
+
+
+# --- reading a provider's answers: a stale copy, a cached one that won't read ----------------------------
+
+
+def answer(*, from_cache=True, fetched_at=None):
+    return Response(url="https://x.test/page", status=200, content=b"page", from_cache=from_cache,
+                    fetched_at=fetched_at)
+
+
+def test_a_copy_is_stale_past_its_max_age_or_of_unknown_age_and_a_fresh_answer_never():
+    now, month = datetime(2026, 10, 18, 3, 30, tzinfo=UTC), timedelta(days=30)
+    assert not is_stale(answer(from_cache=False), now, month)
+    assert not is_stale(answer(fetched_at="2026-09-19T03:30:00Z"), now, month)  # 29 days old
+    assert is_stale(answer(fetched_at="2026-09-17T03:30:00Z"), now, month)  # 31 days old
+    assert is_stale(answer(fetched_at=None), now, month)
+    assert is_stale(answer(fetched_at="2026-09-17T03:30:00Z"), now.replace(tzinfo=None), month)  # naive is UTC
+    assert not is_stale(answer(fetched_at="2026-09-19T03:30:00Z"), now.replace(tzinfo=None), month)
+
+
+NOTICE = b"<html>Maintenance</html>"  # served with HTTP 200, so cached like the page
+
+
+class Unreadable(ProviderError):
+    pass
+
+
+class PageGone(ProviderError):
+    pass
+
+
+def words(resp):
+    if resp.content == NOTICE:
+        raise Unreadable("ug", resp.url, resp.status, "a notice, not the page")
+    return None if resp.status == 404 else resp.text
+
+
+def answers(*bodies):
+    """A handler answering each request with the next of ``bodies``: bytes for a 200, or a status."""
+    left = iter(bodies)
+
+    def handler(request):
+        body = next(left)
+        return httpx.Response(body, text="gone") if isinstance(body, int) else httpx.Response(200, content=body)
+
+    return handler
+
+
+def test_a_fresh_answer_that_wont_read_is_an_error_and_is_asked_for_no_more(tmp_path):
+    client, rec = make_client(tmp_path, answers(NOTICE))
+    fetched: set[str] = set()
+    url = "https://x.test/page"
+    with pytest.raises(Unreadable):
+        read_once_more(client, client.get(url), url, words, Unreadable, fetched=fetched)
+    assert len(rec.requests) == 1
+    assert fetched == {url}
+
+
+def test_a_cached_answer_that_wont_read_is_asked_for_once_more_past_the_cache(tmp_path):
+    url = "https://x.test/page"
+    make_client(tmp_path, answers(NOTICE))[0].get(url)  # last night's answer, cached
+    client, rec = make_client(tmp_path, answers(b"the page"))
+    fetched: set[str] = set()
+    assert read_once_more(client, client.get(url), url, words, Unreadable, fetched=fetched) == "the page"
+    assert len(rec.requests) == 1
+    assert fetched == {url}
+    assert client.get(url).content == b"the page"  # the cache holds the new answer
+
+
+def test_a_cached_answer_still_unreadable_when_asked_again_is_an_error(tmp_path):
+    url = "https://x.test/page"
+    make_client(tmp_path, answers(NOTICE))[0].get(url)
+    client, rec = make_client(tmp_path, answers(NOTICE))
+    with pytest.raises(Unreadable):
+        read_once_more(client, client.get(url), url, words, Unreadable, fetched=set())
+    assert len(rec.requests) == 1
+
+
+def test_what_the_first_request_was_given_goes_to_the_second(tmp_path):
+    url = "https://x.test/api/get"
+    make_client(tmp_path, answers(NOTICE))[0].get(url, params={"q": "x"})
+    client, rec = make_client(tmp_path, answers(404))
+    resp = client.get(url, params={"q": "x"})
+    assert read_once_more(client, resp, url, words, Unreadable, params={"q": "x"}, accept=(200, 404)) is None
+    assert [str(r.url) for r in rec.requests] == ["https://x.test/api/get?q=x"]
+
+
+def test_a_url_already_fetched_in_the_pass_is_not_asked_for_again(tmp_path):
+    url = "https://x.test/page"
+    make_client(tmp_path, answers(NOTICE))[0].get(url)
+    client, rec = make_client(tmp_path, answers(b"the page"))
+    with pytest.raises(Unreadable):
+        read_once_more(client, client.get(url), url, words, Unreadable, fetched={url})
+    assert rec.requests == []
+
+
+def test_only_the_reader_s_own_failure_asks_again(tmp_path):
+    url = "https://x.test/page"
+    make_client(tmp_path, answers(NOTICE))[0].get(url)
+    client, rec = make_client(tmp_path, answers(b"the page"))
+    with pytest.raises(Unreadable):
+        read_once_more(client, client.get(url), url, words, PageGone)
+    assert rec.requests == []
 
 
 # --- a line per request in the log, at -v -----------------------------------------------------
