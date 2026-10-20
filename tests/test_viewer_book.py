@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 from helpers import browser
-from helpers.browser import in_chromium
+from helpers.browser import Browser, in_chromium
 
 from caracole.chordpro import to_chordpro
 from caracole.viewer.book import BookSong, assets_version, build_songbook, songbook_csp
@@ -86,6 +86,14 @@ def test_each_song_says_where_it_is_and_links_its_neighbours():
     assert 'rel="next"' not in last and 'href="#contents"' in last
     assert 'id="sheet-3"' in minor and 'id="facts-3"' in minor and 'id="strip-3"' in minor
     assert 'lang="zh"' in last
+
+
+def test_each_song_says_what_its_capo_means_as_its_sheet_html_does():
+    html = page()
+    first = re.search(r'<p class="facts" id="facts-1">(.*?)</p>', html).group(1)
+    minor = re.search(r'<p class="facts" id="facts-3">(.*?)</p>', html).group(1)
+    assert first == '<b>G</b> shapes · capo <b>2</b> · sounds <b>A</b> · <span class="from">key from the sheet</span>'
+    assert minor == 'Key <b>Am</b> <span class="from">from the tab</span>'
 
 
 def test_the_pager_is_above_each_sheet_and_after_it_too():
@@ -262,13 +270,20 @@ def test_the_song_in_the_address_opens_whatever_else_the_address_keeps(tmp_path)
 
 
 @in_chromium
+def test_the_address_keeps_a_songs_text_size(tmp_path):
+    # Served, the page has no storage: the song's text size is in its address, as its key is.
+    harness = 'out = [getComputedStyle(q("#sheet")).fontSize, location.hash];'
+    assert result_of(open_page(page(), tmp_path, "#song-3=&fs=22", harness=harness)) == ["22px", "#song-3=&fs=22"]
+
+
+@in_chromium
 def test_a_song_opens_alone_in_the_viewer_in_its_own_key(tmp_path):
     dom = open_page(page(), tmp_path, "#song-3")
     assert 'data-view="song"' in dom and 'data-ready="1"' in dom  # the viewer ran, on this song
     assert visible_songs(dom) == ["3"]
     assert re.search(r'<nav class="toc" id="contents"[^>]*hidden', dom)
     assert chords_of(dom)[:4] == ["Bm", "G", "D", "A"]  # Am, F, C, G up 2: its [transpose]
-    assert re.search(r'id="fab"[^>]*>Key Bm · \+2</button>', dom)
+    assert '<span class="vh" id="key-full">Key Bm · +2</span>' in dom
     assert "<title>Minor Song · Campfire</title>" in dom
 
 
@@ -282,7 +297,7 @@ def test_a_songs_made_up_flat_five_chord_is_written_as_its_viewer_writes_it(tmp_
         .find((b) => b.firstChild.textContent === text);
       const g = () => q('#sheet .c[data-c="1"]').textContent;
       const before = g();
-      q("#fab").click();
+      q("#more").click();
       chip("#modes", "Phrygian").click();
       const shown = g();
       q('#sheet .c[data-c="1"]').click();  // its chord box
@@ -322,21 +337,21 @@ def test_the_page_remembers_the_song_and_each_songs_own_settings(tmp_path):
     harness = """
       const step = Number(sessionStorage.getItem("step") || "0");
       sessionStorage.setItem("step", String(step + 1));
-      const fab = () => q("#fab") ? q("#fab").textContent : "";
+      const said = () => q("#key-full") ? q("#key-full").textContent : "";
       const log = (value) => {
         const seen = JSON.parse(sessionStorage.getItem("seen") || "[]");
         seen.push(value);
         sessionStorage.setItem("seen", JSON.stringify(seen));
       };
       if (step === 0) {  // song 3: up a semitone more, then song 1
-        q("#up").click();
-        log(fab());
+        q("#t-up").click();
+        log(said());
         location.hash = "song-1";
       } else if (step === 1) {  // song 1 keeps its own settings; back to song 3
-        log(fab());
+        log(said());
         location.hash = "song-3";
       } else if (step === 2) {  // song 3 as you left it; then the contents
-        log(fab());
+        log(said());
         location.hash = "contents";
       } else if (step === 3) {  // the contents show where you were; then the page with no address
         log(q(".toc .here") ? q(".toc .here").textContent : "");
@@ -348,9 +363,59 @@ def test_the_page_remembers_the_song_and_each_songs_own_settings(tmp_path):
     """
     dom = open_page(page(), tmp_path, "#song-3", harness=harness, budget=15000)
     three, one, again, here, shown = result_of(dom)
-    assert three == "Key Cm · +3" and one == "Key G" and again == "Key Cm · +3"
+    assert three == "Key Cm · +3" and one == "G shapes · capo 2 · sounds A" and again == "Key Cm · +3"
     assert "Minor Song" in here
     assert shown == ["song-3"]
+
+
+@in_chromium
+def test_each_song_keeps_its_own_text_size_and_scroll_speed(tmp_path):
+    harness = """
+      const step = Number(sessionStorage.getItem("step") || "0");
+      sessionStorage.setItem("step", String(step + 1));
+      const log = (value) => {
+        const seen = JSON.parse(sessionStorage.getItem("seen") || "[]");
+        seen.push(value);
+        sessionStorage.setItem("seen", JSON.stringify(seen));
+      };
+      const now = () => [q("#pill-speed").textContent, getComputedStyle(q("#sheet")).fontSize, location.hash];
+      if (step === 0) {  // song 3: bigger, and faster; then song 1
+        q("#size").click();
+        q("#bigger").click();
+        q("#scroll").click();
+        q("#pill-faster").click();
+        q("#pill-end").click();
+        log(now());
+        location.hash = "song-1";
+      } else if (step === 1) {  // song 1 as it was; back to song 3
+        log(now());
+        location.hash = "song-3";
+      } else {
+        log(now());
+        out = JSON.parse(sessionStorage.getItem("seen"));
+      }
+    """
+    dom = open_page(page(), tmp_path, "#song-3", harness=harness, budget=12000)
+    three, one, again = result_of(dom)
+    assert three == ["7", "20px", "#song-3=&fs=20&speed=7"]
+    assert one[:2] == ["6", "18px"] and "fs=" not in one[2] and "speed=" not in one[2]
+    assert again == three
+
+
+@in_chromium
+def test_a_song_in_the_songbook_scrolls_by_itself_too(tmp_path):
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(page(), encoding="utf-8")
+    with Browser(tmp_path / "profile", width=390, height=640, mobile=True) as b:
+        b.open(path.as_uri() + "#song-1&speed=20")
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        b.click("#scroll")
+        b.click("#go")
+        label = b.js("document.querySelector('#go').getAttribute('aria-label')")
+        assert b.wait("scrollY > 20", 5)
+        shown = b.js("location.hash.startsWith('#song-1') && !document.querySelector('#pill').hidden")
+    assert label == "Pause" and shown
 
 
 @in_chromium
@@ -376,7 +441,7 @@ def test_the_song_the_page_reopens_is_in_its_address_so_a_reload_keeps_it(tmp_pa
         log(location.hash);
         location.reload();
       } else {
-        log([shown(), q("#fab") ? q("#fab").textContent : ""]);
+        log([shown(), q("#key-full") ? q("#key-full").textContent : ""]);
         out = JSON.parse(sessionStorage.getItem("seen"));
       }
     """

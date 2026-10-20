@@ -138,9 +138,14 @@ songs.py's, in the `removed` table).
   for chordpro (`rendered_song`), so its viewer is one caracole wrote; helpers/chromium.py
   drives a headless Chromium of the test's own over the DevTools protocol (a pipe, the standard
   library), for a page whose CSP refuses a test's script; helpers/browser.py's `Browser` is the
-  same with typing, Enter, clicks and the layout read back, for the lookup page's tests and the
-  library page's bar (test_web_page_search.py: a real `caracole serve`, its queue running a fake
-  `caracole get`). Both
+  same with typing, Enter, clicks, touches and the layout read back, on real time, for the lookup
+  page's tests and the library page's bar (test_web_page_search.py: a real `caracole serve`, its
+  queue running a fake `caracole get`), the viewer's scrolling (test_viewer_scroll.py: a page on
+  `dump_dom`'s virtual time draws no frames), its bar (test_viewer_bar.py: a finger's drag is touch
+  events, as `Input.synthesizeScrollGesture` scrolls nothing headless) and its settings and chord
+  card, docked or beside the song (test_viewer_panels.py), which share helpers/viewer_pages.py: a
+  viewer written and opened in it (`written`, `viewer`), a finger's `drag`, `tap` and `tap_at`,
+  `rest` until the page stops gliding, and keys. Both
   resolve no host name (`helpers.browser.NO_LOOKUPS`), and their tests are `@in_chromium` too.
   fixtures/ holds UG, LaCuerda, LRCLIB,
   gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
@@ -185,7 +190,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_viewer_layout.py, test_viewer_preamble.py, test_viewer_shapes.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py, test_web_page_search.py), and the shared browser itself (test_harness.py) | neither |
+| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_viewer_layout.py, test_viewer_preamble.py, test_viewer_shapes.py, test_viewer_scroll.py, test_viewer_bar.py, test_viewer_panels.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py, test_web_page_search.py), and the shared browser itself (test_harness.py) | neither |
 
 Before a change is done:
 

@@ -127,3 +127,19 @@ def test_a_songbooks_song_takes_two_columns_only_when_it_fits(tmp_path):
         long = opened(browser, book, tmp_path, "songbook.html", "#song-2").eval(LAYOUT)
     assert short["right"] > 0 and short["height"] <= short["window"], short
     assert long["right"] == 0 and long["font"] > 18, long
+
+
+def test_the_settings_rail_beside_the_song_measures_its_columns_again(tmp_path):
+    # From 900 px wide the settings are a rail the song moves over for: two columns of it no longer fit
+    # beside it, so the song reads in one, in the larger text, and in two again once the rail closes.
+    with Chromium(tmp_path / "profile", size=DESKTOP) as browser:
+        tab = opened(browser, build_viewer(SHORT), tmp_path)
+        seen = [tab.eval(LAYOUT)]
+        tab.eval("document.getElementById('more').click()")
+        seen.append(tab.eval(LAYOUT) | {"columns": tab.eval("document.documentElement.dataset.columns")})
+        tab.eval("document.getElementById('more').click()")
+        seen.append(tab.eval(LAYOUT))
+    assert seen[0]["right"] > 0, seen
+    assert seen[1]["right"] == 0 and seen[1]["columns"] == "1" and seen[1]["font"] > 18, seen[1]
+    assert not seen[1]["sideways"], seen[1]
+    assert seen[2]["right"] > 0 and seen[2]["font"] == seen[0]["font"], seen

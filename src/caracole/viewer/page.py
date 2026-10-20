@@ -59,6 +59,8 @@ from caracole.viewer.theory import (
     map_chord,
     parse_chord,
     parse_key,
+    shapes_key,
+    sounding,
     spelling,
 )
 from caracole.viewer.voicings import (
@@ -152,8 +154,9 @@ def viewer_csp(page: bytes) -> str:
     stylesheet, by their hashes, and nothing else to load, no form to send, no base to
     change), with a sandbox, which a ``<meta>`` policy can't set: the page then runs in an
     origin of its own, with no cookie and no way to ask the server for anything. Its script
-    still runs; it has no storage there, and keeps the transposition, the mode and the capo
-    in its address (``#t=2&mode=aeolian``) alone, as it does everywhere besides its storage.
+    still runs; it has no storage there, and keeps the transposition, the mode, the capo, the
+    text size and the scroll speed in its address (``#t=2&mode=aeolian&fs=20&speed=8``) alone,
+    as it does everywhere besides its storage.
 
     The policy is the page's, not this caracole's: a viewer written before an upgrade carries
     the hashes of the script and style it was written with, and keeps them until the next
@@ -195,11 +198,13 @@ def _sha256(text: str) -> str:
 
 def _song_key(sheet: Sheet, chords: list[Chord | None], key: str | None,
               source: str | None) -> tuple[Key | None, str | None]:
-    if (found := parse_key(key)) is not None:
-        return found, _origin(source)
-    if (found := parse_key(sheet.key)) is not None:
-        return found, "from the sheet"
+    """The key of the shapes the sheet's chords are, and where it came from in words. A key named
+    for a sheet with a capo may be the one the song sounds in (``theory.shapes_key``)."""
     played = [chords[i] for i in _played(sheet) if chords[i] is not None]
+    if (found := parse_key(key)) is not None:
+        return shapes_key(found, sheet.capo or 0, played), _origin(source)
+    if (found := parse_key(sheet.key)) is not None:
+        return shapes_key(found, sheet.capo or 0, played), "from the sheet"
     found = estimate_key(played)
     return found, "estimated from the chords" if found else None
 
@@ -286,12 +291,25 @@ def _given_shapes(sheet: Sheet) -> list[tuple[Chord, Position]]:
 # --- the page ------------------------------------------------------------------------------------
 
 
+def _facts(key: Key | None, origin: str | None, capo: int) -> str:
+    """The key line under the title, as HTML, as viewer.js writes it for the sheet as written.
+
+    With a capo it says the key of the shapes played, the capo and the key the song sounds in,
+    as Cifra Club's key line does ("Em shapes · capo 2 · sounds F#m"): "Key Em" alone would read
+    as the song's key. Without one, the key ("Key Em"). Each says where the key came from.
+    """
+    source = escape(origin or "")
+    if key is None:
+        return f"Capo <b>{capo}</b>" if capo else ""
+    if not capo:
+        return f"Key <b>{escape(key_name(key))}</b>" + (f' <span class="from">{source}</span>' if source else "")
+    return (
+        f"<b>{escape(key_name(key))}</b> shapes · capo <b>{capo}</b> · sounds <b>{escape(key_name(sounding(key, capo)))}</b>"
+        + (f' · <span class="from">key {source}</span>' if source else "")
+    )
+
+
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None) -> str:
-    facts = []
-    if key is not None:
-        facts.append(f"Key <b>{escape(key_name(key))}</b> <span class=\"from\">{escape(origin or '')}</span>")
-    if sheet.capo:
-        facts.append(f"Capo <b>{sheet.capo}</b>")
     notice = (
         '<p class="notice">Auto-generated, unverified: caracole heard these chords in the recording.</p>\n'
         if sheet.auto else ""
@@ -303,7 +321,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
         f"<h1>{escape(title)}</h1>\n"
         + (f'<p class="artist">{escape(sheet.artist)}</p>\n' if sheet.artist else "")
-        + f'<p class="facts" id="facts">{" · ".join(facts)}</p>\n</header>\n'
+        + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
         + notice
         + '<div class="strip" id="strip" hidden></div>\n'
         + f'<article class="sheet" id="sheet"{lang}>\n{_sheet_html(sheet)}</article>\n'
@@ -459,31 +477,59 @@ def _words(text: str) -> list[str]:
     return words
 
 
-# The settings sheet and the chord card the script fills in; hidden until it runs.
-_CONTROLS = """<button type="button" class="fab" id="fab" hidden aria-controls="panel" aria-expanded="false">Key</button>
-<div class="scrim" id="scrim" hidden></div>
-<section class="sheet-ui panel" id="panel" hidden role="dialog" aria-modal="true" aria-labelledby="panel-title">
-<header class="ui-head"><h2 id="panel-title" tabindex="-1">Key <span id="key-now"></span></h2>
+# The bar at the foot of the page, the settings and the chord card the script fills in; hidden
+# until it runs. The bar, in the order a keyboard reaches it: the song a semitone down or up, its key
+# in short between them (for the eye; whole for a screen reader); Aa, the text size in a box beside
+# it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
+# above the bar's place, the bar out of the way while the song moves: its first button counts down (a
+# ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
+# modal: nothing dims the song or takes it out of reach while they are open (viewer.js).
+_CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
+<div class="bar-in">
+<span class="keys" id="keys" role="group" aria-label="Transpose">
+<button type="button" class="step" id="t-down" aria-label="Transpose down a semitone">−</button>
+<output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
+<button type="button" class="step" id="t-up" aria-label="Transpose up a semitone">+</button>
+</span>
+<span class="size-box" id="size-box">
+<button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes">Aa</button>
+<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>
+<button type="button" id="smaller" aria-label="Smaller text" aria-disabled="false">A−</button>
+<output id="fs-now">18 px</output>
+<button type="button" id="bigger" aria-label="Bigger text" aria-disabled="false">A+</button>
+</span>
+</span>
+<button type="button" class="tool play" id="scroll" aria-label="Scroll by itself"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg></button>
+<button type="button" class="tool" id="more" aria-label="More settings" aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.5" cy="8" r="1.6"/><circle cx="8" cy="8" r="1.6"/><circle cx="13.5" cy="8" r="1.6"/></svg></button>
+</div>
+</div>
+<div class="pill" id="pill" role="group" aria-label="Scrolling by itself" hidden>
+<button type="button" class="go" id="go" aria-label="Pause"><svg class="ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="track" cx="22" cy="22" r="19"/><circle class="arc" cx="22" cy="22" r="19" pathLength="100"/></svg><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.6" height="12" rx="1"/><rect x="9.4" y="2" width="3.6" height="12" rx="1"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg><span class="tick" id="tick"></span></button>
+<button type="button" class="step" id="pill-slower" data-speed="-1" aria-label="Slower">−</button>
+<output id="pill-speed">6</output>
+<button type="button" class="step" id="pill-faster" data-speed="1" aria-label="Faster">+</button>
+<button type="button" class="end" id="pill-end" aria-label="Stop scrolling">×</button>
+</div>
+<p class="vh" id="scroll-status" role="status"></p>
+<section class="sheet-ui panel" id="panel" hidden role="dialog" aria-labelledby="panel-title">
+<header class="ui-head"><h2 id="panel-title" tabindex="-1">Key</h2>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="row"><span class="lab">Transpose</span>
 <span class="stepper"><button type="button" id="down" aria-label="Down a semitone">−</button>
 <output id="shift">0</output><button type="button" id="up" aria-label="Up a semitone">+</button></span>
 <button type="button" class="link" id="reset-t">Reset</button><p class="hint" id="shift-hint"></p></div>
-<div class="row" id="capo-row" hidden><span class="lab">Capo</span><span class="chips" id="capo"></span>
-<p class="hint" id="capo-hint"></p></div>
+<div class="row" id="capo-row"><span class="lab">Capo</span>
+<span class="stepper"><button type="button" id="capo-down" aria-label="Capo down a fret">−</button>
+<output id="capo-at">0</output><button type="button" id="capo-up" aria-label="Capo up a fret">+</button></span>
+<button type="button" class="link" id="reset-capo">Reset</button><p class="hint" id="capo-hint"></p>
+<span class="chips" id="capo"></span></div>
 <div class="row" id="mode-row" hidden><span class="lab">Mode</span><span class="chips" id="modes"></span>
 <p class="hint" id="mode-hint"></p></div>
-<div class="row"><span class="lab">Text</span>
-<span class="stepper"><button type="button" id="smaller" aria-label="Smaller text">A−</button>
-<button type="button" id="bigger" aria-label="Bigger text">A+</button></span></div>
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
-<div class="row"><span class="lab">Scroll</span>
-<button type="button" class="chip" id="scroll" aria-pressed="false">Start</button>
-<input type="range" id="speed" min="1" max="10" value="3" aria-label="Scroll speed"></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
 </section>
-<section class="sheet-ui card" id="card" hidden role="dialog" aria-modal="true" aria-labelledby="card-name">
+<section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="shape"><button type="button" class="round" id="prev" aria-label="Previous shape">‹</button>

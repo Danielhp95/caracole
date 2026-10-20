@@ -40,7 +40,9 @@ body {
 }
 a { color: inherit; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.page { max-width: 760px; margin: 0 auto; padding: 0 16px calc(96px + env(safe-area-inset-bottom)); }
+/* At the foot, room for the bar (53 px and the screen's safe area) and a little more, and for the pill
+   above it while it is there (--pill): the song's last lines, and the footer, end above them. */
+.page { max-width: 760px; margin: 0 auto; padding: 0 16px calc(72px + var(--pill) + env(safe-area-inset-bottom)); }
 
 /* The title block. */
 .head { padding: 6px 0 4px; }
@@ -131,17 +133,102 @@ a { color: inherit; }
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600;
   text-decoration: none; }
 
-/* The key button, the settings sheet and the chord card: out of the way until wanted. */
-.fab { position: fixed; z-index: 5; right: max(16px, env(safe-area-inset-right));
-  bottom: calc(16px + env(safe-area-inset-bottom)); min-height: 46px; padding: 0 18px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-weight: 650;
-  font-variant-numeric: tabular-nums; box-shadow: 0 2px 12px rgb(0 0 0 / .14); cursor: pointer; }
-.scrim { position: fixed; inset: 0; z-index: 6; background: rgb(0 0 0 / .22); }
-.sheet-ui { position: fixed; z-index: 7; left: 0; right: 0; bottom: 0; max-width: 620px; max-height: 80vh;
-  margin: 0 auto; padding: 6px 16px calc(18px + env(safe-area-inset-bottom)); overflow-y: auto;
-  border-radius: 18px 18px 0 0; background: var(--surface); box-shadow: 0 -6px 28px rgb(0 0 0 / .2); }
+/* The bar at the foot: the key between − and +, Aa, ▶ and ⋯, on a background of its own, so it
+   never sits over the words. It slides away as you scroll down (.away) and back as you scroll up;
+   while the song scrolls by itself it is out of the way, back when it pauses, under the pill. */
+.bar { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
+  padding: 4px max(8px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  border-top: 1px solid var(--border); background: var(--surface); color: var(--text);
+  box-shadow: 0 -2px 12px rgb(0 0 0 / .06); transition: transform .2s ease; }
+.bar.away { transform: translateY(calc(100% + 14px)); }  /* its shadow out of sight too */
+@media (prefers-reduced-motion: reduce) { .bar { transition: none; } }
+.bar-in { display: flex; align-items: center; gap: 4px; max-width: 728px; margin: 0 auto; }
+.bar button { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0;
+  border-radius: 12px; background: none; color: inherit; font: inherit; line-height: 1; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; }
+.bar svg { width: 16px; height: 16px; fill: currentColor; }
+/* − Em +: the song a semitone down or up, its key in short between them; the rest sit at the end. */
+.keys { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; max-width: 240px;
+  border-radius: 12px; background: var(--raised); }
+.keys .step { font-size: 1.35rem; }
+.now { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 2px;
+  text-align: center; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.now .k, .now .d { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now .k { font-weight: 700; }
+.now .d { color: var(--muted); font-size: .72rem; }
+.now .d:empty { display: none; }
+.tool { font-weight: 650; }
+.bar .play { border-radius: 50%; background: var(--accent); color: var(--on-accent); }
+/* Aa: the text size in a small box over the bar, beside the song (nothing behind it is dimmed). */
+.size-box { position: relative; flex: none; margin-left: auto; }  /* Aa, ▶ and ⋯ at the end, keys or none */
+.bar #size[aria-expanded="true"] { background: var(--raised); }
+.sizes { position: absolute; z-index: 1; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface); box-shadow: 0 4px 18px rgb(0 0 0 / .16); white-space: nowrap; }
+.sizes output { min-width: 4.2em; text-align: center; font-size: .9rem; font-weight: 650;
+  font-variant-numeric: tabular-nums; }
+.sizes button[aria-disabled="true"] { opacity: .35; cursor: default; }
+/* Hover only where a pointer hovers: on a phone it would stay on the last button tapped, in the bar
+   and in the pill alike. */
+@media (hover: hover) {
+  .bar button:hover, .pill button:hover { background: var(--raised); }
+  .keys .step:hover { background: var(--border); }
+  .bar .play:hover, .pill .go:hover { background: var(--accent); }
+  .sizes button[aria-disabled="true"]:hover { background: none; }
+}
+/* Scrolling by itself: the pill that steers it, above the bar's place (--foot) whether the bar is there
+   or not, and above a sheet docked on the bar. Its first button counts down (a ring that empties, and
+   the seconds), then shows ❚❚, or ▶ when paused; every state is the same size and in the same place,
+   so nothing moves under a thumb. */
+.pill { position: fixed; z-index: 8; right: max(16px, env(safe-area-inset-right));
+  bottom: calc(var(--foot) + 12px); display: flex; align-items: center; gap: 2px; padding: 3px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  box-shadow: 0 2px 12px rgb(0 0 0 / .14); font-variant-numeric: tabular-nums; }
+.pill button { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0;
+  border-radius: 50%; background: none; color: inherit; font: inherit; font-size: 1.35rem; line-height: 1;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.pill .go { background: var(--accent); color: var(--on-accent); }
+.pill .go > * { grid-area: 1 / 1; }
+.pill .end { color: var(--muted); }
+.pill output { min-width: 2.4ch; text-align: center; font-weight: 700; }
+.i-pause, .i-play { width: 16px; height: 16px; fill: currentColor; }
+.pill .ring { width: 44px; height: 44px; fill: none; stroke: currentColor; stroke-width: 3; transform: rotate(-90deg); }
+.pill .ring .track { opacity: .3; }
+.pill .ring .arc { stroke-dasharray: 100; stroke-dashoffset: 0; }
+.tick { font-size: 1.05rem; font-weight: 700; }
+.pill .ring, .pill .tick, .pill .i-play,
+.pill[data-state="counting"] .i-pause, .pill[data-state="paused"] .i-pause { display: none; }
+.pill[data-state="counting"] .tick, .pill[data-state="paused"] .i-play { display: block; }
+@media (prefers-reduced-motion: no-preference) {
+  .pill[data-state="counting"] .ring { display: block; }
+  .pill[data-state="counting"] .ring .arc { animation: drain 3s linear forwards; }
+}
+@keyframes drain { to { stroke-dashoffset: 100; } }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%);
+  white-space: nowrap; border: 0; }
+/* The settings and a chord's card, beside the song and never over it: nothing dims it. On a phone each
+   docks at the foot, on the bar (--foot: its height; the bar stays while one is docked, even as the song
+   scrolls by itself, the pill above), the settings in at most 45 % of the screen and the card in about
+   200 px; the one opened last hides the other until it closes. The page leaves room under the song for it
+   (--dock: its height, from the script), so the song's end comes up above it. From 900 px wide, the
+   settings are a rail beside the song and the card a popover by its chord (below). */
+:root { --foot: calc(53px + env(safe-area-inset-bottom)); --rail: 360px; --pill: 0px; }
+html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
+.sheet-ui { position: fixed; z-index: 7; left: 0; right: 0; bottom: var(--foot); max-width: 620px; max-height: 45vh;
+  max-height: 45dvh; margin: 0 auto; padding: 6px 16px 14px; overflow-y: auto; overscroll-behavior: contain;
+  border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; background: var(--surface);
+  box-shadow: 0 -4px 18px rgb(0 0 0 / .12); }
+.sheet-ui:not(.top) { visibility: hidden; }
+@media screen {
+  html[data-dock] { scroll-padding-bottom: calc(var(--dock) + var(--foot) + var(--pill) + 8px); }
+  html[data-dock] .page { padding-bottom: calc(var(--dock) + 72px + var(--pill) + env(safe-area-inset-bottom)); }
+  html[data-dock] .pill { bottom: calc(var(--dock) + var(--foot) + 12px); }
+}
 .ui-head { display: flex; align-items: center; gap: 8px; }
-.ui-head h2 { margin: 0; font-size: 1.15rem; }
+/* Room for two lines, as tall as the close button: a heading that wraps at one capo and not at
+   the next moves nothing under it. */
+.ui-head h2 { display: flex; align-items: center; min-height: 2.4em; margin: 0; font-size: 1.15rem; line-height: 1.2; }
+.panel .ui-head { padding-bottom: 6px; }  /* the second line clear of the line under it */
 .ui-head h2:focus { outline: none; }  /* where focus lands as it opens; not a control */
 .x { flex: none; margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
   color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
@@ -154,6 +241,7 @@ a { color: inherit; }
   border: 1px solid var(--border); background: var(--raised); color: var(--text); font: inherit; font-size: .95rem;
   cursor: pointer; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips:empty { display: none; }
 .chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .chip small { display: block; font-size: .7rem; opacity: .75; }
 .link { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--accent); font: inherit;
@@ -161,22 +249,39 @@ a { color: inherit; }
 .hint { flex-basis: 100%; margin: 2px 0 0; color: var(--muted); font-size: .82rem; }
 .hint:empty { display: none; }
 .center { text-align: center; }
+/* The card: the shape at the left, ‹ and › under it; at the right the chords to play instead, in a row
+   that scrolls sideways on a phone, so the card keeps its height from chord to chord. */
+.card { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto auto auto 1fr;
+  grid-template-areas: "head head" "shape title" "shape alts" "shape use" "shape note"; column-gap: 14px;
+  height: 226px; }
+.card:not([hidden]) { display: grid; }
+.card .ui-head { grid-area: head; }
+.shape { grid-area: shape; display: grid; grid-template: "d d" auto "p n" auto / 44px 44px; justify-content: center;
+  align-content: start; gap: 0 8px; }
+.shape .diagram { grid-area: d; }
+#prev { grid-area: p; }
+#next { grid-area: n; }
 /* A chord's shape note, over a hidden copy of the note its other shapes have (viewer.js): one
-   height for both, so the card never moves from shape to shape. */
+   height for both, so the card never moves from shape to shape, where its height is its own too. */
 #shape-note:not(:empty) { display: grid; }
 #shape-note > span { grid-area: 1 / 1; }
 #shape-note .room { visibility: hidden; }
-input[type="range"] { flex: 1 1 120px; accent-color: var(--accent); min-height: 44px; }
-.shape { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 4px 0; }
 .round { border-radius: 50%; padding: 0; font-size: 1.3rem; }
 .round:disabled { opacity: .35; cursor: default; }
-.diagram { display: flex; flex-direction: column; align-items: center; min-height: 150px; justify-content: center;
-  color: var(--muted); font-size: .85rem; text-align: center; }
-.diagram svg { width: 128px; height: auto; }
+.diagram { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 96px; min-height: 112px;
+  color: var(--muted); font-size: .8rem; text-align: center; }
+.diagram svg { width: 96px; height: auto; }
 .count { margin-top: 2px; font-size: .75rem; font-variant-numeric: tabular-nums; }
-.sub { margin: 14px 0 8px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .07em;
+.sub { margin: 2px 0 8px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .07em;
   text-transform: uppercase; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.card .sub { grid-area: title; }
+/* Room round the row for a chip's focus ring, which the row's edge would cut. */
+.card #alts { grid-area: alts; flex-wrap: nowrap; margin: -6px -16px 0 -6px; padding: 6px 16px 6px 6px; overflow-x: auto;
+  scrollbar-width: none; }
+.card #alts .chip { flex: none; }
+.card .actions { grid-area: use; }
+.card .hint { grid-area: note; margin-top: 8px; text-align: start; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 650; }
 .noscript { position: fixed; bottom: 0; left: 0; right: 0; margin: 0; padding: 8px 16px; background: var(--raised);
   color: var(--muted); font-size: .85rem; text-align: center; }
@@ -199,8 +304,23 @@ input[type="range"] { flex: 1 1 120px; accent-color: var(--accent); min-height: 
   [data-columns="2"] .page { max-width: 1180px; }
   [data-columns="2"] .sheet { columns: 2 28em; column-gap: 56px; }
 }
+/* From 900 px wide: the settings a rail beside the song, which moves over for it, and the card a
+   popover by its chord, placed in the page by the script (--pop-top, --pop-left). Both may be open. */
+@media screen and (min-width: 900px) {
+  .sheet-ui:not(.top) { visibility: visible; }
+  .sheet-ui.panel { top: 0; bottom: 0; left: auto; right: 0; width: var(--rail); max-width: none; max-height: none;
+    margin: 0; padding: 14px 20px calc(18px + env(safe-area-inset-bottom)); border: 0; border-left: 1px solid var(--border);
+    border-radius: 0; box-shadow: -2px 0 14px rgb(0 0 0 / .06); }
+  html[data-panel] body { padding-right: var(--rail); }
+  html[data-panel] .bar { right: var(--rail); }
+  html[data-panel] .pill { right: calc(var(--rail) + 16px); }
+  .sheet-ui.card { position: absolute; top: var(--pop-top, 0px); right: auto; bottom: auto; left: var(--pop-left, 0px);
+    width: 340px; height: auto; max-width: none; max-height: none; margin: 0; padding-bottom: 14px; overflow: visible;
+    border-bottom: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
+  .card #alts { flex-wrap: wrap; margin: 0; padding: 0; overflow: visible; }
+}
 @media print {
-  .fab, .scrim, .sheet-ui, .back, .strip, .foot, .noscript { display: none !important; }
+  .bar, .pill, .sheet-ui, .back, .strip, .foot, .noscript { display: none !important; }
   body { background: #fff; color: #000; }
   .page { max-width: none; padding: 0; }
   .c { color: #b4441e; }

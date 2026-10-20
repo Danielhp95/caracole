@@ -18,6 +18,8 @@ from caracole.viewer.theory import (
     map_chord,
     parse_chord,
     parse_key,
+    shapes_key,
+    sounding,
     spelling,
 )
 
@@ -434,3 +436,33 @@ def test_a_capo_hint_offers_open_chord_shapes_for_an_awkward_key(key, hints):
 def test_a_capo_hint_may_lower_or_take_off_the_sheets_capo(shapes, capo, hints):
     # The frets are where the capo goes (0: none), from the key the song sounds in.
     assert [(fret, key_name(k)) for fret, k in capo_hints(shapes, capo=capo)] == hints
+
+
+@pytest.mark.parametrize(
+    ("shapes", "capo", "sounds"),
+    [
+        (Key(4, "aeolian"), 2, "F#m"),  # Em shapes with capo 2, as Wonderwall is played
+        (Key(7, "ionian"), 0, "G"),  # no capo: the shapes' key
+        (Key(9, "ionian"), 3, "C"),
+        (Key(2, "dorian"), 11, "C# dorian"),
+    ],
+)
+def test_a_capo_raises_the_key_the_song_sounds_in(shapes, capo, sounds):
+    assert key_name(sounding(shapes, capo)) == sounds
+
+
+@pytest.mark.parametrize(
+    ("named", "capo", "played", "shapes"),
+    [
+        (Key(6, "ionian"), 6, ("C", "Em", "F", "G", "Am", "C"), "C"),  # F# with capo 6: the sound, in C shapes
+        (Key(0, "ionian"), 6, ("C", "Em", "F", "G", "Am", "C"), "C"),  # C with capo 6: the shapes
+        (Key(6, "aeolian"), 2, ("Em7", "G", "Dsus4", "A7sus4", "Cadd9", "Em7"), "Em"),  # F#m with capo 2
+        (Key(4, "aeolian"), 2, ("Em7", "G", "Dsus4", "A7sus4", "Cadd9", "Em7"), "Em"),
+        (Key(9, "ionian"), 2, ("Am", "E7", "G", "D", "F", "C", "Dm", "E7", "Am"), "A"),  # as named: not a capo off
+        (Key(6, "ionian"), 0, ("C", "F", "G", "C"), "F#"),  # no capo: as named
+        (Key(6, "ionian"), 6, (), "F#"),  # no chords to tell
+    ],
+)
+def test_a_tabs_key_with_a_capo_may_name_the_sound_rather_than_the_shapes(named, capo, played, shapes):
+    # Tabs name either: the chords fit the shapes' key.
+    assert key_name(shapes_key(named, capo, chords(*played))) == shapes

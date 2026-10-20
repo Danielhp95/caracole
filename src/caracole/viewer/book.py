@@ -41,6 +41,7 @@ from caracole.viewer.page import (
     _assets,
     _credit_notice,
     _data,
+    _facts,
     _sha256,
     _sheet_html,
     _song_key,
@@ -203,11 +204,6 @@ def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
     chords = [parse_chord(name, strict=False) for name in sheet.chords]
     key, origin = _song_key(sheet, chords, song.key, song.key_source)
     data = _data(sheet, chords, key, origin, song.transpose)
-    facts = []
-    if key is not None:
-        facts.append(f"Key <b>{escape(key_name(key))}</b> <span class=\"from\">{escape(origin or '')}</span>")
-    if sheet.capo:
-        facts.append(f"Capo <b>{sheet.capo}</b>")
     notice = (
         '<p class="notice">Auto-generated, unverified: caracole heard these chords in the recording.</p>\n'
         if sheet.auto else ""
@@ -220,7 +216,7 @@ def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
         + f'<p class="pos">Song {n} of {total}</p>\n'
         + f'<h2 class="title" id="title-{n}">{escape(song.title)}</h2>\n'
         + (f'<p class="artist">{escape(song.artist)}</p>\n' if song.artist else "")
-        + f'<p class="facts" id="facts-{n}">{" · ".join(facts)}</p>\n</header>\n'
+        + f'<p class="facts" id="facts-{n}">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
         + notice
         + f'<div class="strip" id="strip-{n}" hidden></div>\n'
         + f'<article class="sheet" id="sheet-{n}"{lang}>\n{_sheet_html(sheet)}</article>\n'

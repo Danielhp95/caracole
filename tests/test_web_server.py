@@ -186,12 +186,12 @@ def test_a_served_viewer_works_in_its_sandbox(cfg, conn, tmp_path):
             assert tab.eval("(() => { try { return document.cookie; } catch { return 'none'; } })()") == "none"
             assert tab.eval("document.querySelector('#panel').hidden") is True
             assert tab.eval(chord) == "G"
-            tab.click("#fab")  # the Key button
+            tab.click("#more")  # ⋯ in the bar
             assert tab.eval("document.querySelector('#panel').hidden") is False  # opens the settings
             tab.click("#up")  # Transpose: up a semitone, twice
             tab.click("#up")
             assert tab.eval(chord) == "A"
-            assert tab.eval("document.querySelector('#fab').textContent") == "Key A · +2"
+            assert tab.eval("document.querySelector('#key-full').textContent") == "Key A · +2"
     finally:
         server.shutdown()
         server.server_close()
@@ -205,7 +205,7 @@ def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
     server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
     url = f"http://127.0.0.1:{server.server_address[1]}/" + quote("Soda Stereo/De Música Ligera/sheet.html")
     chord = "document.querySelector('#sheet .c[data-c=\"0\"]').textContent"
-    fab = "document.querySelector('#fab').textContent"
+    key = "document.querySelector('#key-full').textContent"
     afresh = "window.before === undefined && document.documentElement.dataset.ready === '1'"  # a new page
     try:
         with Chromium(tmp_path / "profile") as browser:
@@ -213,21 +213,21 @@ def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
             tab.wait_for("document.documentElement.dataset.ready === '1'")
             assert tab.eval("location.hash") == ""  # nothing changed yet
             entries = tab.eval("history.length")
-            tab.click("#fab")
-            tab.click("#up")
-            tab.click("#up")
+            tab.click("#t-up")  # + in the bar, twice
+            tab.click("#t-up")
+            tab.click("#more")
             tab.eval("[...document.querySelectorAll('#modes .chip')].find((b) => "
                      "b.firstChild.textContent === 'Minor').click()")
             assert tab.eval("location.hash") == "#t=2&mode=aeolian"
             assert tab.eval("history.length") == entries  # replaced, not an entry per tap
             tab.eval("window.before = true; setTimeout(() => location.reload(), 0)")
             tab.wait_for(afresh)
-            assert tab.eval(chord) == "Am" and tab.eval(fab) == "Key Am · +2"
+            assert tab.eval(chord) == "Am" and tab.eval(key) == "Key Am · +2"
             tab.eval("document.querySelector('a.back').click()")  # to the library, and Back
             tab.wait_for("document.title === 'caracole library'")
             tab.eval("history.back()")
             tab.wait_for(afresh)
-            assert tab.eval(chord) == "Am" and tab.eval(fab) == "Key Am · +2"
+            assert tab.eval(chord) == "Am" and tab.eval(key) == "Key Am · +2"
             tab.eval("document.querySelector('#reset-all').click()")
             assert tab.eval("location.hash") == "" and tab.eval(chord) == "G"
     finally:
@@ -250,8 +250,8 @@ def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_pa
         with Chromium(tmp_path / "profile") as browser:
             tab = browser.open(url)
             tab.wait_for("document.documentElement.dataset.ready === '1'")  # its script ran
-            assert tab.eval("getComputedStyle(document.querySelector('#fab')).position") == "fixed"  # its style
-            tab.click("#fab")
+            assert tab.eval("getComputedStyle(document.querySelector('#bar')).position") == "fixed"  # its style
+            tab.click("#more")
             assert tab.eval("document.querySelector('#panel').hidden") is False
     finally:
         server.shutdown()
