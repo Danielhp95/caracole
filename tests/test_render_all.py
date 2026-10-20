@@ -1361,6 +1361,43 @@ def test_render_command_exits_1_when_a_sheet_fails(conn, cfg, fake_chordpro, cap
     assert "Unhandled fonts detected" in caplog.text
 
 
+@pytest.mark.slow
+def test_render_command_renders_one_song_with_song(conn, cfg, fake_chordpro):
+    # The step after a web pick's fetch: another song's sheet that fails is not its failure.
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, bad, tab_id=1)
+    assert caracole_render(cfg, fake_chordpro).exit_code == 1  # the night's render
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+
+    result = caracole_render(cfg, fake_chordpro, "--song", "Soda Stereo - De Música Ligera")
+
+    assert result.exit_code == 0, result.output
+    assert "1 rendered, 0 up to date, 0 failed" in result.output
+    assert pdf_of(cfg, good).is_file()
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Persiana Americana"]
+    unknown = caracole_render(cfg, fake_chordpro, "--song", "Soda Stereo - Zoom")
+    assert unknown.exit_code == 1 and 'No song "Soda Stereo - Zoom" in the library' in unknown.output
+
+
+def test_render_command_forces_one_songs_pdfs_alone(conn, cfg, fake_chordpro, monkeypatch):
+    import caracole.render
+    import caracole.songbook
+    from caracole.songbook import SongbookStats
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    calls = []
+    monkeypatch.setattr(caracole.render, "render_all", lambda conn, cfg, overrides, **kwargs: calls.append(
+        ("sheets", kwargs["force"], kwargs["song_ids"])) or RenderStats())
+    monkeypatch.setattr(caracole.songbook, "render_songbooks", lambda conn, cfg, overrides, *, force: calls.append(
+        ("songbooks", force)) or SongbookStats())
+
+    assert caracole_render(cfg, fake_chordpro, "--force", "--song", song.display).exit_code == 0
+    assert caracole_render(cfg, fake_chordpro, "--force").exit_code == 0
+
+    assert calls == [("sheets", True, {song.id}), ("songbooks", False), ("sheets", True, None), ("songbooks", True)]
+
+
 def test_render_command_a_missing_font_is_no_failure(conn, cfg, fake_chordpro, caplog):
     song = add_song(conn, "宋冬野", "斑马斑马")
     human_sheet(conn, cfg, song, ZH_SHEET, tonality="")

@@ -11,7 +11,7 @@ process for the whole lookup, whose JSON lines become the job's ``stages``
 (get.py's: the song, the match, the sheet, ...), its song and the library files
 it can be read in, and stay out of the step's output; the card's line is then
 the running stage's (status.py). A pick from a song's picker that asks for a
-fetch adds ``caracole fetch --song`` and ``caracole render`` (offline) after its
+fetch adds ``caracole fetch --song`` and ``caracole render --song`` (offline) after its
 ``caracole review`` (``fetch_steps``). Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
@@ -157,7 +157,7 @@ def fetch_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
     return [
         ("Looking it up", ("match",)),
         ("Fetching from Ultimate Guitar", ("fetch", f"--song={display}")),
-        ("Rendering the sheet", ("render",)),
+        ("Rendering the sheet", ("render", f"--song={display}")),
     ]
 
 

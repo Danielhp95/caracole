@@ -632,7 +632,7 @@ Make the token with `openssl rand -base64 24` and store it with
   its next pause; it keeps the budgets, and leaves a site alone while it cools
   down. A pick runs `caracole review --song` first, which writes overrides.toml
   in the library, under the same lock, then, asked to fetch, `caracole fetch
-  --song` and `caracole render`, at the nightly pace. The song's card says how
+  --song` and `caracole render --song`, at the nightly pace. The song's card says how
   it goes, on one line; `/jobs` keeps what each command printed, at `-v`.
 
 ## Logs

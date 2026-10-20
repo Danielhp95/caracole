@@ -1056,8 +1056,9 @@ and cache.
   `_inbox` is a link itself, it is refused the same way, and nothing in the
   folder it points at is read, filed or deleted. The nightly run's scan line
   ends with the same count (`, 1 symbolic link refused`).
-- **`caracole render [--force]`** writes `sheet.cho`, `sheet.pdf` and
-  `sheet.html` next to every kept sheet, transposed as `[transpose]` says.
+- **`caracole render [--force] [--song "ARTIST - TITLE"]`** writes
+  `sheet.cho`, `sheet.pdf` and `sheet.html` next to every kept sheet, or the
+  one song's with `--song`, transposed as `[transpose]` says.
   The PDF has the artist, the key and the capo on one line under the title
   ("Soda Stereo · Key Bm · Capo 2"), the chord diagrams above the song, bold
   chords in rust over the lyrics, and section names on a light band.
@@ -1066,7 +1067,10 @@ and cache.
   sheet, its transposition, the font or caracole's PDF style changes, or when
   it is no longer the PDF caracole wrote: deleted, cut short, edited, or a
   link in its place. So annotate a copy, not `sheet.pdf`. `--force` makes them
-  all again. After an upgrade from a caracole that didn't record what it
+  all again (the song's alone, with `--song`). With `--song`, as after a pick
+  in `caracole serve`, only that song's failure counts: another sheet that
+  fails, or waits for a font, is not its own, and the to-do page keeps telling
+  of the last render of the library. After an upgrade from a caracole that didn't record what it
   wrote, or that drew its PDFs another way, the first render makes every PDF
   once more. The viewer is written again whenever it would change, at every
   render. A song that no longer keeps its human sheet (its UG match was
@@ -1960,7 +1964,7 @@ with it. A KEY that is no key exits with status 2.
   which says "Writing the answer to overrides.toml…", then how the rest goes
   (below). With Fetch it now ticked,
   as it is by default, a pick then runs `caracole fetch --song` and
-  `caracole render`, at the nightly pace; None of these fetches nothing, and caracole goes on
+  `caracole render --song`, for that song alone, at the nightly pace; None of these fetches nothing, and caracole goes on
   looking for the song: if the matcher finds others, the song is back in
   review with those, and its card offers them to pick from, with no Fetch now
   until one is picked. The candidates must still be the ones the page showed
