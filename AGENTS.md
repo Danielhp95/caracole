@@ -85,7 +85,9 @@ and `search --key`).
   gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7
   and Power Tab files (a format's magic header, then filler). helpers/musescore_site.py
   is `FakeMuseScore`, its song sitemaps and the challenge Cloudflare answers caracole
-  with (`challenge()`). fixtures/ holds UG, LaCuerda, LRCLIB, gtptabs.com, MuseScore and
+  with (`challenge()`). helpers/browser.py is `Browser`, a headless Chromium driven over
+  the DevTools protocol on two pipes (type, press Enter, click, read the layout back), for
+  the lookup page's tests. fixtures/ holds UG, LaCuerda, LRCLIB, gtptabs.com, MuseScore and
   ChordPro samples: real response shapes, trimmed, and synthetic lyrics, sheets and files.
 - `nix/`: package.nix (`buildPythonApplication`; the wrapper puts `chordpro` on PATH and
   defaults `CARACOLE_CJK_FONT`; `withAutochords` adds the extra and the model files),
@@ -112,7 +114,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html` in a real browser (test_library_page.py) | neither |
+| `chromium` on PATH | `index.html` and the lookup page in a real browser (test_library_page.py, test_web_lookup_page.py) | neither |
 
 Before a change is done:
 

@@ -2,12 +2,17 @@
 
 It searches your library and the offline Ultimate Guitar index as you type
 (``GET /api/search``, a few milliseconds a query on a full index), so finding
-a song costs no request to any site. Picking a song, or one of its versions,
-looks it up now (``POST /lookup``: one ``caracole get``, which records the
-pick in overrides.toml), and the page follows the request
-(``GET /api/jobs/<id>``) stage by stage: the sheet shows the moment it is
-kept, then the PDF, the lyrics and the rest arrive. A song of your library
-with a sheet opens at once, with no request at all.
+a song costs no request to any site. Enter picks the first result of the
+query typed, never of an older one still on the screen. Picking a song, or
+one of its versions, looks it up now (``POST /lookup``: one ``caracole get``,
+which records the pick in overrides.toml; a song your library has, under any
+name, is posted as that song, by its id), and the page follows the request
+(``GET /api/jobs/<id>``) stage by stage, the results set aside so that it sits
+under the search box: the sheet shows the moment it is kept, scrolled into
+view once, then the PDF, the lyrics and the rest arrive. The progress line
+says what the running stage waits for, and the reasons of the stages left are
+listed, not hidden in tooltips. A song of your library with a sheet opens at
+once, with no request at all.
 
 Like index.html it builds every element with ``createElement`` and
 ``textContent``, never ``innerHTML``: names come from UG's slugs and your own
@@ -46,8 +51,15 @@ details.by-name { margin: 22px 0 0; }
 details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 600; cursor: pointer; }
 .by-name form { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: 1fr; }
 .reader { margin: 22px 0 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 16px;
-  background: var(--surface); box-shadow: var(--shadow); }
+  background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: var(--bar, 112px); }
+.reader-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
 .reader h2 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
+.version { display: inline-flex; align-items: center; gap: 4px; }
+.on-ug { color: var(--muted); font-size: .78rem; }
+details.why { margin: 0 0 10px; color: var(--muted); font-size: .85rem; }
+details.why summary { cursor: pointer; }
+details.why ul { margin: 6px 0 0; padding-left: 1.2em; }
+details.why li.failed { color: var(--failed); }
 .said { margin: 4px 0 10px; color: var(--muted); font-size: .9rem; }
 .stages { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
 .stage { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px;
@@ -70,17 +82,26 @@ SCRIPT = r"""
 const root = document.getElementById("lookup");
 const csrf = root.dataset.csrf;
 const q = document.getElementById("q");
+const bar = document.querySelector(".search");
 const status = document.getElementById("status");
 const results = document.getElementById("results");
+const byName = document.getElementById("by-name-box");
 const reader = document.getElementById("reader");
 // The reader's parts stay the same nodes: only the progress line is a live region, read out as it changes.
 const heading = document.getElementById("reader-title");
+const backToResults = document.getElementById("back");
 const saying = document.getElementById("said");
 const stageList = document.getElementById("stages");
+const whyBox = document.getElementById("why");
+const whyList = document.getElementById("why-list");
 const fileLinks = document.getElementById("files");
 const sheetText = document.getElementById("sheet");
 const MIN = 3;
+const KINDS = {"chords": "Chords", "tabs": "Tab", "guitar-pro": "Guitar Pro", "power": "Power Tab"};
 let typed = 0, inflight = null, timer = null, polling = null, shown = "", lastStages = "";
+let shownFor = null;  // the query the results on the screen answer
+let enterFor = null;  // a query Enter was pressed for before its results came: its first one is picked then
+let scrolled = false;  // the sheet was brought into view once already
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -91,9 +112,11 @@ function el(tag, cls, text) {
 function href(path) { return "/" + path.split("/").map(encodeURIComponent).join("/"); }
 function letters(s) { return (s.match(/[\p{L}\p{N}]/gu) || []).length; }
 function han(s) { return /\p{Script=Han}/u.test(s); }
-function button(label, cls, onclick) {
+function typedText() { return q.value.trim().replace(/\s+/g, " "); }
+function button(label, cls, onclick, aria) {
   const b = el("button", "btn " + (cls || "small"), label);
   b.type = "button";
+  if (aria) b.setAttribute("aria-label", aria);
   b.addEventListener("click", onclick);
   return b;
 }
@@ -101,13 +124,16 @@ function counts(c) {
   const names = {"chords": "chords", "tabs": "tabs", "guitar-pro": "Guitar Pro", "power": "Power Tab"};
   return Object.entries(c).map(([k, n]) => n + " " + (names[k] || k)).join(" · ");
 }
+// The sticky search box covers the top of the page: what is scrolled into view lands below it.
+function measureBar() { document.documentElement.style.setProperty("--bar", Math.ceil(bar.offsetHeight + 8) + "px"); }
 
 // --- searching ------------------------------------------------------------------------------
 
 function search() {
-  const text = q.value.trim().replace(/\s+/g, " ");
+  const text = typedText();
   if (letters(text) < (han(text) ? 2 : MIN)) {
     results.replaceChildren();
+    shownFor = null;
     status.textContent = text ? "Keep typing…" : "";
     return;
   }
@@ -120,12 +146,13 @@ function search() {
     .then(data => {
       if (mine !== typed) return;
       if (data.superseded) { timer = setTimeout(search, 150); return; }
-      show(data);
+      if (data.error) { status.textContent = data.error; return; }  // the database, or signing in
+      show(data, text);
     })
     .catch(e => { if (e.name !== "AbortError") status.textContent = "The search failed: " + e.message; });
 }
 
-function show(data) {
+function show(data, text) {
   results.replaceChildren();
   const n = data.library.length + data.index.length;
   status.textContent = n ? "" : "Nothing matches.";
@@ -142,15 +169,23 @@ function show(data) {
     results.append(list);
   }
   if (data.hint) results.append(el("p", "hint", data.hint));
+  shownFor = text;
+  if (enterFor === text) { enterFor = null; pickFirst(); }
+}
+
+function pickFirst() {
+  const first = results.querySelector("button.primary");
+  if (first) first.click();
 }
 
 function librarySong(s) {
   const li = el("li", "hit"), head = el("div", "hit-head"), names = el("div", "names"), acts = el("div", "acts");
   names.append(el("div", "title", s.title), el("div", "artist", s.artist));
   head.append(names, el("span", "badge " + s.status, s.status));
-  if (s.files.sheet) acts.append(button("Read", "small primary", () => read(s.display, s.files)));
-  acts.append(button(s.files.sheet ? "Fetch again" : "Get it now", "small",
-                     () => lookUp({artist: s.artist, title: s.title}, s.display)));
+  if (s.files.sheet) acts.append(button("Read", "small primary", () => read(s.display, s.files), "Read " + s.display));
+  const again = s.files.sheet ? "Fetch again" : "Get it now";
+  acts.append(button(again, "small", () => lookUp({song: s.id}, s.display),
+                     s.files.sheet ? "Fetch " + s.display + " again" : "Get " + s.display + " now"));
   head.append(acts);
   li.append(head);
   return li;
@@ -160,23 +195,35 @@ function ugSong(h) {
   const li = el("li", "hit"), head = el("div", "hit-head"), names = el("div", "names"), acts = el("div", "acts");
   names.append(el("div", "title", h.title), el("div", "artist", h.artist), el("div", "counts", counts(h.counts)));
   head.append(names);
-  acts.append(button(h.song ? "Get it again" : "Get it", "small primary",
-                     () => lookUp({artist: h.artist, title: h.title, ug: h.ug}, h.artist + " - " + h.title)));
+  // A song your library has (under its own names, maybe): looked up as that song, never as a second one.
+  const mine = h.library;
+  const display = mine ? mine.display : h.artist + " - " + h.title;
+  const pick = extra => Object.assign(mine ? {song: mine.id} : {artist: h.artist, title: h.title}, {ug: h.ug}, extra);
+  acts.append(button(mine ? "Get it again" : "Get it", "small primary", () => lookUp(pick({}), display),
+                     (mine ? "Get " + display + " again" : "Get " + display) + " from Ultimate Guitar"));
   const versions = el("ul", "versions");
   versions.hidden = true;
+  const nth = {};
   for (const t of h.tabs) {
-    const name = (t.type === "guitar-pro" ? "Guitar Pro" : t.type === "power" ? "Power Tab" : t.type)
-      + (t.label ? " · " + t.label : "") + " #" + t.id;
-    const item = el("li");
-    item.append(button(name, "small", () => lookUp({artist: h.artist, title: h.title, ug: h.ug, tab: t.url},
-                                                     h.artist + " - " + h.title)));
+    // Numbered within its kind, in the index's order (no ratings there): "Chords 2 of 13 · acoustic".
+    nth[t.type] = (nth[t.type] || 0) + 1;
+    const kind = KINDS[t.type] || t.type;
+    const name = kind + " " + nth[t.type] + " of " + (h.counts[t.type] || nth[t.type]) + (t.label ? " · " + t.label : "");
+    const item = el("li", "version");
+    item.append(button(name, "small", () => lookUp(pick({tab: t.url}), display), "Get " + name + ", " + display));
+    const ug = el("a", "on-ug", "on UG");
+    ug.href = t.url;
+    ug.target = "_blank";
+    ug.rel = "noopener noreferrer";
+    ug.setAttribute("aria-label", name + ", " + display + ", on Ultimate Guitar");
+    item.append(ug);
     versions.append(item);
   }
   if (h.tabs.length) {
     const toggle = button("Versions", "small", () => {
       versions.hidden = !versions.hidden;
       toggle.setAttribute("aria-expanded", String(!versions.hidden));
-    });
+    }, "Versions of " + display);
     toggle.setAttribute("aria-expanded", "false");
     acts.append(toggle);
   }
@@ -185,41 +232,87 @@ function ugSong(h) {
   return li;
 }
 
-q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, 120); });
+q.addEventListener("input", () => {
+  enterFor = null;
+  expand();
+  clearTimeout(timer);
+  timer = setTimeout(search, 120);
+});
 q.addEventListener("keydown", e => {
   if (e.key !== "Enter") return;
-  const first = results.querySelector("button.primary");
-  if (first) { e.preventDefault(); first.click(); }
+  e.preventDefault();
+  if (results.hidden) { expand(); return; }  // after a pick: the results again, not the pick again
+  const text = typedText();
+  if (text === shownFor) { pickFirst(); return; }
+  // The results on the screen answer an older query: search now, and pick the first of its answer.
+  enterFor = text;
+  clearTimeout(timer);
+  search();
 });
+
+// While a sheet is read the results step aside, so it sits right under the search box; typing brings them back.
+function collapse() {
+  results.hidden = true;
+  byName.hidden = true;
+  backToResults.hidden = !results.childElementCount;
+}
+function expand() {
+  if (!results.hidden) return;
+  results.hidden = false;
+  byName.hidden = false;
+  backToResults.hidden = true;
+}
+backToResults.addEventListener("click", () => { expand(); window.scrollTo({top: 0}); q.focus(); });
 
 // --- looking up, and reading -----------------------------------------------------------------
 
 function lookUp(pick, display) {
-  const body = new URLSearchParams({csrf, artist: pick.artist, title: pick.title});
-  if (pick.ug) body.set("ug", pick.ug);
-  if (pick.tab) body.set("tab", pick.tab);
+  const body = new URLSearchParams({csrf});
+  for (const name of ["song", "artist", "title", "ug", "tab"]) if (pick[name]) body.set(name, pick[name]);
   openReader(display, "Asking for it…");
   fetch("/lookup", {method: "POST", body, headers: {"Accept": "application/json"}})
-    .then(r => r.json().then(data => ({ok: r.ok, data})))
-    .then(({ok, data}) => {
-      if (!ok) { said(data.error || "caracole refused it."); return; }
+    .then(r => r.text().then(text => ({r, text})))
+    .then(({r, text}) => {
+      let data = null;
+      try { data = JSON.parse(text); } catch (e) { data = null; }
+      if (!r.ok || !data) { refused(r.status, data, text); return; }
       history.replaceState(null, "", "/lookup?job=" + data.job);
       follow(data.url);
     })
     .catch(e => said("The request failed: " + e.message));
 }
 
+// A refusal: its sentence; a page's, as its text. A form token older than the server, or signing in, needs a reload.
+function refused(code, data, text) {
+  let why = data && data.error;
+  if (!why) {
+    const page = new DOMParser().parseFromString(text || "", "text/html");
+    const words = (page.querySelector("main, .page, body") || page.documentElement).textContent || "";
+    why = words.replace(/\s+/g, " ").trim().slice(0, 240) || "caracole answered " + code + ".";
+  }
+  said(why);
+  if ((data && data.reload) || code === 401 || code === 403) {
+    const again = el("a", "btn small primary", "Reload the page");
+    again.href = location.pathname + location.search;
+    fileLinks.replaceChildren(again);
+  }
+}
+
 function openReader(display, words) {
+  collapse();
   reader.hidden = false;
   heading.textContent = display;
   saying.textContent = words;
   stageList.replaceChildren();
+  whyList.replaceChildren();
+  whyBox.hidden = true;
   fileLinks.replaceChildren();
   sheetText.textContent = "";
   sheetText.hidden = true;
-  shown = ""; lastStages = "";
+  shown = ""; lastStages = ""; scrolled = false;
   if (polling) clearTimeout(polling);
-  reader.scrollIntoView({block: "start", behavior: "smooth"});
+  measureBar();
+  reader.scrollIntoView({block: "start"});
 }
 function said(words) { if (saying.textContent !== words) saying.textContent = words; }
 
@@ -233,6 +326,8 @@ function follow(url) {
     .catch(e => said(e.message));
 }
 
+function doing(stage) { return stage.detail ? stage.label + ": " + stage.detail : stage.label + "…"; }
+
 function progress(job) {
   if (job.song) heading.textContent = job.song.display;
   stageList.replaceChildren();
@@ -241,15 +336,19 @@ function progress(job) {
     if (s.detail) li.title = s.detail;
     stageList.append(li);
   }
+  // What was left, and why, where touch and keys reach it too (a title shows on hovering alone).
+  const why = job.steps.filter(s => s.detail && (s.state === "skipped" || s.state === "failed"));
+  whyList.replaceChildren(...why.map(s => el("li", s.state, s.label + ": " + s.detail)));
+  whyBox.hidden = !why.length;
   const running = job.steps.find(s => s.state === "running");
   if (job.files.sheet) {
     said(job.active ? "Here it is" + (job.seconds_to_sheet !== null ? ", in " + job.seconds_to_sheet.toFixed(1) + " s" : "")
          + (running ? "; still getting: " + running.label.toLowerCase() : "") : "Done.");
   } else if (job.active) {
-    said(job.state === "queued" ? "Waiting for the request before it…" : (running ? running.label + "…" : "Working…"));
+    said(job.state === "queued" ? "Waiting for the request before it…" : (running ? doing(running) : "Working…"));
   } else {
-    const why = job.steps.filter(s => s.detail && s.state !== "done").map(s => s.label + ": " + s.detail);
-    said("No sheet this time. " + why.join(" "));
+    const failed = job.steps.filter(s => s.detail && s.state !== "done").map(s => s.label + ": " + s.detail);
+    said("No sheet this time. " + failed.join(" "));
   }
   const now = job.steps.map(s => s.state).join(",");
   links(job.files);
@@ -277,6 +376,10 @@ function sheet(path) {
     shown = text;
     sheetText.textContent = text;
     sheetText.hidden = false;
+    if (!scrolled) {  // once, the moment it can be read, laid out: later sheets leave your place alone
+      scrolled = true;
+      requestAnimationFrame(() => { measureBar(); reader.scrollIntoView({block: "start"}); });
+    }
   }).catch(() => {});
 }
 
@@ -295,6 +398,8 @@ document.getElementById("by-name").addEventListener("submit", e => {
   if (artist && title) lookUp({artist, title}, artist + " - " + title);
 });
 
+window.addEventListener("resize", measureBar);
+measureBar();
 const params = new URLSearchParams(location.search);
 const job = params.get("job");
 if (job && /^\d+$/.test(job)) { openReader("Your request", "Following it…"); follow("/api/jobs/" + job); }
@@ -326,7 +431,7 @@ _BODY = """<body>
   <p class="status" id="status" aria-live="polite"></p>
 </div>
 <div id="results"></div>
-<details class="by-name">
+<details class="by-name" id="by-name-box">
   <summary>Not in the list? Look it up by name</summary>
   <form id="by-name" method="post" action="/lookup">
     <input type="hidden" name="csrf" value="__CSRF__">
@@ -336,9 +441,16 @@ _BODY = """<body>
   </form>
 </details>
 <section class="reader" id="reader" aria-labelledby="reader-title" hidden>
-  <h2 id="reader-title"></h2>
+  <div class="reader-head">
+    <h2 id="reader-title"></h2>
+    <button class="btn small" id="back" type="button" hidden>Back to the results</button>
+  </div>
   <p class="said" id="said" role="status" aria-live="polite"></p>
   <ul class="stages" id="stages"></ul>
+  <details class="why" id="why" hidden>
+    <summary>What was left, and why</summary>
+    <ul id="why-list"></ul>
+  </details>
   <div class="files" id="files"></div>
   <pre class="sheet" id="sheet" hidden></pre>
 </section>

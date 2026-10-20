@@ -1153,14 +1153,28 @@ with it. A KEY that is no key exits with status 2.
   milliseconds a query; see [caracole search](#caracole-search)), asking no
   site anything. A search you type over stops at once, so a slow one (a very
   common word, "the" on the way to "the beatles") never holds up the next.
-  Pick a song with Get it, or one of its versions (Versions
-  lists its chords, tabs and Guitar Pro pages by id): it is looked up at once,
+  Pick a song with Get it (Enter picks the first result of what you typed,
+  once its results are in), or one of its versions (Versions numbers its
+  chords, tabs and Guitar Pro pages within each kind, "Chords 2 of 13", each
+  with an "on UG" link to look at it there first): it is looked up at once,
   as `caracole get --ug … [--tab …]` does it, and the song or tab you picked
   is recorded in overrides.toml (`[match]`, `[pin]`), so nothing waits for a
-  review. The page follows the request stage by stage and shows the sheet the
-  moment it is kept, then links its PDF; the lyrics and the rest fill in after.
-  A song of your library with a sheet opens at once (Read). "Not in the list?"
-  looks a song up by its name. `/lookup?q=WORDS` opens it with that search.
+  review. A version picked while the song's lookup still runs is looked up
+  right after it. The results then step aside and the page follows the request
+  stage by stage, right under the search box: it says what each stage waits
+  for, shows the sheet the moment it is kept (and brings it into view once),
+  then links its PDF; the lyrics and the rest fill in after, and "What was
+  left, and why" lists the stages skipped or failed with their reasons. Typing
+  again, or Back to the results, brings the results back.
+  An Ultimate Guitar song your library has already, under its own names
+  (UG's slugs write AC/DC as "Acdc" and 宋冬野 as "Song Dongye"), says Get it
+  again and is looked up as your song: no second song, and no line added to
+  wanted.txt. Nor does Get it now or Fetch again on a song of your library add
+  one, so a song from Spotify alone stays Spotify's. A song of your library
+  with a sheet opens at once (Read). "Not in the list?" looks a song up by its
+  name. `/lookup?q=WORDS` opens it with that search. A page left open across a
+  restart of the server says to reload it, since its form token is no longer
+  the server's.
 - **Request a song.** The form at the top takes an artist, a title and,
   optionally, the album and the length. The song goes into wanted.txt at once,
   as `caracole add ARTIST TITLE` writes it (a song listed already is left as
