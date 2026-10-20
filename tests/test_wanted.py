@@ -531,3 +531,66 @@ def test_sync_reads_a_file_written_by_append(tmp_path):
     stats, up = sync(path)
     assert stats == SyncStats(seen=1, new=1)
     assert up.calls[0]["source_id"] == "宋冬野/斑马斑马"
+
+
+# --- taking a song out (caracole remove) -------------------------------------------------------
+
+
+def test_removing_a_song_takes_out_its_every_line_and_keeps_the_rest_byte_for_byte(tmp_path):
+    from caracole.wanted import remove_wanted, wanted_lines
+
+    path = tmp_path / "wanted.txt"
+    before = (b"# my songs\r\n"
+              b"Radiohead - Creep\r\n"
+              b"\r\n"
+              b"Soda Stereo - De M\xc3\xbasica Ligera   # the live one\r\n"
+              b"not utf-8 \xff\r\n"
+              b"Soda Stereo - De Musica Ligera | Cancion Animal\r\n"
+              b"Radiohead - Creep (Acoustic) | Pablo Honey\r\n"
+              b"broken line\r\n"
+              b"Soda Stereo - Signos")
+    path.write_bytes(before)
+    key = "soda-stereo/de-musica-ligera"
+    assert wanted_lines(path, key) == [4, 6]
+    assert path.read_bytes() == before  # only read
+    assert remove_wanted(path, key) == [4, 6]
+    assert path.read_bytes() == (b"# my songs\r\nRadiohead - Creep\r\n\r\nnot utf-8 \xff\r\n"
+                                 b"Radiohead - Creep (Acoustic) | Pablo Honey\r\nbroken line\r\nSoda Stereo - Signos")
+    assert remove_wanted(path, "radiohead/creep") == [2, 5]  # "(Acoustic)" is a version of it
+    assert remove_wanted(path, "soda-stereo/signos") == [5]
+    assert path.read_bytes() == b"# my songs\r\n\r\nnot utf-8 \xff\r\nbroken line\r\n"
+
+
+def test_removing_a_song_wanted_txt_doesnt_list_leaves_the_file_as_it_was(tmp_path):
+    from caracole.wanted import remove_wanted
+
+    path = tmp_path / "wanted.txt"
+    path.write_text("Oasis - Wonderwall\n", encoding="utf-8")
+    inode = path.stat().st_ino
+    assert remove_wanted(path, "radiohead/creep") == []
+    assert path.stat().st_ino == inode  # not rewritten: nothing for Syncthing to sync
+    assert remove_wanted(tmp_path / "missing.txt", "radiohead/creep") == []
+    assert not (tmp_path / "missing.txt").exists()
+
+
+def test_removing_the_first_line_keeps_the_files_byte_order_mark(tmp_path):
+    from caracole.wanted import remove_wanted
+
+    path = tmp_path / "wanted.txt"
+    path.write_bytes("﻿Radiohead - Creep\nOasis - Wonderwall\n".encode())
+    assert remove_wanted(path, "radiohead/creep") == [1]
+    assert path.read_bytes() == "﻿Oasis - Wonderwall\n".encode()
+    assert parse_wanted(path.read_text(encoding="utf-8"))[0][0].title == "Wonderwall"
+
+
+def test_removing_refuses_a_symlinked_file(tmp_path, secret):
+    from caracole.wanted import remove_wanted, wanted_lines
+
+    path = tmp_path / "wanted.txt"
+    secret.write_text("Radiohead - Creep\n", encoding="utf-8")
+    path.symlink_to(secret)
+    with pytest.raises(OSError, match="symbolic link"):
+        wanted_lines(path, "radiohead/creep")
+    with pytest.raises(OSError, match="symbolic link"):
+        remove_wanted(path, "radiohead/creep")
+    assert secret.read_text(encoding="utf-8") == "Radiohead - Creep\n" and path.is_symlink()

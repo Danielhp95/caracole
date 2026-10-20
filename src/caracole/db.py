@@ -6,6 +6,8 @@ Tables (plan §5, plus ``kv``):
 - ``ug_index``: the local Ultimate Guitar index, built from sitemaps.
 - ``gtptabs_index``: the pages gtptabs.com's sitemaps list, its artists and songs (schema 2).
 - ``musescore_index``: the song pages MuseScore's sitemaps list, by title (schema 3).
+- ``removed``: the songs ``caracole remove`` took out, which no source brings back
+  until you ask for them again (schema 4).
 - ``versions``: every sheet, tab or Guitar Pro version seen for a song.
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
@@ -20,7 +22,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -152,9 +154,23 @@ CREATE INDEX IF NOT EXISTS musescore_index_title ON musescore_index(title_key);
 CREATE INDEX IF NOT EXISTS musescore_index_sitemap ON musescore_index(sitemap);
 """
 
+# The songs `caracole remove` took out (removal.py): one row per song, under the identity key
+# it had, with its display artist and title (to re-key it, as songs are re-keyed) and the
+# source ids it had then, as songs.source_ids holds them. songs.upsert_song brings none of them
+# back but for a wanted.txt line, or a Spotify track added after removed_at.
+_SCHEMA_V4 = """
+CREATE TABLE IF NOT EXISTS removed (
+  key TEXT PRIMARY KEY,
+  artist TEXT NOT NULL,
+  title TEXT NOT NULL,
+  source_ids TEXT NOT NULL DEFAULT '{}',
+  removed_at TEXT NOT NULL
+);
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
-_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3}
+_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

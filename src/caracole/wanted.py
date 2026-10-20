@@ -24,7 +24,8 @@ the library folder, so Syncthing carries it to your phone. One song per line:
   for Spotify's to take its place. A song on two lines is its first line; a
   later one only fills in what the first leaves out.
 - Deleting a line doesn't delete the song from caracole, just as unliking a track
-  on Spotify doesn't.
+  on Spotify doesn't. ``caracole remove`` does, and takes the song's lines out
+  (``remove_wanted``); a line for it written again later brings it back.
 - The file must be a regular file. Others can write to the library, so a
   symbolic link is refused rather than followed (it could point at caracole's
   credentials, and a bad line is quoted on the to-do page).
@@ -32,6 +33,7 @@ the library folder, so Syncthing carries it to your phone. One song per line:
 
 from __future__ import annotations
 
+import codecs
 import os
 import re
 import sqlite3
@@ -40,7 +42,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
-from caracole.library import NotRegularFile, open_regular, read_regular
+from caracole.library import NotRegularFile, open_regular, read_regular, write_atomic
 from caracole.normalize import identity_key
 from caracole.sources import (
     KvGet,
@@ -72,7 +74,7 @@ HEADER = r"""# caracole: the songs you want to learn, one per line.
 #
 # A # starts a comment, at the start of a line or after a space. Write \# for a
 # # that is part of a name (John Lennon - \#9 Dream), and \| for a |.
-# Deleting a line doesn't delete the song from caracole.
+# Deleting a line doesn't delete the song from caracole: caracole remove does.
 
 """
 
@@ -225,6 +227,63 @@ def append_wanted(
     with open(fd, "a", encoding="utf-8", newline="") as f:
         f.write(lead + text + newline)
     return replace(wanted, line_no=(existing + lead).count("\n") + 1)
+
+
+def wanted_lines(path: Path, key: str) -> list[int]:
+    """The numbers of the lines of wanted.txt that hold the song with this identity key.
+
+    [] when the file doesn't exist; NotRegularFile (an OSError) for a symbolic link.
+    """
+    try:
+        data = read_regular(Path(path))
+    except FileNotFoundError:
+        return []
+    return _without(data, key)[1]
+
+
+def remove_wanted(path: Path, key: str, *, tries: int = 3) -> list[int]:
+    """Take every line that holds the song with this identity key out of wanted.txt; return their numbers.
+
+    The rest of the file stays byte for byte: comments, blank lines, lines
+    caracole can't read, the newline style and a byte order mark. A file with no
+    such line is left as it was, and a missing one isn't created. The new text
+    goes through ``library.write_atomic``, once the file reads as it did when it
+    was read: what a device or ``caracole serve`` appended meanwhile is read
+    again, ``tries`` times. NotRegularFile (an OSError) for a symbolic link.
+    """
+    path = Path(path)
+    for _ in range(tries):
+        try:
+            data = read_regular(path)
+        except FileNotFoundError:
+            return []
+        text, removed = _without(data, key)
+        if not removed:
+            return []
+        if read_regular(path) == data:
+            write_atomic(path, text)
+            return removed
+    raise OSError(f"{path} kept changing while caracole took a line out of it; try again")
+
+
+def _without(data: bytes, key: str) -> tuple[bytes, list[int]]:
+    """The file's bytes without the lines of the song with this key, and those lines' numbers."""
+    bom = data.startswith(codecs.BOM_UTF8)
+    body = data[len(codecs.BOM_UTF8):] if bom else data
+    kept: list[bytes] = []
+    removed: list[int] = []
+    for line_no, piece in enumerate(re.split(rb"(?<=\n)", body), start=1):
+        if not piece:  # after a final newline
+            continue
+        try:
+            line = _parse_line(piece.decode("utf-8").rstrip("\n").rstrip("\r"), line_no)
+        except (UnicodeDecodeError, _LineError):
+            line = None
+        if line is not None and line.identity == key:
+            removed.append(line_no)
+        else:
+            kept.append(piece)
+    return (codecs.BOM_UTF8 if bom else b"") + b"".join(kept), removed
 
 
 def sync_wanted(

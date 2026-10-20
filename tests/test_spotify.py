@@ -424,6 +424,29 @@ def test_a_track_without_added_at_is_not_restamped_by_later_runs(conn):
     ]
 
 
+def test_a_removed_song_stays_out_until_you_add_it_on_spotify_again(conn):
+    # caracole remove left a tombstone; your Liked Songs and Learn still list the tracks.
+    from caracole.songs import list_removed, list_songs, mark_removed
+
+    cfg = spotify(playlists=(LEARN,), suggest_top_tracks=False)
+    sync_spotify(conn, FakeSpotify(saved=[saved(SODA, "2026-01-01T00:00:00Z")],
+                                   items={LEARN: [entry(CREEP, "2026-02-01T00:00:00Z")]}), cfg, NOW)
+    for song in list_songs(conn):
+        mark_removed(conn, song, "2026-10-10T00:00:00Z")
+    conn.execute("DELETE FROM songs")
+
+    sp = FakeSpotify(saved=[saved(SODA, "2026-01-01T00:00:00Z")],
+                     items={LEARN: [entry(CREEP, "2026-02-01T00:00:00Z"), entry(BANMA, "2026-10-11T00:00:00Z")]})
+    stats = sync_spotify(conn, sp, cfg, NOW)
+    assert (stats.seen, stats.new, stats.removed) == (1, 1, 2)
+    assert [s.title for s in list_songs(conn)] == ["斑马，斑马"]
+    # Put on Learn again after the removal, Creep comes back.
+    sp.items[LEARN].append(entry(CREEP, "2026-10-12T00:00:00Z"))
+    stats = sync_spotify(conn, sp, cfg, NOW)
+    assert (stats.seen, stats.new, stats.removed) == (2, 1, 1)
+    assert [r.display for r in list_removed(conn)] == ["Soda Stereo - De Música Ligera"]
+
+
 def test_liked_songs_can_be_left_out():
     sp = FakeSpotify(saved=[saved(SODA)], items={LEARN: [entry(CREEP)]})
     _, up, _ = sync(sp, spotify(liked_songs=False, playlists=(LEARN,), suggest_top_tracks=False))

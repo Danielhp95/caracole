@@ -26,7 +26,8 @@ card has its artist's monogram, in a colour of that artist's, and an A-Z strip
 jumps to the first card of a letter.
 
 ``caracole serve`` serves the same page with ``controls`` (``WebControls``): a
-form to request a song, a "Fetch now" button on each wanted song, and a CSP
+form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
+button on each card (the server asks before it removes anything), and a CSP
 that lets the forms post to the server (``form-action 'self'``). The file on
 disk has neither, and lets no form be sent.
 """
@@ -98,13 +99,16 @@ class WebControls:
     ``csrf`` is the token every form posts back; ``busy`` holds the songs with a
     fetch queued or running, whose cards say so instead of offering another;
     ``active`` is how many requests are queued or running, for the masthead;
-    ``held`` holds the songs a fetch must wait for a review of, whose cards say so.
+    ``held`` holds the songs a fetch must wait for a review of, whose cards say so;
+    ``removing`` holds the songs with a removal queued or running, whose cards
+    say so instead of offering Remove.
     """
 
     csrf: str
     busy: frozenset[int] = frozenset()
     active: int = 0
     held: frozenset[int] = frozenset()
+    removing: frozenset[int] = frozenset()
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
@@ -128,7 +132,8 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
         "songs": songs,
     }
     if controls is not None:
-        data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active}
+        data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
+                          "removing": sorted(controls.removing)}
         for song in songs:
             song["fetchable"] = song["id"] not in controls.held
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
@@ -533,6 +538,11 @@ _STYLE = BASE_STYLE + """
   text-align: center; }
 .more[open] > summary::before { transform: rotate(90deg); }
 .more > .subhead { margin: 8px 0 6px; }
+.foot { display: flex; justify-content: flex-end; margin-top: auto; }
+.more + .foot { margin-top: 0; }
+.foot form { margin: 0; }
+.btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.quiet:hover { border-color: var(--border); color: var(--failed); }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
 .empty-hint { margin: 0; color: var(--muted); }
 @media (min-width: 720px) {
@@ -576,6 +586,7 @@ _SCRIPT = r"""
   // Served by caracole serve: its forms' token, and the songs it is fetching already.
   const server = data.server && typeof data.server === "object" ? data.server : null;
   const busy = new Set(listOf(server && server.busy).map(Number));
+  const removing = new Set(listOf(server && server.removing).map(Number));
 
   // The same folding as caracole's normalize.fold: NFKD, no accents, a few letters spelled out, lowercase.
   const fold = (text) => {
@@ -710,6 +721,20 @@ _SCRIPT = r"""
     form.appendChild(go);
     return form;
   };
+  // Every card's "Remove…": caracole serve answers with what goes and what stays, and asks.
+  const removeForm = (s) => {
+    const form = el("form", "remove");
+    form.setAttribute("method", "post");
+    form.setAttribute("action", "/remove");
+    form.appendChild(hidden("csrf", String(server.csrf || "")));
+    form.appendChild(hidden("song", Number(s.id)));
+    const go = el("button", "btn small quiet", "Remove…");
+    go.type = "submit";
+    go.setAttribute("aria-label", "Remove " + String(s.title) + " by " + String(s.artist) + " from caracole");
+    go.title = "Delete its files and keep caracole from bringing it back; the next page asks first";
+    form.appendChild(go);
+    return form;
+  };
 
   let setArtist = () => {};
   const makeCard = (s) => {
@@ -790,6 +815,19 @@ _SCRIPT = r"""
       linkRow(more, "Find the chords", listOf(s.links), "btn small");
       linkRow(more, "Buy the track for an auto sheet", listOf(s.buy), "btn small");
       card.appendChild(more);
+    }
+    if (server) {
+      const foot = el("div", "foot");
+      if (removing.has(Number(s.id))) {
+        const note = el("p", "busy", "Removing… ");
+        const jobs = el("a", null, "see the requests");
+        jobs.href = "/jobs";
+        note.appendChild(jobs);
+        foot.appendChild(note);
+      } else {
+        foot.appendChild(removeForm(s));
+      }
+      card.appendChild(foot);
     }
     return card;
   };

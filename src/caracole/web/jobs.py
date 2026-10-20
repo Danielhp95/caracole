@@ -89,6 +89,14 @@ def fetch_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
     ]
 
 
+REMOVING = "remove:"  # a removal's song_key: the song's key after it, so it never joins the song's add or fetch
+
+
+def remove_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
+    """``caracole remove --yes``: the page asked already, and showed what goes."""
+    return [("Remove from caracole", ("remove", "--yes", "--", display))]
+
+
 class JobQueue:
     """Jobs in order, run by one worker thread (``start``), or by ``run_pending`` in tests."""
 

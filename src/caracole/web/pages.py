@@ -37,6 +37,12 @@ pre { max-height: 22rem; margin: 6px 0 0; padding: 10px; overflow: auto; border-
   border-radius: 16px; background: var(--surface); }
 .error { margin: 0; color: var(--failed); font-weight: 600; }
 .message { max-width: 72ch; }
+.sub { margin: 18px 0 6px; font-size: 1rem; }
+.plan { max-width: 72ch; margin: 0; padding-left: 1.2em; overflow-wrap: anywhere; }
+.plan li + li { margin-top: 4px; }
+.confirm { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.btn.danger { min-height: 44px; background: var(--failed); border-color: var(--failed); color: var(--bg);
+  font-weight: 650; }
 """
 
 # No script; forms post only to the server; nothing else loads.
@@ -130,6 +136,29 @@ def sign_in_page(csrf: str, *, failed: bool = False) -> str:
     lede = ('<p class="lede">This caracole asks for the access token its owner set '
             "(<code>--token-file</code>). Your browser keeps you signed in.</p>")
     return page("Sign in", lede + form)
+
+
+def remove_page(display: str, song_id: int, key: str, csrf: str, goes: list[str], stays: list[str],
+                notes: list[str], *, waiting: int = 0) -> str:
+    """Whether to remove a song, with what goes and what stays (``removal.describe``); the form confirms it."""
+    after = (f" It runs after the {waiting} request{'s' if waiting != 1 else ''} queued before it."
+             if waiting else "")
+    lede = ('<p class="lede">Remove it queues <code>caracole remove</code> for this song, as every request is '
+            f"queued.{escape(after)}</p>")
+
+    def items(heading: str, lines: list[str]) -> str:
+        if not lines:
+            return ""
+        return (f'<h2 class="sub">{escape(heading)}</h2>\n<ul class="plan">'
+                + "".join(f"<li>{escape(line)}</li>" for line in lines) + "</ul>\n")
+
+    hidden = "".join(f'  <input type="hidden" name="{name}" value="{escape(str(value), quote=True)}">\n'
+                     for name, value in (("csrf", csrf), ("song", song_id), ("key", key), ("confirm", "1")))
+    form = ('<form class="confirm" method="post" action="/remove">\n' + hidden
+            + '  <button class="btn danger" type="submit">Remove it</button>\n'
+            '  <a class="btn" href="/">Keep it</a>\n</form>')
+    said = "".join(f'<p class="message">{escape(note)}</p>\n' for note in notes)
+    return page(f"Remove {display}?", lede + items("It takes", goes) + items("It leaves", stays) + said + form)
 
 
 def message_page(title: str, message: str) -> str:

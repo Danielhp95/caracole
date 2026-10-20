@@ -39,10 +39,14 @@ class SyncStats:
     ``missing_playlists`` lists configured Spotify playlists that couldn't be read.
     ``retry_after_until`` is when Spotify's rate limit lets caracole ask again
     (ISO 8601 UTC), when a sync stopped at one that said how long to wait.
+    ``removed`` counts the songs you removed (``caracole remove``) that the
+    source still lists and that stayed out (``songs.SongRemoved``); ``seen``
+    leaves them out.
     """
 
     seen: int = 0
     new: int = 0
+    removed: int = 0
     errors: list[str] = field(default_factory=list)
     missing_playlists: list[str] = field(default_factory=list)
     line_errors: list[tuple[int, str]] = field(default_factory=list)
@@ -136,6 +140,8 @@ class SourcesReport:
                 if s is not None
                 else "Spotify failed"
             )
+            if s is not None and s.removed:
+                line += f", {_count(s.removed, 'removed song')} left out"
             if self.spotify_state == "error" and self.spotify_message:
                 line += f" ({self.spotify_message})"
             parts.append(line)

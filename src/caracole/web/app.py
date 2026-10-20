@@ -5,6 +5,7 @@
     GET  /<file>          a file of the library (files.py)
     POST /request         a song for wanted.txt; with ``fetch``, fetched now too
     POST /fetch           fetch a song of the library now, unless it needs review first
+    POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued
     GET, POST /login      the sign-in page, with an access token
 
 Every request must name the server by a name it answers to (421 otherwise).
@@ -35,7 +36,7 @@ from caracole import db
 from caracole.config import Config
 from caracole.web import pages
 from caracole.web.files import NotServed, read_library_file
-from caracole.web.jobs import JobQueue, QueueFull, add_steps, fetch_steps
+from caracole.web.jobs import REMOVING, JobQueue, QueueFull, add_steps, fetch_steps, remove_steps
 from caracole.web.security import (
     SESSION_COOKIE,
     answers_to,
@@ -142,7 +143,7 @@ class WebApp:
                 return _redirect("/")
             return self._file(path)
         if method == "POST":
-            handler = {"/request": self._request, "/fetch": self._fetch}.get(path)
+            handler = {"/request": self._request, "/fetch": self._fetch, "/remove": self._remove}.get(path)
             if handler is None:
                 return _message(404, "Not here", "There's nothing to send to at this address.")
             form = self._form(request)
@@ -203,7 +204,9 @@ class WebApp:
             with closing(self._connect()) as conn:
                 busy = _song_ids(conn, self.queue.fetching_keys())
                 held = frozenset(s.id for s in list_songs(conn) if review_first(s, overrides))
-                controls = WebControls(self.csrf, busy, self.queue.active_count(), held)
+                removing = _song_ids(conn, {job.song_key.removeprefix(REMOVING) for job in self.queue.snapshot()
+                                            if job.active and job.song_key.startswith(REMOVING)})
+                controls = WebControls(self.csrf, busy, self.queue.active_count(), held, removing)
                 html = build_library_page(conn, self.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
                                           controls=controls)
         except (sqlite3.Error, OSError) as e:  # DatabaseTooNew is an sqlite3.DatabaseError
@@ -299,6 +302,42 @@ class WebApp:
         try:
             job, _ = self.queue.submit(f"Fetch {song.display}", song.key, fetch_steps(song.display),
                                        fetching=True)
+        except QueueFull:
+            return _message(503, "The queue is full", "The queue is full: try again once it empties.")
+        return _redirect(f"/jobs#job-{job.id}")
+
+
+    def _remove(self, form: dict[str, str]) -> Response:
+        """Say what removing a song takes and leaves, and ask; confirmed, queue ``caracole remove --yes``.
+
+        The confirmation carries the song's key: a song id the database gave
+        another song since the question was asked removes nothing.
+        """
+        from caracole.removal import describe, plan_removal
+        from caracole.songs import get_song
+
+        try:
+            song_id = int(form.get("song", ""))
+        except ValueError:
+            return _message(400, "Not a song", "Which song? The form names none.")
+        confirmed = form.get("confirm") == "1"
+        try:
+            with closing(self._connect()) as conn:
+                song = get_song(conn, song_id)
+                plan = None if confirmed else plan_removal(conn, self.cfg, song)
+        except KeyError:
+            return _message(404, "No such song", "That song isn't in the library: removed already, maybe.")
+        except (sqlite3.Error, OSError) as e:
+            return _message(503, "The database can't be read", f"The database can't be read: {e}")
+        if plan is not None:
+            goes, stays, notes = describe(plan, self.cfg)
+            return _html(200, pages.remove_page(song.display, song.id, song.key, self.csrf, goes, stays, notes,
+                                                waiting=self.queue.active_count()))
+        if form.get("key") != song.key:
+            return _message(409, "Not that song", "The library changed since this page was made, so nothing was "
+                                                  "removed: reload the library and try again.")
+        try:
+            job, _ = self.queue.submit(f"Remove {song.display}", REMOVING + song.key, remove_steps(song.display))
         except QueueFull:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
         return _redirect(f"/jobs#job-{job.id}")

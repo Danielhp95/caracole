@@ -219,7 +219,9 @@ For example:
 - A line caracole can't read is reported, and the other lines still count.
 - Deleting a line doesn't delete the song from caracole, just as unliking a
   track on Spotify doesn't, and the song keeps the album and the duration the
-  line gave it. To drop a song, put it under `[ignore]` in overrides.toml.
+  line gave it. To keep a song but stop all work on it, put it under
+  `[ignore]` in overrides.toml; to take it out of caracole, files and all,
+  run [`caracole remove`](#caracole-remove).
 - The file must be a regular file. A symbolic link there is refused, not
   followed: the sync says `wanted.txt: not read: … is a symbolic link, which
   caracole doesn't follow; put the file itself there`, and the to-do page says
@@ -270,6 +272,69 @@ song. The file is the source of truth, so the line is written first, before
 updated, the line is kept all the same, a warning says why, and the next sync
 adds the song. The first `caracole add` creates the file, with a header that
 explains the format.
+
+A song you [removed](#caracole-remove) comes back with `caracole add`, as new:
+`Song radiohead/creep: back from its removal on 2026-10-19, as new; the next
+caracole run looks for it`.
+
+### caracole remove
+
+`caracole remove "ARTIST - TITLE" [--yes]` takes a song out of caracole for
+good: nothing brings it back until you ask for it again. Name the song as the
+to-do page and `caracole search` do. It says what goes and what stays, and asks:
+
+    $ caracole remove "Radiohead - Creep"
+    Remove Radiohead - Creep from caracole?
+    It takes:
+      - its line in wanted.txt (line 3)
+      - 6 files caracole wrote in Radiohead/Creep/: info.json, lyrics.txt, sheet.cho, sheet.json, sheet.pdf, sheet.txt
+      - its record in caracole's database: its match, its lyrics and 4 versions seen of it
+    It leaves:
+      - Radiohead/Creep/notes.md: caracole didn't write it
+    Spotify still lists it: caracole leaves it out from now on, unless you like it or add it to a playlist again.
+    caracole won't bring it back, from wanted.txt, Spotify or the nightly run, until you ask for it again: caracole add, the web page's request form, or a line in wanted.txt.
+    Remove it? [y/N]: y
+    Removed Radiohead - Creep: deleted 6 files, took 1 line out of wanted.txt.
+
+`--yes` (`-y`) doesn't ask. Without it and without an answer (from a script,
+say), nothing is removed and it exits 1.
+
+- **What goes.** The song's lines in wanted.txt, every line that names it,
+  the rest of the file kept byte for byte, comments included. The files
+  caracole wrote in the song's folder: the sheets, tabs and Guitar Pro files
+  it keeps (`sheet.txt`, `sheet.json`, `tab.txt`, `guitar-1.gp5`, the scores
+  it filed from `_inbox/`…), the `.cho` files and PDFs it made from them,
+  `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
+  Then the folder, and the artist's folder, once empty. Syncthing then
+  deletes them on every device. And the song's record: its match, its
+  versions, its lyrics and what caracole remembered about it.
+- **What stays.** Any other file in the folder, a file of yours, a folder, a
+  symbolic link (never followed), stays where it is, and the command names
+  it; so does a `sheet.pdf` or `lyrics.txt` you put in a folder where caracole
+  made none. Nothing outside the song's folder is deleted. The audio you
+  bought, in Music/, is never touched: the song lets go of it. overrides.toml
+  keeps its entries for the song, which apply again if you ask for it again.
+- **It stays out.** caracole remembers the song as removed, so neither the
+  nightly run nor `caracole sync` brings it back: not from wanted.txt (its
+  line is gone), not from your Liked Songs or a playlist that still lists it
+  (the sync says `Spotify 120 songs, 0 new, 1 removed song left out`), and the
+  to-do page no longer suggests it from your top tracks. `_todo.md`,
+  `index.html` and `caracole search` no longer list it.
+- **Until you ask again.** `caracole add`, the web page's request form, or a
+  line for it that you write in wanted.txt brings it back as a new song, and
+  the next run looks for it from scratch. So does a Spotify track you like, or
+  add to a playlist, after the removal. A device that syncs back an old copy
+  of wanted.txt with the line in it brings it back too.
+- A wanted.txt caracole can't read (a symbolic link, say) stops the removal
+  before anything goes: the line it couldn't take out would bring the song
+  back.
+
+`caracole remove --list` lists the songs removed, the latest first, and when.
+`caracole remove` on a song removed already says when it was, and how to
+bring it back. Like `caracole review`, it asks before it takes caracole's lock,
+so the nightly run never waits for your answer; `--list` only reads. On the
+web page, each card's **Remove…** button does the same, after a page that
+says what goes and what stays ([caracole serve](#caracole-serve)).
 
 ### Names in other scripts
 
@@ -364,6 +429,10 @@ expires the refresh token about six months after you authorize: run
 
 Development Mode reads only playlists you own or collaborate on, so
 editorial playlists don't work. A playlist that can't be read is reported.
+
+A song you removed with `caracole remove` stays out while Spotify still lists
+it, and the summary counts it (`1 removed song left out`). Like it, or add it
+to a playlist, again after the removal, and it comes back.
 
 When Spotify says caracole is asking too often (HTTP 429), a wait of up to 30
 seconds is waited out a few times; a longer one isn't. The sync then stops
@@ -989,6 +1058,7 @@ when it has something in it:
   30 days.
 - **Suggestions from your Spotify top tracks**, with `suggest_top_tracks`.
   Add the ones you want to learn to your Learn playlist or to wanted.txt.
+  Songs you have, and songs you removed, aren't suggested.
 - **PDFs.** The last render: how many PDFs were made or failed, a font
   problem if there is one, and the sheets that failed.
 - **Sources.** Whether Spotify is off, synced, not fully set up (the client
@@ -1215,7 +1285,7 @@ with it. A KEY that is no key exits with status 2.
 
 `caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
 [--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with three things the file on disk can't
+`http://127.0.0.1:8737/` by default, with four things the file on disk can't
 do:
 
 - **Request a song.** The form at the top takes an artist, a title and,
@@ -1230,6 +1300,12 @@ do:
   waits for `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
   overrides.toml) to settle the match. Lyrics, LaCuerda and the rest wait for
   the nightly run.
+- **Remove a song.** Each card's Remove… button opens a page that says what
+  goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
+  it queues `caracole remove --yes "ARTIST - TITLE"`, and the card says
+  Removing… until it has run. Keep it goes back to the library, and nothing
+  changes. A page older than a change to the library (the song merged into
+  another since, say) removes nothing: reload the library.
 - **Requests**, the page at `/jobs`, lists each request, the commands it
   runs and what each printed (the newest request's output open), and
   refreshes itself every 10 seconds while one waits or runs. Stop refreshing
@@ -1487,6 +1563,12 @@ a Guitar Pro file: a song that has had one, filed from `_inbox/` or
 downloaded from gtptabs.com, gets no other from gtptabs.com, even after you
 delete it. Nor is a score, which caracole never downloads. Put one you lost
 back in the song's folder under its name.
+
+Deleting a song's folder yourself doesn't remove the song: caracole writes its
+files again. [`caracole remove`](#caracole-remove) does, and deletes only the
+files caracole wrote there (an edited one included, since it is caracole's), by
+name in the song's folder, never through a symbolic link; it names what it
+leaves.
 
 Keep the library private. The sheets and lyrics are other people's work, and
 a personal offline copy is the closest thing to the sites' personal-use terms.

@@ -352,7 +352,9 @@ Soda Stereo - De Música Ligera
 
 The album and duration are optional; they make the lyrics lookup exact.
 `sudo caracole-admin add "宋冬野" "斑马斑马" --album "安和桥北" --duration 4:13`
-appends the same line.
+appends the same line. `sudo caracole-admin remove "宋冬野 - 斑马斑马"` takes a
+song out for good, its line and the files caracole wrote, until you add it
+again ([usage.md](usage.md), "caracole remove").
 
 **Spotify, optionally.** Liked Songs and the playlists you name join
 `wanted.txt` as sources. Without a client id the Spotify step is skipped
@@ -546,8 +548,9 @@ its own fonts, so a Chinese sheet has one even while its PDF waits for a font.
 ## 8. The library page over HTTP
 
 `services.caracole.web` runs `caracole serve` as `caracole-web.service`: the
-library page, a form to request songs, and a Fetch now button on each wanted
-song ([usage.md](usage.md), "caracole serve"). A request runs caracole commands
+library page, a form to request songs, a Fetch now button on each wanted
+song, and a Remove… button on each card, which asks first
+([usage.md](usage.md), "caracole serve"). A request runs caracole commands
 in the unit, one at a time and each under caracole's lock, so the unit has the
 nightly run's sandbox, folders and network. Of the credentials it gets
 `web_token` alone: neither the server nor the commands it runs read Spotify or

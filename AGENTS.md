@@ -49,12 +49,15 @@ http.py (`PoliteClient`, robots rules), health.py (cooldowns, `events`), normali
 pinyin), overrides.py, library.py (song folders, safe file access), notify.py (ntfy),
 site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's and
 MuseScore's), keys.py (a song's musical key and its source, for info.json, `index.html`
-and `search --key`).
+and `search --key`), removal.py (`caracole remove` and the web page's Remove: a song's
+wanted.txt lines, its record and the files caracole wrote; the tombstones it leaves are
+songs.py's, in the `removed` table).
 
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `write_pages`, `fail`, `warn`.
-  The logic of `caracole review` and `caracole search` is in review.py and search.py.
+  The logic of `caracole review`, `caracole search` and `caracole remove` is in review.py,
+  search.py and removal.py.
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed), jobs.py (the queue: each
   request runs the `caracole` CLI in a child process, one command at a time), app.py (the
@@ -235,13 +238,27 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   comparing and never make a key. A change to `clean_title`, `slug_key` or
   `identity_key` that can change a key bumps `normalize.KEY_VERSION`:
   `songs.ensure_current_keys`, run before songs are looked up, listed or added, then re-keys
-  them once and merges those that now share a key. It re-keys `songs` only; `ug_index` keys
+  them once and merges those that now share a key. It re-keys `songs` and the tombstones of
+  removed songs (`removed`, `songs._rekey_removed`) only; `ug_index` keys
   change when a sitemap is parsed again, and the keys of a table site_index.py fills
   (`gtptabs_index`, `musescore_index`) at its next refresh, which parses every sitemap
   again, an unchanged one from the cache
   (`test_gtptabs_fetch.py::test_new_keys_read_the_sitemaps_again_even_when_they_are_unchanged`).
-  Name new per-song kv keys `<prefix><song id>` and add the prefix to
-  `songs._PER_SONG_KV`, so a merge deletes them.
+  Name new per-song kv keys `<prefix><song id>` (or `<prefix><song id>:<more>`) and add the
+  prefix to `songs._PER_SONG_KV`, so a merge or a removal deletes them (`songs.delete_song_kv`).
+- **A removed song stays removed until you ask for it again.** `caracole remove` (removal.py)
+  takes the song's lines out of wanted.txt first, and stops before anything else when the
+  file can't be read; then, in one savepoint, leaves its tombstone (`songs.mark_removed`:
+  table `removed`, its key, name and source ids) and deletes its record (versions and files
+  cascade), its per-song kv, its source ids' `songs:fields:` and its lines' `wanted:first_seen:`;
+  then the files caracole wrote. `songs.upsert_song`, the one way a source adds a song, finds a
+  tombstone by source id, or by key when no song has it, and raises `songs.SongRemoved`
+  unless the source asks again (`_unless_removed`): a wanted.txt line always does (`caracole
+  add`, the web page, a line typed), and any other source only with a track added after the
+  removal. Spotify counts what stays out in `SyncStats.removed`. The to-do page suggests no
+  removed song (`todo._suggestions`). Nothing else may create a song
+  (`test_removal.py::test_the_next_sync_brings_nothing_back_until_you_ask_for_the_song_again`,
+  `test_songs.py::test_no_spotify_track_added_before_a_songs_removal_brings_it_back`).
 - **Schema changes go through db.py**: bump `SCHEMA_VERSION` and add the script to
   `_MIGRATIONS`. `_migrate` copies an existing database to `caracole.sqlite.v<N>.bak`
   (`VACUUM INTO`), then runs each script in one `BEGIN IMMEDIATE` transaction with its
@@ -256,17 +273,26 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   exclusively, then a rename. Never `mkstemp`, whose mode 0600 hides files from Syncthing.
   Nothing private goes there: the database, the Spotify token, the lock and the HTTP cache
   stay in `state_dir` and `cache_dir`, and chordpro works on a copy in a 0700 folder under
-  the cache (render.py). tests/test_library_safety.py.
+  the cache (render.py). tests/test_library_safety.py. A removal deletes only what caracole
+  wrote in the song's folder (`removal._caracoles`: kept files, the outputs of a kept sheet or
+  of a render record, LRCLIB's lyrics, info.json), by name, through descriptors opened with
+  `O_NOFOLLOW` from the library down, and names everything it leaves; it never touches Music/
+  (tests/test_removal.py).
 - **One caracole at a time**: `_common.exclusive` holds an flock on `state_dir/caracole.lock`,
   re-entrant within a process, and the clients of `make_client` hold it until closed.
   Every command that asks UG, LRCLIB, LaCuerda, gtptabs.com or MuseScore for pages or
   writes the library takes it;
-  `search`, `match --dry-run` and `index stats` only read and never wait. `review` takes it
-  only after its questions (commands/library.py), so the nightly run never waits for an
-  answer (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`).
+  `search`, `match --dry-run`, `index stats` and `remove --list` only read and never wait.
+  `review` and `remove` take it only after their questions (commands/library.py,
+  commands/remove.py), so the nightly run never waits for an answer
+  (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`,
+  `::test_remove_never_holds_the_lock_while_it_asks`).
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
   runs every other change as a `caracole` command in a child process, one at a time
-  (web/jobs.py), since the lock is re-entrant within a process and its threads would share it.
+  (web/jobs.py), since the lock is re-entrant within a process and its threads would share it:
+  a removal too, `caracole remove --yes`, once its page (`removal.plan_removal`, which only
+  reads) has asked; its job's song key is `remove:<key>` (`jobs.REMOVING`), so it never joins
+  the song's add or fetch.
 - **Spotify is optional, and wanted.txt is always a source.** `sources.sync_sources` syncs
   wanted.txt first, then Spotify, importing spotipy, only when `cfg.spotify.enabled` (a
   `client_id` is set); any Spotify failure becomes a state on its report, never an error.
