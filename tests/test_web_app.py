@@ -67,6 +67,14 @@ def shown(response):
     return html.unescape(text(response))
 
 
+def card_data(response, song_id: int) -> dict:
+    """A song's entry in the library page's data, by its id."""
+    import json
+
+    data = json.loads(JSON_BLOCK.search(text(response)).group(1))
+    return next(song for song in data["songs"] if song["id"] == song_id)
+
+
 # --- the library page ------------------------------------------------------------------------
 
 
@@ -273,6 +281,25 @@ def test_a_review_that_overrides_toml_settles_or_an_artist_page_answers_can_be_f
     assert post(app, "/fetch", {"song": str(settled.id)}).status == 303
     assert post(app, "/fetch", {"song": str(covers.id)}).status == 303
     assert '"fetchable":false' not in text(get(app, "/"))
+
+
+def test_a_reject_settles_a_review_only_when_it_names_every_candidate(app, conn, cfg, queue):
+    # None of these, then the rematch: the song may be in review again, with the candidates it
+    # hadn't shown. Its [reject] names none of those, so `caracole fetch --song` would still refuse it.
+    from caracole.overrides import add_reject
+
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="review", match_candidates=REVIEW, review=True)
+    add_reject(cfg.overrides_file, creep.display, ["radiohead/creep-live", "radiohead/creep"])
+    response = post(app, "/fetch", {"song": str(creep.id)})
+    assert response.status == 409 and "Review it first" in shown(response) and queue.snapshot() == []
+    card = card_data(get(app, "/"), creep.id)
+    # Held (WebControls.held): the card shows its picker, and no Fetch now that could only fail.
+    assert card["fetchable"] is False and [c["ref"] for c in card["candidates"]] == SHOWN.split()
+    # Every candidate rejected: the job's `caracole match` reads that before the fetch.
+    add_reject(cfg.overrides_file, creep.display, ["radiohead/creep-acoustic"])
+    assert card_data(get(app, "/"), creep.id)["fetchable"] is True
+    assert post(app, "/fetch", {"song": str(creep.id)}).status == 303
 
 
 def test_fetch_now_of_a_song_ignored_in_overrides_toml_is_refused(app, conn, cfg, queue):

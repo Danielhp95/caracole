@@ -432,14 +432,21 @@ def review_first(song: Song, overrides: Overrides) -> bool:
     """Whether ``caracole fetch --song`` would refuse the song as needing review first (commands/fetch.py).
 
     A review that its artist's UG page settles can be fetched, and so can one
-    that overrides.toml settles (``[match]``, ``[pin]``, ``[reject]``): the
-    job's ``caracole match`` reads it before the fetch.
+    that overrides.toml settles (``[match]``, ``[pin]``): the job's ``caracole
+    match`` reads it before the fetch. A ``[reject]`` settles it only when it
+    names every candidate the song has now: after None of these, the rematch
+    may leave the song in review with candidates it hadn't shown, which the
+    entry doesn't name, and ``caracole fetch --song`` would refuse it.
     """
+    from caracole.review import candidates_of
     from caracole.ug.fetch import needs_artist_page
 
     if song.match_decision != "review" or needs_artist_page(song):
         return False
-    return not any(song.key in table for table in (overrides.match, overrides.pin, overrides.reject))
+    if song.key in overrides.match or song.key in overrides.pin:
+        return False
+    rejected = overrides.reject.get(song.key)
+    return rejected is None or not all((c["artist_key"], c["song_key"]) in rejected for c in candidates_of(song))
 
 
 def _pick(conn: sqlite3.Connection, song: Song, overrides: Overrides, *, search: bool = False) -> pages.Pick | None:

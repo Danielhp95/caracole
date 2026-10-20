@@ -1278,7 +1278,9 @@ do:
   the candidates you saw, which go under `[reject]`. With Fetch it now ticked,
   as it is by default, a pick then runs `caracole fetch --song` and
   `caracole render`; None of these fetches nothing, and caracole goes on
-  looking for the song. The candidates must still be the ones the page showed
+  looking for the song: if the matcher finds others, the song is back in
+  review with those, and its card offers them to pick from, with no Fetch now
+  until one is picked. The candidates must still be the ones the page showed
   (the nightly run may have matched the song again: reload the page then),
   and a song whose own request waits or runs gets its pick once that ends. A
   review without candidates keeps its Review first button: `caracole review`
