@@ -40,7 +40,7 @@ an earlier one failed:
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
 | youtube | youtube.py (video addresses, picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html), songbook.py (the songbooks of songbooks.toml, in `Library/_songbooks/`) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
@@ -61,8 +61,8 @@ songs.py's, in the `removed` table).
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `make_youtube`,
   `write_pages`, `fail`, `warn`.
-  The logic of `caracole review`, `caracole search` and `caracole remove` is in review.py,
-  search.py and removal.py.
+  The logic of `caracole review`, `caracole search`, `caracole remove` and `caracole songbook`
+  is in review.py, search.py, removal.py and songbook.py.
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed; `read_written_page`, a page
   caracole wrote, while it holds the bytes a lookup says it wrote), jobs.py (the queue: each
@@ -72,9 +72,9 @@ songs.py's, in the `removed` table).
   step's label is that line while it runs, "Fetching from Ultimate Guitar…"), app.py (the
   routes; `/jobs.json` and the forms answer the page's script in JSON; `written_pages`,
   each kind of page caracole writes into the library by file name, with its record and its
-  CSP: the sheet viewers), pages.py, server.py (`http.server`). The page is
-  library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
-  /jobs.json how they go.
+  CSP: the sheet viewers and songbook.html), songbooks.py (the songbook forms, each queued as
+  its `caracole songbook` command), pages.py, server.py (`http.server`). The page is library_page.py's, with `WebControls`; its script
+  posts the forms with fetch() and asks /jobs.json how they go.
 - `viewer/`: the sheet viewer render.py writes beside each PDF. page.py builds the page
   (`build_viewer`) from the song's .cho (sheet.py reads it back); theory.py names chords and
   keys, guesses keys, changes modes and finds alternatives; voicings.py and voicings.json are
@@ -85,7 +85,12 @@ songs.py's, in the `removed` table).
   matches it (`library.holds`), with `viewer.viewer_csp(page)` as its header: a sandbox and
   the policy in that page's own `<meta>`, never one built from this caracole's assets (a
   viewer written before an upgrade holds the old hashes). Anyone with a synced device can
-  put an HTML page in the library.
+  put an HTML page in the library. book.py builds songbook.html
+  (`build_songbook`): a section per song, made as page.py makes a sheet.html, and book.js,
+  which runs before viewer.js and gives the song it shows the element ids viewer.js looks
+  for; book.css and book.js are inlined and hashed too. A server serves it only while
+  `songbook.pages_written` (kv `songbook:<folder>`) matches it, with
+  `book.songbook_csp(page)`, the policy of those bytes in a sandbox, as its header.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
@@ -135,7 +140,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html` and `sheet.html` in a real browser (test_library_page.py, test_viewer.py), a viewer `caracole serve` sends (test_web_server.py), and the page served by a real `caracole serve` (test_web_page.py) | neither |
+| `chromium` on PATH | `index.html`, `sheet.html` and `songbook.html` in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py), a viewer `caracole serve` sends (test_web_server.py), and the page served by a real `caracole serve` (test_web_page.py) | neither |
 
 Before a change is done:
 
@@ -317,6 +322,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **overrides.toml** is written only through the `add_*` functions of overrides.py: tomlkit,
   so the user's comments and layout survive, then `library.write_atomic`. It is read only
   as a regular file (`test_overrides.py::test_writers_preserve_comments_and_roundtrip`).
+  So is **songbooks.toml**, through the writers of songbook.py (`make_songbook`, `add_to_songbook`,
+  ...): a file that won't parse is a `SongbookFileError`, which stops the songbooks and nothing else
+  (`test_songbook.py::test_writers_keep_comments_and_layout`,
+  `test_songbook_render.py::test_a_broken_songbooks_file_is_an_error_that_stops_nothing_else`).
 - **The library is synced**: Syncthing and every device can write to it. Read a file there
   with `library.read_regular` (or `open_regular`: no symbolic link followed, regular files
   only), and write one with `library.write_atomic`: a random temporary name opened
@@ -333,7 +342,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   re-entrant within a process, and the clients of `make_client` and the yt-dlp runner of
   `make_youtube` hold it until closed. Every command that asks UG, LRCLIB, LaCuerda,
   gtptabs.com, MuseScore or YouTube for pages or writes the library takes it;
-  `search`, `match --dry-run`, `index stats` and `remove --list` only read and never wait.
+  `search`, `match --dry-run`, `index stats`, `remove --list`, `songbook list` and
+  `songbook show` only read and never wait.
   `review` and `remove` take it only after their questions (commands/library.py,
   commands/remove.py), so the nightly run never waits for an answer
   (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`,

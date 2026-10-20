@@ -12,6 +12,9 @@
     POST /fetch           fetch a song of the library now, unless it needs review first
     POST /review          a song in review's answer, as ``caracole review --song`` writes it
     POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued
+    POST /songbook/…      make a songbook, add to it, move or take out a song, rename it, delete it
+                          (songbooks.py); a songbook's page, _songbooks/<folder>/songbook.html, is
+                          one of the ``written_pages``
     GET, POST /login      the sign-in page, with an access token
 
 Every request must name the server by a name it answers to (421 otherwise).
@@ -35,6 +38,9 @@ A pick from the picker is ``caracole review --song "A - T" --pick ARTIST/SONG``
 page's script, its job; to a form, its line on /jobs), and fetched after it
 when asked: the server writes no overrides.toml itself. The candidates the
 page showed must be the song's now, and the song's own request goes first.
+
+A songbook form queues its ``caracole songbook`` command the same way
+(songbooks.py), and the answer sends the browser to the requests page.
 """
 
 from __future__ import annotations
@@ -200,6 +206,8 @@ class WebApp:
         if method == "POST":
             handler = {"/request": self._request, "/fetch": self._fetch, "/review": self._review,
                        "/remove": self._remove}.get(path)
+            if handler is None and path.startswith("/songbook/"):
+                handler = self._songbook_form(path)
             if handler is None:
                 return _message(404, "Not here", "There's nothing to send to at this address.")
             form = self._form(request)
@@ -503,6 +511,30 @@ class WebApp:
 
     # --- the forms ------------------------------------------------------------------------------
 
+    def _songbook_form(self, path: str) -> Callable[[dict[str, str]], Response] | None:
+        """The handler of a songbook form (songbooks.py): it queues its caracole songbook command."""
+        from caracole.web.songbooks import ROUTES
+
+        if path not in ROUTES:
+            return None
+
+        def handle(form: dict[str, str]) -> Response:
+            from caracole.web.songbooks import FormRefused, songbook_job
+
+            try:
+                job = songbook_job(path, form, library_dir=self.cfg.library_dir, connect=self._connect)
+            except FormRefused as e:
+                return _message(e.status, e.title, e.message)
+            except (sqlite3.Error, OSError) as e:
+                return _message(503, "The database can't be read", f"The database can't be read: {e}")
+            try:
+                queued, _ = self.queue.submit(job.title, job.key, job.steps)
+            except QueueFull:
+                return _message(503, "The queue is full", "The queue is full: try again once it empties.")
+            return _redirect(f"/jobs#job-{queued.id}")
+
+        return handle
+
     def _request(self, form: dict[str, str]) -> Response:
         """A song for wanted.txt, as ``caracole add`` writes it, and its commands queued."""
         from caracole.wanted import append_wanted, find_wanted, parse_duration
@@ -744,13 +776,17 @@ class WrittenPage:
 
 def written_pages() -> dict[str, WrittenPage]:
     """The pages caracole writes into the library, by file name: each song's sheet viewers
-    (render.py), served in a sandbox with their own policy (``viewer.viewer_csp``). A new kind
-    of page joins here with its own record."""
+    (render.py), served in a sandbox with their own policy (``viewer.viewer_csp``), and each
+    songbook's page (songbook.py, ``_songbooks/<folder>/songbook.html``), with its own
+    (``book.songbook_csp``). A new kind of page joins here with its own record."""
+    from caracole import songbook
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS
     from caracole.viewer import viewer_csp
+    from caracole.viewer.book import songbook_csp
 
     viewer = WrittenPage(_viewers_written, viewer_csp, _VIEWER_REFUSED)
-    return {HUMAN_OUTPUTS[2]: viewer, AUTO_OUTPUTS[2]: viewer}  # "sheet.html", "sheet (auto).html"
+    return {HUMAN_OUTPUTS[2]: viewer, AUTO_OUTPUTS[2]: viewer,  # "sheet.html", "sheet (auto).html"
+            songbook.HTML_NAME: WrittenPage(songbook.pages_written, songbook_csp, songbook.PAGE_REFUSED)}
 
 
 _VIEWER_REFUSED = ("This sheet viewer isn't the page caracole last wrote here (it was changed on a synced "

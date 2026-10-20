@@ -805,7 +805,33 @@ def test_apostrophes_and_empty_results_in_a_real_browser(conn, cfg, tmp_path):
 
     # The suggested command is quoted for a shell.
     shown = listing(dump_dom(path, tmp_path, "#q=" + quote("guns n' roses")))
-    assert "caracole search \"guns n' roses\"" in shown
+    assert "caracole search 'guns n'\\'' roses'" in shown
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_commands_the_file_names_quote_each_word_so_no_shell_expands_it(conn, cfg, tmp_path):
+    # bash and zsh expand ! even in double quotes ("event not found"): each word goes in single quotes, each '
+    # written '\'', as the Select bar's command writes them.
+    import html as html_module
+    import shlex
+
+    artist, title = "Rock'n Band", 'Wow!Wow $HOME `id` "x"'
+    in_review(conn, artist, title)
+    lost = add_song(conn, "It's", "$5! `ls` \"y\"")
+    update_song(conn, lost.id, match_decision="not_found")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    shown = listing(dump_dom(path, tmp_path))
+    codes = [html_module.unescape(c) for c in re.findall(r"<code>(.*?)</code>", shown, re.S)]
+    review = [c for c in codes if c.startswith("caracole review --song")]
+    assert review == ["caracole review --song 'It'\\''s - $5! `ls` \"y\"'",  # by artist
+                      "caracole review --song 'Rock'\\''n Band - Wow!Wow $HOME `id` \"x\"'"]
+    assert [shlex.split(c)[3] for c in review] == [lost.display, f"{artist} - {title}"]
+
+    query = "It's $5! no such `song` \"z\""
+    searched = listing(dump_dom(path, tmp_path, "#q=" + quote(query)))
+    hint = [html_module.unescape(c) for c in re.findall(r"<code>(caracole search .*?)</code>", searched, re.S)]
+    assert hint == ["caracole search 'It'\\''s $5! no such `song` \"z\"'"]
+    assert shlex.split(hint[0]) == ["caracole", "search", query]
 
 
 @pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
@@ -1137,7 +1163,7 @@ def test_the_file_shows_a_reviews_candidates_and_the_line_that_picks_one(conn, c
     assert 'href="https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-1"' in picker
     assert 'target="_blank"' in picker and 'rel="noopener noreferrer"' in picker
     assert picker.count('class="choice-link"') == 1  # the candidate the index no longer has links nowhere
-    assert '<code>caracole review --song "Radio Head - Crep"</code>' in picker
+    assert "<code>caracole review --song 'Radio Head - Crep'</code>" in picker
     assert "<form" not in card and "<input" not in card  # the file sends nothing
 
 
@@ -1405,7 +1431,7 @@ def test_the_served_card_of_a_song_not_found_links_to_its_search_hits(conn, cfg,
     assert "/review" not in on_file
     # The file can't search: it names the line that lists the hits, numbered as --pick takes them.
     hint = re.search(r'<p class="pick-hint">(.*?)</p>', on_file, re.S)
-    assert hint and '<code>caracole review --song "Radio Head - Crep"</code>' in hint.group(1), on_file
+    assert hint and "<code>caracole review --song 'Radio Head - Crep'</code>" in hint.group(1), on_file
     assert "caracole search finds for it" in hint.group(1)
 
 
@@ -1842,9 +1868,9 @@ def test_the_file_rows_show_a_reviews_candidates_and_a_song_not_founds_line(conn
     shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path, "#view=rows"))
     crep = panel_of(row_of(shown, "Crep"))
     assert re.search(r'<details class="picker"', crep) and "<form" not in crep
-    assert '<code>caracole review --song "Radio Head - Crep"</code>' in crep
+    assert "<code>caracole review --song 'Radio Head - Crep'</code>" in crep
     hint = re.search(r'<p class="pick-hint">(.*?)</p>', panel_of(row_of(shown, "Yesterday")), re.S)
-    assert hint and '<code>caracole review --song "The Beatles - Yesterday"</code>' in hint.group(1)
+    assert hint and "<code>caracole review --song 'The Beatles - Yesterday'</code>" in hint.group(1)
 
 
 # Measures each row (its height, whether a part of it leaves it or covers another), then opens Crep's picker
