@@ -30,7 +30,8 @@ class Recorder:
 
 def running(app):
     server = make_server(app, "127.0.0.1", 0)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # shutdown() returns at the next poll: every 10 ms, not every 500
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
     return server
 
@@ -98,11 +99,18 @@ def test_sigterm_stops_caracole_serve_cleanly(tmp_path):
     process = subprocess.Popen([sys.executable, "-m", "caracole", "--config", str(config), "serve", "--port",
                                 str(port)], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:
+        # An answer, not just a connection: the socket listens before serve() is ready for a
+        # SIGTERM, a gap a loaded machine (the suite on every core) can make wide enough to hit.
         for _ in range(200):
             try:
-                socket.create_connection(("127.0.0.1", port), timeout=1).close()
+                served = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+                try:
+                    served.request("GET", "/")
+                    served.getresponse().read()
+                finally:
+                    served.close()
                 break
-            except OSError:
+            except (OSError, http.client.HTTPException):
                 time.sleep(0.05)
         process.send_signal(signal.SIGTERM)
         out, _ = process.communicate(timeout=15)

@@ -307,7 +307,8 @@ def test_the_page_works_served_in_a_sandbox(tmp_path):
             pass
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Server)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    # shutdown() returns at the next poll: every 10 ms, not every 500
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
     try:
         dom = dump_url(f"http://127.0.0.1:{server.server_port}/Artist/Title/sheet.html#t=2", tmp_path)
     finally:
