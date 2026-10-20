@@ -550,6 +550,7 @@ with _common.exclusive(cfg, "run"):
 """
 
 
+@pytest.mark.slow
 def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, cfg):
     import subprocess
     import sys
@@ -582,6 +583,7 @@ def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, c
     assert int(handoffs) == 1
 
 
+@pytest.mark.slow
 def test_the_youtube_steps_pauses_hand_the_lock_to_a_waiting_lookup_too(cfg, conn, tmp_path, monkeypatch):
     # The nightly run's youtube step holds caracole's lock for minutes, 15 to 30 seconds between two yt-dlp
     # runs: a lookup waiting meanwhile goes first in that pause, as in a client's, and the pause starts again.

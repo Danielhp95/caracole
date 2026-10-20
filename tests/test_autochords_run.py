@@ -814,6 +814,7 @@ with _common.exclusive(cfg, "get Nobody - Lantern Shore", interactive=True):
 """
 
 
+@pytest.mark.slow
 def test_a_lookup_waiting_for_the_lock_takes_it_between_two_songs(conn, cfg, tmp_path):
     # A song's auto sheet takes minutes, and the unit runs for hours: a lookup never waits for all of it.
     import time

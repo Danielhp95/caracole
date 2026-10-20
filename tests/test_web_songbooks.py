@@ -120,6 +120,7 @@ def steps(queue):
 # --- the forms -------------------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_the_select_bar_makes_a_songbook_of_the_songs_in_the_order_picked(app, setup, queue):
     songs = setup[3]
     response = post(app, "/songbook/make", {"name": "  Beach   nights ",
@@ -136,6 +137,7 @@ def test_the_select_bar_makes_a_songbook_of_the_songs_in_the_order_picked(app, s
     assert (setup[1].library_dir / "_songbooks" / "Beach nights" / "songbook.html").is_file()
 
 
+@pytest.mark.slow
 def test_a_songbook_whose_files_cant_be_made_is_a_failed_request(app, setup, queue):
     songs = setup[3]
     (setup[1].library_dir / "_songbooks" / "Trip" / "songbook.pdf").mkdir(parents=True)
@@ -147,6 +149,7 @@ def test_a_songbook_whose_files_cant_be_made_is_a_failed_request(app, setup, que
     assert books(setup) == [Songbook("Trip", ("Radiohead - Creep",))]
 
 
+@pytest.mark.slow
 def test_a_name_starting_with_a_dash_is_a_name_not_an_option(app, setup, queue):
     songs = setup[3]
     assert post(app, "/songbook/make", {"name": "-Encore", "songs": str(songs["creep"].id)}).status == 303
@@ -161,6 +164,7 @@ def test_the_select_bar_adds_to_a_songbook_there_is(app, setup, queue, campfire)
     assert steps(queue) == [[("songbook", "add", "--", "Campfire", "Soda Stereo - De Música Ligera")]]
 
 
+@pytest.mark.slow
 def test_the_songbook_forms_queue_move_remove_rename_and_delete(app, setup, queue, campfire):
     for path, fields in [
         ("/songbook/move", {"name": "Campfire", "song": "Muse - Hysteria", "position": "1"}),
@@ -185,6 +189,7 @@ def test_the_songbook_forms_queue_move_remove_rename_and_delete(app, setup, queu
     assert books(setup) == [] and not campfire.exists()
 
 
+@pytest.mark.slow
 def test_a_song_gone_from_the_library_can_still_be_moved_or_taken_out(app, setup, queue, campfire):
     cfg = setup[1]
     make_songbook(cfg.library_dir / FILE_NAME, "Picnic", ["Radiohead - Creep", "Pixies - Where Is My Mind"])
@@ -193,6 +198,7 @@ def test_a_song_gone_from_the_library_can_still_be_moved_or_taken_out(app, setup
     assert books(setup)[1] == Songbook("Picnic", ("Radiohead - Creep",))
 
 
+@pytest.mark.slow
 def test_a_song_gone_from_the_library_goes_alone_never_with_the_song_whose_title_its_own_holds(app, setup, queue):
     _, cfg, conn, _ = setup
     police = add_song(conn, "Radiohead", "Karma Police")
@@ -216,6 +222,7 @@ def test_a_song_gone_from_the_library_goes_alone_never_with_the_song_whose_title
     assert books(setup) == [Songbook("Gig", ("Radiohead - Karma Police", "Muse - Hysteria"))]
 
 
+@pytest.mark.slow
 def test_a_song_the_page_removes_from_the_library_stays_in_its_songbook_as_missing(app, setup, queue, campfire):
     # The page's Remove runs caracole remove, which leaves songbooks.toml alone: the songbook lists the song
     # as missing, its page is still served, and its × takes the song out.
