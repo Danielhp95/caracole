@@ -368,9 +368,11 @@ def _scan(ctx: StepContext) -> StepResult:
 
 
 def _render(ctx: StepContext) -> StepResult:
+    from caracole.commands._common import hand_over
     from caracole.render import render_all
 
-    s = render_all(ctx.conn, ctx.cfg, ctx.overrides, now=ctx.now)
+    # Many PDFs to make (a new font, say) take minutes: a waiting lookup goes between two songs.
+    s = render_all(ctx.conn, ctx.cfg, ctx.overrides, now=ctx.now, between=lambda: hand_over(ctx.cfg, ctx.conn))
     tail = f"; {s.font_error}" if s.font_error else ""
     result = StepResult(title="PDFs", done=_counted((s.rendered, "rendered")),
                         status=f"{s.rendered} rendered, {s.failed} failed{tail}")

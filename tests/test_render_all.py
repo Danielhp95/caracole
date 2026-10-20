@@ -389,6 +389,52 @@ def test_ignored_songs_are_not_rendered(conn, cfg):
         assert not (song_dir(cfg.library_dir, song) / "sheet.cho").exists()
 
 
+def test_a_lookup_goes_between_two_songs_and_what_it_changed_is_read_again(conn, cfg):
+    # A long pass (every PDF again, a new font) holds the lock: a waiting lookup gets it between two songs.
+    first = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-02T00:00:00Z")
+    human_sheet(conn, cfg, first, tab_id=1)
+    second = add_song(conn, "Soda Stereo", "Persiana Americana", added_at="2026-10-01T00:00:00Z")
+    human_sheet(conn, cfg, second, tab_id=2)
+    run, turns = FakeChordPro(), []
+
+    def between() -> bool:  # the lock went to a lookup, and you ignored the second song meanwhile
+        turns.append(len(run.calls))
+        overrides(cfg, '[ignore]\nsongs = ["Soda Stereo - Persiana Americana"]\n')
+        return True
+
+    stats = render(conn, cfg, runner=run, between=between)
+    assert turns == [1]  # once, between the two songs
+    assert stats.rendered == 1 and not pdf_of(cfg, second).exists()
+
+
+def test_the_nightly_render_and_caracole_render_hand_the_lock_over_between_songs(cfg, monkeypatch, tmp_path):
+    import caracole.render
+    from caracole.commands import _common
+    from caracole.pipeline import _render
+
+    handed, passes = [], []
+    monkeypatch.setattr(_common, "hand_over", lambda cfg, conn=None: handed.append(conn is not None) or False)
+
+    def render_all(conn, cfg, overrides, **kwargs):
+        passes.append(kwargs["between"]())
+        return RenderStats()
+
+    monkeypatch.setattr(caracole.render, "render_all", render_all)
+    from caracole import db
+    from caracole.pipeline import StepContext
+
+    conn = db.connect(cfg.db_path)
+    _render(StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=None,
+                        report=None))
+    conn.close()
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
+                      f'library_dir = "{cfg.library_dir}"\n', encoding="utf-8")
+    result = CliRunner().invoke(build_app(), ["--config", str(config), "render"])
+    assert result.exit_code == 0, result.output
+    assert handed == [True, True] and passes == [False, False]
+
+
 # --- when a PDF is rendered again ------------------------------------------------------------
 
 

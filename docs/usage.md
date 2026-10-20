@@ -880,7 +880,13 @@ pauses, lets go of the lock in the pause it is in, takes it back once the
 lookup is done, and waits a whole pause again before its next request. The
 run then reads each song again before its turn, and overrides.toml too, so a
 song the lookup fetched isn't fetched twice, and a tab it pinned is the one
-kept.
+kept. Work that sends no request lets a lookup go first between two songs:
+`caracole autochords` (a song takes minutes, and the unit runs for hours), and
+the PDF pass of the run and of `caracole render`, which reads each song and
+overrides.toml again after it. The waiting lookup announces itself with a file
+in `caracole.lock.waiting/` in the state folder, which it touches every second
+while it waits; one left by a lookup that was killed while it waited is no
+longer waited for after five seconds.
 
 ## The to-do page
 

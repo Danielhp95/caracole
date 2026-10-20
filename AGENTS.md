@@ -286,14 +286,21 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   answer (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`).
   A lookup never waits behind a whole nightly run, and still never writes beside it:
   `exclusive(..., interactive=True)` announces it in `state_dir/caracole.lock.waiting/` (a
-  file per waiting process, dropped once it holds the lock or its process is gone), and
-  bulk work's clients spend each pause looking for one (`_common.hand_over`, every
-  `HANDOFF_SLICE` s; never inside a transaction): they let go of the flock, take it back
-  once the lookup is done, then pause a whole `delay` again. A bulk caller holding state
-  across a pause re-reads it after one: ug/fetch.py `fetch_songs` reads each song and
-  overrides.toml again (`_Handoffs`; a song a lookup fetched mid-turn is fetched again next
-  run), and gtptabs_fetch.py checks a song still has no file before its turn
-  (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause`).
+  file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and
+  dropped once it holds it; one its process left, or untouched for `TICKET_STALE` s, a
+  lookup killed while it waited, no longer counts). Bulk work hands the lock over
+  (`_common.hand_over`, never inside a transaction): it lets go of the flock, takes it back
+  once the lookup is done, and goes on. It does so in two places. Its clients spend each
+  pause looking for a waiting lookup (every `HANDOFF_SLICE` s), then pause a whole `delay`
+  again. Work that sends no request does it between two songs (a `between` callback):
+  `autochords_pending` (commands/autochords.py) and `render_all` (pipeline.py's render step,
+  commands/render.py). A bulk caller
+  holding state across a handoff re-reads it after one: ug/fetch.py `fetch_songs` reads each
+  song and overrides.toml again (`_Handoffs`; a song a lookup fetched mid-turn is fetched
+  again next run), gtptabs_fetch.py checks a song still has no file before its turn, and
+  `autochords_pending` and `render_all` read each song after and overrides.toml again
+  (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause`,
+  `test_autochords_run.py::test_a_lookup_waiting_for_the_lock_takes_it_between_two_songs`).
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
   runs every other change as a `caracole` command in a child process, one at a time
   (web/jobs.py), since the lock is re-entrant within a process and its threads would share it.

@@ -762,6 +762,98 @@ def test_nothing_pending_loads_no_model(conn, cfg, tmp_path):
     assert (stats.generated, stats.skipped, stats.failed, stats.errors) == (0, 1, 0, [])
 
 
+# --- a lookup goes between two songs -------------------------------------------------------------
+
+LOOKUP = r"""
+import sys
+from pathlib import Path
+from caracole.commands import _common
+from caracole.config import load_config
+
+cfg = load_config(Path(sys.argv[1]))
+with _common.exclusive(cfg, "get Nobody - Lantern Shore", interactive=True):
+    with open(sys.argv[2], "a", encoding="utf-8") as log:
+        log.write("lookup\n")
+"""
+
+
+def test_a_lookup_waiting_for_the_lock_takes_it_between_two_songs(conn, cfg, tmp_path):
+    # A song's auto sheet takes minutes, and the unit runs for hours: a lookup never waits for all of it.
+    import time
+
+    from caracole.commands import _common
+
+    from conftest import subprocess_pythonpath
+
+    with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road", added_at="2026-10-02T00:00:00Z"),
+               name="first.wav")
+    with_audio(conn, tmp_path, add_song(conn, "Nobody", "Lantern Shore", added_at="2026-10-01T00:00:00Z"),
+               name="second.wav")
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
+                      f'library_dir = "{cfg.library_dir}"\n', encoding="utf-8")
+    log = tmp_path / "order.log"
+    env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(Path(__file__).parents[1] / "src")}
+    lookups: list[subprocess.Popen] = []
+
+    class Busy(FakeRecognizer):
+        def recognize(self, path):
+            with open(log, "a", encoding="utf-8") as out:
+                out.write(Path(path).name + "\n")
+            if not lookups:  # while the first song is worked on, a lookup asks for the lock
+                lookups.append(subprocess.Popen([sys.executable, "-c", LOOKUP, str(config), str(log)], env=env))
+                deadline = time.time() + 20
+                while not _common.lookups_waiting(cfg) and time.time() < deadline:
+                    time.sleep(0.05)
+            return super().recognize(path)
+
+    try:
+        with _common.exclusive(cfg, "autochords"):
+            stats = run(conn, cfg, recognizer=Busy(), between=lambda: _common.hand_over(cfg, conn))
+        assert lookups[0].wait(30) == 0
+    finally:
+        for p in lookups:
+            p.kill()
+    assert stats.generated == 2
+    assert log.read_text(encoding="utf-8").splitlines() == ["first.wav", "lookup", "second.wav"]
+
+
+def test_after_a_handoff_the_songs_and_overrides_are_read_again(conn, cfg, tmp_path):
+    with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road", added_at="2026-10-02T00:00:00Z"),
+               name="first.wav")
+    with_audio(conn, tmp_path, add_song(conn, "Nobody", "Lantern Shore", added_at="2026-10-01T00:00:00Z"),
+               name="second.wav")
+    calls = []
+
+    def between() -> bool:  # a lookup had the lock, and you ignored the second song meanwhile
+        calls.append(1)
+        cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+        cfg.overrides_file.write_text('[ignore]\nsongs = ["Nobody - Lantern Shore"]\n', encoding="utf-8")
+        return True
+
+    recognizer = FakeRecognizer()
+    stats = run(conn, cfg, recognizer=recognizer, overrides=Overrides(), between=between)
+    assert calls == [1]  # between the two songs
+    assert [p.name for p in recognizer.calls] == ["first.wav"] and stats.skipped == 1
+
+
+def test_the_command_hands_the_lock_over_between_songs(tmp_path, monkeypatch, models_importable):
+    import caracole.autochords.run as ac_run
+    from caracole.commands import _common
+
+    handed = []
+    monkeypatch.setattr(_common, "hand_over", lambda cfg, conn=None: handed.append(conn is not None) or False)
+
+    def pending(conn, cfg, **kwargs):
+        kwargs["between"]()
+        return AutoStats()
+
+    monkeypatch.setattr(ac_run, "autochords_pending", pending)
+    result = invoke(write_config(tmp_path))
+    assert result.exit_code == 0, result.output
+    assert handed == [True]
+
+
 def test_summary():
     assert (
         AutoStats(generated=2, skipped=5, failed=1).summary() == "2 generated, 5 skipped, 1 failed"

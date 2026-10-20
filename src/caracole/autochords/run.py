@@ -120,6 +120,17 @@ class AutoStats:
         return f"{self.generated} generated, {self.skipped} skipped, {self.failed} failed"
 
 
+def _overrides_again(cfg: Config, overrides: Overrides) -> Overrides:
+    """overrides.toml read again after a lookup had the lock; the one read before, if it can't be."""
+    from caracole.overrides import OverridesError
+
+    try:
+        return load_overrides(cfg.overrides_file)
+    except OverridesError as e:
+        log.info("overrides.toml couldn't be read again (%s); auto-chords goes on with what it read.", e)
+        return overrides
+
+
 def autochords_pending(
     conn: sqlite3.Connection,
     cfg: Config,
@@ -128,6 +139,7 @@ def autochords_pending(
     beats_fn: BeatsFn | None = None,
     now: datetime | None = None,
     overrides: Overrides | None = None,
+    between: Callable[[], bool] | None = None,
 ) -> AutoStats:
     """Generate the auto sheets that are due, keep them in the library, and record the run.
 
@@ -137,6 +149,11 @@ def autochords_pending(
     with no new audio loads no model; the defaults must then read a test tone.
     ``overrides`` defaults to the file at ``cfg.overrides_file``; its
     ``[ignore]`` songs are skipped. The run is stamped with ``now``.
+
+    ``between`` is called between two songs, in no transaction: the command
+    hands caracole's lock to a waiting lookup there (``_common.hand_over``), as
+    a song can take minutes. When it says it did, overrides.toml and each song
+    after are read again, since the lookup may have changed them.
     """
     stamp = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     if overrides is None:
@@ -144,7 +161,17 @@ def autochords_pending(
     stats = AutoStats()
     models: tuple[Recognizer, BeatsFn] | None = None
     unavailable = False
-    for song in list_songs(conn):
+    handed = False
+    for n, listed in enumerate(list_songs(conn)):
+        if n and between is not None and between():
+            handed = True
+            overrides = _overrides_again(cfg, overrides)
+        song = listed
+        if handed:
+            try:
+                song = get_song(conn, listed.id)
+            except KeyError:  # merged into another song meanwhile
+                continue
         failure = _known_failure(conn, song)  # first, so a failure goes when its file does
         if not song.audio_path:
             continue

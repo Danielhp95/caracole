@@ -431,7 +431,8 @@ pause up to 20 seconds per site, and the 10–20 second pauses hold for the
 machine, not per process. The lock goes with the process holding it, whatever
 ends it. A lookup (`caracole-admin get`, or one from the library page) is the
 exception that waits only for a moment: the run lets it go first in the pause
-it is in, then goes on ([usage.md](usage.md), "One caracole at a time").
+it is in, and `caracole-autochords` and the PDF pass between two songs, then
+they go on ([usage.md](usage.md), "One caracole at a time").
 
 ## 6. Auto-chords
 
