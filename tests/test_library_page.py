@@ -1702,8 +1702,10 @@ document.body.setAttribute("data-command", String(!document.querySelector(".pick
 def test_the_select_bar_of_the_file_on_disk_and_its_command_on_a_touch_phone(conn, cfg, tmp_path):
     from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
 
-    # The search field is the search bar's, which another change redraws.
-    script = (UNFOLD + MAKE_FROM_DISK + noting("data-short", small_targets(TITLES))
+    # The search field is the search bar's, which another change redraws. While selecting, a card is one
+    # target, its artist's name no target of its own.
+    exempt = TITLES + ", .selecting [data-picker] .artist"
+    script = (UNFOLD + MAKE_FROM_DISK + noting("data-short", small_targets(exempt))
               + noting("data-weak", weak_edges("#q")))
     html = with_script(every_control(conn, cfg, served=False), script)
     dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, size="390,844", touch=True)

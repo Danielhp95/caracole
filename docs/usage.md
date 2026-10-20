@@ -1542,13 +1542,16 @@ file. On the file on disk it names the `caracole songbook` commands that change
 it; `caracole serve` adds buttons. **Select**, beside the Sort menu, puts a
 box on each card, or on each row in the Rows view, where the source's mark
 was: tick songs in the order they go in the songbook (each box shows its
-place, and a screen reader says it: "Pick Creep by Radiohead, 2nd"), search,
-filter and switch views between ticks, and the bar at the bottom counts them,
-`3 selected`. Give the songbook a name and tap Make songbook, or pick a
-songbook there is in the menu (instead of New songbook) to Add to it; Clear
-unticks them all, and Select, pressed while the mode is on, leaves it. On the
-file on disk, which can't write anything, the bar shows the command to run
-where caracole runs, with Copy:
+place, and a screen reader says it: "Pick Creep by Radiohead, 2nd"). A tap
+anywhere on a card or a row ticks it, or unticks it: while you select, each
+song's Open, Files, Fetch now and Remove… are put away, and a tap on its
+title or its artist opens and filters nothing, so a tick never opens a file
+by mistake. Search, filter and switch views between ticks; the bar at the
+bottom counts them, `3 selected`. Give the songbook a name and tap Make
+songbook, or pick a songbook there is in the menu (instead of New songbook)
+to Add to it; Clear unticks them all, and Select, pressed while the mode is
+on, leaves it. On the file on disk, which can't write anything, the bar shows
+the command to run where caracole runs, with Copy:
 `caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
 each word in single quotes, so that no shell changes a `!`, a `$` or a quote
 in a name.

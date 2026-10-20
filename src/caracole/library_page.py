@@ -2443,16 +2443,27 @@ _SONGBOOK_STYLE = """
 .pick-n { font-weight: 750; font-variant-numeric: tabular-nums; }
 .card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+/* While selecting, a card or a row is one target: a tap anywhere on it lands on it, and the Select script
+   picks it or lets it go; only its box takes a tap of its own. What opens a file or acts on the song is put
+   away, and so are the lines that say what to do about its match, so that a pick never opens or fetches
+   anything; a key pressed on what stays (its artist's filter, its request's line) still does what it says. */
+.selecting [data-picker] { cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none;
+  user-select: none; }
+.selecting [data-picker] * { pointer-events: none; }
+.selecting [data-picker] .pick, .selecting [data-picker] .pick * { pointer-events: auto; }
+.selecting [data-picker] > .actions, .selecting [data-picker] > .more, .selecting [data-picker] > .foot,
+.selecting [data-picker] > .picker, .selecting [data-picker] > .row-action, .selecting [data-picker] > .row-more,
+.selecting [data-picker] > .row-panel, .selecting [data-picker] > .note, .selecting [data-picker] > .pick-hint,
+.selecting [data-picker] .filter-mark { display: none; }
+.selecting [data-picker] .artist { min-height: 0; }  /* no target of its own: the card is */
 /* A row's box stands where its source's mark was, beside the title and the artist (both lines on a phone). */
-.selecting .row { grid-template-columns: 34px minmax(0, 1fr) auto var(--row-more); }
+.selecting .row { grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "src title" "src sub"; }
 .selecting .row > .source { display: none; }
-.selecting .row > .pick { grid-column: 1; grid-row: 1 / span 2; align-self: center; width: 34px; height: 34px;
-  border-radius: 10px; }
+.selecting .row > .pick { grid-area: src; align-self: center; }
 .row.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
 @media (min-width: 900px) {
-  .selecting .row { grid-template-columns: 34px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem
-    var(--row-more); }
-  .selecting .row > .pick { grid-row: 1; }
+  .selecting .row { grid-template-columns: 44px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem);
+    grid-template-areas: "src title artist meta"; }
 }
 .pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .selecting .page { padding-bottom: 260px; }
@@ -2477,9 +2488,10 @@ _SONGBOOK_STYLE = """
 
 # The Select mode: a box on each card (any element of #list with a data-id: a row too), and a bar to
 # name the songbook. It goes with the page's own script, after it: it finds the cards by their song's
-# id and builds everything with createElement and textContent, as the page does. On caracole serve
-# the bar posts the songbook (the server's token, the songs' ids in the order picked); on the file on
-# disk it shows the caracole songbook command to run instead.
+# id and builds everything with createElement and textContent, as the page does. While it is on, a tap
+# anywhere on a card picks it (the stylesheet puts its files and actions away, and lets the taps through
+# to the card). On caracole serve the bar posts the songbook (the server's token, the songs' ids in the
+# order picked); on the file on disk it shows the caracole songbook command to run instead.
 _SELECT_SCRIPT = r"""
 (() => {
   "use strict";
@@ -2641,6 +2653,15 @@ _SELECT_SCRIPT = r"""
     }
   };
   new MutationObserver(decorate).observe(list, { childList: true, subtree: true });
+  // A tap anywhere on a card while selecting: the stylesheet lets it through to the card itself, all but a
+  // tap on its box, which ticks it alone. A key pressed on the card's artist, say, has that for its target, and
+  // does what the artist's button says.
+  list.addEventListener("click", (e) => {
+    const card = e.target;
+    if (!selecting() || !(card instanceof HTMLElement) || !card.dataset.picker) return;
+    const box = card.querySelector(".pick input");
+    if (box) box.click();  // its change event picks the song, or lets it go
+  });
 
   const setMode = (on) => {
     document.body.classList.toggle("selecting", on);
