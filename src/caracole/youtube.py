@@ -142,7 +142,7 @@ def parse_search(text: str) -> list[Video]:
     """The videos of yt-dlp's flat search (``--flat-playlist --dump-single-json``), in its order."""
     try:
         data = json.loads(text)
-    except ValueError as e:
+    except (ValueError, RecursionError) as e:  # or nested deeper than the parser goes
         raise ProviderError(PROVIDER, None, None, f"yt-dlp's search answer isn't JSON: {e}") from e
     entries = data.get("entries") if isinstance(data, dict) else None
     videos = []
@@ -554,7 +554,7 @@ class YtDlp:
         for line in reversed(out.splitlines()):
             try:
                 found = json.loads(line)
-            except ValueError:
+            except (ValueError, RecursionError):
                 continue
             if isinstance(found, dict) and found.get("filepath"):
                 info = found

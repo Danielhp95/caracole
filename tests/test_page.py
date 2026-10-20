@@ -161,6 +161,11 @@ def test_invalid_json_is_parse_error():
         parse_tab_page('<div class="js-store" data-content="{&quot;store&quot;:"></div>')
 
 
+def test_json_nested_too_deep_to_read_is_a_parse_error():
+    with pytest.raises(PageParseError):
+        parse_tab_page(f'<div class="js-store" data-content="{"[" * 100_000}"></div>')
+
+
 @pytest.mark.parametrize(
     "payload", ["[]", "{&quot;store&quot;:[]}", "{&quot;store&quot;:{&quot;page&quot;:{}}}"]
 )

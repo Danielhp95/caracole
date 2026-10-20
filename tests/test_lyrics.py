@@ -313,7 +313,12 @@ def test_instrumental():
     assert client.endpoints() == ["/get"]
 
 
-@pytest.mark.parametrize("body", [b"<html><title>Maintenance</title></html>", [], None])
+DEEP = b"[" * 100_000  # JSON nested deeper than Python's parser recurses
+
+
+@pytest.mark.parametrize(
+    "body", [b"<html><title>Maintenance</title></html>", [], None, pytest.param(DEEP, id="nested too deep")]
+)
 def test_unreadable_get_body_is_an_error_not_a_miss(body):
     client = FakeClient(get=(200, body))
     with pytest.raises(ProviderError):
@@ -391,8 +396,9 @@ def test_overloaded_search_leaves_song_pending():
     assert raised.value.status == 503
 
 
-def test_unreadable_search_body_is_an_error_not_a_miss():
-    client = FakeClient(get=OVERLOADED, search=(200, {"code": 500, "name": "Oops"}))
+@pytest.mark.parametrize("body", [{"code": 500, "name": "Oops"}, pytest.param(DEEP, id="nested too deep")])
+def test_unreadable_search_body_is_an_error_not_a_miss(body):
+    client = FakeClient(get=OVERLOADED, search=(200, body))
     with pytest.raises(ProviderError):
         fetch(client)
 

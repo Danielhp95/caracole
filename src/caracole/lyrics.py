@@ -254,7 +254,7 @@ def _json(resp: Response, shape: type[Mapping] | type[list]) -> Any:
     """The JSON an answer holds, which must be a ``shape``: an object (``Mapping``) or a list."""
     try:
         found = resp.json()
-    except ValueError as e:  # also covers UnicodeDecodeError
+    except (ValueError, RecursionError) as e:  # UnicodeDecodeError too; or nested too deep
         raise LrclibParseError(PROVIDER, resp.url, resp.status, f"unreadable response: {e}") from e
     if not isinstance(found, shape):
         what = "object" if shape is Mapping else "list"
