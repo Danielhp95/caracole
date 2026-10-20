@@ -260,6 +260,26 @@ def test_select_mode_posts_the_songbook_on_the_served_page(library, tmp_path):
 
 
 @in_chromium
+def test_select_mode_says_its_state_and_each_picks_place_to_a_screen_reader(library, tmp_path):
+    conn, cfg = library
+    out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + """
+      pick("Hysteria"); pick("Creep");
+      const toggle = q(".pick-toggle");
+      const name = (title) => Array.from(card(title).querySelector(".pick").childNodes)  // its label, read aloud
+        .filter((n) => !(n.getAttribute && n.getAttribute("aria-hidden") === "true")).map((n) => n.textContent).join("");
+      out = {on: [toggle.textContent, toggle.getAttribute("aria-pressed")],
+             names: ["Hysteria", "Creep", "De Música Ligera"].map(name),
+             option: q(".pick-into option").textContent};
+      toggle.click();
+      out.off = [toggle.textContent, toggle.getAttribute("aria-pressed")];
+    """)
+    assert out["on"] == ["Select", "true"] and out["off"] == ["Select", "false"]  # pressed, never "Done, pressed"
+    assert out["names"] == ["Pick Hysteria by Muse, 1st", "Pick Creep by Radiohead, 2nd",
+                            "Pick De Música Ligera by Soda Stereo"]
+    assert out["option"] == "New songbook"  # fits the bar at 360 px
+
+
+@in_chromium
 def test_select_mode_needs_a_name_and_a_song(library, tmp_path):
     conn, cfg = library
     out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + """

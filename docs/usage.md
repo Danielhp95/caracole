@@ -1004,11 +1004,13 @@ missing, and its files, the phone page first, then the PDF and the ChordPro
 file. On the file on disk it names the `caracole songbook` commands that change
 it; `caracole serve` adds buttons. **Select**, beside the Sort menu, puts a
 box on each card: tick songs in the order they go in the songbook (each box
-shows its place), search and filter between ticks, and the bar at the bottom
-counts them, `3 selected`. Give the songbook a name and tap Make songbook, or
-pick a songbook there is in the menu to Add to it; Clear unticks them all, and
-Done leaves the mode. On the file on disk, which can't write anything, the bar
-shows the command to run where caracole runs, with Copy:
+shows its place, and a screen reader says it: "Pick Creep by Radiohead,
+2nd"), search and filter between ticks, and the bar at the bottom counts them,
+`3 selected`. Give the songbook a name and tap Make songbook, or pick a
+songbook there is in the menu (instead of New songbook) to Add to it; Clear
+unticks them all, and Select, pressed while the mode is on, leaves it. On the
+file on disk, which can't write anything, the bar shows the command to run
+where caracole runs, with Copy:
 `caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
 each word in single quotes, so that no shell changes a `!`, a `$` or a quote
 in a name.

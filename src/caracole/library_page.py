@@ -1161,7 +1161,7 @@ _SELECT_SCRIPT = r"""
   const form = el("form", "pick-form");
   const into = el("select", "pick-into");
   into.setAttribute("aria-label", "Into which songbook");
-  into.appendChild(new Option("A new songbook", ""));
+  into.appendChild(new Option("New songbook", ""));
   for (const name of books) into.appendChild(new Option(name, name));
   const intoLabel = el("label");
   intoLabel.appendChild(into);
@@ -1206,6 +1206,10 @@ _SELECT_SCRIPT = r"""
   bar.appendChild(inner);
   document.body.appendChild(bar);
 
+  const ordinal = (n) => {
+    const tens = n % 100;
+    return n + (tens >= 11 && tens <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th");
+  };
   // Only what changed is touched: the list's observer sees every change to a card's children.
   const paint = (card) => {
     const at = picked.indexOf(card.dataset.id);
@@ -1214,6 +1218,11 @@ _SELECT_SCRIPT = r"""
     const n = card.querySelector(".pick-n");
     const number = at >= 0 ? String(at + 1) : "";
     if (n && n.textContent !== number) n.textContent = number;
+    // The box's name says its place too: the number on it is hidden from a screen reader.
+    const said = card.querySelector(".pick-label");
+    const s = songs.get(card.dataset.id);
+    const name = s ? "Pick " + s.title + " by " + s.artist + (at >= 0 ? ", " + ordinal(at + 1) : "") : "";
+    if (said && s && said.textContent !== name) said.textContent = name;
     if (card.classList.contains("picked") !== (at >= 0)) card.classList.toggle("picked", at >= 0);
   };
   const paintAll = () => {
@@ -1245,7 +1254,7 @@ _SELECT_SCRIPT = r"""
         box.type = "checkbox";
         const order = el("span", "pick-n");
         order.setAttribute("aria-hidden", "true");
-        label.append(box, order, el("span", "visually-hidden", "Pick " + s.title + " by " + s.artist));
+        label.append(box, order, el("span", "visually-hidden pick-label", "Pick " + s.title + " by " + s.artist));
         box.addEventListener("change", () => pick(id, box.checked));
         (card.querySelector(".head") || card).prepend(label);
       }
@@ -1257,8 +1266,7 @@ _SELECT_SCRIPT = r"""
 
   const setMode = (on) => {
     document.body.classList.toggle("selecting", on);
-    toggle.setAttribute("aria-pressed", on ? "true" : "false");
-    toggle.textContent = on ? "Done" : "Select";
+    toggle.setAttribute("aria-pressed", on ? "true" : "false");  // its name stays "Select": pressed or not
     bar.hidden = !on;
     paintAll();
   };
