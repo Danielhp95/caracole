@@ -817,6 +817,15 @@ _SCRIPT = r"""
     return look;
   };
 
+  // A song not found, on the file, which can't search: the line that lists its search hits, numbered as
+  // `caracole review --song … --pick N` takes them.
+  const notFoundHint = (s) => {
+    const hint = el("p", "pick-hint", "Not in the offline Ultimate Guitar index under this name: ");
+    hint.appendChild(el("code", null, "caracole review --song " + shellQuote(String(s.display))));
+    hint.appendChild(document.createTextNode(" lists what caracole search finds for it, to pick one."));
+    return hint;
+  };
+
   // The picker: a song in review's candidates, numbered as `caracole review` numbers them. The file shows
   // them with the line that picks one; caracole serve, with a form whose answer `caracole review --song`
   // writes (web/app.py). makePicker(song) builds it from a song of the data that has `candidates`.
@@ -974,6 +983,8 @@ _SCRIPT = r"""
       note.appendChild(todo);
       note.appendChild(document.createTextNode(", or run caracole review."));
       card.appendChild(note);
+    } else if (!server && s.notFound && s.status === "wanted") {
+      card.appendChild(notFoundHint(s));
     }
 
     const actions = el("div", "actions");

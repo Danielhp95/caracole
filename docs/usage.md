@@ -1102,7 +1102,10 @@ differently", "title only: another artist's song, probably a cover", "under
 UG's catch-all misc-musicals"), its score, its tabs per type ("Chords ×2 ·
 Tabs ×1") and a link to its page on UG. The file can't write overrides.toml,
 so it ends with the line to run, as `caracole review --song "Radio Head -
-Crep"`; `caracole serve` makes the list a picker (see below).
+Crep"`; `caracole serve` makes the list a picker (see below). A wanted song
+the offline index didn't match says so, with the same line: for it, that
+lists what `caracole search` finds, numbered as `--pick` takes them (see
+[Review](#review)); `caracole serve` links to them instead.
 
 The search box filters as you type. It ignores case and accents, so "musica"
 finds "De Música Ligera", and it matches Chinese titles by pinyin: "ban ma" or

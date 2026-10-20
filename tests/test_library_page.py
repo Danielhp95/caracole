@@ -970,5 +970,9 @@ def test_the_served_card_of_a_song_not_found_links_to_its_search_hits(conn, cfg,
     card = card_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
     assert re.search(rf'<a class="btn" href="/review\?song={lost.id}"[^>]*>Look in the index</a>', card)
     assert "/fetch" in card  # its artist's UG page may have it: Fetch now still asks
-    on_file = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
-    assert "/review" not in card_of(on_file, "Crep")
+    on_file = card_of(listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path)), "Crep")
+    assert "/review" not in on_file
+    # The file can't search: it names the line that lists the hits, numbered as --pick takes them.
+    hint = re.search(r'<p class="pick-hint">(.*?)</p>', on_file, re.S)
+    assert hint and '<code>caracole review --song "Radio Head - Crep"</code>' in hint.group(1), on_file
+    assert "caracole search finds for it" in hint.group(1)
