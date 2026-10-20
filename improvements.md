@@ -96,6 +96,13 @@ When requesting a new song, having a full new page is a bit verbose when I norma
 
 Have a button to remove the tab from caracole so that it's removed localy, when running `caracole run` it won't be redownloaded and essentially permantently removed from the system until it is requested again.
 
+**Done in [8bf75db](https://github.com/Danielhp95/caracole/commit/8bf75db).** Remove a song with `caracole remove "Artist - Title"`, or with the **Remove…** button on its card in `caracole serve`. Both first show what goes and what stays, then ask; `--yes` skips the question on the command line.
+- **What goes:** the song's lines in wanted.txt (the rest of the file, comments included, stays as it was), the files caracole wrote in its folder (sheets, tabs, Guitar Pro files, scores, .cho, PDFs, viewers, lyrics, info.json), the folder once empty, and its database record.
+- **What stays:** files caracole didn't write, which the removal names, and the audio in Music/.
+- **It stays out:** caracole remembers the song as removed, so `caracole run` brings it back from neither wanted.txt nor a Spotify playlist that still lists it. The to-do page, index.html and `caracole search` no longer show it.
+- **Getting it back:** `caracole add`, a web request, its line typed into wanted.txt again, or adding it on Spotify after the removal all bring it back as a new song.
+- `caracole remove --list` shows what you've removed.
+
 ## what to do with chord pro files?
 
 What do I do with those files? Should I open them with some specific program?
