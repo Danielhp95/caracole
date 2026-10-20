@@ -172,14 +172,14 @@ a { color: inherit; }
 .i-pause, .i-play { width: 16px; height: 16px; fill: currentColor; }
 .pill .ring { width: 44px; height: 44px; fill: none; stroke: currentColor; stroke-width: 3; transform: rotate(-90deg); }
 .pill .ring .track { opacity: .3; }
-.pill .ring .bar { stroke-dasharray: 100; stroke-dashoffset: 0; }
+.pill .ring .arc { stroke-dasharray: 100; stroke-dashoffset: 0; }
 .tick { font-size: 1.05rem; font-weight: 700; }
 .pill .ring, .pill .tick, .pill .i-play,
 .pill[data-state="counting"] .i-pause, .pill[data-state="paused"] .i-pause { display: none; }
 .pill[data-state="counting"] .tick, .pill[data-state="paused"] .i-play { display: block; }
 @media (prefers-reduced-motion: no-preference) {
   .pill[data-state="counting"] .ring { display: block; }
-  .pill[data-state="counting"] .ring .bar { animation: drain 3s linear forwards; }
+  .pill[data-state="counting"] .ring .arc { animation: drain 3s linear forwards; }
 }
 @keyframes drain { to { stroke-dashoffset: 100; } }
 .vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%);

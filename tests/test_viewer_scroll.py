@@ -115,6 +115,9 @@ def test_the_pill_is_on_the_page_hidden_until_scrolling_starts():
     assert re.findall(r'<button type="button"[^>]*id="([^"]+)"[^>]*aria-label="([^"]*)"', inside) == [
         ("go", "Pause"), ("pill-slower", "Slower"), ("pill-faster", "Faster"), ("pill-end", "Stop scrolling")]
     assert '<output id="pill-speed">6</output>' in inside
+    # The countdown's ring: a track and the arc that empties, named apart from the bar's rules.
+    assert re.search(r'<svg class="ring"[^>]*><circle class="track"[^>]*/><circle class="arc"[^>]*/></svg>', inside)
+    assert re.findall(r'class="[^"]*\bbar\b(?!-)', html) == ['class="bar']  # the bar alone
     # A live region outside the pill, there before it shows, says when it starts and stops.
     assert re.search(r'<p class="vh" id="scroll-status" role="status"></p>', html)
     # ▶ in the bar starts it; the pill's − and + set the speed, a number: no slider without one.
@@ -209,7 +212,10 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
         b.click("#scroll")
         pressed = b.js("performance.now()")
         counting = look(b)
-        ring = b.js("getComputedStyle(document.querySelector('#go .ring .bar')).animationName")
+        ring = b.js("getComputedStyle(document.querySelector('#go .ring .arc')).animationName")
+        # The arc drawn in the button's own colour, as the number and the track are.
+        colours = b.js("""['#go', '#go .ring .arc', '#go .ring .track']
+          .map((s) => getComputedStyle(document.querySelector(s))).map((c, i) => i ? c.stroke : c.color)""")
         time.sleep(1.2)
         later = look(b)
         assert b.wait("document.querySelector('#go').getAttribute('aria-label') === 'Pause'", 5)
@@ -231,6 +237,7 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
     assert counting["go"] == "Start now" and counting["tick"] == "3" and counting["icons"] == ["ring", "tick"]
     assert counting["status"] == "Scrolling in 3 seconds" and counting["y"] == 0
     assert ring == "drain"  # the ring empties as the seconds pass
+    assert colours[1] == colours[2] == colours[0]
     assert later["tick"] == "2" and later["y"] == 0
     assert 2900 <= first - pressed <= 4000
     assert running["icons"] == ["i-pause"] and running["status"] == "Scrolling"
