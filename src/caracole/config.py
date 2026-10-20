@@ -42,10 +42,14 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     "gtptabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
     # Its song sitemaps, for the to-do page's links: nothing is downloaded (musescore.py).
     "musescore": ProviderPolicy(budget=10, delay=(10.0, 20.0)),
+    # yt-dlp, for the audio of a song nobody has charted (youtube.py): a budget of yt-dlp runs,
+    # each a search or a download, so six are three songs a night. A run sends several requests,
+    # which yt-dlp's own pauses space out; these pauses go between two runs.
+    "youtube": ProviderPolicy(budget=6, delay=(15.0, 30.0)),
 }
 # The providers [providers.<name>] can turn off with `enabled = false`. The others are what
 # caracole is built on, so for them `enabled` is an unknown key like any other.
-SWITCHABLE = frozenset({"gtptabs", "musescore"})
+SWITCHABLE = frozenset({"gtptabs", "musescore", "youtube"})
 
 
 @dataclass(frozen=True)
@@ -124,6 +128,7 @@ class Config:
     user_agent: str = DEFAULT_USER_AGENT
     guitar_pro_mode: str = "assisted"
     chordpro_bin: str = "chordpro"
+    ytdlp_bin: str = "yt-dlp"
     cjk_font: Path | None = None
     spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
     providers: Mapping[str, ProviderPolicy] = field(default_factory=lambda: dict(DEFAULT_PROVIDERS))
@@ -143,7 +148,7 @@ class Config:
 _TOP_KEYS = {
     "data_dir", "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file",
     "wanted_file",
-    "user_agent", "guitar_pro_mode", "chordpro_bin", "cjk_font",
+    "user_agent", "guitar_pro_mode", "chordpro_bin", "ytdlp_bin", "cjk_font",
     "spotify", "providers", "match", "rank", "ntfy", "autochords",
 }
 _SPOTIFY_KEYS = {
@@ -407,6 +412,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
     )
 
     cjk_font_value = _optional_string(data, "cjk_font", "cjk_font") or env.get("CARACOLE_CJK_FONT")
+    ytdlp_bin = _optional_string(data, "ytdlp_bin", "ytdlp_bin") or env.get("CARACOLE_YTDLP_BIN") or "yt-dlp"
 
     return Config(
         library_dir=library_dir,
@@ -418,6 +424,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         user_agent=_string(data.get("user_agent", DEFAULT_USER_AGENT), "user_agent"),
         guitar_pro_mode=mode,
         chordpro_bin=_string(data.get("chordpro_bin", "chordpro"), "chordpro_bin"),
+        ytdlp_bin=ytdlp_bin,
         cjk_font=paths.resolve(cjk_font_value) if cjk_font_value else None,
         spotify=spotify,
         providers=providers,

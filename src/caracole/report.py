@@ -111,6 +111,8 @@ def why(error: BaseException) -> str:
     network = _network_error(error)
     if network is not None:
         return "didn't answer in time" if isinstance(network, httpx.TimeoutException) else "couldn't be reached"
+    if isinstance(error.__cause__, TimeoutError):  # a program stopped after its timeout (yt-dlp, youtube.py)
+        return "didn't answer in time"
     status = getattr(error, "status", None)
     if isinstance(status, int):
         if status in (502, 503, 504):
@@ -420,7 +422,8 @@ def style_for(stream: Any, env: Mapping[str, str] | None = None) -> Style:
 
 _COUNTED = re.compile(r"^## (.+) \((\d+)\)$", re.MULTILINE)
 # Sections of the to-do page that only tell you something: caracole keeps at them by itself.
-FOR_YOUR_INFORMATION = frozenset({"Partial sheets", "Missing lyrics", "Suggestions from your Spotify top tracks"})
+FOR_YOUR_INFORMATION = frozenset({"Partial sheets", "Missing lyrics", "Suggestions from your Spotify top tracks",
+                                  "No human sheet found yet"})  # the last: what caracole takes from YouTube
 
 
 def todo_count(page: str) -> int:

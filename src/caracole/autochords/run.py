@@ -1,7 +1,10 @@
 """Auto-chords over the library: ``sheet (auto).txt`` for songs you bought (plan §4).
 
 ``autochords_pending`` is what the ``caracole-autochords`` unit runs, offline,
-after the nightly run has linked new purchases (``music.scan_music``). A song
+after the nightly run has linked new purchases (``music.scan_music``), or audio
+it took from YouTube (``youtube_fetch.py``), which is linked the same way and
+used the same way: such a sheet says which video its audio came from, on the
+line after the song's name, and its version's URL is the video's. A song
 with linked audio is due when:
 
 - its audio file exists;
@@ -62,6 +65,8 @@ from caracole.music import read_audio
 from caracole.overrides import Overrides, load_overrides
 from caracole.songs import Song, get_song, list_songs, refresh_status, update_song
 from caracole.versions import get_version, upsert_version
+from caracole.youtube import Video
+from caracole.youtube_fetch import youtube_audio
 
 log = logging.getLogger(__name__)
 
@@ -178,14 +183,15 @@ def autochords_pending(
         if models is None:
             stats.failed += 1
             continue
+        video = youtube_audio(conn, song)  # audio youtube_fetch.py took, rather than a purchase
         try:
-            text, used, key = _make_sheet(song, *models)
+            text, used, key = _make_sheet(song, *models, source=_from_youtube(video))
         except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
             stats.failed += 1
             stats.failures.append(_unreadable(conn, song, e, stamp))
             continue
         try:
-            _keep(conn, cfg, song, text, used, key, stamp)
+            _keep(conn, cfg, song, text, used, key, stamp, video=video)
         except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
             _error(stats, song, e)
             continue
@@ -402,11 +408,20 @@ def _synced_for(lyrics: Lyrics | None, audio: Path) -> str | None:
     return lyrics.synced
 
 
+def _from_youtube(video: Video | None) -> str | None:
+    """The sheet's line for audio taken from YouTube: which video it was."""
+    if video is None:
+        return None
+    named = f"{video.title} ({video.channel})" if video.channel else video.title or video.id
+    return f"Audio from YouTube: {named}, {video.url}"
+
+
 def _make_sheet(
-    song: Song, recognizer: Recognizer, beats_fn: BeatsFn
+    song: Song, recognizer: Recognizer, beats_fn: BeatsFn, *, source: str | None = None
 ) -> tuple[str, str, str | None]:
     """One song's auto sheet, which lyrics it used, and the key of the chords heard (None when
-    they fit no key); all of it comes from its audio file.
+    they fit no key); all of it comes from its audio file. ``source`` says where that came
+    from, when it wasn't a purchase.
 
     The key is estimated from the chords as recognized, each weighed by how long it sounds,
     before they are snapped to beats and laid out.
@@ -426,6 +441,7 @@ def _make_sheet(
         plain=plain,
         beats=beats,
         downbeats=downbeats,
+        **({"source": source} if source else {}),
     )
     return text, "synced" if synced else "plain" if plain else "none", key
 
@@ -438,15 +454,20 @@ def _keep(
     used: str,
     key: str | None,
     stamp: str,
+    *,
+    video: Video | None = None,
 ) -> None:
     """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
 
-    The key heard goes into the version's ``raw``, for ``keys.song_key``.
+    The key heard goes into the version's ``raw``, for ``keys.song_key``. Audio from YouTube
+    (``video``) gives the version the video's address, so info.json names it, and its fields.
     """
     audio = Path(song.audio_path or "")
-    raw = {"audio": song.audio_path, "model": MODEL, "lyrics": used}
+    raw: dict[str, object] = {"audio": song.audio_path, "model": MODEL, "lyrics": used}
     if key is not None:
         raw["key"] = key
+    if video is not None:
+        raw["youtube"] = video.as_json()
     version_id = upsert_version(
         conn,
         provider=PROVIDER,
@@ -458,7 +479,7 @@ def _keep(
         votes=0,
         version=1,
         label=None,
-        url="file://" + str(audio.absolute()),
+        url=video.url if video is not None else "file://" + str(audio.absolute()),
         raw=raw,
         now=stamp,
     )

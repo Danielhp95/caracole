@@ -10,7 +10,9 @@ A removal takes, in this order:
    ids, and leaves its tombstone (``songs.mark_removed``), so that no source brings
    it back until you ask for it again (``songs.upsert_song``);
 3. the files caracole wrote out of its folder (``plan_removal`` says which), then
-   the folder, and its artist's, once empty.
+   the folder, and its artist's, once empty;
+4. the audio caracole took from YouTube for it (youtube_fetch.py), from caracole's
+   cache, where nothing else would ever use it.
 
 The library is synced, so every device lets go of the files too. Files caracole
 didn't write stay where they are, and the removal names each: nothing of yours
@@ -63,7 +65,8 @@ class RemovalPlan:
     its place). ``elsewhere`` holds kept files the database places in another
     folder, which stay. ``wanted_lines`` are the song's lines in wanted.txt, and
     ``wanted_problem`` why the file can't be read. ``audio`` is the purchase the
-    song lets go of.
+    song lets go of, and ``youtube_audio`` the files of audio caracole took from
+    YouTube for it, in its cache, which go.
     """
 
     song: Song
@@ -76,6 +79,7 @@ class RemovalPlan:
     wanted_problem: str | None = None
     audio: str | None = None
     versions: int = 0
+    youtube_audio: tuple[str, ...] = ()
 
 
 @dataclass
@@ -116,8 +120,10 @@ def plan_removal(conn: sqlite3.Connection, cfg: Config, song: Song) -> RemovalPl
         problem = str(e)
     lines, wanted_problem = _wanted_lines(cfg, song)
     versions = conn.execute("SELECT COUNT(*) FROM versions WHERE song_id = ?", (song.id,)).fetchone()[0]
+    youtube = _youtube_audio(conn, cfg, song)
+    bought = song.audio_path if song.audio_path and song.audio_path not in youtube else None
     return RemovalPlan(song, folder, tuple(sorted(delete)), tuple(sorted(keep)), problem, tuple(elsewhere),
-                       lines, wanted_problem, song.audio_path, versions)
+                       lines, wanted_problem, bought, versions, youtube)
 
 
 def remove_song(conn: sqlite3.Connection, cfg: Config, plan: RemovalPlan, *, now: datetime | None = None
@@ -160,6 +166,13 @@ def remove_song(conn: sqlite3.Connection, cfg: Config, plan: RemovalPlan, *, now
     conn.execute("RELEASE remove_song")
     if plan.folder_problem is None:
         _delete_files(cfg.library_dir, plan, result)
+    for path in plan.youtube_audio:
+        try:
+            Path(path).unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as e:  # the next youtube step's tidy deletes it: no song names it now
+            result.errors.append(f"can't delete {path}: {e.strerror or e}")
     return result
 
 
@@ -178,6 +191,8 @@ def describe(plan: RemovalPlan, cfg: Config) -> tuple[list[str], list[str], list
         goes.append(f"the folder {folder}, and its artist's once empty")
     record = "its record in caracole's database: its match, its lyrics"
     goes.append(record + (f" and {_count(plan.versions, 'version')} seen of it" if plan.versions else ""))
+    if plan.youtube_audio:
+        goes.append("the audio caracole took from YouTube for it, from caracole's cache")
     stays = [f"{folder}{name}: {why}" for name, why in plan.keep]
     if plan.folder_problem:
         stays.append(f"{folder}: {plan.folder_problem}, so nothing in it is deleted")
@@ -352,6 +367,16 @@ def _wanted_lines(cfg: Config, song: Song) -> tuple[tuple[int, ...], str | None]
     except OSError as e:
         return (), f"{cfg.wanted_file}: {e.strerror or e}"
     return tuple(sorted(set(lines))), None
+
+
+def _youtube_audio(conn: sqlite3.Connection, cfg: Config, song: Song) -> tuple[str, ...]:
+    """The song's files of audio caracole took from YouTube: what its record and its link name, in
+    caracole's own folder for them (``youtube_fetch.audio_dir``), never a file anywhere else."""
+    from caracole.youtube_fetch import audio_dir, load_record
+
+    folder = audio_dir(cfg)
+    named = (load_record(conn, song.id).audio, song.audio_path)
+    return tuple(dict.fromkeys(p for p in named if p and Path(p).parent == folder))
 
 
 def _audio(path: str, cfg: Config) -> str:

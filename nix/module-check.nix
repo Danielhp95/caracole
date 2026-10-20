@@ -29,6 +29,8 @@ let
   };
 
   stub = writeShellScriptBin "caracole" "exit 0";
+  # The auto-chords package's stand-in, told apart from the default one.
+  stubAutochords = writeShellScriptBin "caracole" "# with auto-chords\nexit 0";
   toml = pkgs.formats.toml { };
 
   evalSystem =
@@ -47,7 +49,7 @@ let
 
   stubbed.services.caracole = {
     package = stub;
-    autochords.package = stub;
+    autochords.package = stubAutochords;
   };
 
   # ntfy, Spotify and both static secrets, as the NUC will have them.
@@ -89,6 +91,13 @@ let
       && lib.elemAt args (i + 2) == value
     ) (lib.range 0 (lib.length args - 3));
   setsAny = package: name: lib.elem name package.makeWrapperArgs;
+  # Whether the wrapper puts that program's bin/ on PATH, as `--prefix PATH : …` does.
+  putsOnPath =
+    package: program:
+    let
+      plain = builtins.unsafeDiscardStringContext;
+    in
+    lib.any (arg: lib.elem (plain "${program}/bin") (lib.splitString ":" (plain arg))) package.makeWrapperArgs;
 
   bare = evalSystem [ stubbed ];
   nuc = evalSystem [
@@ -129,6 +138,13 @@ let
         credentials.web_token = "/run/agenix/caracole-web-token";
       };
     }
+  ];
+  # caracole-web with auto-chords on: it shows the pages the nightly run writes.
+  webAutochords = evalSystem [
+    stubbed
+    configured
+    autochordsOn
+    { services.caracole.web.enable = true; }
   ];
   # caracole-web on every address, with no access token.
   webOpen = evalSystem [
@@ -303,6 +319,8 @@ let
   movedConfigFile = toml.generate "caracole.toml" moved.services.caracole.settings;
   run = nuc.systemd.services.caracole;
   runSc = run.serviceConfig;
+  runAutochords = nucAutochords.systemd.services.caracole;
+  runAutochordsPackageModels = nucModelsFromPackage.systemd.services.caracole;
   timer = nuc.systemd.timers.caracole;
   notify = nuc.systemd.services.caracole-notify-failure;
   autochords = nucAutochords.systemd.services.caracole-autochords;
@@ -312,6 +330,8 @@ let
   webSc = web.serviceConfig;
   webConfigFile = toml.generate "caracole.toml" webDefault.services.caracole.settings;
   tailnetWeb = webTailnet.systemd.services.caracole-web;
+  webAutochordsUnit = webAutochords.systemd.services.caracole-web;
+  webAutochordsConfigFile = toml.generate "caracole.toml" webAutochords.services.caracole.settings;
   findAdmin =
     system: lib.findFirst (p: lib.getName p == "caracole-admin") null system.environment.systemPackages;
   admin = findAdmin nuc;
@@ -365,6 +385,21 @@ let
     "caracole.service waits for the network" =
       lib.elem "network-online.target" run.wants && lib.elem "network-online.target" run.after;
     "caracole.service starts nothing on success without auto-chords" = run.onSuccess == [ ];
+    "without auto-chords, caracole.service runs the default package and gets no model paths" =
+      !(run.environment ? CARACOLE_BTC_WEIGHTS) && !(run.environment ? CARACOLE_BEAT_CHECKPOINT);
+    # Its YouTube step (src/caracole/youtube_fetch.py) runs only where auto-chords' packages,
+    # model files and yt-dlp are: the auto-chords package.
+    "with auto-chords on, caracole.service runs the auto-chords package, with the model paths" =
+      runAutochords.serviceConfig.ExecStart == "${lib.getExe stubAutochords} --config ${configFile} run"
+      && runAutochords.environment.CARACOLE_BTC_WEIGHTS == "/models/btc.pt"
+      && runAutochords.environment.CARACOLE_BEAT_CHECKPOINT == "/models/beat_this.ckpt"
+      && !(runAutochordsPackageModels.environment ? CARACOLE_BTC_WEIGHTS);
+    # The run never imports torch, and yt-dlp's deno runs without its JIT (DENO_V8_FLAGS=--jitless).
+    "with auto-chords on, caracole.service keeps MemoryDenyWriteExecute and the rest of its hardening" =
+      runAutochords.serviceConfig.MemoryDenyWriteExecute && hardened runAutochords.serviceConfig
+      && !(runAutochords.serviceConfig ? PrivateNetwork);
+    "the auto-chords package puts yt-dlp on PATH, and the default package doesn't" =
+      putsOnPath autochordsPackage pkgs.yt-dlp && !(putsOnPath defaultPackage pkgs.yt-dlp);
     "caracole.timer fires at the schedule, catches up and spreads the start" =
       timer.timerConfig.OnCalendar == "*-*-* 03:30"
       && timer.timerConfig.Persistent == true
@@ -384,7 +419,7 @@ let
     "caracole-autochords.service opens the same folders as caracole.service, numba's cache in the cache" =
       opens autochords defaultLayout;
     "caracole-autochords.service runs `caracole --config <generated caracole.toml> autochords`" =
-      autochordsSc.ExecStart == "${lib.getExe stub} --config ${configFile} autochords";
+      autochordsSc.ExecStart == "${lib.getExe stubAutochords} --config ${configFile} autochords";
     "caracole-autochords.service runs as caracole, with a group-writable umask" = sameUser autochordsSc;
     # It reads no secret, and its parsers (FFmpeg, libsndfile) see the most outside data.
     "caracole-autochords.service loads no credentials" =
@@ -419,6 +454,15 @@ let
     "caracole-web.service listens where web.address and web.port say, answering to web.allowedHosts" =
       lib.hasSuffix " serve --address 100.64.0.7 --port 8740 --allow-host nuc.example.ts.net --allow-host nuc"
         tailnetWeb.serviceConfig.ExecStart;
+    # Its pages and the commands it runs (add, match, fetch, render) rewrite _todo.md and index.html,
+    # which say whether caracole takes audio from YouTube (src/caracole/youtube_fetch.py
+    # route_problem): with auto-chords on, they must say it as the nightly run does.
+    "with auto-chords on, caracole-web.service runs the auto-chords package, with the model paths" =
+      webAutochordsUnit.serviceConfig.ExecStart
+      == "${lib.getExe stubAutochords} --config ${webAutochordsConfigFile} serve --address 127.0.0.1 --port 8737"
+      && webAutochordsUnit.environment.CARACOLE_BTC_WEIGHTS == "/models/btc.pt"
+      && webAutochordsUnit.environment.CARACOLE_BEAT_CHECKPOINT == "/models/beat_this.ckpt"
+      && webAutochordsUnit.serviceConfig.MemoryDenyWriteExecute;
     "caracole-web.service is hardened as caracole.service is, MemoryDenyWriteExecute included" =
       hardened webSc && webSc.MemoryDenyWriteExecute && webSc.RestrictNamespaces;
     "caracole-web.service runs as caracole, with a group-writable umask" = sameUser webSc;
@@ -473,10 +517,10 @@ let
         "/data/caracole";
     "with dataDir = /data/caracole, both units run with the generated caracole.toml" =
       moved.systemd.services.caracole.serviceConfig.ExecStart
-      == "${lib.getExe stub} --config ${movedConfigFile} run"
+      == "${lib.getExe stubAutochords} --config ${movedConfigFile} run"
       &&
         moved.systemd.services.caracole-autochords.serviceConfig.ExecStart
-        == "${lib.getExe stub} --config ${movedConfigFile} autochords";
+        == "${lib.getExe stubAutochords} --config ${movedConfigFile} autochords";
     "libraryDir set on its own moves the library alone" =
       hasLayout libraryAlone libraryAloneLayout
       && opens libraryAlone.systemd.services.caracole libraryAloneLayout

@@ -5,9 +5,11 @@ asks each site that has no icon kept, even one whose last try was less than a
 week ago, with a client of its own (``make_client``: caracole's lock, the
 provider's budget and pauses, its cooldown). What a site answered less than a
 week ago still comes from the cache (``icons._look``), so asking again sooner
-retries an error, never an answer. A site with no provider of its own yet (YouTube) gets
-``ICON_POLICY``. A block cools that provider down as any block does, and the
-other sites are still asked; a block or an error exits 0. A site that answered a
+retries an error, never an answer. A site with no provider of its own gets
+``ICON_POLICY``; YouTube has one (yt-dlp's, for the nightly run's youtube step),
+whose budget and pauses its icon keeps to, and which ``[providers.youtube]
+enabled = false`` turns off. A block cools that provider down as any block does,
+and the other sites are still asked; a block or an error exits 0. A site that answered a
 request of this command's had a good run (``record_ok``), as the nightly run
 counts one; an answer from the cache alone leaves its health as it was.
 """

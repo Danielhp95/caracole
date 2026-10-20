@@ -18,6 +18,9 @@ Tables:
 - ``[reject]``: "Artist - Title" → "ug-artist/ug-song"s that are not the song
   (``caracole review``'s "none of these"): the matcher never offers them again,
   and goes on looking for the song.
+- ``[youtube]``: "Artist - Title" → the YouTube video caracole takes the song's
+  audio from, in place of the one its search picks (youtube_fetch.py), or "none":
+  never take this song's audio from YouTube.
 
 Keys are canonicalized when loaded, so they're matched the same way songs are.
 Writers use tomlkit, so your comments and layout survive.
@@ -43,6 +46,7 @@ from tomlkit.exceptions import TOMLKitError
 
 from caracole.library import NotRegularFile, read_regular, write_atomic
 from caracole.normalize import compact, identity_key, name_forms, slug_key, ug_slug_key
+from caracole.youtube import video_id_from_url, watch_url
 
 # UG's hosts as an address bar shows them, in any case: www and tabs, the bare domain, and a language
 # edition's (UG's tab pages link to es.ultimate-guitar.com as their Spanish edition). Whichever host it
@@ -59,7 +63,10 @@ _ARTIST_HOST = "https://www.ultimate-guitar.com"
 # How messages and the to-do page write an artist page's address and a tab page's.
 ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
 TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
-_TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject"}
+_TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube"}
+# How messages and the to-do page write a YouTube video's address, and the value that says "no video".
+VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
+NO_VIDEO = "none"
 _TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
 
 
@@ -71,7 +78,8 @@ class OverridesError(Exception):
 class Overrides:
     """overrides.toml, canonicalized. ``pin_urls`` holds each pin's address, in ``pin``'s order;
     ``reject`` holds each song's rejected (artist key, song key) pairs, every entry of the song's;
-    ``artist_url_names`` the name each ``[artist_url]`` entry is written under, by its key."""
+    ``artist_url_names`` the name each ``[artist_url]`` entry is written under, by its key;
+    ``youtube`` each song's video id, or None for "none"."""
 
     alias: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     match: Mapping[str, tuple[str, str]] = field(default_factory=dict)
@@ -83,6 +91,7 @@ class Overrides:
     pin_urls: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     reject: Mapping[str, frozenset[tuple[str, str]]] = field(default_factory=dict)
     artist_url_names: Mapping[str, str] = field(default_factory=dict)
+    youtube: Mapping[str, str | None] = field(default_factory=dict)
 
 
 def override_key(display: str) -> str:
@@ -333,11 +342,24 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         refs = frozenset(_ug_ref(r, where) for r in _strings(v, where))
         reject[ident] = reject.get(ident, frozenset()) | refs  # the song written two ways: both count
 
+    youtube = {_song_key(k, f"[youtube] {k!r}"): _video(v, f"[youtube] {k!r}") for k, v in table("youtube").items()}
+
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
-        artist_url_names=artist_url_names,
+        artist_url_names=artist_url_names, youtube=youtube,
     )
+
+
+def _video(value: Any, where: str) -> str | None:
+    """A ``[youtube]`` value: the id of the video at a YouTube address, or None for "none"."""
+    if isinstance(value, str) and value.strip().lower() == NO_VIDEO:
+        return None
+    video = video_id_from_url(value)
+    if video is None:
+        raise OverridesError(f"{where}: expected a YouTube video's address ({VIDEO_SHAPE}) or \"{NO_VIDEO}\", "
+                             f"got {value!r}")
+    return video
 
 
 def _edit(path: Path, change) -> None:
@@ -422,6 +444,33 @@ def add_reject(path: Path, display: str, ug_refs: Sequence[str]) -> None:
 
     if refs:
         _edit(path, change)
+
+
+def add_youtube(path: Path, display: str, url: str) -> None:
+    """Set the song's ``[youtube]`` entry: the video at ``url``, written as its plain address, or "none".
+
+    The song's entry is found by its key, as the table is read, so the song written another
+    way changes the entry it has. The same video, or "none" again, writes nothing.
+    """
+    wanted = override_key(display)
+    video = _video(url, f"[youtube] {display!r}")
+    value = NO_VIDEO if video is None else watch_url(video)
+
+    def same_song(key: str) -> bool:
+        try:
+            return override_key(key) == wanted
+        except OverridesError:
+            return False
+
+    def change(doc) -> None:
+        t = _table_of(doc, "youtube")
+        key = next((k for k in reversed(list(t)) if same_song(k)), None)
+        if key is None:
+            t[display] = value
+        elif _video(t[key], f"[youtube] {key!r}") != video:
+            t[key] = value
+
+    _edit(path, change)
 
 
 def add_artist_url(path: Path, artist: str, url: str) -> None:

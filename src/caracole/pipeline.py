@@ -1,13 +1,16 @@
 """The nightly ``caracole run`` (plan §6).
 
 Steps, in order: sync → icons → index → match → lyrics → fetch → lacuerda →
-scan → gtptabs → musescore → render → todo. Each step runs even if an earlier
+scan → gtptabs → musescore → youtube → render → todo. Each step runs even if an earlier
 one failed, so the to-do page is always rewritten.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
-  the run once it blocks. So are gtptabs and musescore when caracole.toml turns one
-  off: it gets no client then. A block records a cooldown (24 h, doubling) and sends
-  one ntfy message; it is expected behaviour, not a failed run.
+  the run once it blocks. So are gtptabs, musescore and youtube when caracole.toml
+  turns one off: it gets no client then. A block records a cooldown (24 h, doubling)
+  and sends one ntfy message; it is expected behaviour, not a failed run.
+- The youtube step runs yt-dlp (youtube.py, youtube_fetch.py) only in a caracole
+  with auto-chords, which makes the chords of what it downloads: without, the run
+  makes no yt-dlp runner and the step is skipped, and the to-do page says why.
 - An exhausted budget or a provider error ends that step for this run; neither
   is a failure, and neither ever marks a song "not found".
 - Anything else is a bug: it's recorded, the remaining steps still run, and
@@ -358,6 +361,28 @@ def _musescore(ctx: StepContext) -> StepResult:
     return result
 
 
+def _youtube(ctx: StepContext) -> StepResult:
+    from caracole.youtube_fetch import route_problem, youtube_pass
+
+    problem = route_problem(ctx.cfg)
+    runner = ctx.services.clients.get("youtube")
+    if problem is not None or runner is None:
+        return StepResult(status=f"skipped: {problem or 'no yt-dlp runner this run'}")
+    s = youtube_pass(ctx.conn, runner, ctx.cfg, ctx.now, overrides=ctx.overrides)
+    if s.errors:
+        record_error(ctx.conn, "youtube", ctx.now, f"{plural(s.errors, 'song')} failed this run")
+    tail = " (budget spent)" if s.budget_exhausted else ""
+    return StepResult(
+        title="YouTube",
+        done=_counted(_songs(s.downloaded, "downloaded"), _songs(s.missing, "not there")),
+        failures=[Failure.of(song, e) for song, e in s.failures],
+        retry="{songs} will be looked for on YouTube again on the next run",
+        spent=["youtube"] if s.budget_exhausted else [],
+        status=(f"{s.tried} tried, {s.downloaded} downloaded, {s.missing} not on YouTube, {s.unavailable} unavailable, "
+                f"{plural(s.errors, 'error')}{tail}"),
+    )
+
+
 def _scan(ctx: StepContext) -> StepResult:
     from caracole.inbox import file_inbox
     from caracole.music import scan_music
@@ -444,6 +469,8 @@ def default_steps() -> list[Step]:
         # After the scan: a file you dropped into _inbox/ is filed first, so its song gets no other.
         Step("gtptabs", _gtptabs, provider="gtptabs"),
         Step("musescore", _musescore, provider="musescore"),
+        # After the scan, so a purchase dropped into Music/ is linked first and nothing is downloaded for it.
+        Step("youtube", _youtube, provider="youtube"),
         Step("render", _render),
         Step("todo", _todo),
     ]
@@ -453,19 +480,23 @@ def default_steps() -> list[Step]:
 
 
 def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Services:
-    """Real clients for a run: one polite client per provider turned on, Spotify if configured.
+    """Real clients for a run: one polite client per provider turned on, yt-dlp when the YouTube
+    route is on (``youtube_fetch.route_problem``), Spotify if configured.
 
-    The clients are the commands' own (``commands._common.make_client``): each
-    holds caracole's lock until it is closed, and its first request keeps the
-    pause after the provider's last one, whichever caracole sent it.
+    The clients are the commands' own (``commands._common.make_client`` and
+    ``make_youtube``): each holds caracole's lock until it is closed, and its first
+    request keeps the pause after the provider's last one, whichever caracole sent it.
     """
-    from caracole.commands._common import make_client, transport_for
+    from caracole.commands._common import make_client, make_youtube, transport_for
+    from caracole.youtube_fetch import route_problem
 
     clients: dict[str, Any] = {}
     try:
         for p in PROVIDERS:
             if cfg.provider(p).enabled:
                 clients[p] = make_client(cfg, conn, p, run_id)
+        if route_problem(cfg) is None:
+            clients["youtube"] = make_youtube(cfg, conn, run_id)
     except BaseException:  # Ctrl-C during a pause, say: the clients made let go of the lock
         for client in clients.values():
             client.close()

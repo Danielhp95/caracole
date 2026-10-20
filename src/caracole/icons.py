@@ -1,7 +1,8 @@
 """Where a sheet, a tab or a file came from, shown by its site's own icon (index.html, search).
 
 Each source (``SOURCES``) is a value of ``versions.provider`` ("ug", "lacuerda", "gtptabs",
-"inbox", "auto"), or LRCLIB for the lyrics. A site's icon is its favicon, fetched once
+"inbox", "auto"), LRCLIB for the lyrics, or YouTube for an auto sheet made from the audio
+caracole took from there. A site's icon is its favicon, fetched once
 (``fetch_icons``) and kept in ``cache_dir/icons/<source>.png``; the page inlines it as a
 ``data:`` URI, so index.html still loads nothing from the network. A source with no icon
 yet (never fetched, blocked, closed by robots.txt, none there) shows a lettered badge
@@ -63,6 +64,7 @@ RETRY = timedelta(days=7)  # how long a site that gave no icon is left alone
 LYRICS = "lrclib"  # the source of lyrics.txt and lyrics.lrc
 AUTO = "auto"  # the auto-chords sheet's (autochords/run.py PROVIDER)
 INBOX = "inbox"  # a score you filed from _inbox/ (inbox.py)
+YOUTUBE = "youtube"  # an auto sheet's, when its audio came from YouTube (youtube_fetch.py)
 FOLDER = "icons"  # in cache_dir
 
 
@@ -116,12 +118,16 @@ SHEETS = ("sheet.txt", "sheet (auto).txt")  # a song's sheet, the human one firs
 
 
 def kept_sources(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
-    """Where each kept file came from, by song and file name: its version's provider."""
+    """Where each kept file came from, by song and file name: its version's provider; YouTube for
+    an auto sheet made from audio caracole took from there (autochords/run.py keeps the video in
+    its version's ``raw``), a purchase's being the audio model's alone."""
     found: dict[int, dict[str, str]] = {}
-    for song_id, name, provider in conn.execute(
-        "SELECT f.song_id, f.name, v.provider FROM files f JOIN versions v ON v.id = f.version_id"
+    for song_id, name, provider, from_youtube in conn.execute(
+        "SELECT f.song_id, f.name, v.provider, "
+        "CASE WHEN json_valid(v.raw) THEN json_type(v.raw, '$.youtube') END = 'object' "
+        "FROM files f JOIN versions v ON v.id = f.version_id"
     ):
-        found.setdefault(song_id, {})[name] = provider
+        found.setdefault(song_id, {})[name] = YOUTUBE if provider == AUTO and from_youtube else provider
     return found
 
 

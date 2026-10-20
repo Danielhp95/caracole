@@ -254,6 +254,26 @@ def test_cjk_font_setting_and_env(tmp_path):
     assert load_config(None, env={"HOME": str(tmp_path)}).cjk_font is None
 
 
+def test_youtube_is_a_switchable_provider_of_a_few_yt_dlp_runs_a_night(tmp_path):
+    # A run is a search or a download: six are three songs. Its pauses are longer than a site's,
+    # since each run sends several requests of its own (which yt-dlp's own pauses space out).
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    assert cfg.provider("youtube") == ProviderPolicy(budget=6, delay=(15.0, 30.0), enabled=True)
+    p = write(tmp_path, "[providers.youtube]\nenabled = false\nbudget = 2\n")
+    assert load_config(p, env={"HOME": str(tmp_path)}).provider("youtube") == ProviderPolicy(
+        budget=2, delay=(15.0, 30.0), enabled=False)
+
+
+def test_ytdlp_bin_setting_and_env(tmp_path):
+    # As chordpro_bin, a program found on PATH by default; CARACOLE_YTDLP_BIN points elsewhere, and
+    # the file's own key wins over both.
+    assert load_config(None, env={"HOME": str(tmp_path)}).ytdlp_bin == "yt-dlp"
+    env = {"HOME": str(tmp_path), "CARACOLE_YTDLP_BIN": "/opt/yt-dlp/bin/yt-dlp"}
+    assert load_config(None, env=env).ytdlp_bin == "/opt/yt-dlp/bin/yt-dlp"
+    p = write(tmp_path, 'ytdlp_bin = "/srv/yt-dlp"\n')
+    assert load_config(p, env=env).ytdlp_bin == "/srv/yt-dlp"
+
+
 # --- values of the wrong type or out of range -----------------------------------------------
 #
 # Unknown keys are errors so that a typo never falls back to a default unnoticed (usage.md);
@@ -291,6 +311,7 @@ def test_a_path_that_is_not_a_string_is_a_config_error(tmp_path, toml, named):
     [
         ("user_agent = 5\n", "user_agent"),
         ("chordpro_bin = 5\n", "chordpro_bin"),
+        ("ytdlp_bin = 5\n", "ytdlp_bin"),
         ("[spotify]\nclient_id = 12345\n", "client_id"),
         ("[spotify]\nredirect_uri = 5\n", "redirect_uri"),
         ("[ntfy]\nurl = 5\n", "url"),

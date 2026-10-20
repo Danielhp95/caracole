@@ -4,6 +4,11 @@ Every section is a list of things only you can do: confirm a match, download a
 Guitar Pro file, buy a track, replace a purchase auto-chords can't read, find an
 artist's UG page. Each comes with the links to do it, and the exact
 overrides.toml line to paste.
+
+The songs no human sheet was found for are a buy list, unless caracole takes
+their audio from YouTube (youtube_fetch.py: with auto-chords, unless turned
+off). Then they are "No human sheet found yet", each with where it stands, for
+your information, and only those YouTube had nothing for need you.
 """
 
 from __future__ import annotations
@@ -25,14 +30,28 @@ from caracole.lyrics import song_lyrics
 from caracole.musescore import song_pages
 from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
-from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, Overrides
+from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, VIDEO_SHAPE, Overrides
 from caracole.songs import Song, list_removed, list_songs
 from caracole.ug.fetch import artist_is_known, needs_artist_page, pasted_page_problem, songs_to_fetch
 from caracole.ug.index import index_state
 from caracole.ug.lookup import song_tabs
+from caracole.youtube import Video
+from caracole.youtube_fetch import (
+    BLOCKED,
+    CHORDS,
+    DECLINED,
+    DOWNLOADED,
+    MISSING,
+    UNUSABLE,
+    route_problem,
+    song_states,
+    videos_by_audio,
+)
 
-PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs", "musescore")
+PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs", "musescore", "youtube")
 SCORES_TITLE = "Scores on MuseScore"
+NO_SHEET_TITLE = "No human sheet found yet"  # the buy list, when caracole takes the audio from YouTube
+NOTHING_TITLE = "Nothing on YouTube for these"
 GUITAR_KINDS = ("guitar-pro", "power", "tabs")
 NEW_FILES_FOR = timedelta(days=7)  # how long a file downloaded from gtptabs.com is listed as new
 _MD_SPECIAL = "\\`*_[]<>|"
@@ -339,16 +358,106 @@ def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrid
     return buy, waiting
 
 
+def _buy_links(s: Song) -> str:
+    L = search_links(s.artist, s.title)
+    return f"buy: {_link('Bandcamp', L['bandcamp'])} · {_link('Qobuz', L['qobuz'])} · {_link('iTunes', L['itunes'])}"
+
+
+def _check_first(s: Song) -> str:
+    L = search_links(s.artist, s.title)
+    return (f"check first: {_link('Chordify', L['chordify'])} · {_link('Songsterr', L['songsterr'])}"
+            f" · {_link('YouTube', L['youtube'])}")
+
+
 def _buy_list(songs: list[Song]) -> list[str]:
-    items = []
-    for s in songs:
-        L = search_links(s.artist, s.title)
-        items.append(
-            f"- **{md(s.display)}** · buy: {_link('Bandcamp', L['bandcamp'])} · {_link('Qobuz', L['qobuz'])}"
-            f" · {_link('iTunes', L['itunes'])} · check first: {_link('Chordify', L['chordify'])}"
-            f" · {_link('Songsterr', L['songsterr'])} · {_link('YouTube', L['youtube'])}"
-        )
-    return items
+    return [f"- **{md(s.display)}** · {_buy_links(s)} · {_check_first(s)}" for s in songs]
+
+
+BUY_INTRO = ("No human sheet found yet. Buy the track (DRM-free), drop it into Music/, and caracole will "
+             "generate an auto sheet; a human sheet found later takes its place.")
+
+
+def _buy_intro(cfg: Config) -> str:
+    """The buy list's intro, and why caracole takes no audio from YouTube, unless you turned it off."""
+    problem = route_problem(cfg)
+    if problem is None or not cfg.provider("youtube").enabled:
+        return BUY_INTRO
+    return (f"{BUY_INTRO}\n\ncaracole takes a song's audio from YouTube only when it can work out the chords from "
+            f"it, and here it can't: {md(problem)}.")
+
+
+def video_link(video: Video) -> str:
+    """A video as a link, named by its title and channel when they are known."""
+    name = f"{video.title} ({video.channel})" if video.title and video.channel else video.title or video.url
+    return _link(name, video.url)
+
+
+NO_SHEET_INTRO = (
+    "caracole takes the audio from YouTube and works out the chords (auto-chords), a few songs a night; a "
+    "human sheet found later takes the auto sheet's place. Wrong video? Put the right one's address under "
+    f'`[youtube]` in overrides.toml, as `"Artist - Title" = "{VIDEO_SHAPE}"`, or `"none"` to keep a song off '
+    "YouTube."
+)
+NOTHING_INTRO = (
+    "YouTube's search found no video that fits these, or the video you pasted can't be downloaded (caracole "
+    "never logs in), or you turned YouTube down for the song. Find the song's video yourself and paste its "
+    "address under `[youtube]` in overrides.toml (the lines below; write the `[youtube]` header only if the file "
+    "has no such table yet), or buy the track (DRM-free) and drop it into Music/."
+)
+
+
+def _youtube_lists(conn: sqlite3.Connection, cfg: Config, songs_by_id: dict[int, Song], overrides: Overrides,
+                   now: datetime) -> tuple[list[str], list[str], int]:
+    """The songs with no human sheet, each with where it stands on the YouTube route: those
+    caracole is handling, and those YouTube had nothing for, with the lines to paste, and how
+    many of these there are."""
+    handled: list[str] = []
+    nothing: list[str] = []
+    paste: list[str] = []
+    for song_id, st in song_states(conn, cfg, overrides, now).items():
+        s = songs_by_id[song_id]
+        head, links = f"- **{md(s.display)}**: ", f" · {_check_first(s)}"
+        if st.state in (MISSING, UNUSABLE, DECLINED):
+            if st.state == MISSING:
+                text = f"YouTube's search found no video that fits ({md(st.detail or '')})"
+                paste.append(f"{_toml_str(s.display)} = {_toml_str(VIDEO_SHAPE)}  # under [youtube]")
+            elif st.state == UNUSABLE:
+                url = st.video.url if st.video else VIDEO_SHAPE
+                text = f"the video under `[youtube]`, {_link(url, url)}, can't be downloaded: {md(st.detail or '')}"
+                if st.audio_from is not None:
+                    text += f"; its audio is still that of {video_link(st.audio_from)}"
+                paste.append(f"{_toml_str(s.display)} = {_toml_str(VIDEO_SHAPE)}  # in place of the song's line "
+                             "under [youtube]")
+            else:
+                text = f'you turned YouTube down for it (`[youtube]` says "none") · {_buy_links(s)}'
+            nothing.append(head + text + links)
+            continue
+        if st.state == CHORDS:
+            sheet = conn.execute("SELECT path FROM files WHERE song_id = ? AND name = 'sheet (auto).txt'",
+                                 (s.id,)).fetchone()
+            text = f"chords done, from {video_link(st.video) if st.video else 'YouTube'}"
+            if sheet:
+                text += f": {_link('auto sheet', quote(sheet['path']))}"
+        elif st.state == DOWNLOADED:
+            text = f"audio downloaded from {video_link(st.video) if st.video else 'YouTube'}: auto-chords works out " \
+                   "the chords next"
+        elif st.state == BLOCKED:
+            until = get_state(conn, "youtube").cooldown_until
+            text = f"waiting: YouTube is blocking caracole, so it asks again after {_fmt(until)}"
+        else:  # QUEUED
+            if st.video is not None and st.video.title:
+                text = f"queued, picked {video_link(st.video)}: downloaded in the next run"
+            elif st.video is not None:
+                text = f"queued, the video under `[youtube]`, {_link(st.video.url, st.video.url)}, in the next run"
+            else:
+                text = "queued: caracole looks for it on YouTube in the next run"
+            if st.detail:
+                text += f"; the last try failed ({md(st.detail)}), so it is tried again"
+        handled.append(head + text + links)
+    count = len(nothing)
+    if paste:
+        nothing += _paste(paste)
+    return handled, nothing, count
 
 
 def _code(s: str) -> str:
@@ -360,15 +469,21 @@ def _autochords_failures(conn: sqlite3.Connection, cfg: Config) -> tuple[list[st
     """Purchases auto-chords couldn't read, and what to do about them.
 
     They come from kv ``autochords:status``, written by ``autochords.run.autochords_pending``.
-    A file in the music folder is shown from there, as it is on every synced copy.
+    A file in the music folder is shown from there, as it is on every synced copy; audio
+    caracole took from YouTube by its video, never by where caracole keeps it.
     """
     status = kv_get_json(conn, "autochords:status", default=None)
     failed = status.get("failed") if isinstance(status, dict) else None
-    items = []
+    videos = videos_by_audio(conn)
+    items, from_youtube = [], False
     for f in failed if isinstance(failed, list) else []:
         if not isinstance(f, dict) or not all(isinstance(f.get(k), str) for k in ("song", "audio", "error")):
             continue
         audio = Path(f["audio"])
+        if f["audio"] in videos:
+            from_youtube = True
+            items.append(f"- **{md(f['song'])}**: the audio of {video_link(videos[f['audio']])} · {md(f['error'])}")
+            continue
         shown = str(audio.relative_to(cfg.music_dir)) if audio.is_relative_to(cfg.music_dir) else f["audio"]
         items.append(f"- **{md(f['song'])}**: {_code(shown)} · {md(f['error'])}")
     if not items:
@@ -377,8 +492,10 @@ def _autochords_failures(conn: sqlite3.Connection, cfg: Config) -> tuple[list[st
         last = f" (last run {_fmt(datetime.fromisoformat(str(status['at'])))})"
     except (KeyError, ValueError):
         last = ""
+    youtube = (" For audio from YouTube, paste another video's address under `[youtube]` in overrides.toml, "
+               "and the next run downloads that one.") if from_youtube else ""
     return items, ("Re-download each file, or convert it (to FLAC, say) and replace the original. "
-                   f"Auto-chords tries a changed file again on its next run{last}.")
+                   f"Auto-chords tries a changed file again on its next run{last}.{youtube}")
 
 
 def _gtptabs_files(conn: sqlite3.Connection) -> dict[int, list[sqlite3.Row]]:
@@ -625,10 +742,13 @@ def _health(conn: sqlite3.Connection, cfg: Config, now: datetime) -> list[str]:
     requests = last.get("requests", {})
     out = ["## Provider health", "", "| Provider | Status | Last OK | Last error | Requests last run |",
            "|---|---|---|---|---|"]
+    youtube_off = route_problem(cfg)
     for p in PROVIDERS:
         s = get_state(conn, p)
         if not cfg.provider(p).enabled:
             status = f"off ([providers.{p}] enabled = false)"
+        elif p == "youtube" and youtube_off:
+            status = f"off: {md(youtube_off)}"
         elif s.cooldown_until and now < s.cooldown_until:
             blocks = f"{s.strikes} block{'s' if s.strikes != 1 else ''}"
             status = f"cooling down until {_fmt(s.cooldown_until)} ({blocks})"
@@ -727,6 +847,11 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     unread, unread_intro = _autochords_failures(conn, cfg)
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
     ms_pages, ms_intro, n_ms, ms_blocking = _musescore_pages(conn, cfg, songs, overrides, now)
+    if route_problem(cfg) is None:  # caracole takes these songs' audio from YouTube
+        handled, nothing, n_nothing = _youtube_lists(conn, cfg, by_id, overrides, now)
+        no_sheet = [(NO_SHEET_TITLE, handled, NO_SHEET_INTRO, None), (NOTHING_TITLE, nothing, NOTHING_INTRO, n_nothing)]
+    else:
+        no_sheet = [("Buy list", _buy_list(to_buy), _buy_intro(cfg), None)]
     for title, items, intro, count in (
         ("Partial sheets", _partial_sheets(conn, cfg, by_id),
          f"These sheets cover less than {cfg.rank.coverage_threshold:.0%} of the lyrics. caracole keeps "
@@ -737,9 +862,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
          "UG's sitemaps list these artists only by bare ids (usually because of accents or non-Latin "
          "letters), so caracole can't see their tabs. Find each artist once: search Ultimate Guitar, "
          "open the artist's page, or any of their tab pages, and copy its address.", n_artists),
-        ("Buy list", _buy_list(to_buy),
-         "No human sheet found yet. Buy the track (DRM-free), drop it into Music/, and caracole will "
-         "generate an auto sheet; a human sheet found later takes its place.", None),
+        *no_sheet,
         ("Auto-chords couldn't read these purchases", unread, unread_intro, None),
         ("New Guitar Pro files from gtptabs.com", _new_gtptabs_files(conn, by_id, now),
          "caracole downloaded these in the last 7 days, one for each song that had none. Open each in "
