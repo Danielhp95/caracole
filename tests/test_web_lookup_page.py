@@ -443,3 +443,8 @@ def test_an_artists_list_fits_a_phone_and_its_buttons_take_a_thumb(cfg, live, ph
     heights = phone.js("[...document.querySelectorAll('.artist-head .btn, .more-songs .btn')]"
                        ".map(b => b.getBoundingClientRect().height)")
     assert len(heights) == 2 and min(heights) >= 44, heights
+    small = phone.js("[...document.querySelectorAll('#results .row .btn, #results .row .row-more')]"
+                     ".filter(b => b.getClientRects().length)"
+                     ".map(b => [b.textContent.trim(), Math.round(b.getBoundingClientRect().width),"
+                     " Math.round(b.getBoundingClientRect().height)]).filter(([, w, h]) => w < 44 || h < 44)")
+    assert small == [], small  # each song's Get it and its "⋯" too

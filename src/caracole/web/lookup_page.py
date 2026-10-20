@@ -66,7 +66,12 @@ STYLE = BASE_STYLE + ROWS_STYLE + """
 .artist-head h2:focus { outline: none; }
 .more-songs { margin: 10px 0 0; }
 @media (pointer: coarse) {
-  .artist-head .btn, .more-songs .btn { min-height: 44px; }
+  .artist-head .btn, .more-songs .btn, .rows .row .btn { min-height: 44px; }
+  .rows .row .row-more { width: 44px; height: 44px; }
+  .rows .row { grid-template-columns: 20px minmax(0, 1fr) auto 44px; }
+}
+@media (pointer: coarse) and (min-width: 900px) {
+  .rows .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 44px; }
 }
 details.by-name { margin: 22px 0 0; }
 details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 600; cursor: pointer; }
