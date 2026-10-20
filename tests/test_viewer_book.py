@@ -227,6 +227,27 @@ def test_a_song_opens_alone_in_the_viewer_in_its_own_key(tmp_path):
 
 
 @in_chromium
+def test_a_songs_made_up_flat_five_chord_is_written_as_its_viewer_writes_it(tmp_path):
+    # C minor's G in phrygian is G, B and D-flat: "G(b5)" in the songbook as in sheet.html, never "Gb5".
+    dark = to_chordpro("[ch]Cm[/ch]        [ch]G[/ch]\nSynthetic dark words", title="Dark Song", artist="Others",
+                       key="Cm")
+    harness = """
+      const chip = (box, text) => [...document.querySelectorAll(box + " .chip")]
+        .find((b) => b.firstChild.textContent === text);
+      const g = () => q('#sheet .c[data-c="1"]').textContent;
+      const before = g();
+      q("#fab").click();
+      chip("#modes", "Phrygian").click();
+      const shown = g();
+      q('#sheet .c[data-c="1"]').click();  // its chord box
+      out = [before, shown, q("#card-name").textContent];
+    """
+    dom = open_page(page([BookSong("Dark Song", "Others", cho=dark, key="Cm", key_source="tab", id="ffff")]),
+                    tmp_path, "#song-1", harness=harness)
+    assert result_of(dom) == ["G", "G(b5)", "G(b5)"]  # on the sheet, then in its chord box
+
+
+@in_chromium
 def test_next_and_swipes_go_from_song_to_song_skipping_the_missing(tmp_path):
     harness = """
       const step = Number(sessionStorage.getItem("step") || "0");
