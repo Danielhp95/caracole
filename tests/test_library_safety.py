@@ -3,6 +3,7 @@ never writes or reads through a symbolic link planted there."""
 
 import os
 import stat
+from pathlib import Path
 
 import pytest
 
@@ -94,6 +95,35 @@ def test_read_regular_refuses_a_fifo_without_waiting_for_a_writer(tmp_path):
 def test_read_regular_of_nothing_is_file_not_found(tmp_path):
     with pytest.raises(FileNotFoundError):
         read_regular(tmp_path / "wanted.txt")
+
+
+@pytest.fixture
+def inbox_fd(tmp_path):
+    """A folder opened as the inbox is (no link followed), whose files are reached through it."""
+    (tmp_path / "_inbox").mkdir()
+    fd = os.open(tmp_path / "_inbox", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    yield fd
+    os.close(fd)
+
+
+def test_read_regular_reads_a_name_in_a_folder_open_at_a_descriptor(tmp_path, inbox_fd):
+    (tmp_path / "_inbox" / "a.gp5").write_bytes(b"GP5")
+    (tmp_path / "a.gp5").write_bytes(b"NOT THE INBOX'S")
+    assert read_regular(Path("a.gp5"), dir_fd=inbox_fd) == b"GP5"
+
+
+@pytest.mark.parametrize("planted", ["link", "folder", "fifo"])
+def test_read_regular_in_a_folder_refuses_what_it_refuses_elsewhere(tmp_path, state, inbox_fd, planted):
+    entry = tmp_path / "_inbox" / "a.gp5"
+    if planted == "link":
+        entry.symlink_to(state / "spotify_token.json")
+    elif planted == "folder":
+        entry.mkdir()
+    else:
+        os.mkfifo(entry)
+    with pytest.raises(NotRegularFile) as e:
+        read_regular(Path("a.gp5"), dir_fd=inbox_fd)
+    assert e.value.filename == "a.gp5"
 
 
 def test_read_json_reads_a_regular_file(tmp_path):

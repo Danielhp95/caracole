@@ -399,7 +399,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `test_songbook_render.py::test_a_broken_songbooks_file_is_an_error_that_stops_nothing_else`).
 - **The library is synced**: Syncthing and every device can write to it. Read a file there
   with `library.read_regular` (or `open_regular`: no symbolic link followed, regular files
-  only; `read_json` for its JSON, where whatever a device wrote is a ValueError at worst,
+  only; `dir_fd=` for a name in a folder opened without following a link, as inbox.py reads
+  `_inbox/`; `read_json` for its JSON, where whatever a device wrote is a ValueError at worst,
   never the RecursionError that would stop a pass over every song), and write one with
   `library.write_atomic`: a random temporary name opened
   exclusively, then a rename. Never `mkstemp`, whose mode 0600 hides files from Syncthing.
