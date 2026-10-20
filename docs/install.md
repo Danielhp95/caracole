@@ -450,7 +450,7 @@ With Nix:
 ```sh
 nix develop                                         # Python, the dependencies, pytest, pytest-xdist, chordpro, ruff, sqlite3
 pytest -q                                           # every test, on up to 12 cores
-pytest -q -m "not slow"                             # all but the browser, chordpro and second-process tests
+pytest -q -m "not slow"                             # all but the browser, chordpro, model and second-process tests
 nix develop .#autochords -c pytest -m autochords    # the model tests, with the model files
 ```
 

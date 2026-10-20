@@ -104,12 +104,12 @@ and `search --key`).
     nix develop .#autochords -c pytest -m autochords   # the model tests
 
 Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12,
-`--dist worksteal`); `-n 0` runs it in one process, as `--pdb`, `--trace` and `-s` do.
-`slow` marks a test that starts a browser (`helpers.browser.in_chromium`), chordpro
-(`@pytest.mark.chordpro` adds `slow`) or another process: mark a new one too. The whole
-suite stays the gate before a commit.
-tmp_path is in /dev/shm, and stays on disk with `--basetemp` or `PYTEST_DEBUG_TEMPROOT`, or
-when /dev/shm is noexec or has less than 1 GB free (a container's).
+`--dist worksteal`); `-n 0` runs it in one process, as `--pdb`, `--trace`, `-s` and
+`-m autochords` do. `slow` marks a test that starts a browser (`helpers.browser.in_chromium`),
+chordpro or the models (`@pytest.mark.chordpro` and `autochords` add `slow`) or another
+process: mark a new one too. The whole suite stays the gate before a commit. tmp_path is in
+/dev/shm, and stays on disk with `--basetemp` or `PYTEST_DEBUG_TEMPROOT`, or when /dev/shm is
+noexec or has less than 1 GB free (a container's).
 
 Both shells set `CARACOLE_CJK_FONT` to the packages' font. `.#autochords` adds torch,
 beat-this and librosa, and sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` to the

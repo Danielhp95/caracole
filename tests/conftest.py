@@ -28,14 +28,16 @@ def pytest_cmdline_main(config):
     -n says otherwise, and tests go to the workers by work stealing (--dist worksteal), so no
     worker is left with all of a file's browser tests. Given paths, pytest runs them in this
     process, which starts sooner; and so it does with --pdb, --trace or -s, which want this
-    terminal."""
+    terminal, and with -m autochords, the model tests."""
     option = config.option
     if not config.pluginmanager.hasplugin("xdist") or hasattr(config, "workerinput"):
         return
     whole_suite = config.args_source == pytest.Config.ArgsSource.TESTPATHS
     at_the_terminal = option.usepdb or option.trace or option.capture == "no"
+    # The model tests load torch, librosa and beat_this: a gigabyte or more in every worker.
+    models = option.markexpr.strip() == "autochords"
     if (option.numprocesses is None and not option.tx and whole_suite and not option.collectonly
-            and not at_the_terminal):
+            and not at_the_terminal and not models):
         option.numprocesses = "auto"
     if option.dist == "no" and (option.numprocesses or option.tx):
         option.dist = "worksteal"
@@ -71,7 +73,7 @@ def memory_will_do() -> bool:
 
 def pytest_collection_modifyitems(items):
     for item in items:
-        if item.get_closest_marker("chordpro"):
+        if item.get_closest_marker("chordpro") or item.get_closest_marker("autochords"):
             item.add_marker(pytest.mark.slow)
 
 

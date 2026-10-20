@@ -1019,9 +1019,9 @@ def test_a_night_with_nothing_due_imports_no_model_packages(conn, cfg, tmp_path)
 @pytest.fixture
 def real_models(cfg):
     """The cfg with the real model files; skips without them or their packages."""
-    from test_autochords_models import BEAT_CHECKPOINT, BTC_WEIGHTS, HAVE_LIBS
+    from test_autochords_models import BEAT_CHECKPOINT, BTC_WEIGHTS, libs_load
 
-    if not HAVE_LIBS or BTC_WEIGHTS is None or BEAT_CHECKPOINT is None:
+    if BTC_WEIGHTS is None or BEAT_CHECKPOINT is None or not libs_load():
         pytest.skip("needs torch, librosa, beat_this and both model files")
     return replace(
         cfg, autochords=AutochordsConfig(btc_weights=BTC_WEIGHTS, beat_checkpoint=BEAT_CHECKPOINT)

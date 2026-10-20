@@ -9,6 +9,8 @@ import gc
 import os
 import re
 import sqlite3
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -79,7 +81,7 @@ GIVEN_PATHS = pytest.Config.ArgsSource.ARGS
 def config(args_source=WHOLE_SUITE, *, xdist=True, worker=False, **options):
     """What pytest_cmdline_main reads of a pytest.Config, as pytest parsed a command line."""
     parsed = {"numprocesses": None, "tx": None, "dist": "no", "collectonly": False,
-              "usepdb": False, "trace": False, "capture": "fd"}
+              "usepdb": False, "trace": False, "capture": "fd", "markexpr": ""}
     made = SimpleNamespace(
         option=SimpleNamespace(**{**parsed, **options}), args_source=args_source,
         pluginmanager=SimpleNamespace(hasplugin=lambda name: xdist and name == "xdist"),
@@ -100,6 +102,11 @@ def config(args_source=WHOLE_SUITE, *, xdist=True, worker=False, **options):
     pytest.param({"usepdb": True}, (None, "no"), id="--pdb"),
     pytest.param({"trace": True}, (None, "no"), id="--trace"),
     pytest.param({"capture": "no"}, (None, "no"), id="-s"),
+    pytest.param({"markexpr": "not slow"}, ("auto", "worksteal"), id="-m 'not slow'"),
+    # The model tests: torch, librosa and beat_this in each worker, a gigabyte or more apiece.
+    pytest.param({"markexpr": "autochords"}, (None, "no"), id="-m autochords"),
+    pytest.param({"markexpr": " autochords "}, (None, "no"), id="-m ' autochords '"),
+    pytest.param({"markexpr": "not autochords"}, ("auto", "worksteal"), id="-m 'not autochords'"),
     pytest.param({"worker": True}, (None, "no"), id="a worker"),
     pytest.param({"xdist": False}, (None, "no"), id="no xdist"),
 ])
@@ -107,6 +114,40 @@ def test_the_whole_suite_runs_on_workers_unless_told_otherwise(given, expected):
     parsed = config(**given)
     conftest.pytest_cmdline_main(parsed)
     assert (parsed.option.numprocesses, parsed.option.dist) == expected
+
+
+class Item:
+    """What pytest_collection_modifyitems reads and writes of a test."""
+
+    def __init__(self, *marks: str):
+        self.marks = set(marks)
+
+    def get_closest_marker(self, name):
+        return name if name in self.marks else None
+
+    def add_marker(self, mark):
+        self.marks.add(mark.name)
+
+
+def test_chordpro_and_the_models_are_slow():
+    items = [Item(), Item("chordpro"), Item("autochords"), Item("slow")]
+    conftest.pytest_collection_modifyitems(items)
+    assert [item.marks for item in items] == [
+        set(), {"chordpro", "slow"}, {"autochords", "slow"}, {"slow"}]
+
+
+@pytest.mark.slow
+def test_collecting_the_model_tests_loads_no_model_package():
+    # Every pytest-xdist worker collects them, and torch, librosa and beat_this would cost each
+    # worker seconds and a gigabyte or more: a test that needs them loads them (needs_libs).
+    tests = Path(__file__).parent
+    code = ("import sys, test_autochords_models; "
+            "print(*(m for m in ('torch', 'librosa', 'beat_this') if m in sys.modules))")
+    env = {**os.environ, "PYTHONPATH": conftest.subprocess_pythonpath(tests.parent / "src")}
+    found = subprocess.run([sys.executable, "-c", code], cwd=tests, env=env, capture_output=True,
+                           text=True, timeout=120)
+    assert found.returncode == 0, found.stderr[-2000:]
+    assert found.stdout.split() == []
 
 
 def test_what_collection_made_is_out_of_the_garbage_collectors_way():
