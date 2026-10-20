@@ -1313,7 +1313,7 @@ order, their sheets, their transpositions, caracole's PDF style or the font;
 or when it is no longer as caracole wrote it (deleted, edited, a link in its
 place). A songbook gone from songbooks.toml (deleted or renamed by hand) loses
 the files caracole made of it at the next render, each only while it is still
-as caracole wrote it. Like the sheets' PDFs, a songbook with a Chinese song
+as caracole wrote it, and never through a symbolic link. Like the sheets' PDFs, a songbook with a Chinese song
 gets its PDF once a CJK font is set; its page and its ChordPro file need none.
 
 ## overrides.toml: your decisions

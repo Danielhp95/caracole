@@ -454,6 +454,22 @@ def test_a_link_in_place_of_the_songbooks_folder_is_never_written_through(conn, 
     assert list(elsewhere.iterdir()) == []
 
 
+def test_a_link_in_place_of_the_songbooks_folder_is_never_removed_through(conn, cfg, two, tmp_path):
+    render(conn, cfg)
+    books_dir, elsewhere = cfg.library_dir / "_songbooks", tmp_path / "elsewhere"
+    shutil.move(books_dir, elsewhere)  # caracole's very files, its record matching them, behind a link
+    books_dir.symlink_to(elsewhere, target_is_directory=True)
+    delete_songbook(songbooks_file(cfg.library_dir), "Campfire")
+    stats = render(conn, cfg)
+    assert stats.removed == 0
+    assert sorted(p.name for p in (elsewhere / "Campfire").iterdir()) == [
+        "songbook.cho", "songbook.html", "songbook.pdf"]
+    assert kv_get_json(conn, "songbook:Campfire") is not None  # kept, for when a folder is back
+    books_dir.unlink()
+    shutil.move(elsewhere, books_dir)
+    assert render(conn, cfg).removed == 1 and not folder(cfg).exists()
+
+
 def test_only_one_songbook_is_rendered_when_asked(conn, cfg, two):
     make(cfg, "Picnic", "Radiohead - Creep")
     stats = render(conn, cfg, only="picnic")

@@ -824,8 +824,12 @@ def _book_folder(library_dir: Path, book: Songbook) -> Path:
 
 def _remove_gone(conn: sqlite3.Connection, library_dir: Path, folders: set[str]) -> int:
     """Take away the files of the songbooks no longer in songbooks.toml, each only while it is still as
-    caracole wrote it, then their folder when nothing else is in it; return how many songbooks went."""
+    caracole wrote it, then their folder when nothing else is in it; return how many songbooks went.
+    Nothing is removed through a symbolic link, in place of ``Library/_songbooks`` or of a folder."""
     rows = conn.execute("SELECT key FROM kv WHERE key LIKE ? ESCAPE '\\'", (_like_prefix(RECORD_KEY),)).fetchall()
+    books_dir = library_dir / FOLDER
+    if books_dir.is_symlink() or (books_dir.exists() and not books_dir.is_dir()):
+        return 0  # nothing is removed through a link: the records stay, for when a folder is back
     gone = 0
     for (key,) in rows:
         folder = key[len(RECORD_KEY):]
