@@ -885,6 +885,22 @@ def test_songs_ignored_in_overrides_are_not_tried(conn, tmp_path):
     assert site.requests == []
 
 
+def test_a_lookup_asks_about_its_own_song_alone_if_lacuerda_would_today(conn, tmp_path):
+    # `caracole get`: the song asked for now, when the nightly run would try it too.
+    persiana_2 = f"{BASE}/soda_stereo/persiana_americana-2.shtml"
+    site = FakeLaCuerda()
+    site.pages[persiana_2] = (200, fixture("version.html"))
+    wanted = spanish_song(conn, title="De Música Ligera", added_at="2026-10-01T00:00:00Z")
+    other = spanish_song(conn, title="Persiana Americana", added_at="2026-10-05T00:00:00Z")
+    english = with_lyrics(conn, add_song(conn, "Radiohead", "Creep"), ENGLISH_LYRICS)
+    client = site.client(tmp_path / "cache")
+    assert lacuerda_sheets(conn, client, tmp_path / "lib", RANK, NOW, only={wanted.id}) == LaCuerdaStats(
+        tried=1, kept=1)
+    assert site.requests == [SODA, DML_3]
+    assert get_song(conn, other.id).lacuerda_checked_at is None
+    assert lacuerda_sheets(conn, client, tmp_path / "lib", RANK, NOW, only={english.id}) == LaCuerdaStats()
+
+
 # --- in the nightly run -----------------------------------------------------------------
 
 

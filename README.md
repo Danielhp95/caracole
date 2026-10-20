@@ -33,6 +33,7 @@ server.
     caracole add "Oasis" "Wonderwall"   # or add a line to ~/Tabs/wanted.txt
     caracole index build                # once, takes about 10 minutes
     caracole run                        # what the nightly timer runs
+    caracole get "Radiohead - Creep"    # one song now: its sheet in seconds
 
 Then open `~/Tabs/_todo.md`, or `~/Tabs/index.html` to browse. `caracole serve`
 serves that page at `http://127.0.0.1:8737/`, with a form to request a song and
@@ -43,7 +44,9 @@ needed to start. Commands, settings and overrides are explained in
 ## Requests
 
 caracole is gentle with the sites it reads. It makes about 60 requests a night
-to Ultimate Guitar, one at a time and 10 to 20 seconds apart. It follows
+to Ultimate Guitar, one at a time and 10 to 20 seconds apart. A song you look
+up now (`caracole get`) costs a few requests, about a second apart, and every
+lookup of an hour shares a budget of 60 requests a site. It follows
 robots.txt, never uses a site's search, never logs in, and stops for at least a
 day when a site pushes back. It downloads Guitar Pro files only where
 robots.txt allows it: from gtptabs.com, with at most 20 requests a night, one

@@ -54,6 +54,11 @@ and `search --key`).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `write_pages`, `fail`, `warn`.
+  `caracole get` (commands/get.py) is one song looked up now, in one process: get.py runs
+  the run's steps for that song alone (`only=` / `songs=` of lyrics.py, lacuerda_fetch.py,
+  gtptabs_fetch.py and `match.match_all`), sheet first (one versions page and the best-rated
+  sheet, then `Progress.readable`), with interactive clients; `--progress` prints a JSON line
+  per event (`get.progress_line`) for caracole serve.
   The logic of `caracole review` and `caracole search` is in review.py and search.py;
   search.py's prefilter reads ug/key_search.py (`rows_like`: the keys' trigram index,
   `ug_keys_fts`, schema 4), which must find exactly what a `LIKE` scan of `ug_index` finds

@@ -268,6 +268,72 @@ updated, the line is kept all the same, a warning says why, and the next sync
 adds the song. The first `caracole add` creates the file, with a header that
 explains the format.
 
+### caracole get
+
+`caracole get "ARTIST - TITLE"` (or `caracole get ARTIST TITLE`) is for the
+song you want to play now. It does the nightly run's work for that song alone,
+at once, sheet first, and says where the sheet is the moment it is kept:
+
+    $ caracole get "Radiohead - Creep"
+    Song: added to wanted.txt, line 16.
+    Match: matched to radiohead/creep.
+    Sheet: tab 4169 from Ultimate Guitar: /home/you/Tabs/Radiohead/Creep/sheet.txt, readable after 2.1 s.
+    PDF: made.
+    PDF: /home/you/Tabs/Radiohead/Creep/sheet.pdf
+    Lyrics: found.
+    Ultimate Guitar: sheet 4170 · Guitar Pro 4174 · tab 4172.
+    Sheet: a better one replaced it, in /home/you/Tabs/Radiohead/Creep/sheet.txt.
+    LaCuerda: skipped: not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month.
+    gtptabs.com: Guitar Pro file downloaded.
+    Pages: _todo.md and index.html rewritten.
+    Done in 9.4 s: 8 requests (Ultimate Guitar 5, LRCLIB 1, gtptabs.com 2).
+
+In order:
+
+1. **The song.** One the library has is used as it is; any other is added to
+   wanted.txt, as `caracole add` adds it, and synced.
+2. **Match**, against the offline index, for this song alone.
+3. **The sheet.** One Ultimate Guitar page lists every version of the song's
+   chords with its rating, and the best rated is kept at once: one or two
+   requests. Without one there, LaCuerda's, for a song LaCuerda would be asked
+   about tonight. From here on the sheet is readable.
+4. **The PDF**, as `caracole render` makes it.
+5. **The lyrics**, from LRCLIB.
+6. **Ultimate Guitar again**, as the nightly run would: the top sheets are
+   scored against the lyrics, and a more complete one replaces the first;
+   then the guitar parts and the text tab.
+7. **LaCuerda**, for a Spanish song without a complete sheet, and
+   **gtptabs.com**, for a Guitar Pro file, from the index the nightly run
+   keeps.
+8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
+   sheet changed, and MuseScore's pages matched from its local index.
+
+It keeps the interactive pace ([Two paces](#configure)): about a second
+between two requests to a site, six requests to a site at most, and sixty an
+hour for every lookup together. What it leaves undone, the nightly run does.
+A site cooling down after a block is left alone; a block, a spent budget or a
+site's error leaves the song to the nightly run, never not found, and exits 0.
+A nightly run that holds caracole's lock lets the lookup go first at its next
+pause ([One caracole at a time](#one-step-at-a-time)).
+
+Options:
+
+- `--print` prints the sheet itself as soon as it is kept, and again when a
+  better one replaces it.
+- `--ug ARTIST-KEY/SONG-KEY` is the Ultimate Guitar song to use, as
+  `caracole search` shows it (`stone-temple-pilots/creep`): it is recorded
+  under `[match]` in overrides.toml, so the matcher never asks you about it.
+- `--tab URL` is the tab to use, its page's address or its id: it is
+  recorded under `[pin]`.
+- `--album ALBUM` and `--duration M:SS`, for a song new to the library, as in
+  `caracole add`.
+- `--progress` adds a JSON line per stage, which `caracole serve` reads.
+
+A song ignored in overrides.toml, or one wanted.txt can't hold, is not looked
+up, and exits 1. A song the matcher isn't sure of gets everything but its
+Ultimate Guitar sheet: pick its UG song with `--ug`, on the lookup page of
+`caracole serve`, or with `caracole review`.
+
 ### Names in other scripts
 
 Write a song as you know it, in its own script or in Latin letters:
@@ -789,7 +855,7 @@ A page caracole can't write ends the command with status 1 and
 **One caracole at a time.** The commands that ask the sites for pages or write
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
-`index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
+`get`, `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
 `musescore`, `render`, `match`, `scan`, `todo`, `sync`, `add`, `search --add`
 and `autochords`. A
 second one waits for the first, and says which it is:

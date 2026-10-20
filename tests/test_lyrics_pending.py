@@ -378,3 +378,14 @@ def test_the_nightly_lyrics_step_reports_the_counts(conn, cfg, tmp_path):
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
     assert report.steps == {"lyrics": "1 found, 1 missing, 0 instrumental, 0 errors"}
     assert (cfg.library_dir / "Soda Stereo" / "De Música Ligera" / "lyrics.txt").is_file()
+
+
+def test_a_lookup_asks_for_its_own_songs_lyrics_alone(conn, tmp_path):
+    # `caracole get`: one song asked for now; the others wait for the nightly run.
+    wanted = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-01T00:00:00Z")
+    newer = add_song(conn, "Soda Stereo", "Canción Inexistente", added_at="2026-10-05T00:00:00Z")
+    lrclib = FakeLrclib([load("get_hit.json")])
+    stats = run(lrclib, conn, tmp_path, only={wanted.id})
+    assert stats == LyricsStats(found=1)
+    assert get_song(conn, newer.id).lyrics_status == "pending"
+    assert all(params["track_name"] == "De Música Ligera" for _, params in lrclib.requests)

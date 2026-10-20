@@ -456,6 +456,7 @@ def make_client(
             cfg.cache_dir,
             user_agent=cfg.user_agent,
             transport=transport_for(provider),
+            sleep=lambda seconds: sleep(seconds),  # this module's, which tests replace
             on_event=logged,
             lock=lock,
             cfg=cfg,
