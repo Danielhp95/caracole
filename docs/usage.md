@@ -998,6 +998,20 @@ each. When nothing in the library matches, the page shows the
 offline index doesn't know. `caracole serve` serves the same page with a form
 to request songs (see below).
 
+**Songbooks** (see [Songbooks](#songbooks)), above the search box once there is
+one, lists each songbook: its songs in order, those without a sheet marked
+missing, and its files, the phone page first, then the PDF and the ChordPro
+file. On the file on disk it names the `caracole songbook` commands that change
+it; `caracole serve` adds buttons. **Select**, beside the Sort menu, puts a
+box on each card: tick songs in the order they go in the songbook (each box
+shows its place), search and filter between ticks, and the bar at the bottom
+counts them, `3 selected`. Give the songbook a name and tap Make songbook, or
+pick a songbook there is in the menu to Add to it; Clear unticks them all, and
+Done leaves the mode. On the file on disk, which can't write anything, the bar
+shows the command to run where caracole runs, with Copy:
+`caracole songbook make "Beach nights" "Muse - Hysteria" "Radiohead - Creep"`.
+On `caracole serve`, the button makes the songbook (see below).
+
 Each song's entry in the page's data (the `<script type="application/json"
 id="songs">` block) has the same `key` and `key_source` as its info.json.
 
