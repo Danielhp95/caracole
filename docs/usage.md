@@ -1950,9 +1950,10 @@ with it. A KEY that is no key exits with status 2.
   answering, the lines say so after a few tries ("caracole serve can't be
   reached; trying again…"), until it answers again.
 
-  Two requests or more also show as one short list in a corner, a line per
-  song, which folds up or closes; on a phone it starts folded, a single
-  line. A screen reader hears each card's line as
+  Two requests or more also show in a corner, folded to one line on every
+  width ("2 requests · 1 to go"), so that it covers no card; it opens upwards
+  to a line per song, and closes. Its one Details link opens the requests
+  page. A screen reader hears each card's line as
   it changes, to the last one, and Fetch now hands the keyboard focus to that
   line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.

@@ -85,7 +85,7 @@ while one waits or runs, and is drawn again from the song's new data once the
 request is over. A song's row carries what its card does: the line, on a line
 of the row's own; Pick the match, or Removing…, as its button; the picker,
 Look in the index and Remove… under its "⋯". A song new to the library gets a card of its own under the
-bar, and two requests or more also show as a short list in a corner. Without
+bar, and two requests or more also show in a corner, folded to one line that opens upwards. Without
 JavaScript the forms post as forms. The file on disk has none of it, and lets
 no form be sent and nothing be asked.
 
@@ -915,24 +915,26 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .requested { margin-top: 14px; }
 .requested .grid { margin-top: 6px; }
 .card .by { margin: 2px 0 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
-.tray { position: fixed; z-index: 3; right: 16px; bottom: 16px; left: 16px; max-width: 26rem; margin-left: auto;
-  border: 1px solid var(--border-strong); border-radius: 16px; background: var(--surface);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 18%); }
+/* The requests, folded to a pill in the corner over the page's margin, on every width; opened, a list above it. */
+.tray { position: fixed; z-index: 3; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); display: flex;
+  flex-direction: column-reverse; width: max-content; max-width: calc(100vw - 32px); border: 1px solid var(--border-strong);
+  border-radius: 999px; background: var(--surface); box-shadow: 0 8px 28px rgb(0 0 0 / 18%); }
+.tray.open { width: min(26rem, calc(100vw - 32px)); border-radius: 16px; }
 .tray-head { display: flex; align-items: center; gap: 2px; padding: 2px 4px; }
 .tray-toggle { flex: 1; min-width: 0; min-height: 44px; padding: 0 10px; border: 0; border-radius: 12px;
   background: none; color: var(--text); font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
 .tray-toggle::after { content: "▾"; display: inline-block; margin-left: 6px; color: var(--muted); }
-.tray-toggle[aria-expanded="false"]::after { transform: rotate(-90deg); }
+.tray-toggle[aria-expanded="false"]::after { transform: rotate(180deg); }
 .tray-all { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; color: var(--muted);
   font-size: .85rem; font-weight: 600; }
 .tray-close { flex: none; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
   color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
-.tray-list { display: grid; gap: 8px; max-height: min(40vh, 18rem); margin: 0; padding: 0 14px 12px;
+.tray-list { display: grid; gap: 8px; max-height: min(40vh, 18rem); margin: 0; padding: 12px 14px 4px;
   overflow-y: auto; list-style: none; }
 .tray-list li { display: grid; gap: 1px; min-width: 0; }
 .tray-song { overflow: hidden; font-size: .9rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .tray .progress { font-size: .85rem; }
-body.with-tray .page { padding-bottom: 16rem; }
+body.with-tray .page { padding-bottom: 88px; }
 .youtube { margin: 0; color: var(--auto); font-size: .85rem; }
 .more { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border); }
 .more > summary { display: flex; align-items: center; gap: 4px; min-height: 32px; color: var(--muted);
@@ -2580,7 +2582,9 @@ _SCRIPT = r"""
       trayItems.set(id, item);
       trayList.prepend(item);
     }
-    showLine(item.querySelector(".progress"), view);
+    // One Details link, the list's own: a line here says how its request goes, and its card links the rest.
+    const line = view.line && typeof view.line === "object" ? view.line : {};
+    showLine(item.querySelector(".progress"), { line: Object.assign({}, line, { details: null }) });
     const shown = Array.from(trayItems.keys()).map((n) => views.get(n)).filter(Boolean);
     const going = shown.filter(isActive).length;
     traySum.textContent = plural(shown.length, "request") + (going ? " · " + going + " to go" : " · all done");
@@ -2810,15 +2814,12 @@ _SCRIPT = r"""
         poll();
       }
     });
-    if (tray) {
-      if (!window.matchMedia("(min-width: 720px)").matches) {  // on a phone the cards say it: folded
-        trayToggle.setAttribute("aria-expanded", "false");
-        trayList.hidden = true;
-      }
+    if (tray) {  // folded, on every width: the cards say how each goes, and it would cover them
       trayToggle.addEventListener("click", () => {
         const open = trayToggle.getAttribute("aria-expanded") !== "true";
         trayToggle.setAttribute("aria-expanded", String(open));
         trayList.hidden = !open;
+        tray.classList.toggle("open", open);
       });
       byId("tray-close").addEventListener("click", () => {
         for (const [id, item] of trayItems) {
@@ -3340,12 +3341,12 @@ _REQUESTED = """<section class="requested" id="requested" aria-label="Songs you 
 </section>
 <aside class="tray" id="tray" aria-label="Your requests" hidden>
   <div class="tray-head">
-    <button type="button" class="tray-toggle" id="tray-toggle" aria-expanded="true" aria-controls="tray-list"><span
+    <button type="button" class="tray-toggle" id="tray-toggle" aria-expanded="false" aria-controls="tray-list"><span
       id="tray-sum">Requests</span></button>
     <a class="tray-all" href="jobs">Details</a>
     <button type="button" class="tray-close" id="tray-close" aria-label="Close this list">×</button>
   </div>
-  <ol class="tray-list" id="tray-list"></ol>
+  <ol class="tray-list" id="tray-list" hidden></ol>
 </aside>
 """
 
