@@ -3,7 +3,9 @@
 wanted.txt is the source that always works. Spotify is optional, and no Spotify
 failure makes ``caracole sync`` fail. ``add_song`` is the one way a command adds
 a song: ``caracole add`` and ``caracole search --add`` both call it, and each says
-in its own words what it did. It also matches the song against the offline
+in its own words what it did. With ``--lacuerda`` (a LaCuerda song you picked, as
+``caracole search --add`` and caracole serve's Add for tonight's run pick one), the
+pick goes under ``[lacuerda]`` in overrides.toml too, for the nightly run to keep. It also matches the song against the offline
 index at once, as the nightly match step would, so a name that isn't quite
 UG's is a review you can settle now ("Did you mean", ``match_lines``). A sync,
 an add's too, then rewrites _todo.md and index.html. Every command module is
@@ -83,9 +85,15 @@ def register(app: typer.Typer) -> None:
             metavar="M:SS",
             help="The length, as m:ss or whole seconds; it also makes the lookup exact.",
         ),
+        lacuerda: str | None = typer.Option(
+            None, "--lacuerda", metavar="URL",
+            help="The LaCuerda song (its page's address) or version (its sheet's) whose sheet the nightly run "
+                 "keeps; recorded under [lacuerda] in overrides.toml.",
+        ),
     ) -> None:
         """Add a song to wanted.txt, then sync wanted.txt into the library."""
         duration_ms = _duration_ms(duration)
+        _lacuerda_pick(lacuerda)
         cfg = load_cfg(ctx)
         if title is None:  # one text: "Artist - Title", else one name, which names no song
             artist, sep, title = artist.partition(" - ")
@@ -95,7 +103,7 @@ def register(app: typer.Typer) -> None:
                 from caracole.commands.search import offer_songs
 
                 offer_songs(cfg, " ".join(artist.split()), "add")
-        _add(cfg, artist, title, album, duration_ms)
+        _add(cfg, artist, title, album, duration_ms, lacuerda)
 
     @app.command("sync")
     def sync_cmd(ctx: typer.Context) -> None:
@@ -170,6 +178,18 @@ def _spotify_client(cfg: Config) -> SpotifyAPI | None:
 # --- caracole add -----------------------------------------------------------------------------
 
 
+def _lacuerda_pick(url: str | None) -> None:
+    """``--lacuerda``'s address, checked before anything is written: a usage error for any other."""
+    if url is None:
+        return
+    from caracole.overrides import OverridesError, lacuerda_pick_from_url
+
+    try:
+        lacuerda_pick_from_url(url)
+    except OverridesError as e:
+        fail(f"--lacuerda: {e}", 2)
+
+
 def _duration_ms(text: str | None) -> int | None:
     """``--duration`` in milliseconds; a value that isn't a duration exits with status 2."""
     if text is None:
@@ -224,6 +244,7 @@ class AddedSong:
     db_error: Exception | None = None
     match: AddedMatch | None = None
     removed: RemovedSong | None = None
+    lacuerda: str | None = None  # the LaCuerda pick recorded for it
 
 
 def add_song(
@@ -234,8 +255,13 @@ def add_song(
     duration_ms: int | None = None,
     *,
     conn: sqlite3.Connection | None = None,
+    lacuerda: str | None = None,
 ) -> AddedSong:
     """Append a song to wanted.txt unless it's listed, then sync wanted.txt into the library.
+
+    ``lacuerda`` is the LaCuerda song or version picked for it, recorded under ``[lacuerda]`` once the
+    line is written (overrides.toml that can't be written exits with status 1), and asked for at the
+    next LaCuerda pass, however lately LaCuerda answered for the song.
 
     A song the file can't hold exits with status 2, and a file that can't be
     written with status 1. The file is the source of truth, so a database that
@@ -256,6 +282,7 @@ def add_song(
         fail(f"can't add this song: {e}", 2)
     except OSError as e:
         fail(f"can't update {path}: {e.strerror or e}")
+    pick = _record_lacuerda(cfg, line, lacuerda) if lacuerda is not None else None
     try:
         with (
             exclusive(cfg, "add", fatal=False),
@@ -265,14 +292,29 @@ def add_song(
             removed = removed_song(conn, line.identity)
             stats = sync_wanted(conn, path, utcnow())
             song = find_song(conn, line.identity)
+            if pick is not None and song is not None and song.lacuerda_checked_at is not None:
+                from caracole.songs import update_song
+
+                update_song(conn, song.id, lacuerda_checked_at=None)  # a new pick is asked for at once
             overrides = _page_overrides(cfg)
             match = _match_added(conn, cfg, song, overrides) if song is not None else None
             if match is not None and match.result is not None:
                 song = find_song(conn, line.identity)
             _write_pages(conn, cfg, overrides)
     except (sqlite3.Error, OSError) as e:
-        return AddedSong(line, listed, db_error=e)
-    return AddedSong(line, listed, known, song, tuple(stats.errors), match=match, removed=removed)
+        return AddedSong(line, listed, db_error=e, lacuerda=pick)
+    return AddedSong(line, listed, known, song, tuple(stats.errors), match=match, removed=removed, lacuerda=pick)
+
+
+def _record_lacuerda(cfg: Config, line: WantedLine, url: str) -> str:
+    """The LaCuerda pick under ``[lacuerda]``, by the song's line; its address as written."""
+    from caracole.overrides import OverridesError, add_lacuerda, lacuerda_pick_from_url
+
+    try:
+        add_lacuerda(cfg.overrides_file, f"{line.artist} - {line.title}", url)
+    except OverridesError as e:
+        fail(f"the song is in wanted.txt, but its LaCuerda pick can't be recorded in overrides.toml: {e}")
+    return lacuerda_pick_from_url(url).url
 
 
 def _match_added(
@@ -351,12 +393,13 @@ def _write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides | N
         write_pages(conn, cfg, overrides, utcnow(), fatal=False)
 
 
-def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None) -> None:
+def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None,
+         lacuerda: str | None = None) -> None:
     """Add the song with ``add_song``, then say what was done (``say_added``), and when its artist is
     a placeholder such as "misc", that nothing can be found by it."""
     from caracole.normalize import placeholder_artist
 
-    say_added(cfg, add_song(cfg, artist, title, album, duration_ms), album, duration_ms)
+    say_added(cfg, add_song(cfg, artist, title, album, duration_ms, lacuerda=lacuerda), album, duration_ms)
     if placeholder_artist(artist):
         name = " ".join(title.split())
         _warn(f'"{" ".join(artist.split())}" is no one\'s name, and caracole looks a song up by its artist: '
@@ -399,6 +442,9 @@ def say_added(cfg: Config, added: AddedSong, album: str | None = None, duration_
     if added.listed and _would_change(line, album, duration_ms):
         typer.echo("Its line stays as it is: edit it to change the album or the duration.")
     log.info("Song %s: %s", line.identity, known)
+    if added.lacuerda is not None:
+        typer.echo(f"LaCuerda: the nightly run keeps the sheet you picked there ({added.lacuerda}), recorded "
+                   "under [lacuerda] in overrides.toml.")
     for text in match_lines(added.match):
         typer.echo(text)
     for problem in added.problems:

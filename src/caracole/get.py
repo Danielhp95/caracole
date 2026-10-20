@@ -9,13 +9,16 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 - ``song``: the song, found in the library or added to wanted.txt as
   ``caracole add`` adds it, then synced; the Ultimate Guitar song you picked
   recorded under ``[match]`` in overrides.toml, and the tab under ``[pin]``,
-  in place of the song's pin of its kind group alone (``_other_pins``).
+  in place of the song's pin of its kind group alone (``_other_pins``); the
+  LaCuerda song or version you picked under ``[lacuerda]``.
 - ``match``: matched against the offline index, alone.
-- ``sheet``: Ultimate Guitar's sheet, from as few pages as can be: one page
-  lists every version of its kind with its rating, and the best rated is kept
-  (two requests at most; one when the first page read is the best). Without
-  one, LaCuerda's, for a song LaCuerda would be asked about tonight. The sheet
-  is readable from here on (``Progress.readable``).
+- ``sheet``: the LaCuerda sheet you picked, first (its version's page, and its
+  artist's page when the index doesn't name its best version). Else, or when
+  LaCuerda can't give it now, Ultimate Guitar's sheet, from as few pages as can
+  be: one page lists every version of its kind with its rating, and the best
+  rated is kept (two requests at most; one when the first page read is the
+  best). Without one, LaCuerda's, for a song LaCuerda would be asked about
+  tonight. The sheet is readable from here on (``Progress.readable``).
 - ``pdf``: ChordPro and the PDF (render.py), and the HTML viewer where render
   writes one.
 - ``lyrics``: LRCLIB.
@@ -81,7 +84,8 @@ SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: w
 @dataclass(frozen=True)
 class LookupRequest:
     """A song to look up now, by name; ``ug`` ("artist-key/song-key") is the Ultimate Guitar song you
-    picked, ``tab`` the tab (its page's address, or its id)."""
+    picked, ``tab`` the tab (its page's address, or its id), ``lacuerda`` the LaCuerda song or version
+    (its page's address)."""
 
     artist: str
     title: str
@@ -89,6 +93,7 @@ class LookupRequest:
     duration_ms: int | None = None
     ug: str | None = None
     tab: str | None = None
+    lacuerda: str | None = None
 
     @property
     def display(self) -> str:
@@ -343,8 +348,16 @@ class _Lookup:
 
     def find_song(self) -> str:
         from caracole.normalize import identity_key
-        from caracole.overrides import OverridesError, add_match, add_pin, load_overrides, tab_id_from_url
-        from caracole.songs import find_song
+        from caracole.overrides import (
+            OverridesError,
+            add_lacuerda,
+            add_match,
+            add_pin,
+            lacuerda_pick_from_url,
+            load_overrides,
+            tab_id_from_url,
+        )
+        from caracole.songs import find_song, update_song
         from caracole.wanted import append_wanted, sync_wanted
 
         req = self.request
@@ -376,6 +389,11 @@ class _Lookup:
                 tab_id = tab_id_from_url(req.tab)
                 add_pin(self.cfg.overrides_file, song.display, [req.tab, *self._other_pins(song, tab_id)])
                 picked.append(f"[pin] tab {tab_id}")
+            if req.lacuerda:
+                pick = lacuerda_pick_from_url(req.lacuerda)
+                add_lacuerda(self.cfg.overrides_file, song.display, pick.url)
+                update_song(self.conn, song.id, lacuerda_checked_at=None)  # a new pick is asked for at once
+                picked.append(f"[lacuerda] {pick.url}")
             if picked:
                 self.overrides = load_overrides(self.cfg.overrides_file)
         except OverridesError as e:
@@ -449,10 +467,28 @@ class _Lookup:
                             library_dir=self.cfg.library_dir, now=self.now,
                             reload_overrides=lambda: load_overrides(self.cfg.overrides_file), **extra)
 
+    def _picked(self):
+        """The LaCuerda song or version you picked for the song (``[lacuerda]``), or None."""
+        return self.overrides.lacuerda.get(self.song.key) if self.song is not None else None
+
+    def _holds_pick(self) -> bool:
+        """Whether the sheet kept is the LaCuerda one you picked."""
+        from caracole.versions import get_version
+
+        pick, kept = self._picked(), self._kept_sheet()
+        if pick is None or kept is None:
+            return False
+        version = get_version(self.conn, kept.version_id)
+        return version.provider == "lacuerda" and pick.holds(version.tab_id)
+
     def sheet(self) -> tuple[str, str] | str:
         from caracole.songs import get_song
         from caracole.ug.fetch import process_song
 
+        if self._picked() is not None:  # your pick on LaCuerda is the sheet; UG's only when LaCuerda can't give it
+            lc = self.lacuerda()
+            if self._holds_pick():
+                return "done", lc[1] if isinstance(lc, tuple) else lc
         why = self._ug_ready()
         ug: tuple[str, str] | str
         if why is None:
@@ -543,12 +579,18 @@ class _Lookup:
             if s.failures:
                 _, e = s.failures[0]
                 raise e
+            if not s.tried and self._holds_pick():
+                return "done", "the LaCuerda sheet you picked is the sheet already"
+            if not s.tried and self._picked() is not None:
+                return "skipped", "your pick on LaCuerda waits: it was asked for this month"
             if not s.tried:
                 return "skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"
             return "sheet kept from LaCuerda" if s.kept else ("not on LaCuerda" if s.missing else "kept what it had")
 
-        # Without a sheet yet, LaCuerda's is the sheet; with one, a better one the nightly run would look for too.
-        out = self.asking("lacuerda", ask) if self._kept_sheet() is None else self.after_the_sheet("lacuerda", ask)
+        # Without a sheet yet, LaCuerda's is the sheet, and so is the one you picked there; with one, a better one
+        # the nightly run would look for too.
+        first = self._kept_sheet() is None or self._picked() is not None
+        out = self.asking("lacuerda", ask) if first else self.after_the_sheet("lacuerda", ask)
         self.song = get_song(self.conn, self.song.id)
         return out
 

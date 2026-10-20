@@ -535,6 +535,69 @@ def test_lacuerda_without_index_reads_no_listing(tmp_path, sites):
     assert sites.lacuerda.requests == [SODA, DML_3]
 
 
+# --- caracole lacuerda --artist -----------------------------------------------------------
+
+
+@pytest.fixture
+def quick(monkeypatch):
+    monkeypatch.setattr(_common, "sleep", lambda seconds: None)  # the lookup pace's second, between two runs
+
+
+def test_lacuerda_artist_reads_one_page_into_the_index_at_the_lookup_pace(tmp_path, sites, quick):
+    from caracole.lacuerda_index import artist_songs
+
+    sites.lacuerda.pages[SODA] = (LACUERDA_FIXTURES / "artist.html").read_text(encoding="utf-8")
+    result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "LaCuerda: Soda Stereo's page lists 14 songs, in the index now.\n"
+    assert sites.lacuerda.requests == [SODA]
+    conn = open_db(tmp_path)
+    try:
+        assert len(artist_songs(conn, "soda_stereo")) == 14
+        # A lookup's request: it counts in the hour's lookup requests, and its pace is a lookup's.
+        assert [r[0] for r in conn.execute("SELECT run FROM events WHERE provider = 'lacuerda'")][0].startswith("lookup:")
+    finally:
+        conn.close()
+    again = run(tmp_path, "lacuerda", "--artist", "Soda Stereo")  # by their name too; from the cache
+    assert again.stdout == "LaCuerda: Soda Stereo's page lists 14 songs, in the index now.\n"
+    assert sites.lacuerda.requests == [SODA]
+
+
+def test_lacuerda_artist_lacuerda_has_no_page_for_says_so(tmp_path, sites, quick):
+    result = run(tmp_path, "lacuerda", "--artist", "Nadie Conocido")
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "LaCuerda has no artist page for Nadie Conocido.\n"
+
+
+def test_lacuerda_artist_block_cooldown_error_and_spent_lookup_budget_exit_0(tmp_path, sites, quick):
+    sites.lacuerda.status = 500
+    result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
+    assert result.exit_code == 0 and "LaCuerda failed" in result.stdout and "try again" in result.stdout
+    sites.lacuerda.status = 403
+    result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
+    assert result.exit_code == 0 and "LaCuerda blocked caracole" in result.stdout
+    asked = len(sites.lacuerda.requests)
+    result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
+    assert "LaCuerda is cooling down" in result.stdout and len(sites.lacuerda.requests) == asked
+    conn = open_db(tmp_path)
+    try:
+        conn.execute("DELETE FROM kv WHERE key = 'provider:lacuerda'")  # the cooldown over
+        conn.executemany("INSERT INTO events (run, at, provider, url, decision) VALUES (?, ?, 'lacuerda', 'x', 'ok')",
+                         [("lookup:x", datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))] * 60)
+        conn.commit()
+    finally:
+        conn.close()
+    sites.lacuerda.status = None
+    result = run(tmp_path, "lacuerda", "--artist", "soda_stereo")
+    assert result.exit_code == 0 and "this hour's 60 lookup requests to LaCuerda are spent" in result.stdout
+    assert len(sites.lacuerda.requests) == asked
+
+
+def test_lacuerda_artist_and_index_together_is_a_usage_error(tmp_path, sites):
+    result = run(tmp_path, "lacuerda", "--index", "--artist", "estopa")
+    assert result.exit_code == 2 and sites.lacuerda.requests == []
+
+
 # --- the pages -----------------------------------------------------------------------------
 
 STALE = "as an earlier run left it\n"

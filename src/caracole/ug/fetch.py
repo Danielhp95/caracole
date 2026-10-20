@@ -739,8 +739,9 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     A sheet another site gave (LaCuerda's) is replaced only as the shared rule
     says (``versions.replaces_sheet``): ratings can't be compared across sites,
     so coverage alone decides, and a tie keeps it. A pin is your decision and
-    always wins. The sheet kept becomes the slot's only pick, and a complete
-    one retires the auto-chords sheet.
+    always wins; so is the LaCuerda sheet you picked (``[lacuerda]``), which no
+    sheet but a pin replaces. The sheet kept becomes the slot's only pick, and a
+    complete one retires the auto-chords sheet.
     """
     policy = run.ctx.rank
     rows = _rows(run, CHORDS_KINDS)
@@ -778,8 +779,10 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     c, page = best
     assert c.version_id is not None
     kept = _kept_version(run.conn, run.song.id, SHEET_FILES[0])
+    chosen = run.ctx.overrides.lacuerda.get(run.song.key)
     if (kept is not None and kept.provider != PROVIDER and pinned is None
-            and not replaces_sheet(c.coverage, kept.coverage, policy.coverage_threshold)):
+            and ((chosen is not None and kept.provider == "lacuerda" and chosen.holds(kept.tab_id))
+                 or not replaces_sheet(c.coverage, kept.coverage, policy.coverage_threshold))):
         set_picks(run.conn, run.song.id, CHORDS_KINDS, [])  # the other site's sheet stays the pick
         return None
     _keep_text(run, c.version_id, page, SHEET_FILES)

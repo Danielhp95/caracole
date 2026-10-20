@@ -4,6 +4,9 @@ Each makes the same pass as its ``caracole run`` step, with a client of its own:
 this run's budget, and the HTTP cache the nightly run uses too; the lacuerda step's
 two, its sheets and its listings of every artist, are ``caracole lacuerda`` and
 ``caracole lacuerda --index``, which reads the listings even for an empty library.
+``caracole lacuerda --artist NAME`` reads one artist's page into that index now,
+at the lookup pace (as ``caracole get`` asks: a lookup's budgets, no ntfy alert):
+what caracole serve's Songs of a LaCuerda artist runs.
 As in the run,
 a provider cooling down after a block is left alone, and a block starts (or
 extends) its cooldown and sends one ntfy alert. Neither is a failure, and
@@ -70,10 +73,19 @@ def register(app: typer.Typer) -> None:
             False, "--index",
             help="Instead, read LaCuerda's listings of every artist into its local index (artist slugs, for searches).",
         ),
+        artist: str | None = typer.Option(
+            None, "--artist", metavar="NAME",
+            help="Instead, read this artist's page into the index now (their name, or their page's slug), "
+                 "at the lookup pace: their songs, for searches.",
+        ),
     ) -> None:
         """Look for LaCuerda chord sheets for Spanish songs without a complete one."""
         cfg = load_cfg(ctx)
-        if index:
+        if index and artist is not None:
+            _common.fail("--index reads every artist's listing and --artist one artist's page: give one of them", 2)
+        if artist is not None:
+            _lacuerda_artist(cfg, " ".join(artist.split()))
+        elif index:
             _lacuerda_index(cfg)
         else:
             _lacuerda(cfg)
@@ -175,6 +187,49 @@ def _lacuerda_index(cfg: Config) -> None:
     if s.budget_exhausted:
         typer.echo(f"LaCuerda's budget of {_count(cfg.provider('lacuerda').budget, 'request')} per run is spent; "
                    "the next run reads the rest of its listings.")
+
+
+def _lacuerda_artist(cfg: Config, artist: str) -> None:
+    """Read one artist's page into LaCuerda's index now, at the lookup pace, then say what it lists. A
+    cooldown, a block, a spent budget or an error says so and exits 0, as a lookup's would."""
+    from caracole.health import record_error
+    from caracole.http import BudgetExhausted, ProviderError
+    from caracole.lacuerda_fetch import read_artist_page
+
+    with exclusive(cfg, f"lacuerda --artist {artist}", interactive=True), closing(open_db(cfg)) as conn:
+        now = utcnow()
+        if is_cooling(conn, "lacuerda", now):
+            typer.echo(f"LaCuerda is cooling down after a block until {_when(get_state(conn, 'lacuerda').cooldown_until)}; "
+                       "caracole won't ask it before then.")
+            return
+        client = make_client(cfg, conn, "lacuerda", _common.lookup_run_id(now), interactive=True)
+        try:
+            found = read_artist_page(conn, client, artist, now)
+        except ProviderBlocked as e:
+            state = record_block(conn, "lacuerda", now, str(e))
+            typer.echo(f"LaCuerda blocked caracole ({e}): no more requests to it until {_when(state.cooldown_until)}.")
+            return
+        except BudgetExhausted:
+            p = cfg.provider("lacuerda")
+            spent = (f"this hour's {p.lookup_per_hour} lookup requests to LaCuerda are spent"
+                     if client.policy.budget < p.lookup_requests else
+                     f"the lookup's {p.lookup_requests} requests to LaCuerda are spent")
+            typer.echo(f"LaCuerda: {spent}; ask again later.")
+            return
+        except ProviderError as e:
+            record_error(conn, "lacuerda", now, str(e))
+            typer.echo(f"LaCuerda failed ({e}); nothing changed: try again later.")
+            return
+        finally:
+            client.close()
+        if client.requests_made:
+            record_ok(conn, "lacuerda", now)
+        row = found and conn.execute("SELECT artist FROM lacuerda_index WHERE artist_slug = ? LIMIT 1",
+                                     (found[0],)).fetchone()
+    if not found:
+        typer.echo(f"LaCuerda has no artist page for {artist}.")
+        return
+    typer.echo(f"LaCuerda: {row[0] if row else artist}'s page lists {_count(found[1], 'song')}, in the index now.")
 
 
 def _gtptabs(cfg: Config) -> None:

@@ -275,7 +275,7 @@ that turn out to be one song (斑馬斑馬 and 斑马斑马, say) become one.
 
 ### caracole add
 
-`caracole add ARTIST TITLE [--album ALBUM] [--duration M:SS]` (or
+`caracole add ARTIST TITLE [--album ALBUM] [--duration M:SS] [--lacuerda URL]` (or
 `caracole add "ARTIST - TITLE"`) appends the line
 for you, then syncs the file at once and rewrites `_todo.md` and
 `index.html`:
@@ -326,6 +326,16 @@ updated, the line is kept all the same, a warning says why, and the next sync
 adds the song. The first `caracole add` creates the file, with a header that
 explains the format.
 
+`--lacuerda URL` is the LaCuerda song you picked for it, its page's address
+(`https://acordes.lacuerda.net/estopa/como_camaron`) or one of its versions'
+(`…/como_camaron-2.shtml`): it goes under `[lacuerda]` in overrides.toml (see
+[overrides.toml](#overridestoml-your-decisions)), and the nightly run keeps
+that sheet, whatever the song's language, asking LaCuerda for it at its next
+pass however lately it answered for the song: `LaCuerda: the nightly run keeps
+the sheet you picked there (https://acordes.lacuerda.net/estopa/como_camaron),
+recorded under [lacuerda] in overrides.toml.` Any other address is a usage
+error (exit 2), with nothing written.
+
 A song you [removed](#caracole-remove) comes back with `caracole add`, as new:
 `Added Radiohead - Creep to wanted.txt; back from its removal on 2026-10-19, as
 new; the next caracole run looks for it.`
@@ -375,10 +385,13 @@ In order:
    wanted.txt, as `caracole add` adds it, and synced: a song you
    [removed](#caracole-remove) comes back that way, as new.
 2. **Match**, against the offline index, for this song alone.
-3. **The sheet.** One Ultimate Guitar page lists every version of the song's
-   chords with its rating, and the best rated is kept at once: one or two
-   requests. Without one there, LaCuerda's, for a song LaCuerda would be asked
-   about tonight. From here on the sheet is readable.
+3. **The sheet.** The LaCuerda sheet you picked (`--lacuerda`), first: its
+   version's page, one request (and the artist's page when LaCuerda's index
+   doesn't name the song's best version). Else, or when LaCuerda can't give it
+   now, one Ultimate Guitar page lists every version of the song's chords with
+   its rating, and the best rated is kept at once: one or two requests.
+   Without one there, LaCuerda's, for a song LaCuerda would be asked about
+   tonight. From here on the sheet is readable.
 4. **The PDF**, as `caracole render` makes it.
 5. **The lyrics**, from LRCLIB.
 6. **Ultimate Guitar again**, as the nightly run would: the top sheets are
@@ -413,6 +426,13 @@ Options:
   chords sheet, a text tab, a Guitar Pro or Power Tab file, by the offline
   index), and beside its pins of the other kinds: a Guitar Pro version picked
   after a chords sheet keeps the sheet you chose.
+- `--lacuerda URL` is the LaCuerda song to keep the sheet of, its page's
+  address (its best Letra y Acordes version) or a version's
+  (`https://acordes.lacuerda.net/estopa/como_camaron-2.shtml`): it is recorded
+  under `[lacuerda]`, and kept as the sheet whatever the song's language or
+  its coverage of the lyrics; Ultimate Guitar's sheets never replace it, and
+  the song gets Ultimate Guitar's guitar parts all the same. A `[pin]` of an
+  Ultimate Guitar sheet wins over it.
 - `--album ALBUM` and `--duration M:SS`, for a song new to the library, as in
   `caracole add`.
 - `--progress` adds a JSON line per stage, which `caracole serve` reads.
@@ -995,6 +1015,16 @@ and cache.
   A cooldown, a block or a spent budget exits 0. The lacuerda step reads the
   artists' slugs from it; `caracole search` and the Look up page don't read it
   yet.
+
+  **`caracole lacuerda --artist NAME`** reads one artist's page into the index
+  now, so that their songs are there to search: NAME is their name, or the
+  slug of their page (`joaquin_sabina`), tried first when it is written as
+  one. It asks at the lookup pace, as `caracole get` does: one request,
+  within a lookup's budgets, and none when
+  the page is in the cache (30 days). It prints `LaCuerda: Joaquín Sabina's
+  page lists 241 songs, in the index now.`, or `LaCuerda has no artist page
+  for NAME.`; a cooldown, a block, a spent budget or an error says so and
+  exits 0, nothing changed. It can't go with `--index` (exit 2).
 - **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
   song that has no Guitar Pro or Power Tab file, newest songs first. It reads
   gtptabs.com's sitemaps into a local index when it never has, or last did 30
@@ -2261,8 +2291,9 @@ gets its PDF once a CJK font is set; its page and its ChordPro file need none.
 
 `overrides.toml` sits in the library folder (or where `overrides_file` says),
 and can live in git. `caracole review` writes `[match]`, `[alias]`, `[pin]`,
-`[ignore]` and `[reject]` for you, and `caracole youtube --song … --url` or
-`--none` writes `[youtube]`; you write the rest by hand. These are all the
+`[ignore]` and `[reject]` for you, `caracole youtube --song … --url` or
+`--none` writes `[youtube]`, and `caracole get --lacuerda` and `caracole add
+--lacuerda` write `[lacuerda]`; you write the rest by hand. These are all the
 tables:
 
 ```toml
@@ -2293,6 +2324,9 @@ tab_ids = [1601668]
 [youtube]      # the video a song's audio comes from, or "none" for no audio from YouTube
 "Radiohead - Creep" = "https://www.youtube.com/watch?v=XFkzRNyygfk"
 "Some Artist - Some Interlude" = "none"
+
+[lacuerda]     # the LaCuerda song (or version) a song's sheet comes from
+"Estopa - Como Camarón" = "https://acordes.lacuerda.net/estopa/como_camaron"
 ```
 
 - **Song keys** are written `"Artist - Title"`. They match the way songs
@@ -2366,6 +2400,17 @@ tab_ids = [1601668]
   the song's audio off YouTube for good: caracole lets go of any it took, and the
   song goes back to buying. An auto sheet made already stays until a human
   sheet, or one from other audio, takes its place.
+- **`[lacuerda]`** names the LaCuerda song whose sheet is the song's: its page
+  (`https://acordes.lacuerda.net/estopa/como_camaron`: its best Letra y Acordes
+  version) or one version's (`…/como_camaron-2.shtml`), as your browser shows
+  it (without `https://`, on `lacuerda.net`, with a query). The nightly
+  LaCuerda pass asks for it whatever the song's language or its sheet, until it
+  is the sheet kept, and keeps it whatever its coverage of the lyrics, in place
+  of Ultimate Guitar's, LaCuerda's other versions and the auto sheet;
+  Ultimate Guitar's fetch never replaces it. A `[pin]` of an Ultimate Guitar
+  sheet wins over it. An entry you write by hand is asked for at the next pass
+  unless LaCuerda answered for the song in the last 30 days;
+  `caracole get --lacuerda` asks at once.
 
 Each table may appear only once in the file: add lines under a table it has
 already, as the to-do page's lines say. An unknown table, a key other than

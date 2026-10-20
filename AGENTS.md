@@ -35,7 +35,7 @@ an earlier one failed:
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), rank.py, coverage.py, versions.py |
-| lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` is for searches, not wired in yet, `artist_slugs` for the sheets) |
+| lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` is for searches, not wired in yet, `artist_slugs` for the sheets); a `[lacuerda]` pick (overrides.py `LaCuerdaPick`) is tried whatever its language and kept whatever its coverage, `read_artist_page` reads one artist's page (`caracole lacuerda --artist`, at the lookup pace) |
 | scan | music.py (Music/), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
@@ -260,7 +260,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore,
     1–2 s for LRCLIB).
   - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
-    lookups run it). Its clients are `make_client(..., interactive=True)`: a random gap from
+    lookups run it), and `caracole lacuerda --artist`, one artist's page.
+    Its clients are `make_client(..., interactive=True)`: a random gap from
     `lookup_delay` (default 0.5–1.5 s; `[0, 0]` allowed) between two requests to a provider,
     a budget of `lookup_requests` (6) requests to it for the song, and at most
     `lookup_per_hour` (60) for every lookup of the last hour together (`_common.lookup_policy`,

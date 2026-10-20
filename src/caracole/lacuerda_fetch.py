@@ -22,6 +22,16 @@ synced device, cut short by a power cut), which is then written again. Per song:
    and the kept one isn't, or when neither is complete and it covers more. A
    complete sheet also replaces the auto-chords sheet.
 
+**Your pick.** A song you picked on LaCuerda (``[lacuerda]`` in overrides.toml,
+which ``caracole get --lacuerda`` and ``caracole add --lacuerda`` write) is tried
+whatever its language and its sheet until that sheet is the one kept, then never
+again: the version you picked, its page alone, or the song's best "acordes"
+version, which the index names when it holds the artist's page, else the artist
+page does. It is kept whatever its coverage, in place of any sheet but one you
+pinned on Ultimate Guitar (``[pin]``), and a miss waits 30 days as any does.
+``read_artist_page`` reads one artist's page into the index, for caracole serve's
+Songs of a LaCuerda artist (``caracole lacuerda --artist``).
+
 Errors are never misses: a page that doesn't parse, or any other provider
 error, leaves the song to be tried again next run. A cached page that doesn't
 parse (a maintenance notice served with HTTP 200, say) is fetched once more
@@ -32,6 +42,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
@@ -68,7 +79,7 @@ from caracole.lacuerda_index import artist_slugs, store_songs
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, write_info
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title
-from caracole.overrides import Overrides
+from caracole.overrides import LaCuerdaPick, Overrides
 from caracole.songs import SHEET_FILE_NAMES, Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug.page import strip_markup
 from caracole.versions import (
@@ -88,6 +99,7 @@ RECHECK_AFTER = timedelta(days=30)
 _ACCEPT = (200, 404)  # a 404 is an answer: no such artist, or no such version
 HUMAN_SHEET, AUTO_SHEET = SHEET_FILE_NAMES  # "sheet.txt", "sheet (auto).txt"
 SHEET_DOCS = ("sheet.json", HUMAN_SHEET)  # what keeping a sheet writes, in that order
+_SLUG = re.compile(r"[a-z0-9_]+")  # an artist's name written as LaCuerda's slug of their page
 
 
 @dataclass
@@ -132,10 +144,15 @@ def lacuerda_sheets(
     stats = LaCuerdaStats()
     stamp = _stamp(now)
     fetched: set[str] = set()  # URLs fetched from LaCuerda in this pass
+    picks = overrides.lacuerda if overrides is not None else {}
     songs = [s for s in _songs_to_try(conn, library_dir, rank, now, overrides) if only is None or s.id in only]
     for i, song in enumerate(songs):
+        pick = picks.get(song.key)
         try:
-            sheet = _find_sheet(conn, client, song.artists[0], song.title, now, fetched)
+            if pick is not None:
+                sheet = _picked_sheet(conn, client, pick, song, now, fetched)
+            else:
+                sheet = _find_sheet(conn, client, song.artists[0], song.title, now, fetched)
         except ProviderBlocked:
             raise
         except BudgetExhausted:
@@ -155,9 +172,19 @@ def lacuerda_sheets(
         if sheet is None:
             stats.missing += 1
             update_song(conn, song.id, lacuerda_checked_at=stamp)
-        elif _record(conn, library_dir, rank, song, sheet, stamp):
+        elif _record(conn, library_dir, rank, song, sheet, stamp, picked=pick is not None):
             stats.kept += 1
     return stats
+
+
+def read_artist_page(conn: sqlite3.Connection, client: Client, artist: str, now: datetime) -> tuple[str, int] | None:
+    """One artist's page into the index (``lacuerda_index.store_songs``), as caracole serve's Songs of a
+    LaCuerda artist asks for it: under ``artist`` first when it is written as a slug (``soda_stereo``),
+    then under the slugs for that name, as the step tries them (the listings' first). Returns the slug
+    that answered and the songs its page lists (each once); None when LaCuerda has no page by any of them.
+    The page is cached for 30 days, as the step's are. Provider errors propagate."""
+    found = _artist_songs(conn, client, artist, now, set(), first=[artist] if _SLUG.fullmatch(artist) else [])
+    return (found[0], len({s.slug for s in found[1]})) if found is not None else None
 
 
 # --- which songs ---------------------------------------------------------------------
@@ -176,11 +203,21 @@ def _songs_to_try(
     """
     cutoff = _utc(now) - RECHECK_AFTER
     ignored = overrides.ignore if overrides is not None else frozenset()
+    picks = overrides.lacuerda if overrides is not None else {}
     songs = []
     for song in list_songs(conn):
         if song.status == "ignored" or song.key in ignored:
             continue
         kept = _kept_sheet(conn, song.id)
+        pick = picks.get(song.key)
+        if pick is not None:  # your pick: until its sheet is the one kept, unless you pinned a UG sheet
+            lost = kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id)
+            if kept is not None and not lost and (
+                    _pinned(overrides, song, kept) or (kept.provider == PROVIDER and pick.holds(kept.tab_id))):
+                continue
+            if lost or _before(song.lacuerda_checked_at, cutoff):
+                songs.append(song)
+            continue
         if not (kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id)):
             if not _before(song.lacuerda_checked_at, cutoff):  # asked about in the last 30 days
                 continue
@@ -256,28 +293,60 @@ def _find_sheet(
 
 
 def _artist_songs(
-    conn: sqlite3.Connection, client: Client, artist: str, now: datetime, fetched: set[str]
+    conn: sqlite3.Connection, client: Client, artist: str, now: datetime, fetched: set[str],
+    first: Collection[str] = (),
 ) -> tuple[str, list[LCSong]] | None:
     """The first artist page LaCuerda has among the artist's slugs, with its songs, which go into
     the index (``lacuerda_index.store_songs``).
 
-    The slugs are those LaCuerda's listings give the name, then those built from it. A 404,
-    or LaCuerda's HTTP 200 "aqui llega:" body, means no artist by that slug: the next slug is
-    tried. None when no slug has a page.
+    The slugs are ``first``'s, then those LaCuerda's listings give the name, then those built
+    from it. A 404, or LaCuerda's HTTP 200 "aqui llega:" body, means no artist by that slug: the
+    next slug is tried. None when no slug has a page.
     """
-    for slug in dict.fromkeys([*artist_slugs(conn, artist), *artist_slug_candidates(artist)]):
-        url = artist_url(slug)
-        resp = client.get(url, accept=_ACCEPT, max_age=ARTIST_PAGE_MAX_AGE)
-        if _stale(resp, now):
-            # PoliteClient serves a copy past max_age only once the budget is spent.
-            # It is no answer for today: stop as the next request would have.
-            raise BudgetExhausted(PROVIDER)
-        page = _read(client, resp, url, _artist_page_songs, fetched)
-        if page is not None:
-            songs, html = page
-            store_songs(conn, slug, parse_artist_name(html), songs, parse_popularity(html))
+    for slug in dict.fromkeys([*first, *artist_slugs(conn, artist), *artist_slug_candidates(artist)]):
+        songs = _artist_page(conn, client, slug, now, fetched)
+        if songs is not None:
             return slug, songs
     return None
+
+
+def _artist_page(conn: sqlite3.Connection, client: Client, slug: str, now: datetime,
+                 fetched: set[str]) -> list[LCSong] | None:
+    """The songs of the artist page of ``slug``, stored in the index; None when LaCuerda has no artist by it."""
+    url = artist_url(slug)
+    resp = client.get(url, accept=_ACCEPT, max_age=ARTIST_PAGE_MAX_AGE)
+    if _stale(resp, now):
+        # PoliteClient serves a copy past max_age only once the budget is spent.
+        # It is no answer for today: stop as the next request would have.
+        raise BudgetExhausted(PROVIDER)
+    page = _read(client, resp, url, _artist_page_songs, fetched)
+    if page is None:
+        return None
+    songs, html = page
+    store_songs(conn, slug, parse_artist_name(html), songs, parse_popularity(html))
+    return songs
+
+
+def _picked_sheet(conn: sqlite3.Connection, client: Client, pick: LaCuerdaPick, song: Song, now: datetime,
+                  fetched: set[str]) -> _Sheet | None:
+    """The sheet of the LaCuerda song or version you picked, or None when LaCuerda has no such page, or
+    the song no "acordes" version. A version costs its own page; a song, its best "acordes" version's,
+    which the index names when it holds the artist's page, else the artist's page does first."""
+    row = conn.execute("SELECT title, versions, acordes FROM lacuerda_index WHERE path = ?",
+                       (f"{pick.artist}/{pick.song}",)).fetchone()
+    lc_song = LCSong(pick.song, row[0] if row else song.title, row[1] if row else "", ())
+    n = pick.version
+    if n is None and row is not None:
+        n = row[2] or None  # the index names the song's best "acordes" version, 0 for none
+    elif n is None:
+        songs = _artist_page(conn, client, pick.artist, now, fetched)
+        lc_song = next((s for s in songs or () if s.slug == pick.song), None)
+        n = best_acordes_version(lc_song) if lc_song is not None else None
+    if lc_song is None or n is None:
+        return None
+    url = version_url(pick.artist, pick.song, n)
+    markup = _read(client, client.get(url, accept=_ACCEPT), url, _version_sheet, fetched)
+    return _Sheet(pick.artist, lc_song, n, url, markup) if markup is not None else None
 
 
 def _read[T](
@@ -327,9 +396,9 @@ def _stale(resp: Response, now: datetime) -> bool:
 
 def _record(
     conn: sqlite3.Connection, library_dir: Path, rank: RankPolicy, song: Song, sheet: _Sheet,
-    stamp: str,
+    stamp: str, *, picked: bool = False,
 ) -> bool:
-    """Record LaCuerda's version with its coverage; keep it if it beats the kept sheet.
+    """Record LaCuerda's version with its coverage; keep it if it beats the kept sheet, or you picked it.
 
     The sheet already kept, met again, is only rescored: the lyrics may have
     arrived since, and once it proves complete the auto-chords sheet gives way,
@@ -351,7 +420,7 @@ def _record(
     set_coverage(conn, vid, value)
     already_kept = kept is not None and kept.id == vid
     keep = kept is None or (
-        not already_kept and replaces_sheet(value, kept.coverage, rank.coverage_threshold)
+        not already_kept and (picked or replaces_sheet(value, kept.coverage, rank.coverage_threshold))
     )
     if keep:
         _keep(conn, library_dir, song, vid, sheet, complete=_complete(value, rank))

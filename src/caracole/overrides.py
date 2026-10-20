@@ -21,6 +21,9 @@ Tables:
 - ``[youtube]``: "Artist - Title" → the YouTube video caracole takes the song's
   audio from, in place of the one its search picks (youtube_fetch.py), or "none":
   never take this song's audio from YouTube.
+- ``[lacuerda]``: "Artist - Title" → the LaCuerda song (its page) or version (its
+  sheet's page) you picked (``LaCuerdaPick``): lacuerda_fetch.py keeps that sheet,
+  whatever its coverage, and Ultimate Guitar's fetch never replaces it.
 
 Keys are canonicalized when loaded, so they're matched the same way songs are.
 Writers use tomlkit, so your comments and layout survive.
@@ -63,10 +66,16 @@ _ARTIST_HOST = "https://www.ultimate-guitar.com"
 # How messages and the to-do page write an artist page's address and a tab page's.
 ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
 TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
-_TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube"}
+_TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube", "lacuerda"}
 # How messages and the to-do page write a YouTube video's address, and the value that says "no video".
 VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
 NO_VIDEO = "none"
+# LaCuerda's hosts as an address bar shows them; caracole asks acordes.lacuerda.net. A song's page is
+# /<artist>/<song>, a version's /<artist>/<song>.shtml (version 1) or /<artist>/<song>-<n>.shtml (lacuerda.py).
+_LACUERDA_HOST = re.compile(r"(?:(?:acordes|www)\.)?lacuerda\.net")
+_LACUERDA_PATH = re.compile(r"/([a-z0-9_]+)/([a-z0-9_]+?)(?:(?:-([1-9][0-9]*))?(\.shtml))?")
+LACUERDA_BASE = "https://acordes.lacuerda.net"
+LACUERDA_PAGE_SHAPE = f"{LACUERDA_BASE}/<artist>/<song>"
 _TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
 
 
@@ -92,6 +101,53 @@ class Overrides:
     reject: Mapping[str, frozenset[tuple[str, str]]] = field(default_factory=dict)
     artist_url_names: Mapping[str, str] = field(default_factory=dict)
     youtube: Mapping[str, str | None] = field(default_factory=dict)
+    lacuerda: Mapping[str, LaCuerdaPick] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class LaCuerdaPick:
+    """A LaCuerda song you picked (``[lacuerda]``): its artist's slug and its own, and the version whose
+    sheet you picked, or None for the song's best Letra y Acordes version."""
+
+    artist: str
+    song: str
+    version: int | None = None
+
+    @property
+    def url(self) -> str:
+        """The song's page, or the version's: as caracole writes the pick and asks for it."""
+        if self.version is None:
+            return f"{LACUERDA_BASE}/{self.artist}/{self.song}"
+        return f"{LACUERDA_BASE}/{self.artist}/{self.song}{'' if self.version == 1 else f'-{self.version}'}.shtml"
+
+    def holds(self, tab_id: str) -> bool:
+        """Whether a LaCuerda version, by its tab id (``artist/song-N``, as lacuerda_fetch.py records it),
+        is the one picked: that version, or for a song, any of its versions."""
+        artist, _, rest = tab_id.partition("/")
+        song, dash, n = rest.rpartition("-")
+        return (dash == "-" and artist == self.artist and song == self.song
+                and (self.version is None or n == str(self.version)))
+
+
+def lacuerda_pick_from_url(url: Any) -> LaCuerdaPick:
+    """The LaCuerda song or version a page's address names (``LaCuerdaPick``), written as an address bar
+    shows it: without ``https://``, on lacuerda.net, with a query or a trailing slash."""
+    text = url.strip() if isinstance(url, str) else ""
+    if text and not _SCHEME.match(text):
+        text = f"https://{text}"
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        parts = None
+    found = None
+    if parts is not None and parts.scheme in ("http", "https") and _LACUERDA_HOST.fullmatch(parts.netloc.lower()):
+        path = parts.path if parts.path.endswith(".shtml") else parts.path.rstrip("/")
+        found = _LACUERDA_PATH.fullmatch(path)
+    if found is None or found.group(1) == "tabs":
+        raise OverridesError(f"expected a LaCuerda song's page ({LACUERDA_PAGE_SHAPE}) or one of its versions' "
+                             f"(…/<song>-2.shtml), got {url!r}")
+    artist, song, n, shtml = found.groups()
+    return LaCuerdaPick(artist, song, int(n) if n else (1 if shtml else None))
 
 
 def override_key(display: str) -> str:
@@ -344,10 +400,20 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
 
     youtube = {_song_key(k, f"[youtube] {k!r}"): _video(v, f"[youtube] {k!r}") for k, v in table("youtube").items()}
 
+    lacuerda: dict[str, LaCuerdaPick] = {}
+    for k, v in table("lacuerda").items():
+        where = f"[lacuerda] {k!r}"
+        if not isinstance(v, str):
+            raise OverridesError(f"{where}: expected a string, the address of a LaCuerda song's page")
+        try:
+            lacuerda[_song_key(k, where)] = lacuerda_pick_from_url(v)
+        except OverridesError as e:
+            raise OverridesError(f"{where}: {e}") from e
+
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
-        artist_url_names=artist_url_names, youtube=youtube,
+        artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda,
     )
 
 
@@ -469,6 +535,30 @@ def add_youtube(path: Path, display: str, url: str) -> None:
             t[display] = value
         elif _video(t[key], f"[youtube] {key!r}") != video:
             t[key] = value
+
+    _edit(path, change)
+
+
+def add_lacuerda(path: Path, display: str, url: str) -> None:
+    """Set the song's ``[lacuerda]`` entry: the LaCuerda song or version at ``url``, written as caracole
+    asks for it (``LaCuerdaPick.url``). The song's entry is found by its key, as the table is read, so
+    the song written another way changes the entry it has; the same pick again writes nothing."""
+    wanted = override_key(display)
+    pick = lacuerda_pick_from_url(url)
+
+    def same_song(key: str) -> bool:
+        try:
+            return override_key(key) == wanted
+        except OverridesError:
+            return False
+
+    def change(doc) -> None:
+        t = _table_of(doc, "lacuerda")
+        key = next((k for k in reversed(list(t)) if same_song(k)), None)
+        if key is None:
+            t[display] = pick.url
+        elif t[key] != pick.url:
+            t[key] = pick.url
 
     _edit(path, change)
 

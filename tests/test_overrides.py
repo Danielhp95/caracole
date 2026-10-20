@@ -11,11 +11,14 @@ from caracole.overrides import (
     add_artist_url,
     add_block,
     add_ignore,
+    add_lacuerda,
     add_match,
     add_pin,
     add_reject,
     add_youtube,
+    LaCuerdaPick,
     artist_url_entry,
+    lacuerda_pick_from_url,
     load_overrides,
     override_key,
     tab_id_from_url,
@@ -459,6 +462,65 @@ def test_add_youtube_writes_the_plain_address_or_none_in_the_songs_one_entry(tmp
         add_youtube(p, "Radiohead - Creep", "https://www.youtube.com/@radiohead")
     with pytest.raises(OverridesError, match="Artist - Title"):
         add_youtube(p, "Creep", "none")
+    assert p.read_text(encoding="utf-8") == before
+
+
+def test_lacuerda_names_the_song_or_the_version_you_picked_there(tmp_path):
+    o = load_overrides(write(tmp_path, '''
+[lacuerda]   # the LaCuerda song or version a song's sheet comes from
+"Estopa - Como Camarón" = "https://acordes.lacuerda.net/estopa/como_camaron-2.shtml"
+"Soda Stereo - De Música Ligera" = "acordes.lacuerda.net/soda_stereo/de_musica_ligera/"
+"Fito y Fitipaldis - Soldadito Marinero" = "http://lacuerda.net/fito__fitipaldis/soldadito_marinero.shtml?x=1"
+'''))
+    assert o.lacuerda == {
+        "estopa/como-camaron": LaCuerdaPick("estopa", "como_camaron", 2),
+        "soda-stereo/de-musica-ligera": LaCuerdaPick("soda_stereo", "de_musica_ligera"),
+        "fito-fitipaldis/soldadito-marinero": LaCuerdaPick("fito__fitipaldis", "soldadito_marinero", 1),
+    }
+    assert o.lacuerda["estopa/como-camaron"].url == "https://acordes.lacuerda.net/estopa/como_camaron-2.shtml"
+    assert o.lacuerda["soda-stereo/de-musica-ligera"].url == "https://acordes.lacuerda.net/soda_stereo/de_musica_ligera"
+    assert LaCuerdaPick("a", "b", 1).url == "https://acordes.lacuerda.net/a/b.shtml"
+    assert Overrides().lacuerda == {}
+
+
+def test_a_lacuerda_pick_holds_its_version_or_any_version_of_its_song():
+    song, version = LaCuerdaPick("estopa", "como_camaron"), LaCuerdaPick("estopa", "como_camaron", 2)
+    assert song.holds("estopa/como_camaron-2") and song.holds("estopa/como_camaron-1")
+    assert version.holds("estopa/como_camaron-2") and not version.holds("estopa/como_camaron-1")
+    assert not song.holds("estopa/como_camaron_2-1") and not song.holds("ecos/como_camaron-2")
+
+
+@pytest.mark.parametrize("value", [
+    "https://acordes.lacuerda.net/estopa/", "https://acordes.lacuerda.net/estopa/como_camaron/x",
+    "https://tabs.ultimate-guitar.com/tab/85053", "https://acordes.lacuerda.net/tabs/e/index0.html",
+    "https://acordes.lacuerda.net/Estopa/Como Camaron", "https://acordes.lacuerda.net/estopa/como_camaron-0.shtml",
+    "ftp://acordes.lacuerda.net/estopa/como_camaron", "estopa", ""])
+def test_a_lacuerda_entry_that_is_no_song_page_says_what_it_takes(tmp_path, value):
+    with pytest.raises(OverridesError, match="LaCuerda song"):
+        lacuerda_pick_from_url(value)
+    p = write(tmp_path, f'[lacuerda]\n"Estopa - Como Camarón" = "{value}"\n')
+    with pytest.raises(OverridesError, match=r"\[lacuerda\] 'Estopa - Como Camarón': expected a LaCuerda song"):
+        load_overrides(p)
+    with pytest.raises(OverridesError, match="a string"):
+        load_overrides(write(tmp_path, '[lacuerda]\n"Estopa - Como Camarón" = 5\n'))
+
+
+def test_add_lacuerda_writes_the_picks_address_in_the_songs_one_entry(tmp_path):
+    p = write(tmp_path, '# mine\n[lacuerda]\n"estopa - como camarón" = "https://acordes.lacuerda.net/estopa/x"  # old\n')
+    add_lacuerda(p, "Estopa - Como Camarón", "acordes.lacuerda.net/estopa/como_camaron-2.shtml?ref=1")
+    add_lacuerda(p, "Soda Stereo - De Música Ligera", "https://acordes.lacuerda.net/soda_stereo/de_musica_ligera")
+    before, inode = p.read_text(encoding="utf-8"), p.stat().st_ino
+    add_lacuerda(p, "Estopa - Como Camarón", "https://acordes.lacuerda.net/estopa/como_camaron-2.shtml")  # the same
+    text = p.read_text(encoding="utf-8")
+    assert text == before and p.stat().st_ino == inode
+    assert "# mine" in text and text.lower().count("como camar") == 1 and "# old" in text
+    assert '"estopa - como camarón" = "https://acordes.lacuerda.net/estopa/como_camaron-2.shtml"' in text
+    assert load_overrides(p).lacuerda == {"estopa/como-camaron": LaCuerdaPick("estopa", "como_camaron", 2),
+                                          "soda-stereo/de-musica-ligera": LaCuerdaPick("soda_stereo", "de_musica_ligera")}
+    with pytest.raises(OverridesError, match="LaCuerda song"):
+        add_lacuerda(p, "Estopa - Como Camarón", "https://acordes.lacuerda.net/estopa/")
+    with pytest.raises(OverridesError, match="Artist - Title"):
+        add_lacuerda(p, "Como Camarón", "https://acordes.lacuerda.net/estopa/como_camaron")
     assert p.read_text(encoding="utf-8") == before
 
 

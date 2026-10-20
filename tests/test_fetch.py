@@ -2264,9 +2264,10 @@ def test_an_error_on_the_chords_list_is_no_miss(conn, tmp_path):
 # --- sheets from elsewhere: auto-chords, LaCuerda, and blocks ----------------------------------------
 
 
-def keep_other_sheet(conn, tmp_path, song, *, provider, kind, name, coverage=None):
+def keep_other_sheet(conn, tmp_path, song, *, provider, kind, name, coverage=None, tab_id=None):
     """A sheet another step kept: auto-chords' 'sheet (auto).txt', or LaCuerda's sheet.txt."""
-    vid = upsert_version(conn, provider=provider, tab_id=f"{provider}-1", song_id=song.id, slot="sheet", kind=kind,
+    vid = upsert_version(conn, provider=provider, tab_id=tab_id or f"{provider}-1", song_id=song.id, slot="sheet",
+                         kind=kind,
                          rating=0, votes=0, version=1, label=None, url=f"https://example.invalid/{provider}",
                          raw={}, now="2026-10-01T00:00:00Z")
     set_coverage(conn, vid, coverage)
@@ -2361,6 +2362,29 @@ def test_a_ug_sheet_you_pinned_replaces_even_a_complete_lacuerda_sheet(conn, tmp
 
     assert out.sheet == 101 and "sheet 101" in read(tmp_path, song, "sheet.txt")
     assert pick_ids(conn, song, "chords", "acordes", "auto") == [101]
+
+
+def test_a_lacuerda_sheet_you_picked_stays_whatever_ugs_covers(conn, tmp_path):
+    # [lacuerda] is your decision too: UG's complete sheet never replaces the partial one you picked there.
+    from caracole.overrides import LaCuerdaPick
+
+    song = accepted(conn)
+    keep_other_sheet(conn, tmp_path, song, provider="lacuerda", kind="acordes", name="sheet.txt", coverage=0.2,
+                     tab_id="soda_stereo/persiana_americana-2")
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug = FakeUG()
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    picked = Overrides(lacuerda={song.key: LaCuerdaPick("soda_stereo", "persiana_americana")})
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, picked), song)
+
+    assert out.sheet is None and read(tmp_path, song, "sheet.txt") == "lacuerda sheet"
+    assert len(picks(conn, song.id, ("acordes",))) == 1
+    # Another version than the one picked is LaCuerda's like any: the coverage decides.
+    other = Overrides(lacuerda={song.key: LaCuerdaPick("soda_stereo", "persiana_americana", 3)})
+    update_song(conn, song.id, ug_dirty=True)
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, other), get_song(conn, song.id))
+    assert out.sheet == 101 and "sheet 101" in read(tmp_path, song, "sheet.txt")
 
 
 def test_a_kept_ug_sheet_becomes_the_only_pick_of_the_sheet_slot(conn, tmp_path):

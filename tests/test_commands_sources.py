@@ -164,6 +164,23 @@ def test_add_creates_wanted_txt_and_the_song(tmp_path):
     )
 
 
+def test_add_with_lacuerda_records_the_sheet_you_picked_there_for_tonights_run(tmp_path):
+    from caracole.overrides import LaCuerdaPick, load_overrides
+
+    url = "https://acordes.lacuerda.net/estopa/como_camaron-2.shtml"
+    result = run(tmp_path, "add", "--lacuerda", url, "Estopa", "Como Camarón")
+    assert result.exit_code == 0, result.output
+    assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith("\nEstopa - Como Camarón\n")
+    assert load_overrides(tmp_path / "lib" / "overrides.toml").lacuerda == {
+        "estopa/como-camaron": LaCuerdaPick("estopa", "como_camaron", 2)}
+    assert "LaCuerda: the nightly run keeps the sheet you picked there" in result.output
+    [song] = songs(tmp_path)
+    assert song.lacuerda_checked_at is None
+    bad = run(tmp_path, "add", "--lacuerda", "https://acordes.lacuerda.net/estopa/", "Estopa", "Tu Calorro")
+    assert bad.exit_code == 2 and "--lacuerda" in bad.output
+    assert "Tu Calorro" not in wanted_file(tmp_path).read_text(encoding="utf-8")
+
+
 def test_add_a_chinese_song_with_album_and_duration(tmp_path):
     result = run(tmp_path, "add", "宋冬野", "斑马斑马", "--album", "安和桥北", "--duration", "4:13")
     assert result.exit_code == 0, result.output

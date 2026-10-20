@@ -444,6 +444,74 @@ def test_a_spanish_song_ug_has_no_sheet_for_gets_lacuerdas_at_once(cfg, conn, si
     assert progress.states()["lacuerda"] in ("done", "skipped")
 
 
+LC = "https://acordes.lacuerda.net/"
+CAMARON_2 = LC + "estopa/como_camaron-2.shtml"
+
+
+def serve_como_camaron(sites: Sites, conn) -> None:
+    """Estopa's Como Camarón: on Ultimate Guitar, whose sheets chart the whole song, and LaCuerda's version 2."""
+    tabs = [creep_tab(201, rating=4.9, artist="Estopa", song="Como Camaron"),
+            creep_tab(202, rating=4.5, artist="Estopa", song="Como Camaron")]
+    for tab in tabs:
+        others = [t for t in tabs if t is not tab]
+        sites.pages[tab["tab_url"]] = (200, make_tab_page_html(tab, others, content=sheet(f"sheet {tab['id']}", LINES)))
+    upsert_rows(conn, [(t["id"], "estopa", "como-camaron", "chords", t["tab_url"].removeprefix(TAB)) for t in tabs],
+                "1", NOW)
+    mark_built(conn, NOW)
+    sites.lyrics[("Estopa", "Como Camarón")] = "\n".join(LINES)
+    sites.pages[CAMARON_2] = (200, (LACUERDA / "version.html").read_text("utf-8"))
+
+
+def test_the_lacuerda_sheet_you_pick_is_the_sheet_first_and_stays(cfg, conn, sites):
+    from caracole.overrides import LaCuerdaPick
+
+    serve_como_camaron(sites, conn)
+
+    result, progress = look_up(cfg, sites=sites, artist="Estopa", title="Como Camarón", lacuerda=CAMARON_2)
+
+    # The version you picked, before Ultimate Guitar is asked anything: its page alone.
+    readable = next(e for e in progress.events if e[0] == "readable")
+    assert sites.requests[0] == CAMARON_2 and progress.events.index(readable) < progress.events.index(
+        ("stage", "lyrics", "running"))
+    here = folder(cfg, "Estopa", "Como Camarón")
+    assert (here / "sheet.txt").read_text(encoding="utf-8").startswith("Intro:")
+    assert load_overrides(cfg.overrides_file).lacuerda == {"estopa/como-camaron": LaCuerdaPick("estopa", "como_camaron", 2)}
+    assert "[lacuerda]" in result.details["song"] and "LaCuerda" in result.details["sheet"]
+    # Ultimate Guitar's sheets, which chart the lyrics better, replace nothing: the pick stays.
+    assert progress.states()["ug"] == "done" and len(sites.ug()) >= 1
+    assert (here / "sheet.txt").read_text(encoding="utf-8").startswith("Intro:")
+    assert progress.states()["lacuerda"] == "skipped"  # asked already, for the sheet
+    assert find_song(conn, "estopa/como-camaron").status == "found" and result.ok
+
+
+def test_a_lacuerda_pick_lacuerda_cant_answer_now_leaves_the_sheet_to_ultimate_guitar(cfg, conn, sites):
+    serve_como_camaron(sites, conn)
+    record_block(conn, "lacuerda", datetime.now(UTC), "HTTP 403")
+
+    result, progress = look_up(cfg, sites=sites, artist="Estopa", title="Como Camarón", lacuerda=CAMARON_2)
+
+    assert CAMARON_2 not in sites.requests
+    assert "sheet 20" in (folder(cfg, "Estopa", "Como Camarón") / "sheet.txt").read_text(encoding="utf-8")
+    song = find_song(conn, "estopa/como-camaron")
+    assert song.lacuerda_checked_at is None  # an error is never a miss: the nightly run asks for the pick
+    assert "estopa/como-camaron" in load_overrides(cfg.overrides_file).lacuerda and result.ok
+
+
+def test_a_new_pick_is_asked_for_at_once_however_lately_lacuerda_answered_for_the_song(cfg, conn, sites):
+    from caracole.songs import update_song
+
+    from conftest import add_song
+
+    serve_como_camaron(sites, conn)
+    song = add_song(conn, "Estopa", "Como Camarón")
+    update_song(conn, song.id, lacuerda_checked_at="2026-10-19T03:00:00Z")  # a miss last night
+
+    look_up(cfg, sites=sites, artist="Estopa", title="Como Camarón", lacuerda=CAMARON_2)
+
+    assert CAMARON_2 in sites.requests
+    assert (folder(cfg, "Estopa", "Como Camarón") / "sheet.txt").read_text(encoding="utf-8").startswith("Intro:")
+
+
 def test_an_existing_song_is_looked_up_without_a_new_line_in_wanted_txt(cfg, conn, sites):
     from conftest import add_song
 
