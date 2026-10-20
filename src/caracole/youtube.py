@@ -596,10 +596,9 @@ class YtDlp:
                                     env=env, start_new_session=True)
         except OSError as e:  # no yt-dlp there: nothing was sent
             raise ProviderError(PROVIDER, target, None, f"can't run yt-dlp ({self.binary}): {e.strerror or e}") from e
-        self.requests_made += 1
-        started = self._clock()
-        self._last = started
         try:
+            self.requests_made += 1
+            self._last = self._clock()
             out, err = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
             _stop(proc)
