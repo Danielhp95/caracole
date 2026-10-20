@@ -366,6 +366,24 @@ def test_a_removal_confirmed_for_another_song_than_the_id_now_names_is_refused(a
     assert post(app, "/remove", {"song": "x"}).status == 400
 
 
+def test_a_removal_says_how_it_goes_on_jobs_and_never_shows_as_a_song_just_requested(app, conn, cfg, queue):
+    creep = a_kept_song(conn, cfg)
+    post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"})
+    # The card says Removing… in its foot; the page's script gets no job of it, which, with no song of the
+    # library behind it, would be a card under "Just requested".
+    server = json.loads(JSON_BLOCK.search(text(get(app, "/"))).group(1))["server"]
+    assert server["removing"] == [creep.id] and server["jobs"] == []
+    (job_id, item), = JOB_ITEM.findall(text(get(app, "/jobs")))
+    line = re.search(r'<p class="line">(.*?)</p>', item, re.S).group(1)
+    assert "Radiohead - Creep" in line and "Remove Radiohead" not in line and "Queued…" in line
+    queue.run_pending()
+    (job_id, item), = JOB_ITEM.findall(text(get(app, "/jobs")))
+    line = re.search(r'<p class="line">(.*?)</p>', item, re.S).group(1)
+    assert "Removed" in line and "Added" not in line  # not a request that added a song
+    [view] = answer(get_json(app, f"/jobs.json?jobs={job_id}"))["jobs"]
+    assert view["line"]["text"] == "Removed" and view["display"] == "Radiohead - Creep"
+
+
 @pytest.mark.parametrize("csrf,headers", [(None, {}), ("tok", {"sec-fetch-site": "cross-site"})])
 def test_a_removal_from_anywhere_but_the_page_is_refused(app, conn, cfg, queue, csrf, headers):
     creep = a_kept_song(conn, cfg)

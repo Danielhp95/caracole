@@ -1326,7 +1326,8 @@ do:
 - **Remove a song.** Each card's Remove… button opens a page that says what
   goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
   it queues `caracole remove --yes "ARTIST - TITLE"`, and the card says
-  Removing… until it has run. Keep it goes back to the library, and nothing
+  Removing… until it has run; on `/jobs` its line says "Removing from
+  caracole…", then "Removed". Keep it goes back to the library, and nothing
   changes. A page older than a change to the library (the song merged into
   another since, say) removes nothing: reload the library.
 - **How it goes, on the page.** A request leaves you where you are. The

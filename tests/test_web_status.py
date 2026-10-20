@@ -38,6 +38,22 @@ def test_a_running_request_says_its_running_steps_label_whatever_the_command():
     assert job_line(between, None).text == "Looking it up…"
 
 
+def test_a_removal_says_removing_while_it_runs_then_removed():
+    from caracole.web.jobs import REMOVING, remove_steps
+
+    def removal(state, states):
+        made = job(state, remove_steps("Radiohead - Creep"), fetching=False, states=states)
+        made.song_key = REMOVING + "radiohead/creep"
+        return made
+
+    assert job_line(removal("running", ["running"]), None) == Line("running", "Removing from caracole…")
+    # Its song is gone once it is done: that is what it did, not a request that added the song.
+    assert job_line(removal("done", ["done"]), None) == Line("removed", "Removed")
+    failed = removal("failed", ["failed"])
+    failed.steps[0].output = ["error: wanted.txt can't be read."]
+    assert job_line(failed, None) == Line("failed", "wanted.txt can't be read.", details=details_href(3))
+
+
 def test_a_done_request_whose_song_has_a_sheet_is_ready_with_a_link_to_it():
     done = job("done", states=["done"] * 4)
     assert job_line(done, READY) == Line("ready", "Ready", ("Open sheet", "Radiohead/Creep/sheet.pdf"))

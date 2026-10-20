@@ -247,7 +247,10 @@ class WebApp:
                 held = frozenset(s.id for s in list_songs(conn) if review_first(s, overrides))
                 removing = _song_ids(conn, {job.song_key.removeprefix(REMOVING) for job in jobs
                                             if job.active and job.song_key.startswith(REMOVING)})
-                active = tuple(self._views(conn, overrides, jobs, only=[j for j in jobs if j.active]))
+                # A removal's card says Removing… in its foot (``removing``); as a job of the page's
+                # script, with no song of the library behind it, it would be a song just requested.
+                active = tuple(self._views(conn, overrides, jobs, only=[
+                    j for j in jobs if j.active and not j.song_key.startswith(REMOVING)]))
                 controls = WebControls(self.csrf, busy, self.queue.active_count(), held, removing=removing,
                                        jobs=active)
                 html = build_library_page(conn, self.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
@@ -527,7 +530,8 @@ class WebApp:
             return _message(409, "Not that song", "The library changed since this page was made, so nothing was "
                                                   "removed: reload the library and try again.")
         try:
-            job, _ = self.queue.submit(f"Remove {song.display}", REMOVING + song.key, remove_steps(song.display))
+            job, _ = self.queue.submit(f"Remove {song.display}", REMOVING + song.key, remove_steps(song.display),
+                                       display=song.display)
         except QueueFull:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
         return _redirect(f"/jobs#job-{job.id}")

@@ -98,7 +98,7 @@ REMOVING = "remove:"  # a removal's song_key: the song's key after it, so it nev
 
 def remove_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
     """``caracole remove --yes``: the page asked already, and showed what goes."""
-    return [("Remove from caracole", ("remove", "--yes", "--", display))]
+    return [("Removing from caracole", ("remove", "--yes", "--", display))]
 
 
 class JobQueue:
