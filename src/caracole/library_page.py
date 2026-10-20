@@ -1128,7 +1128,8 @@ _SELECT_SCRIPT = r"""
     if (text !== undefined && text !== null) node.textContent = String(text);
     return node;
   };
-  const shellQuote = (text) => '"' + String(text).replace(/(["\\$`])/g, "\\$1") + '"';
+  // Each word in single quotes, each ' written '\'': bash and zsh expand ! even in double quotes.
+  const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
   const picked = [];  // song ids, in the order they were picked: the songbook's order
 
   // Remember whether the Songbooks section was open, across reloads (the served page comes back to it).

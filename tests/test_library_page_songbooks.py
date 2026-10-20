@@ -7,6 +7,7 @@ import hashlib
 import html as html_module
 import json
 import re
+import shlex
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -199,8 +200,23 @@ def test_select_mode_shows_the_command_to_make_the_songbook_on_the_page_on_disk(
     assert out["numbers"] == ["1", "2", "3"]  # in the order picked: the songbook's
     assert out["count"] == "3 selected"
     assert out["shown"]
-    assert out["command"] == ('caracole songbook make "Beach nights" "Muse - Hysteria" "Radiohead - Creep" '
-                              '"Soda Stereo - De Música Ligera"')
+    assert out["command"] == ("caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep' "
+                              "'Soda Stereo - De Música Ligera'")
+
+
+@in_chromium
+def test_the_command_to_copy_quotes_each_word_so_no_shell_expands_it(conn, cfg, tmp_path):
+    title = 'Wow!Wow $HOME `id` "x"'  # bash and zsh expand ! even inside double quotes
+    add_song(conn, "Rock'n Band", title)
+    out = run_in_page(page(conn, cfg), cfg, tmp_path, """
+      q(".pick-toggle").click();
+      qa("#list article")[0].querySelector(".pick input").click();
+      q(".pick-name").value = "It's $5!";
+      q(".pick-form button[type=submit]").click();
+      out = q(".pick-command code").textContent;
+    """)
+    assert out == "caracole songbook make 'It'\\''s $5!' 'Rock'\\''n Band - Wow!Wow $HOME `id` \"x\"'"
+    assert shlex.split(out) == ["caracole", "songbook", "make", "It's $5!", f"Rock'n Band - {title}"]
 
 
 @in_chromium
@@ -217,7 +233,7 @@ def test_select_mode_can_add_to_a_songbook_there_is(library, tmp_path):
       out = {nameShown, label, command: q(".pick-command code").textContent};
     """)
     assert out == {"nameShown": False, "label": "Add to Campfire",
-                   "command": 'caracole songbook add "Campfire" "Radiohead - Creep"'}
+                   "command": "caracole songbook add 'Campfire' 'Radiohead - Creep'"}
 
 
 @in_chromium
