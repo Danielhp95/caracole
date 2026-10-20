@@ -1194,12 +1194,16 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - Text size, every chord's shape in a strip above the song, and scrolling by
   itself (with the screen kept on, where the browser allows it).
 
-The viewer remembers its settings for each song in the browser. Its key is
-its sheet's, found as for info.json (see [The song's key](#the-songs-key)):
-the human sheet's from the tab, or estimated from its chords, and the auto
-sheet's heard in the audio; the page says which. Beside a human sheet,
-`sheet (auto).html` keeps to the chords the model heard, which may be in
-another key than the tab (another transposition, or a capo).
+The viewer remembers its settings for each song in the browser. It keeps the
+transposition, the mode and the capo in its address too
+(`sheet.html#t=2&mode=aeolian`), so a reload or Back keeps them where the
+browser keeps nothing, as when `caracole serve` sends it (see
+[caracole serve](#caracole-serve)). Its key is its sheet's, found as for
+info.json (see [The song's key](#the-songs-key)): the human sheet's from the
+tab, or estimated from its chords, and the auto sheet's heard in the audio;
+the page says which. Beside a human sheet, `sheet (auto).html` keeps to the
+chords the model heard, which may be in another key than the tab (another
+transposition, or a capo).
 
 On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
@@ -1322,6 +1326,26 @@ loses no song. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
 and Guitar Pro files as downloads, never through a symbolic link, never a
 hidden file, and never the database, the token or the cache.
+
+Of the HTML pages in the library, the server sends only the sheet viewers
+(`sheet.html`, `sheet (auto).html`; see [The sheet viewer](#the-sheet-viewer)),
+and each only while it is still the page caracole last wrote for that song:
+caracole records each viewer's SHA-256 and length when it writes it. Any other
+page answers 404 Not found, and so does a viewer edited on a synced device, a
+symbolic link in a viewer's place, and a viewer in a folder that is no song's
+in the database: the page says the viewer isn't the one caracole wrote, and
+that the PDF is beside it. The next `caracole render` writes an edited viewer
+again. The server sends a viewer in a sandbox (its Content-Security-Policy
+header): the page runs its own script and style and nothing else, in an origin
+of its own, with no cookie and no way to ask the server for anything. The
+header allows the script and style the page itself was written with, so a
+viewer an older caracole wrote keeps working after an upgrade until the next
+render writes it again. It works as it does from the folder, but keeps only
+the transposition, the mode and the capo, in its address: a reload or Back
+keeps them, and opening it again from the library starts afresh. Its links to
+the PDF and back to the library work with an access token too: the sign-in
+cookie goes with a link followed from another page, but not with a form
+another site posts or anything it loads from the server.
 
 Who can reach it:
 

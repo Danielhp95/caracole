@@ -57,7 +57,20 @@
   const save = () => {
     try {
       localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose, chords: sheetChords }, state)));
-    } catch (err) { /* private mode */ }
+    } catch (err) { /* private mode, or a server's sandbox */ }
+    // The address keeps where the song is played too, read back above: without storage (a
+    // server's sandbox), a reload and Back still keep it. Replaced, so Back isn't a step per tap.
+    try {
+      const params = new URLSearchParams(location.hash.slice(1));
+      const keep = (name, value, kept) => (kept ? params.set(name, String(value)) : params.delete(name));
+      keep("t", state.t, state.t !== (Number(data.transpose) || 0));
+      keep("mode", state.mode, state.mode !== null);
+      keep("capo", state.capo, state.capo !== null);
+      const fragment = params.toString();
+      if (fragment !== location.hash.slice(1)) {
+        history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
+      }
+    } catch (err) { /* an address the page can't change */ }
   };
 
   // --- naming chords -------------------------------------------------------------------------

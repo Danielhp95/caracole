@@ -5,7 +5,8 @@ A small server from the standard library (``http.server``), in four parts:
 - security.py: the host names it answers to (a guard against DNS rebinding),
   the cross-origin check every write passes, and the tokens.
 - files.py: the library's files, opened without following a link, and only
-  the kinds caracole keeps there.
+  the kinds caracole keeps there; and the pages caracole wrote there (the
+  sheet viewers), only while each is still as written.
 - jobs.py: the queue. A request runs the ``caracole`` command line in a child
   process, one command at a time: ``caracole add``, then, to fetch the song
   now, ``match``, ``fetch --song`` and ``render``. Each takes caracole's lock

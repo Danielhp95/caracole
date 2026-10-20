@@ -59,10 +59,12 @@ songs.py's, in the `removed` table).
   The logic of `caracole review`, `caracole search` and `caracole remove` is in review.py,
   search.py and removal.py.
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
-  writes, tokens), files.py (library files, no link followed), jobs.py (the queue: each
+  writes, tokens), files.py (library files, no link followed; `read_written_page`, a page
+  caracole wrote, while it holds the bytes a lookup says it wrote), jobs.py (the queue: each
   request runs the `caracole` CLI in a child process, one command at a time), app.py (the
-  routes), pages.py, server.py (`http.server`). The page is library_page.py's, with
-  `WebControls`.
+  routes; `written_pages`, each kind of page caracole writes into the library by file
+  name, with its record and its CSP: the sheet viewers), pages.py, server.py
+  (`http.server`). The page is library_page.py's, with `WebControls`.
 - `viewer/`: the sheet viewer render.py writes beside each PDF. page.py builds the page
   (`build_viewer`) from the song's .cho (sheet.py reads it back); theory.py names chords and
   keys, guesses keys, changes modes and finds alternatives; voicings.py and voicings.json are
@@ -70,8 +72,10 @@ songs.py's, in the `removed` table).
   viewer.css are inlined, and the page's CSP holds their hashes. The music theory is Python,
   tested in test_viewer_theory.py; the script only looks up what page.py precomputed. A
   server serves a viewer only while `render.written_file` (kv `render:files:<song id>`)
-  matches it (`library.holds`), with `viewer.viewer_csp()` (a sandbox) as its header: anyone
-  with a synced device can put an HTML page in the library.
+  matches it (`library.holds`), with `viewer.viewer_csp(page)` as its header: a sandbox and
+  the policy in that page's own `<meta>`, never one built from this caracole's assets (a
+  viewer written before an upgrade holds the old hashes). Anyone with a synced device can
+  put an HTML page in the library.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
@@ -83,8 +87,12 @@ songs.py's, in the `removed` table).
   gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7
   and Power Tab files (a format's magic header, then filler). helpers/musescore_site.py
   is `FakeMuseScore`, its song sitemaps and the challenge Cloudflare answers caracole
-  with (`challenge()`). fixtures/ holds UG, LaCuerda, LRCLIB, gtptabs.com, MuseScore and
-  ChordPro samples: real response shapes, trimmed, and synthetic lyrics, sheets and files.
+  with (`challenge()`). helpers/rendered.py keeps a sheet and renders it with a stand-in
+  for chordpro (`rendered_song`), so its viewer is one caracole wrote; helpers/chromium.py
+  drives headless Chromium over the DevTools protocol (a pipe, the standard library), for
+  a page whose CSP refuses a test's script. fixtures/ holds UG, LaCuerda, LRCLIB,
+  gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
+  synthetic lyrics, sheets and files.
 - `nix/`: package.nix (`buildPythonApplication`; the wrapper puts `chordpro` on PATH and
   defaults `CARACOLE_CJK_FONT`; `withAutochords` adds the extra and the model files),
   autochords.nix (the model files, fixed-output), module.nix (`services.caracole`: units,
@@ -111,7 +119,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html` and `sheet.html` in a real browser (test_library_page.py, test_viewer.py) | neither |
+| `chromium` on PATH | `index.html` and `sheet.html` in a real browser (test_library_page.py, test_viewer.py), and a viewer `caracole serve` sends (test_web_server.py) | neither |
 
 Before a change is done:
 

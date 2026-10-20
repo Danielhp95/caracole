@@ -2,22 +2,25 @@
 
 import re
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import pytest
 from typer.testing import CliRunner
 
 from caracole.cli import build_app
+from caracole.library import song_dir
 from caracole.songs import update_song
 from caracole.web.app import Request, WebApp
 from caracole.web.jobs import JobQueue
 from caracole.web.security import session_value
 
 from conftest import add_song
+from helpers.rendered import rendered_song
 
 HOST = "localhost:8737"
 ALLOWED = frozenset({"localhost", "127.0.0.1", "::1"})
 JSON_BLOCK = re.compile(r'<script type="application/json" id="songs">(.*?)</script>', re.S)
+META_POLICY = re.compile(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">')
 
 
 class Recorder:
@@ -441,6 +444,133 @@ def test_the_cards_links_open_the_songs_files(app, cfg):
     assert header(download, "content-disposition") == "attachment"
 
 
+def links_on_the_page(app):
+    """Each file link on the library page, by the file's name: its address on the server."""
+    import json
+
+    songs = json.loads(JSON_BLOCK.search(text(get(app, "/"))).group(1))
+    return {f["name"]: "/" + f["href"] for song in songs["songs"] for f in song["files"]}
+
+
+def test_the_viewer_caracole_wrote_is_served_in_a_sandbox(app, conn, cfg):
+    song = rendered_song(conn, cfg)
+    auto = rendered_song(conn, cfg, "Placeholder Band", "Synthetic Song", auto=True)
+    links = links_on_the_page(app)
+    for one, name in ((song, "sheet.html"), (auto, "sheet (auto).html")):
+        response = get(app, links[name])
+        assert response.status == 200, name
+        assert response.body == (song_dir(cfg.library_dir, one) / name).read_bytes()
+        assert header(response, "content-type") == "text/html; charset=utf-8"
+        policies = [v for k, v in response.headers if k.lower() == "content-security-policy"]
+        own = META_POLICY.search(text(response)).group(1)
+        assert policies == [f"sandbox allow-scripts; {own}; frame-ancestors 'none'"]  # a sandbox, no framing
+        assert header(response, "x-frame-options") == "DENY" and header(response, "cache-control") == "no-store"
+        assert header(response, "x-content-type-options") == "nosniff"
+        assert header(response, "content-disposition") is None
+        assert app.handle(Request("HEAD", links[name], {"host": HOST})).status == 200
+
+
+def test_a_viewer_written_before_an_upgrade_goes_out_with_its_own_policy(app, conn, cfg, monkeypatch):
+    # The viewer on disk carries the hashes of the script and style it was written with; a newer
+    # caracole's would make the browser refuse them, until the next render writes it again.
+    from caracole.library_page import sha256_source
+    from caracole.viewer import page
+
+    rendered_song(conn, cfg)
+    style, script = page._assets()
+    monkeypatch.setattr(page, "_assets", lambda: (style + "\n.new {}", script + "\n// a new release"))
+    response = get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html"))
+    assert response.status == 200
+    sent = text(response)
+    policy = header(response, "content-security-policy")
+    assert f"script-src {sha256_source(re.search(r'<script>(.*?)</script>', sent, re.S).group(1))};" in policy
+    assert f"style-src {sha256_source(re.search(r'<style>(.*?)</style>', sent, re.S).group(1))};" in policy
+    assert policy.startswith("sandbox allow-scripts; default-src 'none'; ")
+    assert policy.endswith("; frame-ancestors 'none'")
+
+
+def test_a_planted_page_is_not_served(app, conn, cfg):
+    song = rendered_song(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    page = (folder / "sheet.html").read_bytes()
+    (folder / "notes.html").write_bytes(page)  # caracole's own bytes, at a name it never writes
+    (folder / "sheet (auto).html").write_bytes(page)  # at a name it writes, but not in this folder
+    (folder / "index.html").write_bytes(page)
+    (cfg.library_dir / "Soda Stereo" / "sheet.html").write_bytes(page)
+    stranger = cfg.library_dir / "Unknown Artist" / "Unknown Song"  # a song the database doesn't know
+    stranger.mkdir(parents=True)
+    (stranger / "sheet.html").write_bytes(page)
+    for path in ("Soda Stereo/De Música Ligera/notes.html", "Soda Stereo/De Música Ligera/sheet (auto).html",
+                 "Soda Stereo/De Música Ligera/index.html", "Soda Stereo/sheet.html", "sheet.html",
+                 "Unknown Artist/Unknown Song/sheet.html", "Soda Stereo/De Música Ligera/SHEET.HTML",
+                 "Soda Stereo/De Música Ligera/sheet.htm"):
+        response = get(app, "/" + quote(path))
+        assert response.status == 404, path
+        assert b"<script" not in response.body
+    assert get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html")).status == 200
+
+
+@pytest.mark.parametrize("edit", [
+    lambda page: page + b"<script>fetch('/caracole.sqlite')</script>",
+    lambda page: page.replace(b"<body", b"<BODY", 1),  # the same length
+])
+def test_an_edited_viewer_is_not_served(app, conn, cfg, edit):
+    song = rendered_song(conn, cfg)
+    viewer = song_dir(cfg.library_dir, song) / "sheet.html"
+    viewer.write_bytes(edit(viewer.read_bytes()))
+    assert get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html")).status == 404
+
+
+def test_a_viewer_not_served_says_why_and_what_to_do(app, conn, cfg):
+    # index.html lists the file whatever it holds, as the card's first link: the 404 says what happened.
+    song = rendered_song(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    (folder / "sheet.html").write_bytes((folder / "sheet.html").read_bytes() + b"<!-- edited -->")
+    response = get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html"))
+    assert response.status == 404
+    said = shown(response)
+    assert "This sheet viewer isn't the page caracole last wrote here" in said
+    assert "the next caracole render writes it again" in said and "The PDF is beside it" in said
+    assert "no such page or file" not in said
+    other = shown(get(app, "/" + quote("Soda Stereo/De Música Ligera/notes.txt")))
+    assert "no such page or file" in other and "sheet viewer" not in other
+
+
+def test_a_viewer_that_cant_be_read_doesnt_blame_the_database(app, conn, cfg, monkeypatch):
+    import errno
+
+    from caracole.web import files
+
+    rendered_song(conn, cfg)
+
+    def fails(fd):
+        raise OSError(errno.EIO, "Input/output error")
+
+    monkeypatch.setattr(files.os, "fstat", fails)
+    response = get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html"))
+    assert response.status == 404 and "database" not in shown(response)
+
+
+def test_a_link_in_a_viewers_place_is_not_followed(app, conn, cfg, tmp_path):
+    song = rendered_song(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    copy = tmp_path / "elsewhere" / "sheet.html"
+    copy.parent.mkdir()
+    copy.write_bytes((folder / "sheet.html").read_bytes())  # the very bytes caracole wrote
+    (folder / "sheet.html").unlink()
+    (folder / "sheet.html").symlink_to(copy)
+    assert get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html")).status == 404
+
+
+def test_a_viewer_of_a_song_the_database_no_longer_holds_is_not_served(app, conn, cfg):
+    song = rendered_song(conn, cfg)
+    for table in ("files", "versions"):
+        conn.execute(f"DELETE FROM {table} WHERE song_id = ?", (song.id,))
+    conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))
+    assert (song_dir(cfg.library_dir, song) / "sheet.html").is_file()
+    assert get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html")).status == 404
+
+
 def test_no_page_shows_a_secret(tmp_path, queue, conn):
     from caracole.config import load_config
 
@@ -493,8 +623,19 @@ def test_signing_in_sets_a_cookie_that_opens_the_library(locked, conn):
     cookie = header(response, "set-cookie")
     value = session_value("a-long-random-access-token")
     assert cookie.startswith(f"caracole_session={value};")
-    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie and "Path=/" in cookie
+    # Lax, not Strict: the sandboxed viewer's links are navigations from another origin (its own),
+    # which a Strict cookie doesn't go with. Writes keep the form token and the cross-origin check.
+    assert "HttpOnly" in cookie and "SameSite=Lax" in cookie and "Path=/" in cookie
     assert "a-long-random-access-token" not in cookie
     signed_in = get(locked, "/", cookie=f"caracole_session={value}")
     assert signed_in.status == 200 and "Radiohead - Creep" in text(signed_in)
     assert get(locked, "/", cookie="caracole_session=forged").status == 401
+
+
+def test_a_viewer_waits_for_signing_in_like_any_file(locked, conn, cfg):
+    rendered_song(conn, cfg)
+    viewer = "/" + quote("Soda Stereo/De Música Ligera/sheet.html")
+    response = get(locked, viewer)
+    assert response.status == 401 and b"Palabras" not in response.body
+    signed_in = get(locked, viewer, cookie=f"caracole_session={session_value('a-long-random-access-token')}")
+    assert signed_in.status == 200 and b"Palabras" in signed_in.body

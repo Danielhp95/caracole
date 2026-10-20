@@ -1,11 +1,13 @@
-"""caracole/web/server.py: the app on a real socket, and a request run by the real command line."""
+"""caracole/web/server.py: the app on a real socket, a request run by the real command line, and a
+sheet viewer it serves, in Chromium."""
 
 import http.client
+import json
 import sys
 import threading
 import time
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import pytest
 
@@ -17,6 +19,8 @@ from caracole.web.security import allowed_hosts
 from caracole.web.server import make_server
 
 from conftest import subprocess_pythonpath
+from helpers.chromium import Chromium
+from helpers.rendered import rendered_song
 
 
 class Recorder:
@@ -146,5 +150,124 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
         assert status == 200 and b"Add Radiohead - Creep" in page and b"Done" in page
     finally:
         queue.stop()
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_served_viewer_works_in_its_sandbox(cfg, conn, tmp_path):
+    # The server sends viewer_csp() with the page: its own script and style by their hashes, in a
+    # sandbox, so no other script runs there, a test's included; Chromium is driven from outside.
+    rendered_song(conn, cfg)  # a sheet in G, its viewer as caracole wrote it
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    url = f"http://127.0.0.1:{server.server_address[1]}/" + quote("Soda Stereo/De Música Ligera/sheet.html")
+    chord = "document.querySelector('#sheet .c[data-c=\"0\"]').textContent"
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(url)
+            tab.wait_for("document.documentElement.dataset.ready === '1'")  # its script ran
+            assert tab.eval("origin") == "null"  # in an origin of its own: the sandbox
+            asked = "fetch('/', {mode: 'no-cors'}).then(() => 'reached', () => 'refused')"
+            assert tab.eval(asked) == "refused"  # no way to ask the server for anything
+            assert tab.eval("(() => { try { return document.cookie; } catch { return 'none'; } })()") == "none"
+            assert tab.eval("document.querySelector('#panel').hidden") is True
+            assert tab.eval(chord) == "G"
+            tab.click("#fab")  # the Key button
+            assert tab.eval("document.querySelector('#panel').hidden") is False  # opens the settings
+            tab.click("#up")  # Transpose: up a semitone, twice
+            tab.click("#up")
+            assert tab.eval(chord) == "A"
+            assert tab.eval("document.querySelector('#fab').textContent") == "Key A · +2"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
+    # The sandbox has no storage, so the transposition, the mode and the capo go in the page's
+    # address: a reload and Back keep them.
+    rendered_song(conn, cfg)
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    url = f"http://127.0.0.1:{server.server_address[1]}/" + quote("Soda Stereo/De Música Ligera/sheet.html")
+    chord = "document.querySelector('#sheet .c[data-c=\"0\"]').textContent"
+    fab = "document.querySelector('#fab').textContent"
+    afresh = "window.before === undefined && document.documentElement.dataset.ready === '1'"  # a new page
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(url)
+            tab.wait_for("document.documentElement.dataset.ready === '1'")
+            assert tab.eval("location.hash") == ""  # nothing changed yet
+            entries = tab.eval("history.length")
+            tab.click("#fab")
+            tab.click("#up")
+            tab.click("#up")
+            tab.eval("[...document.querySelectorAll('#modes .chip')].find((b) => "
+                     "b.firstChild.textContent === 'Minor').click()")
+            assert tab.eval("location.hash") == "#t=2&mode=aeolian"
+            assert tab.eval("history.length") == entries  # replaced, not an entry per tap
+            tab.eval("window.before = true; setTimeout(() => location.reload(), 0)")
+            tab.wait_for(afresh)
+            assert tab.eval(chord) == "Am" and tab.eval(fab) == "Key Am · +2"
+            tab.eval("document.querySelector('a.back').click()")  # to the library, and Back
+            tab.wait_for("document.title === 'caracole library'")
+            tab.eval("history.back()")
+            tab.wait_for(afresh)
+            assert tab.eval(chord) == "Am" and tab.eval(fab) == "Key Am · +2"
+            tab.eval("document.querySelector('#reset-all').click()")
+            assert tab.eval("location.hash") == "" and tab.eval(chord) == "G"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_path, monkeypatch):
+    # The server is a newer caracole than the one that wrote the viewer: the page's own hashes
+    # must go out with it, or the browser refuses its script until the next render.
+    from caracole.viewer import page
+
+    rendered_song(conn, cfg)
+    style, script = page._assets()
+    monkeypatch.setattr(page, "_assets", lambda: (style + "\n.new {}", script + "\n// a new release"))
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    url = f"http://127.0.0.1:{server.server_address[1]}/" + quote("Soda Stereo/De Música Ligera/sheet.html")
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(url)
+            tab.wait_for("document.documentElement.dataset.ready === '1'")  # its script ran
+            assert tab.eval("getComputedStyle(document.querySelector('#fab')).position") == "fixed"  # its style
+            tab.click("#fab")
+            assert tab.eval("document.querySelector('#panel').hidden") is False
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_served_viewers_links_open_once_signed_in(cfg, conn, tmp_path):
+    # The sandboxed viewer has an origin of its own, so following one of its links is a navigation
+    # from another site: the sign-in cookie must go with it (SameSite=Lax, not Strict), or its PDF
+    # and its way back to the library open the sign-in page.
+    rendered_song(conn, cfg)
+    token = "a-long-random-access-token"
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok",
+                            access_token=token))
+    root = f"http://127.0.0.1:{server.server_address[1]}/"
+    viewer = root + quote("Soda Stereo/De Música Ligera/sheet.html")
+    ready = "document.documentElement.dataset.ready === '1'"
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(root)
+            tab.wait_for("document.querySelector('input[name=token]') !== null")
+            tab.eval(f"document.querySelector('input[name=token]').value = {json.dumps(token)}")
+            tab.click("button[type=submit]")
+            tab.wait_for("document.title === 'caracole library'")
+            for link, opened in (("a.pdf", "document.contentType === 'application/pdf'"),
+                                 ("a.back", "document.title === 'caracole library'")):
+                tab = browser.open(viewer)
+                tab.wait_for(ready)
+                tab.eval(f"document.querySelector('{link}').scrollIntoView({{block: 'center'}})")
+                tab.click(link)
+                tab.wait_for(f"!document.documentElement.dataset.ready && document.readyState === 'complete' "
+                             f"&& ({opened} || document.title.startsWith('Sign in'))")
+                assert tab.eval(opened), (link, tab.eval("document.title"), tab.eval("location.href"))
+    finally:
         server.shutdown()
         server.server_close()

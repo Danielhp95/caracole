@@ -590,7 +590,7 @@ def written_file(conn: sqlite3.Connection, song_id: int, name: str) -> tuple[str
 
     For a server: anyone with a synced device can put a page in the library, so a viewer is
     served only while ``library.holds`` says it is still these bytes, and with
-    ``viewer.viewer_csp()`` as its Content-Security-Policy header.
+    ``viewer.viewer_csp(page)``, the policy of those bytes, as its Content-Security-Policy header.
     """
     entry = _written(conn, song_id).get(name)
     return None if entry is None else (entry["sha256"], entry["size"])
