@@ -28,6 +28,7 @@ from caracole.web.jobs import Job, Step
 PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
 .waits { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .waits > p { margin: 0; color: var(--review); font-weight: 600; }
+.step-note { margin: 6px 0 0; color: var(--review); font-size: .85rem; }
 .pick-page { max-width: 46rem; }
 .lede { max-width: 72ch; margin: 4px 0 20px; color: var(--muted); }
 .jobs { display: grid; gap: 12px; }
@@ -177,7 +178,9 @@ def jobs_page(jobs: list[Job], *, refresh: bool = True, picks: Mapping[str, Pick
         items = '<p class="empty">No requests yet. Request a song from <a href="/">the library</a>.</p>'
     else:
         waits = _waits(jobs, picks or {}, csrf, still=not (waiting and refresh))
-        items = ('<div class="jobs">' + "".join(_job(job, newest=n == 0, waits=waits.get(job.id, ""))
+        picking = {job.id for job in jobs if job.id in waits and _waits_for_pick(job, (picks or {}).get(job.song_key))}
+        items = ('<div class="jobs">' + "".join(_job(job, newest=n == 0, waits=waits.get(job.id, ""),
+                                                     picking=job.id in picking)
                                                 for n, job in enumerate(jobs)) + "</div>")
     head = f'<meta http-equiv="refresh" content="{REFRESH}">\n' if waiting and refresh else ""
     return page("Requests", lede + items, head=head)
@@ -207,36 +210,60 @@ def _waits(jobs: list[Job], picks: Mapping[str, Pick], csrf: str, *, still: bool
     return shown
 
 
+# What `caracole fetch --song` says of a song that needs review first (commands/fetch.py).
+_NEEDS_REVIEW = "needs review first"
+
+
+def _waits_for_pick(job: Job, pick: Pick | None) -> bool:
+    """Whether a finished request stopped only because its song needs a pick first: the one step that
+    failed is its ``caracole fetch --song``, which refused the song as needing review, and the song's
+    picker (``pick``) is right under it. Fetch it now is ticked by default, so a request whose
+    ``caracole add`` found only candidates ends this way."""
+    if pick is None or pick.search or job.state != "failed":
+        return False
+    failed = [step for step in job.steps if step.state == "failed"]
+    return (len(failed) == 1 and failed[0].args[:1] == ("fetch",)
+            and any(_NEEDS_REVIEW in line for line in failed[0].output))
+
+
 def _when(dt: datetime | None) -> str:
     return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else ""
 
 
-def _badge(state: str) -> str:
-    return f'<span class="badge {escape(state)}">{escape(_STATE_TEXT.get(state, state))}</span>'
+def _badge(state: str, text: str | None = None) -> str:
+    return f'<span class="badge {escape(state)}">{escape(text or _STATE_TEXT.get(state, state))}</span>'
 
 
-def _job(job: Job, *, newest: bool = False, waits: str = "") -> str:
+def _job(job: Job, *, newest: bool = False, waits: str = "", picking: bool = False) -> str:
+    """A request, its steps and, in ``waits``, its song's picker. ``picking``: it stopped only because
+    the song needs a pick first (``_waits_for_pick``), so it waits for one rather than failed."""
     meta = f"Requested {_when(job.queued_at)}"
     if job.note:
         meta += f" · {escape(job.note)}"
-    steps = "".join(_step(step, shown=newest) for step in job.steps)
+    steps = "".join(_step(step, shown=newest, picking=picking and step.state == "failed") for step in job.steps)
+    badge = _badge("review", "Pick the match") if picking else _badge(job.state)
     return (
         f'<article class="job" id="job-{job.id}">\n'
-        f'  <div class="job-head"><h2>{escape(job.title)}</h2>{_badge(job.state)}</div>\n'
+        f'  <div class="job-head"><h2>{escape(job.title)}</h2>{badge}</div>\n'
         f'  <p class="meta">{meta}</p>\n  <ol class="steps">{steps}</ol>\n{waits}</article>\n'
     )
 
 
-def _step(step: Step, *, shown: bool = False) -> str:
-    """A step, its output open when ``shown`` (the newest request's) or when it runs or failed."""
-    output = ""
+def _step(step: Step, *, shown: bool = False, picking: bool = False) -> str:
+    """A step, its output open when ``shown`` (the newest request's) or when it runs or failed; with
+    ``picking``, the fetch that waits for a pick: a note in place of its error, its output closed."""
+    output = note = ""
+    if picking:
+        note = ('<p class="step-note">Not fetched yet: caracole isn\'t sure which Ultimate Guitar song it is. '
+                "Pick it below, with Fetch it now ticked, and it is fetched then.</p>")
     if step.output or step.dropped:
         lines = ([f"… {step.dropped} earlier lines"] if step.dropped else []) + step.output
-        opened = " open" if shown or step.state in ("running", "failed") else ""
+        opened = " open" if not picking and (shown or step.state in ("running", "failed")) else ""
         output = (f"<details{opened}><summary>Output</summary><pre>"
                   + escape("\n".join(lines)) + "</pre></details>")
+    badge = _badge("review", "Waits for a pick") if picking else _badge(step.state)
     return (f'<li class="step {escape(step.state)}"><div class="step-head"><span>{escape(step.label)}</span>'
-            f"{_badge(step.state)}</div>{output}</li>")
+            f"{badge}</div>{note}{output}</li>")
 
 
 def sign_in_page(csrf: str, *, failed: bool = False) -> str:

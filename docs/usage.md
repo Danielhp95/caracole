@@ -1298,9 +1298,12 @@ do:
   refreshes itself every 10 seconds while one waits or runs. Stop refreshing
   keeps it still, so an output stays open to read. A request that ended in a
   review (`caracole add` found only candidates) shows the song's picker under
-  it, so you pick at once; while the page refreshes itself, which would undo
-  a choice half made, it shows a Pick the match link to the picker's own
-  page, `/review?song=ID`, instead. One whose song the index didn't match
+  it, so you pick at once. With Fetch it now ticked, its `caracole fetch`
+  refused the song until it's picked: the request then says Pick the match,
+  not Failed, and its fetch Waits for a pick, its output closed. While the
+  page refreshes itself, which would undo a choice half made, it shows a Pick
+  the match link to the picker's own page, `/review?song=ID`, instead of the
+  picker. One whose song the index didn't match
   links to what `caracole search` finds for it (Look in the index, above).
 
 Every request runs the `caracole` command line, one command at a time, so the

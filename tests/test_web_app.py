@@ -67,6 +67,13 @@ def shown(response):
     return html.unescape(text(response))
 
 
+def shown_text(html_text: str) -> str:
+    """A piece of a page as a reader reads it: no tags, entities decoded, spaces folded."""
+    import html
+
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", html_text)).split())
+
+
 def card_data(response, song_id: int) -> dict:
     """A song's entry in the library page's data, by its id."""
     import json
@@ -599,6 +606,67 @@ def test_a_pick_writes_what_caracole_review_writes(cfg, conn, tmp_path):
     assert o.match[song.key] == ("radiohead", "creep") and o.alias["radio-head"] == ("radiohead",)
     assert get_song(conn, song.id).match_decision == "accept"
     assert "Now matched to radiohead/creep" in runner.outputs[0]
+
+
+def cli_config(cfg, tmp_path: Path) -> Path:
+    """A caracole.toml for the command line, with ``cfg``'s folders."""
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'library_dir = "{cfg.library_dir}"\nstate_dir = "{cfg.state_dir}"\n'
+                      f'cache_dir = "{cfg.cache_dir}"\nmusic_dir = "{cfg.music_dir}"\n', encoding="utf-8")
+    return config
+
+
+def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cfg, conn, tmp_path, monkeypatch):
+    # Fetch it now is ticked by default; `caracole add` finds only candidates, so `caracole fetch --song`
+    # refuses the song. The request waits for the pick its picker, right under it, gives.
+    from datetime import UTC, datetime
+
+    import httpx
+
+    from caracole.ug.index import mark_built
+
+    def refuse(request):
+        raise AssertionError(f"a request to {request.url}")
+
+    monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(refuse))
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(1, 'oasis', 'champagne-supernova', 'chords', '1', 'x', 'oasis/champagne-supernova-chords-1')")
+    mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+    runner = CliRunnerJobs(cli_config(cfg, tmp_path))
+    queue = JobQueue(runner)
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    fields = {"artist": "Oasis", "title": "Champagne Super", "fetch": "1"}  # a title spelled differently
+    assert post(app, "/request", fields).status == 303
+    queue.run_pending()
+    [job] = queue.snapshot()
+    assert [s.state for s in job.steps] == ["done", "done", "failed", "skipped"], runner.outputs
+    assert "needs review first" in runner.outputs[2]
+    article = re.search(r'<article class="job" id="job-1">.*?</article>', text(get(app, "/jobs")), re.S).group(0)
+    head = re.search(r'<div class="job-head">.*?</div>', article, re.S).group(0)
+    assert '<span class="badge review">Pick the match</span>' in head and "Failed" not in head
+    fetch = re.search(r'<li class="step [^"]*"><div class="step-head"><span>Fetch from Ultimate Guitar</span>.*?</li>',
+                      article, re.S).group(0)
+    assert '<span class="badge review">Waits for a pick</span>' in fetch and "Failed" not in fetch
+    assert "Pick it below" in shown_text(fetch)
+    assert "<details open>" not in fetch  # the command's own words are there, closed
+    assert picker_of(article)
+
+
+def test_a_request_whose_fetch_failed_otherwise_still_shows_failed(cfg, conn):
+    def down(args, emit):
+        if args[0] != "fetch":
+            return 0
+        emit("error: the network is down")
+        return 1
+
+    queue = JobQueue(down)
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    post(app, "/request", {"artist": "Radiohead", "title": "Creep", "fetch": "1"})
+    creep = in_review(conn)
+    queue.run_pending()
+    article = re.search(r'<article class="job" id="job-1">.*?</article>', text(get(app, "/jobs")), re.S).group(0)
+    assert '<span class="badge failed">Failed</span>' in article and "Waits for a pick" not in article
+    assert f'name="song" value="{creep.id}"' in picker_of(article)
 
 
 # --- what every write must carry --------------------------------------------------------------
