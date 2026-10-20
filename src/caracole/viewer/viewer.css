@@ -163,9 +163,14 @@ input[type="range"] { flex: 1 1 120px; accent-color: var(--accent); min-height: 
 .dg-finger { fill: var(--on-accent); font: 700 6.5px system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; }
 .dg-fret { fill: currentColor; font: 600 7px system-ui, sans-serif; text-anchor: end; dominant-baseline: central; }
 
+/* A wide screen: one column, centred, in larger text; two side by side only for a song the window
+   shows whole that way (viewer.js measures it, and says so in data-columns). A longer song would
+   run down the first column and back up the second, against the reading order and the autoscroll. */
 @media (min-width: 1100px) {
-  .page { max-width: 1180px; }
-  .sheet { columns: 2 28em; column-gap: 56px; }
+  .page { max-width: 860px; }
+  :root:not([data-columns="2"]) .sheet { font-size: calc(var(--fs) + 3px); }
+  [data-columns="2"] .page { max-width: 1180px; }
+  [data-columns="2"] .sheet { columns: 2 28em; column-gap: 56px; }
 }
 @media print {
   .fab, .scrim, .sheet-ui, .back, .strip, .foot, .noscript { display: none !important; }

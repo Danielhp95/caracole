@@ -267,7 +267,7 @@
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
     drawStrip();
-    fit();
+    layout();
     save();
   };
 
@@ -298,12 +298,36 @@
       });
     }
   };
+  // One column, or two side by side where viewer.css offers them (a wide screen), only for a song
+  // the window then shows whole: the song's end in the second column, and the sheet no taller than
+  // the window above the room the page keeps at its foot for the controls.
+  const layout = () => {
+    const y = window.scrollY;
+    doc.dataset.columns = "2";
+    if (getComputedStyle(sheetEl).columnCount !== "2") {  // not offered here
+      doc.dataset.columns = "1";
+      fit();
+      return;
+    }
+    fit();
+    const box = sheetEl.getBoundingClientRect();
+    const end = sheetEl.lastElementChild && sheetEl.lastElementChild.lastElementChild;
+    const page = sheetEl.closest(".page") || document.body;
+    const room = window.innerHeight - (parseFloat(getComputedStyle(page).paddingBottom) || 0);
+    const fits = Boolean(end) && end.getBoundingClientRect().left > box.left + box.width / 2 && box.height <= room;
+    if (!fits) {
+      doc.dataset.columns = "1";
+      fit();
+    }
+    // Two columns are shorter than one: measuring them may have moved the page. Back to where it was.
+    if (window.scrollY !== y) window.scrollTo(0, y);
+  };
   let fitting = 0;
   window.addEventListener("resize", () => {
     cancelAnimationFrame(fitting);
-    fitting = requestAnimationFrame(fit);
+    fitting = requestAnimationFrame(layout);
   });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit, () => {});
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout, () => {});
 
   const drawStrip = () => {
     const strip = $("strip");

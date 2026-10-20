@@ -165,7 +165,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py), and the shared browser itself (test_harness.py) | neither |
+| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_viewer_layout.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py), and the shared browser itself (test_harness.py) | neither |
 
 Before a change is done:
 

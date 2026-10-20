@@ -1556,6 +1556,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Chords over the lyrics**, in bold rust. A long line wraps between words,
   never between a chord and its syllable, and a chord reaches over the words
   after it, so the lyrics read without gaps.
+- **On a wide screen** (1100 px or more: a laptop), the song reads down one
+  column, centred, in slightly larger text. A song short enough for the
+  window to show it whole in two columns is shown in two, side by side; a
+  longer one stays in one, as it would otherwise run down the first column
+  and back up the second. The viewer measures again when the window or the
+  text size changes.
 - **Tap a chord** for its fingerings: up to four shapes, with the fingers, the
   barre and the fret they start on (swipe, or ‹ ›, for the next). Every place
   the chord is played lights up while its card is open. The shapes come from
