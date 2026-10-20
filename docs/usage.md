@@ -1526,6 +1526,12 @@ quotes (`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote
 in it. `caracole serve` serves the same page with a form
 to request songs (see below).
 
+On a touch screen every button, fold, chip, menu, letter and artist's name is
+at least 44 pixels each way, for a thumb, and so is each row's "⋯": a phone
+shows about eight rows to a screen. With a mouse they keep their compact
+sizes. The pages `caracole serve` writes itself (Requests, Look up, a song's
+pick) do the same.
+
 **Songbooks** (see [Songbooks](#songbooks)), above the search box once there is
 one, lists each songbook: its songs in order, those without a sheet marked
 missing, and its files, the phone page first, then the PDF and the ChordPro

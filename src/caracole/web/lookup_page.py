@@ -83,6 +83,11 @@ pre.sheet { margin: 0; padding: 12px; overflow-x: auto; border-radius: 10px; bac
   .by-name form { grid-template-columns: 1fr 1fr auto; align-items: end; }
   pre.sheet { font-size: .95rem; }
 }
+/* A thumb's targets, as BASE_STYLE's buttons are: the folds, and a version's page on UG beside its button. */
+@media (pointer: coarse) {
+  details.by-name summary, details.why summary { min-height: 44px; align-content: center; }
+  .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+}
 """
 
 SCRIPT = r"""

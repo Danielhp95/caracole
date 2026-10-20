@@ -355,3 +355,22 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
     assert browser.wait("document.querySelector('h1') && document.querySelector('h1').textContent === "
                         "'De Música Ligera'")
     assert queue.snapshot() == []  # opening it asked for nothing
+
+
+@in_chromium
+def test_on_a_touch_phone_every_control_is_a_thumbs_size(cfg, live, phone):
+    from helpers.rendered import rendered_song
+    from helpers.targets import UNFOLD, small_targets
+
+    base, _ = live
+    conn = db.connect(cfg.db_path)
+    rendered_song(conn, cfg)  # a song of yours, its files under its row's "⋯"
+    conn.close()
+    index_songs(cfg, [("soda-stereo", "de-musica-ligera", 3)])  # and UG's, its versions under its "⋯"
+    phone.open(base + "/lookup")
+    phone.type("musica ligera")
+    assert phone.wait(f"{HITS} >= 2")
+    phone.js("(() => {" + UNFOLD + "})()")
+    # The brand above the title goes where the Library link beside it goes, which is a thumb's size.
+    short = phone.js(small_targets(".app a"))
+    assert short == [], short

@@ -613,13 +613,15 @@ def test_the_nightly_todo_step_also_writes_index_html(conn, cfg):
 NARROWEST_WINDOW = 500  # a --window-size narrower than this, headless Chromium widens to it
 
 
-def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,900") -> str:
+def dump_dom(path: Path, tmp_path: Path, fragment: str = "", size: str = "1280,900", *, touch: bool = False,
+             media: dict[str, str] | None = None) -> str:
     """The page's DOM after its script ran, laid out in a window of ``size`` ("width,height"), in a
     browser context of its own (helpers/browser.py); skips the test when this machine can't run
-    Chromium. A phone's width, narrower than any window, is laid out as a phone's screen."""
+    Chromium. A phone's width, narrower than any window, is laid out as a phone's screen; ``touch``,
+    on a touch screen; ``media``, with media features such as ``{"prefers-color-scheme": "dark"}``."""
     width, height = (int(n) for n in size.split(","))
     return browser.dump_dom(path.as_uri() + fragment, (width, height), hide_scrollbars=True,
-                            mobile=width < NARROWEST_WINDOW)
+                            mobile=width < NARROWEST_WINDOW, touch=touch, media=media)
 
 
 def listing(dom: str) -> str:
@@ -1581,7 +1583,7 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_ski
 
 
 # Notes how each card is laid out: its height, how many lines its title takes, where its badges are against
-# its title and its artist, how tall its Files is, and how many buttons it shows.
+# its title and its artist, how tall its artist and its Files are, and how many buttons it shows.
 CARD_LAYOUT = """
 (() => {
   const box = (n) => n.getBoundingClientRect();
@@ -1597,6 +1599,7 @@ CARD_LAYOUT = """
       lines: Math.round(title.height / parseFloat(getComputedStyle(h2).lineHeight)),
       alone: badges.top >= title.bottom - 1,  // nothing beside the title: the badges are under it
       apart: badges.left >= artist.right - 1 || badges.top >= artist.bottom - 1,  // beside the artist, or under
+      artist: Math.round(artist.height),
       buttons: Array.from(c.querySelectorAll(".btn")).filter((b) => b.checkVisibility()).length,
       files: files ? Math.round(box(files).height) : null,
     };
@@ -1607,14 +1610,14 @@ CARD_LAYOUT = """
 """
 
 
-@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+@pytest.mark.parametrize("size,touch", [("390,844", False), ("390,844", True), ("1280,800", False)])
 @in_chromium
-def test_lean_cards_fit_a_phone_and_their_titles_keep_a_line_of_their_own(conn, cfg, tmp_path, size):
+def test_lean_cards_fit_a_phone_and_their_titles_keep_a_line_of_their_own(conn, cfg, tmp_path, size, touch):
     import html as html_module
 
     filed_library(conn, cfg)
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), CARD_LAYOUT))
-    dom = dump_dom(path, tmp_path, size=size)
+    dom = dump_dom(path, tmp_path, size=size, touch=touch)
     found = re.search(r'data-cards="([^"]*)"', dom)
     assert found, dom[-2000:]
     laid = json.loads(html_module.unescape(found.group(1)))
@@ -1624,6 +1627,11 @@ def test_lean_cards_fit_a_phone_and_their_titles_keep_a_line_of_their_own(conn, 
     # The badges go on the artist's line, or under it: two of them leave the title its whole line.
     assert all(card["alone"] and card["apart"] for card in cards.values()), cards
     assert cards["The Underworld"]["lines"] == 1, cards
+    if touch:
+        # The artist, which shows that artist's songs alone, is a thumb's target, on the line it shares.
+        assert min(card["artist"] for card in cards.values()) >= 44, cards
+    else:
+        assert max(card["artist"] for card in cards.values()) < 44, cards  # a mouse's: the line of text
     if laid["page"] < 480:
         # Three cards to a phone's screen, the fullest too, where its eight files and more made it 1.5.
         assert laid["screen"] // cards["Creep"]["height"] >= 3, cards
@@ -1641,6 +1649,89 @@ def test_an_artists_name_shows_it_is_a_filter_on_its_card_and_its_row(conn, cfg,
         # The name, then a filter's mark that a screen reader skips: the button's title says what it does.
         assert who.group(1) == ('<span class="artist-name">Radiohead</span>'
                                 '<span class="filter-mark" aria-hidden="true"></span>'), who.group(1)
+
+
+# --- touch: a thumb's targets --------------------------------------------------------------------------
+
+
+def every_control(conn, cfg, *, served: bool = True) -> str:
+    """The page caracole serve serves (``served``; else the file on disk), with a control of every kind:
+    filed_library's songs (every file, a Guitar Pro version to download, a song in review, one with no
+    file), a review's candidates to pick, a wanted song with an auto sheet, a songbook, and the form to
+    request a song."""
+    from caracole.library_page import WebControls
+    from caracole.songbook import FILE_NAME, make_songbook
+
+    filed_library(conn, cfg)
+    index_tabs(conn, (1, "radiohead", "creep", "chords"), (3, "radiohead", "creep", "tabs"))
+    in_review(conn)
+    auto = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, auto, "sheet (auto).txt", "sheet (auto).html", "sheet (auto).pdf")
+    make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Radiohead - Creep", "Oasis - Wonderwall"])
+    controls = WebControls(csrf="tok") if served else None
+    return build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
+
+
+# A card's title opens what its Open button opens, which is a thumb's size (WCAG 2.5.8's equivalent).
+TITLES = ".card .title-link"
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+@pytest.mark.parametrize("view", ["", "#view=rows"])
+@in_chromium
+def test_on_a_touch_screen_every_control_is_a_thumbs_size(conn, cfg, tmp_path, size, view):
+    from helpers.targets import UNFOLD, noted, noting, small_targets
+
+    html = with_script(every_control(conn, cfg), UNFOLD + noting("data-short", small_targets(TITLES)))
+    dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, view, size=size, touch=True)
+    short = noted(dom, "data-short")
+    assert short == [], short
+
+
+# On the file on disk, Select a song, name a songbook and make it: the bar then shows the command to run.
+MAKE_FROM_DISK = """
+document.querySelector(".pick-toggle").click();
+document.querySelector("#list .pick input").click();
+document.querySelector(".pick-name").value = "Campfire 2";
+document.querySelector(".pickbar-form button[type=submit]").click();
+document.body.setAttribute("data-command", String(!document.querySelector(".pick-command").hidden));
+"""
+
+
+@in_chromium
+def test_the_select_bar_of_the_file_on_disk_and_its_command_on_a_touch_phone(conn, cfg, tmp_path):
+    from helpers.targets import UNFOLD, noted, noting, small_targets
+
+    script = UNFOLD + MAKE_FROM_DISK + noting("data-short", small_targets(TITLES))
+    html = with_script(every_control(conn, cfg, served=False), script)
+    dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, size="390,844", touch=True)
+    assert 'data-command="true"' in dom  # its Copy button is measured too
+    short = noted(dom, "data-short")
+    assert short == [], short
+
+
+# The heights of the compact controls, as a mouse gets them.
+COMPACT = """
+(() => {
+  const tall = (selector) => {
+    const node = Array.from(document.querySelectorAll(selector)).find((n) => n.checkVisibility());
+    return node ? Math.round(node.getBoundingClientRect().height) : null;
+  };
+  return { row: tall("#list .row-action .btn"), more: tall("#list .row-more"), artist: tall("#list button.artist"),
+           file: tall("#list .row-panel .btn.small"), view: tall(".views button"), letter: tall("#jump button"),
+           chip: tall(".chip"), menu: tall("#sort") };
+})()
+"""
+
+
+@in_chromium
+def test_a_mouse_keeps_the_compact_controls(conn, cfg, tmp_path):
+    from helpers.targets import UNFOLD, noted, noting
+
+    html = with_script(every_control(conn, cfg), UNFOLD + noting("data-compact", COMPACT))
+    heights = noted(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, "#view=rows", size="1280,800"),
+                    "data-compact")
+    assert all(h is not None and h < 44 for h in heights.values()), heights
 
 
 def row_of(shown: str, title: str) -> str:
@@ -1785,6 +1876,12 @@ def test_many_rows_fit_on_a_screen_and_a_phones_rows_wrap_to_two_lines(conn, cfg
     assert set(phone["lines"]) == {2} and min(phone["artists"]) > 40, phone
     # Two lines at most, with buttons a thumb can hit: nine rows to a screen, against three cards.
     assert phone["screen"] // max(phone["heights"]) >= 9, phone
+    # On a touch screen each row's button, "⋯" and artist are a thumb's size: eight rows still.
+    touch = layout_of(dump_dom(path, tmp_path, "#view=rows", size="390,844", touch=True))
+    assert set(touch["lines"]) == {2} and touch["scroll"] <= touch["page"], touch
+    assert touch["screen"] // max(touch["heights"]) >= 8, touch
+    tablet = layout_of(dump_dom(path, tmp_path, "#view=rows", size="1280,800", touch=True))
+    assert set(tablet["lines"]) == {1}, tablet  # one line each, as with a mouse
 
 
 @in_chromium

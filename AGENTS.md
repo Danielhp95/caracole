@@ -105,9 +105,11 @@ songs.py's, in the `removed` table).
   `test_commands_*.py` for the CLI. conftest.py has the `conn` and `cfg` fixtures (every
   directory under `tmp_path`, in /dev/shm if it will do; `conn` copies a database migrated once
   per process), `add_song` and `subprocess_pythonpath`. helpers/browser.py's `dump_dom` opens
-  pages in one Chromium per process, each in a fresh context, for a test marked `@in_chromium`;
-  helpers/locks.py `waiting_for` sees a command wait for caracole's lock. test_harness.py tests
-  what makes the suite fast. helpers/ug_pages.py
+  pages in one Chromium per process, each in a fresh context, for a test marked `@in_chromium`
+  (`touch=True`: a touch screen, where `pointer: coarse` matches; `media=`: dark mode);
+  helpers/targets.py measures a page's controls there: `small_targets`, any under 44 px.
+  helpers/locks.py `waiting_for` sees a command wait for caracole's lock. test_harness.py
+  tests what makes the suite fast. helpers/ug_pages.py
   builds fake UG tab and artist pages, escaped the way UG escapes them
   (`from helpers.ug_pages import ...`). helpers/gtptabs_site.py is `FakeGtpTabs`, a fake
   gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7
@@ -165,7 +167,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py), and the shared browser itself (test_harness.py) | neither |
+| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html`, the lookup page and caracole serve's own pages in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_web_lookup_page.py, test_web_pages.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py), and the shared browser itself (test_harness.py) | neither |
 
 Before a change is done:
 

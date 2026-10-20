@@ -77,6 +77,9 @@ pre { max-height: 22rem; margin: 6px 0 0; padding: 10px; overflow: auto; border-
 .confirm { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .btn.danger { min-height: 44px; background: var(--failed); border-color: var(--failed); color: var(--bg);
   font-weight: 650; }
+@media (pointer: coarse) {
+  .output > summary { min-height: 44px; }  /* a thumb's target, as BASE_STYLE's buttons are */
+}
 """
 
 # No script; forms post only to the server; nothing else loads.

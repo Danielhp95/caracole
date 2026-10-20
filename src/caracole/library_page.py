@@ -33,6 +33,12 @@ card and on a row. A Cards/Rows toggle shows them as rows
 instead, one compact line a song (two on a phone), remembered in the address
 (``#view=rows``) as the search, the filters, the sort and the key are.
 
+On a touch screen (``pointer: coarse``) every control is a thumb's target, 44
+px each way at the least: buttons, folds, chips, menus, letters, a row's "⋯"
+and an artist's name; a mouse keeps the compact sizes, about twenty rows to a
+laptop's screen. ``BASE_STYLE`` and ``PICKER_STYLE`` carry them to the pages
+caracole serve writes itself (web/pages.py, web/lookup_page.py).
+
 Each file, link and row shows where it came from (icons.py): the site's own
 icon, inlined in the data as a ``data:`` URI (the CSP allows images from
 ``data:`` alone), else the site's lettered badge, or a glyph for the audio
@@ -523,7 +529,8 @@ def _haystack(texts: list[str]) -> str:
 
 # --- the page ---------------------------------------------------------------------------
 
-# Shared with the pages caracole serve writes itself (caracole/web/): colours, type, buttons.
+# Shared with the pages caracole serve writes itself (caracole/web/): colours, type, buttons. On a touch
+# screen (pointer: coarse) every button is a thumb's target, 44 px; a mouse keeps the compact ones.
 BASE_STYLE = """
 :root {
   color-scheme: light dark;
@@ -625,6 +632,9 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
   .masthead { padding-top: 32px; }
   .masthead h1 { font-size: 2.1rem; }
 }
+@media (pointer: coarse) {
+  .btn, .btn.small { min-height: 44px; }
+}
 @media (prefers-reduced-motion: no-preference) {
   .btn, .navlink { transition: background-color .12s, border-color .12s; }
 }
@@ -665,6 +675,9 @@ label.choice-pick { cursor: pointer; }
   cursor: pointer; }
 .pick-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
 .pick-hint { margin: 0; color: var(--muted); font-size: .82rem; }
+@media (pointer: coarse) {
+  .picker > summary:not(.btn), .choice-link { min-height: 44px; }
+}
 """
 
 # A list's rows and the marks of where each thing came from: index.html's Rows view, and the results of
@@ -700,7 +713,7 @@ ROWS_STYLE = """
   box-shadow: var(--shadow); }
 /* Below 900px a row is two lines: the title and the main action, then the artist with the key and
    badges (.row-sub, as wide as the row but for the "⋯" button), the artist at least 3rem wide. */
-.row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto 34px;
+.row { --row-more: 34px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto var(--row-more);
   grid-template-areas: "src title act act" ". sub sub more"; align-items: center; gap: 2px 10px;
   min-width: 0; padding: 8px 10px 8px 12px; border-top: 1px solid var(--border); scroll-margin-top: 84px; }
 .row:first-child { border-top: 0; }
@@ -727,7 +740,7 @@ ROWS_STYLE = """
 /* A request's line: a line of the row's own, under the title, the artist and the button. */
 .row > .progress { grid-column: 2 / -1; font-size: .85rem; }
 .row-panel .foot { margin-top: 2px; }
-.row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: 34px; height: 30px;
+.row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: var(--row-more); height: 30px;
   padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted);
   font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
 .row-more:hover, .row-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
@@ -736,13 +749,21 @@ ROWS_STYLE = """
 .row-panel .note { margin: 0; }
 .row-group .subhead { margin: 4px 0 6px; }
 @media (min-width: 900px) {
-  .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px;
+  .row { grid-template-columns: 20px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem var(--row-more);
     grid-template-areas: "src title artist meta act more"; padding: 3px 10px 3px 12px; }
   .row-sub { display: contents; }
   .row-artist { grid-area: artist; justify-self: start; max-width: 100%; }
   .row-meta { grid-area: meta; margin: 0; }
   .row .btn { min-height: 30px; }
   .row-more { height: 28px; }
+}
+/* A thumb's targets: a row's button, its "⋯" and its artist (on a phone the title's line and the artist's,
+   two thumbs high); a mouse keeps the compact rows. */
+@media (pointer: coarse) {
+  .row { --row-more: 44px; padding-top: 4px; padding-bottom: 4px; }
+  .row .btn, .row-busy { min-height: 44px; }
+  .row-more { height: 44px; }
+  .artist { min-width: 44px; min-height: 44px; }
 }
 """
 
@@ -898,9 +919,10 @@ body.with-tray .page { padding-bottom: 16rem; }
 """ + ROWS_STYLE + """@media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
 }
-/* A thumb's targets: the folds of a card and the files in them. */
+/* A thumb's targets: a card's folds, the chips, the menus, Cards/Rows and the letters. */
 @media (pointer: coarse) {
-  .more > summary, .more .btn.small { min-height: 44px; }
+  .more > summary, .chip, .sort select, .views button { min-height: 44px; }
+  .jump button { min-width: 44px; height: 44px; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .plus { transition: transform .15s; }
@@ -2399,7 +2421,8 @@ _SONGBOOK_STYLE = """
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 1rem;
   cursor: pointer; }
 .sb-btn:hover { border-color: var(--border-strong); }
-.sb-more > summary { min-height: 40px; color: var(--muted); font-size: .85rem; font-weight: 600; cursor: pointer; }
+.sb-more > summary { min-height: 40px; align-content: center; color: var(--muted); font-size: .85rem; font-weight: 600;
+  cursor: pointer; }
 .sb-more form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
 .sb-more .f { flex: 1 1 180px; }
 .sb-sure { display: flex; flex: 1 1 100%; align-items: center; gap: 10px; min-height: 44px; font-size: .9rem; }
@@ -2415,13 +2438,14 @@ _SONGBOOK_STYLE = """
 .card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 /* A row's box stands where its source's mark was, beside the title and the artist (both lines on a phone). */
-.selecting .row { grid-template-columns: 34px minmax(0, 1fr) auto 34px; }
+.selecting .row { grid-template-columns: 34px minmax(0, 1fr) auto var(--row-more); }
 .selecting .row > .source { display: none; }
 .selecting .row > .pick { grid-column: 1; grid-row: 1 / span 2; align-self: center; width: 34px; height: 34px;
   border-radius: 10px; }
 .row.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
 @media (min-width: 900px) {
-  .selecting .row { grid-template-columns: 34px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem 34px; }
+  .selecting .row { grid-template-columns: 34px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem) 9.5rem
+    var(--row-more); }
   .selecting .row > .pick { grid-row: 1; }
 }
 .pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -2440,6 +2464,9 @@ _SONGBOOK_STYLE = """
 .pick-error:empty { display: none; }
 .pick-command { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pick-command code { flex: 1 1 260px; padding: 8px 10px; user-select: all; }
+@media (pointer: coarse) {
+  .sb-more > summary { min-height: 44px; }
+}
 """
 
 # The Select mode: a box on each card (any element of #list with a data-id: a row too), and a bar to
