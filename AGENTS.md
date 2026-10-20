@@ -35,7 +35,7 @@ an earlier one failed:
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), rank.py, coverage.py, versions.py |
-| lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` is for searches, not wired in yet, `artist_slugs` for the sheets); a `[lacuerda]` pick (overrides.py `LaCuerdaPick`) is tried whatever its language and kept whatever its coverage, `read_artist_page` reads one artist's page (`caracole lacuerda --artist`, at the lookup pace) |
+| lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` for searches, `artist_slugs` for the sheets, `index_state` for what a search says it lacks); a `[lacuerda]` pick (overrides.py `LaCuerdaPick`) is tried whatever its language and kept whatever its coverage, `read_artist_page` reads one artist's page (`caracole lacuerda --artist`, at the lookup pace) |
 | scan | music.py (Music/), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
@@ -76,7 +76,11 @@ songs.py's, in the `removed` table).
   pinyin counts only as whole words of a key, as in match.py. `search_gtptabs` and
   `search_musescore` read gtptabs.com's and MuseScore's tables (`SiteHit`; MuseScore's by
   exact title keys alone, the query's or what it leaves beside the artist of a song of that
-  title, `_known_song`: a possible match), never the sites. Its prefilter reads
+  title, `_known_song`: a possible match), never the sites; `search_lacuerda` reads
+  LaCuerda's index (lacuerda_index.py `find`): its songs as `SiteHit`s with the page of the
+  sheet a lookup keeps (`sheet`), its artists as `SiteArtist` rows (`known`: the songs it holds
+  of theirs, 0 until caracole read their page), and `lacuerda_left_out` what it lacks (empty,
+  or the letters read so far). Its prefilter reads
   ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
   must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
@@ -93,10 +97,13 @@ songs.py's, in the `removed` table).
   from which commands ran: a step's label is that line while it runs, "Adding to the
   library…", and a lookup's running stage has one of its own, `status.STAGE_LINES`), app.py (the routes; `/jobs.json` and the forms answer the page's script in
   JSON, every refusal as data; `/api/search` for search as you type, through search.py's
-  public functions (`find_index`, `found`, `search_gtptabs`, `search_musescore`; `skipped`, the
-  sites it left out and why), one at a time, the newest first, an older one's
+  public functions (`find_index`, `found`, `search_gtptabs`, `search_musescore`,
+  `search_lacuerda`; `skipped`, the sites it left out and why, and `partial`, LaCuerda's
+  index while its listings are still read), one at a time, the newest first, an older one's
   SQL interrupted once a newer waits (`set_progress_handler`); `/api/artist?key=` an
-  artist's songs, 50 at a time; `/api/jobs[/<id>]`; every `/api/` read refused to
+  artist's songs, 50 at a time, `?lacuerda=SLUG` a LaCuerda artist's that the index holds,
+  and `POST /lacuerda/artist` queues `caracole lacuerda --artist` (`jobs.LACUERDA_ARTIST`)
+  to read their page; `/api/jobs[/<id>]`; every `/api/` read refused to
   another site's fetch, `security.own_page_read`; `POST /lookup`, which runs a song your
   library has, by its id or found from the UG pick (`_Mine`: its match, or its names'
   `name_forms`), under its own names and writes no wanted.txt line for it;
@@ -140,7 +147,7 @@ songs.py's, in the `removed` table).
   library), for a page whose CSP refuses a test's script; helpers/browser.py's `Browser` is the
   same with typing, Enter, clicks and the layout read back, for the lookup page's tests and the
   library page's bar (test_web_page_search.py: a real `caracole serve`, its queue running a fake
-  `caracole get`). Both
+  `caracole get`; test_web_page_lacuerda.py, LaCuerda's group and an artist page read). Both
   resolve no host name (`helpers.browser.NO_LOOKUPS`), and their tests are `@in_chromium` too.
   fixtures/ holds UG, LaCuerda, LRCLIB,
   gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
@@ -185,7 +192,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_viewer_layout.py, test_viewer_preamble.py, test_viewer_shapes.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py, test_web_page_search.py), and the shared browser itself (test_harness.py) | neither |
+| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_viewer_layout.py, test_viewer_preamble.py, test_viewer_shapes.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py, test_web_page_search.py, test_web_page_lacuerda.py), and the shared browser itself (test_harness.py) | neither |
 
 Before a change is done:
 
@@ -260,7 +267,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore,
     1–2 s for LRCLIB).
   - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
-    lookups run it), and `caracole lacuerda --artist`, one artist's page.
+    lookups run it), and `caracole lacuerda --artist`, one artist's page (an artist's Songs).
     Its clients are `make_client(..., interactive=True)`: a random gap from
     `lookup_delay` (default 0.5–1.5 s; `[0, 0]` allowed) between two requests to a provider,
     a budget of `lookup_requests` (6) requests to it for the song, and at most
@@ -287,7 +294,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     `/ru/` (half of its sitemaps), `/search/` or `/storage/` (an artist's "Download all"
     archive), nor musescore.com's `/api/jmuse`, `/score/*/download/*`, `/sheetmusic?`
     (its search) or `/oembed/*`. A host's rules are the `User-agent: *` group of its live
-    robots.txt (tests/fixtures/gtptabs/ and tests/fixtures/musescore/robots.txt).
+    robots.txt (tests/fixtures/gtptabs/ and tests/fixtures/musescore/robots.txt). LaCuerda's
+    robots.txt is empty, and it has no search caracole uses: a search reads `lacuerda_index`
+    alone, and an artist's songs come from their page, read at most once in 30 days
+    (`test_web_app.py::test_a_search_asks_no_site_and_takes_no_lock`).
   - **The one exception is YouTube**, the owner's explicit choice for a handful of their
     own songs a night: its robots.txt closes `/results` and `/youtubei/` to crawlers, and
     yt-dlp uses both, against its terms too. Provider `youtube` (youtube.py) is the one

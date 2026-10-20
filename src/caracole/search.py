@@ -56,7 +56,13 @@ alone: a page there is one whose whole title is the query, or the query less
 an artist's name on either side, where that artist has a song of that title in
 the Ultimate Guitar index, gtptabs.com's or your library; a possible match,
 never more. Both only read the local tables: nothing here asks gtptabs.com or MuseScore
-anything, and MuseScore's pages are for the user to open.
+anything, and MuseScore's pages are for the user to open. ``search_lacuerda`` reads
+LaCuerda's (``lacuerda_index``, from its listings of every artist and the artist pages
+caracole has read): its songs as ``SiteHit``s, each with the page of the sheet a lookup
+keeps (``sheet``), and the artists the query names as rows of their own (``SiteArtist``),
+since the index holds every artist but the songs only of the artists whose page caracole
+has read. ``lacuerda_artist`` and ``lacuerda_songs`` give one of its artists and the songs
+the index holds of theirs. LaCuerda has no search caracole uses: nothing here asks it.
 
 UG's sitemaps list artists with accented or non-Latin names only by bare ids,
 so the index can't see their tabs; ``bare_id_hint`` says what to do then.
@@ -214,10 +220,13 @@ class SiteHit:
     """A page of another site's offline index the query matches.
 
     ``source`` is "gtptabs" (a song page of gtptabs.com: an artist and a title,
-    named from its slugs, its uploads of the title counted in ``uploads``) or
+    named from its slugs, its uploads of the title counted in ``uploads``),
     "musescore" (a song page of MuseScore: a title alone, as its sitemaps give
-    it, so ``artist`` is "" and the page a possible match). ``url`` is the page,
-    for the user to open; ``score`` and ``via`` are as ``IndexHit``'s.
+    it, so ``artist`` is "" and the page a possible match) or "lacuerda" (a song
+    of LaCuerda's, named as LaCuerda names it, its versions counted in
+    ``uploads``, and ``sheet`` the page of its best Letra y Acordes version, the
+    sheet a lookup keeps; None for a song without chords there). ``url`` is the
+    page, for the user to open; ``score`` and ``via`` are as ``IndexHit``'s.
     """
 
     source: str
@@ -229,6 +238,29 @@ class SiteHit:
     title_key: str = ""
     uploads: int = 1
     via: str = "title"
+    sheet: str | None = None
+
+
+@dataclass(frozen=True)
+class SiteArtist:
+    """An artist of another site's offline index the query names: LaCuerda's (``source``).
+
+    ``artist`` is the name the site writes, ``slug`` its own name for their page,
+    ``url`` the page; ``songs`` counts their songs as the site's listing does, and
+    ``known`` how many of them the index holds, 0 until caracole has read their
+    page; ``top`` holds the most popular with chords. ``score`` and ``via`` are as
+    ``IndexHit``'s.
+    """
+
+    source: str
+    artist: str
+    slug: str
+    url: str
+    score: float
+    songs: int = 0
+    known: int = 0
+    via: str = "artist"
+    top: tuple[SiteHit, ...] = ()
 
 
 def display_from_keys(artist_key: str, song_key: str) -> tuple[str, str]:
@@ -418,6 +450,79 @@ def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROW
         if len(hits) >= limit:
             break
     return hits[:max(limit, 0)]
+
+
+def search_lacuerda(conn: sqlite3.Connection, query: str, *, songs: int = SITE_ROWS,
+                    artists: int = ARTIST_ROWS) -> tuple[list[SiteArtist], list[SiteHit]]:
+    """LaCuerda's artists and songs in its index that match ``query``, best first (``lacuerda_index.find``):
+    an artist's songs that only their name matched are in their row, and beside an artist whose whole name
+    is the query, one whose name is only near it ("Andrés Canalla" for "andres calamaro") is left out, as
+    ``find_index`` leaves it out. It reads the table alone."""
+    from caracole.lacuerda_index import find
+
+    found = find(conn, query, artists=artists, songs=songs)
+    named = [a for a in found.artists if a.score >= 100] or found.artists
+    return [_lacuerda_artist(conn, a) for a in named], [_lacuerda_song(h) for h in found.songs]
+
+
+def lacuerda_artist(conn: sqlite3.Connection, slug: str) -> SiteArtist | None:
+    """One artist of LaCuerda's index, by the slug of their page, as ``search_lacuerda`` gives them (score
+    100); None for one it doesn't know."""
+    from caracole.lacuerda_index import LaCuerdaHit, artist_songs
+    from caracole.lacuerda import artist_url
+
+    row = conn.execute("SELECT artist, artist_key, songs FROM lacuerda_index WHERE artist_slug = ? "
+                       "ORDER BY title != '' LIMIT 1", (slug,)).fetchone()
+    if row is None:
+        return None
+    hit = LaCuerdaHit(row[0], slug, row[1], artist_url(slug), 100.0, songs=row[2],
+                      top=tuple(artist_songs(conn, slug, limit=TOP_SONGS, acordes=True)))
+    return _lacuerda_artist(conn, hit)
+
+
+def lacuerda_songs(conn: sqlite3.Connection, slug: str, *, title: str | None = None) -> list[SiteHit]:
+    """The songs LaCuerda's index holds of an artist, most popular first, as LaCuerda orders them; none
+    until caracole has read their page. With ``title``, only those whose title it matches, best first."""
+    from dataclasses import replace
+
+    from caracole.lacuerda_index import artist_songs
+
+    hits = [_lacuerda_song(h) for h in artist_songs(conn, slug)]
+    queries = _queries(title or "")
+    if not queries:
+        return hits
+    scored = [(max(q.score("", h.title_key.replace("-", " ")) for q in queries), n, h) for n, h in enumerate(hits)]
+    return [replace(h, score=round(score, 1), via="title")
+            for score, _, h in sorted((s for s in scored if s[0] >= MIN_SCORE), key=lambda s: (-s[0], s[1]))]
+
+
+def lacuerda_left_out(conn: sqlite3.Connection) -> tuple[str, str] | None:
+    """Why a search of LaCuerda's index finds less than LaCuerda has, worded to follow "LaCuerda's": ("empty",
+    …) before the nightly run read any of its listings or artist pages, ("partial", …) while it reads its
+    listings, with the letters read whole so far; None once every listing page was read."""
+    from caracole.lacuerda_index import index_state, letters_text
+
+    state = index_state(conn)
+    if state.empty:
+        return "empty", "index is empty: the nightly run reads its listings of every artist"
+    if state.complete:
+        return None
+    letters = letters_text(state.letters)
+    those = f", those of {letters}" if letters else ""
+    return "partial", (f"index is still being read: {state.artists:,} artist{'' if state.artists == 1 else 's'} so "
+                       f"far{those}; the nightly run reads the rest")
+
+
+def _lacuerda_song(h) -> SiteHit:
+    return SiteHit("lacuerda", h.title, h.url, h.score, h.artist, h.artist_key, h.title_key,
+                   uploads=len(h.versions), via=h.via, sheet=h.sheet_url)
+
+
+def _lacuerda_artist(conn: sqlite3.Connection, a) -> SiteArtist:
+    known = conn.execute("SELECT COUNT(*) FROM lacuerda_index WHERE artist_slug = ? AND title != ''",
+                         (a.artist_slug,)).fetchone()[0]
+    return SiteArtist("lacuerda", a.artist, a.artist_slug, a.url, a.score, max(a.songs, known), known, a.via,
+                      tuple(_lacuerda_song(t) for t in a.top))
 
 
 def _known_song(conn: sqlite3.Connection, artist: str, title_key: str, mine: list[set[tuple[str, str]]]) -> bool:

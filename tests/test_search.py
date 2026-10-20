@@ -464,6 +464,81 @@ def test_a_musescore_title_is_never_a_word_of_the_query_that_leaves_no_known_son
     assert titles("forever live") == ["Live"]
 
 
+# --- LaCuerda's offline index -------------------------------------------------------------
+
+
+def lacuerda(conn):
+    """LaCuerda's index: Estopa, Enanitos Verdes and Joaquín Sabina from the listings, and Estopa's page read."""
+    from helpers.lacuerda_site import artist_page
+
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+
+    li.store_artists(conn, "tabs/e/index0.html", [LCArtist("estopa", "Estopa", 159),
+                                                  LCArtist("enanitos", "Enanitos Verdes", 151)])
+    li.store_artists(conn, "tabs/j/index0.html", [LCArtist("joaquin_sabina", "Joaquín Sabina", 241)])
+    li.store_artist_page(conn, "estopa", artist_page(
+        "Estopa", "estopa", ("como_camaron", "Como Camarón", "RRT-213"), ("tu_calorro", "Tu Calorro", "R-1"),
+        ("vino_tinto", "Vino Tinto", "T-1")))
+
+
+LC = "https://acordes.lacuerda.net/"
+
+
+def test_lacuerda_songs_are_site_hits_and_its_artists_rows_of_their_own(conn):
+    from caracole.search import SiteArtist, SiteHit, search_lacuerda
+
+    lacuerda(conn)
+    artists, songs = search_lacuerda(conn, "estopa")
+    assert songs == []  # its songs are its row's, never hits of their own
+    [estopa] = artists
+    assert estopa == SiteArtist("lacuerda", "Estopa", "estopa", LC + "estopa/", 100.0, songs=159, known=3,
+                                via="artist", top=estopa.top)
+    assert [(h.title, h.sheet) for h in estopa.top] == [("Como Camarón", LC + "estopa/como_camaron-2.shtml"),
+                                                       ("Tu Calorro", LC + "estopa/tu_calorro.shtml")]
+    artists, songs = search_lacuerda(conn, "como camaron")
+    assert artists == []
+    assert songs == [SiteHit("lacuerda", "Como Camarón", LC + "estopa/como_camaron", 100.0, "Estopa", "estopa",
+                             "como-camaron", uploads=3, via="title", sheet=LC + "estopa/como_camaron-2.shtml")]
+    # A song without chords there has no sheet to keep; an artist whose page caracole never read, no songs.
+    [vino] = search_lacuerda(conn, "vino tinto")[1]
+    assert (vino.uploads, vino.sheet) == (1, None)
+    [sabina] = search_lacuerda(conn, "joaquin sabina")[0]
+    assert (sabina.artist, sabina.songs, sabina.known, sabina.top) == ("Joaquín Sabina", 241, 0, ())
+    assert search_lacuerda(conn, "zzzz qqqq") == ([], []) and search_lacuerda(conn, "ab") == ([], [])
+
+
+def test_beside_a_lacuerda_artist_whose_name_is_the_query_one_only_near_it_is_left_out(conn):
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+    from caracole.search import search_lacuerda
+
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist("andres_calamaro", "Andrés Calamaro", 325),
+                                                  LCArtist("andres", "Andrés", 3),
+                                                  LCArtist("andres_canalla", "Andrés Canalla", 9)])
+    assert [a.artist for a in search_lacuerda(conn, "andres calamaro")[0]] == ["Andrés Calamaro"]
+    assert [a.artist for a in search_lacuerda(conn, "andres")[0]] == ["Andrés"]
+    assert [a.artist for a in search_lacuerda(conn, "andres calamar")[0]][:1] == ["Andrés Calamaro"]  # a typo
+
+
+def test_a_lacuerda_artists_songs_come_from_the_index_most_popular_first(conn):
+    from caracole.search import lacuerda_artist, lacuerda_songs
+
+    lacuerda(conn)
+    estopa = lacuerda_artist(conn, "estopa")
+    assert (estopa.artist, estopa.songs, estopa.known, estopa.score) == ("Estopa", 159, 3, 100.0)
+    from caracole.lacuerda_index import artist_songs
+
+    # LaCuerda's own order of popularity, as the artist page gives it.
+    assert [h.title for h in lacuerda_songs(conn, "estopa")] == [h.title for h in artist_songs(conn, "estopa")]
+    assert sorted(h.title for h in lacuerda_songs(conn, "estopa")) == ["Como Camarón", "Tu Calorro", "Vino Tinto"]
+    assert {h.via for h in lacuerda_songs(conn, "estopa")} == {"artist"}
+    assert lacuerda_songs(conn, "joaquin_sabina") == [] and lacuerda_artist(conn, "joaquin_sabina").known == 0
+    [tinto] = lacuerda_songs(conn, "estopa", title="tinto")  # titles that match, best first
+    assert (tinto.title, tinto.via) == ("Vino Tinto", "title")
+    assert lacuerda_artist(conn, "nobody") is None
+
+
 # --- caracole search -----------------------------------------------------------------
 
 
@@ -1280,3 +1355,100 @@ def test_a_song_of_yours_under_a_placeholder_artist_is_never_what_enter_takes(co
     answer = find(conn, "斑马")
     assert [h.song.artist for h in answer.library] == ["misc"] and answer.library[0].score >= 90
     assert answer.best is None  # and the index's partial pinyin match is no clear song either
+
+
+# --- caracole search: LaCuerda's offline index -------------------------------------------------
+
+
+def lc_part(output: str) -> str:
+    return output.partition("On LaCuerda (offline index)")[2]
+
+
+CAMARON_UG = (9301, "el-barrio", "como-camaron", "chords")
+
+
+def lacuerda_seed(tmp_path, rows=ROWS):
+    (tmp_path / "lib").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "state").mkdir(parents=True, exist_ok=True)
+    conn = seed(tmp_path, rows)
+    lacuerda(conn)
+    return conn
+
+
+def test_cli_lists_lacuerdas_artists_and_songs_after_ultimate_guitars(tmp_path):
+    lacuerda_seed(tmp_path)
+    result = run(tmp_path, "search", "estopa")
+    assert result.exit_code == 0, result.output
+    out = result.output
+    assert out.index("On Ultimate Guitar (offline index)") < out.index("On LaCuerda (offline index)")
+    lc = lc_part(out)
+    assert "  Estopa · LaCuerda · 159 songs. The most popular with chords:\n" in lc
+    assert (f"  1. [LaCuerda] Estopa - Como Camarón · 3 versions, with chords\n     {LC}estopa/como_camaron\n"
+            f'     caracole add --lacuerda {LC}estopa/como_camaron "Estopa" "Como Camarón"\n') in lc
+    assert "  2. [LaCuerda] Estopa - Tu Calorro · 1 version, with chords" in lc
+    assert '     All 3 the index holds: caracole search --artist "Estopa"' in lc
+    # A song by its title, numbered after Ultimate Guitar's hits, as --add takes it.
+    lacuerda_seed(tmp_path / "2", rows=ROWS + [CAMARON_UG])
+    titled = run(tmp_path / "2", "search", "como camaron").output
+    assert "  1. [UG] El Barrio - Como Camaron" in titled and "  2. [LaCuerda] Estopa - Como Camarón" in titled
+
+
+def test_cli_an_artist_whose_page_caracole_never_read_says_how_to_read_it(tmp_path):
+    lacuerda_seed(tmp_path)
+    lc = lc_part(run(tmp_path, "search", "joaquin sabina").output)
+    assert ("  Joaquín Sabina · LaCuerda · 241 songs\n"
+            "     caracole hasn't read their page: caracole lacuerda --artist joaquin_sabina reads it (one request)\n"
+            ) in lc
+
+
+def test_cli_add_takes_a_lacuerda_song_with_its_pick(tmp_path):
+    from caracole.overrides import LaCuerdaPick, load_overrides
+
+    conn = lacuerda_seed(tmp_path, rows=ROWS + [CAMARON_UG])
+    result = run(tmp_path, "search", "como", "camaron", "--add", "2")
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8").endswith("\nEstopa - Como Camarón\n")
+    assert load_overrides(tmp_path / "lib" / "overrides.toml").lacuerda == {
+        "estopa/como-camaron": LaCuerdaPick("estopa", "como_camaron")}
+    assert "LaCuerda: the nightly run keeps the sheet you picked there" in result.output
+    assert find_song(conn, "estopa/como-camaron") is not None
+
+
+def test_cli_a_lacuerda_song_without_chords_is_added_by_its_names_alone(tmp_path):
+    lacuerda_seed(tmp_path)
+    lc = lc_part(run(tmp_path, "search", "vino tinto").output)
+    assert "  1. [LaCuerda] Estopa - Vino Tinto · 1 version, no chords\n" in lc
+    assert 'caracole add "Estopa" "Vino Tinto"' in lc and "--lacuerda" not in lc
+    result = run(tmp_path, "search", "vino tinto", "--add", "1")
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / "lib" / "overrides.toml").exists()
+
+
+def test_cli_search_artist_lists_lacuerdas_songs_of_theirs_too(tmp_path):
+    lacuerda_seed(tmp_path)
+    result = run(tmp_path, "search", "--artist", "estopa")
+    assert result.exit_code == 0, result.output
+    lc = lc_part(result.output)
+    assert "  Estopa · LaCuerda · 3 of their 159 songs in the index, the most popular first:\n" in lc
+    assert lc.count("[LaCuerda] Estopa - ") == 3
+    narrowed = lc_part(run(tmp_path, "search", "--artist", "estopa", "tinto").output)
+    assert narrowed.count("[LaCuerda]") == 1 and "Vino Tinto" in narrowed
+    unread = lc_part(run(tmp_path, "search", "--artist", "joaquin sabina").output)
+    assert "caracole lacuerda --artist joaquin_sabina" in unread and "[LaCuerda]" not in unread
+    nobody = lc_part(run(tmp_path, "search", "--artist", "nobody at all").output)
+    assert "No artist named nobody at all in LaCuerda's index" in nobody
+
+
+def test_cli_says_when_lacuerdas_index_is_empty_or_still_being_read(tmp_path):
+    from caracole.db import kv_set_json
+
+    conn = seed(tmp_path)
+    empty = lc_part(run(tmp_path, "search", "creep").output)
+    assert "Nothing yet: LaCuerda's index is empty" in empty and "caracole lacuerda --index" in empty
+    lacuerda(conn)
+    kv_set_json(conn, "lacuerda:index:pages", {"tabs/a/index0.html": {"pages": ["index0.html"]},
+                                               "tabs/b/index0.html": {"pages": ["index0.html"]}})
+    conn.commit()
+    partial = lc_part(run(tmp_path, "search", "estopa").output)
+    assert "Estopa · LaCuerda" in partial
+    assert "LaCuerda's index is still being read: 3 artists so far, those of A, B;" in " ".join(partial.split())

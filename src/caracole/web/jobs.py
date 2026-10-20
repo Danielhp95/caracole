@@ -12,7 +12,10 @@ process for the whole lookup, whose JSON lines become the job's ``stages``
 it can be read in, and stay out of the step's output; the card's line is then
 the running stage's (status.py). A pick from a song's picker that asks for a
 fetch adds ``caracole fetch --song`` and ``caracole render`` (offline) after its
-``caracole review`` (``fetch_steps``). Each command takes caracole's lock (a
+``caracole review`` (``fetch_steps``). A LaCuerda song you pick goes to ``caracole
+get`` or ``caracole add`` with ``--lacuerda``, and a LaCuerda artist's page is read
+by ``caracole lacuerda --artist`` (``lacuerda_artist_steps``), a job of its own
+(``LACUERDA_ARTIST`` and the page's slug), one request at the lookup pace. Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -140,7 +143,7 @@ class Job:
 
 
 def add_steps(artist: str, title: str, *, album: str | None = None,
-              duration_ms: int | None = None) -> list[tuple[str, tuple[str, ...]]]:
+              duration_ms: int | None = None, lacuerda: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
     """``caracole add``, as you'd type it; ``--`` ends the options, so a name may start with "-"."""
     from caracole.wanted import format_duration
 
@@ -149,6 +152,8 @@ def add_steps(artist: str, title: str, *, album: str | None = None,
         args.append(f"--album={album}")
     if duration_ms is not None:
         args.append(f"--duration={format_duration(duration_ms)}")
+    if lacuerda:
+        args.append(f"--lacuerda={lacuerda}")
     return [("Adding to the library", (*args, "--", artist, title))]
 
 
@@ -165,7 +170,8 @@ LOOKUP = "get"  # the command of a lookup
 
 
 def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_ms: int | None = None,
-                 ug: str | None = None, tab: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
+                 ug: str | None = None, tab: str | None = None,
+                 lacuerda: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
     """Look one song up now: ``caracole get --progress``, one process for every stage (get.py)."""
     from caracole.wanted import format_duration
 
@@ -178,16 +184,27 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
         args.append(f"--ug={ug}")
     if tab:
         args.append(f"--tab={tab}")
+    if lacuerda:
+        args.append(f"--lacuerda={lacuerda}")
     return [("Look it up now", (*args, "--", artist, title))]
 
 
+LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it
+
+
+def lacuerda_artist_steps(slug: str, name: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Read a LaCuerda artist's page into its index now: ``caracole lacuerda --artist``, one request."""
+    return [(f"Reading LaCuerda's page for {name}", ("lacuerda", f"--artist={slug}"))]
+
+
 def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
-    """The Ultimate Guitar song and tab a lookup's ``caracole get`` was given (``--ug``, ``--tab``), if any."""
+    """The Ultimate Guitar song and tab, and the LaCuerda song, a lookup's ``caracole get`` was given (``--ug``,
+    ``--tab``, ``--lacuerda``), if any."""
     picked: list[str] = []
     for step in steps:
         if step.args[:1] == (LOOKUP,):
             options = step.args[:step.args.index("--")] if "--" in step.args else step.args
-            picked += [arg for arg in options if arg.startswith(("--ug=", "--tab="))]
+            picked += [arg for arg in options if arg.startswith(("--ug=", "--tab=", "--lacuerda="))]
     return tuple(picked)
 
 

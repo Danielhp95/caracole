@@ -1,12 +1,17 @@
-"""``caracole search``: find a song in your library and in the offline UG index.
+"""``caracole search``: find a song in your library and in the offline UG and LaCuerda indexes.
 
-Nothing here touches the network: the library is the SQLite file, and the UG
-index is the table ``caracole index build`` filled from UG's sitemaps. Each UG
-hit comes with the ``caracole add`` line to paste, and ``--add N`` adds hit N
-through ``caracole add``'s own path (``sources.add_song``): appended to
-wanted.txt, which is then synced. A hit under a catch-all artist
-(``misc-musicals``…) has no such line, and ``--add`` refuses it: under UG's
-names, the song's artist would be "Misc Musicals".
+Nothing here touches the network: the library is the SQLite file, the UG
+index is the table ``caracole index build`` filled from UG's sitemaps, and
+LaCuerda's the one the nightly run fills from its listings of every artist and
+the artist pages caracole read (lacuerda_index.py). Each UG hit comes with the
+``caracole add`` line to paste, and ``--add N`` adds hit N through ``caracole
+add``'s own path (``sources.add_song``): appended to wanted.txt, which is then
+synced. A hit under a catch-all artist (``misc-musicals``…) has no such line,
+and ``--add`` refuses it: under UG's names, the song's artist would be "Misc
+Musicals". LaCuerda's group comes after UG's, numbered on: its artists (each
+with their most popular songs with chords, or, when caracole never read their
+page, the ``caracole lacuerda --artist`` line that reads it) and its songs, whose
+line, and ``--add``, record the song as your pick there (``--lacuerda``).
 
 A query may be an artist alone or a title alone (``search.find_index``): when
 an artist leads, its most tabbed songs come first, then the songs titled like
@@ -34,13 +39,15 @@ import typer
 from caracole.commands import sources
 from caracole.commands._common import exclusive, fail, load_cfg, open_db
 
+LACUERDA = "On LaCuerda (offline index)"
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from caracole.config import Config
     from caracole.keys import SongKey
     from caracole.overrides import Overrides
-    from caracole.search import ArtistHit, IndexHit, LibraryHit
+    from caracole.search import ArtistHit, IndexHit, LibraryHit, SiteArtist, SiteHit
     from caracole.songs import Song
 
 _SHELL_SPECIAL = re.compile(r'(["\\$`])')
@@ -166,13 +173,18 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
         return
 
     typer.echo("\nOn Ultimate Guitar (offline index)")
+    known = _library_keys(conn)
+    shown, hint = 0, None
     if not _index_built(conn):
         typer.echo(f"  Nothing yet: {_EMPTY_INDEX}.")
-        return
-    listing = _listing(conn, ask, limit)
-    _print_listing(listing, _library_keys(conn))
-    hint = _hint(ask, listing, library[0][0] if library else None, _overrides(cfg))
-    if hint:
+    else:
+        listing = _listing(conn, ask, limit)
+        _print_listing(listing, known)
+        shown = len(listing.hits)
+        hint = _hint(ask, listing, library[0][0] if library else None, _overrides(cfg))
+    typer.echo(f"\n{LACUERDA}")
+    _print_listing(_lacuerda_listing(conn, ask, limit), known, start=shown)
+    if hint:  # Ultimate Guitar's bare ids: after every place's hits
         typer.echo("\n" + _wrap(hint))
 
 
@@ -209,14 +221,14 @@ class _Listing:
     order. ``songs`` and ``artists`` are what its hint weighs; ``missing`` says the index has no
     artist ``--artist`` names."""
 
-    parts: tuple[str | IndexHit, ...]
+    parts: tuple[str | IndexHit | SiteHit, ...]
     songs: tuple[IndexHit, ...] = ()
     artists: tuple[ArtistHit, ...] = ()
     missing: bool = False
     lead: str | None = None  # a search's: "artist" when an artist leads
 
     @property
-    def hits(self) -> list[IndexHit]:
+    def hits(self) -> list[IndexHit | SiteHit]:
         return [p for p in self.parts if not isinstance(p, str)]
 
 
@@ -264,16 +276,106 @@ def _listing(conn: sqlite3.Connection, ask: _Ask, limit: int) -> _Listing:
 
 
 def _print_listing(listing: _Listing, known: set[tuple[str, str]],
-                   paste: Callable[[IndexHit], str | None] | None = None) -> None:
-    """Its lines, and its hits numbered from 1, each with its line to run (``paste``, by default the
-    ``caracole add`` line; None for none)."""
-    n = 0
+                   paste: Callable[[IndexHit], str | None] | None = None, *, start: int = 0) -> None:
+    """Its lines, and its hits numbered from ``start`` + 1, each with its line to run (``paste``, by default
+    the ``caracole add`` line; None for none). A LaCuerda song's line records it as your pick there."""
+    from caracole.search import SiteHit
+
+    n = start
     for part in listing.parts:
         if isinstance(part, str):
             typer.echo(part)
+        elif isinstance(part, SiteHit):
+            n += 1
+            typer.echo(_lacuerda_lines(n, part, known))
         else:
             n += 1
             typer.echo(_index_lines(n, part, known, paste or _add_line))
+
+
+def _lacuerda_listing(conn: sqlite3.Connection, ask: _Ask, limit: int) -> _Listing:
+    """LaCuerda's index's answer as the search prints it, at most ``limit`` songs, numbered on after Ultimate
+    Guitar's. An artist that leads comes first, with their most popular songs with chords; any other artist
+    the query names is a line. Then what the index lacks: all of it while it is empty, or the letters not
+    read yet (``search.lacuerda_left_out``)."""
+    from caracole.search import lacuerda_left_out, search_lacuerda
+
+    left = lacuerda_left_out(conn)
+    if left is not None and left[0] == "empty":
+        return _Listing((f"  Nothing yet: LaCuerda's {left[1]} (`caracole lacuerda --index` reads them now, "
+                         "a run's budget at a time).",))
+    if ask.artist is not None:
+        parts = _lacuerda_artist_parts(conn, ask, limit)
+    elif ask.title is not None:
+        songs = [h for h in search_lacuerda(conn, ask.title, songs=limit, artists=0)[1] if h.via == "title"]
+        parts = list(songs) or ["  nothing matches"]
+    else:
+        artists, songs = search_lacuerda(conn, ask.text, songs=limit)
+        parts = []
+        if artists and (not songs or artists[0].score >= songs[0].score):
+            lead, *others = artists
+            top = [t for t in lead.top][:limit]
+            parts += _lacuerda_artist_head(lead, bool(top))
+            parts += top
+            if lead.known > len(top):
+                parts.append(f"     All {lead.known:,} the index holds: caracole search --artist {_quote(lead.artist)}")
+            shown = {t.url for t in top}
+            rest = [h for h in songs if h.url not in shown][:max(limit - len(top), 0)]
+            if rest:
+                parts += ["", "  Other songs:", *rest]
+        else:
+            others = artists
+            parts += songs or ["  nothing matches"]
+        for a in others:
+            parts += ["", *_lacuerda_artist_head(a, False, also=True)]
+    if left is not None:
+        parts += ["", textwrap.fill(f"LaCuerda's {left[1]}.", 88, initial_indent="  ", subsequent_indent="  ",
+                                    break_long_words=False, break_on_hyphens=False)]
+    return _Listing(tuple(parts))
+
+
+def _lacuerda_artist_head(a: SiteArtist, top: bool, *, also: bool = False) -> list[str]:
+    """An artist's line in LaCuerda's group, and the line that lists their songs, or reads their page."""
+    head = f"  {'Also an artist: ' if also else ''}{a.artist} · LaCuerda · {_count(a.songs, 'song')}"
+    if top:
+        return [head + ". The most popular with chords:"]
+    if a.known:
+        return [head, f"     caracole search --artist {_quote(a.artist)}"]
+    return [head, f"     caracole hasn't read their page: caracole lacuerda --artist {a.slug} reads it (one request)"]
+
+
+def _lacuerda_artist_parts(conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[str | SiteHit]:
+    """``--artist NAME``'s part of LaCuerda: the songs the index holds of the artist the name is, most popular
+    first (with QUERY words, those whose titles they match), or how to read their page."""
+    from caracole.search import STRONG, lacuerda_songs, search_lacuerda
+
+    named = [a for a in search_lacuerda(conn, ask.artist or "", songs=0, artists=1)[0] if a.score >= STRONG]
+    if not named:
+        return [f"  No artist named {ask.artist} in LaCuerda's index"]
+    a = named[0]
+    if not a.known:
+        return _lacuerda_artist_head(a, False)
+    songs = lacuerda_songs(conn, a.slug, title=ask.text or None)
+    head = (f"  {a.artist} · LaCuerda · their songs titled like {ask.text}:" if ask.text else
+            f"  {a.artist} · LaCuerda · {a.known:,} of their {_count(a.songs, 'song')} in the index, the most "
+            "popular first:")
+    parts: list[str | SiteHit] = [head, *songs[:limit]] if songs else [head, "  nothing matches"]
+    if len(songs) > limit:
+        parts.append(f"  … and {len(songs) - limit} more: see them with --limit {len(songs)}")
+    return parts
+
+
+def _lacuerda_lines(n: int, hit: SiteHit, known: set[tuple[str, str]]) -> str:
+    """A numbered LaCuerda song: its names and versions, its page, and the line that adds it as your pick
+    there (by its names alone for a song without chords there: no sheet to keep)."""
+    from caracole.normalize import identity_key
+
+    versions = f"{_count(hit.uploads, 'version')}, {'with chords' if hit.sheet else 'no chords'}"
+    head = f"  {n}. {_tag('lacuerda')}{hit.artist} - {hit.title} · {versions}\n     {hit.url}"
+    if tuple(identity_key(hit.artist, hit.title).split("/", 1)) in known:
+        return f"{head}\n     in your library"
+    pick = f"--lacuerda {hit.url} " if hit.sheet else ""
+    return f"{head}\n     caracole add {pick}{_quote(hit.artist)} {_quote(hit.title)}"
 
 
 def _count(n: int, thing: str) -> str:
@@ -545,21 +647,31 @@ def _index_built(conn: sqlite3.Connection) -> bool:
 
 
 def _add(cfg: Config, conn: sqlite3.Connection, ask: _Ask, n: int, limit: int) -> None:
-    """Add UG hit ``n`` of the search the way ``caracole add`` adds a song, and say what happened.
+    """Add hit ``n`` of the search the way ``caracole add`` adds a song, and say what happened: Ultimate
+    Guitar's, or LaCuerda's after them, as your pick there.
 
-    Only a hit the same search shows can be added: ``n`` up to ``limit``, numbered as it printed them.
+    Only a hit the same search shows can be added: numbered as it printed them, each place's up to ``limit``.
     """
-    if not _index_built(conn):
+    from caracole.search import SiteHit
+
+    ug = _listing(conn, ask, limit).hits if _index_built(conn) else []
+    lacuerda = _lacuerda_listing(conn, ask, limit).hits
+    hits = [*ug, *lacuerda]
+    if not hits and not _index_built(conn):
         fail(f"--add {n}: {_EMPTY_INDEX}", 2)
-    if n > limit:  # a hit you never saw, such as --add 12 typed for --add 2
-        shown = "the first hit is" if limit == 1 else f"the first {limit} hits are"
+    if n > len(hits) and (len(ug) >= limit or len(lacuerda) >= limit):  # a hit you never saw: --add 12 for --add 2
+        shown = "the first hit is" if len(hits) == 1 else f"the first {len(hits)} hits are"
         fail(f"--add {n}: only {shown} shown; see hit {n} with --limit {n} first, then add it with "
              f"--limit {n} --add {n}", 2)
-    hits = _listing(conn, ask, limit).hits
     if not 1 <= n <= len(hits):
         found = f"only {len(hits)} hit{'s' if len(hits) != 1 else ''}" if hits else "nothing"
-        fail(f"--add {n}: Ultimate Guitar has {found} for {ask}", 2)
+        fail(f"--add {n}: {'Ultimate Guitar and LaCuerda have' if lacuerda else 'Ultimate Guitar has'} {found} "
+             f"for {ask}", 2)
     hit = hits[n - 1]
+    if isinstance(hit, SiteHit):  # LaCuerda's, as your pick there when it has chords to keep
+        sources.say_added(cfg, sources.add_song(cfg, hit.artist, hit.title, conn=conn,
+                                                lacuerda=hit.url if hit.sheet else None))
+        return
     if hit.catch_all:  # under UG's names, the song's artist would be the catch-all, as "Misc Musicals"
         fail(_catch_all_note(hit, f"{hit.artist_key}/{hit.song_key}", head=f"--add {n} adds nothing: ",
                              indent=0), 2)

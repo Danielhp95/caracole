@@ -188,6 +188,57 @@ def index_size(conn: sqlite3.Connection) -> tuple[int, int]:
     return row[0], row[1]
 
 
+@dataclass(frozen=True)
+class IndexState:
+    """What the index holds, for a search to say: its artists and songs, whether every listing page was
+    read (``complete``), and the letters (``LETTERS``) whose every page it holds so far (``letters_read``)."""
+
+    artists: int
+    songs: int
+    complete: bool
+    letters: tuple[str, ...]
+
+    @property
+    def empty(self) -> bool:
+        return self.artists == 0 and self.songs == 0
+
+
+def index_state(conn: sqlite3.Connection) -> IndexState:
+    """The index's ``IndexState``; no request."""
+    artists, songs = index_size(conn)
+    return IndexState(artists, songs, complete_at(conn) is not None, tuple(letters_read(conn)))
+
+
+def letters_read(conn: sqlite3.Connection) -> list[str]:
+    """The letters whose every listing page the index holds (read, found unchanged, or gone), in
+    ``LETTERS``' order: a search finds every artist of those. A refresh the budget cut short leaves the
+    letter it stopped in out until its other pages are read."""
+    indexed = pages(conn)
+    done = []
+    for letter in LETTERS:
+        first = indexed.get(listing_path(letter))
+        if first is not None and all(listing_path(letter, p) in indexed for p in first.get("pages", ())):
+            done.append(letter)
+    return done
+
+
+_LETTER_NAMES = {"_num": "#", "nn": "Ñ"}
+
+
+def letters_text(letters: Sequence[str]) -> str:
+    """Letters as LaCuerda's menu names them ("#" for a name that starts with a digit, "Ñ"), three in a row
+    or more as a range: "#, A–C", "A, B, E"."""
+    order = {letter: n for n, letter in enumerate(LETTERS)}
+    runs: list[list[str]] = []
+    for letter in sorted(dict.fromkeys(letters), key=lambda x: order.get(x, len(order))):
+        if runs and letter != "_num" and runs[-1][-1] != "_num" and order.get(letter) == order.get(runs[-1][-1], -2) + 1:
+            runs[-1].append(letter)
+        else:
+            runs.append([letter])
+    name = lambda x: _LETTER_NAMES.get(x, x.upper())  # noqa: E731
+    return ", ".join(f"{name(r[0])}–{name(r[-1])}" if len(r) > 2 else ", ".join(map(name, r)) for r in runs)
+
+
 def _replace(conn: sqlite3.Connection, page: str, rows: Sequence[Sequence[Any]]) -> None:
     ensure_current_keys(conn)
     marks = ", ".join("?" for _ in _COLUMNS)

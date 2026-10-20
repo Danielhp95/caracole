@@ -22,7 +22,8 @@ ran. So a job of other commands reads the same way:
   fetch looked up during this request (``SongFacts.checked_now``); or "Not
   fetched yet", for one it didn't (a cooldown, a block, a spent budget or an
   error, all of which exit 0): an error is never a miss. A removal
-  (``jobs.REMOVING``), whose song is gone once it is done, says "Removed".
+  (``jobs.REMOVING``), whose song is gone once it is done, says "Removed", and
+  a LaCuerda artist page's read (``jobs.LACUERDA_ARTIST``), no song's, "Done".
 
 A line that ends in a failure or a wait also links to the job's output on
 /jobs (``Line.details``). Every link is relative to the library page, which
@@ -35,7 +36,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from caracole.web.jobs import REMOVING, Job, Stage, Step
+from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, Stage, Step
 
 TODO = "_todo.md"
 MAX_TEXT = 160  # characters of an error's sentence
@@ -119,6 +120,8 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0) -> Line:
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     if job.song_key.startswith(REMOVING):  # no song to read once it is done: that is what it did
         return Line("removed", "Removed")
+    if job.song_key.startswith(LACUERDA_ARTIST):  # no song's: what LaCuerda answered is in its output
+        return Line("added", "Done", details=details)
     if song is not None and song.sheet:
         return Line("ready", "Ready", ("Open sheet", song.sheet))
     if song is not None and song.ignored:

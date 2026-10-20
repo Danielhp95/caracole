@@ -192,6 +192,27 @@ def test_the_songs_of_an_artist_whose_page_is_cached_come_from_the_cache(conn, t
     assert tuple(row) == ("Soda Stereo", "soda-stereo", "de-musica-ligera", "RHRTTTDTB", 3, 0, "soda_stereo/")
 
 
+def test_the_state_says_which_letters_a_search_finds_every_artist_of(conn, tmp_path):
+    assert li.index_state(conn) == li.IndexState(0, 0, False, ())
+    assert li.index_state(conn).empty
+    site = site_with(e=[E1, E2], s=[S1])
+    with pytest.raises(BudgetExhausted):
+        refresh(site, conn, tmp_path, budget=6)  # #, A–D answer 404 (no listing), E's first page is read
+    state = li.index_state(conn)
+    assert (state.artists, state.complete, state.letters) == (3, False, ("_num", "a", "b", "c", "d"))
+    assert not state.empty and li.letters_text(state.letters) == "#, A–D"  # E waits for its second page
+    refresh(site, conn, tmp_path, NOW + timedelta(hours=24))
+    state = li.index_state(conn)
+    assert (state.artists, state.songs, state.complete) == (7, 0, True) and len(state.letters) == len(LETTERS)
+
+
+def test_letters_are_named_as_lacuerdas_menu_names_them_runs_as_ranges():
+    assert li.letters_text(["_num", "a", "b", "c"]) == "#, A–C"
+    assert li.letters_text(["a", "b", "e"]) == "A, B, E"
+    assert li.letters_text(["m", "n", "nn", "o", "z"]) == "M–O, Z"  # Ñ in its place, as LaCuerda lists it
+    assert li.letters_text(["nn"]) == "Ñ" and li.letters_text([]) == ""
+
+
 # --- what lacuerda_fetch reads --------------------------------------------------------------
 
 
