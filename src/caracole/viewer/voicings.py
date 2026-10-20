@@ -127,7 +127,7 @@ def plays(position: Position, chord: Chord) -> bool:
 _FRET = r"(?:[xX]|\d{1,2})"
 _FRETS = rf"[xX\d]{{6}}|{_FRET}(?:[\s.,-]+{_FRET}){{5}}"
 _GIVEN = rf"\(\s*(?:{_FRETS})\s*\)|(?:{_FRETS})"
-_FINGERING = re.compile(rf"\s*(?:\(\s*({_FRETS})\s*\)|({_FRETS}))\s*")
+_FINGERING = re.compile(rf"\s*(?P<given>{_GIVEN})\s*")
 _FRET_SPAN = 9  # a position's frets are one character each, counted from its base fret
 # One chord of a legend's line: its name, maybe ":", "=" or "-", and its fingering ("Dsus4/F#(2x0233)",
 # "Cadd9: x32033"). The name is the shortest that leaves a fingering ending where the line or the
@@ -148,7 +148,7 @@ def parse_fingering(text: str) -> Position | None:
     m = _FINGERING.fullmatch(text)
     if not m:
         return None
-    raw = m.group(1) or m.group(2)
+    raw = m["given"].strip("()").strip()  # the frets, out of their brackets
     parts = list(raw) if len(raw) == len(TUNING) else re.split(r"[\s.,-]+", raw)
     frets = [None if p in "xX" else int(p) for p in parts]
     held = [f for f in frets if f]
@@ -209,7 +209,7 @@ def parse_define(value: str) -> tuple[Chord, Position] | None:
 
 def sheet_shapes(given: list[tuple[Chord, Position]]) -> dict[str, dict[str, Any]]:
     """The shapes a sheet gives its chords (``chord_legend``, ``parse_define``), first, then
-    chords-db's: ``{"own": how many are the sheet's, "list": positions}``, filed by the chord as it
+    chords-db's: ``{"mine": how many are the sheet's, "list": positions}``, filed by the chord as it
     is shown, "<root>,<suffix>,<bass>" ("0,add9," for Cadd9, "2,sus4,6" for Dsus4/F#). A shape
     that doesn't play its chord is left out, and one shape is shown once: one chords-db has too
     is chords-db's, with its fingers, unless the sheet gave fingers of its own."""
@@ -223,18 +223,18 @@ def sheet_shapes(given: list[tuple[Chord, Position]]) -> dict[str, dict[str, Any
             # chords-db's, as the viewer shows them (viewer.js shapesOf): the slash chord's own, else its quality's
             fingering, _, slash = voicing_keys(chord)
             filed = [data[k][chord.root] for k in (slash, fingering) if k in data and data[k][chord.root]]
-            shapes[key] = {"own": 0, "list": list(filed[0]) if filed else []}
+            shapes[key] = {"mine": 0, "list": list(filed[0]) if filed else []}
         entry = shapes[key]
         frets = _absolute(position)
         same = next((i for i, p in enumerate(entry["list"]) if _absolute(p) == frets), None)
-        if same is not None and same < entry["own"]:
+        if same is not None and same < entry["mine"]:
             continue  # the sheet gave it already
         if same is not None:
             known = entry["list"].pop(same)
             if not position[1].strip("0"):  # the sheet said nothing of the fingers: chords-db's
                 position = known
-        entry["list"].insert(entry["own"], position)
-        entry["own"] += 1
+        entry["list"].insert(entry["mine"], position)
+        entry["mine"] += 1
     return shapes
 
 

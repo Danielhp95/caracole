@@ -27,8 +27,9 @@ written ``\\u003c``:
   none, which may be below the sheet's own, and the shapes' key);
 - ``voicings``: the fingerings of every chord the page can show, on every root;
 - ``shapes``: the fingerings the sheet gives its chords (its chord legend, its ``{define}``),
-  first, before chords-db's (``voicings.sheet_shapes``), by the chord as shown: the script
-  shows them for that very chord alone, not once it is transposed into another.
+  first, before chords-db's (``voicings.sheet_shapes``: ``{"mine": how many are the sheet's,
+  "list": positions}``), by the chord as shown: the script shows them for that very chord
+  alone, not once it is transposed into another.
 """
 
 from __future__ import annotations

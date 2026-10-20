@@ -44,15 +44,15 @@ def test_the_tabs_legend_gives_its_chords_shapes_first():
     shapes = data_of(build_viewer(LEGEND))["shapes"]
     # by root, suffix and bass, as the chord is shown
     assert set(shapes) == {"4,m7,", "7,,", "2,sus4,", "9,7sus4,", "0,add9,", "2,sus4,6"}
-    assert shapes["0,add9,"] == {"own": 1, "list": [["x32033", NONE, 1, []], *DB["add9"][0]]}
-    assert shapes["7,,"] == {"own": 1, "list": [["320033", NONE, 1, []], *DB[""][7]]}  # G, as the tab plays it
+    assert shapes["0,add9,"] == {"mine": 1, "list": [["x32033", NONE, 1, []], *DB["add9"][0]]}
+    assert shapes["7,,"] == {"mine": 1, "list": [["320033", NONE, 1, []], *DB[""][7]]}  # G, as the tab plays it
     # "Dsus4/F#(2x0233)", a line of text; then chords-db's Dsus4, to play with F# in the bass
-    assert shapes["2,sus4,6"] == {"own": 1, "list": [["2x0233", NONE, 1, []], *DB["sus4"][2]]}
+    assert shapes["2,sus4,6"] == {"mine": 1, "list": [["2x0233", NONE, 1, []], *DB["sus4"][2]]}
 
 
 def test_a_shape_chords_db_has_too_is_shown_once_with_its_fingers():
     dsus4 = data_of(build_viewer(LEGEND))["shapes"]["2,sus4,"]  # "Dsus4   (xx0233)": chords-db's first too
-    assert dsus4 == {"own": 1, "list": DB["sus4"][2]}
+    assert dsus4 == {"mine": 1, "list": DB["sus4"][2]}
     assert dsus4["list"][0] == ["xx0233", "000123", 1, []]
 
 
@@ -66,7 +66,7 @@ def test_a_sheets_define_comes_first_with_its_fingers():
            "Cadd9 (x32033)\nCadd9 (x32030)\n\n{comment: Verse}\n[Cadd9]Made up [G]words\n")
     shapes = data_of(build_viewer(cho))["shapes"]
     # the define, then the legend's other shape, chords-db's x32030 with its fingers, and chords-db's others
-    assert shapes == {"0,add9,": {"own": 2, "list": [["x32033", "021034", 1, []], *DB["add9"][0]]}}
+    assert shapes == {"0,add9,": {"mine": 2, "list": [["x32033", "021034", 1, []], *DB["add9"][0]]}}
 
 
 def test_a_sheet_without_a_legend_has_chords_dbs_shapes_alone():
@@ -75,7 +75,7 @@ def test_a_sheet_without_a_legend_has_chords_dbs_shapes_alone():
 
 def test_a_songbooks_song_keeps_its_tabs_shapes():
     book = build_songbook("Campfire", [BookSong("Legend Song", "The Placeholders", cho=LEGEND, id="aaaa")])
-    assert data_of(book, "data-1")["shapes"]["0,add9,"]["own"] == 1
+    assert data_of(book, "data-1")["shapes"]["0,add9,"]["mine"] == 1
 
 
 # --- in a real browser ---------------------------------------------------------------------------
