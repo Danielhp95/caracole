@@ -46,7 +46,7 @@ from tomlkit.exceptions import TOMLKitError
 
 from caracole.library import NotRegularFile, read_regular, write_atomic
 from caracole.normalize import compact, identity_key, name_forms, slug_key, ug_slug_key
-from caracole.youtube import video_id_from_url, watch_url
+from caracole.youtube_urls import video_id_from_url, watch_url
 
 # UG's hosts as an address bar shows them, in any case: www and tabs, the bare domain, and a language
 # edition's (UG's tab pages link to es.ultimate-guitar.com as their Spanish edition). Whichever host it
