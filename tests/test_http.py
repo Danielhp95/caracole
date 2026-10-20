@@ -15,8 +15,8 @@ from caracole.http import (
     Response,
     is_challenge,
     read_once_more,
+    stale,
 )
-from caracole.http import stale as is_stale
 
 NORMAL_PAGE = (
     b"<html><head><title>DE MUSICA LIGERA CHORDS</title></head><body>"
@@ -536,6 +536,23 @@ def test_conditional_get_sends_validators_and_reuses_body_on_304(tmp_path):
     assert client.requests_made == 2
 
 
+def test_an_answer_just_revalidated_is_as_old_as_its_304(tmp_path):
+    # The 304 says the copy is current now, so a caller checking its age sees a fresh copy.
+    clock = [datetime(2026, 10, 18, tzinfo=UTC)]
+    statuses = iter([200, 304])
+    client, rec = make_client(
+        tmp_path, lambda r: httpx.Response(next(statuses), content=b"<urlset/>", headers={"etag": '"v1"'}),
+        wall_clock=lambda: clock[0],
+    )
+    url = "https://www.ultimate-guitar.com/sitemap40.xml"
+    client.get(url, cache=False, conditional=True)
+    clock[0] += timedelta(days=40)
+    revalidated = client.get(url, cache=False, conditional=True)
+    assert revalidated.status == 304 and revalidated.fetched_at == "2026-11-27T00:00:00Z"
+    assert not stale(revalidated, clock[0], timedelta(days=30))
+    assert len(rec.requests) == 2
+
+
 def test_uncached_conditional_get_is_plain(tmp_path):
     client, rec = make_client(tmp_path, ok(b"x"))
     client.get("https://x.test/s.xml", cache=False, conditional=True)
@@ -656,8 +673,8 @@ def test_max_age_refetches_stale_copies_and_falls_back_when_budget_is_spent(tmp_
     assert client.get(url, max_age=timedelta(days=30)).content == b"v2"
     assert len(rec.requests) == 2
     clock[0] += timedelta(days=40)
-    stale = client.get(url, max_age=timedelta(days=30))  # budget spent: the stale copy beats nothing
-    assert stale.from_cache and stale.content == b"v2" and len(rec.requests) == 2
+    kept = client.get(url, max_age=timedelta(days=30))  # budget spent: the stale copy beats nothing
+    assert kept.from_cache and kept.content == b"v2" and len(rec.requests) == 2
 
 
 # --- reading a provider's answers: a stale copy, a cached one that won't read ----------------------------
@@ -670,12 +687,12 @@ def answer(*, from_cache=True, fetched_at=None):
 
 def test_a_copy_is_stale_past_its_max_age_or_of_unknown_age_and_a_fresh_answer_never():
     now, month = datetime(2026, 10, 18, 3, 30, tzinfo=UTC), timedelta(days=30)
-    assert not is_stale(answer(from_cache=False), now, month)
-    assert not is_stale(answer(fetched_at="2026-09-19T03:30:00Z"), now, month)  # 29 days old
-    assert is_stale(answer(fetched_at="2026-09-17T03:30:00Z"), now, month)  # 31 days old
-    assert is_stale(answer(fetched_at=None), now, month)
-    assert is_stale(answer(fetched_at="2026-09-17T03:30:00Z"), now.replace(tzinfo=None), month)  # naive is UTC
-    assert not is_stale(answer(fetched_at="2026-09-19T03:30:00Z"), now.replace(tzinfo=None), month)
+    assert not stale(answer(from_cache=False), now, month)
+    assert not stale(answer(fetched_at="2026-09-19T03:30:00Z"), now, month)  # 29 days old
+    assert stale(answer(fetched_at="2026-09-17T03:30:00Z"), now, month)  # 31 days old
+    assert stale(answer(fetched_at=None), now, month)
+    assert stale(answer(fetched_at="2026-09-17T03:30:00Z"), now.replace(tzinfo=None), month)  # naive is UTC
+    assert not stale(answer(fetched_at="2026-09-19T03:30:00Z"), now.replace(tzinfo=None), month)
 
 
 NOTICE = b"<html>Maintenance</html>"  # served with HTTP 200, so cached like the page

@@ -139,16 +139,20 @@ class Client(Protocol):
 # --- reading a provider's answers ---------------------------------------------
 
 
+_STAMP = "%Y-%m-%dT%H:%M:%SZ"  # a cached copy's ``fetched_at``, in UTC
+
+
 def stale(resp: Response, now: datetime, max_age: timedelta) -> bool:
     """Whether ``resp`` is a cached copy older than ``max_age`` at ``now`` (a naive time is UTC),
-    or of unknown age. A fresh answer never is. ``PoliteClient`` serves such a copy only once the
-    run's budget is spent: no answer for today, so its caller stops as the next request would have.
+    or of unknown age. A fresh answer never is, nor one a 304 just revalidated. ``PoliteClient``
+    serves such a copy only once the run's budget is spent: no answer for today, so its caller
+    stops as the next request would have.
     """
     if not resp.from_cache:
         return False
     if not resp.fetched_at:
         return True
-    fetched = datetime.strptime(resp.fetched_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    fetched = datetime.strptime(resp.fetched_at, _STAMP).replace(tzinfo=UTC)
     return (now.replace(tzinfo=UTC) if now.tzinfo is None else now) - fetched > max_age
 
 
@@ -420,9 +424,9 @@ class PoliteClient:
         cached = self._read_cache(key) if (cache or conditional) else None
         if cached is not None and cached.status not in accept:
             cached = None  # an answer the caller rejects is no answer: ask again
-        stale = cached is not None and max_age is not None and self._older_than(cached, max_age)
-        if (cache and cached is not None and not conditional and not stale) or (
-            stale and self.requests_made >= self.policy.budget
+        expired = cached is not None and max_age is not None and stale(cached, self._wall_clock(), max_age)
+        if (cache and cached is not None and not conditional and not expired) or (
+            expired and self.requests_made >= self.policy.budget
         ):
             self._log_request("GET", full, _status_line(cached.status), cached=True)
             return cached
@@ -460,7 +464,10 @@ class PoliteClient:
         if status == 304 and cached is not None:
             self._errors_in_a_row = 0
             self._event(at, status, "not_modified", None)
-            return Response(url=full, status=304, content=cached.content, headers=cached.headers, from_cache=True)
+            return Response(
+                url=full, status=304, content=cached.content, headers=cached.headers, from_cache=True,
+                fetched_at=self._stamp(),
+            )
 
         if status in accept:
             kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
@@ -494,9 +501,6 @@ class PoliteClient:
         self.close()
 
     # -- internals ---------------------------------------------------------
-
-    def _older_than(self, cached: Response, max_age: timedelta) -> bool:
-        return stale(cached, self._wall_clock(), max_age)
 
     def _send(self, url: str, request: httpx.Request) -> httpx.Response:
         """One network request, a redirect hop included: within the budget, after the pause."""
@@ -578,12 +582,16 @@ class PoliteClient:
             headers=meta.get("headers", {}), from_cache=True, fetched_at=meta.get("fetched_at"),
         )
 
+    def _stamp(self) -> str:
+        """Now, as a ``fetched_at``."""
+        return self._wall_clock().astimezone(UTC).strftime(_STAMP)
+
     def _write_cache(self, key: str, url: str, status: int, headers: Mapping[str, str], body: bytes) -> None:
         body_path, meta_path = self._paths(key)
         body_path.parent.mkdir(parents=True, exist_ok=True)
         meta = {
             "url": url, "status": status, "headers": dict(headers),
-            "fetched_at": self._wall_clock().astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "fetched_at": self._stamp(),
         }
         for path, data in (
             (body_path, gzip.compress(body, compresslevel=6)),
