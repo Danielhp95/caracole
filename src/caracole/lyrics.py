@@ -371,8 +371,9 @@ def fetch_lyrics(
     never a miss. A cached answer that can't be read is asked for once more,
     past the cache, before it is an error (``http.read_once_more``).
 
-    ``cache`` and ``max_age`` go to every ``client.get``. By default a cached
-    answer is used forever; ``cache=False`` asks LRCLIB again.
+    ``cache`` and ``max_age`` go to the first ``client.get`` of each endpoint; the one
+    more ask (``read_once_more``) goes past the cache. By default a cached answer is
+    used forever; ``cache=False`` asks LRCLIB again.
     """
     options: dict[str, Any] = {"cache": cache, "max_age": max_age}
     track = clean_title(title)
