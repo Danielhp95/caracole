@@ -37,6 +37,9 @@ score, why the matcher thought of it and a link to its UG page. On the file
 it is read-only, with the ``caracole review --song`` line that picks one;
 served, it is a radio group posted to ``/review`` (web/app.py), in place of the
 "Review first" button, and opening it takes the focus to the first candidate.
+A song not found carries ``notFound``, and its served card links to
+``/review?song=ID``, which offers what ``caracole search`` finds for it: a
+search per song would cost every page a moment each.
 """
 
 from __future__ import annotations
@@ -130,7 +133,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     songs = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [])
              for s in library]
-    _add_candidates(conn, library, songs)
+    _add_picks(conn, library, songs)
     data: dict[str, Any] = {
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "fold": {c: fold(c) for c in _TRANSLITERATED},
@@ -150,17 +153,18 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     )
 
 
-def review_choices(conn: sqlite3.Connection, song: Song) -> list[dict[str, Any]]:
+def review_choices(conn: sqlite3.Connection, song: Song,
+                   cands: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """The candidates of a song in review as the picker shows them, numbered as ``caracole review``
-    numbers them (``review.candidates_of``): the UG song (``ref``, as overrides.toml names it), its
-    artist and title as UG writes them, its score, why the matcher thought of it (``review.step_words``),
-    its tabs per type and a page of it on UG. A candidate the index no longer has is named from its
-    keys, with no tabs and no page."""
+    numbers them (``review.candidates_of``), or ``cands`` (a song not found's search hits): the UG
+    song (``ref``, as overrides.toml names it), its artist and title as UG writes them, its score, why
+    the matcher thought of it (``review.step_words``), its tabs per type and a page of it on UG. A
+    candidate the index no longer has is named from its keys, with no tabs and no page."""
     from caracole.review import candidates_of, ref, step_words
     from caracole.search import display_from_keys, index_song
 
     choices = []
-    for n, cand in enumerate(candidates_of(song), start=1):
+    for n, cand in enumerate(candidates_of(song) if cands is None else cands, start=1):
         hit = index_song(conn, cand["artist_key"], cand["song_key"])
         artist, title = (hit.artist, hit.title) if hit else display_from_keys(cand["artist_key"], cand["song_key"])
         choices.append({
@@ -176,13 +180,17 @@ def review_choices(conn: sqlite3.Connection, song: Song) -> list[dict[str, Any]]
     return choices
 
 
-def _add_candidates(conn: sqlite3.Connection, library: list[Song], songs: list[dict[str, Any]]) -> None:
-    """Give each card of a song in review (not ignored) its candidates, for the picker."""
+def _add_picks(conn: sqlite3.Connection, library: list[Song], songs: list[dict[str, Any]]) -> None:
+    """Give each card of a song in review (not ignored) its candidates, for the picker, and mark a song
+    not found (``notFound``), whose served card links to its search hits: a search each would cost
+    every page a moment per song."""
     for song, card in zip(library, songs, strict=True):
         if card["review"]:
             choices = review_choices(conn, song)
             if choices:
                 card["candidates"] = choices
+        elif song.match_decision == "not_found" and card["status"] != "ignored":
+            card["notFound"] = True
 
 
 _TAB_KINDS = {"chords": "Chords", "tabs": "Tabs", "guitar-pro": "Guitar Pro", "power": "Power Tab"}
@@ -800,6 +808,15 @@ _SCRIPT = r"""
     return form;
   };
 
+  // A song not found: caracole serve's picker page shows what `caracole search` finds for it.
+  const lookLink = (s) => {
+    const look = el("a", "btn", "Look in the index");
+    look.href = "/review?song=" + Number(s.id);
+    look.setAttribute("aria-label", "Look for " + String(s.title) + " by " + String(s.artist) + " in the index");
+    look.title = "What caracole search finds for it in the offline Ultimate Guitar index, to pick from";
+    return look;
+  };
+
   // The picker: a song in review's candidates, numbered as `caracole review` numbers them. The file shows
   // them with the line that picks one; caracole serve, with a form whose answer `caracole review --song`
   // writes (web/app.py). makePicker(song) builds it from a song of the data that has `candidates`.
@@ -979,6 +996,7 @@ _SCRIPT = r"""
       } else {
         actions.appendChild(fetchForm(s));
       }
+      if (s.notFound) actions.appendChild(lookLink(s));
     }
     for (const f of listOf(s.files)) actions.appendChild(link(f, f.primary ? "btn primary" : "btn", false));
     if (actions.childNodes.length) card.appendChild(actions);

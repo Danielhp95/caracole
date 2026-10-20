@@ -106,20 +106,27 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
     """One song's answer, as ``caracole review`` takes it, with no question: ``pick`` (a number or
     ARTIST/SONG), or none of the candidates (those ``seen``, else every one it lists).
 
-    It holds caracole's lock from reading the song to rewriting the pages, as nothing waits for
-    you here: what caracole serve's picker runs (web/app.py).
+    A song not found has no review, but ``pick`` may be one of what ``caracole search`` finds for
+    it (``review.search_candidates``): that writes ``[match]`` alone. It holds caracole's lock from
+    reading the song to rewriting the pages, as nothing waits for you here: what caracole serve's
+    picker runs (web/app.py).
     """
-    from caracole.review import ReviewStats, accept, candidates_of, ref, reject, writes_alias
+    from caracole.review import ReviewStats, accept, candidates_of, ref, reject, search_candidates, writes_alias
     from caracole.songs import get_song
 
     with exclusive(cfg, "review"):
-        load_ovr(cfg)
+        overrides = load_ovr(cfg)
         conn = open_db(cfg)
         song = _song_named(conn, display)
-        if not song.review or song.status == "ignored":
+        searched = not song.review and pick is not None and song.match_decision == "not_found"
+        if song.status == "ignored" or song.key in overrides.ignore or not (song.review or searched):
             fail(f'"{song.display}" doesn\'t need review, so nothing was written.')
-        cands = candidates_of(song)
-        again = f'caracole review --song "{song.display}"'
+        if searched:
+            cands = search_candidates(conn, song, rejected=overrides.reject.get(song.key, frozenset()))
+            again = f'caracole search "{song.artist} {song.title}"'
+        else:
+            cands = candidates_of(song)
+            again = f'caracole review --song "{song.display}"'
         stats = ReviewStats()
         try:
             if pick is not None:

@@ -29,7 +29,7 @@ from typing import Any, Callable
 
 from caracole.config import Config
 from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
-from caracole.normalize import slug_key
+from caracole.normalize import clean_title, slug_key
 from caracole.overrides import (
     OverridesError,
     add_alias,
@@ -43,9 +43,12 @@ from caracole.songs import Song, list_songs, update_song
 from caracole.ug.lookup import song_tabs
 
 SHOWN = 9  # candidates a review lists, numbered 1 to 9
+SEARCH = "search"  # the step of a candidate caracole search found, for a song not found
+SEARCHED = 5  # search hits offered as a song not found's candidates
 
 # Why the matcher thought of a candidate, by the step that found it (match.STEPS).
 _STEP_WORDS = {
+    SEARCH: "a caracole search hit for its artist and title",
     "exact": "same artist and title",
     "alias": "under the artist's [alias]",
     "fuzzy_title": "title spelled differently",
@@ -65,6 +68,21 @@ def candidates_of(song: Song) -> list[dict[str, Any]]:
     return [c for c in (song.match_candidates or []) if c.get("artist_key") and c.get("song_key")][:SHOWN]
 
 
+def search_candidates(conn: sqlite3.Connection, song: Song, *, rejected: Collection[tuple[str, str]] = (),
+                      limit: int = SEARCHED) -> list[dict[str, Any]]:
+    """For a song not found (and not ignored), what ``caracole search`` finds for its artist and title in
+    the offline index, best first, as candidates of step ``SEARCH``; the UG songs ``rejected`` for it
+    (its ``[reject]`` entry) left out. None for any other song."""
+    from caracole.search import search_index
+
+    if song.match_decision != "not_found" or song.status == "ignored":
+        return []
+    hits = search_index(conn, f"{song.artist} {clean_title(song.title)}", limit + len(rejected))
+    found = [{"artist_key": h.artist_key, "song_key": h.song_key, "score": h.score, "step": SEARCH}
+             for h in hits if (h.artist_key, h.song_key) not in rejected]
+    return found[:limit]
+
+
 def ref(cand: Mapping[str, Any]) -> str:
     """A candidate as overrides.toml names a UG song: ``"artist-key/song-key"``."""
     return f"{cand['artist_key']}/{cand['song_key']}"
@@ -72,8 +90,9 @@ def ref(cand: Mapping[str, Any]) -> str:
 
 def writes_alias(song: Song, cand: Mapping[str, Any]) -> bool:
     """Whether accepting the candidate adds an ``[alias]`` too: when the artist's name differs, but
-    never for a title-only match (a cover, mostly) nor under a catch-all artist (``NO_ALIAS_STEPS``)."""
-    return cand.get("step") not in NO_ALIAS_STEPS and slug_key(song.artist) != cand["artist_key"]
+    never for a title-only match (a cover, mostly) nor under a catch-all artist (``NO_ALIAS_STEPS``),
+    nor for a search hit, which may be a cover as well as another spelling."""
+    return cand.get("step") not in (*NO_ALIAS_STEPS, SEARCH) and slug_key(song.artist) != cand["artist_key"]
 
 
 def accept(conn: sqlite3.Connection, cfg: Config, song: Song, cand: Mapping[str, Any]) -> None:

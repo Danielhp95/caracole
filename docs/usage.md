@@ -1058,6 +1058,12 @@ which caracole goes on looking for. A song that doesn't need review, a number
 or a UG song the list hasn't, exits 1 and writes nothing. This is what the
 picker of `caracole serve` runs (see [caracole serve](#caracole-serve)).
 
+A song not found has no candidates, but `--pick` also takes one of the first
+five songs `caracole search "ARTIST TITLE"` finds for it, by number or as
+ARTIST/SONG, leaving out those you rejected for it. That writes `[match]`
+alone: no `[alias]`, since a song under another artist's name may as well be
+a cover as another spelling.
+
 ## Browse and search
 
 ### Library/index.html
@@ -1241,7 +1247,7 @@ with it. A KEY that is no key exits with status 2.
 
 `caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
 [--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with four things the file on disk can't
+`http://127.0.0.1:8737/` by default, with what the file on disk can't
 do:
 
 - **Request a song.** The form at the top takes an artist, a title and,
@@ -1271,6 +1277,12 @@ do:
   offers it a pin or an ignore. With the keyboard, Enter opens the picker and
   takes the focus to the first candidate, the arrow keys choose, and Tab
   goes on to Fetch it now and Pick.
+- **Look in the index.** A wanted song the offline index didn't match has a
+  Look in the index link beside Fetch now: its page, `/review?song=ID`, runs
+  `caracole search` for the song's artist and title, and offers the first five
+  hits the same way, without None of these. A pick writes `[match]` alone (see
+  [Review](#review)). The page runs the search when you open it, so the
+  library page carries no hits of its own.
 - **Requests**, the page at `/jobs`, lists each request, the commands it
   runs and what each printed (the newest request's output open), and
   refreshes itself every 10 seconds while one waits or runs. Stop refreshing
@@ -1278,7 +1290,8 @@ do:
   review (`caracole add` found only candidates) shows the song's picker under
   it, so you pick at once; while the page refreshes itself, which would undo
   a choice half made, it shows a Pick the match link to the picker's own
-  page, `/review?song=ID`, instead.
+  page, `/review?song=ID`, instead. One whose song the index didn't match
+  links to what `caracole search` finds for it (Look in the index, above).
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes

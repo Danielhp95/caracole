@@ -234,7 +234,7 @@ class WebApp:
             overrides = load_overrides(self.cfg.overrides_file)
             with closing(self._connect()) as conn:
                 song = get_song(conn, song_id)
-                pick = _pick(conn, song, overrides)
+                pick = _pick(conn, song, overrides, search=True)
         except KeyError:
             return _message(404, "No such song", "That song isn't in the library.")
         except OverridesError as e:
@@ -243,6 +243,9 @@ class WebApp:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
         if pick is None:
             return _message(409, "Nothing to pick", f"{song.display} doesn't need review: there's nothing to pick.")
+        if not pick.choices:
+            return _message(409, "Nothing to pick", f"caracole search finds nothing close to {song.display} in the "
+                                                    "offline Ultimate Guitar index.")
         return _html(200, pages.review_page(pick, self.csrf))
 
     def _picks(self, jobs: list[Job]) -> dict[str, pages.Pick]:
@@ -365,10 +368,10 @@ class WebApp:
         ``pick`` is a candidate's ARTIST/SONG, fetched at once with ``fetch``, or
         "none", which rejects the candidates ``shown``. They must be the song's
         candidates now: the nightly run may have matched it again since the page was
-        loaded. The song's own request, if one waits or runs, goes first.
+        loaded. A song not found takes one of its search hits, the same way. The
+        song's own request, if one waits or runs, goes first.
         """
         from caracole.overrides import OverridesError, load_overrides
-        from caracole.review import candidates_of, ref
         from caracole.songs import get_song
 
         try:
@@ -383,22 +386,25 @@ class WebApp:
         try:
             with closing(self._connect()) as conn:
                 song = get_song(conn, song_id)
+                offered = _pick(conn, song, overrides, search=True)
         except KeyError:
             return _message(404, "No such song", "That song isn't in the library.")
         except (sqlite3.Error, OSError) as e:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
         if song.status == "ignored" or song.key in overrides.ignore:
             return _message(409, "Ignored", f"{song.display} is ignored in overrides.toml.")
-        if not song.review:
+        if offered is None:
             return _message(409, "Nothing to pick", f"{song.display} doesn't need review any more: reload the "
                                                     "library to see where it stands.")
-        refs = [ref(c) for c in candidates_of(song)]
+        refs = [str(c["ref"]) for c in offered.choices]
         if not pick:
             return _message(400, "No answer", "Pick a candidate, or None of these.")
         if form.get("shown", "").split() != refs or not refs:
             return _message(409, "The candidates changed",
                             f"caracole matched {song.display} again since this page was loaded, and its "
                             "candidates changed: reload the library and pick again.")
+        if pick == "none" and offered.search:
+            return _message(400, "Not an answer", "A song not found takes one of its search hits, or nothing.")
         if pick != "none" and pick not in refs:
             return _message(400, "Not a candidate", f"{pick} isn't one of its candidates.")
         if any(job.active and job.song_key == song.key for job in self.queue.snapshot()):
@@ -436,17 +442,25 @@ def review_first(song: Song, overrides: Overrides) -> bool:
     return not any(song.key in table for table in (overrides.match, overrides.pin, overrides.reject))
 
 
-def _pick(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> pages.Pick | None:
-    """A song in review and its candidates, for the picker; None for a song with nothing to pick."""
+def _pick(conn: sqlite3.Connection, song: Song, overrides: Overrides, *, search: bool = False) -> pages.Pick | None:
+    """What a song's picker offers: a review's candidates; for a song not found, with ``search``, what
+    ``caracole search`` finds for it (a moment's work, for the picker's page alone), or without, no
+    choices yet. None for a song with nothing to pick: ignored, settled, or a review without candidates."""
     from caracole.library_page import review_choices
     from caracole.normalize import clean_title
+    from caracole.review import search_candidates
 
-    if not song.review or song.status == "ignored" or song.key in overrides.ignore:
+    if song.status == "ignored" or song.key in overrides.ignore:
         return None
-    choices = review_choices(conn, song)
-    if not choices:
+    title = clean_title(song.title)
+    if song.review:
+        choices = review_choices(conn, song)
+        return pages.Pick(song.id, song.display, title, song.artist, tuple(choices)) if choices else None
+    if song.match_decision != "not_found":
         return None
-    return pages.Pick(song.id, song.display, clean_title(song.title), song.artist, tuple(choices))
+    hits = search_candidates(conn, song, rejected=overrides.reject.get(song.key, frozenset())) if search else []
+    return pages.Pick(song.id, song.display, title, song.artist, tuple(review_choices(conn, song, hits)),
+                      search=True)
 
 
 def _song_ids(conn: sqlite3.Connection, keys: set[str]) -> frozenset[int]:

@@ -389,6 +389,48 @@ def test_review_song_with_broken_overrides_stops_before_writing(tmp_path):
     assert "overrides:" in result.output and overrides.read_text(encoding="utf-8") == BROKEN_OVERRIDES
 
 
+CREP = "Radio Head - Crep"
+
+
+def not_found(tmp_path):
+    """Radio Head's "Crep", not found under that name, and an index that has Radiohead's "Creep"."""
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import mark_built
+
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    sid, _ = upsert_song(conn, artists=["Radio Head"], title="Crep", album=None, duration_ms=None, isrc=None,
+                         source="wanted", source_id="x", added_at="2026-10-18T00:00:00Z")
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(1, 'radiohead', 'creep', 'chords', '1', 'x', 'radiohead/creep-chords-1')")
+    mark_built(conn, datetime(2026, 10, 18, 3, 30, tzinfo=UTC))
+    update_song(conn, sid, match_decision="not_found")
+    return conn, sid
+
+
+@pytest.mark.parametrize("pick", ["radiohead/creep", "1"])
+def test_review_song_pick_of_a_song_not_found_takes_a_search_hit_and_writes_match_alone(tmp_path, pick):
+    conn, sid = not_found(tmp_path)
+    result = run(tmp_path, "review", "--song", CREP, "--pick", pick)
+    assert result.exit_code == 0, result.output
+    text = overrides_text(tmp_path)
+    assert f'[match]\n"{CREP}" = "radiohead/creep"' in text and "[alias]" not in text
+    assert get_song(conn, sid).match_decision == "accept"
+    assert "Now matched to radiohead/creep" in result.output
+
+
+@pytest.mark.parametrize("args,message", [
+    (["--pick", "oasis/wonderwall"], "has no candidate oasis/wonderwall now"),
+    (["--pick", "2"], "has no candidate 2 now"),
+    (["--none"], "doesn't need review"),
+])
+def test_review_song_of_a_song_not_found_takes_only_a_search_hit(tmp_path, args, message):
+    not_found(tmp_path)
+    result = run(tmp_path, "review", "--song", CREP, *args)
+    assert result.exit_code == 1, result.output
+    assert message in result.output and overrides_text(tmp_path) == ""
+
+
 def test_scan_reports_music_and_inbox(tmp_path):
     seed(tmp_path)
     (tmp_path / "music").mkdir()

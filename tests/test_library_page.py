@@ -405,6 +405,18 @@ def test_an_ignored_song_in_review_has_no_candidates_to_pick(conn, cfg):
     assert "candidates" not in songs_of(page(conn, cfg, o))[s.display]
 
 
+def test_a_song_not_found_says_so_for_the_served_card_to_look_in_the_index(conn, cfg):
+    # Its search hits cost a search each, so the page carries none: caracole serve's /review runs it.
+    lost = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, lost.id, match_decision="not_found")
+    ignored = add_song(conn, "Nobody", "Nothing")
+    update_song(conn, ignored.id, match_decision="not_found", status="ignored")
+    plain = add_song(conn, "Oasis", "Wonderwall")
+    songs = songs_of(page(conn, cfg))
+    assert songs[lost.display]["notFound"] is True and "candidates" not in songs[lost.display]
+    assert "notFound" not in songs[ignored.display] and "notFound" not in songs[plain.display]
+
+
 def test_guitar_pro_pages_to_click_are_the_picks_without_files(conn, cfg):
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", ver=2, rating=4.2, votes=5)
@@ -472,7 +484,8 @@ def test_no_external_resources_and_no_urls_outside_the_data(conn, cfg):
     v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
     set_picks(conn, s.id, ["guitar-pro"], [v])
     html = page(conn, cfg)
-    shell = JSON_BLOCK.sub("", html)
+    # The CSP's hashes are base64, which may hold "//" before a letter: they are no addresses.
+    shell = re.sub(r"'sha256-[A-Za-z0-9+/]+=*'", "'sha256'", JSON_BLOCK.sub("", html))
     assert not re.search(r"https?://|//[a-z]", shell, re.I)  # no CDN, fonts, images, fetches
     assert not re.search(r"<(link|img|iframe|object|embed)\b|\bsrc=|@import|url\(", shell, re.I)
     allowed = set(search_links("宋冬野", "斑马，斑马").values()) | {"https://tabs.ultimate-guitar.com/tab/555890"}
@@ -945,3 +958,17 @@ def test_opening_the_picker_takes_the_focus_to_its_first_candidate_and_fits_a_ph
     state = json.loads(html_module.unescape(found.group(1)))
     assert state["open"] and state["inPicker"] and state["focus"] == "pick=radiohead/creep", state
     assert state["width"] <= state["page"], state  # nothing wider than the phone
+
+
+@pytest.mark.skipif(CHROMIUM is None, reason="chromium not found on PATH")
+def test_the_served_card_of_a_song_not_found_links_to_its_search_hits(conn, cfg, tmp_path):
+    from caracole.library_page import WebControls
+
+    lost = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, lost.id, match_decision="not_found")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    card = card_of(listing(dump_dom(write_library_page(cfg.library_dir, html), tmp_path)), "Crep")
+    assert re.search(rf'<a class="btn" href="/review\?song={lost.id}"[^>]*>Look in the index</a>', card)
+    assert "/fetch" in card  # its artist's UG page may have it: Fetch now still asks
+    on_file = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+    assert "/review" not in card_of(on_file, "Crep")

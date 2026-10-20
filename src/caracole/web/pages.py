@@ -81,19 +81,23 @@ REFRESH = 10  # seconds between reloads while a request waits or runs
 
 @dataclass(frozen=True)
 class Pick:
-    """A song in review and its candidates (``library_page.review_choices``), for the picker."""
+    """A song in review and its candidates (``library_page.review_choices``), for the picker; with
+    ``search``, a song not found and what ``caracole search`` finds for it (none yet on the requests
+    page, which links to them)."""
 
     song_id: int
     display: str
     title: str  # as the card shows it (normalize.clean_title)
     artist: str
     choices: Sequence[Mapping[str, Any]] = field(default_factory=tuple)
+    search: bool = False
 
 
 def picker_form(pick: Pick, csrf: str, *, focus: bool = False) -> str:
     """The picker's form, as the library page's script builds it on a card: a radio group of the
-    candidates and "None of these", "Fetch it now" (ticked) and Pick, posted to ``/review``. ``focus``:
-    its first candidate takes the focus when the page opens (a page for this alone)."""
+    candidates and "None of these" (not for search hits: nothing proposed them), "Fetch it now"
+    (ticked) and Pick, posted to ``/review``. ``focus``: its first candidate takes the focus when the
+    page opens (a page for this alone)."""
     rows = []
     for n, c in enumerate(pick.choices):
         why = " · ".join(str(part) for part in (c.get("why"), f"score {c.get('score') or 0}", c.get("tabs")) if part)
@@ -104,8 +108,15 @@ def picker_form(pick: Pick, csrf: str, *, focus: bool = False) -> str:
                 if href.startswith(("https://", "http://")) else "")
         rows.append(_choice(str(c.get("ref")), f"{c.get('n')}. {name}", why, autofocus=focus and n == 0) + page
                     + "</div>")
-    rows.append(_choice("none", "None of these", "caracole drops them for good and goes on looking for the song",
-                        cls="choice none") + "</div>")
+    if pick.search:
+        hint = ("Your pick goes into overrides.toml under [match], as caracole review --song --pick writes it, "
+                "with no [alias]: a hit under another artist's name may be a cover. Fetch it now then asks "
+                "Ultimate Guitar for it.")
+    else:
+        rows.append(_choice("none", "None of these", "caracole drops them for good and goes on looking for the "
+                            "song", cls="choice none") + "</div>")
+        hint = ("Your answer goes into overrides.toml, as caracole review writes it. Fetch it now then asks "
+                "Ultimate Guitar for the song picked; None of these fetches nothing.")
     shown = " ".join(str(c.get("ref")) for c in pick.choices)
     question = f"Which Ultimate Guitar song is “{pick.title}” by {pick.artist}?"
     return (
@@ -116,8 +127,7 @@ def picker_form(pick: Pick, csrf: str, *, focus: bool = False) -> str:
         f'  <fieldset class="choices"><legend>{escape(question)}</legend>\n  ' + "\n  ".join(rows) + "\n  </fieldset>\n"
         '  <div class="pick-row"><label class="pick-check"><input type="checkbox" name="fetch" value="1" checked>'
         'Fetch it now</label><button class="btn primary" type="submit">Pick</button></div>\n'
-        '  <p class="pick-hint">Your answer goes into overrides.toml, as caracole review writes it. Fetch it now '
-        "then asks Ultimate Guitar for the song picked; None of these fetches nothing.</p>\n</form>"
+        f'  <p class="pick-hint">{escape(hint)}</p>\n</form>'
     )
 
 
@@ -131,9 +141,15 @@ def _choice(value: str, name: str, why: str, *, cls: str = "choice", autofocus: 
 
 
 def review_page(pick: Pick, csrf: str) -> str:
-    """A song in review's picker on a page of its own, for the requests page to link to."""
-    lede = (f'<p class="lede">caracole isn\'t sure which Ultimate Guitar song {escape(pick.display)} is. Pick it '
-            "here, as <code>caracole review</code> would ask you.</p>")
+    """A song in review's picker on a page of its own, for the requests page to link to; or a song not
+    found's, with what ``caracole search`` finds for it."""
+    if pick.search:
+        lede = (f'<p class="lede">Nothing in the offline Ultimate Guitar index matched {escape(pick.display)} '
+                "closely enough. These are what <code>caracole search</code> finds for its artist and title: pick "
+                "one only if it is the song, and caracole writes it under <code>[match]</code>.</p>")
+    else:
+        lede = (f'<p class="lede">caracole isn\'t sure which Ultimate Guitar song {escape(pick.display)} is. '
+                "Pick it here, as <code>caracole review</code> would ask you.</p>")
     return page("Pick the match", f'<div class="pick-page">{lede}{picker_form(pick, csrf, focus=True)}</div>')
 
 
@@ -178,10 +194,15 @@ def _waits(jobs: list[Job], picks: Mapping[str, Pick], csrf: str, *, still: bool
         pick = picks.get(job.song_key)
         if job.active or pick is None:
             continue
-        head = (f"<p>caracole isn't sure which Ultimate Guitar song it is: "
-                f"{len(pick.choices)} candidate{'s' if len(pick.choices) != 1 else ''}.</p>")
-        body = (picker_form(pick, csrf) if still else
-                f'<p><a class="btn primary" href="/review?song={pick.song_id}">Pick the match</a></p>')
+        if pick.search:  # a search costs a moment: the picker's page runs it
+            head = "<p>Not in the offline Ultimate Guitar index under this name.</p>"
+            body = (f'<p><a class="btn primary" href="/review?song={pick.song_id}">See what caracole search '
+                    "finds</a></p>")
+        else:
+            head = (f"<p>caracole isn't sure which Ultimate Guitar song it is: "
+                    f"{len(pick.choices)} candidate{'s' if len(pick.choices) != 1 else ''}.</p>")
+            body = (picker_form(pick, csrf) if still else
+                    f'<p><a class="btn primary" href="/review?song={pick.song_id}">Pick the match</a></p>')
         shown[job.id] = f'<div class="waits">{head}{body}</div>'
     return shown
 

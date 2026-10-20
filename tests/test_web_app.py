@@ -467,6 +467,70 @@ def test_a_request_whose_song_was_picked_since_shows_no_picker(app, conn, queue)
     assert "/review" not in text(get(app, "/jobs"))
 
 
+# --- a song not found: caracole search's hits ---------------------------------------------------
+
+
+def not_found(conn):
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(1, 'radiohead', 'creep', 'chords', '1', 'x', 'radiohead/creep-chords-1'), "
+                 "(2, 'radiohead', 'high-and-dry', 'chords', '1', 'x', 'radiohead/high-and-dry-chords-2')")
+    song = add_song(conn, "Radio Head", "Crep")
+    update_song(conn, song.id, match_decision="not_found")
+    return song
+
+
+HITS = "radiohead/creep radiohead/high-and-dry"
+
+
+def test_the_pickers_page_of_a_song_not_found_offers_caracole_searchs_hits(app, conn):
+    crep = not_found(conn)
+    response = get(app, f"/review?song={crep.id}")
+    assert response.status == 200
+    body = shown(response)
+    assert "caracole search" in body and "[match]" in body
+    form = picker_of(text(response))
+    radios = re.findall(r'<input type="radio" name="pick" value="([^"]*)" required', form)
+    assert radios == ["radiohead/creep", "radiohead/high-and-dry"]  # and no "None of these": nothing to reject
+    assert f'name="shown" value="{HITS}"' in form
+    assert "a caracole search hit for its artist and title" in form
+
+
+def test_a_song_not_found_with_no_search_hit_has_nothing_to_pick(app, conn):
+    song = add_song(conn, "Nobody", "Nothing Like It")
+    update_song(conn, song.id, match_decision="not_found")
+    response = get(app, f"/review?song={song.id}")
+    assert response.status == 409 and "caracole search finds nothing" in shown(response)
+
+
+def test_a_pick_of_a_search_hit_queues_caracole_review_then_the_fetch(app, conn, queue):
+    crep = not_found(conn)
+    fields = {"song": str(crep.id), "pick": "radiohead/creep", "shown": HITS, "fetch": "1"}
+    assert post(app, "/review", fields).status == 303
+    assert [s.args for s in queue.snapshot()[0].steps] == [
+        ("review", "--song=Radio Head - Crep", "--pick=radiohead/creep"),
+        ("fetch", "--song=Radio Head - Crep"),
+        ("render",),
+    ]
+
+
+@pytest.mark.parametrize("fields,status", [
+    ({"pick": "none", "shown": HITS}, 400),
+    ({"pick": "radiohead/creep", "shown": "radiohead/creep"}, 409),
+])
+def test_a_song_not_found_takes_a_search_hit_alone(app, conn, queue, fields, status):
+    crep = not_found(conn)
+    assert post(app, "/review", {"song": str(crep.id)} | fields).status == status
+    assert queue.snapshot() == []
+
+
+def test_a_request_that_ends_not_found_links_to_its_search_hits(app, conn, queue):
+    post(app, "/request", {"artist": "Radio Head", "title": "Crep"})
+    crep = not_found(conn)
+    queue.run_pending()
+    job = re.search(r'<article class="job" id="job-1">.*?</article>', text(get(app, "/jobs")), re.S).group(0)
+    assert f'href="/review?song={crep.id}"' in job and 'action="/review"' not in job
+
+
 class CliRunnerJobs:
     """Runs each step as the `caracole` command line, in this process, against ``config``."""
 

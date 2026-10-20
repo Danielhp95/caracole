@@ -247,3 +247,56 @@ def test_each_step_is_said_in_plain_words(cand, words):
     from caracole.review import step_words
 
     assert step_words(cand) == words
+
+
+# --- a song not found: caracole search's hits as its candidates ---------------------------------
+
+
+def index(conn, *rows):
+    conn.executemany(
+        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+        "VALUES (?, ?, ?, ?, '1', 'x', ?)", [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows])
+
+
+def test_a_song_not_found_has_caracole_searchs_hits_for_candidates(conn, cfg):
+    from caracole.review import accept, search_candidates, step_words, writes_alias
+
+    index(conn, (1, "radiohead", "creep", "chords"), (2, "radiohead", "creep", "chords"),
+          (3, "radiohead", "high-and-dry", "chords"), (4, "oasis", "wonderwall", "chords"))
+    s = add_song(conn, "Radio Head", "Creep")
+    update_song(conn, s.id, match_decision="not_found")
+    s = get_song(conn, s.id)
+    found = search_candidates(conn, s)
+    assert [(c["artist_key"], c["song_key"], c["step"]) for c in found][:2] == [
+        ("radiohead", "creep", "search"), ("radiohead", "high-and-dry", "search")]
+    assert all(c["score"] for c in found) and len(found) <= 5
+    assert step_words(found[0]) == "a caracole search hit for its artist and title"
+    # A hit under another artist's name may be a cover as well as a spelling: no [alias].
+    assert not writes_alias(s, found[0])
+    accept(conn, cfg, s, found[0])
+    o = load_overrides(cfg.overrides_file)
+    assert o.match[s.key] == ("radiohead", "creep") and not o.alias
+
+
+def test_only_a_song_not_found_has_search_hits_for_candidates(conn):
+    from caracole.review import search_candidates
+
+    index(conn, (1, "radiohead", "creep", "chords"))
+    for decision in ("review", "accept", None):
+        s = add_song(conn, "Radiohead", f"Creep {decision}")
+        update_song(conn, s.id, match_decision=decision)
+        assert search_candidates(conn, get_song(conn, s.id)) == [], decision
+    ignored = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, ignored.id, match_decision="not_found", status="ignored")
+    assert search_candidates(conn, get_song(conn, ignored.id)) == []
+
+
+def test_the_songs_you_rejected_for_a_song_never_come_back_as_its_search_hits(conn):
+    # "None of these" made it not found: its hits mustn't offer the same songs again.
+    from caracole.review import search_candidates
+
+    index(conn, (1, "radiohead", "creep", "chords"), (3, "radiohead", "high-and-dry", "chords"))
+    s = add_song(conn, "Radio Head", "Creep")
+    update_song(conn, s.id, match_decision="not_found")
+    found = search_candidates(conn, get_song(conn, s.id), rejected={("radiohead", "creep")})
+    assert [c["song_key"] for c in found] == ["high-and-dry"]
