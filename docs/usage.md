@@ -841,7 +841,10 @@ it honours it. It does so on these terms:
   cooldown, 24 hours and doubling, as for any site, with one ntfy message.
   Nothing is retried, and caracole never works around a block: no cookies, no
   login, no proxy, no PO tokens or plugins (yt-dlp gets `--ignore-config`,
-  `--no-cookies`, `--no-cookies-from-browser`, `--no-plugin-dirs`).
+  `--no-cookies`, `--no-cookies-from-browser`, `--no-plugin-dirs`). Nor does
+  yt-dlp get any of caracole's secrets: it runs without the unit's credentials
+  or any `CARACOLE_*` variable, with only the paths, language, proxy and
+  certificate settings it needs.
 - **Audio alone**, as m4a, never a playlist, at most 100 MB, kept outside the
   synced library, in the cache (see [the library folder](#the-library-folder)).
 

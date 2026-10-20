@@ -16,6 +16,8 @@ night, on these terms (youtube_fetch.py runs it, AGENTS.md says why):
   ``--ignore-config``, ``--no-cookies``, ``--no-cookies-from-browser``,
   ``--no-plugin-dirs`` and ``--no-remote-components``, and nothing that logs in. A video
   that needs a login (private, age-restricted, members-only) is ``VideoUnavailable``.
+  Nor any of caracole's secrets: yt-dlp runs in an environment of its own (``ytdlp_env``),
+  without the unit's credentials or caracole's tokens.
 - **Audio alone**: ``-x`` to m4a, never a playlist, at most 100 MB.
 
 yt-dlp runs as a program, its arguments a list and never a shell, and whatever comes from
@@ -39,7 +41,7 @@ import signal
 import subprocess
 import time
 import unicodedata
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -580,8 +582,7 @@ class YtDlp:
             raise BudgetExhausted(PROVIDER)
         self._pause()
         argv = [self.binary, *_BASE_ARGS, "--cache-dir", str(self.cache_dir), *args, "--", target]
-        env = dict(os.environ)
-        env.setdefault("DENO_V8_FLAGS", "--jitless")
+        env = ytdlp_env(os.environ)
         try:
             proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                     env=env, start_new_session=True)
@@ -637,6 +638,27 @@ class YtDlp:
     def _event(self, target: str, status: int | None, decision: str, message: str | None) -> None:
         if self._on_event is not None:
             self._on_event(Event(provider=PROVIDER, url=target, status=status, decision=decision, message=message))
+
+
+# What yt-dlp, and the deno and ffmpeg it starts, are given of caracole's environment: where
+# programs and home are, the language, temporary and cache folders, proxies, certificates, and
+# deno's flags. Nothing else: not the unit's credentials (CREDENTIALS_DIRECTORY) nor caracole's
+# tokens (CARACOLE_*), for these are other people's programs reading YouTube's pages.
+_KEPT_ENV = frozenset({
+    "PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "TZ", "TMPDIR", "TEMP", "TMP", "XDG_CACHE_HOME",
+    "XDG_RUNTIME_DIR", "SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+    "DENO_V8_FLAGS", "DENO_DIR", "DENO_NO_UPDATE_CHECK", "DENO_CERT", "DENO_TLS_CA_STORE",
+})
+_PROXY_ENV = frozenset({"http_proxy", "https_proxy", "all_proxy", "no_proxy"})
+
+
+def ytdlp_env(environ: Mapping[str, str]) -> dict[str, str]:
+    """The environment yt-dlp runs in (``_KEPT_ENV``, ``LC_*`` and the proxy variables), with
+    ``DENO_V8_FLAGS=--jitless`` unless it says otherwise."""
+    env = {k: v for k, v in environ.items()
+           if k in _KEPT_ENV or k.startswith("LC_") or k.lower() in _PROXY_ENV}
+    env.setdefault("DENO_V8_FLAGS", "--jitless")
+    return env
 
 
 def _stop(proc: subprocess.Popen) -> None:
