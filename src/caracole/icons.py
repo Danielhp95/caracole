@@ -108,8 +108,9 @@ SOURCES: Mapping[str, Source] = {
 
 
 # Files caracole makes from another it kept, which come from where that one came from.
-_MADE_FROM = {"sheet.pdf": "sheet.txt", "sheet.cho": "sheet.txt",
-              "sheet (auto).pdf": "sheet (auto).txt", "sheet (auto).cho": "sheet (auto).txt"}
+_MADE_FROM = {"sheet.pdf": "sheet.txt", "sheet.cho": "sheet.txt", "sheet.html": "sheet.txt",
+              "sheet (auto).pdf": "sheet (auto).txt", "sheet (auto).cho": "sheet (auto).txt",
+              "sheet (auto).html": "sheet (auto).txt"}
 _LYRICS_FILES = ("lyrics.txt", "lyrics.lrc")
 SHEETS = ("sheet.txt", "sheet (auto).txt")  # a song's sheet, the human one first
 

@@ -1220,6 +1220,24 @@ def test_each_file_says_where_it_came_from_and_the_song_where_its_sheet_did(conn
     assert songs[wanted.display]["source"] is None
 
 
+def test_a_song_whose_first_link_is_its_viewer_shows_where_its_sheet_came_from(conn, cfg):
+    # The viewer is a song's first link, so the song's mark (on its card and its row) is the
+    # viewer's source: the sheet it was rendered from, never none.
+    ug = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, ug, "Words\n")
+    put(cfg, ug, "sheet.html", "sheet.pdf", "sheet.cho")
+    auto = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, auto, "sheet (auto).txt", "sheet (auto).html", "sheet (auto).pdf")
+
+    songs = songs_of(page(conn, cfg))
+    files = {f["name"]: f.get("source") for f in songs[ug.display]["files"]}
+    assert files["sheet.html"] == "ug"
+    assert next(f for f in songs[ug.display]["files"] if f["primary"])["name"] == "sheet.html"
+    assert songs[ug.display]["source"] == "ug"
+    assert {f["name"]: f["source"] for f in songs[auto.display]["files"]}["sheet (auto).html"] == "auto"
+    assert songs[auto.display]["source"] == "auto"
+
+
 def test_links_to_other_sites_name_them(conn, cfg):
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
