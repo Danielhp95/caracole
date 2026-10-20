@@ -466,6 +466,24 @@ def test_on_a_phone_the_pager_names_fit_cut_short_and_next_has_a_row_after_the_s
     assert not medium["pagers"][1]["next"]["cut"], medium  # whole there
 
 
+EDGES = [LONG[1], LONG[2], LONG[0]]  # "Short", then two long titles: the first song's Next and the last's Previous
+
+
+@in_chromium
+def test_on_a_phone_the_first_songs_next_and_the_last_songs_previous_take_the_empty_side(tmp_path):
+    first = result_of(open_page(page(EDGES), tmp_path, "#song-1", harness=PAGERS, size="390,844"))
+    last = result_of(open_page(page(EDGES), tmp_path, "#song-3", harness=PAGERS, size="390,844"))
+    for seen, there, gone in ((first, "next", "prev"), (last, "prev", "next")):
+        assert seen["page"] <= seen["window"], seen  # no sideways scroll
+        top = seen["pagers"][0]
+        link, toc = top[there], top["toc"]
+        assert top[gone] is None and a_tap(link) and a_tap(toc), top
+        assert inside(link["box"], top["box"]) and inside(toc["box"], top["box"]), top
+        # side by side, the link with the room the song it hasn't would have had: some 25 characters of a title
+        assert (toc["box"][2] <= link["box"][0]) if there == "next" else (link["box"][2] <= toc["box"][0]), top
+        assert link["name"] >= 180 and inside(link["arrow"], link["box"]), top
+
+
 @in_chromium
 def test_on_a_desktop_the_pager_names_show_whole_in_one_row(tmp_path):
     desk = result_of(open_page(page(MEDIUM), tmp_path, "#song-2", harness=PAGERS, size="1280,800"))

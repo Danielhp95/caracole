@@ -51,6 +51,11 @@ html[data-view="song"] .book-head .artist { display: none; }
   .head .pager a[rel="next"] { display: inline-grid; grid-template-columns: minmax(0, 1fr) auto; justify-content: end;
     gap: 0 .3em; align-content: center; padding-block: 2px; line-height: 1.25; }
   .head .pager a[rel="next"] .lead { grid-column: 1 / -1; justify-self: end; color: var(--muted); font-size: .75rem; }
+  /* The first song has no Previous, the last no Next: the other link takes that side's room too. */
+  .head .pager > span.none { display: none; }
+  .head .pager:has(> span.none:first-child) { grid-template-columns: auto minmax(0, 1fr); }
+  .head .pager:has(> span.none:last-child) { grid-template-columns: minmax(0, 1fr) auto; }
+  .head .pager a[href="#contents"] { justify-self: center; }
   /* After it, where the next song is what you want, Next has a row of its own, under Previous and Contents. */
   .sheet + .pager { grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; }
   .sheet + .pager a[href="#contents"] { justify-self: end; }
