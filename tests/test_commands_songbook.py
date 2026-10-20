@@ -230,6 +230,21 @@ def test_a_song_the_songbook_lacks_is_still_found_by_a_search_of_the_library(set
     assert books(setup)[0].songs == ("Radiohead - Karma Police", "Radiohead - Karma Police Live")
 
 
+def test_a_change_whose_files_cant_be_made_exits_1_and_stays_made(setup):
+    (folder(setup, "Trip") / "songbook.pdf").mkdir(parents=True)  # a synced device put a folder in its place
+    made = run(setup, "make", "Trip", "Soda Stereo - De Música Ligera")
+    assert made.exit_code == 1 and isinstance(made.exception, SystemExit), made.output
+    assert "Some of its files couldn't be made" in made.output
+    assert books(setup) == [Songbook("Trip", ("Soda Stereo - De Música Ligera",))]  # songbooks.toml is changed
+    assert (folder(setup, "Trip") / "songbook.html").is_file()
+    for args in (("add", "Trip", "Muse - Hysteria"), ("move", "Trip", "Muse - Hysteria", "1"),
+                 ("remove", "Trip", "Muse - Hysteria")):
+        assert run(setup, *args).exit_code == 1, args
+    assert books(setup)[0].songs == ("Soda Stereo - De Música Ligera",)
+    (folder(setup, "Trip") / "songbook.pdf").rmdir()
+    assert run(setup, "add", "Trip", "Muse - Hysteria").exit_code == 0
+
+
 def test_render_renders_one_or_every_songbook(setup):
     _, cfg, _ = setup
     make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Soda Stereo - De Música Ligera"])

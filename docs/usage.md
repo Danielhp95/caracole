@@ -1295,10 +1295,13 @@ songbook's files stay as they are, and everything else goes on.
 
 A NAME is found in any case. `remove` and `move` take the songbook's own song
 of that artist and title first, and only when it has none, the song a search of
-your library finds ("oasis wonderwal"), as `make` does. Each change writes songbooks.toml, makes the
-songbook's files and rewrites `_todo.md` and `index.html`, holding caracole's
-lock; `list` and `show` only read, and never wait. A songbooks.toml that can't
-be read exits 2.
+your library finds ("oasis wonderwal"), as `make` does. Each change writes
+songbooks.toml, makes the songbook's files and rewrites `_todo.md` and
+`index.html`, holding caracole's lock; `list` and `show` only read, and never
+wait. A change whose files couldn't all be made exits 1, as `render` does,
+after saying `Some of its files couldn't be made`: the change to songbooks.toml
+stays made, and on `caracole serve` its request shows as failed. A
+songbooks.toml that can't be read exits 2.
 
 `index.html` lists the songbooks and makes the commands to change them, and
 `caracole serve` runs them from the page (see

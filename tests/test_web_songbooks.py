@@ -136,6 +136,17 @@ def test_the_select_bar_makes_a_songbook_of_the_songs_in_the_order_picked(app, s
     assert (setup[1].library_dir / "_songbooks" / "Beach nights" / "songbook.html").is_file()
 
 
+def test_a_songbook_whose_files_cant_be_made_is_a_failed_request(app, setup, queue):
+    songs = setup[3]
+    (setup[1].library_dir / "_songbooks" / "Trip" / "songbook.pdf").mkdir(parents=True)
+    assert post(app, "/songbook/make", {"name": "Trip", "songs": str(songs["creep"].id)}).status == 303
+    queue.run_pending()
+    job = queue.snapshot()[0]
+    assert job.state == "failed"  # the requests page says so, not "Done"
+    assert "couldn't be made" in "\n".join(job.steps[0].output)
+    assert books(setup) == [Songbook("Trip", ("Radiohead - Creep",))]
+
+
 def test_a_name_starting_with_a_dash_is_a_name_not_an_option(app, setup, queue):
     songs = setup[3]
     assert post(app, "/songbook/make", {"name": "-Encore", "songs": str(songs["creep"].id)}).status == 303

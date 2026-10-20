@@ -201,7 +201,7 @@ def register(app: typer.Typer) -> None:
         cfg = load_cfg(ctx)
         with exclusive(cfg, "songbook render"), closing(open_db(cfg)) as conn:
             only = _book(_books(cfg), name).name if name is not None else None
-            stats = _render(cfg, conn, only, force=force, quiet=True)
+            stats = _render(cfg, conn, only, force=force, quiet=True, exit_on_failure=False)
         typer.echo(songbooks_line(stats))
         if stats.failed:
             raise typer.Exit(1)
@@ -300,9 +300,11 @@ def _files(cfg: Config, folder: str) -> list[str]:
 
 
 def _render(cfg: Config, conn: sqlite3.Connection, only: str | None, *, force: bool = False,
-            quiet: bool = False) -> SongbookStats:
+            quiet: bool = False, exit_on_failure: bool = True) -> SongbookStats:
     """Make the songbook's files (``only``: that one, else every one; the files of songbooks gone go
-    too), then rewrite the library pages, which list the songbooks."""
+    too), then rewrite the library pages, which list the songbooks. A file that couldn't be made exits
+    1 once the pages are written (``exit_on_failure``), as caracole render does: a change to
+    songbooks.toml stays made, and caracole serve's request shows it failed."""
     from caracole import songbook
 
     overrides = load_ovr(cfg)
@@ -323,4 +325,6 @@ def _render(cfg: Config, conn: sqlite3.Connection, only: str | None, *, force: b
         if stats.failed:
             typer.echo("Some of its files couldn't be made: the warning above says why.")
     write_pages(conn, cfg, overrides, utcnow())
+    if stats.failed and exit_on_failure:
+        raise typer.Exit(1)
     return stats
