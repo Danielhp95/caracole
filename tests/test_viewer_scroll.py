@@ -9,15 +9,15 @@ from __future__ import annotations
 import http.server
 import json
 import re
-import tempfile
 import threading
 import time
-from contextlib import contextmanager
 from html import unescape
 from pathlib import Path
 
 from helpers import browser
+from helpers import viewer_pages as pages
 from helpers.browser import Browser, in_chromium
+from helpers.viewer_pages import key, tap
 
 from caracole.viewer import build_viewer, viewer_csp
 
@@ -79,24 +79,12 @@ WAKE_LOCK = """(() => {
 
 
 def written(tmp_path: Path, cho: str = LONG, name: str = "Title") -> str:
-    page = tmp_path / "Artist" / name / "sheet.html"
-    page.parent.mkdir(parents=True, exist_ok=True)
-    page.write_text(build_viewer(cho), encoding="utf-8")
-    return page.as_uri()
+    return pages.written(tmp_path, cho, name)
 
 
-@contextmanager
-def viewer(tmp_path: Path, url: str | None = None, *, width: int = 390, height: int = 844, mobile: bool = True,
-           reduced: bool = False):
+def viewer(tmp_path: Path, url: str | None = None, **options):
     """The viewer at ``url`` (a long sheet's, by default) in a Chromium of its own, once its script ran."""
-    url = url or written(tmp_path)
-    with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), width=width, height=height,
-                 mobile=mobile) as b:
-        if reduced:
-            b.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-reduced-motion", "value": "reduce"}])
-        b.open(url)
-        assert b.wait("document.documentElement.dataset.ready === '1'")
-        yield b
+    return pages.viewer(tmp_path, url or written(tmp_path), **options)
 
 
 def look(b: Browser) -> dict:
@@ -108,25 +96,6 @@ def start_now(b: Browser) -> None:
     b.click("#scroll")
     b.click("#go")
     assert look(b)["go"] == "Pause"
-
-
-def tap(b: Browser, selector: str) -> None:
-    """A finger on the middle of the first element ``selector`` finds in view (clear of the pill, at
-    the bottom, for the sheet's), without scrolling to it."""
-    clear = 120 if selector.startswith("#sheet") else 0
-    box = b.js(f"""(() => {{
-      const el = [...document.querySelectorAll({json.dumps(selector)})].find((e) => {{
-        const r = e.getBoundingClientRect(); return r.width && r.top >= 0 && r.bottom <= innerHeight - {clear}; }});
-      if (!el) return null;
-      const r = el.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; }})()""")
-    assert box, f"nothing in view is {selector}"
-    b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": box[0], "y": box[1]}])
-    b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
-
-
-def key(b: Browser, name: str, code: int) -> None:
-    for kind in ("keyDown", "keyUp"):
-        b.send("Input.dispatchKeyEvent", type=kind, key=name, code=name, windowsVirtualKeyCode=code)
 
 
 def moved_since(b: Browser, y: int, wait: float = 0.5) -> bool:

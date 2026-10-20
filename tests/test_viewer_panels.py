@@ -11,13 +11,13 @@ real time (helpers/browser.py's ``Browser``).
 from __future__ import annotations
 
 import re
-import tempfile
 import time
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+from helpers import viewer_pages as pages
 from helpers.browser import Browser, in_chromium
+from helpers.viewer_pages import click_at, drag, rest, tab, tap_at
 
 from caracole.viewer import build_viewer
 from caracole.viewer.book import BookSong, build_songbook
@@ -54,21 +54,12 @@ LOOK = """(() => {
 
 
 def written(tmp_path: Path, cho: str = LONG, name: str = "Title") -> str:
-    page = tmp_path / "Artist" / name / "sheet.html"
-    page.parent.mkdir(parents=True, exist_ok=True)
-    page.write_text(build_viewer(cho), encoding="utf-8")
-    return page.as_uri()
+    return pages.written(tmp_path, cho, name)
 
 
-@contextmanager
-def viewer(tmp_path: Path, url: str | None = None, *, width: int = 390, height: int = 844, mobile: bool = True):
+def viewer(tmp_path: Path, url: str | None = None, **options):
     """The viewer at ``url`` (the long sheet's, by default) in a Chromium of its own, once its script ran."""
-    url = url or written(tmp_path)
-    with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), width=width, height=height,
-                 mobile=mobile) as b:
-        b.open(url)
-        assert b.wait("document.documentElement.dataset.ready === '1'")
-        yield b
+    return pages.viewer(tmp_path, url or written(tmp_path), **options)
 
 
 def look(b: Browser) -> dict:
@@ -93,46 +84,6 @@ def chord(b: Browser, name: str, *, below: int = 0, above: int | None = None) ->
     }})()""")
     assert found, f"no {name} in reach"
     return found
-
-
-def tap_at(b: Browser, x: float, y: float) -> None:
-    b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": x, "y": y}])
-    b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
-    time.sleep(0.05)
-
-
-def click_at(b: Browser, x: float, y: float) -> None:
-    for kind in ("mousePressed", "mouseReleased"):
-        b.send("Input.dispatchMouseEvent", type=kind, x=x, y=y, button="left", clickCount=1)
-    time.sleep(0.05)
-
-
-def drag(b: Browser, dy: int, *, start: int) -> None:
-    """A finger drags the page from ``start`` px down the screen by ``dy`` (more than 0: on down the song)."""
-    steps = 12
-    b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": 195, "y": start}])
-    for i in range(1, steps + 1):
-        b.send("Input.dispatchTouchEvent", type="touchMove", touchPoints=[{"x": 195, "y": start - dy * i / steps}])
-        time.sleep(0.016)
-    b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
-
-
-def rest(b: Browser) -> None:
-    """Until the page stops gliding after a drag."""
-    last = None
-    for _ in range(40):
-        y = b.js("scrollY")
-        if y == last:
-            return
-        last = y
-        time.sleep(0.1)
-
-
-def tab(b: Browser, *, back: bool = False) -> None:
-    """Tab, or Shift+Tab, where the focus is."""
-    for kind in ("keyDown", "keyUp"):
-        b.send("Input.dispatchKeyEvent", type=kind, key="Tab", code="Tab", windowsVirtualKeyCode=9,
-               modifiers=8 if back else 0)
 
 
 # --- the page as written ---------------------------------------------------------------------------

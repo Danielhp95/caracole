@@ -9,14 +9,14 @@ Chromium of their own on real time (helpers/browser.py's ``Browser``).
 from __future__ import annotations
 
 import re
-import tempfile
 import time
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 from helpers import browser
+from helpers import viewer_pages as pages
 from helpers.browser import Browser, in_chromium
+from helpers.viewer_pages import drag, key, rest, tap
 
 from caracole.chordpro import to_chordpro
 from caracole.viewer import build_viewer
@@ -50,24 +50,12 @@ BAR = """(() => {
 
 
 def written(tmp_path: Path, cho: str = LONG, name: str = "Title") -> str:
-    page = tmp_path / "Artist" / name / "sheet.html"
-    page.parent.mkdir(parents=True, exist_ok=True)
-    page.write_text(build_viewer(cho), encoding="utf-8")
-    return page.as_uri()
+    return pages.written(tmp_path, cho, name)
 
 
-@contextmanager
-def viewer(tmp_path: Path, url: str | None = None, *, width: int = 390, height: int = 844, mobile: bool = True,
-           reduced: bool = False):
+def viewer(tmp_path: Path, url: str | None = None, **options):
     """The viewer at ``url`` (a long sheet's, by default) in a Chromium of its own, once its script ran."""
-    url = url or written(tmp_path)
-    with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), width=width, height=height,
-                 mobile=mobile) as b:
-        b.send("Emulation.setEmulatedMedia", features=[
-            {"name": "prefers-reduced-motion", "value": "reduce" if reduced else "no-preference"}])
-        b.open(url)
-        assert b.wait("document.documentElement.dataset.ready === '1'")
-        yield b
+    return pages.viewer(tmp_path, url or written(tmp_path), **options)
 
 
 def bar(b: Browser) -> dict:
@@ -77,56 +65,6 @@ def bar(b: Browser) -> dict:
 def settled(b: Browser, where: str) -> bool:
     """Whether the bar comes to be ``where`` ("shown", "away", "hidden") within two seconds."""
     return b.wait(f"({BAR}).where === {where!r}", 2)
-
-
-def drag(b: Browser, dy: int) -> None:
-    """A finger drags the page by ``dy`` pixels (more than 0: on down the song), up to 500, and lets go:
-    it may glide on a little. Touch events, as a finger makes them: ``Input.synthesizeScrollGesture``
-    with a touch scrolls nothing in a headless Chromium."""
-    start, steps = (640 if dy > 0 else 200), 12
-    b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": 195, "y": start}])
-    for i in range(1, steps + 1):
-        b.send("Input.dispatchTouchEvent", type="touchMove", touchPoints=[{"x": 195, "y": start - dy * i / steps}])
-        time.sleep(0.016)
-    b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
-
-
-def rest(b: Browser) -> None:
-    """Until the page stops gliding after a drag: a tap on a page still moving only stops it, with no click."""
-    last = None
-    for _ in range(40):
-        y = b.js("scrollY")
-        if y == last:
-            return
-        last = y
-        time.sleep(0.1)
-
-
-def key(b: Browser, name: str, code: int) -> None:
-    """A key pressed and let go where the focus is (``press`` knows Enter, Escape and Tab alone)."""
-    for kind in ("keyDown", "keyUp"):
-        b.send("Input.dispatchKeyEvent", type=kind, key=name, code=name, windowsVirtualKeyCode=code)
-
-
-def tap(b: Browser, selector: str) -> None:
-    """A finger on the first element ``selector`` finds in view, clear of the bar, with no chord within
-    a finger's reach: Chrome hit-tests a touch over an area, and a word beside a chord's larger target
-    would open the chord's card. On the word's last line of text, as its box reaches up into the row
-    of chords."""
-    box = b.js(f"""(() => {{
-      const at = (r) => [r.x + r.width / 2, r.bottom - Math.min(8, r.height / 2)];
-      const near = [[0, 0], [-12, 0], [12, 0], [0, -12], [0, 12], [-9, -9], [9, -9], [-9, 9], [9, 9]];
-      const el = [...document.querySelectorAll({selector!r})].find((e) => {{
-        const r = e.getBoundingClientRect();
-        if (!r.width || r.top < 0 || r.bottom > innerHeight - 120) return false;
-        const [x, y] = at(r);
-        if (!e.contains(document.elementFromPoint(x, y))) return false;
-        return near.every(([dx, dy]) => {{ const hit = document.elementFromPoint(x + dx, y + dy);
-          return !(hit && hit.closest(".c")); }}); }});
-      return el ? at(el.getBoundingClientRect()) : null; }})()""")
-    assert box, f"nothing in view is {selector}"
-    b.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": box[0], "y": box[1]}])
-    b.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
 
 
 # --- the page as written ---------------------------------------------------------------------------

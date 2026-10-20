@@ -124,7 +124,9 @@ songs.py's, in the `removed` table).
   page's tests, the viewer's scrolling (test_viewer_scroll.py: a page on `dump_dom`'s virtual time
   draws no frames), its bar (test_viewer_bar.py: a finger's drag is touch events, as
   `Input.synthesizeScrollGesture` scrolls nothing headless) and its settings and chord card,
-  docked or beside the song (test_viewer_panels.py). Both
+  docked or beside the song (test_viewer_panels.py), which share helpers/viewer_pages.py: a viewer
+  written and opened in it (`written`, `viewer`), a finger's `drag`, `tap` and `tap_at`, `rest`
+  until the page stops gliding, and keys. Both
   resolve no host name (`helpers.browser.NO_LOOKUPS`), and their tests are `@in_chromium` too.
   fixtures/ holds UG, LaCuerda, LRCLIB,
   gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
