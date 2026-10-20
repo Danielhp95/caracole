@@ -1374,8 +1374,8 @@ as `caracole review` numbers them. Each is the UG song as UG names it
 differently", "title only: another artist's song, probably a cover", "under
 UG's catch-all misc-musicals"), its score, its tabs per type ("Chords ×2 ·
 Tabs ×1") and a link to its page on UG. The file can't write overrides.toml,
-so it ends with the line to run, as `caracole review --song "Radio Head -
-Crep"`; `caracole serve` makes the list a picker (see below). A wanted song
+so it ends with the line to run, as `caracole review --song 'Radio Head -
+Crep'`; `caracole serve` makes the list a picker (see below). A wanted song
 the offline index didn't match says so, with the same line: for it, that
 lists what `caracole search` finds, numbered as `--pick` takes them (see
 [Review](#review)); `caracole serve` links to them instead.
@@ -1393,7 +1393,9 @@ minor"); and you can sort by artist, by title or by when songs were added.
 Sorted by artist or title, a row of letters jumps to the first song under
 each. When nothing in the library matches, the page shows the
 `caracole search` line to run, unless you searched for a key, which the
-offline index doesn't know. `caracole serve` serves the same page with a form
+offline index doesn't know. The page puts each word of a line to run in single
+quotes (`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote
+in it. `caracole serve` serves the same page with a form
 to request songs (see below).
 
 **Songbooks** (see [Songbooks](#songbooks)), above the search box once there is

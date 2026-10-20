@@ -906,7 +906,8 @@ _SCRIPT = r"""
   const EDGES = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
   const term = (word) => word.replace(APOSTROPHES, "").replace(EDGES, "");
   const terms = (folded) => folded.split(/\s+/).map(term).filter(Boolean);
-  const shellQuote = (text) => '"' + text.replace(/(["\\$`])/g, "\\$1") + '"';
+  // Each word in single quotes, each ' written '\'': bash and zsh expand ! even in double quotes.
+  const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
   const hay = songs.map((s) => String(s.search || ""));
 
   const STATUS_TEXT = { found: "Found", wanted: "Wanted", ignored: "Ignored" };
