@@ -1100,8 +1100,15 @@ do:
   - or, when a command failed, its error in one sentence, with a **Details**
     link to what it printed.
 
+  A song asked for again shows on the card it has there already, and a
+  refused request's card goes at the next request. A request still on its
+  way when you reload the page keeps its card. When the server stops
+  answering, the lines say so after a few tries ("caracole serve can't be
+  reached; trying again…"), until it answers again.
+
   Two requests or more also show as one short list in a corner, a line per
-  song, which folds up or closes. A screen reader hears each card's line as
+  song, which folds up or closes; on a phone it starts folded, a single
+  line. A screen reader hears each card's line as
   it changes, to the last one, and Fetch now hands the keyboard focus to that
   line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.

@@ -26,7 +26,7 @@ from caracole import db
 from caracole.library import song_dir
 from caracole.overrides import override_key
 from caracole.songs import find_song, update_song
-from caracole.web.app import WebApp
+from caracole.web.app import Request, Response, WebApp
 from caracole.web.jobs import JobQueue
 from caracole.web.security import allowed_hosts
 from caracole.web.server import make_server
@@ -57,12 +57,15 @@ class Polls:
 
 class FakeCaracole:
     """The job's commands, faked: ``add`` syncs wanted.txt, ``fetch`` keeps a sheet.pdf once the page has
-    seen it run. A song in ``fail`` fails its fetch with that error, as the CLI says one.
+    seen it run. A song in ``fail`` fails its fetch with that error, as the CLI says one. With ``slow_add``,
+    ``add`` too waits for the page to ask twice; the next ``down`` times the page asks, the server answers 503.
     """
 
-    def __init__(self, cfg, *, fail=None):
+    def __init__(self, cfg, *, fail=None, slow_add=False, down=0):
         self.cfg = cfg
         self.fail = fail or {}
+        self.slow_add = slow_add
+        self.down = down
         self.polls = Polls()
 
     def __call__(self, args, emit):
@@ -71,6 +74,8 @@ class FakeCaracole:
         conn = db.connect(self.cfg.db_path)
         try:
             if args[0] == "add":
+                if self.slow_add:
+                    self.polls.wait(2, timeout=30)
                 sync_wanted(conn, self.cfg.wanted_file, datetime.now(UTC))
             elif args[0] == "fetch":
                 display = args[-1].removeprefix("--song=")
@@ -101,10 +106,11 @@ def with_script(page: str, script: str) -> str:
 
 @pytest.fixture
 def serve(cfg, monkeypatch):
-    """``serve(runner, script)``: the server on a free port, its page with ``script``; returns its address."""
+    """``serve(runner, script)``: the server on a free port, its page with ``script``; returns its address.
+    ``before(app)`` runs before the queue starts."""
     started = []
 
-    def start(runner, script):
+    def start(runner, script, *, before=None):
         import caracole.library_page as library_page
 
         real = library_page.build_library_page
@@ -114,12 +120,19 @@ def serve(cfg, monkeypatch):
         answer = app.handle
 
         def handle(request):
-            response = answer(request)
+            if request.target.startswith("/jobs.json") and runner.down > 0:
+                runner.down -= 1
+                response = app.finish(Response(503, json.dumps({"error": "The database can't be read: locked."})
+                                               .encode(), [("Content-Type", "application/json; charset=utf-8")]))
+            else:
+                response = answer(request)
             if request.target.startswith("/jobs.json"):
                 runner.polls.tick()
             return response
 
         app.handle = handle
+        if before is not None:
+            before(app)
         server = make_server(app, "127.0.0.1", 0)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         queue.start()
@@ -299,6 +312,8 @@ def test_several_requests_show_as_one_short_list(serve, cfg, conn, tmp_path):
     assert "3 requests" in tray.group(1) and 'href="jobs"' in tray.group(1)
     # The lines in the list aren't read out a second time: the cards' are.
     assert 'role="status"' not in tray.group(1)
+    # On a desktop the list is open.
+    assert 'aria-expanded="true"' in tray.group(1) and not re.search(r'<ol[^>]*id="tray-list"[^>]*hidden', dom)
 
 
 def test_a_failed_request_says_why_in_one_sentence_with_its_details(serve, cfg, conn, tmp_path):
@@ -336,3 +351,82 @@ def test_the_progress_fits_a_phone(serve, cfg, conn, tmp_path):
 
     assert attribute(dom, "data-wide") <= attribute(dom, "data-page")  # nothing wider than the screen
     assert re.search(r'<aside[^>]*id="tray"(?![^>]*hidden)', dom)
+    # Folded: only its one line shows ("2 requests · all done"), over cards that say the same.
+    assert re.search(r'<button[^>]*id="tray-toggle"[^>]*aria-expanded="false"', dom)
+    assert re.search(r'<ol[^>]*id="tray-list"[^>]*hidden', dom)
+
+
+def test_a_new_songs_request_shows_after_a_reload(serve, cfg, conn, tmp_path):
+    # Asked for before the page loaded, and still on its way: the library has no card for it yet.
+    def request(app):
+        sent = {"host": "127.0.0.1", "content-type": "application/x-www-form-urlencoded",
+                "sec-fetch-site": "same-origin"}
+        body = b"csrf=tok&artist=Radiohead&title=Creep&fetch=1"
+        assert app.handle(Request("POST", "/request", sent, body)).status == 303
+
+    url = serve(FakeCaracole(cfg, slow_add=True), "(() => {\n" + WATCH + "})();\n", before=request)
+
+    dom = dump_dom(url, tmp_path)
+
+    requested = re.search(r'<section[^>]*id="requested"[^>]*>(.*?)</section>', dom, re.S)
+    assert requested and "hidden" not in requested.group(0)[:80], dom[-3000:]
+    shown = card(requested.group(1), "Creep")
+    assert "Radiohead" in shown and "Ready" in shown and ">Sheet PDF</a>" in shown
+    assert "Adding to the library…" in attribute(dom, "data-seen")
+
+
+def test_a_server_that_doesnt_answer_says_so_on_the_card_then_goes_on(serve, cfg, conn, tmp_path):
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    url = serve(FakeCaracole(cfg, down=3), clicks("Creep"))
+
+    dom = dump_dom(url, tmp_path)
+
+    seen = attribute(dom, "data-seen")
+    assert "The database can't be read: locked. Trying again…" in seen, seen
+    line = re.search(r'<p class="progress"[^>]*>.*?</p>', card(dom, "Creep"), re.S).group(0)
+    assert 'data-tone="ready"' in line and "Trying again" not in line
+
+
+ASKS_THREE_TIMES = """
+const form = document.querySelector("form.request-form");
+const ask = (artist, title) => {
+  form.elements.namedItem("artist").value = artist;
+  form.elements.namedItem("title").value = title;
+  form.querySelector('button[type="submit"]').click();
+};
+const once = (test, then) => {
+  const timer = setInterval(() => {
+    if (test()) {
+      clearInterval(timer);
+      then();
+    }
+  }, 50);
+};
+const tones = () => Array.from(document.querySelectorAll("#requested .progress")).map((p) => p.dataset.tone);
+ask("Simon - Garfunkel", "Mrs Robinson");
+once(() => tones().includes("failed"), () => {
+  ask("Simon & Garfunkel", "Mrs Robinson");
+  once(() => tones().includes("ready"), () => {
+    document.body.setAttribute("data-cards", String(document.querySelectorAll("#requested article").length));
+    ask("Simon & Garfunkel", "Mrs Robinson");
+    once(() => document.body.hasAttribute("data-cards") && tones().includes("queued"), () => {
+      document.body.setAttribute("data-again", JSON.stringify(tones()));
+    });
+  });
+});
+"""
+
+
+def test_asking_again_shows_on_the_same_card(serve, cfg, conn, tmp_path):
+    # Refused first ("Simon - Garfunkel" can't be an artist), then asked for right, then asked for again once
+    # done: one card, the song's.
+    url = serve(FakeCaracole(cfg), "(() => {\n" + WATCH + ASKS_THREE_TIMES + "})();\n")
+
+    dom = dump_dom(url, tmp_path)
+
+    requested = re.search(r'<section[^>]*id="requested"[^>]*>(.*?)</section>', dom, re.S).group(1)
+    assert attribute(dom, "data-cards") == 1  # the refused request's card went at the next request
+    assert attribute(dom, "data-again") == ["queued"]  # asked again: the same card says so
+    assert len(re.findall(r"<article", requested)) == 1, requested
+    assert "Simon &amp; Garfunkel" in requested and 'data-tone="ready"' in requested

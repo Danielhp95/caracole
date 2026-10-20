@@ -793,6 +793,8 @@ _SCRIPT = r"""
   const POLL = 1500;
   const BACKGROUND_POLL = 6000;  // a page in a background tab asks less often
   const UNREACHABLE = { line: { tone: "failed", text: "caracole serve can't be reached: is it running?" } };
+  const UNREACHABLE_NOW = "caracole serve can't be reached; trying again…";
+  const MISSES = 3;  // asked in vain this many times in a row, the lines say so
   const views = new Map();  // job id -> what the server last said of it
   const songJob = new Map();  // song id -> the newest job of the song this page shows
   const watched = new Set();  // the jobs this page shows: asked for here, or waiting or running when it loaded
@@ -1242,10 +1244,11 @@ _SCRIPT = r"""
     summarize();
     tallyChips();  // the grid itself stays as it is: a card the filter now hides goes at the next search
   };
+  const songOf = (view) => (view.songId === null || view.songId === undefined ? null : Number(view.songId));
   const apply = (view) => {
     const id = Number(view.id);
     views.set(id, view);
-    const song = view.songId === null || view.songId === undefined ? null : Number(view.songId);
+    const song = songOf(view);
     if (song !== null) {
       if (!songJob.has(song) || songJob.get(song) <= id) songJob.set(song, id);
       if (!isActive(view)) busy.delete(song);
@@ -1254,6 +1257,12 @@ _SCRIPT = r"""
       settled.add(id);
       redraw(view);
     }
+    paint(view);
+  };
+  // The job's line on the cards that show it, and in the list of requests.
+  const paint = (view) => {
+    const id = Number(view.id);
+    const song = songOf(view);
     const i = song !== null && songJob.get(song) === id ? byIndex.get(song) : undefined;
     for (const card of [i === undefined ? null : cards.get(i), spots.get(id)]) {
       if (!card) continue;
@@ -1307,7 +1316,11 @@ _SCRIPT = r"""
           stop(failure(answer).line.text);
           return;
         }
-        if (!answer.ok || !answer.body) throw new Error(String(answer.status));
+        if (!answer.ok || !answer.body) {
+          const e = new Error(String(answer.status));
+          e.said = answer.body && typeof answer.body.error === "string" ? answer.body.error : "";
+          throw e;
+        }
         misses = 0;
         requestsCount(Number(answer.body.active) || 0);
         const seen = new Set();
@@ -1319,9 +1332,14 @@ _SCRIPT = r"""
         for (const id of ask) if (!seen.has(id)) settled.add(id);  // forgotten: the server keeps the last few
         schedule();
       })
-      .catch(() => {
-        // The server is restarting, or the network is down: ask again, less and less often.
+      .catch((e) => {
+        // The server is restarting, or the network is down: ask again, less and less often. From the third
+        // miss in a row the lines say so, until an answer gives them back.
         misses += 1;
+        if (misses >= MISSES) {
+          const text = e && e.said ? String(e.said) + " Trying again…" : UNREACHABLE_NOW;
+          for (const id of pending()) paint(Object.assign({}, views.get(id), { line: { tone: "waiting", text } }));
+        }
         schedule(Math.min(POLL * 2 ** misses, 30000));
       });
   };
@@ -1333,9 +1351,34 @@ _SCRIPT = r"""
   };
 
   if (server) {
+    const requested = byId("requested");
+    const requestedGrid = byId("requested-grid");
+    const placeholder = (artist, title) => {
+      const card = el("article", "card pending");
+      const head = el("div", "head");
+      const mono = el("span", "mono", (artist.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase());
+      mono.setAttribute("aria-hidden", "true");
+      head.appendChild(mono);
+      const names = el("div", "names");
+      names.appendChild(el("h2", null, title));
+      names.appendChild(el("p", "by", artist));
+      head.appendChild(names);
+      card.appendChild(head);
+      showLine(progressIn(card), { line: { tone: "queued", text: "Sending…" } });
+      return card;
+    };
     for (const view of listOf(server.jobs)) {
       if (!view || typeof view !== "object") continue;
       watched.add(Number(view.id));
+      const song = songOf(view);
+      if (requestedGrid && isActive(view) && (song === null || !byIndex.has(song))) {
+        // A song new to the library, on its way since before this page loaded: its card under the form.
+        const [artist, ...title] = String(view.display || "").split(" - ");
+        const spot = title.length ? placeholder(artist, title.join(" - ")) : placeholder("", artist);
+        requestedGrid.appendChild(spot);  // newest first, as they come
+        requested.hidden = false;
+        spots.set(Number(view.id), spot);
+      }
       apply(view);
     }
     document.addEventListener("visibilitychange", () => {
@@ -1346,6 +1389,10 @@ _SCRIPT = r"""
       }
     });
     if (tray) {
+      if (!window.matchMedia("(min-width: 720px)").matches) {  // on a phone the cards say it: folded
+        trayToggle.setAttribute("aria-expanded", "false");
+        trayList.hidden = true;
+      }
       trayToggle.addEventListener("click", () => {
         const open = trayToggle.getAttribute("aria-expanded") !== "true";
         trayToggle.setAttribute("aria-expanded", String(open));
@@ -1365,25 +1412,24 @@ _SCRIPT = r"""
     }
     // The request form: a card for the song at once, above the grid, which says how its request goes.
     const requestForm = document.querySelector("form.request-form");
-    const requested = byId("requested");
-    const requestedGrid = byId("requested-grid");
-    const placeholder = (artist, title) => {
-      const card = el("article", "card pending");
-      const head = el("div", "head");
-      const mono = el("span", "mono", (artist.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase());
-      mono.setAttribute("aria-hidden", "true");
-      head.appendChild(mono);
-      const names = el("div", "names");
-      names.appendChild(el("h2", null, title));
-      names.appendChild(el("p", "by", artist));
-      head.appendChild(names);
-      card.appendChild(head);
-      showLine(progressIn(card), { line: { tone: "queued", text: "Sending…" } });
-      return card;
+    const refused = new Set();  // the cards of requests the server refused, gone at the next one
+    // The card #requested shows already for the job's song (or, before the song is in the library, for the
+    // same "Artist - Title"), if any: asked for again, it is the one that says how this request goes.
+    const spotOf = (view) => {
+      const song = songOf(view);
+      for (const [id, card] of spots) {
+        const was = views.get(id);
+        if (!was || !card.isConnected || !requestedGrid.contains(card)) continue;
+        const same = song !== null && songOf(was) !== null ? songOf(was) === song : was.display === view.display;
+        if (same) return [id, card];
+      }
+      return null;
     };
     if (requestForm && requested) {
       requestForm.addEventListener("submit", (e) => {
         e.preventDefault();
+        for (const card of refused) card.remove();
+        refused.clear();
         const field = (name) => requestForm.elements.namedItem(name);
         const typed = (name) => String(field(name).value || "").trim().replace(/\s+/g, " ");
         let spot = placeholder(typed("artist"), typed("title"));
@@ -1396,23 +1442,26 @@ _SCRIPT = r"""
           const view = answer.ok && answer.body && answer.body.job;
           if (!view) {
             showLine(progressIn(spot), failure(answer));
+            refused.add(spot);
             return;
           }
           for (const name of ["artist", "title", "album", "duration"]) field(name).value = "";
           const id = Number(view.id);
-          if (spots.has(id)) {  // asked for again: its card, at the top
+          const shown = spots.has(id) ? [id, spots.get(id)] : spotOf(view);
+          if (shown) {  // asked for again: its card says how it goes, where it is, its line still in the page
             spot.remove();
-            spot = spots.get(id);
-            requestedGrid.prepend(spot);
+            spot = shown[1];
+            if (shown[0] !== id) spots.delete(shown[0]);
           } else {
-            const i = view.songId === null || view.songId === undefined ? undefined : byIndex.get(Number(view.songId));
+            const i = songOf(view) === null ? undefined : byIndex.get(songOf(view));
             if (i !== undefined) spot = refill(spot, makeCard(songs[i]));  // a song the library has: its card
-            spots.set(id, spot);
           }
+          spots.set(id, spot);
           track(view);
         }, () => {
           button.disabled = false;
           showLine(progressIn(spot), UNREACHABLE);
+          refused.add(spot);
         });
       });
     }
