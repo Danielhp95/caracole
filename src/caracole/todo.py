@@ -32,7 +32,7 @@ from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, VIDEO_SHAPE, Overrides
 from caracole.songs import Song, list_removed, list_songs
-from caracole.ug.fetch import artist_is_known, needs_artist_page, pasted_page_problem, songs_to_fetch
+from caracole.ug.fetch import artist_is_known, fetch_due, needs_artist_page, pasted_page_problem
 from caracole.ug.index import index_state
 from caracole.ug.lookup import song_tabs
 from caracole.youtube import Video
@@ -153,7 +153,7 @@ def _leads_elsewhere(song: Song) -> bool:
     return any(c.get("step") in _LEADS_ELSEWHERE for c in song.match_candidates or [])
 
 
-def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due: set[int]) -> str | None:
+def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime) -> str | None:
     """What to do when no candidate is right, for a review whose candidates all come from steps that
     never accept: other artists' songs of the title (probably covers), and names that aren't quite
     UG's. The index has nothing surer of the song's own artist, and its UG page may (A6)."""
@@ -172,7 +172,7 @@ def _covers_note(conn: sqlite3.Connection, song: Song, overrides: Overrides, due
         return (f"{head}. If none is the song you want{spelt}, UG {lists} {artist} only by bare ids: find the "
                 "artist's page, or one of their tab pages (see Artists to find below), and paste its address "
                 "under `[artist_url]`, and caracole looks for the song there.")
-    if song.id in due:
+    if fetch_due(conn, song, overrides, now):
         return (f"{head}. caracole looks for it on {artist}'s UG page in the next run: wait for that before "
                 "you pick one.")
     return (f"{head}. caracole didn't find it on {artist}'s UG page either. Pick one only if it is the "
@@ -221,13 +221,13 @@ def _alias_line(artist: str, akey: str, overrides: Overrides) -> list[str]:
     return [f"{_toml_str(artist)} = [{listed}]  # in place of the artist's line under [alias]"]
 
 
-def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, due: set[int]) -> list[str]:
+def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, now: datetime) -> list[str]:
     items: list[str] = []
     for s in songs:
         if not s.review or s.status == "ignored":
             continue
         items += [f"### {md(s.display)}", ""]
-        note = _covers_note(conn, s, overrides, due)
+        note = _covers_note(conn, s, overrides, now)
         if note:
             items += [note, ""]
         refs: list[str] = []
@@ -342,7 +342,6 @@ def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrid
     and, for a song not found, the index is complete. Songs not matched yet,
     reviews and songs whose audio you have are neither.
     """
-    due = {s.id for s in songs_to_fetch(conn, overrides, now)}
     partial = index_state(conn) == "partial"
     buy, waiting = [], 0
     for s in songs:
@@ -351,7 +350,7 @@ def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrid
         if s.match_decision not in ("accept", "pinned", "not_found"):
             continue
         unfetched = s.match_decision != "not_found" and not s.ug_checked_at
-        if s.id in due or unfetched or _lacuerda_due(s):
+        if unfetched or fetch_due(conn, s, overrides, now) or _lacuerda_due(s):
             waiting += 1
         elif not (partial and s.match_decision == "not_found"):  # see _setup
             buy.append(s)
@@ -834,7 +833,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     if setup:
         out += _section("Setup problems", setup)
 
-    review = _review(conn, songs, overrides, {s.id for s in songs_to_fetch(conn, overrides, now)})
+    review = _review(conn, songs, overrides, now)
     if review:
         # The count is of songs, not lines, so the header is built here rather than by _section.
         out += [f"## Review ({sum(1 for s in songs if s.review and s.status != 'ignored')})", "",

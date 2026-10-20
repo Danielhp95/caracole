@@ -7,8 +7,8 @@ from caracole.health import record_block
 from caracole.library import keep_file
 from caracole.normalize import slug_key
 from caracole.overrides import Overrides, load_overrides
-from caracole.songs import update_song
-from caracole.todo import build_todo, md, search_links, write_todo
+from caracole.songs import get_song, list_songs, update_song
+from caracole.todo import build_todo, md, search_links, songs_to_buy, write_todo
 from caracole.versions import set_coverage, set_picks, upsert_version
 
 from conftest import add_song
@@ -419,6 +419,50 @@ def test_buy_list_waits_for_pending_fetches(conn, cfg):
     text = todo(conn, cfg)
     assert "## Buy list" not in text
     assert "1 song waiting for the nightly fetch" in text
+
+
+def test_one_songs_buy_verdict_is_the_one_the_whole_library_gives_it(conn):
+    # A card of caracole serve's asks songs_to_buy about its one song: the answer is the to-do page's.
+    o = Overrides(artist_url={"宋冬野": "https://www.ultimate-guitar.com/artist/song_dongye_1234567"})
+    fetched = add_song(conn, "Radiohead", "Creep")  # fetched, nothing more to do: for buying
+    update_song(conn, fetched.id, match_decision="accept", ug_checked_at="2026-10-18T03:35:00Z", ug_dirty=False)
+    dirty = add_song(conn, "Blur", "Song 2")  # fetched, and new tabs since: waiting
+    update_song(conn, dirty.id, match_decision="accept", ug_checked_at="2026-10-18T03:35:00Z", ug_dirty=True)
+    unfetched = add_song(conn, "Oasis", "Wonderwall")  # accepted, never fetched: waiting
+    update_song(conn, unfetched.id, match_decision="accept")
+    page_due = add_song(conn, "宋冬野", "斑马斑马")  # its artist page pasted and not read for it yet: waiting
+    update_song(conn, page_due.id, match_decision="not_found")
+    missing = add_song(conn, "Pulp", "Common People")  # UG has none: for buying
+    update_song(conn, missing.id, match_decision="not_found")
+    spanish = add_song(conn, "Joaquín Sabina", "Y Nos Dieron las Diez")  # LaCuerda still to be asked: waiting
+    update_song(conn, spanish.id, match_decision="not_found")
+    review = add_song(conn, "Soda", "Persiana Americana")  # neither
+    update_song(conn, review.id, review=True, match_decision="review")
+    found = add_song(conn, "Pixies", "Where Is My Mind")  # neither
+    update_song(conn, found.id, status="found", match_decision="accept")
+    for_buying, waits = {fetched.id, missing.id}, {dirty.id, unfetched.id, page_due.id, spanish.id}
+    songs = list_songs(conn)
+    buy, waiting = songs_to_buy(conn, songs, o, NOW)
+    assert {s.id for s in buy} == for_buying and waiting == len(waits)
+    for s in songs:
+        buy, waiting = songs_to_buy(conn, [s], o, NOW)
+        assert ([b.id for b in buy], waiting) == ([s.id] if s.id in for_buying else [], int(s.id in waits)), s.display
+
+
+def test_one_songs_buy_verdict_lists_no_other_song(conn, monkeypatch):
+    # Nor does it list (or re-key) the whole library to give it, in caracole serve's process.
+    import caracole.songs
+
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, match_decision="accept", ug_checked_at="2026-10-18T03:35:00Z", ug_dirty=False)
+    song = get_song(conn, s.id)
+
+    def listed(conn):
+        raise AssertionError("the whole library was listed")
+
+    monkeypatch.setattr(caracole.songs, "ensure_current_keys", listed)
+    buy, waiting = songs_to_buy(conn, [song], Overrides(), NOW)
+    assert [b.id for b in buy] == [song.id] and waiting == 0
 
 
 def test_guitar_pro_pages_to_click(conn, cfg):
