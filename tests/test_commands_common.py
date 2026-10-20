@@ -324,15 +324,15 @@ def test_a_new_client_pauses_after_another_process_s_last_request(cfg, conn, pau
     # UG's policy: 10-20 s between requests, whichever process sends them.
     log_request(conn, "ug", ago=3)
     make_client(cfg, conn, "ug", "run").close()
-    [pause] = pauses
+    pause = sum(pauses)  # slept in slices, each a chance to hand the lock to a lookup
     assert 10 - 4 <= pause <= 20 - 3
+    assert max(pauses) <= _common.HANDOFF_SLICE
 
 
 def test_a_request_logged_in_the_future_costs_one_pause_at_most(cfg, conn, pauses):
     log_request(conn, "ug", ago=-3600)  # the clock was set back since
     make_client(cfg, conn, "ug", "run").close()
-    [pause] = pauses
-    assert pause <= 20
+    assert sum(pauses) <= 20
 
 
 @pytest.mark.parametrize(
@@ -346,3 +346,235 @@ def test_no_pause_without_a_recent_request_to_the_provider(
     log_request(conn, provider, ago=ago, decision=decision)
     make_client(cfg, conn, "ug", "run").close()
     assert pauses == []
+
+
+# --- two paces: bulk work, and one song looked up now ------------------------------------------------
+
+
+class Site:
+    """A site answering every request with 200, recording each."""
+
+    def __init__(self):
+        self.requests: list[str] = []
+
+    def transport(self, provider: str):
+        import httpx
+
+        def answer(request):
+            self.requests.append(str(request.url))
+            return httpx.Response(200, text="ok")
+
+        return httpx.MockTransport(answer)
+
+
+@pytest.fixture
+def site(monkeypatch) -> Site:
+    s = Site()
+    monkeypatch.setattr(_common, "transport_for", s.transport)
+    return s
+
+
+def log_lookup_request(conn, provider: str, ago: float) -> None:
+    at = (datetime.now(UTC) - timedelta(seconds=ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+        ("lookup:2026-10-19T12:00:00Z", at, provider, "https://tabs.ultimate-guitar.com/tab/1", 200, "ok"),
+    )
+
+
+def test_an_interactive_client_keeps_the_lookup_pace(cfg, conn, site):
+    now = _common.utcnow()
+    client = make_client(cfg, conn, "ug", _common.lookup_run_id(now), interactive=True)
+    try:
+        ug = cfg.provider("ug")
+        assert client.policy.delay == ug.lookup_delay == (0.5, 1.5)
+        assert client.policy.budget == ug.lookup_requests == 6
+    finally:
+        client.close()
+    assert _common.lookup_run_id(now).startswith(_common.LOOKUP_RUN)
+
+
+def test_a_lookup_sends_at_most_a_few_requests_to_a_site(cfg, conn, site, monkeypatch):
+    from caracole.http import BudgetExhausted
+
+    client = make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True,
+                         policy=None)
+    client._sleep = lambda seconds: None  # the gap itself is another test's
+    try:
+        for n in range(6):
+            client.get(f"https://tabs.ultimate-guitar.com/tab/{n}")
+        with pytest.raises(BudgetExhausted):
+            client.get("https://tabs.ultimate-guitar.com/tab/99")
+    finally:
+        client.close()
+    assert len(site.requests) == 6
+    runs = {r[0] for r in conn.execute("SELECT run FROM events WHERE provider = 'ug'")}
+    assert all(run.startswith(_common.LOOKUP_RUN) for run in runs)  # the hourly budget counts them
+
+
+def test_lookups_share_a_budget_per_site_per_hour(cfg, conn, site):
+    for ago in range(58):
+        log_lookup_request(conn, "ug", ago=60 + ago)
+    log_lookup_request(conn, "ug", ago=3700)  # more than an hour ago
+    log_lookup_request(conn, "lrclib", ago=10)  # another site
+    log_request(conn, "ug", ago=4000)  # the nightly run's: bulk work has its own budget
+    client = make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
+    try:
+        assert client.policy.budget == 2  # 60 an hour, 58 spent
+    finally:
+        client.close()
+    spent = make_client(cfg, conn, "lrclib", _common.lookup_run_id(_common.utcnow()), interactive=True)
+    try:
+        assert spent.policy.budget == 6
+    finally:
+        spent.close()
+
+
+def test_a_lookups_first_request_waits_only_the_short_gap_after_the_last_one(cfg, conn, site, pauses):
+    bulk = make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
+    bulk.get("https://tabs.ultimate-guitar.com/tab/1")
+    bulk.close()
+    client = make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
+    client.close()
+    # UG's bulk pause is 10-20 s; a lookup's gap is 0.5-1.5 s, counted to the fraction of a second.
+    assert 0.3 <= sum(pauses) <= 1.5
+
+
+def test_bulk_work_after_a_lookup_keeps_the_long_pause(cfg, conn, site, pauses):
+    lookup = make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
+    lookup._sleep = lambda seconds: None
+    lookup.get("https://tabs.ultimate-guitar.com/tab/1")
+    lookup.close()
+    make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z").close()
+    assert 9.5 <= sum(pauses) <= 20
+
+
+def test_a_waiting_lookup_says_whom_it_waits_for_and_is_announced(cfg, capsys):
+    took = threading.Event()
+
+    def lookup():
+        with exclusive(cfg, "get Oasis - Wonderwall", interactive=True):
+            took.set()
+
+    with another_caracole(cfg):
+        thread = threading.Thread(target=lookup)
+        thread.start()
+        assert not took.wait(0.5)
+        assert _common.lookups_waiting(cfg)  # what the nightly run checks in its pauses
+    assert took.wait(5)
+    thread.join(5)
+    assert not _common.lookups_waiting(cfg)  # it took the lock: its announcement went
+    assert ("Another caracole is running (pid 4242: run); it lets a lookup go first at its next pause, "
+            "or between two songs.") in capsys.readouterr().err
+
+
+def test_an_announcement_a_dead_lookup_left_is_not_waited_for(cfg):
+    waiting = cfg.state_dir / _common.WAITING_DIR
+    waiting.mkdir(parents=True)
+    (waiting / "999999999.1").write_text("get A - B\n", encoding="utf-8")  # no such process
+    assert not _common.lookups_waiting(cfg)
+    assert not any(waiting.iterdir())
+
+
+def test_a_ticket_no_waiting_lookup_keeps_alive_is_given_up_after_one_try(cfg, conn, monkeypatch):
+    # A lookup killed while it waited leaves its ticket, and its pid may be another process's by now.
+    import time
+
+    monkeypatch.setattr(_common, "TICKET_STALE", 0.4)
+    waiting = cfg.state_dir / _common.WAITING_DIR
+    waiting.mkdir(parents=True)
+    (waiting / f"{os.getpid()}.7").write_text("get A - B\n", encoding="utf-8")  # a live pid; nothing waits
+    with exclusive(cfg, "run"):
+        began = time.monotonic()
+        assert _common.hand_over(cfg, conn)  # once: the lock is let go, and nobody takes it
+        assert time.monotonic() - began < 3  # not the whole HANDOFF_TAKE
+        assert not _common.hand_over(cfg, conn)  # then it is no longer waited for
+    assert not _common.lookups_waiting(cfg)
+
+
+def test_a_lookup_waiting_long_keeps_its_ticket_alive(cfg, monkeypatch):
+    import time
+
+    monkeypatch.setattr(_common, "TICKET_STALE", 0.4)
+    monkeypatch.setattr(_common, "TICKET_BEAT", 0.1)
+    took = threading.Event()
+
+    def lookup():
+        with exclusive(cfg, "get Oasis - Wonderwall", interactive=True):
+            took.set()
+
+    with another_caracole(cfg):
+        thread = threading.Thread(target=lookup)
+        thread.start()
+        time.sleep(1.2)  # three times TICKET_STALE
+        assert not took.is_set() and _common.lookups_waiting(cfg)
+    assert took.wait(5)
+    thread.join(5)
+
+
+def test_nothing_is_handed_over_when_no_lookup_waits_or_mid_transaction(cfg, conn):
+    with exclusive(cfg, "run"):
+        assert not _common.hand_over(cfg, conn)
+        waiting = cfg.state_dir / _common.WAITING_DIR
+        waiting.mkdir(parents=True, exist_ok=True)
+        (waiting / f"{os.getpid()}.1").write_text("get A - B\n", encoding="utf-8")
+        conn.execute("BEGIN")
+        try:
+            assert not _common.hand_over(cfg, conn)  # a lookup can't write while this transaction is open
+        finally:
+            conn.execute("ROLLBACK")
+    assert _common.hand_over(cfg, conn) is False  # nothing held, nothing to give
+
+
+HOLDER = r"""
+import sys, time
+from pathlib import Path
+import httpx
+from caracole.commands import _common
+from caracole.config import load_config
+from caracole import db
+
+cfg = load_config(Path(sys.argv[1]))
+out = open(sys.argv[2], "w", buffering=1)
+_common.transport_for = lambda provider: httpx.MockTransport(lambda r: httpx.Response(200, text="ok"))
+conn = db.connect(cfg.db_path)
+with _common.exclusive(cfg, "run"):
+    client = _common.make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
+    client.get("https://tabs.ultimate-guitar.com/tab/1")
+    out.write(f"first {time.time()}\n")
+    client.get("https://tabs.ultimate-guitar.com/tab/2")  # after a 4 s pause, handed over meanwhile
+    out.write(f"second {time.time()} {client.handoffs}\n")
+    client.close()
+"""
+
+
+def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, cfg):
+    import subprocess
+    import sys
+    import time
+
+    from conftest import subprocess_pythonpath
+
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
+                      f'library_dir = "{cfg.library_dir}"\n[providers.ug]\ndelay = [4, 4]\n', encoding="utf-8")
+    log = tmp_path / "holder.log"
+    env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(Path(__file__).parents[1] / "src")}
+    holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(config), str(log)], env=env)
+    try:
+        deadline = time.time() + 20
+        while "first" not in (log.read_text() if log.exists() else "") and time.time() < deadline:
+            time.sleep(0.05)
+        asked = time.time()
+        with exclusive(cfg, "get Oasis - Wonderwall", interactive=True):
+            took = time.time()
+            time.sleep(0.5)
+        released = time.time()
+        assert holder.wait(30) == 0
+    finally:
+        holder.kill()
+    first, second = log.read_text().splitlines()
+    assert took - asked < 1.5  # not the 4 s the run had left to pause, let alone its whole run
+    _, sent, handoffs = second.split()
+    assert float(sent) >= released + 3.5  # the run waited a whole pause again after the lookup
+    assert int(handoffs) == 1

@@ -794,7 +794,8 @@ def _transaction(conn: sqlite3.Connection) -> Iterator[None]:
 
 
 def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolicy, *,
-              dry_run: bool = False, song_ids: Collection[int] | None = None) -> list[MatchChange]:
+              dry_run: bool = False, song_ids: Collection[int] | None = None,
+              songs: Iterable[Song] | None = None) -> list[MatchChange]:
     """Match every song, newest first, and store the results (unless ``dry_run``). With
     ``song_ids``, only those songs: ``caracole add`` matches the song it adds.
 
@@ -812,12 +813,13 @@ def match_all(conn: sqlite3.Connection, overrides: Overrides, policy: MatchPolic
     partial (``index_state``) so does any song the ladder matched before, and a
     miss is never saved: a song never matched stays unmatched (only an override
     you took out comes off). Returns one change per song; a kept song's ``new``
-    is its stored match (not found, for one never matched).
+    is its stored match (not found, for one never matched). ``songs``: these
+    alone, as a lookup (``caracole get``) matches its one song.
     """
     index = IndexView(conn)
     complete = index_state(conn) == "complete"
     changes, kept = [], set()
-    for song in list_songs(conn):
+    for song in list_songs(conn) if songs is None else songs:
         if song_ids is not None and song.id not in song_ids:
             continue
         new = match_song(song, index, overrides, policy)

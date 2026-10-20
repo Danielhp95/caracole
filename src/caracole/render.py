@@ -119,8 +119,8 @@ from caracole.library import (
 )
 from caracole.keys import sheet_keys
 from caracole.normalize import clean_title
-from caracole.overrides import Overrides
-from caracole.songs import Song, list_songs
+from caracole.overrides import Overrides, OverridesError, load_overrides
+from caracole.songs import Song, get_song, list_songs
 from caracole.ug.page import json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
@@ -375,6 +375,7 @@ def render_all(
     runner: Runner = subprocess.run,
     force: bool = False,
     now: datetime | None = None,
+    between: Callable[[], bool] | None = None,
 ) -> RenderStats:
     """Write every kept sheet as ChordPro and render it to a PDF in the song's key.
 
@@ -384,12 +385,30 @@ def render_all(
     ``{"at", "rendered", "failed": [display keys], "font_error"}``, stamped with
     ``now`` (by default the current time). ``force`` renders every PDF again,
     up to date or not; ``runner`` runs chordpro (tests pass a fake).
+
+    ``between`` is called between two songs, in no transaction: bulk work hands
+    caracole's lock to a waiting lookup there (``_common.hand_over``), as a pass
+    that renders many PDFs takes minutes. When it says it did, overrides.toml
+    and each song after are read again, since the lookup may have changed them.
     """
     stats = RenderStats()
     failed: list[str] = []
     no_font: list[str] = []
     font, font_problem = _cjk_font(cfg.cjk_font)
-    for song in list_songs(conn):
+    handed = False
+    for n, listed in enumerate(list_songs(conn)):
+        if n and between is not None and between():
+            handed = True
+            try:
+                overrides = load_overrides(cfg.overrides_file)
+            except OverridesError as e:
+                log.info("overrides.toml couldn't be read again (%s); the render goes on with what it read.", e)
+        song = listed
+        if handed:
+            try:
+                song = get_song(conn, listed.id)
+            except KeyError:  # merged into another song meanwhile
+                continue
         if song.status == "ignored" or song.key in overrides.ignore:
             continue
         try:

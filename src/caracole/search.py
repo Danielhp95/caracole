@@ -6,8 +6,9 @@
   scored against its artists and its title.
 - **The UG index** (``search_index``): the ``ug_index`` table built from UG's
   sitemaps, about 1.6 million rows. A SQL ``LIKE`` prefilter keeps the
-  candidates to a few thousand, and rapidfuzz ranks them. One pattern costs
-  about 0.1 s per column over 1.6M rows, so the prefilter uses at most two:
+  candidates to a few thousand, and rapidfuzz ranks them. It reads the
+  trigram index of the keys (ug/key_search.py), not the rows; the prefilter
+  uses at most two patterns:
   the query's two longest words (a typo in one of them still finds the song),
   or, for names made of initials, the hyphenated and the compact key
   (UG writes R.E.M. as ``r-e-m`` but AC/DC as ``acdc``). Variant slugs such as
@@ -45,6 +46,7 @@ from caracole.match import SHOW_WORDS, is_catch_all
 from caracole.normalize import clean_title, fold, has_han, name_forms, romanize, split_variant
 from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
 from caracole.songs import Song, list_songs
+from caracole.ug.key_search import rows_like
 from caracole.ug.lookup import IndexTab, song_tabs
 
 MIN_SCORE = 70  # below this a hit is noise
@@ -136,13 +138,8 @@ def search_index(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[
     if not patterns:
         return []
     queries = [_Query(form) for form in _forms(query)]
-    where = " OR ".join(
-        f"artist_key LIKE ?{i} OR song_key LIKE ?{i}" for i in range(1, len(patterns) + 1)
-    )
-    rows = conn.execute(
-        f"SELECT artist_key, song_key, COUNT(*) FROM ug_index WHERE {where} GROUP BY artist_key, song_key",
-        patterns,
-    )
+    # Every row whose artist or song key matches a pattern, read from the keys' trigram index.
+    rows = rows_like(conn, patterns)
     groups: dict[tuple[str, str], int] = {}
     for artist_key, song_key, n in rows:
         key = (artist_key, split_variant(song_key)[0])

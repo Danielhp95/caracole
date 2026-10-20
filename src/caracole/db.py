@@ -8,6 +8,8 @@ Tables (plan §5, plus ``kv``):
 - ``musescore_index``: the song pages MuseScore's sitemaps list, by title (schema 3).
 - ``removed``: the songs ``caracole remove`` took out, which no source brings back
   until you ask for them again (schema 4).
+- ``ug_keys`` and ``ug_keys_fts``: every key of ``ug_index``, with a trigram index for
+  substring search (schema 5, ug/key_search.py).
 - ``versions``: every sheet, tab or Guitar Pro version seen for a song.
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
@@ -22,7 +24,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -168,9 +170,39 @@ CREATE TABLE IF NOT EXISTS removed (
 );
 """
 
+# Search as you type (caracole serve's lookup, caracole search): a trigram index over the
+# distinct keys of ug_index, artist and song keys alike, so that a LIKE '%…%' pattern of three
+# letters or more reads the index instead of 1.6 million rows twice (ug/key_search.py). The
+# keys follow every row inserted or re-keyed; a key no row has any longer stays, matching
+# nothing. detail=none: LIKE needs no positions, and the index is a third the size. The
+# triggers test for the key first: an upsert's conflict handling would override OR IGNORE.
+_SCHEMA_V5 = """
+CREATE TABLE IF NOT EXISTS ug_keys (
+  id INTEGER PRIMARY KEY,
+  key TEXT NOT NULL UNIQUE
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS ug_keys_fts USING fts5(
+  key, content='ug_keys', content_rowid='id', tokenize='trigram', detail='none'
+);
+CREATE TRIGGER IF NOT EXISTS ug_keys_indexed AFTER INSERT ON ug_keys BEGIN
+  INSERT INTO ug_keys_fts(rowid, key) VALUES (new.id, new.key);
+END;
+CREATE TRIGGER IF NOT EXISTS ug_index_keys_added AFTER INSERT ON ug_index BEGIN
+  INSERT INTO ug_keys(key) SELECT new.artist_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.artist_key);
+  INSERT INTO ug_keys(key) SELECT new.song_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.song_key);
+END;
+CREATE TRIGGER IF NOT EXISTS ug_index_keys_changed AFTER UPDATE OF artist_key, song_key ON ug_index
+WHEN new.artist_key IS NOT old.artist_key OR new.song_key IS NOT old.song_key BEGIN
+  INSERT INTO ug_keys(key) SELECT new.artist_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.artist_key);
+  INSERT INTO ug_keys(key) SELECT new.song_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.song_key);
+END;
+INSERT OR IGNORE INTO ug_keys(key) SELECT artist_key FROM ug_index UNION SELECT song_key FROM ug_index;
+CREATE INDEX IF NOT EXISTS events_provider_at ON events(provider, at);
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
-_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4}
+_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

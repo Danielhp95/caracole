@@ -3,7 +3,8 @@
 They share index.html's look (``library_page.BASE_STYLE``), carry no script,
 and every text in them is escaped. The requests page is one line per request,
 the line its song's card shows (status.py), with the commands it ran and what
-each printed folded away under it. It refreshes itself every 10 seconds while
+each printed folded away under it (a lookup's stages first, each with how it
+went and why). It refreshes itself every 10 seconds while
 a request waits or runs, with a meta refresh: no script. A reload closes what
 the reader opened, so a request's output is open when the address asks for it
 (``/jobs?job=N``, the cards' Details link), and "Stop refreshing"
@@ -57,6 +58,7 @@ PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
 .output[open] { grid-column: 1 / -1; }
 .meta { margin: 2px 0 8px; color: var(--muted); font-size: .85rem; }
 .steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.steps.stages { margin-bottom: 8px; }  /* a lookup's stages, above the one command that ran them */
 .step { padding: 8px 10px; border-radius: 10px; background: var(--raised); }
 .step-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .92rem;
   font-weight: 600; }
@@ -94,7 +96,8 @@ def page(title: str, body: str, *, head: str = "") -> str:
         '<div class="page">\n<header class="masthead">\n  <div>\n'
         '    <p class="app"><a href="/">caracole</a></p>\n'
         f"    <h1>{escape(title)}</h1>\n  </div>\n"
-        '  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a></nav>\n</header>\n'
+        '  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a>'
+        '<a class="navlink" href="/lookup">Look up</a></nav>\n</header>\n'
         f"{body}\n</div>\n</body>\n</html>\n"
     )
 
@@ -199,8 +202,9 @@ def jobs_page(jobs: list[Job], lines: Mapping[int, Line], *, opened: int | None 
         again = f"/jobs?job={opened}" if opened is not None else "/jobs"
         note = f'This page stays as it is: <a href="{again}">refresh it</a> to see how they go.'
     lede = (
-        '<p class="lede">Requests run one at a time, each a caracole command under its lock, with the same '
-        f"pauses between requests as from a terminal. {note}</p>"
+        '<p class="lede">Requests run one at a time, each a caracole command under its lock, as from a '
+        "terminal: a song looked up now is one <code>caracole get</code>, a few requests about a second apart. "
+        f"{note}</p>"
     )
     if not jobs:
         items = '<p class="empty">No requests yet. Request a song from <a href="/">the library</a>.</p>'
@@ -280,12 +284,20 @@ def _job(job: Job, line: Line | None, *, opened: bool = False, waits: str = "", 
     meta = f"{escape(job.title)} · requested {_when(job.queued_at)}"
     if job.note:
         meta += f" · {escape(job.note)}"
+    if job.seconds_to_sheet is not None:
+        meta += f" · sheet readable after {job.seconds_to_sheet:.1f} s"
+    stages = ""
+    if job.stages:  # a lookup's, as `caracole get --progress` reports them
+        stages = '<ol class="steps stages">' + "".join(
+            f'<li class="step {escape(s.state)}"><div class="step-head"><span>{escape(s.label)}</span>'
+            f'{_badge(s.state)}</div>' + (f'<p class="meta">{escape(s.detail)}</p>' if s.detail else "") + "</li>"
+            for s in job.stages) + "</ol>"
     steps = "".join(_step(step, picking=picking and step.state == "failed") for step in job.steps)
     return (
         f'<li class="job" id="job-{job.id}">'
         f'<p class="line"><span class="song">{escape(job.display or job.title)}</span>{_says(line, job)}</p>'
         f'<details class="output"{" open" if opened else ""}><summary>Output</summary>'
-        f'<p class="meta">{meta}</p><ol class="steps">{steps}</ol></details>{waits}</li>\n'
+        f'<p class="meta">{meta}</p>{stages}<ol class="steps">{steps}</ol></details>{waits}</li>\n'
     )
 
 

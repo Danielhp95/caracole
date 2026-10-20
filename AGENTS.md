@@ -61,36 +61,41 @@ songs.py's, in the `removed` table).
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
   `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `make_youtube`,
   `write_pages`, `fail`, `warn`.
+  `caracole get` (commands/get.py) is one song looked up now, in one process: get.py runs
+  the run's steps for that song alone (`only=` / `songs=` of lyrics.py, lacuerda_fetch.py,
+  gtptabs_fetch.py and `match.match_all`), sheet first (one versions page and the best-rated
+  sheet, then `Progress.readable`), with interactive clients; `--progress` prints a JSON line
+  per event (`get.progress_line`) for caracole serve.
   The logic of `caracole review`, `caracole search`, `caracole remove` and `caracole songbook`
-  is in review.py, search.py, removal.py and songbook.py.
+  is in review.py, search.py, removal.py and songbook.py; search.py's prefilter reads
+  ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
+  must find exactly what a `LIKE` scan of `ug_index` finds
+  (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
+  except that a pattern in more than `KEYS_PER_PATTERN` keys (a common word) brings in its
+  shortest keys and those every pattern is in
+  (`::test_a_common_word_brings_in_its_shortest_keys_and_those_every_word_is_in`).
 - `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
   writes, tokens), files.py (library files, no link followed; `read_written_page`, a page
   caracole wrote, while it holds the bytes a lookup says it wrote), jobs.py (the queue: each
-  request runs the `caracole` CLI at `-v` in a child process, one command at a time),
-  status.py (the one line a request shows on its card and on /jobs, read from the job's
-  steps and, once it is over, from the song's state, never from which commands ran: a
-  step's label is that line while it runs, "Fetching from Ultimate Guitar…"), app.py (the
-  routes; `/jobs.json` and the forms answer the page's script in JSON; `written_pages`,
-  each kind of page caracole writes into the library by file name, with its record and its
-  CSP: the sheet viewers and songbook.html), songbooks.py (the songbook forms, each queued as
-  its `caracole songbook` command), pages.py, server.py (`http.server`). The page is library_page.py's, with `WebControls`; its script
-  posts the forms with fetch() and asks /jobs.json how they go.
-- `viewer/`: the sheet viewer render.py writes beside each PDF. page.py builds the page
-  (`build_viewer`) from the song's .cho (sheet.py reads it back); theory.py names chords and
-  keys, guesses keys, changes modes and finds alternatives; voicings.py and voicings.json are
-  the fingerings, a checked subset of chords-db (MIT, LICENSE-chords-db); viewer.js and
-  viewer.css are inlined, and the page's CSP holds their hashes. The music theory is Python,
-  tested in test_viewer_theory.py; the script only looks up what page.py precomputed. A
-  server serves a viewer only while `render.written_file` (kv `render:files:<song id>`)
-  matches it (`library.holds`), with `viewer.viewer_csp(page)` as its header: a sandbox and
-  the policy in that page's own `<meta>`, never one built from this caracole's assets (a
-  viewer written before an upgrade holds the old hashes). Anyone with a synced device can
-  put an HTML page in the library. book.py builds songbook.html
-  (`build_songbook`): a section per song, made as page.py makes a sheet.html, and book.js,
-  which runs before viewer.js and gives the song it shows the element ids viewer.js looks
-  for; book.css and book.js are inlined and hashed too. A server serves it only while
-  `songbook.pages_written` (kv `songbook:<folder>`) matches it, with
-  `book.songbook_csp(page)`, the policy of those bytes in a sandbox, as its header.
+  request runs the `caracole` CLI at `-v` in a child process, one command at a time; a
+  lookup is one `caracole get --progress`, whose JSON lines become `Job.stages`, and
+  `Job.as_json` is a job as data), status.py (the one line a request shows on its card and
+  on /jobs, read from the job's steps and, once it is over, from the song's state, never
+  from which commands ran: a step's label is that line while it runs, "Adding to the
+  library…"), app.py (the routes; `/jobs.json` and the forms answer the page's script in
+  JSON, every refusal as data; `/api/search` for search as you type, through search.py's
+  public functions, one at a time, the newest first, an older one's SQL interrupted once a
+  newer waits (`set_progress_handler`); `/api/jobs[/<id>]`; every `/api/` read refused to
+  another site's fetch, `security.own_page_read`; `POST /lookup`, which runs a song your
+  library has, by its id or found from the UG pick (`_Mine`: its match, or its names'
+  `name_forms`), under its own names and writes no wanted.txt line for it;
+  `written_pages`, each kind of page caracole writes into the library by file name, with
+  its record and its CSP: the sheet viewers and songbook.html), songbooks.py (the songbook
+  forms, each queued as its `caracole songbook` command), lookup_page.py (the lookup page:
+  its script, `createElement` and `textContent` only, allowed by hash, connects to the
+  server alone), pages.py, server.py (`http.server`). The library page is
+  library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
+  /jobs.json how they go.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
@@ -108,7 +113,9 @@ songs.py's, in the `removed` table).
   helpers/rendered.py keeps a sheet and renders it with a stand-in
   for chordpro (`rendered_song`), so its viewer is one caracole wrote; helpers/chromium.py
   drives headless Chromium over the DevTools protocol (a pipe, the standard library), for
-  a page whose CSP refuses a test's script. fixtures/ holds UG, LaCuerda, LRCLIB,
+  a page whose CSP refuses a test's script; helpers/browser.py is `Browser`, the same over
+  two pipes with typing, Enter, clicks and the layout read back, for the lookup page's
+  tests. fixtures/ holds UG, LaCuerda, LRCLIB,
   gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
   synthetic lyrics, sheets and files.
 - `nix/`: package.nix (`buildPythonApplication`; the wrapper puts `chordpro` on PATH and
@@ -140,7 +147,7 @@ files nix/autochords.nix fetches. Tests that need a real program or model skip w
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html`, `sheet.html` and `songbook.html` in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py), a viewer `caracole serve` sends (test_web_server.py), and the page served by a real `caracole serve` (test_web_page.py) | neither |
+| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html` and the lookup page in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_web_lookup_page.py), a viewer `caracole serve` sends (test_web_server.py), and the page served by a real `caracole serve` (test_web_page.py) | neither |
 
 Before a change is done:
 
@@ -201,17 +208,33 @@ Traps:
 
 Each names where it is enforced. Don't weaken one to make a test pass.
 
-- **Politeness** (http.py, health.py, commands/_common.py).
-  - Budgets per run: `ug` 60, `lrclib` 200, `lacuerda` 30, `gtptabs` 20, `musescore` 10
-    requests, `youtube` 6 yt-dlp runs (`config.DEFAULT_PROVIDERS`); `caracole index build`
-    at least 100 (`BUILD_BUDGET`, commands/index.py). Then `BudgetExhausted`. Only a
-    provider in `config.SWITCHABLE` (`gtptabs`, `musescore`, `youtube`) can be turned off
-    (`enabled = false`): then it gets no client and its step is skipped.
-  - One request at a time (a synchronous client, and the lock below), with a random pause
-    from the provider's `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore, 1–2 s
-    for LRCLIB) between any two, redirect hops included: `PoliteClient` paces its own
-    requests, and `_common._pause_after_last_request` its first after the last one any
-    caracole sent.
+- **Politeness** (http.py, health.py, commands/_common.py), at two paces
+  (`config.ProviderPolicy`; `_common.make_client` picks one).
+  - **Bulk work**: the nightly run (its index refresh included), `caracole index build`
+    and every command but `caracole get`. Budgets per run: `ug` 60, `lrclib` 200,
+    `lacuerda` 30, `gtptabs` 20, `musescore` 10 requests, `youtube` 6 yt-dlp runs
+    (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100 (`BUILD_BUDGET`,
+    commands/index.py). Then `BudgetExhausted`. Between any two requests to a provider, a
+    random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore,
+    1–2 s for LRCLIB).
+  - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
+    lookups run it). Its clients are `make_client(..., interactive=True)`: a random gap from
+    `lookup_delay` (default 0.5–1.5 s; `[0, 0]` allowed) between two requests to a provider,
+    a budget of `lookup_requests` (6) requests to it for the song, and at most
+    `lookup_per_hour` (60) for every lookup of the last hour together (`_common.lookup_policy`,
+    counting the `events` of runs named `lookup:…`). What follows the sheet, which the nightly
+    run would do anyway (get.py's `ug` stage, LaCuerda for a song with a sheet), spends only what
+    leaves `get.SHEETS_SHARE` (half) of that hour's requests for sheets (`_Lookup.after_the_sheet`).
+    Then `BudgetExhausted`: the rest waits for the nightly run. Nothing else is looser for a
+    lookup, and a lookup never runs yt-dlp.
+  - Either pace: one request at a time per provider (a synchronous client, and the lock
+    below), redirect hops included. `PoliteClient` paces its own requests, and
+    `_common._pause_after_last_request` its first after the last one any caracole sent
+    (kv `http:last_request:<provider>`, to the fraction of a second, else `events`). No gap
+    is shorter than the host's robots.txt `Crawl-delay` (`http.ROBOTS_CRAWL_DELAY`, from
+    the same `User-agent: *` groups as the rules below: none has one today).
+  - Only a provider in `config.SWITCHABLE` (`gtptabs`, `musescore`, `youtube`) can be
+    turned off (`enabled = false`): then it gets no client and its step is skipped.
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
     more that run, `health.record_block` cools the provider down for 24 h × 2^(k−1) + 2 h after
     the k-th block in a row (so the next nightly run is always skipped), and nothing retries or works around it (no proxies).
@@ -348,6 +371,23 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   commands/remove.py), so the nightly run never waits for an answer
   (`test_commands_lock.py::test_review_never_holds_the_lock_while_it_waits_for_you`,
   `::test_remove_never_holds_the_lock_while_it_asks`).
+  A lookup never waits behind a whole nightly run, and still never writes beside it:
+  `exclusive(..., interactive=True)` announces it in `state_dir/caracole.lock.waiting/` (a
+  file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and
+  dropped once it holds it; one its process left, or untouched for `TICKET_STALE` s, a
+  lookup killed while it waited, no longer counts). Bulk work hands the lock over
+  (`_common.hand_over`, never inside a transaction): it lets go of the flock, takes it back
+  once the lookup is done, and goes on. It does so in two places. Its clients spend each
+  pause looking for a waiting lookup (every `HANDOFF_SLICE` s), then pause a whole `delay`
+  again. Work that sends no request does it between two songs (a `between` callback):
+  `autochords_pending` (commands/autochords.py) and `render_all` (pipeline.py's render step,
+  commands/render.py). A bulk caller
+  holding state across a handoff re-reads it after one: ug/fetch.py `fetch_songs` reads each
+  song and overrides.toml again (`_Handoffs`; a song a lookup fetched mid-turn is fetched
+  again next run), gtptabs_fetch.py checks a song still has no file before its turn, and
+  `autochords_pending` and `render_all` read each song after and overrides.toml again
+  (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause`,
+  `test_autochords_run.py::test_a_lookup_waiting_for_the_lock_takes_it_between_two_songs`).
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
   runs every other change as a `caracole` command in a child process, one at a time
   (web/jobs.py), since the lock is re-entrant within a process and its threads would share it:

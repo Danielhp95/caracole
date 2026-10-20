@@ -2629,9 +2629,9 @@ _REQUEST = """<details class="request">
       <label class="check"><input type="checkbox" name="fetch" value="1" checked>Fetch it now</label>
       <button class="btn primary" type="submit">Request</button>
     </div>
-    <p class="hint">It goes into wanted.txt, as <code>caracole add</code> writes it. Fetch it now asks
-      Ultimate Guitar for this song alone, under the same pauses as every caracole command; its lyrics
-      come with the nightly run.</p>
+    <p class="hint">It goes into wanted.txt, as <code>caracole add</code> writes it. Fetch it now looks it
+      up at once, as <code>caracole get</code> does: its sheet in seconds, then its lyrics, PDF and the rest,
+      a few requests about a second apart.</p>
   </form>
 </details>
 <section class="requested" id="requested" aria-label="Songs you just requested" hidden>
@@ -2655,6 +2655,7 @@ def _nav(controls: WebControls | None) -> str:
     links = '<a class="navlink" href="_todo.md">To-do</a>'
     if controls is not None:
         n = f'<span class="n">{controls.active}</span>' if controls.active else ""
+        links = '<a class="navlink" href="/lookup">Look up</a>' + links  # the lookup page, web/lookup_page.py
         links += f'<a class="navlink" href="/jobs">Requests{n}</a>'
     return links
 

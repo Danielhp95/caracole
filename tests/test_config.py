@@ -411,3 +411,40 @@ def test_match_and_rank_numbers_in_range_load(tmp_path):
 def test_settings_caracole_never_reads_are_unknown_keys(tmp_path, toml, named):
     with pytest.raises(ConfigError, match=f"unknown key.*{named}"):
         load(tmp_path, toml)
+
+
+# --- the interactive pace: one song you asked for just now -----------------------------------------
+
+
+def test_every_provider_has_an_interactive_pace_by_default(tmp_path):
+    # Bulk work keeps 10-20 s between requests; a lookup sends its few requests about a second apart.
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    for name in ("ug", "lrclib", "lacuerda", "gtptabs", "musescore"):
+        policy = cfg.provider(name)
+        assert policy.lookup_delay == (0.5, 1.5), name
+        assert policy.lookup_requests == 6, name
+        assert policy.lookup_per_hour == 60, name
+
+
+def test_the_interactive_pace_is_set_per_provider(tmp_path):
+    cfg = load(tmp_path, "[providers.ug]\nlookup_delay = [0, 0]\nlookup_requests = 10\nlookup_per_hour = 100\n")
+    ug = cfg.provider("ug")
+    assert (ug.budget, ug.delay) == (60, (10.0, 20.0))  # the bulk pace is untouched
+    assert (ug.lookup_delay, ug.lookup_requests, ug.lookup_per_hour) == ((0.0, 0.0), 10, 100)
+    assert cfg.provider("lacuerda").lookup_requests == 6
+
+
+@pytest.mark.parametrize(
+    "toml,where",
+    [
+        ("lookup_delay = [2, 1]", "lookup_delay"),
+        ("lookup_delay = 1", "lookup_delay"),
+        ("lookup_requests = -1", "lookup_requests"),
+        ("lookup_requests = 2.5", "lookup_requests"),
+        ("lookup_per_hour = true", "lookup_per_hour"),
+        ('lookup_per_hour = "60"', "lookup_per_hour"),
+    ],
+)
+def test_an_interactive_pace_of_the_wrong_kind_is_a_config_error(tmp_path, toml, where):
+    with pytest.raises(ConfigError, match=rf"\[providers\.ug\]\.{where} must be"):
+        load(tmp_path, f"[providers.ug]\n{toml}\n")

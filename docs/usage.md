@@ -67,6 +67,9 @@ suggest_top_tracks = true         # list your top tracks on the to-do page; neve
 [providers.ug]                    # Ultimate Guitar
 budget = 60                       # requests per run
 delay = [10, 20]                  # seconds between two requests, chosen at random
+lookup_delay = [0.5, 1.5]         # the same, for a song you look up now (caracole get); [0, 0]: none
+lookup_requests = 6               # requests to the site for that one song, at most
+lookup_per_hour = 60              # requests to the site for every lookup of an hour, together
 [providers.lrclib]                # lyrics
 budget = 200
 delay = [1, 2]
@@ -128,9 +131,12 @@ goes when the PDF is done, so caracole must be able to write there. Its
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
 to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
-status 2: `database: … is at schema version 4, but this caracole knows up to 3:
+status 2: `database: … is at schema version 6, but this caracole knows up to 5:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
-when there is one. A state folder caracole can't use ends a command with status
+when there is one. Schema 4 keeps the songs you removed. Schema 5 adds an index of the UG index's names, for
+searching as you type: the first command after the upgrade builds it from the
+index, in a few seconds, and it adds about a quarter to the database's size
+(about 75 MB to a full index's 315). A state folder caracole can't use ends a command with status
 1 and `can't open the database …` (or `can't open …/caracole.lock: …`).
 `caracole add` is the exception to both: it keeps its line and warns (see
 below).
@@ -144,7 +150,27 @@ else the file `client_secret_file` names, else
 
 **Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs`, `musescore`
 and `youtube`. Any other `[providers.…]` table is an error, like any other
-unknown key. Only gtptabs.com, MuseScore and YouTube can be turned off: with
+unknown key. Each has the three `lookup_` keys too, with the defaults above
+(YouTube's go unused: a lookup runs no yt-dlp).
+
+**Two paces.** Bulk work, the nightly run, `caracole index build` and every
+command but `caracole get`, keeps `budget` and `delay`: 10–20 seconds between
+two requests to Ultimate Guitar, whichever caracole sends them. A lookup
+(`caracole get`, and the lookups of `caracole serve`) is one song you asked
+for just now, so it keeps `lookup_delay` instead, about a second, and stops
+after `lookup_requests` requests to a site; every lookup of the last hour
+shares `lookup_per_hour`, so a script or a stuck button can't turn lookups
+into a crawl. Half of that hour is kept for sheets: what follows a lookup's
+sheet, which the nightly run would do anyway (Ultimate Guitar's other sheets
+scored, guitar parts and the text tab; LaCuerda's for a song with a sheet
+already), stops once the hour's lookups have spent half of `lookup_per_hour`,
+so an evening of songs looked up on the spot keeps getting sheets (about
+twenty to thirty an hour with the defaults). What a lookup leaves undone waits
+for the nightly run. Either
+pace sends one request at a time to a site, never less than its robots.txt's
+`Crawl-delay` apart (none of the sites caracole reads sets one for every
+robot), and keeps everything else below: robots.txt, the cache, the blocks and
+cooldowns. Only gtptabs.com, MuseScore and YouTube can be turned off: with
 `enabled = false` under `[providers.gtptabs]`, `[providers.musescore]` or
 `[providers.youtube]`, caracole sends that site nothing, the nightly run skips
 its step, and the to-do page's Provider health says it is off. The other three
@@ -299,6 +325,76 @@ explains the format.
 A song you [removed](#caracole-remove) comes back with `caracole add`, as new:
 `Added Radiohead - Creep to wanted.txt; back from its removal on 2026-10-19, as
 new; the next caracole run looks for it.`
+
+### caracole get
+
+`caracole get "ARTIST - TITLE"` (or `caracole get ARTIST TITLE`) is for the
+song you want to play now. It does the nightly run's work for that song alone,
+at once, sheet first, and says where the sheet is the moment it is kept:
+
+    $ caracole get "Radiohead - Creep"
+    Song: added to wanted.txt, line 16.
+    Match: matched to radiohead/creep.
+    Sheet: tab 4169 from Ultimate Guitar: /home/you/Tabs/Radiohead/Creep/sheet.txt, readable after 2.1 s.
+    PDF: made.
+    PDF: /home/you/Tabs/Radiohead/Creep/sheet.pdf
+    Lyrics: found.
+    Ultimate Guitar: sheet 4170 · Guitar Pro 4174 · tab 4172.
+    Sheet: a better one replaced it, in /home/you/Tabs/Radiohead/Creep/sheet.txt.
+    LaCuerda: skipped: not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month.
+    gtptabs.com: Guitar Pro file downloaded.
+    Pages: _todo.md and index.html rewritten.
+    Done in 9.4 s: 8 requests (Ultimate Guitar 5, LRCLIB 1, gtptabs.com 2).
+
+In order:
+
+1. **The song.** One the library has is used as it is; any other is added to
+   wanted.txt, as `caracole add` adds it, and synced: a song you
+   [removed](#caracole-remove) comes back that way, as new.
+2. **Match**, against the offline index, for this song alone.
+3. **The sheet.** One Ultimate Guitar page lists every version of the song's
+   chords with its rating, and the best rated is kept at once: one or two
+   requests. Without one there, LaCuerda's, for a song LaCuerda would be asked
+   about tonight. From here on the sheet is readable.
+4. **The PDF**, as `caracole render` makes it.
+5. **The lyrics**, from LRCLIB.
+6. **Ultimate Guitar again**, as the nightly run would: the top sheets are
+   scored against the lyrics, and a more complete one replaces the first;
+   then the guitar parts and the text tab.
+7. **LaCuerda**, for a Spanish song without a complete sheet, and
+   **gtptabs.com**, for a Guitar Pro file, from the index the nightly run
+   keeps.
+8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
+   sheet changed, and MuseScore's pages matched from its local index.
+
+It keeps the interactive pace ([Two paces](#configure)): about a second
+between two requests to a site, six requests to a site at most, and sixty an
+hour for every lookup together. What it leaves undone, the nightly run does.
+A site cooling down after a block is left alone; a block, a spent budget or a
+site's error leaves the song to the nightly run, never not found, and exits 0.
+A nightly run that holds caracole's lock lets the lookup go first at its next
+pause ([One caracole at a time](#one-step-at-a-time)).
+
+Options:
+
+- `--print` prints the sheet itself as soon as it is kept, and again when a
+  better one replaces it.
+- `--ug ARTIST-KEY/SONG-KEY` is the Ultimate Guitar song to use, as
+  `caracole search` shows it (`stone-temple-pilots/creep`): it is recorded
+  under `[match]` in overrides.toml, so the matcher never asks you about it.
+- `--tab URL` is the tab to use, its page's address or its id: it is
+  recorded under `[pin]`, in place of the song's pin of the same kind (a
+  chords sheet, a text tab, a Guitar Pro or Power Tab file, by the offline
+  index), and beside its pins of the other kinds: a Guitar Pro version picked
+  after a chords sheet keeps the sheet you chose.
+- `--album ALBUM` and `--duration M:SS`, for a song new to the library, as in
+  `caracole add`.
+- `--progress` adds a JSON line per stage, which `caracole serve` reads.
+
+A song ignored in overrides.toml, or one wanted.txt can't hold, is not looked
+up, and exits 1. A song the matcher isn't sure of gets everything but its
+Ultimate Guitar sheet: pick its UG song with `--ug`, on the lookup page of
+`caracole serve`, or with `caracole review`.
 
 ### caracole remove
 
@@ -993,7 +1089,7 @@ A page caracole can't write ends the command with status 1 and
 **One caracole at a time.** The commands that ask the sites for pages or write
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
-`index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
+`get`, `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
 `musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
 `search --add`, `autochords` and the `songbook` commands that change a songbook
 or render one. A
@@ -1006,6 +1102,21 @@ wait. A command that waited reads the sites' cooldowns once it has the
 lock: if the caracole it waited for was blocked, it sends that site nothing and
 exits 0. Its first request to a site also waits out the pause after the last
 request any caracole sent there, so the pauses hold whichever caracole sends.
+
+A lookup (`caracole get`) never waits behind a whole run: it says
+`Another caracole is running (pid 4242: run); it lets a lookup go first at its
+next pause, or between two songs.`, and the run, which spends most of its time in its 10–20 second
+pauses, lets go of the lock in the pause it is in, takes it back once the
+lookup is done, and waits a whole pause again before its next request. The
+run then reads each song again before its turn, and overrides.toml too, so a
+song the lookup fetched isn't fetched twice, and a tab it pinned is the one
+kept. Work that sends no request lets a lookup go first between two songs:
+`caracole autochords` (a song takes minutes, and the unit runs for hours), and
+the PDF pass of the run and of `caracole render`, which reads each song and
+overrides.toml again after it. The waiting lookup announces itself with a file
+in `caracole.lock.waiting/` in the state folder, which it touches every second
+while it waits; one left by a lookup that was killed while it waited is no
+longer waited for after five seconds.
 
 ## Audio from YouTube
 
@@ -1568,7 +1679,14 @@ two places, and sends no request:
 
 QUERY is words of the artist, the title or both. Matching ignores case,
 accents and punctuation (`AC/DC`, `R.E.M.`), survives a typo, and also
-compares Chinese as pinyin. `--limit N` (or `-n N`) shows up to N hits from
+compares Chinese as pinyin. It reads an index of the UG index's names, so a
+word of three letters or more is looked up in milliseconds, not by reading all
+1.6 million rows: a song or an artist answers in 5–25 ms on a full index, and
+a query made only of very common words in 50–160 ms ("the" about 0.1 s, "i
+love you" about 0.15 s): such a word is in tens of thousands of names, so it
+brings in only the thousand shortest of them, which hold its exact titles and
+artists, and the names every word of the query is in; the first hits are the
+same as when every name was ranked. `--limit N` (or `-n N`) shows up to N hits from
 each place, 10 by default. `--add N` adds UG hit N to wanted.txt and syncs it,
 the same way `caracole add` does, and says so in the same one line (`-v` adds
 its line in wanted.txt and the song's key). N can be at most `--limit`, so only a hit the
@@ -1604,23 +1722,49 @@ with it. A KEY that is no key exits with status 2.
 
 `caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
 [--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with what the file on disk can't
-do:
+`http://127.0.0.1:8737/` by default, with what the file on disk can't do:
 
+- **Look up**, the page at `/lookup`, is for the song you want to play now,
+  the way you would look it up on Ultimate Guitar. Type a song or an artist:
+  it searches your library and the offline index as you type (5–25 ms a
+  query, up to about 0.15 s for very common words; see
+  [caracole search](#caracole-search)), asking no
+  site anything. A search you type over stops at once, so a slow one (a very
+  common word, "the" on the way to "the beatles") never holds up the next.
+  Pick a song with Get it (Enter picks the first result of what you typed,
+  once its results are in), or one of its versions (Versions numbers its
+  chords, tabs and Guitar Pro pages within each kind, "Chords 2 of 13", each
+  with an "on UG" link to look at it there first): it is looked up at once,
+  as `caracole get --ug … [--tab …]` does it, and the song or tab you picked
+  is recorded in overrides.toml (`[match]`, `[pin]`), so nothing waits for a
+  review. A version picked while the song's lookup still runs is looked up
+  right after it. The results then step aside and the page follows the request
+  stage by stage, right under the search box: it says what each stage waits
+  for, shows the sheet the moment it is kept (and brings it into view once),
+  then links its PDF; the lyrics and the rest fill in after, and "What was
+  left, and why" lists the stages skipped or failed with their reasons. Typing
+  again, or Back to the results, brings the results back.
+  An Ultimate Guitar song your library has already, under its own names
+  (UG's slugs write AC/DC as "Acdc" and 宋冬野 as "Song Dongye"), says Get it
+  again and is looked up as your song: no second song, and no line added to
+  wanted.txt. Nor does Get it now or Fetch again on a song of your library add
+  one, so a song from Spotify alone stays Spotify's. A song of your library
+  with a sheet opens at once (Read). "Not in the list?" looks a song up by its
+  name. `/lookup?q=WORDS` opens it with that search. A page left open across a
+  restart of the server says to reload it, since its form token is no longer
+  the server's.
 - **Request a song.** The form at the top takes an artist, a title and,
   optionally, the album and the length. The song goes into wanted.txt at once,
   as `caracole add ARTIST TITLE` writes it (a song listed already is left as
   it is), then `caracole add` runs to put it in the library.
-- **Fetch it now.** Ticked, as it is by default, the request also runs
-  `caracole match` (offline), `caracole fetch --song "ARTIST - TITLE"` and
-  `caracole render` (offline), so a sheet can be there in a minute or two.
-  Each wanted song's card, and its row in the Rows view, has a Fetch now
-  button that does the same, except
-  on a song that needs review, which `caracole fetch` won't fetch until
-  `caracole review` (or a `[match]`, `[pin]` or `[reject]` entry in
-  overrides.toml) settles the match: its card and its row have Pick the
-  match instead (below). Lyrics, LaCuerda and the rest wait for the nightly
-  run.
+- **Fetch it now.** Ticked, as it is by default, the request is looked up at
+  once instead, as `caracole get` does it: its sheet in seconds, then its PDF,
+  lyrics and the rest. Each wanted song's card, and its row in the Rows view,
+  has a Fetch now button that does the same, except on a song that needs
+  review, which has no UG song to fetch until you say which it is (`caracole
+  review`, or a `[match]`, `[pin]` or `[reject]` entry in overrides.toml): its
+  card and its row have Pick the match instead (below), and the lookup page
+  picks one too.
 - **Pick the match.** On a song that needs review, Pick the match opens its
   candidates, as on the file (see above), as a list to choose from: pick one,
   or None of these, and Pick. It runs `caracole review --song "ARTIST - TITLE"
@@ -1632,7 +1776,7 @@ do:
   which says "Writing the answer to overrides.toml…", then how the rest goes
   (below). With Fetch it now ticked,
   as it is by default, a pick then runs `caracole fetch --song` and
-  `caracole render`; None of these fetches nothing, and caracole goes on
+  `caracole render`, at the nightly pace; None of these fetches nothing, and caracole goes on
   looking for the song: if the matcher finds others, the song is back in
   review with those, and its card offers them to pick from, with no Fetch now
   until one is picked. The candidates must still be the ones the page showed
@@ -1699,20 +1843,27 @@ do:
   while one waits or runs (`/jobs.json`), less often in a background tab.
 - **Requests**, the page at `/jobs`, has one line per request, the same as
   its card's, with the commands it ran and what each printed folded away
-  under it (they run at `-v`, so that is the whole story). A card's Details
+  under it (they run at `-v`, so that is the whole story), and a lookup's
+  stages with their states and why one was skipped. A card's Details
   link opens that request's output. It refreshes itself every 10 seconds while
   one waits or runs; Stop refreshing keeps it still. A request that ended in a
   review (`caracole add` found only candidates) shows the song's picker under
-  its line, so you pick at once. With Fetch it now ticked, its `caracole
-  fetch` refused the song until it's picked: its line then says Needs review
-  · Pick the match, not the fetch's error, and in its output the fetch Waits
-  for a pick. While
+  its line, so you pick at once; with Fetch it now ticked, its lookup has no
+  UG song to fetch until then, and its line says Needs review · Pick the match.
+  A pick's own `caracole fetch`, which refuses a song still in review, Waits
+  for a pick in its output. While
   the page refreshes itself, which would undo a choice half made, it shows a
   Pick the match link to the picker's own page, `/review?song=ID`, instead of
   the picker. One whose song the index didn't match links to what `caracole
-  search` finds for it (Look in the index, above).
+  search` finds for it (Look in the index, above). `/api/jobs` and
+  `/api/jobs/N` give each request as JSON: its steps (a lookup's stages),
+  each with its state, its song and the library files its sheet can be read
+  in. These JSON addresses (`/api/…`) answer caracole's own pages, the address
+  bar and programs such as curl; a browser fetching one for another site's
+  page gets 403.
 - **Without JavaScript**, the forms still work: a request sends you to its
-  line on `/jobs`, its output open; a pick, to its line.
+  line on `/jobs`, its output open; a pick, to its line; a lookup, to the
+  lookup page, which follows it.
 - **Songbooks.** Select's Make songbook (or Add to a songbook there is) runs
   `caracole songbook make NAME "ARTIST - TITLE"...` (or `add`) with the songs
   in the order you ticked them. In the Songbooks section, ↑ and ↓ move a song,
@@ -1725,8 +1876,10 @@ do:
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
-caracole's lock (behind a nightly run, it waits), keeps the pause after the
-last request any caracole sent, and keeps the budgets and cooldowns. The
+caracole's lock, keeps the pause after the last request any caracole sent, and
+keeps the budgets and cooldowns. A lookup keeps the interactive pace (about a
+second between two requests to a site, six for the song, sixty an hour), and
+a nightly run holding the lock lets it go first at its next pause. The
 queue holds 20 requests and one per song: asking again for a song gives its
 request, and Fetch it now on a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart

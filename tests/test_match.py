@@ -555,6 +555,16 @@ def test_match_all_writes_decisions_candidates_and_the_review_flag(conn):
     assert get_song(conn, creep.id).matched_at is not None
 
 
+def test_match_all_can_match_one_song_alone(conn):
+    # `caracole get`: the song asked for now; the others keep what they had.
+    index(conn, (1, "oasis", "wonderwall", "chords"), (3, "radiohead", "creep", "chords"))
+    creep = add_song(conn, "Radiohead", "Creep")
+    wall = add_song(conn, "Oasis", "Wonderwall")
+    changes = match_all(conn, Overrides(), POLICY, songs=[wall])
+    assert [(c.song.id, c.new.decision) for c in changes] == [(wall.id, "accept")]
+    assert get_song(conn, creep.id).match_decision is None
+
+
 def test_match_all_keeps_at_most_five_candidates(conn):
     index(conn, *[(i, "oasis", f"song-{i}", "chords") for i in range(1, 10)])
     s = add_song(conn, "Oasis", "Song")

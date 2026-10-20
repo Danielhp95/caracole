@@ -3142,3 +3142,74 @@ def test_a_tab_page_whose_artist_link_isnt_a_url_teaches_nothing(conn, tmp_path)
     assert (stats.songs_done, stats.songs_failed) == (1, 0)
     assert learned_artist_url(conn, "soda-stereo") is None
     assert "sheet 101" in read(tmp_path, song, "sheet.txt")
+
+
+# --- bulk work that handed caracole's lock to a lookup --------------------------------------------------
+
+
+class HandingOver(Recording):
+    """The nightly run's client: before asking for ``at``, it hands the lock to a lookup, ``lookup()``."""
+
+    def __init__(self, client, at, lookup):
+        super().__init__(client)
+        self.at, self.lookup, self.handoffs = at, lookup, 0
+
+    def get(self, url, **options):
+        if url == self.at and self.lookup is not None:
+            self.lookup()
+            self.lookup, self.handoffs = None, self.handoffs + 1
+        return super().get(url, **options)
+
+
+def test_a_song_a_lookup_fetched_meanwhile_is_not_fetched_again(conn, tmp_path):
+    ug = FakeUG()
+    persiana = accepted(conn, added_at="2026-10-10T00:00:00Z")
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    older = signos(conn, ug)
+
+    def lookup():  # `caracole get "Soda Stereo - Signos"`, while the run paused before Persiana's page
+        update_song(conn, older.id, ug_dirty=False, ug_checked_at="2026-10-18T03:31:00Z")
+
+    client = HandingOver(ug.client(tmp_path / "cache"), slugged(101), lookup)
+    stats = fetch_songs(context(conn, client, tmp_path), [persiana, older])
+
+    assert slugged(901, song="signos") not in ug.requests
+    assert stats.songs_done == 1 and "sheet 101" in read(tmp_path, persiana, "sheet.txt")
+
+
+def test_after_a_handoff_the_fetch_reads_overrides_toml_again(conn, tmp_path):
+    # The lookup's pick, recorded as a [pin] while the run waited, is the song's sheet.
+    ug = FakeUG()
+    persiana = accepted(conn, added_at="2026-10-10T00:00:00Z")
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"))
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    older = signos(conn, ug)
+    index(conn, (902, "soda-stereo", "signos", "chords"))
+    ug.tab(version_dict(902, song="Signos", artist="Soda Stereo", tab_url=slugged(902, song="signos"), rating=1.0,
+                        votes=1), content=sheet("sheet 902", LINES))
+    pinned = Overrides(pin={older.key: (902,)})
+    client = HandingOver(ug.client(tmp_path / "cache"), slugged(101), lambda: None)
+
+    fetch_songs(context(conn, client, tmp_path, reload_overrides=lambda: pinned), [persiana, older])
+
+    assert "sheet 902" in read(tmp_path, older, "sheet.txt")
+
+
+def test_a_song_a_lookup_fetched_in_the_middle_of_its_fetch_is_fetched_again_next_run(conn, tmp_path):
+    # The run had read Persiana's state before the lookup changed it: what it kept may not be the
+    # lookup's pick, so the next run ranks the song again, from the cache.
+    from caracole.ug.fetch import note_looked_up
+
+    ug = FakeUG()
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (401, "soda-stereo", "persiana-americana", "tabs"))
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    ug.tab(v(401, "tabs"), content=riff("tab 401"))
+    client = HandingOver(ug.client(tmp_path / "cache"), slugged(401, "tabs"),
+                         lambda: note_looked_up(conn, song.id))
+
+    fetch_songs(context(conn, client, tmp_path), [song])
+
+    assert get_song(conn, song.id).ug_dirty is True
