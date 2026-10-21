@@ -312,7 +312,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **Politeness** (http.py, health.py, commands/_common.py), at two paces
   (`config.ProviderPolicy`; `_common.make_client` picks one).
   - **Bulk work**: the nightly run (its index refresh included), `caracole index build`
-    and every command but `caracole get` and `caracole lacuerda --artist`. Budgets per run:
+    and every command but `caracole get`, `caracole versions` and `caracole lacuerda --artist`.
+    Budgets per run:
     `ug` 60, `lrclib` 200, `lacuerda` 30 (its sheets first, then its listings of every
     artist), `gtptabs` 20, `musescore` 10 requests, `youtube` 6 yt-dlp runs
     (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100 (`BUILD_BUDGET`,
@@ -320,7 +321,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore,
     1–2 s for LRCLIB).
   - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
-    lookups run it), and `caracole lacuerda --artist`, one artist's page (an artist's Songs).
+    lookups run it), `caracole versions --keep`, one tab page asked for now (`--choose` and
+    `--clear` run get), and `caracole lacuerda --artist`, one artist's page (an artist's Songs).
     Its clients are `make_client(..., interactive=True)`: a random gap from
     `lookup_delay` (default 0.5–1.5 s; `[0, 0]` allowed) between two requests to a provider,
     a budget of `lookup_requests` (6) requests to it for the song, and at most
@@ -494,8 +496,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   re-entrant within a process, and the clients of `make_client` and the yt-dlp runner of
   `make_youtube` hold it until closed. Every command that asks UG, LRCLIB, LaCuerda,
   gtptabs.com, MuseScore or YouTube for pages or writes the library takes it;
-  `search`, `match --dry-run`, `index stats`, `remove --list`, `songbook list` and
-  `songbook show` only read and never wait.
+  `search`, `match --dry-run`, `index stats`, `remove --list`, `songbook list`,
+  `songbook show` and `versions` (the list alone) only read and never wait.
   `add` writes its wanted.txt line first, and a `--lacuerda` pick (overrides.toml is in the
   library) only once it holds the lock, failing when the lock file can't be opened
   (`test_commands_sources.py::test_add_with_lacuerda_writes_no_pick_without_caracoles_lock`).
@@ -507,7 +509,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `exclusive(..., interactive=True)` announces it in `state_dir/caracole.lock.waiting/` (a
   file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and
   dropped once it holds it; one its process left, or untouched for `TICKET_STALE` s, a
-  lookup killed while it waited, no longer counts). Every changing `caracole songbook`
+  lookup killed while it waited, no longer counts). `caracole versions --keep` and `--clear` (which
+  writes overrides.toml under it) wait so too, and `--choose` through get. Every changing `caracole songbook`
   command (make, add, remove, move, set, rename, delete, render: commands/songbook.py) waits the
   same way, as a songbook is asked for now
   (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).
