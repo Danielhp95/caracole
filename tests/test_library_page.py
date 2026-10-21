@@ -1141,6 +1141,55 @@ def test_a_screen_reader_hears_each_artist_and_song_and_a_jump_moves_the_focus(c
     assert re.search(r'<body[^>]*data-focus="radiohead"', dom), dom[-1500:]
 
 
+# Notes how an artist's header looks beside their song's line, and what base.css's tokens resolve to.
+HEADER_LOOK = """
+(() => {
+  const css = (node) => getComputedStyle(node);
+  const token = (name) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(" + name + ")";
+    document.body.appendChild(probe);
+    const colour = css(probe).color;
+    probe.remove();
+    return colour;
+  };
+  const head = document.querySelector("#list section.artist .artist-title");
+  const name = head.querySelector(".artist-name");
+  const counts = head.querySelector(".artist-counts");
+  const title = document.querySelector("#list section.artist .line-title h3");
+  document.body.setAttribute("data-look", JSON.stringify({
+    name: [parseFloat(css(name).fontSize), css(name).color],
+    mark: css(head.querySelector(".filter-mark")).backgroundColor,
+    counts: [parseFloat(css(counts).fontSize), css(counts).color],
+    title: parseFloat(css(title).fontSize),
+    tokens: Object.fromEntries(["--artist", "--text", "--accent", "--muted"].map((t) => [t, token(t)])),
+  }));
+})();
+"""
+
+
+@in_chromium
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_an_artists_name_is_bigger_than_their_songs_titles_in_a_colour_of_its_own(conn, cfg, tmp_path, scheme):
+    # The header the list and the served search results share: the name in --artist, a second accent, its funnel
+    # with it; the counts beside it small and muted.
+    from html import unescape
+
+    from caracole.library_page import WebControls
+
+    add_song(conn, "Radiohead", "Creep")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    path = write_library_page(cfg.library_dir, with_script(html, HEADER_LOOK))
+    dom = dump_dom(path, tmp_path, media={"prefers-color-scheme": scheme})
+    look = json.loads(unescape(re.search(r'<body[^>]*data-look="([^"]*)"', dom).group(1)))
+    tokens = look["tokens"]
+    assert tokens["--artist"] not in (tokens["--text"], tokens["--accent"], tokens["--muted"]), tokens
+    size, colour = look["name"]
+    assert colour == tokens["--artist"] and look["mark"] == colour, look
+    assert size >= 1.1 * look["title"], look
+    assert look["counts"][0] < size and look["counts"][1] == tokens["--muted"], look
+
+
 # Clicks Queen's name over their songs, then notes the titles shown and the chip.
 ARTIST_CLICK = """
 (() => {

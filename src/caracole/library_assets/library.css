@@ -119,11 +119,17 @@ section.artist .lines { border: 0; border-radius: 0; background: none; box-shado
 section.artist + section.artist { border-top: 1px solid var(--border); }
 section.artist:focus { outline: none; }
 section.artist:focus-visible > .artist-title { outline: 3px solid var(--focus); outline-offset: -3px; }
-.artist-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0 2px; min-height: 24px; margin: 0;
-  padding: 2px 12px; border-bottom: 1px solid var(--border); background: var(--raised); font-size: .9rem;
-  font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+/* The name bigger than the titles under it, in the second accent (--artist), its funnel and underline with it; the
+   counts beside it small and muted. */
+.artist-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 2px; min-height: 34px; margin: 0;
+  padding: 5px 12px; border-bottom: 1px solid var(--border); background: var(--raised); color: var(--artist);
+  font-size: 1.125rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
 section.artist:first-child > .artist-title { border-radius: 11px 11px 0 0; }
-.artist-title button.artist { color: var(--text); font-size: inherit; font-weight: inherit; }
+.artist-title button.artist, .artist-title button.artist:hover { color: var(--artist); font-size: inherit;
+  font-weight: inherit; }
+/* A name that wraps keeps its funnel after its last word, not at the band's far end. */
+.artist-title button.artist { display: block; }
+.artist-title .filter-mark { display: inline-block; margin-left: 5px; }
 .artist-counts { color: var(--muted); font-size: .82rem; font-weight: 500; }
 /* In an artist's group its header names the artist: its lines leave the name out, and the column with it. */
 section.artist .line-by { display: none; }
