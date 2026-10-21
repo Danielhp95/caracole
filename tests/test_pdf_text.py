@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from html import unescape
 from pathlib import Path
@@ -26,6 +27,15 @@ MINOR = to_chordpro(
     "[ch]Cm[/ch]      [ch]Ab[/ch]\nTiny minor words\n[ch]Bb[/ch]     [ch]G7[/ch]\nand back home",
     title="Minor", artist="Placeholders", key="Cm",
 )
+# A chord legend in a section after the first: the viewer reads its shapes wherever it is.
+LATER = ("{title: Later}\n{artist: The Placeholders}\n\n{comment: Verse}\n[Em7]Words [Cadd9]to sing\n\n"
+         "{comment: Chords}\nEm7 022033  Cadd9 x32033\n\n{comment: Chorus}\n[Cadd9]More [Em7]words\n")
+# The sheet's own {define}s, one with no fingers, which the viewer takes from chords-db.
+DEFINED = ("{title: Defined}\n{artist: The Placeholders}\n{define: Am base-fret 1 frets x 0 2 2 1 0}\n"
+           "{define: E base-fret 1 frets 0 2 2 1 0 0 fingers 0 2 3 1 0 0}\n\n{comment: Verse}\n[Am]Words to [E]sing\n")
+# Shapes the viewer leaves out, or that chords-db has too, and two for one chord.
+SHAPES = ("{title: Shapes}\n{artist: The Placeholders}\nA#m (x13321)\nG (x02220)\nC (x32010)\n"
+          "D (xx0232)  D (x57775)\n\n{comment: Verse}\n[Bbm]Words [G]to [D]sing\n{comment: Chorus}\n[Bbm]more\n")
 WALL = to_chordpro(
     "[ch]Em7[/ch]      [ch]G[/ch]\nSynthetic words go here\n[ch]Dsus4[/ch]     [ch]A7sus4[/ch]\nmade up for the test\n"
     "[ch]Cadd9[/ch]  [ch]D[/ch]  [ch]Em7[/ch]\nand home",
@@ -45,7 +55,7 @@ def test_the_notes_go_the_tab_blocks_stay():
     assert [line for line in lines if line.startswith("{define")] == [
         "{define: Em7 base-fret 1 frets 0 2 2 0 3 3 fingers 0 0 0 0 0 0}",
         "{define: G base-fret 1 frets 3 2 0 0 3 3 fingers 0 0 0 0 0 0}",
-        "{define: Dsus4 base-fret 1 frets x x 0 2 3 3 fingers 0 0 0 0 0 0}",
+        "{define: Dsus4 base-fret 1 frets x x 0 2 3 3 fingers 0 0 0 1 2 3}",  # chords-db's fingers
         "{define: A7sus4 base-fret 1 frets x 0 2 0 3 3 fingers 0 0 0 0 0 0}",
         "{define: Cadd9 base-fret 1 frets x 3 2 0 3 3 fingers 0 0 0 0 0 0}",
         "{define: Dsus4/F# base-fret 1 frets 2 x 0 2 3 3 fingers 0 0 0 0 0 0}",
@@ -54,16 +64,58 @@ def test_the_notes_go_the_tab_blocks_stay():
     assert "[Cadd9]Still more [Dsus4/F#]words to sing" in lines
 
 
+def defines(text: str) -> list[str]:
+    return [line for line in text.splitlines() if line.startswith("{define")]
+
+
 def test_a_legend_shape_is_written_for_the_chord_as_the_song_names_it():
     # A shape that doesn't play its chord is left out, as the viewer leaves it out; a chord the song
-    # never plays gets none; the first of two shapes for one chord is the one used.
-    cho = ("{title: Shapes}\n{artist: The Placeholders}\nA#m (x13321)\nG (x02220)\nC (x32010)\n"
-           "D (xx0232)  D (x57775)\n\n{comment: Verse}\n[Bbm]Words [G]to [D]sing\n{comment: Chorus}\n[Bbm]more\n")
-    defines = [line for line in pdf_text(cho, key=None, capo=None).splitlines() if line.startswith("{define")]
-    assert defines == [
-        "{define: Bbm base-fret 1 frets x 1 3 3 2 1 fingers 0 0 0 0 0 0}",
-        "{define: D base-fret 1 frets x x 0 2 3 2 fingers 0 0 0 0 0 0}",
+    # never plays gets none; the first of two shapes for one chord is the one used, and a shape
+    # chords-db has too takes its fingers, as the viewer shows it.
+    assert defines(pdf_text(SHAPES, key=None, capo=None)) == [
+        "{define: Bbm base-fret 1 frets x 1 3 3 2 1 fingers 0 1 3 4 2 1}",
+        "{define: D base-fret 1 frets x x 0 2 3 2 fingers 0 0 0 1 3 2}",
     ]
+
+
+def test_a_legend_after_the_first_section_gives_its_shapes_too():
+    # It stays in the song, where the tab put it, and its shapes are the chord diagrams.
+    text = pdf_text(LATER, key=None, capo=None)
+    assert defines(text) == [
+        "{define: Em7 base-fret 1 frets 0 2 2 0 3 3 fingers 0 0 0 0 0 0}",
+        "{define: Cadd9 base-fret 1 frets x 3 2 0 3 3 fingers 0 0 0 0 0 0}",
+    ]
+    assert "Em7 022033  Cadd9 x32033" in text.splitlines()
+
+
+def test_the_sheets_own_defines_are_written_as_the_viewer_shows_them():
+    # One given without fingers takes chords-db's, as in the viewer. chordpro draws a chord's last
+    # {define}, so the sheet's own go: one in the song would draw over the viewer's shape.
+    cho = DEFINED + "{comment: Chorus}\n{define: Am base-fret 5 frets 1 3 3 1 1 1}\n[Am]More\n"
+    text = pdf_text(cho, key=None, capo=None)
+    assert defines(text) == [
+        "{define: Am base-fret 1 frets x 0 2 2 1 0 fingers 0 0 2 3 1 0}",
+        "{define: E base-fret 1 frets 0 2 2 1 0 0 fingers 0 2 3 1 0 0}",
+    ]
+    lines = text.splitlines()
+    assert lines[lines.index("{comment: CHORUS}") + 1] == "[Am]More"
+
+
+@pytest.mark.parametrize("cho", [LEGEND, LATER, DEFINED, SHAPES, UG_CHO, MINOR], ids=[
+    "legend", "legend-later", "defines", "shapes", "no-shapes", "no-legend"])
+def test_the_chord_diagrams_are_the_shapes_the_viewer_shows(cho):
+    # For each chord the song plays, the first shape the viewer shows for it when the sheet gives
+    # one (its data's "shapes", by the chord as shown: "<root>,<suffix>,<bass>"), and no other.
+    data = json.loads(re.search(r'<script type="application/json" id="song">(.*?)</script>',
+                                build_viewer(cho), re.S).group(1))
+    shown = {}
+    for name, chord in zip(parse_sheet(cho).chords, data["chords"], strict=True):
+        entry = chord and data["shapes"].get(f"{chord[0]},{chord[1]},{'' if chord[2] is None else chord[2]}")
+        if entry and entry["mine"]:
+            frets, fingers, base, _ = entry["list"][0]
+            shown[name] = f"base-fret {base} frets {' '.join(frets)} fingers {' '.join(fingers)}"
+    drawn = dict(line[len("{define: "):-1].split(" ", 1) for line in defines(pdf_text(cho, key=None, capo=None)))
+    assert drawn == shown
 
 
 def test_the_header_reads_like_the_viewer():

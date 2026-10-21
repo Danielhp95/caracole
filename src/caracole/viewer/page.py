@@ -303,8 +303,14 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
                 for t in range(12)
             ]
     data["voicings"] = page_voicings(needed)
-    data["shapes"] = sheet_shapes(_given_shapes(sheet))
+    data["shapes"] = shapes_of(sheet)
     return data
+
+
+def shapes_of(sheet: Sheet) -> dict[str, dict[str, Any]]:
+    """The shapes the sheet's page shows for its chords (its data's ``shapes``: ``voicings.sheet_shapes``,
+    by ``voicings.shape_key``), for what shows the same beside the page: the PDF's chord diagrams."""
+    return sheet_shapes(_given_shapes(sheet))
 
 
 def _given_shapes(sheet: Sheet) -> list[tuple[Chord, Position]]:

@@ -31,7 +31,7 @@
     "formats": {
       "title": {
         "title": ["", "%{title}", ""],
-        "subtitle": ["", "%{artist}%{key| · Key %{}}%{capo| · Capo %{}}", ""],
+        "subtitle": ["", "%{subtitle|%{}|%{artist}%{key| · Key %{}}%{capo| · Capo %{}}}", ""],
         "footer": ["", "", "%{page}"]
       },
       "default": {

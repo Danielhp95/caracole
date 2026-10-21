@@ -5,29 +5,32 @@ private copy it renders (``render._render_into``). It is the .cho with:
 
 - the tab's notes before its first section left out: the viewer's preamble
   (``sheet.split_preamble``), the lines it folds away; a tab block after them stays;
-- the shapes its chord legend gives as ``{define}``s, so the PDF's chord diagrams are the tab's:
-  for each chord the song plays, under the name it writes it by, the first shape given for it
-  that plays it (``voicings.plays``), as the viewer shows it;
+- the shapes the sheet gives its chords as ``{define}``s, so the PDF's chord diagrams are the
+  viewer's: for each chord the song plays that the sheet gives a shape for (its chord legend,
+  wherever it is, or a ``{define}``), the first shape its viewer shows for it (``page.shapes_of``),
+  under the name the song writes it by. The sheet's own ``{define}``s that the viewer reads go:
+  chordpro draws a chord's last one;
 - ``{subtitle}`` under the title: the artist, the viewer's key line (``page.key_line_text``), a
   capo the notes name for a sheet with no capo of its own, and a tuning they name ("half step
   down"), so a song in another tuning never prints as if in standard tuning;
 - its section names in capitals;
 - ``{columns: N}`` after its header.
 
-Each PDF's record (render.py) keeps ``PDF_TEXT_VERSION``: bump it when what ``pdf_text`` writes
-changes (the viewer's key line and how its key is found among it), and every PDF is made again.
+Each PDF's record (render.py) keeps the SHA-256 of this text, so a PDF is made again whenever it
+would print otherwise (a key heard anew, a newer viewer's theory or shapes), and ``PDF_TEXT_VERSION``:
+bump it to make every PDF again even so.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from typing import Any
 
 from caracole.autochords.merge import AUTO_MARKER
 from caracole.chordpro import directive_text
-from caracole.viewer.page import key_line_text
+from caracole.viewer.page import key_line_text, shapes_of
 from caracole.viewer.sheet import COMMENTS, Preamble, directive, parse_sheet, split_preamble
-from caracole.viewer.theory import Chord, Key, parse_chord
-from caracole.viewer.voicings import Position, plays
+from caracole.viewer.theory import Key, parse_chord
+from caracole.viewer.voicings import parse_define, shape_key
 
 PDF_TEXT_VERSION = 1
 
@@ -44,15 +47,16 @@ def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2) -
     head = 0
     while head < len(lines) and _in_header(lines[head]):
         head += 1
-    body = lines[max(head, pre.end):]
+    body = _song(lines[max(head, pre.end):])
     out = lines[:head]
     if subtitle := _subtitle(lines[:head], key, capo, pre):
         out.append(f"{{subtitle: {directive_text(subtitle)}}}")
-    out += [line for line in lines[head:pre.end] if directive(line)]  # a {define} among the notes, say
-    out += _defines(pre.legend, parse_sheet("\n".join(body)).chords)
+    # A directive among the notes stays (a {define} the viewer can't read, say)
+    out += [line for line in lines[head:pre.end] if (found := directive(line)) and not _read_define(found)]
+    out += _defines(shapes_of(parse_sheet(cho)), parse_sheet("\n".join(body)).chords)
     if columns > 1:
         out.append(f"{{columns: {columns}}}")
-    out += map(_capitals, body)
+    out += body
     return "\n".join(out) + "\n"
 
 
@@ -68,31 +72,37 @@ def _subtitle(header: list[str], key: Key | None, capo: int | None, pre: Preambl
     return " · ".join(part for part in parts if part)
 
 
-def _defines(legend: Iterable[tuple[Chord, Position]], names: list[str]) -> list[str]:
-    """A ``{define}`` for each chord the song plays (``names``, as it writes them) that the legend
-    gives a shape for: the first one that plays it."""
-    shapes: dict[tuple[int, str, int | None], Position] = {}
-    for chord, position in legend:
-        if plays(position, chord):
-            shapes.setdefault(_as_shown(chord), position)
+def _defines(shapes: dict[str, dict[str, Any]], names: list[str]) -> list[str]:
+    """A ``{define}`` for each chord the song plays (``names``, as it writes them) that the sheet gives
+    a shape for: the first one its viewer shows (``shapes``, ``page.shapes_of``), fingers and all."""
     out = []
     for name in names:
-        chord = parse_chord(name, strict=False)
-        if chord is not None and (position := shapes.get(_as_shown(chord))) is not None:
-            frets, fingers, base, _ = position
+        chord = parse_chord(name, strict=False)  # as the viewer reads the song's chords
+        entry = shapes.get(shape_key(chord)) if chord is not None else None
+        if entry is not None and entry["mine"]:
+            frets, fingers, base, _ = entry["list"][0]
             out.append(f"{{define: {name} base-fret {base} frets {' '.join(frets)} fingers {' '.join(fingers)}}}")
     return out
 
 
-def _as_shown(chord: Chord) -> tuple[int, str, int | None]:
-    """A chord as the viewer files the sheet's shapes, for that very chord alone: its root, its
-    suffix as written and its bass (``voicings.sheet_shapes``)."""
-    return chord.root, chord.suffix, chord.bass
+def _read_define(found: tuple[str, str]) -> bool:
+    """Whether a directive is a ``{define}`` whose shape the viewer reads (``voicings.parse_define``)."""
+    return found[0] == "define" and parse_define(found[1]) is not None
 
 
-def _capitals(line: str) -> str:
-    """A section's name in capitals; any other line as it is."""
-    found = directive(line)
-    if found is None or found[0] not in COMMENTS or not found[1]:
-        return line
-    return f"{{{found[0]}: {directive_text(found[1].upper())}}}"
+def _song(lines: list[str]) -> list[str]:
+    """The song's lines for the PDF: its section names in capitals, its own ``{define}``s that the
+    viewer reads left out, and a tab's lines as they are."""
+    out, tab = [], False
+    for line in lines:
+        found = directive(line)
+        if tab:
+            tab = not (found is not None and found[0] in ("end_of_tab", "eot"))
+        elif found is not None and found[0] in ("start_of_tab", "sot"):
+            tab = True
+        elif found is not None and _read_define(found):
+            continue
+        elif found is not None and found[0] in COMMENTS and found[1]:
+            line = f"{{{found[0]}: {directive_text(found[1].upper())}}}"
+        out.append(line)
+    return out

@@ -1112,18 +1112,22 @@ and cache.
 - **`caracole render [--force] [--song "ARTIST - TITLE"]`** writes
   `sheet.cho`, `sheet.pdf` and `sheet.html` next to every kept sheet, or the
   one song's with `--song`, transposed as `[transpose]` says.
-  The PDF has the artist, the key and the capo on one line under the title
-  ("Soda Stereo · Key Bm · Capo 2"), the chord diagrams above the song, bold
-  chords in rust over the lyrics, and section names on a light band.
-  chordpro prints a text of the PDF's own, and `sheet.cho` stays as it is,
-  for the viewer: the tab's notes before its first section stay out of the
-  PDF (a tab after them stays in), the shapes of its chord legend
-  ("Cadd9 (x32033)") are the PDF's chord diagrams, the section names are in
+  The PDF has one line under the title: the artist and the viewer's key line
+  ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or "Soda Stereo · Key Bm"
+  without a capo), then a capo or a tuning the tab's notes name
+  ("Soda Stereo · Key Bm · half step down"). Then the chord diagrams above
+  the song, bold chords in rust over the lyrics, and section names on a light
+  band. chordpro prints a text of the PDF's own, and `sheet.cho` stays as it
+  is, for the viewer: the tab's notes before its first section stay out of the
+  PDF (a tab after them stays in), the chord diagrams are the shapes the
+  viewer shows first for the chords the sheet gives shapes for (its chord
+  legend, "Cadd9 (x32033)", wherever it is), the section names are in
   capitals and the song is in two columns.
   `sheet.html` is the sheet viewer, for the phone (see
   [The sheet viewer](#the-sheet-viewer)). A PDF is made again only when its
-  sheet, its transposition, the font, caracole's PDF style or the way caracole
-  writes the PDF's text changes, or when
+  sheet, its transposition, the font, caracole's PDF style or the text the
+  PDF prints changes (the key it names, as when an auto sheet's key is heard
+  again, or a newer caracole's way of writing it), or when
   it is no longer the PDF caracole wrote: deleted, cut short, edited, or a
   link in its place. So annotate a copy, not `sheet.pdf`. `--force` makes them
   all again (the song's alone, with `--song`). With `--song`, as after a pick

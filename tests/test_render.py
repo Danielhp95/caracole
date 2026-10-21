@@ -10,7 +10,9 @@ from pathlib import Path
 
 import pytest
 
+from caracole.pdf_text import pdf_text as printed_text
 from caracole.render import STYLE_FILE, RenderError, needs_font_file, render_pdf, write_chordpro
+from caracole.viewer.theory import Key
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 CHORDPRO = os.environ.get("CARACOLE_CHORDPRO_BIN") or shutil.which("chordpro")
@@ -122,8 +124,11 @@ def test_the_pdf_takes_caracoles_style(cho, tmp_path):
 def test_the_style_puts_key_and_capo_under_the_title_and_colours_the_chords():
     pdf = json.loads(STYLE_FILE.read_text(encoding="utf-8"))["pdf"]
     # ChordPro prints neither {artist} nor {capo} by default; a capo the guitarist can't see
-    # means playing in the wrong key. The key is transposed along with the chords.
-    assert pdf["formats"]["title"]["subtitle"] == ["", "%{artist}%{key| · Key %{}}%{capo| · Capo %{}}", ""]
+    # means playing in the wrong key. A sheet's PDF says its {subtitle} (pdf_text.py: the viewer's
+    # key line, a tuning), and a text with none (a songbook's song) the key, transposed along with
+    # the chords, and the capo.
+    assert pdf["formats"]["title"]["subtitle"] == [
+        "", "%{subtitle|%{}|%{artist}%{key| · Key %{}}%{capo| · Capo %{}}}", ""]
     assert pdf["fonts"]["chord"]["name"] == "Helvetica-Bold" and pdf["fonts"]["chord"]["color"] == "#b4441e"
     assert pdf["diagrams"]["show"] == "top"  # the shapes before the song, not after it
 
@@ -439,6 +444,22 @@ def test_render_real_chordpro_binary(tmp_path):
     assert any(font == "Helvetica" and "Tiny test" in shown for font, shown in strings)
     assert {"G", "D", "Em", "C", "G/B", "Am", "F"} <= {s.strip() for f, s in strings if f == "Helvetica-Bold"}
     assert b"0.705882 0.266667 0.117647 rg" in b"".join(_streams(pdf))  # the chords' colour, #b4441e
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_render_real_prints_the_tuning_under_the_title_in_place_of_key_and_capo(tmp_path):
+    # A sheet's PDF text says its key line and the tuning its notes name in {subtitle}
+    # (pdf_text.py), which the style prints; a song a half step down never reads as in standard tuning.
+    sheet = ("{title: Tuned}\n{artist: The Placeholders}\n{key: Em}\n{capo: 2}\n"
+             "Tuning: Eb Ab Db Gb Bb Eb (half step down)\n\n{comment: Verse}\n[Em]Tiny test\n")
+    cho = tmp_path / "sheet.cho"
+    cho.write_text(printed_text(sheet, key=Key(4, "aeolian"), capo=2), encoding="utf-8")
+    pdf = tmp_path / "sheet.pdf"
+    render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
+    text = pdf_text(pdf)
+    assert "The Placeholders · Em shapes · capo 2 · sounds F#m · half step down" in text
+    assert "Key Em" not in text and "Tuning" not in text and "VERSE" in text
 
 
 def _streams(path: Path) -> list[bytes]:

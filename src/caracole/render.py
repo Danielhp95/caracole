@@ -63,11 +63,12 @@ those names stay.
 The PDFs take caracole's look (``STYLE_FILE``, a ChordPro config) and are
 transposed by the song's ``[transpose]`` override. Each is made from a text of
 its own (caracole/pdf_text.py), the .cho staying as the viewer reads it: without
-the tab's notes, its chord legend's shapes as chord diagrams, the viewer's key
-line under the title, section names in capitals, in two columns. kv ``render:<song id>``
+the tab's notes, the shapes its viewer shows (its chord legend's) as chord diagrams,
+the viewer's key line under the title, section names in capitals, in two columns. kv ``render:<song id>``
 keeps what the song's PDF was made from (the SHA-256 of the .cho, the
-transposition, the font, the SHA-256 of the style, the PDF's name and
-``pdf_text.PDF_TEXT_VERSION``) and what was
+transposition, the font, the SHA-256 of the style, the PDF's name,
+``pdf_text.PDF_TEXT_VERSION`` and the SHA-256 of the text chordpro prints, whose
+key line and chord diagrams come from more than the .cho) and what was
 written (the PDF's length and SHA-256): its human sheet's, else its auto
 sheet's. ``render:<song id>:auto`` does the same for an auto sheet's PDF
 beside a human one. A PDF is rendered again only when one of those changes,
@@ -159,9 +160,10 @@ FONT_ELEMENTS = ("text", "title")
 
 # How the PDFs look (a ChordPro config): Helvetica, bold chords in caracole's rust,
 # the chord diagrams above the song, section names on a light band, and under the
-# title the artist, the key (transposed along with the chords) and the capo, which
-# ChordPro doesn't print by default: a capo the guitarist can't see means playing
-# in the wrong key. Its SHA-256 is in each PDF's record, so a new look renders
+# title the text's {subtitle} (a sheet's: pdf_text.py, the artist, the viewer's key
+# line, a tuning), else the artist, the key (transposed along with the chords) and the
+# capo (a songbook's song), which ChordPro doesn't print by default: a capo the guitarist
+# can't see means playing in the wrong key. Its SHA-256 is in each PDF's record, so a new look renders
 # every PDF once more.
 STYLE_FILE = Path(__file__).with_name("chordpro-style.json")
 
@@ -639,6 +641,9 @@ def _render_sheet_pdf(
         "style": _style(),
         "pdf": pdf.name,
         "pdf_text": PDF_TEXT_VERSION,
+        # What chordpro prints, made from more than the .cho: the sheet's key (an auto sheet's is
+        # heard, in its version's data) and the viewer's theory and shapes, which a newer caracole changes
+        "printed_sha": hashlib.sha256(printed.encode("utf-8")).hexdigest(),
     }
     if not force and _up_to_date(pdf, kv_get_json(conn, state_key), state):
         return _Done("skipped")
