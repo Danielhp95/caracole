@@ -27,7 +27,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   song's failure, or its wait for a CJK font, is not this one's.
 - ``lyrics``: LRCLIB.
 - ``ug``: Ultimate Guitar again, as the nightly run would: the top sheets
-  scored against the lyrics (a better one replaces the first), guitar parts
+  scored against the lyrics (a better one replaces the first, and the others
+  are kept beside it, said as "kept beside it: tab B, tab C"), guitar parts
   and the text tab. It spends only what leaves ``SHEETS_SHARE`` of the hour's
   lookup requests to UG for sheets (``after_the_sheet``), so that an evening
   of lookups keeps getting them.
@@ -488,7 +489,8 @@ class _Lookup:
         from caracole.ug.fetch import FetchContext
 
         rank = replace(self.cfg.rank, scored_sheets=_FIRST_SCORED) if first else self.cfg.rank
-        extra = {"max_pages_per_group": _FIRST_PAGES} if first else {}
+        # The first pass scores one sheet alone: the versions kept beside it wait for the ug stage.
+        extra = {"max_pages_per_group": _FIRST_PAGES, "versions": False} if first else {}
         return FetchContext(conn=self.conn, client=client, overrides=self.overrides, rank=rank,
                             library_dir=self.cfg.library_dir, now=self.now,
                             reload_overrides=lambda: load_overrides(self.cfg.overrides_file), **extra)
@@ -603,6 +605,8 @@ class _Lookup:
                 parts.append("Guitar Pro " + ", ".join(str(t) for t in out.guitar_pro))
             if out.tab is not None:
                 parts.append(f"tab {out.tab}")
+            if out.kept_versions:
+                parts.append("kept beside it: " + ", ".join(f"tab {t}" for t in out.kept_versions))
             return " · ".join(parts)
 
         out = self.after_the_sheet("ug", rest)

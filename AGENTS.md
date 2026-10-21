@@ -37,7 +37,7 @@ section says where things are, and the rules a change there keeps.
 | index | ug/sitemap.py, ug/index.py |
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
-| fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py, sheet_versions.py (a song's UG chords versions in rank order, the one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`; `as_data`, the pages' JSON) |
+| fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py, sheet_versions.py (a song's UG chords versions in rank order, the one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`: the versions the fetch scores, written by ug/fetch.py's `_keep_beside` with no request more, a pinned sheet's from the cache alone; `in_library`, the list as the library holds it; `as_data`, the pages' JSON) |
 | lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page), lacuerda_index.py (its listings of every artist, for searches) |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
@@ -122,8 +122,11 @@ Rules a change there keeps (the Invariants below are the others):
   inside the command's function (Heavy imports, below): get.py is `caracole get`, one song looked
   up now (the run's steps for that song alone, sheet first, at the lookup pace, then its `songbooks` stage: the songbooks of songbooks.toml that list the
   song, `songbook.songbooks_listing`, made again by `render_songbooks(only=…)`, then `write_pages` again once one was, as `caracole songbook render` writes the pages after; `--progress`, a
-  JSON line per event, for caracole serve), and review.py, search.py, removal.py and songbook.py
-  are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local indexes
+  JSON line per event, for caracole serve), versions_cmd.py is `caracole versions` (a song's UG
+  chords versions listed from sheet_versions.py with no request; `--keep`, one tab page at the
+  lookup pace, `ug.fetch.keep_version`, noted as yours in `sheet_versions.kept_by_you`; `--choose`,
+  get's `--tab`; `--clear`, `overrides.remove_pin` then get), and review.py, search.py, removal.py
+  and songbook.py are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local indexes
   alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
   gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
   (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
