@@ -82,7 +82,7 @@ from caracole.library import drop_file, holds, keep_file, kept_already, kept_fil
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title
 from caracole.overrides import LaCuerdaPick, Overrides
-from caracole.songs import SHEET_FILE_NAMES, Song, get_song, list_songs, refresh_status, update_song
+from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug.page import strip_markup
 from caracole.versions import (
     SHEET_KINDS,
@@ -99,7 +99,6 @@ log = logging.getLogger(__name__)
 ARTIST_PAGE_MAX_AGE = timedelta(days=30)
 RECHECK_AFTER = timedelta(days=30)
 _ACCEPT = (200, 404)  # a 404 is an answer: no such artist, or no such version
-HUMAN_SHEET, AUTO_SHEET = SHEET_FILE_NAMES  # "sheet.txt", "sheet (auto).txt"
 SHEET_DOCS = ("sheet.json", HUMAN_SHEET)  # what keeping a sheet writes, in that order
 _SLUG = re.compile(r"[a-z0-9_]+")  # an artist's name written as LaCuerda's slug of their page
 
