@@ -65,7 +65,8 @@ _PRECEDENCE = (_WANTED, "spotify")
 # ("render:7:auto"). It goes with a song merged into another or removed (delete_song_kv): SQLite
 # may give that id to the next new song.
 _PER_SONG_KV = ("render:", "render:files:", "render:export:", "render:progressions:", "ug:artist_page_checked:",
-                "autochords:failed:", "gtptabs:checked:", "ug:blocked:", "youtube:")
+                "autochords:failed:", "gtptabs:checked:", "ug:blocked:", "youtube:", "sheet_versions:same:",
+                "sheet_versions:yours:")
 
 
 def utc_now_iso() -> str:

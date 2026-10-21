@@ -11,7 +11,8 @@ Tables:
   pages, which the fetch reads once for the artist page it links to.
 - ``[pin]``: "Artist - Title" → tab page URLs to always use. Each pin keeps its
   tab id (``pin``) and the address you pasted (``pin_urls``): UG serves a
-  slugged tab only at its slugged URL.
+  slugged tab only at its slugged URL. ``remove_pin`` takes a song's pins out
+  (``caracole versions --clear``).
 - ``[transpose]``: "Artist - Title" → semitones, applied when sheets are rendered.
 - ``[version]``: "Artist - Title" → where you play the song, as "Make this my version" saves it
   (``add_version``): the key it plays in, as the sheet reads its chords, a mode chosen and its capo,
@@ -49,7 +50,7 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Collection, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlsplit
 
 import tomlkit
@@ -635,6 +636,46 @@ def add_pin(path: Path, display: str, urls: Sequence[str]) -> None:
     for u in urls:
         tab_id_from_url(u)
     _edit(path, lambda doc: _table_of(doc, "pin").__setitem__(display, list(urls)))
+
+
+def remove_pin(path: Path, display: str, tabs: Collection[int] | None = None) -> bool:
+    """Take the song's pins of ``tabs`` (every pin, with None) out of ``[pin]``, and an entry left empty with
+    them; whether one was there. The song's entries are found by its key, as the table is read (as
+    ``add_version`` finds them); the rest of the file, comments included, stays as it was."""
+    wanted = override_key(display)
+    removed = False
+    if read_text(path, OverridesError) is None:
+        return False  # no file, no pin: none is written
+
+    def change(doc) -> None:
+        nonlocal removed
+        if "pin" not in doc:
+            return
+        t = doc["pin"]
+        def goes(value: Any) -> bool:
+            try:
+                return tabs is None or tab_id_from_url(str(value)) in tabs
+            except OverridesError:
+                return False
+
+        for k in [k for k in t if _names_song(k, wanted)]:
+            values = t[k]
+            if isinstance(values, str):  # one pin, written as a string
+                if goes(values):
+                    del t[k]
+                    removed = True
+                continue
+            if not isinstance(values, list):
+                continue
+            for i in reversed(range(len(values))):
+                if goes(values[i]):
+                    del values[i]
+                    removed = True
+            if not len(values):
+                del t[k]
+
+    _edit(path, change)
+    return removed
 
 
 def _append_unique(doc, table: str, key: str, value: Any, same) -> None:
