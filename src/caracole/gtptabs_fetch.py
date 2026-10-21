@@ -268,7 +268,7 @@ def title_page(conn: sqlite3.Connection, song: Song, now: datetime) -> str | Non
     if conn.execute(f"SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id WHERE f.song_id = ? "
                     f"AND v.kind IN ({marks}) LIMIT 1", (song.id, *GUITAR_FILE_KINDS)).fetchone() is not None:
         return None
-    if not _before(kv_get(conn, f"{CHECKED_PREFIX}{song.id}"), now - RECHECK_AFTER):
+    if not stamps.before(kv_get(conn, f"{CHECKED_PREFIX}{song.id}"), now - RECHECK_AFTER):
         return None
     keys = list(dict.fromkeys(key for name in song.artists or [song.artist] for key in artist_keys(name)))
     title = title_key(song.title)
