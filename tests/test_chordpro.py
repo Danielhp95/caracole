@@ -428,3 +428,19 @@ def test_a_chord_name_cannot_embed_or_ask_for_a_local_image(tmp_path, image):
     render_pdf(cho, pdf, chordpro_bin=CHORDPRO, runner=in_tmp)
     data = pdf.read_bytes()
     assert not (b"/Width 37" in data and b"/Height 11" in data)
+
+
+def test_spaces_after_a_lines_first_chord_are_trimmed():
+    out = to_chordpro(
+        "[Verse]\n[ch]Em7[/ch]            [ch]G[/ch]\n  Today is gonna be the day\n",
+        title="T",
+        artist="A",
+    )
+    assert out.splitlines()[-1] == "[Em7]Today is gonn[G]a be the day"
+
+
+def test_spaces_between_later_chords_stay():
+    out = to_chordpro("[Verse]\n[ch]C[/ch]   [ch]F[/ch]\nla la   con\n", title="T", artist="A")
+    assert out.splitlines()[-1] == "[C]la l[F]a   con"
+    only = to_chordpro("[Verse]\n[ch]C[/ch]   [ch]F[/ch]\n", title="T", artist="A")
+    assert only.splitlines()[-1] == "[C] [F]"

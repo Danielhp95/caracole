@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 from conftest import add_song
-from helpers.songbooks import ZH_SHEET, FakeChordPro, keep_sheet, output_of, render_sheets
+from helpers.songbooks import SHEET, ZH_SHEET, FakeChordPro, keep_sheet, output_of, render_sheets
 
 from caracole.db import kv_get_json, kv_set_json
 from caracole.overrides import load_overrides
@@ -590,3 +590,103 @@ def test_the_real_pdf_of_a_chinese_songbook_embeds_the_font(conn, cfg):
     assert stats.failed == [] and stats.font_error is None
     data = (folder(cfg, "宋冬野的歌") / "songbook.pdf").read_bytes()
     assert Path(CJK_FONT).stem.split("-")[0].encode() in data
+
+
+def test_each_song_goes_in_as_its_pdf_text(conn, cfg, two):
+    fake = FakeChordPro()
+    render(conn, cfg, overrides(cfg, '[transpose]\n"Radiohead - Creep" = 2\n'), runner=fake)
+    creep, soda = inputs(fake, pdf_call(fake))
+    assert creep.startswith("{transpose: 2}\n{title: Creep}")
+    for text in (creep, soda):
+        assert "{columns: 2}" in text and "{subtitle:" in text
+    assert "Radiohead · Key A" in creep  # the key G, two semitones up: the line says what the chords play
+    cho_call = next(c for c in fake.calls if output_of(c).suffix == ".cho")
+    assert "{columns:" not in inputs(fake, cho_call)[0]  # songbook.cho stays the sheets as the apps read them
+
+
+def auto_sheet(conn, cfg, song, *, key=None):
+    """Keep an auto-chords sheet as the autochords step does: "sheet (auto).txt", from a versions row
+    with provider "auto", whose raw data holds the ``key`` heard, if any."""
+    from caracole.autochords import ChordSegment, build_sheet
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    text = build_sheet([ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G")], title=song.title,
+                       artist=song.artist, synced="[00:00.00]made up words to sing\n")
+    vid = upsert_version(conn, provider="auto", tab_id=f"auto-{song.id}", song_id=song.id, slot="sheet",
+                         kind="auto", rating=0, votes=0, version=1, label=None, url="",
+                         raw={"key": key} if key else {}, now="2026-10-18T03:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet (auto).txt",
+              data=text.encode("utf-8"), rank=1)
+
+
+def test_a_song_whose_key_is_heard_again_makes_the_pdf_again(conn, cfg):
+    # A song's PDF text is made from more than its .cho: an auto sheet's key is in its version's data.
+    # Heard again, the song's own PDF and the phone page say the new key, and so must the songbook's PDF.
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song, key="D")
+    render_sheets(conn, cfg)
+    make(cfg, "Campfire", "Placeholder Band - Synthetic Song")
+    render(conn, cfg)
+    auto_sheet(conn, cfg, song, key="G")
+    render_sheets(conn, cfg)
+    fake = FakeChordPro()
+    assert render(conn, cfg, runner=fake).rendered == 1
+    (sheet,) = inputs(fake, pdf_call(fake))
+    assert "{subtitle: Placeholder Band · Key G}" in sheet.splitlines()
+    assert render(conn, cfg).skipped == 1
+
+
+def test_a_newer_way_of_printing_a_song_makes_the_pdf_again(conn, cfg, two, monkeypatch):
+    # A newer caracole whose theory, key line or shapes print the same sheets another way.
+    from caracole import render as render_module
+
+    render(conn, cfg)
+    made = render_module.pdf_text
+    monkeypatch.setattr(render_module, "pdf_text", lambda cho, **kw: made(cho, **kw) + "{comment: newer}\n")
+    fake = FakeChordPro()
+    assert render(conn, cfg, runner=fake).rendered == 1
+    assert all(song.endswith("{comment: newer}\n") for song in inputs(fake, pdf_call(fake)))
+    assert render(conn, cfg).skipped == 1
+
+
+def test_letters_only_a_songs_notes_have_need_no_font(conn, cfg):
+    # The notes stay out of a song's PDF text, and so do the letters they alone have, as in its own PDF.
+    assert cfg.cjk_font is None
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet(conn, cfg, song, "Notas: 这是一个合成的例子\n\n" + SHEET)
+    render_sheets(conn, cfg)
+    make(cfg, "Campfire", "Soda Stereo - De Música Ligera")
+    fake = FakeChordPro()
+    stats = render(conn, cfg, runner=fake)
+    assert stats.font_error is None and stats.failed == [] and stats.rendered == 1
+    call = pdf_call(fake)
+    assert not any(a.startswith("--define=pdf.fonts") for a in call)
+    (sheet,) = inputs(fake, call)
+    assert "这是一个" not in sheet
+    assert "这是一个" in (folder(cfg) / "songbook.cho").read_text(encoding="utf-8")  # the apps' file keeps the notes
+
+
+@pytest.mark.parametrize("part", ["viewer_key", "pdf_text"])
+def test_a_song_whose_pdf_text_cant_be_made_fails_the_songbooks_pdf_alone(conn, cfg, two, caplog, monkeypatch,
+                                                                          part):
+    # A song's PDF text runs the viewer's code: a bug there costs the songbooks it is in their PDF,
+    # and nothing else: their page, their ChordPro file and the other songbooks are still made.
+    from caracole import render as render_module
+
+    make(cfg, "Picnic", "Soda Stereo - De Música Ligera")
+    real = getattr(render_module, part)
+
+    def broken(cho, *args, **kwargs):
+        if "Creep" in cho:
+            raise ValueError("a bug in the viewer's theory")
+        return real(cho, *args, **kwargs)
+
+    monkeypatch.setattr(render_module, part, broken)
+    stats = render(conn, cfg)
+    assert stats.failed == ["Campfire"] and stats.rendered == 1
+    assert not (folder(cfg) / "songbook.pdf").exists()
+    assert (folder(cfg) / "songbook.html").exists() and (folder(cfg) / "songbook.cho").exists()
+    assert (folder(cfg, "Picnic") / "songbook.pdf").exists()
+    assert "songbook Campfire: no songbook.pdf" in caplog.text
+    assert "Traceback" in caplog.text and "a bug in the viewer's theory" in caplog.text

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from caracole.chordpro import to_chordpro
-from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Tab, Text, parse_sheet
+from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Tab, Text, parse_sheet, split_preamble
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 
@@ -115,3 +117,82 @@ def test_the_chords_a_sheet_defines_are_kept_as_written():
                         "{chord: G frets 3 2 0 0 3 3}\n{define: }\n[Cadd9]la\n")
     assert sheet.defines == ["Cadd9 base-fret 1 frets x 3 2 0 3 3 fingers 0 2 1 0 3 4", "G frets 3 2 0 0 3 3"]
     assert [s.lines for s in sheet.sections] == [[Lyrics([(0, "la")])]]  # neither a line nor a section
+
+
+def test_the_preamble_holds_the_notes_the_legend_and_the_tuning():
+    lines = fixture("legend_sheet.cho").splitlines()
+    pre = split_preamble(lines)
+    assert "http://example.com/watch?v=placeholder&feature=related" in pre.notes
+    assert [(c.root, c.suffix, p[0]) for c, p in pre.legend if c.suffix == "m7"] == [(4, "m7", "022033")]
+    assert pre.tuning is None
+    assert pre.capo_note == "Capo 2"
+    assert pre.tabs == ()
+    assert lines[pre.end] == "{comment: Intro}"
+
+
+def test_a_tuning_note_is_read():
+    lines = ["Tuning: Eb Ab Db Gb Bb Eb (half step down)", "", "{comment: Verse}", "[Em]words", "{comment: Chorus}", "[G]more"]
+    pre = split_preamble(lines)
+    assert pre.tuning == "half step down"
+    assert pre.capo_note is None
+    assert lines[pre.end] == "{comment: Verse}"
+
+
+@pytest.mark.parametrize(("note", "tuning"), [
+    ("Eb standard tuning", "Eb standard"),
+    ("Tuning: Eb standard", "Eb standard"),
+    ("Drop D tuning", "Drop D"),
+    ("Capo 2, drop d", "drop d"),
+    ("Drop C# (C# G# C# F# A# D#)", "Drop C#"),
+    ("Drop A, capo 1", "Drop A"),
+    ("Tuning: DADGAD", "DADGAD"),
+    ("Tuning = Open G", "Open G"),
+    # Everyday English, and notes that only talk about the tuning: none of it names one
+    ("Please drop a comment and rate!", None),
+    ("Drop A Comment And Rate", None),
+    ("drop by my channel", None),
+    ("Let the chorus drop down soft", None),
+    ("Grab standard picks for this one", None),
+    ("I'm not sure about the tuning here, tell me in the comments", None),
+    ("Standard tuning", None),
+    ("Tuning: Standard (EADGBE)", None),
+    ("Tuning: E A D G B E", None),
+])
+def test_only_a_tuning_a_note_names_is_read(note, tuning):
+    # The PDF prints it under the title: a made-up one would make a song in standard tuning read as
+    # if in another. A tuning is named ("half step down", "Drop D", "Eb standard") or given after a
+    # "Tuning:" label; standard tuning goes unsaid.
+    lines = [note, "", "{comment: Verse}", "[Em]words", "{comment: Chorus}", "[G]more"]
+    pre = split_preamble(lines)
+    assert pre.notes == (note,)
+    assert pre.tuning == tuning
+
+
+def test_a_lacuerda_sheet_without_sections_has_no_preamble():
+    lines = ["[Em]Words to [G]sing", "[Am]and more", "", "[C]still more"]
+    pre = split_preamble(lines)
+    assert (pre.notes, pre.legend, pre.tabs, pre.tuning, pre.capo_note, pre.end) == ((), (), (), None, None, 0)
+
+
+def test_a_blank_line_after_the_header_does_not_move_where_the_body_starts():
+    lines = ["{title: x}", "", "note one", "note two", "", "{comment: Verse}", "[Em]hi", "{comment: Chorus}", "[G]x"]
+    pre = split_preamble(lines)
+    assert pre.notes == ("note one", "note two")
+    assert pre.end == 5
+    assert lines[pre.end] == "{comment: Verse}"
+
+
+def test_several_leading_blank_lines_and_a_comment_line_are_not_counted():
+    lines = ["", "{title: x}", "", "", "# a comment", "note one", "", "{comment: Verse}", "[Em]hi"]
+    pre = split_preamble(lines)
+    assert pre.notes == ("note one",)
+    assert lines[pre.end] == "{comment: Verse}"
+
+
+def test_a_preamble_ends_at_a_tab_after_a_blank_header_line():
+    lines = ["{title: x}", "", "note one", "{start_of_tab}", "e|--", "{end_of_tab}", "{comment: Verse}", "[Em]hi"]
+    pre = split_preamble(lines)
+    assert pre.notes == ("note one",)
+    assert pre.tabs == ()
+    assert pre.end == 3
+    assert lines[pre.end] == "{start_of_tab}"

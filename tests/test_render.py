@@ -10,7 +10,9 @@ from pathlib import Path
 
 import pytest
 
+from caracole.pdf_text import pdf_text as printed_text
 from caracole.render import STYLE_FILE, RenderError, needs_font_file, render_pdf, write_chordpro
+from caracole.viewer.theory import Key
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 CHORDPRO = os.environ.get("CARACOLE_CHORDPRO_BIN") or shutil.which("chordpro")
@@ -122,10 +124,17 @@ def test_the_pdf_takes_caracoles_style(cho, tmp_path):
 def test_the_style_puts_key_and_capo_under_the_title_and_colours_the_chords():
     pdf = json.loads(STYLE_FILE.read_text(encoding="utf-8"))["pdf"]
     # ChordPro prints neither {artist} nor {capo} by default; a capo the guitarist can't see
-    # means playing in the wrong key. The key is transposed along with the chords.
-    assert pdf["formats"]["title"]["subtitle"] == ["", "%{artist}%{key| · Key %{}}%{capo| · Capo %{}}", ""]
+    # means playing in the wrong key. A sheet's PDF says its {subtitle} (pdf_text.py: the viewer's
+    # key line, a tuning), and a text with none (a songbook's song) the key, transposed along with
+    # the chords, and the capo.
+    assert pdf["formats"]["title"]["title"] == ["%{title}", "", ""]
+    assert pdf["formats"]["title"]["subtitle"] == ["%{subtitle}", "", ""]
     assert pdf["fonts"]["chord"]["name"] == "Helvetica-Bold" and pdf["fonts"]["chord"]["color"] == "#b4441e"
+    assert pdf["fonts"]["comment"] == {"name": "Helvetica-Bold", "size": 9, "color": "#b4441e"}  # no background
     assert pdf["diagrams"]["show"] == "top"  # the shapes before the song, not after it
+    # The chord boxes of style C as the sketches page rendered it (B's 9 pt boxes, smaller in two columns)
+    assert {k: pdf["diagrams"][k] for k in ("width", "height", "hspace", "dotsize")} == {
+        "width": 7, "height": 7, "hspace": 3.6, "dotsize": 0.85}
 
 
 def test_the_style_leaves_every_text_element_to_the_cjk_font():
@@ -423,13 +432,15 @@ def test_render_real_chordpro_binary(tmp_path):
         capo=2,
     )
     pdf = tmp_path / "sheet.pdf"
-    render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
+    printed = tmp_path / "printed.cho"  # the PDF's own text, whose {subtitle} the style prints
+    printed.write_text(printed_text(cho.read_text(encoding="utf-8"), key=Key(7, "ionian"), capo=None), encoding="utf-8")
+    render_pdf(printed, pdf, chordpro_bin=CHORDPRO)
     assert pdf.read_bytes().startswith(b"%PDF")
     text = pdf_text(pdf)
     for shown in [
         "Synthetic Test Song",
-        "The Placeholders · Key G · Capo 2",
-        "Verse 1",
+        "The Placeholders · Key G",
+        "VERSE 1",
         "Tiny test",
     ]:
         assert shown in text
@@ -439,6 +450,22 @@ def test_render_real_chordpro_binary(tmp_path):
     assert any(font == "Helvetica" and "Tiny test" in shown for font, shown in strings)
     assert {"G", "D", "Em", "C", "G/B", "Am", "F"} <= {s.strip() for f, s in strings if f == "Helvetica-Bold"}
     assert b"0.705882 0.266667 0.117647 rg" in b"".join(_streams(pdf))  # the chords' colour, #b4441e
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_render_real_prints_the_tuning_under_the_title_in_place_of_key_and_capo(tmp_path):
+    # A sheet's PDF text says its key line and the tuning its notes name in {subtitle}
+    # (pdf_text.py), which the style prints; a song a half step down never reads as in standard tuning.
+    sheet = ("{title: Tuned}\n{artist: The Placeholders}\n{key: Em}\n{capo: 2}\n"
+             "Tuning: Eb Ab Db Gb Bb Eb (half step down)\n\n{comment: Verse}\n[Em]Tiny test\n")
+    cho = tmp_path / "sheet.cho"
+    cho.write_text(printed_text(sheet, key=Key(4, "aeolian"), capo=2), encoding="utf-8")
+    pdf = tmp_path / "sheet.pdf"
+    render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
+    text = pdf_text(pdf)
+    assert "The Placeholders · Em shapes · capo 2 · sounds F#m · half step down" in text
+    assert "Key Em" not in text and "Tuning" not in text and "VERSE" in text
 
 
 def _streams(path: Path) -> list[bytes]:
@@ -461,6 +488,7 @@ def test_render_real_transposes_chords_and_key(tmp_path):
         artist="A",
         key="E",
     )
+    cho.write_text(printed_text(cho.read_text(encoding="utf-8"), key=Key(2, "ionian"), capo=None), encoding="utf-8")
     pdf = tmp_path / "sheet.pdf"
     render_pdf(cho, pdf, transpose=-2, chordpro_bin=CHORDPRO)
     text = pdf_text(pdf)
@@ -523,6 +551,7 @@ def test_render_real_chinese_sheet_with_cjk_font(tmp_path):
     cho = write_chordpro(
         fixture("zh_sheet.txt"), tmp_path / "sheet.cho", title="斑马斑马", artist="宋冬野"
     )
+    cho.write_text(printed_text(cho.read_text(encoding="utf-8"), key=None, capo=None), encoding="utf-8")
     pdf = tmp_path / "sheet.pdf"
     render_pdf(cho, pdf, chordpro_bin=CHORDPRO, font_file=Path(CJK_FONT))
     runs, programs = pdf_runs(pdf)

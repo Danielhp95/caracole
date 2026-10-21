@@ -217,7 +217,7 @@ def sheet_shapes(given: list[tuple[Chord, Position]]) -> dict[str, dict[str, Any
     for chord, position in given:
         if not plays(position, chord):
             continue
-        key = f"{chord.root},{chord.suffix},{'' if chord.bass is None else chord.bass}"
+        key = shape_key(chord)
         if key not in shapes:
             # chords-db's, as the viewer shows them (viewer.js shapesOf): the slash chord's own, else its quality's
             fingering, _, slash = voicing_keys(chord)
@@ -235,6 +235,11 @@ def sheet_shapes(given: list[tuple[Chord, Position]]) -> dict[str, dict[str, Any
         entry["list"].insert(entry["mine"], position)
         entry["mine"] += 1
     return shapes
+
+
+def shape_key(chord: Chord) -> str:
+    """Where ``sheet_shapes`` files a chord's shapes: the chord as shown, "<root>,<suffix>,<bass>"."""
+    return f"{chord.root},{chord.suffix},{'' if chord.bass is None else chord.bass}"
 
 
 def _absolute(position: Position) -> tuple[int | None, ...]:

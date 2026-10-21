@@ -61,9 +61,16 @@ the .cho and the viewer while they are still as written. Files of yours by
 those names stay.
 
 The PDFs take caracole's look (``STYLE_FILE``, a ChordPro config) and are
-transposed by the song's ``[transpose]`` override. kv ``render:<song id>``
+transposed by the song's ``[transpose]`` override. Each is made from a text of
+its own (caracole/pdf_text.py), the .cho staying as the viewer reads it: without
+the tab's notes, the shapes its viewer shows (its chord legend's) as chord diagrams,
+the viewer's key line under the title, section names in capitals, in two columns. That
+text runs the viewer's code: a bug there fails that song's PDF alone, logged with its traceback,
+as a chordpro failure does, and its viewer is still written. kv ``render:<song id>``
 keeps what the song's PDF was made from (the SHA-256 of the .cho, the
-transposition, the font, the SHA-256 of the style and the PDF's name) and what was
+transposition, the font, the SHA-256 of the style, the PDF's name,
+``pdf_text.PDF_TEXT_VERSION`` and the SHA-256 of the text chordpro prints, whose
+key line and chord diagrams come from more than the .cho) and what was
 written (the PDF's length and SHA-256): its human sheet's, else its auto
 sheet's. ``render:<song id>:auto`` does the same for an auto sheet's PDF
 beside a human one. A PDF is rendered again only when one of those changes,
@@ -81,8 +88,8 @@ the sheet keeps the built-in fonts.
 Others can write to the library (the Syncthing group, every synced device), so
 no sheet there is read through a symbolic link: a link or a FIFO in the place of
 ``sheet.json``, ``sheet (auto).txt``, a .cho or a viewer fails that song (a viewer's
-alone: the PDFs are still rendered). chordpro reads a
-copy of the .cho and writes the PDF in a private directory under the cache
+alone: the PDFs are still rendered). chordpro reads the
+PDF's text and writes the PDF in a private directory under the cache
 directory, and the PDF then goes into the song's folder in one rename.
 """
 
@@ -121,6 +128,7 @@ from caracole.library import (
 from caracole.keys import sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
+from caracole.pdf_text import PDF_TEXT_VERSION, pdf_text
 from caracole.songs import (
     AUTO_SHEET,
     HUMAN_SHEET,
@@ -130,9 +138,11 @@ from caracole.songs import (
     get_song,
     list_songs,
 )
-from caracole.ug.page import json_int
+from caracole.ug.page import decode_twice, json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
+from caracole.viewer.page import viewer_key
+from caracole.viewer.theory import Key
 
 log = logging.getLogger(__name__)
 
@@ -151,11 +161,11 @@ TIMEOUT = 120  # seconds; a sheet renders in about one
 FONT_ELEMENTS = ("text", "title")
 
 # How the PDFs look (a ChordPro config): Helvetica, bold chords in caracole's rust,
-# the chord diagrams above the song, section names on a light band, and under the
-# title the artist, the key (transposed along with the chords) and the capo, which
-# ChordPro doesn't print by default: a capo the guitarist can't see means playing
-# in the wrong key. Its SHA-256 is in each PDF's record, so a new look renders
-# every PDF once more.
+# the chord diagrams above the song, section names in small rust capitals with no band,
+# and under the title the text's {subtitle} (pdf_text.py: the artist, the viewer's key
+# line, a capo or a tuning the notes name), as ChordPro prints neither the artist nor the
+# capo by default: a capo the guitarist can't see means playing in the wrong key. Its
+# SHA-256 is in each PDF's record, so a new look renders every PDF once more.
 STYLE_FILE = Path(__file__).with_name("chordpro-style.json")
 
 Runner = Callable[..., subprocess.CompletedProcess]
@@ -595,8 +605,8 @@ def _render_sheet(
         return data is not None
 
     try:
-        done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, transpose,
-                                 cjk_font=cjk_font, runner=runner, force=force)
+        done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, transpose, key=key[0],
+                                 capo=sheet.capo, cjk_font=cjk_font, runner=runner, force=force)
     except RenderError:
         viewer()  # the PDF's error is the song's; the viewer's own, if any, is logged
         raise
@@ -612,29 +622,53 @@ def _render_sheet_pdf(
     state_key: str,
     transpose: int,
     *,
+    key: str | None,
+    capo: int | None,
     cjk_font: Path | None,
     runner: Runner,
     force: bool,
 ) -> _Done:
-    """Render the ChordPro ``text`` to ``pdf`` unless kv ``state_key`` says it is up to date."""
-    need = _font_need(text)
+    """Render the ChordPro ``text`` to ``pdf`` unless kv ``state_key`` says it is up to date: chordpro
+    prints the PDF's own text (``_printed``), and the font is the one that text needs. A text that
+    can't be made (a bug in the viewer's code it runs) is a RenderError, logged with its traceback:
+    this PDF fails, and the pass goes on."""
+    try:
+        printed = _printed(text, key=key, capo=capo, transpose=transpose)
+    except Exception as e:  # a sheet the viewer's code can't read must never cost the other PDFs
+        log.warning("%s: cannot make the text of %s", song.display, pdf.name, exc_info=True)
+        raise RenderError(f"cannot make the text of {pdf.name}: {type(e).__name__}: {e}") from e
+    need = _font_need(printed)
     font = cjk_font if need else None
     if need == "letters" and font is None:
-        return _Done("no font", missing=_first_lost_letter(text))
+        return _Done("no font", missing=_first_lost_letter(printed))
     state = {
         "source_sha": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "transpose": transpose,
         "font": str(font) if font else None,
         "style": _style(),
         "pdf": pdf.name,
+        "pdf_text": PDF_TEXT_VERSION,
+        # What chordpro prints, made from more than the .cho: the sheet's key (an auto sheet's is
+        # heard, in its version's data) and the viewer's theory and shapes, which a newer caracole changes
+        "printed_sha": hashlib.sha256(printed.encode("utf-8")).hexdigest(),
     }
     if not force and _up_to_date(pdf, kv_get_json(conn, state_key), state):
         return _Done("skipped")
-    sha, size = _render_into(text, pdf, work_dir=cfg.cache_dir, transpose=transpose,
+    sha, size = _render_into(printed, pdf, work_dir=cfg.cache_dir, transpose=transpose,
                              chordpro_bin=cfg.chordpro_bin, font_file=font, runner=runner)
     kv_set_json(conn, state_key, {**state, "pdf_sha256": sha, "pdf_size": size})
     write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
     return _Done("rendered")
+
+
+def _printed(text: str, *, key: str | None, capo: int | None, transpose: int) -> str:
+    """The text chordpro prints of the sheet ``text`` (``pdf_text``), with the key of its shapes as its
+    viewer names it from ``key`` (the sheet's, ``keys.sheet_keys``), moved by ``transpose`` as chordpro
+    moves the chords, and the look-alike letters capitals can make written in Latin (``_as_latin``)."""
+    shapes = viewer_key(text, key)
+    if shapes is not None:
+        shapes = Key((shapes.tonic + transpose) % 12, shapes.mode)
+    return _as_latin(pdf_text(text, key=shapes, capo=capo))
 
 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *,
@@ -787,7 +821,7 @@ def _human_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) ->
     if not isinstance(content, str) or not content.strip():
         raise RenderError(f"{path} holds no sheet content")
     raw = get_version(conn, kept.version_id).raw
-    return _Sheet(content, key=_key(raw), capo=_capo(doc.get("meta")))
+    return _Sheet(decode_twice(content), key=_key(raw), capo=_capo(doc.get("meta")))
 
 
 def _key(raw: Mapping[str, Any]) -> str | None:
@@ -826,17 +860,17 @@ def _render_into(
     font_file: Path | None,
     runner: Runner,
 ) -> tuple[str, int]:
-    """``render_pdf`` of the ChordPro ``text`` in a private directory, then the PDF to ``pdf``; return
-    the SHA-256 and the length of the PDF written.
+    """``render_pdf`` of the ChordPro ``text`` (a PDF's own, ``_printed``) in a private directory, then
+    the PDF to ``pdf``; return the SHA-256 and the length of the PDF written.
 
     chordpro opens its input and its output by name and follows symbolic links, and
     others can write to the song's folder: either file could be swapped for a link
     while it runs, to print one of caracole's private files into the PDF or to write
-    over it. So chordpro reads a copy of the .cho and writes the PDF in a directory
+    over it. So chordpro reads the text, as a file, and writes the PDF in a directory
     of its own under ``work_dir`` (the cache), which only caracole can enter (mode
     0700). The PDF then goes to ``pdf`` through ``write_atomic``, so a failed run
     leaves the last good one in place, and another caracole rendering the same sheet
-    isn't in the way. The copies keep the sheet's names: chordpro picks its backend
+    isn't in the way. Both files keep the sheet's names: chordpro picks its backend
     by the extension, and its messages then say which sheet failed.
     """
     work_dir.mkdir(mode=0o700, parents=True, exist_ok=True)

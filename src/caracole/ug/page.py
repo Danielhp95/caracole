@@ -23,7 +23,7 @@ import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from html import unescape as decode_entities
+from html import unescape
 from typing import Any
 
 from selectolax.lexbor import LexborHTMLParser
@@ -218,6 +218,18 @@ def read_versions(
     return tuple(v for v in map(parse_version, items) if v is not None)
 
 
+_ENTITY = re.compile(r"&(#\d+|#x[0-9a-f]+|[a-z]+);", re.I)
+
+
+def decode_twice(text: str) -> str:
+    """Decode HTML entities, and once more when the result still holds one.
+
+    UG escapes a sheet's text inside its JSON ("&amp;"), and some sheets were escaped twice
+    on its side ("&amp;amp;feature"). A sheet kept before this pass still holds either."""
+    text = unescape(text)
+    return unescape(text) if _ENTITY.search(text) else text
+
+
 def parse_tab_page(html: str | bytes, *, url: str | None = None) -> UGTabPage:
     """Parse a tab page. ``url`` is only used in error messages."""
     data = read_page_data(html, url=url)
@@ -236,8 +248,8 @@ def parse_tab_page(html: str | bytes, *, url: str | None = None) -> UGTabPage:
             raise PageParseError("ug", url, None, f"{tab.type} page without wiki_tab.content")
     else:
         # UG keeps the sheet text HTML-escaped inside its JSON ("&amp;"), on top of the
-        # attribute's own escaping, so it needs one more decoding pass.
-        content = decode_entities(content)
+        # attribute's own escaping, so it needs one more decoding pass (two for some).
+        content = decode_twice(content)
     meta = view.get("meta")
     return UGTabPage(
         tab=tab,

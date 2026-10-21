@@ -37,7 +37,7 @@ def test_the_text_before_the_first_section_is_folded_after_two_lines():
     summary, body = fold.groups()
     # the summary: the first two lines, to read at a glance, and More
     assert "This is a made-up note about the version" in summary
-    assert "http://example.com/watch?v=placeholder&amp;amp;feature=related" in summary
+    assert "http://example.com/watch?v=placeholder&amp;feature=related" in summary
     assert "and these are the chords" not in summary
     assert ">More<" in summary
     # inside: all of it, the legend's chords as any chord on the sheet

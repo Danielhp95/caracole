@@ -33,6 +33,10 @@ _STAFF = re.compile(r"\s*(?:[A-Ga-g][#b]?\s*[|:]|\|)[\s\d|:()\[\]<>/\\^~*.=+'hpb
 _SOLFEGE = re.compile(r"(?i)(do|re|mi|fa|sol|la|si)(?!dd|ug|lt)")
 _SOLFEGE_LETTER = {"do": "C", "re": "D", "mi": "E", "fa": "F", "sol": "G", "la": "A", "si": "B"}
 
+# The spaces between a line's first chords and its first word: the lyric's own indent, which
+# only pushes the words away from their chord. Spaces before another chord stay.
+_LEAD_GAP = re.compile(r"^((?:\[[^\[\]]*\])+) +(?=[^\[\s])")
+
 TAB_STOP = 8
 
 
@@ -65,7 +69,8 @@ def is_chord_line(line: str) -> bool:
 def merge_chord_line(chords: str, lyrics: str) -> str:
     """One ChordPro line: each chord of the chord line placed at its column in the lyric line.
 
-    A chord beyond the end of the lyric is padded out with spaces.
+    A chord beyond the end of the lyric is padded out with spaces. The spaces directly after the
+    line's leading chords are dropped; later chords stay on the same letters.
     """
     text = _escape_inline(_TAB_MARK.sub("", lyrics).expandtabs(TAB_STOP).rstrip())
     out: list[str] = []
@@ -80,7 +85,7 @@ def merge_chord_line(chords: str, lyrics: str) -> str:
             col = at
         out.append(token)
     out.append(text[i:])
-    return _finish("".join(out))
+    return _finish(_LEAD_GAP.sub(r"\1", "".join(out)))
 
 
 def to_chordpro(

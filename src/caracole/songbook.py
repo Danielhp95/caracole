@@ -73,9 +73,11 @@ from caracole.render import (
     _first_lost_letter,
     _font_need,
     _font_options,
+    _printed,
     _style,
     written_file,
 )
+from caracole.viewer.sheet import parse_sheet
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -704,17 +706,27 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
     songs = [(e.title, e.artist, e.cho, e.transpose) for e in playable]
     make(CHO_NAME, {"songs": songs, "v": 1}, lambda: _chordpro_file(cfg, playable, runner) if playable else None)
 
-    text = "\n".join([book.name, *(e.cho or f"{e.title} {e.artist} {e.missing}" for e in entries)])
-    need = _font_need(text)
-    pdf_font = font if need else None
-    if need == "letters" and font is None:
-        done.no_font = _first_lost_letter(text)
-    else:
-        pdf_inputs = {
-            "name": book.name, "songs": [(e.title, e.artist, e.cho, e.transpose, e.missing) for e in entries],
-            "style": _style(), "book": BOOK_CONFIG, "font": str(pdf_font) if pdf_font else None, "v": 2,
-        }
-        make(PDF_NAME, pdf_inputs, lambda: _pdf(cfg, book, entries, runner, font=pdf_font) if playable else None)
+    # What chordpro prints of each song: made from more than its .cho (its key, the viewer's theory and
+    # shapes), so the PDF's inputs hold these texts, and the font is the one they need
+    try:
+        printed = [_song_file(e, pdf=True) for e in entries]
+    except RenderError as e:
+        log.warning("songbook %s: no %s: %s", book.name, PDF_NAME, e)
+        done.failed = True
+        printed = None
+    if printed is not None:
+        text = "\n".join([book.name, *printed])
+        need = _font_need(text)
+        pdf_font = font if need else None
+        if need == "letters" and font is None:
+            done.no_font = _first_lost_letter(text)
+        else:
+            pdf_inputs = {
+                "name": book.name, "songs": printed, "style": _style(), "book": BOOK_CONFIG,
+                "font": str(pdf_font) if pdf_font else None, "v": 4,
+            }
+            make(PDF_NAME, pdf_inputs, lambda: _pdf(cfg, book, entries, printed, runner, font=pdf_font)
+                 if playable else None)
 
     from caracole.viewer.book import BookSong, assets_version, build_songbook
 
@@ -862,16 +874,25 @@ def _like_prefix(prefix: str) -> str:
 # --- the chordpro runs -------------------------------------------------------------------------
 
 
-def _song_file(entry: Entry) -> str:
+def _song_file(entry: Entry, *, pdf: bool = False) -> str:
     """One song for chordpro: its sheet in its transposition ({transpose} before {key}, so the key moves
-    too), or a page naming it as missing, which the contents then name too."""
+    too; for the PDF the sheet's PDF text, ``render._printed``, whose key line is moved by hand), or a
+    page naming it as missing, which the contents then name too. A PDF text that can't be made (a bug
+    in the viewer's code it runs) is a RenderError, logged with its traceback."""
     if entry.cho is not None:
-        return (f"{{transpose: {entry.transpose}}}\n" if entry.transpose else "") + entry.cho
+        text = entry.cho
+        if pdf:
+            try:
+                text = _printed(text, key=entry.key, capo=parse_sheet(text).capo, transpose=entry.transpose)
+            except Exception as e:  # a sheet the viewer's code can't read costs the PDFs it is in, and no more
+                log.warning("%s: cannot make its text for the songbook PDF", entry.text, exc_info=True)
+                raise RenderError(f"cannot make the text of {entry.text}: {type(e).__name__}: {e}") from e
+        return (f"{{transpose: {entry.transpose}}}\n" if entry.transpose else "") + text
     why = ("caracole has no sheet for this song yet." if entry.missing == MISSING_SHEET
            else "This song isn't in the library.")
     who = f"{entry.artist} · missing: {entry.missing}" if entry.artist else f"missing: {entry.missing}"
     return (f"{{title: {directive_text(entry.title)}}}\n{{artist: {directive_text(who)}}}\n"
-            f"{{comment: {directive_text(why)}}}\n")
+            f"{{subtitle: {directive_text(who)}}}\n{{comment: {directive_text(why)}}}\n")
 
 
 def _contents_file(book: Songbook, entries: Sequence[Entry]) -> str:
@@ -880,7 +901,7 @@ def _contents_file(book: Songbook, entries: Sequence[Entry]) -> str:
     count = f"{len(entries)} song{'' if len(entries) == 1 else 's'}"
     if missing:
         count += f", {missing} without a sheet yet"
-    return (f"{{title: {directive_text(book.name)}}}\n{{artist: {directive_text(count)}}}\n\n"
+    return (f"{{title: {directive_text(book.name)}}}\n{{artist: {directive_text(count)}}}\n{{subtitle: {directive_text(count)}}}\n\n"
             "A caracole songbook\n{new_page}\n{comment: Contents}\n")
 
 
@@ -895,10 +916,12 @@ def _book_config(book: Songbook) -> dict[str, Any]:
 _BRACES = str.maketrans("{}", "()")
 
 
-def _pdf(cfg: Config, book: Songbook, entries: Sequence[Entry], runner: Runner, *, font: Path | None) -> bytes:
-    """songbook.pdf: every song, in order, through one chordpro run, in caracole's look."""
+def _pdf(cfg: Config, book: Songbook, entries: Sequence[Entry], printed: Sequence[str], runner: Runner, *,
+         font: Path | None) -> bytes:
+    """songbook.pdf: every song, in order (``printed``: each one's ``_song_file`` for the PDF), through
+    one chordpro run, in caracole's look."""
     with _workspace(cfg) as tmp:
-        files = _write_songs(tmp, entries)
+        files = _write_songs(tmp, printed)
         (tmp / CONTENTS_TEMPLATE).write_text(_contents_file(book, entries), encoding="utf-8")
         config = tmp / BOOK_CONFIG_NAME
         config.write_text(json.dumps(_book_config(book), ensure_ascii=False), encoding="utf-8")
@@ -916,7 +939,7 @@ def _chordpro_file(cfg: Config, entries: Sequence[Entry], runner: Runner) -> byt
     """songbook.cho: the sheets, each in its key, as chordpro's own ChordPro backend writes them, split
     by {new_song}, without the chord definitions an app may not read (--diagrams=none)."""
     with _workspace(cfg) as tmp:
-        files = _write_songs(tmp, entries)
+        files = _write_songs(tmp, [_song_file(e) for e in entries])
         out = tmp / CHO_NAME
         _run([cfg.chordpro_bin, "--nodefaultconfigs", "--diagrams=none", f"--output={out}", *map(str, files)],
              runner, len(files), cfg.chordpro_bin)
@@ -932,11 +955,11 @@ def _workspace(cfg: Config) -> Iterator[Path]:
         yield Path(tmp)
 
 
-def _write_songs(tmp: Path, entries: Sequence[Entry]) -> list[Path]:
+def _write_songs(tmp: Path, texts: Sequence[str]) -> list[Path]:
     files = []
-    for n, entry in enumerate(entries, start=1):
+    for n, text in enumerate(texts, start=1):
         path = tmp / f"{n:03d}.cho"
-        path.write_text(_song_file(entry), encoding="utf-8")
+        path.write_text(text, encoding="utf-8")
         files.append(path)
     return files
 

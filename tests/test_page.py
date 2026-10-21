@@ -325,3 +325,13 @@ def test_sheet_text_html_entities_are_decoded():
 
     html_ = make_tab_page_html(version_dict(1), [], content="Tom &amp; Jerry&#039;s [ch]G[/ch] &lt;3")
     assert parse_tab_page(html_).content == "Tom & Jerry's [ch]G[/ch] <3"
+
+
+def test_a_twice_escaped_entity_is_decoded():
+    # Some sheets were escaped twice on UG's side ("&amp;amp;feature"), so they need a third pass.
+    from helpers.ug_pages import make_tab_page_html, version_dict
+
+    from caracole.ug.page import parse_tab_page
+
+    html_ = make_tab_page_html(version_dict(1), [], content="watch?v=x&amp;amp;feature=related [ch]G[/ch]")
+    assert parse_tab_page(html_).content == "watch?v=x&feature=related [ch]G[/ch]"

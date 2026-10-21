@@ -27,6 +27,7 @@ from caracole.db import kv_get_json, kv_set_json
 from caracole.lacuerda import parse_version_page
 from caracole.library import drop_file, keep_file, song_dir, write_atomic, write_info
 from caracole.overrides import Overrides, load_overrides
+from caracole.pdf_text import PDF_TEXT_VERSION
 from caracole.render import STYLE_FILE, RenderStats, render_all, written_file
 from caracole.songs import get_song, update_song
 from caracole.ug.page import strip_markup
@@ -90,12 +91,14 @@ class FakeChordPro:
 
     def __init__(self, fail: tuple[str, ...] = ()):
         self.calls: list[list[str]] = []
+        self.printed: list[bytes] = []  # each text it was given, as read
         self.fail = fail  # a .cho whose name or text holds one of these fails, after half a PDF
 
     def __call__(self, cmd, **kwargs):
         cmd = list(cmd)
         self.calls.append(cmd)
         cho, out = Path(cmd[-1]), output_of(cmd)
+        self.printed.append(cho.read_bytes())
         sheet = cho.read_text(encoding="utf-8")
         if any(part in cho.name or part in sheet for part in self.fail):
             out.write_bytes(b"%PDF-1.4 half")
@@ -202,6 +205,15 @@ def test_human_sheet_becomes_chordpro_and_pdf(conn, cfg):
     assert "[Bm]Una canción de [G]prueba" in cho
     assert (folder / "sheet.pdf").read_bytes().startswith(b"%PDF")
     assert stats == RenderStats(rendered=1, skipped=0, failed=0, font_error=None)
+
+
+def test_a_kept_sheet_with_a_twice_escaped_entity_renders_decoded(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, content="[Verse 1]\r\n[ch]Bm[/ch] Tom &amp; Jerry\r\n")
+    render(conn, cfg)
+    cho = (cfg.library_dir / "Soda Stereo" / "De Música Ligera" / "sheet.cho").read_text(encoding="utf-8")
+    assert "Tom & Jerry" in cho
+    assert "&amp;" not in cho
 
 
 @pytest.mark.parametrize(
@@ -570,6 +582,31 @@ def test_a_viewer_that_cant_be_built_never_costs_the_pdfs(conn, cfg, caplog, mon
     assert "no viewer for Soda Stereo - Persiana Americana" in caplog.text
     assert "Traceback" in caplog.text and "a bug in the viewer" in caplog.text
     assert "no PDF for" not in caplog.text
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Persiana Americana"]
+
+
+@pytest.mark.parametrize("part", ["viewer_key", "pdf_text"])
+def test_a_pdf_text_that_cant_be_made_costs_that_pdf_alone(conn, cfg, caplog, monkeypatch, part):
+    # The PDF's text runs the viewer's code (its key, its preamble, its shapes): a bug there costs
+    # that sheet its PDF and nothing else, as a bug in its viewer costs the viewer alone.
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")  # newer: rendered first
+    human_sheet(conn, cfg, bad, tab_id=1)
+    real = getattr(render_module, part)
+
+    def broken(cho, *args, **kwargs):
+        if "Persiana" in cho:
+            raise ValueError("a bug in the viewer's theory")
+        return real(cho, *args, **kwargs)
+
+    monkeypatch.setattr(render_module, part, broken)
+    stats = render(conn, cfg)
+    assert (stats.rendered, stats.failed) == (1, 1)
+    assert pdf_of(cfg, good).is_file() and not pdf_of(cfg, bad).exists()
+    assert "<h1>Persiana Americana</h1>" in viewer_of(cfg, bad)  # its viewer is made all the same
+    assert "no PDF for Soda Stereo - Persiana Americana" in caplog.text
+    assert "Traceback" in caplog.text and "a bug in the viewer's theory" in caplog.text
     assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Persiana Americana"]
 
 
@@ -1169,7 +1206,8 @@ def test_render_record_says_what_the_pdf_was_made_from(conn, cfg, tmp_path):
     cfg = replace(cfg, cjk_font=font)
     song = add_song(conn, "宋冬野", "斑马斑马")
     human_sheet(conn, cfg, song, ZH_SHEET, tonality="")
-    render(conn, cfg, overrides(cfg, '[transpose]\n"宋冬野 - 斑马斑马" = 3\n'))
+    run = FakeChordPro()
+    render(conn, cfg, overrides(cfg, '[transpose]\n"宋冬野 - 斑马斑马" = 3\n'), runner=run)
     cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_bytes()
     pdf = pdf_of(cfg, song).read_bytes()
     assert kv_get_json(conn, f"render:{song.id}") == {
@@ -1178,9 +1216,82 @@ def test_render_record_says_what_the_pdf_was_made_from(conn, cfg, tmp_path):
         "font": str(font),
         "style": hashlib.sha256(STYLE_FILE.read_bytes()).hexdigest(),  # the look of the PDF
         "pdf": "sheet.pdf",
+        "pdf_text": PDF_TEXT_VERSION,  # how the PDF's own text was made from sheet.cho
+        "printed_sha": hashlib.sha256(run.printed[-1]).hexdigest(),  # that text, its key line and all
         "pdf_sha256": hashlib.sha256(pdf).hexdigest(),  # what was written, to tell it is still there
         "pdf_size": len(pdf),
     }
+
+
+def test_the_pdf_is_made_from_its_own_text_and_sheet_cho_keeps_the_notes(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, "Made-up notes on how this version goes\r\n\r\n" + UG_SHEET)
+    render(conn, cfg)
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    printed = pdf_of(cfg, song).read_bytes().decode("utf-8")  # the fake prints the text it was given
+    assert "Made-up notes on how this version goes" in cho and "{columns" not in cho  # the viewer's
+    assert "Made-up notes" not in printed
+    assert "{key: Bm}\n{subtitle: Soda Stereo · Key Bm}\n{columns: 2}\n{comment: INTRO}\n" in printed
+
+
+def test_a_transposed_pdfs_key_line_names_the_key_its_chords_are_in(conn, cfg):
+    # chordpro moves the chords by [transpose]; the key line moves with them, as the viewer's does.
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, meta={"capo": 2})
+    render(conn, cfg, overrides(cfg, '[transpose]\n"Soda Stereo - De Música Ligera" = -2\n'))
+    printed = pdf_of(cfg, song).read_bytes().decode("utf-8")
+    assert "{subtitle: Soda Stereo · Am shapes · capo 2 · sounds Bm}" in printed.splitlines()
+
+
+def test_letters_only_the_notes_have_need_no_font(conn, cfg):
+    # The notes stay out of the PDF, and so do the letters they alone have.
+    assert cfg.cjk_font is None
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, "Notas: 这是一个合成的例子\r\n\r\n" + UG_SHEET)
+    stats = render(conn, cfg)
+    assert stats.rendered == 1 and stats.font_error is None
+    assert "这是一个" in (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    assert "这是一个".encode() not in pdf_of(cfg, song).read_bytes()
+
+
+def test_a_new_pdf_text_rerenders_every_pdf_once(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    key = f"render:{song.id}"
+    record = kv_get_json(conn, key)
+    kv_set_json(conn, key, {**record, "pdf_text": PDF_TEXT_VERSION - 1})
+    assert render(conn, cfg).rendered == 1
+    record = kv_get_json(conn, key)
+    del record["pdf_text"]  # a caracole that printed sheet.cho itself
+    kv_set_json(conn, key, record)
+    assert render(conn, cfg).rendered == 1
+    assert render(conn, cfg).skipped == 1
+
+
+def test_a_new_key_heard_makes_the_auto_sheets_pdf_again(conn, cfg):
+    # The key line comes from the version's data, not the .cho, which stays as it was.
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song, key="D")
+    render(conn, cfg)
+    cho = (song_dir(cfg.library_dir, song) / "sheet (auto).cho").read_bytes()
+    auto_sheet(conn, cfg, song, key="G")
+    run = FakeChordPro()
+    assert render(conn, cfg, runner=run).rendered == 1
+    assert (song_dir(cfg.library_dir, song) / "sheet (auto).cho").read_bytes() == cho
+    assert "{subtitle: Placeholder Band · Key G}" in run.printed[-1].decode("utf-8").splitlines()
+    assert render(conn, cfg).skipped == 1
+
+
+def test_a_change_to_what_the_pdf_prints_makes_it_again_without_a_version_bump(conn, cfg, monkeypatch):
+    # A newer caracole whose theory, key line or shapes print the same .cho another way.
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    made = render_module.pdf_text
+    monkeypatch.setattr(render_module, "pdf_text", lambda cho, **kw: made(cho, **kw) + "{comment: newer}\n")
+    assert render(conn, cfg).rendered == 1
+    assert render(conn, cfg).skipped == 1
 
 
 def test_a_new_pdf_style_rerenders_every_pdf_once(conn, cfg):
@@ -1585,23 +1696,39 @@ def test_real_spanish_ug_sheet_transposed_then_skipped(conn, real):
     assert_built_in_fonts(real, pdf)
     assert {b"Bm", b"G", b"D", b"A"} <= drawn_strings(pdf)
     if (text := pdf_text(pdf)) is not None:
-        for shown in ("De Música Ligera", "Soda Stereo · Key Bm · Capo 2",
+        for shown in ("De Música Ligera", "Soda Stereo · Bm shapes · capo 2 · sounds C#m",
                       "Una canción de prueba", "solo para el analizador"):
             assert shown in text
-        assert set(CHORD.findall(text)) == {"Bm", "G", "D", "A"}
+        assert set(CHORD.findall(text)) == {"Bm", "G", "D", "A", "C#m"}  # C#m: the key the song sounds in
 
     down = overrides(real, '[transpose]\n"Soda Stereo - De Musica Ligera" = -2\n')
     assert render_all(conn, real, down) == RenderStats(rendered=1)
     drawn = drawn_strings(pdf)
     assert {b"Am", b"F", b"C", b"G"} <= drawn and not {b"Bm", b"D", b"A"} & drawn
     if (text := pdf_text(pdf)) is not None:
-        assert "Key Am · Capo 2" in text
-        assert set(CHORD.findall(text)) == {"Am", "F", "C", "G"}
+        assert "Soda Stereo · Am shapes · capo 2 · sounds Bm" in text
+        assert set(CHORD.findall(text)) == {"Am", "F", "C", "G", "Bm"}  # Bm: the key it sounds in
     assert info_json(real, song)["render"] == {"transpose": -2, "pdf": "sheet.pdf"}
 
     stamp = pdf.stat().st_mtime_ns
     assert render_all(conn, real, down) == RenderStats(skipped=1)
     assert pdf.stat().st_mtime_ns == stamp
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_real_sheet_prints_the_tuning_its_notes_name(conn, real):
+    # The notes stay out of the PDF, and their tuning goes under the title: a song a half step
+    # down never prints as if in standard tuning.
+    notes = "Tuning: Eb Ab Db Gb Bb Eb (half step down)\r\nBm x24432  G 320033\r\n\r\n"
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, real, song, notes + UG_SHEET)
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    pdf = pdf_of(real, song)
+    assert_built_in_fonts(real, pdf)
+    if (text := pdf_text(pdf)) is not None:
+        assert "Soda Stereo · Key Bm · half step down" in text
+        assert "Tuning" not in text and "INTRO" in text
 
 
 @pytest.mark.chordpro
