@@ -332,3 +332,50 @@ def test_a_version_page_no_render_wrote_is_not_caracoles_to_remove(conn, cfg):
     assert page.name in {name for name, _ in plan.keep}
     remove_song(conn, cfg, plan)
     assert [p.name for p in folder.iterdir()] == [page.name]
+
+
+# --- what the fetch keeps (ug/fetch.py), rendered --------------------------------------------------------
+
+
+def fetched(conn, cfg, tmp_path, *, same=None):
+    """A song fetched from a fake UG (test_fetch_versions.py's four versions): 101 the sheet, the next two
+    kept beside it, as ug/fetch.py writes them; ``cfg`` with the library the fetch wrote."""
+    import dataclasses
+
+    from test_fetch import FakeUG, accepted, context
+    from test_fetch_versions import four_chords
+
+    from caracole.songs import get_song
+    from caracole.ug.fetch import process_song
+
+    song = accepted(conn)
+    ug = FakeUG()
+    four_chords(conn, ug, same=same)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+    return song, dataclasses.replace(cfg, library_dir=tmp_path / "lib")
+
+
+def test_the_versions_the_fetch_keeps_get_their_pages(conn, cfg, tmp_path):
+    song, cfg = fetched(conn, cfg, tmp_path)
+    render(conn, cfg)
+    folder = folder_of(cfg, song)
+    assert sorted(p.name for p in folder.glob("version-*.html")) == ["version-102.html", "version-103.html"]
+    data = page_data(folder / "version-102.html")["versions"]
+    assert [(v["tab"], v["page"], v["this"]) for v in data["list"]] == [
+        ("101", "sheet.html", False), ("102", "version-102.html", True), ("103", "version-103.html", False),
+        ("104", None, False)]
+    assert data["sheet"] == "ug"
+    assert '<p class="l">sheet 102</p>' in (folder / "version-102.html").read_text("utf-8")  # its own text
+
+
+def test_a_version_whose_text_is_the_sheets_gets_no_page_and_opens_the_sheets(conn, cfg, tmp_path):
+    # Review Focus 1: tab 102 is 101's very text. It's kept as sheet.html, and no page of its own is made
+    song, cfg = fetched(conn, cfg, tmp_path, same=(101, 102))
+    render(conn, cfg)
+    folder = folder_of(cfg, song)
+    assert [p.name for p in folder.glob("version-*.html")] == ["version-103.html"]
+    for page in ("sheet.html", "version-103.html"):
+        listed = {v["tab"]: (v["kept"], v["page"]) for v in page_data(folder / page)["versions"]["list"]}
+        assert listed["102"] == (True, "sheet.html")
+    mine = [v["tab"] for v in page_data(folder / "sheet.html")["versions"]["list"] if v["this"]]
+    assert mine == ["101"]

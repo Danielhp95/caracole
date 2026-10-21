@@ -497,7 +497,7 @@ say), nothing is removed and it exits 1.
 - **What goes.** The song's lines in wanted.txt, every line that names it,
   the rest of the file kept byte for byte, comments included. The files
   caracole wrote in the song's folder: the sheets, tabs and Guitar Pro files
-  it keeps (`sheet.txt`, `sheet.json`, `version-<tab>.txt`, `tab.txt`, `guitar-1.gp5`, the scores
+  it keeps (`sheet.txt`, `sheet.json`, `tab.txt`, `guitar-1.gp5`, the scores
   it filed from `_inbox/`…), the `.cho` files and PDFs it made from them (the
   `sheet (G Dorian, capo 0).pdf` exports of `caracole render --version` too),
   every file of a version kept beside the sheet (`version-<tab>.txt`,
@@ -3133,13 +3133,11 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
       sheet.json            the same version as the source gave it
-      version-39144.txt     another Ultimate Guitar version caracole scored for the sheet,
-      version-39144.json    kept beside it (by its tab id): the runners-up
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key
       sheet.html            the sheet viewer, for the phone
-      version-39144.txt     another version of the sheet, kept beside it: its text,
-      version-39144.json    the version as UG gave it, and its viewer (no PDF of
-      version-39144.html    its own)
+      version-39144.txt     another Ultimate Guitar version caracole scored for the sheet,
+      version-39144.json    kept beside it (by its tab id), the runners-up: its text, the
+      version-39144.html    version as UG gave it, and its viewer (no PDF of its own)
       lyrics.txt            the lyrics, from LRCLIB
       lyrics.lrc            the timed lyrics, when LRCLIB has them
       guitar-1.gp5          Guitar Pro or Power Tab files: filed by rank, or from gtptabs.com
