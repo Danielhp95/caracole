@@ -43,7 +43,7 @@ section says where things are, and the rules a change there keeps.
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
 | youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step; `song_states`, where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a one-song card asks of its song alone) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed under Versions in its line's ⋯ on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml: a song is a string, or a table with its own `Setting`: key, mode, capo; `SongbookSong`, `Songbook.songs`, `.texts`; `set_song_setting`, and `with_capo`, the capo a key or a mode `caracole songbook set` gives plays at now, so a replaced sheet keeps the key it sounds in; its files play each song through `apply_version`, never chordpro's `{transpose}`, where `in_setting` puts it: the setting's key as the key of the shapes played, its mode and capo, the rest the song's `own_version`; `plays_in`, that in words, "key unknown, as written" for a sheet with no key) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed under Versions in its line's ⋯ on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python; harmony.py, what each chord does in its key on top of theory.py: Roman numerals, relations, families, glossary lines, chord tones, solo scales, progressions named from its `CATALOGUE` and their endings, `progression_key` for searching), songbook.py (songbooks.toml: a song is a string, or a table with its own `Setting`: key, mode, capo; `SongbookSong`, `Songbook.songs`, `.texts`; `set_song_setting`, and `with_capo`, the capo a key or a mode `caracole songbook set` gives plays at now, so a replaced sheet keeps the key it sounds in; its files play each song through `apply_version`, never chordpro's `{transpose}`, where `in_setting` puts it: the setting's key as the key of the shapes played, its mode and capo, the rest the song's `own_version`; `plays_in`, that in words, "key unknown, as written" for a sheet with no key) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py (its Songbooks tab's data) |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
@@ -104,9 +104,11 @@ Rules a change there keeps (the Invariants below are the others):
   library_assets/, inlined byte for byte in the order of `library_page.STYLESHEETS`, `SCRIPTS`
   and `TEMPLATES`, where a new file is listed (test_library_assets.py).
 - viewer/: what a page is made from is `page.BUILD_FILES`, hashed into `page.build_version`: a
-  module the viewer comes to import goes there (test_viewer_book.py checks). theory.py and
-  `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field
-  compared, and a list handed out is a copy (test_viewer_theory.py). version.py names and shapes
+  module the viewer comes to import goes there (test_viewer_book.py checks). theory.py, harmony.py
+  and `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field
+  compared, and a list handed out is a copy (test_viewer_theory.py, test_viewer_harmony.py).
+  harmony.py's docstring holds the rules where music theory reads a chord two ways (B♭ in C is
+  borrowed from C minor; D in C is V/V only going to G): change a rule there and in its test. version.py names and shapes
   every chord as viewer.js does, so a PDF made in a version is what the viewer shows
   (test_viewer_version.py compares the two in Chromium).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
