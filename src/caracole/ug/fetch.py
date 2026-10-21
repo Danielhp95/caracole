@@ -72,7 +72,7 @@ from caracole.http import (
 )
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_json, write_info
 from caracole.lyrics import song_lyrics
-from caracole.match import REVIEW_ONLY_STEPS
+from caracole.match import ARTIST_PAGE, REVIEW_ONLY_STEPS
 from caracole.normalize import clean_title, compact, listing_forms, name_forms, slug_key, without_featuring
 from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
@@ -103,6 +103,7 @@ from caracole.versions import (
     SHEET_KINDS,
     STALE,
     VersionRow,
+    complete,
     get_version,
     mark_gone,
     replaces_sheet,
@@ -123,10 +124,11 @@ _GROUPS = (CHORDS_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)
 _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
 SHEET_FILES = (HUMAN_SHEET, "sheet.json")
 TAB_FILES = ("tab.txt", "tab.json")
+KEPT_TEXT = (*SHEET_FILES, *TAB_FILES)  # the files a kept UG sheet or tab is
+_KEPT_TEXT_MARKS = ",".join("?" for _ in KEPT_TEXT)
 _TAB_HOST = urlsplit(TAB_BASE_URL).netloc
 
-# The artist-page route (A6).
-ARTIST_PAGE = "artist_page"  # the match step of a song found on its artist's page
+# The artist-page route (A6): a song found on it has the match step ``ARTIST_PAGE``.
 ARTIST_PAGE_MAX_AGE = timedelta(days=30)
 ARTIST_PAGE_KINDS = ("chords", "guitar-pro", "power", "tabs")  # the sheet's list first
 TITLE_MATCH = 90  # rapidfuzz ratio of title keys, the matcher's accept score
@@ -232,19 +234,12 @@ def _slot(kind: str) -> str:
 # --- artist keys ------------------------------------------------------------------------------
 
 
-def _name_keys(name: str) -> list[str]:
-    """A name's keys, its slug key first (``normalize.name_forms``): its pinyin key when it is Chinese,
-    and each part of a name UG writes in two scripts, as "Song Dongye (宋冬野)" or
-    "斑马 斑马 Banma Banma Zebra Zebra"."""
-    return list(name_forms(name))
-
-
 def artist_keys(song: Song, overrides: Overrides) -> list[str]:
     """The UG artist keys a song may be listed under: [alias] first, then each artist's own keys."""
     keys: list[str] = []
     for name in song.artists or [song.artist]:
         keys += overrides.alias.get(slug_key(name), ())
-        keys += _name_keys(name)
+        keys += name_forms(name)
     return [k for k in dict.fromkeys(keys) if k]
 
 
@@ -261,7 +256,11 @@ def pasted_page_problem(conn: sqlite3.Connection, song: Song, overrides: Overrid
     """The tab page you pasted under [artist_url] for the song's artist and what is wrong with it, when
     reading it gave no artist page (``PASTE_GONE``, ``PASTE_CLOSED``, ``PASTE_NO_ARTIST``) or it couldn't
     be read (``PASTE_UNREADABLE``, and when caracole asks for it again); else None."""
-    keys = artist_keys(song, overrides)
+    return _paste_problem(conn, artist_keys(song, overrides), overrides)
+
+
+def _paste_problem(conn: sqlite3.Connection, keys: list[str], overrides: Overrides) -> tuple[str, str] | None:
+    """``pasted_page_problem`` for an artist's keys."""
     if (failed := _failed_paste(conn, keys, overrides)) is not None:
         return failed
     if (unread := _unread_paste(conn, keys, overrides)) is not None:
@@ -467,7 +466,7 @@ def _same_artist(key: str, name: str) -> bool:
     aside, as "宋冬野" and "Song Dongye (宋冬野)" do. A pair is neither of its artists."""
     if _a_pair(name):
         return False
-    return not {compact(k) for k in _name_keys(key)}.isdisjoint(compact(k) for k in _name_keys(name))
+    return not {compact(k) for k in name_forms(key)}.isdisjoint(compact(k) for k in name_forms(name))
 
 
 def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[str] = ()) -> str | None:
@@ -478,7 +477,7 @@ def _learn_artist_url(conn: sqlite3.Connection, page: UGTabPage, also: Iterable[
     url = _artist_page_base(page.artist_url)
     if url is not None:
         name = page.tab.artist_name
-        own = [slug_key(name)] if _a_pair(name) else _name_keys(name)
+        own = [slug_key(name)] if _a_pair(name) else name_forms(name)
         for key in dict.fromkeys([*own, *also]):
             if key:
                 remember_artist_url(conn, key, url)
@@ -799,14 +798,17 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     return int(c.tab_id)
 
 
+def _ranked_guitar(run: _SongRun, rows: list[VersionRow], pinned: list[int] | None) -> list[Candidate]:
+    """A guitar slot's candidates: the pins in their order, else best rated first."""
+    if pinned is not None:
+        return [_candidate(r) for r in _in_order(rows, pinned)]
+    return rank_guitar([_candidate(r) for r in rows], run.ctx.rank, variant=run.song.variant)
+
+
 def _guitar_pro_slot(run: _SongRun, pinned: list[int] | None) -> tuple[int, ...]:
     """Pick the best Guitar Pro and Power Tab versions; nothing is downloaded (assisted mode)."""
     policy = run.ctx.rank
-    rows = _rows(run, GUITAR_PRO_KINDS)
-    if pinned is not None:
-        ranked = [_candidate(r) for r in _in_order(rows, pinned)]
-    else:
-        ranked = rank_guitar([_candidate(r) for r in rows], policy, variant=run.song.variant)
+    ranked = _ranked_guitar(run, _rows(run, GUITAR_PRO_KINDS), pinned)
     chosen = ranked[: policy.keep_guitar_pro]
     set_picks(run.conn, run.song.id, GUITAR_PRO_KINDS, [c.version_id for c in chosen if c.version_id is not None])
     return tuple(int(c.tab_id) for c in chosen)
@@ -815,10 +817,7 @@ def _guitar_pro_slot(run: _SongRun, pinned: list[int] | None) -> tuple[int, ...]
 def _tab_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     """Keep the best text tab (or the first pin) as tab.txt and tab.json."""
     rows = _rows(run, TAB_KINDS)
-    if pinned is not None:
-        ranked = [_candidate(r) for r in _in_order(rows, pinned)]
-    else:
-        ranked = rank_guitar([_candidate(r) for r in rows], run.ctx.rank, variant=run.song.variant)
+    ranked = _ranked_guitar(run, rows, pinned)
     best = _first_with_text(run, ranked, rows, {})
     if best is None:
         set_picks(run.conn, run.song.id, TAB_KINDS, [])
@@ -1123,15 +1122,11 @@ def _mark_checked(run: _SongRun) -> None:
     kv_set(run.conn, _checked_key(run.song.id), _iso(run.ctx.now))
 
 
-def _forget_learned(run: _SongRun, keys: list[str], base: str) -> None:
+def _artist_page_gone(run: _SongRun, keys: list[str], base: str) -> None:
+    log.warning("UG artist page %s answered 404; check [artist_url] for %s", base, run.song.artist)
     for key in keys:
         if learned_artist_url(run.conn, key) == base:
             forget_artist_url(run.conn, key)
-
-
-def _artist_page_gone(run: _SongRun, keys: list[str], base: str) -> None:
-    log.warning("UG artist page %s answered 404; check [artist_url] for %s", base, run.song.artist)
-    _forget_learned(run, keys, base)
     listed_tabs.forget(run.conn, base)  # a search no longer finds what it listed
 
 
@@ -1193,11 +1188,10 @@ def _artist_page_route(run: _SongRun) -> bool:
     _read_pasted_tab_page(run, keys)
     base = _known_artist_page(run.conn, keys, run.ctx.overrides) or _learn_artist_page(run, keys)
     if base is None:
-        overrides = run.ctx.overrides
-        if _failed_paste(run.conn, keys, overrides) is not None or _unread_paste(run.conn, keys, overrides):
+        if _paste_problem(run.conn, keys, run.ctx.overrides) is not None:
             return False
         return _not_on_artist_page(run)
-    listing = _read_artist_page(run, base, ARTIST_PAGE_KINDS, _name_keys(clean_title(run.song.title)))
+    listing = _read_artist_page(run, base, ARTIST_PAGE_KINDS, name_forms(clean_title(run.song.title)))
     if not listing.complete:
         return False
     if listing.gone:
@@ -1221,12 +1215,10 @@ def _not_on_artist_page(run: _SongRun) -> bool:
 
 def _undone(conn: sqlite3.Connection, song_id: int) -> bool:
     """Whether the song keeps a sheet or a tab from a UG version an earlier match found (``STALE``)."""
-    names = (*SHEET_FILES, *TAB_FILES)
-    marks = ",".join("?" for _ in names)
     return conn.execute(
         "SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id "
-        f"WHERE f.song_id = ? AND v.provider = ? AND v.gone = {STALE} AND f.name IN ({marks}) LIMIT 1",
-        (song_id, PROVIDER, *names),
+        f"WHERE f.song_id = ? AND v.provider = ? AND v.gone = {STALE} AND f.name IN ({_KEPT_TEXT_MARKS}) LIMIT 1",
+        (song_id, PROVIDER, *KEPT_TEXT),
     ).fetchone() is not None
 
 
@@ -1251,7 +1243,7 @@ def _matched_artist_keys(run: _SongRun) -> list[str]:
 
 def _matched_title_forms(song: Song) -> list[str]:
     """The keys a matched song's title may be listed under: its own title's, then its match's."""
-    forms = [*_name_keys(clean_title(song.title)), song.match_song_key or ""]
+    forms = [*name_forms(clean_title(song.title)), song.match_song_key or ""]
     return [f for f in dict.fromkeys(forms) if f]
 
 
@@ -1422,12 +1414,10 @@ def _block_changed(conn: sqlite3.Connection, song: Song, block: frozenset[int]) 
         return True
     if not block:
         return False
-    names = (*SHEET_FILES, *TAB_FILES)
-    marks = ",".join("?" for _ in names)
     rows = conn.execute(
         "SELECT v.tab_id FROM versions v WHERE v.song_id = ? AND v.provider = ? AND (v.pick_rank IS NOT NULL "
-        f"OR EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id AND f.name IN ({marks})))",
-        (song.id, PROVIDER, *names),
+        f"OR EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id AND f.name IN ({_KEPT_TEXT_MARKS})))",
+        (song.id, PROVIDER, *KEPT_TEXT),
     )
     return any(int(r[0]) in block for r in rows)
 
@@ -1638,23 +1628,10 @@ def fetch_songs(
     # Once the budget is spent each song still runs until its first uncached request, so
     # songs whose pages are cached are settled (and finished) for free.
     for listed in songs:
-        song = handed.current(listed)
-        if song is None:
+        done = _fetch_turn(ctx, handed, stats, listed, guitar=False)
+        if done is None:
             continue
-        before = handed.count()
-        try:
-            outcome = process_song(ctx, song, guitar=False)
-        except BudgetExhausted:
-            stats.budget_exhausted = True
-            continue
-        except ProviderBlocked:
-            raise
-        except ProviderError as e:
-            log.debug("UG fetch failed for %s: %s", song.display, e)
-            stats.songs_failed += 1
-            stats.failures.append((song, e))
-            continue
-        handed.after(song, before)
+        song, outcome = done
         if outcome.settled:
             stats.sheets_done += 1
             settled.append((song, outcome.requests))
@@ -1663,27 +1640,41 @@ def fetch_songs(
             if on_song is not None:
                 on_song(song, outcome)
     for listed, sheet_requests in settled:
-        song = handed.current(get_song(ctx.conn, listed.id))
-        if song is None:
+        done = _fetch_turn(ctx, handed, stats, listed, guitar=True)
+        if done is None:
             continue
-        before = handed.count()
-        try:
-            outcome = process_song(ctx, song)
-        except BudgetExhausted:
-            stats.budget_exhausted = True
-            continue
-        except ProviderBlocked:
-            raise
-        except ProviderError as e:
-            log.debug("UG fetch failed for %s: %s", song.display, e)
-            stats.songs_failed += 1
-            stats.failures.append((song, e))
-            continue
-        handed.after(song, before)
+        song, outcome = done
         stats.songs_done += 1
         if on_song is not None:
             on_song(song, replace(outcome, requests=outcome.requests + sheet_requests))
     return stats
+
+
+def _fetch_turn(
+    ctx: FetchContext, handed: _Handoffs, stats: FetchStats, listed: Song, *, guitar: bool
+) -> tuple[Song, SongFetchOutcome] | None:
+    """One song's turn in one pass of ``fetch_songs``: the song and what it did, or None when there is
+    nothing to count (a handoff left it nothing to do, the budget ran out, or UG failed for it).
+
+    A block is re-raised; any other provider error skips the song, which stays dirty."""
+    song = handed.current(get_song(ctx.conn, listed.id) if guitar else listed)
+    if song is None:
+        return None
+    before = handed.count()
+    try:
+        outcome = process_song(ctx, song, guitar=guitar)
+    except BudgetExhausted:
+        stats.budget_exhausted = True
+        return None
+    except ProviderBlocked:
+        raise
+    except ProviderError as e:
+        log.debug("UG fetch failed for %s: %s", song.display, e)
+        stats.songs_failed += 1
+        stats.failures.append((song, e))
+        return None
+    handed.after(song, before)
+    return song, outcome
 
 
 # --- sheets kept before their lyrics ---------------------------------------------------------------
@@ -1721,7 +1712,7 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
             continue
         value = coverage.coverage(content, lines, line_match=rank.line_match)
         set_coverage(conn, row["version_id"], value)
-        if value is not None and value >= rank.coverage_threshold:
+        if complete(value, rank.coverage_threshold):
             _retire_auto_sheet(conn, library_dir, song)
         elif _unranked_rivals(conn, song.id, row["version_id"]):
             update_song(conn, song.id, ug_dirty=True)
@@ -1741,13 +1732,11 @@ def _send_back_lost(conn: sqlite3.Connection, library_dir: Path) -> None:
     yours to download (assisted mode). Each file is hashed; the files table
     keeps no length to compare first.
     """
-    names = (*SHEET_FILES, *TAB_FILES)
-    marks = ",".join("?" for _ in names)
     rows = conn.execute(
         "SELECT f.song_id, f.path, f.sha256 FROM files f JOIN versions v ON v.id = f.version_id "
-        f"JOIN songs s ON s.id = f.song_id WHERE v.provider = ? AND v.gone = {LIVE} AND f.name IN ({marks}) "
+        f"JOIN songs s ON s.id = f.song_id WHERE v.provider = ? AND v.gone = {LIVE} AND f.name IN ({_KEPT_TEXT_MARKS}) "
         "AND s.match_decision IN ('accept', 'pinned') AND s.ug_dirty = 0 AND s.status != 'ignored'",
-        (PROVIDER, *names),
+        (PROVIDER, *KEPT_TEXT),
     ).fetchall()
     for song_id in sorted({r["song_id"] for r in rows if not holds(library_dir / r["path"], r["sha256"])}):
         update_song(conn, song_id, ug_dirty=True)

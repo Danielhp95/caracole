@@ -163,7 +163,7 @@ def picks(conn: sqlite3.Connection, song_id: int, kinds: Sequence[str]) -> list[
     return [_row(r) for r in rows]
 
 
-def _complete(coverage: float | None, threshold: float) -> bool:
+def complete(coverage: float | None, threshold: float) -> bool:
     return coverage is not None and coverage >= threshold
 
 
@@ -180,8 +180,8 @@ def replaces_sheet(new: float | None, kept: float | None, threshold: float) -> b
       partial sheet never displaces one of unknown coverage, which may be complete;
     - a tie keeps the kept sheet.
     """
-    if _complete(kept, threshold):
+    if complete(kept, threshold):
         return False
-    if _complete(new, threshold):
+    if complete(new, threshold):
         return True
     return new is not None and kept is not None and new > kept
