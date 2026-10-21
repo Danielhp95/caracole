@@ -947,7 +947,10 @@ plus 2 hours, so 26 hours after a first block, 50 after a second and 98 after
 a third. However late the timer starts them, the nightly runs then leave that
 site out for the next night after a first block, the next two after a second,
 and the next four after a third. A block in a command counts the same way,
-from when the command started. A run or a command the site answers without a
+from when the command started, and sends the same one ntfy message: `caracole
+fetch`, `index`, `icons`, `lyrics`, `lacuerda`, `gtptabs`, `musescore` and
+`youtube` alike. A lookup (`caracole get`, `caracole lacuerda --artist`) sends
+none: it says so where you asked. A run or a command the site answers without a
 block starts the count again. Neither a block, nor a spent budget, nor any
 other error from a site marks a song not found or its lyrics missing: the
 song waits for the next run. An answer that won't read but was cached all the
@@ -1249,8 +1252,8 @@ and cache.
   with its provider's budget and pace (15–30 s), unless `[providers.youtube]
   enabled = false` turned it off. What a site answered less than a week ago
   still comes from the cache, so running it again sooner asks that site nothing. A block cools that site
-  down, as any block does, and the others are still asked. A block or an error
-  exits 0.
+  down and sends one ntfy message, as any block does, and the others are still
+  asked. A block or an error exits 0.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
 - **`caracole search [QUERY]... [--limit N] [--add N] [--key KEY] [--artist NAME]

@@ -11,6 +11,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from helpers.ntfy import CONFIG as NTFY_CONFIG
+from helpers.ntfy import FakeNtfy
 from helpers.icon_files import CLEAR, RED, bmp_image, chunk, ico, pixels, png
 
 from caracole import icons
@@ -482,7 +484,7 @@ def icon_sites():
     }
 
 
-def icons_command(tmp_path, monkeypatch, sites, extra=""):
+def icons_command(tmp_path, monkeypatch, sites, extra="", ntfy=None):
     from typer.testing import CliRunner
 
     from caracole.cli import build_app
@@ -493,8 +495,10 @@ def icons_command(tmp_path, monkeypatch, sites, extra=""):
         f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n' + extra,
         encoding="utf-8",
     )
-    monkeypatch.setattr("caracole.commands._common.transport_for",
-                        lambda provider: httpx.MockTransport(sites[provider].handler))
+    if ntfy is not None:
+        config.write_text(config.read_text(encoding="utf-8") + NTFY_CONFIG, encoding="utf-8")
+    monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(
+        ntfy.handler if provider == "ntfy" else sites[provider].handler))
     monkeypatch.setattr("caracole.commands._common.sleep", lambda s: None)
     return CliRunner().invoke(build_app(), ["--config", str(config), "icons"])
 
@@ -521,6 +525,19 @@ def test_caracole_icons_fetches_what_is_missing_and_rewrites_the_pages(tmp_path,
     assert again.exit_code == 0, again.output
     assert {k: len(s.asked) for k, s in sites.items()} == asked
     assert "Ultimate Guitar: kept already" in again.output and "MuseScore: cooling down" in again.output
+
+
+def test_caracole_icons_sends_one_alert_for_a_block_as_the_nightly_run_does(tmp_path, monkeypatch):
+    ntfy = FakeNtfy()
+    sites = icon_sites()
+    result = icons_command(tmp_path, monkeypatch, sites, ntfy=ntfy)
+    assert result.exit_code == 0, result.output
+    assert ntfy.titles == ["caracole: musescore blocked"]  # the one site that blocked, once
+    (alert,) = ntfy.posts
+    assert alert.headers["priority"] == "high" and alert.headers["tags"] == "warning"
+    assert "MuseScore blocked caracole" in alert.content.decode()
+    assert icons_command(tmp_path, monkeypatch, sites, ntfy=ntfy).exit_code == 0  # cooling down: no alert
+    assert len(ntfy.posts) == 1
 
 
 def test_caracole_icons_says_when_a_site_has_none_and_leaves_one_turned_off_alone(tmp_path, monkeypatch):

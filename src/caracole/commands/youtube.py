@@ -132,7 +132,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
             state = record_block(conn, PROVIDER, now, str(e))
             message = (f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes}). "
                        "Nothing was marked missing.")
-            _alert(cfg, f"caracole: {PROVIDER} blocked", message)
+            _common.alert_block(cfg, PROVIDER, message)
             typer.echo(f"YouTube blocked caracole: {message}")
             write_pages(conn, cfg, overrides, utcnow())
             return
@@ -224,14 +224,6 @@ def _line(song: Song, outcome: str, record: Record) -> str:
 def _totals(stats: YouTubeStats, runs: int, budget: int) -> str:
     return (f"YouTube: {stats.downloaded} downloaded, {stats.missing} not there, {stats.unavailable} unavailable, "
             f"{_count(stats.errors, 'error')} ({_count(runs, 'yt-dlp run')} of {budget}).")
-
-
-def _alert(cfg: Config, title: str, message: str) -> None:
-    """One ntfy message, as the nightly run sends on a block; nothing without an ntfy URL."""
-    from caracole.notify import Notifier
-
-    notifier = Notifier(cfg.ntfy.url, cfg.ntfy.token, transport=_common.transport_for("ntfy"))
-    notifier.send(title, message, priority="high", tags=["warning"])
 
 
 def _count(n: int, word: str) -> str:

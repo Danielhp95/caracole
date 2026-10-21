@@ -341,7 +341,7 @@ def _provider_pass[T](
                 f"{e}\nNo more requests to {name} until {shown(state.cooldown_until)} "
                 f"(block #{state.strikes}). Nothing was marked missing."
             )
-            _alert(cfg, f"caracole: {provider} blocked", message)
+            _common.alert_block(cfg, provider, message)
             typer.echo(f"{name} blocked caracole: {message}")
             write_pages(conn, cfg, overrides, utcnow())  # with the cooldown
             return None
@@ -352,14 +352,6 @@ def _provider_pass[T](
         if ran(result):
             write_pages(conn, cfg, overrides, utcnow())
     return result
-
-
-def _alert(cfg: Config, title: str, message: str) -> None:
-    """One ntfy message, as the nightly run sends on a block; nothing without an ntfy URL."""
-    from caracole.notify import Notifier
-
-    notifier = Notifier(cfg.ntfy.url, cfg.ntfy.token, transport=_common.transport_for("ntfy"))
-    notifier.send(title, message, priority="high", tags=["warning"])
 
 
 def _budget_spent(cfg: Config, provider: str) -> None:

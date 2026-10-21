@@ -3,7 +3,8 @@
 The local UG index is built once from Ultimate Guitar's sitemaps, or from
 sitemap files you already have, and the nightly run refreshes it. A block or
 a spent budget is not a failure: the sitemaps read so far are kept, and the
-command says what happens next. Every command module is imported on every
+command says what happens next; a block sends the one ntfy alert the run sends
+(``_common.alert_block``). Every command module is imported on every
 start, so the index module is imported inside the commands.
 
 What build and refresh print comes from ``ug.index``'s progress events, put
@@ -202,8 +203,10 @@ def _with_ug(conn: sqlite3.Connection, cfg: Config, now: datetime, policy: Provi
         outcome.stats = action(client)
     except ProviderBlocked as e:
         state = record_block(conn, "ug", now, str(e))
-        report.stopped(f"Ultimate Guitar blocked caracole ({e}). No more requests to it until "
-                       f"{shown(state.cooldown_until)} (block #{state.strikes}); {_KEPT}.", until=state.cooldown_until)
+        message = (f"Ultimate Guitar blocked caracole ({e}). No more requests to it until "
+                   f"{shown(state.cooldown_until)} (block #{state.strikes}); {_KEPT}.")
+        _common.alert_block(cfg, "ug", message)
+        report.stopped(message, until=state.cooldown_until)
         return outcome
     except BudgetExhausted:
         report.stopped(f"The Ultimate Guitar budget of {policy.budget} requests is spent; {_KEPT}.")

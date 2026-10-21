@@ -3,7 +3,8 @@
 The nightly ``caracole run`` does this as one of its steps; the command runs it
 on its own, or for one song with ``--song``, and like the run it first scores
 the sheets kept before their lyrics arrived. A block or a spent budget is
-expected behaviour, not a failure, so both exit 0. Then it rewrites _todo.md
+expected behaviour, not a failure, so both exit 0; a block sends the one ntfy
+alert the run sends (``_common.alert_block``). Then it rewrites _todo.md
 and index.html, unless it did nothing (a cooldown, or nothing to fetch or
 score). Every command module is imported on every start, so the fetch code is
 imported inside the command.
@@ -25,6 +26,7 @@ from typing import TYPE_CHECKING
 import typer
 
 from caracole.commands._common import (
+    alert_block,
     exclusive,
     fail,
     load_cfg,
@@ -110,10 +112,10 @@ def _fetch(cfg: Config, display: str | None) -> None:
             state = record_block(conn, e.provider, now, str(e))
             if asked is not None:
                 _send_back(conn, asked, overrides, now)
-            typer.echo(
-                f"Ultimate Guitar blocked caracole ({e}). No more UG requests until "
-                f"{shown(state.cooldown_until)} (block #{state.strikes}). Nothing was marked not found."
-            )
+            message = (f"Ultimate Guitar blocked caracole ({e}). No more UG requests until "
+                       f"{shown(state.cooldown_until)} (block #{state.strikes}). Nothing was marked not found.")
+            alert_block(cfg, e.provider, message)
+            typer.echo(message)
             write_pages(conn, cfg, overrides, utcnow())  # with what it kept, and the cooldown
             return
         finally:
