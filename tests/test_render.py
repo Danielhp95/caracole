@@ -93,18 +93,21 @@ def cho(tmp_path) -> Path:
 def test_render_pdf_command_line(cho, tmp_path):
     pdf = tmp_path / "sheet.pdf"
     run = FakeRunner()
-    render_pdf(cho, pdf, transpose=-2, chordpro_bin="/opt/chordpro/bin/chordpro", runner=run)
+    render_pdf(cho, pdf, chordpro_bin="/opt/chordpro/bin/chordpro", runner=run)
     assert run.cmd[0] == "/opt/chordpro/bin/chordpro"
-    assert "--transpose=-2" in run.cmd
     assert f"--output={pdf}" in run.cmd
     assert run.cmd[-1] == str(cho)
     assert pdf.exists()
 
 
-def test_no_transpose_option_at_zero(cho, tmp_path):
+def test_chordpro_transposes_nothing(cho, tmp_path):
+    # The text it is given names each chord where the song is played, as the viewer does
+    # (viewer/version.py apply_version): chordpro's own transposition spells A# for Bb.
     run = FakeRunner()
     render_pdf(cho, tmp_path / "sheet.pdf", runner=run)
     assert not any(a.startswith("--transpose") for a in run.cmd)
+    with pytest.raises(TypeError):
+        render_pdf(cho, tmp_path / "sheet.pdf", transpose=-2, runner=run)
 
 
 def test_default_configs_are_ignored(cho, tmp_path):
@@ -482,7 +485,11 @@ def _streams(path: Path) -> list[bytes]:
 
 @pytest.mark.chordpro
 @real_chordpro
-def test_render_real_transposes_chords_and_key(tmp_path):
+def test_render_real_draws_the_chords_and_key_of_a_version(tmp_path):
+    # Moved by the viewer's own rules (apply_version), not by chordpro, which transposes nothing now.
+    from caracole.viewer.page import viewer_key
+    from caracole.viewer.version import Version, apply_version, played_key
+
     cho = write_chordpro(
         "[ch]C#m7[/ch]     [ch]A[/ch]\nSome words to sing",
         tmp_path / "sheet.cho",
@@ -490,9 +497,13 @@ def test_render_real_transposes_chords_and_key(tmp_path):
         artist="A",
         key="E",
     )
-    cho.write_text(printed_text(cho.read_text(encoding="utf-8"), key=Key(2, "ionian"), capo=None), encoding="utf-8")
+    sheet, down = cho.read_text(encoding="utf-8"), Version(t=-2)
+    shapes = viewer_key(sheet)
+    played, capo = played_key(down, shapes, None)
+    cho.write_text(printed_text(apply_version(sheet, down, key=shapes, capo_sheet=None), key=played, capo=capo),
+                   encoding="utf-8")
     pdf = tmp_path / "sheet.pdf"
-    render_pdf(cho, pdf, transpose=-2, chordpro_bin=CHORDPRO)
+    render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
     text = pdf_text(pdf)
     assert "Bm7" in text and "G" in text and "A · Key D" in text
     assert "C#m7" not in text

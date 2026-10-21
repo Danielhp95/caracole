@@ -75,9 +75,11 @@ from caracole.render import (
     _font_options,
     _printed,
     _style,
+    own_version,
     written_file,
 )
 from caracole.viewer.sheet import parse_sheet
+from caracole.viewer.version import Version
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -523,7 +525,9 @@ BOOK_FONT_ELEMENTS = ("text", "title", "toc")
 @dataclass(frozen=True)
 class Entry:
     """One song of a songbook as it is rendered: its sheet's ChordPro (``cho``), as caracole wrote it
-    beside the song's PDF, or why it has none (``missing``)."""
+    beside the song's PDF, or why it has none (``missing``). ``version`` is where the song plays in it by
+    default: the song's own (``render.own_version``: its ``[version]``, else its ``[transpose]``), and
+    ``transpose`` that version's ``t``."""
 
     text: str  # as songbooks.toml writes it
     title: str
@@ -532,6 +536,7 @@ class Entry:
     cho: str | None = None
     missing: str | None = None
     transpose: int = 0
+    version: Version = field(default_factory=Version)
     key: str | None = None
     key_source: str | None = None
 
@@ -584,7 +589,8 @@ def _entry_of(conn: sqlite3.Connection, library_dir: Path, overrides: Overrides,
     name, cho = sheet
     human, auto = sheet_keys(conn, library_dir, song)
     key = auto if name == AUTO_OUTPUTS[0] else human
-    return Entry(text, title, song.artist, song, cho=cho, transpose=overrides.transpose.get(song.key, 0),
+    version = own_version(overrides, song)
+    return Entry(text, title, song.artist, song, cho=cho, transpose=version.t, version=version,
                  key=key.key if key else None, key_source=key.source if key else None)
 
 

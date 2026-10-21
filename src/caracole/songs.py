@@ -43,6 +43,14 @@ SHEET_OUTPUTS = {
     HUMAN_SHEET: ("sheet.cho", "sheet.pdf", "sheet.html"),
     AUTO_SHEET: ("sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html"),
 }
+
+
+def is_export(name: str) -> bool:
+    """Whether ``name`` is a PDF of a sheet in another version (render.py ``render_version``):
+    "sheet (G Dorian, capo 0).pdf", not the auto sheet's own "sheet (auto).pdf"."""
+    return name.startswith("sheet (") and name.endswith(").pdf") and name not in SHEET_OUTPUTS[AUTO_SHEET]
+
+
 KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored keys were made with
 # What each source id last said of its song's album, duration, ISRC and variant (_remember),
 # as JSON under this prefix + "<source>:<source id>", e.g. "songs:fields:spotify:<track id>".
@@ -56,7 +64,7 @@ _PRECEDENCE = (_WANTED, "spotify")
 # gtptabs_fetch.py, youtube_fetch.py), as "<prefix><song id>" or "<prefix><song id>:<more>"
 # ("render:7:auto"). It goes with a song merged into another or removed (delete_song_kv): SQLite
 # may give that id to the next new song.
-_PER_SONG_KV = ("render:", "render:files:", "ug:artist_page_checked:", "autochords:failed:", "gtptabs:checked:",
+_PER_SONG_KV = ("render:", "render:files:", "render:export:", "ug:artist_page_checked:", "autochords:failed:", "gtptabs:checked:",
                 "ug:blocked:", "youtube:")
 
 

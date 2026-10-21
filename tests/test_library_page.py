@@ -101,6 +101,13 @@ def test_key_comes_from_the_kept_sheets_version_and_transpose_from_overrides(con
     assert plain.key not in o.transpose
 
 
+def test_a_songs_own_version_is_the_transposition_its_card_shows(conn, cfg):
+    # [version] wins over [transpose]: its PDF is moved by the version's t
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    o = Overrides(transpose={s.key: -2}, version={s.key: "t=3&mode=dorian"})
+    assert songs_of(page(conn, cfg, o))["Soda Stereo - De Música Ligera"]["transpose"] == 3
+
+
 def keep_sheet_json(conn, cfg, song, content, *, raw=None, tab_id=1):
     v = version(conn, song, tab_id, raw=raw)
     doc = json.dumps({"content": content}).encode()
@@ -311,6 +318,35 @@ def test_the_sheet_viewer_is_the_first_link_for_the_phone(conn, cfg):
     files = songs_of(page(conn, cfg))[auto.display]["files"]
     assert [(f["name"], f["primary"]) for f in files] == [("sheet (auto).html", True), ("sheet (auto).pdf", False)]
     assert files[0]["href"].endswith("/sheet%20%28auto%29.html")
+
+
+def test_a_songs_exports_are_listed_after_its_sheets_pdfs_by_their_versions(conn, cfg):
+    # The PDFs caracole made in other versions (render.py render_version, recorded under their labels), after
+    # the sheet's viewer and PDF, each named by its version; never a "sheet (…).pdf" caracole didn't make, nor
+    # one recorded that is gone from the folder.
+    from caracole.library_page import result_cards
+    from caracole.render import EXPORT_KV
+
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    v = version(conn, s, 85053)
+    keep_file(conn, cfg.library_dir, song=s, version_id=v, name="sheet.txt", data=b"[G]la", rank=1)
+    put(cfg, s, "sheet.html", "sheet.pdf", "sheet (G Dorian, capo 0).pdf", "sheet (B Minor, capo 2).pdf",
+        "sheet (yours).pdf", "lyrics.txt")
+    db.kv_set_json(conn, f"{EXPORT_KV}{s.id}", {
+        "G Dorian, capo 0": {"pdf": "sheet (G Dorian, capo 0).pdf", "query": "t=0&mode=dorian"},
+        "B Minor, capo 2": {"pdf": "sheet (B Minor, capo 2).pdf", "query": "t=4&capo=2"},
+        "A Major, capo 0": {"pdf": "sheet (A Major, capo 0).pdf", "query": "t=2"},  # deleted on a device
+    })
+    files = songs_of(page(conn, cfg))[s.display]["files"]
+    assert [(f["name"], f["label"], f["primary"]) for f in files] == [
+        ("sheet.html", "Sheet viewer", True), ("sheet.pdf", "Sheet PDF", False),
+        ("sheet (B Minor, capo 2).pdf", "Sheet PDF, B Minor, capo 2", False),
+        ("sheet (G Dorian, capo 0).pdf", "Sheet PDF, G Dorian, capo 0", False),
+        ("sheet.txt", "Sheet text", False), ("lyrics.txt", "Lyrics", False)]
+    export = next(f for f in files if f["name"] == "sheet (G Dorian, capo 0).pdf")
+    assert export["href"] == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"
+    assert export["source"] == "ug"  # made from the sheet: where it came from
+    assert [f["name"] for f in result_cards(conn, cfg, [s])[s.id]["links"]] == [f["name"] for f in files]
 
 
 def test_only_files_that_exist_are_linked(conn, cfg):

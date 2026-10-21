@@ -143,6 +143,17 @@ def test_each_song_is_in_its_transposition(conn, cfg, two):
     assert "--diagrams=none" in cho_call  # no chord definitions in the file for an app to choke on
 
 
+def test_a_songs_own_version_is_its_default_in_a_songbook(conn, cfg, two):
+    from caracole.songbook import find_songbook, load_songbooks, songbook_entries
+    from caracole.viewer.version import Version, version_from_query
+
+    ovr = overrides(cfg, '[transpose]\n"Radiohead - Creep" = 3\n\n[version]\n"Radiohead - Creep" = "t=2&mode=dorian"\n')
+    book = find_songbook(load_songbooks(songbooks_file(cfg.library_dir)), "Campfire")
+    creep, soda = songbook_entries(conn, cfg.library_dir, ovr, book)
+    assert creep.version == version_from_query("t=2&mode=dorian") and creep.transpose == 2  # [version] wins
+    assert soda.version == Version() and soda.transpose == 0
+
+
 def test_songs_without_a_sheet_are_named_missing(conn, cfg, two):
     add_song(conn, "Muse", "Hysteria")  # in the library, no sheet yet
     path = songbooks_file(cfg.library_dir)

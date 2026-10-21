@@ -21,7 +21,8 @@ A small server from the standard library (``http.server``), in these parts:
   Each area's routes are a module: library_routes.py (the library page,
   requests, Fetch now), review_routes.py (the picker), jobs_routes.py (the
   requests page, /jobs.json, /api/jobs), search_routes.py (the lookup page,
-  search as you type, lookups), remove_routes.py and songbook_routes.py.
+  search as you type, lookups), remove_routes.py, songbook_routes.py and
+  export_routes.py (a sheet's PDF in the version its viewer was left in).
   pages.py: the pages it writes itself.
 - songbooks.py: the songbook forms, each queued as its ``caracole songbook``
   command (songbook_routes.py). Each songbook's page is one of the pages

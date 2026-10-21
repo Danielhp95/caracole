@@ -264,3 +264,18 @@ def test_the_next_sync_brings_nothing_back_until_you_ask_for_the_song_again(conn
     back = next(s for s in list_songs(conn) if s.title == "Creep")
     assert (back.status, back.lyrics_status, back.match_decision) == ("wanted", "pending", None)
     assert removed_song(conn, CREEP) is None
+
+
+def test_a_removal_deletes_the_songs_exports(conn, cfg):
+    from caracole.render import EXPORT_KV
+
+    song = creep(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    (folder / "sheet (G Dorian, capo 0).pdf").write_text("x", encoding="utf-8")
+    (folder / "sheet (mine).pdf").write_text("y", encoding="utf-8")  # not recorded: yours
+    db.kv_set_json(conn, f"{EXPORT_KV}{song.id}", {"G Dorian, capo 0": {"pdf": "sheet (G Dorian, capo 0).pdf",
+                                                                        "query": "t=2&mode=dorian"}})
+    plan, result = plan_and_remove(conn, cfg, song)
+    assert "sheet (G Dorian, capo 0).pdf" in plan.delete and "sheet (mine).pdf" not in plan.delete
+    assert not (folder / "sheet (G Dorian, capo 0).pdf").exists() and (folder / "sheet (mine).pdf").exists()
+    assert db.kv_get_json(conn, f"{EXPORT_KV}{song.id}") is None

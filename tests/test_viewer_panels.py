@@ -393,3 +393,27 @@ def test_a_songbook_song_has_the_rail_and_the_docked_card_too(tmp_path):
     assert pager <= rail["panel"]["left"]  # Next, beside the rail too
     assert docked["card"]["bottom"] == docked["bar"]["top"] and docked["name"] == "G"
     assert stayed.startswith("#song-1")  # Escape changed no song
+
+
+# --- exporting the version -------------------------------------------------------------------------
+
+
+@in_chromium
+def test_the_file_viewer_shows_the_command_to_export(tmp_path):
+    # A page opened from the disk has no server to ask: the settings say what to run, with Copy.
+    with viewer(tmp_path, written(tmp_path) + "#t=2&capo=1&fs=20") as b:
+        b.js("document.querySelector('#more').click()")
+        shown = b.js("""(() => {
+          const q = (s) => document.querySelector(s);
+          const box = (el) => { const r = el.getBoundingClientRect(); return [r.width, r.height]; };
+          return {cmd: q('#export-cmd').textContent, link: q('#export').hidden, copy: box(q('#export-copy')),
+                  hint: q('#export-hint').textContent,
+                  cmdSeen: !q('#export-cmd').closest('[hidden]'), sideways: document.documentElement.scrollWidth > innerWidth};
+        })()""")
+        b.js("document.querySelector('#t-up').click()")
+        moved = b.js("document.querySelector('#export-cmd').textContent")
+    assert shown["cmd"] == "caracole render --song 'Synthetic - Long Song' --version 't=2&capo=1'"
+    assert shown["link"] is True and shown["cmdSeen"] and not shown["sideways"]
+    assert "--mine" in shown["hint"]  # and how to make it the song's own version
+    assert min(shown["copy"]) >= 44
+    assert moved.endswith("--version 't=3&capo=1'")  # it follows the song

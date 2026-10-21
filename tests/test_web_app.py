@@ -2305,8 +2305,8 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     from caracole.web.app import route_for, routes
 
     names = sorted(m.name for m in pkgutil.iter_modules(web.__path__) if m.name.endswith("_routes"))
-    assert names == ["jobs_routes", "library_routes", "remove_routes", "review_routes", "search_routes",
-                     "songbook_routes"]
+    assert names == ["export_routes", "jobs_routes", "library_routes", "remove_routes", "review_routes",
+                     "search_routes", "songbook_routes"]
     gathered = []
     for name in names:
         module = importlib.import_module(f"caracole.web.{name}")
@@ -2324,3 +2324,4 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     assert route_for("GET", "/api/jobsx") is None and route_for("POST", "/songbook/nothing") is None
     assert route_for("POST", "/songbook/make").page == "the library"
     assert route_for("POST", "/lookup").page == "the page" and route_for("GET", "/jobs.json").script_only
+    assert route_for("POST", "/export").page == "the export page"

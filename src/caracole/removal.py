@@ -35,7 +35,7 @@ from pathlib import Path, PurePosixPath
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, savepoint
 from caracole.library import song_dir
-from caracole.songs import SHEET_OUTPUTS, SOURCE_FIELDS_KV, Song, delete_song_kv, list_songs, mark_removed
+from caracole.songs import SHEET_OUTPUTS, SOURCE_FIELDS_KV, Song, delete_song_kv, is_export, list_songs, mark_removed
 
 _LYRICS = ("lyrics.txt", "lyrics.lrc")
 _INFO = "info.json"
@@ -334,7 +334,8 @@ def _caracoles(conn: sqlite3.Connection, song: Song, kept_here: set[str]) -> set
 
     Its kept files; the ChordPro, PDF and page it makes from a kept sheet, or
     that a render record names (``render.py``: the record goes with the outputs);
-    the lyrics, when LRCLIB's were written; info.json. A ``sheet.pdf`` or a
+    the PDFs it exported in other versions (kv ``render:export:``); the lyrics, when
+    LRCLIB's were written; info.json. A ``sheet.pdf`` or a
     ``lyrics.txt`` of yours, in a folder caracole made none in, isn't one.
     """
     ours = set(kept_here) | {_INFO}
@@ -347,6 +348,13 @@ def _caracoles(conn: sqlite3.Connection, song: Song, kept_here: set[str]) -> set
         if isinstance(pdf, str):
             stem = pdf.removesuffix(".pdf")
             ours.update((pdf, f"{stem}.cho", f"{stem}.html"))
+    from caracole.render import EXPORT_KV
+
+    exports = kv_get_json(conn, f"{EXPORT_KV}{song.id}")  # render_version's PDFs in other versions
+    for entry in exports.values() if isinstance(exports, dict) else ():
+        pdf = entry.get("pdf") if isinstance(entry, dict) else None
+        if isinstance(pdf, str) and is_export(pdf):
+            ours.add(pdf)
     if song.lyrics_status == "found":
         ours.update(_LYRICS)
     return ours
