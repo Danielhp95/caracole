@@ -34,8 +34,8 @@ from pathlib import Path, PurePosixPath
 
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, savepoint
-from caracole.library import song_dir
-from caracole.songs import SHEET_OUTPUTS, SOURCE_FIELDS_KV, Song, delete_song_kv, is_export, list_songs, mark_removed
+from caracole.library import song_dir, song_folder, songs_in_folder
+from caracole.songs import SHEET_OUTPUTS, SOURCE_FIELDS_KV, Song, delete_song_kv, is_export, mark_removed
 
 _LYRICS = ("lyrics.txt", "lyrics.lrc")
 _INFO = "info.json"
@@ -95,8 +95,7 @@ def plan_removal(conn: sqlite3.Connection, cfg: Config, song: Song) -> RemovalPl
     ours = _caracoles(conn, song, kept_here)
     why = dict(_WHY)
     # Two songs whose names make one folder: its info.json, lyrics and PDFs may be the other's.
-    other = next((s for s in list_songs(conn) if s.id != song.id
-                  and song_dir(cfg.library_dir, s) == song_dir(cfg.library_dir, song)), None)
+    other = next((s for s in songs_in_folder(conn, song_folder(song.artist, song.title)) if s.id != song.id), None)
     if other is not None:
         ours = set(kept_here)
         why["file"] = f"the folder is {other.display}'s too"

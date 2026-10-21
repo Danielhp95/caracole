@@ -311,9 +311,9 @@ def display_from_keys(artist_key: str, song_key: str) -> tuple[str, str]:
 def did_you_mean(song: Song, limit: int = SHOWN_CANDIDATES) -> list[dict]:
     """A song in review's first candidates, best first (``songs.match_candidates`` rows): the UG songs
     the matcher thinks it may be. Empty for a song not in review."""
-    if not song.review:
-        return []
-    return [c for c in song.match_candidates or [] if c.get("artist_key") and c.get("song_key")][:limit]
+    from caracole.review import candidates_of
+
+    return candidates_of(song)[:limit] if song.review else []
 
 
 def search_library(conn: sqlite3.Connection, query: str, limit: int = 10, *,

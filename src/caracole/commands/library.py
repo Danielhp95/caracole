@@ -175,8 +175,7 @@ def _list_hits(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> No
     as ``--pick`` takes them (``review.search_candidates``), without the songs rejected for it, which
     ``caracole search`` lists and numbers too. It writes nothing, so it takes no lock."""
     from caracole.normalize import clean_title
-    from caracole.review import ref, search_candidates
-    from caracole.ug.lookup import song_tabs
+    from caracole.review import candidate_page, ref, search_candidates
 
     hits = search_candidates(conn, song, rejected=overrides.reject.get(song.key, frozenset()))
     if not hits:
@@ -187,8 +186,8 @@ def _list_hits(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> No
     typer.echo(f"{song.display}: not found under this name. What {search} finds for it, without the songs "
                "you rejected for it:")
     for n, c in enumerate(hits, start=1):
-        tabs = song_tabs(conn, c["artist_key"], c["song_key"])
-        url = f"  {tabs[0].url}" if tabs else ""
+        page = candidate_page(conn, c["artist_key"], c["song_key"])
+        url = f"  {page}" if page else ""
         typer.echo(f"  {n}) {float(c.get('score') or 0):.0f}  {ref(c)}{url}")
     typer.echo(f'Pick one with caracole review --song "{song.display}" --pick N, or ARTIST/SONG: that writes '
                "[match] alone, no [alias].")

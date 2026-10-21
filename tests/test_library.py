@@ -4,7 +4,17 @@ import re
 
 import pytest
 
-from caracole.library import drop_file, keep_file, kept_files, safe_name, song_dir, write_atomic, write_info
+from caracole.library import (
+    drop_file,
+    keep_file,
+    kept_files,
+    safe_name,
+    song_dir,
+    song_folder,
+    songs_in_folder,
+    write_atomic,
+    write_info,
+)
 from caracole.versions import (
     SHEET_KINDS,
     mark_gone,
@@ -56,6 +66,34 @@ def test_song_dir_stays_inside_library(conn, tmp_path):
         assert d.parent.parent == lib
     s = add_song(conn, "AC/DC", "Back In Black - 2003 Remaster")
     assert song_dir(lib, s) == lib / "AC-DC" / "Back In Black"
+
+
+@pytest.mark.parametrize("artist, title", [
+    ("Café Tacvba", "Eres (Live)"), ("宋冬野", "董小姐"), ("AC/DC", "Back: In Black"), ("...", "..."),
+    ("Radiohead", "Creep"),
+])
+def test_songs_in_folder_agrees_with_song_dir(conn, tmp_path, artist, title):
+    lib = tmp_path / "library"
+    mine = add_song(conn, artist, title)
+    add_song(conn, "Someone Else", "Another Song")
+    folder = song_dir(lib, mine).relative_to(lib).parts
+    assert song_folder(mine.artist, mine.title) == folder
+    assert [s.id for s in songs_in_folder(conn, folder)] == [mine.id]
+
+
+def test_songs_in_folder_is_empty_unless_the_folder_is_an_artist_and_a_title(conn):
+    add_song(conn, "Radiohead", "Creep")
+    assert songs_in_folder(conn, ()) == [] and songs_in_folder(conn, ("Radiohead",)) == []
+    assert songs_in_folder(conn, ("Radiohead", "Creep", "x")) == []
+
+
+def test_songs_in_folder_lists_the_newest_first_as_list_songs_does(conn):
+    first = add_song(conn, "Radiohead", "Creep")
+    second = add_song(conn, "Radiohead", "Creep (Live)")  # one folder: the live suffix is cleaned
+    from caracole.songs import list_songs
+    expected = [s.id for s in list_songs(conn) if song_folder(s.artist, s.title) == ("Radiohead", "Creep")]
+    assert [s.id for s in songs_in_folder(conn, ("Radiohead", "Creep"))] == expected
+    assert set(expected) <= {first.id, second.id}
 
 
 def test_write_atomic_returns_sha256(tmp_path):

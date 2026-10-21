@@ -331,7 +331,7 @@ def _match_added(
     """
     from caracole.match import match_all
     from caracole.ug.index import index_state
-    from caracole.ug.lookup import song_tabs
+    from caracole.review import candidate_page
 
     if overrides is None:
         return None
@@ -339,10 +339,7 @@ def _match_added(
     if state == "empty":
         return AddedMatch(state)
     [change] = match_all(conn, overrides, cfg.match, song_ids={song.id})
-    pages = []
-    for c in change.new.candidates:
-        tabs = song_tabs(conn, c.artist_key, c.song_key)
-        pages.append(tabs[0].url if tabs else None)
+    pages = [candidate_page(conn, c.artist_key, c.song_key) for c in change.new.candidates]
     return AddedMatch(state, change.new, tuple(pages))
 
 

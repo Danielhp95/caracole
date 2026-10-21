@@ -694,8 +694,8 @@ def test_get_the_missing_songs_queues_a_lookup_of_each_in_order_then_the_songboo
     response = post(app, "/songbook/get", {"name": "gig"})
     assert response.status == 303 and header(response, "location") == "/jobs#job-3"
     assert steps(queue) == [
-        [("get", "--progress", "--", "Muse", "Hysteria")],
-        [("get", "--progress", "--", "Muse", "Uprising")],
+        [("get", "--progress", "--no-songbooks", "--", "Muse", "Hysteria")],  # the songbook is made once, after them
+        [("get", "--progress", "--no-songbooks", "--", "Muse", "Uprising")],
         [("songbook", "render", "--", "Gig")],  # once they are done: the songbook made again with their sheets
     ]
     assert [job.title for job in queue.snapshot()[::-1]] == [
@@ -731,7 +731,7 @@ def test_get_one_missing_song_now_looks_it_up_then_makes_the_songbook_again(app,
     # A set list's Get it: that song alone, as Get the missing songs now gets each.
     queue._limit = 10
     data = json.loads(post(app, "/songbook/get", {"name": "Gig", "song": str(gig["uprising"].id)}, accept=JSON).body)
-    assert steps(queue) == [[("get", "--progress", "--", "Muse", "Uprising")], [("songbook", "render", "--", "Gig")]]
+    assert steps(queue) == [[("get", "--progress", "--no-songbooks", "--", "Muse", "Uprising")], [("songbook", "render", "--", "Gig")]]
     assert [v["display"] for v in data["jobs"]] == ["Muse - Uprising"] and data["left"] == 0
     refused = post(app, "/songbook/get", {"name": "Gig", "song": str(gig["creep"].id)}, accept=JSON)
     assert refused.status == 409 and "has a sheet" in json.loads(refused.body)["error"]

@@ -812,6 +812,18 @@ def test_the_library_page_is_written_after_the_songbooks_a_lookup_made_again(cfg
     assert book["changed"] is not None and book["missing"] == 0, book
 
 
+def test_a_lookup_told_to_leave_the_songbooks_remakes_none(cfg, conn, sites):
+    serve_creep(sites, conn)
+    _books(cfg, Campfire=["Radiohead - Creep"])
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep", songbooks=False)
+
+    assert result.ok
+    assert not (cfg.library_dir / "_songbooks").exists()
+    assert not [s for s in progress.said if s[0] == "songbooks" and s[1] == "running" and s[2]]  # no names: none made
+    assert any(s[0] == "songbooks" and s[1] == "skipped" for s in progress.said)
+
+
 def test_a_song_in_no_songbook_remakes_none(cfg, conn, sites):
     serve_creep(sites, conn)
     _books(cfg, Other=["Soda Stereo - De Música Ligera"])

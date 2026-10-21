@@ -49,8 +49,24 @@ def safe_name(s: str) -> str:
     return s or "_"
 
 
+def song_folder(artist: str, title: str) -> tuple[str, str]:
+    """The two folder names a song's files go under, ``library_dir / artist / title``."""
+    return safe_name(artist), safe_name(clean_title(title))
+
+
 def song_dir(library_dir: Path, song: Song) -> Path:
-    return library_dir / safe_name(song.artist) / safe_name(clean_title(song.title))
+    return library_dir.joinpath(*song_folder(song.artist, song.title))
+
+
+def songs_in_folder(conn: sqlite3.Connection, folder: tuple[str, ...]) -> list[Song]:
+    """The songs whose folder (``song_folder``) is ``folder``, in ``list_songs``' order: newest first. Only a
+    folder of two names (artist, title) is a song's; reads each song's names alone, the whole song of a match."""
+    from caracole.songs import get_song
+
+    if len(folder) != 2:
+        return []
+    rows = conn.execute("SELECT id, artist, title FROM songs ORDER BY added_at DESC, id DESC").fetchall()
+    return [get_song(conn, r["id"]) for r in rows if song_folder(r["artist"], r["title"]) == tuple(folder)]
 
 
 def write_atomic(path: Path, data: bytes) -> str:

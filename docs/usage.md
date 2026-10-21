@@ -462,6 +462,9 @@ Options:
 - `--album ALBUM` and `--duration M:SS`, for a song new to the library, as in
   `caracole add`.
 - `--progress` adds a JSON line per stage, which `caracole serve` reads.
+- `--no-songbooks` leaves the songbooks that list the song as they are (by
+  default the lookup makes them again). The page's Get the missing songs now
+  uses it for each song and makes the songbook once, after them all.
 
 A song ignored in overrides.toml, or one wanted.txt can't hold, is not looked
 up, and exits 1. A song the matcher isn't sure of gets everything but its
