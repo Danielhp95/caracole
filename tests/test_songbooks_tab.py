@@ -361,6 +361,26 @@ def test_dragging_a_song_moves_it_and_the_keyboard_can_too(serve, cfg, library, 
         assert page.js("document.documentElement.scrollWidth <= innerWidth")
 
 
+def test_a_drag_the_browser_cancels_puts_the_line_back_and_sends_nothing(serve, cfg, library, tmp_path):
+    url, posted = serve(Fake(cfg))
+    with opened(tmp_path, 390, 844) as page:
+        page.open(url + CAMPFIRE)
+        grip = '#songbooks .set-line[data-entry="Radiohead - Creep"] .grip'
+        (x, y), (_, below) = middles(page, grip, '#songbooks .set-line[data-entry="Muse - Hysteria"]')
+        page.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": x, "y": y}])
+        for n in range(1, 9):
+            page.send("Input.dispatchTouchEvent", type="touchMove",
+                      touchPoints=[{"x": x, "y": y + (below + 12 - y) * n / 8}])
+            time.sleep(0.02)
+        assert page.js(SEEN) == ["Hysteria", "Creep", "De Música Ligera"]  # it follows the finger
+        page.send("Input.dispatchTouchEvent", type="touchCancel", touchPoints=[])
+        assert page.wait(f"{SEEN}[0] === 'Creep'", timeout=5), page.js(SEEN)
+        time.sleep(0.5)  # a move, if one were sent, is posted by now
+        assert page.js(TITLES) == ["Creep", "Hysteria", "De Música Ligera"]
+        assert [p for p in posted if p[0] == "/songbook/move"] == []
+        assert books_toml(cfg)[0].texts[0] == "Radiohead - Creep"
+
+
 @SIZES
 def test_a_settings_chip_changes_that_songs_key_mode_and_capo(serve, cfg, library, tmp_path, size):
     url, posted = serve(Fake(cfg))
@@ -377,6 +397,7 @@ def test_a_settings_chip_changes_that_songs_key_mode_and_capo(serve, cfg, librar
         page.js(f"""(() => {{ const form = document.querySelector('{creep} .set-edit');
             form.elements.key.value = 'G'; form.elements.mode.value = 'dorian'; form.elements.capo.value = '0'; }})()""")
         page.click(f"{creep} .set-edit button[type=submit]")
+        assert page.js(f"document.activeElement === document.querySelector('{creep} .plays')")  # the keyboard stays
         assert page.wait(f"{chip}.startsWith('G Dorian')", timeout=20), page.js(chip)
         assert page.js(chip) == "G Dorian, capo 0"
         assert ("/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "key": "G", "mode": "dorian",
@@ -386,6 +407,7 @@ def test_a_settings_chip_changes_that_songs_key_mode_and_capo(serve, cfg, librar
         # Back to its own version: the setting goes.
         page.click(f"{creep} .plays")
         page.click(f"{creep} .set-edit .as-own")
+        assert page.js(f"document.activeElement === document.querySelector('{creep} .plays')")
         assert page.wait(f"{chip} === 'A Minor, capo 0'", timeout=20), page.js(chip)
         assert ("/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "clear": "1"}) in posted
         assert books_toml(cfg)[0].songs[0].setting is None
@@ -441,6 +463,36 @@ def test_add_a_song_searches_everything_and_a_site_song_is_looked_up_then_added(
         assert books_toml(cfg)[0].texts[-1] == "Oasis - Wonderwall"
         page.js(STILL)
         assert page.js(MOVED) == [], page.js("window.shifts")
+
+
+def test_a_new_songs_pending_line_shows_its_lookup_while_that_waits(serve, cfg, library, tmp_path):
+    index(cfg, ("oasis", "wonderwall"))
+    hold = threading.Event()
+    url, _ = serve(Fake(cfg, hold=hold))
+    line = "((document.querySelector('#songbooks .set-line.pending .progress') || {}).textContent || '')"
+    try:
+        with opened(tmp_path) as page:
+            page.open(url + CAMPFIRE)
+            page.click("#songbooks .add-song input")
+            page.type("wonderwall")
+            found = ("Array.from(document.querySelectorAll('#songbooks .add-results .line'))"
+                     ".findIndex((l) => l.querySelector('h3').textContent === 'Wonderwall')")
+            assert page.wait(f"{found} >= 0", timeout=10)
+            page.click(f"#songbooks .add-results .line:nth-child({page.js(found) + 1}) .line-action button")
+            assert page.wait(f"{line} !== '' && {line} !== 'Sending…'", timeout=10), page.js(line)
+            # the lookup's own line (it runs, held), never the songbook change's "Queued behind 1 request…"
+            assert not page.js(line).startswith("Queued"), page.js(line)
+    finally:
+        hold.set()
+
+
+def test_new_songbook_on_an_empty_library_says_why_it_cant_instead_of_doing_nothing(serve, cfg, tmp_path):
+    url, _ = serve(Fake(cfg))
+    with opened(tmp_path) as page:
+        page.open(url + "#tab=songbooks")
+        assert page.js(f"{SHOWN}('#songbooks .book-none')")
+        assert "no songs" in page.js("document.querySelector('#songbooks .book-none').textContent")
+        assert not page.js(f"{SHOWN}('#songbooks .new-book')")  # no button that does nothing
 
 
 # --- the songbook's files, and the file on disk -----------------------------------------------------------------
@@ -516,7 +568,10 @@ def test_the_tab_meets_touch_contrast_and_dark_mode(serve, cfg, library, tmp_pat
         else:  # a mouse: the set list's lines as dense as the library's
             tall = page.js("Array.from(document.querySelectorAll('#songbooks .set-line:not(.editing)'))"
                            ".map((l) => Math.round(l.getBoundingClientRect().height))")
-            assert max(tall) <= 32, tall
+            page.js("document.getElementById('tab-library').click()")
+            line = page.js("Math.round(document.querySelector('#list .line').getBoundingClientRect().height)")
+            assert line <= 26, line  # the library's own line, about 25 px with its border
+            assert max(tall) <= line, (tall, line)
         colours = page.js("""(() => { const c = (n) => getComputedStyle(n);
             return [c(document.body).backgroundColor, c(document.querySelector('#songbooks .book')).color]; })()""")
         lum = [sum(int(v) for v in c[c.index("(") + 1:c.index(")")].split(",")[:3]) / 3 for c in colours]
