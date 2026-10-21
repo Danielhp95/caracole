@@ -702,6 +702,45 @@ def test_enter_moves_to_the_first_result_and_never_requests_a_song(cfg, live, br
     assert queue.snapshot() == [] and len(asked) >= 1
 
 
+SKYNYRD = [("lynyrd-skynyrd", "free-bird", 4), ("lynyrd-skynyrd", "sweet-home-alabama", 3),
+           ("lynyrd-skynyrd", "simple-man", 2), ("lynyrd-skynyrd", "tuesdays-gone", 1), ("sam-grow", "skynyrd", 1)]
+DID_YOU_MEAN = "(document.querySelector('#results .did-you-mean') || {}).textContent"
+
+
+def test_a_word_of_an_artists_name_puts_their_header_first_and_enter_asks_for_nothing(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=SKYNYRD)
+    browser.open(base)
+    search(browser, "skynyrd")
+    assert browser.wait("document.getElementById('found').dataset.query === 'skynyrd'")
+    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 4", "Sam Grow"]  # the artist first, the song titled so after
+    assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "Skynyrd"]
+    assert browser.js("document.querySelector('#results .more-by').textContent") == "+ 1 more by Lynyrd Skynyrd"
+    assert browser.js(DID_YOU_MEAN) is None
+    browser.press("Enter")
+    assert browser.wait("document.activeElement.matches('#results article.hit')")
+    time.sleep(0.5)
+    assert queue.snapshot() == []
+
+
+def test_a_close_spelling_says_did_you_mean_above_the_notes_and_the_name_opens_their_songs(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=SKYNYRD)
+    browser.open(base)
+    search(browser, "lynrd")
+    assert browser.wait(f"{DID_YOU_MEAN} === 'Did you mean Lynyrd SkynyrdUG?'")
+    notes = browser.js("[...document.querySelectorAll('#results .notes > *')].map((n) => n.className)")
+    assert notes[0] == "did-you-mean" and "hint index-hint" in notes  # above the notes, which stay
+    assert browser.js(HITS) == 0
+    searched = len(asked)
+    browser.click("#results .did-you-mean button")
+    assert browser.wait(f"{HITS} === 4")
+    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 4"]
+    assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "Tuesdays Gone"]
+    assert browser.js("document.activeElement.matches('#results section.artist')")
+    assert len(asked) == searched and queue.snapshot() == []  # their songs came from /api/artist: no search, no site
+
+
 def test_escape_returns_to_the_list_with_its_filter(cfg, live, browser):
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])

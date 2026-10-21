@@ -3,6 +3,8 @@
 .read-page { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0 0; }
 .read-page p { flex: 1 1 22rem; margin: 0; color: var(--muted); }
 .read-page .read-outcome { flex: 1 1 100%; }
+.did-you-mean { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 0; color: var(--muted); }
+.did-you-mean .btn { gap: 6px; }
 @media (pointer: coarse) { .read-page .btn { min-height: 44px; } }
 .actions form { margin: 0; }
 .subhead { margin: 2px 0 -2px; color: var(--muted); font-size: .75rem; font-weight: 650; letter-spacing: .06em;

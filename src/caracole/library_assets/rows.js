@@ -588,6 +588,23 @@ const caracoleRows = (icons) => {
     }
     return why;
   };
+  // "Did you mean Lynyrd Skynyrd?": the artists whose names are spelled close to a query nothing matches well
+  // (/api/search's ``suggest``), each a button, with its site's mark, that lists their songs: ``open(s, button)``.
+  const didYouMean = (close, open) => {
+    const p = el("p", "did-you-mean", "Did you mean ");
+    const all = listOf(close).filter((s) => s && typeof s === "object");
+    all.forEach((s, i) => {
+      if (i) p.appendChild(document.createTextNode(i === all.length - 1 ? " or " : ", "));
+      const name = String(s.artist || "");
+      const site = s.source === "lacuerda" ? "LaCuerda" : "Ultimate Guitar";
+      const go = button(name, "small", (e) => open(s, e.currentTarget), "List the songs of " + name + " on " + site);
+      const mark = sourceMark(String(s.source || ""));
+      if (mark) go.appendChild(mark);
+      p.appendChild(go);
+    });
+    p.appendChild(document.createTextNode("?"));
+    return p;
+  };
   // A paragraph of the server's, its commands in backticks as the terminal prints them: those as code.
   const prose = (cls, text) => {
     const p = el("p", cls);
@@ -597,5 +614,6 @@ const caracoleRows = (icons) => {
     return p;
   };
   return { resultRow, sourceMark, link, titleLink, artistFilter, button, many, counts, opener, ugHit, artistHit,
-    siteHit, siteArtist, siteArtistSongs, siteUnlisted, readArtistPage, readOutcome, prose, indexLine, titleLine };
+    siteHit, siteArtist, siteArtistSongs, siteUnlisted, readArtistPage, readOutcome, didYouMean, prose, indexLine,
+    titleLine };
 };

@@ -156,7 +156,7 @@
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
   // ROWS_SCRIPT's, which the lookup page shares
   const { sourceMark, link, resultRow, artistFilter, button, many, indexLine, titleLine, siteUnlisted, readArtistPage,
-    readOutcome, prose } = caracoleRows(ICONS);
+    readOutcome, didYouMean, prose } = caracoleRows(ICONS);
   // A song's file from where its sheet came from has no mark of its own: its line's says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -1440,6 +1440,38 @@
     model.notes = model.notes.filter((node) => node !== offer);
     drawGroups();
   };
+  // An artist the answer suggests ("Did you mean Lynyrd Skynyrd?"), opened: their songs (/api/artist, fifty, or those
+  // LaCuerda's index holds, or the offer to read their page), in their group, first, as an artist the query names
+  // is; the focus to it. It reads the indexes alone: no site is asked anything.
+  const openSuggested = (model, s, go) => {
+    const was = answer;
+    const ug = s.source !== "lacuerda";
+    go.disabled = true;
+    say("Listing " + String(s.artist || "") + "'s songs…");
+    (ug ? artistPage(String(s.artist_key || ""), 0) : sitePage({ slug: String(s.slug || "") })).then((page) => {
+      go.disabled = false;
+      if (!page || answer !== was || !state.all) return;
+      const g = groupOf(model, model.alias.get(String(s.group_key)) || String(s.group_key || ""), page.artist);
+      g.tail = null;  // made again, with what this group has now
+      if (ug) {
+        const got = objects(page.songs);
+        g.ug = { artist_key: page.artist_key, artist: page.artist, songs: page.total, tabs: page.tabs,
+          group_key: s.group_key, top: [] };
+        for (const h of got) addSong(model, "ug", h, g);
+        g.ugOffset = got.length;
+        g.ugListed = got.length;
+        say(String(page.artist) + ": " + many(page.total, "song") + " on Ultimate Guitar");
+      } else {
+        g.lacuerda = { artist: page.artist, slug: page.slug, songs: page.listed, known: page.total, gtptabs: page.gtptabs };
+        if (page.read) listLaCuerda(g, page);
+      }
+      model.order.splice(model.order.indexOf(g.key), 1);
+      model.order.unshift(g.key);
+      drawGroups();
+      const section = Array.from(groupsBox.querySelectorAll("section.artist")).find((x) => x.dataset.artist === g.key);
+      if (section) section.focus();
+    });
+  };
 
   // Of your songs, those the status buttons, the Key menu and an artist's chip show, in the list as in the results
   // (the sites' songs are what the sites have, whatever they show); and that in words, for the results' head, which
@@ -1537,12 +1569,15 @@
     keptNote.hidden = !said;
     notesBox.replaceChildren(...(model ? notesOf(model) : []));
   };
-  // Under the groups: a name LaCuerda's index has no artist by, under a letter its listings aren't read to yet (their
-  // page may say: the offer to read it); the sites left out, and those searched in part, with why; the server's hint.
+  // Under the groups: the artists spelled close to a query nothing matches well ("Did you mean"); a name LaCuerda's
+  // index has no artist by, under a letter its listings aren't read to yet (their page may say: the offer to read it);
+  // the sites left out, and those searched in part, with why; the server's hint.
   const notesOf = (model) => {
     if (model.notes) return model.notes;
     const data = answer.data;
     model.notes = [];
+    const close = objects(data.suggest);  // nothing matches well: the artists spelled close to the query
+    if (close.length) model.notes.push(didYouMean(close, (s, go) => openSuggested(model, s, go)));
     const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
     if (unlisted) {
       const offer = siteUnlisted(unlisted, (go, box) => readThenShow({ name: String(unlisted.name || "") }, go, box,

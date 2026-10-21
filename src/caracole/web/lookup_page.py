@@ -9,9 +9,11 @@ sheet (``lacuerda``), and an artist's Songs lists those the index holds, or,
 while caracole hasn't read their page, offers to (``POST /lacuerda/artist``,
 one request, a job the page follows on ``/api/jobs``), as it does for a name
 under a letter LaCuerda's listings aren't read to yet. A query may be an
-artist's name alone or a title alone: an artist it names is a row of its own,
-whose Songs lists all their songs (``GET /api/artist``), and comes first when
-it leads. Enter acts
+artist's name alone or a title alone, or a word of an artist's name
+("skynyrd"): an artist it names is a row of its own, whose Songs lists all
+their songs (``GET /api/artist``), and comes first when it leads. A query
+nothing matches well, spelled close to an artist's name ("lynrd"), says "Did
+you mean" that artist, whose name lists their songs the same way. Enter acts
 on the answer of the query typed, never of an older one still on the screen:
 its ``best`` row, the song you meant; when an artist leads, that artist's
 songs; when nothing stands out, nothing, so a guess never spends a request.
@@ -204,6 +206,14 @@ function show(data, text) {
   if (data.index.length) results.append(...group("On Ultimate Guitar", data.index.map(ugSong)));
   if (data.lead !== "artist") results.append(...named);
   if (data.lacuerda_leads !== true) results.append(...lcGroup);
+  // Nothing matches well, and artists' names are spelled close to the query: "Did you mean" them, each listing their
+  // songs as an artist's Songs does.
+  const close = objects(data.suggest);
+  if (close.length) {
+    results.append(rowKit.didYouMean(close, s => s.source === "lacuerda"
+      ? openSiteArtist({slug: String(s.slug || ""), artist: String(s.artist || "")}, true)
+      : openArtist({artist_key: String(s.artist_key || ""), artist: String(s.artist || "")}, true)));
+  }
   // No artist of LaCuerda's by that name, under a letter its listings aren't read to yet: their page may say.
   const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
   if (unlisted) {

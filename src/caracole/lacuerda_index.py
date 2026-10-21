@@ -440,7 +440,8 @@ class LaCuerdaHit:
     its ``songs`` (as the listing does) and holds its ``top`` songs the index has: the most
     popular with a Letra y Acordes version. A song's hit has its ``title``, its lcd letters
     (``versions``, one per version) and its best Letra y Acordes version (``acordes``, 0 for
-    none), whose page is ``sheet_url``.
+    none), whose page is ``sheet_url``. ``part`` is True for an artist whose name holds the query's words as
+    words of its own among others ("sabina" of Joaquín Sabina), never letters inside a word.
     """
 
     artist: str
@@ -457,6 +458,7 @@ class LaCuerdaHit:
     acordes: int = 0
     top: tuple[LaCuerdaHit, ...] = ()
     source: str = "lacuerda"
+    part: bool = False
 
     @property
     def kind(self) -> str:
@@ -481,8 +483,9 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
          songs: int = SONG_ROWS) -> LaCuerdaFound:
     """LaCuerda's artists and songs the index holds that match ``query``, best first.
 
-    Ties go to the artist with more songs, and to the song with a Letra y Acordes version, then
-    with more versions. A query of fewer than three letters (two Chinese characters) finds
+    Ties go to the artist whose name holds the query's words as words of its own ("andres" of Andrés
+    Calamaro before Andresito's), then to the one with more songs; and to the song with a Letra y Acordes
+    version, then with more versions. A query of fewer than three letters (two Chinese characters) finds
     nothing. Reads only the table: nothing is asked of LaCuerda.
     """
     queries = _queries(query)
@@ -512,12 +515,15 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
             own = conn.execute(f"SELECT {', '.join(_COLUMNS)} FROM lacuerda_index WHERE path = ?",
                                (f"{slug}/",)).fetchone()
             named[slug] = (score, "artist", _Row(*own) if own is not None else row)
-    ranked = sorted(named.values(), key=lambda s: (-s[0], -_artist_songs(conn, s[2]), s[2].artist.casefold(),
-                                                   s[2].artist_slug))
+    parts = {slug for slug, (_, _, row) in named.items()
+             if any(q.part_of(row.artist_key.replace("-", " ")) for q in queries)}
+    ranked = sorted(named.values(), key=lambda s: (-s[0], s[2].artist_slug not in parts, -_artist_songs(conn, s[2]),
+                                                   s[2].artist.casefold(), s[2].artist_slug))
     found.sort(key=lambda s: (-s[0], s[2].acordes == 0, -len(s[2].versions), s[2].artist.casefold(),
                               s[2].title.casefold(), s[2].path))
     return LaCuerdaFound(
-        artists=tuple(_artist_hit(conn, row, score, via) for score, via, row in ranked[:max(artists, 0)]),
+        artists=tuple(_artist_hit(conn, row, score, via, row.artist_slug in parts)
+                      for score, via, row in ranked[:max(artists, 0)]),
         songs=tuple(_song_hit(row, score, via) for score, via, row in found[:max(songs, 0)]),
     )
 
@@ -549,11 +555,11 @@ def _artist_songs(conn: sqlite3.Connection, row: _Row) -> int:
                         (row.artist_slug,)).fetchone()[0]
 
 
-def _artist_hit(conn: sqlite3.Connection, row: _Row, score: float, via: str) -> LaCuerdaHit:
+def _artist_hit(conn: sqlite3.Connection, row: _Row, score: float, via: str, part: bool = False) -> LaCuerdaHit:
     return LaCuerdaHit(
         artist=row.artist, artist_slug=row.artist_slug, artist_key=row.artist_key, url=artist_url(row.artist_slug),
         score=round(score, 1), via=via, songs=_artist_songs(conn, row),
-        top=tuple(artist_songs(conn, row.artist_slug, limit=TOP_SONGS, acordes=True)),
+        top=tuple(artist_songs(conn, row.artist_slug, limit=TOP_SONGS, acordes=True)), part=part,
     )
 
 
@@ -648,6 +654,12 @@ class _Query:
         ``_Query.holds``). True for a query with no Chinese."""
         words = [name.split() for name in names]
         return all(any(holds_run(w, run) for w in words) for run in self.runs)
+
+    def part_of(self, artist: str) -> bool:
+        """Whether the query's words are words of an artist's name among others (space-separated words), each
+        Chinese word's pinyin a whole run of them: never letters inside a word, nor the whole name."""
+        words, name = self.text.split(), artist.split()
+        return len(words) < len(name) and all(w in name for w in words) and self.holds(artist)
 
     def artist(self, artist: str) -> tuple[float, str]:
         """How well the query names an artist, and the reading: 100 for the whole name, at most 90 for a
