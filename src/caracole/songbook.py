@@ -42,11 +42,9 @@ import json
 import logging
 import sqlite3
 import subprocess
-import tempfile
 import tomllib
 import unicodedata
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -82,14 +80,16 @@ from caracole.render import (
     RenderError,
     Runner,
     _cjk_font,
-    _first_lost_letter,
-    _font_need,
     _font_options,
     _sheet_text,
     _style,
     export_query,
     keeps_key,
     own_version,
+    pdf_font,
+    private_dir,
+    run_chordpro,
+    written_entry,
     written_file,
 )
 from caracole.viewer.page import viewer_key
@@ -906,16 +906,15 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
         printed = None
     if printed is not None:
         text = "\n".join([book.name, *printed])
-        need = _font_need(text)
-        pdf_font = font if need else None
-        if need == "letters" and font is None:
-            done.no_font = _first_lost_letter(text)
+        book_font, lost = pdf_font(text, font)
+        if lost is not None:
+            done.no_font = lost
         else:
             pdf_inputs = {
                 "name": book.name, "songs": printed, "style": _style(), "book": BOOK_CONFIG,
-                "font": str(pdf_font) if pdf_font else None, "v": 5,
+                "font": str(book_font) if book_font else None, "v": 5,
             }
-            make(PDF_NAME, pdf_inputs, lambda: _pdf(cfg, book, entries, printed, runner, font=pdf_font)
+            make(PDF_NAME, pdf_inputs, lambda: _pdf(cfg, book, entries, printed, runner, font=book_font)
                  if playable else None)
 
     from caracole.viewer.book import BookSong, assets_version, build_songbook
@@ -956,8 +955,7 @@ def _digest(inputs: Any) -> str:
 
 def _holds(path: Path, entry: Any) -> bool:
     """Whether the file at ``path`` is still what the record ``entry`` says caracole wrote."""
-    return (isinstance(entry, Mapping) and isinstance(entry.get("sha256"), str)
-            and isinstance(entry.get("size"), int) and holds(path, entry["sha256"], entry["size"]))
+    return (written := written_entry(entry)) is not None and holds(path, *written)
 
 
 def _drop(path: Path, entry: Any) -> None:
@@ -981,10 +979,7 @@ def written_page(conn: sqlite3.Connection, folder: str) -> tuple[str, int] | Non
     """The SHA-256 and the length of the songbook.html caracole last wrote in ``_songbooks/<folder>/``,
     or None: as ``render.written_file`` does for a sheet's viewer, so that a server serves the page
     only while it is still those bytes (``pages_written``)."""
-    entry = _record(conn, folder)["files"].get(HTML_NAME)
-    if not (isinstance(entry, Mapping) and isinstance(entry.get("sha256"), str) and type(entry.get("size")) is int):
-        return None
-    return entry["sha256"], entry["size"]
+    return written_entry(_record(conn, folder)["files"].get(HTML_NAME))
 
 
 def pages_written(conn: sqlite3.Connection, library_dir: Path, parts: tuple[str, ...]) -> list[tuple[str, int]]:
@@ -1127,7 +1122,7 @@ def _pdf(cfg: Config, book: Songbook, entries: Sequence[Entry], printed: Sequenc
          font: Path | None) -> bytes:
     """songbook.pdf: every song, in order (``printed``: each one's ``_song_file`` for the PDF), through
     one chordpro run, in caracole's look."""
-    with _workspace(cfg) as tmp:
+    with private_dir(cfg.cache_dir, "songbook-") as tmp:
         files = _write_songs(tmp, printed)
         (tmp / CONTENTS_TEMPLATE).write_text(_contents_file(book, entries), encoding="utf-8")
         config = tmp / BOOK_CONFIG_NAME
@@ -1135,10 +1130,9 @@ def _pdf(cfg: Config, book: Songbook, entries: Sequence[Entry], printed: Sequenc
         out = tmp / PDF_NAME
         cmd = [cfg.chordpro_bin, "--nodefaultconfigs", f"--config={STYLE_FILE}", f"--config={config}"]
         if font is not None:
-            _font_options(font)  # its checks: a missing file or a collection is a RenderError
-            cmd += [f"--define=pdf.fonts.{element}.file={font.expanduser().absolute()}"
-                    for element in BOOK_FONT_ELEMENTS]
-        _run([*cmd, f"--output={out}", *map(str, files)], runner, len(files), cfg.chordpro_bin)
+            cmd += _font_options(font, BOOK_FONT_ELEMENTS)  # a missing file or a collection is a RenderError
+        run_chordpro([*cmd, f"--output={out}", *map(str, files)], out, runner=runner,
+                     timeout=TIMEOUT + PER_SONG_TIMEOUT * len(files), chordpro_bin=cfg.chordpro_bin)
         return out.read_bytes()
 
 
@@ -1146,21 +1140,12 @@ def _chordpro_file(cfg: Config, texts: Sequence[str], runner: Runner) -> bytes:
     """songbook.cho: the sheets (``texts``: each one's ``_song_file``), each in its key, as chordpro's own
     ChordPro backend writes them, split by {new_song}, without the chord definitions an app may not read
     (--diagrams=none)."""
-    with _workspace(cfg) as tmp:
+    with private_dir(cfg.cache_dir, "songbook-") as tmp:
         files = _write_songs(tmp, texts)
         out = tmp / CHO_NAME
-        _run([cfg.chordpro_bin, "--nodefaultconfigs", "--diagrams=none", f"--output={out}", *map(str, files)],
-             runner, len(files), cfg.chordpro_bin)
+        run_chordpro([cfg.chordpro_bin, "--nodefaultconfigs", "--diagrams=none", f"--output={out}", *map(str, files)],
+                     out, runner=runner, timeout=TIMEOUT + PER_SONG_TIMEOUT * len(files), chordpro_bin=cfg.chordpro_bin)
         return out.read_bytes()
-
-
-@contextmanager
-def _workspace(cfg: Config) -> Iterator[Path]:
-    """A private folder under the cache (mode 0700), where chordpro reads copies and writes its file:
-    it follows links, and the library is anyone's to write (as ``render._render_into``)."""
-    cfg.cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="songbook-", dir=cfg.cache_dir) as tmp:
-        yield Path(tmp)
 
 
 def _write_songs(tmp: Path, texts: Sequence[str]) -> list[Path]:
@@ -1170,20 +1155,3 @@ def _write_songs(tmp: Path, texts: Sequence[str]) -> list[Path]:
         path.write_text(text, encoding="utf-8")
         files.append(path)
     return files
-
-
-def _run(cmd: list[str], runner: Runner, songs: int, chordpro_bin: str) -> None:
-    """Run chordpro; RenderError when it is missing, fails, takes too long or writes nothing."""
-    out = Path(next(a.split("=", 1)[1] for a in cmd if a.startswith("--output=")))
-    timeout = TIMEOUT + PER_SONG_TIMEOUT * songs
-    try:
-        result = runner(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout)
-    except FileNotFoundError as e:
-        raise RenderError(f"chordpro not found: {chordpro_bin}") from e
-    except subprocess.TimeoutExpired as e:
-        raise RenderError(f"chordpro timed out after {timeout} s") from e
-    stderr = result.stderr or ""
-    if result.returncode != 0:
-        raise RenderError(f"chordpro failed (exit {result.returncode})", stderr=stderr)
-    if not out.is_file():
-        raise RenderError(f"chordpro wrote no {out.name}", stderr=stderr)

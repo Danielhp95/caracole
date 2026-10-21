@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import zlib
 from dataclasses import replace
 from pathlib import Path
@@ -610,6 +611,38 @@ def test_a_failed_run_is_reported_and_the_rest_goes_on(conn, cfg, two, caplog):
     assert stats.failed == ["Campfire"] and stats.rendered == 1
     assert (folder(cfg, "Picnic") / "songbook.pdf").exists()
     assert "songbook Campfire" in caplog.text and "Unhandled fonts" in caplog.text
+    assert (folder(cfg) / "songbook.html").exists()  # the page needs no chordpro
+
+
+def _raising(error):
+    def run(cmd, **kwargs):
+        raise error
+    return run
+
+
+def _ends(code: int, *, writes: bool):
+    def run(cmd, **kwargs):
+        if writes:
+            output_of(cmd).write_bytes(b"%PDF-1.4 fake")
+        return subprocess.CompletedProcess(cmd, code, stdout="", stderr="")
+    return run
+
+
+@pytest.mark.parametrize(("runner", "said"), [
+    (_raising(FileNotFoundError(2, "No such file or directory")), "chordpro not found: {bin}"),
+    (_raising(subprocess.TimeoutExpired("chordpro", 1)), "chordpro timed out after {timeout} s"),
+    (_raising(PermissionError(13, "Permission denied")), "cannot run {bin}: [Errno 13] Permission denied"),
+    (_ends(3, writes=True), "chordpro failed (exit 3)"),
+    (_ends(0, writes=False), "chordpro wrote no songbook.pdf"),
+], ids=["not found", "timed out", "cannot run", "failed", "nothing written"])
+def test_a_chordpro_run_that_fails_says_why_and_fails_its_songbook(conn, cfg, two, caplog, runner, said):
+    from caracole.render import TIMEOUT
+    from caracole.songbook import PER_SONG_TIMEOUT
+
+    stats = render(conn, cfg, runner=runner)
+    assert stats.failed == ["Campfire"]
+    timeout = TIMEOUT + PER_SONG_TIMEOUT * 2  # its two songs
+    assert f"songbook Campfire: no songbook.pdf: {said.format(bin=cfg.chordpro_bin, timeout=timeout)}" in caplog.text
     assert (folder(cfg) / "songbook.html").exists()  # the page needs no chordpro
 
 

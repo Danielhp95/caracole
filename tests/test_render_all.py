@@ -627,6 +627,15 @@ def recorded(data: bytes) -> tuple[str, int]:
     return hashlib.sha256(data).hexdigest(), len(data)
 
 
+def test_a_record_whose_size_isnt_a_number_is_no_file_written(conn, cfg):
+    # As the songbook's pages are: a size of true (a JSON boolean) is no length.
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    kv_set_json(conn, f"render:files:{song.id}", {"sheet.html": {"sha256": "0" * 64, "size": True},
+                                                  "sheet.cho": {"sha256": "0" * 64, "size": 3}})
+    assert written_file(conn, song.id, "sheet.html") is None
+    assert written_file(conn, song.id, "sheet.cho") == ("0" * 64, 3)
+
+
 def test_each_cho_and_viewer_written_is_recorded(conn, cfg):
     # A server serves a viewer only while it is the page caracole wrote: anyone with a synced
     # device could put a sheet.html of their own there, whose script would run as the server's.
