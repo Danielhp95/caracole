@@ -27,6 +27,11 @@ file, and none of it loads anything from the network.
   follows the Songbooks section as the page draws it again ("caracole:songbooks"); on the file on
   disk it shows the caracole songbook command to run instead, folded beside Copy.
 
+- drawn.js: the last script, once every other has drawn what it draws: the page shows. Until then
+  library.css keeps it unseen (its body is ``drawing``), so a slow machine that paints it before its
+  scripts have run shows nothing that moves once they have (the list empty, the request form open,
+  the Songbooks section closed though you left it open); two seconds on, it shows all the same.
+
 - head.html, body.html, request.html and requested.html: index.html's skeleton, whose
   ``__BLANKS__`` library_page.py fills in: the policy, the style, the masthead's links, the
   Songbooks section and, served, the request form and the songs just requested.

@@ -1123,10 +1123,9 @@ SETTLED = """new Promise((done) => {
 })"""
 
 
-# Notes every layout shift that no input brought about from now on: how much, and what moved. A request's answer
-# that comes seconds after its tap moves nothing on the screen. (Not since the page loaded: as busy as a whole run
-# makes the machine, Chromium may draw the page before its script has run, the list empty and the request form
-# showing, then move both once it has; that is the page's load, which no request brings about.)
+# Notes every layout shift that no input brought about since the page loaded (buffered): how much, and what
+# moved. A request's answer that comes seconds after its tap moves nothing on the screen, and nor does the page's
+# load (test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine).
 SHIFTS = """(() => {
   window.shifts = [];
   new PerformanceObserver((list) => {
@@ -1135,9 +1134,37 @@ SHIFTS = """(() => {
       const moved = (e.sources || []).map((s) => (s.node ? s.node.id || String(s.node.className || s.node.nodeName) : "?"));
       window.shifts.push({ value: Math.round(e.value * 10000) / 10000, moved });
     }
-  }).observe({ type: "layout-shift" });
+  }).observe({ type: "layout-shift", buffered: true });
   return true;
 })()"""
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+def test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine(serve, cfg, conn, tmp_path, size):
+    # On a slow machine (Chromium's processor slowed twentyfold), the page may be painted before its script has
+    # run: were it seen then, the list would be empty, the request form open under the bar and the Songbooks
+    # section closed though you left it open, and all of it would move once the script has drawn them.
+    from caracole.songbook import make_songbook, songbooks_file
+
+    for n in range(40):
+        add_song(conn, "Band", f"Song {n:02}")
+    make_songbook(songbooks_file(cfg.library_dir), "Campfire", [f"Band - Song {n:02}" for n in range(6)])
+    url = serve(FakeCaracole(cfg), "(() => {})();\n", timers=QUICK)
+    width, height = (int(n) for n in size.split(","))
+    with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
+        page.open(url)
+        page.js("localStorage.setItem('caracole-library:songbooks-open', '1')")  # as you left it open
+        page.send("Emulation.setCPUThrottlingRate", rate=20)
+        page.js("window.before = true; location.reload()")
+        assert page.wait("window.before === undefined && document.readyState === 'complete' && "
+                         "document.querySelector('#songbooks > details').open", timeout=30)
+        assert page.js(SHIFTS)
+        page.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
+        shifts = page.js("window.shifts")
+        page.send("Emulation.setCPUThrottlingRate", rate=1)
+        shown = page.js("getComputedStyle(document.querySelector('.page')).visibility")
+    assert shifts == [], shifts
+    assert shown == "visible"
 
 
 @pytest.mark.parametrize("size", ["390,844", "1280,800"])
