@@ -620,9 +620,9 @@ NUMBERED = ("{title: Numbered}\n{artist: The Placeholders}\n{key: C}\n\n{comment
             "[C]Words [Am]to [F]sing [G]here\n[D]more [G]words [D]and [C]home\n")
 
 
-def numbered_pdf(tmp_path: Path, names: str) -> list[tuple[str, str]]:
+def numbered_pdf(tmp_path: Path, names: str, sheet: str = NUMBERED) -> list[tuple[str, str]]:
     cho = tmp_path / f"{names}.cho"
-    cho.write_text(printed_text(NUMBERED, key=Key(0, "ionian"), capo=None, names=names), encoding="utf-8")
+    cho.write_text(printed_text(sheet, key=Key(0, "ionian"), capo=None, names=names), encoding="utf-8")
     pdf = tmp_path / f"{names}.pdf"
     render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
     return pdf_strings(pdf)
@@ -652,3 +652,14 @@ def test_render_real_numerals_chart_says_its_key_and_draws_no_diagrams(tmp_path)
     # The same song by its chords names each chord over its words and over its diagram: the chart, neither.
     named = [text.strip() for _, text in plain]
     assert all(named.count(chord) >= 2 for chord in ("C", "Am", "F", "G")), named
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_render_real_numerals_chart_draws_not_even_the_diagram_of_a_chord_the_sheet_defines(tmp_path):
+    # Hm is no chord caracole reads: it stays as written, with the sheet's own {define}, which chordpro
+    # would draw as a diagram named Hm but for the chart's {diagrams: off}.
+    sheet = NUMBERED.replace("{key: C}\n", "{key: C}\n{define: Hm base-fret 1 frets x 2 4 4 3 2}\n").replace(
+        "[G]here", "[Hm]here")
+    texts = [text.strip() for _, text in numbered_pdf(tmp_path, "numerals", sheet)]
+    assert texts.count("Hm") == 1, texts  # over its words alone

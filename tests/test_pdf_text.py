@@ -246,6 +246,13 @@ def test_a_numerals_chart_has_numerals_in_the_chords_place_its_key_under_the_tit
     assert "{diagrams: off}" in lines
 
 
+def test_each_chord_is_read_with_the_next_chord_on_another_root():
+    # D D7 G: both D chords go to G, so both are V of V; the last D goes to C, the key's II.
+    sheet = "{title: X}\n{key: C}\n[D]one [D7]two [G]three [D]four [C]home\n"
+    lines = pdf_text(sheet, key=C_MAJOR, capo=None, names="numerals").splitlines()
+    assert "[V/V]one [V7/V]two [V]three [II]four [I]home" in lines
+
+
 def test_both_names_each_chord_and_its_numeral_with_the_viewers_shape():
     text = pdf_text(SONG, key=C_MAJOR, capo=None, names="both")
     lines = text.splitlines()
