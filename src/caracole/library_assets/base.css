@@ -12,6 +12,9 @@
   --accent: #b4441e;
   --accent-hover: #9a3915;
   --on-accent: #ffffff;
+  /* A second accent, an artist's name over their songs: indigo, away from the rust, the badges and the sites' marks.
+     Contrast 6.77:1 on --raised, 7.78:1 on --surface; in the dark, 7.49:1 and 8.63:1. */
+  --artist: #3448b0;
   --focus: #1f6feb;
   --shadow: 0 1px 2px rgb(31 30 28 / 6%), 0 6px 18px rgb(31 30 28 / 5%);
   --found: #1d6b43; --found-bg: #def1e5;
@@ -34,6 +37,7 @@
     --accent: #f0895c;
     --accent-hover: #f5a47f;
     --on-accent: #1b0e07;
+    --artist: #a5b4fc;
     --focus: #6ea8fe;
     --shadow: none;
     --found: #83d6a6; --found-bg: #133222;
