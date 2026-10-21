@@ -371,14 +371,15 @@ def transport_for(provider: str) -> httpx.BaseTransport | None:
 
 
 def alert_block(cfg: Config, provider: str, message: str) -> None:
-    """The ntfy alert a block sends, as the nightly run sends one: once for the block, never per song,
-    high priority; nothing without an ntfy URL. Sending never raises (notify.py)."""
+    """The ntfy alert a block sends, titled as the nightly run titles one ("caracole: Ultimate Guitar
+    blocked", ``logs.provider_name``) with the command's own message: once for the block, never per
+    song, high priority; nothing without an ntfy URL. Sending never raises (notify.py)."""
     if not cfg.ntfy.url:
         return
     from caracole.notify import Notifier  # httpx: only when there is an alert to send
 
     notifier = Notifier(cfg.ntfy.url, cfg.ntfy.token, transport=transport_for("ntfy"))
-    notifier.send(f"caracole: {provider} blocked", message, priority="high", tags=["warning"])
+    notifier.send(f"caracole: {logs.provider_name(provider)} blocked", message, priority="high", tags=["warning"])
 
 
 @functools.cache

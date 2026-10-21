@@ -8,8 +8,9 @@ week ago still comes from the cache (``icons._look``), so asking again sooner
 retries an error, never an answer. A site with no provider of its own gets
 ``ICON_POLICY``; YouTube has one (yt-dlp's, for the nightly run's youtube step),
 whose budget and pauses its icon keeps to, and which ``[providers.youtube]
-enabled = false`` turns off. A block cools that provider down and sends its one ntfy
-alert, as any block does (``_common.alert_block``), and the other sites are still asked; a block or an error exits 0. A site that answered a
+enabled = false`` turns off. A block cools that provider down and sends its
+one ntfy alert, as any block does (``_common.alert_block``), and the other
+sites are still asked; a block or an error exits 0. A site that answered a
 request of this command's had a good run (``record_ok``), as the nightly run
 counts one; an answer from the cache alone leaves its health as it was.
 """

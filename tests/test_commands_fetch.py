@@ -166,7 +166,7 @@ def test_a_block_sends_one_alert_as_the_nightly_run_does(tmp_path, ug, monkeypat
     result = run(tmp_path, ntfy=True)
 
     assert result.exit_code == 0, result.output
-    assert ntfy.titles == ["caracole: ug blocked"]  # one for the block, none per song
+    assert ntfy.titles == ["caracole: Ultimate Guitar blocked"]  # one for the block, none per song
     (alert,) = ntfy.posts
     assert alert.headers["priority"] == "high" and alert.headers["tags"] == "warning"
     assert "Ultimate Guitar blocked caracole" in alert.content.decode()

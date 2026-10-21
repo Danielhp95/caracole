@@ -329,7 +329,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
     more that run, `health.record_block` cools the provider down for 24 h × 2^(k−1) + 2 h after
     the k-th block in a row (so the next nightly run is always skipped), one ntfy alert goes out
-    for the block, never one a song (the run's step, or `_common.alert_block` in a command; a lookup
+    for the block, never one a song, titled with `logs.provider_name` (the run's step, or
+    `_common.alert_block` in a command, `caracole fetch --song` from serve's review page too; a lookup
     sends none), and nothing retries or works around it (no proxies).
   - No URL robots.txt closes is asked for, or followed to (`http.ROBOTS_DISALLOW`,
     `robots_disallows`): not UG's `/search.php` (matching is local, against the sitemap

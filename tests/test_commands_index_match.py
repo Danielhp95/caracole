@@ -269,7 +269,7 @@ def test_cli_index_block_sends_one_alert_as_the_nightly_run_does(tmp_path, ug, m
         ntfy.handler if provider == "ntfy" else ug.handler))
     result = run(tmp_path, "index", "build", ntfy=True)
     assert result.exit_code == 0, result.output
-    assert ntfy.titles == ["caracole: ug blocked"]
+    assert ntfy.titles == ["caracole: Ultimate Guitar blocked"]
     (alert,) = ntfy.posts
     assert alert.headers["priority"] == "high" and alert.headers["tags"] == "warning"
     assert "Ultimate Guitar blocked caracole" in alert.content.decode()

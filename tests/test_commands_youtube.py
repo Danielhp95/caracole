@@ -316,7 +316,7 @@ def test_a_block_cools_youtube_down_alerts_once_and_exits_0(tmp_path, ntfy, fake
     assert result.exit_code == 0, result.output
     assert "YouTube blocked caracole" in result.output and "Nothing was marked missing." in result.output
     assert is_cooling(conn, "youtube", _common.utcnow())
-    assert [p.headers.get("title") for p in ntfy.posts] == ["caracole: youtube blocked"]
+    assert [p.headers.get("title") for p in ntfy.posts] == ["caracole: YouTube blocked"]
     assert (kv_get_json(conn, f"youtube:{song.id}") or {}).get("missing_at") is None
     again = invoke(write_config(tmp_path, fake, ntfy=True))
     assert again.exit_code == 0 and "cooling down" in again.output and len(fake.argvs()) == 1

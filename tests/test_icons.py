@@ -532,7 +532,7 @@ def test_caracole_icons_sends_one_alert_for_a_block_as_the_nightly_run_does(tmp_
     sites = icon_sites()
     result = icons_command(tmp_path, monkeypatch, sites, ntfy=ntfy)
     assert result.exit_code == 0, result.output
-    assert ntfy.titles == ["caracole: musescore blocked"]  # the one site that blocked, once
+    assert ntfy.titles == ["caracole: MuseScore blocked"]  # the one site that blocked, once
     (alert,) = ntfy.posts
     assert alert.headers["priority"] == "high" and alert.headers["tags"] == "warning"
     assert "MuseScore blocked caracole" in alert.content.decode()

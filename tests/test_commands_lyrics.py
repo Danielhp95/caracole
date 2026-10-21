@@ -247,7 +247,7 @@ def test_lyrics_block_starts_a_cooldown_and_sends_one_alert(tmp_path, sites):
     finally:
         conn.close()
     (alert,) = sites.ntfy.posts
-    assert alert.headers["Title"] == "caracole: lrclib blocked"
+    assert alert.headers["Title"] == "caracole: LRCLIB blocked"
     assert alert.headers["Priority"] == "high"
 
 
@@ -428,7 +428,7 @@ def test_lacuerda_block_starts_a_cooldown(tmp_path, sites):
     finally:
         conn.close()
     (alert,) = sites.ntfy.posts
-    assert alert.headers["Title"] == "caracole: lacuerda blocked"
+    assert alert.headers["Title"] == "caracole: LaCuerda blocked"
 
 
 def test_lacuerda_asks_nothing_while_lacuerda_cools_down(tmp_path, sites):
@@ -512,7 +512,7 @@ def test_lacuerda_index_block_starts_a_cooldown(tmp_path, sites):
     finally:
         conn.close()
     (alert,) = sites.ntfy.posts
-    assert alert.headers["Title"] == "caracole: lacuerda blocked"
+    assert alert.headers["Title"] == "caracole: LaCuerda blocked"
 
 
 def test_lacuerda_index_asks_nothing_while_lacuerda_cools_down(tmp_path, sites):

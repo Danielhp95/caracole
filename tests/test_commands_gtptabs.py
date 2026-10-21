@@ -165,7 +165,7 @@ def test_gtptabs_block_starts_a_cooldown_and_sends_one_alert(tmp_path, sites):
     finally:
         conn.close()
     (alert,) = sites.ntfy.posts
-    assert alert.headers["Title"] == "caracole: gtptabs blocked"
+    assert alert.headers["Title"] == "caracole: gtptabs.com blocked"
 
 
 def test_gtptabs_asks_nothing_while_it_cools_down(tmp_path, sites):

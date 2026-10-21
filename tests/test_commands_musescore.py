@@ -164,7 +164,7 @@ def test_a_musescore_challenge_starts_a_cooldown_and_sends_one_alert(tmp_path, s
     finally:
         conn.close()
     (alert,) = sites.ntfy.posts
-    assert alert.headers["Title"] == "caracole: musescore blocked"
+    assert alert.headers["Title"] == "caracole: MuseScore blocked"
     assert STALE not in pages(tmp_path)  # the to-do page shows the cooldown
 
 
