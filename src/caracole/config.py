@@ -32,11 +32,12 @@ class ProviderPolicy:
     """A site's two paces.
 
     Bulk work (the nightly run, ``caracole index build``, every command but
-    ``caracole get``) sends ``budget`` requests at most per run, a random pause
-    from ``delay`` apart. An interactive lookup, one song asked for just now
-    (``caracole get``, or caracole serve's lookups), sends ``lookup_requests`` at
-    most, a random gap from ``lookup_delay`` apart, and every lookup of an hour
-    together ``lookup_per_hour``.
+    ``caracole get`` and ``caracole lacuerda --artist``) sends ``budget`` requests
+    at most per run, a random pause from ``delay`` apart. An interactive lookup,
+    one song asked for just now (``caracole get``, or caracole serve's lookups),
+    or one LaCuerda artist's page (``caracole lacuerda --artist``), sends
+    ``lookup_requests`` at most, a random gap from ``lookup_delay`` apart, and
+    every lookup of an hour together ``lookup_per_hour``.
     """
 
     budget: int
