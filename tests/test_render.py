@@ -13,6 +13,7 @@ import pytest
 from caracole.pdf_text import pdf_text as printed_text
 from caracole.render import STYLE_FILE, RenderError, needs_font_file, render_pdf, write_chordpro
 from caracole.viewer.theory import Key
+from helpers.pdf_pages import decode, pdf_objects, pdf_pages, to_unicode as parse_to_unicode
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 CHORDPRO = os.environ.get("CARACOLE_CHORDPRO_BIN") or shutil.which("chordpro")
@@ -317,16 +318,7 @@ def pdf_runs(path: Path) -> tuple[list[tuple[str, str, list[int]]], dict[str, by
     Just enough PDF for these tests: Flate streams, simple fonts read as WinAnsi,
     and Type0 fonts (Identity-H, so codes are glyph ids) read through ToUnicode.
     """
-    data = path.read_bytes()
-    objects: dict[int, tuple[bytes, bytes | None]] = {}
-    for m in re.finditer(rb"(\d+) 0 obj(.*?)endobj", data, re.DOTALL):
-        head, _, rest = m.group(2).partition(b"stream")
-        stream = None
-        if rest:
-            stream = rest.lstrip(b"\r\n").rpartition(b"endstream")[0]
-            if b"/FlateDecode" in head:
-                stream = zlib.decompress(stream)
-        objects[int(m.group(1))] = (head, stream)
+    objects = pdf_objects(path.read_bytes())
 
     def ref(head: bytes, key: bytes) -> int | None:
         m = re.search(rb"/" + key + rb" \[?\s*(\d+) 0 R", head)
@@ -343,7 +335,7 @@ def pdf_runs(path: Path) -> tuple[list[tuple[str, str, list[int]]], dict[str, by
             continue
         cmap = None
         if to_unicode := re.search(rb"/ToUnicode (\d+) 0 R", head):
-            cmap = _parse_cmap(objects[int(to_unicode.group(1))][1] or b"")
+            cmap = parse_to_unicode(objects[int(to_unicode.group(1))][1] or b"")
         fonts[name.group(1).decode()] = (base.group(1).decode(), cmap)
         cid = ref(head, b"DescendantFonts")
         desc = ref(objects[cid][0], b"FontDescriptor") if cid else None
@@ -371,7 +363,7 @@ def pdf_runs(path: Path) -> tuple[list[tuple[str, str, list[int]]], dict[str, by
                 for p in parts:
                     raw = bytes.fromhex(p[1:-1].decode()) if p.startswith(b"<") else b""
                     codes += [int.from_bytes(raw[i : i + 2]) for i in range(0, len(raw), 2)]
-            shown.append((font[0], "".join(_decode(p, font[1]) for p in parts), codes))
+            shown.append((font[0], "".join(decode(p, font[1]) for p in parts), codes))
     return shown, programs
 
 
@@ -391,33 +383,6 @@ def glyph_records(font: bytes, gids) -> dict[int, bytes]:
         return 2 * struct.unpack(">H", font[loca + 2 * i : loca + 2 * i + 2])[0]
 
     return {g: font[glyf + at(g) : glyf + at(g + 1)].rstrip(b"\0") for g in gids}
-
-
-def _parse_cmap(text: bytes) -> dict[int, str]:
-    cmap: dict[int, str] = {}
-    for lo, hi, dst in re.findall(rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", text):
-        for i, code in enumerate(range(int(lo, 16), int(hi, 16) + 1)):
-            cmap[code] = chr(int(dst, 16) + i)
-    return cmap
-
-
-def _decode(part: bytes, cmap: dict[int, str] | None) -> str:
-    if part.startswith(b"<"):
-        raw = bytes.fromhex(part[1:-1].decode())
-        if cmap is not None:
-            return "".join(
-                cmap.get(int.from_bytes(raw[i : i + 2]), "") for i in range(0, len(raw), 2)
-            )
-        return raw.decode("cp1252", "replace")
-    escapes = {b"n": b"\n", b"r": b"\r", b"t": b"\t", b"b": b"\b", b"f": b"\f"}
-
-    def unescape(m: re.Match) -> bytes:
-        code = m.group(1)
-        return bytes([int(code, 8) & 0xFF]) if code[:1].isdigit() else escapes.get(code, code)
-
-    return re.sub(rb"\\([0-7]{1,3}|.)", unescape, part[1:-1], flags=re.DOTALL).decode(
-        "cp1252", "replace"
-    )
 
 
 def pdf_text(path: Path) -> str:
@@ -663,3 +628,150 @@ def test_render_real_numerals_chart_draws_not_even_the_diagram_of_a_chord_the_sh
         "[G]here", "[Hm]here")
     texts = [text.strip() for _, text in numbered_pdf(tmp_path, "numerals", sheet)]
     assert texts.count("Hm") == 1, texts  # over its words alone
+
+
+# --- two columns that end level (pdf_text.py's estimate, against the real chordpro) ---------------
+
+def drawn_at(tmp_path: Path, text: str, *, font: str | None = None) -> list[list[tuple[float, float, str]]]:
+    """What chordpro draws of the ChordPro ``text``, page by page: (x, y, string)."""
+    cho = tmp_path / "estimate.cho"
+    cho.write_text(text, encoding="utf-8")
+    pdf = tmp_path / "estimate.pdf"
+    render_pdf(cho, pdf, chordpro_bin=CHORDPRO, font_file=Path(font) if font else None)
+    return pdf_pages(pdf)
+
+
+_WORDS = " ".join(["placeholder"] * 12)
+# Each kind of line, by name.
+_KINDS = {
+    "chords-over-words": "[C]A chord [G]over words\n",
+    "words": "Words alone\n",
+    "chords": "[C] [G] [Am]\n",
+    "repeat-mark": "[*x2]\n",
+    "blank": "\n",
+    "blanks": "\n\n\n",
+    "heading": "{comment: VERSE 1}\n",
+    "highlight": "{highlight: CHORUS}\n",
+    "tab": "{start_of_tab}\ne|---0---|\n\nB|---1---|\n{end_of_tab}\n",
+    "silent": "# a ChordPro comment\n{define: C base-fret 1 frets x 3 2 0 1 0}\n",
+    "wrapped-words": _WORDS + "\n",
+    "wrapped-chords-and-words": "[C]" + _WORDS + " [G]more\n",
+    "words-pushed-to-a-line-of-their-own": "y en la cara dos so[C]les que [G]sin palabras [Am]hablan, [C]  [G]   [Am]\n",
+    "a-chord-too-wide-for-where-its-words-start": "[C]placeholder placeholder placeholder placehold[Am7]s\n",
+    "wrapped-heading": "{comment: " + _WORDS + " " + _WORDS + "}\n",
+    # Its rest fits a column, but not past the indent a wrapped line's next part starts at.
+    "a-wrapped-rest-the-indent-pushes-onto-a-third-line": "[C]" + " ".join(["placeholder"] * 7) + " placeholdera\n",
+    # The theory edition's "D · V/V": chordpro places a chord by the name it displays, wider than its own.
+    "a-displayed-chord-too-wide-for-where-its-words-start":
+        '{define: Q base-fret 1 frets x 0 2 0 1 0 display "Am7 · vi7 of V/V"}\n'
+        "[C]placeholder placeholder placeholder placehold[Q]s\n",
+    "comment-italic": "{comment_italic: VERSE 1}\n",  # in chordpro's own 12 pt, which the style leaves
+    "comment-box": "{comment_box: VERSE 1}\n",
+    "chorus-recalled": "{chorus}\n",  # a heading, "Chorus"
+    "chorus-recalled-by-its-label": "{chorus: Again}\n",
+}
+# One PDF holds them all, each between a line of its own before it ("ZZZ 3") and one after it
+# ("YYY 3"), half of them in each column.
+_KINDS_TEXT = "{title: Estimate}\n{subtitle: The Placeholders}\n{columns: 2}\n" + "".join(
+    f"ZZZ {n}\n{lines}YYY {n}\n" + ("{column_break}\n" if n == len(_KINDS) // 2 else "")
+    for n, lines in enumerate(_KINDS.values()))
+
+
+@pytest.fixture(scope="module")
+def kinds_drawn(tmp_path_factory):
+    """Where chordpro draws each "ZZZ n" and "YYY n" line of _KINDS_TEXT, by its text, on one page."""
+    pages = drawn_at(tmp_path_factory.mktemp("kinds"), _KINDS_TEXT)
+    assert len(pages) == 1
+    return {s.strip(): (x, y) for x, y, s in pages[0] if s.startswith(("ZZZ", "YYY"))}
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@pytest.mark.parametrize("kind", list(_KINDS))
+def test_the_estimate_of_a_lines_height_is_chordpros(kinds_drawn, kind):
+    from caracole.pdf_text import layout, line_heights
+
+    shape, n = layout(), list(_KINDS).index(kind)
+    lines = _KINDS_TEXT.splitlines()
+    estimate = sum(line_heights(lines, shape)[lines.index(f"ZZZ {n}") + 1:lines.index(f"YYY {n}")])
+    (x, top), (x_after, bottom) = kinds_drawn[f"ZZZ {n}"], kinds_drawn[f"YYY {n}"]
+    assert x == x_after  # in one column
+    assert estimate == pytest.approx(top - bottom - shape.lyrics, abs=0.01)
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@pytest.mark.parametrize(("chords", "header"), [
+    (["C", "G"], ""),
+    (["C", "D", "E", "F", "G", "A", "B", "Am", "Dm", "Em"], ""),
+    (["C", "D", "E", "F", "G", "A", "B", "Am", "Dm", "Em"], "{diagrams: off}\n"),  # a numerals chart
+], ids=["a row of diagrams", "two rows", "no diagrams"])
+def test_the_estimate_of_the_first_pages_column_is_chordpros(tmp_path, chords, header):
+    from caracole.pdf_text import column_height, layout, line_heights
+
+    lines = [f"[{chords[i % len(chords)]}]Line {i:02d}" for i in range(60)]
+    text = "{title: Estimate}\n" + header + "{columns: 2}\n" + "\n".join(lines) + "\n"
+    shape = layout()
+    room, held = column_height(text.splitlines(), shape), 0
+    for height in line_heights(lines, shape):
+        if room < height:
+            break
+        room, held = room - height, held + 1
+    first = drawn_at(tmp_path, text)[0]
+    assert sorted(s for x, y, s in first if s.startswith("Line") and x < shape.second_column) == [
+        f"Line {i:02d}" for i in range(held)]
+
+
+def level_song(lyric: str = "Made up words to sing") -> str:
+    """宋冬野's 斑马斑马 in shape (synthetic words): chordpro filled the first column and left one line
+    alone in the second."""
+    out = ["{title: Level}", "{artist: The Placeholders}"]
+    for n, count in enumerate([4, 4, 4, 8, 5], 1):
+        out += ["", f"{{comment: Part {n}}}"]
+        out += [f"[C]{lyric} [D]{n}.{i} [Bm]and [Em]more" for i in range(count)]
+    return "\n".join(out) + "\n"
+
+
+def columns_of(page, shape, mark: str) -> tuple[list[str], list[str]]:
+    lines = [(x, y, s) for x, y, s in page if mark in s]
+    return ([s for x, y, s in lines if x < shape.second_column], [s for x, y, s in lines if x >= shape.second_column])
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_a_mid_length_songs_two_columns_each_hold_a_fair_share(tmp_path):
+    from caracole.pdf_text import layout
+
+    pages = drawn_at(tmp_path, printed_text(level_song(), key=Key(0, "ionian"), capo=None))
+    left, right = columns_of(pages[0], layout(), "Made up words")
+    assert len(pages) == 1 and len(left) + len(right) == 25
+    assert min(len(left), len(right)) >= 10, (left, right)  # chordpro alone: 24 and 1
+    second = [s for x, y, s in sorted(pages[0], key=lambda r: -r[1]) if x >= layout().second_column]
+    assert second[0] == "PART 4"  # a section starts the second column
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@cjk_font
+def test_a_mid_length_chinese_songs_two_columns_each_hold_a_fair_share(tmp_path):
+    from caracole.pdf_text import layout
+
+    printed = printed_text(level_song("斑马斑马你不要睡着啦"), key=Key(4, "aeolian"), capo=None)
+    pages = drawn_at(tmp_path, printed, font=CJK_FONT)
+    left, right = columns_of(pages[0], layout(), "斑马")
+    assert len(pages) == 1 and len(left) + len(right) == 25
+    assert min(len(left), len(right)) >= 10, (left, right)
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@pytest.mark.parametrize("names", ["both", "numerals"])
+def test_a_numbered_songs_two_columns_each_hold_a_fair_share_its_legend_too(tmp_path, names):
+    # "D · V/V" over the words and the diagrams, or the numerals with none, and a legend after the song.
+    from caracole.pdf_text import layout
+
+    pages = drawn_at(tmp_path, printed_text(level_song(), key=Key(0, "ionian"), capo=None, names=names))
+    left, right = columns_of(pages[0], layout(), "Made up words")
+    assert len(pages) == 1 and len(left) + len(right) == 25
+    assert min(len(left), len(right)) >= 10, (left, right)
+    assert "THE NUMERALS, IN C MAJOR" in [s.strip() for x, y, s in pages[0]]

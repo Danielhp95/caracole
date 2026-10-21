@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import zlib
 from dataclasses import replace
 from pathlib import Path
@@ -613,6 +614,38 @@ def test_a_failed_run_is_reported_and_the_rest_goes_on(conn, cfg, two, caplog):
     assert (folder(cfg) / "songbook.html").exists()  # the page needs no chordpro
 
 
+def _raising(error):
+    def run(cmd, **kwargs):
+        raise error
+    return run
+
+
+def _ends(code: int, *, writes: bool):
+    def run(cmd, **kwargs):
+        if writes:
+            output_of(cmd).write_bytes(b"%PDF-1.4 fake")
+        return subprocess.CompletedProcess(cmd, code, stdout="", stderr="")
+    return run
+
+
+@pytest.mark.parametrize(("runner", "said"), [
+    (_raising(FileNotFoundError(2, "No such file or directory")), "chordpro not found: {bin}"),
+    (_raising(subprocess.TimeoutExpired("chordpro", 1)), "chordpro timed out after {timeout} s"),
+    (_raising(PermissionError(13, "Permission denied")), "cannot run {bin}: [Errno 13] Permission denied"),
+    (_ends(3, writes=True), "chordpro failed (exit 3)"),
+    (_ends(0, writes=False), "chordpro wrote no songbook.pdf"),
+], ids=["not found", "timed out", "cannot run", "failed", "nothing written"])
+def test_a_chordpro_run_that_fails_says_why_and_fails_its_songbook(conn, cfg, two, caplog, runner, said):
+    from caracole.render import TIMEOUT
+    from caracole.songbook import PER_SONG_TIMEOUT
+
+    stats = render(conn, cfg, runner=runner)
+    assert stats.failed == ["Campfire"]
+    timeout = TIMEOUT + PER_SONG_TIMEOUT * 2  # its two songs
+    assert f"songbook Campfire: no songbook.pdf: {said.format(bin=cfg.chordpro_bin, timeout=timeout)}" in caplog.text
+    assert (folder(cfg) / "songbook.html").exists()  # the page needs no chordpro
+
+
 def test_a_file_that_cant_be_written_fails_its_songbook_alone(conn, cfg, two, caplog):
     make(cfg, "Trip", "Radiohead - Creep")
     make(cfg, "Weekend", "Soda Stereo - De Música Ligera")
@@ -866,6 +899,30 @@ def test_the_real_files_play_a_song_in_its_setting(conn, cfg, two):
         assert text in strings, strings
     second = (folder(cfg) / "songbook.cho").read_text(encoding="utf-8").split("{new_song}\n")[1]
     assert "{key: Gm}" in second and "[Edim]" in second and "[Am]" not in second and "{define" not in second
+
+
+@real_chordpro
+@pytest.mark.chordpro
+def test_a_songs_two_columns_end_level_in_the_songbook_too(conn, cfg):
+    # A song a little longer than a column (宋冬野's 斑马斑马 in shape, synthetic words): alone, chordpro
+    # would leave one line in the second column.
+    from caracole.pdf_text import layout
+    from helpers.pdf_pages import pdf_pages
+
+    cfg = replace(cfg, chordpro_bin=CHORDPRO, cjk_font=None)
+    sheet = "".join(
+        f"[Part {n}]\r\n" + "".join(f"[tab][ch]C[/ch]               [ch]D[/ch]\r\nMade up words to sing {n}.{i} and"
+                                     " more[/tab]\r\n" for i in range(count)) + "\r\n"
+        for n, count in enumerate([4, 4, 4, 8, 5], 1))
+    level = add_song(conn, "The Placeholders", "Level")
+    keep_sheet(conn, cfg, level, sheet, tonality="C")
+    render_sheets(conn, cfg)
+    make(cfg, "Campfire", "The Placeholders - Level")
+    assert render_songbooks(conn, cfg, overrides(cfg, "")).failed == []
+    pages = [[x for x, y, s in page if s.startswith("Made up words")] for page in pdf_pages(folder(cfg) / "songbook.pdf")]
+    lines = pages[-1]  # the song's one page
+    second = sum(1 for x in lines if x >= layout().second_column)
+    assert len(lines) == 25 and min(second, 25 - second) >= 10, lines
 
 
 @real_chordpro

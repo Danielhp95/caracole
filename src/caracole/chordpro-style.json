@@ -4,6 +4,8 @@
       "foreground-light": "#efece6",
       "foreground-medium": "#8a847a"
     },
+    "papersize": [595, 842],
+    "columnspace": 20,
     "margintop": 92,
     "marginbottom": 40,
     "marginleft": 48,
@@ -14,6 +16,7 @@
       "title": 1.15,
       "lyrics": 1.15,
       "chords": 1.0,
+      "diagramchords": 1.2,
       "empty": 0.6,
       "tab": 1.0
     },
@@ -23,6 +26,7 @@
       "height": 7,
       "vcells": 4,
       "linewidth": 0.1,
+      "nutwidth": 5,
       "hspace": 3.6,
       "vspace": 2.2,
       "dotsize": 0.85,
