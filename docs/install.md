@@ -277,9 +277,12 @@ Then [run it nightly](#run-it-nightly-on-ubuntu).
 ### Run it nightly on Ubuntu
 
 These files mirror the NixOS module: the same schedule, user, folders,
-hardening and credentials. One part isn't here: the module's ntfy message
-when a unit fails. caracole's own messages, a summary after each run and
-alerts for blocks, still come once `[ntfy]` has a `url`.
+hardening and credentials. Two parts aren't here. One is the module's ntfy
+message when a unit fails; caracole's own messages, a summary after each run
+and alerts for blocks, still come once `[ntfy]` has a `url`. The other is
+caracole-web, the library page over HTTP: `sudo caracole-admin serve` runs
+it in the foreground, on 127.0.0.1:8737
+([usage.md](usage.md#caracole-serve)).
 
 **A user and the folders:**
 
