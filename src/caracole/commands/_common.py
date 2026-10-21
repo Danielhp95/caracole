@@ -109,7 +109,6 @@ def open_db(cfg: Config) -> sqlite3.Connection:
     return conn
 
 
-
 def load_ovr(cfg: Config) -> Overrides:
     try:
         return load_overrides(cfg.overrides_file)

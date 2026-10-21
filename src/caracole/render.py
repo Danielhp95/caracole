@@ -136,8 +136,9 @@ from caracole.viewer import build_viewer
 
 log = logging.getLogger(__name__)
 
-HUMAN_OUTPUTS = SHEET_OUTPUTS[HUMAN_SHEET]  # ("sheet.cho", "sheet.pdf", "sheet.html")
-AUTO_OUTPUTS = SHEET_OUTPUTS[AUTO_SHEET]  # ("sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html")
+# Each kept sheet's .cho, .pdf and .html, named in songs.SHEET_OUTPUTS.
+HUMAN_OUTPUTS = SHEET_OUTPUTS[HUMAN_SHEET]
+AUTO_OUTPUTS = SHEET_OUTPUTS[AUTO_SHEET]
 STATUS_KEY = "render:status"  # kv: the last pass, for the to-do page
 FILES_KEY = "render:files:"  # kv, then the song's id: each .cho and viewer written (written_file)
 FONT_HINT = "set cjk_font or CARACOLE_CJK_FONT"
@@ -247,8 +248,8 @@ def write_chordpro(
 
 def _chordpro_text(markup: str, *, title: str, artist: str, key: str | None = None,
                    capo: int | str | None = None, auto: bool = False) -> str:
-    """The ChordPro text of UG sheet markup (``to_chordpro``), its stray look-alike letters
-    written in Latin (``_as_latin``): what ``write_chordpro`` writes."""
+    """The .cho text of a sheet: its UG markup in ChordPro (``to_chordpro``), then its stray
+    look-alike letters written in Latin (``_as_latin``)."""
     return _as_latin(to_chordpro(markup, title=title, artist=artist, key=key, capo=capo, auto=auto))
 
 
