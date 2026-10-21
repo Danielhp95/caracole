@@ -13,6 +13,10 @@ Tables:
   tab id (``pin``) and the address you pasted (``pin_urls``): UG serves a
   slugged tab only at its slugged URL.
 - ``[transpose]``: "Artist - Title" → semitones, applied when sheets are rendered.
+- ``[version]``: "Artist - Title" → where you play the song, as its viewer's address writes it
+  (``t=2&mode=dorian&capo=0&at=3.1``: its key, mode, capo, shapes and swaps; viewer/version.py),
+  as "Make this my version" saves it (``add_version``): its PDF, its viewer and its songbooks
+  start there (render.py ``own_version``). It wins over the song's ``[transpose]``.
 - ``[ignore] songs``: songs to skip.
 - ``[block] tab_ids``: tabs never to use.
 - ``[reject]``: "Artist - Title" → "ug-artist/ug-song"s that are not the song
@@ -42,7 +46,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 import tomlkit
 from tomlkit.exceptions import TOMLKitError
@@ -66,7 +70,8 @@ _ARTIST_HOST = "https://www.ultimate-guitar.com"
 # How messages and the to-do page write an artist page's address and a tab page's.
 ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
 TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
-_TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube", "lacuerda"}
+_TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube", "lacuerda",
+           "version"}
 # How messages and the to-do page write a YouTube video's address, and the value that says "no video".
 VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
 NO_VIDEO = "none"
@@ -77,6 +82,9 @@ _LACUERDA_PATH = re.compile(r"/([a-z0-9_]+)/([a-z0-9_]+?)(?:(?:-([1-9][0-9]*))?(
 LACUERDA_BASE = "https://acordes.lacuerda.net"
 LACUERDA_PAGE_SHAPE = f"{LACUERDA_BASE}/<artist>/<song>"
 _TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
+# A version as a viewer's address writes it, and how long one may be: every chord's shape and swap is a few hundred.
+VERSION_SHAPE = "t=2&mode=dorian&capo=0"
+VERSION_MAX = 2000
 
 
 class OverridesError(Exception):
@@ -88,7 +96,8 @@ class Overrides:
     """overrides.toml, canonicalized. ``pin_urls`` holds each pin's address, in ``pin``'s order;
     ``reject`` holds each song's rejected (artist key, song key) pairs, every entry of the song's;
     ``artist_url_names`` the name each ``[artist_url]`` entry is written under, by its key;
-    ``youtube`` each song's video id, or None for "none"."""
+    ``youtube`` each song's video id, or None for "none"; ``version`` each song's own version, as its
+    viewer's address writes it (without a "#")."""
 
     alias: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     match: Mapping[str, tuple[str, str]] = field(default_factory=dict)
@@ -102,6 +111,7 @@ class Overrides:
     artist_url_names: Mapping[str, str] = field(default_factory=dict)
     youtube: Mapping[str, str | None] = field(default_factory=dict)
     lacuerda: Mapping[str, LaCuerdaPick] = field(default_factory=dict)
+    version: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -403,10 +413,12 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         except OverridesError as e:
             raise OverridesError(f"{where}: {e}") from e
 
+    version = {_song_key(k, f"[version] {k!r}"): _version(v, f"[version] {k!r}") for k, v in table("version").items()}
+
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
-        artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda,
+        artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, version=version,
     )
 
 
@@ -419,6 +431,24 @@ def _video(value: Any, where: str) -> str | None:
         raise OverridesError(f"{where}: expected a YouTube video's address ({VIDEO_SHAPE}) or \"{NO_VIDEO}\", "
                              f"got {value!r}")
     return video
+
+
+def _version(value: Any, where: str) -> str:
+    """A ``[version]`` value: a viewer's address after its "#" (or a "?"), which viewer/version.py reads as its
+    viewer does (``version_from_query``): text, with no control character or escape that isn't UTF-8."""
+    text = value.strip() if isinstance(value, str) else None
+    if text is not None and text[:1] in ("#", "?"):
+        text = text[1:]
+    try:
+        readable = (text is not None and len(text) <= VERSION_MAX
+                    and not any(ord(c) < 32 or ord(c) == 127 for c in text)
+                    and not any(ord(c) < 32 or ord(c) == 127 for _, v in parse_qsl(text, errors="strict") for c in v))
+    except (UnicodeDecodeError, ValueError):
+        readable = False
+    if not readable:
+        raise OverridesError(f"{where}: expected a version as the sheet's viewer writes it in its address "
+                             f"(\"{VERSION_SHAPE}\"), got {value!r}")
+    return text
 
 
 def _edit(path: Path, change) -> None:
@@ -550,6 +580,31 @@ def add_lacuerda(path: Path, display: str, url: str) -> None:
             t[display] = pick.url
         elif t[key] != pick.url:
             t[key] = pick.url
+
+    _edit(path, change)
+
+
+def add_version(path: Path, display: str, query: str | None) -> None:
+    """Set the song's ``[version]`` entry to ``query`` (a viewer's address, its "#" left out), or with None
+    take the song's entries out: the song then plays as its ``[transpose]``, else as written.
+
+    The song's entry is found by its key, as the table is read, so the song written another way changes
+    the entry it has; the same version again, or nothing to take out, writes nothing."""
+    wanted = override_key(display)
+    value = None if query is None else _version(query, f"[version] {display!r}")
+
+    def change(doc) -> None:
+        if value is None and "version" not in doc:
+            return
+        t = _table_of(doc, "version")
+        keys = [k for k in t if _names_song(k, wanted)]
+        if value is None:
+            for k in keys:
+                del t[k]
+        elif not keys:
+            t[display] = value
+        elif t[keys[-1]] != value:  # the last one counts
+            t[keys[-1]] = value
 
     _edit(path, change)
 

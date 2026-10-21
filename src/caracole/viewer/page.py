@@ -19,7 +19,11 @@ written ``\\u003c``:
   read it: it then stays as written;
 - ``key``: ``{"tonic", "mode", "from"}`` (where the key came from, in words), or
   null for a sheet without chords; ``transpose``: where the viewer starts (the
-  song's ``[transpose]``, as the PDF); ``capoSheet``: the sheet's own capo;
+  song's ``[transpose]``, as the PDF, or its own version's); ``start``: the song's
+  own version (overrides.toml's ``[version]``, "Make this my version"), as the
+  viewer's address writes it (viewer/version.py), or null for none: the script starts
+  there when its address names no version (``t``, ``mode``, ``capo``, ``alt``, ``at``);
+  ``capoSheet``: the sheet's own capo;
 - for each mode of the key's tonic: ``mapped`` chords (``theory.map_chord``),
   their ``alts`` (``theory.alternatives``), ``names`` (each pitch class's name in
   that mode on each tonic, ``theory.spelling``), ``keyNames``, and ``capo`` hints
@@ -99,7 +103,7 @@ _SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio
 # A module the viewer comes to import goes here too (test_viewer_book.py checks).
 BUILD_FILES = (
     *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "voicings.py", "voicings.json",
-                               "viewer.js", "viewer.css", "LICENSE-chords-db")),
+                               "version.py", "viewer.js", "viewer.css", "LICENSE-chords-db")),
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "normalize.py",  # has_han
     HERE.parent / "autochords" / "merge.py",  # AUTO_MARKER, which sheet.py reads
@@ -129,21 +133,27 @@ def build_viewer(
     key: str | None = None,
     key_source: str | None = None,
     transpose: int = 0,
+    start: str | None = None,
     pdf: str | None = None,
+    export: bool = True,
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
     The key comes from ``key`` (the song's, ``keys.sheet_keys``, with ``key_source``, one
     of ``keys.SOURCES``), else from the sheet's own ``{key}``, else it is estimated from
-    the chords. ``transpose`` is where the viewer starts; ``pdf`` names the PDF beside the
-    page, linked when given.
+    the chords. ``transpose`` is where the viewer starts, and ``start`` the song's own version
+    (``t=2&mode=dorian&capo=0``), in which it starts when its address names none; ``pdf`` names
+    the PDF beside the page, linked when given. Without ``export``, its settings offer no Export PDF of
+    this version (an auto sheet kept beside a human one, whose exports are that sheet's: render.py
+    ``export_viewer``).
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
+    data["start"] = start
     style, script = _assets()
     title = sheet.title or "Untitled"
     return _page(
         f"{title} · {sheet.artist}" if sheet.artist else title,
-        _body(sheet, title, song_key, origin, pdf) + json_block("song", data),
+        _body(sheet, title, song_key, origin, pdf, export=export) + json_block("song", data),
         styles=(style,),
         scripts=(script,),
     )
@@ -358,7 +368,8 @@ def key_line_text(key: Key | None, capo: int | None) -> str:
     return f"{key_name(key)} shapes · capo {capo} · sounds {key_name(sounding(key, capo))}"
 
 
-def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None) -> str:
+def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None, *,
+          export: bool = True) -> str:
     pdf_link = f'<a class="pdf" href="{escape(quote(pdf))}">PDF</a>\n' if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
@@ -369,7 +380,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         + _song_html(sheet)
         + _footer(pdf_link)
         + "</div>\n"
-        + _CONTROLS
+        + (_SHEET_CONTROLS if export else _CONTROLS)
     )
 
 
@@ -516,6 +527,12 @@ def _words(text: str) -> list[str]:
 # above the bar's place, the bar out of the way while the song moves: its first button counts down (a
 # ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
 # modal: nothing dims the song or takes it out of reach while they are open (viewer.js).
+_EXPORT_ROW = """<div class="row" id="export-row"><a class="link" id="export" href="/export">Export PDF of this version</a>
+<p class="hint" id="export-hint"></p>
+<code class="cmd" id="export-cmd" hidden></code><button type="button" class="chip" id="export-copy" hidden>Copy</button></div>
+"""
+
+
 _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <div class="bar-in">
 <span class="keys" id="keys" role="group" aria-label="Transpose">
@@ -574,3 +591,8 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 </section>
 <noscript><p class="noscript">Turn on JavaScript to transpose, change the mode and see chord shapes.</p></noscript>
 """
+
+# The sheet viewer's controls: the shared ones and the export row. The songbook has none: no song owns it.
+_SHEET_CONTROLS = _CONTROLS.replace(
+    '</section>\n<section class="sheet-ui card" id="card"',
+    _EXPORT_ROW + '</section>\n<section class="sheet-ui card" id="card"', 1)

@@ -613,6 +613,52 @@ def test_the_address_keeps_where_the_song_is_played(tmp_path):
     assert hashes == ["#panel=1", "#panel=1&t=2", "#panel=1&t=2&mode=aeolian", "#panel=1"]
 
 
+MINE = "t=2&mode=dorian&capo=0&at=0.1"  # a song's own version (overrides.toml's [version]), as the address writes it
+AS_WRITTEN = {"0": "G", "1": "D", "2": "Em", "3": "C", "4": "G/B", "5": "Am", "6": "F"}
+
+
+def test_the_viewer_is_given_the_songs_version_to_start_in():
+    assert data_of(build_viewer(UG_CHO, transpose=2, start=MINE))["start"] == MINE
+    assert data_of(build_viewer(UG_CHO))["start"] is None
+
+
+@in_chromium
+def test_the_viewer_starts_in_the_songs_version(tmp_path):
+    # "Make this my version": the page starts where its PDF is made, when its address names no version
+    html = build_viewer(UG_CHO, transpose=2, start=MINE)
+    asked = chord_texts(dump_dom(build_viewer(UG_CHO), tmp_path, "#" + MINE))
+    assert asked != AS_WRITTEN
+    assert chord_texts(dump_dom(html, tmp_path)) == asked
+    assert chord_texts(dump_dom(html, tmp_path, "#fs=20")) == asked  # the text size names no version
+    # An address that names one is that version, not the song's: t=0 is the sheet as written.
+    assert chord_texts(dump_dom(html, tmp_path, "#t=0")) == AS_WRITTEN
+    # The address then names the version, t and all, so a reload and its export keep it, and
+    # Reset everything goes back to the song's version.
+    hashes = run_in_page(html, tmp_path, """
+      const first = location.hash;
+      q("#up").click();
+      const up = location.hash;
+      q("#reset-all").click();
+      out = [first, up, location.hash, q('#sheet .c[data-c="0"]').textContent];
+    """)
+    assert hashes == ["#" + MINE, "#t=3&mode=dorian&capo=0", "#" + MINE, asked["0"]]
+    # What the browser kept for this page before the song had this version is not where it starts.
+    kept = run_in_page(html, tmp_path, 'out = location.hash;', before="""
+      localStorage.setItem("caracole-viewer:" + location.pathname, JSON.stringify({ base: 0, t: 5, mode: "lydian",
+        capo: 4, alt: {}, at: {}, chords: "" }));
+    """)
+    assert kept == "#" + MINE
+    # What it kept for this very version is where it was left: in the sheet's own mode, no shape chosen.
+    left = run_in_page(html, tmp_path, 'out = location.hash;', before="""
+      const written = {};
+      for (const el of document.querySelectorAll("#sheet .c")) if (!(el.dataset.c in written)) written[el.dataset.c] = el.textContent;
+      const chords = Object.keys(written).map((i) => written[i]).join("|");
+      localStorage.setItem("caracole-viewer:" + location.pathname, JSON.stringify({ base: "%s", t: 2, mode: null,
+        capo: null, alt: {}, at: {}, atSigns: {}, chords }));
+    """ % MINE)
+    assert left == "#t=2"
+
+
 @in_chromium
 def test_the_address_keeps_the_text_size(tmp_path):
     # As fs=, read back on a reload, so the page keeps it where it has no storage (a server's

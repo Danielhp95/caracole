@@ -15,6 +15,7 @@ from caracole.overrides import (
     add_match,
     add_pin,
     add_reject,
+    add_version,
     add_youtube,
     LaCuerdaPick,
     artist_url_entry,
@@ -471,6 +472,49 @@ def test_add_youtube_writes_the_plain_address_or_none_in_the_songs_one_entry(tmp
     with pytest.raises(OverridesError, match="Artist - Title"):
         add_youtube(p, "Creep", "none")
     assert p.read_text(encoding="utf-8") == before
+
+
+def test_version_names_where_a_song_is_played_as_its_viewers_address(tmp_path):
+    o = load_overrides(write(tmp_path, '''
+[version]   # where you play a song: its PDF, its viewer and its songbooks follow it
+"Soda Stereo - De Música Ligera" = "t=2&mode=dorian&capo=0&at=3.1"
+"Radiohead - Creep" = "#t=-1"
+'''))
+    assert o.version == {"soda-stereo/de-musica-ligera": "t=2&mode=dorian&capo=0&at=3.1", "radiohead/creep": "t=-1"}
+    assert Overrides().version == {}
+
+
+@pytest.mark.parametrize("value", ["3", "true", '"t=2\\u0000"', '"t=%ff"', '"' + "t=2&" + "x" * 3000 + '"'])
+def test_a_version_that_is_no_viewers_address_names_its_entry(tmp_path, value):
+    with pytest.raises(OverridesError, match=r"\[version\] 'Radiohead - Creep': expected .*t=2&mode=dorian"):
+        load_overrides(write(tmp_path, f'[version]\n"Radiohead - Creep" = {value}\n'))
+
+
+def test_add_version_writes_and_clears_the_table_keeping_comments(tmp_path):
+    p = write(tmp_path, '# mine\n[transpose]\n"Soda Stereo - De Música Ligera" = -2  # for my voice\n\n'
+                        '[version]  # where I play them\n"radiohead - creep" = "t=1"  # half a step up\n')
+    add_version(p, "Soda Stereo - De Música Ligera", "t=2&mode=dorian&capo=0&at=3.1")
+    add_version(p, "Radiohead - Creep", "#t=3")  # the song's one entry, as it is written; no "#"
+    text = p.read_text(encoding="utf-8")
+    assert "# mine" in text and "# for my voice" in text and "# where I play them" in text
+    assert text.count("reep") == 1 and '"radiohead - creep" = "t=3"' in text
+    o = load_overrides(p)
+    assert o.version == {"soda-stereo/de-musica-ligera": "t=2&mode=dorian&capo=0&at=3.1", "radiohead/creep": "t=3"}
+    assert o.transpose == {"soda-stereo/de-musica-ligera": -2}  # [transpose] stays; [version] wins over it
+    before, inode = text, p.stat().st_ino
+    add_version(p, "Radiohead - Creep", "t=3")  # the same again: nothing is written
+    add_version(p, "Nobody - Nothing", None)  # no entry to clear: nothing either
+    assert p.read_text(encoding="utf-8") == before and p.stat().st_ino == inode
+
+    add_version(p, "RADIOHEAD - CREEP", None)  # cleared, by the song's key
+    text = p.read_text(encoding="utf-8")
+    assert "reep" not in text and "# mine" in text and "# where I play them" in text
+    assert load_overrides(p).version == {"soda-stereo/de-musica-ligera": "t=2&mode=dorian&capo=0&at=3.1"}
+    with pytest.raises(OverridesError, match="Artist - Title"):
+        add_version(p, "Creep", "t=1")
+    with pytest.raises(OverridesError, match="expected"):
+        add_version(p, "Radiohead - Creep", "t=1\x00&mode=dorian")
+    assert p.read_text(encoding="utf-8") == text
 
 
 def test_lacuerda_names_the_song_or_the_version_you_picked_there(tmp_path):

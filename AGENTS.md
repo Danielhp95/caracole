@@ -43,7 +43,7 @@ section says where things are, and the rules a change there keeps.
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
 | youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html), songbook.py (songbooks.toml) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed among the song's files on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
@@ -87,7 +87,9 @@ Rules a change there keeps (the Invariants below are the others):
 - viewer/: what a page is made from is `page.BUILD_FILES`, hashed into `page.build_version`: a
   module the viewer comes to import goes there (test_viewer_book.py checks). theory.py and
   `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field
-  compared, and a list handed out is a copy (test_viewer_theory.py).
+  compared, and a list handed out is a copy (test_viewer_theory.py). version.py names and shapes
+  every chord as viewer.js does, so a PDF made in a version is what the viewer shows
+  (test_viewer_version.py compares the two in Chromium).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share (config,
   the database, the lock, clients at either pace, pages, `fail`, `warn`, `song_named`): use it
@@ -442,7 +444,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `state_dir` and `cache_dir`, and chordpro works on a copy in a 0700 folder under the cache
   (render.py). tests/test_library_safety.py. A removal deletes only what caracole
   wrote in the song's folder (`removal._caracoles`: kept files, the outputs of a kept sheet or
-  of a render record, LRCLIB's lyrics, info.json), by name, through descriptors opened with
+  of a render record, its exports, LRCLIB's lyrics, info.json), by name, through descriptors opened with
   `O_NOFOLLOW` from the library down, and names everything it leaves; it never touches Music/,
   and deletes the song's audio taken from YouTube from the cache (tests/test_removal.py).
 - **One caracole at a time**: `_common.exclusive` holds an flock on `state_dir/caracole.lock`,
