@@ -90,9 +90,8 @@ class Video:
     def from_json(cls, data: Any) -> Video | None:
         if not isinstance(data, dict) or not isinstance(data.get("id"), str) or not VIDEO_ID.fullmatch(data["id"]):
             return None
-        duration = data.get("duration")
         return cls(data["id"], str(data.get("title") or ""), str(data.get("channel") or ""),
-                   float(duration) if isinstance(duration, (int, float)) and not isinstance(duration, bool) else None)
+                   _number(data.get("duration")))
 
 
 def _number(value: Any) -> float | None:
@@ -349,8 +348,7 @@ class _Names:
         upload is karaoke). A word the song's own title or artist holds doesn't count."""
         if _KARAOKE_CHANNEL.search(fold(channel)) and not _KARAOKE_CHANNEL.search(self.whole):
             return True
-        return any(not re.search(re.escape(m.group(0)), self.whole)
-                   for text in (title, channel) for m in _UNWANTED.finditer(fold(text)))
+        return any(m.group(0) not in self.whole for text in (title, channel) for m in _UNWANTED.finditer(fold(text)))
 
 
 def _official(names: _Names, video: Video) -> int:

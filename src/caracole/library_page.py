@@ -309,12 +309,13 @@ class WebControls:
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
-                       controls: WebControls | None = None) -> str:
+                       controls: WebControls | None = None, youtube: dict[int, SongState] | None = None) -> str:
     """The whole page: every song, its files, and the links to find what's missing.
 
-    With ``controls``, the page ``caracole serve`` serves: the same, with its forms.
+    With ``controls``, the page ``caracole serve`` serves: the same, with its forms. ``youtube``: as
+    ``song_cards`` takes it.
     """
-    songs = song_cards(conn, cfg, overrides, now)
+    songs = song_cards(conn, cfg, overrides, now, youtube=youtube)
     data: dict[str, Any] = {
         "generated": now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "fold": {c: fold(c) for c in _TRANSLITERATED},
@@ -342,10 +343,12 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
 
 
 def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime,
-               songs: list[Song] | None = None) -> list[dict[str, Any]]:
+               songs: list[Song] | None = None, *, youtube: dict[int, SongState] | None = None) -> list[dict[str, Any]]:
     """The songs' data (each song's "card", as ``/jobs.json`` names it), as the page's JSON holds it: of
     every song, or of ``songs``; a song in review with its candidates, for the picker (``_add_picks``);
-    each file with where it came from."""
+    each file with where it came from. ``youtube``: where each song stands on the YouTube route
+    (``song_states``; empty with the route off), when the caller has it already, else asked of these
+    songs alone."""
     pages = _guitar_pro_pages(conn)
     sources = _downloaded(conn)
     origins = kept_sources(conn)
@@ -355,7 +358,8 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
     # With the YouTube route on, caracole takes those songs' audio itself: their lines say how it goes,
     # and only a song you turned YouTube down for is for buying.
-    youtube = song_states(conn, cfg, overrides, now) if route_problem(cfg) is None else {}
+    if youtube is None:
+        youtube = song_states(conn, overrides, now, songs=library) if route_problem(cfg) is None else {}
     if youtube:
         to_buy = {i for i in to_buy if i not in youtube or youtube[i].state == DECLINED}
     musescore = cfg.provider("musescore").enabled

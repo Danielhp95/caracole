@@ -35,10 +35,9 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
-from caracole import db
-from caracole.config import Config
+from caracole.config import DEFAULT_PROVIDERS, Config
 from caracole.db import kv_get_json, kv_set_json
 from caracole.health import get_state, is_cooling, record_block, record_error, record_ok
 from caracole.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
@@ -65,11 +64,12 @@ from caracole.report import (
     summary_text,
     todo_count,
     unreadable_wanted,
+    when,
 )
 from caracole.songs import ensure_current_keys, list_songs
 
 log = logging.getLogger(__name__)
-PROVIDERS = ("ug", "lrclib", "lacuerda", "gtptabs", "musescore")
+PROVIDERS = tuple(p for p in DEFAULT_PROVIDERS if p != "youtube")  # each gets a polite client; YouTube, yt-dlp
 clock = time.monotonic  # what the run's duration is measured with; tests replace it
 
 
@@ -148,10 +148,6 @@ def _iso(dt: datetime) -> str:
     return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _fmt(dt: datetime | None) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"
-
-
 # --- the default steps ----------------------------------------------------------
 
 
@@ -160,9 +156,19 @@ def _counted(*counts: tuple[int, str]) -> list[str]:
     return [f"{n} {words}" for n, words in counts if n]
 
 
-def _songs(n: int, what: str) -> tuple[int, str]:
-    """A count of songs that reads well alone: (3, "songs matched")."""
-    return n, f"{'song' if n == 1 else 'songs'} {what}"
+def _n(n: int, noun: str, what: str = "") -> tuple[int, str]:
+    """A count that reads well alone, for ``_counted``: (3, "songs matched"), (1, "new tab")."""
+    return n, f"{noun if n == 1 else noun + 's'} {what}".rstrip()
+
+
+def _provider_result(ctx: StepContext, provider: str, *, errors: int, error: str, spent: bool, status: str,
+                     failures: Iterable[tuple[Any, BaseException]] = (), **fields: Any) -> StepResult:
+    """A provider step's result: its errors recorded in the provider's health (``error`` says how
+    many), the songs an error left (``failures``), a spent budget on the line and in the status."""
+    if errors:
+        record_error(ctx.conn, provider, ctx.now, error)
+    return StepResult(failures=[Failure.of(song, e) for song, e in failures], spent=[provider] if spent else [],
+                      status=status + (" (budget spent)" if spent else ""), **fields)
 
 
 def _sync(ctx: StepContext) -> StepResult:
@@ -221,7 +227,7 @@ def _index(ctx: StepContext) -> StepResult:
     dirty = len(stats.songs_marked)
     new = len(stats.new_tab_ids)
     return StepResult(title="Index refresh",
-                      done=_counted((new, "new tab" if new == 1 else "new tabs"), _songs(dirty, "to fetch again")),
+                      done=_counted(_n(new, "new tab"), _n(dirty, "song", "to fetch again")),
                       status=f"{new} new tabs, {dirty} songs to refetch")
 
 
@@ -251,8 +257,8 @@ def _match(ctx: StepContext) -> StepResult:
     matched = sum(1 for d in changed if d in ("accept", "pinned"))
     return StepResult(
         title="Matching",
-        done=_counted(_songs(matched, "matched"), _songs(changed.count("review"), "to review"),
-                      _songs(changed.count("not_found"), "not on Ultimate Guitar")),
+        done=_counted(_n(matched, "song", "matched"), _n(changed.count("review"), "song", "to review"),
+                      _n(changed.count("not_found"), "song", "not on Ultimate Guitar")),
         status=f"{len(changed)} decisions changed",
     )
 
@@ -261,17 +267,12 @@ def _lyrics(ctx: StepContext) -> StepResult:
     from caracole.lyrics import fetch_pending_lyrics
 
     s = fetch_pending_lyrics(ctx.conn, ctx.services.client("lrclib"), ctx.cfg.library_dir, ctx.now)
-    if s.errors:
-        record_error(ctx.conn, "lrclib", ctx.now, f"{plural(s.errors, 'song')} failed this run")
-    tail = " (budget spent)" if s.budget_exhausted else ""
-    return StepResult(
-        title="Lyrics",
+    return _provider_result(
+        ctx, "lrclib", errors=s.errors, error=f"{plural(s.errors, 'song')} failed this run", spent=s.budget_exhausted,
+        status=f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental, {plural(s.errors, 'error')}",
+        failures=s.failures, title="Lyrics",
         done=_counted((s.found, "found"), (s.missing, "missing"), (s.instrumental, "instrumental")),
-        failures=[Failure.of(song, e) for song, e in s.failures],
         retry="the lyrics of {songs} will be tried again on the next run",
-        spent=["lrclib"] if s.budget_exhausted else [],
-        status=(f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental, "
-                f"{plural(s.errors, 'error')}{tail}"),
     )
 
 
@@ -288,20 +289,16 @@ def _fetch(ctx: StepContext) -> StepResult:
         reload_overrides=lambda: load_overrides(ctx.cfg.overrides_file),
     )
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
-    if s.songs_failed:
-        record_error(ctx.conn, "ug", ctx.now, f"{plural(s.songs_failed, 'song')} failed this run")
     scored = f", {plural(rescored, 'kept sheet')} rescored" if rescored else ""
-    tail = " (budget spent)" if s.budget_exhausted else ""
     sheets = f"{plural(s.sheets_done, 'sheet')} settled, " if s.sheets_done else ""
-    return StepResult(
-        title="Ultimate Guitar",
-        done=_counted((s.sheets_done, "sheet settled" if s.sheets_done == 1 else "sheets settled"),
-                      _songs(s.songs_done, "done"),
-                      (rescored, "kept sheet rescored" if rescored == 1 else "kept sheets rescored")),
-        failures=[Failure.of(song, e) for song, e in s.failures],
+    return _provider_result(
+        ctx, "ug", errors=s.songs_failed, error=f"{plural(s.songs_failed, 'song')} failed this run",
+        spent=s.budget_exhausted,
+        status=f"{sheets}{plural(s.songs_done, 'song')} done, {s.songs_failed} failed{scored}",
+        failures=s.failures, title="Ultimate Guitar",
+        done=_counted(_n(s.sheets_done, "sheet", "settled"), _n(s.songs_done, "song", "done"),
+                      _n(rescored, "kept sheet", "rescored")),
         retry="{songs} will be looked for on Ultimate Guitar again on the next run",
-        spent=["ug"] if s.budget_exhausted else [],
-        status=f"{sheets}{plural(s.songs_done, 'song')} done, {s.songs_failed} failed{scored}{tail}",
     )
 
 
@@ -316,25 +313,20 @@ def _lacuerda(ctx: StepContext) -> StepResult:
     wanted = any(song.status != "ignored" and song.key not in ctx.overrides.ignore for song in list_songs(ctx.conn))
     ix = (lacuerda_index.index_pass(ctx.conn, client, ctx.now) if wanted and not s.budget_exhausted
           else lacuerda_index.IndexStats())
-    if s.errors:
-        record_error(ctx.conn, "lacuerda", ctx.now, f"{plural(s.errors, 'song')} failed this run")
-    if ix.errors:
-        record_error(ctx.conn, "lacuerda", ctx.now, "its artist listings couldn't be read this run")
-    spent = s.budget_exhausted or ix.budget_exhausted
-    tail = " (budget spent)" if spent else ""
     artists, songs = lacuerda_index.index_size(ctx.conn)
-    result = StepResult(
-        title="LaCuerda",
-        done=_counted((s.kept, "sheet kept" if s.kept == 1 else "sheets kept"), _songs(s.missing, "not there"),
-                      (ix.pages, "page of artists read" if ix.pages == 1 else "pages of artists read")),
-        failures=[Failure.of(song, e) for song, e in s.failures],
-        retry="{songs} will be looked for on LaCuerda again on the next run",
-        spent=["lacuerda"] if spent else [],
+    result = _provider_result(
+        ctx, "lacuerda", errors=s.errors, error=f"{plural(s.errors, 'song')} failed this run",
+        spent=s.budget_exhausted or ix.budget_exhausted,
         status=(f"{s.tried} tried, {plural(s.kept, 'sheet')} kept, {s.missing} not on LaCuerda, "
                 f"{plural(s.errors, 'error')}; artist index: {plural(ix.pages, 'page')} read, "
-                f"{plural(artists, 'artist')}, {plural(songs, 'song')}{tail}"),
+                f"{plural(artists, 'artist')}, {plural(songs, 'song')}"),
+        failures=s.failures, title="LaCuerda",
+        done=_counted(_n(s.kept, "sheet", "kept"), _n(s.missing, "song", "not there"),
+                      _n(ix.pages, "page", "of artists read")),
+        retry="{songs} will be looked for on LaCuerda again on the next run",
     )
     if ix.errors:
+        record_error(ctx.conn, "lacuerda", ctx.now, "its artist listings couldn't be read this run")
         result.problems.append(Problem("LaCuerda's artist listings couldn't be read this run; they are asked for "
                                        "again on the next run, and the log says why."))
     return result
@@ -345,21 +337,18 @@ def _gtptabs(ctx: StepContext) -> StepResult:
 
     s = gtptabs_files(ctx.conn, ctx.services.client("gtptabs"), ctx.cfg.library_dir, ctx.now,
                       overrides=ctx.overrides)
-    if s.errors:
-        record_error(ctx.conn, "gtptabs", ctx.now, f"{plural(s.errors, 'error')} this run")
     index = f"{plural(s.sitemaps, 'sitemap')} indexed, " if s.sitemaps else ""
-    tail = " (budget spent)" if s.budget_exhausted else ""
-    result = StepResult(
-        title="gtptabs.com",
-        done=_counted((s.kept, "Guitar Pro file downloaded" if s.kept == 1 else "Guitar Pro files downloaded"),
-                      _songs(s.missing, "not there")),
-        spent=["gtptabs"] if s.budget_exhausted else [],
+    result = _provider_result(
+        ctx, "gtptabs", errors=s.errors, error=f"{plural(s.errors, 'error')} this run", spent=s.budget_exhausted,
         status=(f"{index}{s.tried} tried, {plural(s.kept, 'Guitar Pro file')} kept, {s.missing} not on gtptabs.com, "
-                f"{plural(s.errors, 'error')}{tail}"),
+                f"{plural(s.errors, 'error')}"),
+        failures=s.failures, title="gtptabs.com",
+        done=_counted(_n(s.kept, "Guitar Pro file", "downloaded"), _n(s.missing, "song", "not there")),
+        retry="{songs} will be looked for on gtptabs.com again on the next run",
     )
-    if s.errors:
-        result.problems.append(Problem(f"gtptabs.com failed {plural(s.errors, 'time')} this run; those songs are "
-                                       "tried again on the next run, and the log says why."))
+    if s.sitemap_errors:  # a song's error is on its failure's line
+        result.problems.append(Problem("gtptabs.com's sitemaps couldn't be read this run; they are asked for again "
+                                       "on the next run, and the log says why."))
     return result
 
 
@@ -367,16 +356,12 @@ def _musescore(ctx: StepContext) -> StepResult:
     from caracole.musescore_fetch import index_size, musescore_index
 
     s = musescore_index(ctx.conn, ctx.services.client("musescore"), ctx.now, overrides=ctx.overrides)
-    if s.errors:
-        record_error(ctx.conn, "musescore", ctx.now, f"{plural(s.errors, 'error')} this run")
     read = f"{plural(s.sitemaps, 'sitemap')} indexed, " if s.sitemaps else ""
     errors = f", {plural(s.errors, 'error')}" if s.errors else ""
-    tail = " (budget spent)" if s.budget_exhausted else ""
-    result = StepResult(
-        title="MuseScore",
-        done=_counted((s.sitemaps, "song sitemap read" if s.sitemaps == 1 else "song sitemaps read")),
-        spent=["musescore"] if s.budget_exhausted else [],
-        status=f"{read}{plural(index_size(ctx.conn), 'song page')} in the index{errors}{tail}",
+    result = _provider_result(
+        ctx, "musescore", errors=s.errors, error=f"{plural(s.errors, 'error')} this run", spent=s.budget_exhausted,
+        status=f"{read}{plural(index_size(ctx.conn), 'song page')} in the index{errors}", title="MuseScore",
+        done=_counted(_n(s.sitemaps, "song sitemap", "read")),
     )
     if s.errors:
         result.problems.append(Problem("MuseScore's song sitemaps couldn't be read this run; they are asked for "
@@ -392,17 +377,13 @@ def _youtube(ctx: StepContext) -> StepResult:
     if problem is not None or runner is None:
         return StepResult(status=f"skipped: {problem or 'no yt-dlp runner this run'}")
     s = youtube_pass(ctx.conn, runner, ctx.cfg, ctx.now, overrides=ctx.overrides)
-    if s.errors:
-        record_error(ctx.conn, "youtube", ctx.now, f"{plural(s.errors, 'song')} failed this run")
-    tail = " (budget spent)" if s.budget_exhausted else ""
-    return StepResult(
-        title="YouTube",
-        done=_counted(_songs(s.downloaded, "downloaded"), _songs(s.missing, "not there")),
-        failures=[Failure.of(song, e) for song, e in s.failures],
-        retry="{songs} will be looked for on YouTube again on the next run",
-        spent=["youtube"] if s.budget_exhausted else [],
+    return _provider_result(
+        ctx, "youtube", errors=s.errors, error=f"{plural(s.errors, 'song')} failed this run", spent=s.budget_exhausted,
         status=(f"{s.tried} tried, {s.downloaded} downloaded, {s.missing} not on YouTube, {s.unavailable} unavailable, "
-                f"{plural(s.errors, 'error')}{tail}"),
+                f"{plural(s.errors, 'error')}"),
+        failures=s.failures, title="YouTube",
+        done=_counted(_n(s.downloaded, "song", "downloaded"), _n(s.missing, "song", "not there")),
+        retry="{songs} will be looked for on YouTube again on the next run",
     )
 
 
@@ -417,8 +398,7 @@ def _scan(ctx: StepContext) -> StepResult:
     filed = len(inbox.filed)
     result = StepResult(
         title="Music and inbox",
-        done=_counted((music.matched, "purchase linked" if music.matched == 1 else "purchases linked"),
-                      (filed, "Guitar Pro file filed" if filed == 1 else "Guitar Pro files filed")),
+        done=_counted(_n(music.matched, "purchase", "linked"), _n(filed, "Guitar Pro file", "filed")),
         status=f"{music.matched} purchases linked, {filed} Guitar Pro files filed{links}",
     )
     if refused:
@@ -452,7 +432,7 @@ def _render_songbooks(ctx: StepContext, result: StepResult) -> None:
     from caracole.songbook import render_songbooks
 
     b = render_songbooks(ctx.conn, ctx.cfg, ctx.overrides)
-    result.done += _counted((b.rendered, "songbook made" if b.rendered == 1 else "songbooks made"))
+    result.done += _counted(_n(b.rendered, "songbook", "made"))
     if b.rendered or b.skipped or b.failed:
         result.status += f"; songbooks: {b.rendered} rendered, {len(b.failed)} failed"
     if b.error:
@@ -468,10 +448,7 @@ def _render_songbooks(ctx: StepContext, result: StepResult) -> None:
 def _todo(ctx: StepContext) -> StepResult:
     from caracole.todo import write_pages
 
-    ctx.report.requests = _requests(ctx.services)
-    ctx.report.budgets = _budgets(ctx.services)
-    _record_ok(ctx.conn, ctx.report, ctx.now)  # before the page, so its provider health shows this run
-    kv_set_json(ctx.conn, "run:last", _report_json(ctx.report))
+    _settle(ctx.conn, ctx.report, ctx.services, ctx.now)  # before the page, so its provider health shows this run
     page, _ = write_pages(ctx.conn, ctx.cfg, ctx.overrides, ctx.now)
     return StepResult(todo=_needs_you(page))
 
@@ -595,6 +572,18 @@ def _record_ok(conn: sqlite3.Connection, report: RunReport, now: datetime) -> No
             record_ok(conn, p, now)
 
 
+def _settle(conn: sqlite3.Connection, report: RunReport, services: Services, now: datetime, *,
+            started: float | None = None) -> None:
+    """The run so far into kv ``run:last``: each provider's requests and budget, and its health
+    (``_record_ok``); at the run's end (``started``), how long it took, timed after the health."""
+    report.requests = _requests(services)
+    report.budgets = _budgets(services)
+    _record_ok(conn, report, now)
+    if started is not None:
+        report.seconds = clock() - started
+    kv_set_json(conn, "run:last", _report_json(report))
+
+
 def _report_json(report: RunReport) -> dict[str, Any]:
     return {
         "run_id": report.run_id, "started": report.started, "finished": report.finished,
@@ -606,7 +595,7 @@ def _report_json(report: RunReport) -> dict[str, Any]:
 def run_pipeline(
     cfg: Config,
     *,
-    conn: sqlite3.Connection | None = None,
+    conn: sqlite3.Connection,
     services: Services | None = None,
     steps: list[Step] | None = None,
     now: datetime | None = None,
@@ -620,16 +609,16 @@ def run_pipeline(
     clock_given = now is not None
     now = (now or datetime.now(UTC)).replace(microsecond=0)
     run_id = _iso(now)
-    conn = conn or db.connect(cfg.db_path)
     # Before any step reads songs by key, as the sync reads wanted.txt's first-seen times.
     ensure_current_keys(conn)
-    if services is not None:
-        return _run(cfg, conn, services, steps, now, run_id, clock_given, started)
-    services = make_services(cfg, conn, run_id)
+    own = services is None
+    if own:
+        services = make_services(cfg, conn, run_id)
     try:
         return _run(cfg, conn, services, steps, now, run_id, clock_given, started)
     finally:
-        services.close()
+        if own:
+            services.close()
 
 
 def _skipped(cfg: Config, conn: sqlite3.Connection, report: RunReport, step: Step,
@@ -642,7 +631,7 @@ def _skipped(cfg: Config, conn: sqlite3.Connection, report: RunReport, step: Ste
         return StepResult(status=f"skipped: {p} blocked this run")
     if p and is_cooling(conn, p, now):
         until = get_state(conn, p).cooldown_until
-        return StepResult(problems=[cooling(p, until)], status=f"skipped: {p} cooling down until {_fmt(until)}")
+        return StepResult(problems=[cooling(p, until)], status=f"skipped: {p} cooling down until {when(until)}")
     return None
 
 
@@ -691,12 +680,8 @@ def _run(cfg: Config, conn: sqlite3.Connection, services: Services, steps: list[
         report.record(step.name, result if result is not None else _run_step(ctx, step))
         log.info("%s: %s", step.name, report.steps[step.name])
 
-    report.requests = _requests(services)
-    report.budgets = _budgets(services)
-    _record_ok(conn, report, now)
     report.finished = run_id if clock_given else _iso(datetime.now(UTC))
-    report.seconds = clock() - started
-    kv_set_json(conn, "run:last", _report_json(report))
+    _settle(conn, report, services, now, started=started)
     title = "caracole run" if report.ok else "caracole run failed"
     services.notifier.send(title, report.summary(), priority=None if report.ok else "high",
                            tags=() if report.ok else ("rotating_light",))

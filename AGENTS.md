@@ -38,11 +38,11 @@ section says where things are, and the rules a change there keeps.
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py |
-| lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the sheets), lacuerda_index.py (its listings of every artist, for searches) |
+| lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page), lacuerda_index.py (its listings of every artist, for searches) |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
-| youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step) |
+| youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step; `song_states`, where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a one-song card asks of its song alone) |
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed under Versions in its line's ⋯ on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml: a song is a string, or a table with its own `Setting`: key, mode, capo; `SongbookSong`, `Songbook.songs`, `.texts`; `set_song_setting`, and `with_capo`, the capo a key or a mode `caracole songbook set` gives plays at now, so a replaced sheet keeps the key it sounds in; its files play each song through `apply_version`, never chordpro's `{transpose}`, where `in_setting` puts it: the setting's key as the key of the shapes played, its mode and capo, the rest the song's `own_version`; `plays_in`, that in words, "key unknown, as written" for a sheet with no key) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py (its Songbooks tab's data) |
 
@@ -65,6 +65,7 @@ Shared by the steps and the commands:
 | library.py | song folders, safe file access in the synced library |
 | notify.py | ntfy |
 | site_index.py | a site's sitemaps into a table, resumed across runs |
+| provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
 | keys.py | a song's musical key and where it came from |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
@@ -281,7 +282,7 @@ Traps:
   `test_commands_index_match.py::test_a_command_that_sends_no_request_imports_no_http_client`
   fails when importing `caracole.cli` and reading a `[youtube]` entry (youtube_urls.py) loads
   httpx, rich, `caracole.http` or `caracole.youtube`.
-  music.py imports mutagen in `read_audio` alone, and lyrics.py in `_expected_seconds`:
+  music.py imports mutagen in `read_audio` alone, and lyrics.py (`expected_seconds`) in `_matches`:
   inbox.py, which the pages import, scores names with its `Names`
   (`test_music.py::test_the_pages_load_no_tag_reader`, `::test_the_inbox_loads_no_http_client`).
 - Branch from `caracole-v1`, the default branch; `main` takes it by merge, when the owner asks.
@@ -360,8 +361,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
   that won't parse (`PageParseError`, `GtpTabsParseError`, `LaCuerdaParseError`,
   `LrclibParseError`) never makes a song not found, its lyrics missing or its Guitar Pro
-  file a miss: the song waits for the next run (http.py, pipeline.py, ug/fetch.py, lyrics.py,
-  lacuerda_fetch.py, gtptabs_fetch.py;
+  file a miss: the song waits for the next run (http.py, pipeline.py, provider_pass.py, ug/fetch.py,
+  lyrics.py, lacuerda_fetch.py, gtptabs_fetch.py;
   `test_pipeline.py::test_ug_block_cools_down_and_never_marks_not_found`,
   `test_fetch.py::test_parse_error_is_not_a_miss`,
   `test_gtptabs_fetch.py::test_a_spent_budget_is_no_miss`). A cached answer that won't

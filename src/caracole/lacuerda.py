@@ -55,16 +55,7 @@ from caracole.normalize import clean_title, fold, slug_key, ug_slug_key
 BASE_URL = "https://acordes.lacuerda.net"
 PROVIDER = "lacuerda"
 
-ACORDES = "R"
-# Version types by lcd letter, as the song page labels them. K has no label on
-# any captured page, so look letters up with .get().
-TYPE_NAMES = {
-    "R": "Letra y Acordes",
-    "T": "Tablatura",
-    "B": "Tab p/Bajo",
-    "D": "Batería",
-    "H": "Armónica",
-}
+ACORDES = "R"  # the lcd letter of a "Letra y Acordes" version
 
 
 class LaCuerdaParseError(ProviderError):

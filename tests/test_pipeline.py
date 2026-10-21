@@ -257,8 +257,33 @@ def test_default_gtptabs_step_passes_overrides_and_reports_errors(conn, cfg, mon
     assert seen == {"overrides": o, "library_dir": cfg.library_dir}
     assert result.status == "2 sitemaps indexed, 3 tried, 1 Guitar Pro file kept, 1 not on gtptabs.com, 1 error"
     assert result.title == "gtptabs.com" and result.done == ["1 Guitar Pro file downloaded", "1 song not there"]
-    assert [p.text for p in result.problems] == [
-        "gtptabs.com failed 1 time this run; those songs are tried again on the next run, and the log says why."]
+    assert [p.text for p in result.problems] == [  # an error no song's failure stands for: the sitemaps'
+        "gtptabs.com's sitemaps couldn't be read this run; they are asked for again on the next run, and the log "
+        "says why."]
+    assert get_state(conn, "gtptabs").last_error == "1 error this run"
+
+
+def test_the_gtptabs_step_names_the_songs_an_error_left(conn, cfg, monkeypatch):
+    from conftest import add_song
+
+    import caracole.gtptabs_fetch as gf
+    from caracole.http import ProviderUnavailable
+    from caracole.pipeline import default_steps
+
+    song = add_song(conn, "Blur", "Beetlebum")
+    later = add_song(conn, "Blur", "Song 2")
+    failures = [(song, ProviderError("gtptabs", "https://gtptabs.com/tabs/2/blur.html", 502, "HTTP 502")),
+                (later, ProviderUnavailable("gtptabs", None, None, "too many errors this run"))]
+    monkeypatch.setattr(gf, "gtptabs_files", lambda *a, **k: gf.GtpTabsStats(tried=1, errors=1, failures=failures))
+    steps = [s for s in default_steps() if s.name == "gtptabs"]
+    report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=steps, now=NOW)
+    result = report.results["gtptabs"]
+    assert [(f.song, f.provider) for f in result.failures] == [("Blur – Beetlebum", "gtptabs"),
+                                                                ("Blur – Song 2", "gtptabs")]
+    assert result.problems == []  # every error is a song's, each said on its own line
+    lines = report.summary().splitlines()
+    assert ("gtptabs.com didn't answer (HTTP 502) and caracole stopped asking it, so 2 songs will be looked for on "
+            "gtptabs.com again on the next run.") in lines
     assert get_state(conn, "gtptabs").last_error == "1 error this run"
 
 

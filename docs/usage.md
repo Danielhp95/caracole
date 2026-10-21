@@ -856,7 +856,9 @@ configuration it would take, and why it waits.
 8. **scan**: link purchases in Music/, and file Guitar Pro downloads.
 9. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
    has none. It comes after the scan, so a file you dropped into `_inbox/` is
-   filed first, and that song gets none from gtptabs.com.
+   filed first, and that song gets none from gtptabs.com. As for the other
+   sites, the summary counts the songs an error left for the next run on the
+   cause's line; sitemaps it couldn't read get a line of their own.
 10. **musescore**: read MuseScore's song sitemaps into a local index, for the
     to-do page's links to its pages. It downloads nothing.
 11. **youtube**: take the audio of a few songs no human sheet was found for from

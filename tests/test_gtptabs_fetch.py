@@ -8,6 +8,7 @@ the budget and robots.txt are the client's real behaviour.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import timedelta
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from helpers.gtptabs_site import (
 
 from caracole.db import kv_get
 from caracole.gtptabs_fetch import GtpTabsStats, gtptabs_files
-from caracole.http import ProviderBlocked
+from caracole.http import ProviderBlocked, ProviderError
 from caracole.library import keep_file, kept_files, song_dir
 from caracole.overrides import Overrides
 from caracole.songs import update_song
@@ -338,6 +339,51 @@ def test_a_server_error_is_an_error_not_a_miss(conn, tmp_path):
     stats = run(site, conn, tmp_path)
     assert (stats.tried, stats.errors, stats.missing) == (1, 1, 0)
     assert checked(conn, song) is None
+
+
+def test_the_pass_names_each_song_an_error_left_with_its_error(conn, tmp_path):
+    # For the run's summary, ntfy and `caracole get`, which say why in words.
+    song = add_song(conn, "Blur", "Beetlebum")
+    site = FakeGtpTabs(pages={BLUR: (502, "Bad gateway", HTML)})
+    [(failed, error)] = run(site, conn, tmp_path).failures
+    assert (failed.id, error.provider, error.status) == (song.id, "gtptabs", 502)
+
+
+def test_the_songs_left_once_gtptabs_is_given_up_on_are_named_too(conn, tmp_path, caplog):
+    # PoliteClient stops asking a provider after three errors in a row in one run.
+    titles = ["Uno", "Dos", "Tres", "Cuatro", "Cinco"]
+    for i, title in enumerate(titles):
+        add_song(conn, "Blur", title, added_at=f"2026-10-0{i + 1}T00:00:00Z")
+    site = FakeGtpTabs(pages={BLUR: (502, "Bad gateway", HTML)})
+    with caplog.at_level(logging.INFO):
+        stats = run(site, conn, tmp_path)
+    assert (stats.tried, stats.errors) == (3, 3)  # the songs never asked about are no errors
+    assert [(song.title, type(error).__name__) for song, error in stats.failures] == [
+        ("Cinco", "ProviderError"), ("Cuatro", "ProviderError"), ("Tres", "ProviderError"),
+        ("Dos", "ProviderUnavailable"), ("Uno", "ProviderUnavailable"),
+    ]
+    assert site.requests.count(BLUR) == 3
+    said = [r.levelname for r in caplog.records if "unavailable for the rest of this run" in r.getMessage()]
+    assert said == ["INFO"]  # as LRCLIB's and LaCuerda's: the summary names the songs
+
+
+def test_a_client_that_gave_up_before_the_sitemaps_names_every_song_it_would_have_tried(conn, tmp_path):
+    # The run's client is shared: an earlier step (the icons') may have made it give up on the site.
+    song = add_song(conn, "Blur", "Beetlebum")
+    add_song(conn, "Soda Stereo", "Signos")  # an artist the site doesn't know: never tried, so never named
+    site = FakeGtpTabs(pages={f"{BASE}/favicon.ico": (502, "Bad gateway", HTML)})
+    run(site, conn, tmp_path, budget=3)  # the index is read, then the budget is spent
+    later = NOW + timedelta(days=31)  # the sitemaps are due again
+    client = site.client(tmp_path / "cache", now=later)
+    try:
+        for _ in range(3):
+            with pytest.raises(ProviderError):
+                client.get(f"{BASE}/favicon.ico")
+        stats = gtptabs_files(conn, client, tmp_path / "library", later)
+    finally:
+        client.close()
+    assert [(s.id, type(e).__name__) for s, e in stats.failures] == [(song.id, "ProviderUnavailable")]
+    assert (stats.tried, stats.errors, stats.sitemap_errors) == (0, 0, 0) and checked(conn, song) is None
 
 
 def test_a_page_that_isnt_an_artist_page_is_fetched_once_more_then_an_error(conn, tmp_path):

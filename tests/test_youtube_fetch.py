@@ -122,9 +122,9 @@ def test_while_youtube_cools_down_its_songs_wait_blocked(conn, ycfg):
 
     song = to_buy(conn)
     record_block(conn, "youtube", NOW, "youtube: Sign in to confirm you're not a bot")
-    state = yf.song_state(conn, ycfg, song, Overrides(), NOW)
+    state = yf.song_state(conn, song, Overrides(), NOW)
     assert state.state == yf.BLOCKED and state.detail == "until 2026-10-20 05:50 UTC"
-    assert yf.song_state(conn, ycfg, song, Overrides(), NOW + timedelta(days=2)).state == yf.QUEUED
+    assert yf.song_state(conn, song, Overrides(), NOW + timedelta(days=2)).state == yf.QUEUED
 
 
 # --- a pass -------------------------------------------------------------------------------------
@@ -169,7 +169,7 @@ def test_songs_caracole_may_still_find_a_sheet_for_or_has_audio_for_are_left_alo
     ignored = to_buy(conn, "Suede", "Animal Nitrate")
     unmatched = add_song(conn, "Elastica", "Connection")
     o = Overrides(ignore=frozenset({ignored.key}))
-    assert yf.songs_for_youtube(conn, ycfg, o, NOW) == []
+    assert yf.songs_for_youtube(conn, o, NOW) == []
     assert run(conn, ycfg, o).tried == 0 and fake.argvs() == []
     assert unmatched.match_decision is None
 
@@ -181,8 +181,8 @@ def test_a_song_youtube_has_nothing_for_is_a_miss_asked_about_again_after_30_day
     assert run(conn, ycfg).missing == 1
     assert get_song(conn, song.id).audio_path is None
     assert kv_get_json(conn, f"youtube:{song.id}")["missing_at"] == "2026-10-19T03:50:00Z"
-    assert yf.songs_for_youtube(conn, ycfg, Overrides(), NOW + timedelta(days=29)) == []
-    assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW + timedelta(days=31))] == [song.id]
+    assert yf.songs_for_youtube(conn, Overrides(), NOW + timedelta(days=29)) == []
+    assert [s.id for s in yf.songs_for_youtube(conn, Overrides(), NOW + timedelta(days=31))] == [song.id]
 
 
 @pytest.mark.slow
@@ -222,7 +222,7 @@ def test_a_new_paste_replaces_the_audio_and_none_takes_it_away(conn, ycfg, fake)
     run(conn, ycfg, Overrides(youtube={song.key: None}))
     assert get_song(conn, song.id).audio_path is None and not second.exists()
     assert len(fake.argvs()) == calls  # "none" asks YouTube nothing
-    assert yf.songs_for_youtube(conn, ycfg, Overrides(youtube={song.key: None}), NOW) == []
+    assert yf.songs_for_youtube(conn, Overrides(youtube={song.key: None}), NOW) == []
 
 
 @pytest.mark.slow
@@ -252,7 +252,7 @@ def test_an_error_is_no_miss_and_the_song_waits_for_the_next_run(conn, ycfg, fak
     assert [(s.id, e.status) for s, e in stats.failures] == [(song.id, 503)]
     record = kv_get_json(conn, f"youtube:{song.id}")
     assert "missing_at" not in record and "503" in record["error"]
-    assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [song.id]
+    assert [s.id for s in yf.songs_for_youtube(conn, Overrides(), NOW)] == [song.id]
 
 
 @pytest.mark.slow
@@ -266,7 +266,7 @@ def test_a_picked_video_whose_download_fails_the_same_way_every_night_gives_way_
     record = kv_get_json(conn, f"youtube:{song.id}")
     assert record["skip"] == [TOPIC] and record["video"] is None and "missing_at" not in record  # no miss
     assert "Requested format is not available" in record["error"]
-    assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [song.id]
+    assert [s.id for s in yf.songs_for_youtube(conn, Overrides(), NOW)] == [song.id]
     run(conn, ycfg, now=NOW + timedelta(days=yf.GIVE_UP_AFTER))
     assert get_song(conn, song.id).audio_path.endswith(f"-{LYRICS}.m4a")  # searched again: the next pick
     assert [a[-1] for a in fake.argvs()].count("ytsearch8:Radiohead Creep") == 2
@@ -290,10 +290,10 @@ def test_a_pasted_video_whose_download_fails_the_same_way_every_night_waits_for_
     fake.video(OTHER, stderr="ERROR: [youtube] oNOFfl3Hx3s: Requested format is not available", exit=1)
     o = Overrides(youtube={song.key: OTHER})
     for night in range(yf.GIVE_UP_AFTER):
-        assert [s.id for s in yf.songs_for_youtube(conn, ycfg, o, NOW)] == [song.id]
+        assert [s.id for s in yf.songs_for_youtube(conn, o, NOW)] == [song.id]
         run(conn, ycfg, o, now=NOW + timedelta(days=night))
-    assert yf.songs_for_youtube(conn, ycfg, o, NOW) == []
-    state = yf.song_state(conn, ycfg, get_song(conn, song.id), o, NOW)
+    assert yf.songs_for_youtube(conn, o, NOW) == []
+    state = yf.song_state(conn, get_song(conn, song.id), o, NOW)
     assert state.state == yf.UNUSABLE and "Requested format is not available" in state.detail
 
 
@@ -301,10 +301,10 @@ def test_a_pasted_video_whose_download_fails_the_same_way_every_night_waits_for_
 def test_songs_whose_last_try_failed_come_after_the_others(conn, ycfg, fake):
     failing = to_buy(conn, added_at="2026-10-02T00:00:00Z")  # the newest
     other = to_buy(conn, "Radiohead", "Karma Police", added_at="2026-10-01T00:00:00Z")
-    assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [failing.id, other.id]
+    assert [s.id for s in yf.songs_for_youtube(conn, Overrides(), NOW)] == [failing.id, other.id]
     fake.search("Radiohead Creep", stderr="ERROR: Unable to download API page: HTTP Error 502: Bad Gateway", exit=1)
     run(conn, ycfg, songs=[get_song(conn, failing.id)])
-    assert [s.id for s in yf.songs_for_youtube(conn, ycfg, Overrides(), NOW)] == [other.id, failing.id]
+    assert [s.id for s in yf.songs_for_youtube(conn, Overrides(), NOW)] == [other.id, failing.id]
 
 
 @pytest.mark.slow
@@ -338,9 +338,9 @@ def test_a_pasted_video_that_cant_be_had_waits_for_another_paste(conn, ycfg, fak
     fake.video(OTHER, stderr="ERROR: [youtube] oNOFfl3Hx3s: Private video", exit=1)
     o = Overrides(youtube={song.key: OTHER})
     run(conn, ycfg, o)
-    state = yf.song_state(conn, ycfg, get_song(conn, song.id), o, NOW)
+    state = yf.song_state(conn, get_song(conn, song.id), o, NOW)
     assert state.state == yf.UNUSABLE and "Private video" in state.detail
-    assert yf.songs_for_youtube(conn, ycfg, o, NOW) == []
+    assert yf.songs_for_youtube(conn, o, NOW) == []
     fake.video(LYRICS, data="another")
     run(conn, ycfg, Overrides(youtube={song.key: LYRICS}))
     assert Path(get_song(conn, song.id).audio_path).read_text() == "another"
@@ -357,15 +357,15 @@ def test_a_pasted_video_that_cant_be_had_for_a_song_with_audio_waits_for_another
     before = len(fake.argvs())
     for night in (1, 2, 3):
         later = NOW + timedelta(days=night)
-        assert yf.songs_for_youtube(conn, ycfg, o, later) == []
+        assert yf.songs_for_youtube(conn, o, later) == []
         run(conn, ycfg, o, now=later)
     assert len(fake.argvs()) == before  # YouTube refused it once: it isn't asked again every night
     after = get_song(conn, song.id)
     assert Path(after.audio_path).read_text() == "the topic upload"  # the audio it had stays
-    state = yf.song_state(conn, ycfg, after, o, NOW)
+    state = yf.song_state(conn, after, o, NOW)
     assert state.state == yf.UNUSABLE and state.video == Video(OTHER) and "Private video" in state.detail
     assert state.audio_from.id == TOPIC
-    assert yf.song_states(conn, ycfg, o, NOW)[song.id].state == yf.UNUSABLE
+    assert yf.song_states(conn, o, NOW)[song.id].state == yf.UNUSABLE
     fake.video(LYRICS, data="another")
     run(conn, ycfg, Overrides(youtube={song.key: LYRICS}))  # another paste is taken
     assert Path(get_song(conn, song.id).audio_path).read_text() == "another"
@@ -393,7 +393,7 @@ def test_a_purchase_takes_the_youtube_audios_place(conn, ycfg, fake):
     scan_music(conn, ycfg.music_dir)
     after = get_song(conn, song.id)
     assert after.audio_path == str(bought) and yf.youtube_audio(conn, after) is None
-    assert yf.songs_for_youtube(conn, ycfg, Overrides(), NOW) == []
+    assert yf.songs_for_youtube(conn, Overrides(), NOW) == []
 
 
 @pytest.mark.slow
@@ -451,20 +451,20 @@ def test_each_song_without_a_human_sheet_has_a_state(conn, ycfg, fake):
     fake.search("Radiohead Karma Police", stderr="ERROR: HTTP Error 502: Bad Gateway", exit=1)
     o = Overrides(youtube={declined.key: None})
     run(conn, ycfg, o, songs=[get_song(conn, creep.id), get_song(conn, missing.id), get_song(conn, queued.id)])
-    states = yf.song_states(conn, ycfg, o, NOW)
+    states = yf.song_states(conn, o, NOW)
     assert {s.title: states[s.id].state for s in (queued, creep, missing, declined)} == {
         "Karma Police": yf.QUEUED, "Creep": yf.DOWNLOADED, "Airbag": yf.MISSING, "Let Down": yf.DECLINED}
     assert "502" in states[queued.id].detail  # the last try's error, tried again next run
     assert states[creep.id].video.id == TOPIC
     auto_sheet(conn, ycfg, get_song(conn, creep.id))
-    assert yf.song_states(conn, ycfg, o, NOW)[creep.id].state == yf.CHORDS
+    assert yf.song_states(conn, o, NOW)[creep.id].state == yf.CHORDS
     keep_file(conn, ycfg.library_dir, song=get_song(conn, creep.id), version_id=upsert_version(
         conn, provider="ug", tab_id="1", song_id=creep.id, slot="sheet", kind="chords", rating=5, votes=9,
         version=1, label=None, url="u", raw={}, now="x"), name="sheet.txt", data=b"[C]x", rank=1)
-    assert creep.id not in yf.song_states(conn, ycfg, o, NOW)  # a human sheet: off the list
+    assert creep.id not in yf.song_states(conn, o, NOW)  # a human sheet: off the list
 
 
 def test_a_record_that_isnt_one_is_no_record(conn, ycfg):
     song = to_buy(conn)
     kv_set_json(conn, f"youtube:{song.id}", ["not", "a", "record"])
-    assert yf.song_state(conn, ycfg, song, Overrides(), NOW).state == yf.QUEUED
+    assert yf.song_state(conn, song, Overrides(), NOW).state == yf.QUEUED

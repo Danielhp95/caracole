@@ -48,9 +48,10 @@ from typing import Any
 from caracole.config import Config
 from caracole.db import kv_get_json, kv_set_json
 from caracole.health import get_state, is_cooling
-from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
-from caracole.lyrics import song_lyrics
+from caracole.http import ProviderBlocked, ProviderError
+from caracole.lyrics import expected_seconds
 from caracole.overrides import Overrides
+from caracole.provider_pass import PassStats, each_song
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, update_song
 from caracole.youtube import PROVIDER, Video, VideoUnavailable, YtDlp, choose, search_query
 
@@ -225,7 +226,7 @@ def _to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
     return songs_to_buy(conn, songs, overrides, now)[0]
 
 
-def songs_for_youtube(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> list[Song]:
+def songs_for_youtube(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[Song]:
     """The songs due for their audio from YouTube, newest first, those whose last try failed
     after the others, so they never hold up the rest (see the module docstring)."""
     now = _utc(now)
@@ -254,32 +255,18 @@ def songs_for_youtube(conn: sqlite3.Connection, cfg: Config, overrides: Override
     return sorted(due, key=lambda s: s.id in failed)  # stable: newest first within each
 
 
-def expected_seconds(song: Song) -> float | None:
-    """How long the song is: its own duration, else LRCLIB's."""
-    if song.duration_ms:
-        return song.duration_ms / 1000
-    try:
-        lyrics = song_lyrics(song)
-    except (TypeError, ValueError):  # stored lyrics that can't be read: no duration
-        return None
-    return lyrics.duration if lyrics is not None and lyrics.duration else None
-
-
 # --- a pass -------------------------------------------------------------------------------------------
 
 
 @dataclass
-class YouTubeStats:
-    """What one pass did: songs ``tried`` (errors included), audio ``downloaded``, searches that
-    found nothing (``missing``), videos ``unavailable``, and the songs an error left, with it."""
+class YouTubeStats(PassStats):
+    """What one pass did: songs ``tried`` (errors included), ``errors`` and the songs an error left,
+    with it (``failures``), as every pass counts them (provider_pass.py); audio ``downloaded``,
+    searches that found nothing (``missing``) and videos ``unavailable``."""
 
-    tried: int = 0
     downloaded: int = 0
     missing: int = 0
     unavailable: int = 0
-    errors: int = 0
-    budget_exhausted: bool = False
-    failures: list[tuple[Song, ProviderError]] = field(default_factory=list)
 
 
 def youtube_pass(
@@ -302,26 +289,17 @@ def youtube_pass(
     now = _utc(now)
     stats = YouTubeStats()
     tidy(conn, cfg, overrides)
-    for song in songs if songs is not None else songs_for_youtube(conn, cfg, overrides, now):
-        try:
-            outcome = _one(conn, runner, cfg, song, overrides, now)
-        except ProviderBlocked:
-            raise
-        except BudgetExhausted:
-            stats.budget_exhausted = True
-            break
-        except ProviderError as e:
-            stats.tried += 1
-            stats.errors += 1
-            stats.failures.append((song, e))
-            record = load_record(conn, song.id)
-            record.error, record.error_at = e.message or str(e), _iso(now)
-            _save(conn, song.id, record)
-            log.warning("YouTube for %s: %s", song.display, e)
-            if on_song is not None:
-                on_song(song, GAVE_UP if isinstance(e, DownloadsFailed) else "error", record)
-            continue
-        stats.tried += 1
+
+    def failed(song: Song, e: ProviderError) -> None:
+        record = load_record(conn, song.id)
+        record.error, record.error_at = e.message or str(e), _iso(now)
+        _save(conn, song.id, record)
+        if on_song is not None:
+            on_song(song, GAVE_UP if isinstance(e, DownloadsFailed) else "error", record)
+
+    due = songs if songs is not None else songs_for_youtube(conn, overrides, now)
+    for song, outcome in each_song(due, stats, lambda song: _one(conn, runner, cfg, song, overrides, now),
+                                   site="YouTube", level=logging.WARNING, on_error=failed):
         stats.downloaded += outcome == DOWNLOADED_NOW
         stats.missing += outcome == MISSED
         stats.unavailable += outcome == PASSED_OVER
@@ -487,7 +465,7 @@ class SongState:
     audio_from: Video | None = None
 
 
-def song_state(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, now: datetime) -> SongState:
+def song_state(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime) -> SongState:
     """Where a song with no human sheet stands on the YouTube route (``QUEUED`` and the rest).
 
     A pasted video that can't be had is ``UNUSABLE`` even when the song has audio from
@@ -513,18 +491,19 @@ def song_state(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Ove
     return SongState(QUEUED, video, record.error)
 
 
-def song_states(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> dict[int, SongState]:
-    """Every song on the YouTube route's list, newest first: the songs with no human sheet the
-    to-do page lists (``todo.songs_to_buy``), and those whose audio YouTube gave, until a human
-    sheet turns up."""
-    songs = list_songs(conn)
+def song_states(conn: sqlite3.Connection, overrides: Overrides, now: datetime, *,
+                songs: list[Song] | None = None) -> dict[int, SongState]:
+    """Every song on the YouTube route's list (of ``songs``, when given: a one-song card's), newest
+    first: the songs with no human sheet the to-do page lists (``todo.songs_to_buy``), and those whose
+    audio YouTube gave, until a human sheet turns up."""
+    songs = list_songs(conn) if songs is None else songs
     listed = {s.id for s in _to_buy(conn, songs, overrides, now)}
     out = {}
     for song in songs:
         youtube_gave = (not _ignored(song, overrides) and _own_audio(song, load_record(conn, song.id))
                         and not _kept(conn, song.id, HUMAN_SHEET))
         if song.id in listed or youtube_gave:
-            out[song.id] = song_state(conn, cfg, song, overrides, now)
+            out[song.id] = song_state(conn, song, overrides, now)
     return out
 
 

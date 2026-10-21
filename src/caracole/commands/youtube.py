@@ -110,7 +110,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
         now = utcnow()
         tidied = tidy(conn, cfg, overrides)  # lets go of audio no song needs, and of files gone from the cache
         song = _one_song(conn, cfg, display, overrides) if display else None
-        songs = [song] if song is not None else songs_for_youtube(conn, cfg, overrides, now)
+        songs = [song] if song is not None else songs_for_youtube(conn, overrides, now)
         if song is not None and _has_it(conn, song, overrides):
             songs = []
         elif not songs:

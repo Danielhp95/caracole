@@ -20,9 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 import re
-import secrets
 import sqlite3
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -32,17 +30,10 @@ from typing import Any, Literal, Protocol
 
 from rapidfuzz import fuzz
 
-from caracole.http import (
-    BudgetExhausted,
-    Client,
-    ProviderBlocked,
-    ProviderError,
-    ProviderUnavailable,
-    Response,
-    read_once_more,
-)
-from caracole.library import song_dir
+from caracole.http import Client, ProviderError, Response, read_once_more
+from caracole.library import song_dir, write_atomic
 from caracole.normalize import clean_title, fold, slug_key
+from caracole.provider_pass import PassStats, each_song
 from caracole.songs import Song, list_songs, update_song
 
 log = logging.getLogger(__name__)
@@ -211,6 +202,18 @@ def song_lyrics(song: HasLyricsJson) -> Lyrics | None:
     return lyrics_from_json(song.lyrics_json)
 
 
+def expected_seconds(song: Song) -> float | None:
+    """How long the song is: its own duration, else LRCLIB's (a wanted.txt line rarely gives
+    one); None when neither is known, or the stored lyrics can't be read."""
+    if song.duration_s is not None:
+        return song.duration_s
+    try:
+        lyrics = song_lyrics(song)
+    except (TypeError, ValueError):  # stored lyrics that can't be read: no duration
+        return None
+    return lyrics.duration if lyrics is not None and lyrics.duration else None
+
+
 def _normalize_line(line: str) -> str:
     return " ".join(_NON_WORD.split(fold(_APOSTROPHES.sub("", line)))).strip()
 
@@ -358,7 +361,6 @@ def fetch_lyrics(
     album: str | None,
     duration_s: float | None,
     cache: bool = True,
-    max_age: timedelta | None = None,
 ) -> LyricsResult:
     """Look a song up on LRCLIB: ``/api/get`` first, then ``/api/search``.
 
@@ -371,11 +373,10 @@ def fetch_lyrics(
     never a miss. A cached answer that can't be read is asked for once more,
     past the cache, before it is an error (``http.read_once_more``).
 
-    ``cache`` and ``max_age`` go to the first ``client.get`` of each endpoint; the one
-    more ask (``read_once_more``) goes past the cache. By default a cached answer is
-    used forever; ``cache=False`` asks LRCLIB again.
+    ``cache`` goes to the first ``client.get`` of each endpoint; the one more ask
+    (``read_once_more``) goes past the cache. By default a cached answer is used
+    forever; ``cache=False`` asks LRCLIB again.
     """
-    options: dict[str, Any] = {"cache": cache, "max_age": max_age}
     track = clean_title(title)
     params: dict[str, str | int] = {"artist_name": artist, "track_name": track}
     if album:
@@ -383,7 +384,7 @@ def fetch_lyrics(
     if duration_s is not None:
         params["duration"] = round(duration_s)
     url = f"{LRCLIB_API}/get"
-    resp = client.get(url, params=params, accept=_GET_ACCEPT, **options)
+    resp = client.get(url, params=params, accept=_GET_ACCEPT, cache=cache)
     found = read_once_more(client, resp, url, _get_record, LrclibParseError, params=params, accept=_GET_ACCEPT)
     if found is not None:
         outcome = _outcome(Lyrics.from_record(found))
@@ -392,7 +393,7 @@ def fetch_lyrics(
 
     url = f"{LRCLIB_API}/search"
     query = {"track_name": _search_title(track), "artist_name": artist}
-    resp = client.get(url, params=query, accept=(200,), **options)
+    resp = client.get(url, params=query, accept=(200,), cache=cache)
     cands = read_once_more(client, resp, url, lambda r: _json(r, list), LrclibParseError, params=query,
                            accept=(200,))
     best = pick_candidate(cands, artist=artist, title=title, duration_s=duration_s)
@@ -400,27 +401,13 @@ def fetch_lyrics(
     return outcome or LyricsResult("missing", None)
 
 
-def _write_atomic(path: Path, text: str) -> None:
-    # open(..., "x") rather than mkstemp: mkstemp makes 0600 files, which would hide
-    # the library from Syncthing reading it through the group.
-    tmp = path.with_name(f".{path.name}.{secrets.token_hex(4)}.tmp")
-    try:
-        with open(tmp, "x", encoding="utf-8", newline="\n") as f:
-            f.write(text)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-
-
 def write_lyrics(song_dir: Path, lyrics: Lyrics) -> list[Path]:
     """Write ``lyrics.txt`` and, when there are synced lyrics, ``lyrics.lrc``.
 
-    Each file ends in a newline and is replaced atomically. A file these lyrics
-    have no text for is removed, so a stale ``lyrics.lrc`` never outlives a
-    re-fetch. Returns the paths written; an instrumental writes nothing.
+    Each file ends in a newline and is replaced atomically (``library.write_atomic``,
+    which makes the folder). A file these lyrics have no text for is removed, so a
+    stale ``lyrics.lrc`` never outlives a re-fetch. Returns the paths written; an
+    instrumental writes nothing.
     """
     contents = {
         "lyrics.txt": lyrics.plain if lyrics.has_lyrics else None,
@@ -430,8 +417,7 @@ def write_lyrics(song_dir: Path, lyrics: Lyrics) -> list[Path]:
     for name, text in contents.items():
         path = song_dir / name
         if text:
-            song_dir.mkdir(parents=True, exist_ok=True)
-            _write_atomic(path, text.rstrip("\n") + "\n")
+            write_atomic(path, (text.rstrip("\n") + "\n").encode("utf-8"))
             written.append(path)
         else:
             path.unlink(missing_ok=True)
@@ -442,20 +428,13 @@ def write_lyrics(song_dir: Path, lyrics: Lyrics) -> list[Path]:
 
 
 @dataclass
-class LyricsStats:
-    """What one ``fetch_pending_lyrics`` pass did.
-
-    ``failures`` names the songs a provider error left pending, each with its
-    error: the ``errors`` counted, then the songs not asked about once the client
-    gave up on LRCLIB for the run (``ProviderUnavailable``).
-    """
+class LyricsStats(PassStats):
+    """What one ``fetch_pending_lyrics`` pass did: ``tried``, ``errors`` and ``failures`` as
+    every pass counts them (provider_pass.py), and what LRCLIB answered."""
 
     found: int = 0
     missing: int = 0
     instrumental: int = 0
-    errors: int = 0
-    budget_exhausted: bool = False
-    failures: list[tuple[Song, ProviderError]] = field(default_factory=list, compare=False, repr=False)
 
 
 RECHECK_MISSING_AFTER = timedelta(days=30)
@@ -478,23 +457,19 @@ def _before(stamp: str | None, cutoff: datetime) -> bool:
         return True
 
 
-def _songs_to_look_up(
-    conn: sqlite3.Connection, now: datetime, recheck_after: timedelta
-) -> list[tuple[Song, bool]]:
-    """Songs never looked up, newest first, then misses older than ``recheck_after``.
-
-    The flag marks a re-check, whose cached answer is the old miss itself.
-    """
+def _songs_to_look_up(conn: sqlite3.Connection, now: datetime, recheck_after: timedelta) -> list[Song]:
+    """Songs never looked up, newest first, then misses older than ``recheck_after``: re-checks,
+    whose cached answer is the old miss itself."""
     cutoff = _utc(now) - recheck_after
-    pending: list[tuple[Song, bool]] = []
-    due: list[tuple[Song, bool]] = []
+    pending: list[Song] = []
+    due: list[Song] = []
     for song in list_songs(conn):
         if song.status == "ignored":
             continue
         if song.lyrics_status == "pending":
-            pending.append((song, False))
+            pending.append(song)
         elif song.lyrics_status == "missing" and _before(song.lyrics_at, cutoff):
-            due.append((song, True))
+            due.append(song)
     return pending + due
 
 
@@ -519,34 +494,21 @@ def fetch_pending_lyrics(
     Found lyrics are written to the song's folder (``write_lyrics``) and stored
     in ``songs.lyrics_json``; every outcome stores ``lyrics_at``.
 
-    Errors are never misses. ``ProviderBlocked`` propagates; ``BudgetExhausted``
-    ends the pass (``budget_exhausted``); any other ``ProviderError`` counts in
-    ``errors`` and leaves the song as it was, for the next run. Once the client
-    gives up on the provider for this run (``ProviderUnavailable``), the pass ends.
+    Errors are never misses (provider_pass.py): ``ProviderBlocked`` propagates;
+    ``BudgetExhausted`` ends the pass (``budget_exhausted``); any other
+    ``ProviderError`` counts in ``errors`` and leaves the song as it was, for the
+    next run. Once the client gives up on the provider for this run
+    (``ProviderUnavailable``), the pass ends.
     """
     stats = LyricsStats()
     stamp = _stamp(now)
-    songs = [(s, r) for s, r in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only]
-    for i, (song, recheck) in enumerate(songs):
-        try:
-            result = fetch_lyrics(
-                client, artist=song.artists[0], title=song.title, album=song.album,
-                duration_s=song.duration_s, cache=not recheck,
-            )
-        except ProviderBlocked:
-            raise
-        except BudgetExhausted:
-            stats.budget_exhausted = True
-            break
-        except ProviderUnavailable as e:
-            log.info("LRCLIB is unavailable for the rest of this run: %s", e)
-            stats.failures += [(left, e) for left, _ in songs[i:]]
-            break
-        except ProviderError as e:
-            stats.errors += 1
-            stats.failures.append((song, e))
-            log.debug("lyrics for %s: %s", song.display, e)
-            continue
+
+    def turn(song: Song) -> LyricsResult:  # a re-check of a miss goes past the cache
+        return fetch_lyrics(client, artist=song.artists[0], title=song.title, album=song.album,
+                            duration_s=song.duration_s, cache=song.lyrics_status != "missing")
+
+    songs = (s for s in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only)
+    for song, result in each_song(songs, stats, turn, site="LRCLIB"):
         _record(conn, library_dir, song, result, stamp)
         if result.status == "found":
             stats.found += 1
