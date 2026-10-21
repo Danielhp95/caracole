@@ -273,7 +273,7 @@ The page shows the version label, "Make PDF" (a POST with the form token, checke
 
 ### Task E4: Make this my version
 
-**Files:** Modify `src/caracole/overrides.py` (table `version` in `_TABLES`, field `version: Mapping[str, str]`, `add_version(path, display, query | None)`), `render.py` (the main PDF uses `apply_version` when a song has one; `[transpose]` still works and `version` wins), `viewer/page.py` (data `start`: the version's query, read by viewer.js as its starting state when the address has none), `songbook.py` (`_entry_of`: a song's version as its default), and `web/export_routes.py` (a "Make this my version" button: POST, then the job `caracole render --song`). Test: `tests/test_overrides.py`, `tests/test_render_all.py`, `tests/test_viewer.py`, `tests/test_web_export.py`.
+**Files:** Modify `src/caracole/overrides.py` (table `version` in `_TABLES`, field `version: Mapping[str, str]`, `add_version(path, display, query | None)`), `render.py` (the main PDF always goes through `apply_version`: a song's `[version]`, else `Version(t=[transpose])`, else the sheet as written; `render_pdf` stops passing `--transpose`, as the spec says; `[transpose]` keeps working and `[version]` wins), `viewer/page.py` (data `start`: the version's query, read by viewer.js as its starting state when the address has none), `songbook.py` (`_entry_of`: a song's version as its default), and `web/export_routes.py` (a "Make this my version" button: POST, then the job `caracole render --song`). Test: `tests/test_overrides.py`, `tests/test_render_all.py`, `tests/test_viewer.py`, `tests/test_web_export.py`.
 
 - [ ] **Step 1: Write the failing tests.**
   - `test_add_version_writes_and_clears_the_table_keeping_comments`.
