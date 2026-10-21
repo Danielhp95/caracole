@@ -2262,7 +2262,8 @@ def test_a_viewer_written_before_an_upgrade_goes_out_with_its_own_policy(app, co
     assert response.status == 200
     sent = text(response)
     policy = header(response, "content-security-policy")
-    assert f"script-src {sha256_source(re.search(r'<script>(.*?)</script>', sent, re.S).group(1))};" in policy
+    scripts = re.findall(r"<script>(.*?)</script>", sent, re.S)
+    assert f"script-src {' '.join(map(sha256_source, scripts))};" in policy
     assert f"style-src {sha256_source(re.search(r'<style>(.*?)</style>', sent, re.S).group(1))};" in policy
     assert policy.startswith("sandbox allow-scripts; default-src 'none'; ")
     assert policy.endswith("; frame-ancestors 'none'")

@@ -1924,6 +1924,16 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   minor one). It follows the key, the mode and the capo, in the key of the
   shapes you play: with a capo, its frets count from the capo, as the chords'
   necks do.
+- **Hear it**: a tap on a chord, in the song or in the strip, also strums
+  it, and so does a tap on the shape on its card (or Enter on it): the shape
+  the card shows, with the capo where it is, low string to high, in standard
+  tuning. The sound is made in the browser (a plucked string, synthesized:
+  no recording, nothing loaded), so it works from the synced folder and from
+  `caracole serve` alike. Nothing sounds until you tap, one sound plays at a
+  time, and the page falls silent when you switch away from it; the next tap
+  plays again. **Sound**, in the settings, sets the volume: Off, Soft,
+  Medium (the default) or Loud. With it off, a tap opens the card alone. A
+  phone set to silent may keep it silent.
 - **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
   left lists each chord of the song once, in the order it first comes, with a
   guitar neck (frets 0 to 15, the high e on top) showing every shape of it in
@@ -2074,11 +2084,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   seconds alone, with no ring.
 
 The viewer remembers its settings for each song in the browser, the scroll
-speed, the text size and the shape chosen for each chord among them: a chord
+speed, the text size, the volume and the shape chosen for each chord among them: a chord
 named otherwise when the page opens (an address with another key, mode or
 capo) starts at its first shape. It keeps the transposition, the mode, the
-capo, the chord names (`nm=both`, `nm=numerals`), the text size and the scroll
-speed in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8`), and so the shape chosen for a
+capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll speed and the
+volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
 suffix, bass), so a reload or

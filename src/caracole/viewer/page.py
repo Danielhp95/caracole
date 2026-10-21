@@ -1,10 +1,11 @@
 """sheet.html: one sheet as a page for a phone, written beside its PDF.
 
 The page is one self-contained file. It opens from the synced library folder with
-no server: it loads nothing (a Content-Security-Policy with the hashes of its one
-script and one stylesheet makes the browser enforce that) and links only to the PDF
-beside it and to the library's index.html two folders up. A server may serve it
-too, only while it is the page caracole wrote, with ``viewer_csp(page)`` as its header.
+no server: it loads nothing (a Content-Security-Policy with the hashes of its two
+scripts, strum.js and viewer.js, and its stylesheet makes the browser enforce that)
+and links only to the PDF beside it and to the library's index.html two folders up.
+A server may serve it too, only while it is the page caracole wrote, with
+``viewer_csp(page)`` as its header.
 
 The sheet itself is static HTML, so it reads without the script, and prints. What a tab
 says before its first section or riff (its tabber's notes, a link, a chord legend) is
@@ -112,6 +113,7 @@ BUILD_FILES = (
     *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "harmony.py", "harmony_tables.py",
                                "voicings.py", "voicings.json", "version.py", "viewer.js", "viewer.css",
                                "LICENSE-chords-db")),
+    HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "normalize.py",  # has_han
     HERE.parent / "page_icon.py",  # the icon in the page's head
@@ -134,6 +136,13 @@ def build_version() -> str:
 @lru_cache(maxsize=1)
 def _assets() -> tuple[str, str]:
     return (HERE / "viewer.css").read_text(encoding="utf-8"), (HERE / "viewer.js").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _sound() -> str:
+    """strum.js: a chord's shape strummed in Web Audio (``window.caracoleSound``), inlined before viewer.js,
+    which calls it, in a sheet.html and a songbook.html alike."""
+    return (HERE / "strum.js").read_text(encoding="utf-8")
 
 
 def build_viewer(
@@ -164,7 +173,7 @@ def build_viewer(
         f"{title} · {sheet.artist}" if sheet.artist else title,
         _body(sheet, title, song_key, origin, pdf, export=export) + json_block("song", data),
         styles=(style,),
-        scripts=(script,),
+        scripts=(_sound(), script),
     )
 
 
@@ -623,6 +632,8 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="chip" id="harmony-open" aria-haspopup="dialog" aria-controls="harmony">Progressions, the key's scale</button></div>
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
+<div class="row" id="sound-row" hidden><span class="lab">Sound</span><span class="chips" id="volumes"></span>
+<p class="hint">Tap a chord, or its shape on its card, to hear it strummed.</p></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
