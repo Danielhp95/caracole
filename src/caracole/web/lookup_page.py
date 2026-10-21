@@ -196,15 +196,17 @@ function show(data, text) {
   const n = data.library.length + data.index.length + artists.length + lcArtists.length + lc.length;
   status.textContent = n ? "" : "Nothing matches.";
   if (data.library.length) results.append(...group("In your library", data.library.map(librarySong)));
+  // LaCuerda's: its artists, then its songs (the index holds every artist, and the songs of the pages caracole read);
+  // first when it alone has the artist the query names ("andres calamaro": lacuerda_leads).
+  const lcGroup = lcArtists.length || lc.length ?
+    group("On LaCuerda", [...lcArtists.map(siteArtistRow), ...lc.map(lcSong)]) : [];
+  if (data.lacuerda_leads === true) results.append(...lcGroup);
   // The artists the query names: first when one leads ("oasis"), after the songs when a song does ("wonderwall").
   const named = artists.length ? group("Artists on Ultimate Guitar", artists.map(artistRow)) : [];
   if (data.lead === "artist") results.append(...named);
   if (data.index.length) results.append(...group("On Ultimate Guitar", data.index.map(ugSong)));
   if (data.lead !== "artist") results.append(...named);
-  // LaCuerda's: its artists, then its songs (the index holds every artist, and the songs of the pages caracole read).
-  if (lcArtists.length || lc.length) {
-    results.append(...group("On LaCuerda", [...lcArtists.map(siteArtistRow), ...lc.map(lcSong)]));
-  }
+  if (data.lacuerda_leads !== true) results.append(...lcGroup);
   // No artist of LaCuerda's by that name, under a letter its listings aren't read to yet: their page may say.
   const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
   if (unlisted) {
@@ -224,7 +226,8 @@ function show(data, text) {
 }
 
 // Enter: the answer's best row, its main action (a song of yours opens, an Ultimate Guitar song is looked up);
-// when an artist leads, that artist's songs; when nothing stands out, nothing: a guess never spends a request.
+// when an artist leads, that artist's songs, LaCuerda's when it leads; when nothing stands out, nothing: a guess
+// never spends a request.
 function pickBest() {
   const data = shownData;
   if (!data || artistOpen) return;
@@ -238,6 +241,10 @@ function pickBest() {
   }
   const artists = Array.isArray(data.artists) ? data.artists : [];
   if (data.lead === "artist" && artists.length) { openArtist(artists[0], false); return; }
+  // LaCuerda's artist when it alone has the one the query names: their Songs, which asks LaCuerda nothing.
+  const lcArtists = (Array.isArray(data.lacuerda_artists) ? data.lacuerda_artists : [])
+    .filter(a => a && typeof a === "object");
+  if (data.lacuerda_leads === true && lcArtists.length) { openSiteArtist(lcArtists[0], false); return; }
   if (results.querySelector(".hit")) status.textContent = "Nothing stands out: pick one, or type more.";
 }
 

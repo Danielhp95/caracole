@@ -2623,16 +2623,18 @@ _SCRIPT = r"""
     const lcArtists = objects(data.lacuerda_artists);
     const lc = objects(data.lacuerda);
     const box = document.createDocumentFragment();
+    // LaCuerda's artists, then its songs: the index holds every artist, songs of a few. First when it alone has the
+    // artist the query names ("andres calamaro", where Ultimate Guitar has only weak rows: lacuerda_leads).
+    const counted = [lcArtists.length ? many(lcArtists.length, "artist") : "", lc.length ? many(lc.length, "song") : ""];
+    const lcGroup = lcArtists.length || lc.length ? group("LaCuerda · " + counted.filter(Boolean).join(" · "),
+      [...lcArtists.map((a) => siteArtist(a, openSiteArtist)), ...lc.map((h) => siteHit(h, getIt, later))]) : [];
+    if (data.lacuerda_leads === true) box.append(...lcGroup);
     // The artists the query names: first when one leads ("oasis"), after the songs when a song does.
     const named = artists.length ? group("Artists on Ultimate Guitar", artists.map((a) => artistHit(a, openArtist))) : [];
     if (data.lead === "artist") box.append(...named);
     if (index.length) box.append(...group("Ultimate Guitar · " + many(index.length, "song"), index.map((h) => ugHit(h, getIt, later))));
     if (data.lead !== "artist") box.append(...named);
-    if (lcArtists.length || lc.length) {  // its artists, then its songs: the index holds every artist, songs of a few
-      const counted = [lcArtists.length ? many(lcArtists.length, "artist") : "", lc.length ? many(lc.length, "song") : ""];
-      box.append(...group("LaCuerda · " + counted.filter(Boolean).join(" · "),
-        [...lcArtists.map((a) => siteArtist(a, openSiteArtist)), ...lc.map((h) => siteHit(h, getIt, later))]));
-    }
+    if (data.lacuerda_leads !== true) box.append(...lcGroup);
     // No artist of LaCuerda's by that name, under a letter its listings aren't read to yet: their page may say.
     const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
     if (unlisted) {
@@ -2660,7 +2662,9 @@ _SCRIPT = r"""
     sitesBox.replaceChildren(box);
     const parts = [];
     if (index.length || artists.length) parts.push((index.length + artists.length) + " on Ultimate Guitar");
-    if (lc.length || lcArtists.length) parts.push((lc.length + lcArtists.length) + " on LaCuerda");
+    if (lc.length || lcArtists.length) {
+      parts[data.lacuerda_leads === true ? "unshift" : "push"]((lc.length + lcArtists.length) + " on LaCuerda");
+    }
     if (gtp.length) parts.push(gtp.length + " on gtptabs.com");
     if (ms.length) parts.push(ms.length + " on MuseScore");
     say(parts.length ? parts.join(" · ") : "Nothing on the sites: request it by name below");

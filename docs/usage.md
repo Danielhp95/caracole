@@ -1928,16 +1928,22 @@ While the nightly run hasn't read the listing of a name's letter whole, the
 index can't tell whether LaCuerda has an artist it doesn't list: for a query
 it has no artist by, under such a letter, the group ends with the line that
 reads the page of that name now. The name is the artist the query names on
-Ultimate Guitar (`El Barrio` for "el barrio como camaron"), else the query;
-a query Ultimate Guitar's index reads as a title ("creep") gets no such line:
+Ultimate Guitar, by their whole name or by part of it (`Enrique Bunbury` for
+"bunbury"), else an artist whose whole name starts or ends the query and whose
+songs Ultimate Guitar's index reads it as (`Estopa` for "estopa como camaron",
+while caracole hasn't read their page; never `Fito` for "fito paez"), else the
+query. A query LaCuerda's own index answers well gets no such line: a song by
+its title ("como camaron" is Estopa's Como Camarón), or by an artist it lists or
+holds the songs of ("estopa como camaron", once their page is read), and
+neither does a query Ultimate Guitar's index reads as a title ("creep"):
 
     $ caracole search estopa
     …
     On LaCuerda (offline index)
       nothing matches
 
-      LaCuerda's index is still being read: 2,957 artists so far, those of #, A, B;
-      the nightly run reads the rest.
+      LaCuerda's index is still being read: 2,957 artists so far, with #, A, B read
+      whole; the nightly run reads the rest.
 
       LaCuerda hasn't listed E yet: caracole lacuerda --artist "estopa" reads the
       page of “estopa” now (a request for each spelling of the name tried, usually one).
@@ -1954,9 +1960,10 @@ folded, a leading "Los" and an artist's "y" aside, Chinese as pinyin. While the
 index is empty the group says so (`Nothing yet: LaCuerda's index is empty: the
 nightly run reads its listings of every artist`), and while the nightly run
 still reads its listings it ends with what it has: `LaCuerda's index is still
-being read: 2,957 artists so far, those of #, A–C; the nightly run reads the
-rest.` LaCuerda has no search caracole uses: everything listed comes from the
-local table, and nothing asks LaCuerda anything.
+being read: 2,957 artists so far, with #, A–C read whole; the nightly run reads
+the rest.` (the artists counted include those of a letter read in part).
+LaCuerda has no search caracole uses: everything listed comes from the local
+table, and nothing asks LaCuerda anything.
 
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
@@ -2002,9 +2009,13 @@ with it. A KEY that is no key exits with status 2.
   the name tried, usually one), then lists their songs, or says what LaCuerda
   answered: `Not found: LaCuerda has no artist page for estopa.`, or, for a
   cooldown, a block, a spent hour's budget or an error, `Not read: …`, with a
-  link to the request's output. The name is the artist the query names on
-  Ultimate Guitar, else the query; a title there, "creep", gets no offer. Once
-  a page is read, a search finds their songs at once), **Guitar Pro on gtptabs.com**
+  link to the request's output. The name is chosen as `caracole search` chooses
+  it: the artist the query names on Ultimate Guitar, else the one of theirs
+  whose name starts or ends it, else the query; a title there, "creep", or a song LaCuerda's
+  index has, "como camaron", gets no offer. Once a page is read, a search finds
+  their songs at once. When LaCuerda alone has the artist the query names, and
+  Ultimate Guitar's index nothing that matches well ("andres calamaro": only
+  Javier Calamaro's songs), LaCuerda's group comes first), **Guitar Pro on gtptabs.com**
   (five songs with a file there), and **MuseScore** (five pages whose title is
   what you typed, or what you typed less an artist's name before or after it,
   when that artist has a song of that title in the Ultimate Guitar index,
@@ -2019,8 +2030,8 @@ with it. A KEY that is no key exits with status 2.
   hasn't read yet (MuseScore's while it blocks caracole, LaCuerda's before its
   first listings); and those searched in part: LaCuerda's, while the nightly
   run still reads its listings ("Searched in part: LaCuerda (its index is still
-  being read: 2,957 artists so far, those of #, A–C; the nightly run reads the
-  rest)."). Searching asks no site anything: it reads
+  being read: 2,957 artists so far, with #, A–C read whole; the nightly run reads
+  the rest)."). Searching asks no site anything: it reads
   the indexes alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s
   for very common words), takes no lock and spends no budget. **Enter never
   spends a request**, however clear the best result: Get it does. Escape, or
@@ -2061,7 +2072,8 @@ with it. A KEY that is no key exits with status 2.
   and the Ultimate Guitar and LaCuerda indexes, whose Get it reads the sheet on
   the page as it arrives, stage by stage. Its Enter acts on the song you clearly meant (one of
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
-  songs, or nothing when nothing stands out. `/lookup?q=WORDS` opens it with
+  songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
+  nothing), or nothing when nothing stands out. `/lookup?q=WORDS` opens it with
   that search, and a lookup posted without JavaScript lands there.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" takes an artist, a title and, optionally, the album and the length,

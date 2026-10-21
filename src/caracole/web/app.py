@@ -84,9 +84,11 @@ LaCuerda's index holds every artist it has read, but the songs only of the
 artists whose page caracole has read: an artist's Songs offers to read it
 (``POST /lacuerda/artist``), a job like the others; and while the nightly run
 hasn't read the listing of a letter whole, a query it has no artist by under
-that letter offers to read the page of that name (``lacuerda_unlisted``). Once
-such a read is over, the answers kept are dropped, so a search finds their
-songs at once.
+that letter offers to read the page of that name (``lacuerda_unlisted``), never
+a page LaCuerda's own songs or artists already name. Once such a read is over,
+the answers kept are dropped, so a search finds their songs at once. LaCuerda's
+group leads (``lacuerda_leads``) when it has the artist the query names and
+Ultimate Guitar's index has nothing strong.
 """
 
 from __future__ import annotations
@@ -955,6 +957,7 @@ class WebApp:
         from caracole.search import (
             LibraryHit,
             found,
+            lacuerda_leads,
             search_gtptabs,
             search_lacuerda,
             search_library,
@@ -992,7 +995,8 @@ class WebApp:
                               for h in (musescore if "musescore" not in left_out else [])],
                 "lacuerda": self._lacuerda_rows(conn, lacuerda, songs),
                 "lacuerda_artists": [_lacuerda_artist_json(a) for a in lc_artists],
-                "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists),
+                "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
+                "lacuerda_leads": lacuerda_leads(index_found, lc_artists),
                 "skipped": skipped, "partial": partial}
 
     def _after_reads(self) -> None:
@@ -1383,16 +1387,15 @@ def _lacuerda_artist_json(a: SiteArtist) -> dict[str, Any]:
             "score": a.score, "via": a.via, "top": [{"title": t.title, "url": t.url, "sheet": t.sheet} for t in a.top]}
 
 
-def _lacuerda_unlisted(conn: sqlite3.Connection, q: str, ug: IndexFound,
-                       lc_artists: Sequence[SiteArtist]) -> dict[str, str] | None:
+def _lacuerda_unlisted(conn: sqlite3.Connection, q: str, ug: IndexFound, lc_artists: Sequence[SiteArtist],
+                       lc_songs: Sequence[SiteHit]) -> dict[str, str] | None:
     """A query LaCuerda's index has no artist by (none it found is a strong match, as "Bomba Estereo" isn't for
-    "soda stereo"), under a letter of its listings not read yet (``search.lacuerda_unlisted``, with the Ultimate
-    Guitar index's answer ``ug``): the name whose page Read LaCuerda's page reads, and the letter."""
-    from caracole.search import STRONG, lacuerda_unlisted
+    "soda stereo", nor a song: "como camaron" is Estopa's title), under a letter of its listings not read yet
+    (``search.lacuerda_unlisted``, with the Ultimate Guitar index's answer ``ug`` and LaCuerda's): the name whose
+    page Read LaCuerda's page reads, and the letter."""
+    from caracole.search import lacuerda_unlisted
 
-    if any(a.score >= STRONG for a in lc_artists):
-        return None
-    found = lacuerda_unlisted(conn, q, ug.artists, ug.songs, ug.lead)
+    found = lacuerda_unlisted(conn, q, ug.artists, ug.songs, ug.lead, lacuerda=[*lc_artists, *lc_songs])
     return {"name": found[0], "letter": found[1]} if found is not None else None
 
 

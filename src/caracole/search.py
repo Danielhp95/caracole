@@ -62,7 +62,9 @@ caracole has read): its songs as ``SiteHit``s, each with the page of the sheet a
 keeps (``sheet``), and the artists the query names as rows of their own (``SiteArtist``),
 since the index holds every artist but the songs only of the artists whose page caracole
 has read. ``lacuerda_artist`` and ``lacuerda_songs`` give one of its artists and the songs
-the index holds of theirs. LaCuerda has no search caracole uses: nothing here asks it.
+the index holds of theirs. While its listings aren't read whole, ``lacuerda_unlisted`` names the
+page that may tell whether LaCuerda has an artist it doesn't list, and ``lacuerda_leads`` says when
+its group comes first. LaCuerda has no search caracole uses: nothing here asks it.
 
 UG's sitemaps list artists with accented or non-Latin names only by bare ids,
 so the index can't see their tabs; ``bare_id_hint`` says what to do then.
@@ -517,7 +519,8 @@ def lacuerda_songs(conn: sqlite3.Connection, slug: str, *, title: str | None = N
 def lacuerda_left_out(conn: sqlite3.Connection) -> tuple[str, str] | None:
     """Why a search of LaCuerda's index finds less than LaCuerda has, worded to follow "LaCuerda's": ("empty",
     …) before the nightly run read any of its listings or artist pages, ("partial", …) while it reads its
-    listings, with the letters read whole so far; None once every listing page was read."""
+    listings, with the letters read whole so far (the artists counted include those of a letter read in part);
+    None once every listing page was read."""
     from caracole.lacuerda_index import index_state, letters_text
 
     state = index_state(conn)
@@ -526,33 +529,76 @@ def lacuerda_left_out(conn: sqlite3.Connection) -> tuple[str, str] | None:
     if state.complete:
         return None
     letters = letters_text(state.letters)
-    those = f", those of {letters}" if letters else ""
+    whole = f", with {letters} read whole" if letters else ""
     return "partial", (f"index is still being read: {state.artists:,} artist{'' if state.artists == 1 else 's'} so "
-                       f"far{those}; the nightly run reads the rest")
+                       f"far{whole}; the nightly run reads the rest")
 
 
 def lacuerda_unlisted(conn: sqlite3.Connection, query: str, artists: Sequence[ArtistHit] = (),
-                      songs: Sequence[IndexHit] = (), lead: str | None = None) -> tuple[str, str] | None:
+                      songs: Sequence[IndexHit] = (), lead: str | None = None, *,
+                      lacuerda: Sequence[SiteHit | SiteArtist] = (), artist: bool = False) -> tuple[str, str] | None:
     """For a query LaCuerda's index has no artist by, while it hasn't read whole the listing of the letter their
     name would be in (``lacuerda_index.unread_letter``): the name whose page can tell whether LaCuerda has them,
-    and that letter as LaCuerda's menu names it ("E"). The Ultimate Guitar index's answer (``artists``, ``songs``,
-    ``lead``, as ``find_index`` gives them) says what the query names: a song by its title alone that leads
-    ("creep", beside the artist The Creep) is no name, so none; else the artist that leads, or the artist of a
-    strong song by its artist and title ("Estopa" for "estopa como camaron"); else the query. None when the
-    index can tell."""
+    and that letter as LaCuerda's menu names it ("E"). None when the index can tell.
+
+    LaCuerda's own answer (``lacuerda``: ``search_lacuerda``'s artists and songs) tells first: a strong artist is
+    the name, listed, and a strong song by its title alone ("como camaron") is a title, by its artist's name
+    (and its title: "estopa como camaron") an artist the index holds, so none. Then the Ultimate Guitar
+    index's answer (``artists``, ``songs``, ``lead``, as ``find_index`` gives them): a song by its title alone
+    that leads ("creep", beside the artist The Creep) is no name, so none; else the artist that leads, or the
+    artist of a strong song by its artist and title, or by part of the artist's name ("Enrique Bunbury" for
+    "bunbury"). Else none when LaCuerda has an artist whose whole name is among the query's words (their row,
+    ``lacuerda_index.NAMED``, says it); else the artist of an Ultimate Guitar song read by both its names,
+    however weakly, whose whole name starts or ends the query (``_named_at_an_end``: "Estopa" for "estopa como
+    camaron", whose page may hold the title Ultimate Guitar lacks); else the query. With ``artist``
+    (``--artist NAME``) the query is the name."""
     from caracole.lacuerda_index import letters_text, unread_letter
 
-    strong = [h for h in songs if h.score >= STRONG]
-    first = strong[0] if strong else None
-    name = query
-    if artists and (lead == "artist" or first is None or first.via != "title"):
-        name = artists[0].artist
-    elif first is not None and first.via == "both" and first.artist:
-        name = first.artist
-    elif first is not None and first.via == "title":
+    if any(h.score >= STRONG for h in lacuerda):
         return None
+    name = query
+    if not artist:
+        strong = [h for h in songs if h.score >= STRONG]
+        first = strong[0] if strong else None
+        if artists and (lead == "artist" or first is None or first.via != "title"):
+            name = artists[0].artist
+        elif first is not None and first.via != "title" and first.artist and not no_ones(first.artist_key):
+            name = first.artist
+        elif first is not None and first.via == "title":
+            return None
+        elif any(isinstance(a, SiteArtist) and a.via == "both" for a in lacuerda):
+            return None
+        else:
+            name = _named_at_an_end(query, songs) or query
     letter = unread_letter(conn, name)
     return (name, letters_text([letter])) if letter is not None else None
+
+
+def _named_at_an_end(query: str, songs: Sequence[IndexHit]) -> str | None:
+    """The artist of an Ultimate Guitar song the search read by both its names (``songs``, however weak), whose
+    whole name is a run of the query's words at its start or its end, fewer than all of them: the longest run's,
+    the better song's at a tie. None for none. An artist the search didn't read so is none: "Fito" is no
+    answer for "fito paez", nor "Heroes" for "heroes del silencio entre dos tierras"."""
+    words = _tokens(query)
+    runs: dict[str, int] = {}
+    for n in range(len(words) - 1, 0, -1):
+        for run in (words[:n], words[-n:]):
+            for form in name_forms(" ".join(run)):
+                runs.setdefault(compact(form), n)
+    best: tuple[int, str] | None = None
+    for h in songs:
+        n = runs.get(compact(h.artist_key), 0) if h.via == "both" and h.artist and not no_ones(h.artist_key) else 0
+        if n and (best is None or n > best[0]):
+            best = n, h.artist
+    return best[1] if best is not None else None
+
+
+def lacuerda_leads(ug: IndexFound, lacuerda: Sequence[SiteArtist]) -> bool:
+    """Whether LaCuerda's group comes before Ultimate Guitar's: it has an artist whose whole name is the query
+    ("andres calamaro"), and the Ultimate Guitar index has no artist the query names and no strong song (only
+    Javier Calamaro's). The lookup page's Enter then opens that artist's songs, which asks nothing."""
+    return (any(a.score >= 100 for a in lacuerda) and not ug.artists
+            and not any(h.score >= STRONG for h in ug.songs))
 
 
 def _lacuerda_song(h: LaCuerdaHit) -> SiteHit:

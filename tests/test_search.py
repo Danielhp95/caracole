@@ -1459,7 +1459,7 @@ def test_cli_offers_to_read_the_page_of_an_artist_under_a_letter_lacuerda_hasnt_
     kv_set_json(conn, li.PAGES_KEY, {f"tabs/{x}/index0.html": {"pages": ["index0.html"]} for x in "ab"})
     conn.commit()
     partial = " ".join(lc_part(run(tmp_path, "search", "estopa").output).split())
-    assert "still being read: 1 artist so far, those of A, B;" in partial
+    assert "still being read: 1 artist so far, with A, B read whole;" in partial
     assert offer + " (a request for each spelling of the name tried, usually one)." in partial
     by_artist = " ".join(lc_part(run(tmp_path, "search", "--artist", "estopa").output).split())
     assert "No artist named estopa in LaCuerda's index" in by_artist and offer in by_artist
@@ -1486,6 +1486,72 @@ def test_the_name_whose_lacuerda_page_may_tell_is_the_one_the_query_names_on_ult
     assert lacuerda_unlisted(conn, "!!!") is None  # no page's address can be made of it
 
 
+def test_lacuerdas_own_answer_and_a_name_at_an_end_of_the_query_say_whose_page_may_tell(conn):
+    # "estopa como camaron" and "como camaron" while E isn't listed whole: no page that can't exist is offered.
+    from dataclasses import replace
+
+    from caracole import lacuerda_index as li
+    from caracole.db import kv_set_json
+    from caracole.lacuerda import LCArtist
+    from caracole.search import IndexHit, SiteArtist, SiteHit, lacuerda_unlisted
+
+    index(conn, [(9401, "estopa", "la-raja-de-tu-falda", "chords"), (9402, "el-barrio", "mi-amor", "chords")])
+    li.store_artists(conn, "tabs/b/index0.html", [LCArtist("el_barrio", "El Barrio", 30)])
+    kv_set_json(conn, li.PAGES_KEY, {f"tabs/{x}/index0.html": {"pages": ["index0.html"]} for x in "ab"})
+    weak = IndexHit("estopa", "como-el-agua", {"chords": 1}, 73.7, "u", artist="Estopa", title="Como El Agua",
+                    via="both")
+    # Estopa's page not read: the artist at the query's start names the page, never the whole query.
+    assert lacuerda_unlisted(conn, "estopa como camaron", [], [weak], "song") == ("Estopa", "E")
+    # Estopa's page read: LaCuerda's own strong song says it, by both names or by its title alone.
+    camaron = SiteHit("lacuerda", "Como Camarón", LC + "estopa/como_camaron", 100.0, "Estopa", "estopa",
+                      "como-camaron", via="both")
+    assert lacuerda_unlisted(conn, "estopa como camaron", [], [weak], "song", lacuerda=[camaron]) is None
+    assert lacuerda_unlisted(conn, "como camaron", lacuerda=[replace(camaron, via="title")]) is None
+    # LaCuerda's artist whose whole name is among the query's words: their row says it.
+    el_barrio = SiteArtist("lacuerda", "El Barrio", "el_barrio", LC + "el_barrio/", 80.0, via="both")
+    assert lacuerda_unlisted(conn, "el barrio como camaron", [], [], "song", lacuerda=[el_barrio]) is None
+    # An artist at an end of the query that Ultimate Guitar's search didn't read as a song's is no answer: "Fito"
+    # (an artist there too) for "fito paez", whose accented name Ultimate Guitar's sitemaps hide.
+    index(conn, [(9403, "fito", "algo", "chords")])
+    fitoor = IndexHit("misc-soundtrack", "fitoor-pashmina", {"chords": 1}, 70.0, "u", artist="Misc Soundtrack",
+                      title="Fitoor Pashmina", via="title")
+    assert lacuerda_unlisted(conn, "fito paez", [], [fitoor], "song") == ("fito paez", "F")
+    # Ultimate Guitar's strong songs by part of their artist's name name them: Enrique Bunbury's E, not bunbury's B.
+    bunbury = IndexHit("enrique-bunbury", "lady-blue", {"chords": 2}, 90.0, "u", artist="Enrique Bunbury",
+                       title="Lady Blue", via="artist")
+    assert lacuerda_unlisted(conn, "bunbury", [], [bunbury], "song") == ("Enrique Bunbury", "E")
+    # An artist only near the name is no answer (Bomba Estereo for "soda stereo"); a name given as an artist's
+    # (``--artist``) is the name, whatever its words.
+    bomba = SiteArtist("lacuerda", "Bomba Estereo", "bomba_estereo", LC + "bomba_estereo/", 75.0)
+    assert lacuerda_unlisted(conn, "soda stereo", lacuerda=[bomba]) == ("soda stereo", "S")
+    assert lacuerda_unlisted(conn, "estopa como camaron", artist=True) == ("estopa como camaron", "E")
+
+
+ESTOPA_UG = (9401, "estopa", "como-el-agua", "chords")  # a title near the query's, which UG reads by both names
+
+
+def test_cli_offers_no_page_lacuerdas_own_answer_already_names(tmp_path):
+    # LaCuerda's listings read up to B, and Estopa's E not yet: before their page is read, the artist the query
+    # starts with is the page offered; after, LaCuerda's own songs say who it names, and nothing is offered.
+    from helpers.lacuerda_site import artist_page
+
+    from caracole import lacuerda_index as li
+    from caracole.db import kv_set_json
+    from caracole.lacuerda import LCArtist
+
+    conn = seed(tmp_path, rows=ROWS + [ESTOPA_UG])
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist("andres_calamaro", "Andrés Calamaro", 325)])
+    kv_set_json(conn, li.PAGES_KEY, {f"tabs/{x}/index0.html": {"pages": ["index0.html"]} for x in "ab"})
+    conn.commit()
+    before = " ".join(lc_part(run(tmp_path, "search", "estopa como camaron").output).split())
+    assert 'caracole lacuerda --artist "Estopa" reads the page of “Estopa” now' in before
+    li.store_artist_page(conn, "estopa", artist_page("Estopa", "estopa", ("como_camaron", "Como Camarón", "RRT-213")))
+    conn.commit()
+    for query in ("estopa como camaron", "como camaron"):
+        lc = lc_part(run(tmp_path, "search", query).output)
+        assert "[LaCuerda] Estopa - Como Camarón" in lc and "hasn't listed" not in lc, (query, lc)
+
+
 def test_cli_says_when_lacuerdas_index_is_empty_or_still_being_read(tmp_path):
     from caracole.db import kv_set_json
 
@@ -1498,4 +1564,4 @@ def test_cli_says_when_lacuerdas_index_is_empty_or_still_being_read(tmp_path):
     conn.commit()
     partial = lc_part(run(tmp_path, "search", "estopa").output)
     assert "Estopa · LaCuerda" in partial
-    assert "LaCuerda's index is still being read: 3 artists so far, those of A, B;" in " ".join(partial.split())
+    assert "LaCuerda's index is still being read: 3 artists so far, with A, B read whole;" in " ".join(partial.split())

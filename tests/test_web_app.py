@@ -1532,7 +1532,7 @@ def test_the_search_lists_lacuerdas_artists_and_songs_from_its_index(app, conn):
     data = as_json(get(app, "/api/search?q=estopa"))
     assert "lacuerda" not in {s["source"] for s in data["skipped"]}
     assert data["partial"] == [{"source": "lacuerda", "name": "LaCuerda", "why": (
-        "its index is still being read: 2 artists so far, those of E, J; the nightly run reads the rest")}]
+        "its index is still being read: 2 artists so far, with E, J read whole; the nightly run reads the rest")}]
 
 
 def test_a_complete_lacuerda_index_is_searched_with_nothing_said(app, conn):
@@ -1604,6 +1604,46 @@ def test_the_search_offers_to_read_the_page_of_a_name_lacuerda_hasnt_listed_yet(
     data = as_json(get(app, "/api/search?q=soda%20stereo"))
     assert [a["artist"] for a in data["lacuerda_artists"]] == ["Bomba Estereo"]
     assert data["lacuerda_unlisted"] == {"name": "soda stereo", "letter": "S"}
+
+
+def test_the_search_offers_no_page_lacuerdas_own_answer_already_names(app, conn):
+    # E's listing not read whole, Estopa's page read: LaCuerda's strong songs say who the query names, and no page
+    # that can't exist ("estopa_como_camaron", "como_camaron") is offered.
+    from caracole.ug.index import mark_built, upsert_rows
+
+    lacuerda_index(conn, letters=("j",))
+    for q in ("estopa%20como%20camaron", "como%20camaron"):
+        data = as_json(get(app, f"/api/search?q={q}"))
+        assert [h["title"] for h in data["lacuerda"]][:1] == ["Como Camarón"], q
+        assert data["lacuerda_unlisted"] is None, q
+    # Ultimate Guitar's songs by part of an artist's name name them: Enrique Bunbury's E, for "bunbury".
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(3101, "enrique-bunbury", "lady-blue", "chords", "enrique-bunbury/lady-blue-chords-3101")],
+                "1", when)
+    mark_built(conn, when)
+    conn.commit()
+    assert as_json(get(app, "/api/search?q=bunbury"))["lacuerda_unlisted"] == {"name": "Enrique Bunbury", "letter": "E"}
+
+
+def test_lacuerda_leads_with_the_artist_the_query_names_when_ultimate_guitar_has_nothing_strong(app, conn):
+    # "andres calamaro": Ultimate Guitar's index has Javier Calamaro alone, LaCuerda's has Andrés Calamaro.
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+    from caracole.ug.index import mark_built, upsert_rows
+
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(3201, "javier-calamaro", "amapolas", "chords", "javier-calamaro/amapolas-chords-3201"),
+                       (3202, "estopa", "la-raja-de-tu-falda", "chords", "estopa/la-raja-de-tu-falda-chords-3202")],
+                "1", when)
+    mark_built(conn, when)
+    lacuerda_index(conn)
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist("andres_calamaro", "Andrés Calamaro", 325)])
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=andres%20calamaro"))
+    assert [a["artist"] for a in data["lacuerda_artists"]] == ["Andrés Calamaro"]
+    assert data["lacuerda_leads"] is True and data["best"] is None  # Enter opens their Songs, which asks nothing
+    estopa = as_json(get(app, "/api/search?q=estopa"))  # Ultimate Guitar names them too: its rows come first
+    assert estopa["artists"] and estopa["lacuerda_artists"] and estopa["lacuerda_leads"] is False
 
 
 def test_a_page_read_by_name_is_searched_at_once_and_its_request_says_what_lacuerda_answered(cfg, conn):

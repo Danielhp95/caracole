@@ -80,9 +80,13 @@ songs.py's, in the `removed` table).
   LaCuerda's index (lacuerda_index.py `find`): its songs as `SiteHit`s with the page of the
   sheet a lookup keeps (`sheet`), its artists as `SiteArtist` rows (`known`: the songs it holds
   of theirs, 0 until caracole read their page), `lacuerda_left_out` what it lacks (empty,
-  or the letters read so far), and `lacuerda_unlisted` a name it has no artist by under a
+  or the letters read whole so far), and `lacuerda_unlisted` a name it has no artist by under a
   letter not read whole yet (`lacuerda_index.unread_letter`), whose page the user may have
-  read (`caracole lacuerda --artist NAME`), never a title Ultimate Guitar's index reads as one.
+  read (`caracole lacuerda --artist NAME`): never one LaCuerda's own strong songs or artists
+  name, nor a title Ultimate Guitar's index reads as one, and before the whole query the
+  artist at an end of it whom Ultimate Guitar's search read as a song's (`_named_at_an_end`:
+  "Estopa" for "estopa como camaron", never "Fito" for "fito paez");
+  `lacuerda_leads`, LaCuerda's group first when it alone has the artist the query names.
   Its prefilter reads
   ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
   must find exactly what a `LIKE` scan of `ug_index` finds
@@ -119,8 +123,8 @@ songs.py's, in the `removed` table).
   its script, `createElement` and `textContent` only, allowed by hash, connects to the
   server alone; its results are the library's rows, `library_page.ROWS_SCRIPT` and
   `ROWS_STYLE` through its row builders, `ugHit` and `artistHit` too, and a song you have opens its viewer;
-  Enter acts on `/api/search`'s `best`, or opens the leading artist's songs, and never
-  spends a request without one),
+  Enter acts on `/api/search`'s `best`, or opens the leading artist's songs (LaCuerda's when
+  `lacuerda_leads`), and never spends a request without one),
   pages.py, server.py (`http.server`). The library page is
   library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
   /jobs.json how they go. Its one bar filters your songs as you type and, on Enter or Search

@@ -29,7 +29,7 @@ import re
 import sqlite3
 import sys
 import textwrap
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import closing, nullcontext
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NoReturn
@@ -309,6 +309,7 @@ def _lacuerda_listing(conn: sqlite3.Connection, ask: _Ask, limit: int, ug: _List
         return _Listing((f"  Nothing yet: LaCuerda's {left[1]} (`caracole lacuerda --index` reads them now, "
                          "a run's budget at a time).", *_lacuerda_offer(conn, ask, ug)))
     artists: list[SiteArtist] = []
+    songs: list[SiteHit] = []
     if ask.artist is not None:
         parts, found = _lacuerda_artist_parts(conn, ask, limit)
         artists = [found] if found is not None else []
@@ -337,21 +338,23 @@ def _lacuerda_listing(conn: sqlite3.Connection, ask: _Ask, limit: int, ug: _List
     if left is not None:
         parts += ["", _fill(f"LaCuerda's {left[1]}.")]
     if not any(a.score >= STRONG for a in artists):  # none of theirs it found is the name ("Bomba Estereo")
-        parts += _lacuerda_offer(conn, ask, ug)
+        parts += _lacuerda_offer(conn, ask, ug, [*artists, *songs])
     return _Listing(tuple(parts))
 
 
-def _lacuerda_offer(conn: sqlite3.Connection, ask: _Ask, ug: _Listing | None) -> list[str]:
+def _lacuerda_offer(conn: sqlite3.Connection, ask: _Ask, ug: _Listing | None,
+                    lacuerda: Sequence[SiteHit | SiteArtist] = ()) -> list[str]:
     """For a name LaCuerda's index has no artist by, while its listing of their letter isn't read
     (``search.lacuerda_unlisted``), the line that reads the page of that name now: ``--artist``'s, or the one
-    the query names; none when the index can tell, and for a title (``--title``, or a query Ultimate Guitar's
-    index reads as one)."""
+    the query names; none when the index can tell (LaCuerda's own answer, ``lacuerda``, among it), and for a
+    title (``--title``, or a query Ultimate Guitar's or LaCuerda's index reads as one)."""
     from caracole.search import lacuerda_unlisted
 
     if ask.title is not None:
         return []
-    found = (lacuerda_unlisted(conn, ask.artist) if ask.artist is not None else
-             lacuerda_unlisted(conn, ask.text, *((ug.artists, ug.songs, ug.lead) if ug is not None else ())))
+    found = (lacuerda_unlisted(conn, ask.artist, artist=True) if ask.artist is not None else
+             lacuerda_unlisted(conn, ask.text, *((ug.artists, ug.songs, ug.lead) if ug is not None else ()),
+                               lacuerda=lacuerda))
     if found is None:
         return []
     name, letter = found

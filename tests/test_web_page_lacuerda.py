@@ -228,6 +228,40 @@ def test_the_lookup_page_lists_lacuerda_after_ultimate_guitar(cfg, live, browser
     assert args[:3] == ("get", "--progress", f"--lacuerda={LC}estopa/tu_calorro") and args[-2:] == ("Estopa", "Tu Calorro")
 
 
+def calamaro(cfg):
+    """Ultimate Guitar's index knows only Javier Calamaro; LaCuerda's listings have Andrés Calamaro, page unread."""
+    sites(cfg, ug=[("javier-calamaro", "amapolas", 3), ("javier-calamaro", "euforia-y-furia", 2)])
+    lacuerda(cfg)
+    conn = db.connect(cfg.db_path)
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist("andres_calamaro", "Andrés Calamaro", 325)])
+    conn.commit()
+    conn.close()
+
+
+def test_lacuerda_comes_first_with_the_artist_it_alone_has_by_that_name(cfg, live, browser):
+    # "andres calamaro": Ultimate Guitar's weak rows (Javier Calamaro's) come after LaCuerda's Andrés Calamaro.
+    base, _, _ = live
+    calamaro(cfg)
+    search(browser, base, "andres calamaro")
+    assert browser.wait(f"{LC_ROWS}.length === 1")
+    assert [g.split(" · ")[0] for g in browser.js(GROUPS)] == ["LaCuerda", "Ultimate Guitar"]
+
+
+def test_enter_on_the_lookup_page_opens_the_artist_lacuerda_alone_has_by_that_name(cfg, live, browser):
+    base, queue, _ = live
+    calamaro(cfg)
+    browser.open(base + "lookup?q=andres%20calamaro")
+    assert browser.wait(f"{LC_ROWS}.length === 1")
+    groups = browser.js("[...document.querySelectorAll('#results .group')].map((g) => g.textContent)")
+    assert groups == ["On LaCuerda", "On Ultimate Guitar"], groups
+    browser.js("document.getElementById('q').focus()")
+    browser.press("Enter")
+    assert browser.wait("!!document.querySelector('#results .artist-head h2')")
+    assert browser.js("document.querySelector('#results .artist-head h2').textContent") == "Andrés Calamaro"
+    assert browser.wait("!!document.querySelector('#results .read-page button')")
+    assert queue.snapshot() == []  # Enter asked nothing: reading their page is the button's
+
+
 def test_lacuerdas_rows_and_the_offer_to_read_a_page_fit_a_phone(cfg, live, tmp_path):
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
