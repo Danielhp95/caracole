@@ -130,7 +130,8 @@ def test_the_style_puts_key_and_capo_under_the_title_and_colours_the_chords():
     assert pdf["formats"]["title"]["title"] == ["%{title}", "", ""]
     assert pdf["formats"]["title"]["subtitle"] == ["%{subtitle}", "", ""]
     assert pdf["fonts"]["chord"]["name"] == "Helvetica-Bold" and pdf["fonts"]["chord"]["color"] == "#b4441e"
-    assert pdf["fonts"]["comment"] == {"name": "Helvetica-Bold", "size": 9, "color": "#b4441e"}  # no background
+    # White, not the theme's foreground-light, which chordpro would put behind every section name.
+    assert pdf["fonts"]["comment"] == {"name": "Helvetica-Bold", "size": 9, "color": "#b4441e", "background": "#ffffff"}
     assert pdf["diagrams"]["show"] == "top"  # the shapes before the song, not after it
     # The chord boxes of style C as the sketches page rendered it (B's 9 pt boxes, smaller in two columns)
     assert {k: pdf["diagrams"][k] for k in ("width", "height", "hspace", "dotsize")} == {
@@ -450,6 +451,7 @@ def test_render_real_chordpro_binary(tmp_path):
     assert any(font == "Helvetica" and "Tiny test" in shown for font, shown in strings)
     assert {"G", "D", "Em", "C", "G/B", "Am", "F"} <= {s.strip() for f, s in strings if f == "Helvetica-Bold"}
     assert b"0.705882 0.266667 0.117647 rg" in b"".join(_streams(pdf))  # the chords' colour, #b4441e
+    assert b"0.937255 0.92549 0.901961 rg" not in b"".join(_streams(pdf))  # no box behind "VERSE 1": #efece6
 
 
 @pytest.mark.chordpro

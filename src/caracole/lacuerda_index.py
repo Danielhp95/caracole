@@ -40,7 +40,6 @@ which letter a name would be, for a search to offer reading the page of that nam
 from __future__ import annotations
 
 import logging
-import re
 import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -77,7 +76,16 @@ from caracole.lacuerda import (
     song_url,
     version_url,
 )
-from caracole.normalize import fold, has_han, identity_key, name_forms, romanize
+from caracole.normalize import (
+    PINYIN_PARTIAL_SCALE,
+    fold,
+    has_han,
+    holds_run,
+    identity_key,
+    name_forms,
+    name_words,
+    romanize,
+)
 
 log = logging.getLogger(__name__)
 
@@ -562,7 +570,9 @@ def _rows_like(conn: sqlite3.Connection, patterns: Sequence[str], extra: Sequenc
     """The rows whose keys hold one of ``patterns``; those holding more of them and of ``extra`` first,
     then artists, then the shortest keys: at most ``ROWS_READ``."""
     def holds(n: int) -> str:
-        return f"(artist_key LIKE ?{n} OR title_key LIKE ?{n})"
+        # The keys hyphenated, and written together: "banma" is in "ban-ma-ban-ma", a Chinese name's pinyin.
+        return (f"(artist_key LIKE ?{n} OR title_key LIKE ?{n} OR replace(artist_key, '-', '') LIKE ?{n} "
+                f"OR replace(title_key, '-', '') LIKE ?{n})")
 
     every = [*patterns, *extra]
     where = " OR ".join(holds(n) for n in range(1, len(patterns) + 1))
@@ -575,36 +585,25 @@ def _rows_like(conn: sqlite3.Connection, patterns: Sequence[str], extra: Sequenc
 
 # --- words and scores, as search.py has them ------------------------------------------------
 
-_WORD_SPLIT = re.compile(r"[\W_]+")
-_APOSTROPHES = re.compile(r"['’‘`´ʼ]")
-
-
-def _tokens(text: str) -> list[str]:
-    """A text's words as slug keys make them: accents folded, apostrophes, "and" and a leading "the"
-    dropped; Chinese runs kept apart."""
-    words = [w for w in _WORD_SPLIT.split(_APOSTROPHES.sub("", fold(text))) if w]
-    kept = [w for w in words if w != "and"] or words
-    if len(kept) > 1 and kept[0] == "the":
-        kept = kept[1:]
-    return kept
-
-
 def _forms(text: str) -> list[str]:
     """The query as words: as written, as an identity key's title folds it (number words as digits) and
     as an artist's (a leading article and "y" dropped); Chinese in pinyin too."""
-    forms = [" ".join(_tokens(text)),
+    forms = [" ".join(name_words(text)),
              title_key(text).replace("-", " "),
              name_key(text).replace("-", " ")]
     if has_han(text):
-        forms.append(" ".join(fold(romanize(t)) if has_han(t) else t for t in _tokens(text)))
+        forms.append(" ".join(fold(romanize(t)) if has_han(t) else t for t in name_words(text)))
     return [f for f in dict.fromkeys(forms) if f]
 
 
 def _queries(text: str) -> list[_Query]:
-    plain = "".join(_tokens(text))
+    """The query's forms, ready to be scored. A Chinese query's forms all carry each Chinese word's pinyin
+    (``_Query.runs``): the pinyin the keys make of it counts only as whole words of a name."""
+    plain = "".join(name_words(text))
     if len(plain) < (2 if has_han(plain) else 3):
         return []
-    return [_Query(form) for form in _forms(text)]
+    runs = tuple("".join(fold(s) for s in romanize(t).split()) for t in name_words(text) if has_han(t))
+    return [_Query(form, runs) for form in _forms(text)]
 
 
 def _patterns(text: str) -> tuple[list[str], list[str]]:
@@ -612,7 +611,10 @@ def _patterns(text: str) -> tuple[list[str], list[str]]:
     up to two more that put the rows holding them first. Chinese words are their pinyin syllables in order;
     a name of initials is its hyphenated and its compact key."""
     found: list[tuple[int, str]] = []
-    for form in _forms(text):
+    # A Chinese query's pinyin forms are its syllables apart: only the form that still holds the characters
+    # makes patterns, so a word is its syllables in order and never one pattern per syllable.
+    forms = [" ".join(name_words(text))] if has_han(text) else _forms(text)
+    for form in forms:
         for token in form.split():
             if has_han(token):
                 syllables = romanize(token).split()
@@ -623,7 +625,7 @@ def _patterns(text: str) -> tuple[list[str], list[str]]:
                 found.append((len(token), f"%{token}%"))
     long = [(n, p) for n, p in found if n >= 3]
     if not long:  # names made of initials
-        latin = [t for t in _tokens(text) if not has_han(t)]
+        latin = [t for t in name_words(text) if not has_han(t)]
         key = "-".join(latin)
         if len("".join(latin)) >= 2:
             long = [(len(key), f"%{key}%"), (len(key), f"%{key.replace('-', '')}%")]
@@ -636,20 +638,30 @@ def _patterns(text: str) -> tuple[list[str], list[str]]:
 class _Query:
     """One form of a query, ready to be scored against many rows (space-separated words)."""
 
-    def __init__(self, text: str):
+    def __init__(self, text: str, runs: tuple[str, ...] = ()):
         self.text = text
         self.compact = text.replace(" ", "")
+        self.runs = runs
+
+    def holds(self, *names: str) -> bool:
+        """Whether each Chinese word's pinyin is a whole run of the words of one of ``names`` (as search.py's
+        ``_Query.holds``). True for a query with no Chinese."""
+        words = [name.split() for name in names]
+        return all(any(holds_run(w, run) for w in words) for run in self.runs)
 
     def artist(self, artist: str) -> tuple[float, str]:
         """How well the query names an artist, and the reading: 100 for the whole name, at most 90 for a
         part of it ("artist"); ``NAMED`` for the whole name, as words of its own, among other words of the
         query, which may be a title the index doesn't hold ("both")."""
         q, qc, a = self.text, self.compact, artist.replace(" ", "")
-        best = max(fuzz.ratio(q, artist), fuzz.ratio(qc, a))
-        if len(q) < len(artist):
-            best = max(best, PARTIAL_SCALE * fuzz.partial_ratio(q, artist))
-        if len(qc) < len(a):
-            best = max(best, PARTIAL_SCALE * fuzz.partial_ratio(qc, a))
+        best = 0.0
+        if self.holds(artist):
+            scale = PINYIN_PARTIAL_SCALE if self.runs else PARTIAL_SCALE
+            best = max(fuzz.ratio(q, artist), fuzz.ratio(qc, a))
+            if len(q) < len(artist):
+                best = max(best, scale * fuzz.partial_ratio(q, artist))
+            if len(qc) < len(a):
+                best = max(best, scale * fuzz.partial_ratio(qc, a))
         words, name = q.split(), artist.split()
         if best < NAMED and 0 < len(name) < len(words) and any(
                 words[i:i + len(name)] == name for i in range(len(words) - len(name) + 1)):
@@ -660,9 +672,12 @@ class _Query:
         """How well the query names a song, by reading, in ``READINGS``' order: as its title, as both its
         names (their words in any order), as its artist. A part of the names counts for the title or the
         artist when it lies within that name, else for both."""
+        if self.runs and not self.holds(artist, title):
+            return (0.0, 0.0, 0.0)
         q, qc = self.text, self.compact
         a, t = artist.replace(" ", ""), title.replace(" ", "")
         full = f"{artist} {title}"
+        scale = PINYIN_PARTIAL_SCALE if self.runs else PARTIAL_SCALE
         by = {"title": max(fuzz.ratio(q, title), fuzz.ratio(qc, t)),
               "both": max(fuzz.token_sort_ratio(q, full), fuzz.ratio(qc, a + t)),
               "artist": max(fuzz.ratio(q, artist), fuzz.ratio(qc, a))}
@@ -672,7 +687,7 @@ class _Query:
                 part = fuzz.partial_ratio_alignment(needle, names)
                 where = ("title" if part.dest_start >= edge else
                          "artist" if part.dest_end <= edge + gap else "both")
-                by[where] = max(by[where], PARTIAL_SCALE * part.score)
+                by[where] = max(by[where], scale * part.score)
         return by["title"], by["both"], by["artist"]
 
 

@@ -46,8 +46,11 @@ def artist_known(conn: sqlite3.Connection, artist_key: str) -> bool:
     return conn.execute("SELECT 1 FROM ug_index WHERE artist_key = ? LIMIT 1", (artist_key,)).fetchone() is not None
 
 
+ARTIST_URL_KV = "ug:artist_url:"  # kv: the artist page learned for an artist key, under this prefix
+
+
 def _artist_url_key(artist_key: str) -> str:
-    return f"ug:artist_url:{artist_key}"
+    return f"{ARTIST_URL_KV}{artist_key}"
 
 
 def learned_artist_url(conn: sqlite3.Connection, artist_key: str) -> str | None:

@@ -1565,3 +1565,59 @@ def test_cli_says_when_lacuerdas_index_is_empty_or_still_being_read(tmp_path):
     partial = lc_part(run(tmp_path, "search", "estopa").output)
     assert "Estopa · LaCuerda" in partial
     assert "LaCuerda's index is still being read: 3 artists so far, with A, B read whole;" in " ".join(partial.split())
+
+
+# --- removed songs ------------------------------------------------------------------------------
+
+
+def remove_song(conn, artist, title, when="2026-10-20T09:00:00+00:00"):
+    from caracole.songs import mark_removed
+
+    song = add_song(conn, artist, title)
+    mark_removed(conn, song, when)
+    conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))
+    return song
+
+
+def test_search_removed_scores_the_tombstones_names_chinese_as_pinyin(conn):
+    from caracole.search import RemovedHit, search_removed
+
+    remove_song(conn, "宋冬野", "斑马斑马")
+    remove_song(conn, "Plain Jane", "Nothing")
+    for q in ("斑马", "斑马斑马", "banma"):
+        hits = search_removed(conn, q)
+        assert [(h.artist, h.title) for h in hits] == [("宋冬野", "斑马斑马")], q
+        assert isinstance(hits[0], RemovedHit) and hits[0].removed_at.startswith("2026-10-20")
+        assert hits[0].key and hits[0].score >= 50 and hits[0].via in ("title", "artist", "both")
+    assert [h.artist for h in search_removed(conn, "ban ma")] == ["宋冬野"]
+    assert [h.title for h in search_removed(conn, "nothing")] == ["Nothing"]
+
+
+def test_a_removed_song_is_found_by_a_typo_and_is_never_a_library_hit_or_best(conn):
+    from caracole.search import find_index, found, search_removed
+
+    remove_song(conn, "Radiohead", "Creep")
+    assert [h.title for h in search_removed(conn, "radiohed crep")] == ["Creep"]
+    assert search_library(conn, "creep") == []
+    assert found([], find_index(conn, "creep")).best is None
+
+
+def test_cli_lists_a_removed_song_after_the_library_with_the_line_that_brings_it_back(tmp_path):
+    conn = seed(tmp_path)
+    remove_song(conn, "宋冬野", "斑马斑马")
+    for q in ("斑马", "斑马斑马", "banma"):
+        out = run(tmp_path, "search", q).output
+        assert "Removed from your library" in out, out
+        assert out.index("In your library") < out.index("Removed from your library") < out.index("On Ultimate Guitar")
+        assert "宋冬野 - 斑马斑马" in out and "removed 2026-10-20" in out
+        assert 'caracole add "宋冬野" "斑马斑马"' in out
+    assert "Removed from your library" not in run(tmp_path, "search", "creep").output
+
+
+def test_after_caracole_add_the_song_is_in_the_library_group_and_not_the_removed_one(tmp_path):
+    conn = seed(tmp_path)
+    remove_song(conn, "宋冬野", "斑马斑马")
+    assert run(tmp_path, "add", "宋冬野", "斑马斑马").exit_code == 0
+    out = run(tmp_path, "search", "banma").output
+    assert "Removed from your library" not in out
+    assert "宋冬野 - 斑马斑马" in out.split("On Ultimate Guitar")[0]

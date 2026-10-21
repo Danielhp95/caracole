@@ -227,8 +227,13 @@ def _index(ctx: StepContext) -> StepResult:
 
 def _match(ctx: StepContext) -> StepResult:
     from caracole.match import match_all
+    from caracole.ug.artist_tabs import backfill
     from caracole.ug.index import index_state
 
+    # Once, the artist pages caracole read before it kept their tabs for searches, from its HTTP cache: no
+    # request, so here, where nothing waits for Ultimate Guitar's cooldown (ug/artist_tabs.py).
+    if (ug := ctx.services.clients.get("ug")) is not None:
+        backfill(ctx.conn, ug, ctx.overrides)
     state = index_state(ctx.conn)
     if state == "empty":
         # Matching against an empty index would mark every song not found (and put it on the
