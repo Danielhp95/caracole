@@ -43,6 +43,7 @@ from caracole.commands._common import (
     utcnow,
     write_pages,
 )
+from caracole.logs import plural
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -66,7 +67,7 @@ def register(app: typer.Typer) -> None:
         with exclusive(cfg, "songbook make", interactive=True), closing(open_db(cfg)) as conn:
             found = _songs(conn, songs)
             made = _do(lambda: make_songbook(_file(cfg), name, [f.song.display for f in found]))
-            typer.echo(f'Made the songbook "{made.name}": {_count(len(made.songs))}.')
+            typer.echo(f'Made the songbook "{made.name}": {plural(len(made.songs), "song")}.')
             seen: set[int] = set()
             for f in found:  # a song named twice is in it once
                 if f.song.id in seen:
@@ -91,7 +92,7 @@ def register(app: typer.Typer) -> None:
                 missing = sum(1 for e in songbook_entries(conn, cfg.library_dir, overrides, b) if e.cho is None)
                 without = f", {missing} without a sheet" if missing else ""
                 files = _files(cfg, b.folder)
-                typer.echo(f"{b.name}: {_count(len(b.songs))}{without} · {', '.join(files) or 'not made yet'}")
+                typer.echo(f"{b.name}: {plural(len(b.songs), "song")}{without} · {', '.join(files) or 'not made yet'}")
 
     @book.command("show")
     def show_cmd(ctx: typer.Context, name: str = typer.Argument(..., help="The songbook's name.")) -> None:
@@ -105,7 +106,7 @@ def register(app: typer.Typer) -> None:
         overrides = load_ovr(cfg)
         with closing(open_db(cfg)) as conn:
             entries = songbook_entries(conn, cfg.library_dir, overrides, b)
-        typer.echo(f"{b.name}: {_count(len(entries))}")
+        typer.echo(f"{b.name}: {plural(len(entries), "song")}")
         for n, e in enumerate(entries, start=1):
             shown = e.song.display if e.song is not None else e.text
             where = plays_in(e) if e.setting or e.version != Version() else None
@@ -342,10 +343,6 @@ def _setting_line(setting) -> str:
     parts = [p for p in (f"key {setting.key}" if setting.key else "", setting.mode or "",
                          f"capo {setting.capo}" if setting.capo is not None else "") if p]
     return ", ".join(parts) or "the sheet's own setting"
-
-
-def _count(n: int) -> str:
-    return f"{n} song" if n == 1 else f"{n} songs"
 
 
 def _files(cfg: Config, folder: str) -> list[str]:

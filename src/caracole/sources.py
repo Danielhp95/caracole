@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from caracole.config import Config
+from caracole.logs import plural
 from caracole.stamps import stamp as utc_stamp  # under its old name: spotify.py and wanted.py import it
 
 if TYPE_CHECKING:
@@ -116,9 +117,9 @@ class SourcesReport:
     def summary(self) -> str:
         """One line for the run report and ``caracole sync``; the lines' problems aren't in it."""
         w = self.wanted
-        line = f"wanted.txt {_count(w.seen, 'song')}, {w.new} new"
+        line = f"wanted.txt {plural(w.seen, 'song')}, {w.new} new"
         if w.errors:
-            line += f", {_count(len(w.errors), 'problem')}"
+            line += f", {plural(len(w.errors), 'problem')}"
         parts = [line]
         if self.spotify_state == "off":
             parts.append("Spotify off")
@@ -130,12 +131,12 @@ class SourcesReport:
         else:
             s = self.spotify
             line = (
-                f"Spotify {_count(s.seen, 'song')}, {s.new} new"
+                f"Spotify {plural(s.seen, 'song')}, {s.new} new"
                 if s is not None
                 else "Spotify failed"
             )
             if s is not None and s.removed:
-                line += f", {_count(s.removed, 'removed song')} left out"
+                line += f", {plural(s.removed, 'removed song')} left out"
             if self.spotify_state == "error" and self.spotify_message:
                 line += f" ({self.spotify_message})"
             parts.append(line)
@@ -237,10 +238,6 @@ def sync_sources(
         },
     )
     return report
-
-
-def _count(n: int, noun: str) -> str:
-    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
 def _stamp_or_none(value: str | None) -> str | None:

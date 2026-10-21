@@ -32,7 +32,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from caracole.logs import priority, provider_name
+from caracole.logs import plural, priority, provider_name
 from caracole.normalize import clean_title
 from caracole.stamps import shown as when  # the to-do page's time, kept under its old name
 
@@ -47,10 +47,6 @@ class _Song(Protocol):
 def song_name(song: _Song) -> str:
     """A song as the summary and the log show it: "Artist – Title", the title without its version suffix."""
     return f"{song.artist.strip()} – {clean_title(song.title)}"
-
-
-def plural(n: int, noun: str, many: str | None = None) -> str:
-    return f"{n} {noun if n == 1 else (many or noun + 's')}"
 
 
 def duration(seconds: float) -> str:

@@ -38,6 +38,7 @@ from caracole.commands._common import (
     utcnow,
     write_pages,
 )
+from caracole.logs import plural
 from caracole.stamps import shown
 
 if TYPE_CHECKING:
@@ -86,7 +87,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
         # and a partial one sends its song back to have its sheets ranked again.
         rescored = rescore_kept_sheets(conn, cfg.library_dir, cfg.rank)
         if rescored:
-            scored = f"Scored {_count(rescored, 'kept sheet')} against lyrics that came later."
+            scored = f"Scored {plural(rescored, 'kept sheet')} against lyrics that came later."
             if display:  # not about the song asked for
                 log.info(scored)
             else:
@@ -133,7 +134,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
         return
     typer.echo(_totals(stats, client.requests_made))
     if stats.budget_exhausted:
-        typer.echo(f"The UG budget of {_count(budget, 'request')} is spent; the rest waits for the next run.")
+        typer.echo(f"The UG budget of {plural(budget, 'request')} is spent; the rest waits for the next run.")
 
 
 def _send_back(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime) -> bool:
@@ -184,10 +185,6 @@ def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> S
     return song
 
 
-def _count(n: int, noun: str) -> str:
-    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
-
-
 def _line(song: Song, outcome: SongFetchOutcome, *, requests: bool = True) -> str:
     """One song's result, as ``Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)``;
     without ``requests``, the count is left to -v."""
@@ -200,16 +197,16 @@ def _line(song: Song, outcome: SongFetchOutcome, *, requests: bool = True) -> st
         parts.append(f"tab {outcome.tab}")
     line = f"{song.display}: {' · '.join(parts) or 'nothing kept'}"
     if not requests:
-        log.info("%s: %s", song.display, _count(outcome.requests, "UG request"))
+        log.info("%s: %s", song.display, plural(outcome.requests, "UG request"))
         return line
-    return f"{line} ({_count(outcome.requests, 'request')})"
+    return f"{line} ({plural(outcome.requests, 'request')})"
 
 
 def _not_done(song: Song, stats: FetchStats, budget: int, *, due: bool = True) -> str:
     """Why ``--song``'s song got no line of its own: an error, or the budget, before it was done.
     Neither is a miss, so it waits for the next run (``due``, as ``_send_back`` makes a matched song),
     or for you to ask again; a sheet the first pass kept stays."""
-    spent = f"the UG budget of {_count(budget, 'request')} is spent"
+    spent = f"the UG budget of {plural(budget, 'request')} is spent"
     if stats.sheets_done:
         if stats.failures:
             return f"{song.display}: sheet kept; its guitar parts wait for the next run ({stats.failures[0][1]})."
@@ -221,5 +218,5 @@ def _not_done(song: Song, stats: FetchStats, budget: int, *, due: bool = True) -
 
 
 def _totals(stats: FetchStats, requests: int) -> str:
-    done = _count(stats.songs_done, "song")
-    return f"{done} done, {stats.songs_failed} failed, {_count(requests, 'UG request')}."
+    done = plural(stats.songs_done, "song")
+    return f"{done} done, {stats.songs_failed} failed, {plural(requests, 'UG request')}."

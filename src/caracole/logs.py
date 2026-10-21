@@ -59,6 +59,11 @@ def provider_name(provider: str) -> str:
     return PROVIDER_NAMES.get(provider, provider)
 
 
+def plural(n: int, noun: str, many: str | None = None) -> str:
+    """A count and its noun, as every message says one: "1 song", "2 songs" (``many``, when not noun + "s")."""
+    return f"{n} {noun if n == 1 else (many or noun + 's')}"
+
+
 def request_line(provider: str, method: str, url: str, answer: str, *, cached: bool = False,
                  seconds: float | None = None, used: int, budget: int) -> str:
     """One request, as the log shows it at -v: who was asked what, what came back, how fast, and

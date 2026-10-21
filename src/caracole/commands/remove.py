@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import typer
 
 from caracole.commands._common import exclusive, fail, load_cfg, open_db, utcnow, warn, write_pages
+from caracole.logs import plural
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -88,9 +89,9 @@ def _remove_now(conn: sqlite3.Connection, cfg: Config, key: str) -> None:
         result = remove_song(conn, cfg, plan, now=utcnow())
     except RemovalError as e:
         fail(str(e))
-    files = f"deleted {_count(len(result.deleted), 'file')}"
+    files = f"deleted {plural(len(result.deleted), 'file')}"
     lines = len(result.wanted_lines)
-    wanted = f", took {_count(lines, 'line')} out of wanted.txt" if lines else ""
+    wanted = f", took {plural(lines, 'line')} out of wanted.txt" if lines else ""
     typer.echo(f"Removed {song.display}: {files}{wanted}.")
     _, stays, notes = describe(plan, cfg)
     _items("It left:", stays + [f"{plan.folder}/{name}: {why}" for name, why in result.kept[len(plan.keep):]])
@@ -156,7 +157,3 @@ def _items(heading: str, lines: list[str]) -> None:
 def _when(stamp: str) -> str:
     """"2026-10-19T12:00:00Z" as "2026-10-19 12:00 UTC"."""
     return f"{stamp[:10]} {stamp[11:16]} UTC" if len(stamp) >= 16 else stamp
-
-
-def _count(n: int, noun: str) -> str:
-    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"

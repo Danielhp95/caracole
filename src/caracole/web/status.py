@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from caracole.get import SHEET_FROM
+from caracole.logs import plural
 from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, Stage, Step
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
@@ -122,7 +123,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     """The job's line; ``song`` is None while the library has no such song; ``ahead``: the jobs before it;
     ``songbook_page``: for a songbook's change, its songbook's page (``songbooks.songbook_page``), if any."""
     if job.state == "queued":
-        return Line("queued", f"Queued behind {_count(ahead, 'request')}…" if ahead else "Queued…")
+        return Line("queued", f"Queued behind {plural(ahead, 'request')}…" if ahead else "Queued…")
     if job.state == "running":
         if job.stages:
             return Line("running", _stage_line(job.stages, new=song is None))
@@ -224,7 +225,3 @@ def _short(text: str) -> str:
         return text
     cut = text[: MAX_TEXT - 1].rsplit(" ", 1)[0].rstrip(" ,;:")
     return cut + "…"
-
-
-def _count(n: int, noun: str) -> str:
-    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"

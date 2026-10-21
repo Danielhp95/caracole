@@ -41,6 +41,7 @@ from caracole.commands._common import (
     utcnow,
     write_pages,
 )
+from caracole.logs import plural
 from caracole.stamps import shown
 
 if TYPE_CHECKING:
@@ -144,7 +145,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
     typer.echo(_totals(stats, runner.requests_made, cfg.provider(PROVIDER).budget))
     if stats.budget_exhausted:
         budget = cfg.provider(PROVIDER).budget
-        typer.echo(f"YouTube's budget of {_count(budget, 'yt-dlp run')} is spent; the songs left wait for the next run.")
+        typer.echo(f"YouTube's budget of {plural(budget, 'yt-dlp run')} is spent; the songs left wait for the next run.")
     if stats.downloaded:
         typer.echo("Next, `caracole autochords` works out the chords from the audio (the caracole-autochords unit "
                    "runs it after each nightly run).")
@@ -223,8 +224,4 @@ def _line(song: Song, outcome: str, record: Record) -> str:
 
 def _totals(stats: YouTubeStats, runs: int, budget: int) -> str:
     return (f"YouTube: {stats.downloaded} downloaded, {stats.missing} not there, {stats.unavailable} unavailable, "
-            f"{_count(stats.errors, 'error')} ({_count(runs, 'yt-dlp run')} of {budget}).")
-
-
-def _count(n: int, word: str) -> str:
-    return f"{n} {word}{'' if n == 1 else 's'}"
+            f"{plural(stats.errors, 'error')} ({plural(runs, 'yt-dlp run')} of {budget}).")

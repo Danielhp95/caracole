@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from caracole.commands._common import fail, load_cfg
+from caracole.commands._common import fail, load_cfg, warn
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -82,9 +82,8 @@ def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow
         fail(f"--allow-host: {e}", 2)
     app = WebApp(cfg, JobQueue(CaracoleRunner(config_path)), allowed=hosts, access_token=token)
     if address.strip("[]") not in LOOPBACK and token is None:
-        typer.secho(f"Listening on {address}: anyone who can reach it can read the library and request "
-                    "songs. On a LAN, give an access token with --token-file.", err=True,
-                    fg=typer.colors.YELLOW)
+        warn(f"Listening on {address}: anyone who can reach it can read the library and request "
+             "songs. On a LAN, give an access token with --token-file.")
     typer.echo("It answers to " + ", ".join(sorted(hosts)) + " and any IP address; --allow-host adds a name.")
     try:
         server.serve(app, address, port, announce=typer.echo)

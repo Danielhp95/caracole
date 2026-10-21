@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 import typer
 
 from caracole import db
-from caracole.commands._common import LOCK_NAME, exclusive, fail, load_cfg, open_db, utcnow, write_pages
+from caracole.commands._common import LOCK_NAME, exclusive, fail, load_cfg, open_db, utcnow, warn, write_pages
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -150,9 +150,9 @@ def _sync(cfg: Config) -> None:
         _write_pages(conn, cfg, _page_overrides(cfg))
     typer.echo(report.summary())
     for problem in report.wanted.errors:
-        _warn(problem)
+        warn(problem)
     if report.spotify_state == "auth_needed" and report.spotify_message:
-        _warn(f"Spotify: {report.spotify_message}")
+        warn(f"Spotify: {report.spotify_message}")
     if report.spotify_state == "off" and not cfg.wanted_file.exists():
         typer.echo(f"No {cfg.wanted_file} yet: `caracole add ARTIST TITLE` creates it.")
 
@@ -171,7 +171,7 @@ def _spotify_client(cfg: Config) -> SpotifyAPI | None:
     except SpotifyError:
         return None
     except Exception as e:  # noqa: BLE001 (Spotify is optional: nothing it raises stops the sync)
-        _warn(f"Spotify unavailable: {type(e).__name__}: {e}")
+        warn(f"Spotify unavailable: {type(e).__name__}: {e}")
         return None
 
 
@@ -384,7 +384,7 @@ def _page_overrides(cfg: Config) -> Overrides | None:
     try:
         return load_overrides(cfg.overrides_file)
     except OverridesError as e:
-        _warn(f"overrides: {e}\n_todo.md and index.html are left as they were until it's fixed.")
+        warn(f"overrides: {e}\n_todo.md and index.html are left as they were until it's fixed.")
         return None
 
 
@@ -408,7 +408,7 @@ def _add(cfg: Config, artist: str, title: str, album: str | None, duration_ms: i
     say_added(cfg, add_song(cfg, artist, title, album, duration_ms, lacuerda=lacuerda), album, duration_ms)
     if placeholder_artist(artist):
         name = " ".join(title.split())
-        _warn(f'"{" ".join(artist.split())}" is no one\'s name, and caracole looks a song up by its artist: '
+        warn(f'"{" ".join(artist.split())}" is no one\'s name, and caracole looks a song up by its artist: '
               f'it may never find this one. If you don\'t know the artist, caracole search "{name}" lists the '
               "songs of that title with theirs; then write the artist into its line in wanted.txt.")
 
@@ -430,7 +430,7 @@ def say_added(cfg: Config, added: AddedSong, album: str | None = None, duration_
     if added.db_error is not None:
         typer.echo(f"{done}.")
         log.info("Song %s", line.identity)
-        _warn(
+        warn(
             f"The song is in wanted.txt, but the database couldn't be updated ({added.db_error}); "
             "the next `caracole sync` or `caracole run` adds it."
         )
@@ -454,7 +454,7 @@ def say_added(cfg: Config, added: AddedSong, album: str | None = None, duration_
     for text in match_lines(added.match, lacuerda=added.lacuerda):
         typer.echo(text)
     for problem in added.problems:
-        _warn(problem)
+        warn(problem)
 
 
 def _would_change(line: WantedLine, album: str | None, duration_ms: int | None) -> bool:
@@ -468,7 +468,3 @@ def _would_change(line: WantedLine, album: str | None, duration_ms: int | None) 
         line.duration_ms if duration_ms is None else duration_ms,
     )
     return asked != format_line(line.artist, line.title, line.album, line.duration_ms)
-
-
-def _warn(message: str) -> None:
-    typer.secho(message, err=True, fg=typer.colors.YELLOW)
