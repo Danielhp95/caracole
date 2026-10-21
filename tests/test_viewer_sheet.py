@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from caracole.chordpro import to_chordpro
-from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Tab, Text, parse_sheet
+from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Tab, Text, parse_sheet, split_preamble
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
 
@@ -115,3 +115,28 @@ def test_the_chords_a_sheet_defines_are_kept_as_written():
                         "{chord: G frets 3 2 0 0 3 3}\n{define: }\n[Cadd9]la\n")
     assert sheet.defines == ["Cadd9 base-fret 1 frets x 3 2 0 3 3 fingers 0 2 1 0 3 4", "G frets 3 2 0 0 3 3"]
     assert [s.lines for s in sheet.sections] == [[Lyrics([(0, "la")])]]  # neither a line nor a section
+
+
+def test_the_preamble_holds_the_notes_the_legend_and_the_tuning():
+    lines = fixture("legend_sheet.cho").splitlines()
+    pre = split_preamble(lines)
+    assert "http://example.com/watch?v=placeholder&feature=related" in pre.notes
+    assert [(c.root, c.suffix, p[0]) for c, p in pre.legend if c.suffix == "m7"] == [(4, "m7", "022033")]
+    assert pre.tuning is None
+    assert pre.capo_note == "Capo 2"
+    assert pre.tabs == ()
+    assert lines[pre.end] == "{comment: Intro}"
+
+
+def test_a_tuning_note_is_read():
+    lines = ["Tuning: Eb Ab Db Gb Bb Eb (half step down)", "", "{comment: Verse}", "[Em]words", "{comment: Chorus}", "[G]more"]
+    pre = split_preamble(lines)
+    assert pre.tuning == "half step down"
+    assert pre.capo_note is None
+    assert lines[pre.end] == "{comment: Verse}"
+
+
+def test_a_lacuerda_sheet_without_sections_has_no_preamble():
+    lines = ["[Em]Words to [G]sing", "[Am]and more", "", "[C]still more"]
+    pre = split_preamble(lines)
+    assert (pre.notes, pre.legend, pre.tabs, pre.tuning, pre.capo_note, pre.end) == ((), (), (), None, None, 0)

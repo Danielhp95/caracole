@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass, field
 
 from caracole.autochords.merge import AUTO_MARKER
+from caracole.viewer.theory import Chord
+from caracole.viewer.voicings import Position, chord_legend
 
 
 @dataclass(frozen=True)
@@ -157,3 +159,103 @@ def _line(line: str, chord) -> Line:
     if all(not text.strip() for _, text in parts):
         return ChordRow([item for item, _ in parts if item is not None])
     return Lyrics(parts)
+
+
+# --- the preamble --------------------------------------------------------------------------------
+
+
+def written(line: Line, names: list[str]) -> str:
+    """A line as the sheet writes it, its chords and marks among its words: "Cadd9 (x32033)"."""
+    if isinstance(line, Text):
+        return line.text
+    if isinstance(line, ChordRow):
+        return " ".join(names[i] if isinstance(i, int) else i for i in line.items)
+    if isinstance(line, Lyrics):
+        return "".join((names[c] if isinstance(c, int) else c or "") + text for c, text in line.parts)
+    return ""
+
+
+def _played(line: Line, names: list[str]) -> bool:
+    return not isinstance(line, (Text, Blank)) and not chord_legend(written(line, names))
+
+
+def preamble_section(sheet: Sheet) -> Section | None:
+    """What a tab says before its first section (its tabber's notes, a link, a chord legend), or None:
+    an unlabelled first section, before another, up to its first tab (UG's first label is often inside
+    it: "[Intro]"), with nothing played in it. Its lines are text and chords given with their
+    fingerings (``voicings.chord_legend``); chords alone there are the song's intro and words sung
+    there its first verse, and none of it is folded away. The viewer's rule, and the PDF's."""
+    first = sheet.sections[0] if len(sheet.sections) > 1 else None
+    if first is None or first.label or first.chorus:
+        return None
+    lines: list[Line] = []
+    for line in first.lines:
+        if isinstance(line, Tab):
+            break
+        if _played(line, sheet.chords):
+            return None
+        lines.append(line)
+    while lines and isinstance(lines[-1], Blank):
+        lines.pop()
+    return Section(None, lines=lines) if lines else None
+
+
+_TUNING = re.compile(r"(?i)\btuning\b|half[- ]step down|drop [a-g]|[a-g]b standard")
+_TUNING_NAME = re.compile(r"(?i)half[- ]step down|drop [a-g]\w*|[a-g]b standard")
+_CAPO = re.compile(r"(?i)\bcapo\b\D{0,6}(\d+)")
+
+
+@dataclass(frozen=True)
+class Preamble:
+    notes: tuple[str, ...]  # the text lines folded away (not tab, not legend)
+    legend: tuple[tuple[Chord, Position], ...]  # from voicings.chord_legend
+    tabs: tuple[tuple[int, int], ...]  # (start, end) line spans of tab blocks inside it: none, the rule ends at a tab
+    tuning: str | None  # e.g. "Eb standard", "half step down", "Drop D"
+    capo_note: str | None  # e.g. "Capo 2"
+    end: int  # index of the first body line
+
+
+def split_preamble(lines: list[str]) -> Preamble:
+    """The preamble of a ChordPro text's lines by the viewer's rule (``preamble_section``): what
+    it holds, and ``end``, the index of the first line after it (``0`` when there is none)."""
+    sheet = parse_sheet("\n".join(lines))
+    section = preamble_section(sheet)
+    if section is None:
+        return Preamble((), (), (), None, None, 0)
+    notes: list[str] = []
+    legend: list[tuple[Chord, Position]] = []
+    for line in section.lines:
+        text = written(line, sheet.chords)
+        found = chord_legend(text)
+        if found:
+            legend += found
+        elif isinstance(line, Text):
+            notes.append(text.strip())
+    tuning = capo = None
+    for note in notes:
+        if tuning is None and _TUNING.search(note):
+            named = _TUNING_NAME.search(note)
+            tuning = named.group(0) if named else note.split(":", 1)[-1].strip()
+        if capo is None and (m := _CAPO.search(note)):
+            capo = f"Capo {int(m.group(1))}"
+    return Preamble(tuple(notes), tuple(legend), (), tuning, capo, _end_of(lines, len(section.lines)))
+
+
+def _end_of(lines: list[str], count: int) -> int:
+    """The index after the ``count``-th content line of the text (a line the parser keeps in a
+    section: not a directive, a ``#`` comment, or inside a tab), and the blank lines after it."""
+    seen, tab = 0, False
+    for i, raw in enumerate(lines):
+        line = raw.replace(_ESCAPED_BACKSLASH, "\\")
+        if tab:
+            tab = not ((d := _DIRECTIVE.fullmatch(line)) and d.group(1).lower() in ("end_of_tab", "eot"))
+        elif (d := _DIRECTIVE.fullmatch(line)):
+            tab = d.group(1).lower() in ("start_of_tab", "sot")
+        elif not line.startswith("#"):
+            seen += 1
+        if seen == count and not tab:
+            end = i + 1
+            while end < len(lines) and not lines[end].strip():
+                end += 1
+            return end
+    return len(lines)
