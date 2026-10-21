@@ -175,10 +175,26 @@ def test_refresh_returns_new_ids_and_marks_song_dirty(conn, tmp_path):
     assert stats.sitemaps_fetched == 1 and stats.sitemaps_unchanged == 1 and stats.rows == 3
     assert rows(conn)[-1] == (3002, "radiohead", "creep-intro", "tabs", "last", "2026-10-19T03:30:00Z",
                               "radiohead/creep-intro-tabs-3002")
-    # the refresh already marked the song; the pipeline's own call finds the same song
+    # the refresh marked the song, and its stats say which, for the pipeline and `caracole index refresh` to count
     assert get_song(conn, creep.id).ug_dirty is True
     assert get_song(conn, wonderwall.id).ug_dirty is False
-    assert mark_dirty_for_new(conn, stats.new_tab_ids) == 1
+    assert stats.songs_marked == frozenset({creep.id})
+
+
+def test_the_songs_each_sitemaps_new_tabs_mark_are_summed_up_once(conn, tmp_path):
+    ug = site()
+    build_index(conn, ug.client(tmp_path / "cache"), NOW)
+    hotel = accepted(conn, "Eagles", "Hotel California", "eagles", "hotel-california")
+    desperado = accepted(conn, "Eagles", "Desperado", "eagles", "desperado", decision="pinned")
+    creep = accepted(conn, "Radiohead", "Creep", "radiohead", "creep")
+    ug.files["sitemap.xml"] = sitemap_index("sitemap1.xml", "sitemap2.xml", "sitemap3.xml", "sitemap_last.xml")
+    ug.files["sitemap3.xml"] = urlset("eagles/hotel-california-chords-4001", "eagles/desperado-chords-4002")
+    ug.files["sitemap_last.xml"] = urlset("eagles/desperado-tabs-4003", "radiohead/creep-chords-2002")
+    stats = refresh_index(conn, ug.client(tmp_path / "cache"), LATER)
+    assert stats.new_tab_ids == (4001, 4002, 4003)
+    # Desperado has a new tab in both sitemaps, and Creep only one it had: each song marked counts once
+    assert stats.songs_marked == frozenset({hotel, desperado})
+    assert [get_song(conn, i).ug_dirty for i in (hotel, desperado, creep)] == [True, True, False]
 
 
 def test_refresh_picks_up_new_numbered_sitemaps(conn, tmp_path):
@@ -372,9 +388,9 @@ def test_mark_dirty_for_new_covers_variant_slugs_of_accepted_and_pinned_songs(co
     other = accepted(conn, "Oasis", "Wonderwall II", "oasis", "wonderwall-ii")
     new = upsert_rows(conn, [row(10, "oasis", "wonderwall-acoustic"), row(11, "radiohead", "creep-intro", "tabs"),
                              row(12, "eagles", "hotel-california"), row(13, "oasis", "wonderwall-iii")], "last", NOW)
-    assert mark_dirty_for_new(conn, new) == 2
+    assert mark_dirty_for_new(conn, new) == {wonderwall, creep}
     assert [get_song(conn, i).ug_dirty for i in (wonderwall, creep, hotel, other)] == [True, True, False, False]
-    assert mark_dirty_for_new(conn, []) == 0
+    assert mark_dirty_for_new(conn, []) == set()
 
 
 def test_index_stats(conn):

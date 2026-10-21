@@ -212,13 +212,13 @@ def _icons(ctx: StepContext) -> StepResult:
 
 
 def _index(ctx: StepContext) -> StepResult:
-    from caracole.ug.index import index_count, mark_dirty_for_new, refresh_index
+    from caracole.ug.index import index_count, refresh_index
 
     if index_count(ctx.conn) == 0:
         return StepResult(title="Index refresh", actions=[BUILD_INDEX],
                           status="skipped: the index is empty; run `caracole index build` once")
     stats = refresh_index(ctx.conn, ctx.services.client("ug"), ctx.now)
-    dirty = mark_dirty_for_new(ctx.conn, stats.new_tab_ids)
+    dirty = len(stats.songs_marked)
     new = len(stats.new_tab_ids)
     return StepResult(title="Index refresh",
                       done=_counted((new, "new tab" if new == 1 else "new tabs"), _songs(dirty, "to fetch again")),

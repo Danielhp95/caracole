@@ -611,6 +611,27 @@ def test_default_match_step_waits_for_an_index_a_build_left_half_done(conn, cfg)
     assert get_song(conn, wall.id).match_decision == "accept"
 
 
+def test_default_index_step_counts_the_songs_its_refresh_marked(conn, cfg, monkeypatch):
+    # The refresh flags the songs as it stores each sitemap; the step counts them from its stats, flagging none again.
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext, _index
+    from caracole.ug import index as ug_index
+
+    ug_index.upsert_rows(conn, [(1001, "oasis", "wonderwall", "chords", "oasis/wonderwall-chords-1001")], "1", NOW)
+
+    def marked_again(conn_, tab_ids):
+        raise AssertionError("the refresh marked these songs already")
+
+    monkeypatch.setattr(ug_index, "mark_dirty_for_new", marked_again)
+    monkeypatch.setattr(ug_index, "refresh_index", lambda conn_, client, now: ug_index.IndexStats(
+        sitemaps_fetched=1, sitemaps_unchanged=1, rows=3, new_tab_ids=(3001, 3002), parsed=("last",),
+        songs_marked=frozenset({7})))
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
+                      report=RunReport(run_id="r", started="r"))
+    result = _index(ctx)
+    assert (result.done, result.status) == (["2 new tabs", "1 song to fetch again"], "2 new tabs, 1 songs to refetch")
+
+
 def keep_sheet_before_lyrics(conn, cfg, song, content):
     """A UG sheet kept while the song's lyrics were pending: sheet.txt and sheet.json, no coverage."""
     import json
