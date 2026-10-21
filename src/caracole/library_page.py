@@ -715,12 +715,11 @@ _HEAD, _BODY, _REQUEST, _REQUESTED = (read_asset(name) for name in TEMPLATES)
 
 
 def _nav(controls: WebControls | None) -> str:
-    """The masthead's links: the to-do page, and caracole serve's requests."""
-    links = '<a class="navlink" href="_todo.md">To-do</a>'
-    if controls is not None:
-        n = f'<span class="n">{controls.active}</span>' if controls.active else ""
-        links += f'<a class="navlink" href="/jobs">Requests{n}</a>'
-    return links
+    """The masthead's links: caracole serve's requests; on the file, none, and no nav."""
+    if controls is None:
+        return ""
+    n = f'<span class="n">{controls.active}</span>' if controls.active else ""
+    return f'<nav class="links" aria-label="Pages"><a class="navlink" href="/jobs">Requests{n}</a></nav>'
 
 
 def _request_form(controls: WebControls | None) -> str:

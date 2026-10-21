@@ -117,6 +117,21 @@ def test_the_library_page_is_served_with_its_forms(app, conn):
     assert get(app, "/index.html").status == 200
 
 
+NAV = re.compile(r'<nav class="links" aria-label="Pages">(.*?)</nav>', re.S)
+NAVLINK = re.compile(r'<a class="navlink" href="([^"]*)">([^<]*)')
+
+
+def test_the_served_mastheads_link_neither_the_to_do_page_nor_the_lookup_page(app, conn):
+    # The library page's bar does what the lookup page does: no page's masthead links /lookup, and none links
+    # _todo.md, which the nightly run still writes. The lookup page answers still, for a lookup posted without
+    # JavaScript and for the /lookup?q= links there are.
+    add_song(conn, "Radiohead", "Creep")
+    assert NAVLINK.findall(NAV.search(text(get(app, "/"))).group(1)) == [("/jobs", "Requests")]
+    for page in (get(app, "/jobs"), get(app, "/review?song=999"), get(app, "/review?song=1"), get(app, "/nothing.pdf")):
+        assert NAVLINK.findall(NAV.search(text(page)).group(1)) == [("/", "Library")], page.status
+    assert get(app, "/lookup").status == 200 and get(app, "/lookup?q=creep").status == 200
+
+
 def test_every_answer_keeps_the_page_to_itself(app, conn):
     for response in (get(app, "/"), get(app, "/jobs"), get(app, "/nothing.pdf")):
         assert header(response, "x-content-type-options") == "nosniff"

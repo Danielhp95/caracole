@@ -252,6 +252,23 @@ def test_the_request_form_is_under_the_results_not_above_the_bar(conn, cfg):
     assert 'href="/lookup"' not in html  # the bar is the way in: no Look up link in the masthead
 
 
+def masthead(html: str) -> str:
+    return re.search(r'<header class="masthead lib">(.*?)</header>', html, re.S).group(1)
+
+
+def test_the_masthead_links_no_to_do_page_written_or_served(conn, cfg):
+    from caracole.library_page import WebControls
+
+    # The file links no page at all: no To-do link, and no empty landmark where the links were.
+    written = masthead(JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW)))
+    assert "_todo.md" not in written and "To-do" not in written and "<nav" not in written
+    # Served, the masthead has Requests alone.
+    served = masthead(JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW,
+                                                            controls=WebControls(csrf="tok", active=2))))
+    assert re.findall(r'<a class="navlink" href="([^"]*)">([^<]*)', served) == [("/jobs", "Requests")]
+    assert '<nav class="links" aria-label="Pages">' in served and "_todo.md" not in served
+
+
 # --- files ---------------------------------------------------------------------------
 
 

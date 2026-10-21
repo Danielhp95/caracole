@@ -1668,7 +1668,8 @@ loads nothing from the network. It has two tabs under its header: **Library**,
 your songs, and **Songbooks** (see [The Songbooks tab](#the-songbooks-tab));
 the address remembers which (`#tab=songbooks`). Its header is short, so that on
 a phone the first song starts well within the first screen: the library's
-numbers beside its title, the pages on the line above, the tabs, the search box,
+numbers beside its title (served, the Requests link on the line above), the tabs,
+the search box,
 then one row of
 buttons and menus (the status buttons, then Select, Key and Sort), which
 scrolls sideways on a phone, fading at an end where more of it is out of
@@ -2418,13 +2419,16 @@ with it. A KEY that is no key exits with status 2.
   [caracole remove](#caracole-remove)), then its lookup. It is never what
   Enter acts on.
 
-  `/lookup`, the lookup page, still answers: the same search of your library
+  `/lookup`, the lookup page, still answers, though no page's header links to
+  it any more (the requests page's has Library alone): the same search of your library
   and the Ultimate Guitar and LaCuerda indexes, whose Get it reads the sheet on
   the page as it arrives, stage by stage. Its Enter acts on the song you clearly meant (one of
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
   songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
   nothing), or nothing when nothing stands out. `/lookup?q=WORDS` opens it with
-  that search, and a lookup posted without JavaScript lands there.
+  that search, and a lookup posted without JavaScript lands there. A song of
+  yours with a sheet has Fetch again there, its sheet looked up anew, which its
+  line on the library page hasn't.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" takes an artist, a title and, optionally, the album and the length,
   filled in from what you searched ("Muse - Hysteria"; an artist's name alone
