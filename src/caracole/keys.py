@@ -243,10 +243,18 @@ def _human_key(conn: sqlite3.Connection, library_dir: Path, kept: Mapping[str, K
     human = kept.get(HUMAN_SHEET)
     if human is None:
         return None
-    tab = _tonality(get_version(conn, human.version_id).raw)
+    raw = get_version(conn, human.version_id).raw
+    markup = None if _tonality(raw) is not None else _markup(library_dir, kept.get(SHEET_DOC), human)
+    return sheet_key(raw, markup)
+
+
+def sheet_key(raw: Mapping[str, Any], markup: str | None) -> SongKey | None:
+    """The key of a human sheet from its version's data (``raw``) and its ``markup``: UG's
+    ``tonality_name``, else the key the markup states, else the one its chords suggest. A
+    version kept beside the sheet (render.py's ``version-<tab>.html``) takes its own so."""
+    tab = _tonality(raw)
     if tab is not None:
         return SongKey(tab, "tab")
-    markup = _markup(library_dir, kept.get(SHEET_DOC), human)
     if markup is None:
         return None
     stated = key_in_text(markup)

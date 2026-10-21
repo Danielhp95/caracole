@@ -499,7 +499,9 @@ say), nothing is removed and it exits 1.
   it keeps (`sheet.txt`, `sheet.json`, `tab.txt`, `guitar-1.gp5`, the scores
   it filed from `_inbox/`…), the `.cho` files and PDFs it made from them (the
   `sheet (G Dorian, capo 0).pdf` exports of `caracole render --version` too),
-  `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
+  every file of a version kept beside the sheet (`version-<tab>.txt`,
+  `.json`, and its viewer `version-<tab>.html`, a version's page the last
+  fetch let go too), `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
   Then the folder, and the artist's folder, once empty. Syncthing then
   deletes them on every device. And the song's record: its match, its
   versions, its lyrics and what caracole remembered about it, and the audio
@@ -1170,7 +1172,16 @@ and cache.
   page keeps telling of the last render of the library. After an upgrade from
   a caracole that didn't record what it wrote, or that drew its PDFs another
   way, the first render makes every PDF once more. The viewer is written
-  again whenever it would change, at every render. A song that no longer
+  again whenever it would change, at every render. Each version of UG's
+  kept beside the sheet (`version-<tab>.txt` and `.json`) gets a viewer of
+  its own, `version-<tab>.html`, and no `.cho` or PDF (its viewer's Export
+  PDF of this version makes one): it opens in the version's own key, as the
+  version is written, since the song's own version (`[version]`,
+  `[transpose]`) is its sheet's. Every viewer of the song (`sheet.html`, an
+  auto sheet's standing alone, each `version-<tab>.html`) lists the song's UG
+  chords versions, in the order caracole ranks them, and which one it is. A
+  version no longer kept loses its `version-<tab>.html` at the next render,
+  while it is still as caracole wrote it. A song that no longer
   keeps its human sheet (its UG match was undone, say) loses the `sheet.cho`,
   `sheet.pdf` and `sheet.html` made from it; one you put where caracole never
   rendered one stays. A sheet that never
@@ -3113,6 +3124,9 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       sheet.json            the same version as the source gave it
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key
       sheet.html            the sheet viewer, for the phone
+      version-39144.txt     another version of the sheet, kept beside it: its text,
+      version-39144.json    the version as UG gave it, and its viewer (no PDF of
+      version-39144.html    its own)
       lyrics.txt            the lyrics, from LRCLIB
       lyrics.lrc            the timed lyrics, when LRCLIB has them
       guitar-1.gp5          Guitar Pro or Power Tab files: filed by rank, or from gtptabs.com

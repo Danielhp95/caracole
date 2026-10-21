@@ -138,6 +138,7 @@ def build_viewer(
     start: str | None = None,
     pdf: str | None = None,
     export: bool = True,
+    versions: dict[str, Any] | None = None,
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -147,10 +148,14 @@ def build_viewer(
     (``t=2&mode=dorian&capo=0``), in which it starts when its address names none; ``pdf`` names
     the PDF beside the page, linked when given. Without ``export``, its settings offer no Export PDF of
     this version (an auto sheet kept beside a human one, whose exports are that sheet's: render.py
-    ``export_viewer``).
+    ``export_viewer``). ``versions``, the song's UG chords versions (render.py ``_versions_data``:
+    ``sheet_versions.as_data`` with ``sheet``, the provider of the one, and ``this`` on each entry,
+    true on the page's own), goes in the page's data as ``versions``; without it, the data has none.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
     data["start"] = start
+    if versions is not None:
+        data["versions"] = versions
     style, script = _assets()
     title = sheet.title or "Untitled"
     return _page(

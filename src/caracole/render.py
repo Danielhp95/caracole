@@ -55,6 +55,13 @@ never costs it a PDF. kv ``render:files:<song id>`` keeps the SHA-256 and the
 length of each .cho and viewer written (``written_file``), PDF or no PDF: a
 server serves a viewer only while it is still those bytes.
 
+Each UG version the fetch keeps beside the sheet (sheet_versions.py: ``version-<tab>.txt``
+and ``.json``) gets a viewer of its own, ``version-<tab>.html``, made from its JSON as the
+sheet's is from sheet.json, in its own key and as written, with no .cho or PDF
+(``_render_versions``); it is recorded like the sheet's viewer, and goes, while it is still as
+written, once the version is no longer kept. Every viewer of the song (the one's, and each
+version's) lists the song's UG chords versions in its data's ``versions`` (``_versions_data``).
+
 A human sheet the song no longer keeps (the fetch drops one whose UG match was
 undone when nothing replaces it) takes the ``sheet.cho``, ``sheet.pdf`` and
 ``sheet.html`` rendered from it along, at the next pass. Only what the records
@@ -135,10 +142,11 @@ from caracole.library import (
     write_atomic,
     write_info,
 )
-from caracole.keys import sheet_keys
+from caracole.keys import sheet_key, sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
 from caracole.pdf_text import PDF_TEXT_VERSION, pdf_text
+from caracole.sheet_versions import SheetVersion, as_data, in_library, tab_of, version_names
 from caracole.songs import (
     AUTO_SHEET,
     HUMAN_SHEET,
@@ -392,7 +400,7 @@ def _font_problem(path: str, size: int, mtime_ns: int) -> str | None:
 
 # --- the library ---------------------------------------------------------------------
 
-Outcome = Literal["rendered", "skipped", "no font"]
+Outcome = Literal["rendered", "skipped", "no font", "pages"]  # "pages": the version pages, no PDF
 
 
 @dataclass
@@ -556,23 +564,33 @@ def _render_song(
 
     Each viewer takes its own sheet's key, as ``keys.sheet_keys`` finds it and info.json
     records it: the human sheet's from the tab or its chords, the auto sheet's heard in the audio.
+
+    The versions kept beside the sheet get their pages first (``_render_versions``), so a sheet
+    whose PDF fails costs them nothing. The song's UG chords versions are in the viewer of the
+    one (the human sheet's, else an auto sheet's standing alone) and in each version page.
     """
     files = {f.name: f for f in kept_files(conn, song.id)}
     human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
     folder = song_dir(cfg.library_dir, song)
-    done: list[_Done] = []
+    versions = in_library(conn, song.id, cfg.rank)
+    listed = _versions_data(conn, versions, human or auto)
+    done: list[_Done] = [_render_versions(conn, cfg, song, files, versions, listed)]
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
     version = own_version(overrides, song)
+    chosen = next((v.tab_id for v in versions if v.chosen), None)
 
-    def render(kept: KeptFile, sheet: _Sheet, state_key: str, played: Version, *, export: bool = True) -> None:
+    def render(kept: KeptFile, sheet: _Sheet, state_key: str, played: Version, *, export: bool = True,
+               listed: dict[str, Any] | None = None) -> None:
         found = auto_key if sheet.auto else human_key
         mine = (found.key, found.source) if found is not None else (None, None)
         done.append(_render_sheet(conn, cfg, song, folder, kept, sheet, state_key, played,
                                   start=export_query(played) if song.key in overrides.version else None,
-                                  cjk_font=cjk_font, runner=runner, force=force, key=mine, export=export))
+                                  cjk_font=cjk_font, runner=runner, force=force, key=mine, export=export,
+                                  versions=listed))
 
     if human is not None:
-        render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id), version)
+        render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id), version,
+               listed=_own(listed, chosen))
         if auto is None and done[-1].outcome != "no font":  # its PDF is in place
             for name in AUTO_OUTPUTS:
                 (folder / name).unlink(missing_ok=True)
@@ -585,10 +603,80 @@ def _render_song(
         # Beside the human sheet, the version's shapes and swaps are that sheet's chords', by their places, and
         # an export is that sheet's (export_viewer): its viewer offers none
         render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside),
-               replace(version, at={}, alt={}) if beside else version, export=not beside)
+               replace(version, at={}, alt={}) if beside else version, export=not beside,
+               listed=None if beside else _own(listed, None))
     if human is not None or auto is not None:
         _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, runner=runner, force=force)
     return done
+
+
+# --- the versions kept beside the sheet: a viewer each ----------------------------------
+
+
+def _versions_data(conn: sqlite3.Connection, versions: list[SheetVersion], one: KeptFile | None
+                   ) -> dict[str, Any] | None:
+    """What every viewer of the song says of its UG chords versions: ``sheet_versions.as_data``, its
+    ``total`` every version listed (gone ones too), and ``sheet``, the provider of the sheet the title
+    opens ("ug", "lacuerda", "auto"; None when it keeps none). None when UG lists no chords version of
+    the song: then no viewer has a ``versions`` (and shows no switcher)."""
+    if not versions:
+        return None
+    provider = get_version(conn, one.version_id).provider if one is not None else None
+    return {**as_data(versions, len(versions)), "sheet": provider}
+
+
+def _own(listed: dict[str, Any] | None, tab: str | None) -> dict[str, Any] | None:
+    """``listed`` as one page holds it: each entry's ``this`` says whether it is the page's own (``tab``'s;
+    with None, the page of a sheet that is none of them, a LaCuerda or an auto sheet)."""
+    if listed is None:
+        return None
+    return {**listed, "list": [{**v, "this": tab is not None and v["tab"] == tab} for v in listed["list"]]}
+
+
+def _render_versions(conn: sqlite3.Connection, cfg: Config, song: Song, files: Mapping[str, KeptFile],
+                     versions: list[SheetVersion], listed: dict[str, Any] | None) -> _Done:
+    """Write a viewer page for each version kept beside the sheet, ``version-<tab>.html`` (its ``page``),
+    from its ``version-<tab>.json`` as the sheet's is from sheet.json, and no ChordPro file or PDF: a PDF of
+    it is an export (its viewer's Export PDF of this version). Each page starts as the version is written, in its
+    own key (``keys.sheet_key``), and is recorded (``_note_written``) and written only when its bytes change.
+
+    The page of a version no longer kept (the fetch let it go) goes while it still holds what caracole wrote
+    (``_forget_written``): one changed since, on a synced device, stays, and is forgotten. A page that can't
+    be made (its JSON unreadable, a bug) is logged as "no viewer for" and fails the song, as a sheet's viewer
+    does; the last one written stays."""
+    folder = song_dir(cfg.library_dir, song)
+    pages = {v.page: v for v in versions if v.page == version_names(v.tab_id)[2]}  # kept, and not the one
+    ok = True
+    for page, v in pages.items():
+        ok = _render_version(conn, cfg, song, folder, files, v, _own(listed, v.tab_id)) and ok
+    left = tuple(name for name in _written(conn, song.id) if tab_of(name) is not None and name not in pages)
+    _forget_written(conn, song.id, left, folder)
+    return _Done("pages", viewer_failed=not ok)
+
+
+def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: Path, files: Mapping[str, KeptFile],
+                    v: SheetVersion, listed: dict[str, Any] | None) -> bool:
+    """Write the kept version ``v``'s viewer page; False, logged, when it can't be made or written."""
+    _, doc, page = version_names(v.tab_id)
+    kept = files.get(doc)
+    if kept is None:
+        log.warning("no viewer for %s: %s isn't kept", song.display, doc)
+        return False
+    raw = get_version(conn, kept.version_id).raw
+    try:
+        sheet = _ug_sheet(cfg.library_dir / kept.path, raw)
+    except RenderError as e:
+        log.warning("no viewer for %s: %s", song.display, e)
+        return False
+    found = sheet_key(raw, sheet.markup)
+    text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
+                          key=sheet.key, capo=sheet.capo)
+    data = _write_viewer(song, text, folder / page, None, key=(found.key, found.source) if found else (None, None),
+                         transpose=0, start=None, versions=listed)
+    if data is None:
+        return False
+    _note_written(conn, song.id, page, data)
+    return True
 
 
 # --- an export: the sheet's PDF in another version ------------------------------------
@@ -811,12 +899,14 @@ def _render_sheet(
     force: bool,
     key: tuple[str | None, str | None] = (None, None),
     export: bool = True,
+    versions: dict[str, Any] | None = None,
 ) -> _Done:
     """Write one sheet's .cho, render its PDF in ``version`` unless kv ``state_key`` says it is up to date,
     then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a sheet
     waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``); ``start``, the
     song's own version as the viewer's address writes it, where the viewer starts, or None for none;
-    ``export``, whether the viewer offers an export (``export_viewer``).
+    ``export``, whether the viewer offers an export (``export_viewer``); ``versions``, the song's versions
+    as this viewer lists them (``_own``), or None.
 
     The PDF, the viewer and the record of the .cho are made from the text written, never read
     back: a synced device may write there a moment later."""
@@ -831,7 +921,8 @@ def _render_sheet(
 
     def viewer() -> bool:
         page = folder / f"{stem}.html"
-        data = _write_viewer(song, text, page, pdf, key=key, transpose=version.t, start=start, export=export)
+        data = _write_viewer(song, text, page, pdf, key=key, transpose=version.t, start=start, export=export,
+                             versions=versions)
         if data is not None:
             _note_written(conn, song.id, page.name, data)
         return data is not None
@@ -917,22 +1008,23 @@ def _printed(text: str, *, key: str | None, capo: int | None) -> str:
     return _as_latin(pdf_text(text, key=viewer_key(text, key), capo=capo))
 
 
-def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *, key: tuple[str | None, str | None],
-                  transpose: int, start: str | None, export: bool = True) -> bytes | None:
+def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: tuple[str | None, str | None],
+                  transpose: int, start: str | None, export: bool = True,
+                  versions: dict[str, Any] | None = None) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
-    there is one, and return the page's bytes. It starts where the PDF is: at ``transpose``, in the song's
-    own version (``start``) when it has one, and takes the sheet's key (``keys.sheet_keys``) when it has
-    one; with ``export``, it offers Export PDF of this version. A viewer that hasn't changed isn't written
-    again.
+    there is one (a version page has none: ``pdf`` None), and return the page's bytes. It starts where the
+    PDF is: at ``transpose``, in the song's own version (``start``) when it has one, and takes the sheet's
+    key (``keys.sheet_keys``) when it has one; with ``export``, it offers Export PDF of this version;
+    ``versions`` lists the song's versions. A viewer that hasn't changed isn't written again.
 
     The viewer is an extra: None, logged as "no viewer for", when it can't be built (a bug,
     with its traceback) or written (a link or a FIFO in its place), and the song's PDFs and
     its other sheet go on all the same.
     """
-    linked = pdf.name if pdf.is_file() and not pdf.is_symlink() else None
+    linked = pdf.name if pdf is not None and pdf.is_file() and not pdf.is_symlink() else None
     try:
         html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, start=start, pdf=linked,
-                            export=export)
+                            export=export, versions=versions)
     except Exception:  # a sheet the viewer can't read must never cost the PDFs
         log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
         return None
@@ -1060,7 +1152,12 @@ def _read_text(path: Path) -> str:
 
 def _human_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) -> _Sheet:
     """The sheet the fetch step kept: the markup in sheet.json, the key UG gives the version."""
-    path = (library_dir / kept.path).with_name("sheet.json")
+    return _ug_sheet((library_dir / kept.path).with_name("sheet.json"), get_version(conn, kept.version_id).raw)
+
+
+def _ug_sheet(path: Path, raw: Mapping[str, Any]) -> _Sheet:
+    """A sheet from the JSON the fetch keeps beside its text (sheet.json, a version's
+    ``version-<tab>.json``): its markup and its capo, and the key UG gives the version (``raw``)."""
     try:
         doc = read_json(path)
     except (OSError, ValueError) as e:  # ValueError: not UTF-8, not JSON, or nested too deep
@@ -1068,7 +1165,6 @@ def _human_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) ->
     content = doc.get("content") if isinstance(doc, Mapping) else None
     if not isinstance(content, str) or not content.strip():
         raise RenderError(f"{path} holds no sheet content")
-    raw = get_version(conn, kept.version_id).raw
     return _Sheet(decode_twice(content), key=_key(raw), capo=_capo(doc.get("meta")))
 
 
