@@ -237,6 +237,9 @@ Traps:
   inherited PYTHONPATH (`conftest.subprocess_pythonpath`): the dependencies arrive on it.
 - A dependency is listed three times: pyproject.toml, flake.nix (`runtimeDeps` or
   `autochordsDeps`) and nix/package.nix. It comes from nixpkgs: no pip, uv or PyPI pins.
+  Every third-party module src/ imports is listed, even one another dependency brings (click
+  with typer, requests and urllib3 with spotipy); auto-chords' modules may import the extra's.
+  test_nix_package.py checks both.
 - The version is in pyproject.toml and src/caracole/__init__.py; the package check compares
   `caracole --version` with pyproject's, and test_cli.py expects "caracole 0.1.0".
 - A Nix file may set only `CARACOLE_*` variables the source reads (test_nix_package.py). A

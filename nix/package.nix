@@ -85,7 +85,10 @@ python3Packages.buildPythonApplication (finalAttrs: {
       selectolax
       rapidfuzz
       spotipy
+      requests
+      urllib3
       typer
+      click
       mutagen
       tomlkit
       pypinyin

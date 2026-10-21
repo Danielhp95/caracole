@@ -8,7 +8,7 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
       python = pkgs.python3;
-      runtimeDeps = ps: with ps; [ httpx selectolax rapidfuzz spotipy typer mutagen tomlkit pypinyin ];
+      runtimeDeps = ps: with ps; [ httpx selectolax rapidfuzz spotipy requests urllib3 typer click mutagen tomlkit pypinyin ];
       testDeps = ps: with ps; [ pytest pytest-xdist ];
       autochordsDeps = ps: with ps; [ torch torchaudio beat-this librosa numpy scipy soundfile pyyaml ];
       devPython = python.withPackages (ps: runtimeDeps ps ++ testDeps ps);
