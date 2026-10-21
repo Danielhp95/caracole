@@ -199,6 +199,13 @@ def _songs_to_try(
     return songs
 
 
+def asked_lately(song: Song, now: datetime) -> bool:
+    """Whether LaCuerda was asked about the song in the last 30 days, so that a pass, a lookup's among them,
+    leaves it alone until they are over (``_songs_to_try``), your pick too; for the requests page, which then
+    offers no LaCuerda sheet (web/outcome.py)."""
+    return not _before(song.lacuerda_checked_at, _utc(now) - RECHECK_AFTER)
+
+
 def may_ask(song: Song) -> bool:
     """Whether LaCuerda may have the song, the rule the step and the to-do page go by: it looks
     Spanish (by its lyrics when it has any, else its title), and a slug of LaCuerda's can be built

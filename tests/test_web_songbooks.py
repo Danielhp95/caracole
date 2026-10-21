@@ -424,7 +424,8 @@ def test_a_songbook_made_says_made_with_its_page_to_open_and_never_that_the_nigh
     assert line["link"] == {"label": "Open songbook", "href": "_songbooks/Beach%20nights/songbook.html"}
     assert get(app, "/" + line["link"]["href"]).status == 200  # the page caracole wrote, which it serves
     jobs = get(app, "/jobs").body.decode("utf-8")
-    assert 'Made · <a href="_songbooks/Beach%20nights/songbook.html">Open songbook</a>' in jobs
+    assert '<span class="says ready">Made</span>' in jobs
+    assert '<a class="btn act primary" href="/_songbooks/Beach%20nights/songbook.html">Open songbook</a>' in jobs
     assert "nightly run" not in jobs  # a song's line, "Added: the nightly run looks for it", misleads here
     # Added to: its page again. Renamed, its card is beside the line: no link. Deleted: no page to open, nor
     # the older lines.
@@ -565,6 +566,17 @@ def test_add_a_song_of_the_library_queues_songbook_add(app, setup, queue, campfi
     data = json.loads(post(app, "/songbook/add-song", {"name": "picnic", "song": str(hysteria.id)}, accept=JSON).body)
     assert data["job"]["songbook"] == {"action": "add", "name": "Picnic", "after": "Picnic"} and data["jobs"] == []
     assert steps(queue) == [[("songbook", "add", "--", "Picnic", "Muse - Hysteria")]]
+
+
+def test_cancelling_either_half_of_add_a_song_cancels_both(app, setup, queue, campfire):
+    # The lookup and the songbook's change are queued both or neither, and cancelled so too: a songbook add
+    # left alone would run for a song the library may not have.
+    for half in (0, 1):
+        post(app, "/songbook/add-song", {"name": "Campfire", "artist": "Oasis", "title": "Wonderwall"})
+        ids = sorted(job.id for job in queue.snapshot())
+        assert len(ids) == 2
+        assert post(app, "/jobs/cancel", {"job": str(ids[half])}).status == 303
+        assert queue.snapshot() == []
 
 
 def test_add_a_song_from_an_index_looks_it_up_then_adds_it(app, setup, queue, campfire):

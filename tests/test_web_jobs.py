@@ -10,6 +10,7 @@ import pytest
 from caracole.web.jobs import (
     CaracoleRunner,
     JobQueue,
+    JobStarted,
     QueueFull,
     add_steps,
     child_env,
@@ -376,6 +377,68 @@ def test_the_queue_holds_a_limited_number_of_requests():
         queue.submit("Add A - 3", "a|3", add_steps("A", "3"))
     queue.run_pending()
     queue.submit("Add A - 3", "a|3", add_steps("A", "3"))  # room again
+
+
+def test_a_job_that_has_not_started_can_be_cancelled_never_one_that_runs_or_ended():
+    started = threading.Event()
+    go_on = threading.Event()
+
+    def slow(args, emit):
+        started.set()
+        go_on.wait(10)
+        return 0
+
+    queue = JobQueue(slow)
+    first, _ = queue.submit("Add A - 1", "a|1", add_steps("A", "1"))
+    second, _ = queue.submit("Add A - 2", "a|2", add_steps("A", "2"))
+    third, _ = queue.submit("Add A - 3", "a|3", add_steps("A", "3"))
+    queue.start()
+    try:
+        assert started.wait(10)
+        # The running one is never stopped halfway: JobStarted, and it goes on.
+        with pytest.raises(JobStarted):
+            queue.cancel(first.id)
+        cancelled = queue.cancel(second.id)
+        assert cancelled is not None and cancelled.id == second.id and cancelled.title == "Add A - 2"
+        assert [j.id for j in queue.snapshot()] == [third.id, first.id]
+        assert queue.cancel(second.id) is None  # gone: nothing to cancel
+        assert queue.cancel(99) is None
+    finally:
+        go_on.set()
+        queue.stop()
+    assert {j.id: j.state for j in queue.snapshot()} == {third.id: "queued", first.id: "done"}
+    with pytest.raises(JobStarted):  # over: it stays in the history
+        queue.cancel(first.id)
+
+
+def test_jobs_queued_together_are_cancelled_together_while_they_wait():
+    queue = JobQueue(FakeRunner())
+    alone, _ = queue.submit("Add A - 1", "a|1", add_steps("A", "1"))
+    (first, _), (second, _) = queue.submit_all([
+        {"title": "Fetch B - 2", "song_key": "b|2", "steps": add_steps("B", "2"), "fetching": True},
+        {"title": "Put B - 2 in a songbook", "song_key": "songbook|b|2", "steps": [("Adding", ("songbook", "add"))]}])
+    assert queue.cancel(second.id).id == second.id
+    assert [j.id for j in queue.snapshot()] == [alone.id]
+    # One of them running: the one that waits still goes, and the running one runs on.
+    (first, _), (second, _) = queue.submit_all([
+        {"title": "Fetch C - 3", "song_key": "c|3", "steps": add_steps("C", "3"), "fetching": True},
+        {"title": "Put C - 3 in a songbook", "song_key": "songbook|c|3", "steps": [("Adding", ("songbook", "add"))]}])
+    with queue._lock:
+        next(j for j in queue._jobs if j.id == first.id).state = "running"
+    queue.cancel(second.id)
+    assert sorted(j.id for j in queue.snapshot()) == [alone.id, first.id]
+
+
+def test_a_cancelled_job_makes_room_in_the_queue():
+    queue = JobQueue(FakeRunner(), limit=2)
+    queue.submit("Add A - 1", "a|1", add_steps("A", "1"))
+    waiting, _ = queue.submit("Add A - 2", "a|2", add_steps("A", "2"))
+    with pytest.raises(QueueFull):
+        queue.submit("Add A - 3", "a|3", add_steps("A", "3"))
+    queue.cancel(waiting.id)
+    queue.submit("Add A - 3", "a|3", add_steps("A", "3"))
+    queue.run_pending()
+    assert sorted(j.title for j in queue.snapshot()) == ["Add A - 1", "Add A - 3"]
 
 
 def test_finished_jobs_are_forgotten_beyond_a_few():

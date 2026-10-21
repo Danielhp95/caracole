@@ -13,14 +13,16 @@ A small server from the standard library (``http.server``), in these parts:
   candidate is ``caracole review --song``. Each takes caracole's lock
   and keeps the pause after the last request any caracole sent, as it does
   from a terminal, so the server is never more aggressive than the CLI.
-- status.py: the one line a request shows on its song's card and on /jobs,
-  read from its job's steps and, once it is over, from the song's state.
+- status.py: the one line a request shows on its song's card, read from its
+  job's steps and, once it is over, from the song's state; outcome.py: the
+  requests page's own view of it, the running one's steps and a finished
+  one's outcome, reason and next step.
 - app.py: the router, as a function from a request to a response, what
   every route shares (the answers' shapes, ``Refused``, the database, the
   queue) and the checks every request passes; server.py puts it on a socket.
   Each area's routes are a module: library_routes.py (the library page,
   requests, Fetch now), review_routes.py (the picker), jobs_routes.py (the
-  requests page, /jobs.json, /api/jobs), search_routes.py (the lookup page,
+  requests page, its Cancel and Try again, /jobs.json, /api/jobs), search_routes.py (the lookup page,
   search as you type, lookups), remove_routes.py, songbook_routes.py and
   export_routes.py (a sheet's PDF in the version its viewer was left in).
   pages.py: the pages it writes itself.

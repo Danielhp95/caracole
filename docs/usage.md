@@ -2715,21 +2715,75 @@ is no progression exits with status 2.
   it changes, to the last one, and Fetch now hands the keyboard focus to that
   line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.
-- **Requests**, the page at `/jobs`, has one line per request, the same as
-  its song's, with the commands it ran and what each printed folded away
-  under it (they run at `-v`, so that is the whole story), and a lookup's
-  stages with their states and why one was skipped. A song's Details
-  link opens that request's output. It refreshes itself every 10 seconds while
-  one waits or runs; Stop refreshing keeps it still. A request that ended in a
-  review (`caracole add` found only candidates) shows the song's picker under
-  its line, so you pick at once; with Fetch it now ticked, its lookup has no
-  UG song to fetch until then: its line says Needs review · Pick the match,
-  not a failure, and in its output the lookup's sheet stage Waits for a pick.
-  While
-  the page refreshes itself, which would undo a choice half made, it shows a
-  Pick the match link to the picker's own page, `/review?song=ID`, instead of
-  the picker. One whose song the index didn't match links to what `caracole
-  search` finds for it (Look in the index, above). `/api/jobs` and
+- **Requests**, the page at `/jobs`, shows what runs now, then what ended:
+  - **Now**: the request that runs, as a card with its song, how long ago it
+    started ("started 12 s ago"), its line ("Rendering the sheet…") and its
+    steps, the one running highlighted and those done ticked: for a lookup,
+    Song, Match, Sheet, PDF, Lyrics, Guitar Pro (Ultimate Guitar's second
+    pass, LaCuerda's and gtptabs.com's) and Songbooks, leaving out a step it
+    doesn't use (Songbooks when Get the missing songs makes the songbook
+    after, a step that ended with nothing to do for the song, such as the PDF
+    of a song with no sheet); for a request of other commands, its commands.
+    Under it, the requests queued, in order ("Queued, next", "Queued, 2nd"),
+    each with **Cancel**, which takes it out of the queue before it starts
+    (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
+    one that is over stays). Cancelling a request leaves its wanted.txt line:
+    the song is in your library's list from the moment you asked, and the
+    nightly run looks for it; remove it from the library if you don't want it.
+    A songbook's Add a song for a song you haven't got queues two requests,
+    its lookup and the songbook's change, both or neither: cancelling either
+    cancels the other too, while it waits.
+  - **Today** and **Earlier** (by when each ended, in the server's time
+    zone): the requests that are over, newest first, each with its outcome as
+    a coloured word, the reason in a sentence when there is one, the time it
+    ended and its next step:
+    - **Ready** · **Open**, its sheet; a reason says what waits for tonight's
+      run, in the site's own answer ("LRCLIB answered 503: the lyrics wait
+      for tonight's run.");
+    - **Needs review** · **Pick the match**, the picker's own page,
+      `/review?song=ID` (without candidates to pick, **Open in the library**,
+      the song's line);
+    - **Not found**: "Ultimate Guitar has no chords for it" once caracole
+      asked Ultimate Guitar for it (its song page, or its artist's page), and
+      "Not in the offline Ultimate Guitar index under this name" for a song
+      the index didn't match and whose artist's UG page isn't known, which
+      nobody asked; then, when the local indexes have it elsewhere, what: a
+      sheet LaCuerda's index holds, or a page gtptabs.com's index lists for a
+      song with no Guitar Pro file, and **Get it from there**, the lookup a
+      search's Get it runs (with that LaCuerda sheet picked), back on this
+      page. A site a new lookup would skip again isn't offered: one cooling
+      down after a block, one the lookup skipped for a block or a spent
+      budget, LaCuerda once asked about the song this month and gtptabs.com
+      once looked up for it this month. With nothing elsewhere, a song the
+      index didn't match has **See what caracole search finds** (the
+      picker's page, Look in the index, above), also beside Get it from
+      there, and any other **Request by name**, the library page's request
+      form filled in with the song (`/#q=Artist - Title`);
+    - **Not fetched yet**, with why (a cooldown, a block, a spent budget or
+      an error, in the stage's words), and **Failed**, with its error in one
+      sentence: **Try again** queues the same commands again
+      (`POST /jobs/again`), with no question asked, a songbook's Delete
+      among them; a failed removal's Try again asks what goes first, as of
+      now (Remove's own question, `POST /remove`);
+    - a songbook's **Made** or **Added** · **Open songbook**; **Removed**,
+      **Deleted**, **Added** (the nightly run looks for it), and a LaCuerda
+      artist page's **Read**, **Not found** or **Not read** (Try again), each
+      in a word and a sentence.
+
+  Every request keeps its **Output**, folded away: when it was asked for (in
+  the server's time zone, named), the commands it ran and
+  what each printed (they run at `-v`, so that is the whole story), and a
+  lookup's stages with their states and why one was skipped. A song's Details
+  link on the library page opens that request's output. The page refreshes
+  itself every 10 seconds while one waits or runs; Stop refreshing keeps it
+  still. The song's line on the library page still says it the short way
+  (Not found · see the to-do page, above). A request that ended in a review
+  (`caracole add` found only candidates) shows the song's picker under it
+  while the page is still, so you pick at once; with Fetch it now ticked, its
+  lookup has no UG song to fetch until then: it says Needs review, not a
+  failure, and in its output the lookup's sheet stage Waits for a pick. While
+  the page refreshes itself, which would undo a choice half made, its Pick the
+  match opens the picker's own page instead. `/api/jobs` and
   `/api/jobs/N` give each request as JSON: its steps (a lookup's stages),
   each with its state, its song and the library files its sheet can be read
   in. These JSON addresses (`/api/…`) answer caracole's own pages, the address
@@ -2737,7 +2791,8 @@ is no progression exits with status 2.
   page gets 403.
 - **Without JavaScript**, the forms still work: a request sends you to its
   line on `/jobs`, its output open; a pick, to its line; a lookup, to the
-  lookup page, which follows it.
+  lookup page, which follows it (one from the requests page's Get it from
+  there, back to `/jobs`).
 - **Songbooks**, the page's second tab (see [The Songbooks tab](#the-songbooks-tab)
   for what it shows). Each change runs its `caracole songbook` command (see
   [Songbooks](#songbooks)) and leaves you where you are:
