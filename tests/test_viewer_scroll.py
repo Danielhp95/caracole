@@ -276,8 +276,8 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
         ended = look(b)
         time.sleep(0.3)
         ended_still = look(b)["y"] == ended["y"]
-        b.js("location.reload()")
-        assert b.wait("document.documentElement.dataset.ready === '1'")
+        b.js("window.before = true; location.reload()")  # the page loaded again, not the one before it
+        assert b.wait("window.before === undefined && document.documentElement.dataset.ready === '1'")
         reloaded = look(b)
 
     assert faster["go"] == "Pause" and faster["speed"] == "8"
