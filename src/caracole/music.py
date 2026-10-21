@@ -25,7 +25,6 @@ from typing import Any
 
 from rapidfuzz import fuzz
 
-from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title, identity_key, name_forms
 from caracole.songs import Song, list_songs, update_song
 
@@ -128,6 +127,8 @@ def _expected_seconds(song: Song) -> float | None:
     """
     if song.duration_s is not None:
         return song.duration_s
+    from caracole.lyrics import song_lyrics  # here: inbox.py, which the pages import, needs no lyrics
+
     try:
         lyrics = song_lyrics(song)
     except (TypeError, ValueError):  # stored lyrics that can't be read: no duration

@@ -119,6 +119,18 @@ def test_the_pages_load_no_tag_reader():
     assert out.stdout.strip() == "[]"
 
 
+@pytest.mark.slow
+def test_the_inbox_loads_no_http_client():
+    # web/files.py imports inbox.py for its extensions: scoring a download's names with Names reads
+    # no lyrics, so neither brings in lyrics.py, http.py and the httpx they load.
+    code = ("import sys; import caracole.inbox, caracole.web.files; print(sorted(m for m in sys.modules "
+            "if m in ('caracole.lyrics', 'caracole.http') or m.startswith(('httpx', 'rich'))))")
+    src = Path(__file__).resolve().parents[1] / "src"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
+                         env={"PYTHONPATH": subprocess_pythonpath(src)})
+    assert out.stdout.strip() == "[]"
+
+
 # --- a disk that isn't there tonight --------------------------------------------------------
 
 

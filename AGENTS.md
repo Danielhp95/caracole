@@ -237,8 +237,9 @@ Traps:
   `test_commands_index_match.py::test_registering_the_commands_imports_neither_the_matcher_nor_the_index`
   fails when importing `caracole.cli` loads rapidfuzz, `caracole.match` or `caracole.ug`; the
   `test_registering_the_command*` tests of fetch, lyrics, sources, autochords and youtube do
-  the same. music.py imports mutagen in `read_audio` alone: inbox.py, which the pages import,
-  scores names with its `Names` (`test_music.py::test_the_pages_load_no_tag_reader`).
+  the same. music.py imports mutagen in `read_audio` alone, and lyrics.py in `_expected_seconds`:
+  inbox.py, which the pages import, scores names with its `Names`
+  (`test_music.py::test_the_pages_load_no_tag_reader`, `::test_the_inbox_loads_no_http_client`).
 - Branch from `caracole-v1`, the default branch (`main` holds only the first design commit).
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:
