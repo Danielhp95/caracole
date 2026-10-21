@@ -6,7 +6,8 @@ progression with its name and how it ends. On top of theory.py's chords and keys
 scale (theory.py's ``_DEGREES``): a degree the key lowers or raises gets ♭ or ♯, so A minor's C is
 ♭III and C Mixolydian's B♭ is ♭VII. Upper case for a chord with a major third (or none), lower case
 for a minor or diminished one; then ° (diminished), ø (half-diminished), + (augmented) and the
-extensions as the chord's name has them (V7, ii9, Isus4, I5). A slash chord's bass is its degree
+extensions as the chord's name has them (V7, ii9, Isus4, I5; a 6/9 is I69, as the slash is the
+bass's). A slash chord's bass is its degree
 above the chord's own root, in Arabic numerals (C/E is I/3, G/F is V/♭7, C/D is I/2: a bass that is
 no note of the chord shows as what it is, never as an inversion); a Roman numeral after the slash
 is the chord a secondary chord belongs to (V/V). The bass's degree is counted against the major
@@ -19,13 +20,18 @@ analysis where two readings exist):
 
 - *in the key*: every note of the chord (its bass too) is in the key's scale; in a minor
   (Aeolian) key a chord on the fifth or the seventh degree may raise the sixth and the seventh,
-  so E7 and G♯°7 are A minor's V7 and vii°7, as ``theory.estimate_key`` counts them.
+  so E7 and G♯°7 are A minor's V7 and vii°7, as ``theory.estimate_key`` counts them, and one on
+  the tonic the seventh (Am(maj7) is A minor's i(maj7), and C minor's in C). But a dominant
+  seventh of the key, on neither its tonic nor its fifth, that goes a fifth down to a chord of
+  the key is secondary: G7 C in A minor is V7/♭III (G7 going elsewhere is ♭VII7).
 - *secondary*: a dominant (a major third, no major seventh) a fifth above a major or minor chord
   of the key other than the tonic (V/x), or a leading-tone chord (diminished or half-diminished)
   a half step below one (vii°/x). Read so when it goes to that chord, or when no mode on the
   tonic holds it (E major in C is V/vi wherever it goes). One a mode holds and that goes
   elsewhere is borrowed: D major in C going to C is C Lydian's II (rock's "Lydian II"), going
-  to G it is V/V. A chord on the tonic is never secondary: C7 F7 in a blues is I7 IV7.
+  to G it is V/V. On the tonic, only a dominant seventh going to IV (iv) that is no dominant
+  seventh itself: C Cmaj7 C7 F is I Imaj7 V7/IV IV, Am A7 Dm is i V7/iv iv, and a blues's C7 F7
+  stays I7 IV7.
 - *borrowed* from the first mode on the same tonic that holds it (with the minor key's raised
   sixth and seventh on its fifth and seventh degrees, as above). A major key borrows from its
   parallel minor first (modal mixture: ♭III, iv, ♭VI, ♭VII, ii°, vii°7 are "borrowed from C
@@ -44,8 +50,14 @@ rock's Aeolian cadence, ♭VII–i). None for a chord from outside the key.
 **Progressions**: a section's chords as numerals, each read with the chord it goes to (the next on
 the sheet on another root, the next section's after its last); a chord held over several lines
 once, a cycle the section plays whole each time folded ("vi IV I V" ×4), named from ``CATALOGUE`` in any
-rotation and key, and its ending. Names compare the numerals' roots alone (Imaj7 is I, I/3 is I;
-V/V stays V/V), as ``progression_key`` does for searching.
+rotation and key (the 12-bar blues only from its first chord: its changes turned round are no
+blues), and its ending. Names compare the numerals' roots alone (Imaj7 is I, I/3 is I; V/V stays
+V/V, but V/IV, built on the tonic, is I), as ``progression_key`` does for searching.
+
+**Notes** keep one letter a degree, from the root up (G♯7's 3rd is B♯, F♯ major's 7th E♯; a double
+sharp is "##", a double flat "bb"). The root is spelled as the key spells it, a secondary chord's
+from the chord it belongs to (G♯°7 to Am in C, not A♭°7), and by its other name when that needs
+fewer double sharps and flats (C♯m7♭5 in C, not D♭'s F♭, A♭♭ and C♭).
 
 The answers are kept (``functools`` caches), as theory.py's are: chords and keys are frozen, these
 dataclasses too, and a list handed out is a copy.
@@ -62,13 +74,14 @@ from caracole.viewer.theory import (
     _DEGREES,
     _LETTERS,
     _NATURAL,
+    FLATS,
     MODES,
     SCALES,
+    SHARPS,
     Chord,
     Key,
     _diatonic_quality,
     _intervals,
-    _spell,
     scale,
     spelling,
 )
@@ -80,8 +93,8 @@ _IONIAN = SCALES["ionian"]
 _SHAPES: dict[str, tuple[bool, str, str]] = {
     "": (False, "", ""), "m": (True, "", ""), "5": (False, "", "5"), "dim": (True, "°", ""),
     "aug": (False, "+", ""), "sus2": (False, "", "sus2"), "sus4": (False, "", "sus4"),
-    "b5": (False, "", "♭5"), "6": (False, "", "6"), "m6": (True, "", "6"), "69": (False, "", "6/9"),
-    "m69": (True, "", "6/9"), "7": (False, "", "7"), "maj7": (False, "", "maj7"),
+    "b5": (False, "", "♭5"), "6": (False, "", "6"), "m6": (True, "", "6"), "69": (False, "", "69"),
+    "m69": (True, "", "69"), "7": (False, "", "7"), "maj7": (False, "", "maj7"),
     "m7": (True, "", "7"), "mmaj7": (True, "", "maj7"), "m7b5": (True, "ø", "7"),
     "dim7": (True, "°", "7"), "7sus4": (False, "", "7sus4"), "7sus2": (False, "", "7sus2"),
     "add9": (False, "", "add9"), "madd9": (True, "", "add9"), "add11": (False, "", "add11"),
@@ -140,7 +153,9 @@ class Progression:
 # without the turnaround's V), "Andalusian cadence", "Plagal cadence" (the double plagal cadence,
 # ♭VII–IV–I, the progression I–♭VII–IV turned round), "Circle progression", "Pachelbel's Canon",
 # "Ragtime progression" and "Royal road progression". The first two read again in the relative
-# minor, so a song in A minor read as C major, or the other way, finds the same name.
+# minor, so a song in A minor read as C major, or the other way, finds the same name; so do the
+# Andalusian cadence, the circle of fifths and the royal road. The ragtime progression is named
+# with or without the I it starts from.
 CATALOGUE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("the pop progression", ("I", "V", "vi", "IV")),
     ("the pop progression", ("i", "♭VI", "♭III", "♭VII")),
@@ -154,12 +169,19 @@ CATALOGUE: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("the 12-bar blues", ("I", "IV", "I", "IV", "I", "V", "IV", "I")),
     ("the 12-bar blues", ("I", "IV", "I", "IV", "I", "V", "IV", "I", "V")),
     ("the Andalusian cadence", ("i", "♭VII", "♭VI", "V")),
+    ("the Andalusian cadence", ("vi", "V", "IV", "V/vi")),
     ("I–♭VII–IV", ("I", "♭VII", "IV")),
     ("the circle of fifths", ("vi", "ii", "V", "I")),
+    ("the circle of fifths", ("i", "iv", "♭VII", "♭III")),
     ("the Canon", ("I", "V", "vi", "iii", "IV", "I", "IV", "V")),
     ("the ragtime progression", ("V/vi", "V/ii", "V/V", "V")),
+    ("the ragtime progression", ("I", "V/vi", "V/ii", "V/V", "V")),
     ("the royal road", ("IV", "V", "iii", "vi")),
+    ("the royal road", ("♭VI", "♭VII", "v", "i")),
 )
+# Names matched only as written, from their first chord, never in another rotation: the blues's
+# changes turned round ("C G F C F") are no blues.
+_AS_WRITTEN = frozenset({"the 12-bar blues"})
 
 # The modes a key borrows from, first the one asked first (the module's docstring says why).
 _BORROWS = {
@@ -178,9 +200,10 @@ def _mode_word(mode: str) -> str:
     return _MODE_WORDS.get(mode, mode.capitalize())
 
 
-def _key_words(key: Key) -> str:
-    """"C major", "A minor", "C Mixolydian"."""
-    return f"{spelling(key)[key.tonic]} {_mode_word(key.mode)}"
+def _key_words(key: Key, home: Key | None = None) -> str:
+    """"C major", "A minor", "C Mixolydian". A key on ``home``'s tonic (the key a chord is
+    borrowed from) spells it as ``home`` does: Eb minor in Eb major, never D# minor."""
+    return f"{spelling(home or key)[key.tonic]} {_mode_word(key.mode)}"
 
 
 def _degree(pc: int, key: Key) -> tuple[int, str]:
@@ -219,6 +242,10 @@ def _dominant(chord: Chord) -> bool:
     return 4 in iv and 11 not in iv and (8 not in iv or 10 in iv)
 
 
+def _dominant_seventh(chord: Chord | None) -> bool:
+    return chord is not None and _dominant(chord) and 10 in chord.intervals
+
+
 def _leading(chord: Chord) -> bool:
     iv = chord.intervals
     return 3 in iv and 6 in iv and 4 not in iv and 7 not in iv
@@ -226,10 +253,14 @@ def _leading(chord: Chord) -> bool:
 
 def _holds(key: Key, chord: Chord) -> bool:
     """Every note of the chord is in the key: in a minor key, a chord on the fifth or seventh
-    degree may raise the sixth and seventh."""
+    degree may raise the sixth and seventh, and one on the tonic the seventh (i(maj7))."""
     notes = scale(key)
-    if key.mode == "aeolian" and (chord.root - key.tonic) % 12 in (7, 11):
-        notes = notes | {(key.tonic + 9) % 12, (key.tonic + 11) % 12}
+    if key.mode == "aeolian":
+        degree = (chord.root - key.tonic) % 12
+        if degree in (7, 11):
+            notes = notes | {(key.tonic + 9) % 12, (key.tonic + 11) % 12}
+        elif degree == 0:
+            notes = notes | {(key.tonic + 11) % 12}
     return chord.pitch_classes <= notes
 
 
@@ -266,16 +297,29 @@ class _Reading:
 
 @functools.lru_cache(maxsize=8192)
 def _read(chord: Chord, key: Key, next_chord: Chord | None) -> _Reading:
+    fifth_below = (chord.root + 5) % 12
+    resolves = next_chord is not None and next_chord.root == fifth_below
     if _holds(key, chord):
+        # A dominant seventh of the key (not its own V, not on its tonic) going a fifth down to a
+        # chord of the key: G7 C in A minor is V7/♭III.
+        if (resolves and _dominant_seventh(chord) and (chord.root - key.tonic) % 12 not in (0, 7)
+                and _target(fifth_below, key) is not None):
+            return _Reading("secondary", None, fifth_below)
         return _Reading("in")
     sources = [Key(key.tonic, m) for m in _borrows(key)]
     source = next((s for s in sources if _holds(s, chord)), None)
-    if chord.root != key.tonic:
+    if chord.root == key.tonic:
+        # A tonic dominant seventh going to IV (iv) is its V7, unless that is a dominant seventh
+        # too: C7 F is V7/IV, a blues's C7 F7 stays I7 IV7.
+        if (resolves and _dominant_seventh(chord) and not _dominant_seventh(next_chord)
+                and _target(fifth_below, key) is not None):
+            return _Reading("secondary", None, fifth_below)
+    else:
         for kind, fits, step in (("secondary", _dominant, 5), ("leading", _leading, 1)):
             target = (chord.root + step) % 12
             if fits(chord) and _target(target, key) is not None:
-                resolves = next_chord is not None and next_chord.root == target
-                if resolves or source is None:
+                goes = next_chord is not None and next_chord.root == target
+                if goes or source is None:
                     return _Reading(kind, None, target)
     if source is not None:
         return _Reading("borrowed", source)
@@ -324,7 +368,7 @@ def relation(chord: Chord, key: Key, next_chord: Chord | None = None) -> Relatio
     if reading.kind in ("secondary", "leading"):
         return Relation(reading.kind, None, _target(reading.target, key)[1])
     if reading.kind == "borrowed":
-        return Relation("borrowed", _key_words(reading.source), None)
+        return Relation("borrowed", _key_words(reading.source, key), None)
     return Relation(reading.kind, None, None)
 
 
@@ -340,7 +384,7 @@ def family(chord: Chord, key: Key) -> str | None:
 
 # An extension's part, in words that read after "with".
 _EXTENSION_WORDS = {
-    "5": "only its root and 5th", "6": "an added 6th", "6/9": "an added 6th and 9th",
+    "5": "only its root and 5th", "6": "an added 6th", "69": "an added 6th and 9th",
     "7": "a 7th", "maj7": "a major 7th", "9": "a 7th and 9th", "maj9": "a major 7th and 9th",
     "11": "a 7th, 9th and 11th", "13": "a 7th, 9th and 13th", "add9": "an added 9th",
     "add11": "an added 11th", "sus2": "the 2nd in place of the 3rd",
@@ -356,7 +400,7 @@ _SYMBOL_MEANINGS = {
     "sus2": "suspended: the 2nd in place of the 3rd",
     "sus4": "suspended: the 4th in place of the 3rd",
 }
-_TOKENS = re.compile(r"maj\d+|add\d+|sus\d|6/9|[♭♯]\d+|no\d|\d+|.")
+_TOKENS = re.compile(r"maj\d+|add\d+|sus\d|69|[♭♯]\d+|no\d|\d+|.")
 
 
 def _tokens(extension: str) -> list[str]:
@@ -395,10 +439,9 @@ def _quality_words(chord: Chord, numeral_: Numeral) -> str:
     return triad or (f"with {parts}" if parts else "")
 
 
-def _chord_name(chord: Chord, key: Key | None) -> str:
-    names = spelling(key)
-    bass = "" if chord.bass is None else "/" + names[chord.bass]
-    return names[chord.root] + chord.suffix + bass
+def _chord_name(chord: Chord, key: Key, next_chord: Chord | None) -> str:
+    bass = "" if chord.bass is None else "/" + spelling(key)[chord.bass]
+    return _root_name(chord, key, _read(chord, key, next_chord)) + chord.suffix + bass
 
 
 @functools.lru_cache(maxsize=8192)
@@ -437,7 +480,7 @@ def explain(chord: Chord, key: Key, next_chord: Chord | None = None) -> str:
         goes = next_chord is not None and next_chord.root == reading.target
         line += f"; {'leads' if goes else 'points'} to {target}"
     elif reading.kind == "borrowed":
-        line += f"; borrowed from {_key_words(reading.source)}"
+        line += f"; borrowed from {_key_words(reading.source, key)}"
     elif reading.kind == "outside":
         line += f"; outside {words}"
     return line
@@ -482,7 +525,7 @@ def _glossary(chords: tuple[Chord, ...], key: Key) -> tuple[tuple[str, str, str]
 
     for chord, after in zip(chords, _goes_to(chords), strict=True):
         n = numeral(chord, key, after)
-        example = f"{_chord_name(chord, key)} = {n.text}"
+        example = f"{_chord_name(chord, key, after)} = {n.text}"
         note(0, "I–VII", f"Roman numerals: the chord's root counted up the scale of {words}, "
                          f"from its tonic, {tonic} (I)", example)
         if n.of is None and n.quality != "+" and 4 in chord.intervals and not n.roman.islower():
@@ -533,16 +576,52 @@ def _tone_names(chord: Chord) -> dict[int, str]:
     return {i: names[i] for i in iv}
 
 
+def _named(letter: str, pc: int) -> str:
+    """``letter`` with the sharps or flats that make it sound ``pc``: E# and Cb stay, a double
+    one is "##" or "bb"."""
+    step = (pc - _NATURAL[letter] + 6) % 12 - 6
+    return letter + ("#" * step if step > 0 else "b" * -step)
+
+
 def _letter_name(root_name: str, number: int, pc: int) -> str:
-    """The note ``number`` letters up from ``root_name`` (1 is the root), sounding ``pc``."""
-    letter = _LETTERS[(_LETTERS.index(root_name[0]) + number - 1) % 7]
-    return _spell(letter, (pc - _NATURAL[letter] + 6) % 12 - 6)
+    """The note ``number`` letters up from ``root_name`` (1 is the root), sounding ``pc``: one
+    letter a degree, so G#7's 3rd is B#."""
+    return _named(_LETTERS[(_LETTERS.index(root_name[0]) + number - 1) % 7], pc)
+
+
+def _doubles(root_name: str, chord: Chord, steps: Sequence[int]) -> tuple[int, int]:
+    """How many double sharps or flats the chord's notes, then the scale's (``steps``, a scale of
+    seven), need when spelled up from ``root_name``."""
+    def count(notes):
+        return sum(len(n) > 2 for n in notes)
+    tones = count(_letter_name(root_name, _number(label), (chord.root + i) % 12)
+                  for i, label in _tone_names(chord).items())
+    notes = count(_letter_name(root_name, n + 1, (chord.root + s) % 12)
+                  for n, s in enumerate(steps)) if len(steps) == 7 else 0
+    return tones, notes
+
+
+def _root_name(chord: Chord, key: Key | None, reading: _Reading | None,
+               steps: Sequence[int] = ()) -> str:
+    """The chord's root as its notes are spelled from: as ``key`` spells it, but a secondary
+    chord's from the chord it belongs to (G#dim7 to Am: a half step below A; a V/x a fifth above
+    x), and the other name of the note when that spells the chord (then its scale) with fewer
+    double sharps and flats (C#m7b5 in C, not Db's Fb, Abb and Cb)."""
+    names = spelling(key)
+    first = names[chord.root]
+    if key is not None and reading is not None and reading.kind in ("secondary", "leading"):
+        target = names[reading.target][0]
+        letter = _LETTERS[(_LETTERS.index(target) + (4 if reading.kind == "secondary" else 6)) % 7]
+        if len(name := _named(letter, chord.root)) <= 2:
+            first = name
+    candidates = [first] + [n for n in (SHARPS[chord.root], FLATS[chord.root]) if n != first]
+    return min(candidates, key=lambda n: _doubles(n, chord, steps))  # the first of the best
 
 
 def chord_tones(chord: Chord, key: Key | None) -> list[tuple[str, str]]:
     """The chord's notes with their intervals, low to high by degree: C7 is [("C", "R"),
     ("E", "3"), ("G", "5"), ("Bb", "♭7")]. Each note is spelled from the root's letter (E7's
-    third is G#, even in C), the root as ``key`` spells it. A bass that is no note of the chord
+    third is G#, even in C; G#7's B#), the root as the module's docstring says. A bass that is no note of the chord
     comes in by its degree above the root (C/D's D is its "2")."""
     return list(_chord_tones(chord, key))
 
@@ -553,7 +632,11 @@ def _number(label: str) -> int:
 
 @functools.lru_cache(maxsize=4096)
 def _chord_tones(chord: Chord, key: Key | None) -> tuple[tuple[str, str], ...]:
-    root = spelling(key)[chord.root]
+    if key is None:
+        root = _root_name(chord, None, None)
+    else:
+        name = _scale_for(chord, key)
+        root = _root_name(chord, key, _read(chord, key, None), _intervals_of(name))
     tones = [(label, interval) for interval, label in _tone_names(chord).items()]
     if chord.bass is not None and (interval := (chord.bass - chord.root) % 12) not in chord.intervals:
         tones.append((_BASS_DEGREES[interval], interval))
@@ -611,6 +694,20 @@ def solo_scale(chord: Chord, key: Key) -> tuple[str, tuple[str, ...]]:
 
 @functools.lru_cache(maxsize=4096)
 def _solo_scale(chord: Chord, key: Key) -> tuple[str, tuple[str, ...]]:
+    name = _scale_for(chord, key)
+    steps = _intervals_of(name)
+    root = _root_name(chord, key, _read(chord, key, None), steps)
+    if len(steps) == 7:
+        notes = tuple(_letter_name(root, i + 1, (chord.root + s) % 12) for i, s in enumerate(steps))
+    else:  # no letter a degree: in sharps from a sharp root, in flats from a flat one
+        names = SHARPS if "#" in root else FLATS if "b" in root else spelling(key)
+        notes = (root, *(names[(chord.root + s) % 12] for s in steps[1:]))
+    return f"{root} {_mode_word(name) if name in SCALES else name}", notes
+
+
+@functools.lru_cache(maxsize=4096)
+def _scale_for(chord: Chord, key: Key) -> str:
+    """The name of the scale ``solo_scale`` gives for ``chord``: a mode or one of _OTHER_SCALES."""
     reading = _read(chord, key, None)
     candidates: list[str] = []
     home = key if reading.kind == "in" else reading.source
@@ -623,14 +720,7 @@ def _solo_scale(chord: Chord, key: Key) -> tuple[str, tuple[str, ...]]:
         candidates.append("mixolydian")
     candidates += _by_quality(chord)
     pcs = {(pc - chord.root) % 12 for pc in chord.pitch_classes}
-    name = next((c for c in candidates if pcs <= set(_intervals_of(c))), candidates[0])
-    root = spelling(key)[chord.root]
-    steps = _intervals_of(name)
-    if len(steps) == 7:
-        notes = tuple(_letter_name(root, i + 1, (chord.root + s) % 12) for i, s in enumerate(steps))
-    else:
-        notes = tuple(spelling(key)[(chord.root + s) % 12] for s in steps)
-    return f"{root} {_mode_word(name) if name in SCALES else name}", notes
+    return next((c for c in candidates if pcs <= set(_intervals_of(c))), candidates[0])
 
 
 @functools.cache
@@ -656,9 +746,13 @@ _ROMAN_ONLY = re.compile(_ROMAN + r"[°ø+]?$")
 _SEPARATORS = re.compile(r"[\s,–—-]+")
 
 
+# A V/x built on the tonic is the I it stands on, as names compare roots: C C7 F is I IV.
+_ON_THE_TONIC = {"V/IV": "I", "V/iv": "I"}
+
+
 def _core(text: str) -> str:
     """A numeral's root, its case and the chord it is the V of: "Imaj7" -> "I", "V7/V/3" ->
-    "V/V", "bVII" -> "♭VII". A text that is no numeral stays as it is."""
+    "V/V", "bVII" -> "♭VII", "V7/IV" -> "I". A text that is no numeral stays as it is."""
     m = _NUMERAL.match(text)
     if not m:
         return text
@@ -668,7 +762,7 @@ def _core(text: str) -> str:
         if of := _ROMAN_ONLY.match(part):
             core += "/" + {"b": "♭", "#": "♯"}.get(of.group(1), of.group(1)) + of.group(2)
             break
-    return core
+    return _ON_THE_TONIC.get(core, core)
 
 
 def _collapse(items: Sequence[str]) -> list[str]:
@@ -689,13 +783,19 @@ def progression_key(numerals: Sequence[str] | str) -> str:
     vi" are both "I V vi IV". ``numerals`` may be one string ("vi IV I V", "vi–IV–I–V")."""
     if isinstance(numerals, str):
         numerals = [n for n in _SEPARATORS.split(numerals) if n]
+    cycle = _cycle(numerals)
+    if not cycle:
+        return ""
+    return " ".join(min(tuple(cycle[i:] + cycle[:i]) for i in range(len(cycle))))
+
+
+def _cycle(numerals: Sequence[str]) -> list[str]:
+    """The numerals' roots, a chord held twice once, a last chord that is the first again
+    dropped, the cycle once: as written, not turned."""
     cores = _collapse([_core(n) for n in numerals])
     while len(cores) > 1 and cores[0] == cores[-1]:
         cores.pop()
-    if not cores:
-        return ""
-    cycle = cores[: _period(cores)]
-    return " ".join(min(tuple(cycle[i:] + cycle[:i]) for i in range(len(cycle))))
+    return cores[: _period(cores)] if cores else []
 
 
 @functools.cache
@@ -704,6 +804,20 @@ def _catalogue() -> dict[str, str]:
     for name, numerals in CATALOGUE:
         names.setdefault(progression_key(numerals), name)
     return names
+
+
+@functools.cache
+def _as_written() -> frozenset[tuple[str, ...]]:
+    return frozenset(tuple(_cycle(numerals)) for name, numerals in CATALOGUE if name in _AS_WRITTEN)
+
+
+def _name(cycle: Sequence[str]) -> str | None:
+    """The catalogue's name for a cycle, in any rotation, but those of ``_AS_WRITTEN`` only from
+    their first chord."""
+    name = _catalogue().get(progression_key(cycle))
+    if name in _AS_WRITTEN and tuple(_cycle(cycle)) not in _as_written():
+        return None
+    return name
 
 
 def _ending(cores: Sequence[str]) -> str | None:
@@ -746,7 +860,6 @@ def _progressions(sections: tuple[tuple[str, tuple[Chord | None, ...]], ...],
         held = _collapse(numerals)
         period = _period(held)
         cycle = tuple(held[:period])
-        found.append((name, Progression(cycle, len(held) // period,
-                                        _catalogue().get(progression_key(cycle)),
+        found.append((name, Progression(cycle, len(held) // period, _name(cycle),
                                         _ending([_core(t) for t in held]))))
     return tuple(found)
