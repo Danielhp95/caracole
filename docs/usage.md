@@ -1996,6 +1996,24 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   **What do the numerals mean?** under it explains the notation with the
   song's own chords as examples, in the key shown. A song whose key caracole
   can't tell offers chords alone, and says so.
+- **Harmony** (in the settings) opens a panel in their place, docked at the
+  foot on a phone and a rail on the right from 900 px wide: the key the
+  numerals are read in and where it came from, the key's neck on a phone (on
+  a laptop it heads the rail of necks), and each section's progression in
+  numerals, one cycle of it with the times it is played ("I–V–vi–IV ×4"), its
+  name when it has a common one (the pop progression, the '50s progression,
+  ii–V–I, the 12-bar blues, the Andalusian cadence, the circle of fifths, the
+  Canon, in any key and starting on any of its chords) and how the section
+  ends (an authentic cadence, V–I; plagal, IV–I; half, on V; deceptive,
+  V–vi). A section with no chord caracole can read isn't listed; a sheet with
+  no headings has one section, "Section 1". Tap a progression to go to its
+  section. Where the page can play a chord, **▶** plays it, a chord a bar at
+  the tempo above the list (80 bpm to start), each chord with the shape and
+  the capo the page shows, marking the chord playing, and **■** stops it, as
+  closing the panel does. **Songs with this progression** opens the library
+  page with the songs that have it (`index.html#prog=I%20V%20vi%20IV`). With
+  numerals on, a section's heading on the sheet names its progression too
+  ("Verse · the pop progression").
 - Every chord's shape in a strip above the song (Show all, in the
   settings): the shapes alone, large enough to read at a glance; tap one for
   its card, with the fingers. Reset everything, at the foot of the settings,

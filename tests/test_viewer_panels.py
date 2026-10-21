@@ -331,6 +331,146 @@ def test_a_card_for_a_chord_caracole_cant_read_lists_no_notes(tmp_path):
     assert seen["notes"] == [] and seen["scale"] is None and seen["name"] == "N.C."
 
 
+# --- the Harmony panel --------------------------------------------------------------------------------
+
+SONG = ("{title: Progressions}\n{artist: Synthetic}\n{key: C}\n"
+        "{comment: Verse}\n" + "[C]made [G]up [Am]words [F]here\n" * 4 + "\n"
+        "{comment: Chorus}\n[F]and [G]the [C]cho[Am]rus\n[F]ends [G]at [C]home\n\n"
+        "{comment: Riff}\n[N.C.]no chords here\n\n"
+        "{comment: Bridge}\n[Am]down [G]the [F]stairs [E7]again\n")
+UNNAMED = "{title: Unnamed}\n{artist: Synthetic}\n[Am]down [G]the [F]stairs [E7]again\n[Am]down [G]the [F]stairs [E7]again\n"
+# What the Harmony panel lists, section by section, and where it is.
+HARMONY = """(() => { const h = document.getElementById('harmony');
+  const r = h.getBoundingClientRect();
+  return {open: !h.hidden, box: h.hidden ? null : {top: Math.round(r.top), bottom: Math.round(r.bottom),
+            left: Math.round(r.left), right: Math.round(r.right)},
+    key: document.getElementById('harmony-key').textContent,
+    neck: h.querySelector('.kn') !== null,
+    tempo: !document.getElementById('tempo-row').hidden,
+    rows: [...h.querySelectorAll('.prog')].map((li) => ({
+      section: li.querySelector('.prog-sec').textContent,
+      numerals: [...li.querySelectorAll('.prog-nums .pn')].map((n) => n.textContent),
+      repeats: li.querySelector('.prog-x') ? li.querySelector('.prog-x').textContent : '',
+      about: li.querySelector('.prog-about').textContent,
+      play: !li.querySelector('.prog-play').hidden,
+      songs: li.querySelector('.prog-songs').getAttribute('href')})),
+    focus: document.activeElement ? document.activeElement.id : '', panel: !document.getElementById('panel').hidden,
+    page: document.documentElement.scrollWidth}; })()"""
+# A stand-in for HV3's synthesis (strum.js: window.caracoleSound), noting what it is asked to play.
+FAKE_SOUND = """window.caracoleSound = {available: true, stop() {},
+  play(chords, options) { window.asked = {chords, bpm: options.bpm}; window.playing = options;
+    options.onChord(0);
+    return {playing: true, stop() { window.stopped = true; options.onEnd(false); }}; }};"""
+
+
+def open_harmony(b: Browser) -> None:
+    b.click("#more")
+    b.click("#harmony-open")
+    assert b.wait("!document.getElementById('harmony').hidden")
+
+
+@in_chromium
+def test_on_a_phone_the_harmony_panel_docks_in_place_of_the_settings_and_lists_each_sections_progression(tmp_path):
+    with viewer(tmp_path, written(tmp_path, SONG)) as b:
+        open_harmony(b)
+        seen = b.js(HARMONY)
+        bar = look(b)["bar"]
+        targets = b.js(small_targets(".foot *"))
+    assert seen["open"] and not seen["panel"] and seen["focus"] == "harmony-title"
+    assert seen["box"]["bottom"] == bar["top"] and seen["box"]["left"] == 0 and seen["box"]["right"] == 390
+    assert seen["key"] == "Read in the key of C (from the sheet)."
+    assert seen["neck"]  # the key's neck, on a phone, is here
+    verse, chorus, bridge = seen["rows"]  # the riff has no chord to read
+    assert verse == {"section": "Verse", "numerals": ["I", "V", "vi", "IV"], "repeats": "×4",
+                     "about": "the pop progression", "play": False,
+                     "songs": "../../index.html#prog=I%20V%20vi%20IV"}
+    assert chorus["numerals"] == ["IV", "V", "I", "vi", "IV", "V", "I"] and chorus["repeats"] == ""
+    assert chorus["about"] == "ends on an authentic cadence (V–I)"
+    assert bridge["section"] == "Bridge" and bridge["numerals"][0] == "vi"
+    assert not seen["tempo"] and seen["page"] <= 390 and targets == []
+
+
+@in_chromium
+def test_on_a_laptop_the_harmony_panel_is_a_rail_and_the_keys_neck_stays_in_the_rail_of_necks(tmp_path):
+    with viewer(tmp_path, written(tmp_path, SONG), **DESKTOP) as b:
+        open_harmony(b)
+        seen = b.js(HARMONY)
+        client = look(b)["client"]
+        b.click("#more")  # the settings in its place
+        swapped = b.js("[document.getElementById('harmony').hidden, document.getElementById('panel').hidden]")
+    assert seen["box"]["right"] == client and seen["box"]["top"] == 0 and seen["box"]["left"] == client - 360
+    assert not seen["neck"] and seen["page"] <= 1280
+    assert swapped == [True, False]
+
+
+@in_chromium
+def test_a_section_tapped_in_the_panel_comes_into_view(tmp_path):
+    with viewer(tmp_path, written(tmp_path, SONG + "".join(f"{{comment: Outro {n}}}\n[C]la [G]la\n" for n in range(30)))) as b:
+        open_harmony(b)
+        b.js("document.querySelectorAll('#harmony .prog-go')[2].click()")  # the bridge
+        assert b.wait("Math.abs(document.querySelectorAll('#sheet section.sec')[3].getBoundingClientRect().top) < 40")
+        still = b.js("!document.getElementById('harmony').hidden")
+    assert still
+
+
+@in_chromium
+def test_with_numerals_on_a_sections_heading_names_its_progression(tmp_path):
+    heads = "[...document.querySelectorAll('#sheet h2.lbl')].map((h) => h.textContent)"
+    with viewer(tmp_path, written(tmp_path, SONG)) as b:
+        plain = b.js(heads)
+    with viewer(tmp_path, written(tmp_path, SONG, name="Numbered") + "#nm=both") as b:
+        named = b.js(heads)
+    assert plain == ["Verse", "Chorus", "Riff", "Bridge"]
+    # The bridge, vi V IV V7/vi, is the Andalusian cadence read in the relative major.
+    assert named == ["Verse · the pop progression", "Chorus", "Riff", "Bridge · the Andalusian cadence"]
+
+
+@in_chromium
+def test_a_sheet_with_no_headings_has_one_section_to_list(tmp_path):
+    with viewer(tmp_path, written(tmp_path, UNNAMED)) as b:
+        open_harmony(b)
+        seen = b.js(HARMONY)
+    assert [(r["section"], r["numerals"], r["repeats"], r["about"]) for r in seen["rows"]] == [
+        ("Section 1", ["i", "♭VII", "♭VI", "V7"], "×2", "the Andalusian cadence · ends on a half cadence (on V)")]
+
+
+@in_chromium
+def test_play_asks_the_synthesis_for_the_progression_and_marks_the_chord_playing(tmp_path):
+    with viewer(tmp_path, written(tmp_path, SONG)) as b:
+        b.js(FAKE_SOUND)
+        open_harmony(b)
+        shown = b.js(HARMONY)
+        b.js("document.querySelectorAll('#harmony .prog-play')[0].click()")
+        asked = b.js("window.asked")
+        marked = b.js("[...document.querySelectorAll('#harmony .prog')[0].querySelectorAll('.pn.on')].map((n) => n.textContent)")
+        label = b.js("document.querySelectorAll('#harmony .prog-play')[0].getAttribute('aria-label')")
+        b.js("window.playing.onChord(5)")
+        later = b.js("[...document.querySelectorAll('#harmony .prog')[0].querySelectorAll('.pn.on')].map((n) => n.textContent)")
+        shapes = b.js("""(() => { const d = JSON.parse(document.getElementById('song').textContent);
+          const rep = d.chords[0]; return d.voicings[rep[3]][rep[0]][0]; })()""")
+        b.click("#bpm-up")
+        b.js("document.querySelectorAll('#harmony .prog-play')[0].click()")  # ■
+        stopped = b.js("[window.stopped, document.querySelectorAll('#harmony .prog-play')[0].getAttribute('aria-label')]")
+    assert shown["tempo"] and all(r["play"] for r in shown["rows"])
+    assert asked["bpm"] == 80 and len(asked["chords"]) == 4 * 4  # a chord a bar, the cycle four times
+    assert asked["chords"][0] == {"position": shapes, "capo": 0}
+    assert marked == ["I"] and later == ["V"] and label == "Stop"
+    assert stopped == [True, "Play Verse"]
+
+
+@in_chromium
+@pytest.mark.skipif(not (Path(__file__).parents[1] / "src" / "caracole" / "viewer" / "strum.js").exists(),
+                    reason="waits for HV3's synthesis (strum.js, window.caracoleSound)")
+def test_play_strums_the_progression_with_hv3s_synthesis(tmp_path):
+    with viewer(tmp_path, written(tmp_path, SONG)) as b:
+        open_harmony(b)
+        b.click("#harmony .prog-play")
+        assert b.wait("document.documentElement.dataset.heard !== undefined", timeout=5)
+        heard = b.js("document.documentElement.dataset.heard")
+        b.click("#harmony .prog-play")
+    assert heard
+
+
 # --- both open: Escape, and the focus ---------------------------------------------------------------------
 
 

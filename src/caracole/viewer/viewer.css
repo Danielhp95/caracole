@@ -132,6 +132,25 @@ html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
 .gloss p { margin: 10px 0 0; color: var(--muted); font-size: .85rem; }
 .gloss .gloss-key { color: var(--text); }
 .gloss-roles .nm { font-weight: 700; }
+/* The Harmony panel (viewer.js), in the settings' place: each section's progression, a button to its section,
+   ▶ beside it, and its songs; the numeral playing marked. A section's heading names its progression. */
+.progs { margin: 0; padding: 0; list-style: none; }
+.prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; padding: 6px 0;
+  border-top: 1px solid var(--border); }
+.prog-go { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; padding: 4px 0;
+  border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.prog-sec { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.prog-nums { font-size: 1.05rem; font-weight: 700; overflow-wrap: anywhere; }
+.pn { border-radius: 4px; }
+.pn.on { background: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
+.prog-x { margin-left: .45em; color: var(--muted); font-weight: 600; }
+.prog-about { color: var(--muted); font-size: .82rem; }
+.prog-about:empty { display: none; }
+.prog-songs { grid-column: 1 / -1; justify-self: start; font-size: .85rem; }
+.hint-inline { color: var(--muted); font-size: .82rem; }
+#harmony-key { margin-bottom: 8px; }
+#harmony-neck:empty { display: none; }
+.lbl .prog-of { font-weight: 600; letter-spacing: 0; text-transform: none; }
 /* With the script, a chord may reach over the words after it (.tight); the script widens
    a column only where two chords would touch. */
 .tight .s { position: relative; padding-top: 1.25em; }

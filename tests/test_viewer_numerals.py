@@ -388,3 +388,31 @@ def test_the_glossary_explains_the_songs_numerals_in_the_key_shown(tmp_path):
     assert any(t.endswith("Bb = ♭VII") for t in first) and any(t.endswith("C = ♭VII") for t in moved)
     assert moved[0].startswith("Read in the key of D (from the sheet)")
     assert targets == []
+
+
+@in_chromium
+def test_a_chord_caracole_cant_read_stays_as_written_among_numerals(tmp_path):
+    cho = IN_C + "{comment: Break}\n[N.C.]a break [C]then home\n"
+    with open_viewer(tmp_path, written(tmp_path, cho) + "#nm=numerals", **PHONE) as b:
+        shown = b.js(SHEET)
+    assert [c["text"] for c in shown[-2:]] == ["N.C.", "I"] and shown[-2]["nm"] is None
+
+
+@in_chromium
+def test_a_songbook_song_shows_its_numerals_and_its_harmony(tmp_path):
+    from caracole.viewer.book import BookSong, build_songbook
+
+    songs = [BookSong("In C", "Synthetic", cho=IN_C, id="aaaa"), BookSong("In A minor", "Synthetic", cho=IN_A_MINOR, id="bbbb")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
+    with open_viewer(tmp_path, path.as_uri() + "#song-2", **PHONE) as b:
+        b.click("#more")
+        b.js("[...document.querySelectorAll('#names .chip')][1].click()")
+        shown = b.js(SHEET)
+        b.click("#harmony-open")
+        assert b.wait("!document.getElementById('harmony').hidden")
+        progs = b.js("[...document.querySelectorAll('#harmony .prog')].map((p) => [p.querySelector('.prog-nums').textContent, "
+                     "p.querySelector('.prog-songs').getAttribute('href')])")
+    assert [c["nm"] for c in shown] == AM_NUMERALS
+    assert progs == [["i–♭VII–♭VI–V7×2", "../../index.html#prog=V%20i%20%E2%99%ADVII%20%E2%99%ADVI"]]

@@ -29,6 +29,8 @@
   const FS = { min: 13, max: 30, step: 2, start: 18 };
   // The scroll's speed, 1 to 30: ``px`` pixels a second a step at the usual text size (see pace()).
   const SPEED = { min: 1, max: 30, start: 6, px: 2 };
+  // The Harmony panel's tempo, in beats a minute: a chord a bar of four.
+  const BPM = { min: 40, max: 200, start: 80, step: 5 };
   // The capo goes on any fret up to the 11th (past it the shapes come round again), or the sheet's.
   const CAPO_MAX = Math.max(11, Number(data.capoSheet) || 0);
 
@@ -38,7 +40,7 @@
   // nm: the chord names as numerals beside them ("both") or in their place ("numerals"), null for the
   // chords alone; roles: the numerals in their families' colours.
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
-    speed: SPEED.start, nm: null, roles: true, kn: "scale" };
+    speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -115,6 +117,7 @@
       }
       if (saved.roles === false) state.roles = false;
       if (saved.kn === "penta") state.kn = "penta";
+      if (Number(saved.bpm) >= BPM.min && Number(saved.bpm) <= BPM.max) state.bpm = Math.round(Number(saved.bpm));
       if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
       if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
       state.strip = saved.strip === true;
@@ -467,7 +470,7 @@
     .map((c) => Number(c) + (Number(position[2]) || 1) - 1));
 
   // --- drawing the page --------------------------------------------------------------------------
-  const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
+  const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go"), harmony = $("harmony");
   const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
@@ -602,6 +605,8 @@
     drawStrip();
     drawNecks();  // before layout(), which measures the song beside the rail
     layout();  // fit() too
+    drawHeadings();
+    if (!harmony.hidden) drawHarmony();
     if (!card.hidden) drawCard();  // an open card follows the key, the mode and the capo
     dock();
     save();
@@ -883,6 +888,7 @@
     // The window widened past 1200 px, or narrowed under it: the rail comes or goes, and the song with it.
     railWide.addEventListener("change", () => {
       drawNecks();
+      if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
       layout();
       place();
     });
@@ -1090,9 +1096,9 @@
   }
   const restack = () => {
     const rail = doc.dataset.panel;
-    for (const which of [panel, card]) which.classList.toggle("top", which === topLayer());
+    for (const which of [panel, card, harmony]) which.classList.toggle("top", which === topLayer());
     more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
-    if (panel.hidden) delete doc.dataset.panel;
+    if (panel.hidden && harmony.hidden) delete doc.dataset.panel;  // the settings' rail, or the Harmony panel's
     else doc.dataset.panel = "open";
     if (wide.matches && rail !== doc.dataset.panel) layout();  // the song's column narrows beside the rail
     place();
@@ -1117,6 +1123,7 @@
     const mine = !active || active === document.body || which.contains(active);
     which.hidden = true;
     if (which === card) for (const el of chordEls) el.classList.remove("on");
+    if (which === harmony) stopPlaying();
     restack();
     if (!mine) return;  // the focus is somewhere else of yours: it stays there
     let to = opener && opener.isConnected ? opener : null;
@@ -1144,7 +1151,15 @@
     if (layers.length) close(topLayer());
   });
   // ⋯ closes the settings where you see them, and brings them up from under a card on a phone.
-  more.addEventListener("click", () => (inSight(panel) ? close(panel) : open(panel, more)));
+  // The settings and the Harmony panel take one place: either opens in the other's.
+  more.addEventListener("click", () => {
+    if (inSight(panel)) {
+      close(panel);
+      return;
+    }
+    close(harmony);
+    open(panel, more);
+  });
 
   // In the focus order the card comes after its chord, wherever it is on the page: Tab from its last
   // control goes on to what follows the chord, and Shift+Tab from its first back to the chord.
@@ -1181,6 +1196,7 @@
     $("names-hint").textContent = can ? "" : "caracole can't tell this song's key, so it can't number its chords.";
     $("gloss").hidden = !can;
     if (can) drawGlossary();
+    $("harmony-row").hidden = !can || !data.progressions;
   }
   $("roles").addEventListener("click", () => {
     state.roles = !state.roles;
@@ -1269,6 +1285,171 @@
   });
   tip.addEventListener("pointerover", () => clearTimeout(leaving));
   tip.addEventListener("pointerout", leave);
+
+  // --- the Harmony panel: each section's progression, named, played ------------------------------------
+  // In the settings' place (docked on a phone, a rail from 900 px): the key the numerals are read in, its
+  // neck on a phone (the rail of necks has it on a laptop), and each section's progression (page.py's
+  // ``progressions``): its numerals, one cycle, the times it is played, its name and how it ends. Tap one to
+  // go to its section; ▶ plays it with strum.js's synthesis (window.caracoleSound, when the page has it), a
+  // chord a bar at the tempo set, each chord as the page shows it, its shape and the capo, and marks the one
+  // playing; ■ stops it. Songs with this progression is the library's page, with it filtered (#prog=).
+  const ENDINGS = { authentic: "an authentic cadence (V–I)", plagal: "a plagal cadence (IV–I)",
+    half: "a half cadence (on V)", deceptive: "a deceptive cadence (V–vi)" };
+  const sectionEls = () => Array.from(sheetEl.querySelectorAll(":scope > section.sec"));
+  const sectionName = (n) => {
+    const head = (sectionEls()[n] || document.body).querySelector(":scope > h2.lbl");
+    return head && head.firstChild ? head.firstChild.textContent : "Section " + (n + 1);
+  };
+  // With the numerals shown, each section's heading names its progression, when it has a name.
+  function drawHeadings() {
+    const named = {};
+    if (numbered()) for (const found of table("progressions") || []) if (found[3]) named[found[0]] = found[3];
+    sectionEls().forEach((sec, n) => {
+      const head = sec.querySelector(":scope > h2.lbl");
+      if (!head) return;
+      let tag = head.querySelector(".prog-of");
+      if (!own.call(named, n)) {
+        if (tag) tag.remove();
+        return;
+      }
+      if (!tag) {
+        tag = head.appendChild(document.createElement("span"));
+        tag.className = "prog-of";
+      }
+      tag.textContent = " · " + named[n];
+    });
+  }
+  const sound = () => {
+    const found = window.caracoleSound;
+    return found && found.available !== false && typeof found.play === "function" ? found : null;
+  };
+  let playing = null;  // {n: the section, at: the numeral sounding, handle}
+  const drawPlaying = () => {
+    for (const li of $("progs").children) {
+      const mine = Boolean(playing) && playing.n === Number(li.dataset.n);
+      const play = li.querySelector(".prog-play");
+      play.textContent = mine ? "■" : "▶";
+      play.setAttribute("aria-label", mine ? "Stop" : "Play " + li.querySelector(".prog-sec").textContent);
+      li.querySelectorAll(".pn").forEach((pn, k) => pn.classList.toggle("on", mine && playing.at === k));
+    }
+  };
+  function stopPlaying() {
+    const was = playing;
+    playing = null;
+    if (was && was.handle) {
+      try {
+        was.handle.stop();
+      } catch (err) { /* already over */ }
+    }
+    drawPlaying();
+  }
+  const playSection = (n, repeats, chords) => {
+    const again = Boolean(playing) && playing.n === n;
+    stopPlaying();
+    const synth = sound();
+    if (again || !synth) return;
+    const cycle = chords.map((i) => {
+      const c = String(i);
+      const shapes = shapesOf(current(c), shift());
+      const at = Math.min(state.at[c] || 0, shapes.list.length - 1);
+      return { position: shapes.list.length ? shapes.list[at] : null, capo: capoNow() };
+    });
+    const all = [];
+    for (let r = 0; r < repeats; r++) all.push(...cycle);
+    const me = { n, at: -1, handle: null };
+    playing = me;
+    drawPlaying();
+    me.handle = synth.play(all, { bpm: state.bpm,
+      onChord: (k) => {
+        if (playing !== me) return;
+        me.at = k % cycle.length;
+        drawPlaying();
+      },
+      onEnd: () => {
+        if (playing !== me) return;
+        playing = null;
+        drawPlaying();
+      } });
+    if (!me.handle || me.handle.playing === false) {
+      if (playing === me) playing = null;
+      drawPlaying();
+    }
+  };
+  const drawHarmony = () => {
+    if (!key) return;
+    $("harmony-key").textContent = "Read in " + keyWords() + ".";
+    const neckBox = $("harmony-neck");
+    const inNeck = neckBox.contains(document.activeElement);
+    neckBox.textContent = "";
+    if (!railWide.matches && data.keyScale) neckBox.appendChild(keyNeck());
+    if (inNeck) {
+      const to = neckBox.querySelector('[aria-pressed="true"]');
+      if (to) to.focus({ preventScroll: true });
+    }
+    const synth = sound();
+    $("tempo-row").hidden = !synth;
+    $("bpm").textContent = String(state.bpm);
+    const list = $("progs");
+    const active = list.contains(document.activeElement) ? document.activeElement : null;
+    const back = active ? [Array.prototype.indexOf.call(list.children, active.closest(".prog")),
+      ["prog-go", "prog-play", "prog-songs"].find((cls) => active.classList.contains(cls))] : null;
+    list.textContent = "";
+    const found = table("progressions") || [];
+    $("progs-none").hidden = found.length > 0;
+    for (const [n, numerals, repeats, name, ending, pkey, chords] of found) {
+      const li = list.appendChild(document.createElement("li"));
+      li.className = "prog";
+      li.dataset.n = String(n);
+      const go = li.appendChild(document.createElement("button"));
+      go.type = "button";
+      go.className = "prog-go";
+      const part = (cls, text) => {
+        const span = go.appendChild(document.createElement("span"));
+        span.className = cls;
+        if (text !== undefined) span.textContent = text;
+        return span;
+      };
+      part("prog-sec", sectionName(n));
+      const nums = part("prog-nums");
+      numerals.forEach((numeral, k) => {
+        if (k) nums.appendChild(document.createTextNode("–"));
+        const pn = nums.appendChild(document.createElement("span"));
+        pn.className = "pn";
+        pn.textContent = numeral;
+      });
+      if (repeats > 1) nums.appendChild(document.createElement("span")).className = "prog-x";
+      if (repeats > 1) nums.lastChild.textContent = "×" + repeats;
+      part("prog-about", [name, ending && ENDINGS[ending] ? "ends on " + ENDINGS[ending] : ""].filter(Boolean).join(" · "));
+      go.addEventListener("click", () => {
+        const sec = sectionEls()[n];
+        if (sec) sec.scrollIntoView({ block: "start", behavior: calm.matches ? "auto" : "smooth" });
+      });
+      const play = li.appendChild(document.createElement("button"));
+      play.type = "button";
+      play.className = "round prog-play";
+      play.hidden = !synth || !Array.isArray(chords);
+      play.addEventListener("click", () => playSection(n, repeats, chords || []));
+      const songs = li.appendChild(document.createElement("a"));
+      songs.className = "link prog-songs";
+      songs.href = String(data.library || "") + "#prog=" + encodeURIComponent(pkey);
+      songs.textContent = "Songs with this progression";
+    }
+    drawPlaying();
+    const again = back && list.children[back[0]] && list.children[back[0]].querySelector("." + back[1]);
+    if (again) again.focus({ preventScroll: true });
+  };
+  $("harmony-open").addEventListener("click", () => {
+    close(panel);
+    drawHarmony();
+    open(harmony, more);
+  });
+  const setBpm = (n) => {
+    state.bpm = Math.max(BPM.min, Math.min(BPM.max, n));
+    $("bpm").textContent = String(state.bpm);
+    save();
+  };
+  $("bpm-down").addEventListener("click", () => setBpm(state.bpm - BPM.step));
+  $("bpm-up").addEventListener("click", () => setBpm(state.bpm + BPM.step));
 
   // --- Aa: the text size, in a box beside the song -------------------------------------------------
   // Not a dialog: the song stays in view and within reach, and the box closes on Escape, on a tap
@@ -1524,6 +1705,7 @@
       return;
     }
     if (!reveal.touched || performance.now() < reveal.quiet || !sizes.hidden || !panel.hidden || !card.hidden
+        || !harmony.hidden
         || keyboardIn(bar)) {
       reveal.y = y;
       return;

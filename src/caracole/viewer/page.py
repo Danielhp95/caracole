@@ -612,6 +612,8 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <details class="gloss" id="gloss" hidden><summary>What do the numerals mean?</summary><div id="gloss-body"></div>
 <p class="gloss-roles"><span class="nm r-h">home</span> chords at rest, <span class="nm r-a">away</span> chords moving away, <span class="nm r-p">pull</span> chords pulling home; <span class="nm out">underlined</span>, a chord from outside the key: the colours are a help, and each numeral's line says the same.</p>
 <p class="gloss-all">The whole notation: upper case for a major chord, lower case for a minor one; ♭ or ♯ before it, a root a half step below or above that degree of the major scale; ° diminished, ø half-diminished, + augmented; then the chord's extension (7, maj7, sus4, add9…). A number after a slash is the bass note, as its degree above the chord's root (I/3); a numeral after one, the chord of the key it leads to (V/V, vii°/vi).</p></details></div>
+<div class="row" id="harmony-row" hidden><span class="lab">Harmony</span>
+<button type="button" class="chip" id="harmony-open" aria-haspopup="dialog" aria-controls="harmony">Progressions, the key's scale</button></div>
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
@@ -627,6 +629,18 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="chips" id="alts"></div>
 <div class="actions"><button type="button" class="btn primary" id="use" hidden></button></div>
 <div class="info"><p class="tones" id="card-tones"></p><p class="solo" id="card-scale"></p></div>
+</section>
+<section class="sheet-ui panel harmony" id="harmony" hidden role="dialog" aria-labelledby="harmony-title">
+<header class="ui-head"><h2 id="harmony-title" tabindex="-1">Harmony</h2>
+<button type="button" class="x" data-close aria-label="Close">×</button></header>
+<p class="hint" id="harmony-key"></p>
+<div id="harmony-neck"></div>
+<div class="row" id="tempo-row" hidden><span class="lab">Tempo</span>
+<span class="stepper"><button type="button" id="bpm-down" aria-label="Slower">−</button>
+<output id="bpm">80</output><button type="button" id="bpm-up" aria-label="Faster">+</button></span>
+<span class="hint-inline">bpm, a chord a bar</span></div>
+<ol class="progs" id="progs"></ol>
+<p class="hint" id="progs-none" hidden>No chords here caracole can read.</p>
 </section>
 <div class="tip" id="tip" role="tooltip" hidden><p id="tip-line"></p><p class="tip-key" id="tip-key"></p>
 <button type="button" class="chip" id="tip-card"></button></div>
