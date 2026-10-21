@@ -1212,6 +1212,9 @@ and cache.
   In the sheet viewer, ⋯ has **Export PDF of this version**, but for the auto
   sheet's viewer kept beside a human sheet: its chords are other ones, and an
   export would be the human sheet's (caracole serve refuses one from it, 409).
+  caracole serve refuses one from a kept version's page (`version-<tab>.html`)
+  too, for the same reason: make that version the one first, then export it
+  from the song's own viewer.
   On `caracole serve` it opens `/export` in the same tab: the version in words ("G Dorian,
   capo 0"), Make PDF (this command, queued like any request), the job's line,
   then Open the PDF and Back to the sheet, which keeps the viewer's address.
@@ -2599,6 +2602,28 @@ with it. A KEY that is no key exits with status 2.
 - **Without JavaScript**, the forms still work: a request sends you to its
   line on `/jobs`, its output open; a pick, to its line; a lookup, to the
   lookup page, which follows it.
+- **A sheet's versions.** The sheet viewer's Make this the one and Keep it
+  open `/versions?sheet=…&tab=…&do=choose|keep` in the same tab (the viewer
+  runs in a sandbox, with no way to send a form), and `do=clear` is Go back to
+  caracole's pick:
+  a page of the server's own naming the song and the version ("Ver 2 of 13 ·
+  4.85★ (12,629)", with the tabber's note) and what the song's sheet is now
+  ("The one now: Ver 3 · 4.86★ (408)", or LaCuerda's sheet, or the auto-chords
+  sheet), with the one button that does it. **Make this the one** looks the
+  song up with that tab, as `caracole get --tab` does with the tab's own page
+  (`caracole versions --choose` runs the same): it becomes `sheet.txt`, the
+  page the title opens, its PDF and its songbooks', kept under `[pin]`.
+  **Keep it** queues `caracole versions SONG --keep TAB`: one tab page, at the
+  lookup pace, kept beside the sheet with a viewer of its own. **Go back to
+  caracole's pick**, on a song with a `[pin]`, queues `caracole versions SONG
+  --clear`. Each is the song's request, as a lookup is: its card says how it
+  goes, the same one asked twice is queued once, and Make this the one takes
+  the place of the song's lookup still waiting. The page then says how it goes
+  (it reloads itself while it waits or runs) and, once done, opens the sheet or
+  the kept version's page; Back to the sheet goes back where you came from.
+  On the one already, a version kept already, one Ultimate Guitar no longer
+  has, or a song with no pin, it says so and offers nothing (sent anyway:
+  409).
 - **Songbooks**, the page's second tab (see [The Songbooks tab](#the-songbooks-tab)
   for what it shows). Each change runs its `caracole songbook` command (see
   [Songbooks](#songbooks)) and leaves you where you are:
@@ -2677,7 +2702,8 @@ on a device, or replaced by a link, it gets a page saying so until the next
 `caracole render` (or `caracole songbook render`) writes it again.
 
 Of the HTML pages in the library, the server sends only the sheet viewers
-(`sheet.html`, `sheet (auto).html`; see [The sheet viewer](#the-sheet-viewer)),
+(`sheet.html`, `sheet (auto).html` and each kept version's `version-<tab>.html`;
+see [The sheet viewer](#the-sheet-viewer)),
 and each only while it is still the page caracole last wrote for that song:
 caracole records each viewer's SHA-256 and length when it writes it. Any other
 page answers 404 Not found, and so does a viewer edited on a synced device, a

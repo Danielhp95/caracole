@@ -1,0 +1,331 @@
+"""caracole serve's versions page: Make this the one, Keep it and back to caracole's pick, each a command queued;
+and a kept version's page, served as a sheet viewer is."""
+
+import re
+from html import unescape
+from urllib.parse import quote, urlencode
+
+import pytest
+
+from caracole.library import keep_file, song_dir
+from caracole.render import _note_written
+from caracole.sheet_versions import version_names
+from caracole.versions import mark_gone, set_coverage, upsert_version
+from caracole.viewer import build_viewer
+
+from helpers.rendered import FETCHED, rendered_song
+from test_web_app import ALLOWED, HOST, JSON, META_POLICY, Recorder, get, header, post, text
+
+FOLDER = "Soda Stereo/De Música Ligera"
+SHEET = f"{FOLDER}/sheet.html"
+DISPLAY = "Soda Stereo - De Música Ligera"
+KEPT, OTHER, GONE = "39144", "1064463", "777"  # a version kept beside the sheet, one not kept, one UG lost
+SLUGGED = "https://tabs.ultimate-guitar.com/tab/soda-stereo/de-musica-ligera-chords-{}"
+
+
+@pytest.fixture
+def recorder():
+    return Recorder()
+
+
+@pytest.fixture
+def queue(recorder):
+    from caracole.web.jobs import JobQueue
+
+    return JobQueue(recorder, limit=5)
+
+
+@pytest.fixture
+def app(cfg, queue):
+    from caracole.web.app import WebApp
+
+    return WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+
+
+def shown(response):
+    return " ".join(unescape(re.sub(r"<[^>]+>", " ", text(response))).split())
+
+
+def chords(conn, song, tab, *, rating, votes, number, coverage=None, note=None):
+    raw = {"id": int(tab), "version_description": note} if note else {"id": int(tab)}
+    vid = upsert_version(conn, provider="ug", tab_id=tab, song_id=song.id, slot="sheet", kind="chords",
+                         rating=rating, votes=votes, version=number, label=None, url=SLUGGED.format(tab), raw=raw,
+                         now=FETCHED)
+    if coverage is not None:
+        set_coverage(conn, vid, coverage)
+    return vid
+
+
+def keep_version(conn, cfg, song, vid, tab, *, rank=2):
+    """Keep a version beside the sheet as the fetch step does (its text and JSON), and its viewer page as render.py
+    writes and records it."""
+    folder = song_dir(cfg.library_dir, song)
+    txt, data, page = version_names(tab)
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=txt, data=f"[G]Otra {tab}\n".encode(), rank=rank)
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=data, data=b"{}", rank=rank)
+    html = build_viewer(f"{{title: De Música Ligera}}\n{{artist: Soda Stereo}}\n[G]Otra versión {tab}\n")
+    (folder / page).write_text(html, encoding="utf-8")
+    _note_written(conn, song.id, page, html.encode("utf-8"))
+
+
+def versioned_song(conn, cfg):
+    """De Música Ligera, its sheet (Ver 1) and three more of UG's chords versions: Ver 2, kept beside it; Ver 3,
+    not kept; Ver 4, gone from UG."""
+    song = rendered_song(conn, cfg)
+    sheet_vid = conn.execute("SELECT version_id FROM files WHERE song_id = ? AND name = 'sheet.txt'",
+                             (song.id,)).fetchone()[0]
+    set_coverage(conn, sheet_vid, 0.95)
+    kept = chords(conn, song, KEPT, rating=4.85, votes=12629, number=2, coverage=0.9,
+                  note="the version they play\n  live in 2007")
+    chords(conn, song, OTHER, rating=4.86, votes=408, number=3)
+    mark_gone(conn, chords(conn, song, GONE, rating=4.0, votes=3, number=4))
+    keep_version(conn, cfg, song, kept, KEPT)
+    return song
+
+
+def versions_url(tab=KEPT, do="choose", sheet=SHEET, extra=""):
+    return "/versions?" + urlencode([("sheet", sheet), ("tab", tab), ("do", do)]) + extra
+
+
+# --- a kept version's page -------------------------------------------------------------------
+
+
+def test_a_kept_versions_page_is_served_as_a_viewer_in_its_sandbox(app, conn, cfg):
+    song = versioned_song(conn, cfg)
+    address = "/" + quote(f"{FOLDER}/version-{KEPT}.html")
+    response = get(app, address)
+    assert response.status == 200
+    assert response.body == (song_dir(cfg.library_dir, song) / f"version-{KEPT}.html").read_bytes()
+    own = META_POLICY.search(text(response)).group(1)
+    assert [v for k, v in response.headers if k.lower() == "content-security-policy"] == [
+        f"sandbox allow-scripts; {own}; frame-ancestors 'none'"]
+    assert header(response, "content-type") == "text/html; charset=utf-8"
+    assert header(response, "x-frame-options") == "DENY"
+
+
+def test_a_version_page_is_served_only_while_it_holds_what_caracole_wrote(app, conn, cfg):
+    song = versioned_song(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    page = (folder / f"version-{KEPT}.html").read_bytes()
+    # caracole's own bytes, at names it never wrote here or never writes at all
+    for name in (f"version-{OTHER}.html", "version-.html", f"version-{KEPT}.htm", f"Version-{KEPT}.html",
+                 f"version-{KEPT}.txt.html", "version-1a.html"):
+        (folder / name).write_bytes(page)
+        response = get(app, "/" + quote(f"{FOLDER}/{name}"))
+        assert response.status == 404 and b"<script" not in response.body, name
+    (folder / f"version-{KEPT}.html").write_bytes(page + b"<script>fetch('/caracole.sqlite')</script>")
+    edited = get(app, "/" + quote(f"{FOLDER}/version-{KEPT}.html"))
+    assert edited.status == 404 and b"<script" not in edited.body
+    assert "This version's viewer isn't the page caracole last wrote here" in shown(edited)
+    assert "the next caracole render writes it again" in shown(edited)
+    assert get(app, "/" + quote(SHEET)).status == 200
+
+
+def test_a_version_page_of_a_folder_no_song_has_is_not_served(app, conn, cfg):
+    song = versioned_song(conn, cfg)
+    page = (song_dir(cfg.library_dir, song) / f"version-{KEPT}.html").read_bytes()
+    stranger = cfg.library_dir / "Unknown Artist" / "Unknown Song"
+    stranger.mkdir(parents=True)
+    (stranger / f"version-{KEPT}.html").write_bytes(page)
+    assert get(app, "/" + quote(f"Unknown Artist/Unknown Song/version-{KEPT}.html")).status == 404
+
+
+# --- the versions page -----------------------------------------------------------------------
+
+
+def test_the_versions_page_names_the_version_and_offers_the_one_form(app, conn, cfg):
+    versioned_song(conn, cfg)
+    page = get(app, versions_url(OTHER, "choose"))
+    assert page.status == 200
+    body = shown(page)
+    assert DISPLAY in body and "Ver 3 of 4 · 4.86★ (408)" in body
+    assert "The one now: Ver 1 · 4.5★ (10)" in body
+    assert text(page).count("<form") == 1 and 'action="/versions/choose"' in text(page)
+    assert ">Make this the one<" in text(page)
+    for name, value in (("csrf", "tok"), ("sheet", SHEET), ("tab", OTHER)):
+        assert f'name="{name}" value="{value}"' in text(page), name
+    assert f'href="/{quote(SHEET)}"' in text(page)  # back to the sheet it came from
+    csp = header(page, "content-security-policy")
+    assert "default-src 'none'" in csp and "script-src" not in csp and "sandbox" not in csp
+    assert "<script" not in text(page)
+
+
+def test_the_tabbers_note_shows_with_its_version(app, conn, cfg):
+    versioned_song(conn, cfg)
+    body = shown(get(app, versions_url(KEPT, "choose")))
+    assert "Ver 2 of 4 · 4.85★ (12,629)" in body and "the version they play live in 2007" in body
+
+
+def test_the_page_may_come_from_a_kept_versions_own_page(app, conn, cfg):
+    versioned_song(conn, cfg)
+    page = get(app, versions_url(KEPT, "choose", sheet=f"{FOLDER}/version-{KEPT}.html"))
+    assert page.status == 200 and 'action="/versions/choose"' in text(page)
+    assert f'href="/{quote(f"{FOLDER}/version-{KEPT}.html")}"' in text(page)
+
+
+def test_make_this_the_one_looks_the_song_up_with_that_tab(app, queue, recorder, conn, cfg):
+    versioned_song(conn, cfg)
+    made = post(app, "/versions/choose", {"sheet": SHEET, "tab": KEPT})
+    assert made.status == 303
+    where = header(made, "location")
+    assert where.startswith("/versions?") and "job=" in where and "do=choose" in where
+    assert "Queued" in shown(get(app, where))
+    assert 'http-equiv="refresh"' in text(get(app, where))
+    queue.run_pending()
+    # caracole get --tab, as caracole versions --choose is: the tab's own page, recorded under [pin]
+    assert recorder.calls == [["get", "--progress", f"--tab={SLUGGED.format(KEPT)}", "--", "Soda Stereo",
+                               "De Música Ligera"]]
+    done = get(app, where)
+    assert "Done" in shown(done) and 'http-equiv="refresh"' not in text(done)
+    assert f'href="/{quote(SHEET)}"' in text(done) and "Open the sheet" in shown(done)
+
+
+def test_keep_it_fetches_that_version_and_keeps_it_beside_the_sheet(app, queue, recorder, conn, cfg):
+    song = versioned_song(conn, cfg)
+    page = get(app, versions_url(OTHER, "keep"))
+    assert page.status == 200 and 'action="/versions/keep"' in text(page) and ">Keep it<" in text(page)
+    where = header(post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}), "location")
+    queue.run_pending()
+    assert recorder.calls == [["versions", f"--keep={OTHER}", "--", DISPLAY]]
+    done = get(app, where)
+    assert "Done, but it wasn't kept" in shown(done)  # the fake command kept nothing
+    keep_version(conn, cfg, song, chords(conn, song, OTHER, rating=4.86, votes=408, number=3), OTHER, rank=3)
+    done = get(app, where)
+    assert f'href="/{quote(f"{FOLDER}/version-{OTHER}.html")}"' in text(done) and "Open it" in shown(done)
+
+
+def test_back_to_caracoles_pick_takes_the_pin_out(app, queue, recorder, conn, cfg):
+    versioned_song(conn, cfg)
+    page = get(app, versions_url("", "clear"))
+    assert page.status == 200 and "<form" not in text(page)  # no pin: caracole picks the sheet already
+    assert "caracole picks" in shown(page)
+    assert post(app, "/versions/clear", {"sheet": SHEET}).status == 409
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(KEPT)}"]\n', encoding="utf-8")
+    page = get(app, versions_url("", "clear"))
+    assert 'action="/versions/clear"' in text(page) and ">Go back to caracole's pick<" in text(page)
+    where = header(post(app, "/versions/clear", {"sheet": SHEET}), "location")
+    queue.run_pending()
+    assert recorder.calls == [["versions", "--clear", "--", DISPLAY]]
+    assert "Done" in shown(get(app, where))
+
+
+def test_a_post_from_the_pages_script_is_answered_with_its_job(app, queue, conn, cfg):
+    versioned_song(conn, cfg)
+    response = post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}, accept=JSON)
+    assert response.status == 200
+    import json
+
+    job = json.loads(response.body)["job"]
+    assert job["display"] == DISPLAY and job["state"] == "queued"
+
+
+@pytest.mark.parametrize("path", ["/versions/choose", "/versions/keep", "/versions/clear"])
+def test_each_post_needs_the_form_token_and_the_same_origin(app, queue, recorder, conn, cfg, path):
+    from caracole.web.app import Request
+
+    versioned_song(conn, cfg)
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(KEPT)}"]\n', encoding="utf-8")
+    form = {"sheet": SHEET, "tab": OTHER}
+    assert post(app, path, form, csrf="wrong").status == 403
+    assert post(app, path, form, csrf=None).status == 403
+    assert post(app, path, form, **{"sec-fetch-site": "cross-site", "origin": "http://evil.example"}).status == 403
+    sent = {"host": HOST, "content-type": "text/plain", "sec-fetch-site": "same-origin", "origin": f"http://{HOST}"}
+    assert app.handle(Request("POST", path, sent, b"csrf=tok")).status == 415
+    queue.run_pending()
+    assert recorder.calls == []
+
+
+def test_what_cant_be_done_is_refused_before_anything_is_queued(app, queue, recorder, conn, cfg):
+    versioned_song(conn, cfg)
+    sheet_tab = conn.execute("SELECT v.tab_id FROM files f JOIN versions v ON v.id = f.version_id "
+                             "WHERE f.name = 'sheet.txt'").fetchone()[0]
+    cases = [
+        ("choose", sheet_tab, 409),  # the one already
+        ("keep", sheet_tab, 409),
+        ("keep", KEPT, 409),  # kept already
+        ("choose", GONE, 409), ("keep", GONE, 409),  # UG no longer has it
+        ("choose", "424242", 404),  # not one of the song's versions
+        ("choose", "", 400), ("keep", "12a", 400),
+    ]
+    for do, tab, status in cases:
+        assert post(app, f"/versions/{do}", {"sheet": SHEET, "tab": tab}).status == status, (do, tab)
+        assert get(app, versions_url(tab, do)).status == (status if status != 409 else 200), (do, tab)
+    assert get(app, versions_url(KEPT, "nothing")).status == 400
+    for sheet in ("Nobody/Nothing/sheet.html", f"{FOLDER}/sheet.pdf", "../sheet.html", "", f"{FOLDER}/notes.html",
+                  f"{FOLDER}/version-{OTHER}.html"):
+        assert post(app, "/versions/choose", {"sheet": sheet, "tab": OTHER}).status == 404, sheet
+        assert get(app, versions_url(OTHER, "choose", sheet=sheet)).status == 404, sheet
+    assert get(app, versions_url(extra="&job=abc")).status == 400
+    queue.run_pending()
+    assert recorder.calls == []
+
+
+def test_the_page_of_a_version_that_cant_be_done_says_why_and_offers_no_form(app, conn, cfg):
+    versioned_song(conn, cfg)
+    kept = get(app, versions_url(KEPT, "keep"))
+    assert "<form" not in text(kept) and "kept already" in shown(kept)
+    assert f'href="/{quote(f"{FOLDER}/version-{KEPT}.html")}"' in text(kept)
+    gone = get(app, versions_url(GONE, "choose"))
+    assert "<form" not in text(gone) and "no longer has" in shown(gone)
+
+
+def test_an_ignored_song_has_nothing_to_choose(app, queue, conn, cfg):
+    from caracole.overrides import add_ignore
+
+    versioned_song(conn, cfg)
+    add_ignore(cfg.overrides_file, DISPLAY)
+    assert post(app, "/versions/choose", {"sheet": SHEET, "tab": OTHER}).status == 409
+    assert queue.active_count() == 0
+
+
+def test_a_job_of_another_version_is_not_shown_here(app, conn, cfg):
+    versioned_song(conn, cfg)
+    where = header(post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}), "location")
+    job = re.search(r"job=(\d+)", where).group(1)
+    other = get(app, versions_url(KEPT, "choose", extra=f"&job={job}"))
+    assert other.status == 200 and "Queued" not in shown(other)
+
+
+# --- the song's jobs ---------------------------------------------------------------------------
+
+
+def test_two_versions_kept_are_two_commands_and_the_same_one_twice_is_one(app, queue, recorder, conn, cfg):
+    song = versioned_song(conn, cfg)
+    third = "5555"
+    chords(conn, song, third, rating=3.0, votes=2, number=5)
+    first = post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER})
+    again = post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER})
+    assert header(first, "location") == header(again, "location")  # the same job
+    post(app, "/versions/keep", {"sheet": SHEET, "tab": third})
+    queue.run_pending()
+    assert recorder.calls == [["versions", f"--keep={OTHER}", "--", DISPLAY],
+                              ["versions", f"--keep={third}", "--", DISPLAY]]
+
+
+def test_a_version_asked_for_while_the_songs_lookup_waits_joins_it(app, queue, recorder, conn, cfg):
+    # The song's own job, as a lookup's: Keep it goes after the lookup waiting, and Make this the one, a lookup
+    # with that tab, takes the lookup's place, as a tab picked on the lookup page does.
+    song = versioned_song(conn, cfg)
+    assert post(app, "/fetch", {"song": str(song.id)}).status == 303  # the card's Fetch now: a lookup waits
+    keep = header(post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}), "location")
+    choose = header(post(app, "/versions/choose", {"sheet": SHEET, "tab": KEPT}), "location")
+    assert re.search(r"job=(\d+)", keep).group(1) == re.search(r"job=(\d+)", choose).group(1) == "1"
+    assert queue.active_count() == 1
+    queue.run_pending()
+    assert [call[:3] for call in recorder.calls] == [["versions", f"--keep={OTHER}", "--"],
+                                                     ["get", "--progress", f"--tab={SLUGGED.format(KEPT)}"]]
+
+
+# --- an export from a version page -------------------------------------------------------------
+
+
+def test_an_export_from_a_kept_versions_page_is_refused_and_says_what_to_do(app, queue, conn, cfg):
+    versioned_song(conn, cfg)
+    page = f"{FOLDER}/version-{KEPT}.html"
+    refused = get(app, f"/export?sheet={quote(page)}&t=2")
+    assert refused.status == 409 and "make this version the one first" in shown(refused)
+    assert post(app, "/export", {"sheet": page, "v": "t=2"}).status == 409
+    assert get(app, f"/export?sheet={quote(SHEET)}&t=2").status == 200
+    assert queue.active_count() == 0

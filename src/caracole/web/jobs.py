@@ -15,7 +15,9 @@ fetch adds ``caracole fetch --song`` and ``caracole render --song`` (offline) af
 ``caracole review`` (``fetch_steps``). A LaCuerda song you pick goes to ``caracole
 get`` or ``caracole add`` with ``--lacuerda``, and a LaCuerda artist's page is read
 by ``caracole lacuerda --artist`` (``lacuerda_artist_steps``), a job of its own
-(``LACUERDA_ARTIST`` and the page's slug), one request at the lookup pace. Each command takes caracole's lock (a
+(``LACUERDA_ARTIST`` and the page's slug), one request at the lookup pace. A version of a song's sheet kept, or
+its pin taken out, is ``caracole versions`` (``version_steps``), a pick of the song's as a lookup's ``--tab`` is,
+so the song's jobs join it as they would that. Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -191,6 +193,17 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
     return [("Look it up now", (*args, "--", artist, title))]
 
 
+VERSIONS = "versions"  # the command that keeps a song's version, or takes its pin out
+
+
+def version_steps(display: str, *, keep: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
+    """``caracole versions``: keep the Ultimate Guitar tab ``keep`` beside the song's sheet (one tab page, at the
+    lookup pace), or, without it, take the song's ``[pin]`` out and look it up again (``--clear``)."""
+    if keep is not None:
+        return [("Fetching the version from Ultimate Guitar", (VERSIONS, f"--keep={keep}", "--", display))]
+    return [("Going back to caracole's pick", (VERSIONS, "--clear", "--", display))]
+
+
 LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it
 
 
@@ -201,12 +214,14 @@ def lacuerda_artist_steps(slug: str, name: str) -> list[tuple[str, tuple[str, ..
 
 def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
     """The Ultimate Guitar song and tab, and the LaCuerda song, a lookup's ``caracole get`` was given (``--ug``,
-    ``--tab``, ``--lacuerda``), if any."""
+    ``--tab``, ``--lacuerda``), and what a ``caracole versions`` does (``--keep``, ``--clear``), if any."""
     picked: list[str] = []
     for step in steps:
+        options = step.args[:step.args.index("--")] if "--" in step.args else step.args
         if step.args[:1] == (LOOKUP,):
-            options = step.args[:step.args.index("--")] if "--" in step.args else step.args
             picked += [arg for arg in options if arg.startswith(("--ug=", "--tab=", "--lacuerda="))]
+        elif step.args[:1] == (VERSIONS,):
+            picked += [arg for arg in options if arg.startswith("--keep=") or arg == "--clear"]
     return tuple(picked)
 
 
@@ -323,7 +338,9 @@ class JobQueue:
                 waiting.steps = [s for s in waiting.steps if s.args[:1] not in (("add",), (LOOKUP,))]
                 waiting.stages = []
             runs = {step.args[0] for step in waiting.steps}
-            waiting.steps += [step for step in new if step.args[0] not in runs]
+            # Two versions kept, or a pin taken out after a version kept, are two commands
+            waiting.steps += [step for step in new if step.args[0] not in runs
+                              or (step.args[0] == VERSIONS and step.args not in {s.args for s in waiting.steps})]
             waiting.stages = waiting.stages or _stages(waiting.steps)
             waiting.title, waiting.fetching = title, True
             waiting.note = waiting.note or note

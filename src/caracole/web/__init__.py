@@ -6,7 +6,8 @@ A small server from the standard library (``http.server``), in these parts:
   the cross-origin check every write passes, and the tokens.
 - files.py: the library's files, opened without following a link, and only
   the kinds caracole keeps there; and the pages caracole wrote there (the
-  sheet viewers and the songbooks' pages), only while each is still as written.
+  sheet viewers, a kept version's among them, and the songbooks' pages), only
+  while each is still as written.
 - jobs.py: the queue. A request runs the ``caracole`` command line in a child
   process, one command at a time: ``caracole add``, then, to fetch the song
   now, ``match``, ``fetch --song`` and ``render``; a pick of a review's
@@ -21,8 +22,10 @@ A small server from the standard library (``http.server``), in these parts:
   Each area's routes are a module: library_routes.py (the library page,
   requests, Fetch now), review_routes.py (the picker), jobs_routes.py (the
   requests page, /jobs.json, /api/jobs), search_routes.py (the lookup page,
-  search as you type, lookups), remove_routes.py, songbook_routes.py and
-  export_routes.py (a sheet's PDF in the version its viewer was left in).
+  search as you type, lookups), remove_routes.py, songbook_routes.py,
+  export_routes.py (a sheet's PDF in the version its viewer was left in) and
+  versions_routes.py (one of Ultimate Guitar's versions of a song's sheet made
+  the one, or kept beside it).
   pages.py: the pages it writes itself.
 - songbooks.py: the songbook forms, each queued as its ``caracole songbook``
   command (songbook_routes.py). Each songbook's page is one of the pages

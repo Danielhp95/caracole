@@ -6,12 +6,14 @@ Each area's routes are a module of its own, a ``*_routes.py`` of caracole.web, w
 docstring lists them and says how they answer: library_routes.py (the library page, a song requested,
 Fetch now), review_routes.py (the picker), jobs_routes.py (the requests page, /jobs.json, /api/jobs),
 search_routes.py (the lookup page, search as you type, a song looked up now, a LaCuerda artist's page
-read), remove_routes.py (Remove), songbook_routes.py (the songbook forms) and export_routes.py (a
-sheet's PDF in the version its viewer was left in, and Make this my version). A new route, or a new
+read), remove_routes.py (Remove), songbook_routes.py (the songbook forms), export_routes.py (a
+sheet's PDF in the version its viewer was left in, and Make this my version) and versions_routes.py
+(a sheet's Ultimate Guitar versions: Make this the one, Keep it, back to caracole's pick). A new route, or a new
 module of them, changes nothing here. This module answers the rest:
 
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as
-                          a sheet viewer, while it is as written (``written_pages``), in a sandbox
+                          a sheet viewer or a kept version's, while it is as written (``written_page``),
+                          in a sandbox
     GET, POST /login      the sign-in page, with an access token
 
 Every request must name the server by a name it answers to (421 otherwise).
@@ -415,7 +417,7 @@ class WebApp:
         try:
             if not path.startswith("/"):
                 raise NotServed(path)
-            page = written_pages().get(path.rsplit("/", 1)[-1])
+            page = written_page(path.rsplit("/", 1)[-1])
             if page is not None:
                 try:
                     return self._written_page(path[1:], page)
@@ -465,7 +467,8 @@ def written_pages() -> dict[str, WrittenPage]:
     """The pages caracole writes into the library, by file name: each song's sheet viewers
     (render.py), served in a sandbox with their own policy (``viewer.viewer_csp``), and each
     songbook's page (songbook.py, ``_songbooks/<folder>/songbook.html``), with its own
-    (``book.songbook_csp``). A new kind of page joins here with its own record."""
+    (``book.songbook_csp``). A new kind of page joins here with its own record. A kept version's
+    page, named by its tab, is a viewer too (``written_page``)."""
     from caracole import songbook
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS
     from caracole.viewer import viewer_csp
@@ -479,6 +482,29 @@ def written_pages() -> dict[str, WrittenPage]:
 _VIEWER_REFUSED = ("This sheet viewer isn't the page caracole last wrote here (it was changed on a synced "
                    "device, say), so the server won't send it: the next caracole render writes it again. "
                    "The PDF is beside it.")
+_VERSION_REFUSED = ("This version's viewer isn't the page caracole last wrote here (it was changed on a synced "
+                    "device, say), so the server won't send it: the next caracole render writes it again. "
+                    "The song's own sheet.html is beside it.")
+
+
+def written_page(name: str) -> WrittenPage | None:
+    """The kind of page caracole writes into the library under the file name ``name``: one of
+    ``written_pages``, or, for a kept version's page (sheet_versions.py, ``version-<tab>.html``), a
+    sheet viewer, recorded as the others are (render.py); None for any other name."""
+    page = written_pages().get(name)
+    if page is None and version_page_tab(name) is not None:
+        from caracole.viewer import viewer_csp
+
+        page = WrittenPage(_viewers_written, viewer_csp, _VERSION_REFUSED)
+    return page
+
+
+def version_page_tab(name: str) -> str | None:
+    """The Ultimate Guitar tab of a kept version's viewer page by its name ("version-39144.html"), else None."""
+    from caracole.sheet_versions import tab_of, version_names
+
+    tab = tab_of(name)
+    return tab if tab is not None and version_names(tab)[2] == name else None
 
 
 def _viewers_written(conn: sqlite3.Connection, library_dir: Path, parts: tuple[str, ...]) -> list[tuple[str, int]]:

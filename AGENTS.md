@@ -80,7 +80,8 @@ Rules a change there keeps (the Invariants below are the others):
   `page_icon.LINK` in its head, which its policy allows with `img-src data:` (test_page_icon.py). Their scripts build
   every element with `createElement` and `textContent`, never `innerHTML`, and connect to
   nothing but caracole serve. A page caracole writes into the library is served only through
-  `app.written_pages` (a new kind goes there, with its record and its policy), and only while it
+  `app.written_pages` (a new kind goes there, with its record and its policy; a kept version's page,
+  `version-<tab>.html`, is a sheet viewer by its name: `app.written_page`), and only while it
   holds the bytes caracole recorded (`files.read_written_page`). Enter in a search box never
   spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
   opens the leading artist's songs), and on the library page, whose served bar searches
@@ -145,7 +146,11 @@ Rules a change there keeps (the Invariants below are the others):
   cross-origin check and carries the form token. Beyond a wanted.txt line, every change runs as a
   `caracole` command queued in jobs.py (One caracole at a time, below). The one line a request
   shows is status.py's, read from the job's steps and the song's state, never from which commands
-  ran: a step's label is that line while it runs ("Adding to the library…").
+  ran: a step's label is that line while it runs ("Adding to the library…"). A sandboxed viewer
+  reaches a form only through a GET page of the server's own, whose form posts with the token:
+  `/export` (export_routes.py) and `/versions` (versions_routes.py: Make this the one, `caracole get
+  --tab` with the tab's own page; Keep it and back to caracole's pick, `caracole versions --keep` and
+  `--clear`), each a job under the song's key, which jobs.py's `_pick` joins as a lookup's `--tab`.
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
