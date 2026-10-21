@@ -568,6 +568,17 @@ def test_add_a_song_of_the_library_queues_songbook_add(app, setup, queue, campfi
     assert steps(queue) == [[("songbook", "add", "--", "Picnic", "Muse - Hysteria")]]
 
 
+def test_cancelling_either_half_of_add_a_song_cancels_both(app, setup, queue, campfire):
+    # The lookup and the songbook's change are queued both or neither, and cancelled so too: a songbook add
+    # left alone would run for a song the library may not have.
+    for half in (0, 1):
+        post(app, "/songbook/add-song", {"name": "Campfire", "artist": "Oasis", "title": "Wonderwall"})
+        ids = sorted(job.id for job in queue.snapshot())
+        assert len(ids) == 2
+        assert post(app, "/jobs/cancel", {"job": str(ids[half])}).status == 303
+        assert queue.snapshot() == []
+
+
 def test_add_a_song_from_an_index_looks_it_up_then_adds_it(app, setup, queue, campfire):
     # A song you don't have: in wanted.txt at once (as Get it writes it), looked up now, then put in the songbook.
     cfg = setup[1]

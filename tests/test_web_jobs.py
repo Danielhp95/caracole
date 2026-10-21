@@ -411,6 +411,24 @@ def test_a_job_that_has_not_started_can_be_cancelled_never_one_that_runs_or_ende
         queue.cancel(first.id)
 
 
+def test_jobs_queued_together_are_cancelled_together_while_they_wait():
+    queue = JobQueue(FakeRunner())
+    alone, _ = queue.submit("Add A - 1", "a|1", add_steps("A", "1"))
+    (first, _), (second, _) = queue.submit_all([
+        {"title": "Fetch B - 2", "song_key": "b|2", "steps": add_steps("B", "2"), "fetching": True},
+        {"title": "Put B - 2 in a songbook", "song_key": "songbook|b|2", "steps": [("Adding", ("songbook", "add"))]}])
+    assert queue.cancel(second.id).id == second.id
+    assert [j.id for j in queue.snapshot()] == [alone.id]
+    # One of them running: the one that waits still goes, and the running one runs on.
+    (first, _), (second, _) = queue.submit_all([
+        {"title": "Fetch C - 3", "song_key": "c|3", "steps": add_steps("C", "3"), "fetching": True},
+        {"title": "Put C - 3 in a songbook", "song_key": "songbook|c|3", "steps": [("Adding", ("songbook", "add"))]}])
+    with queue._lock:
+        next(j for j in queue._jobs if j.id == first.id).state = "running"
+    queue.cancel(second.id)
+    assert sorted(j.id for j in queue.snapshot()) == [alone.id, first.id]
+
+
 def test_a_cancelled_job_makes_room_in_the_queue():
     queue = JobQueue(FakeRunner(), limit=2)
     queue.submit("Add A - 1", "a|1", add_steps("A", "1"))

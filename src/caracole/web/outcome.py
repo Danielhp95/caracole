@@ -18,14 +18,19 @@ song:
   (``Action``): a link, or a form posted with the form token. Ready opens its sheet; Needs review picks
   the match (its picker's page), or, with no candidates, opens the song on the library page; Not found,
   with a sheet or a Guitar Pro file the local indexes have elsewhere (``elsewhere``: LaCuerda's index,
-  gtptabs.com's), gets it from there with the lookup the search's Get it runs, else requests it by name
-  (the library page's request form, filled in: ``/#q=Artist - Title``); Failed and Not fetched yet try
-  again (``POST /jobs/again``: the same steps, queued again); a songbook made opens it.
+  gtptabs.com's), gets it from there with the lookup the search's Get it runs; else, for a song the
+  offline index didn't match, shows what ``caracole search`` finds for it (the picker's page,
+  ``/review?song=ID``), also offered beside Get it from there (``Outcome.also``), and for any other,
+  requests it by name (the library page's request form, filled in: ``/#q=Artist - Title``); Failed and
+  Not fetched yet try again (``POST /jobs/again``: the same steps, queued again), a failed removal by
+  asking what goes again (``POST /remove``, its question, as of now); a songbook made opens it.
 
 A reason is a site's own answer, worded for a person: a lookup's stage that ended in a wait or an error
 says which site, what it answered and what waits ("LRCLIB answered 503: the lyrics wait for tonight's
-run."); a Not found says Ultimate Guitar has no chords for it, and what the indexes have elsewhere. A
-reason that can't be told from the job is left out, never made up.
+run."); a Not found says Ultimate Guitar has no chords for it only when the fetch asked it
+(``SongFacts.asked_ug``), and else, for a song the offline index didn't match, that the index doesn't
+have it under this name; then what the indexes have elsewhere. A reason that can't be told from the job
+is left out, never made up.
 """
 
 from __future__ import annotations
@@ -38,7 +43,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 from caracole.get import GTPTABS_KEPT
-from caracole.web.jobs import LACUERDA_ARTIST, LOOKUP, Job, Stage
+from caracole.web.jobs import LACUERDA_ARTIST, LOOKUP, REMOVING, Job, Stage
 from caracole.web.status import Line, SongFacts
 
 if TYPE_CHECKING:
@@ -73,10 +78,11 @@ _COOLING = re.compile(r"^(?P<site>.+?) is cooling down after a block, until (?P<
 _SPENT = re.compile(r"^(?P<spent>.+); the nightly run does the rest$")
 
 NO_CHORDS = "Ultimate Guitar has no chords for it"
+NOT_INDEXED = "Not in the offline Ultimate Guitar index under this name"
 NOT_ASKED = ("caracole didn't ask Ultimate Guitar this time (a cooldown, a block, a spent budget or an error: "
              "the output says which).")
 IN_REVIEW = "caracole isn't sure which Ultimate Guitar song it is."
-_ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs.com has a Guitar Pro file"}
+_ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs.com's index lists a page for it"}
 
 
 @dataclass(frozen=True)
@@ -99,12 +105,14 @@ class Action:
 
 @dataclass(frozen=True)
 class Outcome:
-    """How a finished request ended: ``tone`` (status.py's), ``word``, ``reason`` ("" for none), ``action``."""
+    """How a finished request ended: ``tone`` (status.py's), ``word``, ``reason`` ("" for none), ``action``,
+    and ``also``, a second way on beside it."""
 
     tone: str
     word: str
     reason: str = ""
     action: Action | None = None
+    also: Action | None = None
 
 
 # --- the running request's steps ------------------------------------------------------------------------
@@ -159,6 +167,9 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
     again = Action("Try again", post="/jobs/again", fields=(("job", str(job.id)),))
     tone, text = line.tone, line.text
     if tone == "failed":
+        if job.song_key.startswith(REMOVING):  # what goes is asked again, as of now: never removed unasked
+            again = (Action("Try again", post="/remove", fields=(("song", str(job.song_id)),))
+                     if job.song_id is not None else None)
         return Outcome("failed", "Failed", _sentence(text), again)
     if tone == "removed":
         return Outcome("removed", text)
@@ -183,18 +194,29 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
 
 
 def _not_found(job: Job, facts: SongFacts | None, song_id: int | None) -> Outcome:
-    """Not found: what the lookup got elsewhere, or what the local indexes have elsewhere, else nothing."""
+    """Not found: Ultimate Guitar has no chords for it once the fetch asked it, else, for a song the offline
+    index didn't match, the index lacks it under this name; then what the lookup got elsewhere, or what the
+    local indexes have elsewhere. A song the index didn't match goes on to what caracole search finds for
+    it; any other, with nothing elsewhere, is requested by name."""
+    unmatched = facts is not None and facts.not_found
+    head = NO_CHORDS if facts is not None and facts.asked_ug else NOT_INDEXED if unmatched else ""
+    search = (Action("See what caracole search finds", href=f"/review?song={song_id}")
+              if unmatched and song_id is not None else None)
     if any(s.name == "gtptabs" and s.state == "done" and s.detail == GTPTABS_KEPT for s in job.stages):
-        return Outcome("missing", "Not found", f"{NO_CHORDS}; caracole got a Guitar Pro file from gtptabs.com.",
-                       _in_library(song_id))
+        return Outcome("missing", "Not found", _joined(head, "caracole got a Guitar Pro file from gtptabs.com"),
+                       _in_library(song_id), search)
     where = facts.elsewhere if facts is not None else None
     if where is not None and song_id is not None and where[0] in _ELSEWHERE:
         source, url = where
         fields = (("song", str(song_id)), *((("lacuerda", url),) if source == "lacuerda" else ()), ("then", "jobs"))
-        return Outcome("missing", "Not found", f"{NO_CHORDS}; {_ELSEWHERE[source]}.",
-                       Action("Get it from there", post="/lookup", fields=fields))
-    return Outcome("missing", "Not found", f"{NO_CHORDS}.",
-                   Action("Request by name", href="/#" + urlencode({"q": job.display or job.title})))
+        return Outcome("missing", "Not found", _joined(head, _ELSEWHERE[source]),
+                       Action("Get it from there", post="/lookup", fields=fields), search)
+    return Outcome("missing", "Not found", _sentence(head),
+                   search or Action("Request by name", href="/#" + urlencode({"q": job.display or job.title})))
+
+
+def _joined(head: str, rest: str) -> str:
+    return _sentence(f"{head}; {rest}" if head else rest)
 
 
 def _in_library(song_id: int | None) -> Action | None:
@@ -248,22 +270,38 @@ def _href(href: str) -> str:
 def elsewhere(conn: sqlite3.Connection, cfg: Config, song: Song, job: Job, now: datetime) -> tuple[str, str] | None:
     """For a song a fetch left without a sheet: a sheet LaCuerda's index holds of it (``("lacuerda", its
     page)``), else a gtptabs.com page whose title its index lists for a song with no Guitar Pro file
-    (``("gtptabs", the page)``); None for neither, or a site the job's lookup asked already. It reads the
-    local tables alone, and sends nothing."""
+    (``("gtptabs", the page)``); None for neither. A site a new lookup would skip again is none: one the
+    job's lookup asked already, one that cools down after a block now, one its stage skipped for a block,
+    a cooldown or a spent budget, and LaCuerda once asked about the song this month (``asked_lately``),
+    as gtptabs.com (``title_page``). It reads the local tables alone, and sends nothing."""
     from caracole.gtptabs_fetch import title_page
+    from caracole.health import is_cooling
+    from caracole.lacuerda_fetch import asked_lately
     from caracole.lacuerda_index import sheet_page
 
     if song.status == "ignored":
         return None
     by_name = {stage.name: stage for stage in job.stages}
-    asked = by_name.get("lacuerda")
-    if asked is None or not (asked.state == "done" or asked.detail.startswith("asked already")):
+
+    def may_ask(provider: str) -> bool:
+        stage = by_name.get(provider)
+        if stage is not None and (stage.state == "done" or stage.detail.startswith("asked already")
+                                  or stage.state == "skipped" and _waited(stage.detail)):
+            return False
+        return not is_cooling(conn, provider, now)
+
+    if may_ask("lacuerda") and not asked_lately(song, now):
         page = sheet_page(conn, song.artists or [song.artist], song.title)
         if page is not None:
             return "lacuerda", page
-    asked = by_name.get("gtptabs")
-    if cfg.provider("gtptabs").enabled and (asked is None or asked.state != "done"):
+    if cfg.provider("gtptabs").enabled and may_ask("gtptabs"):
         page = title_page(conn, song, now)
         if page is not None:
             return "gtptabs", page
     return None
+
+
+def _waited(detail: str) -> bool:
+    """Whether a stage was skipped for a block, a cooldown or a spent budget, in get.py's words."""
+    detail = detail.strip()
+    return bool(_BLOCKED.match(detail) or _COOLING.match(detail) or _SPENT.match(detail))

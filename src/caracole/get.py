@@ -93,6 +93,8 @@ SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: w
 # serve's line follows (web/status.py), "Fetching from LaCuerda…" rather than Ultimate Guitar's.
 SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from Ultimate Guitar"}
 GTPTABS_KEPT = "Guitar Pro file downloaded"  # the gtptabs stage's detail for a file kept, which caracole serve reads
+# The sheet stage's detail for a song Ultimate Guitar can't be asked about, which caracole serve reads.
+NOT_IN_INDEX = "the offline index doesn't have it, and its artist's UG page isn't known"
 
 
 @dataclass(frozen=True)
@@ -482,7 +484,7 @@ class _Lookup:
         if song.match_decision == "review":
             return ("caracole isn't sure which Ultimate Guitar song this is: pick it on the lookup page, "
                     "or run caracole review")
-        return "the offline index doesn't have it, and its artist's UG page isn't known"
+        return NOT_IN_INDEX
 
     def _fetch_context(self, client, *, first: bool):
         from caracole.overrides import load_overrides

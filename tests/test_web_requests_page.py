@@ -6,7 +6,7 @@ step; and the routes that cancel a queued request and try a finished one again."
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from helpers import browser
@@ -69,9 +69,10 @@ def mockup() -> tuple[list[Job], dict, dict]:
                                             "pdf": ("running", "")}, state="running")
     running.started_at = NOW - timedelta(seconds=12)
     queued = lookup(7, "Estopa - Como Camarón", {}, state="queued")
-    nyc = lookup(5, "Horse The Band - New York City", {"sheet": ("skipped", "the offline index doesn't have it"),
+    nyc = lookup(5, "Horse The Band - New York City", {"sheet": ("skipped", "Ultimate Guitar has no sheet to keep"),
                                                        "pdf": ("skipped", "no sheet yet")}, finished=today_at(14, 2))
-    pizza = lookup(4, "Horse The Band - Crippled By Pizza", {"sheet": ("skipped", ""), "pdf": ("skipped", "")},
+    pizza = lookup(4, "Horse The Band - Crippled By Pizza", {"sheet": ("skipped", "Ultimate Guitar has no sheet to "
+                                                                                  "keep"), "pdf": ("skipped", "")},
                    finished=today_at(14, 1))
     creep = lookup(3, "Radiohead - Creep", {"lyrics": (
         "failed", "LRCLIB failed (lrclib: 503: https://lrclib.net/api/get: HTTP 503); the nightly run tries again")},
@@ -79,9 +80,10 @@ def mockup() -> tuple[list[Job], dict, dict]:
     book = Job(2, 'Delete the songbook "test"', f"{KEY}songbook\x1fdelete\x1f--\x1ftest",
                [Step("Deleting the songbook", ("songbook", "delete", "--", "test"), state="done")], state="done",
                display='Delete the songbook "test"', queued_at=today_at(13, 12), finished_at=today_at(13, 12))
-    facts = {5: SongFacts(not_found=True, checked_now=True,
+    # Both Horse The Band songs are matched, and Ultimate Guitar was asked: it has no chords for them.
+    facts = {5: SongFacts(checked_now=True, asked_ug=True,
                           elsewhere=("gtptabs", "https://gtptabs.com/tabs/h/horse-the-band/new-york-city.html")),
-             4: SongFacts(not_found=True, checked_now=True), 3: SongFacts(sheet="Radiohead/Creep/sheet.html")}
+             4: SongFacts(checked_now=True, asked_ug=True), 3: SongFacts(sheet="Radiohead/Creep/sheet.html")}
     songs = {5: 15, 4: 14, 3: 13}
     jobs = [queued, running, nyc, pizza, creep, book]
     lines = {job.id: job_line(job, facts.get(job.id), ahead=1 if job is queued else 0) for job in jobs}
@@ -137,8 +139,8 @@ def test_each_outcome_says_its_word_its_reason_and_its_next_step():
     shown = dict(JOB_ITEM.findall(today))
     nyc = shown["5"]
     assert '<span class="says missing">Not found</span>' in nyc
-    assert ('<p class="reason">Ultimate Guitar has no chords for it; gtptabs.com has a Guitar Pro file.</p>'
-            in nyc)
+    assert ('<p class="reason">Ultimate Guitar has no chords for it; gtptabs.com&#x27;s index lists a page for '
+            "it.</p>" in nyc)
     assert re.search(r'<form class="act-form" method="post" action="/lookup">.*name="song" value="15">'
                      r'.*name="then" value="jobs">.*>Get it from there</button></form>', nyc)
     assert '<time class="when" datetime="' in nyc and ">14:02</time>" in nyc
@@ -261,22 +263,55 @@ def test_try_again_queues_the_same_steps_and_needs_the_token(cfg, conn):
     assert queue.snapshot()[0].state == "done"
 
 
-def lookup_ran(cfg, conn, queue, app, artist, title, *, sheet=False):
-    """A song looked up now (Fetch it now) whose lookup left it as the test says: not found, or with a sheet."""
+def test_trying_a_lacuerda_artists_read_again_lets_go_of_the_searches_kept_once_it_is_read(app, queue):
+    # A read asked for from a search drops the answers kept once it is over (search_routes._after_reads):
+    # Try again's read does the same.
+    post(app, "/lacuerda/artist", {"name": "Caifanes"})
+    queue.run_pending()
+    app._reads.clear()
+    response = post(app, "/jobs/again", {"job": "1"})
+    assert response.status == 303
+    assert app._reads == {2}
+
+
+def lookup_ran(cfg, conn, queue, app, artist, title, *, sheet=False, asked=False):
+    """A song looked up now (Fetch it now) whose lookup left it as the test says: not found in the offline
+    index, matched and asked on Ultimate Guitar (``asked``), which had no sheet, or with a sheet."""
     post(app, "/request", {"artist": artist, "title": title, "fetch": "1"})
     song = add_song(conn, artist, title)
-    update_song(conn, song.id, match_decision="accept" if sheet else "not_found")
+    update_song(conn, song.id, match_decision="accept" if sheet or asked else "not_found")
     if sheet:
         folder = song_dir(cfg.library_dir, song)
         folder.mkdir(parents=True)
         (folder / "sheet.pdf").write_bytes(b"%PDF")
     queue.run_pending()
+    if asked:  # its fetch settled it during the job: what it lacks, UG lacks
+        started = queue.snapshot()[0].started_at
+        update_song(conn, song.id, ug_checked_at=started.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
     return song
 
 
-def test_a_song_not_found_requests_it_by_name_or_gets_it_where_the_indexes_have_it(cfg, conn, queue, app):
+def test_a_song_the_offline_index_lacks_says_so_and_its_one_next_step_is_what_caracole_search_finds(
+        cfg, conn, queue, app):
     pizza = lookup_ran(cfg, conn, queue, app, "Horse The Band", "Crippled By Pizza")
     item = dict(JOB_ITEM.findall(text(get(app, "/jobs"))))["1"]
+    # Nobody asked Ultimate Guitar: the index doesn't have it under this name, and its artist's page isn't known.
+    assert '<p class="reason">Not in the offline Ultimate Guitar index under this name.</p>' in item
+    assert "no chords" not in item and "Request by name" not in item
+    assert item.count("See what caracole search finds") == 1
+    assert (f'<div class="next"><a class="btn act primary" href="/review?song={pizza.id}">See what caracole search '
+            "finds</a><time" in item)
+    assert 'class="waits"' not in item
+    # The library page's line for it is as it was.
+    [view] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
+    assert view["line"] == {"tone": "missing", "text": "Not found",
+                            "link": {"label": "see the to-do page", "href": "_todo.md"}, "details": None}
+
+
+def test_a_song_not_found_requests_it_by_name_or_gets_it_where_the_indexes_have_it(cfg, conn, queue, app):
+    pizza = lookup_ran(cfg, conn, queue, app, "Horse The Band", "Crippled By Pizza", asked=True)
+    item = dict(JOB_ITEM.findall(text(get(app, "/jobs"))))["1"]
+    assert '<p class="reason">Ultimate Guitar has no chords for it.</p>' in item
     assert '<a class="btn act" href="/#q=Horse+The+Band+-+Crippled+By+Pizza">Request by name</a>' in item
     # The library page's line for it is as it was: Not found, with the to-do page.
     [view] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
@@ -288,7 +323,11 @@ def test_a_song_not_found_requests_it_by_name_or_gets_it_where_the_indexes_have_
                  "'como-camaron', 'lcd', 1, 'e')")
     camaron = lookup_ran(cfg, conn, queue, app, "Estopa", "Como Camarón")
     item = dict(JOB_ITEM.findall(text(get(app, "/jobs"))))["2"]
-    assert "LaCuerda has a sheet." in item
+    assert "Not in the offline Ultimate Guitar index under this name; LaCuerda has a sheet." in item
+    # What caracole search finds, beside it, in the same row: never a second way on under the output.
+    assert re.search(r'<div class="next"><form [^>]*action="/lookup">.*?</form><a class="btn act" '
+                     rf'href="/review\?song={camaron.id}">See what caracole search finds</a><time', item)
+    assert item.count("See what caracole search finds") == 1
     form = re.search(r'<form class="act-form" method="post" action="/lookup">.*?</form>', item).group(0)
     fields = dict(re.findall(r'name="(\w+)" value="([^"]*)"', form))
     assert fields == {"csrf": "tok", "song": str(camaron.id),

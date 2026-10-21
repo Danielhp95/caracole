@@ -2591,6 +2591,9 @@ with it. A KEY that is no key exits with status 2.
     one that is over stays). Cancelling a request leaves its wanted.txt line:
     the song is in your library's list from the moment you asked, and the
     nightly run looks for it; remove it from the library if you don't want it.
+    A songbook's Add a song for a song you haven't got queues two requests,
+    its lookup and the songbook's change, both or neither: cancelling either
+    cancels the other too, while it waits.
   - **Today** and **Earlier** (by when each ended, in the server's time
     zone): the requests that are over, newest first, each with its outcome as
     a coloured word, the reason in a sentence when there is one, the time it
@@ -2601,23 +2604,35 @@ with it. A KEY that is no key exits with status 2.
     - **Needs review** · **Pick the match**, the picker's own page,
       `/review?song=ID` (without candidates to pick, **Open in the library**,
       the song's line);
-    - **Not found**: "Ultimate Guitar has no chords for it", and, when the
-      local indexes have it elsewhere, what: a sheet LaCuerda's index holds,
-      or a Guitar Pro file gtptabs.com's lists for a song with none, and
-      **Get it from there**, the lookup a search's Get it runs (with that
-      LaCuerda sheet picked), back on this page; with nothing elsewhere,
-      **Request by name**, the library page's request form filled in with
-      the song (`/#q=Artist - Title`);
+    - **Not found**: "Ultimate Guitar has no chords for it" once caracole
+      asked Ultimate Guitar for it (its song page, or its artist's page), and
+      "Not in the offline Ultimate Guitar index under this name" for a song
+      the index didn't match and whose artist's UG page isn't known, which
+      nobody asked; then, when the local indexes have it elsewhere, what: a
+      sheet LaCuerda's index holds, or a page gtptabs.com's index lists for a
+      song with no Guitar Pro file, and **Get it from there**, the lookup a
+      search's Get it runs (with that LaCuerda sheet picked), back on this
+      page. A site a new lookup would skip again isn't offered: one cooling
+      down after a block, one the lookup skipped for a block or a spent
+      budget, LaCuerda once asked about the song this month and gtptabs.com
+      once looked up for it this month. With nothing elsewhere, a song the
+      index didn't match has **See what caracole search finds** (the
+      picker's page, Look in the index, above), also beside Get it from
+      there, and any other **Request by name**, the library page's request
+      form filled in with the song (`/#q=Artist - Title`);
     - **Not fetched yet**, with why (a cooldown, a block, a spent budget or
       an error, in the stage's words), and **Failed**, with its error in one
       sentence: **Try again** queues the same commands again
-      (`POST /jobs/again`);
+      (`POST /jobs/again`), with no question asked, a songbook's Delete
+      among them; a failed removal's Try again asks what goes first, as of
+      now (Remove's own question, `POST /remove`);
     - a songbook's **Made** or **Added** · **Open songbook**; **Removed**,
       **Deleted**, **Added** (the nightly run looks for it), and a LaCuerda
       artist page's **Read**, **Not found** or **Not read** (Try again), each
       in a word and a sentence.
 
-  Every request keeps its **Output**, folded away: the commands it ran and
+  Every request keeps its **Output**, folded away: when it was asked for (in
+  the server's time zone, named), the commands it ran and
   what each printed (they run at `-v`, so that is the whole story), and a
   lookup's stages with their states and why one was skipped. A song's Details
   link on the library page opens that request's output. The page refreshes
@@ -2629,9 +2644,7 @@ with it. A KEY that is no key exits with status 2.
   lookup has no UG song to fetch until then: it says Needs review, not a
   failure, and in its output the lookup's sheet stage Waits for a pick. While
   the page refreshes itself, which would undo a choice half made, its Pick the
-  match opens the picker's own page instead. One whose song the index didn't
-  match links to what `caracole search` finds for it (Look in the index,
-  above). `/api/jobs` and
+  match opens the picker's own page instead. `/api/jobs` and
   `/api/jobs/N` give each request as JSON: its steps (a lookup's stages),
   each with its state, its song and the library files its sheet can be read
   in. These JSON addresses (`/api/…`) answer caracole's own pages, the address

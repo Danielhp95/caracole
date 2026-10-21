@@ -89,8 +89,9 @@ class SongFacts:
     has candidates to pick from. ``lacuerda`` says the sheet you picked on
     LaCuerda (``[lacuerda]``) is still to be asked for. ``elsewhere`` is, for a song a
     fetch left without a sheet, what the local indexes have of it on another site (a
-    source and its page: ``outcome.elsewhere``), which the requests page alone says; the
-    line here never reads it.
+    source and its page: ``outcome.elsewhere``), and ``asked_ug`` that the fetch
+    itself asked Ultimate Guitar (``checked_since``), so that what the song lacks, UG
+    lacks; both the requests page alone says, and the line here never reads them.
     """
 
     sheet: str | None = None
@@ -101,6 +102,7 @@ class SongFacts:
     picker: str | None = None
     lacuerda: bool = False
     elsewhere: tuple[str, str] | None = None
+    asked_ug: bool = False
 
 
 @dataclass(frozen=True)

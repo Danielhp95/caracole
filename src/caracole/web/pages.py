@@ -38,7 +38,7 @@ from caracole.page_icon import LINK as PAGE_ICON
 
 if TYPE_CHECKING:  # songbooks.py imports Refused, and status.py imports songbooks.py
     from caracole.web.jobs import Job, Stage, Step
-    from caracole.web.outcome import Outcome
+    from caracole.web.outcome import Action, Outcome
     from caracole.web.status import Line
 
 PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
@@ -287,8 +287,11 @@ def jobs_page(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[i
             said = outcome(job, line) if line is not None else None
         ended = (job.finished_at or job.queued_at).astimezone()
         group = "Today" if ended.date() == today else "Earlier"
-        groups[group].append(_finished(job, said, ended, csrf, output(job), waits.get(job.id, ""),
-                                       day=group != "Today"))
+        shown_below = waits.get(job.id, "")
+        if said is not None and pending.get(job.id) is not None and pending[job.id].search and _leads(
+                said, f"/review?song={pending[job.id].song_id}"):
+            shown_below = ""  # what caracole search finds is its next step already, in its row
+        groups[group].append(_finished(job, said, ended, csrf, output(job), shown_below, day=group != "Today"))
     sections = []
     if now_items:
         sections.append(_section("now", "Now", now_items))
@@ -337,7 +340,12 @@ def _queued(job: Job, place: int, csrf: str, output: str) -> str:
 
 
 # The next steps that are the request's way on; the others (Try again, Request by name…) are plain buttons.
-_PRIMARY = frozenset({"Open", "Pick the match", "Get it from there", "Open songbook"})
+_PRIMARY = frozenset({"Open", "Pick the match", "Get it from there", "Open songbook", "See what caracole search finds"})
+
+
+def _leads(said: Outcome, href: str) -> bool:
+    """Whether an outcome's next step, or the one beside it, is a link to ``href``."""
+    return any(a is not None and a.href == href for a in (said.action, said.also))
 
 
 def _finished(job: Job, said: Outcome | None, ended: datetime, csrf: str, output: str, waits: str, *,
@@ -349,18 +357,24 @@ def _finished(job: Job, said: Outcome | None, ended: datetime, csrf: str, output
     else:
         said_html = _says(said.tone, said.word)
         reason = f'<p class="reason">{escape(said.reason)}</p>' if said.reason else ""
-        action = ""
-        if said.action is not None:
-            a = said.action
-            cls = "btn act primary" if a.label in _PRIMARY else "btn act"
-            if a.post is not None:
-                action = _form(a.post, a.fields, a.label, csrf, cls=cls)
-            elif a.href is not None:
-                action = f'<a class="{cls}" href="{escape(a.href, quote=True)}">{escape(a.label)}</a>'
+        action = _action(said.action, csrf) + _action(said.also, csrf, primary=False)
     shown = f"{ended.day} {ended:%b}, {ended:%H:%M}" if day else f"{ended:%H:%M}"
     when = f'<time class="when" datetime="{ended.astimezone(UTC):%Y-%m-%dT%H:%M:%SZ}">{escape(shown)}</time>'
     return (f'<li class="job over {escape(job.state)}" id="job-{job.id}"><p class="line">{_song(job)}{said_html}'
             f'</p>{reason}<div class="next">{action}{when}</div>{output}{waits}</li>\n')
+
+
+def _action(a: Action | None, csrf: str, *, primary: bool = True) -> str:
+    """A next step: a link, or a one-button form posted with the form token; "" for none. ``primary``: drawn as
+    the request's way on when it is one (``_PRIMARY``); the one beside it is a plain button."""
+    if a is None:
+        return ""
+    cls = "btn act primary" if primary and a.label in _PRIMARY else "btn act"
+    if a.post is not None:
+        return _form(a.post, a.fields, a.label, csrf, cls=cls)
+    if a.href is not None:
+        return f'<a class="{cls}" href="{escape(a.href, quote=True)}">{escape(a.label)}</a>'
+    return ""
 
 
 def _form(action: str, fields: Sequence[tuple[str, str]], label: str, csrf: str, *, cls: str = "btn act",

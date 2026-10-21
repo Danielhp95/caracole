@@ -3,8 +3,8 @@ finished one ended, with the next step to take."""
 
 from datetime import UTC, datetime
 
-from caracole.get import STAGES
-from caracole.songs import update_song
+from caracole.get import NOT_IN_INDEX, STAGES
+from caracole.songs import get_song, update_song
 from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, Stage, Step, lookup_steps, remove_steps
 from caracole.web.outcome import Action, Chip, Outcome, elsewhere, outcome, steps
 from caracole.web.status import SongFacts, job_line
@@ -125,30 +125,58 @@ def test_needs_review_picks_the_match():
     assert bare.action == Action("Open in the library", href="/#song=7")
 
 
-def test_not_found_with_something_elsewhere_gets_it_from_there():
-    job = ended({"sheet": ("skipped", "the offline index doesn't have it, and its artist's UG page isn't known")})
-    gtp = SongFacts(not_found=True, checked_now=True, elsewhere=("gtptabs", "https://gtptabs.com/tabs/x.html"))
-    assert said(job, gtp, song_id=3) == Outcome(
-        "missing", "Not found", "Ultimate Guitar has no chords for it; gtptabs.com has a Guitar Pro file.",
-        Action("Get it from there", post="/lookup", fields=(("song", "3"), ("then", "jobs"))))
-    lc = SongFacts(not_found=True, checked_now=True,
-                   elsewhere=("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))
-    assert said(job, lc, song_id=3) == Outcome(
-        "missing", "Not found", "Ultimate Guitar has no chords for it; LaCuerda has a sheet.",
-        Action("Get it from there", post="/lookup", fields=(
-            ("song", "3"), ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"), ("then", "jobs"))))
-    # A Guitar Pro file the lookup itself downloaded is in the library already: the song's line has it.
-    got = ended({"sheet": ("skipped", ""), "gtptabs": ("done", "Guitar Pro file downloaded")})
-    assert said(got, SongFacts(not_found=True, checked_now=True), song_id=3) == Outcome(
-        "missing", "Not found", "Ultimate Guitar has no chords for it; caracole got a Guitar Pro file from "
-                                "gtptabs.com.", Action("Open in the library", href="/#song=3"))
+SEARCH = Action("See what caracole search finds", href="/review?song=3")
 
 
-def test_not_found_with_nothing_elsewhere_requests_it_by_name():
-    job = ended({"sheet": ("skipped", "")}, display="Horse The Band - Crippled By Pizza")
-    assert said(job, SongFacts(not_found=True, checked_now=True), song_id=3) == Outcome(
+def test_not_found_says_ultimate_guitar_has_no_chords_only_once_it_was_asked():
+    # The offline index didn't match the name, and UG couldn't be asked: whether UG has chords, nobody knows.
+    # What caracole search finds for it is the way on, the one next step.
+    job = ended({"sheet": ("skipped", NOT_IN_INDEX)}, display="Horse The Band - Crippled By Pizza")
+    unmatched = SongFacts(not_found=True, checked_now=True)
+    assert said(job, unmatched, song_id=3) == Outcome(
+        "missing", "Not found", "Not in the offline Ultimate Guitar index under this name.", SEARCH)
+    # Its artist's UG page was read for it, with no chords there: UG was asked, and the index still lacks it.
+    read = SongFacts(not_found=True, checked_now=True, asked_ug=True)
+    assert said(job, read, song_id=3) == Outcome("missing", "Not found", "Ultimate Guitar has no chords for it.",
+                                                 SEARCH)
+    # A song the index matched, whose UG page had no sheet to keep: requested by name.
+    matched = ended({"sheet": ("skipped", "Ultimate Guitar has no sheet to keep")},
+                    display="Horse The Band - Crippled By Pizza")
+    assert said(matched, SongFacts(checked_now=True, asked_ug=True), song_id=3) == Outcome(
         "missing", "Not found", "Ultimate Guitar has no chords for it.",
         Action("Request by name", href="/#q=Horse+The+Band+-+Crippled+By+Pizza"))
+    # A fetch of commands that refused the song as not in the index (it failed): not asked either.
+    fetch = Job(9, "Fetch Horse The Band - Crippled By Pizza", "horse-the-band/crippled-by-pizza",
+                [Step("Fetching from Ultimate Guitar", ("fetch", "--song=Horse The Band - Crippled By Pizza"),
+                      state="failed")], fetching=True, state="failed")
+    assert said(fetch, SongFacts(not_found=True), song_id=3).reason == (
+        "Not in the offline Ultimate Guitar index under this name.")
+
+
+def test_not_found_with_something_elsewhere_gets_it_from_there():
+    job = ended({"sheet": ("skipped", "Ultimate Guitar has no sheet to keep")})
+    gtp = SongFacts(checked_now=True, asked_ug=True, elsewhere=("gtptabs", "https://gtptabs.com/tabs/x.html"))
+    assert said(job, gtp, song_id=3) == Outcome(
+        "missing", "Not found", "Ultimate Guitar has no chords for it; gtptabs.com's index lists a page for it.",
+        Action("Get it from there", post="/lookup", fields=(("song", "3"), ("then", "jobs"))))
+    # A song the index didn't match: LaCuerda's sheet first, and what caracole search finds beside it.
+    unmatched = ended({"sheet": ("skipped", NOT_IN_INDEX)})
+    lc = SongFacts(not_found=True, checked_now=True,
+                   elsewhere=("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))
+    assert said(unmatched, lc, song_id=3) == Outcome(
+        "missing", "Not found", "Not in the offline Ultimate Guitar index under this name; LaCuerda has a sheet.",
+        Action("Get it from there", post="/lookup", fields=(
+            ("song", "3"), ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"), ("then", "jobs"))),
+        also=SEARCH)
+    # A Guitar Pro file the lookup itself downloaded is in the library already: the song's line has it.
+    got = ended({"sheet": ("skipped", ""), "gtptabs": ("done", "Guitar Pro file downloaded")})
+    assert said(got, SongFacts(checked_now=True, asked_ug=True), song_id=3) == Outcome(
+        "missing", "Not found", "Ultimate Guitar has no chords for it; caracole got a Guitar Pro file from "
+                                "gtptabs.com.", Action("Open in the library", href="/#song=3"))
+    assert said(got, SongFacts(not_found=True, checked_now=True), song_id=3) == Outcome(
+        "missing", "Not found", "Not in the offline Ultimate Guitar index under this name; caracole got a Guitar "
+                                "Pro file from gtptabs.com.", Action("Open in the library", href="/#song=3"),
+        also=SEARCH)
 
 
 def test_failed_and_not_fetched_yet_try_again():
@@ -168,6 +196,17 @@ def test_failed_and_not_fetched_yet_try_again():
                 fetching=True, state="done")
     assert said(fetch, SongFacts()).reason == ("caracole didn't ask Ultimate Guitar this time (a cooldown, a block, "
                                                "a spent budget or an error: the output says which).")
+
+
+def test_a_failed_removal_tries_again_through_its_question_never_straight_to_remove():
+    removal = Job(7, "Remove Radiohead - Creep", REMOVING + "radiohead/creep",
+                  [Step(label, args, state="failed") for label, args in remove_steps("Radiohead - Creep")],
+                  state="failed", song_id=12)
+    # What goes is asked again (POST /remove without confirm: removal.plan_removal, as of now).
+    assert said(removal).action == Action("Try again", post="/remove", fields=(("song", "12"),))
+    unknown = Job(8, "Remove X - Y", REMOVING + "x/y", [Step("Removing", ("remove", "--yes"), state="failed")],
+                  state="failed")
+    assert said(unknown).action is None
 
 
 def test_a_songbook_made_opens_it_and_a_deletion_and_a_removal_say_so():
@@ -235,3 +274,37 @@ def test_elsewhere_is_a_lacuerda_sheet_or_a_gtptabs_page_the_local_indexes_list(
     assert elsewhere(conn, cfg, song, job, NOW) is None
     update_song(conn, song.id, status="ignored")
     assert elsewhere(conn, cfg, song, job, NOW) is None
+
+
+def test_elsewhere_offers_no_site_the_new_lookup_would_skip_again(conn, cfg):
+    from caracole.health import record_block
+
+    song = add_song(conn, "Estopa", "Como Camarón")
+    conn.execute("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) VALUES "
+                 "('tabs/e/estopa/como-camaron.html', 'tabs/e/estopa.html', 'estopa', 'como-camaron', 'como-camaron', "
+                 "'s1')")
+    conn.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, title, title_key, versions, "
+                 "acordes, page) VALUES ('estopa/como_camaron', 'estopa', 'Estopa', 'estopa', 'Como Camarón', "
+                 "'como-camaron', 'lcd', 1, 'e')")
+    job = ended({"sheet": ("skipped", ""), "lacuerda": ("skipped", ""), "gtptabs": ("skipped", "")},
+                display="Estopa - Como Camarón")
+    assert elsewhere(conn, cfg, song, job, NOW)[0] == "lacuerda"
+    # LaCuerda asked about the song this month: a lookup skips it until the month is over.
+    update_song(conn, song.id, lacuerda_checked_at="2026-10-01T00:00:00Z")
+    song = get_song(conn, song.id)
+    assert elsewhere(conn, cfg, song, job, NOW)[0] == "gtptabs"
+    update_song(conn, song.id, lacuerda_checked_at="2026-09-01T00:00:00Z")
+    song = get_song(conn, song.id)
+    assert elsewhere(conn, cfg, song, job, NOW)[0] == "lacuerda"
+    # A site that cools down after a block: the lookup would skip it again.
+    record_block(conn, "lacuerda", NOW, "lacuerda: 403")
+    assert elsewhere(conn, cfg, song, job, NOW)[0] == "gtptabs"
+    record_block(conn, "gtptabs", NOW, "gtptabs: 403")
+    assert elsewhere(conn, cfg, song, job, NOW) is None
+    # A stage skipped for a spent budget or a block: not offered either, whatever the cooldowns say now.
+    conn.execute("DELETE FROM kv WHERE key LIKE 'provider:%'")
+    spent = ended({"sheet": ("skipped", ""),
+                   "lacuerda": ("skipped", "the lookup's 6 requests to LaCuerda are spent; the nightly run does the rest"),
+                   "gtptabs": ("skipped", "gtptabs.com blocked caracole (gtptabs: 429: x): no more requests to it "
+                                          "until 2026-10-22 18:00 UTC.")}, display="Estopa - Como Camarón")
+    assert elsewhere(conn, cfg, song, spent, NOW) is None

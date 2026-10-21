@@ -115,7 +115,9 @@ def cancel(app: WebApp, form: dict[str, str]) -> Response:
 
 def again(app: WebApp, form: dict[str, str]) -> Response:
     """A request that is over, its steps queued again as a new request (Try again); back to the requests page.
-    It is queued as any request is (``JobQueue.submit``): a song's request waiting or running is the answer."""
+    It is queued as any request is (``JobQueue.submit``): a song's request waiting or running is the answer. A
+    LaCuerda artist's read is one of ``app._reads``, as the search's Read is, so the answers the searches kept
+    go once it is over. A failed removal's Try again asks what goes first (outcome.py: ``POST /remove``)."""
     job_id = _form_job(form)
     job = app.queue.job(job_id)
     if job is None:
@@ -127,6 +129,9 @@ def again(app: WebApp, form: dict[str, str]) -> Response:
     picked = any(step.args[:1] == ("review",) for step in job.steps)  # a pick comes after the song's own request
     queued, _ = app.submit(job.title, job.song_key, steps, fetching=job.fetching, note=job.note,
                            display=job.display, join=not picked, song_id=job.song_id)
+    if job.song_key.startswith(LACUERDA_ARTIST):  # once read, the searches' answers kept go, as a search's read's
+        with app._searching:
+            app._reads.add(queued.id)
     return app.queued(queued, "/jobs")
 
 
@@ -231,7 +236,9 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
     A fetch that is over and left no sheet is "Not found" only if it looked the
     song up during the job (``ug.fetch.checked_since``): a cooldown, a block, a
     spent budget or an error looks nothing up, and the song isn't missing; for the
-    requests page, it says what the local indexes have of the song elsewhere
+    requests page, it says whether that fetch asked Ultimate Guitar at all
+    (``asked_ug``: not for a song the offline index lacks whose artist's page isn't
+    known) and what the local indexes have of the song elsewhere
     (``outcome.elsewhere``). A job that is over doesn't change, so its answer is
     worked out once (``app._ended``).
     """
@@ -250,12 +257,12 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
     if song is not None:
         ignored = song.status == "ignored" or (overrides is not None and song.key in overrides.ignore)
         sheet = sheet_href(app.cfg.library_dir, song)
-        checked_now = False
+        checked_now = asked_ug = False
         if over and job.fetching and not sheet and job.started_at is not None:
             from caracole.ug.fetch import checked_since
 
-            checked_now = checked_since(conn, song, job.started_at) or (
-                bool(job.stages) and _nothing_to_ask(conn, song, overrides))
+            asked_ug = checked_since(conn, song, job.started_at)
+            checked_now = asked_ug or (bool(job.stages) and _nothing_to_ask(conn, song, overrides))
         picker = None
         if song.review and not ignored:
             from caracole.review import candidates_of
@@ -269,7 +276,7 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
             elsewhere = other_sites(conn, app.cfg, song, job, datetime.now(UTC))
         facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
                           checked_now=checked_now, ignored=ignored, picker=picker, lacuerda=picked,
-                          elsewhere=elsewhere)
+                          elsewhere=elsewhere, asked_ug=asked_ug)
     # A removal's song is gone once it is done: the job knows which it was.
     answer = (song.id if song is not None else job.song_id if removal else None, facts)
     if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known
