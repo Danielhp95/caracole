@@ -38,7 +38,10 @@ from caracole.ug.index import mark_built
 from conftest import add_song, subprocess_pythonpath
 
 WAITING = "Another caracole is running (pid 4242: run); waiting for it to finish."
+# A lookup's: the nightly run hands it the lock at its next pause.
+LOOKUP_WAITING = "Another caracole is running (pid 4242: run); it lets a lookup go first at its next pause"
 PERSIANA = "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-101"
+CALAMARO = "https://acordes.lacuerda.net/andres_calamaro/"
 LRCLIB_HIT = Path(__file__).parent / "fixtures" / "lrclib" / "get_hit.json"
 SPANISH_LYRICS = "Cruzo la plaza con el café frío\ny cuento las luces del tren de las seis\n"
 # Environment load_config would read; none of it may leak into a test.
@@ -233,6 +236,12 @@ def removed(tmp_path, sites, conn) -> bool:
     return conn.execute("SELECT COUNT(*) FROM removed").fetchone()[0] > 0
 
 
+def picked_on_lacuerda(tmp_path, sites, conn) -> bool:
+    """overrides.toml, which is in the library, holds the LaCuerda pick: written only under the lock."""
+    overrides = tmp_path / "lib" / "overrides.toml"
+    return overrides.exists() and "[lacuerda]" in overrides.read_text(encoding="utf-8")
+
+
 def added_to_wanted_txt(tmp_path, sites, conn) -> bool:
     wanted = tmp_path / "lib" / "wanted.txt"
     return wanted.exists() and "Stone Temple Pilots - Creep" in wanted.read_text(encoding="utf-8")
@@ -246,6 +255,7 @@ class Case:
     args: tuple[str, ...]
     setup: Step
     done: Step  # what the command leaves once it ran; false while it waits
+    said: str = WAITING  # what it says as it waits
 
 
 WRITERS = [
@@ -261,6 +271,8 @@ WRITERS = [
     Case(("render",), nothing, rendered),
     Case(("sync",), a_wanted_line, has_songs),
     Case(("add", "Radiohead", "Creep"), nothing, has_songs),
+    Case(("add", "--lacuerda", f"{CALAMARO}flaca", "Andrés Calamaro", "Flaca"), nothing, picked_on_lacuerda),
+    Case(("lacuerda", "--artist", "estopa"), nothing, requested, LOOKUP_WAITING),
     Case(("match",), a_song_to_match, matched),
     Case(("search", "stone temple pilots creep", "--add", "1"), a_song_to_match,
          added_to_wanted_txt),
@@ -280,7 +292,7 @@ def test_a_command_that_writes_waits_for_another_caracole(tmp_path, config, site
         assert started.still_waiting()
         assert not case.done(tmp_path, sites, conn)  # nothing sent, nothing written yet
     result = started.finished()
-    assert WAITING in result.output, result.output
+    assert case.said in result.output, result.output
     assert case.done(tmp_path, sites, conn), result.output
 
 

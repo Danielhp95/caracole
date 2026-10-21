@@ -6,7 +6,7 @@ from caracole.db import kv_set, kv_set_json
 from caracole.health import record_block
 from caracole.library import keep_file
 from caracole.normalize import slug_key
-from caracole.overrides import Overrides, load_overrides
+from caracole.overrides import LaCuerdaPick, Overrides, load_overrides
 from caracole.songs import get_song, list_songs, update_song
 from caracole.todo import build_todo, md, search_links, songs_to_buy, write_todo
 from caracole.versions import set_coverage, set_picks, upsert_version
@@ -411,6 +411,18 @@ def test_buy_list_waits_for_lacuerda_to_be_asked(conn, cfg):
     text = todo(conn, cfg)
     assert "## Buy list (1)" in text and "No human sheet found yet" in text
     assert "No human sheet exists" not in text
+
+
+def test_buy_list_waits_for_the_sheet_you_picked_on_lacuerda(conn, cfg):
+    # Your pick on LaCuerda is asked for whatever the song's language: until LaCuerda answers, nothing is bought.
+    s = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, s.id, match_decision="not_found")
+    assert "## Buy list (1)" in todo(conn, cfg)  # no pick, and not a song for LaCuerda: nothing to wait for
+    picked = Overrides(lacuerda={"radiohead/creep": LaCuerdaPick("radiohead", "creep")})
+    text = todo(conn, cfg, picked)
+    assert "## Buy list" not in text and "1 song waiting for the nightly fetch" in text
+    update_song(conn, s.id, lacuerda_checked_at="2026-10-18T03:36:00Z")  # LaCuerda had no such sheet
+    assert "## Buy list (1)" in todo(conn, cfg, picked)
 
 
 def test_buy_list_waits_for_pending_fetches(conn, cfg):

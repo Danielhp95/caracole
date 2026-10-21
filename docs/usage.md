@@ -275,7 +275,7 @@ that turn out to be one song (斑馬斑馬 and 斑马斑马, say) become one.
 
 ### caracole add
 
-`caracole add ARTIST TITLE [--album ALBUM] [--duration M:SS]` (or
+`caracole add ARTIST TITLE [--album ALBUM] [--duration M:SS] [--lacuerda URL]` (or
 `caracole add "ARTIST - TITLE"`) appends the line
 for you, then syncs the file at once and rewrites `_todo.md` and
 `index.html`:
@@ -326,6 +326,25 @@ updated, the line is kept all the same, a warning says why, and the next sync
 adds the song. The first `caracole add` creates the file, with a header that
 explains the format.
 
+`--lacuerda URL` is the LaCuerda song you picked for it, its page's address
+(`https://acordes.lacuerda.net/estopa/como_camaron`) or one of its versions'
+(`…/como_camaron-2.shtml`), as `caracole search` prints it with the song: it
+goes under `[lacuerda]` in overrides.toml (see
+[overrides.toml](#overridestoml-your-decisions)), and the nightly run keeps
+that sheet, whatever the song's language, asking LaCuerda for it at its next
+pass however lately it answered for the song: `LaCuerda: the nightly run keeps
+the sheet you picked there (https://acordes.lacuerda.net/estopa/como_camaron),
+recorded under [lacuerda] in overrides.toml.` Any other address is a usage
+error (exit 2), with nothing written. overrides.toml is in the library, so the
+pick is written once `caracole add` holds caracole's lock, as every writer of
+that file does; a lock file that can't be opened exits 1, the line in
+wanted.txt and no pick written. A song you picked on LaCuerda is no Ultimate
+Guitar review of other artists' songs of its title (covers, mostly): the sheet
+is the one you picked, so with nothing of its artist's by that name in the
+offline index it is not found there, and says so: `Ultimate Guitar's offline
+index has no song of theirs by this name; the sheet is the one you picked on
+LaCuerda.`
+
 A song you [removed](#caracole-remove) comes back with `caracole add`, as new:
 `Added Radiohead - Creep to wanted.txt; back from its removal on 2026-10-19, as
 new; the next caracole run looks for it.`
@@ -375,10 +394,16 @@ In order:
    wanted.txt, as `caracole add` adds it, and synced: a song you
    [removed](#caracole-remove) comes back that way, as new.
 2. **Match**, against the offline index, for this song alone.
-3. **The sheet.** One Ultimate Guitar page lists every version of the song's
-   chords with its rating, and the best rated is kept at once: one or two
-   requests. Without one there, LaCuerda's, for a song LaCuerda would be asked
-   about tonight. From here on the sheet is readable.
+3. **The sheet.** The LaCuerda sheet you picked (`--lacuerda`), first: its
+   version's page, one request (and the artist's page when LaCuerda's index
+   doesn't name the song's best version). Else, or when LaCuerda can't give it
+   now, one Ultimate Guitar page lists every version of the song's chords with
+   its rating, and the best rated is kept at once: one or two requests. The
+   stage then says first why your pick isn't the sheet (`LaCuerda failed (…)`,
+   a cooldown, `the Ultimate Guitar tab you pinned is kept over your LaCuerda
+   pick`), then what Ultimate Guitar gave.
+   Without one there, LaCuerda's, for a song LaCuerda would be asked about
+   tonight. From here on the sheet is readable.
 4. **The PDF**, as `caracole render` makes it, for this song alone: another
    song's failed PDF, or one waiting for a CJK font, isn't this one's.
 5. **The lyrics**, from LRCLIB.
@@ -414,6 +439,13 @@ Options:
   chords sheet, a text tab, a Guitar Pro or Power Tab file, by the offline
   index), and beside its pins of the other kinds: a Guitar Pro version picked
   after a chords sheet keeps the sheet you chose.
+- `--lacuerda URL` is the LaCuerda song to keep the sheet of, its page's
+  address (its best Letra y Acordes version) or a version's
+  (`https://acordes.lacuerda.net/estopa/como_camaron-2.shtml`): it is recorded
+  under `[lacuerda]`, and kept as the sheet whatever the song's language or
+  its coverage of the lyrics; Ultimate Guitar's sheets never replace it, and
+  the song gets Ultimate Guitar's guitar parts all the same. A `[pin]` of an
+  Ultimate Guitar sheet wins over it.
 - `--album ALBUM` and `--duration M:SS`, for a song new to the library, as in
   `caracole add`.
 - `--progress` adds a JSON line per stage, which `caracole serve` reads.
@@ -997,8 +1029,25 @@ and cache.
   nothing was due. A page that won't parse, or any other error, leaves the
   index as it was and counts as an error: an error never empties an initial.
   A cooldown, a block or a spent budget exits 0. The lacuerda step reads the
-  artists' slugs from it; `caracole search` and the Look up page don't read it
-  yet.
+  artists' slugs from it, and `caracole search`, Search all and the Look up
+  page suggest its artists and songs (see [caracole search](#caracole-search)).
+
+  **`caracole lacuerda --artist NAME`** reads one artist's page into the index
+  now, so that their songs are there to search: NAME is their name, or the
+  slug of their page as `caracole search` prints it (`joaquin_sabina`), tried
+  first when it is written as one. It asks at the lookup pace, as
+  `caracole get` does, within a lookup's budgets: a request for each slug
+  tried until one answers (one for a slug the listings give; a name they don't
+  list may take one per spelling, "the" or "y" kept or not), and none when the
+  page is in the cache (30 days). Its last line starts with what LaCuerda
+  answered, which caracole serve's request line shows: `Read: LaCuerda's page
+  of Joaquín Sabina lists 241 songs, in the index now.`, `Not found: LaCuerda
+  has no artist page for NAME.`, or `Not read: …` for a cooldown, a block, a
+  spent budget or an error (`Not read: LaCuerda failed (…); nothing changed:
+  try again later.`), all of which exit 0, nothing changed. It can't go with
+  `--index` (exit 2). An artist's Songs on the page `caracole serve` serves
+  runs it, and so does Read LaCuerda's page for a name its listings haven't
+  reached yet.
 - **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
   song that has no Guitar Pro or Power Tab file, newest songs first. It reads
   gtptabs.com's sitemaps into a local index when it never has, or last did 30
@@ -1836,7 +1885,8 @@ old, with no request.
 ### caracole search
 
 `caracole search [QUERY]... [--limit N] [--add N] [--key KEY] [--artist NAME]
-[--title TITLE]` looks in two places, and sends no request:
+[--title TITLE]` looks in three places, and sends no request: your library, the
+offline Ultimate Guitar index and LaCuerda's (see below):
 
     $ caracole search creep
     In your library
@@ -1849,6 +1899,9 @@ old, with no request.
       2. [UG] Stone Temple Pilots - Creep · chords×1
          https://tabs.ultimate-guitar.com/tab/stone-temple-pilots/creep-chords-5001
          caracole add "Stone Temple Pilots" "Creep"
+
+    On LaCuerda (offline index)
+      nothing matches
 
 - **In your library**: every song, whatever its status, with its key when it
   has one (`Key G major (from the tab)`) and its folder. A song with a sheet
@@ -1956,6 +2009,71 @@ that title by any artist, by tabs, never an artist's songs: it takes the
 whole title, so it can't go with QUERY words (exit 2); with `--artist`, it
 searches that artist's titles. Neither goes with `--key` (exit 2).
 
+**On LaCuerda** comes after Ultimate Guitar's hits, numbered on, from
+LaCuerda's local index (see [caracole lacuerda](#one-step-at-a-time)), which
+holds every artist of LaCuerda's listings the nightly run has read, and the
+songs of the artists whose page caracole has read. An artist the query names
+is a line of their own, with the songs LaCuerda's listing counts, then their
+most popular songs with chords the index holds; or, when caracole has never
+read their page, the line that reads it, one request:
+
+    $ caracole search estopa
+    …
+    On LaCuerda (offline index)
+      Estopa · LaCuerda · 159 songs. The most popular with chords:
+      1. [LaCuerda] Estopa - Como Camarón · 3 versions, with chords
+         https://acordes.lacuerda.net/estopa/como_camaron
+         caracole add --lacuerda https://acordes.lacuerda.net/estopa/como_camaron "Estopa" "Como Camarón"
+      …
+         All 12 the index holds: caracole search --artist "Estopa"
+
+    $ caracole search joaquin sabina
+    …
+    On LaCuerda (offline index)
+      Joaquín Sabina · LaCuerda · 241 songs
+         caracole hasn't read their page: caracole lacuerda --artist joaquin_sabina reads it (one request)
+
+While the nightly run hasn't read the listing of a name's letter whole, the
+index can't tell whether LaCuerda has an artist it doesn't list: for a query
+it has no artist by, under such a letter, the group ends with the line that
+reads the page of that name now. The name is the artist the query names on
+Ultimate Guitar, by their whole name or by part of it (`Enrique Bunbury` for
+"bunbury"), else an artist whose whole name starts or ends the query and whose
+songs Ultimate Guitar's index reads it as (`Estopa` for "estopa como camaron",
+while caracole hasn't read their page; never `Fito` for "fito paez"), else the
+query. A query LaCuerda's own index answers well gets no such line: a song by
+its title ("como camaron" is Estopa's Como Camarón), or by an artist it lists or
+holds the songs of ("estopa como camaron", once their page is read), and
+neither does a query Ultimate Guitar's index reads as a title ("creep"):
+
+    $ caracole search estopa
+    …
+    On LaCuerda (offline index)
+      nothing matches
+
+      LaCuerda's index is still being read: 2,957 artists so far, with #, A, B read
+      whole; the nightly run reads the rest.
+
+      LaCuerda hasn't listed E yet: caracole lacuerda --artist "estopa" reads the
+      page of “estopa” now (a request for each spelling of the name tried, usually one).
+
+A song's line adds it as your pick there (`caracole add --lacuerda`), so the
+nightly run keeps that sheet; a song LaCuerda has no chords for ("1 version,
+no chords") is added by its names alone. `--add N` takes LaCuerda's hits too,
+numbered as printed, and records the pick the same way. `--artist NAME` lists
+the songs the index holds of the LaCuerda artist NAME names, LaCuerda's most
+popular first (`Estopa · LaCuerda · 12 of their 159 songs in the index, the
+most popular first:`), after Ultimate Guitar's, and `--title TITLE` its songs
+of that title. Names are compared as Ultimate Guitar's are: as words, accents
+folded, a leading "Los" and an artist's "y" aside, Chinese as pinyin. While the
+index is empty the group says so (`Nothing yet: LaCuerda's index is empty: the
+nightly run reads its listings of every artist`), and while the nightly run
+still reads its listings it ends with what it has: `LaCuerda's index is still
+being read: 2,957 artists so far, with #, A–C read whole; the nightly run reads
+the rest.` (the artists counted include those of a letter read in part).
+LaCuerda has no search caracole uses: everything listed comes from the local
+table, and nothing asks LaCuerda anything.
+
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
 songs in the key, by name. It lists up to `--limit` of them, and says how many
@@ -1965,12 +2083,12 @@ more there are:
     In your library, in A minor
       [LaCuerda] Soda Stereo - De Música Ligera · found · Key A minor (estimated from the chords) · /home/you/Tabs/Soda Stereo/De Música Ligera
 
-    The offline Ultimate Guitar index has no keys: search it without --key.
+    The offline Ultimate Guitar and LaCuerda indexes have no keys: search them without --key.
 
 KEY is written the way tabs write keys, in either case: `"A minor"`, `Am`,
 `am`, `F#`, `"Bb major"`, `bbm` (B flat minor), `"La menor"`; any spelling of
 the same key matches (`Gbm` finds F# minor). The
-offline index knows no keys, so `--key` leaves it out, and `--add` can't go
+offline indexes know no keys, so `--key` leaves them out, and `--add` can't go
 with it. A KEY that is no key exits with status 2.
 
 ### caracole serve
@@ -1988,7 +2106,26 @@ with it. A KEY that is no key exits with status 2.
   what caracole's offline indexes hold:
   **Ultimate Guitar** (eight songs, and the artists the query names, as in
   [caracole search](#caracole-search): an artist's Songs lists all of theirs,
-  fifty at a time, and All results goes back), **Guitar Pro on gtptabs.com**
+  fifty at a time, and All results goes back), **LaCuerda** (the artists the
+  query names, each with the songs its listing counts and their most popular
+  songs with chords, then five songs: "estopa" finds Estopa; an artist's Songs
+  lists the songs the index holds of theirs, LaCuerda's most popular first, or,
+  for an artist whose page caracole has never read, says how many it lists and
+  offers Read their page, which queues `caracole lacuerda --artist` (one
+  request, at the lookup pace) and lists them once it has run; and for a query
+  it has no artist by, while the nightly run hasn't read the listing of its
+  letter whole, says so and offers Read LaCuerda's page for “estopa”, which
+  queues `caracole lacuerda --artist estopa` (a request for each spelling of
+  the name tried, usually one), then lists their songs, or says what LaCuerda
+  answered: `Not found: LaCuerda has no artist page for estopa.`, or, for a
+  cooldown, a block, a spent hour's budget or an error, `Not read: …`, with a
+  link to the request's output. The name is chosen as `caracole search` chooses
+  it: the artist the query names on Ultimate Guitar, else the one of theirs
+  whose name starts or ends it, else the query; a title there, "creep", or a song LaCuerda's
+  index has, "como camaron", gets no offer. Once a page is read, a search finds
+  their songs at once. When LaCuerda alone has the artist the query names, and
+  Ultimate Guitar's index nothing that matches well ("andres calamaro": only
+  Javier Calamaro's songs), LaCuerda's group comes first), **Guitar Pro on gtptabs.com**
   (five songs with a file there), and **MuseScore** (five pages whose title is
   what you typed, or what you typed less an artist's name before or after it,
   when that artist has a song of that title in the Ultimate Guitar index,
@@ -1999,9 +2136,12 @@ with it. A KEY that is no key exits with status 2.
   over stops at once, and only the newest query's answer is shown, the older
   one staying until then. The line under the box says "Searching the sites…",
   then how many each site has, and the list ends with the sites left out and
-  why: one turned off in caracole.toml, one whose index the nightly run hasn't
-  read yet (MuseScore's while it blocks caracole), and LaCuerda, which has no
-  offline index (Get it asks it too). Searching asks no site anything: it reads
+  why: one turned off in caracole.toml, or one whose index the nightly run
+  hasn't read yet (MuseScore's while it blocks caracole, LaCuerda's before its
+  first listings); and those searched in part: LaCuerda's, while the nightly
+  run still reads its listings ("Searched in part: LaCuerda (its index is still
+  being read: 2,957 artists so far, with #, A–C read whole; the nightly run reads
+  the rest)."). Searching asks no site anything: it reads
   the indexes alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s
   for very common words), takes no lock and spends no budget. **Enter never
   spends a request**, however clear the best result: Get it does. Escape, or
@@ -2016,26 +2156,34 @@ with it. A KEY that is no key exits with status 2.
   with an "on UG" link to look at it there first), as `--tab …` (`[pin]`). Get
   it on a gtptabs.com song looks it up by its names, as `caracole get` does,
   whose gtptabs.com stage downloads its Guitar Pro file for a song that has
-  none; a MuseScore page is a link to open, as caracole never fetches from
+  none; Get it on a LaCuerda song looks it up as `caracole get --lacuerda …`
+  does, and keeps that LaCuerda sheet (`[lacuerda]`), whatever Ultimate Guitar
+  has (one with no chords there, "· no chords", is looked up by its names); a
+  MuseScore page is a link to open, as caracole never fetches from
   MuseScore. The row then says how it goes, on a line of its own ("Sending…",
   "Fetching from Ultimate Guitar…", "Ready · Open sheet"), and once the sheet
   is kept the row is the song's, with its sheet as its button. A song your
   library has already, under its own names (UG's slugs write AC/DC as "Acdc"
   and 宋冬野 as "Song Dongye"), says In your library and Get it again, and is
   looked up as your song: no second song, and no line added to wanted.txt. A
-  song your library hasn't, from Ultimate Guitar or gtptabs.com, also has **Add
+  song your library hasn't, from Ultimate Guitar, LaCuerda or gtptabs.com, also has **Add
   for tonight's run** under "⋯": it goes into wanted.txt under the site's names,
-  as Request does with Fetch it now unticked, and the nightly run looks it up
+  as Request does with Fetch it now unticked (a LaCuerda song as
+  `caracole add --lacuerda …`, the pick recorded: its request says Added:
+  tonight's run gets the sheet you picked on LaCuerda, as its card does, with a
+  link to that sheet's page, and it waits for no Ultimate Guitar review of
+  other artists' songs of its title), and the nightly run looks it up
   (not a song under one of UG's `misc-…` names, which are no one's: request it
   by name as you know it).
   Back to your songs, a song new to the library gets a card of its own under the box
   ("Just requested").
 
   `/lookup`, the lookup page, still answers: the same search of your library
-  and the Ultimate Guitar index, whose Get it reads the sheet on the page as it
-  arrives, stage by stage. Its Enter acts on the song you clearly meant (one of
+  and the Ultimate Guitar and LaCuerda indexes, whose Get it reads the sheet on
+  the page as it arrives, stage by stage. Its Enter acts on the song you clearly meant (one of
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
-  songs, or nothing when nothing stands out. `/lookup?q=WORDS` opens it with
+  songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
+  nothing), or nothing when nothing stands out. `/lookup?q=WORDS` opens it with
   that search, and a lookup posted without JavaScript lands there.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" takes an artist, a title and, optionally, the album and the length,
@@ -2077,7 +2225,9 @@ with it. A KEY that is no key exits with status 2.
   goes on through the candidates' UG links to Fetch it now and Pick. In the
   Rows view the picker is under the row's "⋯", and the row's Pick the match
   opens it there, the focus on the first candidate.
-- **Look in the index.** A wanted song the offline index didn't match has a
+- **Look in the index.** A wanted song the offline index didn't match (and
+  whose sheet you didn't pick on LaCuerda: its card says Tonight's run gets
+  the sheet you picked on LaCuerda instead) has a
   Look in the index link beside Fetch now (under "⋯" in the Rows view): its
   page, `/review?song=ID`, runs
   `caracole search` for the song's artist and title, and offers the first five
@@ -2122,7 +2272,15 @@ with it. A KEY that is no key exits with status 2.
     never a miss, and the song waits for the next run (Details says if it
     doesn't);
   - **Added: the nightly run looks for it**, for a request without Fetch it
-    now;
+    now; **Added: tonight's run gets the sheet you picked on LaCuerda** for
+    one with a LaCuerda pick still to ask for;
+  - for a read of a LaCuerda artist's page (Read their page, Read LaCuerda's
+    page for a name), what LaCuerda answered, in the command's words up to its
+    first ";": **Read: LaCuerda's page of Caifanes lists 88 songs, in the index
+    now.**, **Not found: LaCuerda has no artist page for caifanes.**, or **Not
+    read: LaCuerda failed.**, **Not read: LaCuerda is cooling down after a
+    block until …**, **Not read: this hour's 60 lookup requests to LaCuerda are
+    spent.**, each with **Details**;
   - or, when a command failed, its error in one sentence, with a **Details**
     link to what it printed.
 
@@ -2394,9 +2552,10 @@ gets its PDF once a CJK font is set; its page and its ChordPro file need none.
 
 `overrides.toml` sits in the library folder (or where `overrides_file` says),
 and can live in git. `caracole review` writes `[match]`, `[alias]`, `[pin]`,
-`[ignore]` and `[reject]` for you, and `caracole youtube --song … --url` or
-`--none` writes `[youtube]`; you write the rest by hand. These are all the
-tables:
+`[ignore]` and `[reject]` for you, `caracole youtube --song … --url` or
+`--none` writes `[youtube]`, and `caracole get --lacuerda` and `caracole add
+--lacuerda` (Get it and Add for tonight's run on a LaCuerda song) write
+`[lacuerda]`; you write the rest by hand. These are all the tables:
 
 ```toml
 [alias]        # source artist -> UG artist slug(s): fixes every song by that artist
@@ -2426,6 +2585,9 @@ tab_ids = [1601668]
 [youtube]      # the video a song's audio comes from, or "none" for no audio from YouTube
 "Radiohead - Creep" = "https://www.youtube.com/watch?v=XFkzRNyygfk"
 "Some Artist - Some Interlude" = "none"
+
+[lacuerda]     # the LaCuerda song (or version) a song's sheet comes from
+"Estopa - Como Camarón" = "https://acordes.lacuerda.net/estopa/como_camaron"
 ```
 
 - **Song keys** are written `"Artist - Title"`. They match the way songs
@@ -2499,6 +2661,17 @@ tab_ids = [1601668]
   the song's audio off YouTube for good: caracole lets go of any it took, and the
   song goes back to buying. An auto sheet made already stays until a human
   sheet, or one from other audio, takes its place.
+- **`[lacuerda]`** names the LaCuerda song whose sheet is the song's: its page
+  (`https://acordes.lacuerda.net/estopa/como_camaron`: its best Letra y Acordes
+  version) or one version's (`…/como_camaron-2.shtml`), as your browser shows
+  it (without `https://`, on `lacuerda.net`, with a query). The nightly
+  LaCuerda pass asks for it whatever the song's language or its sheet, until it
+  is the sheet kept, and keeps it whatever its coverage of the lyrics, in place
+  of Ultimate Guitar's, LaCuerda's other versions and the auto sheet;
+  Ultimate Guitar's fetch never replaces it. A `[pin]` of an Ultimate Guitar
+  sheet wins over it. An entry you write by hand is asked for at the next pass
+  unless LaCuerda answered for the song in the last 30 days;
+  `caracole get --lacuerda` asks at once.
 
 Each table may appear only once in the file: add lines under a table it has
 already, as the to-do page's lines say. An unknown table, a key other than

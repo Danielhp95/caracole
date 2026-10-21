@@ -1,11 +1,17 @@
 """The lookup page of ``caracole serve``: search as you type, pick the song or the tab, read its sheet.
 
-It searches your library and the offline Ultimate Guitar index as you type
-(``GET /api/search``: 5–25 ms a query on a full index, up to about 0.15 s for
-very common words, ug/key_search.py), so finding
-a song costs no request to any site. A query may be an artist's name alone or
-a title alone: an artist it names is a row of its own, whose Songs lists all
-their songs (``GET /api/artist``), and comes first when it leads. Enter acts
+It searches your library and the offline Ultimate Guitar and LaCuerda indexes
+as you type (``GET /api/search``: 5–25 ms a query on a full index, up to about
+0.15 s for very common words, ug/key_search.py), so finding
+a song costs no request to any site. LaCuerda's artists and songs follow
+Ultimate Guitar's, with LaCuerda's mark: a song's Get it keeps that LaCuerda
+sheet (``lacuerda``), and an artist's Songs lists those the index holds, or,
+while caracole hasn't read their page, offers to (``POST /lacuerda/artist``,
+one request, a job the page follows on ``/api/jobs``), as it does for a name
+under a letter LaCuerda's listings aren't read to yet. A query may be an
+artist's name alone or a title alone: an artist it names is a row of its own,
+whose Songs lists all their songs (``GET /api/artist``), and comes first when
+it leads. Enter acts
 on the answer of the query typed, never of an older one still on the screen:
 its ``best`` row, the song you meant; when an artist leads, that artist's
 songs; when nothing stands out, nothing, so a guess never spends a request.
@@ -23,13 +29,13 @@ once, with no request at all.
 Its results are the library's own rows, as index.html's Rows view and its
 search of the sites draw them: the page runs ``library_page.ROWS_SCRIPT``
 before its own script and builds each result with its row builders
-(``resultRow``, ``ugHit``, ``artistHit``), with the mark of where it came
-from (``icons.page_icons``, inlined as index.html inlines them) and its other
-actions under the row's "⋯" (an Ultimate Guitar song's versions; a song of
-your library's files). A song of your library opens as its card does, from
-its title or its button: its sheet viewer, else its PDF (a page caracole
-serves only while it is the one caracole wrote, ``app.written_pages``); one
-with a sheet and neither is read on the page.
+(``resultRow``, ``ugHit``, ``artistHit``, ``siteHit``, ``siteArtist``), with
+the mark of where it came from (``icons.page_icons``, inlined as index.html
+inlines them) and its other actions under the row's "⋯" (an Ultimate Guitar
+song's versions; a song of your library's files). A song of your library
+opens as its card does, from its title or its button: its sheet viewer, else
+its PDF (a page caracole serves only while it is the one caracole wrote,
+``app.written_pages``); one with a sheet and neither is read on the page.
 
 Like index.html it builds every element with ``createElement`` and
 ``textContent``, never ``innerHTML``: names come from UG's slugs and your own
@@ -180,14 +186,34 @@ function show(data, text) {
   results.replaceChildren();
   artistOpen = null;
   const artists = Array.isArray(data.artists) ? data.artists : [];
-  const n = data.library.length + data.index.length + artists.length;
+  const objects = (value) => (Array.isArray(value) ? value : []).filter(x => x && typeof x === "object");
+  const lcArtists = objects(data.lacuerda_artists), lc = objects(data.lacuerda);
+  const n = data.library.length + data.index.length + artists.length + lcArtists.length + lc.length;
   status.textContent = n ? "" : "Nothing matches.";
   if (data.library.length) results.append(...group("In your library", data.library.map(librarySong)));
+  // LaCuerda's: its artists, then its songs (the index holds every artist, and the songs of the pages caracole read);
+  // first when it alone has the artist the query names ("andres calamaro": lacuerda_leads).
+  const lcGroup = lcArtists.length || lc.length ?
+    group("On LaCuerda", [...lcArtists.map(siteArtistRow), ...lc.map(lcSong)]) : [];
+  if (data.lacuerda_leads === true) results.append(...lcGroup);
   // The artists the query names: first when one leads ("oasis"), after the songs when a song does ("wonderwall").
   const named = artists.length ? group("Artists on Ultimate Guitar", artists.map(artistRow)) : [];
   if (data.lead === "artist") results.append(...named);
   if (data.index.length) results.append(...group("On Ultimate Guitar", data.index.map(ugSong)));
   if (data.lead !== "artist") results.append(...named);
+  if (data.lacuerda_leads !== true) results.append(...lcGroup);
+  // No artist of LaCuerda's by that name, under a letter its listings aren't read to yet: their page may say.
+  const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
+  if (unlisted) {
+    const [heading, offer] = rowKit.siteUnlisted(unlisted, (go, at) => readThenShow({name: String(unlisted.name || "")}, go, at));
+    if (!lc.length) results.append(heading);
+    results.append(offer);
+  }
+  const partly = objects(data.partial);
+  if (partly.length) {
+    results.append(el("p", "hint", "Searched in part: " + partly.map(x => String(x.name || x.source) + " (" +
+      String(x.why || "") + ")").join("; ") + "."));
+  }
   if (data.hint) results.append(rowKit.prose("hint", data.hint));
   shownFor = text;
   shownData = data;
@@ -195,7 +221,8 @@ function show(data, text) {
 }
 
 // Enter: the answer's best row, its main action (a song of yours opens, an Ultimate Guitar song is looked up);
-// when an artist leads, that artist's songs; when nothing stands out, nothing: a guess never spends a request.
+// when an artist leads, that artist's songs, LaCuerda's when it leads; when nothing stands out, nothing: a guess
+// never spends a request.
 function pickBest() {
   const data = shownData;
   if (!data || artistOpen) return;
@@ -209,6 +236,10 @@ function pickBest() {
   }
   const artists = Array.isArray(data.artists) ? data.artists : [];
   if (data.lead === "artist" && artists.length) { openArtist(artists[0], false); return; }
+  // LaCuerda's artist when it alone has the one the query names: their Songs, which asks LaCuerda nothing.
+  const lcArtists = (Array.isArray(data.lacuerda_artists) ? data.lacuerda_artists : [])
+    .filter(a => a && typeof a === "object");
+  if (data.lacuerda_leads === true && lcArtists.length) { openSiteArtist(lcArtists[0], false); return; }
   if (results.querySelector(".hit")) status.textContent = "Nothing stands out: pick one, or type more.";
 }
 
@@ -307,6 +338,70 @@ function librarySong(s) {
 // draws it (ROWS_SCRIPT's row); a song your library has, under its own names maybe, is looked up as that song.
 function ugSong(h) { return rowKit.ugHit(h, (pick, display) => lookUp(pick, display)); }
 
+// A song of LaCuerda's index, with its mark: Get it looks it up and keeps that LaCuerda sheet (ROWS_SCRIPT's row).
+function lcSong(h) { return rowKit.siteHit(h, (pick, display) => lookUp(pick, display)); }
+
+// A LaCuerda artist: Songs lists those the index holds, or offers to read their page (ROWS_SCRIPT's rows).
+function siteArtistRow(a) { return rowKit.siteArtist(a, () => openSiteArtist(a, true)); }
+
+// A LaCuerda artist, by the slug of their page ({slug}) or by a name ({name}: a page read by name); ``quiet``, a 404
+// isn't said.
+function getSiteArtist(who, signal) {
+  const asked = who.slug ? "lacuerda=" + encodeURIComponent(who.slug) : "lacuerda_name=" + encodeURIComponent(who.name || "");
+  return fetch("/api/artist?" + asked, {signal, headers: {"Accept": "application/json"}})
+    .then(r => r.json().then(data => ({status: r.status, data})))
+    .then(({status: code, data}) => {
+      if (data.error) { if (!(who.quiet && code === 404)) status.textContent = data.error; return null; }
+      return data;
+    })
+    .catch(e => { if (e.name !== "AbortError") status.textContent = "The list failed: " + e.message; return null; });
+}
+
+function openSiteArtist(a, focus) {
+  const mine = ++typed;
+  if (inflight) inflight.abort();
+  inflight = new AbortController();
+  status.textContent = "Listing the songs of " + a.artist + " on LaCuerda…";
+  getSiteArtist({slug: a.slug}, inflight.signal).then(data => { if (data && mine === typed) showSiteArtist(data, focus); });
+}
+
+// Read a LaCuerda page ({slug} or {name}) from the button ``go`` in ``offer``, then list the artist's songs; a read
+// that leaves none to list says what LaCuerda answered, under the offer (ROWS_SCRIPT's readOutcome).
+function readThenShow(who, go, offer) {
+  const mine = typed;
+  go.disabled = true;
+  rowKit.readArtistPage(csrf, who, words => { status.textContent = words; }).then(read => {
+    if (mine !== typed || !offer.isConnected) return;
+    if (read.error) { go.disabled = false; status.textContent = read.error; return; }
+    getSiteArtist(Object.assign({quiet: true}, who)).then(page => {
+      if (mine !== typed || !offer.isConnected) return;
+      if (page && page.read) { showSiteArtist(page, true); return; }
+      const line = read.job && read.job.line && typeof read.job.line === "object" ? read.job.line : {};
+      go.disabled = line.tone === "missing";  // no such page: asking again finds none either
+      offer.querySelectorAll(".read-outcome").forEach(x => x.remove());
+      const said = rowKit.readOutcome(read.job);
+      offer.append(said);
+      status.textContent = said.firstChild.textContent.trim();
+    });
+  });
+}
+
+function showSiteArtist(data, focus) {
+  results.replaceChildren();
+  artistOpen = "lacuerda:" + data.slug;
+  const head = el("div", "artist-head");
+  const name = el("h2", null, data.artist);
+  name.tabIndex = -1;
+  head.append(name, button("All results", "small", backToSearch, "Back to all the results"));
+  results.append(head);
+  status.textContent = data.artist + ": " + (data.read ? many(data.total, "song") + " on LaCuerda." :
+    "caracole hasn't read their page on LaCuerda yet.");
+  if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
+  results.append(...rowKit.siteArtistSongs(data, group, (pick, display) => lookUp(pick, display), null,
+    (go, offer) => readThenShow({slug: data.slug}, go, offer)));
+  if (focus) name.focus();
+}
+
 q.addEventListener("input", () => {
   enterFor = null;
   expand();
@@ -343,7 +438,7 @@ backToResults.addEventListener("click", () => { expand(); window.scrollTo({top: 
 
 function lookUp(pick, display) {
   const body = new URLSearchParams({csrf});
-  for (const name of ["song", "artist", "title", "ug", "tab"]) if (pick[name]) body.set(name, pick[name]);
+  for (const name of ["song", "artist", "title", "ug", "tab", "lacuerda"]) if (pick[name]) body.set(name, pick[name]);
   openReader(display, "Asking for it…");
   fetch("/lookup", {method: "POST", body, headers: {"Accept": "application/json"}})
     .then(r => r.text().then(text => ({r, text})))
@@ -497,9 +592,9 @@ _BODY = """<body>
   </div>
   <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a><a class="navlink" href="/jobs">Requests</a></nav>
 </header>
-<p class="lede">Type a song or an artist. caracole searches your library and its offline copy of Ultimate Guitar's
-  index as you type, asking no site anything; pick a song, or one of its versions, and its sheet is here in
-  seconds.</p>
+<p class="lede">Type a song or an artist. caracole searches your library and its offline copies of Ultimate Guitar's
+  and LaCuerda's indexes as you type, asking no site anything; pick a song, or one of its versions, and its sheet is
+  here in seconds.</p>
 <div class="search" role="search">
   <label class="visually-hidden" for="q">Song or artist</label>
   <input id="q" type="search" placeholder="Song or artist" autocomplete="off" autocapitalize="off" autocorrect="off"

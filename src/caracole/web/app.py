@@ -8,17 +8,21 @@
                           jobs, each with its song's card once it is over)
     GET  /api/search?q=   your library and the offline indexes, as JSON (search.py): your songs, the
                           artists the query names, the UG index's songs, which comes first and the
-                          row Enter may act on; gtptabs.com's and MuseScore's pages, and the
-                          sites not searched, with why
+                          row Enter may act on; LaCuerda's artists and songs, gtptabs.com's and
+                          MuseScore's pages, and the sites not searched, or not whole, with why
     GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
-                          ``offset``, and yours by them
+                          ``offset``, and yours by them; ``?lacuerda=SLUG`` (``?lacuerda_name=NAME``),
+                          a LaCuerda artist's songs the index holds, and whether caracole read their page
     GET  /api/jobs[/<id>] the requests as data: each step with its state (Job.as_json)
     GET  /review?song=ID  a song in review's picker, on a page of its own
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as
                           a sheet viewer, while it is as written (``written_pages``), in a sandbox
     POST /request         a song for wanted.txt; with ``fetch``, looked up now too
     POST /fetch           look a song of the library up now, unless it needs review first
-    POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``) you picked
+    POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``), or the LaCuerda
+                          song (``lacuerda``), you picked
+    POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
+                          ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
     POST /review          a song in review's answer, as ``caracole review --song`` writes it
     POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued, and
                           back to the library, at the song's card
@@ -83,10 +87,21 @@ Searching reads, and sends no request: one search runs at a time, one asked
 for meanwhile wins over the older ones still waiting (``superseded``: the
 page asks again if it still wants it), and the offline indexes' answers are
 kept a few minutes. A query of fewer than three letters (two in Chinese)
-looks nowhere. Of gtptabs.com and MuseScore it reads only the tables their
-sitemaps filled (``search.search_gtptabs``, ``search.search_musescore``), and
-says why it left a site out (``skipped``): turned off, its index still empty,
-MuseScore blocking caracole, or LaCuerda, which has no offline index at all.
+looks nowhere. Of LaCuerda, gtptabs.com and MuseScore it reads only the tables
+their listings and sitemaps filled (``search.search_lacuerda``,
+``search.search_gtptabs``, ``search.search_musescore``), and says why it left a
+site out (``skipped``): turned off, its index still empty, or MuseScore blocking
+caracole; and why it searched one only in part (``partial``): LaCuerda's index
+while the nightly run still reads its listings, with the letters read so far.
+LaCuerda's index holds every artist it has read, but the songs only of the
+artists whose page caracole has read: an artist's Songs offers to read it
+(``POST /lacuerda/artist``), a job like the others; and while the nightly run
+hasn't read the listing of a letter whole, a query it has no artist by under
+that letter offers to read the page of that name (``lacuerda_unlisted``), never
+a page LaCuerda's own songs or artists already name. Once such a read is over,
+the answers kept are dropped, so a search finds their songs at once. LaCuerda's
+group leads (``lacuerda_leads``) when it has the artist the query names and
+Ultimate Guitar's index has nothing strong.
 """
 
 from __future__ import annotations
@@ -112,12 +127,14 @@ from caracole.config import Config
 from caracole.web import pages
 from caracole.web.files import NotServed, read_library_file, read_written_page
 from caracole.web.jobs import (
+    LACUERDA_ARTIST,
     REMOVING,
     Job,
     JobQueue,
     QueueFull,
     add_steps,
     fetch_steps,
+    lacuerda_artist_steps,
     lookup_steps,
     remove_steps,
     review_steps,
@@ -136,18 +153,20 @@ from caracole.web.status import SongFacts, details_href, job_line
 
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
-    from caracole.search import IndexFound, IndexHit, LibraryHit, SiteHit
+    from caracole.search import IndexFound, IndexHit, LibraryHit, SiteArtist, SiteHit
     from caracole.songs import Song
 
 MAX_BODY = 16 * 1024
 TOKEN_HEADER = "x-caracole-form-token"  # /jobs.json's form token
 MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
-PICK_LIMITS = {"ug": 300, "tab": 600}
+PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600}
 QUERY_LIMIT = 200  # characters of a search
 LIBRARY_HITS, INDEX_HITS, TABS_SHOWN, SITE_HITS = 5, 8, 24, 5
 ARTIST_PAGE = 50  # an artist's songs /api/artist gives at a time
+LACUERDA_SONGS = 1000  # a LaCuerda artist's songs /api/artist gives: all of them, the index holds no more
 CACHE_SIZE, CACHE_SECONDS = 128, 300.0  # the offline index's answers kept
+_SLUG = re.compile(r"[a-z0-9_]{1,200}")  # the slug of a LaCuerda artist's page
 SEARCH_CHECK_STEPS = 20_000  # SQLite steps between two looks for a newer search, a millisecond or so
 # The library page's own address after #, as its script writes it (URLSearchParams' characters alone).
 _BACK = re.compile(r"[A-Za-z0-9%*._~+=&-]{0,512}")
@@ -221,10 +240,12 @@ class WebApp:
         self._tickets = itertools.count(1)
         self._newest = 0  # the newest search asked for
         # A query's answer from the offline indexes, kept a while: (when, the answer, its songs and artists as
-        # JSON, the hint, gtptabs.com's and MuseScore's pages).
+        # JSON, the hint, gtptabs.com's and MuseScore's pages, LaCuerda's artists and songs).
         self._found: OrderedDict[str, tuple[float, IndexFound, list[dict[str, Any]], list[dict[str, Any]],
-                                            str | None, list[SiteHit], list[SiteHit]]] = OrderedDict()
+                                            str | None, list[SiteHit], list[SiteHit], list[SiteArtist],
+                                            list[SiteHit]]] = OrderedDict()
         self._song_forms: dict[tuple, tuple[frozenset[str], frozenset[str]]] = {}  # _Mine's, by a song's names
+        self._reads: set[int] = set()  # LaCuerda artist pages being read (jobs): the answers kept go once one is
 
     def handle(self, request: Request) -> Response:
         response = self._route(request)
@@ -286,13 +307,20 @@ class WebApp:
                 return self._search(parse_qs(urlsplit(request.target).query).get("q", [""])[0])
             if path == "/api/artist":
                 asked = parse_qs(urlsplit(request.target).query)
+                if "lacuerda" in asked or "lacuerda_name" in asked:
+                    return self._lacuerda_artist(asked.get("lacuerda", [""])[0].strip(),
+                                                 name=" ".join(asked.get("lacuerda_name", [""])[0].split()))
                 return self._artist(asked.get("key", [""])[0].strip(), asked.get("offset", ["0"])[0].strip())
             if path == "/api/jobs":
                 return _json(200, {"jobs": [job.as_json() for job in self.queue.snapshot()]})
             if path.startswith("/api/jobs/"):
                 number = path[len("/api/jobs/"):]
                 job = self.queue.job(int(number)) if number.isascii() and number.isdigit() else None
-                return _json(200, job.as_json()) if job is not None else _json(404, {"error": "no such request"})
+                if job is None:
+                    return _json(404, {"error": "no such request"})
+                if job.song_key.startswith(LACUERDA_ARTIST):  # no song's: its line says what LaCuerda answered
+                    return _json(200, job.as_json() | {"line": job_line(job, None).as_json()})
+                return _json(200, job.as_json())
             if path == "/login":
                 return _redirect("/")
             return self._file(path)
@@ -301,11 +329,13 @@ class WebApp:
                        "/remove": self._remove}.get(path)
             if path == "/lookup":
                 handler = lambda form: self._lookup(form, wants_json=data)  # noqa: E731
+            if path == "/lacuerda/artist":
+                handler = lambda form: self._lacuerda_read(form, wants_json=data)  # noqa: E731
             if handler is None and path.startswith("/songbook/"):
                 handler = self._songbook_form(path)
             if handler is None:
                 return _message(404, "Not here", "There's nothing to send to at this address.")
-            form = self._form(request, page="the page" if path == "/lookup" else "the library")
+            form = self._form(request, page="the page" if path in ("/lookup", "/lacuerda/artist") else "the library")
             return form if isinstance(form, Response) else handler(form)
         return Response(405, b"", [("Allow", "GET, HEAD, POST")])
 
@@ -374,8 +404,10 @@ class WebApp:
                 removing = _song_ids(conn, {job.song_key.removeprefix(REMOVING) for job in jobs
                                             if job.active and job.song_key.startswith(REMOVING)})
                 # Every request on its way, which the page's script shows where it belongs (``kind``): a
-                # song's on its card, a removal's on its song's, a songbook's change on its songbook's.
-                active = tuple(self._views(conn, overrides, jobs, only=[j for j in jobs if j.active]))
+                # song's on its card, a removal's on its song's, a songbook's change on its songbook's. A
+                # LaCuerda artist page's read is no song's: the result row it was asked from follows it.
+                active = tuple(self._views(conn, overrides, jobs, only=[
+                    j for j in jobs if j.active and not j.song_key.startswith(LACUERDA_ARTIST)]))
                 controls = WebControls(self.csrf, busy, self.queue.active_count(), held, removing=removing,
                                        jobs=active)
                 html = build_library_page(conn, self.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
@@ -510,8 +542,9 @@ class WebApp:
                 from caracole.review import candidates_of
 
                 picker = f"review?song={song.id}" if candidates_of(song) else None  # the card's, or its page
+            picked = overrides is not None and song.key in overrides.lacuerda and song.lacuerda_checked_at is None
             facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
-                              checked_now=checked_now, ignored=ignored, picker=picker)
+                              checked_now=checked_now, ignored=ignored, picker=picker, lacuerda=picked)
         # A removal's song is gone once it is done: the job knows which it was.
         answer = (song.id if song is not None else job.song_id if removal else None, facts)
         if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known
@@ -688,7 +721,11 @@ class WebApp:
         return line, f"{'Already in' if listed else 'Added to'} wanted.txt, line {line.line_no}."
 
     def _request(self, form: dict[str, str]) -> Response:
-        """A song for wanted.txt, as ``caracole add`` writes it, and its commands queued."""
+        """A song for wanted.txt, as ``caracole add`` writes it, and its commands queued; with ``lacuerda``, the
+        LaCuerda song you picked, which its command records for the nightly run (Add for tonight's run)."""
+        lacuerda = _lacuerda_field(form)
+        if isinstance(lacuerda, tuple):
+            return _message(*lacuerda)
         written = self._wanted_line(form)
         if len(written) == 3:
             return _message(*written)
@@ -696,9 +733,11 @@ class WebApp:
         display = f"{line.artist} - {line.title}"
         fetch = form.get("fetch") in ("1", "on", "yes")
         if fetch:  # `caracole get` adds the song itself
-            steps = lookup_steps(line.artist, line.title, album=line.album, duration_ms=line.duration_ms)
+            steps = lookup_steps(line.artist, line.title, album=line.album, duration_ms=line.duration_ms,
+                                 lacuerda=lacuerda)
         else:
-            steps = add_steps(line.artist, line.title, album=line.album, duration_ms=line.duration_ms)
+            steps = add_steps(line.artist, line.title, album=line.album, duration_ms=line.duration_ms,
+                              lacuerda=lacuerda)
         try:
             job, _ = self.queue.submit(f"{'Fetch' if fetch else 'Add'} {display}", line.identity, steps,
                                        fetching=fetch, note=note, display=display)
@@ -863,6 +902,9 @@ class WebApp:
                 tab_id_from_url(pick["tab"])
             except OverridesError as e:
                 return refused(400, "Not a pick", f"That isn't an Ultimate Guitar tab: {e}")
+        lacuerda = _lacuerda_field(form)
+        if isinstance(lacuerda, tuple):
+            return refused(*lacuerda)
         found = self._library_song(form, (artist_key, song_key) if pick["ug"] else None)
         if isinstance(found, tuple):
             return refused(*found)
@@ -877,7 +919,7 @@ class WebApp:
             artist, title, album, duration_ms, key = line.artist, line.title, line.album, line.duration_ms, line.identity
             display = f"{artist} - {title}"
         steps = lookup_steps(artist, title, album=album, duration_ms=duration_ms,
-                             ug=pick["ug"] or None, tab=pick["tab"] or None)
+                             ug=pick["ug"] or None, tab=pick["tab"] or None, lacuerda=lacuerda)
         try:
             job, _ = self.queue.submit(f"Fetch {artist} - {title}", key, steps, fetching=True, note=note,
                                        display=display)
@@ -949,20 +991,32 @@ class WebApp:
         songs, which leads, and the row Enter may act on (``best``: a song of yours by its id, or an
         Ultimate Guitar song by its keys; None for none). A song of your library comes as its card
         has it (``_rows``)."""
-        from caracole.search import LibraryHit, found, search_gtptabs, search_library, search_musescore
+        from caracole.search import (
+            LibraryHit,
+            found,
+            lacuerda_leads,
+            search_gtptabs,
+            search_lacuerda,
+            search_library,
+            search_musescore,
+        )
         from caracole.songs import list_songs
 
         mine = search_library(conn, q, LIBRARY_HITS)
-        skipped = self._skipped(conn)
+        skipped, partial = self._skipped(conn)
         left_out = {s["source"] for s in skipped}
+        self._after_reads()
         cached = self._found.get(q)
         if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
-            index_found, index, artists, hint, gtptabs, musescore = cached[1:]
+            index_found, index, artists, hint, gtptabs, musescore, lc_artists, lacuerda = cached[1:]
         else:
             index_found, index, artists, hint = self._index_hits(conn, q)
             gtptabs = search_gtptabs(conn, q, SITE_HITS) if "gtptabs" not in left_out else []
             musescore = search_musescore(conn, q, SITE_HITS) if "musescore" not in left_out else []
-            self._found[q] = (time.monotonic(), index_found, index, artists, hint, gtptabs, musescore)
+            lc_artists, lacuerda = (search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out
+                                    else ([], []))
+            self._found[q] = (time.monotonic(), index_found, index, artists, hint, gtptabs, musescore, lc_artists,
+                              lacuerda)
             while len(self._found) > CACHE_SIZE:
                 self._found.popitem(last=False)
         answer = found(mine, index_found)
@@ -976,26 +1030,51 @@ class WebApp:
                 "gtptabs": self._gtptabs_rows(conn, gtptabs if "gtptabs" not in left_out else [], songs),
                 "musescore": [{"source": h.source, "title": h.title, "url": h.url, "score": h.score}
                               for h in (musescore if "musescore" not in left_out else [])],
-                "skipped": skipped}
+                "lacuerda": self._lacuerda_rows(conn, lacuerda, songs),
+                "lacuerda_artists": [_lacuerda_artist_json(a) for a in lc_artists],
+                "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
+                "lacuerda_leads": lacuerda_leads(index_found, lc_artists),
+                "skipped": skipped, "partial": partial}
+
+    def _after_reads(self) -> None:
+        """Drop the offline indexes' answers kept, once a LaCuerda artist page asked for is read: the index holds
+        their songs now, which an answer from before it lacks. Under ``_searching``."""
+        over = {i for i in self._reads if (job := self.queue.job(i)) is None or not job.active}
+        if over:
+            self._reads -= over
+            self._found.clear()
 
     def _gtptabs_rows(self, conn: sqlite3.Connection, hits: Sequence[SiteHit], songs: list[Song]) -> list[dict[str, Any]]:
         """gtptabs.com's pages as the page draws them; one your library has (``_Mine``, by its names) names it,
         so that Get it looks it up as that song."""
+        return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "uploads": h.uploads,
+                 "score": h.score, "via": h.via, **mine} for h, mine in zip(hits, self._owners(conn, hits, songs))]
+
+    def _lacuerda_rows(self, conn: sqlite3.Connection, hits: Sequence[SiteHit], songs: list[Song]) -> list[dict[str, Any]]:
+        """LaCuerda's songs as the page draws them: its page, the page of the sheet Get it keeps (``sheet``, None
+        for a song without chords there) and its versions; one your library has names it, as gtptabs.com's do."""
+        return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "sheet": h.sheet,
+                 "versions": h.uploads, "score": h.score, "via": h.via, **mine}
+                for h, mine in zip(hits, self._owners(conn, hits, songs))]
+
+    def _owners(self, conn: sqlite3.Connection, hits: Sequence[SiteHit], songs: list[Song]) -> list[dict[str, Any]]:
+        """Each site hit's song of your library (``_Mine``, by its names), as ``song`` and ``library`` (its names
+        and its card's links); None for one your library hasn't."""
         from caracole.library_page import result_cards
 
         owners_of = _Mine(songs, self._song_forms)
         owners = [owners_of.song_for(h.artist_key, h.title_key, h.artist, h.title) for h in hits]
         cards = result_cards(conn, self.cfg, list({s.id: s for s in owners if s}.values()))
-        return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "uploads": h.uploads,
-                 "score": h.score, "via": h.via, "song": song.id if song else None,
+        return [{"song": song.id if song else None,
                  "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
-                             "links": cards[song.id]["links"]} if song else None}
-                for h, song in zip(hits, owners)]
+                             "links": cards[song.id]["links"]} if song else None} for song in owners]
 
-    def _skipped(self, conn: sqlite3.Connection) -> list[dict[str, str]]:
+    def _skipped(self, conn: sqlite3.Connection) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
         """The sites a search leaves out, and why: one turned off, one whose index the nightly run hasn't
-        filled yet (MuseScore's, while it blocks caracole), and LaCuerda, which has no offline index."""
+        filled yet (MuseScore's, while it blocks caracole); and those it searches only in part: LaCuerda's,
+        while the nightly run reads its listings (``search.lacuerda_left_out``)."""
         from caracole.health import get_state
+        from caracole.search import lacuerda_left_out
 
         left = []
         for source, name, table in (("gtptabs", "gtptabs.com", "gtptabs_index"),
@@ -1009,8 +1088,12 @@ class WebApp:
             else:
                 why = "its index is empty: the nightly run reads its sitemaps"
             left.append({"source": source, "name": name, "why": why})
-        left.append({"source": "lacuerda", "name": "LaCuerda", "why": "no offline index: Get it asks LaCuerda too"})
-        return left
+        partial: list[dict[str, str]] = []
+        lacuerda = lacuerda_left_out(conn)
+        if lacuerda is not None:
+            said = {"source": "lacuerda", "name": "LaCuerda", "why": f"its {lacuerda[1]}"}
+            (left if lacuerda[0] == "empty" else partial).append(said)
+        return left, partial
 
     def _rows(self, conn: sqlite3.Connection, mine: Sequence[LibraryHit], index: list[dict[str, Any]],
               songs: list[Song] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -1082,6 +1165,67 @@ class WebApp:
                     return self._artist_songs(conn, key, int(offset))
             except (sqlite3.Error, OSError) as e:
                 return _json(503, {"error": f"The database can't be read: {e}"})
+
+    def _lacuerda_artist(self, slug: str, *, name: str = "") -> Response:
+        """A LaCuerda artist, for the pages: the songs LaCuerda's index holds of theirs, most popular first, and
+        yours by them; ``read`` says whether it holds any, which it does once caracole has read their page. By the
+        slug of their page, or by their ``name``, as a page read by name (``POST /lacuerda/artist``) left them."""
+        from caracole.search import LibraryHit, lacuerda_artist, lacuerda_artist_named, lacuerda_songs, library_by_artist
+        from caracole.songs import list_songs
+
+        if not slug and not name:
+            return _json(400, {"error": "Which artist? The address names none."})
+        with self._searching:
+            try:
+                with closing(self._connect()) as conn:
+                    named = lacuerda_artist(conn, slug) if slug else lacuerda_artist_named(conn, name)
+                    if named is None:
+                        return _json(404, {"error": "LaCuerda's index has no such artist."})
+                    songs = list_songs(conn)
+                    theirs = [LibraryHit(s, 100.0, "artist") for s in library_by_artist(songs, named.artist)]
+                    library, _ = self._rows(conn, theirs, [], songs)
+                    hits = self._lacuerda_rows(conn, lacuerda_songs(conn, named.slug)[:LACUERDA_SONGS], songs)
+            except (sqlite3.Error, OSError) as e:
+                return _json(503, {"error": f"The database can't be read: {e}"})
+        return _json(200, {"source": "lacuerda", "slug": named.slug, "artist": named.artist, "url": named.url,
+                           "listed": named.songs, "total": named.known, "read": named.known > 0, "songs": hits,
+                           "library": library})
+
+    def _lacuerda_read(self, form: dict[str, str], *, wants_json: bool) -> Response:
+        """A LaCuerda artist's page read into the index: ``caracole lacuerda --artist`` queued, a job of its own
+        (at the lookup pace: one request for an artist the index lists, one per spelling of a ``name`` tried,
+        usually one); asked again while it waits or runs, that job. By the ``slug`` of a page the index lists,
+        or by a ``name``, for an artist under a letter of LaCuerda's listings not read yet."""
+        from caracole.lacuerda import artist_slug_candidates
+        from caracole.lacuerda_index import name_key
+        from caracole.search import lacuerda_artist
+
+        slug, name = form.get("slug", "").strip(), " ".join(form.get("name", "").split())
+        if name and not slug:
+            if len(name) > LIMITS["artist"] or not artist_slug_candidates(name):
+                return _message(400, "Not an artist", "That name makes no LaCuerda artist page's address.")
+            display, key, who = name, LACUERDA_ARTIST + "name:" + name_key(name), name
+        else:
+            if not _SLUG.fullmatch(slug):
+                return _message(400, "Not an artist", "Which artist? The form names no LaCuerda artist page.")
+            try:
+                with closing(self._connect()) as conn:
+                    named = lacuerda_artist(conn, slug)
+            except (sqlite3.Error, OSError) as e:
+                return _message(503, "The database can't be read", f"The database can't be read: {e}")
+            if named is None:
+                return _message(404, "No such artist", "LaCuerda's index has no such artist.")
+            display, key, who = named.artist, LACUERDA_ARTIST + slug, slug
+        try:
+            job, _ = self.queue.submit(f"Read the page of {display} on LaCuerda", key,
+                                       lacuerda_artist_steps(who, display), display=f"{display} on LaCuerda")
+        except QueueFull:
+            return _message(503, "The queue is full", "The queue is full: try again once it empties.")
+        with self._searching:
+            self._reads.add(job.id)
+        if wants_json:
+            return _json(202, {"job": job.id, "url": f"/api/jobs/{job.id}"})
+        return _redirect(f"/jobs#job-{job.id}")
 
     def _artist_songs(self, conn: sqlite3.Connection, key: str, offset: int) -> Response:
         from caracole.search import LibraryHit, artist_songs, index_artist, library_by_artist
@@ -1302,6 +1446,41 @@ def _nothing_to_ask(conn: sqlite3.Connection, song: Song, overrides: Overrides |
 
     return (song.match_decision == "not_found" and overrides is not None
             and not artist_is_known(conn, song, overrides))
+
+
+def _lacuerda_artist_json(a: SiteArtist) -> dict[str, Any]:
+    """A LaCuerda artist as the page draws them: their songs as the listing counts them, those the index holds
+    (``known``: 0 until caracole has read their page), and the most popular with chords."""
+    return {"source": a.source, "artist": a.artist, "slug": a.slug, "url": a.url, "songs": a.songs, "known": a.known,
+            "score": a.score, "via": a.via, "top": [{"title": t.title, "url": t.url, "sheet": t.sheet} for t in a.top]}
+
+
+def _lacuerda_unlisted(conn: sqlite3.Connection, q: str, ug: IndexFound, lc_artists: Sequence[SiteArtist],
+                       lc_songs: Sequence[SiteHit]) -> dict[str, str] | None:
+    """A query LaCuerda's index has no artist by (none it found is a strong match, as "Bomba Estereo" isn't for
+    "soda stereo", nor a song: "como camaron" is Estopa's title), under a letter of its listings not read yet
+    (``search.lacuerda_unlisted``, with the Ultimate Guitar index's answer ``ug`` and LaCuerda's): the name whose
+    page Read LaCuerda's page reads, and the letter."""
+    from caracole.search import lacuerda_unlisted
+
+    found = lacuerda_unlisted(conn, q, ug.artists, ug.songs, ug.lead, lacuerda=[*lc_artists, *lc_songs])
+    return {"name": found[0], "letter": found[1]} if found is not None else None
+
+
+def _lacuerda_field(form: dict[str, str]) -> str | None | tuple[int, str, str]:
+    """A form's ``lacuerda``, the LaCuerda song or version picked, written as caracole asks for it; None for
+    none; (status, title, message) for one that is no LaCuerda song's page."""
+    from caracole.overrides import OverridesError, lacuerda_pick_from_url
+
+    value = form.get("lacuerda", "").strip()
+    if not value:
+        return None
+    if len(value) > PICK_LIMITS["lacuerda"]:
+        return 400, "Too long", f"The lacuerda is too long: {PICK_LIMITS['lacuerda']} characters at most."
+    try:
+        return lacuerda_pick_from_url(value).url
+    except OverridesError as e:
+        return 400, "Not a pick", f"That isn't a LaCuerda song: {e}"
 
 
 def _job_ids(values: list[str] | None) -> frozenset[int] | None:

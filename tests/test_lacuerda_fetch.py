@@ -933,6 +933,94 @@ def test_a_lookup_asks_about_its_own_song_alone_if_lacuerda_would_today(conn, tm
     assert lacuerda_sheets(conn, client, tmp_path / "lib", RANK, NOW, only={english.id}) == LaCuerdaStats()
 
 
+def test_the_version_you_picked_is_kept_whatever_the_songs_language_or_its_coverage(conn, tmp_path):
+    # Picked on caracole serve's page ([lacuerda]): the song needn't look Spanish, and the sheet needn't cover
+    # its lyrics better than the one kept, a complete one even. A version picked costs its page alone.
+    from caracole.overrides import LaCuerdaPick
+
+    song = with_lyrics(conn, add_song(conn, "Radiohead", "Creep"), ENGLISH_LYRICS)
+    keep_ug_sheet(conn, tmp_path, song, 1.0, lib=tmp_path / "lib")
+    site = FakeLaCuerda()
+    picks = Overrides(lacuerda={song.key: LaCuerdaPick("soda_stereo", "de_musica_ligera", 3)})
+    assert run_with(site, conn, tmp_path, picks) == LaCuerdaStats(tried=1, kept=1)
+    assert site.requests == [DML_3]
+    (v,) = lacuerda_versions(conn, song)
+    assert v.tab_id == "soda_stereo/de_musica_ligera-3" and files_of(conn, song)["sheet.txt"] == v.id
+    assert picked(conn, song) == {"ug": None, "lacuerda": 1}
+    # Kept, it is asked for no more, and stays.
+    site.requests.clear()
+    assert run_with(site, conn, tmp_path, picks) == LaCuerdaStats()
+    assert site.requests == []
+
+
+def test_a_song_you_picked_gets_its_best_acordes_version_from_the_index_or_its_artist_page(conn, tmp_path):
+    from caracole.lacuerda_index import store_artist_page
+    from caracole.overrides import LaCuerdaPick
+
+    pick = LaCuerdaPick("soda_stereo", "de_musica_ligera")
+    song = add_song(conn, "Soda Stereo", "De Música Ligera (Remastered)")
+    site = FakeLaCuerda()
+    assert run_with(site, conn, tmp_path, Overrides(lacuerda={song.key: pick})) == LaCuerdaStats(tried=1, kept=1)
+    assert site.requests == [SODA, DML_3]  # the artist page names its best version: 3
+    # With the artist's page in the index already, the version's page alone.
+    other = add_song(conn, "Soda", "Música")
+    site = FakeLaCuerda()
+    store_artist_page(conn, "soda_stereo", fixture("artist.html"))
+    (tmp_path / "cache").rename(tmp_path / "cache-before")
+    assert run_with(site, conn, tmp_path, Overrides(lacuerda={other.key: pick})) == LaCuerdaStats(tried=1, kept=1)
+    assert site.requests == [DML_3]
+
+
+def test_a_pick_lacuerda_has_no_sheet_for_is_a_miss_asked_again_after_30_days(conn, tmp_path):
+    from caracole.overrides import LaCuerdaPick
+
+    song = spanish_song(conn)
+    gone = f"{BASE}/soda_stereo/de_musica_ligera-9.shtml"
+    site = FakeLaCuerda({gone: (404, fixture("not_found.html"))})
+    picks = Overrides(lacuerda={song.key: LaCuerdaPick("soda_stereo", "de_musica_ligera", 9)})
+    assert run_with(site, conn, tmp_path, picks) == LaCuerdaStats(tried=1, missing=1)
+    assert get_song(conn, song.id).lacuerda_checked_at == STAMP and lacuerda_versions(conn, song) == []
+    site.requests.clear()
+    assert run_with(site, conn, tmp_path, picks) == LaCuerdaStats() and site.requests == []
+    # A song without chords there is a miss too, with no version asked for.
+    no_chords = LaCuerdaPick("soda_stereo", "musica_ligera_tab")
+    other = add_song(conn, "Soda Stereo", "Otra")
+    site = FakeLaCuerda({SODA: (200, artist_page("Soda Stereo", "soda_stereo", ("musica_ligera_tab", "X", "T-1")))})
+    assert run_with(site, conn, tmp_path, Overrides(lacuerda={other.key: no_chords})) == LaCuerdaStats(
+        tried=1, missing=1)
+    assert site.requests == [SODA]
+
+
+def test_a_pin_of_an_ultimate_guitar_sheet_wins_over_a_lacuerda_pick(conn, tmp_path):
+    from caracole.overrides import LaCuerdaPick
+
+    song = spanish_song(conn)
+    ug_vid = keep_ug_sheet(conn, tmp_path, song, 0.5)
+    site = FakeLaCuerda()
+    both = Overrides(pin={song.key: (85053,)}, lacuerda={song.key: LaCuerdaPick("soda_stereo", "de_musica_ligera")})
+    assert run_with(site, conn, tmp_path, both) == LaCuerdaStats()
+    assert site.requests == [] and files_of(conn, song) == {"sheet.txt": ug_vid, "sheet.json": ug_vid}
+
+
+def test_an_artists_page_is_read_by_its_slug_or_their_name_for_the_index(conn, tmp_path):
+    from caracole.lacuerda import LCArtist
+    from caracole.lacuerda_fetch import read_artist_page
+    from caracole.lacuerda_index import artist_songs, store_artists
+
+    store_artists(conn, "tabs/e/index0.html", [LCArtist("enanitos", "Enanitos Verdes", 151)])
+    enanitos = f"{BASE}/enanitos/"
+    site = FakeLaCuerda({SODA: (200, fixture("artist.html")),
+                         enanitos: (200, artist_page("Enanitos Verdes", "enanitos", ("lamento", "Lamento", "R-1")))})
+    client = site.client(tmp_path / "cache")
+    assert read_artist_page(conn, client, "soda_stereo", NOW) == ("soda_stereo", 14)
+    assert read_artist_page(conn, client, "Los Enanitos Verdes", NOW) == ("enanitos", 1)  # the listing's slug
+    assert site.requests == [SODA, enanitos]
+    assert [h.title for h in artist_songs(conn, "enanitos")] == ["Lamento"]
+    assert read_artist_page(conn, client, "Nadie Conocido", NOW) is None  # LaCuerda's "no such artist"
+    assert read_artist_page(conn, client, "soda_stereo", NOW) == ("soda_stereo", 14)  # cached: no request
+    assert site.requests == [SODA, enanitos, f"{BASE}/nadie_conocido/"]
+
+
 # --- in the nightly run -----------------------------------------------------------------
 
 

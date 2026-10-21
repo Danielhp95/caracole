@@ -5,7 +5,8 @@
 
 It says where the sheet is as soon as it is kept, then what each other stage
 did. ``--ug`` and ``--tab`` record the Ultimate Guitar song or tab you picked
-(``[match]``, ``[pin]``). ``--progress`` adds a JSON line per event, which
+(``[match]``, ``[pin]``), and ``--lacuerda`` the LaCuerda song or version
+(``[lacuerda]``), whose sheet is then the one kept. ``--progress`` adds a JSON line per event, which
 caracole serve reads (``get.read_progress_line``). A block or a spent budget
 exits 0, as in every command; a song caracole won't look up (ignored, or one
 wanted.txt can't hold) exits 1, as does a bug; a usage error exits 2. The
@@ -46,6 +47,9 @@ def register(app: typer.Typer) -> None:
         tab: str | None = typer.Option(None, "--tab", metavar="URL",
                                        help="The Ultimate Guitar tab to use, its page's address or id; "
                                             "recorded under [pin] in overrides.toml."),
+        lacuerda: str | None = typer.Option(None, "--lacuerda", metavar="URL",
+                                            help="The LaCuerda song (its page's address) or version (its sheet's) "
+                                                 "to keep the sheet of; recorded under [lacuerda] in overrides.toml."),
         show: bool = typer.Option(False, "--print", help="Print the sheet itself as soon as it is kept."),
         progress: bool = typer.Option(False, "--progress", help="A JSON line per stage too, for caracole serve."),
     ) -> None:
@@ -55,9 +59,9 @@ def register(app: typer.Typer) -> None:
 
             offer_songs(load_cfg(ctx), " ".join(song[0].split()), "get")
         artist, title = _artist_title(song)
-        _check_pick(ug, tab)
+        _check_pick(ug, tab, lacuerda)
         duration_ms = _duration(duration)
-        _get(load_cfg(ctx), artist, title, album, duration_ms, ug, tab, show=show, progress=progress)
+        _get(load_cfg(ctx), artist, title, album, duration_ms, ug, tab, lacuerda, show=show, progress=progress)
 
 
 def _artist_title(words: list[str]) -> tuple[str, str]:
@@ -72,8 +76,8 @@ def _artist_title(words: list[str]) -> tuple[str, str]:
     return artist.strip(), title.strip()
 
 
-def _check_pick(ug: str | None, tab: str | None) -> None:
-    from caracole.overrides import OverridesError, tab_id_from_url
+def _check_pick(ug: str | None, tab: str | None, lacuerda: str | None = None) -> None:
+    from caracole.overrides import OverridesError, lacuerda_pick_from_url, tab_id_from_url
 
     if ug is not None:
         artist_key, sep, song_key = ug.strip().partition("/")
@@ -84,6 +88,11 @@ def _check_pick(ug: str | None, tab: str | None) -> None:
             tab_id_from_url(tab)
         except OverridesError as e:
             fail(f"--tab: {e}", 2)
+    if lacuerda is not None:
+        try:
+            lacuerda_pick_from_url(lacuerda)
+        except OverridesError as e:
+            fail(f"--lacuerda: {e}", 2)
 
 
 def _duration(text: str | None) -> int | None:
@@ -101,10 +110,10 @@ def _duration(text: str | None) -> int | None:
 
 
 def _get(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None, ug: str | None,
-         tab: str | None, *, show: bool, progress: bool) -> None:
+         tab: str | None, lacuerda: str | None = None, *, show: bool, progress: bool) -> None:
     from caracole.get import LookupRequest, look_up
 
-    request = LookupRequest(artist, title, album=album, duration_ms=duration_ms, ug=ug, tab=tab)
+    request = LookupRequest(artist, title, album=album, duration_ms=duration_ms, ug=ug, tab=tab, lacuerda=lacuerda)
     reporter = _Lines(cfg.library_dir, show=show, json_lines=progress)
     result = look_up(cfg, request, reporter)
     reporter.flush()

@@ -1499,7 +1499,7 @@ def test_the_search_lists_gtptabs_and_musescore_pages_each_capped(app, conn):
     assert len(ms) == 5 and {h["title"] for h in ms} == {"Creep"}
     assert ms[0]["url"] == "https://musescore.com/song/creep-1" and "artist" not in ms[0]  # a title alone
     assert data["skipped"] == [{"source": "lacuerda", "name": "LaCuerda",
-                                "why": "no offline index: Get it asks LaCuerda too"}]
+                                "why": "its index is empty: the nightly run reads its listings of every artist"}]
 
 
 def test_the_search_says_which_sites_it_left_out_and_why(app, cfg, conn):
@@ -1525,6 +1525,224 @@ def test_the_search_says_which_sites_it_left_out_and_why(app, cfg, conn):
     assert reasons["gtptabs"] == reasons["musescore"] == "turned off in caracole.toml"
 
 
+LC = "https://acordes.lacuerda.net/"
+
+
+def lacuerda_index(conn, *, letters=("e", "j")):
+    """LaCuerda's index: Estopa and Joaquín Sabina from E's and J's listings, which are all read, and Estopa's page."""
+    from helpers.lacuerda_site import artist_page
+
+    from caracole import lacuerda_index as li
+    from caracole.db import kv_set_json
+    from caracole.lacuerda import LCArtist
+
+    li.store_artists(conn, "tabs/e/index0.html", [LCArtist("estopa", "Estopa", 159)])
+    li.store_artists(conn, "tabs/j/index0.html", [LCArtist("joaquin_sabina", "Joaquín Sabina", 241)])
+    li.store_artist_page(conn, "estopa", artist_page(
+        "Estopa", "estopa", ("como_camaron", "Como Camarón", "RRT-213"), ("vino_tinto", "Vino Tinto", "T-1")))
+    kv_set_json(conn, li.PAGES_KEY, {f"tabs/{x}/index0.html": {"pages": ["index0.html"]} for x in letters})
+    conn.commit()
+
+
+def test_the_search_lists_lacuerdas_artists_and_songs_from_its_index(app, conn):
+    lacuerda_index(conn)
+    mine = add_song(conn, "Estopa", "Como Camarón")
+    data = as_json(get(app, "/api/search?q=estopa"))
+    [estopa] = data["lacuerda_artists"]
+    assert estopa == {"source": "lacuerda", "artist": "Estopa", "slug": "estopa", "url": LC + "estopa/",
+                      "songs": 159, "known": 2, "score": 100.0, "via": "artist",
+                      "top": [{"title": "Como Camarón", "url": LC + "estopa/como_camaron",
+                               "sheet": LC + "estopa/como_camaron-2.shtml"}]}
+    assert data["lacuerda"] == []  # its songs are in its row
+    songs = as_json(get(app, "/api/search?q=como%20camaron"))["lacuerda"]
+    assert [{k: h[k] for k in ("source", "artist", "title", "url", "sheet", "versions", "via", "song")}
+            for h in songs] == [{"source": "lacuerda", "artist": "Estopa", "title": "Como Camarón",
+                                 "url": LC + "estopa/como_camaron", "sheet": LC + "estopa/como_camaron-2.shtml",
+                                 "versions": 3, "via": "title", "song": mine.id}]
+    assert songs[0]["library"]["id"] == mine.id  # yours: Get it looks it up as yours
+    [vino] = as_json(get(app, "/api/search?q=vino%20tinto"))["lacuerda"]
+    assert vino["sheet"] is None and vino["song"] is None
+    # E and J are read whole, the other letters not yet: LaCuerda is searched, and the answer says what it lacks.
+    data = as_json(get(app, "/api/search?q=estopa"))
+    assert "lacuerda" not in {s["source"] for s in data["skipped"]}
+    assert data["partial"] == [{"source": "lacuerda", "name": "LaCuerda", "why": (
+        "its index is still being read: 2 artists so far, with E, J read whole; the nightly run reads the rest")}]
+
+
+def test_a_complete_lacuerda_index_is_searched_with_nothing_said(app, conn):
+    from caracole import lacuerda_index as li
+    from caracole.db import kv_set
+
+    lacuerda_index(conn)
+    kv_set(conn, li.COMPLETE_KEY, "2026-10-19T03:00:00Z")
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=joaquin%20sabina"))
+    assert data["partial"] == [] and data["lacuerda_artists"][0]["known"] == 0
+
+
+def test_api_artist_lists_a_lacuerda_artists_songs_and_yours(app, conn):
+    lacuerda_index(conn)
+    mine = add_song(conn, "Estopa", "Como Camarón")
+    data = as_json(get(app, "/api/artist?lacuerda=estopa"))
+    assert {k: data[k] for k in ("source", "slug", "artist", "url", "listed", "total", "read")} == {
+        "source": "lacuerda", "slug": "estopa", "artist": "Estopa", "url": LC + "estopa/", "listed": 159,
+        "total": 2, "read": True}
+    assert sorted(h["title"] for h in data["songs"]) == ["Como Camarón", "Vino Tinto"]
+    assert [s["id"] for s in data["library"]] == [mine.id]
+    unread = as_json(get(app, "/api/artist?lacuerda=joaquin_sabina"))
+    assert (unread["read"], unread["songs"], unread["listed"]) == (False, [], 241)
+    assert get(app, "/api/artist?lacuerda=nobody").status == 404
+
+
+def test_reading_a_lacuerda_artists_page_is_one_command_in_the_queue(app, conn, queue):
+    lacuerda_index(conn)
+    response = post(app, "/lacuerda/artist", {"slug": "joaquin_sabina"}, accept="application/json")
+    assert response.status == 202
+    data = as_json(response)
+    assert data["url"] == f"/api/jobs/{data['job']}"
+    [job] = queue.snapshot()
+    assert [s.args for s in job.steps] == [("lacuerda", "--artist=joaquin_sabina")]
+    assert job.display == "Joaquín Sabina on LaCuerda" and job.song_key == "lacuerda-artist:joaquin_sabina"
+    again = as_json(post(app, "/lacuerda/artist", {"slug": "joaquin_sabina"}, accept="application/json"))
+    assert again["job"] == data["job"] and len(queue.snapshot()) == 1  # asked twice, read once
+    assert post(app, "/lacuerda/artist", {"slug": "nobody"}).status == 404
+    assert post(app, "/lacuerda/artist", {"slug": "joaquin_sabina"}, csrf="old").status == 403
+    queue.run_pending()
+    line = as_json(get_json(app, "/jobs.json"))["jobs"][0]["line"]
+    assert line["text"] == "Done" and line["details"]  # what LaCuerda answered is in its output
+
+
+def test_the_search_offers_to_read_the_page_of_a_name_lacuerda_hasnt_listed_yet(app, conn):
+    # The owner's "estopa", with E not read yet: no artist of theirs in the index is no sign LaCuerda lacks them.
+    lacuerda_index(conn)  # E and J read whole
+    data = as_json(get(app, "/api/search?q=caifanes"))
+    assert data["lacuerda_artists"] == [] and data["lacuerda_unlisted"] == {"name": "caifanes", "letter": "C"}
+    assert as_json(get(app, "/api/search?q=estopa"))["lacuerda_unlisted"] is None  # listed: their row says it
+    assert as_json(get(app, "/api/search?q=enrique%20bunbury"))["lacuerda_unlisted"] is None  # E is read whole
+    # A title on Ultimate Guitar is no name to read; the artist the query names there is the one.
+    from caracole.ug.index import upsert_rows
+
+    creep_index(conn)
+    upsert_rows(conn, [(3003, "caifanes", "afuera", "chords", "caifanes/afuera-chords-3003")], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    conn.commit()
+    assert as_json(get(app, "/api/search?q=creep"))["lacuerda_unlisted"] is None
+    assert as_json(get(app, "/api/search?q=caifanes%20afuera"))["lacuerda_unlisted"] == {
+        "name": "Caifanes", "letter": "C"}
+    # An artist only near the name is no answer: Bomba Estereo, for "soda stereo".
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+
+    li.store_artists(conn, "tabs/b/index0.html", [LCArtist("bomba_estereo", "Bomba Estereo", 5)])
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=soda%20stereo"))
+    assert [a["artist"] for a in data["lacuerda_artists"]] == ["Bomba Estereo"]
+    assert data["lacuerda_unlisted"] == {"name": "soda stereo", "letter": "S"}
+
+
+def test_the_search_offers_no_page_lacuerdas_own_answer_already_names(app, conn):
+    # E's listing not read whole, Estopa's page read: LaCuerda's strong songs say who the query names, and no page
+    # that can't exist ("estopa_como_camaron", "como_camaron") is offered.
+    from caracole.ug.index import mark_built, upsert_rows
+
+    lacuerda_index(conn, letters=("j",))
+    for q in ("estopa%20como%20camaron", "como%20camaron"):
+        data = as_json(get(app, f"/api/search?q={q}"))
+        assert [h["title"] for h in data["lacuerda"]][:1] == ["Como Camarón"], q
+        assert data["lacuerda_unlisted"] is None, q
+    # Ultimate Guitar's songs by part of an artist's name name them: Enrique Bunbury's E, for "bunbury".
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(3101, "enrique-bunbury", "lady-blue", "chords", "enrique-bunbury/lady-blue-chords-3101")],
+                "1", when)
+    mark_built(conn, when)
+    conn.commit()
+    assert as_json(get(app, "/api/search?q=bunbury"))["lacuerda_unlisted"] == {"name": "Enrique Bunbury", "letter": "E"}
+
+
+def test_lacuerda_leads_with_the_artist_the_query_names_when_ultimate_guitar_has_nothing_strong(app, conn):
+    # "andres calamaro": Ultimate Guitar's index has Javier Calamaro alone, LaCuerda's has Andrés Calamaro.
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+    from caracole.ug.index import mark_built, upsert_rows
+
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(3201, "javier-calamaro", "amapolas", "chords", "javier-calamaro/amapolas-chords-3201"),
+                       (3202, "estopa", "la-raja-de-tu-falda", "chords", "estopa/la-raja-de-tu-falda-chords-3202")],
+                "1", when)
+    mark_built(conn, when)
+    lacuerda_index(conn)
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist("andres_calamaro", "Andrés Calamaro", 325)])
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=andres%20calamaro"))
+    assert [a["artist"] for a in data["lacuerda_artists"]] == ["Andrés Calamaro"]
+    assert data["lacuerda_leads"] is True and data["best"] is None  # Enter opens their Songs, which asks nothing
+    estopa = as_json(get(app, "/api/search?q=estopa"))  # Ultimate Guitar names them too: its rows come first
+    assert estopa["artists"] and estopa["lacuerda_artists"] and estopa["lacuerda_leads"] is False
+
+
+def test_a_page_read_by_name_is_searched_at_once_and_its_request_says_what_lacuerda_answered(cfg, conn):
+    from helpers.lacuerda_site import artist_page
+
+    from caracole import db
+    from caracole import lacuerda_index as li
+
+    lacuerda_index(conn)  # E and J read whole: C, Caifanes', isn't
+
+    def read(args, emit):  # caracole lacuerda --artist, as it takes the page in
+        c = db.connect(cfg.db_path)
+        try:
+            li.store_artist_page(c, "caifanes", artist_page("Caifanes", "caifanes", ("afuera", "Afuera", "R-1")))
+            c.commit()
+        finally:
+            c.close()
+        emit("Read: LaCuerda's page of Caifanes lists 1 song, in the index now.")
+        return 0
+
+    queue = JobQueue(read)
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    assert as_json(get(app, "/api/search?q=caifanes"))["lacuerda_artists"] == []  # an answer kept a few minutes
+    data = as_json(post(app, "/lacuerda/artist", {"name": "  caifanes "}, accept="application/json"))
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("lacuerda", "--artist=caifanes") and job.display == "caifanes on LaCuerda"
+    queue.run_pending()
+    after = as_json(get(app, "/api/search?q=caifanes"))  # the read's over: no answer kept from before it
+    assert [a["artist"] for a in after["lacuerda_artists"]] == ["Caifanes"] and after["lacuerda_unlisted"] is None
+    page = as_json(get(app, "/api/artist?lacuerda_name=caifanes"))
+    assert (page["slug"], page["read"], [h["title"] for h in page["songs"]]) == ("caifanes", True, ["Afuera"])
+    assert as_json(get(app, data["url"]))["line"] == {
+        "tone": "added", "text": "Read: LaCuerda's page of Caifanes lists 1 song, in the index now.", "link": None,
+        "details": None}
+    assert get(app, "/api/artist?lacuerda_name=nobody%20at%20all").status == 404
+    for name in ("!!!", "", "x" * 201):
+        assert post(app, "/lacuerda/artist", {"name": name}).status == 400, name
+    assert len(queue.snapshot()) == 1
+
+
+def test_get_it_on_a_lacuerda_song_keeps_that_sheet(app, cfg, queue, conn):
+    url = LC + "estopa/como_camaron"
+    response = lookup(app, {"artist": "Estopa", "title": "Como Camarón", "lacuerda": url})
+    assert response.status == 202
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("get", "--progress", f"--lacuerda={url}", "--", "Estopa", "Como Camarón")
+    assert "Estopa - Como Camarón" in cfg.wanted_file.read_text(encoding="utf-8")
+    assert lookup(app, {"artist": "Estopa", "title": "Como Camarón", "lacuerda": "https://example.com/x"}).status == 400
+
+
+def test_add_for_tonights_run_on_a_lacuerda_song_records_the_pick_with_its_add(app, cfg, queue):
+    url = LC + "estopa/como_camaron"
+    response = post(app, "/request", {"artist": "Estopa", "title": "Como Camarón", "lacuerda": url},
+                    accept="application/json")
+    assert response.status == 200
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("add", f"--lacuerda={url}", "--", "Estopa", "Como Camarón")
+    fetched = post(app, "/request", {"artist": "Estopa", "title": "Tu Calorro", "lacuerda": LC + "estopa/tu_calorro",
+                                     "fetch": "1"}, accept="application/json")
+    assert fetched.status == 200
+    assert queue.snapshot()[0].steps[0].args == (
+        "get", "--progress", f"--lacuerda={LC}estopa/tu_calorro", "--", "Estopa", "Tu Calorro")
+    assert post(app, "/request", {"artist": "Estopa", "title": "X", "lacuerda": "estopa"}).status == 400
+
+
 def test_a_search_asks_no_site_and_takes_no_lock(app, conn, monkeypatch):
     from caracole.commands import _common
 
@@ -1538,6 +1756,9 @@ def test_a_search_asks_no_site_and_takes_no_lock(app, conn, monkeypatch):
                musescore=["https://musescore.com/song/creep-1"])
     response = get(app, "/api/search?q=creep")
     assert response.status == 200 and as_json(response)["gtptabs"] and as_json(response)["musescore"]
+    lacuerda_index(conn)  # LaCuerda has no search caracole uses: its index answers, and its artists' songs
+    assert as_json(get(app, "/api/search?q=estopa"))["lacuerda_artists"]
+    assert as_json(get(app, "/api/artist?lacuerda=estopa"))["songs"]
 
 
 def test_a_search_of_fewer_than_three_letters_looks_nowhere(app, conn):

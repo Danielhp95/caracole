@@ -332,8 +332,9 @@ def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrid
 
     A song is for buying once nothing caracole will still do may find it a human
     sheet: its UG match was fetched, or UG doesn't have it; no fetch, artist
-    page or LaCuerda check is due for it (those songs are the waiting ones);
-    and, for a song not found, the index is complete. Songs not matched yet,
+    page or LaCuerda check is due for it, nor the sheet you picked on
+    LaCuerda (those songs are the waiting ones); and, for a song not found,
+    the index is complete. Songs not matched yet,
     reviews and songs whose audio you have are neither.
     """
     partial = index_state(conn) == "partial"
@@ -344,7 +345,8 @@ def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrid
         if s.match_decision not in ("accept", "pinned", "not_found"):
             continue
         unfetched = s.match_decision != "not_found" and not s.ug_checked_at
-        if unfetched or fetch_due(conn, s, overrides, now) or _lacuerda_due(s):
+        picked = s.key in overrides.lacuerda and s.lacuerda_checked_at is None  # your pick, not asked for yet
+        if unfetched or fetch_due(conn, s, overrides, now) or _lacuerda_due(s) or picked:
             waiting += 1
         elif not (partial and s.match_decision == "not_found"):  # see _setup
             buy.append(s)

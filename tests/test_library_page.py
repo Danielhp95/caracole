@@ -505,6 +505,22 @@ def test_a_song_not_found_says_so_for_the_served_card_to_look_in_the_index(conn,
     assert "notFound" not in songs[ignored.display] and "notFound" not in songs[plain.display]
 
 
+def test_a_song_picked_on_lacuerda_says_tonights_run_gets_that_sheet_not_that_it_is_missing(conn, cfg):
+    # UG has no song of theirs by that name, which is no matter: the sheet is the one picked on LaCuerda.
+    from caracole.overrides import LaCuerdaPick
+
+    s = add_song(conn, "Andrés Calamaro", "Flaca")
+    update_song(conn, s.id, match_decision="not_found")
+    picked = Overrides(lacuerda={s.key: LaCuerdaPick("andres_calamaro", "flaca")})
+    card = songs_of(page(conn, cfg, picked))[s.display]
+    assert card["lacuerda"] == {"label": "the sheet you picked on LaCuerda",
+                                "href": "https://acordes.lacuerda.net/andres_calamaro/flaca"}
+    assert "notFound" not in card and not card["review"]
+    update_song(conn, s.id, lacuerda_checked_at="2026-10-18T03:36:00Z")  # LaCuerda had no such sheet: the usual
+    card = songs_of(page(conn, cfg, picked))[s.display]
+    assert card["lacuerda"] is None and card["notFound"] is True
+
+
 def test_guitar_pro_pages_to_click_are_the_picks_without_files(conn, cfg):
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", ver=2, rating=4.2, votes=5)

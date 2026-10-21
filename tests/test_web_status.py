@@ -81,6 +81,38 @@ def test_a_done_add_says_the_nightly_run_looks_for_it():
     assert job_line(added, None) == Line("added", "Added: the nightly run looks for it")
 
 
+def test_a_done_add_of_a_song_picked_on_lacuerda_says_tonights_run_gets_that_sheet():
+    added = job("done", FETCH[:1], fetching=False, states=["done"])
+    picked = SongFacts(not_found=True, lacuerda=True)
+    assert job_line(added, picked) == Line("added", "Added: tonight's run gets the sheet you picked on LaCuerda")
+    # A review of the artist's own songs is still one; a pick LaCuerda had no sheet for is the usual add.
+    assert job_line(added, SongFacts(review=True, lacuerda=True)).text == "Needs review"
+    assert job_line(added, SongFacts(not_found=True)) == Line("added", "Added: the nightly run looks for it")
+
+
+def test_reading_a_lacuerda_artists_page_says_what_lacuerda_answered():
+    from caracole.web.jobs import LACUERDA_ARTIST, lacuerda_artist_steps
+
+    def read(said, state="done"):
+        made = job(state, lacuerda_artist_steps("caifanes", "Caifanes"), fetching=False, states=[state],
+                   outputs=[["<6>caracole.http: GET https://acordes.lacuerda.net/caifanes/", said]])
+        made.song_key = LACUERDA_ARTIST + "caifanes"
+        return made
+
+    details = details_href(3)
+    assert job_line(read("Read: LaCuerda's page of Caifanes lists 88 songs, in the index now."), None) == Line(
+        "added", "Read: LaCuerda's page of Caifanes lists 88 songs, in the index now.")
+    assert job_line(read("Not found: LaCuerda has no artist page for Caifanes."), None) == Line(
+        "missing", "Not found: LaCuerda has no artist page for Caifanes.", details=details)
+    failed = "Not read: LaCuerda failed (ConnectError: [Errno 111] Connection refused); nothing changed: try again later."
+    assert job_line(read(failed), None) == Line("waiting", "Not read: LaCuerda failed.", details=details)
+    cooling = "Not read: LaCuerda is cooling down after a block until 21 Oct 03:00; caracole won't ask it before then."
+    assert job_line(read(cooling), None).text == "Not read: LaCuerda is cooling down after a block until 21 Oct 03:00."
+    spent = "Not read: this hour's 60 lookup requests to LaCuerda are spent; ask again later."
+    assert job_line(read(spent), None).text == "Not read: this hour's 60 lookup requests to LaCuerda are spent."
+    assert job_line(read("something else"), None) == Line("added", "Done", details=details)  # an older caracole's
+
+
 def test_a_failed_request_says_its_error_in_one_short_sentence_with_a_link_to_the_details():
     error = ('error: Ultimate Guitar lists Joaquín Sabina only by bare tab ids, which caracole can\'t see. Find '
              "the artist's page on UG, or one of their tab pages, and paste its address under [artist_url].")
