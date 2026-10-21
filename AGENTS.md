@@ -40,7 +40,7 @@ an earlier one failed:
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
 | youtube | youtube.py (picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_urls.py (a video's address, the standard library alone: overrides.py's `[youtube]`), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html), songbook.py (the songbooks of songbooks.toml, in `Library/_songbooks/`) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html; `page.build_version` hashes `page.BUILD_FILES`, what a page is made from: a module the viewer comes to import goes there, test_viewer_book.py checks), songbook.py (the songbooks of songbooks.toml, in `Library/_songbooks/`) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error

@@ -38,6 +38,7 @@ import base64
 import hashlib
 import json
 import re
+import sys
 import unicodedata
 from functools import lru_cache
 from html import escape, unescape
@@ -83,6 +84,28 @@ _SOURCES = {
     "estimate": "estimated from the chords", "estimated": "estimated from the chords",
     "chords": "estimated from the chords",
 }
+
+
+# What a page is made from besides its song: this module, those it imports and the files they read.
+# A module the viewer comes to import goes here too (test_viewer_book.py checks).
+BUILD_FILES = (
+    *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "voicings.py", "voicings.json",
+                               "viewer.js", "viewer.css", "LICENSE-chords-db")),
+    HERE.parent / "normalize.py",  # has_han
+    HERE.parent / "autochords" / "merge.py",  # AUTO_MARKER, which sheet.py reads
+)
+
+
+@lru_cache(maxsize=1)
+def build_version() -> str:
+    """What this caracole's viewer is, as a SHA-256 of the Python running it (``sys.version``:
+    unicodedata, html.escape and json.dumps go with it) and of every file in ``BUILD_FILES``, in
+    their order. An upgrade that could change a page changes it: a page made with another one is
+    made again (songbook.html, through ``book.assets_version``)."""
+    digest = hashlib.sha256(sys.version.encode("utf-8"))
+    for path in BUILD_FILES:
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
 
 
 @lru_cache(maxsize=1)

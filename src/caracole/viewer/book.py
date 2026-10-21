@@ -35,6 +35,7 @@ from typing import Any
 from urllib.parse import quote
 
 from caracole.normalize import has_han
+from caracole.viewer import page as viewer_page
 from caracole.viewer.page import (
     _CONTROLS,
     CREDIT_URL,
@@ -52,7 +53,8 @@ from caracole.viewer.theory import Key, key_name, parse_chord
 
 HERE = Path(__file__).parent
 LIBRARY_PAGE = "../../index.html"  # Library/_songbooks/<name>/songbook.html -> Library/index.html
-VERSION = 4  # of the page's markup: a new one makes every songbook.html again
+# What the page is made from besides the sheet viewer's own files (``page.BUILD_FILES``).
+BOOK_FILES = (HERE / "book.py", HERE / "book.js", HERE / "book.css")
 
 
 @dataclass(frozen=True)
@@ -77,11 +79,12 @@ def _book_assets() -> tuple[str, str]:
 
 
 def assets_version() -> str:
-    """What the page's scripts and stylesheets are, and its markup's version: a new one, and every
-    songbook's page is made again."""
-    digest = hashlib.sha256(str(VERSION).encode())
-    for text in (*_assets(), *_book_assets()):
-        digest.update(hashlib.sha256(text.encode("utf-8")).digest())
+    """What the page is made from besides its songs, as a SHA-256: the sheet viewer
+    (``page.build_version``), then this module, its script and its stylesheet. An upgrade that
+    changes any of them, and every songbook's page is made again, as every sheet.html is."""
+    digest = hashlib.sha256(viewer_page.build_version().encode("utf-8"))
+    for path in BOOK_FILES:
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
     return digest.hexdigest()
 
 

@@ -123,6 +123,30 @@ def test_a_page_goes_out_with_the_policy_it_was_written_with(monkeypatch):
     assert viewer_csp(written.encode("utf-8")) == "sandbox allow-scripts; " + meta
 
 
+def test_the_build_version_follows_each_file_and_the_python(monkeypatch, tmp_path):
+    from caracole.viewer import page
+
+    copies = []
+    for n, path in enumerate(page.BUILD_FILES):
+        copies.append(tmp_path / f"{n}-{path.name}")
+        copies[-1].write_bytes(path.read_bytes())
+    monkeypatch.setattr(page, "BUILD_FILES", tuple(copies))
+    page.build_version.cache_clear()
+    try:
+        seen = {page.build_version()}
+        assert re.fullmatch(r"[0-9a-f]{64}", next(iter(seen)))
+        for copy in copies:
+            copy.write_bytes(copy.read_bytes() + b"\n")
+            page.build_version.cache_clear()
+            seen.add(page.build_version())
+        monkeypatch.setattr("sys.version", "3.99.0 (another build)")  # unicodedata, html, json
+        page.build_version.cache_clear()
+        seen.add(page.build_version())
+    finally:
+        page.build_version.cache_clear()
+    assert len(seen) == len(copies) + 2
+
+
 @pytest.mark.parametrize("written", [
     b"<!doctype html><title>No policy</title><script>alert(1)</script>",
     b'<meta http-equiv="Content-Security-Policy" content="default-src *&#13;&#10;X-Evil: 1">',  # no header split

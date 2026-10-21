@@ -273,6 +273,28 @@ def test_a_change_renders_it_again(conn, cfg, two, change):
     assert pdf_call(fake)
 
 
+def test_an_upgrade_of_the_viewer_makes_the_phone_page_again(conn, cfg, two, monkeypatch):
+    # An upgrade that changes how the viewer draws a sheet (here, its chords' markup) changes the
+    # viewer's build version: songbook.html, each song in the viewer, follows as sheet.html does.
+    # Its PDF and ChordPro file are chordpro's, and stay as they are.
+    from caracole.viewer import page
+
+    render(conn, cfg)
+    before = (folder(cfg) / "songbook.html").read_bytes()
+    chord_html = page._chord_html
+
+    def marked(*args):
+        return chord_html(*args).replace(' role="button"', ' role="button" data-new')
+
+    monkeypatch.setattr(page, "_chord_html", marked)
+    monkeypatch.setattr(page, "build_version", lambda: "a newer viewer")
+    fake = FakeChordPro()
+    stats = render(conn, cfg, runner=fake)
+    after = (folder(cfg) / "songbook.html").read_bytes()
+    assert stats.rendered == 1 and after != before and b"data-new" in after
+    assert fake.calls == []
+
+
 def fake_font(path: Path) -> Path:
     directory = struct.pack(">HHHH", 1, 0, 0, 0) + struct.pack(">4sIII", b"CFF ", 0, 28, 4)
     path.write_bytes(b"OTTO" + directory + bytes(4))
