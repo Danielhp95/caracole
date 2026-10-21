@@ -2563,33 +2563,35 @@ def test_on_a_desktop_the_view_controls_sit_in_the_toolbar_and_needs_review_show
     assert layout_of(dom)["view"] is False  # no View button: it all fits
 
 
-STUCK = """
-(() => {
-  window.scrollTo(0, document.documentElement.scrollHeight);
-  setTimeout(() => {
-    const bar = document.querySelector(".searchbar");
-    const box = bar.getBoundingClientRect();
-    document.body.setAttribute("data-bar", JSON.stringify({
-      stuck: bar.classList.contains("stuck"), shadow: getComputedStyle(bar).boxShadow,
-      left: box.left, right: box.right, top: box.top, page: innerWidth,
-    }));
-  }, 300);
-})();
-"""
+# The bar as it is: kept at the top or not (an IntersectionObserver's answer), its edge, its sides.
+STUCK = """(() => {
+  const bar = document.querySelector(".searchbar");
+  const box = bar.getBoundingClientRect();
+  return { stuck: bar.classList.contains("stuck"), shadow: getComputedStyle(bar).boxShadow,
+           left: box.left, right: box.right, top: box.top, page: innerWidth };
+})()"""
 
 
 @in_chromium
 def test_the_bar_kept_at_the_top_has_an_edge_and_covers_the_page_side_to_side(conn, cfg, tmp_path):
+    # On real time, scrolled to the end: the bar sticks once the page's IntersectionObserver answers, in a frame
+    # drawn after the scroll, which a page on dump_dom's virtual clock may never get on a busy machine.
+    from helpers.browser import Browser
+
     for n in range(30):
         add_song(conn, "Radiohead", f"Song {n}")
-    html = page(conn, cfg)
-    csp = csp_of(html)
-    html = html.replace(csp, csp.replace("script-src ", f"script-src {sha(STUCK)} ")).replace(
-        "</body>", f"<script>{STUCK}</script>\n</body>")
-    path = write_library_page(cfg.library_dir, html)
-    at_top = json.loads(__import__("html").unescape(re.search(r'data-bar="([^"]*)"', dump_dom(path, tmp_path)).group(1)))
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    bars = {}
+    for width, height in ((1280, 900), (390, 844)):
+        with Browser(tmp_path / f"chrome-{width}", width=width, height=height) as b:
+            b.send("Emulation.setScrollbarsHidden", hidden=True)  # as dump_dom lays a page out
+            b.send("Emulation.setDeviceMetricsOverride", width=width, height=height, deviceScaleFactor=1,
+                   mobile=width < NARROWEST_WINDOW)
+            b.open(path.as_uri())
+            b.js("window.scrollTo(0, document.documentElement.scrollHeight)")
+            assert b.wait("document.querySelector('.searchbar').classList.contains('stuck')"), b.js(STUCK)
+            bars[f"{width},{height}"] = b.js(STUCK)
+    at_top = bars["1280,900"]
     assert at_top["stuck"] and at_top["shadow"] != "none" and at_top["top"] == 0
-    for size in ("390,844", "1280,900"):
-        bar = json.loads(__import__("html").unescape(
-            re.search(r'data-bar="([^"]*)"', dump_dom(path, tmp_path, size=size)).group(1)))
+    for size, bar in bars.items():
         assert bar["left"] <= 0 and bar["right"] >= bar["page"], (size, bar)  # nothing shows beside it
