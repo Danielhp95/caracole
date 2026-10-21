@@ -329,6 +329,96 @@ def test_every_change_holds_caracoles_lock(setup, monkeypatch):
     assert held == [True] * 7
 
 
+CHANGES = [("make", "Picnic", "Muse - Hysteria"), ("add", "Campfire", "Soda Stereo - De Música Ligera"),
+           ("move", "Campfire", "Muse - Hysteria", "1"), ("remove", "Campfire", "Muse - Hysteria"),
+           ("rename", "Campfire", "Picnic"), ("delete", "Campfire"), ("render", "Campfire"), ("render",)]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("args", CHANGES, ids=" ".join)
+def test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run(setup, args):
+    # A songbook asked for now is made now: like `caracole get`, the change announces that it waits (its
+    # ticket in caracole.lock.waiting/), so that a nightly run holding the lock hands it over at its next
+    # pause, or between two songs, instead of making it wait for the whole run. It still never writes beside
+    # the run: until the lock is its own, nothing is written.
+    import threading
+    import time
+
+    from caracole.commands import _common
+
+    _, cfg, _ = setup
+    make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Muse - Hysteria", "宋冬野 - 斑马，斑马"])
+    before = (cfg.library_dir / FILE_NAME).read_bytes()
+    cfg.state_dir.mkdir(parents=True, exist_ok=True)
+    fd = os.open(cfg.state_dir / "caracole.lock", os.O_RDWR | os.O_CREAT)
+    fcntl.flock(fd, fcntl.LOCK_EX)  # the nightly run holds it
+    os.write(fd, b"4242 run\n")
+    done: list = []
+    thread = threading.Thread(target=lambda: done.append(run(setup, *args)), daemon=True)
+    try:
+        thread.start()
+        deadline = time.monotonic() + 10
+        while not _common.lookups_waiting(cfg) and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert _common.lookups_waiting(cfg), done and done[0].output  # what the nightly run looks for in its pauses
+        assert not done and (cfg.library_dir / FILE_NAME).read_bytes() == before  # waiting, not writing beside it
+    finally:
+        os.close(fd)
+    thread.join(15)
+    assert done and done[0].exit_code == 0, done and done[0].output
+    assert "it lets a lookup go first at its next pause" in done[0].output
+    assert not _common.lookups_waiting(cfg)  # it took the lock: its ticket went
+
+
+HOLDER = r"""
+import sys, time
+from pathlib import Path
+import httpx
+from caracole.commands import _common
+from caracole.config import load_config
+from caracole import db
+
+cfg = load_config(Path(sys.argv[1]), env={})
+out = open(sys.argv[2], "w", buffering=1)
+_common.transport_for = lambda provider: httpx.MockTransport(lambda r: httpx.Response(200, text="ok"))
+conn = db.connect(cfg.db_path)
+with _common.exclusive(cfg, "run"):
+    client = _common.make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
+    client.get("https://tabs.ultimate-guitar.com/tab/1")
+    out.write(f"first {time.time()}\n")
+    client.get("https://tabs.ultimate-guitar.com/tab/2")  # after a 4 s pause, handed over meanwhile
+    out.write(f"second {time.time()} {client.handoffs}\n")
+    client.close()
+"""
+
+
+@pytest.mark.slow
+def test_a_songbook_made_during_the_nightly_run_is_made_in_its_next_pause(setup, tmp_path):
+    import time
+
+    toml, cfg, _ = setup
+    with toml.open("a", encoding="utf-8") as f:
+        f.write("[providers.ug]\ndelay = [4, 4]\n")  # the run's pause between two requests to UG
+    log = tmp_path / "holder.log"
+    env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(Path(__file__).parents[1] / "src")}
+    holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(toml), str(log)], env=env)
+    try:
+        deadline = time.time() + 20
+        while "first" not in (log.read_text() if log.exists() else "") and time.time() < deadline:
+            time.sleep(0.05)
+        asked = time.time()
+        made = run(setup, "make", "Campfire", "Muse - Hysteria", "Soda Stereo - De Música Ligera")
+        finished = time.time()
+        assert holder.wait(30) == 0
+    finally:
+        holder.kill()
+    assert made.exit_code == 0, made.output
+    assert finished - asked < 3.5  # in the pause the run was in, not after it, let alone after the whole run
+    assert (folder(setup) / "songbook.html").is_file()
+    _, sent, handoffs = log.read_text().splitlines()[1].split()
+    assert float(sent) >= finished + 3.5 and int(handoffs) == 1  # the run waited a whole pause again after it
+
+
 @pytest.mark.slow
 def test_registering_the_command_imports_neither_the_songbooks_nor_the_renderer():
     code = ("import sys; import caracole.cli; "

@@ -452,7 +452,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `exclusive(..., interactive=True)` announces it in `state_dir/caracole.lock.waiting/` (a
   file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and
   dropped once it holds it; one its process left, or untouched for `TICKET_STALE` s, a
-  lookup killed while it waited, no longer counts). Bulk work hands the lock over
+  lookup killed while it waited, no longer counts). Every changing `caracole songbook`
+  command (make, add, remove, move, rename, delete, render: commands/songbook.py) waits the
+  same way, as a songbook is asked for now
+  (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).
+  Bulk work hands the lock over
   (`_common.hand_over`, never inside a transaction): it lets go of the flock, takes it back
   once the lookup is done, and goes on. It does so in two places. Its clients, and the
   yt-dlp runner of `make_youtube` between two runs, spend each pause looking for a waiting

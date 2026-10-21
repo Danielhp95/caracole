@@ -1185,6 +1185,11 @@ overrides.toml again after it. The waiting lookup announces itself with a file
 in `caracole.lock.waiting/` in the state folder, which it touches every second
 while it waits; one left by a lookup that was killed while it waited is no
 longer waited for after five seconds.
+A songbook change, asked for now as a lookup is, waits the same way and says
+the same: `caracole songbook make`, `add`, `remove`, `move`, `rename`,
+`delete` and `render`, so a songbook you make (from a terminal, or on
+`caracole serve`) while the nightly run works is made in the run's next pause,
+in seconds, rather than after the whole run.
 
 ## Audio from YouTube
 
@@ -2372,8 +2377,9 @@ A NAME is found in any case. `remove` and `move` take the songbook's own song
 of that artist and title first, and only when it has none, the song a search of
 your library finds ("oasis wonderwal"), as `make` does. Each change writes
 songbooks.toml, makes the songbook's files and rewrites `_todo.md` and
-`index.html`, holding caracole's lock; `list` and `show` only read, and never
-wait. A change whose files couldn't all be made exits 1, as `render` does,
+`index.html`, holding caracole's lock, which a nightly run lets it have at its
+next pause, as it does a lookup (see [One caracole at a time](#one-step-at-a-time));
+`list` and `show` only read, and never wait. A change whose files couldn't all be made exits 1, as `render` does,
 after saying `Some of its files couldn't be made`: the change to songbooks.toml
 stays made, and on `caracole serve` its request shows as failed. A
 songbooks.toml that can't be read exits 2.
