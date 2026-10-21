@@ -2,9 +2,9 @@
 // Served, each song can be dragged (or moved with ↑ and ↓ on its grip), played elsewhere (its chip: key, mode,
 // capo), taken out (×) or got now (Get it); the songbook gets its missing songs, a song from your library or the
 // indexes (Add a song), another name, or deleted. Each is one form posted with fetch(), queued as a caracole
-// songbook command; the songbook's status line says how it goes, a lookup's line its song's, and once a change is
-// over /jobs.json brings the songbooks as they are now (library.js tells: "caracole:songbooks"). The file on disk
-// shows them read-only, with the commands that change them. Every text is put in with textContent.
+// songbook command; the songbook's status line says how it goes, a lookup's line its song's, and once a change, a
+// lookup or a removal is over /jobs.json brings the songbooks as they are now (library.js tells: "caracole:songbooks").
+// The file on disk shows them read-only, with the commands that change them. Every text is put in with textContent.
 (() => {
   "use strict";
   const byId = (id) => document.getElementById(id);

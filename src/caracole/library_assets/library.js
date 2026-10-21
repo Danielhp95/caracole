@@ -1835,9 +1835,13 @@
     document.body.classList.toggle("with-tray", !tray.hidden);
   };
   // The lines drawn again from what the library has now: a request is over. Each keeps its request line. A
-  // removal done leaves its song's line saying so; a songbook's change brings the songbooks as they are now, which
-  // the Songbooks tab (songbooks.js) and the Select bar's menu (select.js) draw again ("caracole:songbooks").
+  // removal done leaves its song's line saying so. Each brings the songbooks as they are now (a songbook's change,
+  // a lookup that made the songbooks its song is in again, a removal), which the Songbooks tab (songbooks.js) and
+  // the Select bar's menu (select.js) draw again ("caracole:songbooks").
   const redraw = (view) => {
+    if (view.songbooks && typeof view.songbooks === "object") {
+      document.dispatchEvent(new CustomEvent("caracole:songbooks", { detail: { songbooks: view.songbooks, view } }));
+    }
     if (view.kind === "remove" && songOf(view) !== null) {
       removing.delete(songOf(view));
       if (view.state === "done") {
@@ -1845,12 +1849,7 @@
         return;
       }
     }
-    if (view.kind === "songbook") {
-      if (view.songbooks && typeof view.songbooks === "object") {
-        document.dispatchEvent(new CustomEvent("caracole:songbooks", { detail: { songbooks: view.songbooks, view } }));
-      }
-      return;
-    }
+    if (view.kind === "songbook") return;
     const data = view.card && typeof view.card === "object" ? view.card : null;
     if (!data) return;
     const i = byIndex.get(Number(data.id));

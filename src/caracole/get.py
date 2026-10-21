@@ -39,8 +39,9 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   whose MuseScore links come from the local index.
 - ``songbooks``: the songbooks of songbooks.toml that list the song, made again
   as ``caracole songbook render`` does (a songbook whose inputs did not change
-  is left as it is); the others are left alone, and a songbooks.toml that can't
-  be read is said and stops nothing.
+  is left as it is), then _todo.md and index.html again once one was, as they
+  show each songbook's files; the others are left alone, and a songbooks.toml
+  that can't be read is said and stops nothing.
 
 A block cools its site down and ends that site's stages; a spent budget (the
 lookup's or the hour's) and a provider's error leave the song to the nightly
@@ -687,6 +688,7 @@ class _Lookup:
     def songbooks(self) -> tuple[str, str] | str:
         from caracole.songbook import SongbookError, load_songbooks, render_songbooks, songbooks_file
         from caracole.songbook import songbooks_listing
+        from caracole.todo import write_pages
 
         try:
             books = load_songbooks(songbooks_file(self.cfg.library_dir))
@@ -699,6 +701,8 @@ class _Lookup:
         self.progress.stage("songbooks", "running", names)  # for caracole serve's "Remaking songbook X…"
         stats = render_songbooks(self.conn, self.cfg, self.overrides, runner=self.runner,
                                  only=[b.name for b in mine])
+        if stats.rendered or stats.failed:  # index.html shows each songbook's files: written again after them
+            write_pages(self.conn, self.cfg, self.overrides, self.now)
         if stats.failed:
             return "failed", f"a file of {', '.join(stats.failed)} couldn't be made; the nightly run tries again"
         if stats.font_error:

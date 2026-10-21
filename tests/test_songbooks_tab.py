@@ -694,6 +694,29 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
         assert page.js(MOVED) == [], page.js("window.shifts")
 
 
+def test_a_song_fetched_from_the_library_shows_with_its_sheet_in_its_songbooks(serve, cfg, library, tmp_path):
+    # Fetch now on the library's line: a lookup alone, no songbook's change. Once it is over the set list it is in
+    # draws again, so it offers no Get it the server would refuse ("has a sheet already").
+    runner = Fake(cfg)
+    url, posted = serve(runner)
+    hysteria = '#songbooks .set-line[data-entry="Muse - Hysteria"]'
+    line = f'#list [data-id="{library["Hysteria"].id}"]'
+    get = "#songbooks .book form.get-missing button"
+    with opened(tmp_path, 1280, 800) as page:
+        page.open(url + CAMPFIRE)
+        assert page.js(SET)[1] == ["2", "Hysteria", "Muse", "No sheet yet"]
+        assert page.js(f"document.querySelector('{hysteria} .set-get') !== null")
+        page.click("#tab-library")
+        page.click(f"{line} form.fetch button")
+        assert page.wait(f"document.querySelector('{line} .progress').textContent.startsWith('Ready')", timeout=30)
+        page.click("#tab-songbooks")
+        assert page.js(SET)[1] == ["2", "Hysteria", "Muse", "A Minor, capo 0"], page.js(SET)
+        assert page.js(f"document.querySelector('{hysteria} .set-get') === null")
+        assert page.js(f"((b) => !b || getComputedStyle(b).visibility === 'hidden')(document.querySelector("
+                       f"{json.dumps(get)}))")
+        assert [p[0] for p in posted] == ["/fetch"] and [c[0] for c in runner.calls] == ["get"]
+
+
 def test_a_set_lists_get_it_looks_that_song_up(serve, cfg, library, tmp_path):
     runner = Fake(cfg)
     url, posted = serve(runner)

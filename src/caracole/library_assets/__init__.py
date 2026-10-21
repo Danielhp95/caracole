@@ -25,7 +25,7 @@ file, and none of it loads anything from the network.
   bar is one line: on a phone, "2 selected · Make songbook…", which unfolds the menu and the name
   field. On caracole serve songbooks.js posts the bar's songbook (the server's token, the songs' ids in
   the order picked; its "caracole:sent" says how the server answered: on its way, the picks go and the
-  mode ends; refused, the bar says why), and its menu follows the songbooks once a change is over
+  mode ends; refused, the bar says why), and its menu follows the songbooks once a request is over
   ("caracole:songbooks"); on the file on disk it shows the caracole songbook command to run instead,
   folded beside Copy. The Songbooks tab's "+ New songbook" turns it on ("caracole:new-songbook").
   songbooks.js runs after select.js: the tabs (body.html's Library and Songbooks, ``#tab=songbooks`` and

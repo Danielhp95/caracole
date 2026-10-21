@@ -421,11 +421,13 @@ In order:
    sheet changed, and MuseScore's pages matched from its local index.
 9. **The songbooks it is in**: each songbook of songbooks.toml that lists the
    song is made again, as `caracole songbook render NAME` does (one whose
-   songs and settings did not change is left as it is: "up to date"), so a
-   song fetched now, or from the web page's Get it, shows in its songbooks at
-   once. A songbook that does not list the song is left alone. A songbooks.toml
-   that cannot be read is said on that line and stops nothing: the lookup
-   still exits 0.
+   songs and settings did not change is left as it is: "up to date"), then
+   `_todo.md` and `index.html` once more, so the library page's Songbooks tab
+   has the songbook's files as they are now. A songbook that does not list the
+   song is left alone. On `caracole serve`, once the lookup is over (Fetch now,
+   Fetch it now, a set list's Get it), the Songbooks tab is drawn again: the
+   song shows there with its sheet, and no Get it. A songbooks.toml that cannot
+   be read is said on that line and stops nothing: the lookup still exits 0.
 
 It keeps the interactive pace ([Two paces](#configure)): about a second
 between two requests to a site, six requests to a site at most, and sixty an
@@ -2599,7 +2601,9 @@ with it. A KEY that is no key exits with status 2.
   its song in the set list (and on the song's own line in the library); the
   lookups stay out of the list of requests in the corner. While a rename or a
   deletion runs, the songbook's controls wait. Once a change is over the set
-  list is drawn again as songbooks.toml has it, each line where it was: a song
+  list is drawn again as songbooks.toml has it (and so it is once any song's
+  lookup or removal is over, wherever you asked for it: a song Fetch now got
+  shows there with its sheet), each line where it was: a song
   taken out says "Taken out", and a deleted songbook "Deleted", where it was
   until your next click or key, so that nothing on the screen moves seconds
   after your tap. Select's Make songbook (or Add to a songbook there is) runs

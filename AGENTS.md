@@ -91,7 +91,8 @@ Rules a change there keeps (the Invariants below are the others):
   for those alone. The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
   data's `songbooks` (songbook_section.py: each songbook's set list, where it plays each song as
   `songbook.plays_in` says it, and the setting's menus' names, the theory's), which `/jobs.json`
-  gives again once a songbook's change is over. library.js lends it `window.caracoleLibrary`
+  gives again once a job is over (`jobs_routes.views`: a songbook's change, a lookup, which makes the
+  songbooks its song is in again, or a removal; a LaCuerda artist's read changes none). library.js lends it `window.caracoleLibrary`
   (`track`, `showLine`) and tells it every job's view (`caracole:job`) and the songbooks
   (`caracole:songbooks`); it posts the Select bar's songbook too. A song's chip sends the capo with
   the key and the mode (`/songbook/set`, as `caracole songbook set` keeps it), and Add a song looks
@@ -113,7 +114,7 @@ Rules a change there keeps (the Invariants below are the others):
   rather than another copy. A command's logic lives in a module outside commands/, imported
   inside the command's function (Heavy imports, below): get.py is `caracole get`, one song looked
   up now (the run's steps for that song alone, sheet first, at the lookup pace, then its `songbooks` stage: the songbooks of songbooks.toml that list the
-  song, `songbook.songbooks_listing`, made again by `render_songbooks(only=…)`; `--progress`, a
+  song, `songbook.songbooks_listing`, made again by `render_songbooks(only=…)`, then `write_pages` again once one was, as `caracole songbook render` writes the pages after; `--progress`, a
   JSON line per event, for caracole serve), and review.py, search.py, removal.py and songbook.py
   are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local indexes
   alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),

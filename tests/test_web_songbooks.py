@@ -463,6 +463,33 @@ def test_once_its_job_is_over_the_songbooks_come_with_it_as_the_tab_draws_them(s
     assert none["books"] == [] and none["error"] is None
 
 
+def test_once_a_lookup_is_over_the_songbooks_come_with_it_too(setup, campfire):
+    # Fetch now from the library list: a song's job, no songbook's. Its song now has a sheet, so the set list
+    # it is in says so, and offers no Get it the server would refuse.
+    _, cfg, conn, songs = setup
+
+    def looked_up(args, emit):  # caracole get: a sheet kept and made (which remakes the songbooks it is in)
+        c = db.connect(cfg.db_path)
+        try:
+            keep_sheet(c, cfg, songs["hysteria"], tab_id=9)
+            render_sheets(c, cfg)
+        finally:
+            c.close()
+        return 0
+
+    app = WebApp(cfg, JobQueue(looked_up), allowed=ALLOWED, csrf="tok")
+    assert post(app, "/fetch", {"song": str(songs["hysteria"].id)}, accept=JSON).status == 200
+    waiting = jobs_json(app, "1")["jobs"][0]
+    assert waiting["kind"] == "song" and "songbooks" not in waiting  # only once it is over
+    app.queue.run_pending()
+    view = jobs_json(app, "1")["jobs"][0]
+    assert view["state"] == "done" and view["card"]["id"] == songs["hysteria"].id
+    [book] = view["songbooks"]["books"]
+    hysteria = next(s for s in book["set"] if s["title"] == "Hysteria")
+    assert (hysteria["missing"], hysteria["get"]) == (None, False) and book["missing"] == 0
+    assert view["songbooks"] == page_data(app)["songbooks"]  # as the page has them now
+
+
 def test_a_songbook_change_on_its_way_is_on_the_page_as_a_songbooks_not_a_songs(app, setup, queue, campfire):
     post(app, "/songbook/rename", {"name": "Campfire", "new": "Beach"})
     page = get(app, "/").body.decode("utf-8")

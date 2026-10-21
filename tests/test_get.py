@@ -796,6 +796,22 @@ def test_a_song_fetched_now_remakes_the_songbooks_it_is_in_and_no_other(cfg, con
     assert ("songbooks", "done", "Campfire made again") in progress.said
 
 
+def test_the_library_page_is_written_after_the_songbooks_a_lookup_made_again(cfg, conn, sites):
+    import re
+
+    serve_creep(sites, conn)
+    _books(cfg, Campfire=["Radiohead - Creep"])
+
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    # index.html shows the songbook as it is now: made, with its files to open, not "not made yet".
+    page = (cfg.library_dir / "index.html").read_text(encoding="utf-8")
+    data = json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', page, re.S).group(1))
+    book = next(b for b in data["songbooks"]["books"] if b["name"] == "Campfire")
+    assert "songbook.html" in {f["name"] for f in book["files"]}, book
+    assert book["changed"] is not None and book["missing"] == 0, book
+
+
 def test_a_song_in_no_songbook_remakes_none(cfg, conn, sites):
     serve_creep(sites, conn)
     _books(cfg, Other=["Soda Stereo - De Música Ligera"])
