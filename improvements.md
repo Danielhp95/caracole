@@ -195,6 +195,12 @@ After finishing, do a /deep-research for what is the best UX design for this typ
   - A phone header that leaves the first screen to the songs.
 - **Songbook page:** "Next: <title> ›" and the key and capo of each song in the contents.
 
+**Second pass done in [9f83300](https://github.com/Danielhp95/caracole/commit/9f83300), [93a105b](https://github.com/Danielhp95/caracole/commit/93a105b), [5f5e871](https://github.com/Danielhp95/caracole/commit/5f5e871), [88297ef](https://github.com/Danielhp95/caracole/commit/88297ef), [e8f1147](https://github.com/Danielhp95/caracole/commit/e8f1147) and [b3eba05](https://github.com/Danielhp95/caracole/commit/b3eba05)**, from the sketches you picked (B for search, A for the chords, C for the PDF, A for songbooks, and "Cards go"). Design: docs/superpowers/specs/2026-10-20-design-pass-2-design.md.
+- **Library page:** your songs are dense lines grouped by artist, the only view: title, status, key, sources, Open or Fetch now, and a ⋯ with everything else. About twenty lines fit a laptop screen; a line can't be shorter without its buttons getting too small to hit. Typing searches your songs, the songs you removed ("Add again") and every local index (UG, its artist pages caracole read, LaCuerda, gtptabs.com) inside the same artist groups, with tab counts, one line per song whatever the sites; Enter never spends a request.
+- **Sheet viewer on a laptop:** from 1200 px, a rail on the left draws each chord along the neck with every position; picking one sets the shape, kept in the address.
+- **PDFs:** two columns, the sheet's own shapes as diagrams, the header as the viewer says it ("Em shapes · capo 2 · sounds F#m"), section names as rust capitals, the tabber's chatter left out, text UG escaped twice decoded. **Export PDF of this version** makes a PDF of exactly what the viewer shows (key, capo, mode, positions, swaps), saved beside the sheet as "sheet (F# Dorian, capo 2).pdf"; **Make this my version** makes it the song's own, for its PDF, its viewer and its songbooks.
+- **Songbooks tab:** the list, then a set list you reorder by dragging (or with the keyboard), a chip per song for its key, mode and capo in that songbook (`caracole songbook set` too), Add a song from everything search finds, and the PDF, phone page and ChordPro file. A song fetched now remakes the songbooks it is in.
+
 ## Searching only by artist or songname
 
 Sometimes one does not know the artist, we need to allow for either or scenarios for searching
