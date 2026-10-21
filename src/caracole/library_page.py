@@ -3131,6 +3131,7 @@ _SCRIPT = r"""
       const top = line && old.isConnected ? line.getBoundingClientRect().top : null;
       const kept = refill(old, fresh);
       if (tall) kept.style.minHeight = tall + "px";
+      if (line) line.style.minHeight = "";  // the last thing on the card, which keeps the height: as tall as it says
       if (top !== null && line.isConnected) {  // measured before a frame is drawn: it never moves
         const drop = top - line.getBoundingClientRect().top;
         if (drop > 0) line.style.marginTop = drop + "px";
