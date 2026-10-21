@@ -39,7 +39,11 @@ written ``\\u003c``:
   ``places``, ``glossary``, ``altNumerals``), each chord's notes (``tones``) and its scale for a solo
   (``solo``, ``altSolo``, ``scaleWords``, ``scales``), the key's scale (``keyScale``, ``pentatonic``) and
   each section's progression (``progressions``): harmony_tables.py says how;
-- ``library``: the library's index.html, relative to the page.
+- ``library``: the library's index.html, relative to the page;
+- ``versions``: UG's chords versions of the song, for the switcher under the key line and the list it
+  opens (``_VERSIONS``, ``_VERSION_LIST``), or null for none: ``sheet_versions.as_data``'s ``{"total",
+  "list"}``, each entry's ``this`` saying whether it is this page's, and ``sheet``, the provider of the
+  sheet the title opens ("ug", "lacuerda", "auto"): render.py's ``_versions_data``.
 """
 
 from __future__ import annotations
@@ -432,11 +436,14 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
         f"<h1>{escape(title)}</h1>\n"
         + (f'<p class="artist">{escape(sheet.artist)}</p>\n' if sheet.artist else "")
-        + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
+        + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n'
+        + _VERSIONS
+        + "</header>\n"
         + _song_html(sheet)
         + _footer(pdf_link)
         + "</div>\n"
         + (_SHEET_CONTROLS if export else _CONTROLS)
+        + _VERSION_LIST
     )
 
 
@@ -668,6 +675,26 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="tip" id="tip" role="tooltip" hidden><p id="tip-line"></p><p class="tip-key" id="tip-key"></p>
 <button type="button" class="chip" id="tip-card"></button></div>
 <noscript><p class="noscript">Turn on JavaScript to transpose, change the mode and see chord shapes.</p></noscript>
+"""
+
+# A sheet viewer's versions (its data's ``versions``), hidden until the script fills them in: under the key
+# line, ‹ and › open the version kept before or after this one, in rank order, and between them the line
+# that says which this is ("Ver 3 of 13 · 4.86★ (408) · the one") opens the list of every version UG has, a
+# dialog that is not modal, like the settings (a rail beside the song from 900 px wide, where it takes the
+# settings' place). An end ‹ or › has no address. The songbook has neither: its songs have no versions.
+_VERSIONS = """<nav class="versions" id="versions" hidden aria-label="Versions of this sheet">
+<a class="vstep" id="ver-prev" aria-label="The version kept before this one">‹</a>
+<button type="button" class="vnow" id="ver-now" aria-haspopup="dialog" aria-controls="version-list" aria-expanded="false"><span id="ver-line"></span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.6 5.6 8 11l5.4-5.4-1.2-1.2L8 8.6 3.8 4.4z"/></svg></button>
+<a class="vstep" id="ver-next" aria-label="The version kept after this one">›</a>
+</nav>
+"""
+
+_VERSION_LIST = """<section class="sheet-ui panel vlist" id="version-list" hidden role="dialog" aria-labelledby="version-list-title">
+<header class="ui-head"><h2 id="version-list-title" tabindex="-1">Versions</h2>
+<button type="button" class="x" data-close aria-label="Close">×</button></header>
+<div class="row vrow" id="ver-acts" hidden></div>
+<ol class="vers" id="ver-items"></ol>
+</section>
 """
 
 # The sheet viewer's controls: the shared ones and the export row. The songbook has none: no song owns it.
