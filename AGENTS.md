@@ -225,7 +225,9 @@ Before a change is done:
     nix flake check
 
 `nix flake check` builds three checks: `package` and `autochords` each run the suite (minus
-the tests marked `autochords`), then check the wrapped `caracole`; `module` evaluates small
+the tests marked `autochords`), then check that the installed package is src/ file for file (the
+suite imports caracole from src/, so a data file left out of the wheel shows only there: a new
+asset folder goes inside src/caracole/) and check the wrapped `caracole`; `module` evaluates small
 NixOS systems against nix/module-check.nix and loads their caracole.toml with config.py. One
 at a time: `nix build`, `nix build .#autochords`, `nix build .#checks.x86_64-linux.module`.
 

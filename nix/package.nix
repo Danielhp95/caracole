@@ -133,12 +133,22 @@ python3Packages.buildPythonApplication (finalAttrs: {
     export CARACOLE_CJK_FONT=${lib.escapeShellArg cjkFont}
   '';
 
-  # After the tests, on the wrapped program: the font exists, and the wrapper
+  # After the tests, on the installed package: it is src/, file for file. The
+  # tests import caracole from src/ (pyproject's pythonpath), so they would pass
+  # with a stylesheet, script, template or data file the code reads at run time
+  # (library_assets/, viewer/, chordpro-style.json) left out of the wheel, or
+  # with a folder beside src/caracole that the wheel never takes.
+  # Then on the wrapped program: the font exists, and the wrapper
   # sets it and finds chordpro. The auto-chords variant finds its models, their
   # packages and yt-dlp, so its YouTube route is on (with no song to ask about,
   # it asks nothing); the default one says where to get them, and takes no audio
   # from YouTube.
   postCheck = ''
+    if ! diff -r --exclude=__pycache__ --exclude='caracole-*.dist-info' \
+      src $out/${python3Packages.python.sitePackages}; then
+      echo "the installed package is not src/ file for file: see the lines above" >&2
+      exit 1
+    fi
     if [ ! -f ${lib.escapeShellArg cjkFont} ]; then
       echo "CJK font not found: ${cjkFont}" >&2
       exit 1
