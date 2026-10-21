@@ -82,7 +82,8 @@ is made from a text of its own (caracole/pdf_text.py), the .cho staying as the
 viewer reads it: in a version, each chord named and shaped as the viewer shows
 it there (``apply_version``); without the tab's notes, the shapes its viewer shows
 (its chord legend's) as chord diagrams,
-the viewer's key line under the title, section names in capitals, in two columns. That
+the viewer's key line under the title, section names in capitals, in two columns that end
+level when the first page's two hold the song. That
 text runs the viewer's code: a bug there fails that song's PDF alone, logged with its traceback,
 as a chordpro failure does, and its viewer is still written. kv ``render:<song id>``
 keeps what the song's PDF was made from (the SHA-256 of the .cho, the
@@ -121,7 +122,8 @@ import struct
 import subprocess
 import tempfile
 import unicodedata
-from collections.abc import Callable, Collection, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from functools import lru_cache
@@ -151,7 +153,7 @@ from caracole.library import (
 from caracole.keys import SongKey, sheet_key, sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
-from caracole.pdf_text import PDF_TEXT_VERSION, pdf_text
+from caracole.pdf_text import PDF_TEXT_VERSION, STYLE_FILE, pdf_text
 from caracole.sheet_versions import SheetVersion, as_data, in_library, sheet_pins, tab_of, version_names
 from caracole.songs import (
     AUTO_SHEET,
@@ -204,8 +206,8 @@ FONT_ELEMENTS = ("text", "title")
 # and under the title the text's {subtitle} (pdf_text.py: the artist, the viewer's key
 # line, a capo or a tuning the notes name), as ChordPro prints neither the artist nor the
 # capo by default: a capo the guitarist can't see means playing in the wrong key. Its
-# SHA-256 is in each PDF's record, so a new look renders every PDF once more.
-STYLE_FILE = Path(__file__).with_name("chordpro-style.json")
+# SHA-256 is in each PDF's record, so a new look renders every PDF once more. It is
+# pdf_text.STYLE_FILE, whose page sizes and spacings say where the PDF's two columns end level.
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -341,31 +343,42 @@ def render_pdf(
     if font_file is not None:
         cmd += _font_options(Path(font_file))
     cmd += [f"--output={pdf}", str(cho)]
+    run_chordpro(cmd, Path(pdf), runner=runner, timeout=TIMEOUT, chordpro_bin=chordpro_bin, on=f" on {cho}",
+                 nothing=f"no PDF for {cho}")
+
+
+def run_chordpro(cmd: list[str], out: Path, *, runner: Runner, timeout: float, chordpro_bin: str, on: str = "",
+                 nothing: str | None = None) -> None:
+    """Run the chordpro command ``cmd``, which writes ``out``, for at most ``timeout`` seconds (a sheet's PDF,
+    a songbook's files). RenderError when ``chordpro_bin`` is missing or can't be run, times out, exits
+    non-zero (with its stderr) or writes nothing: ``on`` ends the messages of a run on one sheet
+    (" on sheet.cho"), and ``nothing`` says what it didn't write ("no PDF for sheet.cho"; "no <out's name>"
+    without it)."""
     try:
-        result = runner(
-            cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=TIMEOUT
-        )
+        result = runner(cmd, capture_output=True, encoding="utf-8", errors="replace", timeout=timeout)
     except FileNotFoundError as e:
         raise RenderError(f"chordpro not found: {chordpro_bin}") from e
     except subprocess.TimeoutExpired as e:
-        raise RenderError(f"chordpro timed out after {TIMEOUT} s on {cho}") from e
+        raise RenderError(f"chordpro timed out after {timeout} s{on}") from e
     except OSError as e:
         raise RenderError(f"cannot run {chordpro_bin}: {e}") from e
     stderr = result.stderr or ""
     if result.returncode != 0:
-        raise RenderError(f"chordpro failed on {cho} (exit {result.returncode})", stderr=stderr)
-    if not Path(pdf).is_file():
-        raise RenderError(f"chordpro wrote no PDF for {cho}", stderr=stderr)
+        raise RenderError(f"chordpro failed{on} (exit {result.returncode})", stderr=stderr)
+    if not out.is_file():
+        raise RenderError(f"chordpro wrote {nothing or 'no ' + out.name}", stderr=stderr)
 
 
-def _font_options(font: Path) -> list[str]:
+def _font_options(font: Path, elements: tuple[str, ...] = FONT_ELEMENTS) -> list[str]:
+    """chordpro's options that print ``elements`` in the font file ``font``; RenderError when it is
+    missing or chordpro can't use it (``_font_problem``)."""
     font = font.expanduser().absolute()
     if not font.is_file():
         raise RenderError(f"font file not found: {font}")
     stat = font.stat()
     if problem := _font_problem(str(font), stat.st_size, stat.st_mtime_ns):
         raise RenderError(f"{font} {problem}")
-    return [f"--define=pdf.fonts.{element}.file={font}" for element in FONT_ELEMENTS]
+    return [f"--define=pdf.fonts.{element}.file={font}" for element in elements]
 
 
 _SFNT_VERSIONS = (b"\x00\x01\x00\x00", b"OTTO", b"true")
@@ -917,9 +930,8 @@ def render_version(
         log.warning("%s: cannot make the export %s", song.display, version_query(v), exc_info=True)
         raise RenderError(f"cannot make the export: {type(e).__name__}: {e}") from e
     pdf = folder / f"sheet ({safe_name(label)}).pdf"
-    need = _font_need(printed)
-    font = _cjk_font(cfg.cjk_font)[0] if need else None
-    if need == "letters" and font is None:
+    font, lost = pdf_font(printed, _cjk_font(cfg.cjk_font)[0])
+    if lost is not None:
         raise RenderError(f"{pdf.name} needs a CJK font: {FONT_HINT}")
     state = {
         "pdf": pdf.name,
@@ -1098,10 +1110,9 @@ def _render_sheet_pdf(
     except Exception as e:  # a sheet the viewer's code can't read must never cost the other PDFs
         log.warning("%s: cannot make the text of %s", song.display, pdf.name, exc_info=True)
         raise RenderError(f"cannot make the text of {pdf.name}: {type(e).__name__}: {e}") from e
-    need = _font_need(printed)
-    font = cjk_font if need else None
-    if need == "letters" and font is None:
-        return _Done("no font", missing=_first_lost_letter(printed))
+    font, lost = pdf_font(printed, cjk_font)
+    if lost is not None:
+        return _Done("no font", missing=lost)
     state = {
         "source_sha": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "transpose": version.t,  # info.json's; the rest of the version is in the text printed
@@ -1184,8 +1195,17 @@ def written_file(conn: sqlite3.Connection, song_id: int, name: str) -> tuple[str
     served only while ``library.holds`` says it is still these bytes, and with
     ``viewer.viewer_csp(page)``, the policy of those bytes, as its Content-Security-Policy header.
     """
-    entry = _written(conn, song_id).get(name)
-    return None if entry is None else (entry["sha256"], entry["size"])
+    return written_entry(_written(conn, song_id).get(name))
+
+
+def written_entry(entry: Any) -> tuple[str, int] | None:
+    """The SHA-256 and the length a record's entry of a file written says (``{"sha256", "size"}``), or None
+    for an entry that says neither (a device's edit of the database's JSON, an older shape): the one
+    reading of those records, a sheet's .cho and viewer's (``written_file``) and a songbook's files'."""
+    if not isinstance(entry, Mapping):
+        return None
+    sha, size = entry.get("sha256"), entry.get("size")
+    return (sha, size) if isinstance(sha, str) and type(size) is int else None
 
 
 def _written(conn: sqlite3.Connection, song_id: int) -> dict[str, dict[str, Any]]:
@@ -1193,11 +1213,7 @@ def _written(conn: sqlite3.Connection, song_id: int) -> dict[str, dict[str, Any]
     record = kv_get_json(conn, f"{FILES_KEY}{song_id}")
     if not isinstance(record, Mapping):
         return {}
-    return {
-        name: entry for name, entry in record.items()
-        if isinstance(entry, Mapping) and isinstance(entry.get("sha256"), str)
-        and isinstance(entry.get("size"), int)
-    }
+    return {name: entry for name, entry in record.items() if written_entry(entry) is not None}
 
 
 def _note_written(conn: sqlite3.Connection, song_id: int, name: str, data: bytes) -> None:
@@ -1355,16 +1371,36 @@ def _render_into(
     isn't in the way. Both files keep the sheet's names: chordpro picks its backend
     by the extension, and its messages then say which sheet failed.
     """
-    work_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="render-", dir=work_dir) as tmp:
-        cho, out = Path(tmp) / f"{pdf.stem}.cho", Path(tmp) / pdf.name
+    with private_dir(work_dir, "render-") as tmp:
+        cho, out = tmp / f"{pdf.stem}.cho", tmp / pdf.name
         cho.write_bytes(text.encode("utf-8"))
         render_pdf(cho, out, chordpro_bin=chordpro_bin, font_file=font_file, runner=runner)
         data = out.read_bytes()
         return write_atomic(pdf, data), len(data)
 
 
+@contextmanager
+def private_dir(cache_dir: Path, prefix: str) -> Iterator[Path]:
+    """A folder of its own under ``cache_dir``, named from ``prefix``, which only caracole can enter (mode
+    0700), and gone once done: where chordpro reads copies and writes its file (``_render_into``, a
+    songbook's files), as it follows links and the library is anyone's to write."""
+    cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=prefix, dir=cache_dir) as tmp:
+        yield Path(tmp)
+
+
 _INVISIBLE = frozenset({"Cc", "Cf"})  # controls, zero-width spaces, byte-order marks
+
+
+def pdf_font(text: str, cjk_font: Path | None) -> tuple[Path | None, str | None]:
+    """The font file chordpro prints the PDF text ``text`` in, and the first letter it would lose: the
+    CJK font ``cjk_font`` (one ``_cjk_font`` found usable, or None) when the built-in fonts lose some of
+    ``text``, else none; a letter lost only when they lose letters (``_font_need``) and no font is set,
+    and the PDF then waits for one."""
+    need = _font_need(text)
+    if need == "letters" and cjk_font is None:
+        return None, _first_lost_letter(text)
+    return (cjk_font if need else None), None
 
 
 def _font_need(text: str) -> Literal["letters", "symbols"] | None:
