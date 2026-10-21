@@ -32,6 +32,8 @@ MANY = ["G", "D", "Em", "C", "Am", "F", "Bm", "E", "A", "Dm", "B7", "G7", "Cmaj7
 MANY_CHO = "{title: Many Chords}\n{artist: Synthetic}\n{key: G}\n" + "".join(
     f"{{comment: Verse {n}}}\n" + "".join(f"[{c}]made up " for c in MANY[:7]) + "\n"
     + "".join(f"[{c}]words " for c in MANY[7:]) + "\n\n" for n in range(1, 13))
+# Chords whose shapes sit where another of theirs does: F's two at fret 1, Em7's three open ones.
+SAME_PLACES = "{title: Same Places}\n{artist: Synthetic}\n{comment: Verse}\n[F]made [Em7]up [Am7]words [A7]here\n"
 DESKTOP = {"width": 1280, "height": 800, "mobile": False}
 
 # What the page shows: the rail, the sheet, the bar, the settings and the card (None: not shown), each
@@ -93,17 +95,6 @@ def absolute(position) -> set[tuple[int, str]]:
     return out
 
 
-def legend(positions, mine: int) -> list[str]:
-    """The legend's words: "the tab's" for the first ``mine``, "open" for a shape with open strings at
-    the nut, else the fret of its lowest finger."""
-    words = []
-    for p, position in enumerate(positions):
-        dots = [fret for fret, kind in absolute(position) if kind == "dot"]
-        words.append("the tab's" if p < mine else "open" if "0" in position[0] and position[2] == 1
-                     else f"fret {min(dots)}")
-    return words
-
-
 def diagram(position) -> dict:
     """What a diagram of ``position`` draws (``DIAGRAM``)."""
     frets, base = position[0], position[2]
@@ -121,6 +112,31 @@ def reload(b: Browser) -> None:
     assert b.wait("!window.before && document.documentElement.dataset.ready === '1'")
 
 
+def reopen(b: Browser, url: str) -> None:
+    """The page opened again at ``url``, as from the library: a new load, in the same browser."""
+    b.send("Page.navigate", url="about:blank")
+    assert b.wait("location.href === 'about:blank'")
+    b.open(url)
+    assert b.wait("document.documentElement.dataset.ready === '1'")
+
+
+def to_song(b: Browser, n: int) -> None:
+    """A songbook's next song, as its arrows and swipes go there: its address, which loads the page again."""
+    b.js(f"window.before = true; location.hash = 'song-{n}'")
+    assert b.wait("!window.before && document.documentElement?.dataset.ready === '1'")
+
+
+def radio_names(b: Browser) -> list[list[str]]:
+    """Each legend's radio buttons by the names Chromium gives them (its accessibility tree), legend by legend."""
+    b.send("Accessibility.enable")
+    names = []
+    for k in range(b.js("document.querySelectorAll('#necks .nk-legend').length")):
+        group = b.send("Runtime.evaluate", expression=f"document.querySelectorAll('#necks .nk-legend')[{k}]")
+        nodes = b.send("Accessibility.queryAXTree", objectId=group["result"]["objectId"], role="radio")["nodes"]
+        names.append([node["name"]["value"] for node in nodes])
+    return names
+
+
 # --- the rail ----------------------------------------------------------------------------------------
 
 
@@ -134,7 +150,9 @@ def test_from_1200_px_a_rail_on_the_left_shows_a_neck_per_chord(tmp_path, width)
     assert seen["bar"]["left"] == rail["right"] and seen["bar"]["right"] == seen["client"]
     assert [c["name"] for c in seen["chords"]] == LEGEND_CHORDS == seen["sheetChords"]
     g = seen["chords"][1]
-    assert g["label"] == "G: 5 positions" and g["legend"] == legend(G_POSITIONS, 1)
+    assert g["label"] == "G: 5 positions"
+    assert g["legend"] == ["1 · the tab's", "2 · open", "3 · fret 3", "4 · fret 5", "5 · fret 7"]
+    assert seen["chords"][0]["legend"] == ["1 · the tab's", "2 · open", "3 · fret 12", "4 · open", "5 · open"]  # Em7
     for chord in seen["chords"]:
         assert chord["label"] == positions_label(chord["name"], len(chord["legend"])), chord
         assert {p for p, *_ in chord["dots"]} == set(range(len(chord["legend"]))), chord  # each drawn
@@ -205,7 +223,8 @@ def test_the_necks_follow_transposition_and_mode(tmp_path):
     names = [c["name"] for c in up["chords"]]
     assert names == up["sheetChords"] and names[1] == "Ab"  # G, a semitone up
     ab = up["chords"][1]
-    assert ab["label"] == positions_label("Ab", len(DB[""][8])) and ab["legend"] == legend(DB[""][8], 0)
+    assert ab["label"] == positions_label("Ab", len(DB[""][8]))
+    assert ab["legend"] == ["1 · fret 1", "2 · fret 4", "3 · fret 6", "4 · fret 8"]
     for p, position in enumerate(DB[""][8]):  # chords-db's Ab: the tab's own G is G's alone
         assert {(fret, kind) for q, fret, kind in ab["dots"] if q == p} == absolute(position), position
     assert picked == "1.2" and up["at"] is None and ab["checked"] == 0  # ...is G's: Ab starts at its first
@@ -222,6 +241,22 @@ def test_chords_shown_by_one_name_share_one_neck(tmp_path):
     assert [c["name"] for c in as_written["chords"]] == ["A#", "Bb", "F"]  # and no neck for N.C.
     assert [c["name"] for c in up["chords"]] == ["B", "F#"] and up["sheetChords"] == ["B", "F#", "N.C."]
     assert picked["at"] == "0.1,1.1" and picked["chords"][0]["checked"] == 1  # both of its places
+
+
+def test_every_legend_names_its_shapes_apart(tmp_path):
+    # Numbered as the card counts them ("2 of 4"), so two shapes at one fret, or three open ones, are told
+    # apart in words, by sight and by a screen reader, and never by their colour alone.
+    with open_viewer(tmp_path, written(tmp_path, SAME_PLACES), **DESKTOP) as b:
+        seen = b.js(RAIL)
+        heard = radio_names(b)
+    legends = [c["legend"] for c in seen["chords"]]
+    assert [c["name"] for c in seen["chords"]] == ["F", "Em7", "Am7", "A7"]
+    assert legends == [["1 · fret 1", "2 · fret 1", "3 · fret 3", "4 · fret 5"],
+                       ["1 · open", "2 · fret 12", "3 · open", "4 · open"],
+                       ["1 · open", "2 · open", "3 · fret 5", "4 · fret 5"],
+                       ["1 · open", "2 · open", "3 · fret 5", "4 · fret 7"]]
+    assert heard == legends  # the names a screen reader gives them: the words shown
+    assert all(len(set(names)) == len(names) for names in heard)
 
 
 # --- picking a position --------------------------------------------------------------------------------
@@ -254,6 +289,33 @@ def test_picking_a_position_on_the_neck_makes_it_the_chords_shape_in_the_strip_a
     assert back["at"] == "1.2" and back["chords"][1]["checked"] == 2
     assert reloaded[0]["at"] == "1.2" and reloaded[0]["chords"][1]["checked"] == 2  # kept in the address
     assert reloaded[1] == diagram(G_POSITIONS[2])
+
+
+def test_opened_again_the_page_keeps_the_shapes_chosen_for_the_chords_they_were_chosen_for(tmp_path):
+    # From the folder the browser keeps them, as it keeps the key: opened again with no address, each
+    # chord plays the shape chosen for it. An address naming another key renames the chords: theirs start
+    # at their first shape, never one chosen for another chord.
+    url = written(tmp_path, LEGEND)
+    with open_viewer(tmp_path, url, **DESKTOP) as b:
+        b.click("#t-up")  # Em7 and G are Fm7 and Ab
+        b.click('#necks .nk:nth-of-type(1) [role=radio][data-p="1"]')  # Fm7's second shape
+        b.click('#necks .nk:nth-of-type(2) [role=radio][data-p="2"]')  # Ab's third
+        picked = b.js(RAIL)
+        reopen(b, url)
+        again = [b.js(RAIL), b.js("location.hash")]
+        b.click("#more")
+        b.click("#strip-toggle")
+        b.press("Escape")
+        strip = b.js(DIAGRAM % "#strip button:nth-of-type(2) svg")
+        reopen(b, url + "#t=2")
+        other = b.js(RAIL)
+    assert picked["at"] == "0.1,1.2" and [c["name"] for c in picked["chords"]][:2] == ["Fm7", "Ab"]
+    rail, hash_ = again
+    assert [c["name"] for c in rail["chords"]] == [c["name"] for c in picked["chords"]]
+    assert hash_ == "#t=1&at=0.1%2C1.2" and [c["checked"] for c in rail["chords"]][:3] == [1, 2, 0]
+    assert strip == diagram(DB[""][8][2])  # the strip plays it too
+    assert [c["name"] for c in other["chords"]][:2] == ["F#m7", "A"]
+    assert other["at"] is None and all(c["checked"] == 0 for c in other["chords"])
 
 
 def test_the_keyboard_picks_a_position_with_the_arrows(tmp_path):
@@ -392,3 +454,24 @@ def test_a_songbook_song_has_its_own_rail(tmp_path):
     assert [c["name"] for c in seen["chords"]] == ["A#", "Bb", "F"]  # its own chords
     assert other == [0, None]  # the other song's rail is in its hidden section; this one's is the viewer's
     assert picked[0] == "#song-2=&at=0.1" and picked[1] == "1"
+
+
+def test_in_a_songbook_each_song_keeps_its_shapes_from_song_to_song(tmp_path):
+    # A set list played song to song: each song comes back in the key and with the shapes you left it in.
+    songs = [BookSong("Legend Song", "The Placeholders", cho=LEGEND, id="aaaa"),
+             BookSong("Twins", "Synthetic", cho=TWINS, id="bbbb")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
+    with open_viewer(tmp_path, path.as_uri() + "#song-1", **DESKTOP) as b:
+        b.click("#t-up")
+        b.click('#necks .nk:nth-of-type(2) [role=radio][data-p="2"]')  # song 1's G, now Ab: its third shape
+        one = [b.js(RAIL), b.js("location.hash")]
+        to_song(b, 2)
+        two = [b.js(RAIL), b.js("location.hash")]
+        to_song(b, 1)
+        back = [b.js(RAIL), b.js("location.hash")]
+    assert one[1] == "#song-1=&t=1&at=1.2" and one[0]["chords"][1]["name"] == "Ab"
+    assert [c["name"] for c in two[0]["chords"]] == ["A#", "Bb", "F"] and two[1] == "#song-2="  # its own, as left
+    assert back[1] == "#song-1=&t=1&at=1.2"
+    assert back[0]["chords"][1]["name"] == "Ab" and back[0]["chords"][1]["checked"] == 2

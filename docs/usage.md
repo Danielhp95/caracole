@@ -1766,8 +1766,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
   left lists each chord of the song once, in the order it first comes, with a
   guitar neck (frets 0 to 15, the high e on top) showing every shape of it in
-  a colour of its own, the tab's own ringed, and a legend under it that names
-  them: "the tab's", "open", "fret 7". Click a shape, on the neck or in the
+  a colour of its own, the tab's own ringed, and a legend under it that
+  numbers them as the card counts them ("2 of 5") and names them: "1 · the
+  tab's", "2 · open", "3 · fret 3", so two shapes at one fret ("1 · fret 1",
+  "2 · fret 1") have names of their own. Click a shape, on the neck or in the
   legend, to play it: the strip and the chord's card show it, and the address
   keeps it, as the card's ‹ › do (and the rail follows the card's). In a
   legend the arrow keys go from shape to shape; Tab stops once a chord. The
@@ -1847,7 +1849,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   seconds alone, with no ring.
 
 The viewer remembers its settings for each song in the browser, the scroll
-speed and the text size among them. It keeps the transposition, the mode, the
+speed, the text size and the shape chosen for each chord among them: a chord
+named otherwise when the page opens (an address with another key, mode or
+capo) starts at its first shape. It keeps the transposition, the mode, the
 capo, the text size and the scroll speed in its address too
 (`sheet.html#t=2&mode=aeolian&fs=20&speed=8`), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
@@ -2492,8 +2496,8 @@ in `Library/_songbooks/<name>/`:
   a song to open it in the sheet viewer, with everything the viewer does
   (chord shapes, transposition, chords to play instead, modes, scrolling by
   itself), each song in its own key and keeping its own settings, its scroll
-  speed and text size among them. Previous and Next name the songs they go to
-  ("‹ Hotel California", "Next: little wolf ›", a title too long for the phone
+  speed, text size and chosen shapes among them. Previous and Next name the
+  songs they go to ("‹ Hotel California", "Next: little wolf ›", a title too long for the phone
   cut short with "…"), above each song and again at its end, where on a phone
   Next has a row of its own, with room for the title. They, a swipe across the
   sheet or the arrow keys go from song to song, skipping the missing ones, and

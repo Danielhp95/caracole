@@ -72,12 +72,17 @@
     }
     return out;
   };
+  // The shapes kept chosen, each with the chord it was chosen for (atSigns): read back once the chords
+  // can be named (below setAt), as only a chord still named so gets its shape back.
+  let keptAt = null;
   try {
     const saved = JSON.parse(localStorage.getItem(store) || "null");
     if (saved && typeof saved === "object") {
       if (saved.base === data.transpose) state.t = clampT(saved.t);  // a new [transpose] starts afresh
       if (validMode(saved.mode)) state.mode = saved.mode;
       if (saved.alt && typeof saved.alt === "object" && saved.chords === sheetChords) state.alt = saved.alt;
+      if (saved.at && typeof saved.at === "object" && saved.atSigns && typeof saved.atSigns === "object"
+        && saved.chords === sheetChords) keptAt = { at: saved.at, signs: saved.atSigns };
       if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
       if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
       state.strip = saved.strip === true;
@@ -86,7 +91,10 @@
   } catch (err) { /* no storage: the page still works */ }
   const hash = new URLSearchParams(location.hash.slice(1));
   if (hash.has("alt")) state.alt = swapsOf(hash.get("alt"));
-  if (hash.has("at")) state.at = positionsOf(hash.get("at"));
+  if (hash.has("at")) {
+    state.at = positionsOf(hash.get("at"));
+    keptAt = null;  // the address says which
+  }
   if (hash.has("t")) state.t = clampT(hash.get("t"));
   if (validMode(hash.get("mode"))) state.mode = hash.get("mode");
   if (hash.has("capo")) state.capo = fretOf(hash.get("capo"));
@@ -94,7 +102,11 @@
   if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
   const save = () => {
     try {
-      localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose, chords: sheetChords }, state)));
+      // Each shape chosen with the chord it was chosen for, so that only that chord gets it back.
+      const atSigns = {};
+      for (const i of Object.keys(state.at)) if (own.call(atSeen, i)) atSigns[i] = atSeen[i];
+      localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose, chords: sheetChords }, state,
+        { atSigns })));
     } catch (err) { /* private mode, or a server's sandbox */ }
     // The address keeps where the song is played too, and the text size and the scroll speed,
     // read back above: without storage (a server's sandbox), a reload and Back still keep them.
@@ -310,13 +322,16 @@
     }
     return root;
   };
-  // What each position is called in the neck's legend: "the tab's" for the first ``mine`` of them,
-  // "open" for one with open strings at the nut, else the fret its lowest finger is on.
+  // What each position is called in the neck's legend: its number, as the card counts them ("2 of 4"), then
+  // "the tab's" for the first ``mine`` of them, "open" for one with open strings at the nut, else the fret
+  // its lowest finger is on. Numbered, two at one fret ("1 · fret 1", "2 · fret 1") have names of their own,
+  // and are told apart by more than their colour.
   const neckLabels = (positions, mine) => positions.map((position, p) => {
-    if (p < mine) return "the tab's";
+    const n = p + 1 + " · ";
+    if (p < mine) return n + "the tab's";
     const up = (Number(position[2]) || 1) - 1;
     const fretted = Array.from(position[0]).filter((c) => c !== "x" && c !== "0").map((c) => Number(c) + up);
-    return up === 0 && position[0].includes("0") ? "open" : "fret " + Math.min(...fretted);
+    return n + (up === 0 && position[0].includes("0") ? "open" : "fret " + Math.min(...fretted));
   });
   // The highest fret a position reaches up the neck (0 for open strings alone).
   const topFret = (position) => Math.max(0, ...Array.from(String(position[0])).filter((c) => c !== "x" && c !== "0")
@@ -375,6 +390,16 @@
       delete atSeen[i];
     }
   };
+  // The shapes the browser kept (no address said which): each chord named now as it was when its shape was
+  // chosen plays it again. One named otherwise (an address with another key, mode or capo, or a swap)
+  // starts at its first shape, as it would have, rather than take a shape chosen for another chord.
+  if (keptAt) {
+    for (const i of Object.keys(keptAt.at)) {
+      const n = Number(keptAt.at[i]);
+      const sign = atSign(i);
+      if (Number.isInteger(n) && n > 0 && sign !== "" && keptAt.signs[i] === sign) setAt(i, n);
+    }
+  }
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
     keepPositions();
