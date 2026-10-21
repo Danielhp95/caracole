@@ -164,12 +164,14 @@
   // (the data marks it primary).
   const primaryOf = (s) => listOf(s.files).find((f) => f && f.primary) || null;
   // A line's button for it, its main action unless the server's control has its place (a wanted song's Fetch
-  // now): "Open" for the viewer, "Open PDF" and "Open text" for the others.
+  // now): "Open" for the viewer, "Open PDF" and "Open text" for the others. An auto sheet's says so in its name, as a
+  // touch screen shows no title and YouTube's mark says only where the audio came from.
   const openButton = (s, f) => {
     const kind = /\.html$/i.test(String(f.name || "")) ? "" : /\.pdf$/i.test(String(f.name || "")) ? "PDF" : "text";
     const text = kind ? "Open " + kind : "Open";
     const open = link({ label: text, href: f.href }, "btn small primary", false);
-    open.setAttribute("aria-label", text + (kind ? " of " : " ") + String(s.title) + " by " + String(s.artist));
+    open.setAttribute("aria-label", text + (kind ? " of " : " ") + String(s.title) + " by " + String(s.artist) +
+      (s.auto === true ? ", an auto sheet" : ""));
     open.title = String(f.label || "");  // "Sheet viewer", "Auto sheet PDF"
     return open;
   };
@@ -723,7 +725,8 @@
     return facts.childNodes.length ? facts : null;
   };
   // Under a line's "⋯": Select, the song picked, and its bar to put it in a songbook there is or a new one
-  // (select.js, which hears "caracole:pick").
+  // (select.js, which hears "caracole:pick"). Select knows the songs the page was loaded with: a song new to the
+  // library since (Get it, a request) has none until the page is loaded again, as it would do nothing.
   const bookButton = (s) => {
     const go = button("Add to a songbook…", "small", () => {
       document.dispatchEvent(new CustomEvent("caracole:pick", { detail: { id: Number(s.id) } }));
@@ -778,7 +781,7 @@
       { heading: "Find the chords", links: listOf(s.links) },
       { heading: "Buy the track for an auto sheet", links: listOf(s.buy) });
     const foot = el("div", "foot");
-    foot.appendChild(bookButton(s));
+    if (byIndex.has(id)) foot.appendChild(bookButton(s));
     if (server && !removing.has(id)) foot.appendChild(removeForm(s));  // removing: its action says so
     more.push(foot);
     const artists = listOf(s.artists);
@@ -1431,19 +1434,43 @@
     drawGroups();
   };
 
-  // What the results show now: your songs that match what is typed, whatever the buttons show (not one removed since
+  // Of your songs, those the status buttons, the Key menu and an artist's chip show, in the list as in the results
+  // (the sites' songs are what the sites have, whatever they show); and that in words, for the results' head, which
+  // hides the buttons: "Your songs here: wanted · by Soda Stereo · in A minor", or nothing when they show every song.
+  const kept = (i) => (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
+    (!state.key || songKeys[i] === keyId(state.key)) && SHOWS[state.show](songs[i]);
+  const SHOW_WORD = { found: "found", wanted: "wanted", review: "needing review" };
+  const keptSaid = () => {
+    const parts = [label(SHOW_WORD, state.show), state.artist ? "by " + artistName(state.artist) : "",
+      state.key && keyGroup(state.key) ? "in " + keyGroup(state.key).name : ""].filter(Boolean);
+    return parts.length ? "Your songs here: " + parts.join(" · ") : "";
+  };
+  // Show all of yours: every status, every key, every artist, here and in the list; the focus to the box, as the
+  // button goes with its note.
+  const keptNote = el("p", "filtered");
+  keptNote.append(el("span"), button("Show all of yours", "small", () => {
+    state.show = "all";
+    state.artist = "";
+    state.key = "";
+    render();
+    save();
+    input.focus();
+  }, "Show all of yours: every status, key and artist"));
+  keptNote.hidden = true;
+
+  // What the results show now: your songs that match what is typed and that the buttons show (not one removed since
   // the page loaded: the answer has it as removed, with Add again), then the server's close matches the filter missed
   // (MINE_SHOWN in all, then All N of your songs), and the answer's groups, under one header
   // an artist: yours first, A to Z, then the answer's, in its order. A song of yours is its own line, with all it
-  // offers, wherever the answer has it; a song of the sites, an index line (indexLine), the same node from one draw
-  // to the next while the answer stands, so that what it shows stays.
+  // offers, wherever the answer has it, unless the buttons hide it; a song of the sites, an index line (indexLine),
+  // the same node from one draw to the next while the answer stands, so that what it shows stays.
   const drawGroups = () => {
     const model = answer && answer.model;
     const q = normal(state.q);
     const fits = typedMatch(parseQuery(state.q));
-    const local = ORDERS.artist.filter((i) => counted(songs[i]) && fits(i));
+    const local = ORDERS.artist.filter((i) => counted(songs[i]) && fits(i) && kept(i));
     const close = answer && answer.q === q ? listOf(answer.data.library).map((h) => byIndex.get(Number(h && h.id)))
-      .filter((i) => i !== undefined && local.indexOf(i) < 0) : [];
+      .filter((i) => i !== undefined && kept(i) && local.indexOf(i) < 0) : [];
     const mine = local.concat(close);
     const shown = mine.slice(0, MINE_SHOWN);
     const groups = new Map();
@@ -1467,7 +1494,7 @@
       const theirs = g.mine.slice();
       for (const item of g.model ? g.model.items : []) {
         if (item.mine !== undefined) {
-          if (!drawn.has(item.mine)) {
+          if (!drawn.has(item.mine) && kept(item.mine)) {
             drawn.add(item.mine);
             theirs.push(item.mine);
           }
@@ -1498,6 +1525,9 @@
       allMine.appendChild(button("All " + mine.length + " of your songs", "small", () => leaveAll(true)));
     }
     allMine.hidden = !allMine.childNodes.length;
+    const said = keptSaid();
+    if (keptNote.firstChild.textContent !== said) keptNote.firstChild.textContent = said;
+    keptNote.hidden = !said;
     notesBox.replaceChildren(...(model ? notesOf(model) : []));
   };
   // Under the groups: a name LaCuerda's index has no artist by, under a letter its listings aren't read to yet (their
@@ -1727,6 +1757,7 @@
   if (server) {
     const head = el("div", "results-head");
     head.appendChild(button("Back to your songs", "small", () => leaveAll(true), "Back to your songs (Escape)"));
+    head.appendChild(keptNote);
     allMine.hidden = true;
     found.append(head, allMine, groupsBox, notesBox);
   }

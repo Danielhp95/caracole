@@ -1904,15 +1904,20 @@ def test_an_auto_sheet_from_youtube_audio_shows_where_it_came_from(conn, cfg, tm
 
     line = line_of(shown, "Creep")
     assert re.search(r'<span class="line-sources"><span class="source letters"[^>]*aria-label="from YouTube"', line), line
-    # Its button says what it opens ("Auto sheet PDF"), as its mark says where that came from: no badge.
+    # Its button says what it opens ("Auto sheet PDF"), as its mark says where that came from: no badge. A touch
+    # screen shows no title, and YouTube's mark says only where the audio came from: the button's name says it is an
+    # auto sheet too, for a screen reader.
     assert re.search(r'<div class="line-action"><a [^>]*title="Auto sheet PDF"[^>]*>Open PDF</a>', line), line
+    assert 'aria-label="Open PDF of Creep by Radiohead, an auto sheet"' in line, line
     assert ">Auto sheet<" not in line
     # The video waits behind the line's ⋯, with the rest of what a card said.
     note = re.search(r'<p class="youtube">(.*?)</p>', panel_of(line), re.S)
     assert note and note.group(1).startswith("Auto sheet from YouTube audio · <a"), line
     assert 'href="https://www.youtube.com/watch?v=XFkzRNyygfk"' in note.group(1)
     assert "Creep (Radiohead - Topic) ↗" in note.group(1)
-    assert 'aria-label="from the audio (auto-chords)"' in line_of(shown, "斑马，斑马")
+    zebra = line_of(shown, "斑马，斑马")
+    assert 'aria-label="from the audio (auto-chords)"' in zebra
+    assert 'aria-label="Open PDF of 斑马，斑马 by 宋冬野, an auto sheet"' in zebra, zebra
 
 
 def layout_of(dom: str) -> dict:
@@ -2462,6 +2467,22 @@ LINES = """(() => {
 })()"""
 
 
+# The list's top scrolled to just under the bar kept at the top, as a laptop reads down a library: the lines and the
+# artists' names whole in sight under the bar, then.
+IN_VIEW = """(() => {
+  const bar = document.querySelector(".searchbar");
+  const groups = document.querySelector("#list .groups");
+  window.scrollTo(0, groups.getBoundingClientRect().top + scrollY - bar.getBoundingClientRect().height);
+  const under = bar.getBoundingClientRect().bottom;
+  const whole = (selector) => Array.from(document.querySelectorAll(selector)).filter((n) => {
+    const r = n.getBoundingClientRect();
+    return r.height > 0 && r.top >= under - 0.5 && r.bottom <= innerHeight + 0.5;
+  }).length;
+  return { lines: whole("#list article.line"), heads: whole("#list section.artist > h2"), under: Math.round(under),
+           top: Math.round(groups.getBoundingClientRect().top), screen: innerHeight };
+})()"""
+
+
 def busy_library(conn, cfg):
     """Four artists of eight songs each, long names among them, each song with a sheet, its lyrics and a key; some
     in review, some wanted."""
@@ -2476,16 +2497,24 @@ def busy_library(conn, cfg):
 
 
 @in_chromium
-def test_about_thirty_lines_fit_a_laptop_screen_and_a_phone_shows_two_lines_a_song(conn, cfg, tmp_path):
+def test_a_laptop_screen_shows_twenty_odd_lines_under_the_bar_and_a_phone_two_lines_a_song(conn, cfg, tmp_path):
     from helpers.targets import noted, noting
 
     busy_library(conn, cfg)
-    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), noting("data-lines", LINES)))
+    script = noting("data-lines", LINES) + noting("data-view", IN_VIEW)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), script))
 
-    wide = noted(dump_dom(path, tmp_path, size="1280,800"), "data-lines")
+    dom = dump_dom(path, tmp_path, size="1280,800")
+    wide = noted(dom, "data-lines")
     assert wide["page"] == 1280 and len(wide["heights"]) == 32 and wide["scroll"] <= wide["page"], wide
     assert set(wide["rows"]) == {1}, wide  # a song a line
-    assert wide["screen"] // max(wide["heights"]) >= 28, wide  # about thirty to a laptop's screen
+    # 24 px a line, no less: its buttons keep the 24 px a pointer's target needs (WCAG 2.5.8), a pixel's slack.
+    assert max(wide["heights"]) <= 25, wide
+    # Read down under the bar, a laptop's screen (713 px of it the page's) holds twenty-odd lines and the names of
+    # their artists: 21 and 3 today, two lines to spare.
+    view = noted(dom, "data-view")
+    assert abs(view["top"] - view["under"]) <= 1 and view["screen"] == wide["screen"], view
+    assert view["lines"] >= 19 and view["lines"] + view["heads"] >= 22, view
 
     for touch in (False, True):
         phone = noted(dump_dom(path, tmp_path, size="390,844", touch=touch), "data-lines")

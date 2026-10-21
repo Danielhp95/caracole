@@ -394,6 +394,36 @@ def test_get_it_looks_the_song_up_and_its_line_says_how_it_goes(cfg, live, brows
                         "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
 
 
+# A line's "⋯" opened, and the names of the buttons it holds.
+OFFERS = ("((a) => { a.querySelector('.line-more').click(); "
+          "return [...a.querySelectorAll('.line-panel button')].map((b) => b.textContent); })")
+
+
+def test_a_song_get_it_brought_offers_no_songbook_until_the_page_is_loaded_again(cfg, live, browser):
+    # Select knows the songs the page was loaded with: on a song Get it brought, Add to a songbook… would do nothing,
+    # so its lines leave it out until the page is loaded again; a song of yours among the results has it.
+    base, queue, _ = live
+    sites(cfg, **WONDERWALL)
+    library(cfg, ("Oasis", "Wonderwall"))
+    browser.open(base + "#q=wonderwall&all=1")
+    assert browser.wait(f"!!document.querySelector(\"{RYAN}\")")
+    browser.click(f"{RYAN} .line-action button")
+    posted(queue)
+    line = "document.querySelector('#results .progress').closest('article')"
+    assert browser.wait("!!document.querySelector('#results .progress')")
+    assert browser.wait(f"{line}.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
+    assert browser.wait(f"{line}.querySelector('.line-action a') && "
+                        f"{line}.querySelector('.line-action a').textContent === 'Open PDF'")  # the song's line now
+    assert "Add to a songbook…" not in browser.js(f"{OFFERS}({line})")
+    oasis = ("[...document.querySelectorAll('#results section.artist')].find((g) => "
+             "g.querySelector('.artist-name').textContent === 'Oasis').querySelector('article.line')")
+    assert "Add to a songbook…" in browser.js(f"{OFFERS}({oasis})")
+    browser.press("Escape")  # its line under the bar, as the new song's
+    assert browser.wait("!document.getElementById('requested').hidden && "
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
+    assert "Add to a songbook…" not in browser.js(f"{OFFERS}(document.querySelector('#requested article'))")
+
+
 def test_a_newer_answer_keeps_the_line_whose_request_runs_and_its_request_line(cfg, live, browser):
     # Typed on, the list on the screen is the older answer's until the newer comes. A Get it tapped there keeps its
     # line, and the line its request line, when the newer answer is drawn; back to your songs, its card.
@@ -603,6 +633,40 @@ def test_escape_returns_to_the_list_with_its_filter(cfg, live, browser):
     assert browser.wait(f"{GRID}.length === 2")
 
 
+def same(expression, value):
+    """A JavaScript condition: the expression's value, as JSON, is ``value``'s."""
+    return f"JSON.stringify({expression}) === {json.dumps(json.dumps(value, separators=(',', ':'), ensure_ascii=False))}"
+
+
+def test_your_songs_among_the_results_keep_to_the_status_buttons_and_the_artist_and_the_results_say_so(cfg, live,
+                                                                                                       browser):
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4), ("stone-temple-pilots", "creep", 2)])
+    creep, _, _ = library(cfg, ("Radiohead", "Creep"), ("Radiohead", "Karma Police"), ("Stone Temple Pilots", "Creep"))
+    conn = db.connect(cfg.db_path)
+    update_song(conn, creep.id, status="found")
+    conn.commit()
+    conn.close()
+    note = "document.querySelector('#results .filtered')"
+    browser.open(base + "#show=wanted")
+    search(browser, "creep")
+    assert browser.wait(f"!{BUSY} && document.getElementById('found').dataset.query === 'creep'")
+    # Wanted pressed: of your songs, the wanted Creep alone; Radiohead's, found, nowhere, though UG has it.
+    assert browser.wait(same(LINES, [["Stone Temple Pilots", [["Creep", "yours"]]]])), browser.js(LINES)
+    assert browser.js(f"{note}.firstChild.textContent") == "Your songs here: wanted"
+    browser.click("#results .filtered button")  # Show all of yours
+    every = [["Radiohead", [["Creep", "yours"]]], ["Stone Temple Pilots", [["Creep", "yours"]]]]
+    assert browser.wait(same(LINES, every)), browser.js(LINES)
+    assert browser.js(f"{note}.hidden") is True and "show=" not in browser.js("location.hash")
+    # An artist's name pressed in the list, then typed: their songs alone of yours, whatever the sites have.
+    browser.press("Escape")
+    assert browser.wait("document.getElementById('results').hidden")
+    browser.click("#list section.artist button.artist")  # Radiohead
+    search(browser, "creep")
+    assert browser.wait(same(LINES, [["Radiohead", [["Creep", "yours"]]]])), browser.js(LINES)
+    assert browser.js(f"{note}.firstChild.textContent") == "Your songs here: by Radiohead"
+
+
 def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
@@ -641,13 +705,14 @@ def test_the_bar_and_its_results_fit_a_phone(cfg, live, phone):
           gtptabs=["https://gtptabs.com/tabs/18/the-red-hot-chili-peppers-and-friends/a-rather-long-song-title-1.html"],
           musescore=["https://musescore.com/song/a_rather_long_song_title_1-5"])
     removed(cfg, "The Red Hot Chili Peppers and Friends", "A Rather Long Song Title 9")
-    phone.open(base)
+    phone.open(base + "#show=found")  # Found pressed: the results' head says so, with Show all of yours
     # The box alone across the bar, a thumb's height: typing searches, so no button beside it.
     field = phone.js("(() => { const q = document.getElementById('q').getBoundingClientRect(); "
                      "return [q.left, innerWidth - q.right, q.height]; })()")
     assert field[0] <= 17 and field[1] <= 17 and field[2] >= 44, field
     search(phone, "a rather long song title")
     assert phone.wait(f"{HITS} >= 4 && !!document.querySelector('#results .removed-hit')")
+    assert phone.js("document.querySelector('#results .filtered').getClientRects().length") == 1
     assert phone.js(NO_SIDEWAYS)
     small = phone.js(small_targets())
     assert small == [], small

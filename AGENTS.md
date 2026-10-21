@@ -85,7 +85,10 @@ Rules a change there keeps (the Invariants below are the others):
   There, library.js's `mergeSites` puts your songs and every index's rows under one header an
   artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
   `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line
-  rows.js's `indexLine`; a removed song's line asks for it again as the request form does.
+  rows.js's `indexLine`; a removed song's line asks for it again as the request form does. Your
+  songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
+  do. select.js knows only the songs the page was loaded with: a line offers Add to a songbook…
+  for those alone.
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of
   library_assets/, inlined byte for byte in the order of `library_page.STYLESHEETS`, `SCRIPTS`
   and `TEMPLATES`, where a new file is listed (test_library_assets.py).

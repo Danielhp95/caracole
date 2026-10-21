@@ -1662,9 +1662,11 @@ It shows your songs as dense lines, grouped by artist: each artist's name over
 their songs, artists A to Z ("The Beatles" under B, Chinese names by their
 pinyin), with how many of their songs you have ("Soda Stereo · you have 2",
 all of them, whatever the search or a filter leaves out), and their songs A to
-Z under it. A line is a song: about thirty to a
-laptop's screen, one line each; on a phone two lines a song, the title and its
-button, then the rest under the title. A line has the song's title, which
+Z under it. A line is a song, one line each on a laptop, 24 px tall with a
+mouse (its buttons no smaller than a pointer needs): read down under the
+search box, a laptop's screen holds twenty-odd lines with their artists'
+names. On a phone two lines a song, the title and its button, then the rest
+under the title. A line has the song's title, which
 opens its sheet (the sheet viewer, see [The sheet viewer](#the-sheet-viewer),
 else the PDF, else the text); its status, one word: Found, Wanted, Needs review
 when caracole isn't sure of the match, or Not found when the offline index has
@@ -1676,7 +1678,8 @@ from](#where-each-file-came-from)); and its one button, Open (Open PDF, Open
 text), or, on the page `caracole serve` serves, Fetch now for a wanted song
 (Pick the match for one that needs review first, and Removing… while caracole
 removes it). An auto sheet says so by its ♪ mark (YouTube's, when its audio came
-from there) and its button's name, "Auto sheet PDF".
+from there), by its button's tooltip, "Auto sheet PDF", and to a screen reader
+by the button's name, "Open PDF of Creep by Radiohead, an auto sheet".
 
 Everything else a song has waits under its line's "⋯": its key in words and
 where it came from ("Key A minor (from the tab)", "Key C major (estimated from
@@ -1692,8 +1695,10 @@ PDF of this version); its other files (the PDF, the text, the ChordPro file,
 the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files) and the
 Guitar Pro versions to download from Ultimate Guitar; its MuseScore pages,
 each a possible match, as on the to-do page; for a song without a sheet, its
-search and buy links; **Add to a songbook…** (see Songbooks, below); and,
-served, Look in the index and Remove…. When Fetch now has the line's button,
+search and buy links; **Add to a songbook…** (see Songbooks, below), for a
+song the page had when it was loaded (one that Get it or a request brought
+since has it once the page is loaded again); and, served, Look in the index
+and Remove…. When Fetch now has the line's button,
 the sheet is the first of its files there, and its title opens it all the same.
 A Guitar Pro file caracole downloaded names its site, as `Guitar Pro 1 ·
 gtptabs.com`, and a score its format, as `Score 1 (MuseScore)`; a score's PDF
@@ -2257,7 +2262,12 @@ with it. A KEY that is no key exits with status 2.
   you type, here as on the file, and from the third letter (the second with a
   Chinese character in it) it searches the sites too, a moment after you stop:
   no Enter, and no button. The list and its buttons make way for the results,
-  under the same artist headers as the list's, each header counting the songs
+  your songs among them still keeping to the status buttons, the Key menu and
+  an artist's name you pressed, which the results' head says ("Your songs
+  here: wanted · by Soda Stereo · in A minor"), with Show all of yours, which
+  lets every song of yours show, there and in the list; the sites' songs are
+  what the sites have, whatever the buttons show. The results come under the
+  same artist headers as the list's, each header counting the songs
   of theirs you have and, for an artist the query names, the songs Ultimate
   Guitar's, LaCuerda's and gtptabs.com's indexes list of theirs ("Estopa · you
   have 2 · UG 60 · LaCuerda 159 · Guitar Pro 12": Guitar Pro is gtptabs.com's
