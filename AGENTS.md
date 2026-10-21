@@ -169,8 +169,9 @@ tombstones it leaves are songs.py's, in the `removed` table).
   queue running a fake `caracole get`; test_web_page_lacuerda.py, LaCuerda's group, an artist page
   read by slug or by name, and a picked song's card), the viewer's scrolling (test_viewer_scroll.py:
   a page on `dump_dom`'s virtual time draws no frames), its bar (test_viewer_bar.py: a finger's drag
-  is touch events, as `Input.synthesizeScrollGesture` scrolls nothing headless) and its settings and
-  chord card, docked or beside the song (test_viewer_panels.py), which share helpers/viewer_pages.py:
+  is touch events, as `Input.synthesizeScrollGesture` scrolls nothing headless), its settings and
+  chord card, docked or beside the song (test_viewer_panels.py), and its rail of necks from 1200 px
+  (test_viewer_necks.py), which share helpers/viewer_pages.py:
   a viewer written and opened in it (`written`, `viewer`), a finger's `drag`, `tap` and `tap_at`,
   `rest` until the page stops gliding, and keys. Both
   resolve no host name (`helpers.browser.NO_LOOKUPS`), and their tests are `@in_chromium` too.

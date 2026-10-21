@@ -328,7 +328,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   .card #alts { flex-wrap: wrap; margin: 0; padding: 0; overflow: visible; }
 }
 @media print {
-  .bar, .pill, .sheet-ui, .back, .strip, .foot, .noscript { display: none !important; }
+  .bar, .pill, .sheet-ui, .back, .necks, .strip, .foot, .noscript { display: none !important; }
   body { background: #fff; color: #000; }
   .page { max-width: none; padding: 0; }
   .c { color: #b4441e; }
@@ -338,7 +338,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 /* A chord's neck: its positions as dots in four colours (--p1 to --p4), the chosen one bolder, the tab's
    own ringed. Open strings are rings at the nut. */
 .neck { display: block; width: 100%; height: auto; color: var(--muted); }
-.nk-string, .nk-fret { stroke: currentColor; stroke-width: .7; opacity: .6; }
+.nk-string, .nk-fret { stroke: currentColor; stroke-width: .7; opacity: .8; }  /* 3:1 at least, light and dark */
 .nk-nut { fill: currentColor; }
 .nk-inlay { fill: currentColor; opacity: .35; }
 .nk-dot, .nk-open { stroke: var(--surface); stroke-width: 1; }
@@ -354,3 +354,33 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .nk-dot.tabs { stroke: var(--text); stroke-width: 1.4; }
 .nk-dot.chosen, .nk-open.chosen { stroke-width: 2; }
 .nk-dot.chosen { stroke: var(--text); }
+
+/* From 1200 px wide: the rail of necks on the left (viewer.js shows it, and says so in data-necks), which the
+   song and the bar move over for, as they do for the settings' rail on the right. It scrolls on its own, and
+   a wheel or a finger at its end leaves the song where it is. */
+:root { --necks: 300px; }
+@media screen and (min-width: 1200px) {
+  .necks { position: fixed; z-index: 7; top: 0; bottom: 0; left: 0; width: var(--necks); overflow-y: auto;
+    overscroll-behavior: contain; padding: 4px 16px calc(18px + env(safe-area-inset-bottom));
+    border-right: 1px solid var(--border); background: var(--surface); scrollbar-width: thin; }
+  html[data-necks] body { padding-left: var(--necks); }
+  html[data-necks] .bar { left: var(--necks); }
+}
+.nk { padding: 12px 0 10px; }
+.nk + .nk { border-top: 1px solid var(--border); }
+.nk-name { margin: 0 0 6px; font-weight: 700; }
+.nk .neck { cursor: pointer; }  /* a dot clicked plays its shape */
+.nk-none { margin: 0; color: var(--muted); font-size: .82rem; }
+/* The legend: each position's colour and where it sits, a button to play it; the one played is outlined. */
+.nk-legend { display: flex; flex-wrap: wrap; gap: 2px 4px; margin-top: 6px; }
+.nk-legend button { display: inline-flex; align-items: center; gap: 6px; min-width: 44px; min-height: 44px;
+  padding: 0 8px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--text);
+  font: inherit; font-size: .8rem; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.nk-legend button[aria-checked="true"] { border-color: var(--text); font-weight: 650; }
+@media (hover: hover) { .nk-legend button:hover { background: var(--raised); } }
+.sw { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+.sw.p0 { background: var(--p1); }
+.sw.p1 { background: var(--p2); }
+.sw.p2 { background: var(--p3); }
+.sw.p3 { background: var(--p4); }
+.sw.tabs { box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 2.5px var(--text); }  /* ringed, as on the neck */

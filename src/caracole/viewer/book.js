@@ -50,7 +50,8 @@
     toc.hidden = true;
     for (const s of sections) s.hidden = s !== current;
     // The names the viewer looks for.
-    for (const [from, to] of [["facts-", "facts"], ["strip-", "strip"], ["sheet-", "sheet"], ["data-", "song"]]) {
+    for (const [from, to] of [["facts-", "facts"], ["necks-", "necks"], ["strip-", "strip"], ["sheet-", "sheet"],
+      ["data-", "song"]]) {
       const el = document.getElementById(from + n);
       if (el) el.id = to;
     }
@@ -110,7 +111,8 @@
   let start = null;
   document.addEventListener("touchstart", (e) => {
     const target = e.target instanceof Element ? e.target : null;
-    start = e.touches.length === 1 && !busy() && !(target && target.closest(".tab, .strip, .sheet-ui, .pill, .bar, input"))
+    start = e.touches.length === 1 && !busy()
+      && !(target && target.closest(".tab, .necks, .strip, .sheet-ui, .pill, .bar, input"))
       ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
   }, { passive: true });
   document.addEventListener("touchend", (e) => {

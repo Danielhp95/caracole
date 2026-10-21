@@ -318,7 +318,9 @@
     const fretted = Array.from(position[0]).filter((c) => c !== "x" && c !== "0").map((c) => Number(c) + up);
     return up === 0 && position[0].includes("0") ? "open" : "fret " + Math.min(...fretted);
   });
-  window.caracole = { neck, neckLabels };
+  // The highest fret a position reaches up the neck (0 for open strings alone).
+  const topFret = (position) => Math.max(0, ...Array.from(String(position[0])).filter((c) => c !== "x" && c !== "0")
+    .map((c) => Number(c) + (Number(position[2]) || 1) - 1));
 
   // --- drawing the page --------------------------------------------------------------------------
   const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
@@ -350,14 +352,27 @@
   // A chord's chosen position holds while the chord is the same: once its name or its number of
   // shapes changes (a transposition, a mode, a capo, a swap), it starts at its first shape again.
   const atSeen = {};
+  const atSign = (i) => {
+    const rep = own.call(written, i) ? current(i) : null;
+    return rep ? label(i, rep) + "|" + shapesOf(rep, shift()).list.length : "";
+  };
   const keepPositions = () => {
     for (const i of Object.keys(state.at)) {
-      const rep = own.call(written, i) ? current(i) : null;
-      const sign = rep ? label(i, rep) + "|" + shapesOf(rep, shift()).list.length : "";
-      if (!rep || state.at[i] >= Number(sign.split("|")[1]) || (i in atSeen && atSeen[i] !== sign)) {
+      const sign = atSign(i);
+      if (!sign || state.at[i] >= Number(sign.split("|")[1]) || (i in atSeen && atSeen[i] !== sign)) {
         delete state.at[i];
         delete atSeen[i];
       } else atSeen[i] = sign;
+    }
+  };
+  // A position chosen now, for the chord as it is now: it holds until that changes.
+  const setAt = (i, n) => {
+    if (n > 0) {
+      state.at[i] = n;
+      atSeen[i] = atSign(i);
+    } else {
+      delete state.at[i];
+      delete atSeen[i];
     }
   };
   const render = () => {
@@ -426,6 +441,7 @@
     $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
     drawSpeed();
     drawStrip();
+    drawNecks();  // before layout(), which measures the song beside the rail
     layout();  // fit() too
     if (!card.hidden) drawCard();  // an open card follows the key, the mode and the capo
     dock();
@@ -536,6 +552,129 @@
     }
   };
 
+  // --- the rail of necks: a wide screen's, on the left -----------------------------------------------
+  // From 1200 px wide (viewer.css), each chord the sheet shows, once, in the order it first comes (two
+  // chords shown by one name are one), with every position of it along a neck and a legend naming them.
+  // Picking one, on the neck or in the legend, makes it the shape the strip and the chord's card show, at
+  // every place of that chord, kept with the rest (state.at). A legend is a group of radio buttons: one
+  // Tab stop a chord, on the shape played, and the arrows go from shape to shape. Narrower, the card alone.
+  const necksEl = $("necks");
+  const railWide = window.matchMedia("(min-width: 1200px)");
+  const shownAs = (name) => {  // the chords the sheet shows by this name, by index
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const rep = own.call(written, String(i)) ? current(String(i)) : null;
+      if (rep && label(String(i), rep) === name) out.push(String(i));
+    }
+    return out;
+  };
+  const drawNecks = () => {
+    if (!necksEl) return;
+    const on = count > 0 && railWide.matches;
+    necksEl.hidden = !on;
+    if (on) doc.dataset.necks = "1";  // the song and the bar move over for it
+    else delete doc.dataset.necks;
+    const active = necksEl.contains(document.activeElement) ? document.activeElement.closest(".nk") : null;
+    const focused = active ? Array.prototype.indexOf.call(necksEl.children, active) : -1;
+    necksEl.textContent = "";
+    if (!on) return;
+    const drawn = new Set();
+    for (let i = 0; i < count; i++) {
+      const c = String(i);
+      const rep = own.call(written, c) ? current(c) : null;
+      if (!rep) continue;  // a chord caracole can't read: nothing to play
+      const name = label(c, rep);
+      if (drawn.has(name)) continue;
+      drawn.add(name);
+      const group = necksEl.appendChild(document.createElement("div"));
+      group.className = "nk";
+      group.dataset.name = name;
+      const head = group.appendChild(document.createElement("p"));
+      head.className = "nk-name";
+      head.textContent = name;
+      const shapes = shapesOf(rep, shift());
+      if (!shapes.list.length) {
+        const none = group.appendChild(document.createElement("p"));
+        none.className = "nk-none";
+        none.textContent = "No shape to show for this chord.";
+        continue;
+      }
+      const chosen = Math.min(state.at[c] || 0, shapes.list.length - 1);
+      group.appendChild(neck(shapes.list, { name, chosen, mine: shapes.mine,
+        frets: Math.max(15, ...shapes.list.map(topFret)) }));
+      const legend = group.appendChild(document.createElement("div"));
+      legend.className = "nk-legend";
+      legend.setAttribute("role", "radiogroup");
+      legend.setAttribute("aria-label", name);
+      neckLabels(shapes.list, shapes.mine).forEach((words, p) => {
+        const b = legend.appendChild(document.createElement("button"));
+        b.type = "button";
+        b.setAttribute("role", "radio");
+        b.setAttribute("aria-checked", p === chosen ? "true" : "false");
+        b.tabIndex = p === chosen ? 0 : -1;
+        b.dataset.p = String(p);
+        const swatch = b.appendChild(document.createElement("span"));
+        swatch.className = "sw p" + (p % 4) + (p < shapes.mine ? " tabs" : "");
+        swatch.setAttribute("aria-hidden", "true");
+        b.appendChild(document.createTextNode(words));
+      });
+    }
+    // Drawn anew under the focus: it goes to the shape now played of the same chord.
+    const back = focused >= 0 ? necksEl.children[focused] : null;
+    const to = back && back.querySelector('[aria-checked="true"]');
+    if (to) to.focus({ preventScroll: true });
+  };
+  // A position picked for a chord: every place the sheet shows it plays it, and its card, when it shows
+  // that chord as it is played, turns to it.
+  const pickPosition = (name, p) => {
+    const places = shownAs(name);
+    for (const i of places) setAt(i, p);
+    if (!card.hidden && places.indexOf(shown.i) >= 0 && shown.pick === choice(shown.i)) shown.at = p;
+    drawStrip();
+    drawNecks();
+    if (!card.hidden) drawCard();
+    save();
+  };
+  // The neck clicked: the position of the dot nearest to the pointer, within a fingertip of it.
+  const nearestPosition = (group, x, y) => {
+    let best = -1, reach = 20;
+    for (const dot of group.querySelectorAll("svg.neck circle[data-p]")) {
+      const r = dot.getBoundingClientRect();
+      const d = Math.hypot(r.left + r.width / 2 - x, r.top + r.height / 2 - y);
+      if (d < reach) {
+        reach = d;
+        best = Number(dot.dataset.p);
+      }
+    }
+    return best;
+  };
+  if (necksEl) {
+    necksEl.addEventListener("click", (e) => {
+      const target = e.target instanceof Element ? e.target : null;
+      const group = target && target.closest(".nk");
+      if (!group) return;
+      const radio = target.closest("[role=radio]");
+      const p = radio ? Number(radio.dataset.p)
+        : target.closest("svg.neck") ? nearestPosition(group, e.clientX, e.clientY) : -1;
+      if (p >= 0) pickPosition(group.dataset.name, p);
+    });
+    const STEPS = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+    necksEl.addEventListener("keydown", (e) => {
+      const radio = e.target instanceof Element ? e.target.closest("[role=radio]") : null;
+      if (!radio || !own.call(STEPS, e.key) || e.altKey || e.ctrlKey || e.metaKey) return;
+      e.preventDefault();
+      e.stopPropagation();  // in a songbook the arrows go from song to song (book.js), but not from here
+      const all = radio.parentElement.children.length;
+      pickPosition(radio.closest(".nk").dataset.name, (Number(radio.dataset.p) + STEPS[e.key] + all) % all);
+    });
+    // The window widened past 1200 px, or narrowed under it: the rail comes or goes, and the song with it.
+    railWide.addEventListener("change", () => {
+      drawNecks();
+      layout();
+      place();
+    });
+  }
+
   // --- the chord card: shapes, and chords to play instead ----------------------------------------
   // ``el`` is the chord tapped (or the strip's button): the card is placed by it, from 900 px wide,
   // and the focus goes back to it. Another chord tapped while the card is open fills it in its place.
@@ -633,9 +772,9 @@
   // The position shown is kept for the chord played now (not one tried among the alternatives).
   const keepAt = () => {
     if (shown.pick !== choice(shown.i)) return;
-    if (shown.at > 0) state.at[shown.i] = shown.at;
-    else delete state.at[shown.i];
+    for (const i of shownAs(label(shown.i, current(shown.i)))) setAt(i, shown.at);  // the rail's one chord
     drawStrip();
+    drawNecks();
     save();
   };
   $("prev").addEventListener("click", () => { shown.at = Math.max(0, shown.at - 1); drawCard(); keepAt(); });

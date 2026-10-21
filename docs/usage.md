@@ -1741,7 +1741,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   window to show it whole in two columns is shown in two, side by side; a
   longer one stays in one, as it would otherwise run down the first column
   and back up the second. The viewer measures again when the window or the
-  text size changes, and when the settings' rail opens beside the song.
+  text size changes, and when the settings' rail opens beside the song. From
+  1200 px the rail of necks (below) takes 300 px on the left, and the song is
+  measured beside it: two columns then need a wider window (at 1280 px a song
+  reads in one, at 1600 px two fit as they did at 1280 px without it).
 - **Tap a chord** for its fingerings: up to four shapes from chords-db, after
   any the sheet gives, with the fingers, the barre and the fret they start on
   (swipe, or ‹ ›, for the next). Every place the chord is played lights up
@@ -1760,6 +1763,18 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sheet of yours. It counts only for the very chord it was given for, and only
   where it plays that chord: transposed, Cadd9 becomes a Dadd9, with
   chords-db's shapes, and so does a capo moved off the sheet's fret.
+- **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
+  left lists each chord of the song once, in the order it first comes, with a
+  guitar neck (frets 0 to 15, the high e on top) showing every shape of it in
+  a colour of its own, the tab's own ringed, and a legend under it that names
+  them: "the tab's", "open", "fret 7". Click a shape, on the neck or in the
+  legend, to play it: the strip and the chord's card show it, and the address
+  keeps it, as the card's ‹ › do (and the rail follows the card's). In a
+  legend the arrow keys go from shape to shape; Tab stops once a chord. The
+  necks follow the key, the capo and the mode, and two chords shown by one
+  name (A# and Bb, transposed to B) share one neck. The rail scrolls on its
+  own, the song and the bar move over for it, and it isn't printed; on a
+  narrower screen or a phone, the chord's card is where the shapes are.
 - **The key line** under the title says how the song is played. With a capo,
   it names the key of the shapes you play, the capo and the key the song
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
@@ -1835,8 +1850,9 @@ The viewer remembers its settings for each song in the browser, the scroll
 speed and the text size among them. It keeps the transposition, the mode, the
 capo, the text size and the scroll speed in its address too
 (`sheet.html#t=2&mode=aeolian&fs=20&speed=8`), and so the shape chosen for a
-chord (`at=3.2`: chord 3, its third shape) and the chords played instead of
-others (`alt=ionian.0.7.maj7.`: mode, chord, root, suffix, bass), so a reload or
+chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
+chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
+suffix, bass), so a reload or
 Back keeps them where the browser keeps nothing, as when `caracole serve` sends it (see
 [caracole serve](#caracole-serve)). Its key is its sheet's, found as for
 info.json (see [The song's key](#the-songs-key)): the human sheet's from the
