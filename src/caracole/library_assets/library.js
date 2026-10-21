@@ -818,8 +818,8 @@
   };
   // An artist's group: a header that names them and counts the songs of theirs you have, "Soda Stereo · you have
   // 2" (``counts.mine``: all of them, whatever the search or a filter leaves out), and, while the served page searches
-  // the sites, the songs each site's index lists of theirs, "· UG 96 · LaCuerda 140" (``counts.ug``,
-  // ``counts.lacuerda``; ``counts.note``, any other words); then their lines. The name, once you have songs of theirs,
+  // the sites, the songs each site's index lists of theirs, "· UG 96 · LaCuerda 140 · Guitar Pro 12" (``counts.ug``,
+  // ``counts.lacuerda``, ``counts.gtptabs``: gtptabs.com's; ``counts.note``, any other words); then their lines. The name, once you have songs of theirs,
   // shows those alone (``artist.filter``, their sortArtist, else ``artist.key``).
   let groupSerial = 0;
   const artistGroup = (artist, items, counts) => {
@@ -840,7 +840,8 @@
       window.scrollTo(0, 0);
     }) : el("span", "artist-name", name));
     const said = [mine ? "you have " + mine : "", Number(c.ug) ? "UG " + Number(c.ug).toLocaleString("en") : "",
-      Number(c.lacuerda) ? "LaCuerda " + Number(c.lacuerda).toLocaleString("en") : "", c.note ? String(c.note) : ""]
+      Number(c.lacuerda) ? "LaCuerda " + Number(c.lacuerda).toLocaleString("en") : "",
+      Number(c.gtptabs) ? "Guitar Pro " + Number(c.gtptabs).toLocaleString("en") : "", c.note ? String(c.note) : ""]
       .filter(Boolean);
     if (said.length) heading.appendChild(el("span", "artist-counts", " · " + said.join(" · ")));
     section.appendChild(heading);
@@ -1421,7 +1422,7 @@
   // A name LaCuerda's index has no artist by, read by that name (the offer under the groups): their group, first.
   const readByName = (model, offer) => (page) => {
     const g = groupOf(model, String(page.group_key || ""), page.artist);
-    g.lacuerda = { artist: page.artist, slug: page.slug, songs: page.listed, known: page.total };
+    g.lacuerda = { artist: page.artist, slug: page.slug, songs: page.listed, known: page.total, gtptabs: page.gtptabs };
     model.order.splice(model.order.indexOf(g.key), 1);
     model.order.unshift(g.key);
     listLaCuerda(g, page);
@@ -1477,9 +1478,11 @@
       const tail = g.model ? tailOf(g.model) : null;
       if (!theirs.length && !items.length && !tail) continue;
       const you = theirs.length ? songs[theirs[0]] : named.get(key) || null;
+      const ug = (g.model && g.model.ug) || {};  // the artists the query names there, if any
+      const lc = (g.model && g.model.lacuerda) || {};
       const section = artistGroup({ key, name: you ? you.artist : g.model.name, filter: you ? you.sortArtist : "" },
-        [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: g.model && g.model.ug ? g.model.ug.songs : 0,
-          lacuerda: g.model && g.model.lacuerda ? g.model.lacuerda.songs : 0 });
+        [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: ug.songs, lacuerda: lc.songs,
+          gtptabs: Math.max(Number(ug.gtptabs) || 0, Number(lc.gtptabs) || 0) });
       if (tail) section.appendChild(tail);
       box.appendChild(section);
     }

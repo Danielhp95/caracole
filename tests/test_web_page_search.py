@@ -319,21 +319,43 @@ def test_index_lines_show_tab_counts_not_stars(cfg, live, browser):
     assert "★" not in text and "rating" not in text.lower() and "votes" not in text.lower()
 
 
+def sent(asked, query, timeout=10.0):
+    """Waits until the server got a search for ``query``."""
+    deadline = time.monotonic() + timeout
+    while query not in asked.queries():
+        if time.monotonic() > deadline:
+            raise AssertionError(f"the page never searched {query!r}: {asked.queries()}")
+        time.sleep(0.02)
+
+
 def test_typing_fast_shows_only_the_newest_answer(cfg, live, browser):
+    # Review Focus 3: the newest query's answer alone, whatever comes late; and your songs that match show at once
+    # and stay throughout, the sites' answer on its way, drawn, or an older one arriving late.
     base, _, asked = live
     sites(cfg, ug=[("radiohead", "creep", 4), ("radiohead", "karma-police", 2), ("muse", "hysteria", 3)])
+    library(cfg, ("Radiohead", "Creep"), ("Easy Star All-Stars", "Karma Police"))
+    yours = ("[...document.querySelectorAll('#results article.line[data-id]')].filter((a) => a.offsetParent !== null)"
+             ".map((a) => a.querySelector('h3').textContent)")
     browser.open(base)
-    asked.held, asked.only = threading.Event(), "creep"  # the first query's answer comes late
+    first = asked.held = threading.Event()  # the first query's answer comes late
+    asked.only = "creep"
     search(browser, "creep")
-    deadline = time.monotonic() + 10
-    while "creep" not in asked.queries() and time.monotonic() < deadline:
-        time.sleep(0.02)
+    sent(asked, "creep")
+    assert browser.js(yours) == ["Creep"] and browser.js(TITLES) == []  # yours, while the sites' answer is on its way
+    asked.held, asked.only = threading.Event(), None  # every later answer waits too, until the test lets it go
     search(browser, "karma police")  # typed over while the first answer is on its way
+    sent(asked, "karma police")
+    assert browser.js(yours) == ["Karma Police"] and browser.js(TITLES) == []  # at once, no answer yet
+    assert browser.js(BUSY)
+    asked.held.set()
     assert browser.wait(f"{TITLES}.join() === 'Karma Police'")
-    asked.held.set()  # the older answer, late: never drawn
+    assert browser.js(yours) == ["Karma Police"]
+    first.set()  # the older answer, late: never drawn
     time.sleep(0.6)
-    assert browser.js(f"{TITLES}.join()") == "Karma Police"
+    assert browser.js(f"{TITLES}.join()") == "Karma Police" and browser.js(yours) == ["Karma Police"]
     assert browser.js("document.getElementById('found').dataset.query") == "karma police"
+    assert browser.js(LINES) == [["Easy Star All-Stars", [["Karma Police", "yours"]]],
+                                 ["Radiohead", [["Karma Police", "ug"]]]]
 
 
 def test_typing_never_asks_a_music_site(cfg, live, browser):

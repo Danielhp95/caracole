@@ -2259,8 +2259,10 @@ with it. A KEY that is no key exits with status 2.
   no Enter, and no button. The list and its buttons make way for the results,
   under the same artist headers as the list's, each header counting the songs
   of theirs you have and, for an artist the query names, the songs Ultimate
-  Guitar's and LaCuerda's indexes list of theirs ("Estopa · you have 2 · UG 60
-  · LaCuerda 159"). Under an artist come your songs that match (up to five in
+  Guitar's, LaCuerda's and gtptabs.com's indexes list of theirs ("Estopa · you
+  have 2 · UG 60 · LaCuerda 159 · Guitar Pro 12": Guitar Pro is gtptabs.com's
+  songs with a file there, a title uploaded twice one song; none while
+  gtptabs.com is turned off). Under an artist come your songs that match (up to five in
   all, as their lines, with all they offer, a title opening its sheet, and All
   N of your songs above the groups when more match; a close match the filter
   missed, a typo say, too), the songs you removed that match (below), then what

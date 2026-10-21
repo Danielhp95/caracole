@@ -143,6 +143,20 @@ def test_estopa_is_lacuerdas_artist_with_their_songs_whose_get_it_keeps_that_she
     assert browser.wait("document.querySelector('#results .progress').dataset.tone === 'ready'", timeout=20)
 
 
+def test_an_artists_header_counts_their_songs_on_every_site_while_searching(cfg, live, browser):
+    # "Estopa · UG 2 · LaCuerda 159 · Guitar Pro 2": what each index lists of theirs, gtptabs.com's uploads of a
+    # title one song.
+    base, queue, _ = live
+    gtp = "https://gtptabs.com/tabs/31/estopa/"
+    sites(cfg, ug=[("estopa", "como-camaron", 3), ("estopa", "tu-calorro", 1)],
+          gtptabs=[gtp + "como-camaron.html", gtp + "como-camaron-2.html", gtp + "la-raja-de-tu-falda.html"])
+    lacuerda(cfg)
+    search(browser, base, "estopa")
+    assert browser.wait("document.getElementById('found').dataset.query === 'estopa'")
+    assert browser.js(GROUPS) == ["Estopa · UG 2 · LaCuerda 159 · Guitar Pro 2"]
+    assert queue.snapshot() == []
+
+
 def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_in_their_group(cfg, live, browser):
     base, queue, runner = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
@@ -166,7 +180,7 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
 def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_listed(cfg, live, browser):
     # The owner's "estopa", with LaCuerda's listings read as far as E and J only: the index can't tell, the page can.
     base, queue, runner = live
-    sites(cfg, ug=[("radiohead", "creep", 4)])
+    sites(cfg, ug=[("radiohead", "creep", 4)], gtptabs=["https://gtptabs.com/tabs/2/bunbury/el-extranjero.html"])
     lacuerda(cfg, complete=False)
     search(browser, base, "bunbury")
     assert browser.wait("!!document.querySelector('#results .read-page.unlisted button')")
@@ -177,7 +191,8 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     assert browser.wait(f"{TITLES}.length === 2", timeout=20)
     assert ("lacuerda", "--artist=bunbury") in runner.ran
     assert sorted(browser.js(TITLES)) == ["Infinito", "Lady Blue"]
-    assert browser.js(GROUPS)[0].startswith("Bunbury · LaCuerda")  # a group of their own, first
+    header = browser.js(GROUPS)[0]  # a group of their own, first, which counts their songs on gtptabs.com too
+    assert header.startswith("Bunbury · LaCuerda") and header.endswith(" · Guitar Pro 1"), header
     assert browser.js("document.querySelector('#results .read-page.unlisted')") is None
     # A name LaCuerda has no page for says so, with what it answered, and the button rests.
     search(browser, base, "caifanes")

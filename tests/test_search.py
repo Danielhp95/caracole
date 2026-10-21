@@ -420,6 +420,20 @@ def test_a_gtptabs_artist_filed_last_name_first_is_named_as_ultimate_guitar_name
     assert beatles.artist == "Beatles"  # no UG row: from its key
 
 
+def test_gtptabs_songs_counts_the_titles_gtptabs_com_lists_by_an_artist_each_once(conn):
+    # The "Guitar Pro 2" of an artist's header on the library page, while it searches.
+    from caracole.search import gtptabs_songs
+
+    gtptabs_pages(conn, GTP + "18/radiohead/creep.html", GTP + "18/radiohead/creep-2.html",
+                  GTP + "18/radiohead/karma-police.html", GTP + "18/radiohead.html",
+                  GTP + "20/stone-temple-pilots/creep.html", GTP + "10/john-elton/your-song.html",
+                  GTP + "10/john-elton/rocket-man.html", GTP + "2/beatles-the/yesterday.html")
+    assert gtptabs_songs(conn, "Radiohead") == 2  # Creep's two uploads are one song, the artist's page none
+    assert gtptabs_songs(conn, "Elton John") == 2  # filed last name first
+    assert gtptabs_songs(conn, "The Beatles") == 1 and gtptabs_songs(conn, "Stone Temple Pilots") == 1
+    assert gtptabs_songs(conn, "Muse") == 0 and gtptabs_songs(conn, "") == 0 and gtptabs_songs(conn, " — ") == 0
+
+
 def test_musescore_pages_are_found_by_their_whole_title_alone(conn):
     from caracole.search import search_musescore
 

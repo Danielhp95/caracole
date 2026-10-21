@@ -1614,6 +1614,35 @@ def test_an_artist_the_search_names_and_their_songs_carry_the_keys_of_their_grou
     assert as_json(get(app, "/api/artist?lacuerda=estopa"))["group_key"] == group
 
 
+def test_an_artist_the_search_names_says_how_many_songs_gtptabs_com_lists_of_theirs(app, cfg, conn):
+    # Their group's header on the library page: "Estopa · UG 2 · LaCuerda 159 · Guitar Pro 2", a title's uploads one
+    # song; none while gtptabs.com is turned off.
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+    from caracole.ug.index import mark_built, upsert_rows
+
+    upsert_rows(conn, [(77, "estopa", "como-camaron", "chords", "estopa/como-camaron-chords-77"),
+                       (78, "estopa", "tu-calorro", "chords", "estopa/tu-calorro-chords-78")], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+    lacuerda_index(conn)
+    gtp = "https://gtptabs.com/tabs/31/"
+    site_pages(conn, gtptabs=[gtp + "estopa/como-camaron.html", gtp + "estopa/como-camaron-2.html",
+                              gtp + "estopa/la-raja-de-tu-falda.html", gtp + "estopa.html",
+                              gtp + "estopa-y-amigos/vino-tinto.html"])
+    data = as_json(get(app, "/api/search?q=estopa"))
+    [ug], [lc] = data["artists"], data["lacuerda_artists"]
+    assert ug["gtptabs"] == lc["gtptabs"] == 2
+    assert as_json(get(app, "/api/artist?lacuerda=estopa"))["gtptabs"] == 2
+    assert as_json(get(app, "/api/search?q=joaquin%20sabina"))["lacuerda_artists"][0]["gtptabs"] == 0
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    app_off = WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok")
+    data = as_json(get(app_off, "/api/search?q=estopa"))
+    assert data["artists"][0]["gtptabs"] == data["lacuerda_artists"][0]["gtptabs"] == 0
+    assert as_json(get(app_off, "/api/artist?lacuerda=estopa"))["gtptabs"] == 0
+
+
 def test_a_row_of_a_song_of_yours_says_whether_its_artist_is_yours_by_name(app, conn):
     # The library page puts the rows of an artist under your artist's header only when they name the same artist (UG's
     # "Acdc" is your AC/DC): your cover matched to the original's tab is your song, not its artist yours.
@@ -1699,7 +1728,7 @@ def test_the_search_lists_lacuerdas_artists_and_songs_from_its_index(app, conn):
     [estopa] = data["lacuerda_artists"]
     assert {k: v for k, v in estopa.items() if k != "top"} == {
         "source": "lacuerda", "artist": "Estopa", "slug": "estopa", "url": LC + "estopa/", "songs": 159, "known": 2,
-        "score": 100.0, "via": "artist", "group_key": "estopa"}
+        "score": 100.0, "via": "artist", "group_key": "estopa", "gtptabs": 0}
     assert [{k: t[k] for k in ("title", "url", "sheet", "song")} for t in estopa["top"]] == [
         {"title": "Como Camarón", "url": LC + "estopa/como_camaron", "sheet": LC + "estopa/como_camaron-2.shtml",
          "song": mine.id}]

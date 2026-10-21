@@ -106,7 +106,9 @@ Rules a change there keeps (the Invariants below are the others):
   alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
   gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
   (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
-  and in `/api/search`'s `removed`, which the library page shows with Add again). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
+  and in `/api/search`'s `removed`, which the library page shows with Add again), and
+  `gtptabs_songs` counts an artist's songs on gtptabs.com (an artist row's `gtptabs` in `/api/search`, the
+  "Guitar Pro 12" of their header). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
   index), which must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
   except that a pattern in more than `KEYS_PER_PATTERN` keys (a common word) brings in its

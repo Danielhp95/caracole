@@ -8,10 +8,12 @@
                           searched, or not whole, with why. Each song's row has the two parts of its
                           identity key (``artist_key``, ``title_key``), and an artist's the first
                           (``group_key``): the library page puts what shares them on one line, and
-                          under one header
+                          under one header, which counts an artist's songs on each site (an artist's
+                          ``songs`` on theirs, ``gtptabs`` gtptabs.com's)
     GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
                           ``offset``, and yours by them; ``?lacuerda=SLUG`` (``?lacuerda_name=NAME``),
                           a LaCuerda artist's songs the index holds, and whether caracole read their page
+                          (and ``gtptabs``, as the search gives it)
     POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``), or the LaCuerda
                           song (``lacuerda``), you picked
     POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
@@ -258,7 +260,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     tops = [t for a in artists for t in a["top"]]
     library, hits = _rows(app, conn, mine, [*index, *tops], songs)
     hits, owned = hits[:len(index)], iter(hits[len(index):])
-    artists = [{**a, "top": [next(owned) for _ in a["top"]]} for a in artists]
+    artists = [{**a, "top": [next(owned) for _ in a["top"]], "gtptabs": _gtptabs_songs(app, conn, a["artist"])}
+               for a in artists]
     best = answer.best
     pick = None if best is None else (
         {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
@@ -270,10 +273,20 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "musescore": [{"source": h.source, "title": h.title, "url": h.url, "score": h.score}
                           for h in (musescore if "musescore" not in left_out else [])],
             "lacuerda": _lacuerda_rows(app, conn, lacuerda, songs),
-            "lacuerda_artists": [_lacuerda_artist_json(app, conn, a, songs) for a in lc_artists],
+            "lacuerda_artists": [{**_lacuerda_artist_json(app, conn, a, songs),
+                                  "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
             "lacuerda_leads": lacuerda_leads(index_found, lc_artists),
             "skipped": skipped, "partial": partial}
+
+
+def _gtptabs_songs(app: WebApp, conn: sqlite3.Connection, artist: str) -> int:
+    """How many songs gtptabs.com's index lists by an artist the query names (``search.gtptabs_songs``), which their
+    group's header on the library page says ("Estopa · UG 60 · LaCuerda 159 · Guitar Pro 12"); none while gtptabs.com
+    is turned off, as the search then lists none of its pages."""
+    from caracole.search import gtptabs_songs
+
+    return gtptabs_songs(conn, artist) if app.cfg.provider("gtptabs").enabled else 0
 
 
 def _after_reads(app: WebApp) -> None:
@@ -462,11 +475,12 @@ def api_lacuerda_artist(app: WebApp, slug: str, *, name: str = "") -> Response:
                 theirs = [LibraryHit(s, 100.0, "artist") for s in library_by_artist(songs, named.artist)]
                 library, _ = _rows(app, conn, theirs, [], songs)
                 hits = _lacuerda_rows(app, conn, lacuerda_songs(conn, named.slug)[:LACUERDA_SONGS], songs)
+                gtptabs = _gtptabs_songs(app, conn, named.artist)
         except (sqlite3.Error, OSError) as e:
             return json_response(503, {"error": f"The database can't be read: {e}"})
     return json_response(200, {"source": "lacuerda", "slug": named.slug, "artist": named.artist, "url": named.url,
                                "group_key": _group_key(named.artist), "listed": named.songs, "total": named.known,
-                               "read": named.known > 0, "songs": hits, "library": library})
+                               "read": named.known > 0, "gtptabs": gtptabs, "songs": hits, "library": library})
 
 
 def lacuerda_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
