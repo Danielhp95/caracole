@@ -20,7 +20,7 @@ ends the command's options, so a name may start with "-".
 
 A job's key is its command (``KEY``, then the command's words), so the same change sent twice
 is queued once; ``songbook_of`` reads back which songbook it changes, by its name before and
-after, for the page that follows it (app.py) and for its line (status.py): "Moving the song…",
+after, for the page that follows it (jobs_routes.py) and for its line (status.py): "Moving the song…",
 its step's label, while it runs; "Moved" once it is done (``DONE``); "Made" and "Added" with its
 songbook's page to open (``songbook_page``, ``OPENS``), as a song's "Ready" has its sheet.
 
@@ -48,6 +48,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
+from caracole.web.pages import Refused
+
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
     from caracole.songbook import Songbook
@@ -55,7 +57,7 @@ if TYPE_CHECKING:
 
 ROUTES = ("/songbook/make", "/songbook/add", "/songbook/move", "/songbook/remove", "/songbook/rename",
           "/songbook/delete")
-GET_MISSING = "/songbook/get"  # its songs without a sheet, looked up now (app.py's own handler)
+GET_MISSING = "/songbook/get"  # its songs without a sheet, looked up now (songbook_routes.py's own handler)
 MAX_POSITION = 100_000
 KEY = "songbook\x1f"  # a songbook job's key: this, then its command's words, this character between them
 # What a songbook job's line says once it is done, by its action.
@@ -64,14 +66,6 @@ DONE = {"make": "Made", "add": "Added", "move": "Moved", "remove": "Taken out", 
 # The changes whose line links the songbook's page once done ("Made · Open songbook"): its songs are new there.
 # Moved, taken out or renamed, its card's own buttons sit beside the line already.
 OPENS = frozenset({"make", "add", "render"})
-
-
-class FormRefused(Exception):
-    """A songbook form that can't be done: its status, a title and what to do."""
-
-    def __init__(self, status: int, title: str, message: str):
-        super().__init__(message)
-        self.status, self.title, self.message = status, title, message
 
 
 @dataclass(frozen=True)
@@ -86,7 +80,7 @@ class SongbookJob:
 
 def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
                  connect: Callable[[], sqlite3.Connection]) -> SongbookJob:
-    """The job a songbook form asks for; FormRefused when it can't be done, before anything is queued."""
+    """The job a songbook form asks for; Refused when it can't be done, before anything is queued."""
     from caracole.songbook import SongbookError, check_free, check_name, same_entry
 
     action = route.rsplit("/", 1)[-1]
@@ -95,7 +89,7 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
         try:
             check_free(books, name)
         except SongbookError as e:
-            raise FormRefused(409, "Taken", str(e)) from e
+            raise Refused(409, "Taken", str(e)) from e
         songs = _songs(form, connect)
         count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
         return _job(f'Make the songbook "{name}" ({count})', "Making the songbook", "make", name, *songs)
@@ -108,11 +102,11 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
     if action in ("move", "remove"):
         song = " ".join(form.get("song", "").split())
         if not song:
-            raise FormRefused(400, "Not a song", "Which song? The form names none.")
+            raise Refused(400, "Not a song", "Which song? The form names none.")
         entry = next((s for s in book.songs if same_entry(s, song)), None)
         if entry is None:
-            raise FormRefused(404, "Not in the songbook", f'"{song}" isn\'t in the songbook "{name}": reload the '
-                                                          "library to see what it holds.")
+            raise Refused(404, "Not in the songbook", f'"{song}" isn\'t in the songbook "{name}": reload the '
+                                                      "library to see what it holds.")
         if action == "remove":
             return _job(f'Take {entry} out of "{name}"', "Taking the song out", "remove", name, entry)
         try:
@@ -120,47 +114,47 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
         except ValueError:
             position = 0
         if not 1 <= position <= MAX_POSITION:
-            raise FormRefused(400, "Not a position", "A position is a whole number from 1, the first song.")
+            raise Refused(400, "Not a position", "A position is a whole number from 1, the first song.")
         return _job(f'Move {entry} to {position} in "{name}"', "Moving the song", "move", name, entry,
                     str(position))
     if action == "rename":
         try:
             new = check_name(form.get("new", ""))
         except SongbookError as e:
-            raise FormRefused(400, "Not a name", str(e)) from e
+            raise Refused(400, "Not a name", str(e)) from e
         try:
             check_free(books, new, but=book)
         except SongbookError as e:
-            raise FormRefused(409, "Taken", str(e)) from e
+            raise Refused(409, "Taken", str(e)) from e
         return _job(f'Rename "{name}" to "{new}"', "Renaming the songbook", "rename", name, new)
     return _job(f'Delete the songbook "{name}"', "Deleting the songbook", "delete", name)
 
 
 def _named(form: Mapping[str, str], library_dir: Path) -> tuple[str, list[Songbook]]:
-    """The name a form gives, as a songbook keeps it, and the songbooks of songbooks.toml; FormRefused for a
+    """The name a form gives, as a songbook keeps it, and the songbooks of songbooks.toml; Refused for a
     name a songbook can't have, or a file that can't be read."""
     from caracole.songbook import SongbookError, SongbookFileError, check_name, load_songbooks, songbooks_file
 
     try:
         name = check_name(form.get("name", ""))
     except SongbookError as e:
-        raise FormRefused(400, "Not a name", str(e)) from e
+        raise Refused(400, "Not a name", str(e)) from e
     try:
         return name, load_songbooks(songbooks_file(library_dir))
     except SongbookFileError as e:
-        raise FormRefused(503, "songbooks.toml can't be read",
-                          f"songbooks.toml can't be read: {e}. Fix it, then try again.") from e
+        raise Refused(503, "songbooks.toml can't be read",
+                      f"songbooks.toml can't be read: {e}. Fix it, then try again.") from e
 
 
 def _book(books: list[Songbook], name: str) -> Songbook:
-    """The songbook of that name, in any case; FormRefused when there is none."""
+    """The songbook of that name, in any case; Refused when there is none."""
     from caracole.songbook import find_songbook
 
     book = find_songbook(books, name)
     if book is None:
         listed = ", ".join(f'"{b.name}"' for b in books)
-        raise FormRefused(404, "No such songbook", f'No songbook named "{name}"'
-                          + (f": there are {listed}." if listed else ": reload the library."))
+        raise Refused(404, "No such songbook", f'No songbook named "{name}"'
+                      + (f": there are {listed}." if listed else ": reload the library."))
     return book
 
 
@@ -173,7 +167,7 @@ def _job(title: str, label: str, action: str, *args: str) -> SongbookJob:
 def missing_songs(form: Mapping[str, str], *, library_dir: Path, connect: Callable[[], sqlite3.Connection],
                   overrides: Overrides) -> tuple[str, list[Song]]:
     """The songbook a Get the missing songs form names, as songbooks.toml has it, and the songs of it a lookup
-    could get a sheet for now, in its order (``songbook.songs_to_get``); FormRefused when there is no such
+    could get a sheet for now, in its order (``songbook.songs_to_get``); Refused when there is no such
     songbook, or none of its songs to get."""
     from caracole.songbook import songbook_entries, songs_to_get
 
@@ -182,8 +176,8 @@ def missing_songs(form: Mapping[str, str], *, library_dir: Path, connect: Callab
     with closing(connect()) as conn:
         songs = songs_to_get(songbook_entries(conn, library_dir, overrides, book), overrides)
     if not songs:
-        raise FormRefused(409, "Nothing to get", f'Every song of "{book.name}" that the library has has a sheet '
-                                                 "already, or is ignored in overrides.toml: reload the library.")
+        raise Refused(409, "Nothing to get", f'Every song of "{book.name}" that the library has has a sheet '
+                                             "already, or is ignored in overrides.toml: reload the library.")
     return book.name, songs
 
 
@@ -235,18 +229,18 @@ def _songs(form: Mapping[str, str], connect: Callable[[], sqlite3.Connection]) -
 
     text = form.get("songs", "").strip()
     if not text:
-        raise FormRefused(400, "No songs", "Pick a song or more for the songbook first.")
+        raise Refused(400, "No songs", "Pick a song or more for the songbook first.")
     try:
         ids = list(dict.fromkeys(int(part) for part in text.split(",")))
     except ValueError as e:
-        raise FormRefused(400, "Not songs", "Which songs? The form's list can't be read: reload the library.") from e
+        raise Refused(400, "Not songs", "Which songs? The form's list can't be read: reload the library.") from e
     names = []
     with closing(connect()) as conn:
         for song_id in ids:
             try:
                 names.append(get_song(conn, song_id).display)
             except KeyError as e:
-                raise FormRefused(404, "No such song", "A song you picked isn't in the library any more: reload "
-                                                       "the library and pick again.") from e
+                raise Refused(404, "No such song", "A song you picked isn't in the library any more: reload "
+                                                   "the library and pick again.") from e
     return names
 

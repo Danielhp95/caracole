@@ -154,7 +154,7 @@ A song in review carries its candidates (``review_choices``), numbered as
 ``makePicker``): a disclosure that lists them, each with its UG names, its
 score, why the matcher thought of it and a link to its UG page. On the file
 it is read-only, with the ``caracole review --song`` line that picks one;
-served, it is a radio group posted to ``/review`` (web/app.py), in place of the
+served, it is a radio group posted to ``/review`` (web/review_routes.py), in place of the
 "Review first" button, and opening it takes the focus to the first candidate.
 A pick posts with fetch() as the other forms do, and the card's line says how
 it goes; while any request of the song waits or runs, the picker offers no

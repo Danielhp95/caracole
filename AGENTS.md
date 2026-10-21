@@ -105,24 +105,37 @@ tombstones it leaves are songs.py's, in the `removed` table).
   `Job.as_json` is a job as data), status.py (the one line a request shows on its card and
   on /jobs, read from the job's steps and, once it is over, from the song's state, never
   from which commands ran: a step's label is that line while it runs, "Adding to the
-  library…", and a lookup's running stage has one of its own, `status.STAGE_LINES`), app.py (the routes; `/jobs.json` and the forms answer the page's script in
-  JSON, every refusal as data; `/api/search` for search as you type, through search.py's
-  public functions (`find_index`, `found`, `search_gtptabs`, `search_musescore`,
-  `search_lacuerda`; `skipped`, the sites it left out and why, and `partial`, LaCuerda's
-  index while its listings are still read), one at a time, the newest first, an older one's
-  SQL interrupted once a newer waits (`set_progress_handler`); `/api/artist?key=` an
-  artist's songs, 50 at a time, `?lacuerda=SLUG` (or `?lacuerda_name=NAME`, once a page
-  read by name) a LaCuerda artist's that the index holds, and `POST /lacuerda/artist` queues
-  `caracole lacuerda --artist` (`jobs.LACUERDA_ARTIST`) to read their page, by `slug` or by
-  `name`; once one is over, the search answers kept are dropped (`_after_reads`);
-  `/api/jobs[/<id>]`, a read's with its `line` (status.py reads what LaCuerda answered from
-  the command's last line: "Read: ", "Not found: ", "Not read: "); every `/api/` read refused to
-  another site's fetch, `security.own_page_read`; `POST /lookup`, which runs a song your
-  library has, by its id or found from the UG pick (`_Mine`: its match, or its names'
-  `name_forms`), under its own names and writes no wanted.txt line for it;
-  `written_pages`, each kind of page caracole writes into the library by file name, with
-  its record and its CSP: the sheet viewers and songbook.html), songbooks.py (the songbook
-  forms, each queued as its `caracole songbook` command; Get the missing songs now,
+  library…", and a lookup's running stage has one of its own, `status.STAGE_LINES`), app.py (the
+  router; what every route shares: `Request`, `Response`, the answers' shapes, `WebApp.db()`,
+  `.overrides()`, `.submit()` and `.queued()`; the checks every request passes, every `/api/`
+  read refused to another site's fetch, `security.own_page_read`; `/<file>` and
+  `written_pages`, each kind of page caracole writes into the library by file name, with its
+  record and its CSP: the sheet viewers and songbook.html; a route refuses with
+  `pages.Refused`, which `WebApp.handle` answers as the message page, or to the page's script
+  as JSON, every refusal as data), and the routes, a module per area, each handler taking the
+  `WebApp`:
+  - library_routes.py: `/`, `POST /request` (`wanted_line`, which lookups share) and
+    `POST /fetch`.
+  - review_routes.py: the picker, `GET` and `POST /review` (`review_first`).
+  - jobs_routes.py: `/jobs`, `/jobs.json` (`views`, a job as the page's script reads it) and
+    `/api/jobs[/<id>]`, a read's with its `line` (status.py reads what LaCuerda answered from
+    the command's last line: "Read: ", "Not found: ", "Not read: ").
+  - search_routes.py: `/lookup`; `/api/search` for search as you type, through search.py's
+    public functions (`find_index`, `found`, `search_gtptabs`, `search_musescore`,
+    `search_lacuerda`; `skipped`, the sites it left out and why, and `partial`, LaCuerda's
+    index while its listings are still read), one at a time, the newest first, an older one's
+    SQL interrupted once a newer waits (`set_progress_handler`); `/api/artist?key=` an
+    artist's songs, 50 at a time, `?lacuerda=SLUG` (or `?lacuerda_name=NAME`, once a page
+    read by name) a LaCuerda artist's that the index holds, and `POST /lacuerda/artist` queues
+    `caracole lacuerda --artist` (`jobs.LACUERDA_ARTIST`) to read their page, by `slug` or by
+    `name`; once one is over, the search answers kept are dropped (`_after_reads`);
+    `POST /lookup`, which runs a song your library has, by its id or found from the UG pick
+    (`_Mine`: its match, or its names' `name_forms`), under its own names and writes no
+    wanted.txt line for it.
+  - remove_routes.py: `POST /remove`; songbook_routes.py: `POST /songbook/…`.
+
+  The rest of web/: songbooks.py (the songbook forms, each queued as its `caracole songbook`
+  command, songbook_routes.py; Get the missing songs now,
   `missing_songs`, a `caracole get` per song `songbook.songs_to_get` names, then
   `render_job`, `caracole songbook render NAME`, after them; `songbook_of` reads a job's key back,
   the songbook it changes, and once it is over `/jobs.json` gives the Songbooks section drawn

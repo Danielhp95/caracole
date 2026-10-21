@@ -1,0 +1,232 @@
+"""caracole serve's requests: the requests page, /jobs.json for the pages' scripts, and the API's jobs.
+
+    GET  /jobs            the requests, a line each, and what each command printed
+                          (?job=N: its output open; ?refresh=0: no reloading)
+    GET  /jobs.json       the requests, a line each, for the page's script (?jobs=N,M: only those
+                          jobs, each with its song's card once it is over)
+    GET  /api/jobs[/<id>] the requests as data: each step with its state (Job.as_json)
+
+Each job is shown as the page's script reads it (``views``): its song, its line (status.py) and, once
+it is over and the page asks (``?jobs=``), its song's card as the library page draws it now, or, for a
+songbook's change, the Songbooks section drawn again, which the page puts in place of its own. A job
+says what it is about (``kind``: a song's, a removal's, a songbook's), so the page shows each where it
+belongs. Every route that queues a job answers the page's script with its view (``WebApp.queued``).
+app.py checks that /jobs.json is asked for by the page's own script, as a write would be.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from contextlib import closing
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+from caracole.web import pages
+from caracole.web.app import Response, WebApp, html_response, json_response, overrides_or_none
+from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job
+from caracole.web.review_routes import picks_waiting, review_first
+from caracole.web.status import SongFacts, details_href, job_line
+
+if TYPE_CHECKING:
+    from caracole.overrides import Overrides
+    from caracole.songs import Song
+
+MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
+
+
+def jobs_page(app: WebApp, asked: dict[str, list[str]]) -> Response:
+    """Every request, a line each, its output open only when asked for (``?job=N``)."""
+    try:
+        opened = int(asked.get("job", [""])[0])
+    except ValueError:
+        opened = None
+    jobs = app.queue.snapshot()
+    facts: dict[int, SongFacts | None] = {}
+    books: dict[int, str | None] = {}
+    try:
+        overrides = overrides_or_none(app.cfg)
+        with closing(app.connect()) as conn:
+            forget_ended(app, jobs)
+            facts = {job.id: song_of(app, conn, overrides, job)[1] for job in jobs}
+            books = {job.id: _songbook_page(conn, job) for job in jobs}
+    except (sqlite3.Error, OSError):  # the lines say only how the jobs went, then
+        pass
+    lines = {job.id: job_line(job, facts.get(job.id), ahead=_ahead(jobs, job), songbook_page=books.get(job.id))
+             for job in jobs}
+    still = asked.get("refresh") == ["0"]
+    return html_response(200, pages.jobs_page(jobs, lines, opened=opened, refresh=not still,
+                                              picks=picks_waiting(app, jobs), csrf=app.csrf))
+
+
+def jobs_json(app: WebApp, asked: dict[str, list[str]]) -> Response:
+    """The requests for the page's script."""
+    ids = _job_ids(asked.get("jobs"))
+    overrides = app.overrides(" Fix it, then reload this page.")
+    jobs = app.queue.snapshot()
+    only = None if ids is None else [job for job in jobs if job.id in ids]
+    with app.db() as conn:
+        forget_ended(app, jobs)
+        shown = views(app, conn, overrides, jobs, only=only, cards=ids or frozenset())
+    return json_response(200, {"active": sum(j.active for j in jobs), "jobs": shown})
+
+
+def api_jobs(app: WebApp) -> Response:
+    return json_response(200, {"jobs": [job.as_json() for job in app.queue.snapshot()]})
+
+
+def api_job(app: WebApp, number: str) -> Response:
+    job = app.queue.job(int(number)) if number.isascii() and number.isdigit() else None
+    if job is None:
+        return json_response(404, {"error": "no such request"})
+    if job.song_key.startswith(LACUERDA_ARTIST):  # no song's: its line says what LaCuerda answered
+        return json_response(200, job.as_json() | {"line": job_line(job, None).as_json()})
+    return json_response(200, job.as_json())
+
+
+def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jobs: list[Job], *,
+          only: list[Job] | None = None, cards: frozenset[int] = frozenset()) -> list[dict[str, Any]]:
+    """Each job (of ``only``, else every one) as the page's script reads it: its song, its line and,
+    for a job in ``cards`` that is over, its song's card as the page draws it now, or, for a
+    songbook's change, the Songbooks section (``songbooks``).
+
+    ``jobs`` is the whole queue, newest first, for the jobs ahead of a queued one;
+    ``overrides`` None (overrides.toml unreadable) leaves the cards out.
+    """
+    from caracole.library_page import song_cards
+    from caracole.songs import get_song
+
+    shown = []
+    section: dict[str, Any] | None = None  # drawn once, for every songbook job that asks
+    for job in jobs if only is None else only:
+        song_id, facts = song_of(app, conn, overrides, job)
+        seen = view(job, jobs, song_id, facts, songbook_page=_songbook_page(conn, job))
+        if job.id in cards and not job.active and "songbook" in seen and overrides is not None:
+            section = section or _songbooks(app, conn, overrides)
+            seen["songbooks"] = section
+        if job.id in cards and not job.active and song_id is not None and overrides is not None:
+            try:
+                song = get_song(conn, song_id)  # as it is now
+            except KeyError:
+                shown.append(seen)
+                continue
+            card = song_cards(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0), [song])[0]
+            card["fetchable"] = not review_first(song, overrides)
+            seen["card"] = card
+        shown.append(seen)
+    return shown
+
+
+def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None, *,
+         songbook_page: str | None = None) -> dict[str, Any]:
+    """A job as /jobs.json gives it; ``jobs`` is the whole queue. ``kind`` says what it is about: a song
+    ("song"), a song's removal ("remove"), or a songbook ("songbook", which ``songbook`` names), whose
+    ``songbook_page`` its line links once it is done."""
+    from caracole.web.songbooks import songbook_of
+
+    songbook = songbook_of(job.song_key)
+    kind = "remove" if job.song_key.startswith(REMOVING) else "songbook" if songbook is not None else "song"
+    line = job_line(job, facts, ahead=_ahead(jobs, job), songbook_page=songbook_page)
+    seen = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
+            "state": job.state, "fetching": job.fetching, "line": line.as_json(), "details": details_href(job.id)}
+    if songbook is not None:
+        seen["songbook"] = songbook
+    return seen
+
+
+def _songbooks(app: WebApp, conn: sqlite3.Connection, overrides: Overrides) -> dict[str, Any]:
+    """The Songbooks section as the library page draws it now (``html``; hidden, with no songbook), and
+    the songbooks for its Select bar (``books``)."""
+    from caracole.library_page import WebControls, songbooks_section
+
+    html, books = songbooks_section(conn, app.cfg, overrides, WebControls(app.csrf))
+    return {"html": html, "books": books}
+
+
+def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
+            job: Job) -> tuple[int | None, SongFacts | None]:
+    """The id of the job's song, and what its line needs to know of it; None while the library has
+    no such song.
+
+    A fetch that is over and left no sheet is "Not found" only if it looked the
+    song up during the job (``ug.fetch.checked_since``): a cooldown, a block, a
+    spent budget or an error looks nothing up, and the song isn't missing. A job
+    that is over doesn't change, so its answer is worked out once (``app._ended``).
+    """
+    over = not job.active
+    if over:
+        with app._ended_lock:
+            ended = app._ended.get(job.id)
+        if ended is not None:
+            return ended
+    from caracole.library_page import sheet_href
+    from caracole.songs import find_song
+
+    removal = job.song_key.startswith(REMOVING)
+    song = find_song(conn, job.song_key.removeprefix(REMOVING))
+    facts = None
+    if song is not None:
+        ignored = song.status == "ignored" or (overrides is not None and song.key in overrides.ignore)
+        sheet = sheet_href(app.cfg.library_dir, song)
+        checked_now = False
+        if over and job.fetching and not sheet and job.started_at is not None:
+            from caracole.ug.fetch import checked_since
+
+            checked_now = checked_since(conn, song, job.started_at) or (
+                bool(job.stages) and _nothing_to_ask(conn, song, overrides))
+        picker = None
+        if song.review and not ignored:
+            from caracole.review import candidates_of
+
+            picker = f"review?song={song.id}" if candidates_of(song) else None  # the card's, or its page
+        picked = overrides is not None and song.key in overrides.lacuerda and song.lacuerda_checked_at is None
+        facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
+                          checked_now=checked_now, ignored=ignored, picker=picker, lacuerda=picked)
+    # A removal's song is gone once it is done: the job knows which it was.
+    answer = (song.id if song is not None else job.song_id if removal else None, facts)
+    if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known
+        with app._ended_lock:
+            app._ended[job.id] = answer
+    return answer
+
+
+def forget_ended(app: WebApp, jobs: list[Job]) -> None:
+    """Let go of the jobs the queue no longer remembers (``jobs``: the whole queue)."""
+    kept = {job.id for job in jobs}
+    with app._ended_lock:
+        for job_id in [i for i in app._ended if i not in kept]:
+            del app._ended[job_id]
+
+
+def _ahead(jobs: list[Job], job: Job) -> int:
+    """How many jobs wait or run before a queued one."""
+    return sum(1 for j in jobs if j.active and j.id < job.id)
+
+
+def _songbook_page(conn: sqlite3.Connection, job: Job) -> str | None:
+    """A songbook's change that is done: its songbook's page, for its line to open; None for any other job."""
+    from caracole.web.songbooks import songbook_page
+
+    return songbook_page(conn, job.song_key) if job.state == "done" else None
+
+
+def _nothing_to_ask(conn: sqlite3.Connection, song: Song, overrides: Overrides | None) -> bool:
+    """Whether Ultimate Guitar can't be asked about the song at all: the offline index doesn't have it, and
+    its artist's UG page isn't known. ``caracole fetch --song`` refuses such a song; a lookup's sheet stage
+    skips it, and what it lacks, UG lacks as far as caracole can tell: not found, not a wait."""
+    from caracole.ug.fetch import artist_is_known
+
+    return (song.match_decision == "not_found" and overrides is not None
+            and not artist_is_known(conn, song, overrides))
+
+
+def _job_ids(values: list[str] | None) -> frozenset[int] | None:
+    """The jobs ``?jobs=N,M`` asks about (plain digits only, ``MAX_ASKED`` at most); None when the
+    address asks about none in particular."""
+    if values is None:
+        return None
+    ids: set[int] = set()
+    for part in values[0].split(","):
+        part = part.strip()
+        if part.isascii() and part.isdigit() and len(ids) < MAX_ASKED:
+            ids.add(int(part))
+    return frozenset(ids)

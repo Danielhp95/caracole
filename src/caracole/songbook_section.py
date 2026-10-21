@@ -1,6 +1,6 @@
 """The library page's Songbooks section: each songbook of songbooks.toml as a card, in index.html
 (library_page.py) and in caracole serve's ``/jobs.json``, which gives it drawn again once a songbook's
-change is over (web/app.py).
+change is over (web/jobs_routes.py).
 
 Its style is library_assets/songbooks.css; the page's script draws it again from this HTML
 (library.js's ``drawSongbooks``), and select.js makes a songbook from the page. The HTML is written
