@@ -382,12 +382,36 @@ def test_on_a_phone_the_harmony_panel_docks_in_place_of_the_settings_and_lists_e
     assert seen["neck"]  # the key's neck, on a phone, is here
     verse, chorus, bridge = seen["rows"]  # the riff has no chord to read
     assert verse == {"section": "Verse", "numerals": ["I", "V", "vi", "IV"], "repeats": "×4",
-                     "about": "the pop progression", "play": False,
+                     "about": "the pop progression", "play": True,  # strum.js plays it
                      "songs": "../../index.html#prog=I%20V%20vi%20IV"}
     assert chorus["numerals"] == ["IV", "V", "I", "vi", "IV", "V", "I"] and chorus["repeats"] == ""
     assert chorus["about"] == "ends on an authentic cadence (V–I)"
     assert bridge["section"] == "Bridge" and bridge["numerals"][0] == "vi"
-    assert not seen["tempo"] and seen["page"] <= 390 and targets == []
+    assert seen["tempo"] and seen["page"] <= 390 and targets == []
+
+
+@in_chromium
+def test_a_page_that_cant_play_a_chord_offers_no_play_and_no_tempo(tmp_path):
+    with viewer(tmp_path, written(tmp_path, SONG)) as b:
+        b.js("window.caracoleSound = undefined")  # as in a browser with no Web Audio
+        open_harmony(b)
+        seen = b.js(HARMONY)
+    assert seen["rows"] and not any(r["play"] for r in seen["rows"]) and not seen["tempo"]
+
+
+@in_chromium
+def test_with_the_sound_off_the_panel_offers_no_play_until_it_is_on_again(tmp_path):
+    with viewer(tmp_path, written(tmp_path, SONG) + "#vol=0") as b:
+        open_harmony(b)
+        off = b.js(HARMONY)
+        b.js("document.querySelector('#harmony [data-close]').click()")
+        b.click("#more")
+        b.js("[...document.querySelectorAll('#volumes .chip')].find((c) => c.textContent === 'Soft').click()")
+        b.click("#harmony-open")
+        assert b.wait("!document.getElementById('harmony').hidden")
+        on = b.js(HARMONY)
+    assert off["rows"] and not any(r["play"] for r in off["rows"]) and not off["tempo"]
+    assert all(r["play"] for r in on["rows"]) and on["tempo"]
 
 
 @in_chromium

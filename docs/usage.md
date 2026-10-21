@@ -2052,7 +2052,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   ends (an authentic cadence, V–I; plagal, IV–I; half, on V; deceptive,
   V–vi). A section with no chord caracole can read isn't listed; a sheet with
   no headings has one section, "Section 1". Tap a progression to go to its
-  section. Where the page can play a chord, **▶** plays it, a chord a bar at
+  section. **▶** plays it (strummed, as a tap on a chord is, above; not with
+  **Sound** off, or in a browser that can't make sound), a chord a bar at
   the tempo above the list (80 bpm to start), each chord with the shape and
   the capo the page shows, marking the chord playing, and **■** stops it, as
   closing the panel does. **Songs with this progression** opens the library

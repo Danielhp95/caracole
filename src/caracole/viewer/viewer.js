@@ -1449,7 +1449,7 @@
   const playSection = (n, repeats, chords) => {
     const again = Boolean(playing) && playing.n === n;
     stopPlaying();
-    const synth = synthesis();
+    const synth = state.vol > 0 ? synthesis() : null;
     if (again || !synth) return;
     const cycle = chords.map((i) => {
       const c = String(i);
@@ -1489,7 +1489,7 @@
       const to = neckBox.querySelector('[aria-pressed="true"]');
       if (to) to.focus({ preventScroll: true });
     }
-    const synth = synthesis();
+    const synth = state.vol > 0 ? synthesis() : null;  // Sound off: no ▶ that would play nothing
     $("tempo-row").hidden = !synth;
     $("bpm").textContent = String(state.bpm);
     const list = $("progs");
