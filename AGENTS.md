@@ -236,7 +236,7 @@ removed, fails it). One at a time: `nix build`, `nix build .#autochords`,
 Traps:
 
 - The flake sees only files git tracks: `git add` a new file before a Nix build.
-- The package builds from pyproject.toml, README.md, src/ and tests/ alone, in a sandbox
+- The package builds from pyproject.toml, README.md, LICENSE, src/ and tests/ alone, in a sandbox
   without network (test_nix_package.py skips itself there). A subprocess test keeps the
   inherited PYTHONPATH (`conftest.subprocess_pythonpath`): the dependencies arrive on it.
 - A dependency is listed three times: pyproject.toml, flake.nix (`runtimeDeps` or

@@ -71,6 +71,8 @@ python3Packages.buildPythonApplication (finalAttrs: {
     fileset = lib.fileset.unions [
       ../pyproject.toml
       ../README.md
+      # hatchling puts it in the wheel's dist-info, as pip's install from the repository has it.
+      ../LICENSE
       ../src
       ../tests
     ];
