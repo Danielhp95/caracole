@@ -209,7 +209,7 @@ _CAPO = re.compile(r"(?i)\bcapo\b\D{0,6}(\d+)")
 class Preamble:
     notes: tuple[str, ...]  # the text lines folded away (not tab, not legend)
     legend: tuple[tuple[Chord, Position], ...]  # from voicings.chord_legend
-    tabs: tuple[tuple[int, int], ...]  # (start, end) line spans of tab blocks inside it: none, the rule ends at a tab
+    tabs: tuple[tuple[int, int], ...]  # (start, end) line spans of tab blocks inside it: always (): the rule ends the preamble at the first tab, so none is inside it
     tuning: str | None  # e.g. "Eb standard", "half step down", "Drop D"
     capo_note: str | None  # e.g. "Capo 2"
     end: int  # index of the first body line
@@ -251,7 +251,7 @@ def _end_of(lines: list[str], count: int) -> int:
             tab = not ((d := _DIRECTIVE.fullmatch(line)) and d.group(1).lower() in ("end_of_tab", "eot"))
         elif (d := _DIRECTIVE.fullmatch(line)):
             tab = d.group(1).lower() in ("start_of_tab", "sot")
-        elif not line.startswith("#"):
+        elif not line.startswith("#") and (seen or line.strip()):  # parse_sheet drops a section's leading blanks
             seen += 1
         if seen == count and not tab:
             end = i + 1

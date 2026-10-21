@@ -140,3 +140,27 @@ def test_a_lacuerda_sheet_without_sections_has_no_preamble():
     lines = ["[Em]Words to [G]sing", "[Am]and more", "", "[C]still more"]
     pre = split_preamble(lines)
     assert (pre.notes, pre.legend, pre.tabs, pre.tuning, pre.capo_note, pre.end) == ((), (), (), None, None, 0)
+
+
+def test_a_blank_line_after_the_header_does_not_move_where_the_body_starts():
+    lines = ["{title: x}", "", "note one", "note two", "", "{comment: Verse}", "[Em]hi", "{comment: Chorus}", "[G]x"]
+    pre = split_preamble(lines)
+    assert pre.notes == ("note one", "note two")
+    assert pre.end == 5
+    assert lines[pre.end] == "{comment: Verse}"
+
+
+def test_several_leading_blank_lines_and_a_comment_line_are_not_counted():
+    lines = ["", "{title: x}", "", "", "# a comment", "note one", "", "{comment: Verse}", "[Em]hi"]
+    pre = split_preamble(lines)
+    assert pre.notes == ("note one",)
+    assert lines[pre.end] == "{comment: Verse}"
+
+
+def test_a_preamble_ends_at_a_tab_after_a_blank_header_line():
+    lines = ["{title: x}", "", "note one", "{start_of_tab}", "e|--", "{end_of_tab}", "{comment: Verse}", "[Em]hi"]
+    pre = split_preamble(lines)
+    assert pre.notes == ("note one",)
+    assert pre.tabs == ()
+    assert pre.end == 3
+    assert lines[pre.end] == "{start_of_tab}"
