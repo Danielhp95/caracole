@@ -388,3 +388,5 @@ a.link[hidden] { display: none; }
 .sw.p2 { background: var(--p3); }
 .sw.p3 { background: var(--p4); }
 .sw.tabs { box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 2.5px var(--text); }  /* ringed, as on the neck */
+/* A chord's diagram on its card is a button while it can be heard (viewer.js heardBy, strum.js). */
+.diagram[role="button"] { cursor: pointer; border-radius: 8px; -webkit-tap-highlight-color: transparent; }

@@ -31,12 +31,15 @@
   const SPEED = { min: 1, max: 30, start: 6, px: 2 };
   // The capo goes on any fret up to the 11th (past it the shapes come round again), or the sheet's.
   const CAPO_MAX = Math.max(11, Number(data.capoSheet) || 0);
+  // A chord heard (strum.js), as loud as this: the setting's names and caracoleSound's volumes.
+  const VOLUMES = [["Off", 0], ["Soft", 0.3], ["Medium", 0.6], ["Loud", 1]];
+  const VOL = 2;
 
   // --- the state: where the song is played, kept per page ------------------------------------
   // capo: the fret the capo is on (0 for none), or null for the sheet's own. It stays there
   // through a transposition, as on a guitar: the shapes move instead.
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
-    speed: SPEED.start };
+    speed: SPEED.start, vol: VOL };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -47,6 +50,7 @@
     : Math.min(CAPO_MAX, Math.round(Number(v))));
   const sizeOf = (v) => (Number(v) >= FS.min && Number(v) <= FS.max ? Math.round(Number(v)) : null);
   const speedOf = (v) => (Number(v) >= SPEED.min && Number(v) <= SPEED.max ? Math.round(Number(v)) : null);
+  const volOf = (v) => (/^[0-3]$/.test(String(v)) ? Number(v) : null);
   // The address spells the chords swapped as alt=<mode>.<i>.<root>.<suffix>.<bass>,… (suffix
   // URL-encoded, bass empty for none) and the shapes chosen as at=<i>.<n>,….
   const swapsOf = (text) => {
@@ -110,12 +114,14 @@
       }
       if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
       if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
+      if (volOf(saved.vol) !== null) state.vol = volOf(saved.vol);
       state.strip = saved.strip === true;
     }
   } catch (err) { /* no storage: the page still works */ }
   adopt(hash);
   if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
   if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
+  if (volOf(hash.get("vol")) !== null) state.vol = volOf(hash.get("vol"));
   const save = () => {
     try {
       // Each shape chosen with the chord it was chosen for, so that only that chord gets it back.
@@ -138,6 +144,7 @@
       keep("at", Object.keys(state.at).map((i) => i + "." + state.at[i]).join(","), Object.keys(state.at).length > 0);
       keep("fs", state.fs, state.fs !== FS.start);
       keep("speed", state.speed, state.speed !== SPEED.start);
+      keep("vol", state.vol, state.vol !== VOL);
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -157,7 +164,7 @@
       const title = (document.querySelector("h1") || {}).textContent || "";
       const artist = (document.querySelector(".artist") || {}).textContent || "";
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
-      for (const name of ["fs", "speed"]) version.delete(name);
+      for (const name of ["fs", "speed", "vol"]) version.delete(name);
       cmd.textContent = "caracole render --song " + quoted(artist ? artist + " - " + title : title)
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
@@ -515,6 +522,12 @@
         (asWritten() ? "" : " Each chord moves to the same degree of the new scale.");
     }
 
+    $("sound-row").hidden = !sound || count === 0;
+    if (sound) sound.setVolume(VOLUMES[state.vol][1]);
+    refill($("volumes"), sound ? VOLUMES.map(([name], v) => button(name, state.vol === v, () => {
+      state.vol = v;
+      render();
+    })) : []);
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
     drawSpeed();
@@ -625,7 +638,10 @@
       const name = label(String(i), rep);
       if (shape) b.appendChild(diagram(shape, name, true));
       b.appendChild(document.createTextNode(name));
-      b.addEventListener("click", () => openCard(String(i), b));
+      b.addEventListener("click", () => {
+        openCard(String(i), b);
+        hear();
+      });
       strip.appendChild(b);
     }
   };
@@ -756,7 +772,7 @@
   // --- the chord card: shapes, and chords to play instead ----------------------------------------
   // ``el`` is the chord tapped (or the strip's button): the card is placed by it, from 900 px wide,
   // and the focus goes back to it. Another chord tapped while the card is open fills it in its place.
-  const shown = { i: null, pick: -1, at: 0, el: null };
+  const shown = { i: null, pick: -1, at: 0, el: null, position: null };
   const openCard = (i, el) => {
     if (!own.call(written, i)) return;
     shown.i = i;
@@ -789,8 +805,10 @@
     const shapes = shapesOf(rep, shift());
     const box = $("diagram");
     box.textContent = "";
+    shown.position = null;
     if (shapes.list.length) {
       shown.at = Math.min(shown.at, shapes.list.length - 1);
+      shown.position = shapes.list[shown.at];
       box.appendChild(diagram(shapes.list[shown.at], name));
       const c = document.createElement("span");
       c.className = "count";
@@ -799,6 +817,7 @@
     } else {
       box.textContent = rep ? "No shape to show for this chord." : "caracole can't read this chord.";
     }
+    heardBy(box, name);
     $("prev").disabled = shown.at <= 0;
     $("next").disabled = shown.at >= shapes.list.length - 1;
     const capoNote = capoNow() ? " With the capo on fret " + capoNow() + "." : sheetCapo ? " With no capo." : "";
@@ -834,6 +853,29 @@
     place();
     dock();
   };
+  // --- hearing it (strum.js): a tap on a chord, or on its card's diagram, strums the shape the card shows,
+  // at the capo; nothing sounds otherwise. The diagram is a button only while it has a shape to play.
+  const sound = window.caracoleSound && window.caracoleSound.available ? window.caracoleSound : null;
+  const hearable = () => Boolean(sound) && state.vol > 0 && Boolean(shown.position);
+  const hear = () => {
+    if (hearable()) sound.strum(shown.position, { capo: capoNow() });
+  };
+  function heardBy(box, name) {
+    if (hearable()) {
+      box.setAttribute("role", "button");
+      box.tabIndex = 0;
+      box.setAttribute("aria-label", "Hear " + name);
+    } else {
+      for (const attr of ["role", "tabindex", "aria-label"]) box.removeAttribute(attr);
+    }
+  }
+  $("diagram").addEventListener("click", hear);
+  $("diagram").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      hear();
+    }
+  });
   const pick = (j) => {
     shown.pick = j;
     shown.at = 0;
@@ -1008,13 +1050,17 @@
   const sheet = $("sheet");
   sheet.addEventListener("click", (e) => {
     const el = e.target.closest(".c");
-    if (el) openCard(el.dataset.c, el);
+    if (el) {
+      openCard(el.dataset.c, el);
+      hear();
+    }
   });
   sheet.addEventListener("keydown", (e) => {
     const el = e.target.closest(".c");
     if (el && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
       openCard(el.dataset.c, el);
+      hear();
     }
   });
 
