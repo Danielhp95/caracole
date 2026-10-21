@@ -337,7 +337,8 @@ class PoliteClient:
       caller accepts its status; otherwise the URL is asked again. Only accepted
       answers are cached.
     - ``conditional=True`` revalidates a cached copy with If-None-Match /
-      If-Modified-Since; a 304 returns the cached body.
+      If-Modified-Since; a 304 returns the cached body, and the copy counts as
+      fetched then.
     - Before every network request except the first, it pauses for a random
       time in ``policy.delay``, never less than the host's ``crawl_delay``,
       minus the time already elapsed. A subclass may spend the pause otherwise
@@ -461,12 +462,13 @@ class PoliteClient:
             at, resp = target, self._send(target, resp.next_request)
 
         status, body = resp.status_code, resp.content
-        if status == 304 and cached is not None:
+        if status == 304 and cached is not None:  # the copy is current: it is as old as this answer
             self._errors_in_a_row = 0
             self._event(at, status, "not_modified", None)
+            stamp = self._write_meta(key, cached.url, cached.status, cached.headers)
             return Response(
                 url=full, status=304, content=cached.content, headers=cached.headers, from_cache=True,
-                fetched_at=self._stamp(),
+                fetched_at=stamp,
             )
 
         if status in accept:
@@ -587,16 +589,21 @@ class PoliteClient:
         return self._wall_clock().astimezone(UTC).strftime(_STAMP)
 
     def _write_cache(self, key: str, url: str, status: int, headers: Mapping[str, str], body: bytes) -> None:
-        body_path, meta_path = self._paths(key)
+        body_path, _ = self._paths(key)
         body_path.parent.mkdir(parents=True, exist_ok=True)
-        meta = {
-            "url": url, "status": status, "headers": dict(headers),
-            "fetched_at": self._stamp(),
-        }
-        for path, data in (
-            (body_path, gzip.compress(body, compresslevel=6)),
-            (meta_path, json.dumps(meta, ensure_ascii=False).encode("utf-8")),
-        ):
-            tmp = path.with_name(path.name + ".tmp")
-            tmp.write_bytes(data)
-            os.replace(tmp, path)
+        _replace(body_path, gzip.compress(body, compresslevel=6))
+        self._write_meta(key, url, status, headers)
+
+    def _write_meta(self, key: str, url: str, status: int, headers: Mapping[str, str]) -> str:
+        """Write a cached copy's meta, fetched now; return its ``fetched_at``."""
+        stamp = self._stamp()
+        meta = {"url": url, "status": status, "headers": dict(headers), "fetched_at": stamp}
+        _replace(self._paths(key)[1], json.dumps(meta, ensure_ascii=False).encode("utf-8"))
+        return stamp
+
+
+def _replace(path: Path, data: bytes) -> None:
+    """Write ``path`` whole: a temporary file beside it, then a rename."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)

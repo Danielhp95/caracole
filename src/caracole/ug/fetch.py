@@ -68,6 +68,7 @@ from caracole.http import (
     Response,
     RobotsClosed,
     robots_disallows,
+    stale,
 )
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_json, write_info
 from caracole.lyrics import song_lyrics
@@ -296,7 +297,7 @@ def _get_page[P: (UGTabPage, UGArtistPage)](
         return None if resp.status == 404 else parse(resp.content, url=url)
 
     resp = client.get(url, accept=_PAGE_ACCEPT, max_age=max_age)
-    if max_age is not None and now is not None and _stale(resp, now, max_age):
+    if max_age is not None and now is not None and stale(resp, now, max_age):
         raise BudgetExhausted(PROVIDER)
     try:
         return parsed(resp), not resp.from_cache
@@ -307,14 +308,6 @@ def _get_page[P: (UGTabPage, UGArtistPage)](
         return parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False)), True
     except PageParseError as e:
         raise UnreadablePage(e.provider, e.url, e.status, e.message) from e
-
-
-def _stale(resp: Response, now: datetime, max_age: timedelta) -> bool:
-    """Whether a response is a cached copy older than ``max_age`` at ``now`` (or of unknown age,
-    which PoliteClient counts as stale too)."""
-    if not resp.from_cache:
-        return False
-    return not resp.fetched_at or now - _parse_iso(resp.fetched_at) > max_age
 
 
 def _upsert(run: _SongRun, v: UGVersion) -> int:
