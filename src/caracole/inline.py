@@ -1,8 +1,9 @@
 """What a page caracole writes holds inline: a script or a stylesheet its Content-Security-Policy
 allows by its hash, and a block of data for its script.
 
-The standard library alone, so a page imports it at no cost (sheet.html's and songbook.html's
-builders, viewer/page.py and viewer/book.py).
+The standard library alone, so a page imports it at no cost: sheet.html's and songbook.html's
+builders (viewer/page.py and viewer/book.py, whose ``BUILD_FILES`` list this file), index.html's
+(library_page.py) and those of caracole serve's own pages (web/lookup_page.py, web/pages.py).
 """
 
 from __future__ import annotations

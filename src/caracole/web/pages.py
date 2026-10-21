@@ -25,7 +25,8 @@ from datetime import datetime
 from html import escape
 from typing import Any
 
-from caracole.library_page import BASE_STYLE, PICKER_STYLE, sha256_source
+from caracole.inline import sha256_source
+from caracole.library_page import BASE_STYLE, PICKER_STYLE
 from caracole.web.jobs import Job, Stage, Step
 from caracole.web.status import Line
 
