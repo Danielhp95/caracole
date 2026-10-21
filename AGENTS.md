@@ -80,9 +80,10 @@ tombstones it leaves are songs.py's, in the `removed` table).
   pinyin counts only as whole words of a key, as in match.py. The UG artist pages caracole read
   (ug/artist_tabs.py) are searched with the index (`_listed_rows`): their songs and artists scored
   on every `name_forms` form of UG's names, a song both list one hit (`_merged`, its tabs counted
-  once, `IndexHit.page`, `rating`, `votes`), a song only a page lists named as your songs name
-  its artist (`_Yours`, else `normalize.original_part`), and `bare_id_hint` silent for a query
-  they answer well. `search_gtptabs` and
+  once, `IndexHit.page`, `rating`, `votes`: `_best_listed`, the page's best tab, its rating weighed
+  by its votes with rank.py's `bayes`, and None for a tab nobody rated), a song only a page lists
+  named as your songs name its artist (`_Yours`, else `normalize.original_part`), and
+  `bare_id_hint` silent for a query they answer well. `search_gtptabs` and
   `search_musescore` read gtptabs.com's and MuseScore's tables (`SiteHit`; MuseScore's by
   exact title keys alone, the query's or what it leaves beside the artist of a song of that
   title, `_known_song`: a possible match), never the sites; `search_lacuerda` reads

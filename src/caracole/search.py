@@ -95,6 +95,7 @@ from typing import TYPE_CHECKING, Iterable, Iterator, Mapping, NamedTuple, Seque
 
 from rapidfuzz import fuzz
 
+from caracole.config import RankPolicy
 from caracole.match import CATCH_ALL_PREFIX, SHOW_WORDS, is_catch_all
 from caracole.normalize import (
     clean_title,
@@ -111,6 +112,7 @@ from caracole.normalize import (
     split_variant,
 )
 from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
+from caracole.rank import bayes, prior_mean
 from caracole.songs import Song, list_removed, list_songs
 from caracole.ug.key_search import rows_like
 from caracole.ug.lookup import IndexTab, song_tabs
@@ -159,8 +161,10 @@ class IndexHit:
     A song an artist page caracole read lists (ug/artist_tabs.py: bare ids
     the sitemaps name nowhere, and the slugged tabs beside them) counts those
     tabs too, and ``page`` is that artist page: ``url`` is then its best tab,
-    the best type first, then the best rated, with its ``rating`` and
-    ``votes`` (unless the index has a tab of a better type: that one, unrated).
+    the best type first, then the best rated, its rating weighed by its votes
+    as a fetch weighs them (rank.py), with its ``rating`` (None when nobody
+    voted) and ``votes`` (unless the index has a tab of a better type: that
+    one, unrated).
     Of a song only an artist page lists, ``artist`` is named as your songs
     name them (``_Yours``) and ``title`` is UG's original name.
     """
@@ -1145,15 +1149,29 @@ def _index_hit(conn: sqlite3.Connection, artist_key: str, song_key: str, score: 
         url = sample.url
         artist, title = _names_from_path(sample) or display_from_keys(artist_key, song_key)
     if listed:  # UG's ratings: the page's best tab, of the best type, unless the index has a better type
-        best = min(listed, key=lambda t: (t.label is not None, _type_rank(t.type), -t.rating, -t.votes, t.tab_id))
+        best = _best_listed(listed)
         page = best.page
         if not tabs or (best.label is not None, _type_rank(best.type)) <= (sample.label is not None,
                                                                            _type_rank(sample.type)):
-            url, rating, votes = best.url, best.rating, best.votes
+            url, rating, votes = best.url, best.rating if best.votes else None, best.votes  # no vote: unrated
         if not tabs:
             artist, title = (yours or _Yours(conn)).artist(best.artist), _original_title(best.title)
     return IndexHit(artist_key, song_key, ordered, round(score, 1), url, labels, artist, title, via, rating, votes,
                     page)
+
+
+def _best_listed(listed: Sequence[ListedTab]) -> ListedTab:
+    """The tab a song's hit shows of those an artist page lists: of the best type (no part or "acoustic"
+    label first), the best rated as a fetch rates versions (rank.py ``bayes``): each rating is pulled toward
+    the vote-weighted mean of those tabs, the more the fewer votes it has."""
+
+    def kind(t: ListedTab) -> tuple[bool, tuple[int, str]]:
+        return (t.label is not None, _type_rank(t.type))
+
+    first = min(kind(t) for t in listed)
+    group = [t for t in listed if kind(t) == first]
+    prior, m = prior_mean(group), RankPolicy().prior_votes
+    return min(group, key=lambda t: (-bayes(t.rating, t.votes, prior, m), -t.votes, t.tab_id))
 
 
 class _Yours:

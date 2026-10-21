@@ -1955,9 +1955,13 @@ offline Ultimate Guitar index and LaCuerda's (see below):
   is 宋冬野 and Song Dongye, "斑马 斑马 Banma Banma Zebra Zebra" is 斑马斑马 and
   Banma Banma), Chinese as pinyin, whole words only. A song such a page lists
   is one hit with the index's tabs of it, its tabs counted once; its page is
-  the page's best tab, of the best type, with UG's rating; and its artist is
-  named as your songs name them (your 宋冬野, or else the original of UG's two
-  names), so its line adds the song under that name:
+  the page's best tab, of the best type, then the best rated, each rating
+  weighed by its votes as `caracole fetch` weighs them (pulled toward the
+  average of those tabs, the more the fewer votes it has, so a 5.0 from one
+  vote rarely beats a 4.8 from 300), with UG's rating (`rated 4.8 (120
+  votes)`, nothing for a tab nobody rated); and its artist is named as your
+  songs name them (your 宋冬野, or else the original of UG's two names), so
+  its line adds the song under that name:
 
       $ caracole search 斑马
       …

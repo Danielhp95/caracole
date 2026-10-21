@@ -295,6 +295,32 @@ def test_a_merged_song_keeps_the_index_sample_of_a_better_type_than_the_page_lis
     assert dict(hit.counts) == {"chords": 1, "guitar-pro": 1} and hit.page == SODA
 
 
+def test_the_pages_best_tab_is_the_best_rated_with_its_votes_weighed_as_a_fetch_weighs_them(conn):
+    # A 5.0 from one vote does not beat a 4.8 from 300 votes (rank.py, test_rank.py's case): shrunk toward
+    # the song's chords' mean (about 4.63), the 5.0 is worth about 4.66 and the 4.8 about 4.79.
+    artist_tabs.store(conn, SODA, "Soda Stereo", [_version(d) for d in (
+        version_dict(11, song="Signos", artist="Soda Stereo", rating=5.0, votes=1),
+        version_dict(12, song="Signos", artist="Soda Stereo", rating=4.8, votes=300),
+        version_dict(14, song="Signos", artist="Soda Stereo", rating=4.4, votes=200),
+        version_dict(13, song="Signos", artist="Soda Stereo", type="Tabs", rating=5.0, votes=900),
+    )], read_at="2026-10-18T00:00:00Z")
+
+    (hit,) = find_index(conn, "signos").songs
+    assert (hit.url, hit.rating, hit.votes) == (f"{TAB}12", 4.8, 300)  # chords still before tabs
+
+
+def test_a_tab_nobody_rated_is_unrated_never_rated_zero(conn, tmp_path):
+    # UG writes a null rating for a tab nobody voted on, as for most new bare-id tabs.
+    index_rows(conn, (9001, "anju-panta", "banma-phulyo-fullai-ful", "chords"))  # an index caracole built
+    artist_tabs.store(conn, SODA, "Soda Stereo", [_version(version_dict(
+        2001, song="Signos", artist="Soda Stereo", rating=None, votes=None))], read_at="2026-10-18T00:00:00Z")
+
+    (hit,) = find_index(conn, "signos").songs
+    assert (hit.url, hit.rating, hit.votes, hit.page) == (f"{TAB}2001", None, 0, SODA)
+    _, ug = search(tmp_path, "signos")
+    assert "1. [UG] Soda Stereo - Signos · chords×1\n" in ug and "rated" not in ug
+
+
 def test_official_non_public_and_untracked_types_are_not_kept(conn):
     artist_tabs.store(conn, SODA, "Soda Stereo", [_version(d) for d in (
         version_dict(1, song="Signos", artist="Soda Stereo", type="Official"),
