@@ -228,8 +228,10 @@ Before a change is done:
 the tests marked `autochords`), then check that the installed package is src/ file for file (the
 suite imports caracole from src/, so a data file left out of the wheel shows only there: a new
 asset folder goes inside src/caracole/) and check the wrapped `caracole`; `module` evaluates small
-NixOS systems against nix/module-check.nix and loads their caracole.toml with config.py. One
-at a time: `nix build`, `nix build .#autochords`, `nix build .#checks.x86_64-linux.module`.
+NixOS systems against nix/module-check.nix, loads their caracole.toml with config.py and parses
+their units' command lines with caracole's own CLI (a command or option a unit names, renamed or
+removed, fails it). One at a time: `nix build`, `nix build .#autochords`,
+`nix build .#checks.x86_64-linux.module`.
 
 Traps:
 

@@ -1,8 +1,10 @@
 # `nix build .#checks.x86_64-linux.module`: evaluates small NixOS systems that
 # enable services.caracole and fails, naming every broken expectation, when a unit
 # setting the design relies on is wrong. The build then loads the generated
-# caracole.toml files with caracole's own loader (an unknown key is fatal there), and
-# runs the failure notifier with ntfy unset, which must succeed quietly.
+# caracole.toml files with caracole's own loader (an unknown key is fatal there),
+# parses the units' command lines with caracole's own CLI (a command or an option
+# renamed or removed there fails here), and runs the failure notifier with ntfy
+# unset, which must succeed quietly.
 #
 # The systems run a stub `caracole`, so this check neither builds nor tests the
 # real package; `checks.package` does that.
@@ -12,6 +14,8 @@
   runCommand,
   writeShellScriptBin,
   python3,
+  # A Python with caracole's dependencies (the flake's runtimeDeps), for its CLI.
+  cliPython,
   # The module under test: the flake's nixosModules.default.
   module,
   # What services.caracole.package and autochords.package must default to.
@@ -19,13 +23,11 @@
   autochordsPackage,
 }:
 let
-  # caracole's config loader, run against the generated file.
-  loader = lib.fileset.toSource {
+  # caracole's source: its config loader, run against the generated files, and
+  # its CLI, which parses the units' command lines.
+  source = lib.fileset.toSource {
     root = ../.;
-    fileset = lib.fileset.unions [
-      ../src/caracole/__init__.py
-      ../src/caracole/config.py
-    ];
+    fileset = ../src;
   };
 
   stub = writeShellScriptBin "caracole" "exit 0";
@@ -454,7 +456,7 @@ let
     "caracole-web.service listens where web.address and web.port say, answering to web.allowedHosts" =
       lib.hasSuffix " serve --address 100.64.0.7 --port 8740 --allow-host nuc.example.ts.net --allow-host nuc"
         tailnetWeb.serviceConfig.ExecStart;
-    # Its pages and the commands it runs (add, match, fetch, render) rewrite _todo.md and index.html,
+    # Its pages and the commands it runs (get, add, fetch, render, ...) rewrite _todo.md and index.html,
     # which say whether caracole takes audio from YouTube (src/caracole/youtube_fetch.py
     # route_problem): with auto-chords on, they must say it as the nightly run does.
     "with auto-chords on, caracole-web.service runs the auto-chords package, with the model paths" =
@@ -469,7 +471,7 @@ let
     # Its requests run caracole commands, which write what the nightly run writes.
     "caracole-web.service writes only the library, state and cache, reads the music if it exists, waits for their mounts and caches there" =
       opens web defaultLayout;
-    # Neither caracole serve nor the commands it runs (add, match, fetch, render) read Spotify or ntfy.
+    # Neither caracole serve nor the commands it runs (get, add, fetch, render, ...) read Spotify or ntfy.
     "caracole-web.service loads web_token alone of the credentials, and none without it" =
       tailnetWeb.serviceConfig.LoadCredential == [ "web_token:/run/agenix/caracole-web-token" ]
       && (webOpen.systemd.services.caracole-web.serviceConfig.LoadCredential or [ ]) == [ ];
@@ -660,6 +662,8 @@ else
         "movedAutochordsUnit"
         "movedNotifyUnit"
         "webUnit"
+        "webDefaultUnit"
+        "webAutochordsUnit"
       ];
       loadCases = builtins.toJSON [
         (loads nuc defaultLayout)
@@ -674,6 +678,8 @@ else
       movedAutochordsUnit = unitText moved "caracole-autochords.service";
       movedNotifyUnit = unitText moved "caracole-notify-failure.service";
       webUnit = unitText webTailnet "caracole-web.service";
+      webDefaultUnit = unitText webDefault "caracole-web.service";
+      webAutochordsUnit = unitText webAutochords "caracole-web.service";
     }
     ''
       # Fails the build when the file has the text: `! grep` would not, since
@@ -687,7 +693,7 @@ else
 
       # The generated files must load with caracole's own strict loader, in the
       # units' environment, and name the folders the units open.
-      PYTHONPATH=${loader}/src python3 - "$loadCasesPath" <<'EOF'
+      PYTHONPATH=${source}/src python3 - "$loadCasesPath" <<'EOF'
       import json
       import sys
       from pathlib import Path
@@ -704,6 +710,42 @@ else
       cfg = load_config(Path(cases[0]["config"]), env=cases[0]["env"])
       assert cfg.ntfy.url == "https://ntfy.example/caracole", cfg.ntfy.url
       assert cfg.spotify.client_id == "abc123" and cfg.spotify.playlists == ("Learn",)
+      EOF
+
+      # Each unit's command line, as systemd reads it, parses with caracole's own CLI,
+      # its values checked as the CLI checks them, and reaches the command the unit is
+      # for (stood in for here). caracole-admin's CARACOLE_CONFIG is the root option's
+      # variable.
+      PYTHONPATH=${source}/src ${cliPython}/bin/python3 - <<'EOF'
+      import os
+      import shlex
+
+      import typer.main
+
+      from caracole.cli import build_app
+
+      root = typer.main.get_command(build_app())
+      config = next(p for p in root.params if p.name == "config")
+      assert config.envvar == "CARACOLE_CONFIG", config.envvar
+      ran = []
+      for name in ("run", "autochords", "serve"):
+          root.commands[name].callback = lambda name=name, **params: ran.append((name, params))
+      units = {
+          "runUnit": "run", "movedRunUnit": "run",
+          "autochordsUnit": "autochords", "movedAutochordsUnit": "autochords",
+          "webUnit": "serve", "webDefaultUnit": "serve", "webAutochordsUnit": "serve",
+      }
+      for unit, command in units.items():
+          with open(os.environ[unit + "Path"], encoding="utf-8") as f:
+              (line,) = [line for line in f if line.startswith("ExecStart=")]
+          argv = shlex.split(line.removeprefix("ExecStart="))[1:]
+          ran.clear()
+          root.main(argv, prog_name="caracole", standalone_mode=False)
+          assert [name for name, _ in ran] == [command], (unit, argv, ran)
+          print(f"{unit}: caracole {shlex.join(argv)}")
+          if unit == "webUnit":
+              params = ran[0][1]
+              assert params["address"] == "100.64.0.7" and params["port"] == 8740, params
       EOF
 
       # Without ntfy the notifier says so and succeeds.

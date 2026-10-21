@@ -554,7 +554,8 @@ model tests against the same model files. `nix flake check` builds both
 packages, each running the test suite (the model tests aside), checking that
 the installed package holds every file of the source (the stylesheets,
 scripts and data the pages are made from among them), and then running
-`caracole autochords` on the wrapped program, and evaluates the module.
+`caracole autochords` on the wrapped program, and evaluates the module, whose
+units' command lines it parses with caracole's own CLI.
 
 ## 7. Chinese sheets in the PDFs
 

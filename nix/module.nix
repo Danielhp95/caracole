@@ -638,9 +638,9 @@ in
     # caracole commands in this unit, one at a time, each under caracole's lock,
     # so it has the nightly run's folders, network and sandbox. Of the
     # credentials it gets web_token alone: neither the server nor the commands
-    # it runs (add, match, fetch, render) read Spotify or ntfy. With auto-chords
-    # on, it runs the nightly run's package (runPackage), and none of those
-    # commands runs yt-dlp.
+    # it runs (get, add, review, match, fetch, render, remove, songbook and
+    # lacuerda --artist) read Spotify or ntfy. With auto-chords on, it runs the
+    # nightly run's package (runPackage), and none of those commands runs yt-dlp.
     systemd.services.caracole-web = lib.mkIf cfg.web.enable {
       description = "caracole web: the library page and song requests";
       wantedBy = [ "multi-user.target" ];

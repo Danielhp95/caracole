@@ -49,6 +49,7 @@
           module = self.nixosModules.default;
           defaultPackage = self.packages.${system}.default;
           autochordsPackage = self.packages.${system}.autochords;
+          cliPython = python.withPackages runtimeDeps;
         };
       };
 
