@@ -32,7 +32,9 @@ an artist, a title or both: each hit says which reading scored it (``via``). The
 apart from the songs, and a song only its artist's name matched is in its artist's row
 (``LaCuerdaHit.top``), never a hit of its own. As most artists' songs aren't in the index, an
 artist whose whole name is words of the query among others ("estopa como camaron") is a
-possible match: ``NAMED`` (80), by "both", below a strong hit.
+possible match: ``NAMED`` (80), by "both", below a strong hit. While a letter's listing isn't
+read whole, no artist found is no sign that LaCuerda lacks them: ``unread_letter`` says under
+which letter a name would be, for a search to offer reading the page of that name.
 """
 
 from __future__ import annotations
@@ -62,6 +64,7 @@ from caracole.lacuerda import (
     LCArtist,
     LCSong,
     Listing,
+    artist_slug_candidates,
     artist_url,
     best_acordes_version,
     is_missing_artist_page,
@@ -185,6 +188,73 @@ def index_size(conn: sqlite3.Connection) -> tuple[int, int]:
     row = conn.execute("SELECT COUNT(*) FILTER (WHERE title = ''), COUNT(*) FILTER (WHERE title != '') "
                        "FROM lacuerda_index").fetchone()
     return row[0], row[1]
+
+
+@dataclass(frozen=True)
+class IndexState:
+    """What the index holds, for a search to say: its artists and songs, whether every listing page was
+    read (``complete``), and the letters (``LETTERS``) whose every page it holds so far (``letters_read``)."""
+
+    artists: int
+    songs: int
+    complete: bool
+    letters: tuple[str, ...]
+
+    @property
+    def empty(self) -> bool:
+        return self.artists == 0 and self.songs == 0
+
+
+def index_state(conn: sqlite3.Connection) -> IndexState:
+    """The index's ``IndexState``; no request."""
+    artists, songs = index_size(conn)
+    return IndexState(artists, songs, complete_at(conn) is not None, tuple(letters_read(conn)))
+
+
+def letters_read(conn: sqlite3.Connection) -> list[str]:
+    """The letters whose every listing page the index holds (read, found unchanged, or gone), in
+    ``LETTERS``' order: a search finds every artist of those. A refresh the budget cut short leaves the
+    letter it stopped in out until its other pages are read."""
+    indexed = pages(conn)
+    done = []
+    for letter in LETTERS:
+        first = indexed.get(listing_path(letter))
+        if first is not None and all(listing_path(letter, p) in indexed for p in first.get("pages", ())):
+            done.append(letter)
+    return done
+
+
+def unread_letter(conn: sqlite3.Connection, name: str) -> str | None:
+    """The letter (``LETTERS``) whose listing an artist of this name would be in, while the index hasn't read
+    it whole (an empty index has read none): no artist of theirs in the index is no sign that LaCuerda lacks
+    them then, and their page can tell. The first unread letter of the slugs their page may have
+    (``lacuerda.artist_slug_candidates``); None once those letters are read, or the whole index is, and for
+    a name no slug can be made of."""
+    if complete_at(conn) is not None:
+        return None
+    read = set(letters_read(conn))
+    for slug in artist_slug_candidates(name):
+        letter = "_num" if slug[0].isdigit() else slug[0]
+        if letter in LETTERS and letter not in read:
+            return letter
+    return None
+
+
+_LETTER_NAMES = {"_num": "#", "nn": "Ñ"}
+
+
+def letters_text(letters: Sequence[str]) -> str:
+    """Letters as LaCuerda's menu names them ("#" for a name that starts with a digit, "Ñ"), three in a row
+    or more as a range: "#, A–C", "A, B, E"."""
+    order = {letter: n for n, letter in enumerate(LETTERS)}
+    runs: list[list[str]] = []
+    for letter in sorted(dict.fromkeys(letters), key=lambda x: order.get(x, len(order))):
+        if runs and letter != "_num" and runs[-1][-1] != "_num" and order.get(letter) == order.get(runs[-1][-1], -2) + 1:
+            runs[-1].append(letter)
+        else:
+            runs.append([letter])
+    name = lambda x: _LETTER_NAMES.get(x, x.upper())  # noqa: E731
+    return ", ".join(f"{name(r[0])}–{name(r[-1])}" if len(r) > 2 else ", ".join(map(name, r)) for r in runs)
 
 
 def _replace(conn: sqlite3.Connection, page: str, rows: Sequence[Sequence[Any]]) -> None:

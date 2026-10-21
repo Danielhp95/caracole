@@ -8,8 +8,10 @@ ran. So a job of other commands reads the same way:
 - **Running**: its running step's label, as "Adding to the library…". A
   step's label is written to be this line. A lookup, one ``caracole get``,
   says its running stage's line instead (``STAGE_LINES``), as "Fetching from
-  Ultimate Guitar…", or "Waiting for another caracole…" while its lock is
-  held by a nightly run that lets it go first at its next pause.
+  Ultimate Guitar…" ("Fetching from LaCuerda…" while its sheet stage says it
+  asks LaCuerda, ``get.SHEET_FROM``), or "Waiting for another caracole…"
+  while its lock is held by a nightly run that lets it go first at its next
+  pause.
 - **Failed**: the error its failing command gave, in one short sentence (the
   log's last ``error:`` line, its first sentence; a lookup's, its failed
   stage's words). A command that printed no error is named by its step. A fetch that fails on a song with no sheet that
@@ -27,7 +29,11 @@ ran. So a job of other commands reads the same way:
   "Made", "Moved", "Renamed"…, "Made" and "Added" with a link to the
   songbook's page ("Open songbook") once caracole has written it (a move,
   a song taken out or a new name shows on the songbook's card, beside its
-  buttons); never a song's "Added".
+  buttons); never a song's "Added"; and a LaCuerda artist page's read
+  (``jobs.LACUERDA_ARTIST``), no song's, what LaCuerda answered, in the words
+  ``caracole lacuerda --artist`` ends with ("Read: …", "Not found: …", or "Not
+  read: …" for a cooldown, a block, a spent budget or an error). An add of a
+  song whose sheet you picked on LaCuerda says that tonight's run gets that sheet.
 
 A line that ends in a failure or a wait also links to the job's output on
 /jobs (``Line.details``). Every link is relative to the library page, which
@@ -40,7 +46,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from caracole.web.jobs import REMOVING, Job, Stage, Step
+from caracole.get import SHEET_FROM
+from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, Stage, Step
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
@@ -60,6 +67,9 @@ STAGE_LINES = {
     "pages": "Writing the library page",
 }
 _WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
+_SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
+# How ``caracole lacuerda --artist`` ends, by what LaCuerda answered, and the tone of the line it makes.
+_READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting"}
 
 
 @dataclass(frozen=True)
@@ -74,7 +84,8 @@ class SongFacts:
     ``caracole fetch --song`` refuses as such), and ``ignored`` that
     overrides.toml ignores it.
     ``picker`` is the link to its picker (``review?song=ID``) while its review
-    has candidates to pick from.
+    has candidates to pick from. ``lacuerda`` says the sheet you picked on
+    LaCuerda (``[lacuerda]``) is still to be asked for.
     """
 
     sheet: str | None = None
@@ -83,6 +94,7 @@ class SongFacts:
     checked_now: bool = False
     ignored: bool = False
     picker: str | None = None
+    lacuerda: bool = False
 
 
 @dataclass(frozen=True)
@@ -133,17 +145,35 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
             return Line("removed", DONE[action])
         opens = songbook_page if action in OPENS else None  # moved or renamed: its card is right there
         return Line("ready", DONE[action], ("Open songbook", opens) if opens else None)
+    if job.song_key.startswith(LACUERDA_ARTIST):  # no song's: its command's last word says what LaCuerda answered
+        return _artist_read(job.steps, details)
     if song is not None and song.sheet:
         return Line("ready", "Ready", ("Open sheet", song.sheet))
     if song is not None and song.ignored:
         return Line("added", "Ignored in overrides.toml")
     if song is not None and song.review:
         return Line("review", "Needs review", _review_link(song))
+    if not job.fetching and song is not None and song.lacuerda:
+        return Line("added", "Added: tonight's run gets the sheet you picked on LaCuerda")
     if not job.fetching or song is None:
         return Line("added", "Added: the nightly run looks for it")
     if song.checked_now:
         return Line("missing", "Not found", ("see the to-do page", TODO))
     return Line("waiting", "Not fetched yet", details=details)
+
+
+def _artist_read(steps: list[Step], details: str) -> Line:
+    """A LaCuerda artist page's read, over: the sentence ``caracole lacuerda --artist`` ends with
+    (commands/lyrics.py), up to its first "; " or bracket. "Read: …" is done, "Not found: …"
+    LaCuerda's answer that it has no such page, and "Not read: …" a cooldown, a block, a spent budget or an
+    error, each a wait; any other ending, "Done"."""
+    said = next((line.strip() for step in reversed(steps) for line in reversed(step.output)
+                 if line.startswith(tuple(_READ_TONES))), None)
+    if said is None:
+        return Line("added", "Done", details=details)
+    tone = next(t for prefix, t in _READ_TONES.items() if said.startswith(prefix))
+    text = said.split("; ", 1)[0].split(" (", 1)[0].rstrip(".") + "."
+    return Line(tone, _short(text), details=None if tone == "added" else details)
 
 
 def _review_link(song: SongFacts) -> tuple[str, str]:
@@ -162,6 +192,8 @@ def _stage_line(stages: list[Stage], *, new: bool = False) -> str:
         return "Waiting for another caracole…"
     if stage.name == "song" and new:
         return "Adding to the library…"
+    if stage.state == "running" and stage.name == "sheet" and stage.detail in _SHEET_LINES:
+        return f"{_SHEET_LINES[stage.detail]}…"
     return f"{STAGE_LINES.get(stage.name, stage.label)}…"
 
 

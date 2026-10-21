@@ -1,12 +1,14 @@
 """Helpers shared by command modules: config, database, the run lock, clients, pages, clock.
 
 Two paces (``config.ProviderPolicy``). Bulk work, every command but ``caracole
-get``, keeps a provider's ``delay`` (10-20 s for UG) between any two requests to
-it, whichever caracole sent them, and its ``budget`` a run. An interactive
-lookup (``caracole get``: one song asked for just now) takes ``make_client(...,
-interactive=True)``: ``lookup_delay`` (about a second) between two requests,
-``lookup_requests`` for the song, and ``lookup_per_hour`` for every lookup of
-the last hour together, counted from ``events`` (runs named ``lookup:…``).
+get`` and ``caracole lacuerda --artist``, keeps a provider's ``delay`` (10-20 s
+for UG) between any two requests to it, whichever caracole sent them, and its
+``budget`` a run. An interactive lookup (``caracole get``: one song asked for
+just now; ``caracole lacuerda --artist``: one LaCuerda artist's page) takes
+``make_client(..., interactive=True)``: ``lookup_delay`` (about a second)
+between two requests, ``lookup_requests`` for the song, and ``lookup_per_hour``
+for every lookup of the last hour together, counted from ``events`` (runs named
+``lookup:…``).
 
 One caracole at a time, but a lookup never waits behind a whole nightly run:
 it announces itself in ``state_dir/caracole.lock.waiting/`` (``exclusive(...,

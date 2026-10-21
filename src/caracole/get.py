@@ -9,13 +9,19 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 - ``song``: the song, found in the library or added to wanted.txt as
   ``caracole add`` adds it, then synced; the Ultimate Guitar song you picked
   recorded under ``[match]`` in overrides.toml, and the tab under ``[pin]``,
-  in place of the song's pin of its kind group alone (``_other_pins``).
+  in place of the song's pin of its kind group alone (``_other_pins``); the
+  LaCuerda song or version you picked under ``[lacuerda]``.
 - ``match``: matched against the offline index, alone.
-- ``sheet``: Ultimate Guitar's sheet, from as few pages as can be: one page
-  lists every version of its kind with its rating, and the best rated is kept
-  (two requests at most; one when the first page read is the best). Without
-  one, LaCuerda's, for a song LaCuerda would be asked about tonight. The sheet
-  is readable from here on (``Progress.readable``).
+- ``sheet``: the LaCuerda sheet you picked, first (its version's page, and its
+  artist's page when the index doesn't name its best version). Else, or when
+  LaCuerda can't give it now (said first: a failure, a cooldown, the Ultimate
+  Guitar tab you pinned, which no pick replaces), Ultimate Guitar's sheet, from
+  as few pages as can be: one page lists every version of its kind with its
+  rating, and the best rated is kept (two requests at most; one when the first
+  page read is the best). Without one, LaCuerda's, for a song LaCuerda would
+  be asked about tonight. The sheet is readable from here on
+  (``Progress.readable``). Once it asks LaCuerda, the stage says, running,
+  which site it asks (``SHEET_FROM``), for caracole serve's line.
 - ``pdf``: ChordPro and the PDF (render.py), and the HTML viewer where render
   writes one, for this song alone (``render_all``'s ``song_ids``): another
   song's failure, or its wait for a CJK font, is not this one's.
@@ -77,12 +83,16 @@ PROGRESS_PREFIX = "caracole-progress: "  # a JSON line of `caracole get --progre
 _FIRST_PAGES = 1  # versions pages read before the first sheet is kept: the first lists them all
 _FIRST_SCORED = 1  # sheets fetched for it: the best rated
 SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: what follows one spends the rest
+# A running sheet stage's detail, once LaCuerda is one of the sites it asks: the site it asks now, which caracole
+# serve's line follows (web/status.py), "Fetching from LaCuerda…" rather than Ultimate Guitar's.
+SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from Ultimate Guitar"}
 
 
 @dataclass(frozen=True)
 class LookupRequest:
     """A song to look up now, by name; ``ug`` ("artist-key/song-key") is the Ultimate Guitar song you
-    picked, ``tab`` the tab (its page's address, or its id)."""
+    picked, ``tab`` the tab (its page's address, or its id), ``lacuerda`` the LaCuerda song or version
+    (its page's address)."""
 
     artist: str
     title: str
@@ -90,6 +100,7 @@ class LookupRequest:
     duration_ms: int | None = None
     ug: str | None = None
     tab: str | None = None
+    lacuerda: str | None = None
 
     @property
     def display(self) -> str:
@@ -192,6 +203,9 @@ class _Lookup:
         self.failed: set[str] = set()
         self.kept_for_sheets: set[str] = set()  # sites whose client a stage after the sheet holds to SHEETS_SHARE
         self.lacuerda_asked = False
+        self.lacuerda_said: tuple[str, str] = ("done", "")  # what LaCuerda's first ask came to
+        self.running: str | None = None  # the stage running
+        self.sheet_from: str | None = None  # the site the sheet stage said it asks (SHEET_FROM), if it said one
         self.conn = None
         self.overrides = None
         self.song = None
@@ -208,6 +222,7 @@ class _Lookup:
     def stage(self, name: str, run: Callable[[], tuple[str, str] | str | None]) -> None:
         """Run one stage; what it returns is its end, ``(state, detail)`` or a detail of ``done``."""
         self._report(name, "running")
+        self.running = name
         try:
             out = run()
         except _Stop:
@@ -218,6 +233,8 @@ class _Lookup:
             self.result.bug = self.result.bug or f"{name}: {type(e).__name__}: {e}"
             self._report(name, "failed", f"a bug in caracole: {type(e).__name__}: {e}")
             return
+        finally:
+            self.running = None
         state, detail = out if isinstance(out, tuple) else ("done", out or "")
         self._report(name, state, detail)
         self._check_readable()
@@ -344,8 +361,16 @@ class _Lookup:
 
     def find_song(self) -> str:
         from caracole.normalize import identity_key
-        from caracole.overrides import OverridesError, add_match, add_pin, load_overrides, tab_id_from_url
-        from caracole.songs import find_song
+        from caracole.overrides import (
+            OverridesError,
+            add_lacuerda,
+            add_match,
+            add_pin,
+            lacuerda_pick_from_url,
+            load_overrides,
+            tab_id_from_url,
+        )
+        from caracole.songs import find_song, update_song
         from caracole.wanted import append_wanted, sync_wanted
 
         req = self.request
@@ -377,6 +402,11 @@ class _Lookup:
                 tab_id = tab_id_from_url(req.tab)
                 add_pin(self.cfg.overrides_file, song.display, [req.tab, *self._other_pins(song, tab_id)])
                 picked.append(f"[pin] tab {tab_id}")
+            if req.lacuerda:
+                pick = lacuerda_pick_from_url(req.lacuerda)
+                add_lacuerda(self.cfg.overrides_file, song.display, pick.url)
+                update_song(self.conn, song.id, lacuerda_checked_at=None)  # a new pick is asked for at once
+                picked.append(f"[lacuerda] {pick.url}")
             if picked:
                 self.overrides = load_overrides(self.cfg.overrides_file)
         except OverridesError as e:
@@ -450,7 +480,43 @@ class _Lookup:
                             library_dir=self.cfg.library_dir, now=self.now,
                             reload_overrides=lambda: load_overrides(self.cfg.overrides_file), **extra)
 
+    def _picked(self):
+        """The LaCuerda song or version you picked for the song (``[lacuerda]``), or None."""
+        return self.overrides.lacuerda.get(self.song.key) if self.song is not None else None
+
+    def _holds_pick(self) -> bool:
+        """Whether the sheet kept is the LaCuerda one you picked."""
+        from caracole.versions import get_version
+
+        pick, kept = self._picked(), self._kept_sheet()
+        if pick is None or kept is None:
+            return False
+        version = get_version(self.conn, kept.version_id)
+        return version.provider == "lacuerda" and pick.holds(version.tab_id)
+
+    def _sheet_from(self, provider: str) -> None:
+        """Say which site the running sheet stage asks now, once LaCuerda is one of them (``SHEET_FROM``):
+        caracole serve's line then says LaCuerda, and Ultimate Guitar again after it. A sheet Ultimate Guitar
+        alone is asked for says nothing more."""
+        if self.running != "sheet" or self.sheet_from == provider or (provider == "ug" and self.sheet_from is None):
+            return
+        self.sheet_from = provider
+        self._report("sheet", "running", SHEET_FROM[provider])
+
     def sheet(self) -> tuple[str, str] | str:
+        if self._picked() is None:
+            return self._sheet_from_ug()
+        # Your pick on LaCuerda is the sheet; Ultimate Guitar's only when LaCuerda can't give it, and then the
+        # stage says why not before what Ultimate Guitar gave.
+        lc = self.lacuerda()
+        said = lc[1] if isinstance(lc, tuple) else lc
+        if self._holds_pick():
+            return "done", said
+        ug = self._sheet_from_ug()
+        ug_state, ug_said = ug if isinstance(ug, tuple) else ("done", ug)
+        return ug_state, f"{said}; {ug_said}" if said else ug_said
+
+    def _sheet_from_ug(self) -> tuple[str, str] | str:
         from caracole.songs import get_song
         from caracole.ug.fetch import process_song
 
@@ -458,6 +524,7 @@ class _Lookup:
         ug: tuple[str, str] | str
         if why is None:
             def first(client) -> str:
+                self._sheet_from("ug")
                 out = process_song(self._fetch_context(client, first=True), self.song, guitar=False)
                 return (f"tab {out.sheet} from Ultimate Guitar" if out.sheet is not None
                         else "Ultimate Guitar has no sheet to keep")
@@ -533,11 +600,14 @@ class _Lookup:
         from caracole.lacuerda_fetch import lacuerda_sheets
         from caracole.songs import get_song
 
-        if self.lacuerda_asked:
-            return "skipped", "asked already, for the sheet"
+        if self.lacuerda_asked:  # for the sheet: what it came to is said again, a failure as one
+            state, said = self.lacuerda_said
+            again = "asked already, for the sheet" + (f": {said}" if said else "")
+            return ("skipped" if state == "done" else state), again
         self.lacuerda_asked = True
 
         def ask(client) -> tuple[str, str] | str:
+            self._sheet_from("lacuerda")  # for the sheet stage alone
             s = lacuerda_sheets(self.conn, client, self.cfg.library_dir, self.cfg.rank, self.now,
                                 overrides=self.overrides, only={self.song.id})
             if s.budget_exhausted:
@@ -545,14 +615,37 @@ class _Lookup:
             if s.failures:
                 _, e = s.failures[0]
                 raise e
+            if not s.tried and self._holds_pick():
+                return "done", "the LaCuerda sheet you picked is the sheet already"
+            if not s.tried and self._picked() is not None:
+                return "skipped", self._pick_waits()
             if not s.tried:
                 return "skipped", "not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month"
             return "sheet kept from LaCuerda" if s.kept else ("not on LaCuerda" if s.missing else "kept what it had")
 
-        # Without a sheet yet, LaCuerda's is the sheet; with one, a better one the nightly run would look for too.
-        out = self.asking("lacuerda", ask) if self._kept_sheet() is None else self.after_the_sheet("lacuerda", ask)
+        # Without a sheet yet, LaCuerda's is the sheet, and so is the one you picked there; with one, a better one
+        # the nightly run would look for too.
+        first = self._kept_sheet() is None or self._picked() is not None
+        out = self.asking("lacuerda", ask) if first else self.after_the_sheet("lacuerda", ask)
+        self.lacuerda_said = out if isinstance(out, tuple) else ("done", out)
         self.song = get_song(self.conn, self.song.id)
         return out
+
+    def _pick_waits(self) -> str:
+        """Why the LaCuerda song you picked wasn't asked for (``lacuerda_fetch._songs_to_try``): the tab you pinned
+        on Ultimate Guitar is the sheet kept, which no pick replaces, or LaCuerda answered for the song this
+        month."""
+        from caracole.songs import get_song
+        from caracole.versions import get_version
+
+        kept = self._kept_sheet()
+        version = get_version(self.conn, kept.version_id) if kept is not None else None
+        if (version is not None and version.provider == "ug" and version.tab_id.isdigit()
+                and int(version.tab_id) in self.overrides.pin.get(self.song.key, ())):
+            return "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"
+        if get_song(self.conn, self.song.id).lacuerda_checked_at:
+            return "your pick on LaCuerda waits: it was asked for this month"
+        return "your pick on LaCuerda waits for the nightly run"
 
     def gtptabs(self) -> tuple[str, str] | str:
         from caracole.gtptabs_fetch import gtptabs_files

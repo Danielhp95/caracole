@@ -126,11 +126,25 @@ def test_get_records_the_ug_song_and_the_tab_you_pick(config, sites, conn, tmp_p
     assert f'"Radiohead - Creep" = ["{TAB}radiohead/creep-chords-103"]' in overrides
 
 
+@pytest.mark.slow
+def test_get_records_the_lacuerda_song_you_pick(config, sites, conn, tmp_path):
+    from test_get import CAMARON_2, serve_como_camaron
+
+    serve_como_camaron(sites, conn)
+    result = get(config, "--lacuerda", "acordes.lacuerda.net/estopa/como_camaron-2.shtml", "Estopa - Como Camarón")
+    assert result.exit_code == 0, result.output
+    overrides = (tmp_path / "library" / "overrides.toml").read_text(encoding="utf-8")
+    assert f'[lacuerda]\n"Estopa - Como Camarón" = "{CAMARON_2}"' in overrides
+    assert sites.requests[0] == CAMARON_2 and "Sheet: sheet kept from LaCuerda" in result.output
+
+
 @pytest.mark.parametrize("args,said", [
     (["Radiohead"], 'a song as "Artist - Title"'),
     (["a", "b", "c"], 'a song as "Artist - Title"'),
     (["--tab", "https://example.com/x", "Radiohead - Creep"], "--tab"),
     (["--ug", "radiohead", "Radiohead - Creep"], "--ug"),
+    (["--lacuerda", "https://acordes.lacuerda.net/estopa/", "Estopa - Como Camarón"], "--lacuerda"),
+    (["--lacuerda", f"{TAB}radiohead/creep-chords-103", "Radiohead - Creep"], "--lacuerda"),
     (["--duration", "soon", "Radiohead - Creep"], "--duration"),
 ])
 def test_get_refuses_what_isnt_a_song_with_status_2(config, sites, args, said):

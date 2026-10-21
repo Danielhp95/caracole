@@ -192,6 +192,42 @@ def test_the_songs_of_an_artist_whose_page_is_cached_come_from_the_cache(conn, t
     assert tuple(row) == ("Soda Stereo", "soda-stereo", "de-musica-ligera", "RHRTTTDTB", 3, 0, "soda_stereo/")
 
 
+def test_the_state_says_which_letters_a_search_finds_every_artist_of(conn, tmp_path):
+    assert li.index_state(conn) == li.IndexState(0, 0, False, ())
+    assert li.index_state(conn).empty
+    site = site_with(e=[E1, E2], s=[S1])
+    with pytest.raises(BudgetExhausted):
+        refresh(site, conn, tmp_path, budget=6)  # #, A–D answer 404 (no listing), E's first page is read
+    state = li.index_state(conn)
+    assert (state.artists, state.complete, state.letters) == (3, False, ("_num", "a", "b", "c", "d"))
+    assert not state.empty and li.letters_text(state.letters) == "#, A–D"  # E waits for its second page
+    refresh(site, conn, tmp_path, NOW + timedelta(hours=24))
+    state = li.index_state(conn)
+    assert (state.artists, state.songs, state.complete) == (7, 0, True) and len(state.letters) == len(LETTERS)
+
+
+def test_the_letter_a_name_would_be_listed_under_while_the_index_hasnt_read_it(conn, tmp_path):
+    # While a letter isn't read whole, the index can't tell LaCuerda lacks an artist under it: their page can.
+    assert li.unread_letter(conn, "Estopa") == "e"  # an empty index has read no letter
+    site = site_with(e=[E1, E2], s=[S1])
+    with pytest.raises(BudgetExhausted):
+        refresh(site, conn, tmp_path, budget=6)  # #, A–D read whole, E in part
+    assert li.unread_letter(conn, "Estopa") == "e"
+    assert li.unread_letter(conn, "Caifanes") is None  # C is read whole: none there is none on LaCuerda
+    assert li.unread_letter(conn, "4 Non Blondes") is None  # "#"
+    assert li.unread_letter(conn, "The Beatles") == "t"  # beatles, then the_beatles: B is read, T isn't
+    assert li.unread_letter(conn, "!!!") is None and li.unread_letter(conn, "宋冬野") is None  # no slug to try
+    refresh(site, conn, tmp_path, NOW + timedelta(hours=24))
+    assert li.unread_letter(conn, "Estopa") is None  # every letter read
+
+
+def test_letters_are_named_as_lacuerdas_menu_names_them_runs_as_ranges():
+    assert li.letters_text(["_num", "a", "b", "c"]) == "#, A–C"
+    assert li.letters_text(["a", "b", "e"]) == "A, B, E"
+    assert li.letters_text(["m", "n", "nn", "o", "z"]) == "M–O, Z"  # Ñ in its place, as LaCuerda lists it
+    assert li.letters_text(["nn"]) == "Ñ" and li.letters_text([]) == ""
+
+
 # --- what lacuerda_fetch reads --------------------------------------------------------------
 
 
