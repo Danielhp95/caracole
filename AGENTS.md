@@ -153,7 +153,9 @@ Rules a change there keeps (the Invariants below are the others):
   reaches a form only through a GET page of the server's own, whose form posts with the token:
   `/export` (export_routes.py) and `/versions` (versions_routes.py: Make this the one, `caracole get
   --tab` with the tab's own page; Keep it and back to caracole's pick, `caracole versions --keep` and
-  `--clear`), each a job under the song's key, which jobs.py's `_pick` joins as a lookup's `--tab`.
+  `--clear`, with `--progress`: the job's stages), each a job under the song's key, which jobs.py's
+  `_pick` joins as a lookup's `--tab`. What a done job came to is read from the song's state and
+  overrides.toml again (`caracole get` exits 0 on a block or a spent budget, the sheet unchanged).
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.

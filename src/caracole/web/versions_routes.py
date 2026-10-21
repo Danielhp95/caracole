@@ -6,9 +6,10 @@ title opens, kept beside the sheet, or the song taken back to caracole's pick.
                           then, with ``&job=``, how it goes and a link to what it made
     POST /versions/choose  Make this the one: ``caracole get --tab`` queued, the tab's own page, as
                           ``caracole versions --choose`` runs it (``[pin]``), and back to the versions page
-    POST /versions/keep    Keep it: ``caracole versions --keep`` queued (one tab page, at the lookup pace)
-    POST /versions/clear   Go back to caracole's pick: ``caracole versions --clear`` queued, for a song with a
-                          ``[pin]``
+    POST /versions/keep    Keep it: ``caracole versions --keep --progress`` queued (one tab page, at the lookup
+                          pace)
+    POST /versions/clear   Go back to caracole's pick: ``caracole versions --clear --progress`` queued, for a
+                          song with a ``[pin]`` that chooses its sheet
 
 A sheet viewer served from the library runs in a sandbox, with no way to post a form to the server, so its
 switcher links ``GET /versions?…``, a page of the server's own with no script, whose form ``POST``s with the
@@ -16,12 +17,18 @@ form token like the others. Each post is one command queued under the song's key
 song's card shows it and its jobs join (jobs.py: a version kept, or the pin taken out, is a pick of the song's
 as a lookup's ``--tab`` is): the same version asked twice is one job, Make this the one takes the place of the
 song's lookup that still waits. The server writes no overrides.toml and keeps no file itself: the command does,
-under caracole's lock, at the lookup pace and within its budgets.
+under caracole's lock, at the lookup pace and within its budgets. Its progress lines are the job's stages, as a
+lookup's are. Once the job is done, the page says what it came to from the song's state, read again, never from
+the command's exit (a block, a spent budget or the hour's cap exits 0, the sheet as it was): the version the
+one, else its ``[pin]`` recorded for the nightly run, else nothing changed; a version kept or not; the ``[pin]``
+gone or still there.
 
 Each refusal is a ``Refused``: a sheet that is no viewer caracole wrote for a song of the library (404), a tab
 that isn't a number (400) or isn't one of the song's chords versions on Ultimate Guitar (404), and, posted, what
 can't be done (409): Make this the one on the one, Keep it on a version kept already, either on a version UG no
-longer has, Go back to caracole's pick on a song with no ``[pin]``, and an ignored song. The page itself says
+longer has or one under ``[block]`` (as ``caracole versions`` refuses it), Go back to caracole's pick on a song
+with no ``[pin]`` of its sheet (a Guitar Pro or tab pin stays, as ``caracole versions --clear`` leaves it), and an
+ignored song. The page itself says
 so for those, and offers no form.
 """
 
@@ -60,7 +67,8 @@ _SOURCES = {"lacuerda": "LaCuerda's sheet", "auto": "the auto-chords sheet"}
 class _Asked:
     """What a versions page or post names: the song, the viewer it came from (its library path) and its folder (as
     a quoted address), the version (None for Go back to caracole's pick), every version, what the song's sheet is
-    now, in words, and whether the song has a ``[pin]``."""
+    now, in words, the song's ``[pin]`` tabs that choose its sheet (``caracole versions --clear`` takes out those
+    alone, never a Guitar Pro or tab pin) and every one it has, and the tabs under ``[block]``."""
 
     song: Song
     sheet: str
@@ -68,7 +76,13 @@ class _Asked:
     version: SheetVersion | None
     versions: list[SheetVersion]
     the_one: str | None
-    pinned: bool
+    sheet_pins: tuple[int, ...]
+    pins: tuple[int, ...]
+    blocked: frozenset[int]
+
+    @property
+    def pinned(self) -> bool:
+        return bool(self.sheet_pins)
 
 
 def versions_page(app: WebApp, target: str) -> Response:
@@ -101,7 +115,7 @@ def versions_post(app: WebApp, do: str, form: dict[str, str]) -> Response:
     song = asked.song
     titles = {"choose": f"Make a version the one: {song.display}", "keep": f"Keep a version of {song.display}",
               "clear": f"Back to caracole's pick: {song.display}"}
-    job, _ = app.submit(titles[do], song.key, _steps(do, asked), fetching=do != "keep", display=song.display)
+    job, _ = app.submit(titles[do], song.key, _steps(do, asked), fetching=True, display=song.display)
     return app.queued(job, f"/versions?{_query(do, asked, job=job.id)}")
 
 
@@ -114,6 +128,7 @@ def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
     from caracole.library import songs_in_folder
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS, written_file
     from caracole.sheet_versions import in_library
+    from caracole.versions_cmd import _chords_pins
     from caracole.web.app import version_page_tab
 
     if do != "clear" and not (tab.isascii() and tab.isdigit() and len(tab) <= MAX_TAB):
@@ -129,13 +144,14 @@ def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
             raise _NO_SHEET
         versions = in_library(conn, song.id, app.cfg.rank)
         the_one = _the_one(conn, song.id, versions)
+        sheet_pins = tuple(_chords_pins(conn, song, overrides))
     version = None
     if do != "clear":
         version = next((v for v in versions if v.tab_id == tab), None)
         if version is None:
             raise Refused(404, "No such version", f"Ultimate Guitar lists no such chords version of {song.display}.")
-    return _Asked(song, sheet, "/".join(quote(p) for p in parts[:-1]), version, versions, the_one,
-                  song.key in overrides.pin)
+    return _Asked(song, sheet, "/".join(quote(p) for p in parts[:-1]), version, versions, the_one, sheet_pins,
+                  tuple(overrides.pin.get(song.key, ())), overrides.block)
 
 
 def _the_one(conn, song_id: int, versions: list[SheetVersion]) -> str | None:
@@ -164,6 +180,9 @@ def _cant(do: str, asked: _Asked) -> str | None:
     assert v is not None
     if v.gone:
         return "Ultimate Guitar no longer has this version: it stays listed until the next fetch drops it."
+    if int(v.tab_id) in asked.blocked and not v.chosen:
+        return ("This version is under [block] in overrides.toml: caracole never uses it. Take it out of [block] "
+                "first.")
     if do == "choose" and v.chosen:
         return "This version is the one already: the song's title opens it."
     if do == "keep" and v.kept:
@@ -275,15 +294,40 @@ def _how_it_goes(app: WebApp, do: str, asked: _Asked, job: Job | None) -> tuple[
         assert asked.version is not None
         page = _kept_page(app, asked)
         if page is None:
-            return (f'<p class="says failed">Done, but it wasn\'t kept: see the request\'s '
-                    f'<a href="/{details_href(job.id)}">output</a>.</p>\n', "")
+            why = _stage_detail(job, "version")
+            return (f'<p class="says failed">Done, but it wasn\'t kept{": " + escape(why) if why else ""}. See the '
+                    f'request\'s <a href="/{details_href(job.id)}">output</a>.</p>\n', "")
         return ('<p class="says done">Done: it is kept beside the sheet.</p>\n',
                 f'<a class="btn primary" href="/{asked.folder}/{quote(page)}">Open it</a>\n')
     from caracole.sheet_versions import SHEET_PAGE
 
-    said = "Done: it is the one now." if do == "choose" else "Done: caracole picks the sheet again."
+    # caracole get exits 0 on a block, a spent budget or the hour's cap, the sheet as it was: what the job did is
+    # the song's state, read again, never the command's exit.
+    output = f'<a href="/{details_href(job.id)}">output</a>'
+    if do == "choose":
+        assert asked.version is not None
+        if not asked.version.chosen:
+            why = _stage_detail(job, "sheet")
+            if int(asked.version.tab_id) in asked.pins:
+                said = ("Done, and your choice is recorded under [pin] in overrides.toml, but it isn't the song's "
+                        "sheet yet: the nightly run, or a later lookup, makes it the one")
+            else:
+                said = "Done, but it isn't the one"
+            return (f'<p class="says waiting">{escape(said)}{": " + escape(why) if why else "."} See the '
+                    f"request's {output}.</p>\n", "")
+        said = "Done: it is the one now."
+    elif asked.pinned:
+        return (f'<p class="says failed">Done, but the [pin] is still there: see the request\'s {output}.</p>\n', "")
+    else:
+        said = "Done: caracole picks the sheet again."
     return (f'<p class="says done">{said}</p>\n',
             f'<a class="btn primary" href="/{asked.folder}/{quote(SHEET_PAGE)}">Open the sheet</a>\n')
+
+
+def _stage_detail(job: Job, name: str) -> str:
+    """What the job's stage ``name`` said when it ended, when it ended skipped or failed ("" else)."""
+    stage = next((s for s in job.stages if s.name == name), None)
+    return stage.detail.strip().rstrip(".") if stage is not None and stage.state in ("skipped", "failed") else ""
 
 
 def _kept_page(app: WebApp, asked: _Asked) -> str | None:

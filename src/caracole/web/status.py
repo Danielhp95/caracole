@@ -59,6 +59,7 @@ STAGE_LINES = {
     "song": "Finding the song",
     "match": "Looking it up",
     "sheet": "Fetching from Ultimate Guitar",
+    "version": "Fetching the version from Ultimate Guitar",  # caracole versions --keep's (jobs.KEEP_STAGES)
     "pdf": "Rendering the sheet",
     "lyrics": "Fetching the lyrics from LRCLIB",
     "ug": "Fetching from Ultimate Guitar",

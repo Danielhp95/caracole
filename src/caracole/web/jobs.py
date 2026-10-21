@@ -16,8 +16,9 @@ fetch adds ``caracole fetch --song`` and ``caracole render --song`` (offline) af
 get`` or ``caracole add`` with ``--lacuerda``, and a LaCuerda artist's page is read
 by ``caracole lacuerda --artist`` (``lacuerda_artist_steps``), a job of its own
 (``LACUERDA_ARTIST`` and the page's slug), one request at the lookup pace. A version of a song's sheet kept, or
-its pin taken out, is ``caracole versions`` (``version_steps``), a pick of the song's as a lookup's ``--tab`` is,
-so the song's jobs join it as they would that. Each command takes caracole's lock (a
+its pin taken out, is ``caracole versions --progress`` (``version_steps``), a pick of the song's as a lookup's
+``--tab`` is, so the song's jobs join it as they would that; its JSON lines are the job's stages too (Keep it's
+``KEEP_STAGES``, and a lookup's for ``--clear``). Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -196,13 +197,30 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
 VERSIONS = "versions"  # the command that keeps a song's version, or takes its pin out
 
 
+# Keep it's stages, as ``caracole versions --keep --progress`` reports them (versions_cmd.py)
+KEEP_STAGES = (
+    ("song", "Find the song"),
+    ("version", "The version from Ultimate Guitar"),
+    ("pdf", "The version's page"),
+    ("pages", "The library page"),
+)
+
+
 def version_steps(artist: str, title: str, *, keep: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
-    """``caracole versions``: keep the Ultimate Guitar tab ``keep`` beside the song's sheet (one tab page, at the
-    lookup pace), or, without it, take the song's ``[pin]`` out and look it up again (``--clear``). The song is
-    its artist and title as two words, so a " - " in either stays where it is."""
+    """``caracole versions --progress``: keep the Ultimate Guitar tab ``keep`` beside the song's sheet (one tab
+    page, at the lookup pace), or, without it, take the song's ``[pin]`` out and look it up again (``--clear``, a
+    lookup's stages). The song is its artist and title as two words, so a " - " in either stays where it is."""
     if keep is not None:
-        return [("Fetching the version from Ultimate Guitar", (VERSIONS, f"--keep={keep}", "--", artist, title))]
-    return [("Going back to caracole's pick", (VERSIONS, "--clear", "--", artist, title))]
+        return [("Fetching the version from Ultimate Guitar",
+                 (VERSIONS, f"--keep={keep}", "--progress", "--", artist, title))]
+    return [("Going back to caracole's pick", (VERSIONS, "--clear", "--progress", "--", artist, title))]
+
+
+def _reports(args: Sequence[str]) -> bool:
+    """Whether a step's command writes ``caracole get --progress`` lines: a lookup, or ``caracole versions
+    --progress``."""
+    options = args[:list(args).index("--")] if "--" in args else args
+    return args[:1] == (LOOKUP,) or (args[:1] == (VERSIONS,) and "--progress" in options)
 
 
 LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it
@@ -227,12 +245,16 @@ def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
 
 
 def _stages(steps: Sequence[Step]) -> list[Stage]:
-    """A job's stages: a lookup's, all waiting; none for other commands."""
-    if not any(step.args[:1] == (LOOKUP,) for step in steps):
-        return []
+    """A job's stages, all waiting: a lookup's (``caracole versions --clear`` is one), then Keep it's it hasn't;
+    none for other commands."""
     from caracole.get import STAGES
 
-    return [Stage(name, label) for name, label in STAGES]
+    names: dict[str, str] = {}
+    if any(step.args[:1] == (LOOKUP,) or step.args[:2] == (VERSIONS, "--clear") for step in steps):
+        names.update(STAGES)
+    if any(step.args[:1] == (VERSIONS,) and step.args[1:2] != ("--clear",) for step in steps):
+        names.update((name, label) for name, label in KEEP_STAGES if name not in names)
+    return [Stage(name, label) for name, label in names.items()]
 
 
 REMOVING = "remove:"  # a removal's song_key: the song's key after it, so it never joins the song's add or fetch
@@ -342,7 +364,8 @@ class JobQueue:
             # Two versions kept, or a pin taken out after a version kept, are two commands
             waiting.steps += [step for step in new if step.args[0] not in runs
                               or (step.args[0] == VERSIONS and step.args not in {s.args for s in waiting.steps})]
-            waiting.stages = waiting.stages or _stages(waiting.steps)
+            had = {stage.name for stage in waiting.stages}  # a job waiting has heard nothing yet
+            waiting.stages += [stage for stage in _stages(waiting.steps) if stage.name not in had]
             waiting.title, waiting.fetching = title, True
             waiting.note = waiting.note or note
             return copy.deepcopy(waiting), False
@@ -431,7 +454,7 @@ class JobQueue:
                 step.state = "running"
 
             def emit(line: str, step: Step = step) -> None:
-                event = read_progress_line(line) if step.args[:1] == (LOOKUP,) else None
+                event = read_progress_line(line) if _reports(step.args) else None
                 with self._lock:
                     if event is not None:  # a lookup's progress: data, not output
                         job.heard(event)

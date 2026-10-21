@@ -2682,16 +2682,24 @@ with it. A KEY that is no key exits with status 2.
   (`caracole versions --choose` runs the same): it becomes `sheet.txt`, the
   page the title opens, its PDF and its songbooks', kept under `[pin]`.
   **Keep it** queues `caracole versions SONG --keep TAB`: one tab page, at the
-  lookup pace, kept beside the sheet with a viewer of its own. **Go back to
-  caracole's pick**, on a song with a `[pin]`, queues `caracole versions SONG
-  --clear`. Each is the song's request, as a lookup is: its card says how it
-  goes, the same one asked twice is queued once, and Make this the one takes
-  the place of the song's lookup still waiting. The page then says how it goes
-  (it reloads itself while it waits or runs) and, once done, opens the sheet or
-  the kept version's page; Back to the sheet goes back where you came from.
-  On the one already, a version kept already, one Ultimate Guitar no longer
-  has, or a song with no pin, it says so and offers nothing (sent anyway:
-  409).
+  lookup pace, kept beside the sheet with a viewer of its own. A runner-up
+  caracole keeps by itself is kept already there (sent anyway: 409), and
+  stays only while caracole's ranking keeps it among the runners-up; `caracole
+  versions SONG --keep TAB` on it makes it yours, kept whatever the ranking. **Go back to caracole's pick**, on a song with a
+  `[pin]` that chooses its sheet (a Guitar Pro or tab pin stays, as `--clear`
+  leaves it), queues `caracole versions SONG --clear`. Each is the song's
+  request, as a lookup is: its card says how it goes, stage by stage, the same
+  one asked twice is queued once, and Make this the one takes the place of the
+  song's lookup still waiting. The page then says how it goes (it reloads
+  itself while it waits or runs) and, once done, what it came to, read from the
+  song and overrides.toml, not from how the command exited: the version is the
+  one now (Open the sheet), or your choice is under `[pin]` but a block, a spent
+  budget or the hour's cap kept the sheet as it was, so the nightly run (or a
+  later lookup) makes it the one; the version kept (Open it) or not, and why;
+  the pin gone, or still there. Back to the sheet goes back where you came
+  from. On the one already, a version kept already, one Ultimate Guitar no
+  longer has, one under `[block]`, or a song with no such pin, it says so and
+  offers nothing (sent anyway: 409).
 - **Songbooks**, the page's second tab (see [The Songbooks tab](#the-songbooks-tab)
   for what it shows). Each change runs its `caracole songbook` command (see
   [Songbooks](#songbooks)) and leaves you where you are:

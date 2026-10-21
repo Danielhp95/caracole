@@ -12,6 +12,7 @@ from caracole.render import _note_written
 from caracole.sheet_versions import version_names
 from caracole.versions import mark_gone, set_coverage, upsert_version
 from caracole.viewer import build_viewer
+from caracole.web.status import details_href
 
 from helpers.rendered import FETCHED, rendered_song
 from test_web_app import ALLOWED, HOST, JSON, META_POLICY, Recorder, get, header, post, text
@@ -177,8 +178,30 @@ def test_make_this_the_one_looks_the_song_up_with_that_tab(app, queue, recorder,
     assert recorder.calls == [["get", "--progress", f"--tab={SLUGGED.format(KEPT)}", "--", "Soda Stereo",
                                "De Música Ligera"]]
     done = get(app, where)
-    assert "Done" in shown(done) and 'http-equiv="refresh"' not in text(done)
+    assert 'http-equiv="refresh"' not in text(done)
+    assert "it is the one now" not in shown(done)  # the fake command changed nothing: the page says so
+    assert "Done, but it isn't the one" in shown(done) and f'href="/{details_href(1)}"' in text(done)
+
+
+def test_make_this_the_one_says_its_the_one_only_once_the_sheet_is_that_version(app, queue, recorder, conn, cfg):
+    # caracole get exits 0 on a block, a spent budget or the hour's cap: the job is done, the sheet as it was. The
+    # page reads the song's state, never the command's exit: the pin recorded but not fetched yet, then fetched.
+    from caracole.overrides import add_pin
+
+    song = versioned_song(conn, cfg)
+    where = header(post(app, "/versions/choose", {"sheet": SHEET, "tab": OTHER}), "location")
+    queue.run_pending()
+    add_pin(cfg.overrides_file, DISPLAY, [SLUGGED.format(OTHER)])  # what get --tab writes before it fetches
+    waits = shown(get(app, where))
+    assert "it is the one now" not in waits and "The one now: Ver 1 · 4.5★ (10)" in waits
+    assert "recorded under [pin] in overrides.toml" in waits and "the nightly run" in waits
+    assert f'href="/{details_href(1)}"' in text(get(app, where))
+    other = chords(conn, song, OTHER, rating=4.86, votes=408, number=3)
+    keep_file(conn, cfg.library_dir, song=song, version_id=other, name="sheet.txt", data=b"[G]Otra\n", rank=1)
+    done = get(app, where)
+    assert "Done: it is the one now." in shown(done) and "The one now: Ver 3 · 4.86★ (408)" in shown(done)
     assert f'href="/{quote(SHEET)}"' in text(done) and "Open the sheet" in shown(done)
+    assert "<form" not in text(done)
 
 
 def test_keep_it_fetches_that_version_and_keeps_it_beside_the_sheet(app, queue, recorder, conn, cfg):
@@ -187,7 +210,7 @@ def test_keep_it_fetches_that_version_and_keeps_it_beside_the_sheet(app, queue, 
     assert page.status == 200 and 'action="/versions/keep"' in text(page) and ">Keep it<" in text(page)
     where = header(post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}), "location")
     queue.run_pending()
-    assert recorder.calls == [["versions", f"--keep={OTHER}", "--", *NAMES]]
+    assert recorder.calls == [["versions", f"--keep={OTHER}", "--progress", "--", *NAMES]]
     done = get(app, where)
     assert "Done, but it wasn't kept" in shown(done)  # the fake command kept nothing
     keep_version(conn, cfg, song, chords(conn, song, OTHER, rating=4.86, votes=408, number=3), OTHER, rank=3)
@@ -207,8 +230,38 @@ def test_back_to_caracoles_pick_takes_the_pin_out(app, queue, recorder, conn, cf
     assert 'action="/versions/clear"' in text(page) and ">Go back to caracole's pick<" in text(page)
     where = header(post(app, "/versions/clear", {"sheet": SHEET}), "location")
     queue.run_pending()
-    assert recorder.calls == [["versions", "--clear", "--", *NAMES]]
-    assert "Done" in shown(get(app, where))
+    assert recorder.calls == [["versions", "--clear", "--progress", "--", *NAMES]]
+    # the fake command took nothing out: the pin is still there, and the page says so
+    assert "caracole picks the sheet again" not in shown(get(app, where))
+    assert "Done, but the [pin] is still there" in shown(get(app, where))
+    cfg.overrides_file.write_text("", encoding="utf-8")
+    assert "Done: caracole picks the sheet again." in shown(get(app, where))
+
+
+def test_only_a_chords_pin_is_one_to_go_back_from(app, conn, cfg):
+    # A Guitar Pro version pinned chooses no sheet: caracole versions --clear leaves it, so the page offers nothing.
+    song = versioned_song(conn, cfg)
+    upsert_version(conn, provider="ug", tab_id="301", song_id=song.id, slot="guitar", kind="pro", rating=4.0,
+                   votes=9, version=1, label=None, url=SLUGGED.format(301).replace("chords", "guitar-pro"),
+                   raw={"id": 301}, now=FETCHED)
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(301).replace("chords", "guitar-pro")}"]\n',
+                                  encoding="utf-8")
+    page = get(app, versions_url("", "clear"))
+    assert "<form" not in text(page) and "caracole picks" in shown(page)
+    assert post(app, "/versions/clear", {"sheet": SHEET}).status == 409
+
+
+def test_a_blocked_version_is_neither_made_the_one_nor_kept(app, queue, conn, cfg):
+    from caracole.overrides import add_block
+
+    versioned_song(conn, cfg)
+    add_block(cfg.overrides_file, int(OTHER))
+    for do in ("choose", "keep"):
+        page = get(app, versions_url(OTHER, do))
+        assert page.status == 200 and "<form" not in text(page) and "[block]" in shown(page), do
+        assert post(app, f"/versions/{do}", {"sheet": SHEET, "tab": OTHER}).status == 409, do
+    assert queue.active_count() == 0
 
 
 def test_a_post_from_the_pages_script_is_answered_with_its_job(app, queue, conn, cfg):
@@ -301,8 +354,8 @@ def test_two_versions_kept_are_two_commands_and_the_same_one_twice_is_one(app, q
     assert header(first, "location") == header(again, "location")  # the same job
     post(app, "/versions/keep", {"sheet": SHEET, "tab": third})
     queue.run_pending()
-    assert recorder.calls == [["versions", f"--keep={OTHER}", "--", *NAMES],
-                              ["versions", f"--keep={third}", "--", *NAMES]]
+    assert recorder.calls == [["versions", f"--keep={OTHER}", "--progress", "--", *NAMES],
+                              ["versions", f"--keep={third}", "--progress", "--", *NAMES]]
 
 
 def test_a_version_asked_for_while_the_songs_lookup_waits_joins_it(app, queue, recorder, conn, cfg):
@@ -315,8 +368,51 @@ def test_a_version_asked_for_while_the_songs_lookup_waits_joins_it(app, queue, r
     assert re.search(r"job=(\d+)", keep).group(1) == re.search(r"job=(\d+)", choose).group(1) == "1"
     assert queue.active_count() == 1
     queue.run_pending()
-    assert [call[:3] for call in recorder.calls] == [["versions", f"--keep={OTHER}", "--"],
+    assert [call[:3] for call in recorder.calls] == [["versions", f"--keep={OTHER}", "--progress"],
                                                      ["get", "--progress", f"--tab={SLUGGED.format(KEPT)}"]]
+
+
+def test_a_versions_progress_is_its_jobs_stages_as_a_lookups_is(conn, cfg):
+    # caracole versions --progress writes caracole get's lines: Keep it's stages (the song, the version, its page,
+    # the library page) and Go back to caracole's pick's, a lookup's, are the job's, and stay out of its output.
+    from caracole.get import progress_line
+    from caracole.web.jobs import JobQueue
+    from caracole.web.status import job_line
+
+    seen = {}
+
+    def runner(args, emit):
+        if args[0] == "versions" and args[1].startswith("--keep="):
+            emit(progress_line({"stage": "song", "state": "done", "detail": "in the library"}))
+            emit(progress_line({"stage": "version", "state": "running", "detail": ""}))
+            seen["keep"] = (queue.job(1).stages, job_line(queue.job(1), None))
+            emit(progress_line({"stage": "version", "state": "skipped", "detail": "budget spent; nothing kept"}))
+        else:
+            emit(progress_line({"stage": "sheet", "state": "running", "detail": ""}))
+            seen["clear"] = job_line(queue.job(2), None)
+        emit("Took tab 1 out of [pin]")
+        return 0
+
+    from caracole.web.app import WebApp
+
+    queue = JobQueue(runner, limit=5)
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    song = versioned_song(conn, cfg)
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(KEPT)}"]\n', encoding="utf-8")
+    where = header(post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}), "location")
+    assert song.key in queue.fetching_keys()  # it asks Ultimate Guitar for a page
+    queue.run_pending()
+    post(app, "/versions/clear", {"sheet": SHEET})
+    queue.run_pending()
+    stages, line = seen["keep"]
+    assert [(s.name, s.state) for s in stages][:2] == [("song", "done"), ("version", "running")]
+    assert line.text == "Fetching the version from Ultimate Guitar…"
+    assert seen["clear"].text == "Fetching from Ultimate Guitar…"
+    kept = queue.job(1)
+    assert next(s for s in kept.stages if s.name == "version").detail == "budget spent; nothing kept"
+    assert kept.steps[0].output == ["Took tab 1 out of [pin]"]  # progress lines are data, not output
+    assert "Done, but it wasn't kept: budget spent; nothing kept. See the request's output" in shown(get(app, where))
 
 
 # --- an export from a version page -------------------------------------------------------------
@@ -346,11 +442,11 @@ def test_the_commands_queued_are_ones_caracole_versions_reads(app, queue, record
     post(app, "/versions/clear", {"sheet": SHEET})
     queue.run_pending()
     heard = []
-    monkeypatch.setattr(versions_cmd, "keep", lambda cfg, display, tab, *, progress: heard.append(("keep", display, tab)))
-    monkeypatch.setattr(versions_cmd, "clear", lambda cfg, display, *, progress: heard.append(("clear", display)))
+    monkeypatch.setattr(versions_cmd, "keep", lambda cfg, display, tab, *, progress: heard.append(("keep", display, tab, progress)))
+    monkeypatch.setattr(versions_cmd, "clear", lambda cfg, display, *, progress: heard.append(("clear", display, progress)))
     config = tmp_path / "caracole.toml"
     config.write_text(f'library_dir = "{cfg.library_dir}"\n', encoding="utf-8")
     for args in recorder.calls:
         result = CliRunner().invoke(build_app(), ["--config", str(config), *args])
         assert result.exit_code == 0, (args, result.output)
-    assert heard == [("keep", DISPLAY, int(OTHER)), ("clear", DISPLAY)]
+    assert heard == [("keep", DISPLAY, int(OTHER), True), ("clear", DISPLAY, True)]
