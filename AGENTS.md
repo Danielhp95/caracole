@@ -37,7 +37,7 @@ section says where things are, and the rules a change there keeps.
 | index | ug/sitemap.py, ug/index.py |
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
-| fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py |
+| fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py, sheet_versions.py (a song's UG chords versions in rank order, the one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`; `as_data`, the pages' JSON) |
 | lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page), lacuerda_index.py (its listings of every artist, for searches) |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
