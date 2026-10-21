@@ -251,6 +251,7 @@ def load_voicings() -> dict[str, list[list[Position]]]:
     return json.loads(DATA_FILE.read_text(encoding="utf-8"))
 
 
+@lru_cache(maxsize=4096)
 def voicing_keys(chord: Chord) -> tuple[str, bool, str | None]:
     """Where a chord's fingerings are filed: (quality, whether it is only the nearest one, slash key).
 
