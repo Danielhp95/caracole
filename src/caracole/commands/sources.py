@@ -88,7 +88,7 @@ def register(app: typer.Typer) -> None:
         lacuerda: str | None = typer.Option(
             None, "--lacuerda", metavar="URL",
             help="The LaCuerda song (its page's address) or version (its sheet's) whose sheet the nightly run "
-                 "keeps; recorded under [lacuerda] in overrides.toml.",
+                 "keeps; recorded under \\[lacuerda] in overrides.toml.",
         ),
     ) -> None:
         """Add a song to wanted.txt, then sync wanted.txt into the library."""

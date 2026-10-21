@@ -225,18 +225,25 @@ Before a change is done:
     nix flake check
 
 `nix flake check` builds three checks: `package` and `autochords` each run the suite (minus
-the tests marked `autochords`), then check the wrapped `caracole`; `module` evaluates small
-NixOS systems against nix/module-check.nix and loads their caracole.toml with config.py. One
-at a time: `nix build`, `nix build .#autochords`, `nix build .#checks.x86_64-linux.module`.
+the tests marked `autochords`), then check that the installed package is src/ file for file (the
+suite imports caracole from src/, so a data file left out of the wheel shows only there: a new
+asset folder goes inside src/caracole/) and check the wrapped `caracole`; `module` evaluates small
+NixOS systems against nix/module-check.nix, loads their caracole.toml with config.py and parses
+their units' command lines with caracole's own CLI (a command or option a unit names, renamed or
+removed, fails it). One at a time: `nix build`, `nix build .#autochords`,
+`nix build .#checks.x86_64-linux.module`.
 
 Traps:
 
 - The flake sees only files git tracks: `git add` a new file before a Nix build.
-- The package builds from pyproject.toml, README.md, src/ and tests/ alone, in a sandbox
+- The package builds from pyproject.toml, README.md, LICENSE, src/ and tests/ alone, in a sandbox
   without network (test_nix_package.py skips itself there). A subprocess test keeps the
   inherited PYTHONPATH (`conftest.subprocess_pythonpath`): the dependencies arrive on it.
 - A dependency is listed three times: pyproject.toml, flake.nix (`runtimeDeps` or
   `autochordsDeps`) and nix/package.nix. It comes from nixpkgs: no pip, uv or PyPI pins.
+  Every third-party module src/ imports is listed, even one another dependency brings (click
+  with typer, requests and urllib3 with spotipy); auto-chords' modules may import the extra's.
+  test_nix_package.py checks both.
 - The version is in pyproject.toml and src/caracole/__init__.py; the package check compares
   `caracole --version` with pyproject's, and test_cli.py expects "caracole 0.1.0".
 - A Nix file may set only `CARACOLE_*` variables the source reads (test_nix_package.py). A

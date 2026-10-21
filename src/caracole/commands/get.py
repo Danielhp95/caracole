@@ -44,13 +44,13 @@ def register(app: typer.Typer) -> None:
                                             help="The length, as m:ss or seconds, for a song new to the library."),
         ug: str | None = typer.Option(None, "--ug", metavar="ARTIST-KEY/SONG-KEY",
                                       help="The Ultimate Guitar song to use, as caracole search shows it; "
-                                           "recorded under [match] in overrides.toml."),
+                                           "recorded under \\[match] in overrides.toml."),
         tab: str | None = typer.Option(None, "--tab", metavar="URL",
                                        help="The Ultimate Guitar tab to use, its page's address or id; "
-                                            "recorded under [pin] in overrides.toml."),
+                                            "recorded under \\[pin] in overrides.toml."),
         lacuerda: str | None = typer.Option(None, "--lacuerda", metavar="URL",
                                             help="The LaCuerda song (its page's address) or version (its sheet's) "
-                                                 "to keep the sheet of; recorded under [lacuerda] in overrides.toml."),
+                                                 "to keep the sheet of; recorded under \\[lacuerda] in overrides.toml."),
         show: bool = typer.Option(False, "--print", help="Print the sheet itself as soon as it is kept."),
         progress: bool = typer.Option(False, "--progress", help="A JSON line per stage too, for caracole serve."),
     ) -> None:
