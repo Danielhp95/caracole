@@ -27,7 +27,12 @@ from typer.testing import CliRunner
 
 from caracole.cli import build_app
 from caracole.config import load_config
+from caracole.library import keep_file, song_dir
 from caracole.overrides import load_overrides
+from caracole.sheet_versions import version_names
+from caracole.ug.page import strip_markup
+from caracole.versions import upsert_version
+from conftest import add_song
 from caracole.ug.index import mark_built, upsert_rows
 from caracole.web.app import Request
 
@@ -176,6 +181,41 @@ def test_the_library_pages_menu_lists_the_kept_versions(config, sites, conn, tmp
     assert link_texts(kept) == ["Ver 2 · 4.60★ (50) · the one", "Ver 3 · 4.20★ (50)", "Ver 1 · 4.90★ (100)"]
     assert re.findall(r'href="([^"]*)"', kept) == [
         "Radiohead/Creep/sheet.html", "Radiohead/Creep/version-103.html", "Radiohead/Creep/version-101.html"]
+
+
+@in_chromium
+def test_a_lacuerda_sheet_rendered_is_named_the_one_and_ug_versions_still_switch(conn, cfg, browser):
+    # Review Focus 3, as render.py writes it and the viewer reads it: the title opens LaCuerda's sheet, none of UG's
+    import test_render_versions as r
+
+    song = add_song(conn, "Placeholder Banda", "Canción Sintética")
+    tab_id = "placeholder_banda/cancion_sintetica-3"
+    url = f"https://acordes.lacuerda.net/{tab_id}.shtml"
+    vid = upsert_version(conn, provider="lacuerda", tab_id=tab_id, song_id=song.id, slot="sheet", kind="acordes",
+                         rating=0, votes=0, version=3, label=None, url=url, raw={}, now=r.FETCHED)
+    content = r.sheet("lacuerda")
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt",
+              data=strip_markup(content).encode("utf-8"), rank=1)
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.json",
+              data=json.dumps({"provider": "lacuerda", "url": url, "version": 3, "content": content}).encode(), rank=1)
+    vid_b, raw_b = r.ug_version(conn, song, r.B, rating=4.8, votes=100, number=1, coverage=0.9)
+    r.keep_text(conn, cfg, song, vid_b, raw_b, r.sheet("ug"), version_names(str(r.B))[:2], 2)
+    r.ug_version(conn, song, r.C, rating=4.5, votes=20, number=2)
+    r.render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+
+    browser.open((folder / "sheet.html").as_uri())
+    assert browser.wait("document.querySelector('#ver-line').textContent !== ''")
+    one = browser.js(SWITCHER)
+    browser.open((folder / version_names(str(r.B))[2]).as_uri())
+    assert browser.wait("document.querySelector('#ver-line').textContent !== ''")
+    other = browser.js(SWITCHER)
+
+    assert one["line"] == "2 versions on UG · the one: LaCuerda's sheet"
+    assert (one["prev"], one["next"]) == (None, version_names(str(r.B))[2])
+    assert [row.split(" · ")[0] for row in one["rows"]] == ["LaCuerda's sheet", "Ver 1", "Ver 2"]
+    assert other["line"] == "Ver 1 of 2 · 4.80★ (100)" and other["prev"] == "sheet.html"
+    assert other["acts"] == [["Make this the one", None]]
 
 
 # --- caracole serve ----------------------------------------------------------------------------------
