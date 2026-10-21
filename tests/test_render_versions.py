@@ -129,6 +129,17 @@ def test_a_version_page_takes_its_own_key_and_links_no_pdf(conn, cfg):
     assert "sheet.pdf" not in (folder / version_names(str(B))[2]).read_text("utf-8")
 
 
+def test_a_version_page_offers_no_export_the_sheets_does(conn, cfg):
+    # an export is made from the sheet export_viewer names: from a version's page, Export PDF would give
+    # the one's PDF, not this version's, served or copied as a command
+    song = song_with_versions(conn, cfg)
+    render(conn, cfg)
+    folder = folder_of(cfg, song)
+    assert 'id="export"' in (folder / "sheet.html").read_text("utf-8")
+    for tab in (B, C):
+        assert 'id="export' not in (folder / version_names(str(tab))[2]).read_text("utf-8")
+
+
 def test_a_version_page_is_written_again_only_when_its_bytes_change(conn, cfg):
     song = song_with_versions(conn, cfg)
     render(conn, cfg)
@@ -215,17 +226,18 @@ def test_a_lacuerda_sheet_lists_the_songs_ug_versions_and_is_none_of_them(conn, 
 
 def test_an_auto_sheet_standing_alone_lists_the_songs_ug_versions(conn, cfg):
     from caracole.autochords import ChordSegment, build_sheet
+    from caracole.autochords.run import PROVIDER
 
     song = add_song(conn, "Placeholder Band", "Synthetic Song")
     text = build_sheet([ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G")], title=song.title,
                        artist=song.artist, synced="[00:00.00]made up words\n[00:04.00]for the test\n")
-    vid = upsert_version(conn, provider="auto", tab_id=f"auto-{song.id}", song_id=song.id, slot="sheet",
+    vid = upsert_version(conn, provider=PROVIDER, tab_id=f"auto-{song.id}", song_id=song.id, slot="sheet",
                          kind="auto", rating=0, votes=0, version=1, label=None, url="", raw={}, now=FETCHED)
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet (auto).txt", data=text.encode(), rank=1)
     ug_version(conn, song, B, rating=4.8, votes=100, number=1)
     render(conn, cfg)
     data = page_data(folder_of(cfg, song) / "sheet (auto).html")["versions"]
-    assert data["sheet"] == "auto"
+    assert data["sheet"] == PROVIDER
     assert [v["tab"] for v in data["list"]] == [str(B)]
 
 
@@ -307,3 +319,16 @@ def test_removing_a_song_takes_a_version_page_whose_version_has_left_the_set(con
         drop_file(conn, cfg.library_dir, song=song, name=name)
     plan = plan_removal(conn, cfg, song)
     assert version_names(str(C))[2] in plan.delete
+
+
+def test_a_version_page_no_render_wrote_is_not_caracoles_to_remove(conn, cfg):
+    # the version's text and JSON are kept, but no render has written its page: one by that name is yours
+    song = song_with_versions(conn, cfg)
+    folder = folder_of(cfg, song)
+    page = folder / version_names(str(B))[2]
+    page.write_text("<p>mine</p>", encoding="utf-8")
+    plan = plan_removal(conn, cfg, song)
+    assert page.name not in plan.delete
+    assert page.name in {name for name, _ in plan.keep}
+    remove_song(conn, cfg, plan)
+    assert [p.name for p in folder.iterdir()] == [page.name]

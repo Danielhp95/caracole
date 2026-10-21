@@ -500,8 +500,8 @@ say), nothing is removed and it exits 1.
   it filed from `_inbox/`…), the `.cho` files and PDFs it made from them (the
   `sheet (G Dorian, capo 0).pdf` exports of `caracole render --version` too),
   every file of a version kept beside the sheet (`version-<tab>.txt`,
-  `.json`, and its viewer `version-<tab>.html`, a version's page the last
-  fetch let go too), `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
+  `.json`, and the viewer `version-<tab>.html` a render wrote, a version's
+  page the last fetch let go too), `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
   Then the folder, and the artist's folder, once empty. Syncthing then
   deletes them on every device. And the song's record: its match, its
   versions, its lyrics and what caracole remembered about it, and the audio
@@ -1174,9 +1174,10 @@ and cache.
   way, the first render makes every PDF once more. The viewer is written
   again whenever it would change, at every render. Each version of UG's
   kept beside the sheet (`version-<tab>.txt` and `.json`) gets a viewer of
-  its own, `version-<tab>.html`, and no `.cho` or PDF (its viewer's Export
-  PDF of this version makes one): it opens in the version's own key, as the
-  version is written, since the song's own version (`[version]`,
+  its own, `version-<tab>.html`, and no `.cho` or PDF; its viewer offers no
+  Export PDF either (an export is made from `sheet.html`'s sheet, so
+  `caracole render --version` makes the one's PDF). It opens in the
+  version's own key, as the version is written, since the song's own version (`[version]`,
   `[transpose]`) is its sheet's. Every viewer of the song (`sheet.html`, an
   auto sheet's standing alone, each `version-<tab>.html`) lists the song's UG
   chords versions, in the order caracole ranks them, and which one it is. A

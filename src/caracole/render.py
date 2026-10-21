@@ -57,9 +57,10 @@ server serves a viewer only while it is still those bytes.
 
 Each UG version the fetch keeps beside the sheet (sheet_versions.py: ``version-<tab>.txt``
 and ``.json``) gets a viewer of its own, ``version-<tab>.html``, made from its JSON as the
-sheet's is from sheet.json, in its own key and as written, with no .cho or PDF
-(``_render_versions``); it is recorded like the sheet's viewer, and goes, while it is still as
-written, once the version is no longer kept. Every viewer of the song (the one's, and each
+sheet's is from sheet.json, in its own key and as written, with no .cho or PDF and no
+Export PDF, as an export is the one's (``export_viewer``) (``_render_versions``); it is
+recorded like the sheet's viewer, and goes, while it is still as written, once the version
+is no longer kept. Every viewer of the song (the one's, and each
 version's) lists the song's UG chords versions in its data's ``versions`` (``_versions_data``).
 
 A human sheet the song no longer keeps (the fetch drops one whose UG match was
@@ -554,7 +555,8 @@ def _render_song(
     runner: Runner,
     force: bool,
 ) -> list[_Done]:
-    """Render every sheet the song keeps, the human one first; [] when it keeps none.
+    """Render every sheet the song keeps, the human one first, after the pages of the versions kept beside
+    it: their ``_Done("pages")`` is always the first, so a song that keeps no sheet has that alone.
 
     ``cjk_font`` is a usable font or None. The auto sheet is kept, and so
     rendered, until the fetch steps retire it for a complete human sheet; its
@@ -636,9 +638,10 @@ def _own(listed: dict[str, Any] | None, tab: str | None) -> dict[str, Any] | Non
 def _render_versions(conn: sqlite3.Connection, cfg: Config, song: Song, files: Mapping[str, KeptFile],
                      versions: list[SheetVersion], listed: dict[str, Any] | None) -> _Done:
     """Write a viewer page for each version kept beside the sheet, ``version-<tab>.html`` (its ``page``),
-    from its ``version-<tab>.json`` as the sheet's is from sheet.json, and no ChordPro file or PDF: a PDF of
-    it is an export (its viewer's Export PDF of this version). Each page starts as the version is written, in its
-    own key (``keys.sheet_key``), and is recorded (``_note_written``) and written only when its bytes change.
+    from its ``version-<tab>.json`` as the sheet's is from sheet.json, and no ChordPro file or PDF. It offers
+    no export: an export is made from the sheet ``export_viewer`` names, so this page's would be the one's PDF.
+    Each page starts as the version is written, in its own key (``keys.sheet_key``), and is recorded
+    (``_note_written``) and written only when its bytes change.
 
     The page of a version no longer kept (the fetch let it go) goes while it still holds what caracole wrote
     (``_forget_written``): one changed since, on a synced device, stays, and is forgotten. A page that can't
@@ -672,7 +675,7 @@ def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: P
     text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
                           key=sheet.key, capo=sheet.capo)
     data = _write_viewer(song, text, folder / page, None, key=(found.key, found.source) if found else (None, None),
-                         transpose=0, start=None, versions=listed)
+                         transpose=0, start=None, export=False, versions=listed)
     if data is None:
         return False
     _note_written(conn, song.id, page, data)

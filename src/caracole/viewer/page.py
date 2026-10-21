@@ -147,8 +147,8 @@ def build_viewer(
     the chords. ``transpose`` is where the viewer starts, and ``start`` the song's own version
     (``t=2&mode=dorian&capo=0``), in which it starts when its address names none; ``pdf`` names
     the PDF beside the page, linked when given. Without ``export``, its settings offer no Export PDF of
-    this version (an auto sheet kept beside a human one, whose exports are that sheet's: render.py
-    ``export_viewer``). ``versions``, the song's UG chords versions (render.py ``_versions_data``:
+    this version (an auto sheet kept beside a human one, or a version's page, whose exports are the
+    sheet's: render.py ``export_viewer``). ``versions``, the song's UG chords versions (render.py ``_versions_data``:
     ``sheet_versions.as_data`` with ``sheet``, the provider of the one, and ``this`` on each entry,
     true on the page's own), goes in the page's data as ``versions``; without it, the data has none.
     """
