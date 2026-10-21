@@ -1199,19 +1199,23 @@ and cache.
   **`--song "ARTIST - TITLE" --version QUERY --mine`** makes that version
   the song's own instead: it writes it under `[version]` in overrides.toml
   (once it holds caracole's lock, keeping your comments) as the key it plays
-  in, its mode and its capo, with the chords it plays instead and the shapes
-  it chose by their names (`key=G&mode=dorian&capo=0&at=Gm.2`), says so
+  in (as the sheet reads its chords: `Gm` for an A minor sheet played two
+  down), the mode you chose, if you chose one, and its capo, with the chords
+  it plays instead and the shapes it chose by their names
+  (`key=Gm&mode=dorian&capo=0&at=Gm.x-x-5-7-8-6`), says so
   (`Your version of Soda Stereo - De Música Ligera: G Dorian, capo 0`), then
   renders the song as `--song` does: its `sheet.pdf` is in that version, its
   viewer starts there, its exports and its songbooks follow. The key is a
   key, not a move: a sheet in another key or with another capo that takes
-  the song's place later plays in G dorian with no capo too (`[version]` in
+  the song's place later plays in G dorian with no capo too, and one that
+  reads the same chords in the relative key (C major for A minor's) plays
+  the chords the version played (`[version]` in
   [overrides.toml](#overridestoml-your-decisions)). A sheet with no key has
   no key to keep: the version is written as the viewer's address writes it,
-  a move from the sheet. A version that plays the sheet where the song plays
-  without one (its `[transpose]`, else as written) takes the song's
-  `[version]` out instead, and the song follows its sheet again. `--mine`
-  needs `--version` (exit 2).
+  a move from the sheet, its `t=` named even at 0 (`t=0&capo=1`). A version
+  that plays the sheet where the song plays without one (its `[transpose]`,
+  else as written) takes the song's `[version]` out instead, and the song
+  follows its sheet again. `--mine` needs `--version` (exit 2).
   In the sheet viewer, ⋯ has **Export PDF of this version**, but for the auto
   sheet's viewer kept beside a human sheet: its chords are other ones, and an
   export would be the human sheet's (caracole serve refuses one from it, 409).
@@ -1222,7 +1226,10 @@ and cache.
   `--mine` (caracole serve writes no overrides.toml itself); once it is done
   the page says so and links the song's own PDF. On the version the song
   plays in already (its `[version]`, else its `[transpose]`, else as written),
-  the page says "It is your version" instead.
+  the page says "It is your version" instead; for a `[version]` caracole
+  wrote as a move from the sheet (`t=`, before it kept a key), it adds that a
+  sheet in another key in its place would move it, and offers **Keep it in
+  this key**, the same command, which writes it by its key.
   Opened from a file, the viewer shows the command to run instead, with Copy,
   and says that `--mine` makes it your version.
   chordpro works on a copy, in a private folder in the cache, and the new PDF
@@ -2821,7 +2828,10 @@ song's chip sets where it plays.
   the shapes you play, as an export's name gives it (`G Dorian, capo 0`: G
   dorian shapes, no capo; with `--capo 2` they sound in A dorian), and what the
   setting leaves out is the song's own version's (`--capo 2` alone keeps its
-  sound and plays it from other shapes). The key is a key, not a move:
+  sound and plays it from other shapes; a key with no mode is that tonic in
+  the mode the song's own version plays its sheet in, so on a sheet that reads
+  the song's chords in the relative key, C major for A minor's, `--key B` is
+  B major there). The key is a key, not a move:
   replacing the song's sheet with one in another key keeps it, and with the
   setting's capo, the key it sounds in too. A setting with no capo (a song
   that had no sheet yet when you set it, or one written by hand) takes the
@@ -2899,7 +2909,7 @@ writes `[version]`; you write the rest by hand. These are all the tables:
 "Soda Stereo - De Música Ligera" = -2
 
 [version]      # where you play a song, by its key, as Make this my version saves it: its PDF, viewer and songbooks follow
-"Soda Stereo - De Música Ligera" = "key=G&mode=dorian&capo=0&at=Gm.2"
+"Soda Stereo - De Música Ligera" = "key=Gm&mode=dorian&capo=0&at=Gm.x-x-5-7-8-6"
 
 [ignore]       # songs caracole leaves alone
 songs = ["Some Artist - Some Interlude"]
@@ -2962,14 +2972,23 @@ tab_ids = [1601668]
 - **`[transpose]`** shifts the chords and the key in the PDF. `sheet.txt`
   stays as the source wrote it.
 - **`[version]`** is the song's own version: where you play it, as Make this
-  my version saves it. It is the key it plays in, its mode and its capo
-  (`key=G&mode=dorian&capo=0`: G dorian shapes, no capo; the key a tonic as
-  written, `G`, `F#`, `Bb`; the mode one of `ionian`, `dorian`, ...
-  `locrian`; the capo 0 to 11; a mode or a capo left out is the sheet's), then
-  `alt=` for chords played instead and `at=` for chosen shapes, each by the
-  chord's name in that key (`alt=F.Fmaj7`: Fmaj7 for every F; `at=Gm.2`: the
-  shape Gm's card shows as "3 of …"; a `%`, `&`, `=`, `,` or `.` in a chord's
-  name is written `%25`, `%26`, `%3D`, `%2C`, `%2E`). The song's `sheet.pdf` is
+  my version saves it. It is the key it plays in, a mode you chose, and its
+  capo (`key=Gm&mode=dorian&capo=0`: G dorian shapes, no capo). The key is
+  the key of the shapes played, as a sheet names one, in the mode the sheet's
+  chords were read in (`Gm` for an A minor sheet played two down, `D` for a
+  C major one played two up, `A dorian`); a sheet in its place whose chords
+  read in another mode on the same notes (C major's are A minor's) is read in
+  those notes, so it plays the chords the version played. The mode, one of
+  `ionian`, `dorian`, ... `locrian`, is there only when you chose one, and is
+  then the mode those shapes play in (G dorian, whatever mode a new sheet
+  names; on a sheet read in the relative key the viewer names it from that
+  sheet's tonic, `Bb Lydian` for G dorian's notes on a C major sheet). The
+  capo is 0 to 11, the sheet's when left out. Then come `alt=` for chords
+  played instead and `at=` for chosen shapes, each by the chord's name in that
+  key (`alt=F.Fmaj7`: Fmaj7 for every F; `at=Gm.x-x-5-7-8-6`: Gm in that
+  shape, its frets from the nut, low E first, `x` for a string not played,
+  wherever the new sheet's card lists it; a `%`, `&`, `=`, `,` or `.` in a
+  chord's name is written `%25`, `%26`, `%3D`, `%2C`, `%2E`). The song's `sheet.pdf` is
   made in it, its viewer starts in it, and its songbooks play it there, unless
   a songbook sets its own; it wins over the song's `[transpose]`, which stays
   in the file. The key is a key, not a move, as a songbook's setting is: a
@@ -2978,8 +2997,10 @@ tab_ids = [1601668]
   sheet plays too keeps its swap or its shape; one it doesn't play takes
   nothing of them. An auto sheet rendered beside a human one takes its key,
   mode and capo alone. A sheet with no key (no chord caracole can read, none
-  to estimate one from) can't take a key, so it plays as written, and its
-  songbooks say so (`key unknown, as written`). An entry with `t=` in place
+  to estimate one from) can't take a key, so it plays as written, the log
+  says so once its PDF is made (`sheet.pdf is as written, not in your
+  version (G Dorian, capo 0): its sheet has no key caracole can read`), and
+  its songbooks say so (`key unknown, as written`). An entry with `t=` in place
   of `key=`, as caracole wrote one before, is a move from the sheet, as the
   sheet viewer writes its address after `#` (`t=2` semitones, `mode=dorian`,
   `capo=0`, `alt=` and `at=` by the chords' places in the sheet; a `#` before
@@ -2987,8 +3008,8 @@ tab_ids = [1601668]
   as it did, and caracole never rewrites it. Take the entry out to go back to
   `[transpose]`, or the sheet as written. A value that is not text, holds a
   control character or is over 2000 characters, or whose key, mode or capo
-  can't be one, or with a `key=` and a `t=` both, is an error naming the
-  entry.
+  can't be one (a key as a sheet names one: `G`, `F#m`, `Bb dorian`), or with a
+  `key=` and a `t=` both, is an error naming the entry.
 - **`[ignore]`** takes only `songs = [...]`. It stops all work on a song: no
   matching, fetching, rendering or to-do items. Take it out of the list, and
   the song comes back.

@@ -251,7 +251,7 @@ def test_a_song_without_a_setting_follows_its_own_version(conn, cfg, two):
 def test_a_song_without_a_setting_keeps_its_own_versions_key_on_a_new_sheet(conn, cfg, two):
     # "Make this my version" keeps the key it plays in: a sheet in another key and capo in its place plays there
     _, soda = two
-    ovr = overrides(cfg, f'[version]\n"{SODA}" = "key=G&mode=dorian&capo=0"\n')
+    ovr = overrides(cfg, f'[version]\n"{SODA}" = "key=Gm&mode=dorian&capo=0"\n')
     keep_sheet(conn, cfg, soda, IN_D_MINOR, tab_id=4, tonality="Dm", capo=3)
     render_sheets(conn, cfg, ovr)
     fake = FakeChordPro()
@@ -266,12 +266,35 @@ def test_a_song_without_a_setting_keeps_its_own_versions_key_on_a_new_sheet(conn
     assert plays_in(entries_of(conn, cfg, ovr)[1]) == "D Dorian, capo 5"
 
 
+def test_a_setting_with_a_key_and_no_mode_takes_no_mode_from_an_own_version_that_chose_none(conn, cfg, two):
+    # The song's own version is B minor, two up from its A minor sheet, no mode chosen. A sheet in its place names
+    # C major for the same chords: the songbook plays them as its own version did, Bm G D A, never C major's
+    # degrees put in B aeolian (G Em Bm F#m). A setting of a key alone is that tonic in the mode the sheet plays,
+    # as on top of a move from the sheet (t=2)
+    _, soda = two
+    ovr = overrides(cfg, f'[version]\n"{SODA}" = "key=Bm&capo=0"\n')
+    keep_sheet(conn, cfg, soda, tab_id=4, tonality="C")
+    render_sheets(conn, cfg, ovr)
+    fake = FakeChordPro()
+    assert render(conn, cfg, ovr, runner=fake).rendered == 1
+    assert sung(inputs(fake, pdf_call(fake))[1]) == ["Bm", "G", "D", "A"]
+    assert plays_in(entries_of(conn, cfg, ovr)[1]) == "D Major, capo 0"
+    for own in ("key=Bm&capo=0", "t=2"):
+        ovr = overrides(cfg, f'[version]\n"{SODA}" = "{own}"\n')
+        set_setting(cfg, SODA, Setting(key="B"))
+        fake = FakeChordPro()
+        assert render(conn, cfg, ovr, runner=fake, force=True).rendered == 1, own
+        assert sung(inputs(fake, pdf_call(fake))[1]) == ["G#m", "E", "B", "F#"], own
+        assert plays_in(entries_of(conn, cfg, ovr)[1]) == "B Major, capo 0", own
+        set_setting(cfg, SODA, None)
+
+
 def test_a_sheet_with_no_key_plays_a_songs_own_key_as_written_and_says_so(conn, cfg):
     song = add_song(conn, "Placeholder Band", "Keyless Song")
     keep_sheet(conn, cfg, song, NO_KEY, tonality="")
     render_sheets(conn, cfg)
     make(cfg, "Campfire", "Placeholder Band - Keyless Song")
-    ovr = overrides(cfg, '[version]\n"Placeholder Band - Keyless Song" = "key=G&mode=dorian&capo=0"\n')
+    ovr = overrides(cfg, '[version]\n"Placeholder Band - Keyless Song" = "key=Gm&mode=dorian&capo=0"\n')
     fake = FakeChordPro()
     assert render(conn, cfg, ovr, runner=fake).failed == []
     (text,) = inputs(fake, pdf_call(fake))

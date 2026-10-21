@@ -495,15 +495,17 @@ def test_a_version_may_keep_the_key_it_plays_in(tmp_path):
     # As Make this my version writes it now: a key, its mode and its capo, and chords by their names
     o = load_overrides(write(tmp_path, '''
 [version]
-"Soda Stereo - De Música Ligera" = "key=G&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.2"
+"Soda Stereo - De Música Ligera" = "key=Gm&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.x-x-5-7-8-6"
 "Radiohead - Creep" = "key=F#"
+"Placeholder Band - Synthetic Song" = "key=A dorian&capo=2"
 '''))
-    assert o.version == {"soda-stereo/de-musica-ligera": "key=G&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.2",
-                         "radiohead/creep": "key=F#"}
+    assert o.version == {"soda-stereo/de-musica-ligera": "key=Gm&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.x-x-5-7-8-6",
+                         "radiohead/creep": "key=F#", "placeholder-band/synthetic-song": "key=A dorian&capo=2"}
 
 
 @pytest.mark.parametrize(("value", "why"), [
-    ("key=H", 'key must be a tonic such as "G", "F#" or "Bb", got \'H\''),
+    ("key=H", 'key must be a key as a sheet names it, such as "G", "F#m" or "Bb dorian", got \'H\''),
+    ("key=Gmin", 'key must be a key as a sheet names it, such as "G", "F#m" or "Bb dorian", got \'Gmin\''),
     ("key=G&mode=dorien", "mode must be one of ionian, dorian"),
     ("key=G&capo=12", "capo must be a fret from 0 to 11, got 12"),
     ("t=2&key=G", "a key or a t, not both"),

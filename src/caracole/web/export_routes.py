@@ -15,9 +15,11 @@ is made from the sheet the library keeps.
 Make this my version, unless the version is the song's own already, is the same form with ``mine=1``: it queues
 ``caracole render --song=… --version=… --mine``, which writes the song's ``[version]`` in overrides.toml
 under caracole's lock (the server writes no overrides.toml itself), as the key it plays in (render.py
-``export_entry``), and renders the song in it: its PDF, its viewer and its songbooks then start there, on
+``ExportSheet.entry``), and renders the song in it: its PDF, its viewer and its songbooks then start there, on
 whichever sheet the song has. An address naming no version is the song's own, as the viewer reads its own
-(render.py ``export_version``), and one that plays the sheet as the song's own does is the song's own too.
+(render.py ``export_version``), and one that plays the sheet as the song's own does is the song's own too. The
+song's own kept as a move from the sheet (a ``t=`` entry, as caracole wrote one before it kept a key) is offered
+as Keep it in this key, the same form: a sheet in another key in its place would move it.
 
 An export is made from the song's human sheet, else its auto sheet (render.py ``export_viewer``). The auto
 sheet's viewer kept beside a human sheet shows other chords: it offers no export, and one asked from it is
@@ -44,6 +46,8 @@ if TYPE_CHECKING:
 MAX_QUERY = 2000  # characters: a version with every chord's shape and swap is a few hundred
 EXPORTING = "export:"  # a job's song_key, then the song's key and the version: never the song's own jobs'
 MINE = ":mine"  # after an export's song_key: making that version the song's own
+YOURS = "yours"  # the version is the song's own, as it is kept
+AS_A_MOVE = "as a move"  # the version is the song's own, kept as a move from the sheet (t=): it may be kept by its key
 
 ROUTES = (
     Route("GET", "/export", lambda app, asked: export_page(app, asked.target)),
@@ -102,21 +106,21 @@ def _job_key(song: Song, version: str) -> str:
     return f"{EXPORTING}{song.key}:{version}"
 
 
-def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, bool]:
+def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, str | None]:
     """The song a viewer's path names, the version ``query`` holds as render.py writes it, its label, the
     song's folder in the library (as a path) and whether the version is the song's own (render.py
-    ``export_own``: its ``[version]``, else its ``[transpose]``, else as written), the one it plays its sheet in;
-    raises Refused."""
+    ``ExportSheet.own``: its ``[version]``, else its ``[transpose]``, else as written), the one it plays its sheet
+    in: ``YOURS``, ``AS_A_MOVE`` for one kept as a move from a sheet with a key (an older ``t=`` entry, which Make
+    this my version would keep by its key), or None; raises Refused."""
     from caracole.library import song_dir
     from caracole.render import (
         AUTO_OUTPUTS,
         RenderError,
-        export_entry,
-        export_label,
-        export_own,
         export_query,
+        export_sheet,
         export_version,
         export_viewer,
+        keeps_key,
         written_file,
     )
     from caracole.songs import list_songs
@@ -145,11 +149,15 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
                 raise Refused(409, "Not this sheet", _BESIDE)
             raise Refused(404, "Not found", "There's no such sheet in the library.")
         try:
-            own = export_own(conn, app.cfg, overrides, song)
+            source = export_sheet(conn, app.cfg, song)
+            own = source.own(overrides)
             v = export_version(query, own)
-            label = export_label(conn, app.cfg, song, v)
+            label = source.label(v)
             # where the song plays now: what Make this my version would keep of it is what its own is
-            mine = export_entry(conn, app.cfg, song, own) == export_entry(conn, app.cfg, song, v)
+            mine = YOURS if source.entry(own) == source.entry(v) else None
+            if mine and song.key in overrides.version and not keeps_key(overrides, song) \
+                    and source.shapes is not None and source.kept(v, overrides) is not None:
+                mine = AS_A_MOVE
         except RenderError as e:
             raise Refused(404, "No sheet to export", str(e)) from e
     return song, export_query(v), label, "/".join(quote(p) for p in parts[:-1]), mine
@@ -183,7 +191,7 @@ def _own_pdf(app: WebApp, song: Song, sheet: str) -> str | None:
 
 
 def _body(csrf: str, song: Song, sheet: str, shown: str, label: str, job: Job | None,
-          pdf: str | None, folder: str, mine: bool) -> str:
+          pdf: str | None, folder: str, mine: str | None) -> str:
     back = f"/{quote(sheet)}" + (f"#{shown}" if shown else "")
     hidden = "".join(f'  <input type="hidden" name="{name}" value="{escape(value, quote=True)}">\n'
                      for name, value in (("csrf", csrf), ("sheet", sheet), ("v", shown)))
@@ -205,12 +213,16 @@ def _body(csrf: str, song: Song, sheet: str, shown: str, label: str, job: Job | 
     if pdf:
         links += f'<a class="btn primary" href="/{folder}/{quote(pdf)}">Open the PDF</a>\n'
     links += f'<a class="btn" href="{escape(back, quote=True)}">Back to the sheet</a>'
-    if mine:
+    keep = (f'<form class="confirm" method="post" action="/export">\n{hidden}'
+            '  <input type="hidden" name="mine" value="1">\n'
+            '  <button class="btn" type="submit">{}</button>\n</form>\n')
+    if mine == YOURS:
         own = "<p>It is your version: the song's own PDF, its viewer and its songbooks are in it.</p>\n"
+    elif mine == AS_A_MOVE:
+        own = ("<p>It is your version, kept as a move from the sheet: a sheet in another key in its place would "
+               "move it.</p>\n" + keep.format("Keep it in this key"))
     else:
-        own = (f'<form class="confirm" method="post" action="/export">\n{hidden}'
-               '  <input type="hidden" name="mine" value="1">\n'
-               '  <button class="btn" type="submit">Make this my version</button>\n</form>\n'
+        own = (keep.format("Make this my version") +
                "<p>Your version is where the song's own PDF, its viewer and its songbooks start, kept in "
                "overrides.toml (<code>[version]</code>).</p>\n")
     body = (f'<p class="lede">{escape(song.display)} in <strong>{escape(label)}</strong>. The PDF is written beside '

@@ -14,8 +14,9 @@ Tables:
   slugged tab only at its slugged URL.
 - ``[transpose]``: "Artist - Title" → semitones, applied when sheets are rendered.
 - ``[version]``: "Artist - Title" → where you play the song, as "Make this my version" saves it
-  (``add_version``): the key it plays in, its mode and its capo, and the chords played instead
-  and the shapes chosen, by their names (``key=G&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.2``,
+  (``add_version``): the key it plays in, as the sheet reads its chords, a mode chosen and its capo,
+  and the chords played instead and the shapes chosen, by their names
+  (``key=Gm&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.x-x-5-7-8-6``,
   viewer/version.py ``KeyVersion``), so that a sheet in another key in its sheet's place plays
   there too; or, as caracole wrote it before, the viewer's address (``t=2&mode=dorian&capo=0``),
   a move from the sheet. Its PDF, its viewer and its songbooks start there (render.py
@@ -438,7 +439,7 @@ def _video(value: Any, where: str) -> str | None:
 
 def _version(value: Any, where: str) -> str:
     """A ``[version]`` value: text, with no control character or escape that isn't UTF-8. Either a version kept
-    by the key it plays in, as Make this my version writes it (``key=G&mode=dorian&capo=0``, read by
+    by the key it plays in, as Make this my version writes it (``key=Gm&mode=dorian&capo=0``, read by
     viewer/version.py's ``key_version``, which refuses a key, a mode or a capo that can't be one), or a viewer's
     address after its "#" (or a "?"), as caracole wrote one before, which viewer/version.py reads as its viewer
     does (``version_from_query``): a move from the sheet."""

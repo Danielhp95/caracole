@@ -116,7 +116,7 @@ def test_a_version_kept_by_its_key_shows_what_its_pdf_is_moved_by(conn, cfg):
 
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     keep_sheet_json(conn, cfg, s, AM_F_C_G)  # A minor
-    o = Overrides(transpose={s.key: 3}, version={s.key: "key=G&mode=dorian&capo=0"})
+    o = Overrides(transpose={s.key: 3}, version={s.key: "key=Gm&mode=dorian&capo=0"})
     assert songs_of(page(conn, cfg, o))[s.display]["transpose"] == 0  # no PDF yet
     assert render_all(conn, cfg, o, runner=fake_chordpro).rendered == 1
     assert songs_of(page(conn, cfg, o))[s.display]["transpose"] == -2  # down to G, its [transpose] left out

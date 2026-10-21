@@ -592,8 +592,8 @@ def test_show_says_where_a_songs_own_key_plays_it_and_when_its_sheet_has_none(se
                tab_id=7, tonality="")
     render_sheets(conn, cfg)
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
-    cfg.overrides_file.write_text('[version]\n"Soda Stereo - De Música Ligera" = "key=G&mode=dorian&capo=0"\n'
-                                  '"Placeholder Band - Keyless Song" = "key=G&mode=dorian&capo=0"\n', encoding="utf-8")
+    cfg.overrides_file.write_text('[version]\n"Soda Stereo - De Música Ligera" = "key=Gm&mode=dorian&capo=0"\n'
+                                  '"Placeholder Band - Keyless Song" = "key=Gm&mode=dorian&capo=0"\n', encoding="utf-8")
     assert run(setup, "make", "Gig", "Soda Stereo - De Música Ligera", "Placeholder Band - Keyless Song").exit_code == 0
     shown = run(setup, "show", "Gig")
     assert shown.exit_code == 0, shown.output

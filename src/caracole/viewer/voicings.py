@@ -224,8 +224,8 @@ def sheet_shapes(given: list[tuple[Chord, Position]]) -> dict[str, dict[str, Any
             filed = [data[k][chord.root] for k in (slash, fingering) if k in data and data[k][chord.root]]
             shapes[key] = {"mine": 0, "list": list(filed[0]) if filed else []}
         entry = shapes[key]
-        frets = _absolute(position)
-        same = next((i for i, p in enumerate(entry["list"]) if _absolute(p) == frets), None)
+        frets = frets_from_nut(position)
+        same = next((i for i, p in enumerate(entry["list"]) if frets_from_nut(p) == frets), None)
         if same is not None and same < entry["mine"]:
             continue  # the sheet gave it already
         if same is not None:
@@ -242,7 +242,7 @@ def shape_key(chord: Chord) -> str:
     return f"{chord.root},{chord.suffix},{'' if chord.bass is None else chord.bass}"
 
 
-def _absolute(position: Position) -> tuple[int | None, ...]:
+def frets_from_nut(position: Position) -> tuple[int | None, ...]:
     """The frets a position holds, counted from the nut (None for a muted string): the same
     shape written from another base fret is the same."""
     frets, _, base, _ = position

@@ -91,23 +91,22 @@ def register(app: typer.Typer) -> None:
 
 def _make_mine(conn, cfg, overrides, song_name: str, query: str) -> None:
     """``--mine``: the version ``query`` holds becomes the song's own in overrides.toml, under caracole's lock,
-    kept by the key it plays in on the song's sheet (``render.export_entry``); one that plays that sheet where
-    the song plays without one (its ``[transpose]``, else as written) takes the song's ``[version]`` out
-    instead, so the song follows its sheet again."""
+    kept by the key it plays in on the song's sheet (``render.ExportSheet.entry``); one that plays that sheet
+    where the song plays without one (its ``[transpose]``, else as written) takes the song's ``[version]`` out
+    instead, so the song follows its sheet again (``ExportSheet.kept``)."""
     from caracole.overrides import OverridesError, add_version
-    from caracole.render import RenderError, export_entry, export_label, export_own, export_version
-    from caracole.viewer.version import Version
+    from caracole.render import RenderError, export_sheet, export_version
 
     song = song_named(conn, song_name, overrides)
     try:
-        v = export_version(query, export_own(conn, cfg, overrides, song))
-        label = export_label(conn, cfg, song, v)
-        entry = export_entry(conn, cfg, song, v)
-        plain = export_entry(conn, cfg, song, Version(t=overrides.transpose.get(song.key, 0)))
+        sheet = export_sheet(conn, cfg, song)
+        v = export_version(query, sheet.own(overrides))
+        label = sheet.label(v)
+        entry = sheet.kept(v, overrides)
     except RenderError as e:
         _common.fail(f"no version of {song.display}: {e}")
     try:
-        add_version(cfg.overrides_file, song.display, None if entry == plain else entry)
+        add_version(cfg.overrides_file, song.display, entry)
     except OverridesError as e:
         _common.fail(f"overrides: {e}", 2)
     typer.echo(f"Your version of {song.display}: {label}")
@@ -115,12 +114,12 @@ def _make_mine(conn, cfg, overrides, song_name: str, query: str) -> None:
 
 def _export(cfg, overrides, song_name: str, query: str) -> None:
     """``--version``: the one export, then the pages, which list it."""
-    from caracole.render import RenderError, export_own, export_version, render_version
+    from caracole.render import RenderError, export_sheet, export_version, render_version
 
     with exclusive(cfg, "render"), closing(open_db(cfg)) as conn:
         song = song_named(conn, song_name, overrides)
         try:
-            v = export_version(query, export_own(conn, cfg, overrides, song))
+            v = export_version(query, export_sheet(conn, cfg, song).own(overrides))
             path = render_version(conn, cfg, overrides, song, v)
         except (RenderError, OSError) as e:
             _common.fail(f"no export for {song.display}: {e}")

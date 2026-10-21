@@ -206,3 +206,27 @@ def test_a_version_kept_by_its_key_is_the_one_the_song_plays_in(app, conn, cfg):
         assert "It is your version" in shown(page) and ">Make this my version<" not in text(page), query
     assert ">Make this my version<" in text(get(app, export_url(query="t=0")))
     assert ">Make this my version<" in text(get(app, export_url(query="t=2&capo=2")))  # G shapes at capo 2: A too
+
+
+def test_a_version_kept_as_a_move_from_the_sheet_may_be_kept_by_its_key(app, queue, recorder, conn, cfg):
+    # An entry caracole wrote before it kept a key is a move from the sheet: the page says it is the song's version,
+    # and that a sheet in another key would move it, and offers to keep it in the key it plays in now
+    song = rendered_song(conn, cfg)  # in G
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[version]\n"{song.display}" = "t=2&capo=0"\n', encoding="utf-8")
+    page = get(app, export_url(query="fs=20"))  # naming no version: the song's own
+    assert "A Major, capo 0" in shown(page) and "It is your version" in shown(page)
+    assert "a sheet in another key in its place would move it" in shown(page)
+    assert ">Keep it in this key<" in text(page) and ">Make this my version<" not in text(page)
+    made = post(app, "/export", {"sheet": SHEET, "v": QUERY, "mine": "1"})
+    assert made.status == 303
+    queue.run_pending()
+    assert recorder.calls == [["render", f"--song={song.display}", "--version=t=2&capo=0", "--mine"]]
+    # Once kept by its key, it is the song's own as it is
+    cfg.overrides_file.write_text(f'[version]\n"{song.display}" = "key=A&capo=0"\n', encoding="utf-8")
+    page = get(app, export_url(query="fs=20"))
+    assert "It is your version" in shown(page) and ">Keep it in this key<" not in text(page)
+    # A move that plays the sheet as the song plays without one has no key of its own to keep
+    cfg.overrides_file.write_text(f'[version]\n"{song.display}" = "t=0"\n', encoding="utf-8")
+    page = get(app, export_url(query="fs=20"))
+    assert "It is your version" in shown(page) and ">Keep it in this key<" not in text(page)
