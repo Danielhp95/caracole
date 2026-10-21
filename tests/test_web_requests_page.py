@@ -6,6 +6,7 @@ step; and the routes that cancel a queued request and try a finished one again."
 from __future__ import annotations
 
 import re
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -164,6 +165,20 @@ def test_every_request_keeps_its_output_fold():
     opened = mockup()
     page = jobs_page(opened[0], opened[1], outcomes=opened[2], csrf="tok", now=NOW, opened=3)
     assert '<details class="output" open>' in dict(JOB_ITEM.findall(page))["3"]
+
+
+def test_the_outputs_time_is_in_the_servers_time_zone_named(monkeypatch):
+    monkeypatch.setenv("TZ", "EST+05")  # five hours behind UTC, a POSIX rule: no zone files
+    time.tzset()
+    try:
+        job = Job(1, "Add A - B", "a/b", [Step("Adding to the library", ("add",), state="done")], state="done",
+                  display="A - B", queued_at=datetime(2026, 10, 21, 3, 30, tzinfo=UTC),
+                  finished_at=datetime(2026, 10, 21, 3, 31, tzinfo=UTC))
+        body = jobs_page([job], {1: job_line(job, SongFacts())}, csrf="tok", now=datetime(2026, 10, 21, 12, tzinfo=UTC))
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+    assert "Add A - B · requested 2026-10-20 22:30 EST" in body
 
 
 def test_finished_requests_are_grouped_by_the_day_they_ended_in_the_servers_time_zone():

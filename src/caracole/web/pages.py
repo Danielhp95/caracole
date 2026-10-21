@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 from caracole.inline import sha256_source
 from caracole.library_assets import BASE_STYLE, PICKER_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
-from caracole.stamps import shown
+from caracole.stamps import shown, stamp
 
 if TYPE_CHECKING:  # songbooks.py imports Refused, and status.py imports songbooks.py
     from caracole.web.jobs import Job, Stage, Step
@@ -360,7 +360,7 @@ def _finished(job: Job, said: Outcome | None, ended: datetime, csrf: str, output
         reason = f'<p class="reason">{escape(said.reason)}</p>' if said.reason else ""
         action = _action(said.action, csrf) + _action(said.also, csrf, primary=False)
     shown = f"{ended.day} {ended:%b}, {ended:%H:%M}" if day else f"{ended:%H:%M}"
-    when = f'<time class="when" datetime="{ended.astimezone(UTC):%Y-%m-%dT%H:%M:%SZ}">{escape(shown)}</time>'
+    when = f'<time class="when" datetime="{stamp(ended)}">{escape(shown)}</time>'
     return (f'<li class="job over {escape(job.state)}" id="job-{job.id}"><p class="line">{_song(job)}{said_html}'
             f'</p>{reason}<div class="next">{action}{when}</div>{output}{waits}</li>\n')
 
@@ -464,7 +464,7 @@ def _output(job: Job, *, opened: bool = False, picking: bool = False) -> str:
     """What the request ran, folded away under Output: when it was asked for, a lookup's stages, and each
     command with what it printed. ``picking``: it stopped only because the song needs a pick first
     (``_waits_for_pick``), so its fetch waits for one rather than failed."""
-    meta = f"{escape(job.title)} · requested {shown(job.queued_at, "")}"
+    meta = f"{escape(job.title)} · requested {shown(job.queued_at, "", local=True)}"
     if job.note:
         meta += f" · {escape(job.note)}"
     if job.seconds_to_sheet is not None:

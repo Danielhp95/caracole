@@ -1,4 +1,5 @@
-"""How caracole stores and shows a time: ISO 8601 UTC to the second ("2026-10-18T03:30:00Z").
+"""How caracole stores and shows a time: ISO 8601 UTC to the second ("2026-10-18T03:30:00Z"), shown in UTC,
+or in the server's local time zone on caracole serve's requests page.
 
 A naive time is UTC. The standard library alone, so any module may import it.
 """
@@ -34,6 +35,9 @@ def before(value: str | None, cutoff: datetime) -> bool:
     return when is None or when < cutoff
 
 
-def shown(dt: datetime | None, none: str = "?") -> str:
-    """A time as the to-do page shows it, in UTC; ``none`` for no time."""
-    return none if dt is None else utc(dt).strftime("%Y-%m-%d %H:%M UTC")
+def shown(dt: datetime | None, none: str = "?", *, local: bool = False) -> str:
+    """A time as the to-do page shows it, in UTC; ``none`` for no time. ``local``: in the server's local time
+    zone, named, as caracole serve's requests page shows it ("2026-10-17 23:30 EDT")."""
+    if dt is None:
+        return none
+    return utc(dt).astimezone().strftime("%Y-%m-%d %H:%M %Z") if local else utc(dt).strftime("%Y-%m-%d %H:%M UTC")
