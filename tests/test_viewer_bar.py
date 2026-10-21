@@ -67,6 +67,22 @@ def settled(b: Browser, where: str) -> bool:
     return b.wait(f"({BAR}).where === {where!r}", 2)
 
 
+def watch_slides(b: Browser) -> None:
+    """From now on, note whether the bar is ever told to slide away (``slid``): the page decides it in its
+    scroll handler, at once, so this sees a slide the moment it starts, however short."""
+    b.js("""(() => { window.slides = 0; const bar = document.querySelector('#bar');
+      new MutationObserver(() => { if (bar.classList.contains('away')) window.slides += 1; })
+        .observe(bar, { attributes: true, attributeFilter: ['class'] }); })()""")
+
+
+def slid(b: Browser) -> bool:
+    """Whether the bar was told to slide away since ``watch_slides``, once the scrolls sent so far have
+    come to rest and the page has drawn two frames since (in which their scroll events fire)."""
+    rest(b)
+    b.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
+    return b.js("window.slides") > 0
+
+
 # --- the page as written ---------------------------------------------------------------------------
 
 
@@ -258,9 +274,11 @@ def test_the_keyboard_reaches_every_control_even_when_the_bar_is_away(tmp_path):
             order.append(bar(b)["focus"])
         back = settled(b, "shown")
         # A control with the keyboard's focus is never slid out of sight, whatever scrolls the page.
+        watch_slides(b)
         key(b, "PageDown", 34)
         b.send("Input.dispatchMouseEvent", type="mouseWheel", x=640, y=400, deltaX=0, deltaY=600)
-        kept = not settled(b, "away") and bar(b)["y"] > 600
+        down = b.wait(f"({BAR}).y > 600", 2)
+        kept = down and not slid(b) and bar(b)["where"] == "shown"
         b.press("Enter")  # ⋯
         opened = bar(b)
     assert order == ["t-down", "t-up", "size", "scroll", "more"]
@@ -280,19 +298,19 @@ def test_a_change_of_size_or_key_mid_song_leaves_the_bar_where_it_is(tmp_path):
         drag(b, -100)
         assert settled(b, "shown")
         rest(b)
+        watch_slides(b)
         b.click("#size")
         for _ in range(4):
             b.click("#bigger")
             b.js("window.scrollBy(0, 40)")  # as the browser keeps your line in place
-        sized = bar(b)
+        sized, sized_slid = bar(b), slid(b)
         b.click("#t-up")
         b.js("window.scrollBy(0, 40)")
-        time.sleep(0.6)
-        after = bar(b)
+        after, after_slid = bar(b), slid(b)
         drag(b, 300)  # and your own scrolling still takes it away
         later = settled(b, "away")
-    assert sized["where"] == "shown" and sized["sizes"] and sized["fs"] == "26 px"
-    assert after["where"] == "shown" and after["main"] == "Ab" and later
+    assert sized["where"] == "shown" and sized["sizes"] and sized["fs"] == "26 px" and not sized_slid
+    assert after["where"] == "shown" and after["main"] == "Ab" and not after_slid and later
 
 
 @in_chromium

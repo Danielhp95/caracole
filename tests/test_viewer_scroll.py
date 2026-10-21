@@ -100,8 +100,8 @@ def start_now(b: Browser) -> None:
 
 
 def moved_since(b: Browser, y: int, wait: float = 0.5) -> bool:
-    time.sleep(wait)
-    return look(b)["y"] > y
+    """Whether the page scrolls on past ``y`` within ``wait`` seconds."""
+    return b.wait(f"Math.round(scrollY) > {int(y)}", wait)
 
 
 # --- the page as written ---------------------------------------------------------------------------
