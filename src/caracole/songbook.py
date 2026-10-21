@@ -73,9 +73,11 @@ from caracole.render import (
     _first_lost_letter,
     _font_need,
     _font_options,
+    _printed,
     _style,
     written_file,
 )
+from caracole.viewer.sheet import parse_sheet
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -712,7 +714,7 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
     else:
         pdf_inputs = {
             "name": book.name, "songs": [(e.title, e.artist, e.cho, e.transpose, e.missing) for e in entries],
-            "style": _style(), "book": BOOK_CONFIG, "font": str(pdf_font) if pdf_font else None, "v": 2,
+            "style": _style(), "book": BOOK_CONFIG, "font": str(pdf_font) if pdf_font else None, "v": 3,
         }
         make(PDF_NAME, pdf_inputs, lambda: _pdf(cfg, book, entries, runner, font=pdf_font) if playable else None)
 
@@ -862,16 +864,20 @@ def _like_prefix(prefix: str) -> str:
 # --- the chordpro runs -------------------------------------------------------------------------
 
 
-def _song_file(entry: Entry) -> str:
+def _song_file(entry: Entry, *, pdf: bool = False) -> str:
     """One song for chordpro: its sheet in its transposition ({transpose} before {key}, so the key moves
-    too), or a page naming it as missing, which the contents then name too."""
+    too; for the PDF the sheet's PDF text, ``render._printed``, whose key line is moved by hand), or a
+    page naming it as missing, which the contents then name too."""
     if entry.cho is not None:
-        return (f"{{transpose: {entry.transpose}}}\n" if entry.transpose else "") + entry.cho
+        text = entry.cho
+        if pdf:
+            text = _printed(text, key=entry.key, capo=parse_sheet(text).capo, transpose=entry.transpose)
+        return (f"{{transpose: {entry.transpose}}}\n" if entry.transpose else "") + text
     why = ("caracole has no sheet for this song yet." if entry.missing == MISSING_SHEET
            else "This song isn't in the library.")
     who = f"{entry.artist} · missing: {entry.missing}" if entry.artist else f"missing: {entry.missing}"
     return (f"{{title: {directive_text(entry.title)}}}\n{{artist: {directive_text(who)}}}\n"
-            f"{{comment: {directive_text(why)}}}\n")
+            f"{{subtitle: {directive_text(who)}}}\n{{comment: {directive_text(why)}}}\n")
 
 
 def _contents_file(book: Songbook, entries: Sequence[Entry]) -> str:
@@ -880,7 +886,7 @@ def _contents_file(book: Songbook, entries: Sequence[Entry]) -> str:
     count = f"{len(entries)} song{'' if len(entries) == 1 else 's'}"
     if missing:
         count += f", {missing} without a sheet yet"
-    return (f"{{title: {directive_text(book.name)}}}\n{{artist: {directive_text(count)}}}\n\n"
+    return (f"{{title: {directive_text(book.name)}}}\n{{artist: {directive_text(count)}}}\n{{subtitle: {directive_text(count)}}}\n\n"
             "A caracole songbook\n{new_page}\n{comment: Contents}\n")
 
 
@@ -898,7 +904,7 @@ _BRACES = str.maketrans("{}", "()")
 def _pdf(cfg: Config, book: Songbook, entries: Sequence[Entry], runner: Runner, *, font: Path | None) -> bytes:
     """songbook.pdf: every song, in order, through one chordpro run, in caracole's look."""
     with _workspace(cfg) as tmp:
-        files = _write_songs(tmp, entries)
+        files = _write_songs(tmp, entries, pdf=True)
         (tmp / CONTENTS_TEMPLATE).write_text(_contents_file(book, entries), encoding="utf-8")
         config = tmp / BOOK_CONFIG_NAME
         config.write_text(json.dumps(_book_config(book), ensure_ascii=False), encoding="utf-8")
@@ -932,11 +938,11 @@ def _workspace(cfg: Config) -> Iterator[Path]:
         yield Path(tmp)
 
 
-def _write_songs(tmp: Path, entries: Sequence[Entry]) -> list[Path]:
+def _write_songs(tmp: Path, entries: Sequence[Entry], *, pdf: bool = False) -> list[Path]:
     files = []
     for n, entry in enumerate(entries, start=1):
         path = tmp / f"{n:03d}.cho"
-        path.write_text(_song_file(entry), encoding="utf-8")
+        path.write_text(_song_file(entry, pdf=pdf), encoding="utf-8")
         files.append(path)
     return files
 

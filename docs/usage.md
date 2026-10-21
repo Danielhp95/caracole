@@ -1116,8 +1116,9 @@ and cache.
   ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or "Soda Stereo · Key Bm"
   without a capo), then a capo or a tuning the tab's notes name
   ("Soda Stereo · Key Bm · half step down"). Then the chord diagrams above
-  the song, bold chords in rust over the lyrics, and section names on a light
-  band. chordpro prints a text of the PDF's own, and `sheet.cho` stays as it
+  the song, bold rust chords over the lyrics, and section names in small rust
+  capitals (no band). The title is large, the page a clean two columns, and a
+  songbook's songs are set the same way. chordpro prints a text of the PDF's own, and `sheet.cho` stays as it
   is, for the viewer: the tab's notes before its first section stay out of the
   PDF (a tab after them stays in), the chord diagrams are the shapes the
   viewer shows first for the chords the sheet gives shapes for (its chord

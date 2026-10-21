@@ -4,17 +4,17 @@
       "foreground-light": "#efece6",
       "foreground-medium": "#8a847a"
     },
-    "margintop": 56,
+    "margintop": 92,
     "marginbottom": 40,
     "marginleft": 48,
     "marginright": 40,
-    "headspace": 46,
+    "headspace": 64,
     "footspace": 20,
     "spacing": {
       "title": 1.15,
-      "lyrics": 1.25,
-      "chords": 1.05,
-      "empty": 0.8,
+      "lyrics": 1.15,
+      "chords": 1.0,
+      "empty": 0.6,
       "tab": 1.0
     },
     "diagrams": {
@@ -30,8 +30,8 @@
     },
     "formats": {
       "title": {
-        "title": ["", "%{title}", ""],
-        "subtitle": ["", "%{subtitle|%{}|%{artist}%{key| · Key %{}}%{capo| · Capo %{}}}", ""],
+        "title": ["%{title}", "", ""],
+        "subtitle": ["%{subtitle}", "", ""],
         "footer": ["", "", "%{page}"]
       },
       "default": {
@@ -39,12 +39,12 @@
       }
     },
     "fonts": {
-      "title": { "name": "Helvetica-Bold", "size": 20 },
+      "title": { "name": "Helvetica-Bold", "size": 24 },
       "subtitle": { "name": "Helvetica", "size": 11, "color": "#645f57" },
-      "text": { "name": "Helvetica", "size": 12 },
+      "text": { "name": "Helvetica", "size": 11 },
       "chord": { "name": "Helvetica-Bold", "size": 10.5, "color": "#b4441e" },
       "annotation": { "name": "Helvetica-Oblique", "size": 9.5, "color": "#8a847a" },
-      "comment": { "name": "Helvetica-Bold", "size": 10, "color": "#645f57", "background": "#efece6" },
+      "comment": { "name": "Helvetica-Bold", "size": 9, "color": "#b4441e" },
       "tab": { "name": "Courier", "size": 10 },
       "footer": { "name": "Helvetica", "size": 8, "color": "#8a847a" },
       "diagram": { "name": "Helvetica-Bold", "size": 9 },

@@ -590,3 +590,15 @@ def test_the_real_pdf_of_a_chinese_songbook_embeds_the_font(conn, cfg):
     assert stats.failed == [] and stats.font_error is None
     data = (folder(cfg, "宋冬野的歌") / "songbook.pdf").read_bytes()
     assert Path(CJK_FONT).stem.split("-")[0].encode() in data
+
+
+def test_each_song_goes_in_as_its_pdf_text(conn, cfg, two):
+    fake = FakeChordPro()
+    render(conn, cfg, overrides(cfg, '[transpose]\n"Radiohead - Creep" = 2\n'), runner=fake)
+    creep, soda = inputs(fake, pdf_call(fake))
+    assert creep.startswith("{transpose: 2}\n{title: Creep}")
+    for text in (creep, soda):
+        assert "{columns: 2}" in text and "{subtitle:" in text
+    assert "Radiohead · Key A" in creep  # the key G, two semitones up: the line says what the chords play
+    cho_call = next(c for c in fake.calls if output_of(c).suffix == ".cho")
+    assert "{columns:" not in inputs(fake, cho_call)[0]  # songbook.cho stays the sheets as the apps read them
