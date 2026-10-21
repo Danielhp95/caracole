@@ -24,57 +24,65 @@ Of a song's key, the string holds only the mode ("minor"): the script reads a
 key typed in the box ("a minor", "f#m") and compares it, as the Key menu does,
 by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
 
-The songs are one grid of cards, as many columns as the screen holds, in every
-order: a section per artist left one narrow card per row on a desktop. Each
-card has its artist's monogram, in a colour of that artist's, and an A-Z strip
-jumps to the first card of a letter once more than 40 songs show. A card's
-title and its one Open button open its sheet (its viewer, else its PDF, else
-its text); its other files, and the Guitar Pro versions to download from UG,
-fold under Files, as a row's "⋯" folds them. The title keeps its line: the
-artist goes under it, with the badges at the end of that line or under it. The
-artist's name, marked with a funnel (``artistFilter``, ROWS_SCRIPT's), shows
-that artist's songs alone, on a card and on a row. On a phone the header is
-short (the numbers beside the title, one row of buttons that scrolls sideways,
-Key, Sort and the view under View), so the first song starts on the first
-screen; the bar stays at the top, with an edge once the page scrolls under it.
-A Cards/Rows toggle shows them as rows
-instead, one compact line a song (two on a phone), remembered in the address
-(``#view=rows``) as the search, the filters, the sort and the key are.
+The songs are dense lines (``resultRow``'s ``dense`` form, ROWS_SCRIPT's), a
+song a line on a laptop, about thirty to its screen, two lines a song on a
+phone. By artist, the order the page opens in, they are grouped under their
+artist's name, artists A to Z, each group's header saying how many of the songs
+listed are yours ("Soda Stereo · you have 2"); by title or by when they came,
+they stand alone, each with its artist. A line holds the song's title, which
+opens its sheet (its viewer, else its PDF, else its text), its status (Found,
+Wanted, Needs review, Not found), its key, the marks of where its sheet and its
+files came from and its main action: Open, or, served, Fetch now or Pick the
+match. Everything else a song has is under its "⋯": its facts (the key in words
+and where it came from, the transposition, the lyrics, when it came), its
+review's picker, where its audio comes from, its other files, the Guitar Pro
+versions to download from UG, its MuseScore pages, its search and buy links, Add
+to a songbook… (the Select mode, the song picked) and, served, Remove…. An
+artist's name, marked with a funnel (``artistFilter``, ROWS_SCRIPT's), shows that
+artist's songs alone. An A-Z strip jumps to the first group (or line) of a letter
+once more than 40 songs show. On a phone the header is short (the numbers beside
+the title, then one row of buttons and menus that scrolls sideways), so the first
+song starts on the first screen; the bar stays at the top, with an edge once the
+page scrolls under it. The address remembers the search, the filters, the sort
+and the key.
 
 On a touch screen (``pointer: coarse``) every control is a thumb's target, 44
-px each way at the least: buttons, folds, chips, menus, letters, a row's "⋯"
-and an artist's name (a card's at the top of its box, under its title, whose
-target reaches down to it); a mouse keeps the compact sizes, about twenty rows to a
-laptop's screen. Fields, menus and the Select boxes have the ``--control-edge``
-colour, 3:1 or more against every background (WCAG 1.4.11); cards and dividers
-keep the soft ``--border``. ``BASE_STYLE`` and ``PICKER_STYLE`` carry both to
+px each way at the least: buttons, folds, chips, menus, letters, a line's
+button and "⋯" and an artist's name; a mouse keeps the compact sizes. Fields,
+menus and the Select boxes have the ``--control-edge`` colour, 3:1 or more
+against every background (WCAG 1.4.11); boxes and dividers keep the soft
+``--border``. ``BASE_STYLE`` and ``PICKER_STYLE`` carry both to
 the pages caracole serve writes itself (web/pages.py, web/lookup_page.py).
 
-Each file, link and row shows where it came from (icons.py): the site's own
+Each file, link and line shows where it came from (icons.py): the site's own
 icon, inlined in the data as a ``data:`` URI (the CSP allows images from
 ``data:`` alone), else the site's lettered badge, or a glyph for the audio
 model and the inbox; each is named "from Ultimate Guitar" for a screen reader.
 An auto sheet made from the audio caracole took from YouTube shows YouTube's
-(``icons.kept_sources``), and its card, or its row's "⋯", the video.
+(``icons.kept_sources``), and its line's "⋯" the video.
 
 The seam for lists the page doesn't make itself (the results of caracole
 serve's lookup page, web/lookup_page.py, which runs ``ROWS_SCRIPT`` and has
 ``ROWS_STYLE`` as this page does, and gets each song's files from
 ``result_cards``): ``window.caracole.resultRow(result)`` returns a row
-element, the same as a song's row, to put in a ``<div class="rows">``.
-``result`` is a plain object, every field optional:
+element, to put in a ``<div class="rows">``, or with ``dense``, a line as a
+song's is (``article.line``: ``.line-title``, ``.line-status``, ``.line-key``,
+``.line-sources``, ``.line-action``, ``.line-more``), to put in a ``<div
+class="lines">``. ``result`` is a plain object, every field optional:
 
 - ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button that
-  shows it filters (a funnel after the name), as on a card;
-- ``href``: what the title opens (the row's sheet, as its button does), the same way as
+  shows it filters (a funnel after the name), as a group's name is; a line shows its
+  artist only where no artist's group holds it;
+- ``href``: what the title opens (the song's sheet, as its button does), the same way as
   ``action``'s link; out of the Tab order, since the button says what it opens;
-- ``source``: a key of the data's ``icons`` (``icons.SOURCES``: "ug", "lacuerda"…);
+- ``source``: a key of the data's ``icons`` (``icons.SOURCES``: "ug", "lacuerda"…), or, for
+  a line, ``sources``, several, each marked once;
 - ``key`` ("A minor"), and ``keyText``, what a screen reader hears for it;
-- ``status``, which the row's ``data-status`` gets; ``badges``: ``[{kind, text}]``,
+- ``status``, which its ``data-status`` gets; ``badges``: ``[{kind, text}]``,
   ``kind`` a badge class (found, wanted, review, auto…); ``facts``: a line of text;
 - ``action``: the main control, a Node, or ``{label, href, source}``: an http(s)
   link opens in a new tab, any other address stays relative or goes nowhere;
-- ``more``: what the row's "⋯" button shows, Nodes or
+- ``more``: what its "⋯" button shows, Nodes or
   ``{heading, links: [{label, href, source}]}``.
 
 ``window.caracole.sourceMark(key)`` gives a source's mark alone, and
@@ -91,7 +99,7 @@ the sites and the lookup page alike.
 nothing. Enter, or Search all, searches the sites too. The file can ask
 nothing of anyone: it shows the ``caracole search`` line to run, with Copy,
 above your songs (in their empty list when none match). Served, the results
-take the grid's place until Escape: your songs that match, as their own rows,
+take the list's place until Escape: your songs that match, as their own lines,
 then the Ultimate Guitar index's songs and artists, LaCuerda's artists and
 songs, gtptabs.com's pages and MuseScore's (``GET /api/search``, a moment after
 the last key, the newest query alone, the sites left out, or searched in part,
@@ -107,16 +115,15 @@ the query.
 
 ``caracole serve`` serves the same page with ``controls`` (``WebControls``): the
 search of the sites, a form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
-button on each card (it counts down five seconds, with Undo, before it sends anything), and a CSP
-that lets the forms post to the server (``form-action 'self'``) and the script
+button under each song's "⋯" (it counts down five seconds, with Undo, before it sends anything), and a
+CSP that lets the forms post to the server (``form-action 'self'``) and the script
 ask it how its requests go (``connect-src 'self'``). The script posts the forms
-with fetch(), so the page stays where it is: each song's card shows its
-request's one line (web/status.py), from ``/jobs.json``, asked every 1.5 s
-while one waits or runs, and is drawn again from the song's new data once the
-request is over. A song's row carries what its card does: the line, on a line
-of the row's own; Pick the match, or Removing…, as its button; the picker,
-Look in the index and Remove… under its "⋯". A song new to the library gets a card of its own under the
-bar, and two requests or more also show in a corner, folded to one line that opens upwards. Without
+with fetch(), so the page stays where it is: each song's line shows its
+request's one line (web/status.py), a line of its own across it, from ``/jobs.json``, asked every
+1.5 s while one waits or runs, and is drawn again from the song's new data once the
+request is over. Pick the match (a review held up a fetch), or Removing…, is a line's button then;
+the picker and Look in the index are under its "⋯". A song new to the library gets a line of its own
+under the bar, and two requests or more also show in a corner, folded to one line that opens upwards. Without
 JavaScript the forms post as forms. The file on disk has none of it, and lets
 no form be sent and nothing be asked.
 
@@ -127,11 +134,11 @@ song, its record, its wanted.txt line; never Music/). Nothing else is sent for
 those five seconds, and Undo stops it ("Not removed", the focus back on
 Remove…); then the page posts the removal with the song's key, and the line
 follows it ("Removing…", "Removing from caracole…", then "Removed"), as tall as
-it was. The card is then a ``gone`` one, its name alone, as tall as it was and
-its line where it was, until the page is loaded again. Without JavaScript,
+it was. The song's line is then a ``gone`` one, its name alone, as tall as it was and
+its request line where it was, until the page is loaded again. Without JavaScript,
 Remove…'s question is a page of the server's; Remove it, and Keep it, come back
 to this page as it was left (Remove… sends the address after # along, ``back``),
-at the song's card: ``song=ID`` in the address, which the script scrolls to and
+at the song's line: ``song=ID`` in the address, which the script scrolls to and
 focuses, then drops.
 
 The Songbooks section's forms, and the Select bar's Make songbook, post with
@@ -146,28 +153,27 @@ it is taller than what it holds, until the next click or key). On the served pag
 section is there even before the first songbook, hidden. A songbook with songs
 of yours that have no sheet yet has Get the N missing songs now (each such
 song's ``<li>`` marked ``data-get``; every song's names its id, ``data-song``):
-one lookup per song, each one's line under its name there and on its card, then
+one lookup per song, each one's line under its name there and on the song's own, then
 the songbook made again, on its own line.
 
 A song in review carries its candidates (``review_choices``), numbered as
-``caracole review`` numbers them, and its card a picker (the script's
+``caracole review`` numbers them, and its line a picker under its "⋯" (the script's
 ``makePicker``): a disclosure that lists them, each with its UG names, its
 score, why the matcher thought of it and a link to its UG page. On the file
 it is read-only, with the ``caracole review --song`` line that picks one;
-served, it is a radio group posted to ``/review`` (web/review_routes.py), in place of the
-"Review first" button, and opening it takes the focus to the first candidate.
-A pick posts with fetch() as the other forms do, and the card's line says how
+served, it is a radio group posted to ``/review`` (web/review_routes.py), which the line's
+Pick the match opens, in place of the "Review first" button, the focus on the first candidate.
+A pick posts with fetch() as the other forms do, and the song's line says how
 it goes; while any request of the song waits or runs, the picker offers no
 pick, and the line's "Pick the match" (a request that ended in a review)
 opens it.
-A song not found carries ``notFound``, and its served card links to
+A song not found carries ``notFound``, says "Not found", and its served line's "⋯" links to
 ``/review?song=ID``, which offers what ``caracole search`` finds for it: a
 search per song would cost every page a moment each.
 """
 
 from __future__ import annotations
 
-import hashlib
 import html as html_text
 import re
 import sqlite3
@@ -210,7 +216,7 @@ from caracole.youtube_fetch import (
 
 PAGE_NAME = "index.html"
 
-# Kept files, in the order a card shows them; guitar-N.* goes between the two groups.
+# Kept files, in the order a song's line lists them; guitar-N.* goes between the two groups.
 _FIRST = ("sheet.html", "sheet.pdf", "sheet (auto).html", "sheet (auto).pdf", "sheet.txt", "sheet.cho",
           "lyrics.txt", "lyrics.lrc")
 _LAST = ("tab.txt", "sheet (auto).txt", "sheet (auto).cho", "info.json")
@@ -242,7 +248,6 @@ _TRANSLITERATED = "øØæÆœŒßẞđĐłŁþÞðÐıħĦ"
 _PUNCTUATION = re.compile(r"[\W_]+")
 _APOSTROPHES = re.compile(r"['’‘`´ʼ]")
 _WORD = re.compile(r"[^\W_]+")
-HUES = 8  # monogram colours, .hue-0 to .hue-7
 
 
 @dataclass(frozen=True)
@@ -250,14 +255,14 @@ class WebControls:
     """What ``caracole serve`` adds to the page it serves (caracole/web/).
 
     ``csrf`` is the token every form posts back; ``busy`` holds the songs with a
-    fetch queued or running, whose cards say so instead of offering another;
+    fetch queued or running, whose lines say so instead of offering another;
     ``active`` is how many requests are queued or running, for the masthead;
-    ``held`` holds the songs a fetch must wait for a review of, whose cards say so;
-    ``removing`` holds the songs with a removal queued or running, whose cards
+    ``held`` holds the songs a fetch must wait for a review of, whose lines say so;
+    ``removing`` holds the songs with a removal queued or running, whose lines
     say so instead of offering Remove; ``jobs`` are the requests queued or
-    running, as ``/jobs.json`` gives them, so their cards show their progress
-    from the start: a song's, a removal's on its song's card, and a songbook's
-    change on its songbook's (``kind``). ``timers``, which only the tests that
+    running, as ``/jobs.json`` gives them, so they show their progress from the
+    start: a song's, and a removal's, on its song's line, and a songbook's change
+    on its songbook's card (``kind``). ``timers``, which only the tests that
     drive the page on real time set (``WebApp(timers=...)``), are the script's
     timers in milliseconds in place of its own: ``poll``, between two asks of
     ``/jobs.json`` (1500), and ``undo``, Remove's countdown (5000); the page
@@ -308,15 +313,16 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
 
 def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime,
                songs: list[Song] | None = None) -> list[dict[str, Any]]:
-    """The cards' data, as the page's JSON holds it: of every song, or of ``songs``; a song in review
-    with its candidates, for the picker (``_add_picks``); each file with where it came from."""
+    """The songs' data (each song's "card", as ``/jobs.json`` names it), as the page's JSON holds it: of
+    every song, or of ``songs``; a song in review with its candidates, for the picker (``_add_picks``);
+    each file with where it came from."""
     pages = _guitar_pro_pages(conn)
     sources = _downloaded(conn)
     origins = kept_sources(conn)
     library = list_songs(conn) if songs is None else songs
     keys = {s.id: song_key(conn, cfg.library_dir, s) for s in library}
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
-    # With the YouTube route on, caracole takes those songs' audio itself: their cards say how it goes,
+    # With the YouTube route on, caracole takes those songs' audio itself: their lines say how it goes,
     # and only a song you turned YouTube down for is for buying.
     youtube = song_states(conn, cfg, overrides, now) if route_problem(cfg) is None else {}
     if youtube:
@@ -331,7 +337,7 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
 
 
 def result_cards(conn: sqlite3.Connection, cfg: Config, songs: list[Song]) -> dict[int, dict[str, Any]]:
-    """What a list the page doesn't make itself shows of each song as its card does (caracole serve's
+    """What a list the page doesn't make itself shows of each song as its line does (caracole serve's
     lookup page, which draws them with ``ROWS_SCRIPT``): its files, relative to the library and
     percent-encoded, the primary one marked (its viewer, else its PDF, else its text), each with where
     it came from; where its sheet came from; its key. By song id."""
@@ -346,7 +352,7 @@ def result_cards(conn: sqlite3.Connection, cfg: Config, songs: list[Song]) -> di
 
 
 def sheet_href(library_dir: Path, song: Song) -> str | None:
-    """The link to the song's sheet, its card's main file (relative to index.html), or None without one."""
+    """The link to the song's sheet, its line's main file (relative to index.html), or None without one."""
     names = _file_names(song_dir(library_dir, song))
     return next((f["href"] for f in _files(library_dir, song, names, {}) if f["primary"]), None)
 
@@ -379,8 +385,8 @@ def review_choices(conn: sqlite3.Connection, song: Song,
 
 
 def _add_picks(conn: sqlite3.Connection, library: list[Song], songs: list[dict[str, Any]]) -> None:
-    """Give each card of a song in review (not ignored) its candidates, for the picker, and mark a song
-    not found (``notFound``), whose served card links to its search hits: a search each would cost
+    """Give the data of each song in review (not ignored) its candidates, for the picker, and mark a song
+    not found (``notFound``), whose served line links to its search hits: a search each would cost
     every page a moment per song."""
     for song, card in zip(library, songs, strict=True):
         if card["review"]:
@@ -428,7 +434,7 @@ _YOUTUBE_NOTES = {
 
 
 def _lacuerda_pick(song: Song, overrides: Overrides, status: str) -> dict[str, str] | None:
-    """The sheet you picked on LaCuerda (``[lacuerda]``), for a wanted song's card to say that tonight's run
+    """The sheet you picked on LaCuerda (``[lacuerda]``), for a wanted song's line to say that tonight's run
     gets it; None once LaCuerda was asked for it, and for any other song."""
     pick = overrides.lacuerda.get(song.key)
     if pick is None or status != "wanted" or song.lacuerda_checked_at is not None:
@@ -437,7 +443,7 @@ def _lacuerda_pick(song: Song, overrides: Overrides, status: str) -> dict[str, s
 
 
 def _youtube_note(state: SongState | None) -> dict[str, Any] | None:
-    """What a card says of a song on the YouTube route, and the video its audio came from."""
+    """What a song's line says of it on the YouTube route, and the video its audio came from."""
     if state is None or state.state not in _YOUTUBE_NOTES:
         return None
     video = state.video if state.state in (DOWNLOADED, CHORDS) else None
@@ -450,7 +456,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
           guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
           musescore: list[dict[str, str]], youtube: dict[str, Any] | None = None, *,
           origins: dict[str, str] | None = None) -> dict[str, Any]:
-    """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
+    """One song's data; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, ``musescore``
     the song's MuseScore pages, and ``youtube`` where the song stands on the YouTube route.
 
@@ -498,8 +504,6 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "sortTitle": _sort_key(title),
         "artistLetter": _letter(_sort_key(song.artist)),
         "titleLetter": _letter(_sort_key(title)),
-        "monogram": _monogram(song.artist),
-        "hue": _hue(song.artist),
         # Only the key's mode, so that "minor" finds every minor song: the script finds a typed key
         # ("a minor", "f#m") by its pitch class instead, which a substring of "a minor" can't do.
         "search": _haystack([song.artist, *song.artists, title, song.display,
@@ -589,21 +593,6 @@ def _letter(sort_key: str) -> str:
     return first.upper() if "a" <= first <= "z" else "#"
 
 
-def _monogram(artist: str) -> str:
-    """The card's badge for an artist: two initials ("SS"), or the first Han character ("宋")."""
-    if has_han(artist):
-        return next(c for c in artist if has_han(c))
-    words = _WORD.findall(artist)
-    if not words:
-        return artist.strip()[:1] or "?"
-    return "".join(w[0] for w in words[:2]).upper()
-
-
-def _hue(artist: str) -> int:
-    """The monogram's colour, the same for every song of an artist."""
-    return int.from_bytes(hashlib.sha256(fold(artist).encode("utf-8")).digest()[:4], "big") % HUES
-
-
 def _initials(title: str) -> str:
     """A title's initials, "wywh" for Wish You Were Here (斑马斑马's by pinyin, "bmbm"): typed whole in the
     search box, they find it. None for a title of one word."""
@@ -648,7 +637,7 @@ _CSP = (
 # request.html, the form caracole serve adds under the search's results (a song for wanted.txt, written
 # as `caracole add` writes it; the script fills it in from what was searched, and without the script it
 # posts as a form); requested.html, what caracole serve adds under the bar (the songs just requested,
-# each a card with its line, and the requests, a short list in a corner).
+# each a line with its request line, and the requests, a short list in a corner).
 TEMPLATES = ("head.html", "body.html", "request.html", "requested.html")
 _HEAD, _BODY, _REQUEST, _REQUESTED = (read_asset(name) for name in TEMPLATES)
 

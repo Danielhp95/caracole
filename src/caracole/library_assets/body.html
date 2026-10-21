@@ -33,24 +33,16 @@ __REQUEST__</section>
     <button type="button" class="chip person" id="artist" hidden></button>
   </div>
   <div class="controls">
-    <button type="button" class="chip view-toggle" id="view-toggle" aria-expanded="false"
-      aria-controls="view-panel">View</button>
-  </div>
-  <div class="view-panel" id="view-panel">
-  <div class="views" role="group" aria-label="View">
-    <button type="button" data-view="cards" aria-pressed="true">Cards</button>
-    <button type="button" data-view="rows" aria-pressed="false">Rows</button>
-  </div>
-  <label class="sort" id="keys" hidden>Key
-    <select id="key"><option value="">Any</option></select>
-  </label>
-  <label class="sort">Sort
-    <select id="sort">
-      <option value="artist">Artist A–Z</option>
-      <option value="title">Title A–Z</option>
-      <option value="recent">Recently added</option>
-    </select>
-  </label>
+    <label class="sort" id="keys" hidden>Key
+      <select id="key"><option value="">Any</option></select>
+    </label>
+    <label class="sort">Sort
+      <select id="sort">
+        <option value="artist">Artist A–Z</option>
+        <option value="title">Title A–Z</option>
+        <option value="recent">Recently added</option>
+      </select>
+    </label>
   </div>
 </div>
 <nav class="jump" id="jump" aria-label="Jump to a letter" hidden></nav>

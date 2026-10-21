@@ -125,23 +125,23 @@
     const tens = n % 100;
     return n + (tens >= 11 && tens <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th");
   };
-  // Only what changed is touched: the list's observer sees every change to a card's children.
-  const paint = (card) => {
-    const at = picked.indexOf(card.dataset.id);
-    const box = card.querySelector(".pick input");
+  // Only what changed is touched: the list's observer sees every change to a line's children.
+  const paint = (line) => {
+    const at = picked.indexOf(line.dataset.id);
+    const box = line.querySelector(".pick input");
     if (box && box.checked !== (at >= 0)) box.checked = at >= 0;
-    const n = card.querySelector(".pick-n");
+    const n = line.querySelector(".pick-n");
     const number = at >= 0 ? String(at + 1) : "";
     if (n && n.textContent !== number) n.textContent = number;
     // The box's name says its place too: the number on it is hidden from a screen reader.
-    const said = card.querySelector(".pick-label");
-    const s = songs.get(card.dataset.id);
+    const said = line.querySelector(".pick-label");
+    const s = songs.get(line.dataset.id);
     const name = s ? "Pick " + s.title + " by " + s.artist + (at >= 0 ? ", " + ordinal(at + 1) : "") : "";
     if (said && s && said.textContent !== name) said.textContent = name;
-    if (card.classList.contains("picked") !== (at >= 0)) card.classList.toggle("picked", at >= 0);
+    if (line.classList.contains("picked") !== (at >= 0)) line.classList.toggle("picked", at >= 0);
   };
   const paintAll = () => {
-    for (const card of list.querySelectorAll("[data-picker]")) paint(card);
+    for (const line of list.querySelectorAll("[data-picker]")) paint(line);
     count.textContent = picked.length + " selected";
     submit.disabled = sending || !picked.length;
     const existing = into.value;
@@ -157,17 +157,17 @@
     error.textContent = "";
     paintAll();
   };
-  // A box on each card, as the page's script puts them in the list (it keeps each card it made), once
-  // Select is pressed: until then a card holds nothing to tick (the file's sends nothing, and a review's
-  // picker is the card's only choice).
+  // A box on each song's line, as the page's script puts them in the list (it keeps each line it made), once
+  // Select is pressed: until then a line holds nothing to tick (the file's sends nothing, and a review's
+  // picker is the line's only choice).
   const selecting = () => document.body.classList.contains("selecting");
   const decorate = () => {
     if (!selecting()) return;
-    for (const card of list.querySelectorAll("[data-id]")) {
-      const id = card.dataset.id;
+    for (const line of list.querySelectorAll("[data-id]")) {
+      const id = line.dataset.id;
       if (!songs.has(id)) continue;
-      if (!card.dataset.picker) {
-        card.dataset.picker = "1";
+      if (!line.dataset.picker) {
+        line.dataset.picker = "1";
         const s = songs.get(id);
         const label = el("label", "pick");
         const box = el("input");
@@ -176,19 +176,19 @@
         order.setAttribute("aria-hidden", "true");
         label.append(box, order, el("span", "visually-hidden pick-label", "Pick " + s.title + " by " + s.artist));
         box.addEventListener("change", () => pick(id, box.checked));
-        (card.querySelector(".head") || card).prepend(label);
+        line.prepend(label);
       }
-      paint(card);
+      paint(line);
     }
   };
   new MutationObserver(decorate).observe(list, { childList: true, subtree: true });
-  // A tap anywhere on a card while selecting: the stylesheet lets it through to the card itself, all but a
-  // tap on its box, which ticks it alone. A key pressed on the card's artist, say, has that for its target, and
+  // A tap anywhere on a line while selecting: the stylesheet lets it through to the line itself, all but a
+  // tap on its box, which ticks it alone. A key pressed on the line's artist, say, has that for its target, and
   // does what the artist's button says.
   list.addEventListener("click", (e) => {
-    const card = e.target;
-    if (!selecting() || !(card instanceof HTMLElement) || !card.dataset.picker) return;
-    const box = card.querySelector(".pick input");
+    const line = e.target;
+    if (!selecting() || !(line instanceof HTMLElement) || !line.dataset.picker) return;
+    const box = line.querySelector(".pick input");
     if (box) box.click();  // its change event picks the song, or lets it go
   });
 
@@ -222,6 +222,16 @@
   };
   toggle.addEventListener("click", () => setMode(!selecting()));
   done.addEventListener("click", () => setMode(false));
+  // A line's "Add to a songbook…" (library.js): Select, that song picked, and the bar's menu or name field to
+  // say which songbook (unfolded on a phone).
+  document.addEventListener("caracole:pick", (e) => {
+    const id = String(e.detail && e.detail.id);
+    if (!songs.has(id)) return;
+    if (!selecting()) setMode(true);
+    pick(id, true);
+    if (folds()) setOpen(true, true);
+    else (intoLabel.hidden ? nameInput : into).focus();
+  });
   clear.addEventListener("click", () => {
     picked.length = 0;
     paintAll();

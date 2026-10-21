@@ -271,19 +271,19 @@ const note = () => {
 };
 new MutationObserver(note).observe(document.body, { subtree: true, childList: true, characterData: true });
 const cardOf = (title, where) => Array.from(document.querySelectorAll((where || "#list") + " article"))
-  .find((c) => c.querySelector("h2").textContent === title);
+  .find((c) => c.querySelector("h3").textContent === title);
 """
 
 
 def clicks(*titles: str) -> str:
-    """The test script: Fetch now on each card titled so."""
+    """The test script: Fetch now on each song's line titled so."""
     calls = "".join(f'cardOf({json.dumps(t)}).querySelector("form.fetch button").click();\n' for t in titles)
     return "(() => {\n" + WATCH + calls + "})();\n"
 
 
 def clicks_in_turn(*titles: str) -> str:
-    """The test script: Fetch now on each card titled so, each once the server has answered the one before
-    (its card's button gone), so that the server takes them in that order: requests sent together are
+    """The test script: Fetch now on each song's line titled so, each once the server has answered the one before
+    (its line's button gone), so that the server takes them in that order: requests sent together are
     taken in whatever order its threads get to them."""
     return "(() => {\n" + WATCH + f"""
 const titles = {json.dumps(list(titles))};
@@ -315,12 +315,14 @@ def attribute(dom: str, name: str):
 
 
 def card(dom: str, title: str) -> str:
-    found = re.search(r"<article[^>]*>(?:(?!</article>).)*?<h2>" + re.escape(title) + r"</h2>.*?</article>", dom, re.S)
+    """The song's line titled so (#requested's, or the list's: the first)."""
+    found = re.search(r"<article[^>]*>(?:(?!</article>).)*?<h3[^>]*>" + re.escape(title) + r"</h3>.*?</article>", dom,
+                      re.S)
     assert found, dom[-3000:]
     return found.group(0)
 
 
-def test_fetch_now_shows_its_progress_on_the_card_then_its_files(serve, cfg, conn, tmp_path):
+def test_fetch_now_shows_its_progress_on_the_line_then_its_files(serve, cfg, conn, tmp_path):
     creep = add_song(conn, "Radiohead", "Creep")
     update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
     add_song(conn, "Oasis", "Wonderwall")
@@ -335,24 +337,24 @@ def test_fetch_now_shows_its_progress_on_the_card_then_its_files(serve, cfg, con
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
     assert 'role="status"' in line and 'data-tone="ready"' in line  # read out as it changes
     assert "Ready" in line and 'href="Radiohead/Creep/sheet.pdf"' in line and "Open sheet" in line
-    # Once done, the card shows what the library has now: the sheet, and no Fetch now.
-    assert ">Open PDF</a>" in shown and 'action="/fetch"' not in shown
+    # Once done, the line shows what the library has now: the sheet, its button, and no Fetch now.
+    assert re.search(r'<div class="line-action"><a [^>]*>Open PDF</a>', shown) and 'action="/fetch"' not in shown
     assert 'data-status="found"' in shown
-    assert 'action="/fetch"' in card(dom, "Wonderwall")  # the other card is as it was
+    assert 'action="/fetch"' in card(dom, "Wonderwall")  # the other line is as it was
     # The counts follow: one found song now, in the masthead and on the buttons.
     assert re.search(r'<li class="stat"><b>1</b> found</li>', dom)
     assert re.search(r'data-show="found"[^>]*>Found <span class="n">1</span>', dom)
 
 
-# Notes whether each card's line is still the first node it showed one in (data-same, by where the card is
-# and its title), and where the focus is, every 100 ms (data-focus).
+# Notes whether each song's request line is still the first node it showed one in (data-same, by where the song's
+# line is and its title), and where the focus is, every 100 ms (data-focus).
 FIRST_LINE_AND_FOCUS = """
 const firsts = new Map();
 const same = {};
 new MutationObserver(() => {
   for (const p of document.querySelectorAll("article .progress")) {
     const card = p.closest("article");
-    const where = (card.closest("#requested") ? "requested " : "list ") + card.querySelector("h2").textContent;
+    const where = (card.closest("#requested") ? "requested " : "list ") + card.querySelector("h3").textContent;
     if (!firsts.has(where)) firsts.set(where, p);
     same[where] = firsts.get(where) === p;
   }
@@ -362,14 +364,14 @@ setInterval(() => {
   const at = document.activeElement;
   const card = at && at.closest ? at.closest("article") : null;
   document.body.setAttribute("data-focus", JSON.stringify(
-    [at ? at.tagName.toLowerCase() + "." + at.className : null, card ? card.querySelector("h2").textContent : null]));
+    [at ? at.tagName.toLowerCase() + "." + at.className : null, card ? card.querySelector("h3").textContent : null]));
 }, 100);
 """
 
 
-def test_a_cards_line_stays_the_same_live_region_until_its_request_ends(serve, cfg, conn, tmp_path):
-    # A live region put in the page with its text in it isn't read out: the card's line must be the node
-    # that was there all along, its text changed in place. And the focus, on Fetch now, isn't lost.
+def test_a_songs_request_line_stays_the_same_live_region_until_its_request_ends(serve, cfg, conn, tmp_path):
+    # A live region put in the page with its text in it isn't read out: the song's request line must be the node
+    # that was there all along, its text changed in place. And the focus, on Fetch now, goes to it, never lost.
     creep = add_song(conn, "Radiohead", "Creep")
     update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
     script = ("(() => {\n" + WATCH + FIRST_LINE_AND_FOCUS
@@ -380,12 +382,12 @@ def test_a_cards_line_stays_the_same_live_region_until_its_request_ends(serve, c
 
     shown = card(dom, "Creep")
     assert re.search(r'<p class="progress"[^>]*data-tone="ready"', shown) and shown.count('class="progress"') == 1
-    assert ">Open PDF</a>" in shown  # the card is the song's new one all the same
+    assert ">Open PDF</a>" in shown  # the line is the song's new one all the same
     assert attribute(dom, "data-same") == {"list Creep": True}
     assert attribute(dom, "data-focus") == ["p.progress", "Creep"]
 
 
-def test_a_requested_song_gets_a_card_of_its_own_on_the_page(serve, cfg, conn, tmp_path):
+def test_a_requested_song_gets_a_line_of_its_own_on_the_page(serve, cfg, conn, tmp_path):
     add_song(conn, "Oasis", "Wonderwall")
     url = serve(FakeCaracole(cfg), requests_song("Radiohead", "Creep", extra=FIRST_LINE_AND_FOCUS))
 
@@ -477,7 +479,7 @@ def test_a_failed_request_says_why_in_one_sentence_with_its_details(serve, cfg, 
     assert 'action="/fetch"' in card(dom, "Creep")  # it can be asked for again
 
 
-def test_a_refused_request_says_why_on_its_card(serve, cfg, conn, tmp_path):
+def test_a_refused_request_says_why_on_its_line(serve, cfg, conn, tmp_path):
     url = serve(FakeCaracole(cfg), requests_song("Simon - Garfunkel", "Mrs Robinson"))
 
     dom = dump_dom(url, tmp_path)
@@ -522,7 +524,7 @@ def test_a_new_songs_request_shows_after_a_reload(serve, cfg, conn, tmp_path):
     assert "Adding to the library…" in attribute(dom, "data-seen")
 
 
-def test_a_server_that_doesnt_answer_says_so_on_the_card_then_goes_on(serve, cfg, conn, tmp_path):
+def test_a_server_that_doesnt_answer_says_so_on_the_line_then_goes_on(serve, cfg, conn, tmp_path):
     creep = add_song(conn, "Radiohead", "Creep")
     update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
     url = serve(FakeCaracole(cfg, down=3), clicks("Creep"))
@@ -565,21 +567,21 @@ once(() => tones().includes("failed"), () => {
 """
 
 
-def test_asking_again_shows_on_the_same_card(serve, cfg, conn, tmp_path):
+def test_asking_again_shows_on_the_same_line(serve, cfg, conn, tmp_path):
     # Refused first ("Simon - Garfunkel" can't be an artist), then asked for right, then asked for again once
-    # done: one card, the song's.
+    # done: one line, the song's.
     url = serve(FakeCaracole(cfg), "(() => {\n" + WATCH + ASKS_THREE_TIMES + "})();\n")
 
     dom = dump_dom(url, tmp_path)
 
     requested = re.search(r'<section[^>]*id="requested"[^>]*>(.*?)</section>', dom, re.S).group(1)
-    assert attribute(dom, "data-cards") == 1  # the refused request's card went at the next request
-    assert attribute(dom, "data-again") == ["queued"]  # asked again: the same card says so
+    assert attribute(dom, "data-cards") == 1  # the refused request's line went at the next request
+    assert attribute(dom, "data-again") == ["queued"]  # asked again: the same line says so
     assert len(re.findall(r"<article", requested)) == 1, requested
     assert "Simon &amp; Garfunkel" in requested and 'data-tone="ready"' in requested
 
 
-# --- the picker on a card ---------------------------------------------------------------------------
+# --- the picker on a line ---------------------------------------------------------------------------
 
 CANDIDATES = [{"artist_key": "radiohead", "song_key": "creep", "score": 88, "step": "fuzzy"},
               {"artist_key": "radiohead", "song_key": "creep-acoustic", "score": 86, "step": "fuzzy"}]
@@ -592,8 +594,8 @@ def in_review(conn):
 
 
 def picks(title: str, ref: str) -> str:
-    """The test script: on the card titled so, the picker opened, the candidate ``ref`` chosen, and Pick; it
-    notes (data-both) if the card ever offered a pick while its line said how the request goes."""
+    """The test script: on the line titled so, the picker opened, the candidate ``ref`` chosen, and Pick; it
+    notes (data-both) if the line ever offered a pick while its request line said how the request goes."""
     return "(() => {\n" + WATCH + f"""
 new MutationObserver(() => {{
   const c = cardOf({json.dumps(title)});
@@ -609,9 +611,9 @@ card.querySelector("form.pick-form button[type=submit]").click();
 """ + "})();\n"
 
 
-def test_a_pick_on_a_card_shows_how_it_goes_there_then_the_sheet(serve, cfg, conn, tmp_path):
-    # As Fetch now: the page stays where it is, the picker gives way to the card's line, and the card is drawn
-    # again once the request is over, from what the library has then.
+def test_a_pick_on_a_line_shows_how_it_goes_there_then_the_sheet(serve, cfg, conn, tmp_path):
+    # As Fetch now: the page stays where it is, the picker gives way to the line's request line, and the line is
+    # drawn again once the request is over, from what the library has then.
     in_review(conn)
     url = serve(FakeCaracole(cfg), picks("Creep", "radiohead/creep"))
 
@@ -627,8 +629,8 @@ def test_a_pick_on_a_card_shows_how_it_goes_there_then_the_sheet(serve, cfg, con
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
 
 
-# Clicks the "Pick the match" of Creep's line once it shows, then notes where the page is, whether the
-# card's picker is open, and which candidate has the focus.
+# Clicks the "Pick the match" of Creep's request line once it shows, then notes where the page is, whether the
+# song's picker is open (its "⋯" with it), and which candidate has the focus.
 FOLLOWS_THE_LINE = """
 const timer = setInterval(() => {
   const go = Array.from(cardOf("Creep").querySelectorAll(".progress a")).find((a) => a.textContent === "Pick the match");
@@ -639,7 +641,8 @@ const timer = setInterval(() => {
     const at = document.activeElement;
     document.body.setAttribute("data-after", JSON.stringify({
       path: location.pathname, href: go.getAttribute("href"),
-      open: cardOf("Creep").querySelector("details.picker").open,
+      open: cardOf("Creep").querySelector("details.picker").open &&
+        !cardOf("Creep").querySelector(".line-panel").hidden,
       focus: at && at.name === "pick" ? at.value : null,
     }));
   }, 300);
@@ -647,9 +650,9 @@ const timer = setInterval(() => {
 """
 
 
-def test_a_request_that_ends_in_a_review_offers_its_picker_on_the_card(serve, cfg, conn, tmp_path):
-    # Its fetch refused the song as needing review: the card's line says Needs review, and its link opens the
-    # card's own picker, here, rather than its page.
+def test_a_request_that_ends_in_a_review_offers_its_picker_on_the_line(serve, cfg, conn, tmp_path):
+    # Its fetch refused the song as needing review: the song's request line says Needs review, and its link opens
+    # the line's own picker, under its "⋯", here, rather than its page.
     creep = in_review(conn)
 
     def fetch_it(app):
@@ -708,59 +711,26 @@ def test_a_requests_picker_on_the_requests_page_takes_the_requests_whole_width(s
     assert waits >= inside - 1, widths
 
 
-# --- the same in the Rows view ------------------------------------------------------------------
-
-ROWS_FIRST = 'document.querySelector(\'button[data-view="rows"]\').click();\n'
-
-
-def row(dom: str, title: str) -> str:
-    found = re.search(r'<article class="row"[^>]*>(?:(?!</article>).)*?<h2 class="row-title"[^>]*>' + re.escape(title)
-                      + r"</h2>.*?</article>", dom, re.S)
-    assert found, dom[-3000:]
-    return found.group(0)
+# --- a line's own button ------------------------------------------------------------------------------
 
 
 def listed(dom: str) -> str:
     return re.search(r'<main[^>]*id="list"[^>]*>(.*?)</main>', dom, re.S).group(1)
 
 
-def test_fetch_now_in_a_row_shows_its_progress_on_the_row_then_its_sheet(serve, cfg, conn, tmp_path):
-    creep = add_song(conn, "Radiohead", "Creep")
-    update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
-    add_song(conn, "Oasis", "Wonderwall")
-    script = ("(() => {\n" + WATCH + FIRST_LINE_AND_FOCUS + ROWS_FIRST
-              + 'const go = cardOf("Creep").querySelector("form.fetch button");\ngo.focus();\ngo.click();\n})();\n')
-    url = serve(FakeCaracole(cfg), script)
-
-    dom = dump_dom(url, tmp_path)
-
-    seen = attribute(dom, "data-seen")
-    assert "Fetching from Ultimate Guitar…" in seen, seen
-    # Once done, the row is drawn again, as a row, around its line: the sheet is its button now.
-    assert 'class="card"' not in listed(dom) and listed(dom).count('<article class="row"') == 2
-    shown = row(dom, "Creep")
-    line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
-    assert 'role="status"' in line and 'data-tone="ready"' in line and "Open sheet" in line
-    assert re.search(r'<div class="row-action"><a [^>]*>Sheet PDF</a>', shown) and 'action="/fetch"' not in shown
-    assert 'data-status="found"' in shown and shown.count('class="progress"') == 1
-    assert attribute(dom, "data-same") == {"list Creep": True}  # the same live region all along
-    assert attribute(dom, "data-focus") == ["p.progress", "Creep"]  # the focus went from the button to the line
-    assert 'action="/fetch"' in row(dom, "Wonderwall")
-
-
-def test_a_rows_pick_opens_its_picker_there_and_the_row_shows_how_it_goes(serve, cfg, conn, tmp_path):
+def test_a_lines_pick_opens_its_picker_there_and_the_line_shows_how_it_goes(serve, cfg, conn, tmp_path):
     in_review(conn)
-    script = "(() => {\n" + WATCH + ROWS_FIRST + """
+    script = "(() => {\n" + WATCH + """
 new MutationObserver(() => {
   const r = cardOf("Creep");
   const p = r && r.querySelector(".progress");
-  if (p && /Queued|Writing|Fetching/.test(p.textContent) && r.querySelector("form.pick-form, .row-pick")) {
+  if (p && /Queued|Writing|Fetching/.test(p.textContent) && r.querySelector("form.pick-form, .line-pick")) {
     document.body.setAttribute("data-both", "1");
   }
 }).observe(document.body, { subtree: true, childList: true, characterData: true });
 const r = cardOf("Creep");
-r.querySelector(".row-action .row-pick").click();
-const panel = r.querySelector(".row-panel");
+r.querySelector(".line-action .line-pick").click();
+const panel = r.querySelector(".line-panel");
 document.body.setAttribute("data-opened", JSON.stringify({
   panel: !panel.hidden, picker: panel.querySelector("details.picker").open }));
 r.querySelector('input[name="pick"][value="radiohead/creep"]').checked = true;
@@ -774,12 +744,12 @@ r.querySelector("form.pick-form button[type=submit]").click();
     assert attribute(dom, "data-opened") == {"panel": True, "picker": True}
     seen = attribute(dom, "data-seen")
     assert "Writing the answer to overrides.toml…" in seen and "Fetching from Ultimate Guitar…" in seen, seen
-    assert 'class="card"' not in listed(dom)
-    shown = row(dom, "Creep")
+    assert '<article class="card' not in listed(dom) and '<article class="row' not in listed(dom)
+    shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
     assert 'data-tone="ready"' in line and "Open sheet" in line
-    assert re.search(r'<div class="row-action"><a [^>]*>Sheet PDF</a>', shown)
-    assert 'class="picker"' not in shown and "row-pick" not in shown and "Needs review" not in shown
+    assert re.search(r'<div class="line-action"><a [^>]*>Open PDF</a>', shown)
+    assert 'class="picker"' not in shown and "line-pick" not in shown and "Needs review" not in shown
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
 
 
@@ -1266,11 +1236,11 @@ COUNTDOWN = """(() => {
 })()"""
 
 
-@pytest.mark.parametrize("left,size", [("#show=wanted", "390,844"), ("#view=rows", "390,844"), ("#q=creep", "1280,800")])
-def test_remove_counts_down_on_the_card_then_removes_the_song_there(serve, cfg, conn, tmp_path, left, size):
+@pytest.mark.parametrize("left,size", [("#show=wanted", "390,844"), ("#sort=title", "390,844"), ("#q=creep", "1280,800")])
+def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, conn, tmp_path, left, size):
     # One tap: the song's own line says "Removing in 5 s · Undo" and what goes, the focus on Undo, and nothing is
     # sent for those five seconds (half a second here: QUICK) but the question of what goes; then the removal, and
-    # the line follows it to Removed. The page never leaves the library as you left it (its filter or view here,
+    # the line follows it to Removed. The page never leaves the library as you left it (its filter or order here,
     # the Songbooks section open above the list), and nothing on the screen moves but the line.
     from caracole.songbook import make_songbook, songbooks_file
 
@@ -1283,7 +1253,7 @@ def test_remove_counts_down_on_the_card_then_removes_the_song_there(serve, cfg, 
     runner = FakeCaracole(cfg)
     url = serve(runner, "(() => {})();\n", timers=QUICK)
     item = f'#list [data-id="{creep.id}"]'
-    line = "window.song.querySelector('.progress')"  # its card, or its row, the same node once it is gone
+    line = "window.song.querySelector('.progress')"  # its line's, the same node once it is gone
     width, height = (int(n) for n in size.split(","))
     with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
         page.open(url + left)
@@ -1291,15 +1261,14 @@ def test_remove_counts_down_on_the_card_then_removes_the_song_there(serve, cfg, 
         page.js("window.before = true; location.reload()")
         assert page.wait("window.before === undefined && document.readyState === 'complete' && "
                          "document.querySelector('#songbooks > details').open")
-        if left == "#view=rows":
-            page.click(f"{item} .row-more")
+        page.click(f"{item} .line-more")  # Remove… waits under "⋯"
         page.js(f"window.song = document.querySelector('{item}'); window.song.scrollIntoView({{ block: 'center' }})")
         assert page.js(SHIFTS) and page.js(COUNTDOWN)
         tapped = time.monotonic()
         page.click(f"{item} form.remove button")
         assert page.wait(f"{line} !== null && {line}.textContent === 'Removed'", timeout=20), page.js("window.lines")
         gone = page.js("""(() => { const c = window.song;
-            return [c.querySelector('h2').textContent, c.querySelectorAll('a, button, form').length,
+            return [c.querySelector('h3').textContent, c.querySelectorAll('a, button, form').length,
                     c.querySelector('.progress').getAttribute('role'), location.pathname, location.hash]; })()""")
         page.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
         shifts, counts = page.js("window.shifts"), page.js(COUNTS)
@@ -1328,7 +1297,7 @@ def test_remove_counts_down_on_the_card_then_removes_the_song_there(serve, cfg, 
     assert ["remove", "--yes", "--", "Radiohead - Creep"] in runner.calls
     assert gone == ["Creep", 0, "status", "/", left]  # still the library, as you left it; nothing left to open
     assert find_song(conn, creep.key) is None
-    # Its card keeps its place, its size and its line where it was, Removed, until the page is loaded again:
+    # Its line keeps its place, its size and its request line where it was, Removed, until the page is loaded again:
     # nothing on the screen moves (the line's dot, by a pixel, as its words change: no shift at all).
     assert [s for s in shifts if s["value"] > 0] == [], shifts
     # It counts no more: the masthead, the buttons and the count agree on twelve songs left.
@@ -1350,6 +1319,7 @@ def test_undo_keeps_the_song_and_nothing_is_sent(serve, cfg, conn, tmp_path, siz
     width, height = (int(n) for n in size.split(","))
     with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
         page.open(url)
+        page.click(f"{item} .line-more")  # Remove… waits under "⋯"
         tapped = time.monotonic()
         page.click(f"{item} form.remove button")
         assert page.wait(f"{line} !== null && !!{line}.querySelector('button.undo')")

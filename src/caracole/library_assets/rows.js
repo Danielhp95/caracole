@@ -1,5 +1,5 @@
 
-// Where each thing came from, and a list's rows (``resultRow``): index.html's, and the results of
+// Where each thing came from, and a list's rows and lines (``resultRow``): index.html's, and the results of
 // caracole serve's lookup page (web/lookup_page.py), which runs this script before its own.
 const caracoleRows = (icons) => {
   "use strict";
@@ -58,7 +58,7 @@ const caracoleRows = (icons) => {
   };
   let rowSerial = 0;
   const isWeb = (href) => /^https?:/i.test(String(href || ""));
-  // A title that opens what its card's or its row's main button opens: around the heading, so the heading
+  // A title that opens what its row's or its line's main button opens: around the heading, so the heading
   // stays the song's name alone. Out of the Tab order: the button, which says what it opens, is the keyboard's.
   const titleLink = (href, heading) => {
     const external = isWeb(href);
@@ -86,6 +86,17 @@ const caracoleRows = (icons) => {
     return who;
   };
   const shortKey = (key) => String(key).replace(/ minor$/, "m").replace(/ major$/, "");
+  // A key as a row or a line shows it ("Am"), and as a screen reader hears it ("Key A minor (from the tab)").
+  const keyMark = (cls, r) => {
+    const said = String(r.keyText || "Key " + keyName(r.key));
+    const key = el("span", cls);
+    key.title = said;
+    const shown = el("span", null, shortKey(r.key));
+    shown.setAttribute("aria-hidden", "true");
+    key.appendChild(shown);
+    key.appendChild(el("span", "visually-hidden", said));
+    return key;
+  };
   const linkGroup = (group) => {
     if (group instanceof Node) return group;
     const items = listOf(group && group.links).filter((item) => item && typeof item === "object");
@@ -97,8 +108,83 @@ const caracoleRows = (icons) => {
     box.appendChild(line);
     return box;
   };
+  // What a row's or a line's "⋯" button shows (``more``), folded under it: the button and its panel, named for the
+  // ``kind`` of item ("row-more", "row-panel"), go at the item's end; nothing more to show, no button.
+  const foldMore = (item, title, more, kind) => {
+    const extra = listOf(more).map(linkGroup).filter(Boolean);
+    if (!extra.length) return;
+    const panel = el("div", kind + "-panel");
+    rowSerial += 1;
+    panel.id = kind + "-more-" + rowSerial;
+    panel.hidden = true;
+    for (const node of extra) panel.appendChild(node);
+    const button = el("button", kind + "-more");
+    button.type = "button";
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-controls", panel.id);
+    button.title = "More for " + title;
+    const dots = el("span", null, "⋯");
+    dots.setAttribute("aria-hidden", "true");
+    button.appendChild(dots);
+    button.appendChild(el("span", "visually-hidden", "More for " + title));
+    button.addEventListener("click", () => {
+      const open = button.getAttribute("aria-expanded") !== "true";
+      button.setAttribute("aria-expanded", String(open));
+      panel.hidden = !open;
+    });
+    item.appendChild(button);
+    item.appendChild(panel);
+  };
+  const mainAction = (r) => (r.action instanceof Node ? r.action
+    : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null);
+  // A dense list's line (``dense``): index.html's songs, under their artist's name. Its title, which opens what
+  // ``href`` says; then the artist (where no group above names it: ``onArtist`` makes it the filter a group's name
+  // is), the status's badges, the key and the marks of where it came from (``sources``, else ``source``); its main
+  // action and "⋯". One line from 720px; on a phone two, the title and the action, then the rest.
+  const denseLine = (r) => {
+    const title = String(r.title || "");
+    const artist = String(r.artist || "");
+    const line = el("article", "line");
+    line.tabIndex = -1;
+    if (r.status) line.dataset.status = String(r.status);
+    const heading = el("h3", null, title);
+    heading.title = title;
+    let named = el("div", "line-title");
+    if (r.href) {
+      named = titleLink(r.href, heading);
+      named.className = "line-title";
+    } else {
+      named.appendChild(heading);
+    }
+    line.appendChild(named);
+    const meta = el("div", "line-meta");
+    if (artist && typeof r.onArtist === "function") meta.appendChild(artistFilter(artist, artist, r.onArtist, "line-by"));
+    else if (artist) meta.appendChild(el("span", "line-by", artist));
+    const status = el("span", "line-status");
+    for (const badge of listOf(r.badges)) {
+      if (badge && badge.text) status.appendChild(el("span", "badge " + String(badge.kind || ""), badge.text));
+    }
+    if (r.facts) status.appendChild(el("span", "line-facts", r.facts));
+    if (status.childNodes.length) meta.appendChild(status);
+    if (typeof r.key === "string" && r.key) meta.appendChild(keyMark("line-key", r));
+    const marks = el("span", "line-sources");
+    const sources = listOf(r.sources).length ? listOf(r.sources) : [r.source];
+    for (const key of sources.filter((k, n) => sources.indexOf(k) === n)) {
+      const mark = sourceMark(key);
+      if (mark) marks.appendChild(mark);
+    }
+    if (marks.childNodes.length) meta.appendChild(marks);
+    line.appendChild(meta);
+    const action = el("div", "line-action");
+    const main = mainAction(r);
+    if (main) action.appendChild(main);
+    line.appendChild(action);
+    foldMore(line, title, r.more, "line");
+    return line;
+  };
   const resultRow = (result) => {
     const r = result && typeof result === "object" ? result : {};
+    if (r.dense) return denseLine(r);
     const title = String(r.title || "");
     const artist = String(r.artist || "");
     const row = el("article", "row");
@@ -116,16 +202,7 @@ const caracoleRows = (icons) => {
       sub.appendChild(el("span", "row-artist", artist));
     }
     const meta = el("p", "row-meta");
-    if (typeof r.key === "string" && r.key) {
-      const said = String(r.keyText || "Key " + keyName(r.key));
-      const key = el("span", "row-key");
-      key.title = said;
-      const shown = el("span", null, shortKey(r.key));
-      shown.setAttribute("aria-hidden", "true");
-      key.appendChild(shown);
-      key.appendChild(el("span", "visually-hidden", said));
-      meta.appendChild(key);
-    }
+    if (typeof r.key === "string" && r.key) meta.appendChild(keyMark("row-key", r));
     for (const badge of listOf(r.badges)) {
       if (badge && badge.text) meta.appendChild(el("span", "badge " + String(badge.kind || ""), badge.text));
     }
@@ -135,34 +212,10 @@ const caracoleRows = (icons) => {
     const mark = sourceMark(r.source);
     if (mark) row.appendChild(mark);
     const action = el("div", "row-action");
-    const main = r.action instanceof Node ? r.action
-      : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null;
+    const main = mainAction(r);
     if (main) action.appendChild(main);
     row.appendChild(action);
-    const extra = listOf(r.more).map(linkGroup).filter(Boolean);
-    if (extra.length) {
-      const panel = el("div", "row-panel");
-      rowSerial += 1;
-      panel.id = "row-more-" + rowSerial;
-      panel.hidden = true;
-      for (const node of extra) panel.appendChild(node);
-      const more = el("button", "row-more");
-      more.type = "button";
-      more.setAttribute("aria-expanded", "false");
-      more.setAttribute("aria-controls", panel.id);
-      more.title = "More for " + title;
-      const dots = el("span", null, "⋯");
-      dots.setAttribute("aria-hidden", "true");
-      more.appendChild(dots);
-      more.appendChild(el("span", "visually-hidden", "More for " + title));
-      more.addEventListener("click", () => {
-        const open = more.getAttribute("aria-expanded") !== "true";
-        more.setAttribute("aria-expanded", String(open));
-        panel.hidden = !open;
-      });
-      row.appendChild(more);
-      row.appendChild(panel);
-    }
+    foldMore(row, title, r.more, "row");
     return row;
   };
 
@@ -182,7 +235,7 @@ const caracoleRows = (icons) => {
   const COUNTED = { chords: "chords", tabs: "tabs", "guitar-pro": "Guitar Pro", power: "Power Tab" };
   const counts = (c) => Object.entries(c && typeof c === "object" ? c : {})
     .map(([kind, n]) => n + " " + (own.call(COUNTED, kind) ? COUNTED[kind] : kind)).join(" · ");
-  // A song's sheet viewer or PDF, as its card opens it: a link of the library's, relative to the page.
+  // A song's sheet viewer or PDF, as its line opens it: a link of the library's, relative to the page.
   const opener = (files) => listOf(files).find((f) => f && f.primary && /[.](html|pdf)$/i.test(String(f.name || "")))
     || null;
   const yours = (hit) => (hit && hit.library && typeof hit.library === "object" ? hit.library : null);

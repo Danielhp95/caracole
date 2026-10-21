@@ -521,8 +521,8 @@ say), nothing is removed and it exits 1.
 `caracole remove` on a song removed already says when it was, and how to
 bring it back. Like `caracole review`, it asks before it takes caracole's lock,
 so the nightly run never waits for your answer; `--list` only reads. On the
-web page, each card's **Remove…** button does the same, right there on the
-card: it says in one line what goes, counts down five seconds with Undo, then
+web page, each song's **Remove…**, under its line's "⋯", does the same, right
+there on its line: it says in one line what goes, counts down five seconds with Undo, then
 removes the song ([caracole serve](#caracole-serve)).
 
 ### Names in other scripts
@@ -1602,66 +1602,61 @@ synced folder, in a browser on the laptop or the phone. It needs no server and
 loads nothing from the network. Its header is short, so that on a phone the
 first song starts well within the first screen: the library's numbers beside
 its title, the pages on the line above, the search box, then one row of
-buttons, which scrolls sideways on a phone, fading at an end where more
-buttons are out of sight. The search box stays at the top as
-the page scrolls under it, with an edge to show it. It shows every song as a
-card, in a grid as wide as the screen: one column on a phone, three or four on
-a laptop. A card
-has its status, its key and where the key came from ("Key A minor (from the
-tab)", "Key C major (estimated from the chords)", "(from the audio)": see
-[The song's key](#the-songs-key)), its transposition, and its sheet: its
-title and its one Open button open the sheet viewer (see
-[The sheet viewer](#the-sheet-viewer)), else the PDF (Open PDF), else the
-text. The rest is under Files: the PDF, the text, the ChordPro file, the
-lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files and the
-Guitar Pro versions to download from Ultimate Guitar. A Guitar Pro file
-caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`, and a
-score its format, as `Score 1 (MuseScore)`; a score's PDF is never what a
-card opens, which is the sheet. A card's title has its line to itself: the
-artist goes under it, with the badges at the end of that line, or under it
-when they don't fit. Each artist's cards share a coloured monogram, and the
-artist's name, marked with a funnel, shows only that artist's songs ("Queen"
-leaves out ABBA's "Dancing Queen"), until you take its chip off. "Find it
-elsewhere" opens a song's MuseScore pages, each a possible match, as on the
-to-do page, and, for a song without a sheet, its search and buy links. When
-caracole takes the audio of songs with no
-human sheet from YouTube, their cards say where that stands instead of offering
-to buy them ("No human sheet yet: caracole takes the audio from YouTube next",
+buttons and menus (the status buttons, then Select, Key and Sort), which
+scrolls sideways on a phone, fading at an end where more of it is out of
+sight. The search box stays at the top as the page scrolls under it, with an
+edge to show it.
+
+It shows your songs as dense lines, grouped by artist: each artist's name over
+their songs, artists A to Z ("The Beatles" under B, Chinese names by their
+pinyin), with how many of the songs listed are yours ("Soda Stereo · you have
+2"), and their songs A to Z under it. A line is a song: about thirty to a
+laptop's screen, one line each; on a phone two lines a song, the title and its
+button, then the rest under the title. A line has the song's title, which
+opens its sheet (the sheet viewer, see [The sheet viewer](#the-sheet-viewer),
+else the PDF, else the text); its status, one word: Found, Wanted, Needs review
+when caracole isn't sure of the match, or Not found when the offline index has
+no such song; its key ("Am"; a screen reader hears "Key A minor (from the
+tab)", see [The song's key](#the-songs-key)); the marks of where its sheet and
+its files came from, the sheet's first, by each site's own icon (the lyrics
+LRCLIB's, a Guitar Pro file gtptabs.com's: see [Where each file came
+from](#where-each-file-came-from)); and its one button, Open (Open PDF, Open
+text), or, on the page `caracole serve` serves, Fetch now for a wanted song
+(Pick the match for one that needs review first, and Removing… while caracole
+removes it). An auto sheet says so by its ♪ mark (YouTube's, when its audio came
+from there) and its button's name, "Auto sheet PDF".
+
+Everything else a song has waits under its line's "⋯": its key in words and
+where it came from ("Key A minor (from the tab)", "Key C major (estimated from
+the chords)", "(from the audio)"), its transposition, its lyrics' state and
+when it was added; a review's candidates (below); where it stands on the
+YouTube route, when caracole takes the audio of songs with no human sheet from
+YouTube ("No human sheet yet: caracole takes the audio from YouTube next",
 "Audio from YouTube: auto-chords works out the chords next", "Auto sheet from
-YouTube audio"), with a link to the video once there is one. Next to its
-status, a card shows where its sheet came from, by the site's own icon, and a
-file from somewhere else carries its own: the lyrics LRCLIB's, a Guitar Pro
-file gtptabs.com's (see [Where each file came from](#where-each-file-came-from)).
+YouTube audio"), with a link to the video once there is one, instead of
+offering to buy it; its other files (the PDF, the text, the ChordPro file, the
+lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files) and the
+Guitar Pro versions to download from Ultimate Guitar; its MuseScore pages,
+each a possible match, as on the to-do page; for a song without a sheet, its
+search and buy links; **Add to a songbook…** (see Songbooks, below); and,
+served, Look in the index and Remove…. When Fetch now has the line's button,
+the sheet is the first of its files there, and its title opens it all the same.
+A Guitar Pro file caracole downloaded names its site, as `Guitar Pro 1 ·
+gtptabs.com`, and a score its format, as `Score 1 (MuseScore)`; a score's PDF
+is never what a line opens, which is the sheet.
 
-The Cards/Rows switch, beside the Key menu (on a phone under View, with the
-Key and Sort menus: View says the key chosen there, "View · A minor"), shows
-the songs as rows instead:
-one line a song on a laptop, about twenty to a screen, and two lines on a
-phone: the title and the button, then the artist, the key and the status. A
-row has the sheet's mark, the title, the artist (which, as on a card,
-shows only that artist's songs), the key ("Am"; a screen reader hears "Key A
-minor (from the tab)"), the status, Needs review when caracole isn't sure of
-the match, and one button: the sheet, or, on the page
-`caracole serve` serves, Fetch now for a wanted song (Pick the match for one
-that needs review first, and Removing… while caracole removes it). The title
-opens the sheet too, as a card's does; when Fetch now has the row's button,
-the sheet is the first of its files under "⋯", and on its card Open is a
-plain button beside Fetch now. An auto
-sheet's row says so by its ♪ mark (YouTube's, when its audio came from there)
-and its button, "Auto sheet PDF", rather than by a badge, so that a phone's
-second line keeps room for the artist. Its "⋯" button opens the rest: where a
-song stands on the YouTube route, with its video, as its card says it, a
-review's candidates (the same picker as a card's, which Pick the match opens
-there), the other files, the Guitar Pro
-pages, MuseScore's pages, the search and buy links and, served, Look in the
-index and Remove…. A request's line (see [caracole serve](#caracole-serve))
-shows under the row, a line of its own, as it does on a card. The search, the
-status buttons, the Key menu, the sort and the
-letters work the same in both, and the address remembers the choice
-(`#view=rows`), as it does the rest: a bookmark opens the page as you left it.
+An artist's name, over their songs and marked with a funnel, shows only that
+artist's songs ("Queen" leaves out ABBA's "Dancing Queen"), until you take its
+chip off. Sorted by title, or by when the songs were added, the lines stand
+alone, without the artists' names over them, each with its own (which filters
+the same). A request's line (see [caracole serve](#caracole-serve)) shows under
+the song's, a line of its own. The search, the status buttons, the Key menu,
+the sort and the letters all work on the lines, and the address remembers
+them, as it does the rest: a bookmark opens the page as you left it. (An
+address from before, with `#view=rows` in it, opens the lines.)
 
-A song that needs review opens its candidates under "3 candidates", numbered
-as `caracole review` numbers them. Each is the UG song as UG names it
+A song that needs review lists its candidates under its "⋯", under "3
+candidates", numbered as `caracole review` numbers them. Each is the UG song as UG names it
 ("Radiohead – Creep"), why the matcher thought of it ("artist spelled
 differently", "title only: another artist's song, probably a cover", "under
 UG's catch-all misc-musicals"), its score, its tabs per type ("Chords ×2 ·
@@ -1686,7 +1681,7 @@ menu, there once a song has a key, shows only the songs in one key, with how
 many each key has, and puts the spellings of one key together ("F# / Gb
 minor"); and you can sort by artist, by title or by when songs were added.
 Sorted by artist or title, with more than 40 songs shown, a row of letters
-jumps to the first song under each. A line under the box says what Enter does. **Enter**, or **Search all**
+jumps to the first artist under each (by title, the first song). A line under the box says what Enter does. **Enter**, or **Search all**
 beside the box, searches the sites too (the Enter that ends a word typed with
 an input method, pinyin say, only ends the word): the file on disk, which can ask
 nothing of anyone, shows under the box the `caracole search` line to run where
@@ -1701,13 +1696,12 @@ have under the box, with Get it, and a form to request a song by name (see
 below).
 
 On a touch screen every button, fold, chip, menu, letter and artist's name is
-at least 44 pixels each way, for a thumb, and so is each row's "⋯": a phone
-shows about eight rows to a screen. A card's title is a thumb's height too:
-a tap a little under it still opens the sheet, as the artist's name stands at
-the top of its own 44 pixels, which reach down from it. With a mouse they keep their compact
-sizes. Fields, menus and the Select boxes have an edge you can see against the
-page, in light and dark mode (3:1 at least, as WCAG 1.4.11 asks), while cards
-keep their soft border, and so does the search box. The pages `caracole serve`
+at least 44 pixels each way, for a thumb, and so are each line's button and
+"⋯" (its title, beside them, is as tall): a phone shows about eleven songs to a
+screen. With a mouse they keep their compact sizes. Fields, menus and the
+Select boxes have an edge you can see against the page, in light and dark mode
+(3:1 at least, as WCAG 1.4.11 asks), while the boxes the songs are in keep
+their soft border, and so does the search box. The pages `caracole serve`
 writes itself (Requests, Look up and its search box, a song's pick) do the
 same.
 
@@ -1715,15 +1709,15 @@ same.
 one, lists each songbook: its songs in order, those without a sheet marked
 missing, and its files, the phone page first, then the PDF and the ChordPro
 file. On the file on disk it names the `caracole songbook` commands that change
-it; `caracole serve` adds buttons. **Select**, beside the Cards/Rows switch (View on a phone), puts a
-box on each card, or on each row in the Rows view, where the source's mark
-was: tick songs in the order they go in the songbook (each box shows its
-place, and a screen reader says it: "Pick Creep by Radiohead, 2nd"). A tap
-anywhere on a card or a row ticks it, or unticks it: while you select, each
-song's Open, Files, Fetch now and Remove… are put away, a request's line
-still says how it goes but without its links (Details), and a tap on its
-title or its artist opens and filters nothing, so a tick never opens a file
-by mistake. Search, filter and switch views between ticks; the bar at the
+it; `caracole serve` adds buttons. **Select**, beside the Key menu, puts a
+box at the start of each song's line: tick songs in the order they go in the
+songbook (each box shows its place, and a screen reader says it: "Pick Creep by
+Radiohead, 2nd"). A tap anywhere on a line ticks it, or unticks it: while you
+select, each line's button and "⋯" are put away, a request's line still says
+how it goes but without its links (Details), and a tap on its title opens
+nothing, so a tick never opens a file by mistake. A line's **Add to a
+songbook…**, under its "⋯", does the same with that song ticked, the bar's menu
+or name field ready. Search, filter and sort between ticks; the bar at the
 bottom counts them, `3 selected`. Give the songbook a name and tap Make
 songbook, or pick a songbook there is in the menu (instead of New songbook)
 to Add to it; Clear unticks them all. The × at the start of the bar, or
@@ -2201,10 +2195,10 @@ with it. A KEY that is no key exits with status 2.
 
 - **Search all.** The library page's search box filters your songs as you
   type, here as on the file, asking the server nothing. Enter (a phone's
-  search key), or Search all, lists under the box, in place of the grid and
-  its buttons: your songs that match first (up to five, as their rows, with
-  what their cards offer, a title opening its sheet as a card's does, then All
-  N of your songs; and a close match the filter missed, a typo say), then
+  search key), or Search all, lists under the box, in place of the list and
+  its buttons: your songs that match first (up to five, as their lines, with
+  all they offer, a title opening its sheet, then All N of your songs; and a
+  close match the filter missed, a typo say), then
   what caracole's offline indexes hold:
   **Ultimate Guitar** (eight songs, and the artists the query names, as in
   [caracole search](#caracole-search): an artist's Songs lists all of theirs,
@@ -2247,9 +2241,9 @@ with it. A KEY that is no key exits with status 2.
   the indexes alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s
   for very common words), takes no lock and spends no budget. **Enter never
   spends a request**, however clear the best result: Get it does. Escape, or
-  Back to your songs, goes back to the grid with your search and buttons as
+  Back to your songs, goes back to the list with your search and buttons as
   they were (Escape again clears the search), and the box's × back to all your
-  songs; either way a song asked for there has its card (see below); ↓ goes from the box to the first
+  songs; either way a song asked for there has its line (see below); ↓ goes from the box to the first
   result. The address keeps it (`#q=wonderwall&all=1`).
 
   **Get it** on an Ultimate Guitar song looks it up at once, as `caracole get
@@ -2264,10 +2258,10 @@ with it. A KEY that is no key exits with status 2.
   MuseScore page is a link to open, as caracole never fetches from
   MuseScore. The row then says how it goes, on a line of its own ("Sending…",
   "Fetching from Ultimate Guitar…", "Ready · Open sheet"), and once the sheet
-  is kept the row is the song's, with its sheet as its button. A newer
+  is kept the row is the song's line, its sheet its button. A newer
   answer drawn while it goes (Enter again, or a search typed over) keeps the
   row where it has it, with its line; one it hasn't moves the request under
-  the box as its card ("Just requested"), its line going on there. A song your
+  the box as its line ("Just requested"), its request line going on there. A song your
   library has already, under its own names (UG's slugs write AC/DC as "Acdc"
   and 宋冬野 as "Song Dongye"), says In your library and Get it again, and is
   looked up as your song: no second song, and no line added to wanted.txt. A
@@ -2275,12 +2269,12 @@ with it. A KEY that is no key exits with status 2.
   for tonight's run** under "⋯": it goes into wanted.txt under the site's names,
   as Request does with Fetch it now unticked (a LaCuerda song as
   `caracole add --lacuerda …`, the pick recorded: its request says Added:
-  tonight's run gets the sheet you picked on LaCuerda, as its card does, with a
+  tonight's run gets the sheet you picked on LaCuerda, as its line's "⋯" does, with a
   link to that sheet's page, and it waits for no Ultimate Guitar review of
   other artists' songs of its title), and the nightly run looks it up
   (not a song under one of UG's `misc-…` names, which are no one's: request it
   by name as you know it).
-  Back to your songs, a song new to the library gets a card of its own under the box
+  Back to your songs, a song new to the library gets a line of its own under the box
   ("Just requested").
 
   `/lookup`, the lookup page, still answers: the same search of your library
@@ -2298,11 +2292,11 @@ with it. A KEY that is no key exits with status 2.
   it is), then `caracole add` runs to put it in the library.
 - **Fetch it now.** Ticked, as it is by default, the request is looked up at
   once instead, as `caracole get` does it: its sheet in seconds, then its PDF,
-  lyrics and the rest. Each wanted song's card, and its row in the Rows view,
-  has a Fetch now button that does the same, except on a song that needs
-  review, which has no UG song to fetch until you say which it is (`caracole
-  review`, or a `[match]`, `[pin]` or `[reject]` entry in overrides.toml): its
-  card and its row have Pick the match instead (below), and Get it on an
+  lyrics and the rest. Each wanted song's line has Fetch now for its button,
+  which does the same, except on a song that needs review, which has no UG song
+  to fetch until you say which it is (`caracole review`, or a `[match]`, `[pin]`
+  or `[reject]` entry in overrides.toml): its line has Pick the match instead
+  (below), and Get it on an
   Ultimate Guitar song of Search all picks one too.
 - **Pick the match.** On a song that needs review, Pick the match opens its
   candidates, as on the file (see above), as a list to choose from: pick one,
@@ -2312,35 +2306,35 @@ with it. A KEY that is no key exits with status 2.
   matches that song again (with an `[alias]`, the artist's other songs too)
   and rewrites the pages; or, for None of these, `--none` with the
   candidates you saw, which go under `[reject]`. As a request does, the
-  pick leaves you where you are: the picker gives way to the card's line,
+  pick leaves you where you are: the picker gives way to the song's line,
   which says "Writing the answer to overrides.toml…", then how the rest goes
   (below). With Fetch it now ticked,
   as it is by default, a pick then runs `caracole fetch --song` and
   `caracole render --song`, for that song alone, at the nightly pace; None of
   these fetches nothing, and caracole goes on
   looking for the song: if the matcher finds others, the song is back in
-  review with those, and its card offers them to pick from, with no Fetch now
+  review with those, and its line offers them to pick from, with no Fetch now
   until one is picked. The candidates must still be the ones the page showed
   (the nightly run may have matched the song again: reload the page then),
   and a song whose own request waits or runs gets its pick once that ends:
-  until then its card lists the candidates without a form. A
+  until then its line lists the candidates without a form. A
   review without candidates keeps its Review first button: `caracole review`
   offers it a pin or an ignore. With the keyboard, Enter opens the picker and
   takes the focus to the first candidate, the arrow keys choose, and Tab
-  goes on through the candidates' UG links to Fetch it now and Pick. In the
-  Rows view the picker is under the row's "⋯", and the row's Pick the match
-  opens it there, the focus on the first candidate.
+  goes on through the candidates' UG links to Fetch it now and Pick. The picker
+  is under the line's "⋯", and the line's Pick the match opens it there, the
+  focus on the first candidate.
 - **Look in the index.** A wanted song the offline index didn't match (and
-  whose sheet you didn't pick on LaCuerda: its card says Tonight's run gets
-  the sheet you picked on LaCuerda instead) has a
-  Look in the index link beside Fetch now (under "⋯" in the Rows view): its
+  whose sheet you didn't pick on LaCuerda: its line's "⋯" says Tonight's run
+  gets the sheet you picked on LaCuerda instead) has a
+  Look in the index link under its line's "⋯": its
   page, `/review?song=ID`, runs
   `caracole search` for the song's artist and title, and offers the first five
   hits the same way, without None of these. A pick writes `[match]` alone (see
   [Review](#review)). The page runs the search when you open it, so the
   library page carries no hits of its own.
-- **Remove a song.** Each card's Remove… button (a row's, under its "⋯")
-  removes the song where it is, and you stay on the library: one tap, and
+- **Remove a song.** Each song's Remove…, under its line's "⋯", removes the
+  song where it is, and you stay on the library: one tap, and
   the song's line says "Removing in 5 s · Undo", the keyboard focus on Undo,
   and under it what goes, in one sentence, as
   [`caracole remove`](#caracole-remove) works it out: "Deletes caracole's 6
@@ -2349,21 +2343,21 @@ with it. A KEY that is no key exits with status 2.
   question, which changes nothing, and Undo stops it there: the line says
   "Not removed", and Remove… is back. Then the page queues `caracole remove
   --yes "ARTIST - TITLE"`, and the line says how it goes: "Removing…",
-  "Queued…", "Removing from caracole…", then "Removed", the card keeping only
-  the song's name, its size and its line where it was, so that nothing on
-  the screen moves, until you load the page again (a row, the same). From
+  "Queued…", "Removing from caracole…", then "Removed", the song's line keeping
+  only its name, its size and its request line where it was, so that nothing
+  on the screen moves, until you load the page again. From
   then on the song counts nowhere: the numbers at the top, the buttons'
   counts and the count over the list leave it out. A page older than a
   change to the library (the song merged into another since, say) removes
   nothing, and the line says to reload the library. Without JavaScript,
   Remove… opens a page that says what goes and what stays; Remove it queues
   the removal and goes back to the library as you left it (its search,
-  filters and view), the song's card in view, and Keep it goes back there
+  filters and sort), the song's line in view, and Keep it goes back there
   too.
 - **How it goes, on the page.** A request leaves you where you are. The
-  song's card (or its row, on a line under it), or for a song new to the
-  library a card of its own under the search box ("Just requested"), says on
-  one line how its request goes: "Queued…"
+  song's line, on a line of its own under it, or for a song new to the
+  library a line of its own under the search box ("Just requested"), says
+  how its request goes: "Queued…"
   (or "Queued behind 2 requests…"), then what runs: for a request without
   Fetch it now, "Adding to the library…"; for one looked up now, its stage
   ("Finding the song…", "Looking it up…", "Fetching from Ultimate Guitar…",
@@ -2373,12 +2367,12 @@ with it. A KEY that is no key exits with status 2.
   "Fetching from gtptabs.com…", "Writing the library page…"), or "Waiting for
   another caracole…" while a nightly run holds the lock until its next pause;
   then how it ended (a lookup that stopped says why, in its stage's words):
-  - **Ready · Open sheet**, and the card shows the song's files;
+  - **Ready · Open sheet**, and the song's line opens its sheet, its files under its "⋯";
   - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
     the fetch looked the song up during the request and found none, or the
     index has no such song (and its artist's UG page isn't known);
   - **Needs review · Pick the match**, when caracole isn't sure which UG
-    song it is and has candidates for it: the link opens the card's picker
+    song it is and has candidates for it: the link opens the line's picker
     (from the corner's list of requests, the picker's own page); without
     candidates, **Needs review · see the to-do page**;
   - **Not fetched yet · Details**, when a cooldown, a block, a spent budget
@@ -2398,24 +2392,24 @@ with it. A KEY that is no key exits with status 2.
   - or, when a command failed, its error in one sentence, with a **Details**
     link to what it printed.
 
-  A song asked for again shows on the card it has there already, and a
-  refused request's card goes at the next request. A request still on its
-  way when you reload the page keeps its card. When the server stops
+  A song asked for again shows on the line it has there already, and a
+  refused request's line goes at the next request. A request still on its
+  way when you reload the page keeps its line. When the server stops
   answering, the lines say so after a few tries ("caracole serve can't be
   reached; trying again…"), until it answers again.
 
   Two requests or more also show in a corner, folded to one line on every
-  width ("2 requests · 1 to go"), so that it covers no card; it opens upwards
+  width ("2 requests · 1 to go"), so that it covers no song; it opens upwards
   to a line per song, and closes. Its one Details link opens the requests
-  page. A songbook's change and a removal stay out of it: the card where
-  you asked says how each goes. A screen reader hears each card's line as
+  page. A songbook's change and a removal stay out of it: the songbook's card,
+  or the song's line, where you asked says how each goes. A screen reader hears each song's request line as
   it changes, to the last one, and Fetch now hands the keyboard focus to that
   line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.
 - **Requests**, the page at `/jobs`, has one line per request, the same as
-  its card's, with the commands it ran and what each printed folded away
+  its song's, with the commands it ran and what each printed folded away
   under it (they run at `-v`, so that is the whole story), and a lookup's
-  stages with their states and why one was skipped. A card's Details
+  stages with their states and why one was skipped. A song's Details
   link opens that request's output. It refreshes itself every 10 seconds while
   one waits or runs; Stop refreshing keeps it still. A request that ended in a
   review (`caracole add` found only candidates) shows the song's picker under
@@ -2465,8 +2459,8 @@ with it. A KEY that is no key exits with status 2.
   A songbook with songs of yours that have no sheet yet ("missing: no sheet
   yet") has **Get the 2 missing songs now** beside its files: it looks each
   of them up now, one `caracole get` after the other in the songbook's order,
-  as Fetch now does on its card, each song's line under its name in the
-  songbook (and on its card) saying how its lookup goes, then runs
+  as Fetch now does on its line, each song's request line under its name in the
+  songbook (and on the song's own line) saying how its lookup goes, then runs
   `caracole songbook render NAME`, which makes the songbook again with the
   sheets they got: its line says "Queued behind 2 requests…" while they
   run, then "Making the songbook…" and "Made · Open songbook". A song "not
@@ -2538,7 +2532,7 @@ Who can reach it:
   (403). A form posted from a page older than the server's last start is
   refused too; reload the page. `/jobs.json`, which the page's script reads,
   is refused the same way, and needs the same token in an
-  `X-Caracole-Form-Token` header: a card then says the server has restarted.
+  `X-Caracole-Form-Token` header: a song's line then says the server has restarted.
   Only the served page may ask the server anything from its script (its
   Content-Security-Policy has `connect-src 'self'`); `index.html` on disk asks
   nothing of anyone.

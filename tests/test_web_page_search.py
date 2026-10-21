@@ -174,7 +174,7 @@ def answered(page, hit):
     return page.wait(f"!document.querySelector({json.dumps(hit + ' .row-action button')})")
 
 
-GRID = "[...document.querySelectorAll('#list article')].map((a) => a.querySelector('h2').textContent)"
+GRID = "[...document.querySelectorAll('#list article')].map((a) => a.querySelector('h3').textContent)"
 STATUS = "document.getElementById('bar-status').textContent"
 HITS = "document.querySelectorAll('#results .hit').length"
 GROUPS = "[...document.querySelectorAll('#results .group')].map((g) => g.textContent)"
@@ -229,16 +229,15 @@ def test_get_it_looks_the_song_up_and_its_row_says_how_it_goes(cfg, live, browse
     row = "document.querySelector('#results .progress').closest('article')"
     assert browser.wait("!!document.querySelector('#results .progress')")
     assert browser.wait(f"{row}.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
-    assert browser.js(f"{row}.querySelector('.row-title').textContent") == "Wonderwall"
-    assert browser.wait(f"{row}.querySelector('.row-action a') && "
-                        f"{row}.querySelector('.row-action a').textContent.startsWith('Sheet PDF')")
-    # Back to your songs: the new song has a card of its own above the grid.
+    # Once done, the result's row is the song's own line, around its request line: its sheet its button.
+    assert browser.js(f"{row}.querySelector('h3').textContent") == "Wonderwall"
+    assert browser.wait(f"{row}.querySelector('.line-action a') && "
+                        f"{row}.querySelector('.line-action a').textContent === 'Open PDF'")
+    # Back to your songs: the new song has a line of its own above the list.
     browser.press("Escape")
     assert browser.wait("document.getElementById('results').hidden")
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
-
-
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
 
 
 RYAN = "#results .hit[data-ug='ryan-adams/wonderwall']"
@@ -269,7 +268,7 @@ def test_a_newer_answer_keeps_the_row_whose_request_runs_and_its_line(cfg, live,
     assert browser.wait("window.row.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
     browser.press("Escape")
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
 
 
 def test_a_row_whose_request_runs_and_that_a_newer_answer_lacks_becomes_its_card(cfg, live, browser):
@@ -290,7 +289,7 @@ def test_a_row_whose_request_runs_and_that_a_newer_answer_lacks_becomes_its_card
     assert browser.wait("document.getElementById('found').dataset.query === 'hotel california'", timeout=10)
     assert browser.js(f"document.querySelector(\"{RYAN}\")") is None  # not in the newer answer
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall' && "
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall' && "
                         "!!document.querySelector('#requested article .progress')")
     assert browser.wait("document.querySelector('#requested article .progress').dataset.tone === 'ready'",
                         timeout=20)
@@ -331,7 +330,7 @@ def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
     browser.click("#clear")  # the ×: out of the results, the request on its way with a card of its own
     assert browser.wait("document.getElementById('results').hidden")
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
     assert browser.js("location.hash.includes('all=1')") is False
     # A search after it waits for its answer before what follows it shows, as after Escape.
     browser.js("window.waited = false; new MutationObserver(() => { window.waited = window.waited || "
@@ -371,7 +370,7 @@ def test_a_get_it_whose_row_leaves_the_results_before_the_page_hears_back_still_
     assert browser.js("document.getElementById('requested').hidden") is True  # nothing to show yet
     asked.lookups_held.set()
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall' && "
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall' && "
                         "!!document.querySelector('#requested article .progress')")
     assert browser.wait("document.querySelector('#requested article .progress').dataset.tone === 'ready'",
                         timeout=20)
@@ -438,8 +437,8 @@ def test_escape_returns_to_the_grid_with_its_filter(cfg, live, browser):
     browser.js("document.getElementById('q').focus()")
     browser.type("creep")
     browser.press("Enter")
-    # Your song is the page's own row, with what its card offers (Fetch now, served).
-    assert browser.wait(f"{HITS} >= 1 && document.querySelector('#results .rows .row form.fetch') !== null")
+    # Your song is the page's own line, with all it offers (Fetch now, served).
+    assert browser.wait(f"{HITS} >= 1 && document.querySelector('#results .rows .line form.fetch') !== null")
     browser.press("Escape")
     assert browser.wait("document.getElementById('results').hidden")
     assert browser.js("document.getElementById('q').value") == "creep"
@@ -466,8 +465,7 @@ def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, l
     args = posted(queue)
     assert args[-2:] == ("Muse", "Hysteria")
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Hysteria'")
-
+                        "document.querySelector('#requested article h3').textContent === 'Hysteria'")
 
 
 def test_the_line_for_an_artist_the_index_cant_see_shows_its_commands_as_code(cfg, live, browser):

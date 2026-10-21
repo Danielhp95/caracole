@@ -141,11 +141,10 @@ def test_the_data_names_the_songbooks_for_the_select_bar(library):
     assert data_of(page(conn, cfg))["songbooks"] == [{"name": "Campfire", "songs": 3}]
 
 
-def test_each_card_carries_its_songs_id(library):
-    conn, cfg = library
+def test_each_line_carries_its_songs_id(library):
     from caracole.library_page import _SCRIPT
 
-    assert "card.dataset.id = String(s.id);" in _SCRIPT  # the Select mode finds the cards by it
+    assert "line.dataset.id = String(s.id);" in _SCRIPT  # the Select mode finds the lines by it
 
 
 # --- the Select mode, in a real browser ---------------------------------------------------------------
@@ -177,7 +176,7 @@ def run_in_page(html: str, cfg, tmp_path: Path, body: str, *, size: str = "1280,
 
 
 PICK = """
-  const card = (title) => qa("#list article").find((a) => a.querySelector("h2").textContent === title);
+  const card = (title) => qa("#list article").find((a) => a.querySelector("h3").textContent === title);
   const pick = (title) => { const box = card(title).querySelector(".pick input"); box.click(); };
   q(".pick-toggle").click();
 """
@@ -195,7 +194,7 @@ def test_select_mode_shows_the_command_to_make_the_songbook_on_the_page_on_disk(
       q(".pickbar-form button[type=submit]").click();
       out = {before, numbers, count, command: q(".pick-command code").textContent, shown: !q(".pick-command").hidden};
     """)
-    assert out["before"] == [False, 3]  # the bar, and a box on each card
+    assert out["before"] == [False, 3]  # the bar, and a box on each line
     assert out["numbers"] == ["1", "2", "3"]  # in the order picked: the songbook's
     assert out["count"] == "3 selected"
     assert out["shown"]
@@ -315,52 +314,44 @@ def test_picks_survive_a_search_and_select_mode_works_on_a_phone(library, tmp_pa
     assert out["bar"][0] == 0 and out["bar"][1] == out["page"] and out["bar"][2] == out["height"]
 
 
-ROWS_PICK = """
-  const row = (title) => qa("#list .row").find((a) => a.querySelector(".row-title").textContent === title);
-  const pickRow = (title) => { row(title).querySelector(".pick input").click(); };
+LINES_PICK = """
+  const line = (title) => qa("#list .line").find((a) => a.querySelector("h3").textContent === title);
+  const pickLine = (title) => { line(title).querySelector(".pick input").click(); };
   q(".pick-toggle").click();
 """
 
 
 @in_chromium
 @pytest.mark.parametrize("size", ["390,844", "1280,900"])
-def test_select_mode_picks_rows_too_and_keeps_the_picks_across_the_views(library, tmp_path, size):
+def test_select_mode_puts_a_box_on_each_line_and_keeps_the_picks_when_the_list_is_drawn_again(library, tmp_path,
+                                                                                               size):
     conn, cfg = library
     html = page(conn, cfg, WebControls(csrf="tok"))
-    out = run_in_page(html, cfg, tmp_path, ROWS_PICK + """
-      const boxes = qa("#list .row .pick").filter((p) => p.offsetParent).length;
-      pickRow("Hysteria"); pickRow("Creep");
-      const numbers = ["Hysteria", "Creep", "De Música Ligera"].map((t) => row(t).querySelector(".pick-n").textContent);
-      const picked = qa("#list .row.picked").map((r) => r.querySelector(".row-title").textContent);
-      const box = row("Creep").querySelector(".pick").getBoundingClientRect();
-      const title = row("Creep").querySelector(".row-title").getBoundingClientRect();
-      const mark = row("Creep").querySelector(".source");
+    out = run_in_page(html, cfg, tmp_path, LINES_PICK + """
+      const boxes = qa("#list .line .pick").filter((p) => p.offsetParent).length;
+      pickLine("Hysteria"); pickLine("Creep");
+      const numbers = ["Hysteria", "Creep", "De Música Ligera"].map((t) => line(t).querySelector(".pick-n").textContent);
+      const picked = qa("#list .line.picked").map((r) => r.querySelector("h3").textContent);
+      const box = line("Creep").querySelector(".pick").getBoundingClientRect();
+      const title = line("Creep").querySelector(".line-title").getBoundingClientRect();
       const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
       const scroll = document.documentElement.scrollWidth;
-      q('button[data-view="cards"]').click();  // the cards show the same picks, in the same order
-      await Promise.resolve();  // the boxes come with the list's observer, once the cards are in
-      const card = (title) => qa("#list article.card").find((a) => a.querySelector("h2").textContent === title);
-      const cards = ["Hysteria", "Creep"].map((t) => card(t).querySelector(".pick-n").textContent);
-      card("De Música Ligera").querySelector(".pick input").click();
-      q('button[data-view="rows"]').click();
-      await Promise.resolve();
-      const third = row("De Música Ligera").querySelector(".pick-n").textContent;
-      out = {boxes, numbers, picked, cards, third, count: q(".pick-count").textContent,
+      const sort = q("#sort");
+      sort.value = "title";  // the list drawn again, in another order: the same picks, in the same order
+      sort.dispatchEvent(new Event("change"));
+      await Promise.resolve();  // the boxes come with the list's observer, once the lines are in
+      const again = ["Hysteria", "Creep"].map((t) => line(t).querySelector(".pick-n").textContent);
+      pickLine("De Música Ligera");
+      const third = line("De Música Ligera").querySelector(".pick-n").textContent;
+      out = {boxes, numbers, picked, again, third, count: q(".pick-count").textContent,
              box: [Math.round(box.width), Math.round(box.height)], apart: !overlaps(box, title),
-             mark: mark ? mark.offsetParent === null : true, scroll, page: window.innerWidth};
-    """, size=size, fragment="#view=rows")
-    assert out["boxes"] == 3  # a box on each row
+             scroll, page: window.innerWidth};
+    """, size=size)
+    assert out["boxes"] == 3  # a box on each line
     assert out["numbers"] == ["1", "2", ""] and out["picked"] == ["Hysteria", "Creep"]  # by artist: Muse, Radiohead
-    assert out["cards"] == ["1", "2"] and out["third"] == "3" and out["count"] == "3 selected"
+    assert out["again"] == ["1", "2"] and out["third"] == "3" and out["count"] == "3 selected"
     assert out["box"] == [44, 44] and out["apart"]  # a thumb's target, beside the title
-    assert out["mark"]  # the box stands where the source's mark was
     assert out["scroll"] <= out["page"]
-
-
-def test_each_row_carries_its_songs_id():
-    from caracole.library_page import _SCRIPT
-
-    assert "row.dataset.id = String(s.id);" in _SCRIPT  # the Select mode finds the rows by it
 
 
 @in_chromium
@@ -373,7 +364,8 @@ def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_pat
     update_song(conn, crep.id, review=True, match_decision="review", match_candidates=[
         {"artist_key": "radiohead", "song_key": "creep", "score": 89.4, "step": "fuzzy_artist"}])
     out = run_in_page(page(conn, cfg, WebControls(csrf="tok")), cfg, tmp_path, """
-      const card = qa("#list article").find((a) => a.querySelector("h2").textContent === "Crep");
+      const card = qa("#list article").find((a) => a.querySelector("h3").textContent === "Crep");
+      card.querySelector(".line-more").click();
       card.querySelector("details.picker").open = true;
       const form = card.querySelector("details.picker form");
       const radio = form.querySelector("input[type=radio]");
@@ -390,32 +382,32 @@ def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_pat
     assert out["bar"] == "flex" and out["name"] == 44  # and the bar's
 
 
-# --- the Select mode for the thumb: a card that is one target, and a one-line bar ----------------------------
+# --- the Select mode for the thumb: a line that is one target, and a one-line bar ----------------------------
 
 
-# Each card's (or row's) controls that show, but for its box; and what a tap at the middle of its title, its
-# artist and its status lands on.
-CARD_TARGETS = """
-  const landsOn = (card, n) => {
+# Each line's controls that show, but for its box; and what a tap at the middle of its title, its status and its
+# title's box lands on.
+LINE_TARGETS = """
+  const landsOn = (line, n) => {
     if (!n) return null;
     n.scrollIntoView({block: "center"});
     const r = n.getBoundingClientRect();
     const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    return hit === card ? "card" : hit ? hit.className || hit.tagName : null;
+    return hit === line ? "line" : hit ? hit.className || hit.tagName : null;
   };
-  const targets = (card) => ({
-    controls: qa("a, button, summary, select, input").filter((n) => card.contains(n) && !n.closest(".pick")
+  const targets = (line) => ({
+    controls: qa("a, button, summary, select, input").filter((n) => line.contains(n) && !n.closest(".pick")
       && n.checkVisibility()).map((n) => n.className),
-    funnel: card.querySelector(".filter-mark").checkVisibility(),
-    taps: [card.querySelector("h2"), card.querySelector(".artist"), card.querySelector(".badge")]
-      .map((n) => landsOn(card, n)),
+    funnel: line.querySelector(".filter-mark").checkVisibility(),
+    taps: [line.querySelector("h3"), line.querySelector(".line-status .badge"), line.querySelector(".line-title")]
+      .map((n) => landsOn(line, n)),
   });
 """
 
 
 @in_chromium
 @pytest.mark.parametrize("size", ["390,844", "1280,800"])
-def test_while_selecting_a_card_shows_no_file_or_action_and_a_tap_anywhere_lands_on_it(library, tmp_path, size):
+def test_while_selecting_a_line_shows_no_file_or_action_and_a_tap_anywhere_lands_on_it(library, tmp_path, size):
     from caracole.songs import update_song
 
     conn, cfg = library
@@ -429,39 +421,39 @@ def test_while_selecting_a_card_shows_no_file_or_action_and_a_tap_anywhere_lands
     running = {"id": 7, "kind": "song", "songId": hysteria["id"], "state": "running", "display": "Muse - Hysteria",
                "line": {"tone": "running", "text": "Fetching from Ultimate Guitar…", "details": "/jobs#job-7"}}
     controls = WebControls(csrf="tok", busy=frozenset({hysteria["id"]}), active=1, jobs=(running,))
-    out = run_in_page(page(conn, cfg, controls), cfg, tmp_path, CARD_TARGETS + """
-      const byTitle = (title) => qa("#list [data-id]").find((a) => a.querySelector("h2").textContent === title);
+    out = run_in_page(page(conn, cfg, controls), cfg, tmp_path, LINE_TARGETS + """
+      const byTitle = (title) => qa("#list [data-id]").find((a) => a.querySelector("h3").textContent === title);
       const titles = ["Creep", "Hysteria", "Crep", "Karma Police"];
+      for (const t of titles) byTitle(t).querySelector(".line-more").click();  // every "⋯" open
       const before = titles.map((t) => targets(byTitle(t)).controls.length);
       const note = byTitle("Karma Police").querySelector(".note").checkVisibility();
       const details = byTitle("Hysteria").querySelector(".progress a").checkVisibility();
       q(".pick-toggle").click();
-      const cards = Object.fromEntries(titles.map((t) => [t, targets(byTitle(t))]));
-      q('button[data-view="rows"]').click();
-      await Promise.resolve();  // the boxes come with the list's observer, once the rows are in
-      const rows = Object.fromEntries(titles.map((t) => [t, targets(byTitle(t))]));
+      await Promise.resolve();  // the boxes come with the list's observer
+      const lines = Object.fromEntries(titles.map((t) => [t, targets(byTitle(t))]));
+      const hidden = [byTitle("Karma Police").querySelector(".note").checkVisibility(),
+                      byTitle("Hysteria").querySelector(".progress a").checkVisibility()];
       q(".pick-toggle").click();
-      q('button[data-view="cards"]').click();
       const after = titles.map((t) => targets(byTitle(t)).controls.length);
-      out = {before, note, details, cards, rows, after};
+      out = {before, note, details, lines, hidden, after};
     """, size=size)
-    # Before: Open, Files, Fetch now, the picker, the note's link to the to-do page, a request's Details, Remove…
-    # Selecting: the title (a link to the sheet, or none) and the artist's filter, which a key still works,
-    # without its funnel; a request's line says how it goes, without its links; a tap anywhere lands on the
-    # card, which picks it.
+    # Before: Open, "⋯" and all it holds (files, Fetch now, the picker, the note's link to the to-do page, Add to a
+    # songbook…, Remove…), a request's Details. Selecting: the title alone (a link to the sheet, or none), which a tap
+    # no more reaches than the rest; a request's line says how it goes, without its links; a tap anywhere lands on
+    # the line, which picks it.
     assert min(out["before"]) >= 3 and out["note"] and out["details"], out["before"]
-    for kind in ("cards", "rows"):
-        shown = out[kind]
-        assert shown["Creep"]["controls"] == ["title-link", "artist" if kind == "cards" else "artist row-artist"]
-        for title in ("Hysteria", "Crep", "Karma Police"):
-            assert shown[title]["controls"] == shown["Creep"]["controls"][1:], (kind, title)
-        for title, seen in shown.items():
-            assert seen["taps"] == ["card", "card", "card"] and not seen["funnel"], (kind, title, seen)
+    shown = out["lines"]
+    assert shown["Creep"]["controls"] == ["line-title"], shown
+    for title in ("Hysteria", "Crep", "Karma Police"):
+        assert shown[title]["controls"] == [], (title, shown[title])
+    for title, seen in shown.items():
+        assert seen["taps"] == ["line", "line", "line"] and not seen["funnel"], (title, seen)
+    assert out["hidden"] == [False, False]
     assert out["after"] == out["before"]  # out of the mode, all back
 
 
 @in_chromium
-def test_on_a_phone_a_tap_on_a_card_or_a_row_picks_it_and_opens_nothing(library, tmp_path):
+def test_on_a_phone_a_tap_on_a_line_picks_it_and_opens_nothing(library, tmp_path):
     from helpers.browser import Browser, BrowserError
 
     conn, cfg = library
@@ -479,25 +471,17 @@ def test_on_a_phone_a_tap_on_a_card_or_a_row_picks_it_and_opens_nothing(library,
         phone.open(path.as_uri())
         assert phone.wait(f"document.querySelector({json.dumps(creep)}) !== null")
         phone.click(".pick-toggle")
-        phone.click(creep + " .title-link")  # the title opens the sheet, but not while selecting
+        phone.click(creep + " .line-title")  # the title opens the sheet, but not while selecting
         assert phone.js(picked) == [True, False]
-        phone.click(creep + " .artist")  # nor does the artist filter the list
+        phone.click(creep + " .line-status")  # nor does its status do anything but untick it
         assert phone.js(picked) == [False, False]
-        phone.click(creep + " .facts")
-        phone.click(hysteria + " h2")
+        phone.click(creep + " .line-meta")
+        phone.click(hysteria + " h3")
         assert phone.js(picked) == [True, True]
         assert phone.js("document.querySelector('.pick-count').textContent") == "2 selected"
-        # Rows: the same, and each box is a thumb's size. On a phone Cards and Rows wait under View.
-        phone.click("#view-toggle")
-        phone.click('button[data-view="rows"]')
-        assert phone.wait(f"document.querySelector({json.dumps(creep + '.row .pick')}) !== null")
-        phone.click(creep + " .title-link")
-        assert phone.js(picked) == [False, True]
-        phone.click(hysteria + " .row-sub")
-        assert phone.js(picked) == [False, False]
         size = phone.js(f"(() => {{ const r = document.querySelector({json.dumps(creep + ' .pick')})"
                         ".getBoundingClientRect(); return [r.width, r.height]; })()")
-        assert size == [44, 44]
+        assert size == [44, 44]  # each box a thumb's size
         assert phone.js("location.pathname").endswith("/index.html")  # nothing opened
         assert phone.js("document.querySelectorAll('#list [data-id]').length") == 3  # nor filtered
 
@@ -584,21 +568,17 @@ def test_the_cross_leaves_select_mode_and_keeps_the_picks(library, tmp_path):
       q(".pick-open").click();
       q(".pick-done").focus();
       q(".pick-done").click();
-      // Out of the mode a picked song looks like any other: its card and its row (where the picks show again).
+      // Out of the mode a picked song looks like any other (where the picks show again).
       const look = (n) => { const c = getComputedStyle(n); return [c.borderLeftColor, c.boxShadow, c.backgroundColor]; };
       const same = () => JSON.stringify(look(card("Creep"))) === JSON.stringify(look(card("Hysteria")));
       const left = {bar: q(".pickbar").hidden, pressed: q(".pick-toggle").getAttribute("aria-pressed"),
                     focus: document.activeElement === q(".pick-toggle"),
                     open: card("Creep").querySelector("a.btn.primary").checkVisibility(), same: same()};
-      q('button[data-view="rows"]').click();
-      const row = (title) => qa("#list .row").find((r) => r.querySelector("h2").textContent === title);
-      left.rows = JSON.stringify(look(row("Creep"))) === JSON.stringify(look(row("Hysteria")));
-      q('button[data-view="cards"]').click();
       q(".pick-toggle").click();
       out = {left, count: q(".pick-count").textContent, creep: card("Creep").classList.contains("picked"),
              fields: q(".pick-name").checkVisibility()};
     """, size="390,844")
-    assert out["left"] == {"bar": True, "pressed": "false", "focus": True, "open": True, "same": True, "rows": True}
+    assert out["left"] == {"bar": True, "pressed": "false", "focus": True, "open": True, "same": True}
     assert out["count"] == "1 selected" and out["creep"]  # back in, the picks are as they were
     assert not out["fields"]  # and the bar is one line again
 
@@ -610,7 +590,7 @@ def test_on_the_file_the_command_to_run_folds_away_beside_copy(library, tmp_path
 
     conn, cfg = library
     hysteria = next(s for s in data_of(page(conn, cfg))["songs"] if s["title"] == "Hysteria")
-    update_song(conn, hysteria["id"], match_decision="not_found")  # its card says what to run to find it
+    update_song(conn, hysteria["id"], match_decision="not_found")  # its line says what to run to find it
     out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + BAR + """
       const hint = card("Hysteria").querySelector(".pick-hint").checkVisibility();
       pick("Creep"); pick("Hysteria");

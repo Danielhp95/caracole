@@ -1,28 +1,21 @@
-.card, .list .row { scroll-margin-top: 108px; }  /* below the bar kept at the top */
+.list section.artist, .list .line, .requested .line { scroll-margin-top: 108px; }  /* below the bar kept at the top */
 @media (max-width: 719px) {
-  .toolbar .view-toggle { display: inline-flex; }
-  .view-panel { flex-basis: 100%; justify-content: flex-start; }
-  .view-panel:not(.open) { display: none; }
-  .view-panel .sort { margin-left: 0; }
+  .toolbar { flex-wrap: nowrap; justify-content: flex-start; margin: -4px; padding: 4px; overflow-x: auto;
+    scrollbar-width: none; }
+  .toolbar::-webkit-scrollbar { display: none; }
+  .chips, .controls { flex: none; flex-wrap: nowrap; }
 }
 @media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
   .searchbar { margin: 0 -24px; padding: 12px 24px 8px; }
   .masthead.lib { grid-template-areas: "app links" "title links"; align-items: end; padding: 28px 0 8px; }
-  .chips { flex-wrap: wrap; overflow: visible; }
 }
-/* A thumb's targets: the pages' links, the chips and View, the menus, Cards/Rows, a card's folds and the
-   letters. Every .btn has its 44 px from BASE_STYLE, and a row's from ROWS_STYLE. */
+/* A thumb's targets: the pages' links, the chips, the menus and the letters. Every .btn has its 44 px from
+   BASE_STYLE, and a line's, its "⋯" and an artist's name theirs from ROWS_STYLE. */
 @media (pointer: coarse) {
-  .masthead.lib .navlink, .more > summary, .chip, .sort select, .views button { min-height: 44px; }
+  .masthead.lib .navlink, .chip, .sort select { min-height: 44px; }
   .progress .undo { min-width: 44px; min-height: 44px; }
   .jump button { min-width: 44px; height: 44px; }
-  /* A card's title and its artist share the thumb's height between them: the title's target reaches up into
-     the card's padding and down to the artist's name, which stands at the top of its own 44 px, so that a tap
-     a little under the title opens the sheet and never filters the list. */
-  .card .title-link { padding: 14px 0 8px; margin: -14px 0 -8px; }
-  .card .byline { align-items: flex-start; margin-top: 8px; }
-  .card .byline .artist { align-items: baseline; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .plus span { transition: transform .15s; }

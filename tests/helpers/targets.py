@@ -11,9 +11,8 @@ measured against what is around it alone.
 
 Each is a JavaScript expression whose value is that list, for ``Browser.js``, or for ``noting``: a
 script a test adds to the page (``with_script``), which writes the value into an attribute of the
-body for ``noted`` to read back from ``dump_dom``. ``UNFOLD`` opens every fold, every row's "⋯" and
-the library page's View (Key, Sort, Cards and Rows on a phone) first, so that what they hold is
-measured too.
+body for ``noted`` to read back from ``dump_dom``. ``UNFOLD`` opens every fold and every row's and
+line's "⋯" first, so that what they hold is measured too.
 """
 
 from __future__ import annotations
@@ -100,8 +99,7 @@ _WEAK = r"""
 
 UNFOLD = """
 for (const fold of document.querySelectorAll("details")) fold.open = true;
-for (const panel of document.querySelectorAll(".row-panel")) panel.hidden = false;
-for (const panel of document.querySelectorAll(".view-panel")) panel.classList.add("open");
+for (const panel of document.querySelectorAll(".row-panel, .line-panel")) panel.hidden = false;
 """
 
 

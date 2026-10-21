@@ -20,8 +20,6 @@
   const jump = byId("jump");
   const chips = Array.from(document.querySelectorAll(".chip[data-show]"));
   const artistChip = byId("artist");
-  const viewToggle = byId("view-toggle");
-  const viewPanel = byId("view-panel");
   const JUMP_FROM = 40;  // songs shown before the A-Z strip is worth its room: fewer, and a thumb scrolls
 
   let data;
@@ -152,18 +150,18 @@
   // ROWS_SCRIPT's, which the lookup page shares
   const { sourceMark, link, resultRow, titleLink, artistFilter, button, many, ugHit, artistHit, siteHit, siteArtist,
     siteArtistSongs, siteUnlisted, readArtistPage, readOutcome, prose } = caracoleRows(ICONS);
-  // A song's file from where its sheet came from has no mark of its own: its card's, or its row's, says it.
+  // A song's file from where its sheet came from has no mark of its own: its line's says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
-  // The file a song opens with, from its title and its card's one button: its viewer, else its PDF, else its
-  // text (the data marks it primary).
+  // The file a song opens with, from its title and its line's button: its viewer, else its PDF, else its text
+  // (the data marks it primary).
   const primaryOf = (s) => listOf(s.files).find((f) => f && f.primary) || null;
-  // A card's button for it: "Open" for the viewer, "Open PDF" and "Open text" for the others. The card's
-  // primary one unless it has another (a wanted song's Fetch now, which its row's button is too).
-  const openButton = (s, f, lead) => {
+  // A line's button for it, its main action unless the server's control has its place (a wanted song's Fetch
+  // now): "Open" for the viewer, "Open PDF" and "Open text" for the others.
+  const openButton = (s, f) => {
     const kind = /\.html$/i.test(String(f.name || "")) ? "" : /\.pdf$/i.test(String(f.name || "")) ? "PDF" : "text";
     const text = kind ? "Open " + kind : "Open";
-    const open = link({ label: text, href: f.href }, lead ? "btn primary" : "btn", false);
+    const open = link({ label: text, href: f.href }, "btn small primary", false);
     open.setAttribute("aria-label", text + (kind ? " of " : " ") + String(s.title) + " by " + String(s.artist));
     open.title = String(f.label || "");  // "Sheet viewer", "Auto sheet PDF"
     return open;
@@ -188,13 +186,6 @@
     note.appendChild(document.createTextNode("."));
     return note;
   };
-  const linkRow = (parent, heading, items, cls) => {
-    if (!items.length) return;
-    parent.appendChild(el("p", "subhead", heading));
-    const row = el("div", "actions");
-    for (const item of items) row.appendChild(link(item, cls, true));
-    parent.appendChild(row);
-  };
   const hidden = (name, value) => {
     const field = el("input");
     field.setAttribute("type", "hidden");
@@ -218,8 +209,8 @@
   const postInPlace = (form, go, s) => {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      const card = form.closest("article");
-      const line = progressIn(card);  // in the page before its first words, so they are read out
+      const item = form.closest("article");
+      const line = progressIn(item);  // in the page before its first words, so they are read out
       showLine(line, { line: { tone: "queued", text: "Sending…" } });
       if (form.contains(document.activeElement)) focusOn(line);  // a disabled button would drop it
       go.disabled = true;
@@ -227,14 +218,14 @@
         const view = answer.ok && answer.body && answer.body.job;
         if (!view) {
           go.disabled = false;
-          showLine(progressIn(card), failure(answer));
+          showLine(progressIn(item), failure(answer));
           return;
         }
-        if (card && !isOwn(s, card)) spots.set(Number(view.id), card);
+        if (item && !isOwn(s, item)) spots.set(Number(view.id), item);
         track(view);  // its line takes the form's place
       }, () => {
         go.disabled = false;
-        showLine(progressIn(card), UNREACHABLE);
+        showLine(progressIn(item), UNREACHABLE);
       });
     });
   };
@@ -257,11 +248,11 @@
     held.title = "caracole review settles this match; then it can be fetched";
     return held;
   };
-  // Every card's "Remove…" (a row's, under its "⋯"): one tap counts down REMOVE_WAIT seconds on the song's own
-  // line, "Removing in 5 s · Undo", with what goes (the server's answer to the question, ``removal.brief``), and
-  // sends nothing else meanwhile; then the removal, whose line the card follows to Removed, never leaving the
-  // page. Undo stops it. Without JavaScript the form posts, and caracole serve asks on a page of its own, whose
-  // answers go back to the library as you left it (`back`: the address after #, its search, filters and view).
+  // Every line's "Remove…", under its "⋯": one tap counts down REMOVE_WAIT seconds on the song's own line,
+  // "Removing in 5 s · Undo", with what goes (the server's answer to the question, ``removal.brief``), and sends
+  // nothing else meanwhile; then the removal, whose line the song's follows to Removed, never leaving the page.
+  // Undo stops it. Without JavaScript the form posts, and caracole serve asks on a page of its own, whose answers
+  // go back to the library as you left it (`back`: the address after #, its search, filters and sort).
   const REMOVE_WAIT = 5;  // seconds
   const REMOVE_SECOND = paced("undo", REMOVE_WAIT * 1000) / REMOVE_WAIT;  // ms each of them lasts
   const removals = new Map();  // song id -> its removal counting down (startRemoval)
@@ -281,10 +272,10 @@
     form.appendChild(go);
     return form;
   };
-  // The song's card and row, and the card that showed it elsewhere (#requested's), if any: where its removal shows.
+  // The song's line, and the one that showed it elsewhere (#requested's), if any: where its removal shows.
   const removalItems = (id, r) => {
     const i = byIndex.get(id);
-    const own = i === undefined ? [] : [cards.get(i), rows.get(i)];
+    const own = i === undefined ? [] : [lines.get(i)];
     return own.concat([r.spot]).filter((item, n, all) => item && all.indexOf(item) === n);
   };
   // A removal's line while it counts down: a screen reader hears it once ("Removing Creep in 5 seconds."), the
@@ -402,8 +393,8 @@
   };
 
   // --- caracole serve: requests answered on the page ------------------------------------------
-  // The forms post with fetch(), so the page stays where it is, and each song's card says on one line how its
-  // request goes. /jobs.json gives each request's line, and a request's card once it is over; the page asks
+  // The forms post with fetch(), so the page stays where it is, and each song's line says on a line of its own how
+  // its request goes. /jobs.json gives each request's line, and its song's data once it is over; the page asks
   // it every POLL ms while one it shows waits or runs. Without JavaScript the forms post as forms, and the
   // server sends the browser to the request on /jobs.
   const POLL = paced("poll", 1500);
@@ -414,16 +405,16 @@
   const views = new Map();  // job id -> what the server last said of it
   const songJob = new Map();  // song id -> the newest job of the song this page shows
   const watched = new Set();  // the jobs this page shows: asked for here, or waiting or running when it loaded
-  const settled = new Set();  // watched jobs that are over, their cards drawn again
-  const spots = new Map();  // job id -> a card outside the grid that shows it (#requested's)
+  const settled = new Set();  // watched jobs that are over, their lines drawn again
+  const spots = new Map();  // job id -> what shows it outside the list (a result's row, #requested's line)
   const byIndex = new Map(songs.map((s, i) => [Number(s.id), i]));  // song id -> its place in songs
   const isActive = (view) => view.state === "queued" || view.state === "running";
   const jobOfSong = (id) => (songJob.has(Number(id)) ? views.get(songJob.get(Number(id))) : null);
-  // Whether node is the song's own card or row in the list, which the page draws again itself; any other
-  // (#requested's card) is a spot of the job's.
+  // Whether node is the song's own line in the list, which the page draws again itself; any other (#requested's,
+  // a result's row) is a spot of the job's.
   const isOwn = (s, node) => {
     const i = byIndex.get(Number(s.id));
-    return i !== undefined && (cards.get(i) === node || rows.get(i) === node);
+    return i !== undefined && lines.get(i) === node;
   };
   // A request's line, written into p only when it changed, so a screen reader hears each change once.
   // Its link says where to go next; details, the request's output on /jobs, follows it.
@@ -449,22 +440,22 @@
     }
     if (focused) focusOn(p);  // its link is gone: the focus stays on the line
   };
-  // A song in review's line sends you to its picker (review?song=ID): on a card that has the picker, it opens
+  // A song in review's line sends you to its picker (review?song=ID): on a line that has the picker, it opens
   // that one, where you are, rather than the picker's own page. The list of requests has none: it goes there.
   const pickHere = (e, p) => {
-    const card = p.closest("article");
-    const box = card && card.querySelector("details.picker");
+    const item = p.closest("article");
+    const box = item && item.querySelector("details.picker");
     const href = e.currentTarget.getAttribute("href") || "";
     if (!box || !box.querySelector("form") || !/^review\?song=\d+$/.test(href)) return;
     e.preventDefault();
     showPicker(box);
   };
-  // Opens a picker where it is, a row's in its panel (the "⋯" button's), which opens first. Opened, the
-  // picker takes the focus to its first candidate (its toggle); open already, the focus goes there.
+  // Opens a picker where it is, in its line's panel (the "⋯" button's), which opens first. Opened, the picker
+  // takes the focus to its first candidate (its toggle); open already, the focus goes there.
   const showPicker = (box) => {
-    const panel = box.closest(".row-panel");
+    const panel = box.closest(".line-panel");
     if (panel && panel.hidden) {
-      const more = panel.parentNode.querySelector(".row-more");
+      const more = panel.parentNode.querySelector(":scope > .line-more");
       if (more) more.setAttribute("aria-expanded", "true");
       panel.hidden = false;
     }
@@ -479,24 +470,24 @@
     p.tabIndex = -1;
     p.focus({ preventScroll: true });
   };
-  // A card's line, made the first time: role="status" has it read out when it changes. A live region
-  // put in the page with its text already in it is not read out, so a card keeps its line from the first
-  // text to the last (refill), and only that text changes.
-  const progressIn = (card) => {
-    let p = card.querySelector(".progress");
+  // A song's request line, made the first time: role="status" has it read out when it changes. A live region
+  // put in the page with its text already in it is not read out, so a song's line (or a result's row) keeps its
+  // request line from the first text to the last (refill), and only that text changes.
+  const progressIn = (item) => {
+    let p = item.querySelector(".progress");
     if (!p) {
       p = el("p", "progress");
       p.setAttribute("role", "status");
-      // A card's under its facts; a row's under its artist, a line of its own across the row.
-      const after = card.querySelector(".facts") || card.querySelector(".head") || card.querySelector(".row-sub") ||
-        card.querySelector(".row-title");
+      // A line of its own across the song's line, under its status (a row's, under its artist).
+      const after = item.querySelector(":scope > .line-meta") || item.querySelector(".row-sub") ||
+        item.querySelector(".row-title");
       if (after) after.after(p);
-      else card.appendChild(p);
+      else item.appendChild(p);
     }
     return p;
   };
-  // The card old, drawn again as fresh (makeCard's) where it is, around its own line, which never leaves
-  // the page; returns old. The focus, if it was on something of old's that goes, moves to the line.
+  // The line old, drawn again as fresh (lineFor's) where it is, around its own request line, which never leaves
+  // the page; returns old. The focus, if it was on something of old's that goes, moves to that line.
   const refill = (old, fresh) => {
     const kept = old.querySelector(".progress");
     if (!kept) {
@@ -590,9 +581,8 @@
     row.appendChild(pick);
     return row;
   };
-  // What a card shows under its facts, and a row in its panel, of a song with no picker: why its match waits (a
-  // review with no candidates to pick from), or, on the file, the line that lists a song not found's search hits;
-  // else nothing (null).
+  // What a line shows under its "⋯" of a song with no picker: why its match waits (a review with no candidates to
+  // pick from), or, on the file, the line that lists a song not found's search hits; else nothing (null).
   const unpicked = (s) => {
     if (SHOWS.review(s)) {
       const note = el("p", "note", "caracole isn't sure about this match: see the ");
@@ -666,144 +656,19 @@
   };
 
   let setArtist = () => {};
-  // An artist's monogram, in that artist's colour (one of eight), which a screen reader skips.
-  const monogram = (letters, hue) => {
-    const mono = el("span", "mono hue-" + (Number.isInteger(hue) && hue >= 0 && hue < 8 ? hue : 0), letters || "");
-    mono.setAttribute("aria-hidden", "true");
-    return mono;
-  };
-  // A card's head without its links or badges: the monogram, the title and the artist (a removed song's card;
-  // a requested song's, before the library has it).
-  const plainHead = (letters, hue, title, artist) => {
-    const head = el("div", "head");
-    const names = el("div", "names");
-    names.append(el("h2", null, title), el("p", "by", artist));
-    head.append(monogram(letters, hue), names);
-    return head;
-  };
-  const makeCard = (s) => {
-    const card = el("article", "card");
-    card.dataset.status = String(s.status);
-    card.dataset.id = String(s.id);
-    card.tabIndex = -1;  // the A-Z strip moves the focus to it
-    const head = el("div", "head");
-    head.appendChild(monogram(s.monogram, s.hue));
-    const names = el("div", "names");
-    const primary = primaryOf(s);
-    names.appendChild(primary ? titleLink(primary.href, el("h2", null, s.title)) : el("h2", null, s.title));
-    const artists = listOf(s.artists);
-    // The artist, then the badges: at the end of the artist's line, or under it, never beside the title.
-    const byline = el("div", "byline");
-    byline.appendChild(artistFilter(artists.length > 1 ? artists.join(", ") : String(s.artist), String(s.artist),
-      () => {
-        setArtist(String(s.sortArtist || ""));
-        window.scrollTo(0, 0);
-      }));
-    names.appendChild(byline);
-    head.appendChild(names);
-    const badges = el("div", "badges");
-    const mark = sourceMark(s.source);  // where its sheet came from
-    if (mark) badges.appendChild(mark);
-    badges.appendChild(el("span", "badge " + String(s.status), label(STATUS_TEXT, s.status) || s.status));
-    if (SHOWS.review(s)) badges.appendChild(el("span", "badge review", "Needs review"));
-    if (s.auto) badges.appendChild(el("span", "badge auto", "Auto sheet"));
-    byline.appendChild(badges);
-    card.appendChild(head);
 
-    const facts = el("p", "facts");
-    if (typeof s.key === "string" && s.key) facts.appendChild(el("span", "key", keyText(s)));
-    const shift = Number(s.transpose) || 0;
-    if (shift) {
-      const t = el("span", "transpose", (shift > 0 ? "+" : "−") + Math.abs(shift));
-      t.title = "The PDF is transposed " + (shift > 0 ? "up " : "down ") + Math.abs(shift) +
-        " semitone" + (Math.abs(shift) === 1 ? "" : "s");
-      facts.appendChild(t);
-    }
-    if (label(LYRICS_TEXT, s.lyrics)) facts.appendChild(el("span", "lyrics", label(LYRICS_TEXT, s.lyrics)));
-    if (s.added) facts.appendChild(el("span", "added", "Added " + String(s.added).slice(0, 10)));
-    if (facts.childNodes.length) card.appendChild(facts);
-    const picks = SHOWS.review(s) && listOf(s.candidates).length > 0;
-    const why = picks ? makePicker(s) : unpicked(s);
-    if (why) card.appendChild(why);
-    const fromYouTube = youtubeNote(s);
-    if (fromYouTube) card.appendChild(fromYouTube);
-    const picked = lacuerdaNote(s);
-    if (picked) card.appendChild(picked);
-
-    // Served by caracole serve: how the song's request goes, on one line, and Fetch now unless one runs.
-    const job = server ? jobOfSong(s.id) : null;
-    if (job) showLine(progressIn(card), job);
-    const actions = el("div", "actions");
-    if (server && s.status === "wanted" && !removing.has(Number(s.id))) {  // removing: its foot says so
-      if ((job && isActive(job)) || busy.has(Number(s.id))) {
-        if (!job) showLine(progressIn(card), { line: { tone: "running", text: "Fetching…" } });
-      } else if (s.fetchable === false && picks) {
-        // caracole fetch would refuse it until the match is picked: the picker above does that.
-      } else if (s.fetchable === false) {
-        // caracole fetch would refuse it: the match needs review first (the note above says how).
-        actions.appendChild(reviewFirst("btn"));
-      } else {
-        actions.appendChild(fetchForm(s));
-      }
-      if (s.notFound) actions.appendChild(lookLink(s));
-    }
-    if (primary) actions.appendChild(openButton(s, primary, !actions.querySelector(".btn.primary")));
-    if (actions.childNodes.length) card.appendChild(actions);
-    // The other files, and the Guitar Pro versions to download, folded away as a row's "⋯" folds them.
-    const others = listOf(s.files).filter((f) => f && f !== primary).map((f) => elsewhere(s, f));
-    if (others.length || listOf(s.guitarPro).length) {
-      const files = el("details", "more files");
-      files.appendChild(el("summary", null, "Files"));
-      if (others.length) {
-        const line = el("div", "actions");
-        for (const f of others) line.appendChild(link(f, "btn small", false));
-        files.appendChild(line);
-      }
-      linkRow(files, "Guitar Pro to download", listOf(s.guitarPro), "btn small");
-      card.appendChild(files);
-    }
-    if (listOf(s.museScore).length || listOf(s.links).length || listOf(s.buy).length) {
-      const more = el("details", "more");
-      more.appendChild(el("summary", null, "Find it elsewhere"));
-      linkRow(more, "Scores on MuseScore", listOf(s.museScore), "btn small");
-      linkRow(more, "Find the chords", listOf(s.links), "btn small");
-      linkRow(more, "Buy the track for an auto sheet", listOf(s.buy), "btn small");
-      card.appendChild(more);
-    }
-    if (server) {
-      const foot = el("div", "foot");
-      if (!removing.has(Number(s.id))) {
-        foot.appendChild(removeForm(s));
-      } else if (!job || job.kind !== "remove") {  // a removal the page follows says how it goes on its line
-        const note = el("p", "busy", "Removing… ");
-        const jobs = el("a", null, "see the requests");
-        jobs.href = "/jobs";
-        note.appendChild(jobs);
-        foot.appendChild(note);
-      }
-      if (foot.childNodes.length) card.appendChild(foot);
-      if (removals.has(Number(s.id))) countdownIn(card, removals.get(Number(s.id)));  // drawn again meanwhile
-    }
-    return card;
-  };
-  const cards = new Map();
-  const cardFor = (i) => {
-    if (!cards.has(i)) cards.set(i, makeCard(songs[i]));
-    return cards.get(i);
-  };
-
-  // Rows: one compact line a song (resultRow, from ROWS_SCRIPT: the seam the module docstring describes).
-  // A row is an article titled by its h2; the A-Z strip moves the focus to it.
-  // A song's main action in its row, as its card has it, when the server's control holds the row's button
-  // (``held``): a wanted song's fetch, or the button that opens its picker; Removing… while caracole removes it;
-  // no button at all (``action`` null) while its request, or its removal, waits or runs, as the row's line
-  // then says how it goes. Not held, the row's button is its sheet (sheetAction), as it is on the file.
+  // Lines: a song a line (resultRow's dense form, from ROWS_SCRIPT: the seam the module docstring describes), in
+  // its artist's group. A line is an article titled by its h3; the A-Z strip moves the focus to its group.
+  // A song's main action on its line when the server's control holds the line's button (``held``): a wanted
+  // song's fetch, or the button that opens its picker; Removing… while caracole removes it; no button at all
+  // (``action`` null) while its request, or its removal, waits or runs, as the line's request line then says
+  // how it goes. Not held, the line's button opens its sheet (openButton), as it does on the file.
   const serverAction = (s, picker) => {
     const held = (action) => ({ held: true, action });
     if (server && removing.has(Number(s.id))) {
       const job = jobOfSong(s.id);
       if (job && job.kind === "remove") return held(null);
-      const going = el("a", "row-busy", "Removing…");
+      const going = el("a", "line-busy", "Removing…");
       going.href = "/jobs";
       going.title = "See the requests";
       return held(going);
@@ -812,8 +677,8 @@
       const job = jobOfSong(s.id);
       if ((job && isActive(job)) || busy.has(Number(s.id))) return held(null);
       if (s.fetchable === false && picker && picker.querySelector("form")) {
-        // caracole fetch would refuse it until the match is picked: this opens the picker, in the row's panel.
-        const pick = el("button", "btn small row-pick", "Pick the match");
+        // caracole fetch would refuse it until the match is picked: this opens the picker, in the line's panel.
+        const pick = el("button", "btn small line-pick", "Pick the match");
         pick.type = "button";
         pick.setAttribute("aria-label", "Pick the match for " + String(s.title) + " by " + String(s.artist));
         pick.title = "Which Ultimate Guitar song this is: caracole isn't sure";
@@ -825,21 +690,54 @@
     }
     return { held: false, action: null };
   };
-  // The row's button for its sheet: the primary one, as Fetch now is, named for what it opens ("Sheet viewer").
-  const sheetAction = (s, primary) => {
-    const open = link({ label: primary.label, href: primary.href }, "btn small primary", false);
-    open.setAttribute("aria-label", String(primary.label) + " of " + String(s.title) + " by " + String(s.artist));
-    return open;
+  // A line's one word for where its song stands: Needs review, Not found, else Found, Wanted or Ignored.
+  const statusOf = (s) => (SHOWS.review(s) ? { kind: "review", text: "Needs review" }
+    : s.notFound && s.status === "wanted" ? { kind: "missing", text: "Not found" }
+    : { kind: s.status, text: label(STATUS_TEXT, s.status) || s.status });
+  // Where a song's sheet and files came from, for its line's marks: its sheet's first.
+  const sourcesOf = (s) => [s.source].concat(listOf(s.files).map((f) => f && f.source))
+    .filter((key) => typeof key === "string" && key);
+  // A song's facts, under its line's "⋯": the key in words and where it came from, the PDF's transposition, the
+  // lyrics, when the song came, and its other artists.
+  const factsOf = (s) => {
+    const facts = el("p", "facts");
+    if (typeof s.key === "string" && s.key) facts.appendChild(el("span", "key", keyText(s)));
+    const shift = Number(s.transpose) || 0;
+    if (shift) {
+      const t = el("span", "transpose", (shift > 0 ? "+" : "−") + Math.abs(shift));
+      t.title = "The PDF is transposed " + (shift > 0 ? "up " : "down ") + Math.abs(shift) +
+        " semitone" + (Math.abs(shift) === 1 ? "" : "s");
+      facts.appendChild(t);
+    }
+    if (label(LYRICS_TEXT, s.lyrics)) facts.appendChild(el("span", "lyrics", label(LYRICS_TEXT, s.lyrics)));
+    if (s.added) facts.appendChild(el("span", "added", "Added " + String(s.added).slice(0, 10)));
+    const others = listOf(s.artists).slice(1).map(String);
+    if (others.length) facts.appendChild(el("span", "with", "With " + others.join(", ")));
+    return facts.childNodes.length ? facts : null;
   };
-  const songRow = (s) => {
+  // Under a line's "⋯": Select, the song picked, and its bar to put it in a songbook there is or a new one
+  // (select.js, which hears "caracole:pick").
+  const bookButton = (s) => {
+    const go = button("Add to a songbook…", "small", () => {
+      document.dispatchEvent(new CustomEvent("caracole:pick", { detail: { id: Number(s.id) } }));
+    }, "Add " + String(s.title) + " by " + String(s.artist) + " to a songbook");
+    go.title = "Pick it, and any other songs, for a songbook";
+    return go;
+  };
+  // A song's line: its title (which opens its sheet), its status, its key and the marks of where its sheet and
+  // files came from, its main action; and under its "⋯" its facts, its picker or what to do about its match, where
+  // its audio comes from, its other files, the links to find or buy it, Add to a songbook… and Remove….
+  const lineFor = (s) => {
     const id = Number(s.id);
     const files = listOf(s.files);
     const primary = primaryOf(s);
     const more = [];
-    // What a card shows under its facts, in the row's panel: the picker, or the note that says why not.
+    const facts = factsOf(s);
+    if (facts) more.push(facts);
+    // The picker, or the note that says why there is none.
     const picker = SHOWS.review(s) && listOf(s.candidates).length > 0 ? makePicker(s) : null;
     if (picker) {
-      // The row's button says Pick the match: its picker folds as a read-only one does, "3 candidates".
+      // The line's button says Pick the match: its picker folds as a read-only one does, "3 candidates".
       const summary = picker.querySelector("summary");
       summary.className = "picker-open";
       summary.textContent = plural(listOf(s.candidates).filter((c) => c && c.ref).length, "candidate");
@@ -848,7 +746,7 @@
       const why = unpicked(s);
       if (why) more.push(why);
     }
-    const fromYouTube = youtubeNote(s);  // as on its card, first in the row's panel
+    const fromYouTube = youtubeNote(s);
     if (fromYouTube) more.push(fromYouTube);
     const picked = lacuerdaNote(s);
     if (picked) more.push(picked);
@@ -857,35 +755,32 @@
       look.appendChild(lookLink(s, "btn small"));
       more.push(look);
     }
-    // The sheet is the row's button unless the server's control has its place (Fetch now beside an auto
+    // The sheet is the line's button unless the server's control has its place (Fetch now beside an auto
     // sheet): then it leads the files, and the title opens it all the same.
     const control = serverAction(s, picker);
-    const action = control.held ? control.action : primary ? sheetAction(s, primary) : null;
+    const action = control.held ? control.action : primary ? openButton(s, primary) : null;
     const listed = control.held ? files : files.filter((f) => f !== primary);
     more.push({ heading: "Files", links: listed.map((f) => elsewhere(s, f)) },
       { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },
       { heading: "Find the chords", links: listOf(s.links) },
       { heading: "Buy the track for an auto sheet", links: listOf(s.buy) });
-    if (server && !removing.has(id)) {  // removing: its action says so
-      const foot = el("div", "foot");
-      foot.appendChild(removeForm(s));
-      more.push(foot);
-    }
-    // No "Auto sheet" badge: the row's mark (♪, "from the audio") and its button ("Auto sheet PDF") say so.
-    const badges = [{ kind: s.status, text: label(STATUS_TEXT, s.status) || s.status }];
-    if (SHOWS.review(s)) badges.push({ kind: "review", text: "Needs review" });
+    const foot = el("div", "foot");
+    foot.appendChild(bookButton(s));
+    if (server && !removing.has(id)) foot.appendChild(removeForm(s));  // removing: its action says so
+    more.push(foot);
     const artists = listOf(s.artists);
     const keyed = typeof s.key === "string" && s.key;
-    const row = resultRow({
+    const line = resultRow({
+      dense: true,
       title: s.title,
       href: primary ? primary.href : "",
-      artist: artists.length > 1 ? artists.join(", ") : s.artist,
-      source: s.source,
+      artist: artists.length > 1 ? artists.join(", ") : s.artist,  // shown where no group names it
+      sources: sourcesOf(s),
       status: s.status,
       key: keyed ? s.key : "",
       keyText: keyed ? keyText(s) : "",
-      badges,
+      badges: [statusOf(s)],
       action,
       more,
       onArtist: () => {
@@ -893,32 +788,54 @@
         window.scrollTo(0, 0);
       },
     });
-    row.dataset.id = String(s.id);  // as a card's: the Select mode finds the song's row by it
-    // How the song's request goes, on a line of the row's own, as on its card.
+    line.dataset.id = String(s.id);  // the Select mode finds the song's line by it
+    // How the song's request goes, on a line of its own.
     const job = server ? jobOfSong(id) : null;
     if (job) {
-      showLine(progressIn(row), job);
+      showLine(progressIn(line), job);
     } else if (server && s.status === "wanted" && !removing.has(id) && busy.has(id)) {
-      showLine(progressIn(row), { line: { tone: "running", text: "Fetching…" } });
+      showLine(progressIn(line), { line: { tone: "running", text: "Fetching…" } });
     }
-    if (removals.has(id)) countdownIn(row, removals.get(id));  // drawn again while its removal counts down
-    return row;
+    if (removals.has(id)) countdownIn(line, removals.get(id));  // drawn again while its removal counts down
+    return line;
   };
-  const rows = new Map();
-  const rowFor = (i) => {
-    if (!rows.has(i)) rows.set(i, songRow(songs[i]));
-    return rows.get(i);
+  const lines = new Map();  // song index -> its line, made the first time it shows
+  const lineOf = (i) => {
+    if (!lines.has(i)) lines.set(i, lineFor(songs[i]));
+    return lines.get(i);
   };
-  const VIEWS = ["cards", "rows"];
-  const viewButtons = Array.from(document.querySelectorAll("button[data-view]"));
+  // An artist's group: a header that names them and counts their songs listed, "Soda Stereo · you have 2"
+  // (``counts.mine``), then their lines. The name, once you have songs of theirs, shows those alone.
+  let groupSerial = 0;
+  const artistGroup = (artist, items, counts) => {
+    const a = artist && typeof artist === "object" ? artist : { name: artist };
+    const name = String(a.name || "");
+    const mine = Number(counts && counts.mine) || 0;
+    const section = el("section", "artist");
+    section.dataset.artist = String(a.key || "");
+    section.tabIndex = -1;  // the A-Z strip moves the focus to it
+    const heading = el("h2", "artist-title");
+    groupSerial += 1;
+    heading.id = "artist-" + groupSerial;
+    section.setAttribute("aria-labelledby", heading.id);
+    heading.appendChild(a.key && mine ? artistFilter(name, name, () => {
+      setArtist(String(a.key));
+      window.scrollTo(0, 0);
+    }) : el("span", "artist-name", name));
+    if (mine) heading.appendChild(el("span", "artist-counts", " · you have " + mine));
+    section.appendChild(heading);
+    const box = el("div", "lines");
+    for (const item of listOf(items)) box.appendChild(item);
+    section.appendChild(box);
+    return section;
+  };
   // For lists the page doesn't make itself (the served page's type-ahead): the same rows and marks.
   window.caracole = Object.freeze({ resultRow, sourceMark, icons: ICONS });
 
   // artist: one artist's songs alone, by sortArtist, which a search for the name wouldn't give
   // ("Queen" also finds "Dancing Queen").
   // all: the search of the sites (served; on the file, the line that searches them), under the bar.
-  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", view: "cards", all: false };
-  const itemFor = (i) => (state.view === "rows" ? rowFor(i) : cardFor(i));
+  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", all: false };
   const artistName = (key) => {
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
@@ -930,7 +847,6 @@
     if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
     if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
-    if (VIEWS.indexOf(params.get("view")) >= 0) state.view = params.get("view");
     state.all = params.get("all") === "1" && Boolean(state.q.trim()) && !keyed(state.q);
   } catch (err) {
     // A malformed address: start from the defaults.
@@ -949,7 +865,6 @@
     if (state.sort !== "artist") params.set("sort", state.sort);
     if (state.artist) params.set("artist", state.artist);
     if (state.key) params.set("key", state.key);
-    if (state.view !== "cards") params.set("view", state.view);
     if (state.all) params.set("all", "1");
     try {
       history.replaceState(null, "", "#" + params.toString());
@@ -959,8 +874,8 @@
   };
 
   const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
-  const arrived = new Map();  // song id -> the card data of a song new to the library since the page loaded
-  // A song removed since the page loaded counts nowhere, though its card says Removed until the next load.
+  const arrived = new Map();  // song id -> the data of a song new to the library since the page loaded
+  // A song removed since the page loaded counts nowhere, though its line says Removed until the next load.
   const counted = (s) => s.status !== "removed";
   const summarize = () => {
     const by = { found: 0, wanted: 0, ignored: 0 };
@@ -984,19 +899,19 @@
   const smooth = () => (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ? "auto" : "smooth");
 
-  // The row of buttons, one line that scrolls sideways on a phone: which of its ends hide buttons.
-  const chipRow = document.querySelector(".chips");
+  // The row of buttons and menus, one line that scrolls sideways on a phone: which of its ends hide some.
+  const buttonRow = document.querySelector(".toolbar");
   const chipEdges = () => {
-    if (!chipRow) return;
-    const room = chipRow.scrollWidth - chipRow.clientWidth;
-    chipRow.classList.toggle("more-start", room > 1 && chipRow.scrollLeft > 1);
-    chipRow.classList.toggle("more-end", room > 1 && chipRow.scrollLeft < room - 1);
+    if (!buttonRow) return;
+    const room = buttonRow.scrollWidth - buttonRow.clientWidth;
+    buttonRow.classList.toggle("more-start", room > 1 && buttonRow.scrollLeft > 1);
+    buttonRow.classList.toggle("more-end", room > 1 && buttonRow.scrollLeft < room - 1);
   };
-  if (chipRow) {
-    chipRow.addEventListener("scroll", chipEdges, { passive: true });
-    if ("ResizeObserver" in window) new ResizeObserver(chipEdges).observe(chipRow);
+  if (buttonRow) {
+    buttonRow.addEventListener("scroll", chipEdges, { passive: true });
+    if ("ResizeObserver" in window) new ResizeObserver(chipEdges).observe(buttonRow);
   }
-  // How many of the songs the search and filters match each button would show; a card drawn again changes it.
+  // How many of the songs the search and filters match each button would show; a line drawn again changes it.
   let matchingNow = [];
   let shownNow = [];
   const tallyChips = () => {
@@ -1032,14 +947,11 @@
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
     sort.value = state.sort;
     keySelect.value = state.key;
-    // On a phone Key, Sort and the view are under View, which says a key chosen there.
-    viewToggle.textContent = state.key && keyGroup(state.key) ? "View · " + keyGroup(state.key).name : "View";
-    for (const button of viewButtons) button.setAttribute("aria-pressed", String(button.dataset.view === state.view));
     clear.hidden = !state.q;
     artistChip.hidden = !state.artist;
     artistChip.textContent = state.artist ? artistName(state.artist) + " ×" : "";
     artistChip.setAttribute("aria-label", state.artist ? "Show every artist, not only " + artistName(state.artist) : "");
-    // Searching the sites, served: the results take the grid's place, its tools with it, until Escape.
+    // Searching the sites, served: the results take the list's place, its tools with it, until Escape.
     const searchingAll = Boolean(server) && state.all;
     document.body.classList.toggle("searching-all", searchingAll);
     drawBar(matching.length === 0, query.keys.length > 0);
@@ -1049,29 +961,50 @@
       return;
     }
 
-    // One grid, whatever the order, so the cards fill each row; the strip jumps to a letter's first card.
-    // In rows, one list of rows.
+    // By artist, a group of lines per artist, A to Z, each song's line under its artist's name. By title or by
+    // when they came, the lines alone, each with its artist. The strip jumps to a letter's first group, or line.
     list.textContent = "";
     jump.textContent = "";
-    const grid = el("div", state.view === "rows" ? "rows" : "grid");
     const letterOf = LETTERS[state.sort];
     const firsts = new Map();
-    for (const i of shown) {
-      const card = itemFor(i);
-      if (letterOf) {
-        const letter = String(songs[i][letterOf] || "#");
-        if (!firsts.has(letter)) firsts.set(letter, card);
+    const first = (letter, item) => {
+      if (!firsts.has(letter)) firsts.set(letter, item);
+    };
+    if (state.sort === "artist") {
+      const runs = [];  // ORDERS.artist has each artist's songs together
+      for (const i of shown) {
+        const key = String(songs[i].sortArtist || "");
+        if (!runs.length || runs[runs.length - 1].key !== key) runs.push({ key, items: [] });
+        runs[runs.length - 1].items.push(i);
       }
-      grid.appendChild(card);
+      const groups = el("div", "groups");
+      for (const { key, items } of runs) {
+        const group = artistGroup({ key, name: String(songs[items[0]].artist) }, items.map(lineOf),
+          { mine: items.filter((i) => counted(songs[i])).length });
+        first(String(songs[items[0]].artistLetter || "#"), group);
+        groups.appendChild(group);
+      }
+      if (runs.length) list.appendChild(groups);
+    } else if (shown.length) {
+      const flat = el("section", "flat");
+      flat.appendChild(el("h2", "visually-hidden", state.sort === "title" ? "Your songs by title"
+        : "Your songs, the newest first"));
+      const box = el("div", "lines");
+      for (const i of shown) {
+        const line = lineOf(i);
+        if (letterOf) first(String(songs[i][letterOf] || "#"), line);
+        box.appendChild(line);
+      }
+      flat.appendChild(box);
+      list.appendChild(flat);
     }
-    if (shown.length) list.appendChild(grid);
-    for (const [letter, card] of firsts) {
+    for (const [letter, item] of firsts) {
       const to = el("button", null, letter);
       to.type = "button";
       to.setAttribute("aria-label", "Jump to " + letter);
       to.addEventListener("click", () => {
-        card.scrollIntoView({ block: "start", behavior: smooth() });
-        card.focus({ preventScroll: true });  // so the next Tab goes on from this card
+        item.scrollIntoView({ block: "start", behavior: smooth() });
+        item.focus({ preventScroll: true });  // so the next Tab goes on from there
       });
       jump.appendChild(to);
     }
@@ -1165,11 +1098,6 @@
     render();
     save();
   });
-  viewToggle.addEventListener("click", () => {
-    const open = viewToggle.getAttribute("aria-expanded") !== "true";
-    viewToggle.setAttribute("aria-expanded", String(open));
-    viewPanel.classList.toggle("open", open);
-  });
   // The bar kept at the top gets its edge once the page scrolls under it.
   const edge = byId("bar-edge");
   const bar = document.querySelector(".searchbar");
@@ -1208,13 +1136,6 @@
     render();
     save();
   });
-  for (const button of viewButtons) {
-    button.addEventListener("click", () => {
-      state.view = VIEWS.indexOf(button.dataset.view) >= 0 ? button.dataset.view : "cards";
-      render();
-      save();
-    });
-  }
 
   // --- the bar: your songs as you type, the sites on Enter ---------------------------------------
   // Typing filters your songs, here, asking nothing. Enter, or Search all, searches the sites too: served, one
@@ -1297,8 +1218,8 @@
   let getIt = () => {};
   let later = () => {};
 
-  // Your songs that match what is typed, whatever the buttons show: the page's own rows, with what their cards
-  // offer; then the server's close matches the filter missed.
+  // Your songs that match what is typed, whatever the buttons show: the page's own lines, with all they offer;
+  // then the server's close matches the filter missed.
   const drawMine = (query) => {
     const mine = ORDERS[state.sort].filter(typedMatch(query));
     const q = normal(state.q);
@@ -1306,7 +1227,7 @@
       .filter((i) => i !== undefined && mine.indexOf(i) < 0).slice(0, Math.max(0, MINE_SHOWN - mine.length)) : [];
     mineBox.textContent = "";
     if (mine.length) {
-      mineBox.append(...group("In your library · " + mine.length, mine.slice(0, MINE_SHOWN).map(rowFor)));
+      mineBox.append(...group("In your library · " + mine.length, mine.slice(0, MINE_SHOWN).map(lineOf)));
       if (mine.length > MINE_SHOWN) {
         const every = el("p", "all-mine");
         every.appendChild(button("All " + mine.length + " of your songs", "small", () => leaveAll(true)));
@@ -1315,7 +1236,7 @@
     }
     if (extra.length) {
       mineBox.append(...group(mine.length ? "Close to it, in your library" : "In your library, close to it",
-        extra.map(rowFor)));
+        extra.map(lineOf)));
     }
   };
   const drawResults = (query, answerInList) => {
@@ -1437,7 +1358,7 @@
     }
     if (typeof data.hint === "string" && data.hint) box.appendChild(prose("hint index-hint", data.hint));
     // A row whose request is on its way stays, its line in it, where the newer answer has it; one the newer
-    // answer lacks becomes its card under the bar (settleSpots), its line going on there.
+    // answer lacks becomes its line under the bar (settleSpots), its request line going on there.
     const going = new Map();
     for (const [id, node] of spots) {
       if (sitesBox.contains(node) && views.has(id) && isActive(views.get(id))) going.set(hitKey(node), node);
@@ -1500,7 +1421,7 @@
     head.appendChild(button("All results", "small", backToResults, "Back to all the results"));
     box.appendChild(head);
     const theirs = listOf(page.library).map((x) => byIndex.get(Number(x && x.id))).filter((i) => i !== undefined);
-    if (theirs.length) box.append(...group("Yours by " + page.artist, theirs.map(rowFor)));
+    if (theirs.length) box.append(...group("Yours by " + page.artist, theirs.map(lineOf)));
     const [heading, rows] = group("Ultimate Guitar, the most tabbed first", listOf(page.songs).map((h) => ugHit(h, getIt, later)));
     box.appendChild(heading);
     box.appendChild(rows);
@@ -1592,7 +1513,7 @@
     head.appendChild(button("All results", "small", backToResults, "Back to all the results"));
     box.appendChild(head);
     const theirs = listOf(page.library).map((x) => byIndex.get(Number(x && x.id))).filter((i) => i !== undefined);
-    if (theirs.length) box.append(...group("Yours by " + page.artist, theirs.map(rowFor)));
+    if (theirs.length) box.append(...group("Yours by " + page.artist, theirs.map(lineOf)));
     box.append(...siteArtistSongs(page, group, getIt, later,
       (go, offer) => readThenShow({ slug: String(page.slug || "") }, go, offer)));
     mineBox.hidden = true;
@@ -1644,7 +1565,7 @@
       e.preventDefault();
       enterAll();
     } else if (e.key === "ArrowDown" && state.all && server) {  // on to the first result's button
-      const first = found.querySelector(".row-action button, .row-action a");
+      const first = found.querySelector(".line-action button, .line-action a, .row-action button, .row-action a");
       if (first) {
         e.preventDefault();
         first.focus();
@@ -1673,8 +1594,8 @@
   const trayItems = new Map();  // job id -> its line in the list of requests
   const quiet = new Set();  // the lookups of a songbook's missing songs: its card says how they go
   let trayClosed = false;
-  // The list of requests, once there are two or more: one line each, not read out (the cards' lines are). A
-  // songbook's change, or a removal, is left out: its card, where it was asked for, says how it goes.
+  // The list of requests, once there are two or more: one line each, not read out (the songs' lines are). A
+  // songbook's change, or a removal, is left out: its card or line, where it was asked for, says how it goes.
   const trayShow = (view) => {
     if (!tray || view.kind === "songbook" || view.kind === "remove" || quiet.has(Number(view.id))) return;
     const id = Number(view.id);
@@ -1686,7 +1607,7 @@
       trayItems.set(id, item);
       trayList.prepend(item);
     }
-    // One Details link, the list's own: a line here says how its request goes, and its card links the rest.
+    // One Details link, the list's own: a line here says how its request goes, and its song's links the rest.
     const line = view.line && typeof view.line === "object" ? view.line : {};
     showLine(item.querySelector(".progress"), { line: Object.assign({}, line, { details: null }) });
     const shown = Array.from(trayItems.keys()).map((n) => views.get(n)).filter(Boolean);
@@ -1695,8 +1616,8 @@
     tray.hidden = trayClosed || shown.length < 2;
     document.body.classList.toggle("with-tray", !tray.hidden);
   };
-  // The cards drawn again from what the library has now: a request is over. Each keeps its line. A removal
-  // done leaves its song's card saying so; a songbook's change, the Songbooks section drawn again.
+  // The lines drawn again from what the library has now: a request is over. Each keeps its request line. A
+  // removal done leaves its song's line saying so; a songbook's change, the Songbooks section drawn again.
   const redraw = (view) => {
     if (view.kind === "remove" && songOf(view) !== null) {
       removing.delete(songOf(view));
@@ -1716,18 +1637,17 @@
       songs[i] = data;
       songKeys[i] = keyId(data.key);
       hay[i] = String(data.search || "");
-      if (cards.has(i)) cards.set(i, refill(cards.get(i), makeCard(data)));  // else drawn when shown
-      if (rows.has(i)) rows.set(i, refill(rows.get(i), songRow(data)));
+      if (lines.has(i)) lines.set(i, refill(lines.get(i), lineFor(data)));  // else drawn when shown
     } else {
       arrived.set(Number(data.id), data);  // counted, and shown under the form until the next load
     }
-    const spot = spots.get(Number(view.id));  // a result's row stays a row: the song's own, now
-    if (spot) spots.set(Number(view.id), refill(spot, spot.classList.contains("row") ? songRow(data) : makeCard(data)));
+    const spot = spots.get(Number(view.id));  // a result's row, or a line under the bar: the song's line, now
+    if (spot) spots.set(Number(view.id), refill(spot, lineFor(data)));
     summarize();
-    tallyChips();  // the grid itself stays as it is: a card the filter now hides goes at the next search
+    tallyChips();  // the list itself stays as it is: a line the filter now hides goes at the next search
   };
   const songOf = (view) => (view.songId === null || view.songId === undefined ? null : Number(view.songId));
-  // Whether a job that is over brings what the page draws again: its song's card (none for a song the library
+  // Whether a job that is over brings what the page draws again: its song's line (none for a song the library
   // hasn't got), or the Songbooks section, for a songbook's change; a removal's song is gone, or as it was.
   const drawable = (view) => (view.kind === "songbook" ? Boolean(view.songbooks)
     : view.kind === "remove" || Boolean(view.card) || songOf(view) === null);
@@ -1745,27 +1665,28 @@
     }
     paint(view);
   };
-  // The job's line on the cards and rows that show it, and in the list of requests.
+  // The job's line on the song's line, and wherever else it shows (a result's row, #requested), and in the list
+  // of requests.
   const paint = (view) => {
     const id = Number(view.id);
     const song = songOf(view);
     const i = song !== null && songJob.get(song) === id ? byIndex.get(song) : undefined;
-    for (const card of [i === undefined ? null : cards.get(i), i === undefined ? null : rows.get(i), spots.get(id)]) {
-      if (!card || (song !== null && removals.has(song))) continue;  // its line counts down to its removal
-      const p = progressIn(card);
+    for (const item of [i === undefined ? null : lines.get(i), spots.get(id)]) {
+      if (!item || (song !== null && removals.has(song))) continue;  // its line counts down to its removal
+      const p = progressIn(item);
       showLine(p, view);
-      if (view.kind === "remove") continue;  // its buttons wait where they are: the card is gone once it is done
-      const button = card.querySelector("form.fetch");
+      if (view.kind === "remove") continue;  // its buttons wait where they are: the song is gone once it is done
+      const button = item.querySelector("form.fetch");
       if (button && isActive(view)) {
         if (button.contains(document.activeElement)) focusOn(p);  // the line takes the button's place
         button.remove();
       }
-      const picker = card.querySelector("form.pick-form");
-      if (picker && isActive(view)) {  // POST /review would refuse a pick now: the card is drawn again after
+      const picker = item.querySelector("form.pick-form");
+      if (picker && isActive(view)) {  // POST /review would refuse a pick now: the line is drawn again after
         const box = picker.closest("details.picker");
         if (box.contains(document.activeElement)) focusOn(p);
         box.remove();
-        const pick = card.querySelector(".row-pick");  // a row's button that opened it
+        const pick = item.querySelector(".line-pick");  // the line's button that opened it
         if (pick) {
           if (pick.contains(document.activeElement)) focusOn(p);
           pick.remove();
@@ -1802,19 +1723,13 @@
     badge.textContent = String(n);
   };
 
-  // A song caracole removed: its card, and its row, say so until the page is loaded again, with nothing left to
-  // open, fetch or pick (its files are gone, and so is its data-id, which the Select mode finds songs by).
-  const goneItem = (s, asRow) => {
+  // A song caracole removed: its line says so until the page is loaded again, with nothing left to open, fetch or
+  // pick (its files are gone, and so is its data-id, which the Select mode finds songs by).
+  const goneItem = (s) => {
     const artist = listOf(s.artists).length > 1 ? listOf(s.artists).join(", ") : String(s.artist);
-    if (asRow) {
-      const row = resultRow({ title: s.title, artist, status: "removed" });
-      row.classList.add("gone");
-      return row;
-    }
-    const card = el("article", "card gone");
-    card.tabIndex = -1;
-    card.appendChild(plainHead(s.monogram, s.hue, s.title, artist));
-    return card;
+    const line = resultRow({ dense: true, title: s.title, artist, status: "removed" });
+    line.classList.add("gone");
+    return line;
   };
   const removed = (id) => {
     const i = byIndex.get(id);
@@ -1822,23 +1737,22 @@
     songs[i] = Object.assign({}, songs[i], { status: "removed" });
     // Drawn again where it is, as tall as it was, its line where it was: nothing on the screen moves, seconds
     // after the tap.
-    const gone = (old, asRow) => {
-      const fresh = goneItem(songs[i], asRow);
+    const gone = (old) => {
+      const fresh = goneItem(songs[i]);
       if (!old) return fresh;
       const tall = old.isConnected ? old.getBoundingClientRect().height : 0;
       const line = old.querySelector(".progress");
       const top = line && old.isConnected ? line.getBoundingClientRect().top : null;
       const kept = refill(old, fresh);
       if (tall) kept.style.minHeight = tall + "px";
-      if (line) line.style.minHeight = "";  // the last thing on the card, which keeps the height: as tall as it says
+      if (line) line.style.minHeight = "";  // the last thing on the line, which keeps the height: as tall as it says
       if (top !== null && line.isConnected) {  // measured before a frame is drawn: it never moves
         const drop = top - line.getBoundingClientRect().top;
         if (drop > 0) line.style.marginTop = drop + "px";
       }
       return kept;
     };
-    cards.set(i, gone(cards.get(i), false));
-    rows.set(i, gone(rows.get(i), true));
+    lines.set(i, gone(lines.get(i)));
     summarize();
     tallyChips();
     tell();
@@ -1936,6 +1850,18 @@
     document.addEventListener("click", release, true);
     document.addEventListener("keydown", release, true);
   };
+  // ``then``, once the page has not scrolled for two frames in a row.
+  const whenStill = (then) => {
+    let last = window.scrollY;
+    let still = 0;
+    const frame = () => {
+      still = window.scrollY === last ? still + 1 : 0;
+      last = window.scrollY;
+      if (still >= 2) then();
+      else requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  };
   const drawSongbooks = (view) => {
     const at = shelf();
     if (!at) return;
@@ -2002,12 +1928,16 @@
       if (again) again.focus();
     }
     // Made, or added to, from the Select bar: the songbook scrolls into view whole, if its line is still where
-    // you left it (scrolling moves nothing on the page, as a card growing over what is on the screen would).
+    // you left it (scrolling moves nothing on the page, as a card growing over what is on the screen would): once
+    // the page stops scrolling, as its own scroll to the songbook may still be on its way (a short list's songs
+    // were picked far from it).
     if (job && job.reveal && view.state === "done" && job.card.isConnected) {
-      const at = bookLine(job.card).getBoundingClientRect();
-      if (at.top >= 0 && at.bottom <= window.innerHeight) {
-        job.card.scrollIntoView({ block: "nearest", behavior: smooth() });
-      }
+      whenStill(() => {
+        const at = bookLine(job.card).getBoundingClientRect();
+        if (job.card.isConnected && at.top >= 0 && at.bottom <= window.innerHeight) {
+          job.card.scrollIntoView({ block: "nearest", behavior: smooth() });
+        }
+      });
     }
     // A card stretched while its change ran keeps that height while it is taller than what it holds now, until
     // your next click or key, when what moves under it moves for you.
@@ -2081,12 +2011,13 @@
 
   if (server) {
     const requested = byId("requested");
-    const requestedGrid = byId("requested-grid");
+    const requestedList = byId("requested-list");
+    // A song asked for, before the library has it: its names alone, and how its request goes.
     const placeholder = (artist, title) => {
-      const card = el("article", "card pending");
-      card.appendChild(plainHead((artist.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase(), 0, title, artist));
-      showLine(progressIn(card), { line: { tone: "queued", text: "Sending…" } });
-      return card;
+      const line = resultRow({ dense: true, title, artist });
+      line.classList.add("pending");
+      showLine(progressIn(line), { line: { tone: "queued", text: "Sending…" } });
+      return line;
     };
     // A result's row whose request the server has just answered, put where it would be had the answer come at
     // once: the row left the results while it was on its way (Back to your songs, the ×, Escape, a newer answer
@@ -2137,8 +2068,8 @@
     // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).
     later = (pick, display, row, go) => askFrom("request", pick, ["artist", "title", "lacuerda"], row, go,
       (answer) => answer.job);
-    // Back to your songs: a request's row in the results that is a song new to the library becomes its card
-    // under the bar, which goes on saying how it goes; a song the grid has says it on its own card. With
+    // Back to your songs: a request's row in the results that is a song new to the library becomes its line
+    // under the bar, which goes on saying how it goes; a song the list has says it on its own line. With
     // ``dropped``, only the rows a newer answer left out, at once.
     settleSpots = (dropped) => {
       for (const [id, node] of Array.from(spots)) {
@@ -2151,10 +2082,10 @@
           continue;
         }
         const [artist, ...title] = String((view && view.display) || "").split(" - ");
-        const card = song !== null && arrived.has(song) ? makeCard(arrived.get(song))
+        const card = song !== null && arrived.has(song) ? lineFor(arrived.get(song))
           : title.length ? placeholder(artist, title.join(" - ")) : placeholder("", artist);
         if (view) showLine(progressIn(card), view);
-        requestedGrid.prepend(card);
+        requestedList.prepend(card);
         requested.hidden = false;
         spots.set(id, card);
       }
@@ -2165,11 +2096,11 @@
       const song = songOf(view);
       if (view.kind === "songbook") {
         bookSpot(view);  // a songbook's change: on its songbook's card
-      } else if (requestedGrid && isActive(view) && view.kind === "song" && (song === null || !byIndex.has(song))) {
-        // A song new to the library, on its way since before this page loaded: its card under the form.
+      } else if (requestedList && isActive(view) && view.kind === "song" && (song === null || !byIndex.has(song))) {
+        // A song new to the library, on its way since before this page loaded: its line under the bar.
         const [artist, ...title] = String(view.display || "").split(" - ");
         const spot = title.length ? placeholder(artist, title.join(" - ")) : placeholder("", artist);
-        requestedGrid.appendChild(spot);  // newest first, as they come
+        requestedList.appendChild(spot);  // newest first, as they come
         requested.hidden = false;
         spots.set(Number(view.id), spot);
       }
@@ -2182,7 +2113,7 @@
         poll();
       }
     });
-    if (tray) {  // folded, on every width: the cards say how each goes, and it would cover them
+    if (tray) {  // folded, on every width: the lines say how each goes, and it would cover them
       trayToggle.addEventListener("click", () => {
         const open = trayToggle.getAttribute("aria-expanded") !== "true";
         trayToggle.setAttribute("aria-expanded", String(open));
@@ -2201,7 +2132,7 @@
         document.body.classList.remove("with-tray");
       });
     }
-    // The request form, under the results: a card for the song at once, under the bar, which says how its
+    // The request form, under the results: a line for the song at once, under the bar, which says how its
     // request goes. It is filled in from what was searched ("Artist - Title", or the artist alone when an
     // artist leads, else the title), each field until you type into it yourself.
     const requestForm = document.querySelector("form.request-form");
@@ -2222,14 +2153,14 @@
         }
       };
     }
-    const refused = new Set();  // the cards of requests the server refused, gone at the next one
-    // The card #requested shows already for the job's song (or, before the song is in the library, for the
+    const refused = new Set();  // the lines of requests the server refused, gone at the next one
+    // The line #requested shows already for the job's song (or, before the song is in the library, for the
     // same "Artist - Title"), if any: asked for again, it is the one that says how this request goes.
     const spotOf = (view) => {
       const song = songOf(view);
       for (const [id, card] of spots) {
         const was = views.get(id);
-        if (!was || !card.isConnected || !requestedGrid.contains(card)) continue;
+        if (!was || !card.isConnected || !requestedList.contains(card)) continue;
         const same = song !== null && songOf(was) !== null ? songOf(was) === song : was.display === view.display;
         if (same) return [id, card];
       }
@@ -2243,7 +2174,7 @@
         const field = (name) => requestForm.elements.namedItem(name);
         const typed = (name) => String(field(name).value || "").trim().replace(/\s+/g, " ");
         let spot = placeholder(typed("artist"), typed("title"));
-        requestedGrid.prepend(spot);
+        requestedList.prepend(spot);
         requested.hidden = false;
         if (state.all) spot.scrollIntoView({ block: "nearest", behavior: smooth() });  // under the bar, in view
         const button = requestForm.querySelector('button[type="submit"]');
@@ -2260,13 +2191,13 @@
           typedInto.clear();
           const id = Number(view.id);
           const shown = spots.has(id) ? [id, spots.get(id)] : spotOf(view);
-          if (shown) {  // asked for again: its card says how it goes, where it is, its line still in the page
+          if (shown) {  // asked for again: its line says how it goes, where it is, still in the page
             spot.remove();
             spot = shown[1];
             if (shown[0] !== id) spots.delete(shown[0]);
           } else {
             const i = songOf(view) === null ? undefined : byIndex.get(songOf(view));
-            if (i !== undefined) spot = refill(spot, makeCard(songs[i]));  // a song the library has: its card
+            if (i !== undefined) spot = refill(spot, lineFor(songs[i]));  // a song the library has: its line
           }
           spots.set(id, spot);
           track(view);
@@ -2341,8 +2272,8 @@
   }
   summarize();
   render();
-  // Back from a page of caracole serve's about a song (Remove's question): its card in view, and the focus
-  // on it, as the A-Z strip leaves it; the address keeps the rest. In the next frame, once every script
+  // Back from a page of caracole serve's about a song (Remove's question): its line in view, and the focus
+  // on it, as the A-Z strip leaves a group; the address keeps the rest. In the next frame, once every script
   // has drawn what it draws above the list (the Songbooks section, opened as it was left).
   let back = NaN;
   try {
@@ -2353,7 +2284,7 @@
   if (back) {
     requestAnimationFrame(() => {
       const i = byIndex.get(back);
-      const item = i === undefined ? null : (state.view === "rows" ? rows : cards).get(i);
+      const item = i === undefined ? null : lines.get(i);
       if (item && item.isConnected) {
         item.scrollIntoView({ block: "center" });
         item.focus({ preventScroll: true });
