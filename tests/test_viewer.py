@@ -16,7 +16,8 @@ from helpers import browser
 from helpers.browser import in_chromium
 
 from caracole.chordpro import to_chordpro
-from caracole.viewer import build_viewer, info_key, key_heard, viewer_csp
+from caracole.keys import SOURCES
+from caracole.viewer import build_viewer, viewer_csp
 from caracole.viewer.voicings import load_voicings
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
@@ -238,36 +239,17 @@ def test_a_sheet_without_chords_has_no_key():
 
 @pytest.mark.parametrize(
     ("source", "label"),
-    [("tab", "from the tab"), ("model", "from the audio"), ("autochords", "from the audio"),
-     ("estimate", "estimated from the chords"), ("chords", "estimated from the chords"),
-     ("Musicbrainz", "from Musicbrainz"), (None, "from info.json")],
+    [*SOURCES.items(), ("Musicbrainz", "from Musicbrainz"), (None, "from info.json")],
 )
-def test_where_the_key_came_from_is_said_in_words(source, label):
+def test_where_the_key_came_from_is_said_in_words_as_keys_py_says_it(source, label):
     assert data_of(build_viewer(UG_CHO, key="G", key_source=source))["key"]["from"] == label
 
 
-@pytest.mark.parametrize(
-    ("info", "found"),
-    [
-        ({"key": "Am", "key_source": "tab"}, ("Am", "tab")),
-        ({"key": "C dorian"}, ("C dorian", None)),
-        ({"key": "radiohead|creep"}, (None, None)),  # the song's identity key, not a musical one
-        ({"key": 5, "key_source": "tab"}, (None, None)),
-        ({}, (None, None)),
-        (["not", "a", "dict"], (None, None)),
-    ],
-)
-def test_info_json_gives_a_musical_key_or_none(info, found):
-    assert info_key(info) == found
+def test_the_viewers_copy_of_keys_sources_is_the_same_both_ways():
+    from caracole.viewer import page
 
-
-@pytest.mark.parametrize(
-    ("source", "heard"),
-    [("audio", True), ("model", True), ("autochords", True), (" Audio ", True),
-     ("tab", False), ("chords", False), ("estimate", False), (None, False), (5, False)],
-)
-def test_a_key_heard_in_the_audio_is_told_apart(source, heard):
-    assert key_heard(source) is heard
+    # page.py copies keys.SOURCES rather than import keys.py (BUILD_FILES): no word lost, none added.
+    assert page._SOURCES == SOURCES
 
 
 # --- what the script works from ------------------------------------------------------------------

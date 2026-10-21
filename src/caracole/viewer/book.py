@@ -54,7 +54,7 @@ BOOK_FILES = (HERE / "book.py", HERE / "book.js", HERE / "book.css")
 @dataclass(frozen=True)
 class BookSong:
     """One song of the songbook: its sheet's ChordPro (``cho``, as caracole wrote it) or why it has none
-    (``missing``), with the key info.json gives it and its ``[transpose]``. ``id`` names it the same
+    (``missing``), with its key (``keys.sheet_keys``) and its ``[transpose]``. ``id`` names it the same
     wherever the songbook puts it: the page remembers the song you had open by it."""
 
     title: str

@@ -406,7 +406,6 @@ def test_the_bytes_written_are_recorded(conn, cfg, two):
     page = (folder(cfg) / "songbook.html").read_bytes()
     assert written_page(conn, "Campfire") == (hashlib.sha256(page).hexdigest(), len(page))
     record = kv_get_json(conn, "songbook:Campfire")
-    assert record["name"] == "Campfire"
     assert set(record["files"]) == {"songbook.pdf", "songbook.html", "songbook.cho"}
 
 

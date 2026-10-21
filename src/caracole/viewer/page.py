@@ -64,6 +64,7 @@ from caracole.viewer.theory import (
     spelling,
 )
 from caracole.viewer.voicings import (
+    LICENSE_FILE,
     Position,
     chord_legend,
     page_voicings,
@@ -77,13 +78,10 @@ HERE = Path(__file__).parent
 LIBRARY_PAGE = "../../index.html"
 CREDIT_URL = "https://github.com/tombatossals/chords-db"
 
-# What info.json's "key_source" says, in words for the page.
-_SOURCES = {
-    "tab": "from the tab", "ug": "from the tab", "sheet": "from the tab", "lacuerda": "from the tab",
-    "model": "from the audio", "autochords": "from the audio", "audio": "from the audio",
-    "estimate": "estimated from the chords", "estimated": "estimated from the chords",
-    "chords": "estimated from the chords",
-}
+# Where a key came from (``keys.SongKey.source``), in words for the page: keys.SOURCES, copied, since
+# importing keys.py would bring db.py, songs.py and the rest into BUILD_FILES (test_viewer.py checks
+# that the two agree).
+_SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio": "from the audio"}
 
 
 # What a page is made from besides its song: this module, those it imports and the files they read.
@@ -114,28 +112,6 @@ def _assets() -> tuple[str, str]:
     return (HERE / "viewer.css").read_text(encoding="utf-8"), (HERE / "viewer.js").read_text(encoding="utf-8")
 
 
-def key_heard(source: str | None) -> bool:
-    """Whether info.json's "key_source" says the key was heard in the audio (an auto sheet's).
-
-    Such a key is the auto sheet's alone, and any other key a human sheet's: the model's chords
-    may be in another key than the tab's (another transposition, or the capo).
-    """
-    return isinstance(source, str) and _SOURCES.get(" ".join(source.split()).lower()) == "from the audio"
-
-
-def info_key(info: Any) -> tuple[str | None, str | None]:
-    """The musical key in a song's info.json, and where it came from: ("Am", "tab").
-
-    (None, None) when there is none. info.json's "key" names the song itself in
-    caracole's older files ("radiohead|creep"), so only a key ``theory.parse_key``
-    reads counts.
-    """
-    if not isinstance(info, dict) or parse_key(info.get("key")) is None:
-        return None, None
-    source = info.get("key_source")
-    return info["key"], source if isinstance(source, str) and source.strip() else None
-
-
 def build_viewer(
     cho: str,
     *,
@@ -146,9 +122,10 @@ def build_viewer(
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
-    The key comes from ``key`` (info.json's, with ``key_source``), else from the
-    sheet's own ``{key}``, else it is estimated from the chords. ``transpose`` is where
-    the viewer starts; ``pdf`` names the PDF beside the page, linked when given.
+    The key comes from ``key`` (the song's, ``keys.sheet_keys``, with ``key_source``, one
+    of ``keys.SOURCES``), else from the sheet's own ``{key}``, else it is estimated from
+    the chords. ``transpose`` is where the viewer starts; ``pdf`` names the PDF beside the
+    page, linked when given.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
     style, script = _assets()
@@ -393,7 +370,7 @@ def _footer(links: str) -> str:
 def _credit_notice() -> str:
     """chords-db's copyright and permission notice (MIT): it goes with every copy of its
     fingerings, and each page holds some."""
-    text = (HERE / "LICENSE-chords-db").read_text(encoding="utf-8")
+    text = LICENSE_FILE.read_text(encoding="utf-8")
     return text[text.index("MIT License"):].strip()
 
 

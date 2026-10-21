@@ -36,7 +36,6 @@ from caracole.viewer.theory import QUALITIES, Chord, note_pc, parse_chord
 
 DATA_FILE = Path(__file__).with_name("voicings.json")
 LICENSE_FILE = Path(__file__).with_name("LICENSE-chords-db")
-SOURCE = "chords-db by David Rubert (MIT): https://github.com/tombatossals/chords-db"
 
 TUNING = (40, 45, 50, 55, 59, 64)  # E2 A2 D3 G3 B3 E4, as MIDI notes
 MAX_POSITIONS = 4
