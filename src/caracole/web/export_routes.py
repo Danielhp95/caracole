@@ -14,9 +14,10 @@ is made from the sheet the library keeps.
 
 Make this my version, unless the version is the song's own already, is the same form with ``mine=1``: it queues
 ``caracole render --song=… --version=… --mine``, which writes the song's ``[version]`` in overrides.toml
-under caracole's lock (the server writes no overrides.toml itself) and renders the song in it: its PDF, its
-viewer and its songbooks then start there. An address naming no version is the song's own, as the viewer
-reads its own (render.py ``export_version``).
+under caracole's lock (the server writes no overrides.toml itself), as the key it plays in (render.py
+``export_entry``), and renders the song in it: its PDF, its viewer and its songbooks then start there, on
+whichever sheet the song has. An address naming no version is the song's own, as the viewer reads its own
+(render.py ``export_version``), and one that plays the sheet as the song's own does is the song's own too.
 
 An export is made from the song's human sheet, else its auto sheet (render.py ``export_viewer``). The auto
 sheet's viewer kept beside a human sheet shows other chords: it offers no export, and one asked from it is
@@ -104,16 +105,18 @@ def _job_key(song: Song, version: str) -> str:
 def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, bool]:
     """The song a viewer's path names, the version ``query`` holds as render.py writes it, its label, the
     song's folder in the library (as a path) and whether the version is the song's own (render.py
-    ``own_version``: its ``[version]``, else its ``[transpose]``, else as written); raises Refused."""
+    ``export_own``: its ``[version]``, else its ``[transpose]``, else as written), the one it plays its sheet in;
+    raises Refused."""
     from caracole.library import song_dir
     from caracole.render import (
         AUTO_OUTPUTS,
         RenderError,
+        export_entry,
         export_label,
+        export_own,
         export_query,
         export_version,
         export_viewer,
-        own_version,
         written_file,
     )
     from caracole.songs import list_songs
@@ -142,11 +145,13 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
                 raise Refused(409, "Not this sheet", _BESIDE)
             raise Refused(404, "Not found", "There's no such sheet in the library.")
         try:
-            v = export_version(query, overrides, song)
+            own = export_own(conn, app.cfg, overrides, song)
+            v = export_version(query, own)
             label = export_label(conn, app.cfg, song, v)
+            # where the song plays now: what Make this my version would keep of it is what its own is
+            mine = export_entry(conn, app.cfg, song, own) == export_entry(conn, app.cfg, song, v)
         except RenderError as e:
             raise Refused(404, "No sheet to export", str(e)) from e
-    mine = export_query(own_version(overrides, song)) == export_query(v)  # where the song plays now
     return song, export_query(v), label, "/".join(quote(p) for p in parts[:-1]), mine
 
 

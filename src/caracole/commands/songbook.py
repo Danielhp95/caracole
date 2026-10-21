@@ -108,7 +108,7 @@ def register(app: typer.Typer) -> None:
         typer.echo(f"{b.name}: {_count(len(entries))}")
         for n, e in enumerate(entries, start=1):
             shown = e.song.display if e.song is not None else e.text
-            where = plays_in(e) if e.setting or e.version != Version() else None
+            where = plays_in(e) if e.setting or e.keeps_key or e.version != Version() else None
             typer.echo(f"  {n}. {shown}" + (f" ({where})" if where else "")
                        + (f" (missing: {e.missing})" if e.missing else ""))
         folder = cfg.library_dir / FOLDER / b.folder

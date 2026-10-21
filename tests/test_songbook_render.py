@@ -248,6 +248,39 @@ def test_a_song_without_a_setting_follows_its_own_version(conn, cfg, two):
     assert plays_in(entries_of(conn, cfg, ovr)[1]) == "G Dorian, capo 0"
 
 
+def test_a_song_without_a_setting_keeps_its_own_versions_key_on_a_new_sheet(conn, cfg, two):
+    # "Make this my version" keeps the key it plays in: a sheet in another key and capo in its place plays there
+    _, soda = two
+    ovr = overrides(cfg, f'[version]\n"{SODA}" = "key=G&mode=dorian&capo=0"\n')
+    keep_sheet(conn, cfg, soda, IN_D_MINOR, tab_id=4, tonality="Dm", capo=3)
+    render_sheets(conn, cfg, ovr)
+    fake = FakeChordPro()
+    assert render(conn, cfg, ovr, runner=fake).rendered == 1
+    _, text = inputs(fake, pdf_call(fake))
+    assert "Otra letra" in text and sung(text) == ["Gm", "Edim", "Bb", "F"]  # D minor shapes, capo 3, up to G
+    assert sung(cho_inputs(fake)[1]) == ["Gm", "Edim", "Bb", "F"]
+    (_, entry) = entries_of(conn, cfg, ovr)
+    assert entry.version.t == 2 and plays_in(entry) == "G Dorian, capo 0"
+    assert page_data(cfg, 2)["start"] == "t=2&mode=dorian&capo=0"
+    set_setting(cfg, SODA, Setting(capo=5))  # what a setting leaves out is its own version's: G dorian's sound
+    assert plays_in(entries_of(conn, cfg, ovr)[1]) == "D Dorian, capo 5"
+
+
+def test_a_sheet_with_no_key_plays_a_songs_own_key_as_written_and_says_so(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Keyless Song")
+    keep_sheet(conn, cfg, song, NO_KEY, tonality="")
+    render_sheets(conn, cfg)
+    make(cfg, "Campfire", "Placeholder Band - Keyless Song")
+    ovr = overrides(cfg, '[version]\n"Placeholder Band - Keyless Song" = "key=G&mode=dorian&capo=0"\n')
+    fake = FakeChordPro()
+    assert render(conn, cfg, ovr, runner=fake).failed == []
+    (text,) = inputs(fake, pdf_call(fake))
+    assert sung(text) == ["N.C.", "Hm"] and "{key" not in text
+    (entry,) = entries_of(conn, cfg, ovr)
+    assert entry.version == Version() and plays_in(entry) == "key unknown, as written"
+    assert page_data(cfg, 1)["start"] is None
+
+
 def test_what_a_setting_leaves_out_follows_the_songs_own_version(conn, cfg, two):
     ovr = overrides(cfg, f'[version]\n"{SODA}" = "t=2&mode=dorian&capo=3&at=0.1"\n')
     set_setting(cfg, SODA, Setting(key="C"))  # in C, in its own version's mode and capo

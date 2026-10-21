@@ -261,3 +261,95 @@ def test_python_and_the_viewer_name_every_chord_alike(cho, key, tmp_path):
         # the viewer keeps the version in its address as Python writes it (a capo on the sheet's own fret is none)
         kept = dataclasses.replace(v, capo=None if v.capo == capo else v.capo)
         assert address == "#" + version_query(kept), v
+
+
+# --- a version kept by its key ([version], "Make this my version") ------------------------------------
+
+IN_A_MINOR = "{title: T}\n{artist: A}\n{key: Am}\n[Am]una [F]can[C]ción [G]más\n"
+IN_D_MINOR_CAPO_3 = "{title: T}\n{artist: A}\n{key: Dm}\n{capo: 3}\n[Dm]otra [Bb]le[F]tra [C]más\n"  # a 4th up
+NO_KEY = "{title: T}\n{artist: A}\n[N.C.]la [Hm]lo\n"  # no chord caracole can read: no key
+
+
+def kept_on(entry: str, cho: str) -> Version:
+    """Where the ``[version]`` entry plays the sheet ``cho``, its key and capo as its viewer reads them."""
+    return version.in_key(version.key_version(entry), cho, key=viewer_key(cho), capo_sheet=parse_sheet(cho).capo)
+
+
+def entry_of(v: Version, cho: str) -> str:
+    """The ``[version]`` entry Make this my version writes for ``v`` on the sheet ``cho``."""
+    return version.version_entry(v, cho, key=viewer_key(cho), capo_sheet=parse_sheet(cho).capo)
+
+
+def test_my_version_is_kept_as_the_key_it_plays_in_its_mode_and_its_capo():
+    g_dorian = Version(t=-2, mode="dorian")
+    assert entry_of(g_dorian, IN_A_MINOR) == "key=G&mode=dorian&capo=0"  # as version_label names it, never a t
+    assert version.key_version("key=G&mode=dorian&capo=0") == version.KeyVersion(version.Setting("G", "dorian", 0))
+    # On its own sheet it is the version it was made of; on a sheet a fourth up, with a capo, it is the same key
+    assert kept_on("key=G&mode=dorian&capo=0", IN_A_MINOR) == Version(t=-2, mode="dorian", capo=0)
+    moved = kept_on("key=G&mode=dorian&capo=0", IN_D_MINOR_CAPO_3)
+    assert moved == Version(t=2, mode="dorian", capo=0)
+    assert played(applied(IN_D_MINOR_CAPO_3, moved)) == ["Gm", "Edim", "Bb", "F"]
+    assert played(applied(IN_A_MINOR, g_dorian)) == ["Gm", "Edim", "Bb", "F"]
+    assert version_label(moved, viewer_key(IN_D_MINOR_CAPO_3), 3) == "G Dorian, capo 0"
+    # The mode is written when it is the sheet's own too: the key is G minor, whatever mode a new sheet is in
+    assert entry_of(Version(t=-2), IN_A_MINOR) == "key=G&mode=aeolian&capo=0"
+    assert entry_of(Version(t=1, capo=2), IN_D_MINOR_CAPO_3) == "key=E&mode=aeolian&capo=2"  # F# minor sounds
+    assert entry_of(Version(), IN_D_MINOR_CAPO_3) == "key=D&mode=aeolian&capo=3"
+
+
+def as_kept(v: Version) -> Version:
+    """``v`` as its entry keeps it, with no capo of its own: the capo where the entry puts it (the sheet's, 0 here),
+    and the swaps of the mode it plays in alone."""
+    return dataclasses.replace(v, capo=0, alt={v.mode: v.alt[v.mode]})
+
+
+def test_my_versions_swaps_and_shapes_are_kept_for_the_chords_they_were_chosen_for():
+    fmaj7 = next(a for a in alternatives(parse_chord("G"), Key(9, "dorian")) if a.suffix == "maj7")
+    mine = Version(t=-2, mode="dorian", at={0: 2}, alt={"dorian": {3: (fmaj7.root, fmaj7.suffix, fmaj7.bass)},
+                                                         "lydian": {1: (5, "maj7", None)}})
+    assert played(applied(IN_A_MINOR, mine)) == ["Gm", "Edim", "Bb", "Fmaj7"]
+    # each by the chord as the version names it: Fmaj7 for its F, Gm's third shape; only its own mode's swaps
+    entry = entry_of(mine, IN_A_MINOR)
+    assert entry == "key=G&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.2"
+    assert kept_on(entry, IN_A_MINOR) == as_kept(mine)
+    # A sheet in another key plays them on the chords it names so there, wherever they are
+    moved = kept_on(entry, IN_D_MINOR_CAPO_3)
+    out = applied(IN_D_MINOR_CAPO_3, moved)
+    assert played(out) == ["Gm", "Edim", "Bb", "Fmaj7"]
+    gm = next(d for d in directives(out, "define") if d.startswith("Gm "))
+    assert gm == next(d for d in directives(applied(IN_A_MINOR, mine), "define") if d.startswith("Gm "))
+    assert moved.at == {0: 2}
+    # A sheet without those chords takes none of them; a shape its chord hasn't is none either
+    other = "{title: T}\n{artist: A}\n{key: Am}\n[Am]la [Dm]lo [E7]li\n"
+    assert kept_on(entry, other).alt == {} and kept_on(entry, other).at == {0: 2}
+    assert kept_on("key=G&mode=dorian&capo=0&at=Gm.9,Bb.1", IN_A_MINOR).at == {2: 1}
+    assert played(applied(other, kept_on(entry, other))) == ["Gm", "C", "D7"]
+
+
+def test_a_sheet_with_no_key_plays_my_version_as_written():
+    assert kept_on("key=G&mode=dorian&capo=0", NO_KEY) == Version()
+    # and on one, there's no key to keep: the entry is the viewer's address, a move from the sheet
+    assert entry_of(Version(t=2, capo=1), NO_KEY) == "t=2&capo=1"
+
+
+def test_an_entry_without_a_key_is_a_move_and_one_that_cant_be_read_says_why():
+    assert version.key_version("t=2&mode=dorian&capo=0") is None and version.key_version("") is None
+    assert version.key_version("#key=F#&mode=dorian&capo=2") == version.KeyVersion(version.Setting("F#", "dorian", 2))
+    assert version.key_version("key=Bb") == version.KeyVersion(version.Setting("Bb"))  # the rest the sheet's
+    for bad, why in (("key=H", "key must be a tonic"), ("key=g", "key must be a tonic"),
+                     ("key=", "key must be a tonic"), ("key=G&mode=dorien", "mode must be one of"),
+                     ("key=G&capo=12", "capo must be a fret"), ("key=G&capo=two", "capo must be a fret"),
+                     ("key=G&t=2", "not both")):
+        with pytest.raises(ValueError, match=why):
+            version.key_version(bad)
+    # what it can't read of its swaps and shapes is dropped, as the viewer drops it from its address
+    kept = version.key_version("key=G&alt=F.Fmaj7,F,Hm.Gm,F.x,a.b.c&at=Gm.2,3.1,Hm.1,Gm.x,Gm.0,Bb")
+    assert (kept.alt, kept.at) == ((("F", "Fmaj7"),), (("Gm", 2),))
+
+
+def test_an_entry_round_trips_with_any_chords_name():
+    kept = version.KeyVersion(version.Setting("F#", "dorian", 0), alt=(("C#7", "C#7(b9)"),),
+                              at=(("F#m", 1), ("C6.9", 2), ("A,B", 1), ("D&=%", 3)))
+    query = kept.query()
+    assert query == "key=F#&mode=dorian&capo=0&alt=C#7.C#7(b9)&at=F#m.1,C6%2E9.2,A%2CB.1,D%26%3D%25.3"
+    assert version.key_version(query) == kept

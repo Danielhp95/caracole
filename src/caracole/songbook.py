@@ -40,7 +40,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 import sqlite3
 import subprocess
 import tempfile
@@ -88,13 +87,24 @@ from caracole.render import (
     _sheet_text,
     _style,
     export_query,
+    keeps_key,
     own_version,
     written_file,
 )
 from caracole.viewer.page import viewer_key
 from caracole.viewer.sheet import directive, parse_sheet
-from caracole.viewer.theory import MODES, Key, note_pc
-from caracole.viewer.version import Version, apply_version, played_key, version_label
+from caracole.viewer.theory import Key
+from caracole.viewer.version import (
+    CAPO_MAX,
+    Setting,
+    Version,
+    apply_version,
+    in_setting,
+    places,
+    played_key,
+    setting_problem,
+    version_label,
+)
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -108,8 +118,6 @@ FOLDER = "_songbooks"  # in the library: a folder per songbook
 MAX_NAME = 80  # characters
 _KEYS = ("songs",)
 _SETTING_KEYS = ("song", "key", "mode", "capo")
-_TONIC = re.compile(r"[A-G][#b]?")
-CAPO_MAX = 11  # the viewer's frets (viewer.js CAPO_MAX)
 _HEADER = (
     "Your songbooks. Each [table] is one: its header is the songbook's name, and songs",
     'its songs in order, each "Artist - Title". Edit it by hand, or with caracole songbook',
@@ -124,21 +132,6 @@ class SongbookError(Exception):
 
 class SongbookFileError(SongbookError):
     """songbooks.toml itself can't be read: not a regular file, not UTF-8, not TOML, or not songbooks."""
-
-
-@dataclass(frozen=True)
-class Setting:
-    """How a songbook plays one song, each part None where it says nothing (the song's own version's): ``key``,
-    the tonic of the shapes played, as written ("G", "F#", "Bb"); ``mode``, one of ``theory.MODES``; ``capo``,
-    a fret up to 11. ``in_setting`` makes it a version. ``caracole songbook set`` gives a key or a mode the capo
-    it plays at (``with_capo``), so that a sheet in place of the song's keeps the key it sounds in."""
-
-    key: str | None = None
-    mode: str | None = None
-    capo: int | None = None
-
-    def __bool__(self) -> bool:
-        return self.key is not None or self.mode is not None or self.capo is not None
 
 
 @dataclass(frozen=True)
@@ -326,13 +319,12 @@ def _entry(value: Any, where: str) -> str:
 
 
 def check_setting(key: Any = None, mode: Any = None, capo: Any = None, *, where: str = "a setting") -> Setting:
-    """The setting these parts make; SongbookError naming ``where`` for a part that can't be one."""
-    if key is not None and not (isinstance(key, str) and _TONIC.fullmatch(key)):
-        raise SongbookError(f'{where}: key must be a tonic such as "G", "F#" or "Bb", got {key!r}')
-    if mode is not None and mode not in MODES:
-        raise SongbookError(f"{where}: mode must be one of {', '.join(MODES)}, got {mode!r}")
-    if capo is not None and (isinstance(capo, bool) or not isinstance(capo, int) or not 0 <= capo <= CAPO_MAX):
-        raise SongbookError(f"{where}: capo must be a fret from 0 to {CAPO_MAX}, got {capo!r}")
+    """The setting these parts make (``version.Setting``: how a songbook plays one song, each part None where it
+    says nothing, the song's own version's); SongbookError naming ``where`` for a part that can't be one
+    (``version.setting_problem``). ``caracole songbook set`` gives a key or a mode the capo it plays at
+    (``with_capo``), so that a sheet in place of the song's keeps the key it sounds in."""
+    if (problem := setting_problem(key, mode, capo)) is not None:
+        raise SongbookError(f"{where}: {problem}")
     return Setting(key, mode, capo)
 
 
@@ -636,8 +628,9 @@ class Entry:
     """One song of a songbook as it is rendered: its sheet's ChordPro (``cho``), as caracole wrote it
     beside the song's PDF, or why it has none (``missing``). ``setting`` is the songbook's for it, if any, and
     ``version`` where the songbook plays it: in that setting (``in_setting``), else in the song's own version
-    (``render.own_version``: its ``[version]``, else its ``[transpose]``); ``transpose`` is that version's
-    ``t``. ``plays_in(entry)`` says where, in words."""
+    on that sheet (``render.own_version``: its ``[version]``, else its ``[transpose]``); ``transpose`` is that
+    version's ``t``. ``keeps_key``: whether the song's own version is kept by its key (``render.keeps_key``),
+    which a sheet with no key can't take, as it can't a setting's key. ``plays_in(entry)`` says where, in words."""
 
     text: str  # as songbooks.toml writes it
     title: str
@@ -650,6 +643,7 @@ class Entry:
     key: str | None = None
     key_source: str | None = None
     setting: Setting | None = None
+    keeps_key: bool = False
 
 
 @dataclass
@@ -702,9 +696,9 @@ def _entry_of(conn: sqlite3.Connection, library_dir: Path, overrides: Overrides,
     human, auto = sheet_keys(conn, library_dir, song)
     found = auto if name == AUTO_OUTPUTS[0] else human
     key = found.key if found else None
-    version = _played_in(text, cho, key, own_version(overrides, song), setting)
+    version = _played_in(text, cho, key, own_version(overrides, song, cho, key), setting)
     return Entry(text, title, song.artist, song, cho=cho, transpose=version.t, version=version, key=key,
-                 key_source=found.source if found else None, setting=setting)
+                 key_source=found.source if found else None, setting=setting, keeps_key=keeps_key(overrides, song))
 
 
 def _played_in(text: str, cho: str, key: str | None, own: Version, setting: Setting | None) -> Version:
@@ -720,47 +714,17 @@ def _played_in(text: str, cho: str, key: str | None, own: Version, setting: Sett
         return own
 
 
-def in_setting(own: Version, setting: Setting | None, shapes: Key | None, capo_sheet: int | None) -> Version:
-    """The version a songbook plays a song in: its ``setting`` there, the key of the shapes played (as
-    ``version_label`` names a version, "G Dorian, capo 0"), the mode and the capo, and for what it leaves out
-    the song's own version's (``own``). ``shapes`` and ``capo_sheet`` are the sheet's, as its viewer reads them
-    (``page.viewer_key``, its ``{capo}``): the key is the setting's, whatever key and capo the sheet has.
-
-    With the capo where the sheet has it, ``t`` is the setting's tonic less the sheet's shapes' (to within six
-    semitones), and another capo moves the shapes, as on a guitar. A setting with a key or a mode is the sheet
-    as written (``Version()``) for a sheet with no key (no chord caracole can read): nothing places it there.
-    Shapes chosen in the song's own version (``at``) are for the chords that plays, so they go when the setting
-    plays others; its chords played instead (``alt``) are kept by mode, as the viewer keeps them."""
-    if not setting:
-        return own
-    if _places(setting) and shapes is None:
-        return Version()
-    mode = own.mode if setting.mode is None else setting.mode
-    capo = own.capo if setting.capo is None else setting.capo
-    t = own.t
-    if setting.key is not None:
-        unmoved, _ = played_key(Version(mode=mode, capo=capo), shapes, capo_sheet)  # its shapes at t = 0
-        t = (note_pc(setting.key[0], setting.key[1:]) - unmoved.tonic + 5) % 12 - 5
-    if (t, mode, capo) == (own.t, own.mode, own.capo):
-        return own
-    return replace(own, t=t, mode=mode, capo=capo, at={})
-
-
-def _places(setting: Setting | None) -> bool:
-    """Whether the setting names a key or a mode, which only a sheet with a key can take."""
-    return setting is not None and (setting.key is not None or setting.mode is not None)
-
-
 def with_capo(entry: Entry, setting: Setting, overrides: Overrides) -> Setting:
     """``setting`` for the song of ``entry`` with the capo it plays at now on its sheet, where the setting names
     a key or a mode and no capo (``caracole songbook set``): a setting's key is the key of the shapes played, so
     without its capo a sheet in place of this one, with another capo, would play them at that capo, in another
     key for the singer. As given for a song without a sheet, or one the viewer's code can't read (a bug, logged
     with its traceback), or a setting naming its capo."""
-    if setting.capo is not None or not _places(setting) or entry.cho is None or entry.song is None:
+    if setting.capo is not None or not places(setting) or entry.cho is None or entry.song is None:
         return setting
     try:
-        version = _played_in(entry.text, entry.cho, entry.key, own_version(overrides, entry.song), setting)
+        own = own_version(overrides, entry.song, entry.cho, entry.key)
+        version = _played_in(entry.text, entry.cho, entry.key, own, setting)
         _, capo = played_key(version, viewer_key(entry.cho, entry.key), parse_sheet(entry.cho).capo)
     except Exception:
         log.warning("%s: cannot say at which capo its songbook plays it", entry.text, exc_info=True)
@@ -768,14 +732,15 @@ def with_capo(entry: Entry, setting: Setting, overrides: Overrides) -> Setting:
     return replace(setting, capo=capo) if capo <= CAPO_MAX else setting
 
 
-KEY_UNKNOWN = "key unknown, as written"  # what plays_in says of a setting a sheet with no key can't take
+KEY_UNKNOWN = "key unknown, as written"  # what plays_in says of a setting or a key a sheet with no key can't take
 
 
 def plays_in(entry: Entry) -> str | None:
     """Where the songbook plays the song, in words, for its set list: its version's ``version_label`` ("G
     Dorian, capo 0", "E Minor, capo 2"; "Transposed +2, capo 0" for a sheet with no key), or ``KEY_UNKNOWN`` for
-    a setting with a key or a mode its sheet, which has no key, can't take; None for a song without a sheet, or
-    one the viewer's code can't read (a bug, logged with its traceback)."""
+    a setting with a key or a mode, or an own version kept by its key, that its sheet, which has no key, can't
+    take; None for a song without a sheet, or one the viewer's code can't read (a bug, logged with its
+    traceback)."""
     return where_played(entry)[0]
 
 
@@ -789,7 +754,7 @@ def where_played(entry: Entry) -> tuple[str | None, tuple[Key | None, int] | Non
         shapes = viewer_key(entry.cho, entry.key)
         capo = parse_sheet(entry.cho).capo
         played = played_key(entry.version, shapes, capo)
-        if shapes is None and _places(entry.setting):
+        if shapes is None and (places(entry.setting) or entry.keeps_key):
             return KEY_UNKNOWN, played
         return version_label(entry.version, shapes, capo), played
     except Exception:

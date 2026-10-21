@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -488,6 +489,30 @@ def test_version_names_where_a_song_is_played_as_its_viewers_address(tmp_path):
 def test_a_version_that_is_no_viewers_address_names_its_entry(tmp_path, value):
     with pytest.raises(OverridesError, match=r"\[version\] 'Radiohead - Creep': expected .*t=2&mode=dorian"):
         load_overrides(write(tmp_path, f'[version]\n"Radiohead - Creep" = {value}\n'))
+
+
+def test_a_version_may_keep_the_key_it_plays_in(tmp_path):
+    # As Make this my version writes it now: a key, its mode and its capo, and chords by their names
+    o = load_overrides(write(tmp_path, '''
+[version]
+"Soda Stereo - De Música Ligera" = "key=G&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.2"
+"Radiohead - Creep" = "key=F#"
+'''))
+    assert o.version == {"soda-stereo/de-musica-ligera": "key=G&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.2",
+                         "radiohead/creep": "key=F#"}
+
+
+@pytest.mark.parametrize(("value", "why"), [
+    ("key=H", 'key must be a tonic such as "G", "F#" or "Bb", got \'H\''),
+    ("key=G&mode=dorien", "mode must be one of ionian, dorian"),
+    ("key=G&capo=12", "capo must be a fret from 0 to 11, got 12"),
+    ("t=2&key=G", "a key or a t, not both"),
+])
+def test_a_version_with_a_key_that_cant_be_one_names_its_entry(tmp_path, value, why):
+    with pytest.raises(OverridesError, match=re.escape(f"[version] 'Radiohead - Creep': {why}")):
+        load_overrides(write(tmp_path, f'[version]\n"Radiohead - Creep" = "{value}"\n'))
+    with pytest.raises(OverridesError, match=re.escape(why)):
+        add_version(write(tmp_path, ""), "Radiohead - Creep", value)
 
 
 def test_add_version_writes_and_clears_the_table_keeping_comments(tmp_path):

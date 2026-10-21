@@ -192,3 +192,17 @@ def test_make_this_my_version_saves_it_and_renders_the_song(app, queue, recorder
     assert "It is your version" in shown(page) and ">Make this my version<" not in text(page)
     assert "A Major, capo 0" in shown(get(app, export_url(query="fs=20")))
     assert ">Make this my version<" in text(get(app, export_url(query="t=0")))
+
+
+def test_a_version_kept_by_its_key_is_the_one_the_song_plays_in(app, conn, cfg):
+    # Make this my version keeps the key it plays in: whatever address plays there is the song's own already
+    rendered_song(conn, cfg)  # in G
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text('[version]\n"Soda Stereo - De Música Ligera" = "key=A&mode=ionian&capo=0"\n',
+                                  encoding="utf-8")
+    for query in ("t=2&capo=0", "t=2", "t=2&mode=ionian", "fs=20"):  # the last names no version: the song's own
+        page = get(app, export_url(query=query))
+        assert "A Major, capo 0" in shown(page), query
+        assert "It is your version" in shown(page) and ">Make this my version<" not in text(page), query
+    assert ">Make this my version<" in text(get(app, export_url(query="t=0")))
+    assert ">Make this my version<" in text(get(app, export_url(query="t=2&capo=2")))  # G shapes at capo 2: A too

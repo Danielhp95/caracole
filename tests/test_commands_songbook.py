@@ -582,3 +582,20 @@ def test_show_says_where_the_songbook_plays_a_song_with_a_setting_or_a_version_o
         "  3. Placeholder Band - Keyless Song (key unknown, as written)",
         "  4. Muse - Hysteria (missing: no sheet yet)",
     ]
+
+
+@pytest.mark.slow
+def test_show_says_where_a_songs_own_key_plays_it_and_when_its_sheet_has_none(setup):
+    _, cfg, conn = setup
+    keyless = add_song(conn, "Placeholder Band", "Keyless Song")
+    keep_sheet(conn, cfg, keyless, "[Verse]\n[tab][ch]N.C.[/ch]       [ch]Hm[/ch]\nPalabras sin acordes[/tab]\n",
+               tab_id=7, tonality="")
+    render_sheets(conn, cfg)
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text('[version]\n"Soda Stereo - De Música Ligera" = "key=G&mode=dorian&capo=0"\n'
+                                  '"Placeholder Band - Keyless Song" = "key=G&mode=dorian&capo=0"\n', encoding="utf-8")
+    assert run(setup, "make", "Gig", "Soda Stereo - De Música Ligera", "Placeholder Band - Keyless Song").exit_code == 0
+    shown = run(setup, "show", "Gig")
+    assert shown.exit_code == 0, shown.output
+    assert shown.output.splitlines()[1:3] == ["  1. Soda Stereo - De Música Ligera (G Dorian, capo 0)",
+                                              "  2. Placeholder Band - Keyless Song (key unknown, as written)"]

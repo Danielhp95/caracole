@@ -64,8 +64,10 @@ those names stay.
 
 The PDFs take caracole's look (``STYLE_FILE``, a ChordPro config) and are in
 the song's own version (``own_version``): its ``[version]`` override ("Make
-this my version": a key, mode, capo, shapes and swaps), else its
-``[transpose]``, else the sheet as written; the viewer starts there too. Each
+this my version": the key it plays in, its mode and its capo, so that a sheet
+in another key in its place plays in that key too, and the shapes and swaps it
+chose), else its ``[transpose]``, else the sheet as written; the viewer starts
+there too. Each
 is made from a text of its own (caracole/pdf_text.py), the .cho staying as the
 viewer reads it: in a version, each chord named and shaped as the viewer shows
 it there (``apply_version``); without the tab's notes, the shapes its viewer shows
@@ -156,9 +158,13 @@ from caracole.viewer.page import viewer_key
 from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import Key
 from caracole.viewer.version import (
+    KeyVersion,
     Version,
     apply_version,
+    in_key,
+    key_version,
     played_key,
+    version_entry,
     version_from_query,
     version_label,
     version_query,
@@ -562,17 +568,23 @@ def _render_song(
     folder = song_dir(cfg.library_dir, song)
     done: list[_Done] = []
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
-    version = own_version(overrides, song)
 
-    def render(kept: KeptFile, sheet: _Sheet, state_key: str, played: Version, *, export: bool = True) -> None:
+    def render(kept: KeptFile, sheet: _Sheet, state_key: str, *, beside: bool = False) -> None:
         found = auto_key if sheet.auto else human_key
         mine = (found.key, found.source) if found is not None else (None, None)
-        done.append(_render_sheet(conn, cfg, song, folder, kept, sheet, state_key, played,
+        text = _sheet_cho(song, sheet)
+        # Each sheet in its own place: a version kept by its key moves each by what puts it in that key
+        played = own_version(overrides, song, text, mine[0])
+        if beside:
+            # Beside the human sheet, the version's shapes and swaps were chosen on that sheet, and an export is
+            # that sheet's (export_viewer): its viewer offers none
+            played = replace(played, at={}, alt={})
+        done.append(_render_sheet(conn, cfg, song, folder, kept, text, state_key, played,
                                   start=export_query(played) if song.key in overrides.version else None,
-                                  cjk_font=cjk_font, runner=runner, force=force, key=mine, export=export))
+                                  cjk_font=cjk_font, runner=runner, force=force, key=mine, export=not beside))
 
     if human is not None:
-        render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id), version)
+        render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id))
         if auto is None and done[-1].outcome != "no font":  # its PDF is in place
             for name in AUTO_OUTPUTS:
                 (folder / name).unlink(missing_ok=True)
@@ -582,10 +594,7 @@ def _render_song(
         _drop_human_outputs(conn, cfg.library_dir, song, folder)
     if auto is not None:
         beside = human is not None
-        # Beside the human sheet, the version's shapes and swaps are that sheet's chords', by their places, and
-        # an export is that sheet's (export_viewer): its viewer offers none
-        render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside),
-               replace(version, at={}, alt={}) if beside else version, export=not beside)
+        render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside), beside=beside)
     if human is not None or auto is not None:
         _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, runner=runner, force=force)
     return done
@@ -598,16 +607,55 @@ def _render_song(
 _VERSION_NAMES = frozenset({"t", "mode", "capo", "alt", "at"})
 
 
-def own_version(overrides: Overrides, song: Song) -> Version:
-    """The song's own version, where its PDF, its viewer and its songbooks start: its ``[version]`` ("Make this
-    my version"), at its ``[transpose]`` if that names no ``t``; else its ``[transpose]`` alone; else the sheet
-    as written (``Version()``)."""
+def own_version(overrides: Overrides, song: Song, cho: str, key: str | None) -> Version:
+    """The song's own version on its sheet ``cho`` (its ChordPro as caracole writes it; ``key``, the sheet's,
+    ``keys.sheet_keys``), where its PDF, its viewer and its songbooks start: its ``[version]`` ("Make this my
+    version"), else its ``[transpose]`` alone, else the sheet as written (``Version()``).
+
+    A ``[version]`` kept by its key (``key=G&mode=dorian&capo=0``, as Make this my version writes it) plays in
+    that key on whatever sheet the song has, as a songbook's setting does (``version.in_key``): as written on a
+    sheet with no key, or one the viewer's code can't read (a bug, logged with its traceback). One without a key
+    (``t=2&mode=dorian``, as caracole wrote it before) is a move from the sheet, as the viewer's address writes
+    it, at the song's ``[transpose]`` when it names no ``t``."""
+    own = _own(overrides, song)
+    if isinstance(own, Version):
+        return own
+    try:
+        return in_key(own, cho, key=viewer_key(cho, key), capo_sheet=parse_sheet(cho).capo)
+    except Exception:  # a sheet the viewer's code can't read (a bug) never stops the song's other files
+        log.warning("%s: cannot place it in its own version", song.display, exc_info=True)
+        return Version()
+
+
+def _own(overrides: Overrides, song: Song) -> Version | KeyVersion:
+    """The song's own version as overrides.toml holds it: kept by its key (``KeyVersion``), which each sheet
+    places, or a move from the sheet (``own_version``)."""
     transpose = overrides.transpose.get(song.key, 0)
     query = overrides.version.get(song.key)
     if query is None:
         return Version(t=transpose)
+    if (kept := key_version(query)) is not None:
+        return kept
     version = version_from_query(query)
     return version if "t" in _names(query) else replace(version, t=transpose)
+
+
+def keeps_key(overrides: Overrides, song: Song) -> bool:
+    """Whether the song's own version is kept by its key (a ``[version]`` with one), which a sheet with no key
+    can't take: it is then as written, and a songbook says so (``songbook.KEY_UNKNOWN``)."""
+    return isinstance(_own(overrides, song), KeyVersion)
+
+
+def pdf_transpose(conn: sqlite3.Connection, overrides: Overrides, song: Song) -> int:
+    """How many semitones the song's PDF is moved by, as its line on the library page says: its own version's
+    ``t``, which needs no sheet (``own_version``); for one kept by its key, which moves each sheet by its own, the
+    PDF's as it was last made (kv ``render:<song id>``), 0 before it is made."""
+    own = _own(overrides, song)
+    if isinstance(own, Version):
+        return own.t
+    made = kv_get_json(conn, _state_key(song.id))
+    t = made.get("transpose") if isinstance(made, Mapping) else None
+    return t if isinstance(t, int) and not isinstance(t, bool) else 0
 
 
 def _names(query: str) -> set[str]:
@@ -615,17 +663,37 @@ def _names(query: str) -> set[str]:
     return {name for name, _ in parse_qsl(query[1:] if query[:1] in ("#", "?") else query, keep_blank_values=True)}
 
 
-def export_version(query: str, overrides: Overrides, song: Song) -> Version:
+def export_version(query: str, own: Version) -> Version:
     """The version an address ``query`` holds (``version_from_query``), for an export, as the viewer reads its
     own address: one that names none of the version (its ``t``, ``mode``, ``capo``, ``alt`` or ``at``) is the
-    song's own (``own_version``), where the viewer starts, and one that names no ``t`` is at the own version's,
-    which the viewer leaves out of its address."""
+    song's own, ``own`` (``export_own``), where the viewer starts, and one that names no ``t`` is at the own
+    version's, which the viewer leaves out of its address."""
     names = _names(query)
-    mine = own_version(overrides, song)
     if not names & _VERSION_NAMES:
-        return mine
+        return own
     version = version_from_query(query)
-    return version if "t" in names else replace(version, t=mine.t)
+    return version if "t" in names else replace(version, t=own.t)
+
+
+def export_own(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, song: Song) -> Version:
+    """The song's own version (``own_version``) on the sheet its exports are made from (``export_viewer``), where
+    that sheet's viewer starts. Raises RenderError when the song keeps no sheet."""
+    _, text, found = _export_source(conn, cfg, song)
+    return own_version(overrides, song, text, found.key if found is not None else None)
+
+
+def export_entry(conn: sqlite3.Connection, cfg: Config, song: Song, v: Version) -> str:
+    """The ``[version]`` entry Make this my version writes for the version ``v`` of the song's sheet (the one its
+    exports are made from): ``v`` kept by its key (``version.version_entry``: ``key=G&mode=dorian&capo=0``), so
+    that a sheet in another key in its place plays there too; a move from the sheet for one with no key. Two
+    versions with one entry play that sheet alike. Raises RenderError: no sheet kept, or a sheet the viewer's
+    code can't read."""
+    _, text, found = _export_source(conn, cfg, song)
+    try:
+        return version_entry(v, text, key=viewer_key(text, found.key if found is not None else None),
+                             capo_sheet=parse_sheet(text).capo)
+    except Exception as e:
+        raise RenderError(f"cannot read the sheet: {type(e).__name__}: {e}") from e
 
 
 def export_query(v: Version) -> str:
@@ -655,9 +723,13 @@ def _export_source(conn: sqlite3.Connection, cfg: Config, song: Song):
     else:
         raise RenderError(f"{song.display} keeps no sheet to export")
     found = sheet_keys(conn, cfg.library_dir, song)[1 if sheet.auto else 0]
-    text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
+    return sheet, _sheet_cho(song, sheet), found
+
+
+def _sheet_cho(song: Song, sheet: _Sheet) -> str:
+    """The ChordPro text of one of the song's sheets, as ``sheet.cho`` (or ``sheet (auto).cho``) is written."""
+    return _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
                           key=sheet.key, capo=sheet.capo, auto=sheet.auto)
-    return sheet, text, found
 
 
 def export_label(conn: sqlite3.Connection, cfg: Config, song: Song, v: Version) -> str:
@@ -801,7 +873,7 @@ def _render_sheet(
     song: Song,
     folder: Path,
     kept: KeptFile,
-    sheet: _Sheet,
+    text: str,
     state_key: str,
     version: Version,
     *,
@@ -812,9 +884,9 @@ def _render_sheet(
     key: tuple[str | None, str | None] = (None, None),
     export: bool = True,
 ) -> _Done:
-    """Write one sheet's .cho, render its PDF in ``version`` unless kv ``state_key`` says it is up to date,
-    then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a sheet
-    waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``); ``start``, the
+    """Write one sheet's .cho, ``text`` (``_sheet_cho``), render its PDF in ``version`` unless kv ``state_key``
+    says it is up to date, then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a
+    sheet waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``); ``start``, the
     song's own version as the viewer's address writes it, where the viewer starts, or None for none;
     ``export``, whether the viewer offers an export (``export_viewer``).
 
@@ -822,8 +894,6 @@ def _render_sheet(
     back: a synced device may write there a moment later."""
     stem = Path(kept.name).stem
     cho = folder / f"{stem}.cho"
-    text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
-                          key=sheet.key, capo=sheet.capo, auto=sheet.auto)
     data = text.encode("utf-8")
     _write_if_changed(cho, data)
     _note_written(conn, song.id, cho.name, data)

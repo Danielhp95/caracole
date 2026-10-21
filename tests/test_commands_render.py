@@ -106,16 +106,18 @@ def test_render_mine_makes_the_version_the_songs_own_and_renders_the_song(conn, 
     song = song_in_em(conn, cfg)
     cfg.library_dir.mkdir(parents=True, exist_ok=True)
     cfg.overrides_file.write_text("# mine\n", encoding="utf-8")
-    result = render(cfg, chordpro, "--song", "A - T", "--version", "#t=2&mode=dorian&fs=20", "--mine")
+    result = render(cfg, chordpro, "--song", "A - T", "--version", "#t=2&mode=dorian&at=0.1&fs=20", "--mine")
     assert result.exit_code == 0, result.output
-    assert "F# Dorian, capo 0" in result.output
-    assert load_overrides(cfg.overrides_file).version == {song.key: "t=2&mode=dorian"}
+    assert "Your version of A - T: F# Dorian, capo 0" in result.output
+    # the key it plays in, its mode and its capo, never a t: a sheet in another key in its place plays there too;
+    # the shape chosen, for the chord it was chosen for
+    assert load_overrides(cfg.overrides_file).version == {song.key: "key=F#&mode=dorian&capo=0&at=F#m.1"}
     assert cfg.overrides_file.read_text(encoding="utf-8").startswith("# mine\n")
     folder = song_dir(cfg.library_dir, song)
     assert (folder / "sheet.pdf").is_file() and not list(folder.glob("sheet (*).pdf"))  # its own PDF, no export
     viewer = (folder / "sheet.html").read_text(encoding="utf-8")
     data = json.loads(re.search(r'<script type="application/json" id="song">(.*?)</script>', viewer, re.S).group(1))
-    assert data["start"] == "t=2&mode=dorian"
+    assert data["start"] == "t=2&mode=dorian&capo=0&at=0.1"
 
     # The sheet as the song plays it without one: no [version] left.
     result = render(cfg, chordpro, "--song", "A - T", "--version", "t=0", "--mine")
