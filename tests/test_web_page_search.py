@@ -64,18 +64,28 @@ class FakeGet:
             conn.close()
 
 
+class Asked(list):
+    """The searches the server got; ``slow`` holds how long each next one takes to answer, in seconds."""
+
+    def __init__(self):
+        super().__init__()
+        self.slow: list[float] = []
+
+
 @pytest.fixture
 def live(cfg):
     """The library page on a socket, its queue running ``FakeGet``; ``asked`` lists the searches it got."""
     queue = JobQueue(FakeGet(cfg))
     queue.start()
     app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
-    asked = []
+    asked = Asked()
     answer = app.handle
 
     def handle(request):
         if request.target.startswith("/api/search"):
             asked.append(request.target)
+            if asked.slow:
+                time.sleep(asked.slow.pop(0))
         return answer(request)
 
     app.handle = handle
@@ -213,6 +223,57 @@ def test_get_it_looks_the_song_up_and_its_row_says_how_it_goes(cfg, live, browse
                         "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
 
 
+
+
+RYAN = "#results .hit[data-ug='ryan-adams/wonderwall']"
+BUSY = "(document.getElementById('found').getAttribute('aria-busy') === 'true')"
+
+
+def test_a_newer_answer_keeps_the_row_whose_request_runs_and_its_line(cfg, live, browser):
+    # Enter again searches again: the list on the screen meanwhile is the older answer's. A Get it tapped there
+    # keeps its row, and the row its line, when the newer answer is drawn; back to your songs, its card.
+    base, queue, asked = live
+    sites(cfg, **WONDERWALL)
+    browser.open(base + "#q=wonderwall&all=1")
+    assert browser.wait(f"{HITS} >= 2")
+    browser.js(f"window.row = document.querySelector(\"{RYAN}\")")
+    asked.slow.append(1.0)  # the next answer takes a second
+    browser.js("document.getElementById('q').focus()")
+    browser.press("Enter")
+    assert browser.wait(BUSY)  # the newer search on its way
+    browser.click(f"{RYAN} .row-action button")  # on the older answer's row, as the newer is on its way
+    posted(queue)
+    assert browser.wait("!!window.row.querySelector('.progress')")
+    assert browser.wait(f"!{BUSY}", timeout=10)  # the newer answer, drawn
+    kept = browser.js(f"[document.querySelector(\"{RYAN}\") === window.row, window.row.isConnected, "
+                      "!!window.row.querySelector('.progress')]")
+    assert kept == [True, True, True]  # the same row, in the newer list, with its line
+    assert browser.wait("window.row.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
+    browser.press("Escape")
+    assert browser.wait("!document.getElementById('requested').hidden && "
+                        "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
+
+
+def test_a_row_whose_request_runs_and_that_a_newer_answer_lacks_becomes_its_card(cfg, live, browser):
+    # Typed over, the newer answer has no such row: the request's card comes under the bar, its line still going.
+    base, queue, asked = live
+    sites(cfg, **WONDERWALL)
+    browser.open(base + "#q=wonderwall&all=1")
+    assert browser.wait(f"{HITS} >= 2")
+    asked.slow.append(1.0)
+    browser.js("document.getElementById('q').select()")
+    browser.type("hotel california")
+    browser.press("Enter")
+    assert browser.wait(BUSY)
+    browser.click(f"{RYAN} .row-action button")
+    posted(queue)
+    assert browser.wait("document.getElementById('found').dataset.query === 'hotel california'", timeout=10)
+    assert browser.js(f"document.querySelector(\"{RYAN}\")") is None  # not in the newer answer
+    assert browser.wait("!document.getElementById('requested').hidden && "
+                        "document.querySelector('#requested article h2').textContent === 'Wonderwall' && "
+                        "!!document.querySelector('#requested article .progress')")
+    assert browser.wait("document.querySelector('#requested article .progress').dataset.tone === 'ready'",
+                        timeout=20)
 
 
 def test_a_hit_can_be_added_for_tonights_run_instead_of_got_now(cfg, live, browser):

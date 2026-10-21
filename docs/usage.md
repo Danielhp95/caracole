@@ -2025,7 +2025,10 @@ with it. A KEY that is no key exits with status 2.
   none; a MuseScore page is a link to open, as caracole never fetches from
   MuseScore. The row then says how it goes, on a line of its own ("Sending…",
   "Fetching from Ultimate Guitar…", "Ready · Open sheet"), and once the sheet
-  is kept the row is the song's, with its sheet as its button. A song your
+  is kept the row is the song's, with its sheet as its button. A newer
+  answer drawn while it goes (Enter again, or a search typed over) keeps the
+  row where it has it, with its line; one it hasn't moves the request under
+  the box as its card ("Just requested"), its line going on there. A song your
   library has already, under its own names (UG's slugs write AC/DC as "Acdc"
   and 宋冬野 as "Song Dongye"), says In your library and Get it again, and is
   looked up as your song: no second song, and no line added to wanted.txt. A

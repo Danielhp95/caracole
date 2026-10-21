@@ -2776,6 +2776,9 @@ _SCRIPT = r"""
         say(UNREACHABLE.line.text);
       });
   };
+  // What a result's row stands for, the same in an older answer and a newer one: its site, its UG song, its names.
+  const hitKey = (row) => [row.dataset.source, row.dataset.ug, row.querySelector(".row-title"),
+    row.querySelector(".row-artist")].map((x) => (x && typeof x === "object" ? x.textContent : String(x || ""))).join("|");
   // The answer of the newest search, in one go: the old one stays until then, so nothing flashes.
   const showSites = (data, q) => {
     answer = { data, q };
@@ -2811,7 +2814,20 @@ _SCRIPT = r"""
         left.map((x) => String(x.name || x.source) + " (" + String(x.why || "") + ")").join("; ") + "."));
     }
     if (typeof data.hint === "string" && data.hint) box.appendChild(prose("hint index-hint", data.hint));
+    // A row whose request is on its way stays, its line in it, where the newer answer has it; one the newer
+    // answer lacks becomes its card under the bar (settleSpots), its line going on there.
+    const going = new Map();
+    for (const [id, node] of spots) {
+      if (sitesBox.contains(node) && views.has(id) && isActive(views.get(id))) going.set(hitKey(node), node);
+    }
+    for (const fresh of box.querySelectorAll(".hit")) {
+      const was = going.get(hitKey(fresh));
+      if (!was) continue;
+      fresh.replaceWith(was);
+      going.delete(hitKey(fresh));
+    }
     sitesBox.replaceChildren(box);
+    if (going.size) settleSpots(true);
     const parts = [];
     if (index.length || artists.length) parts.push((index.length + artists.length) + " on Ultimate Guitar");
     if (gtp.length) parts.push(gtp.length + " on gtptabs.com");
@@ -3409,10 +3425,12 @@ _SCRIPT = r"""
     // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).
     later = (pick, display, row, go) => askFrom("request", pick, ["artist", "title"], row, go, (answer) => answer.job);
     // Back to your songs: a request's row in the results that is a song new to the library becomes its card
-    // under the bar, which goes on saying how it goes; a song the grid has says it on its own card.
-    settleSpots = () => {
+    // under the bar, which goes on saying how it goes; a song the grid has says it on its own card. With
+    // ``dropped``, only the rows a newer answer left out, at once.
+    settleSpots = (dropped) => {
       for (const [id, node] of Array.from(spots)) {
-        if (!results.contains(node)) continue;
+        const left = !node.isConnected && node.classList.contains("hit");  // a newer answer has no such row
+        if (dropped ? !left : !left && !results.contains(node)) continue;
         const view = views.get(id);
         const song = view ? songOf(view) : null;
         if (song !== null && byIndex.has(song)) {
