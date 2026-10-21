@@ -19,6 +19,7 @@ from test_web_app import ALLOWED, HOST, JSON, META_POLICY, Recorder, get, header
 FOLDER = "Soda Stereo/De Música Ligera"
 SHEET = f"{FOLDER}/sheet.html"
 DISPLAY = "Soda Stereo - De Música Ligera"
+NAMES = ["Soda Stereo", "De Música Ligera"]  # as two words: a " - " in a name stays its own
 KEPT, OTHER, GONE = "39144", "1064463", "777"  # a version kept beside the sheet, one not kept, one UG lost
 SLUGGED = "https://tabs.ultimate-guitar.com/tab/soda-stereo/de-musica-ligera-chords-{}"
 
@@ -186,7 +187,7 @@ def test_keep_it_fetches_that_version_and_keeps_it_beside_the_sheet(app, queue, 
     assert page.status == 200 and 'action="/versions/keep"' in text(page) and ">Keep it<" in text(page)
     where = header(post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}), "location")
     queue.run_pending()
-    assert recorder.calls == [["versions", f"--keep={OTHER}", "--", DISPLAY]]
+    assert recorder.calls == [["versions", f"--keep={OTHER}", "--", *NAMES]]
     done = get(app, where)
     assert "Done, but it wasn't kept" in shown(done)  # the fake command kept nothing
     keep_version(conn, cfg, song, chords(conn, song, OTHER, rating=4.86, votes=408, number=3), OTHER, rank=3)
@@ -206,7 +207,7 @@ def test_back_to_caracoles_pick_takes_the_pin_out(app, queue, recorder, conn, cf
     assert 'action="/versions/clear"' in text(page) and ">Go back to caracole's pick<" in text(page)
     where = header(post(app, "/versions/clear", {"sheet": SHEET}), "location")
     queue.run_pending()
-    assert recorder.calls == [["versions", "--clear", "--", DISPLAY]]
+    assert recorder.calls == [["versions", "--clear", "--", *NAMES]]
     assert "Done" in shown(get(app, where))
 
 
@@ -300,8 +301,8 @@ def test_two_versions_kept_are_two_commands_and_the_same_one_twice_is_one(app, q
     assert header(first, "location") == header(again, "location")  # the same job
     post(app, "/versions/keep", {"sheet": SHEET, "tab": third})
     queue.run_pending()
-    assert recorder.calls == [["versions", f"--keep={OTHER}", "--", DISPLAY],
-                              ["versions", f"--keep={third}", "--", DISPLAY]]
+    assert recorder.calls == [["versions", f"--keep={OTHER}", "--", *NAMES],
+                              ["versions", f"--keep={third}", "--", *NAMES]]
 
 
 def test_a_version_asked_for_while_the_songs_lookup_waits_joins_it(app, queue, recorder, conn, cfg):
@@ -329,3 +330,27 @@ def test_an_export_from_a_kept_versions_page_is_refused_and_says_what_to_do(app,
     assert post(app, "/export", {"sheet": page, "v": "t=2"}).status == 409
     assert get(app, f"/export?sheet={quote(SHEET)}&t=2").status == 200
     assert queue.active_count() == 0
+
+
+def test_the_commands_queued_are_ones_caracole_versions_reads(app, queue, recorder, conn, cfg, monkeypatch, tmp_path):
+    # The queue runs them as typed: the real command line must read each as the version kept, or the pin taken out.
+    from typer.testing import CliRunner
+
+    from caracole import versions_cmd
+    from caracole.cli import build_app
+    from caracole.overrides import add_pin
+
+    versioned_song(conn, cfg)
+    add_pin(cfg.overrides_file, DISPLAY, [SLUGGED.format(KEPT)])
+    post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER})
+    post(app, "/versions/clear", {"sheet": SHEET})
+    queue.run_pending()
+    heard = []
+    monkeypatch.setattr(versions_cmd, "keep", lambda cfg, display, tab, *, progress: heard.append(("keep", display, tab)))
+    monkeypatch.setattr(versions_cmd, "clear", lambda cfg, display, *, progress: heard.append(("clear", display)))
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'library_dir = "{cfg.library_dir}"\n', encoding="utf-8")
+    for args in recorder.calls:
+        result = CliRunner().invoke(build_app(), ["--config", str(config), *args])
+        assert result.exit_code == 0, (args, result.output)
+    assert heard == [("keep", DISPLAY, int(OTHER)), ("clear", DISPLAY)]

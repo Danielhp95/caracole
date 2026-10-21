@@ -196,12 +196,13 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
 VERSIONS = "versions"  # the command that keeps a song's version, or takes its pin out
 
 
-def version_steps(display: str, *, keep: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
+def version_steps(artist: str, title: str, *, keep: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
     """``caracole versions``: keep the Ultimate Guitar tab ``keep`` beside the song's sheet (one tab page, at the
-    lookup pace), or, without it, take the song's ``[pin]`` out and look it up again (``--clear``)."""
+    lookup pace), or, without it, take the song's ``[pin]`` out and look it up again (``--clear``). The song is
+    its artist and title as two words, so a " - " in either stays where it is."""
     if keep is not None:
-        return [("Fetching the version from Ultimate Guitar", (VERSIONS, f"--keep={keep}", "--", display))]
-    return [("Going back to caracole's pick", (VERSIONS, "--clear", "--", display))]
+        return [("Fetching the version from Ultimate Guitar", (VERSIONS, f"--keep={keep}", "--", artist, title))]
+    return [("Going back to caracole's pick", (VERSIONS, "--clear", "--", artist, title))]
 
 
 LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it

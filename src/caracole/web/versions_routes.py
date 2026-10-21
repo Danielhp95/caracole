@@ -179,7 +179,7 @@ def _steps(do: str, asked: _Asked) -> list[tuple[str, tuple[str, ...]]]:
     if do == "choose":
         assert v is not None
         return lookup_steps(song.artist, song.title, tab=_tab_address(v))
-    return version_steps(song.display, keep=v.tab_id if do == "keep" and v is not None else None)
+    return version_steps(song.artist, song.title, keep=v.tab_id if do == "keep" and v is not None else None)
 
 
 def _tab_address(v: SheetVersion) -> str:
