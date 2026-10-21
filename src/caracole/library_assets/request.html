@@ -1,0 +1,21 @@
+<details class="request" id="request-box">
+  <summary><span class="plus" aria-hidden="true"><span>+</span></span>Not in the list? Request it by name</summary>
+  <form class="request-form" method="post" action="/request">
+    <input type="hidden" name="csrf" value="__CSRF__">
+    <div class="fields">
+      <label class="f">Artist<input name="artist" required maxlength="200" autocomplete="off"></label>
+      <label class="f">Title<input name="title" required maxlength="300" autocomplete="off"></label>
+      <label class="f"><span>Album <em>(optional)</em></span><input name="album" maxlength="300"
+        autocomplete="off"></label>
+      <label class="f"><span>Length <em>(optional: m:ss or seconds)</em></span><input name="duration"
+        maxlength="12" autocomplete="off" placeholder="3:45"></label>
+    </div>
+    <div class="request-row">
+      <label class="check"><input type="checkbox" name="fetch" value="1" checked>Fetch it now</label>
+      <button class="btn primary" type="submit">Request</button>
+    </div>
+    <p class="hint">It goes into wanted.txt, as <code>caracole add</code> writes it. Fetch it now looks it
+      up at once, as <code>caracole get</code> does: its sheet in seconds, then its lyrics, PDF and the rest,
+      a few requests about a second apart.</p>
+  </form>
+</details>

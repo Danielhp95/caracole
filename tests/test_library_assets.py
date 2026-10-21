@@ -32,12 +32,25 @@ def test_index_html_holds_its_stylesheets_and_scripts_as_their_files_have_them(c
         assert f"script-src {sha256_source(script)};" in csp and f"style-src {sha256_source(style)};" in csp
 
 
+def test_index_html_is_its_templates_filled_in(conn, cfg):
+    from caracole.library_page import TEMPLATES, WebControls, build_library_page
+
+    add_song(conn, "Radiohead", "Creep")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))  # every template
+    for name in TEMPLATES:
+        text = text_of(name)
+        pieces = re.split(r"__[A-Z]+__", text)
+        assert len(pieces) > 1 or name == "requested.html", name  # each but one has a blank to fill
+        assert all(piece in html for piece in pieces), name
+        assert not re.search(r"__[A-Z]+__", html)  # and none is left
+
+
 def test_every_file_of_the_folder_is_text_index_html_inlines():
     from caracole.library_assets import HERE
-    from caracole.library_page import SCRIPTS, STYLESHEETS
+    from caracole.library_page import SCRIPTS, STYLESHEETS, TEMPLATES
 
-    names = sorted(p.name for p in HERE.iterdir() if p.suffix in (".css", ".js"))
-    assert names == sorted(STYLESHEETS + SCRIPTS)
+    names = sorted(p.name for p in HERE.iterdir() if p.suffix in (".css", ".js", ".html"))
+    assert names == sorted(STYLESHEETS + SCRIPTS + TEMPLATES)
     for name in names:
         data = (HERE / name).read_bytes()
         # Read as bytes, so nothing turns a line's end into another; a page's hash is of exactly these.

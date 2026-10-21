@@ -5,7 +5,9 @@ Syncthing folder with no server: it loads nothing from the network (a
 Content-Security-Policy with the hashes of its one script and one stylesheet
 makes the browser enforce that), and it links to each song's files by
 relative paths. That script and that stylesheet are the files of
-library_assets/, inlined as they are (``STYLESHEETS``, ``SCRIPTS``).
+library_assets/, inlined as they are (``STYLESHEETS``, ``SCRIPTS``), and so
+is the markup around the songs (``TEMPLATES``); its Songbooks section is
+songbook_section.py's.
 
 Every song is in a ``<script type="application/json">`` block. Titles come
 from Spotify and from your own wanted.txt, so the page's script builds every
@@ -179,15 +181,14 @@ from caracole.config import Config
 from caracole.icons import kept_sources, page_icons, source_of
 from caracole.inbox import SCORE_EXTENSIONS
 from caracole.inline import json_block, sha256_source
-# The page's style and script are files (library_assets/); the pieces caracole serve's own pages share
-# stay importable from here.
-from caracole.library_assets import BASE_STYLE, PICKER_STYLE, ROWS_SCRIPT, ROWS_STYLE  # noqa: F401
-from caracole.library_assets import read as read_asset
 from caracole.keys import SongKey, key_name, song_key
 from caracole.library import song_dir, write_atomic
+from caracole.library_assets import BASE_STYLE, PICKER_STYLE, ROWS_SCRIPT, ROWS_STYLE  # noqa: F401
+from caracole.library_assets import read as read_asset
 from caracole.musescore import song_pages
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
+from caracole.songbook_section import songbooks_section
 from caracole.songs import Song, list_songs
 from caracole.todo import search_links, songs_to_buy
 from caracole.youtube_fetch import (
@@ -202,6 +203,9 @@ from caracole.youtube_fetch import (
     route_problem,
     song_states,
 )
+
+# Importable from here too: the style and script caracole serve's own pages share with this one (BASE_STYLE,
+# PICKER_STYLE, ROWS_STYLE, ROWS_SCRIPT: library_assets/), and the Songbooks section (songbook_section.py).
 
 PAGE_NAME = "index.html"
 
@@ -632,125 +636,13 @@ _CSP = (
     "img-src data:; base-uri 'none'; form-action __FORMS__"
 )
 
-_HEAD = """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="__CSP__">
-<title>caracole library</title>
-<style>__STYLE__</style>
-</head>
-"""
-
-_BODY = """<body>
-<div class="page">
-<header class="masthead lib">
-  <p class="app">caracole</p>
-  <div class="title-line">
-    <h1>Your library</h1>
-    <ul class="summary" id="summary" aria-label="The library in numbers"></ul>
-  </div>
-  <nav class="links" aria-label="Pages">__NAV__</nav>
-</header>
-__SONGBOOKS__<div class="bar-edge" id="bar-edge" aria-hidden="true"></div>
-<div class="searchbar" role="search">
-  <label class="visually-hidden" for="q">Search your songs</label>
-  <div class="bar-row">
-    <div class="field">
-      <input id="q" type="search" placeholder="Artist, title or key" autocomplete="off" autocapitalize="off"
-        autocorrect="off" spellcheck="false" enterkeyhint="search" aria-describedby="bar-status">
-      <button type="button" id="clear" class="clear" aria-label="Clear the search" hidden>×</button>
-    </div>
-    <button type="button" id="all" class="btn all">Search all</button>
-  </div>
-  <p class="bar-status" id="bar-status" aria-live="polite"></p>
-</div>
-__REQUESTED__<section class="results" id="results" aria-label="Search results">
-<div class="found" id="found" hidden></div>
-__REQUEST__</section>
-<div class="toolbar">
-  <div class="chips" role="group" aria-label="Show">
-    <button type="button" class="chip" data-show="all" aria-pressed="true">All <span class="n"></span></button>
-    <button type="button" class="chip" data-show="found" aria-pressed="false">Found <span class="n"></span></button>
-    <button type="button" class="chip" data-show="wanted" aria-pressed="false">Wanted <span class="n"></span></button>
-    <button type="button" class="chip" data-show="review" aria-pressed="false">Needs review <span class="n"></span></button>
-    <button type="button" class="chip person" id="artist" hidden></button>
-  </div>
-  <div class="controls">
-    <button type="button" class="chip view-toggle" id="view-toggle" aria-expanded="false"
-      aria-controls="view-panel">View</button>
-  </div>
-  <div class="view-panel" id="view-panel">
-  <div class="views" role="group" aria-label="View">
-    <button type="button" data-view="cards" aria-pressed="true">Cards</button>
-    <button type="button" data-view="rows" aria-pressed="false">Rows</button>
-  </div>
-  <label class="sort" id="keys" hidden>Key
-    <select id="key"><option value="">Any</option></select>
-  </label>
-  <label class="sort">Sort
-    <select id="sort">
-      <option value="artist">Artist A–Z</option>
-      <option value="title">Title A–Z</option>
-      <option value="recent">Recently added</option>
-    </select>
-  </label>
-  </div>
-</div>
-<nav class="jump" id="jump" aria-label="Jump to a letter" hidden></nav>
-<p class="count" id="count" aria-live="polite"></p>
-<main class="list" id="list"></main>
-<noscript><p class="empty">This page needs JavaScript to list your songs. Each song's files are in its
-  folder, next to this page.</p></noscript>
-<footer class="footer"><span id="updated"></span>Keep this library private: the sheets and lyrics are other
-  people's work.</footer>
-</div>
-"""
-
-# The form caracole serve adds, under the search's results: a song for wanted.txt, written as `caracole add`
-# writes it. The script fills it in from what was searched; without the script it posts as a form.
-_REQUEST = """<details class="request" id="request-box">
-  <summary><span class="plus" aria-hidden="true"><span>+</span></span>Not in the list? Request it by name</summary>
-  <form class="request-form" method="post" action="/request">
-    <input type="hidden" name="csrf" value="__CSRF__">
-    <div class="fields">
-      <label class="f">Artist<input name="artist" required maxlength="200" autocomplete="off"></label>
-      <label class="f">Title<input name="title" required maxlength="300" autocomplete="off"></label>
-      <label class="f"><span>Album <em>(optional)</em></span><input name="album" maxlength="300"
-        autocomplete="off"></label>
-      <label class="f"><span>Length <em>(optional: m:ss or seconds)</em></span><input name="duration"
-        maxlength="12" autocomplete="off" placeholder="3:45"></label>
-    </div>
-    <div class="request-row">
-      <label class="check"><input type="checkbox" name="fetch" value="1" checked>Fetch it now</label>
-      <button class="btn primary" type="submit">Request</button>
-    </div>
-    <p class="hint">It goes into wanted.txt, as <code>caracole add</code> writes it. Fetch it now looks it
-      up at once, as <code>caracole get</code> does: its sheet in seconds, then its lyrics, PDF and the rest,
-      a few requests about a second apart.</p>
-  </form>
-</details>
-"""
-
-# What caracole serve adds under the bar: the songs just requested, each a card with its line, and the
-# requests, a short list in a corner.
-_REQUESTED = """<section class="requested" id="requested" aria-label="Songs you just requested" hidden>
-  <p class="subhead">Just requested</p>
-  <div class="grid" id="requested-grid"></div>
-</section>
-<aside class="tray" id="tray" aria-label="Your requests" hidden>
-  <div class="tray-head">
-    <button type="button" class="tray-toggle" id="tray-toggle" aria-expanded="false" aria-controls="tray-list"><span
-      id="tray-sum">Requests</span></button>
-    <a class="tray-all" href="jobs">Details</a>
-    <button type="button" class="tray-close" id="tray-close" aria-label="Close this list">×</button>
-  </div>
-  <ol class="tray-list" id="tray-list" hidden></ol>
-</aside>
-"""
+# The page's skeleton, as templates whose __BLANKS__ build_library_page fills in: head.html and body.html;
+# request.html, the form caracole serve adds under the search's results (a song for wanted.txt, written
+# as `caracole add` writes it; the script fills it in from what was searched, and without the script it
+# posts as a form); requested.html, what caracole serve adds under the bar (the songs just requested,
+# each a card with its line, and the requests, a short list in a corner).
+TEMPLATES = ("head.html", "body.html", "request.html", "requested.html")
+_HEAD, _BODY, _REQUEST, _REQUESTED = (read_asset(name) for name in TEMPLATES)
 
 
 def _nav(controls: WebControls | None) -> str:
@@ -770,132 +662,3 @@ def _request_form(controls: WebControls | None) -> str:
 
 def _requested(controls: WebControls | None) -> str:
     return _REQUESTED if controls is not None else ""
-
-
-# --- songbooks: the section (songbook.py) ---------------------------------------------------------
-
-
-def songbooks_section(conn: sqlite3.Connection, cfg: Config, overrides: Overrides,
-                      controls: WebControls | None) -> tuple[str, list[dict[str, Any]]]:
-    """The Songbooks section, and the songbooks for the Select mode's bar ({"name", "songs"}).
-
-    Each songbook lists its songs in order, the missing ones marked, and links its files. On
-    caracole serve (``controls``) each song can move up or down or be taken out, and the songbook
-    renamed or deleted, by forms that post to the server; the file on disk says which command does it.
-    No songbook, no section (on caracole serve, a hidden one, where the page's script shows the first
-    songbook made); a songbooks.toml that can't be read is said there, and costs the rest of the page
-    nothing. Each card is named by its songbook (``data-songbook``), which the served page's script
-    finds it by.
-    """
-    from caracole.songbook import SongbookError, load_songbooks, songbooks_file
-
-    try:
-        books = load_songbooks(songbooks_file(cfg.library_dir))
-    except SongbookError as e:
-        body = (f'<p class="sb-error">songbooks.toml can\'t be read: {html_text.escape(str(e))}. Fix it, and '
-                "the songbooks are back; until then each keeps its files.</p>\n")
-        return _songbooks_wrap("!", body), []
-    if not books:
-        return (_songbooks_wrap("0", '<div class="sb-list">\n</div>\n', hidden=True) if controls else ""), []
-    cards = "".join(_songbook_card(conn, cfg, overrides, book, controls) for book in books)
-    body = f'<div class="sb-list">\n{cards}</div>\n'
-    return _songbooks_wrap(str(len(books)), body), [{"name": b.name, "songs": len(b.songs)} for b in books]
-
-
-def _songbooks_wrap(count: str, body: str, *, hidden: bool = False) -> str:
-    return (
-        f'<section class="songbooks" id="songbooks" aria-labelledby="songbooks-title"{" hidden" if hidden else ""}>'
-        '\n<details>\n<summary><span class="sb-icon" aria-hidden="true">♪</span>'
-        '<span id="songbooks-title">Songbooks</span>'
-        f' <span class="n">{count}</span></summary>\n{body}</details>\n</section>\n'
-    )
-
-
-_SONGBOOK_FILES = (("songbook.html", "Songbook for the phone"), ("songbook.pdf", "PDF"), ("songbook.cho", "ChordPro"))
-
-
-def _songbook_card(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any,
-                   controls: WebControls | None) -> str:
-    from caracole.songbook import FOLDER, songbook_entries, songs_to_get
-
-    esc = html_text.escape
-    entries = songbook_entries(conn, cfg.library_dir, overrides, book)
-    missing = sum(1 for e in entries if e.cho is None)
-    songs = f"{len(entries)} song{'' if len(entries) == 1 else 's'}"
-    if missing:
-        songs += f", {missing} without a sheet"
-    names = _file_names(cfg.library_dir / FOLDER / book.folder)
-    base = f"{FOLDER}/{quote(book.folder, safe='')}"
-    links = [f'<a class="btn{" primary" if n == 0 else ""}" href="{base}/{quote(name)}">{label}</a>'
-             for n, (name, label) in enumerate(f for f in _SONGBOOK_FILES if f[0] in names)]
-    # On caracole serve, its songs without a sheet looked up now, one lookup each, then the songbook made again.
-    getting = {song.id for song in songs_to_get(entries, overrides)} if controls is not None else set()
-    to_get = len(getting)
-    get_form = _songbook_form(
-        "get", book.name, controls,
-        '<button class="btn" type="submit" title="Looks each one up now, as caracole get does, then makes the '
-        f'songbook again">{"Get the missing song now" if to_get == 1 else f"Get the {to_get} missing songs now"}'
-        "</button>") if to_get and controls is not None else ""
-    if links:
-        files = f'<div class="actions">{"".join(links)}{get_form}</div>\n'
-    else:
-        files = ('<p class="hint">Not made yet: caracole render, or caracole songbook render, makes its files.</p>\n'
-                 + (f'<div class="actions">{get_form}</div>\n' if get_form else ""))
-    rows = []
-    for n, entry in enumerate(entries, start=1):
-        title, artist = esc(entry.title), esc(entry.artist)
-        why = f'<span class="why">missing: {esc(entry.missing)}</span>' if entry.missing else ""
-        tools = _songbook_tools(book.name, entry.text, entry.title, n, len(entries), controls) if controls else ""
-        song = f' data-song="{entry.song.id}"' if controls is not None and entry.song is not None else ""
-        if entry.song is not None and entry.song.id in getting:  # Get the missing songs now looks it up
-            song += " data-get"
-        rows.append(f'<li{" class=\"missing\"" if entry.missing else ""}{song}><span class="sb-n">{n}</span>'
-                    f'<span class="sb-names"><span class="t">{title}</span> <span class="a">{artist}</span>{why}</span>'
-                    f"{tools}</li>")
-    if controls is not None:
-        more = (
-            '<details class="sb-more"><summary>Rename or delete</summary>\n'
-            + _songbook_form("rename", book.name, controls,
-                             f'<label class="f">New name<input name="new" required maxlength="80" autocomplete="off" '
-                             f'value="{esc(book.name, quote=True)}"></label>'
-                             '<button class="btn" type="submit">Rename</button>')
-            + _songbook_form("delete", book.name, controls,
-                             '<label class="sb-sure"><input type="checkbox" required> Delete it, and the files '
-                             'caracole made of it</label>'
-                             f'<button class="btn" type="submit">Delete {esc(book.name)}</button>')
-            + "</details>\n"
-        )
-    else:
-        more = ('<p class="hint">Change it with <code>caracole songbook add</code>, <code>remove</code>, '
-                "<code>move</code>, <code>rename</code> or <code>delete</code>, or in songbooks.toml.</p>\n")
-    return (
-        f'<article class="sb-card" data-songbook="{esc(book.name, quote=True)}">\n'
-        f'<div class="sb-head"><h2>{esc(book.name)}</h2><p class="hint">{songs}</p></div>\n'
-        + files + f'<ol class="sb-songs">\n{chr(10).join(rows)}\n</ol>\n' + more + "</article>\n"
-    )
-
-
-def _songbook_form(action: str, name: str, controls: WebControls, inner: str, **fields: Any) -> str:
-    """A form that posts to caracole serve's /songbook/<action>, with its token and the songbook's name."""
-    esc = html_text.escape
-    hidden = "".join(f'<input type="hidden" name="{key}" value="{esc(str(value), quote=True)}">'
-                     for key, value in (("csrf", controls.csrf), ("name", name), *fields.items()))
-    return f'<form method="post" action="/songbook/{action}">{hidden}{inner}</form>'
-
-
-def _songbook_tools(name: str, entry: str, title: str, n: int, total: int, controls: WebControls) -> str:
-    """A song's buttons on the served page: up, down, and out of the songbook."""
-    esc = html_text.escape
-    tools = []
-    if n > 1:
-        tools.append(_songbook_form("move", name, controls,
-                                    f'<button class="sb-btn" type="submit" aria-label="Move {esc(title)} up" '
-                                    'title="Up">↑</button>', song=entry, position=n - 1))
-    if n < total:
-        tools.append(_songbook_form("move", name, controls,
-                                    f'<button class="sb-btn" type="submit" aria-label="Move {esc(title)} down" '
-                                    'title="Down">↓</button>', song=entry, position=n + 1))
-    tools.append(_songbook_form("remove", name, controls,
-                                f'<button class="sb-btn" type="submit" aria-label="Take {esc(title)} out of '
-                                f'{esc(name)}" title="Take it out">×</button>', song=entry))
-    return f'<span class="sb-tools">{"".join(tools)}</span>'

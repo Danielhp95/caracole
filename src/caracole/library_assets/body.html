@@ -1,0 +1,63 @@
+<body>
+<div class="page">
+<header class="masthead lib">
+  <p class="app">caracole</p>
+  <div class="title-line">
+    <h1>Your library</h1>
+    <ul class="summary" id="summary" aria-label="The library in numbers"></ul>
+  </div>
+  <nav class="links" aria-label="Pages">__NAV__</nav>
+</header>
+__SONGBOOKS__<div class="bar-edge" id="bar-edge" aria-hidden="true"></div>
+<div class="searchbar" role="search">
+  <label class="visually-hidden" for="q">Search your songs</label>
+  <div class="bar-row">
+    <div class="field">
+      <input id="q" type="search" placeholder="Artist, title or key" autocomplete="off" autocapitalize="off"
+        autocorrect="off" spellcheck="false" enterkeyhint="search" aria-describedby="bar-status">
+      <button type="button" id="clear" class="clear" aria-label="Clear the search" hidden>×</button>
+    </div>
+    <button type="button" id="all" class="btn all">Search all</button>
+  </div>
+  <p class="bar-status" id="bar-status" aria-live="polite"></p>
+</div>
+__REQUESTED__<section class="results" id="results" aria-label="Search results">
+<div class="found" id="found" hidden></div>
+__REQUEST__</section>
+<div class="toolbar">
+  <div class="chips" role="group" aria-label="Show">
+    <button type="button" class="chip" data-show="all" aria-pressed="true">All <span class="n"></span></button>
+    <button type="button" class="chip" data-show="found" aria-pressed="false">Found <span class="n"></span></button>
+    <button type="button" class="chip" data-show="wanted" aria-pressed="false">Wanted <span class="n"></span></button>
+    <button type="button" class="chip" data-show="review" aria-pressed="false">Needs review <span class="n"></span></button>
+    <button type="button" class="chip person" id="artist" hidden></button>
+  </div>
+  <div class="controls">
+    <button type="button" class="chip view-toggle" id="view-toggle" aria-expanded="false"
+      aria-controls="view-panel">View</button>
+  </div>
+  <div class="view-panel" id="view-panel">
+  <div class="views" role="group" aria-label="View">
+    <button type="button" data-view="cards" aria-pressed="true">Cards</button>
+    <button type="button" data-view="rows" aria-pressed="false">Rows</button>
+  </div>
+  <label class="sort" id="keys" hidden>Key
+    <select id="key"><option value="">Any</option></select>
+  </label>
+  <label class="sort">Sort
+    <select id="sort">
+      <option value="artist">Artist A–Z</option>
+      <option value="title">Title A–Z</option>
+      <option value="recent">Recently added</option>
+    </select>
+  </label>
+  </div>
+</div>
+<nav class="jump" id="jump" aria-label="Jump to a letter" hidden></nav>
+<p class="count" id="count" aria-live="polite"></p>
+<main class="list" id="list"></main>
+<noscript><p class="empty">This page needs JavaScript to list your songs. Each song's files are in its
+  folder, next to this page.</p></noscript>
+<footer class="footer"><span id="updated"></span>Keep this library private: the sheets and lyrics are other
+  people's work.</footer>
+</div>
