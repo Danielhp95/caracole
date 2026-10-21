@@ -24,7 +24,9 @@ as Keep it in this key, the same form: a sheet in another key in its place would
 An export is made from the song's human sheet, else its auto sheet (render.py ``export_viewer``). The auto
 sheet's viewer kept beside a human sheet shows other chords: it offers no export, and one asked from it is
 refused (409), as it would be the human sheet's PDF with the auto sheet's shapes and swaps, and Make this my
-version would save them.
+version would save them. So is one asked from a kept version's page (``version-<tab>.html``, sheet_versions.py),
+another of Ultimate Guitar's sheets of the song: its export is made once it is the one (versions_routes.py, Make
+this the one), from the song's own viewer.
 """
 
 from __future__ import annotations
@@ -57,6 +59,9 @@ ROUTES = (
 _NOT_AN_ADDRESS = Refused(400, "Not an address", "That address can't be read.")
 _BESIDE = ("This is the auto-chords sheet kept beside the song's own sheet, with chords of its own: a PDF in "
            "another version is made from the song's own sheet, so open that one from the library and export it.")
+_VERSION = ("This is a version kept beside the song's own sheet, with chords of its own: a PDF in another version "
+            "is made from the song's own sheet, so make this version the one first (Make this the one, under its "
+            "Versions), then export it from the song's sheet.")
 
 
 def export_page(app: WebApp, target: str) -> Response:
@@ -124,7 +129,7 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
         written_file,
     )
     from caracole.songs import list_songs
-    from caracole.web.app import written_pages
+    from caracole.web.app import version_page_tab, written_page
 
     try:
         readable = len(query) <= MAX_QUERY and not any(
@@ -134,7 +139,7 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
     if not readable or _unreadable(query):
         raise Refused(400, "Not a version", "That version can't be read.")
     parts = tuple(sheet.split("/"))
-    if len(parts) < 2 or not sheet or any(p in ("", ".", "..") for p in parts) or parts[-1] not in written_pages():
+    if len(parts) < 2 or not sheet or any(p in ("", ".", "..") for p in parts) or written_page(parts[-1]) is None:
         raise Refused(404, "Not found", "There's no such sheet in the library.")
     overrides = app.overrides()
     library = app.cfg.library_dir
@@ -147,6 +152,8 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
         if parts[-1] != export_viewer(conn, song):
             if parts[-1] == AUTO_OUTPUTS[2]:  # beside the human sheet, whose PDF an export would be
                 raise Refused(409, "Not this sheet", _BESIDE)
+            if version_page_tab(parts[-1]) is not None:  # another sheet's chords, the human sheet's PDF
+                raise Refused(409, "Not this sheet", _VERSION)
             raise Refused(404, "Not found", "There's no such sheet in the library.")
         try:
             source = export_sheet(conn, app.cfg, song)

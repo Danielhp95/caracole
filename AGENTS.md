@@ -82,7 +82,8 @@ Rules a change there keeps (the Invariants below are the others):
   `page_icon.LINK` in its head, which its policy allows with `img-src data:` (test_page_icon.py). Their scripts build
   every element with `createElement` and `textContent`, never `innerHTML`, and connect to
   nothing but caracole serve. A page caracole writes into the library is served only through
-  `app.written_pages` (a new kind goes there, with its record and its policy), and only while it
+  `app.written_pages` (a new kind goes there, with its record and its policy; a kept version's page,
+  `version-<tab>.html`, is a sheet viewer by its name: `app.written_page`), and only while it
   holds the bytes caracole recorded (`files.read_written_page`). Enter in a search box never
   spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
   opens the leading artist's songs), and on the library page, whose served bar searches
@@ -181,7 +182,13 @@ Rules a change there keeps (the Invariants below are the others):
   (never made up: Not found says Ultimate Guitar has no chords only once the fetch asked it,
   `SongFacts.asked_ug`), and its next step; Cancel takes a request that hasn't started out of the
   queue (`JobQueue.cancel`, never one that runs, with the jobs `submit_all` queued `together` with
-  it), and Try again queues a finished one's steps again (a removal's asks its question again).
+  it), and Try again queues a finished one's steps again (a removal's asks its question again). A sandboxed
+  viewer reaches a form only through a GET page of the server's own, whose form posts with the token:
+  `/export` (export_routes.py) and `/versions` (versions_routes.py: Make this the one, `caracole get
+  --tab` with the tab's own page; Keep it and back to caracole's pick, `caracole versions --keep` and
+  `--clear`, with `--progress`: the job's stages), each a job under the song's key, which jobs.py's
+  `_pick` joins as a lookup's `--tab`. What a done job came to is read from the song's state and
+  overrides.toml again (`caracole get` exits 0 on a block or a spent budget, the sheet unchanged).
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
