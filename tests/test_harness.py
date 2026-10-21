@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 import conftest
 import pytest
-from helpers import browser, locks
+from helpers import browser, chromium, locks
 from helpers.browser import in_chromium
 from helpers.locks import waiting_for
 
@@ -349,6 +349,28 @@ def test_a_test_that_opens_pages_without_in_chromium_fails(monkeypatch):
     monkeypatch.setattr(browser, "profiles", None)
     with pytest.raises(pytest.fail.Exception, match="@in_chromium"):
         browser.browser()
+
+
+@pytest.mark.parametrize("opens", ["dump_dom", "Browser", "Chromium"])
+def test_a_test_without_in_chromium_fails_whichever_browser_it_starts_and_whatever_ran_before(
+        opens, monkeypatch, tmp_path):
+    # Unmarked, it would run in the quick loop, and fail rather than skip where no Chromium runs; so
+    # it fails at once, even after a marked test left this process's browser and its profiles set.
+    def started(*args, **kwargs):
+        raise AssertionError("a browser started")
+
+    monkeypatch.setattr(browser, "CHROMIUM", "chromium")  # found, or the test would only skip
+    monkeypatch.setattr(chromium, "CHROMIUM", "chromium")
+    monkeypatch.setattr(browser, "_browser", None)  # this process's own, if any, is put back
+    monkeypatch.setattr(browser, "_profile", None)
+    monkeypatch.setattr(browser, "profiles", tmp_path)
+    monkeypatch.setattr(browser, "SharedBrowser", started)
+    monkeypatch.setattr(subprocess, "Popen", started)
+    start = {"dump_dom": lambda: browser.dump_dom("about:blank", (390, 844)),
+             "Browser": lambda: browser.Browser(tmp_path / "profile"),
+             "Chromium": lambda: chromium.Chromium(tmp_path / "profile")}[opens]
+    with pytest.raises(pytest.fail.Exception, match="@in_chromium"):
+        start()
 
 
 @in_chromium

@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from helpers.browser import NO_LOOKUPS, headless_env
+from helpers.browser import NO_LOOKUPS, headless_env, require_in_chromium
 
 CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 TIMEOUT = 30  # seconds, for any one answer
@@ -41,6 +41,7 @@ class Chromium:
     """A headless Chromium with a profile of its own, closed on leaving the ``with``."""
 
     def __init__(self, profile: Path, *, size: str = "390,844"):
+        require_in_chromium()
         if CHROMIUM is None:
             pytest.skip("chromium not found on PATH")
         commands, self._commands = os.pipe()  # Chromium reads its commands from fd 3

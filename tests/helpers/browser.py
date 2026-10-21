@@ -59,7 +59,8 @@ CHROMIUM_MARKS = [pytest.mark.skipif(CHROMIUM is None, reason="chromium not foun
 
 def in_chromium(test):
     """For a test that opens pages in Chromium: marked slow, skipped without Chromium, and given
-    conftest.py's ``_chromium``, which keeps the browser's profile in the run's basetemp."""
+    conftest.py's ``_chromium``, which keeps the browser's profile in the run's basetemp and lets
+    the test open pages at all (``require_in_chromium``)."""
     for mark in CHROMIUM_MARKS:
         test = mark(test)
     return test
@@ -217,25 +218,34 @@ class SharedBrowser:
             self.process.wait()
 
 
-# Where the profiles go: a folder in the run's basetemp, from conftest.py's _chromium, so that
-# pytest clears a profile with the run's other folders, even one a killed test process left.
+# Where the profiles go: a folder in the run's basetemp, from conftest.py's _chromium_profiles, so
+# that pytest clears a profile with the run's other folders, even one a killed test process left.
 profiles: Path | None = None
 _browser: SharedBrowser | None = None
 _profile: Path | None = None
+# Whether the running test is marked @in_chromium: conftest.py's _chromium says so while it runs.
+marked = False
+
+
+def require_in_chromium() -> None:
+    """Fail a test that opens pages in Chromium without @in_chromium, whichever browser it starts
+    (``dump_dom``, ``Browser``, helpers/chromium.py's ``Chromium``) and whatever ran before it:
+    unmarked, it would run in the quick loop, and fail rather than skip where no Chromium runs."""
+    if not marked:
+        pytest.fail("a test that opens pages in Chromium is marked @in_chromium", pytrace=False)
 
 
 def browser() -> SharedBrowser:
     """This process's browser, started on first use; skips the test when Chromium can't run here.
 
-    conftest.py's _chromium closes it when the session ends; a browser whose pipes close (its test
-    process killed, say) quits by itself."""
+    conftest.py's _chromium_profiles closes it when the session ends; a browser whose pipes close
+    (its test process killed, say) quits by itself."""
     global _browser, _profile
+    require_in_chromium()
     if _browser is not None and _browser.process.poll() is None:
         return _browser
     if CHROMIUM is None:
         pytest.skip("chromium not found on PATH")
-    if profiles is None:
-        pytest.fail("a test that opens pages in Chromium is marked @in_chromium", pytrace=False)
     close()
     _profile = Path(tempfile.mkdtemp(prefix="profile-", dir=profiles))
     try:
@@ -279,6 +289,7 @@ class Browser:
 
     def __init__(self, profile: Path, *, width: int = 1280, height: int = 900, mobile: bool = False,
                  timeout: float = 30.0):
+        require_in_chromium()
         if CHROMIUM is None:
             raise BrowserError("chromium not found on PATH")
         self.timeout = timeout
