@@ -112,7 +112,8 @@ Rules a change there keeps (the Invariants below are the others):
   the database, the lock, clients at either pace, pages, `fail`, `warn`, `song_named`): use it
   rather than another copy. A command's logic lives in a module outside commands/, imported
   inside the command's function (Heavy imports, below): get.py is `caracole get`, one song looked
-  up now (the run's steps for that song alone, sheet first, at the lookup pace; `--progress`, a
+  up now (the run's steps for that song alone, sheet first, at the lookup pace, then its `songbooks` stage: the songbooks of songbooks.toml that list the
+  song, `songbook.songbooks_listing`, made again by `render_songbooks(only=…)`; `--progress`, a
   JSON line per event, for caracole serve), and review.py, search.py, removal.py and songbook.py
   are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local indexes
   alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),

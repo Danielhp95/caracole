@@ -65,6 +65,7 @@ STAGE_LINES = {
     "lacuerda": "Fetching from LaCuerda",
     "gtptabs": "Fetching from gtptabs.com",
     "pages": "Writing the library page",
+    "songbooks": "Remaking its songbooks",
 }
 _WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
@@ -194,6 +195,8 @@ def _stage_line(stages: list[Stage], *, new: bool = False) -> str:
         return "Adding to the library…"
     if stage.state == "running" and stage.name == "sheet" and stage.detail in _SHEET_LINES:
         return f"{_SHEET_LINES[stage.detail]}…"
+    if stage.state == "running" and stage.name == "songbooks" and stage.detail:
+        return f"Remaking songbook {stage.detail}…"
     return f"{STAGE_LINES.get(stage.name, stage.label)}…"
 
 

@@ -419,6 +419,13 @@ In order:
    keeps.
 8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
    sheet changed, and MuseScore's pages matched from its local index.
+9. **The songbooks it is in**: each songbook of songbooks.toml that lists the
+   song is made again, as `caracole songbook render NAME` does (one whose
+   songs and settings did not change is left as it is: "up to date"), so a
+   song fetched now, or from the web page's Get it, shows in its songbooks at
+   once. A songbook that does not list the song is left alone. A songbooks.toml
+   that cannot be read is said on that line and stops nothing: the lookup
+   still exits 0.
 
 It keeps the interactive pace ([Two paces](#configure)): about a second
 between two requests to a site, six requests to a site at most, and sixty an

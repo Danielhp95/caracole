@@ -809,9 +809,16 @@ def _sheet_of(conn: sqlite3.Connection, library_dir: Path, song: Song) -> tuple[
     return None
 
 
+def songbooks_listing(conn: sqlite3.Connection, books: Iterable[Songbook], song: Song) -> list[Songbook]:
+    """The songbooks whose entries name ``song``, found as ``songbook_entries`` finds each (never by a search)."""
+    return [b for b in books if any((found := find_entry_song(conn, e.text)) is not None and found.id == song.id
+                                    for e in b.songs)]
+
+
 def render_songbooks(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, *,
-                     runner: Runner = subprocess.run, force: bool = False, only: str | None = None) -> SongbookStats:
-    """Make every songbook of songbooks.toml (``only``: that one) into its files in
+                     runner: Runner = subprocess.run, force: bool = False,
+                     only: str | Iterable[str] | None = None) -> SongbookStats:
+    """Make every songbook of songbooks.toml (``only``: that one, or those) into its files in
     ``Library/_songbooks/<name>/``, each only when what it is made from changed or it is no longer as
     written; then take away the files of the songbooks gone from the file.
 
@@ -819,6 +826,7 @@ def render_songbooks(conn: sqlite3.Connection, cfg: Config, overrides: Overrides
     they are. A songbook whose file can't be made is logged and ``failed``; the others go on.
     """
     stats = SongbookStats()
+    only_keys = None if only is None else {name_key(n) for n in ([only] if isinstance(only, str) else only)}
     try:
         books = load_songbooks(songbooks_file(cfg.library_dir))
     except SongbookError as e:
@@ -828,7 +836,7 @@ def render_songbooks(conn: sqlite3.Connection, cfg: Config, overrides: Overrides
     font, font_problem = _cjk_font(cfg.cjk_font)
     waiting: list[str] = []
     for book in books:
-        if only is not None and name_key(book.name) != name_key(only):
+        if only_keys is not None and name_key(book.name) not in only_keys:
             continue
         done = _render_book(conn, cfg, overrides, book, font=font, runner=runner, force=force)
         if done.no_font:

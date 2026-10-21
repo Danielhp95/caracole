@@ -29,7 +29,8 @@ if TYPE_CHECKING:
     from caracole.get import LookupResult
 
 _SHORT = {"song": "Song", "match": "Match", "sheet": "Sheet", "pdf": "PDF", "lyrics": "Lyrics",
-          "ug": "Ultimate Guitar", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com", "pages": "Pages"}
+          "ug": "Ultimate Guitar", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com", "pages": "Pages",
+          "songbooks": "Songbooks"}
 _SONG_SHAPE = 'a song as "Artist - Title", or as ARTIST TITLE'
 
 
