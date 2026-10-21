@@ -139,7 +139,6 @@ class Config:
     overrides_file: Path
     wanted_file: Path
     user_agent: str = DEFAULT_USER_AGENT
-    guitar_pro_mode: str = "assisted"
     chordpro_bin: str = "chordpro"
     ytdlp_bin: str = "yt-dlp"
     cjk_font: Path | None = None
@@ -443,7 +442,6 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         overrides_file=overrides_file,
         wanted_file=wanted_file,
         user_agent=_string(data.get("user_agent", DEFAULT_USER_AGENT), "user_agent"),
-        guitar_pro_mode=mode,
         chordpro_bin=_string(data.get("chordpro_bin", "chordpro"), "chordpro_bin"),
         ytdlp_bin=ytdlp_bin,
         cjk_font=paths.resolve(cjk_font_value) if cjk_font_value else None,

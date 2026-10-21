@@ -17,7 +17,7 @@ from typer.testing import CliRunner
 from caracole import db
 from caracole.cli import build_app
 from caracole.commands import _common
-from caracole.commands._common import exclusive, make_client, open_db, open_db_or_exit, write_pages
+from caracole.commands._common import exclusive, make_client, open_db, write_pages
 from caracole.config import load_config
 from caracole.overrides import Overrides
 
@@ -72,12 +72,6 @@ def test_a_database_caracole_cant_write_names_it(tmp_path, cfg, capsys):
         open_db(cfg)
     assert raised.value.exit_code == 1
     assert f"can't open the database {cfg.db_path}: " in capsys.readouterr().err
-
-
-def test_open_db_is_the_one_way_to_open_the_database():
-    # The older name stays for callers that still use it; `caracole add`, which carries on
-    # without the database, opens it with db.connect itself.
-    assert open_db_or_exit is open_db
 
 
 @needs_permissions

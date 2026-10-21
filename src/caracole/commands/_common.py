@@ -109,8 +109,6 @@ def open_db(cfg: Config) -> sqlite3.Connection:
     return conn
 
 
-open_db_or_exit = open_db  # its older name
-
 
 def load_ovr(cfg: Config) -> Overrides:
     try:

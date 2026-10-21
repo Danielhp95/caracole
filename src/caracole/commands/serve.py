@@ -11,7 +11,6 @@ command module is imported on every start.
 
 from __future__ import annotations
 
-import logging
 import os
 import socket
 from pathlib import Path
@@ -26,7 +25,6 @@ if TYPE_CHECKING:
 
 DEFAULT_PORT = 8737
 MIN_TOKEN = 16  # characters
-_LOOPBACK = ("127.0.0.1", "::1", "localhost")
 
 
 def register(app: typer.Typer) -> None:
@@ -75,16 +73,15 @@ def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow
     from caracole.web import server
     from caracole.web.app import WebApp
     from caracole.web.jobs import CaracoleRunner, JobQueue
-    from caracole.web.security import allowed_hosts
+    from caracole.web.security import LOOPBACK, allowed_hosts
 
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     token = _access_token(token_file)
     try:
         hosts = allowed_hosts(address, hostname=socket.gethostname(), extra=allow_host)
     except ValueError as e:
         fail(f"--allow-host: {e}", 2)
     app = WebApp(cfg, JobQueue(CaracoleRunner(config_path)), allowed=hosts, access_token=token)
-    if address.strip("[]") not in _LOOPBACK and token is None:
+    if address.strip("[]") not in LOOPBACK and token is None:
         typer.secho(f"Listening on {address}: anyone who can reach it can read the library and request "
                     "songs. On a LAN, give an access token with --token-file.", err=True,
                     fg=typer.colors.YELLOW)

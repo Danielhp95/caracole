@@ -21,7 +21,6 @@ def test_defaults(tmp_path):
     assert cfg.wanted_file == tmp_path / "Tabs/wanted.txt"
     assert cfg.db_path == tmp_path / ".local/state/caracole/caracole.sqlite"
     assert cfg.user_agent == "caracole/0.1 (personal tab library)"
-    assert cfg.guitar_pro_mode == "assisted"
     assert cfg.chordpro_bin == "chordpro"
     assert cfg.providers["ug"] == ProviderPolicy(budget=60, delay=(10.0, 20.0))
     assert cfg.providers["lrclib"] == ProviderPolicy(budget=200, delay=(1.0, 2.0))
@@ -184,7 +183,6 @@ def test_assisted_guitar_pro_mode_still_loads(tmp_path):
     # Older files, and the example in docs/usage.md, set it; it names UG's mode, which is fixed.
     p = write(tmp_path, 'guitar_pro_mode = "assisted"\n')
     cfg = load_config(p, env={"HOME": str(tmp_path)})
-    assert cfg.guitar_pro_mode == "assisted"
     assert cfg.provider("gtptabs").enabled
 
 
