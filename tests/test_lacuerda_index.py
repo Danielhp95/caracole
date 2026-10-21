@@ -417,3 +417,42 @@ def test_find_reads_no_more_than_the_query_needs_on_a_table_lacuerdas_size(conn)
         assert time.perf_counter() - started < 1.0, query
         assert found.artists or found.songs, query
 
+
+
+# --- Chinese counts as pinyin only in whole words -------------------------------------------
+
+NOISE = ("Bohemia Suburbana", "Bohemia Urbana", "El Bananero", "Anabantha")
+
+
+@pytest.fixture
+def banma(conn):
+    """Artists that merely hold the syllable "ban" (artist rows and a song row of each), and a Chinese
+    song LaCuerda might hold."""
+    li.store_artists(conn, "tabs/b/index0.html", [
+        LCArtist("bohemia_suburbana", "Bohemia Suburbana", 20), LCArtist("bohemia_urbana", "Bohemia Urbana", 12),
+        LCArtist("el_bananero", "El Bananero", 7), LCArtist("anabantha", "Anabantha", 9)])
+    for slug, name in (("bohemia_suburbana", "Bohemia Suburbana"), ("bohemia_urbana", "Bohemia Urbana"),
+                       ("el_bananero", "El Bananero"), ("anabantha", "Anabantha")):
+        li.store_songs(conn, slug, name, [LCSong("banda", "Banda", "R", (1,)), LCSong("mar", "Mar", "R", (1,))])
+    li.store_artists(conn, "tabs/s/index0.html", [LCArtist("song_dongye", "宋冬野", 4)])
+    li.store_songs(conn, "song_dongye", "宋冬野", [LCSong("banma_banma", "斑马斑马", "R", (1,))])
+    return conn
+
+
+@pytest.mark.parametrize("query", ["斑马", "斑马斑马"])
+def test_a_chinese_query_finds_none_of_the_names_that_merely_hold_its_syllables(banma, query):
+    found = li.find(banma, query, artists=10, songs=10)
+    names = {h.artist for h in (*found.artists, *found.songs)}
+    assert not names & set(NOISE)
+
+
+@pytest.mark.parametrize("query", ["斑马", "斑马斑马", "banma", "banma banma"])
+def test_a_chinese_song_is_found_by_its_characters_and_its_pinyin(banma, query):
+    found = li.find(banma, query, artists=10, songs=10)
+    assert [(h.artist, h.title) for h in found.songs][:1] == [("宋冬野", "斑马斑马")], query
+
+
+def test_a_partial_match_in_pinyin_is_no_strong_hit(banma):
+    (hit,) = li.find(banma, "斑马", artists=10, songs=10).songs
+    assert hit.score <= 100 * li.PINYIN_PARTIAL_SCALE + 0.1
+    assert li.find(banma, "宋冬野 斑马斑马").songs[0].score == 100

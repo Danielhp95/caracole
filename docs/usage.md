@@ -2071,7 +2071,9 @@ the songs the index holds of the LaCuerda artist NAME names, LaCuerda's most
 popular first (`Estopa · LaCuerda · 12 of their 159 songs in the index, the
 most popular first:`), after Ultimate Guitar's, and `--title TITLE` its songs
 of that title. Names are compared as Ultimate Guitar's are: as words, accents
-folded, a leading "Los" and an artist's "y" aside, Chinese as pinyin. While the
+folded, a leading "Los" and an artist's "y" aside, Chinese as pinyin, as whole words only (斑马
+finds 宋冬野's 斑马斑马 and a title written `banma`, never the letters inside `Bohemia Suburbana` or
+`El Bananero`; pinyin matching only part of a name is never a strong hit). While the
 index is empty the group says so (`Nothing yet: LaCuerda's index is empty: the
 nightly run reads its listings of every artist`), and while the nightly run
 still reads its listings it ends with what it has: `LaCuerda's index is still

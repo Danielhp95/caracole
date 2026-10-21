@@ -90,8 +90,11 @@ from caracole.normalize import (
     clean_title,
     compact,
     fold,
+    PINYIN_PARTIAL_SCALE,
     has_han,
+    holds_run,
     name_forms,
+    name_words,
     placeholder_artist,
     romanize,
     split_variant,
@@ -107,7 +110,6 @@ if TYPE_CHECKING:
 MIN_SCORE = 70  # below this a hit is noise
 STRONG = 90  # a hit this good is the song you meant
 PARTIAL_SCALE = 0.9  # a query that is only part of a name tops out at 90
-PINYIN_PARTIAL_SCALE = 0.85  # in pinyin, at 85: short syllables are no proof, so never a strong hit
 TYPE_ORDER = ("chords", "tabs", "guitar-pro", "power")
 MAX_PATTERNS = 2
 SHOWN_CANDIDATES = 3  # a review's candidates shown under its song: the rest are in `caracole review`
@@ -117,8 +119,6 @@ ARTIST_ROWS, SONG_ROWS = 3, 8  # what ``find_index`` gives by default
 SITE_ROWS = 5  # a site's pages search_gtptabs and search_musescore give by default
 SITE_ROWS_READ = 2000  # rows of gtptabs_index the prefilter reads, at most
 
-_WORD_SPLIT = re.compile(r"[\W_]+")
-_APOSTROPHES = re.compile(r"['’‘`´ʼ]")
 _SHELL_SPECIAL = re.compile(r'(["\\$`])')
 
 
@@ -378,7 +378,7 @@ def search_gtptabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS)
     (``_gtptabs_artist``), the title from its slug."""
     from caracole.gtptabs import page_url
 
-    patterns = _patterns(_tokens(query))
+    patterns = _patterns(name_words(query))
     if not patterns:
         return []
     queries = _queries(query)
@@ -431,7 +431,7 @@ def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROW
     never every row."""
     from caracole.musescore import SongPage, title_key
 
-    words = _tokens(query)
+    words = name_words(query)
     runs = [(words, [])] + [(words[:n], words[n:]) for n in range(len(words) - 1, 0, -1)] + \
         [(words[-n:], words[:-n]) for n in range(len(words) - 1, 0, -1)]
     runs.sort(key=lambda run: -len(run[0]))  # stable: the whole query, then each length's start before its end
@@ -579,7 +579,7 @@ def _named_at_an_end(query: str, songs: Sequence[IndexHit]) -> str | None:
     whole name is a run of the query's words at its start or its end, fewer than all of them: the longest run's,
     the better song's at a tie. None for none. An artist the search didn't read so is none: "Fito" is no
     answer for "fito paez", nor "Heroes" for "heroes del silencio entre dos tierras"."""
-    words = _tokens(query)
+    words = name_words(query)
     runs: dict[str, int] = {}
     for n in range(len(words) - 1, 0, -1):
         for run in (words[:n], words[-n:]):
@@ -728,23 +728,9 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: st
 # --- words, pinyin and scores -----------------------------------------------------------
 
 
-def _tokens(text: str) -> list[str]:
-    """The words of a name, as ``normalize.slug_key`` makes them, but with CJK runs kept apart.
-
-    Accents are folded, apostrophes dropped, "and" removed and a leading "the"
-    dropped, so the words meet UG's canonical keys one for one. Unlike
-    ``slug_key``, "宋冬野 斑马" stays two words, so each can be looked up alone.
-    """
-    words = [w for w in _WORD_SPLIT.split(_APOSTROPHES.sub("", fold(text))) if w]
-    kept = [w for w in words if w != "and"] or words
-    if len(kept) > 1 and kept[0] == "the":
-        kept = kept[1:]
-    return kept
-
-
 def _forms(text: str) -> list[str]:
     """The text as space-separated words; Chinese gets a second form, in pinyin."""
-    tokens = _tokens(text)
+    tokens = name_words(text)
     plain = " ".join(tokens)
     if not plain:
         return []
@@ -786,7 +772,7 @@ def _queries(text: str) -> list[_Query]:
     forms = _forms(text)
     if len(forms) < 2:
         return [_Query(f) for f in forms]
-    runs = tuple("".join(fold(s) for s in romanize(t).split()) for t in _tokens(text) if has_han(t))
+    runs = tuple("".join(fold(s) for s in romanize(t).split()) for t in name_words(text) if has_han(t))
     return [_Query(forms[0]), _Query(forms[1], runs)]
 
 
@@ -810,7 +796,7 @@ class _Query:
         separated words), hyphens aside: ``song dongye``, ``songdongye`` and ``song dong ye`` hold
         宋冬野, and ``suburban male`` holds no 斑马. True for a form with no Chinese."""
         words = [name.split() for name in names]
-        return all(any(_holds(w, run) for w in words) for run in self.runs)
+        return all(any(holds_run(w, run) for w in words) for run in self.runs)
 
     def score(self, artist: str, title: str) -> float:
         """How well this query matches a song, 0–100 (artist and title are space-separated words).
@@ -851,19 +837,6 @@ class _Query:
         if self.runs and not self.holds(artist):
             return 0.0
         return max(fuzz.ratio(self.text, artist), fuzz.ratio(self.compact, artist.replace(" ", "")))
-
-
-def _holds(words: list[str], run: str) -> bool:
-    """Whether ``run`` is some consecutive ``words`` written together."""
-    for i in range(len(words)):
-        joined = ""
-        for word in words[i:]:
-            joined += word
-            if joined == run:
-                return True
-            if not run.startswith(joined):
-                break
-    return False
 
 
 def _reading(scores: Iterable[tuple[float, float, float]], reading: str | None = None) -> tuple[float, str]:
@@ -917,7 +890,7 @@ def _scored_rows(conn: sqlite3.Connection, query: str,
     """Every song of the rows the prefilter reads scored against the query, best first (ties to more
     tabs, then to the artist with more of the rows), and the artists the query names (none with
     ``reading``)."""
-    patterns = _patterns(_tokens(query))
+    patterns = _patterns(name_words(query))
     if not patterns:
         return [], {}
     queries = _queries(query)
