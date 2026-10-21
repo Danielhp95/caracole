@@ -204,6 +204,15 @@ def test_human_sheet_becomes_chordpro_and_pdf(conn, cfg):
     assert stats == RenderStats(rendered=1, skipped=0, failed=0, font_error=None)
 
 
+def test_a_kept_sheet_with_a_twice_escaped_entity_renders_decoded(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, content="[Verse 1]\r\n[ch]Bm[/ch] Tom &amp; Jerry\r\n")
+    render(conn, cfg)
+    cho = (cfg.library_dir / "Soda Stereo" / "De Música Ligera" / "sheet.cho").read_text(encoding="utf-8")
+    assert "Tom & Jerry" in cho
+    assert "&amp;" not in cho
+
+
 @pytest.mark.parametrize(
     "tonality,capo,head",
     [

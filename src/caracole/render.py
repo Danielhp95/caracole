@@ -130,7 +130,7 @@ from caracole.songs import (
     get_song,
     list_songs,
 )
-from caracole.ug.page import json_int
+from caracole.ug.page import decode_twice, json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
 
@@ -787,7 +787,7 @@ def _human_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) ->
     if not isinstance(content, str) or not content.strip():
         raise RenderError(f"{path} holds no sheet content")
     raw = get_version(conn, kept.version_id).raw
-    return _Sheet(content, key=_key(raw), capo=_capo(doc.get("meta")))
+    return _Sheet(decode_twice(content), key=_key(raw), capo=_capo(doc.get("meta")))
 
 
 def _key(raw: Mapping[str, Any]) -> str | None:
