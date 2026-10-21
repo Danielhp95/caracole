@@ -1,4 +1,4 @@
-"""The one line a request shows, on its song's card and on /jobs: its progress, then how it ended.
+"""The one line a request shows on its song's card: its progress, then how it ended; /jobs says it its own way.
 
 It is read from the job (jobs.py) and, once the job is over, from what the
 library knows of its song (``SongFacts``), never from which commands the job
@@ -37,7 +37,8 @@ ran. So a job of other commands reads the same way:
 
 A line that ends in a failure or a wait also links to the job's output on
 /jobs (``Line.details``). Every link is relative to the library page, which
-``caracole serve`` serves at /.
+``caracole serve`` serves at /. The requests page reads the same line and says
+it as an outcome, a reason and the next step (outcome.py).
 """
 
 from __future__ import annotations
@@ -86,7 +87,10 @@ class SongFacts:
     overrides.toml ignores it.
     ``picker`` is the link to its picker (``review?song=ID``) while its review
     has candidates to pick from. ``lacuerda`` says the sheet you picked on
-    LaCuerda (``[lacuerda]``) is still to be asked for.
+    LaCuerda (``[lacuerda]``) is still to be asked for. ``elsewhere`` is, for a song a
+    fetch left without a sheet, what the local indexes have of it on another site (a
+    source and its page: ``outcome.elsewhere``), which the requests page alone says; the
+    line here never reads it.
     """
 
     sheet: str | None = None
@@ -96,6 +100,7 @@ class SongFacts:
     ignored: bool = False
     picker: str | None = None
     lacuerda: bool = False
+    elsewhere: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True)

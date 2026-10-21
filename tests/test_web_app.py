@@ -497,7 +497,7 @@ def test_a_removal_says_how_it_goes_on_jobs_and_on_the_songs_own_card(app, conn,
     assert view["kind"] == "remove" and view["songId"] == creep.id and view["line"]["text"] == "Queued…"
     (job_id, item), = JOB_ITEM.findall(text(get(app, "/jobs")))
     line = re.search(r'<p class="line">(.*?)</p>', item, re.S).group(1)
-    assert "Radiohead - Creep" in line and "Remove Radiohead" not in line and "Queued…" in line
+    assert "Radiohead - Creep" in line and "Remove Radiohead" not in line and "Queued, next" in line
     queue.run_pending()
     conn.execute("DELETE FROM songs WHERE id = ?", (creep.id,))  # as caracole remove does
     (job_id, item), = JOB_ITEM.findall(text(get(app, "/jobs")))
@@ -866,10 +866,13 @@ def test_a_failed_requests_line_is_its_error_with_a_link_to_its_output(cfg, conn
     assert job["state"] == "failed" and job["line"] == {
         "tone": "failed", "text": "The page under [artist_url] for Radiohead, UG answers 404 for it.",
         "link": None, "details": "jobs?job=1#job-1"}
-    # On /jobs the output is right under the line, behind its Output toggle: no link to the same page.
+    # On /jobs it is Failed, the error its reason, and the output right under it, behind its Output toggle: no
+    # link to the same page, and Try again.
     item = dict(JOB_ITEM.findall(text(get(app, "/jobs"))))["1"]
     line = re.search(r'<p class="line">(.*?)</p>', item, re.S).group(1)
-    assert "UG answers 404 for it." in line and "<a " not in line and "Details" not in line
+    assert '<span class="says failed">Failed</span>' in line and "<a " not in line and "Details" not in item
+    assert '<p class="reason">The page under [artist_url] for Radiohead, UG answers 404 for it.</p>' in item
+    assert 'action="/jobs/again"' in item and ">Try again</button>" in item
 
 
 @pytest.mark.parametrize("token,headers", [
@@ -1289,7 +1292,7 @@ def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cf
     [song] = list_songs(conn)
     line = re.search(r'<p class="line">(.*?)</p>', article, re.S).group(0)
     assert '<span class="says review">Needs review' in line and "Failed" not in line and "error" not in line
-    assert f'<a href="review?song={song.id}">Pick the match</a>' in line and "to-do" not in line
+    assert f'href="/review?song={song.id}">Pick the match</a>' in article and "to-do" not in article
     view = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"][0]
     assert view["line"]["link"] == {"label": "Pick the match", "href": f"review?song={song.id}"}
     assert view["card"]["candidates"]  # the card it is drawn again as has the picker the line names
@@ -1366,7 +1369,7 @@ def test_the_requests_page_has_one_line_per_request_its_output_collapsed(app, co
     assert '<meta http-equiv="refresh" content="10">' in body  # while one waits or runs
     assert "<script>alert" not in body and "&lt;script&gt;alert(1)&lt;/script&gt;" in body
     (job_id, item), = JOB_ITEM.findall(body)
-    assert job_id == "1" and "Queued…" in item
+    assert job_id == "1" and "Queued, next" in item
     queue.run_pending()
     creep = add_song(conn, "Radiohead", "Creep")
     post(app, "/fetch", {"song": str(creep.id)})
@@ -1380,7 +1383,8 @@ def test_the_requests_page_has_one_line_per_request_its_output_collapsed(app, co
     assert list(items) == ["2", "1"]  # newest first
     newest = items["2"]
     line = re.search(r'<p class="line">(.*?)</p>', newest, re.S).group(1)
-    assert "Radiohead - Creep" in line and "Ready" in line and 'href="Radiohead/Creep/sheet.pdf"' in line
+    assert "Radiohead - Creep" in line and '<span class="says ready">Ready</span>' in line
+    assert '<a class="btn act primary" href="/Radiohead/Creep/sheet.pdf">Open</a>' in newest
     # The commands and what each printed are there, folded away.
     assert '<details class="output">' in newest and "<details open" not in body
     # A fetch now is one `caracole get`, its stages listed each with its state.

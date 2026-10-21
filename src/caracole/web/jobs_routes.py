@@ -5,6 +5,15 @@
     GET  /jobs.json       the requests, a line each, for the page's script (?jobs=N,M: only those
                           jobs, each with its song's card once it is over)
     GET  /api/jobs[/<id>] the requests as data: each step with its state (Job.as_json)
+    POST /jobs/cancel     a request that hasn't started (``job``), taken out of the queue: never one that
+                          runs, nor one that is over; an add's wanted.txt line stays
+    POST /jobs/again      a request that is over (``job``), its steps queued again: Try again
+
+The requests page (pages.py) shows the request that runs with its steps and those queued under it, each
+with Cancel, then the finished ones newest first, each as outcome.py says it: its outcome, a reason, when
+it finished and its next step (Open, Pick the match, Get it from there, Request by name, Try again…), read
+from its line and its song (``song_of``: for a song a fetch left without a sheet, what the local indexes
+have elsewhere, ``outcome.elsewhere``).
 
 Each job is shown as the page's script reads it (``views``): its song, its line (status.py) and, once
 it is over and the page asks (``?jobs=``), its song's card as the library page draws it now, and the
@@ -23,8 +32,19 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from caracole.web import pages
-from caracole.web.app import Response, Route, WebApp, address, html_response, json_response, overrides_or_none, query
-from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job
+from caracole.web.app import (
+    Response,
+    Route,
+    WebApp,
+    address,
+    html_response,
+    json_response,
+    overrides_or_none,
+    query,
+    redirect,
+)
+from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, JobStarted
+from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
 from caracole.web.status import SongFacts, details_href, job_line
 
@@ -40,31 +60,82 @@ ROUTES = (
     Route("GET", "/jobs.json", lambda app, asked: jobs_json(app, query(asked)), script_only=True),
     Route("GET", "/api/jobs", lambda app, asked: api_jobs(app)),
     Route("GET", "/api/jobs/", lambda app, asked: api_job(app, address(asked)[len("/api/jobs/"):]), under=True),
+    Route("POST", "/jobs/cancel", lambda app, asked, form: cancel(app, form), page="the requests page"),
+    Route("POST", "/jobs/again", lambda app, asked, form: again(app, form), page="the requests page"),
 )
 
 
 def jobs_page(app: WebApp, asked: dict[str, list[str]]) -> Response:
-    """Every request, a line each, its output open only when asked for (``?job=N``)."""
+    """Every request: the one that runs and those queued, then the finished ones, each with its outcome and
+    its next step (outcome.py); its output open only when asked for (``?job=N``)."""
+    from caracole.web.outcome import outcome
+
     try:
         opened = int(asked.get("job", [""])[0])
     except ValueError:
         opened = None
     jobs = app.queue.snapshot()
-    facts: dict[int, SongFacts | None] = {}
+    songs: dict[int, tuple[int | None, SongFacts | None]] = {}
     books: dict[int, str | None] = {}
     try:
         overrides = overrides_or_none(app.cfg)
         with closing(app.connect()) as conn:
             forget_ended(app, jobs)
-            facts = {job.id: song_of(app, conn, overrides, job)[1] for job in jobs}
+            songs = {job.id: song_of(app, conn, overrides, job) for job in jobs}
             books = {job.id: _songbook_page(conn, job) for job in jobs}
     except (sqlite3.Error, OSError):  # the lines say only how the jobs went, then
         pass
+    facts = {job_id: found[1] for job_id, found in songs.items()}
     lines = {job.id: job_line(job, facts.get(job.id), ahead=_ahead(jobs, job), songbook_page=books.get(job.id))
              for job in jobs}
+    outcomes = {job.id: outcome(job, lines[job.id], facts.get(job.id), song_id=songs.get(job.id, (None,))[0])
+                for job in jobs if not job.active}
     still = asked.get("refresh") == ["0"]
-    return html_response(200, pages.jobs_page(jobs, lines, opened=opened, refresh=not still,
+    return html_response(200, pages.jobs_page(jobs, lines, outcomes=outcomes, opened=opened, refresh=not still,
                                               picks=picks_waiting(app, jobs), csrf=app.csrf))
+
+
+def cancel(app: WebApp, form: dict[str, str]) -> Response:
+    """A request that hasn't started, taken out of the queue (``JobQueue.cancel``); back to the requests page.
+    One that runs is never stopped halfway, and one that is over stays in the history."""
+    job_id = _form_job(form)
+    try:
+        job = app.queue.cancel(job_id)
+    except JobStarted as e:
+        if e.state == "running":
+            raise Refused(409, "Running already", "That request has started, and caracole never stops a command "
+                                                  "halfway: it runs to its end.") from None
+        raise Refused(409, "Over already", "That request is over: there's nothing left to cancel.") from None
+    if job is None:
+        raise Refused(404, "No such request", "That request isn't queued any more: reload the requests page.")
+    response = redirect("/jobs")
+    response.data = {"cancelled": job.id}
+    return response
+
+
+def again(app: WebApp, form: dict[str, str]) -> Response:
+    """A request that is over, its steps queued again as a new request (Try again); back to the requests page.
+    It is queued as any request is (``JobQueue.submit``): a song's request waiting or running is the answer."""
+    job_id = _form_job(form)
+    job = app.queue.job(job_id)
+    if job is None:
+        raise Refused(404, "No such request", "caracole serve no longer remembers that request: ask for it again "
+                                              "from the library.")
+    if job.active:
+        raise Refused(409, "Not over yet", "That request is still queued or running.")
+    steps = [(step.label, step.args) for step in job.steps]
+    picked = any(step.args[:1] == ("review",) for step in job.steps)  # a pick comes after the song's own request
+    queued, _ = app.submit(job.title, job.song_key, steps, fetching=job.fetching, note=job.note,
+                           display=job.display, join=not picked, song_id=job.song_id)
+    return app.queued(queued, "/jobs")
+
+
+def _form_job(form: dict[str, str]) -> int:
+    """The request a form names (``job``); Refused (400) when it names none."""
+    text = form.get("job", "").strip()
+    if not (text.isascii() and text.isdigit()) or len(text) > 12:
+        raise Refused(400, "Not a request", "Which request? The form names none.")
+    return int(text)
 
 
 def jobs_json(app: WebApp, asked: dict[str, list[str]]) -> Response:
@@ -159,8 +230,10 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
 
     A fetch that is over and left no sheet is "Not found" only if it looked the
     song up during the job (``ug.fetch.checked_since``): a cooldown, a block, a
-    spent budget or an error looks nothing up, and the song isn't missing. A job
-    that is over doesn't change, so its answer is worked out once (``app._ended``).
+    spent budget or an error looks nothing up, and the song isn't missing; for the
+    requests page, it says what the local indexes have of the song elsewhere
+    (``outcome.elsewhere``). A job that is over doesn't change, so its answer is
+    worked out once (``app._ended``).
     """
     over = not job.active
     if over:
@@ -189,8 +262,14 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
 
             picker = f"review?song={song.id}" if candidates_of(song) else None  # the card's, or its page
         picked = overrides is not None and song.key in overrides.lacuerda and song.lacuerda_checked_at is None
+        elsewhere = None
+        if over and job.fetching and not sheet and not song.review and not ignored:
+            from caracole.web.outcome import elsewhere as other_sites
+
+            elsewhere = other_sites(conn, app.cfg, song, job, datetime.now(UTC))
         facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
-                          checked_now=checked_now, ignored=ignored, picker=picker, lacuerda=picked)
+                          checked_now=checked_now, ignored=ignored, picker=picker, lacuerda=picked,
+                          elsewhere=elsewhere)
     # A removal's song is gone once it is done: the job knows which it was.
     answer = (song.id if song is not None else job.song_id if removal else None, facts)
     if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known

@@ -27,7 +27,8 @@ lookup takes the place of the song's waiting add, since ``caracole get`` adds
 the song itself, or follows it once it runs; a version you pick meanwhile
 takes the place of the song's waiting lookup, or follows the running one),
 and remembers the last ``keep``
-finished ones, in memory only: a request is in wanted.txt from the moment it's
+finished ones, in memory only (``cancel`` takes one that hasn't started out of the queue, never one
+that runs): a request is in wanted.txt from the moment it's
 made, so a restart loses no song, only the lookup that would have come before
 the nightly run. ``Job.as_json`` is a job as data, for the page that shows a
 request's progress.
@@ -56,6 +57,14 @@ MAX_LINES = 400  # output kept per step: the last lines
 
 class QueueFull(Exception):
     """The queue holds ``limit`` jobs already."""
+
+
+class JobStarted(Exception):
+    """A job asked to be cancelled that runs, or is over (``state``): a command is never stopped halfway."""
+
+    def __init__(self, job_id: int, state: str):
+        super().__init__(f"request {job_id} is {state}")
+        self.state = state
 
 
 @dataclass
@@ -337,6 +346,20 @@ class JobQueue:
         self._jobs.append(job)
         self._wake.notify_all()
         return copy.deepcopy(job), True
+
+    def cancel(self, job_id: int) -> Job | None:
+        """Take a job that hasn't started out of the queue, and give it back, as a copy; None for one never
+        queued, cancelled already or forgotten. Raises JobStarted for one that runs or is over: the command
+        it runs is never stopped halfway, and a finished one stays in the history. A cancelled add leaves its
+        wanted.txt line, which the server wrote when it was asked for: the nightly run looks for the song."""
+        with self._lock:
+            job = next((j for j in self._jobs if j.id == job_id), None)
+            if job is None:
+                return None
+            if job.state != "queued":
+                raise JobStarted(job_id, job.state)
+            self._jobs.remove(job)
+            return copy.deepcopy(job)
 
     def snapshot(self) -> list[Job]:
         """Every job remembered, newest first, as copies."""

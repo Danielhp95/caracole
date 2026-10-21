@@ -424,7 +424,8 @@ def test_a_songbook_made_says_made_with_its_page_to_open_and_never_that_the_nigh
     assert line["link"] == {"label": "Open songbook", "href": "_songbooks/Beach%20nights/songbook.html"}
     assert get(app, "/" + line["link"]["href"]).status == 200  # the page caracole wrote, which it serves
     jobs = get(app, "/jobs").body.decode("utf-8")
-    assert 'Made · <a href="_songbooks/Beach%20nights/songbook.html">Open songbook</a>' in jobs
+    assert '<span class="says ready">Made</span>' in jobs
+    assert '<a class="btn act primary" href="/_songbooks/Beach%20nights/songbook.html">Open songbook</a>' in jobs
     assert "nightly run" not in jobs  # a song's line, "Added: the nightly run looks for it", misleads here
     # Added to: its page again. Renamed, its card is beside the line: no link. Deleted: no page to open, nor
     # the older lines.

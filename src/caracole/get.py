@@ -92,6 +92,7 @@ SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: w
 # A running sheet stage's detail, once LaCuerda is one of the sites it asks: the site it asks now, which caracole
 # serve's line follows (web/status.py), "Fetching from LaCuerda…" rather than Ultimate Guitar's.
 SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from Ultimate Guitar"}
+GTPTABS_KEPT = "Guitar Pro file downloaded"  # the gtptabs stage's detail for a file kept, which caracole serve reads
 
 
 @dataclass(frozen=True)
@@ -673,7 +674,7 @@ class _Lookup:
                 raise e
             if not s.tried:
                 return "skipped", "no file wanted, or gtptabs.com's index doesn't know the artist"
-            return "Guitar Pro file downloaded" if s.kept else "no file there"
+            return GTPTABS_KEPT if s.kept else "no file there"
 
         return self.asking("gtptabs", ask)
 
