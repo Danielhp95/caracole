@@ -250,15 +250,39 @@
     if (capo) return [keyName(shift()), "shapes", rest];
     return [keyName(state.t + sheetCapo), "key", rest];
   };
-  // The line under the key, whole where there is room ("shapes · capo 2 · +1"); on a narrow screen
-  // the capo and the transposition alone ("capo 2 · +1"), so that neither is cut off. Fitted again
-  // when the bar comes back into view or the window changes.
+  // The key in short and the line under it, fitted to the room between − and +. The key a little
+  // smaller where it is too long ("Ab mixolydian" at 360 px), down to three quarters of its size, then
+  // cut short. The line whole where there is room ("shapes · capo 2 · +1"); on a narrow screen the capo
+  // and the transposition alone ("capo 2 · +1"); on the narrowest, each on a line of its own, "capo 2"
+  // over "+1", so that neither is cut off. Fitted again when the bar comes back into view or the window
+  // changes. Measured to the fraction of a pixel, which scrollWidth rounds away: a line 0.4 px too wide
+  // would end in an ellipsis.
   let keyUnder = ["", []];
+  const tooWide = (el) => {
+    const text = document.createRange();
+    text.selectNodeContents(el);
+    return text.getBoundingClientRect().width > el.getBoundingClientRect().width;
+  };
   const fitKey = () => {
-    const line = $("key-now").querySelector(".d");
+    const now = $("key-now"), main = now.querySelector(".k"), line = now.querySelector(".d");
+    main.style.fontSize = "";
+    if (tooWide(main)) {
+      const full = parseFloat(getComputedStyle(main).fontSize);
+      for (let size = full - 0.5; size >= full * 0.75 && tooWide(main); size -= 0.5) main.style.fontSize = size + "px";
+    }
     const [what, rest] = keyUnder;
+    line.classList.remove("stack");
     line.textContent = (what ? [what] : []).concat(rest).join(" · ");
-    if (what && rest.length && line.scrollWidth > line.clientWidth) line.textContent = rest.join(" · ");
+    if (what && rest.length && tooWide(line)) line.textContent = rest.join(" · ");
+    if (rest.length > 1 && tooWide(line)) {
+      line.textContent = "";
+      for (const part of rest) {
+        const one = document.createElement("span");
+        one.textContent = part;
+        line.append(one);
+      }
+      line.classList.add("stack");
+    }
   };
 
   // --- chord diagrams --------------------------------------------------------------------------
@@ -335,13 +359,46 @@
   // at absolute frets (a position's fret n is n + base - 1 up the neck), in its own colour (p0 to p3,
   // round again after four; the first ``mine`` are the tab's own, marked), open strings as rings at the nut, muted strings nothing. ``chosen``
   // is drawn bolder, last. Every dot carries its position (data-p) and fret (data-fret).
+  // A note several positions play is a smaller dot for each, side by side along the string in the order of
+  // the positions (the first on the left), so none hides another and each is its own to click: inside its
+  // fret's cell, shrunk to fit for three or more, their outlines thinner (few); at the nut, left of it, the neck
+  // widened to the left for them, and drawn that much wider, so its frets stay under the other necks' frets.
   const neck = (positions, opts) => {
     const frets = opts.frets || 15;
     const left = 14, top = 9, cell = 19, gap = 9;
+    const notes = positions.map(([shape, , base]) => {
+      const up = (Number(base) || 1) - 1, out = [];
+      for (let s = 0; s < 6; s++) if (shape[s] !== "x") out.push([s, shape[s] === "0" ? 0 : Number(shape[s]) + up]);
+      return out;
+    });
+    const sharing = new Map();  // "string.fret": the positions that play it, in order
+    notes.forEach((list, p) => list.forEach(([s, fret]) => {
+      const k = s + "." + fret;
+      if (!sharing.has(k)) sharing.set(k, []);
+      sharing.get(k).push(p);
+    }));
+    // n dots on one note: 6.4 apart, 2.9 across (3.6 the chosen one); for more than two, smaller and outlined
+    // thinner (viewer.css: half the chosen's outline, 1 or 0.6, beyond its radius), so the outermost stays 8
+    // from the middle: inside the cell, clear of the nut.
+    const sizes = (n) => {
+      const few = n > 2, out = few ? 0.6 : 1, k = Math.min(1, (8 - out) / (3.2 * (n - 1) + 3.6));
+      return { step: 6.4 * k, r: 2.9 * k, bold: 3.6 * k, out, few };
+    };
+    const openRight = left - 2;  // where shared open strings end, short of the nut
+    let margin = 0;  // the room shared open strings take left of the picture
+    for (const [k, ps] of sharing) {
+      if (ps.length < 2 || !k.endsWith(".0")) continue;
+      const z = sizes(ps.length);
+      margin = Math.max(margin, Math.ceil(1 + (z.bold + z.out) * 2 + z.step * (ps.length - 1) - openRight));
+    }
     const width = left + cell * frets + 4, height = top * 2 + gap * 5;
     const label = (positions.length === 1 ? "1 position" : positions.length + " positions");
-    const root = svg("svg", { class: "neck", viewBox: "0 0 " + width + " " + height, role: "img",
+    const root = svg("svg", { class: "neck", viewBox: -margin + " 0 " + (width + margin) + " " + height, role: "img",
       "aria-label": (opts.name || "") + ": " + label });
+    if (margin) {
+      root.style.width = "calc(100% * " + (width + margin) / width + ")";
+      root.style.marginLeft = "calc(-100% * " + margin / width + ")";
+    }
     for (let s = 0; s < 6; s++) {
       svg("line", { class: "nk-string", x1: left, y1: top + s * gap, x2: left + cell * frets, y2: top + s * gap }, root);
     }
@@ -360,16 +417,18 @@
     const order = positions.map((_, p) => p).filter((p) => p !== opts.chosen);
     if (opts.chosen >= 0 && opts.chosen < positions.length) order.push(opts.chosen);
     for (const p of order) {
-      const [shape, , base] = positions[p];
-      const up = (Number(base) || 1) - 1;
       const bold = p === opts.chosen;
-      for (let s = 0; s < 6; s++) {
-        const c = shape[s];
-        if (c === "x") continue;
-        const fret = c === "0" ? 0 : Number(c) + up;
-        const attrs = { class: (c === "0" ? "nk-open" : "nk-dot") + " p" + (p % 4) + (bold ? " chosen" : "") + (p < (opts.mine || 0) ? " tabs" : ""),
+      for (const [s, fret] of notes[p]) {
+        const attrs = { class: (fret === 0 ? "nk-open" : "nk-dot") + " p" + (p % 4) + (bold ? " chosen" : "") + (p < (opts.mine || 0) ? " tabs" : ""),
           cy: top + (5 - s) * gap, r: bold ? 4.2 : 3.2, "data-p": p, "data-fret": fret };
         attrs.cx = fret === 0 ? left - 7 : left + (fret - 0.5) * cell;
+        const ps = sharing.get(s + "." + fret), n = ps.length, i = ps.indexOf(p);
+        if (n > 1) {
+          const z = sizes(n);
+          attrs.r = bold ? z.bold : z.r;
+          if (z.few) attrs.class += " few";
+          attrs.cx = fret === 0 ? openRight - (z.bold + z.out) - (n - 1 - i) * z.step : attrs.cx + (i - (n - 1) / 2) * z.step;
+        }
         svg("circle", attrs, root);
       }
     }
@@ -392,7 +451,7 @@
 
   // --- drawing the page --------------------------------------------------------------------------
   const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
-  const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
+  const more = $("more"), sizes = $("sizes"), sizeButton = $("size"), shapesButton = $("shapes");
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -517,6 +576,7 @@
 
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
+    shapesButton.setAttribute("aria-pressed", state.strip ? "true" : "false");  // the guitar says the same
     drawSpeed();
     drawStrip();
     drawNecks();  // before layout(), which measures the song beside the rail
@@ -1037,6 +1097,18 @@
   $("smaller").addEventListener("click", () => { state.fs = Math.max(FS.min, state.fs - FS.step); render(); });
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
+  // The guitar in the bar shows the strip, or hides it, as the settings' chip does. The strip is above
+  // the song: shown from further down, the page goes up to it, so the shapes are in view above the bar
+  // (from there, a shape's card; back down by hand). Hidden, the page stays where it is.
+  shapesButton.addEventListener("click", () => {
+    state.strip = !state.strip;
+    render();
+    if (!state.strip) return;
+    const strip = $("strip"), r = strip.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > bar.getBoundingClientRect().top) {
+      strip.scrollIntoView({ block: "nearest", behavior: calm.matches ? "auto" : "smooth" });
+    }
+  });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null });
     for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
@@ -1249,8 +1321,9 @@
   });
   bar.addEventListener("focusin", () => slide(false));
 
-  // Nothing to transpose and no other setting for a sheet without chords: Aa and ▶ alone.
+  // Nothing to transpose, no shapes and no other setting for a sheet without chords: Aa and ▶ alone.
   $("keys").hidden = count === 0;
+  shapesButton.hidden = count === 0;
   more.hidden = count === 0;
   showScroll();
   render();

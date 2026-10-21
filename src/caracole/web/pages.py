@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 from caracole.inline import sha256_source
 from caracole.library_assets import BASE_STYLE, PICKER_STYLE
+from caracole.page_icon import LINK as PAGE_ICON
 
 if TYPE_CHECKING:  # songbooks.py imports Refused, and status.py imports songbooks.py
     from caracole.web.jobs import Job, Stage, Step
@@ -88,8 +89,9 @@ pre { max-height: 22rem; margin: 6px 0 0; padding: 10px; overflow: auto; border-
 }
 """
 
-# No script; forms post only to the server; nothing else loads.
-PAGE_CSP = (f"default-src 'none'; style-src {sha256_source(PAGE_STYLE)}; form-action 'self'; "
+# No script; forms post only to the server; nothing else loads. The one image is the page's icon, inline
+# (page_icon.py).
+PAGE_CSP = (f"default-src 'none'; style-src {sha256_source(PAGE_STYLE)}; img-src data:; form-action 'self'; "
             "frame-ancestors 'none'; base-uri 'none'")
 
 _STATE_TEXT = {"queued": "Queued", "running": "Running", "done": "Done", "failed": "Failed",
@@ -101,12 +103,11 @@ def page(title: str, body: str, *, head: str = "") -> str:
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
-        f"{head}<title>{escape(title)} · caracole</title>\n<style>{PAGE_STYLE}</style>\n</head>\n<body>\n"
+        f"{head}{PAGE_ICON}<title>{escape(title)} · caracole</title>\n<style>{PAGE_STYLE}</style>\n</head>\n<body>\n"
         '<div class="page">\n<header class="masthead">\n  <div>\n'
         '    <p class="app"><a href="/">caracole</a></p>\n'
         f"    <h1>{escape(title)}</h1>\n  </div>\n"
-        '  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a>'
-        '<a class="navlink" href="/lookup">Look up</a></nav>\n</header>\n'
+        '  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a></nav>\n</header>\n'
         f"{body}\n</div>\n</body>\n</html>\n"
     )
 

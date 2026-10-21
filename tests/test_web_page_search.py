@@ -525,6 +525,93 @@ def test_a_removed_song_shows_among_the_results_and_add_again_brings_it_back(cfg
         conn.close()
 
 
+# A result's song name, which does what its Get it does: a button in its heading.
+NAME = "{} h3 button.title-get"
+# The page's fetch, each POST noted (its path and form) and never sent: its line stays "Sending…".
+NOTE_POSTS = ("(() => { window.posts = []; const real = window.fetch; window.fetch = (url, init) => { "
+              "if (init && init.method === 'POST') { window.posts.push([String(url), String(init.body)]); "
+              "return new Promise(() => {}); } return real(url, init); }; })()")
+# An Ultimate Guitar song alone, one UG and gtptabs.com have (one line, two marks), and a gtptabs.com song alone.
+OASIS = "#results .hit[data-ug='oasis/wonderwall']"
+NOEL = "#results .hit[data-source='gtptabs']"
+
+
+def test_a_results_name_posts_what_its_get_it_posts(cfg, live, browser):
+    base, queue, _ = live
+    sites(cfg, ug=WONDERWALL["ug"], gtptabs=[*WONDERWALL["gtptabs"],
+                                            "https://gtptabs.com/tabs/20/noel-gallagher/wonderwall.html"])
+    pressed = {}
+    browser.open(base + "#q=wonderwall&all=1")
+    for what in ("name", "get it"):
+        if pressed:
+            browser.js("window.before = true; location.reload()")  # the page anew, its lines as they came
+        assert browser.wait(f"!window.before && {HITS} >= 3 && !!document.querySelector(\"{NOEL}\")")
+        browser.js(NOTE_POSTS)
+        for hit in (RYAN, OASIS, NOEL):
+            browser.click(NAME.format(hit) if what == "name" else f"{hit} .line-action button")
+            assert browser.wait(f"window.posts.length && !!document.querySelector(\"{hit} .progress\")")
+        pressed[what] = browser.js("window.posts")
+    assert pressed["name"] == pressed["get it"]
+    assert [path for path, _ in pressed["name"]] == ["lookup"] * 3
+    forms = [parse_qs(body) for _, body in pressed["name"]]
+    assert forms[0]["ug"] == ["ryan-adams/wonderwall"] and forms[1]["ug"] == ["oasis/wonderwall"]
+    assert forms[2]["artist"] == ["Noel Gallagher"] and "ug" not in forms[2]
+    assert queue.snapshot() == []  # noted, never sent
+    # Named for what it does, and looking like the name it is.
+    assert browser.js(f"document.querySelector(\"{NAME.format(RYAN)}\").getAttribute('aria-label')"
+                      ) == "Get Ryan Adams - Wonderwall"
+    assert browser.js(f"document.querySelector(\"{NAME.format(RYAN)}\").title").startswith("Get Ryan Adams - Wonderwall")
+    assert browser.js(f"document.querySelector(\"{RYAN} h3\").textContent") == "Wonderwall"
+
+
+def test_a_results_name_looks_the_song_up_and_cant_be_pressed_twice(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, **WONDERWALL)
+    browser.open(base + "#q=wonderwall&all=1")
+    assert browser.wait(f"{HITS} >= 2")
+    name = f"document.querySelector(\"{NAME.format(RYAN)}\")"
+    assert browser.js(f"{name}.disabled") is False
+    asked.lookups_held = threading.Event()  # the page hears back once the test says so
+    browser.js(f"{name}.focus()")
+    browser.press("Enter")  # a key on the name, as a click on it
+    args = posted(queue)
+    assert args[:3] == ("get", "--progress", "--ug=ryan-adams/wonderwall") and args[-2:] == ("Ryan Adams", "Wonderwall")
+    assert browser.wait(f"{name}.disabled && document.querySelector(\"{RYAN} .line-action button\").disabled")
+    browser.click(NAME.format(RYAN))  # pressed again while its request is on its way: nothing more
+    asked.lookups_held.set()
+    assert answered(browser, RYAN)  # its request line in its Get it's place
+    assert browser.wait(f"!{name} || {name}.disabled")
+    assert browser.wait("document.querySelector('#results .progress').dataset.tone === 'ready'", timeout=20)
+    assert len(queue.snapshot()) == 1
+
+
+def test_a_song_of_yours_keeps_its_title_link_and_a_removed_songs_name_adds_it_again(cfg, live, browser):
+    base, queue, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 2), ("radiohead", "karma-police", 2)])
+    removed(cfg, "Radiohead", "Creep")
+    (mine,) = library(cfg, ("Radiohead", "Karma Police"))
+    conn = db.connect(cfg.db_path)
+    folder = song_dir(cfg.library_dir, mine)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
+    update_song(conn, mine.id, status="found")
+    conn.close()
+    browser.open(base)
+    search(browser, "radiohead")
+    assert browser.wait("!!document.querySelector('#results .removed-hit') && "
+                        "!!document.querySelector('#results .line[data-id]')")
+    yours = "#results .line[data-id]"
+    assert browser.js(f"!!document.querySelector(\"{yours} a.line-title h3\")") is True  # opens its sheet
+    assert browser.js(f"document.querySelector(\"{yours} .title-get\")") is None
+    gone = "#results .removed-hit"
+    assert browser.js(f"document.querySelector(\"{NAME.format(gone)}\").getAttribute('aria-label')"
+                      ) == "Add Radiohead - Creep again"
+    browser.click(NAME.format(gone))  # as its Add again: asked for as the request form asks
+    args = posted(queue)
+    assert args[0] == "get" and args[-2:] == ("Radiohead", "Creep")
+    assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")
+
+
 def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, **WONDERWALL)

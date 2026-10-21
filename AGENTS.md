@@ -61,6 +61,7 @@ Shared by the steps and the commands:
 | health.py | cooldowns, `events` |
 | normalize.py | keys, pinyin, `name_forms`; `name_words`, `holds_run` and `PINYIN_PARTIAL_SCALE`, Chinese in pinyin only as whole words, for search.py and lacuerda_index.py |
 | inline.py | what a page holds inline: a script or a style by its hash, a JSON data block; the standard library alone |
+| page_icon.py | the mark in every page's tab, "¿" drawn in SVG (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`); the standard library alone |
 | overrides.py | overrides.toml |
 | library.py | song folders, safe file access in the synced library |
 | notify.py | ntfy |
@@ -76,7 +77,8 @@ Rules a change there keeps (the Invariants below are the others):
 - **The pages caracole writes and serves** (index.html, sheet.html, songbook.html, caracole
   serve's own) load nothing from the network: a Content-Security-Policy allows each inline
   script and stylesheet by the hash of the very text inlined (inline.py `sha256_source`), and a
-  page's data is a JSON block with each `<` escaped (`inline.json_block`). Their scripts build
+  page's data is a JSON block with each `<` escaped (`inline.json_block`). Each carries
+  `page_icon.LINK` in its head, which its policy allows with `img-src data:` (test_page_icon.py). Their scripts build
   every element with `createElement` and `textContent`, never `innerHTML`, and connect to
   nothing but caracole serve. A page caracole writes into the library is served only through
   `app.written_pages` (a new kind goes there, with its record and its policy), and only while it
@@ -87,7 +89,9 @@ Rules a change there keeps (the Invariants below are the others):
   There, library.js's `mergeSites` puts your songs and every index's rows under one header an
   artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
   `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line
-  rows.js's `indexLine`; a removed song's line asks for it again as the request form does. Your
+  rows.js's `indexLine`; a removed song's line asks for it again as the request form does. A hit's
+  name there and on the lookup page presses its Get it (or Add again), disabled while that button is
+  (rows.js `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it. Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
   do. select.js knows only the songs the page was loaded with: a line offers Add to a songbook…
   for those alone. The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the

@@ -585,7 +585,8 @@ library page, a form to request songs, a Fetch now button on each wanted
 song, a picker on each song that needs review, a Remove… button on each
 line, which says what goes and waits five seconds with Undo, a search box that lists, as you type, what the
 offline indexes hold of the sites under your songs' artist headers, with Get it, and the lookup page
-(`/lookup`), which shows a sheet seconds after you pick a song
+(`/lookup`), which shows a sheet seconds after you pick a song and is the one page that looks a song you
+have up again, or gets it another version or LaCuerda's sheet; no page links to it, so you type its address
 ([usage.md](usage.md), "caracole serve"). A request runs caracole commands
 in the unit, one at a time and each under caracole's lock, so the unit has the
 nightly run's sandbox, folders and network. Of the credentials it gets

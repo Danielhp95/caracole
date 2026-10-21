@@ -268,6 +268,23 @@ def test_the_request_form_is_under_the_results_not_above_the_bar(conn, cfg):
     assert 'href="/lookup"' not in html  # the bar is the way in: no Look up link in the masthead
 
 
+def masthead(html: str) -> str:
+    return re.search(r'<header class="masthead lib">(.*?)</header>', html, re.S).group(1)
+
+
+def test_the_masthead_links_no_to_do_page_written_or_served(conn, cfg):
+    from caracole.library_page import WebControls
+
+    # The file links no page at all: no To-do link, and no empty landmark where the links were.
+    written = masthead(JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW)))
+    assert "_todo.md" not in written and "To-do" not in written and "<nav" not in written
+    # Served, the masthead has Requests alone.
+    served = masthead(JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW,
+                                                            controls=WebControls(csrf="tok", active=2))))
+    assert re.findall(r'<a class="navlink" href="([^"]*)">([^<]*)', served) == [("/jobs", "Requests")]
+    assert '<nav class="links" aria-label="Pages">' in served and "_todo.md" not in served
+
+
 # --- files ---------------------------------------------------------------------------
 
 
@@ -713,9 +730,12 @@ def test_no_external_resources_and_no_urls_outside_the_data(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马，斑马")
     v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
     set_picks(conn, s.id, ["guitar-pro"], [v])
+    from caracole.page_icon import LINK
+
     html = page(conn, cfg)
+    assert html.count(LINK) == 1  # its icon, inline: a data: URI loads nothing
     # The CSP's hashes are base64, which may hold "//" before a letter: they are no addresses.
-    shell = re.sub(r"'sha256-[A-Za-z0-9+/]+=*'", "'sha256'", JSON_BLOCK.sub("", html))
+    shell = re.sub(r"'sha256-[A-Za-z0-9+/]+=*'", "'sha256'", JSON_BLOCK.sub("", html.replace(LINK, "")))
     assert not re.search(r"https?://|//[a-z]", shell, re.I)  # no CDN, fonts, images, fetches
     assert not re.search(r"<(link|img|iframe|object|embed)\b|\bsrc=|@import|url\(", shell, re.I)
     allowed = set(search_links("宋冬野", "斑马，斑马").values()) | {"https://tabs.ultimate-guitar.com/tab/555890"}
@@ -1135,6 +1155,55 @@ def test_a_screen_reader_hears_each_artist_and_song_and_a_jump_moves_the_focus(c
     assert 'aria-label="Fetch Yesterday by The Beatles now"' in shown
     # After a jump, the next Tab goes on from the artist jumped to, not from the strip.
     assert re.search(r'<body[^>]*data-focus="radiohead"', dom), dom[-1500:]
+
+
+# Notes how an artist's header looks beside their song's line, and what base.css's tokens resolve to.
+HEADER_LOOK = """
+(() => {
+  const css = (node) => getComputedStyle(node);
+  const token = (name) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(" + name + ")";
+    document.body.appendChild(probe);
+    const colour = css(probe).color;
+    probe.remove();
+    return colour;
+  };
+  const head = document.querySelector("#list section.artist .artist-title");
+  const name = head.querySelector(".artist-name");
+  const counts = head.querySelector(".artist-counts");
+  const title = document.querySelector("#list section.artist .line-title h3");
+  document.body.setAttribute("data-look", JSON.stringify({
+    name: [parseFloat(css(name).fontSize), css(name).color],
+    mark: css(head.querySelector(".filter-mark")).backgroundColor,
+    counts: [parseFloat(css(counts).fontSize), css(counts).color],
+    title: parseFloat(css(title).fontSize),
+    tokens: Object.fromEntries(["--artist", "--text", "--accent", "--muted"].map((t) => [t, token(t)])),
+  }));
+})();
+"""
+
+
+@in_chromium
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_an_artists_name_is_bigger_than_their_songs_titles_in_a_colour_of_its_own(conn, cfg, tmp_path, scheme):
+    # The header the list and the served search results share: the name in --artist, a second accent, its funnel
+    # with it; the counts beside it small and muted.
+    from html import unescape
+
+    from caracole.library_page import WebControls
+
+    add_song(conn, "Radiohead", "Creep")
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))
+    path = write_library_page(cfg.library_dir, with_script(html, HEADER_LOOK))
+    dom = dump_dom(path, tmp_path, media={"prefers-color-scheme": scheme})
+    look = json.loads(unescape(re.search(r'<body[^>]*data-look="([^"]*)"', dom).group(1)))
+    tokens = look["tokens"]
+    assert tokens["--artist"] not in (tokens["--text"], tokens["--accent"], tokens["--muted"]), tokens
+    size, colour = look["name"]
+    assert colour == tokens["--artist"] and look["mark"] == colour, look
+    assert size >= 1.1 * look["title"], look
+    assert look["counts"][0] < size and look["counts"][1] == tokens["--muted"], look
 
 
 # Clicks Queen's name over their songs, then notes the titles shown and the chip.
@@ -1674,6 +1743,19 @@ def test_a_songs_title_opens_its_sheet_and_its_lines_button_does_too(conn, cfg, 
     opened = re.search(r'<a class="btn small primary" ([^>]*)>Open PDF</a>', wonderwall)
     assert opened and 'aria-label="Open PDF of Wonderwall by Oasis"' in opened.group(1), wonderwall
     assert '<a class="line-title"' not in line_of(shown, "Yesterday")  # no file: a plain title
+
+
+@in_chromium
+@pytest.mark.parametrize("fragment", ["", "#q=yesterday&all=1"])
+def test_on_the_file_no_name_gets_a_song(conn, cfg, tmp_path, fragment):
+    # A result's name does what its Get it does, which needs caracole serve: on the file, with no Get it, every
+    # name is the title it was, plain or the link to the sheet, the sites' search (Enter) the line to run alone.
+    filed_library(conn, cfg)
+    dom = dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path, fragment)
+    assert re.search(r'<button[^>]*class="title-get', dom) is None
+    assert re.search(r"<h3[^>]*>Yesterday</h3>", dom)  # its name alone, no button in it
+    if fragment:
+        assert 'id="found"' in dom and "caracole serve" in dom  # the line that searches the sites, to run
 
 
 # Notes how each line is laid out: how tall its title's link is against its button, how many lines its title

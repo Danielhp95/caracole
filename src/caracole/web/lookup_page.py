@@ -15,10 +15,11 @@ it leads. Enter acts
 on the answer of the query typed, never of an older one still on the screen:
 its ``best`` row, the song you meant; when an artist leads, that artist's
 songs; when nothing stands out, nothing, so a guess never spends a request.
-Picking a song, or
-one of its versions, looks it up now (``POST /lookup``: one ``caracole get``,
-which records the pick in overrides.toml; a song your library has, under any
-name, is posted as that song, by its id), and the page follows the request
+Picking a song (its Get
+it, or its name, which does the same), or one of its versions, looks it up
+now (``POST /lookup``: one ``caracole get``, which records the pick in
+overrides.toml; a song your library has, under any name, is posted as that
+song, by its id), and the page follows the request
 (``GET /api/jobs/<id>``) stage by stage, the results set aside so that it sits
 under the search box: the sheet shows the moment it is kept, scrolled into
 view once, then the PDF, the lyrics and the rest arrive. The progress line
@@ -52,6 +53,7 @@ from typing import Any
 
 from caracole.inline import json_block, sha256_source
 from caracole.library_assets import BASE_STYLE, ROWS_SCRIPT, ROWS_STYLE
+from caracole.page_icon import LINK as PAGE_ICON
 
 STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }
@@ -636,7 +638,7 @@ def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None) -> str:
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
-        f"<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
+        f"{PAGE_ICON}<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
         + _BODY.replace("__CSRF__", token)
         + json_block("icons", dict(icons or {}))
         + f"<script>{ROWS_SCRIPT}</script>\n<script>{SCRIPT}</script>\n</body>\n</html>\n"

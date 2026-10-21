@@ -1664,12 +1664,16 @@ as another spelling.
 overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
-loads nothing from the network. It has two tabs under its header: **Library**,
+loads nothing from the network. Its browser tab shows caracole's mark, an
+inverted question mark (¿) on its rust-red square, drawn inside the page itself,
+as every page caracole writes or serves shows it (the sheet viewers and the
+songbooks from their next render); caracole serve answers a browser's own
+`/favicon.ico` with it too. It has two tabs under its header: **Library**,
 your songs, and **Songbooks** (see [The Songbooks tab](#the-songbooks-tab));
 the address remembers which (`#tab=songbooks`). Its header is short, so that on
 a phone the first song starts well within the first screen: the library's
-numbers beside its title, the pages on the line above, the tabs, the search box,
-then one row of
+numbers beside its title (served, the Requests link on the line above), the
+tabs, the search box, then one row of
 buttons and menus (the status buttons, then Select, Key and Sort), which
 scrolls sideways on a phone, fading at an end where more of it is out of
 sight. The search box stays at the top as the page scrolls under it, with an
@@ -1905,7 +1909,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
   left lists each chord of the song once, in the order it first comes, with a
   guitar neck (frets 0 to 15, the high e on top) showing every shape of it in
-  a colour of its own, the tab's own ringed, and a legend under it that
+  a colour of its own, the tab's own ringed (a note several shapes play is a
+  smaller dot for each, side by side in the fret, the first shape leftmost,
+  and an open string several play a ring for each left of the nut, so none
+  hides another and a click on one plays its shape), and a legend under it that
   numbers them as the card counts them ("2 of 5") and names them: "1 · the
   tab's", "2 · open", "3 · fret 3", so two shapes at one fret ("1 · fret 1",
   "2 · fret 1") have names of their own. Click a shape, on the neck or in the
@@ -1921,12 +1928,18 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
   "Key Em". Each says where the key came from.
 - **The bar** at the foot of the page holds what you reach for while
-  playing: `− Em +`, `Aa`, `▶` and `⋯`. − and + move every chord, its shapes
-  and the key a semitone at a time, with the key you play between them in
-  short: "Em" over "shapes · capo 2" (or "key" with no capo), and "· +1"
-  once transposed, or "capo 2 · +1" on a screen too narrow for all of it;
-  a screen reader hears the whole line ("Em shapes · capo 2
-  · sounds F#m · +1"). **Aa** opens a small box over the bar with the text
+  playing: `− Em +`, a guitar, `Aa`, `▶` and `⋯`. − and + move every
+  chord, its shapes and the key a semitone at a time, with the key you play
+  between them in short: "Em" over "shapes · capo 2" (or "key" with no
+  capo), and "· +1" once transposed, or "capo 2 · +1" on a screen too
+  narrow for all of it, and "capo 2" over "+1" on the narrowest; a key too
+  long for its room ("Ab mixolydian") is a little smaller. A screen reader
+  hears the whole line ("Em shapes · capo 2 · sounds F#m · +1"). **The
+  guitar** shows the strip of every chord's shape (below), or hides it
+  again, as Show all in the settings does: it stays pressed while the strip
+  shows, and the two always agree. Pressed further down the song, it takes
+  the page up to the strip, so the shapes are in view; a sheet without
+  chords has none. **Aa** opens a small box over the bar with the text
   size and A− and A+, nothing dimmed behind it; a tap anywhere else, or
   Escape, closes it. **▶** scrolls the song by itself (below). **⋯** opens the
   settings. The bar slides away as you scroll down the song, and comes back
@@ -1970,11 +1983,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Phrygian, Lydian, Mixolydian, Locrian). Each chord's notes move to the same
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
   the key, such as the G major chord's B in C minor, stays where it is.
-- Every chord's shape in a strip above the song (Show all, in the
-  settings): the shapes alone, large enough to read at a glance; tap one for
-  its card, with the fingers. Reset everything, at the foot of the settings,
-  puts the transposition, the mode, the capo and the chords played instead
-  back as the viewer starts them.
+- Every chord's shape in a strip above the song (the guitar in the bar, or
+  Show all in the settings; kept for the page, as the text size is): the
+  shapes alone, large enough to read at a glance; tap one for its card,
+  with the fingers. Reset everything, at the foot of the settings, puts the
+  transposition, the mode, the capo and the chords played instead back as
+  the viewer starts them.
 - **Scrolling by itself**: ▶ in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the
@@ -2416,7 +2430,8 @@ is no progression exits with status 2.
   common words), takes no lock and spends no budget, and so does "+ N more".
   **Enter never spends a request**, however clear the best result: it moves to
   the first result's line (once the query's answer is in), from which Tab goes
-  on to its button; Get it does. Escape, or Back to your songs, goes back to
+  on to its name and its button; Get it, or a click or a key on the name,
+  does. Escape, or Back to your songs, goes back to
   the list with your search and buttons as they were (Escape again clears the
   search; Enter, or typing on, brings the results back), and the box's × back
   to all your songs; either way a song asked for there has its line (see
@@ -2438,7 +2453,13 @@ is no progression exits with status 2.
   caracole never fetches from MuseScore. The line then says how it goes, on a
   line of its own ("Sending…", "Fetching from Ultimate Guitar…", "Ready · Open
   sheet"), and once the sheet is kept the line is the song's own line, its
-  sheet its button. A newer answer drawn while it goes (a search typed on)
+  sheet its button. **A result's name does what its Get it does**: a click on
+  "Wonderwall", or Enter or Space on it, looks the song up just as Get it would,
+  and while that request is on its way the name, like the button, can't be
+  pressed again. A removed song's name does what its Add again does (below). A
+  song of yours whose title opens its sheet keeps opening it; an artist's name
+  still shows that artist's songs; and on the file, with no caracole serve, no
+  name gets anything. A newer answer drawn while it goes (a search typed on)
   keeps the line where it has the song, with its request line; one it hasn't
   moves the request under the box as its line ("Just requested"), its request
   line going on there. A song your library has already, under its own names
@@ -2464,13 +2485,21 @@ is no progression exits with status 2.
   [caracole remove](#caracole-remove)), then its lookup. It is never what
   Enter acts on.
 
-  `/lookup`, the lookup page, still answers: the same search of your library
-  and the Ultimate Guitar and LaCuerda indexes, whose Get it reads the sheet on
-  the page as it arrives, stage by stage. Its Enter acts on the song you clearly meant (one of
+  `/lookup`, the lookup page, still answers, though no page's header links to
+  it any more (the requests page's has Library alone): the same search of your library
+  and the Ultimate Guitar and LaCuerda indexes, whose Get it (or a song's name,
+  which does the same) reads the sheet on the page as it arrives, stage by
+  stage. Its Enter acts on the song you clearly meant (one of
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
   songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
   nothing), or nothing when nothing stands out. `/lookup?q=WORDS` opens it with
-  that search, and a lookup posted without JavaScript lands there.
+  that search, and a lookup posted without JavaScript lands there. It alone
+  looks a song you already have up again: on the library page the index's
+  rows of a song of yours are folded into your song's own line, which has
+  neither Get it again nor a version to pick, while here your song keeps its
+  own row, with Fetch again, and each site's row of it its own: Ultimate
+  Guitar's Get it again, with a version of theirs to pick under "⋯", and
+  LaCuerda's, which keeps that LaCuerda sheet.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" takes an artist, a title and, optionally, the album and the length,
   filled in from what you searched ("Muse - Hysteria"; an artist's name alone
