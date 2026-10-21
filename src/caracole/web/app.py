@@ -484,15 +484,13 @@ _VIEWER_REFUSED = ("This sheet viewer isn't the page caracole last wrote here (i
 def _viewers_written(conn: sqlite3.Connection, library_dir: Path, parts: tuple[str, ...]) -> list[tuple[str, int]]:
     """The viewer ``parts`` names, as caracole last wrote it (``render.written_file``) for each song
     whose folder (``library.song_dir``, where render.py writes it) the path is in."""
-    from caracole.library import song_dir
+    from caracole.library import songs_in_folder
     from caracole.render import written_file
-    from caracole.songs import list_songs
 
     *folder, name = parts
     found = []
-    for song in list_songs(conn):
-        if song_dir(library_dir, song).relative_to(library_dir).parts == tuple(folder):
-            record = written_file(conn, song.id, name)
-            if record is not None:
-                found.append(record)
+    for song in songs_in_folder(conn, tuple(folder)):
+        record = written_file(conn, song.id, name)
+        if record is not None:
+            found.append(record)
     return found
