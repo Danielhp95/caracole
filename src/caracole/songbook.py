@@ -18,6 +18,13 @@ files. It is written only through this module's writers (``make_songbook``,
 ``library.write_atomic``. A file that won't parse is a ``SongbookError`` naming it and
 the line; it stops the songbooks and nothing else.
 
+A song may carry its own setting, an inline table in place of the string: its key (a tonic as written),
+its mode (one of ``theory.MODES``) and its capo, each left out where it says nothing::
+
+    songs = ["Oasis - Wonderwall", { song = "Soda Stereo - De Música Ligera", key = "G", mode = "dorian", capo = 0 }]
+
+A song with no setting stays a plain string, in the file and after any change to it.
+
 Two songs are the same when their identity keys are (``same_entry``): accents, case,
 Traditional or Simplified characters and a version suffix don't count. A name is a
 folder too, ``Library/_songbooks/<name>/`` (``library.safe_name``), so two names that
@@ -29,6 +36,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import sqlite3
 import subprocess
 import tempfile
@@ -79,6 +87,7 @@ from caracole.render import (
     written_file,
 )
 from caracole.viewer.sheet import parse_sheet
+from caracole.viewer.theory import MODES
 from caracole.viewer.version import Version
 
 if TYPE_CHECKING:
@@ -92,10 +101,13 @@ FILE_NAME = "songbooks.toml"  # in the library
 FOLDER = "_songbooks"  # in the library: a folder per songbook
 MAX_NAME = 80  # characters
 _KEYS = ("songs",)
+_SETTING_KEYS = ("song", "key", "mode", "capo")
+_TONIC = re.compile(r"[A-G][#b]?")
+CAPO_MAX = 11  # the viewer's frets (viewer.js CAPO_MAX)
 _HEADER = (
     "Your songbooks. Each [table] is one: its header is the songbook's name, and songs",
     'its songs in order, each "Artist - Title". Edit it by hand, or with caracole songbook',
-    "(make, add, remove, move, rename, delete); caracole render makes each songbook into",
+    "(make, add, remove, move, set, rename, delete); caracole render makes each songbook into",
     "Library/_songbooks/<name>/: songbook.pdf, songbook.html and songbook.cho.",
 )
 
@@ -109,11 +121,42 @@ class SongbookFileError(SongbookError):
 
 
 @dataclass(frozen=True)
+class Setting:
+    """How a songbook plays one song, each part None where it says nothing (the sheet's own): ``key``, a
+    tonic as written ("G", "F#", "Bb"); ``mode``, one of ``theory.MODES``; ``capo``, a fret up to 11."""
+
+    key: str | None = None
+    mode: str | None = None
+    capo: int | None = None
+
+    def __bool__(self) -> bool:
+        return self.key is not None or self.mode is not None or self.capo is not None
+
+
+@dataclass(frozen=True)
+class SongbookSong:
+    """A songbook's entry: its "Artist - Title" and the setting it carries, if any. (viewer/book.py's
+    ``BookSong`` is a song as a songbook page draws it.)"""
+
+    text: str
+    setting: Setting | None = None
+
+
+@dataclass(frozen=True)
 class Songbook:
-    """A songbook: its name and its songs, in order, as songbooks.toml writes them."""
+    """A songbook: its name and its songs, in order, as songbooks.toml writes them. Given plain strings,
+    it takes each for a song with no setting."""
 
     name: str
-    songs: tuple[str, ...] = ()
+    songs: tuple[SongbookSong, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "songs", tuple(SongbookSong(s) if isinstance(s, str) else s for s in self.songs))
+
+    @property
+    def texts(self) -> tuple[str, ...]:
+        """Its songs' "Artist - Title", in order."""
+        return tuple(s.text for s in self.songs)
 
     @property
     def folder(self) -> str:
@@ -274,6 +317,47 @@ def _entry(value: Any, where: str) -> str:
     return text
 
 
+def check_setting(key: Any = None, mode: Any = None, capo: Any = None, *, where: str = "a setting") -> Setting:
+    """The setting these parts make; SongbookError naming ``where`` for a part that can't be one."""
+    if key is not None and not (isinstance(key, str) and _TONIC.fullmatch(key)):
+        raise SongbookError(f'{where}: key must be a tonic such as "G", "F#" or "Bb", got {key!r}')
+    if mode is not None and mode not in MODES:
+        raise SongbookError(f"{where}: mode must be one of {', '.join(MODES)}, got {mode!r}")
+    if capo is not None and (isinstance(capo, bool) or not isinstance(capo, int) or not 0 <= capo <= CAPO_MAX):
+        raise SongbookError(f"{where}: capo must be a fret from 0 to {CAPO_MAX}, got {capo!r}")
+    return Setting(key, mode, capo)
+
+
+def _song_of(value: Any, where: str) -> SongbookSong:
+    """An entry of ``songs`` as the file has it: a string, or a table with ``song`` and a setting."""
+    if isinstance(value, Mapping):
+        unknown = [k for k in value if k not in _SETTING_KEYS]
+        if unknown:
+            raise SongbookError(f"{where}: unknown key(s) in a song: {', '.join(map(repr, unknown))}; expected "
+                                '{ song = "Artist - Title", key = "G", mode = "dorian", capo = 0 }')
+        text = _entry(value.get("song"), where)
+        setting = check_setting(value.get("key"), value.get("mode"), value.get("capo"), where=f'{where}, "{text}"')
+        return SongbookSong(text, setting or None)
+    return SongbookSong(_entry(value, where))
+
+
+def _item(song: SongbookSong):
+    """The song as the document writes it: a plain string with no setting, else an inline table."""
+    setting = song.setting
+    if not setting:
+        return song.text
+    table = tomlkit.inline_table()
+    table["song"] = song.text
+    for name in ("key", "mode", "capo"):
+        if (value := getattr(setting, name)) is not None:
+            table[name] = value
+    return table
+
+
+def _text_of(item: Any) -> str:
+    return str(item["song"]) if isinstance(item, Mapping) else str(item)
+
+
 # --- reading -----------------------------------------------------------------------------------
 
 
@@ -312,8 +396,9 @@ def _parse(data: Mapping[str, Any]) -> list[Songbook]:
             raise SongbookError(f"unknown key(s) in {where}: {', '.join(map(repr, unknown))}; "
                                 'expected songs = ["Artist - Title", ...]')
         songs = table.get("songs", [])
-        if not isinstance(songs, list) or not all(isinstance(s, str) for s in songs):
-            raise SongbookError(f'{where}: songs must be a list of "Artist - Title" strings')
+        if not isinstance(songs, list) or not all(isinstance(s, (str, Mapping)) for s in songs):
+            raise SongbookError(f'{where}: songs must be a list of "Artist - Title" strings or '
+                                '{ song = "Artist - Title", key = ..., mode = ..., capo = ... } tables')
         if name_key(name) in names:
             raise SongbookError(f"{where} and [{_quoted(names[name_key(name)])}] are one songbook written "
                                 "twice: merge them")
@@ -321,7 +406,7 @@ def _parse(data: Mapping[str, Any]) -> list[Songbook]:
             raise SongbookError(f"{where} and [{_quoted(folders[_folder_key(name)])}] would share the folder "
                                 f"{FOLDER}/{safe_name(name)}: rename one")
         names[name_key(name)] = folders[_folder_key(name)] = header
-        books.append(Songbook(name, tuple(_entry(s, where) for s in songs)))
+        books.append(Songbook(name, tuple(_song_of(s, where) for s in songs)))
     return books
 
 
@@ -423,7 +508,7 @@ def add_to_songbook(path: Path, name: str, entries: Sequence[str]) -> list[str]:
         songs = _songs(doc, _header(doc, name))
         added: list[str] = []
         for entry in wanted:
-            if not any(same_entry(entry, str(s)) for s in [*songs, *added]):
+            if not any(same_entry(entry, _text_of(s)) for s in [*songs, *added]):
                 added.append(entry)
         songs.extend(added)
         return added
@@ -438,8 +523,8 @@ def remove_from_songbook(path: Path, name: str, entries: Sequence[str]) -> list[
         songs = _songs(doc, _header(doc, name))
         removed: list[str] = []
         for i in reversed(range(len(songs))):
-            if any(same_entry(str(songs[i]), e) for e in entries):
-                removed.insert(0, str(songs[i]))
+            if any(same_entry(_text_of(songs[i]), e) for e in entries):
+                removed.insert(0, _text_of(songs[i]))
                 del songs[i]
         return removed
 
@@ -454,10 +539,10 @@ def move_in_songbook(path: Path, name: str, entry: str, position: int) -> int:
     def change(doc, _books) -> int:
         header = _header(doc, name)
         songs = _songs(doc, header)
-        at = next((i for i, s in enumerate(songs) if same_entry(str(s), entry)), None)
+        at = next((i for i, s in enumerate(songs) if same_entry(_text_of(s), entry)), None)
         if at is None:
             raise SongbookError(f'"{entry}" isn\'t in the songbook "{header}": caracole songbook show lists its songs')
-        value = str(songs[at])
+        value = _item(_song_of(songs[at], f"[{_quoted(header)}]"))
         to = min(position, len(songs)) - 1
         if to != at:
             del songs[at]
@@ -465,6 +550,22 @@ def move_in_songbook(path: Path, name: str, entry: str, position: int) -> int:
         return to + 1
 
     return _edit(path, change)
+
+
+def set_song_setting(path: Path, name: str, entry: str, setting: Setting | None) -> None:
+    """Give the song its setting, in place; ``None`` (or an empty one) takes it off, and the song is a plain
+    string again. SongbookError if the songbook doesn't hold the song. Its place and the rest of the file stay."""
+    setting = check_setting(setting.key, setting.mode, setting.capo) if setting else None
+
+    def change(doc, _books) -> None:
+        header = _header(doc, name)
+        songs = _songs(doc, header)
+        at = next((i for i, s in enumerate(songs) if same_entry(_text_of(s), entry)), None)
+        if at is None:
+            raise SongbookError(f'"{entry}" isn\'t in the songbook "{header}": caracole songbook show lists its songs')
+        songs[at] = _item(SongbookSong(_text_of(songs[at]), setting or None))
+
+    _edit(path, change)
 
 
 def rename_songbook(path: Path, name: str, new: str) -> Songbook:
@@ -561,7 +662,7 @@ def songbook_entries(conn: sqlite3.Connection, library_dir: Path, overrides: Ove
     """The songbook's songs, in order, each with its sheet or why it has none: a song the library
     hasn't got (removed since, say) or one without a sheet is missing, never an error. Each is
     found by its "Artist - Title" alone (``find_entry_song``), never by a search."""
-    return [_entry_of(conn, library_dir, overrides, text) for text in book.songs]
+    return [_entry_of(conn, library_dir, overrides, text) for text in book.texts]
 
 
 def songs_to_get(entries: Iterable[Entry], overrides: Overrides) -> list[Song]:

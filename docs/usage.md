@@ -1313,7 +1313,7 @@ in `caracole.lock.waiting/` in the state folder, which it touches every second
 while it waits; one left by a lookup that was killed while it waited is no
 longer waited for after five seconds.
 A songbook change, asked for now as a lookup is, waits the same way and says
-the same: `caracole songbook make`, `add`, `remove`, `move`, `rename`,
+the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `delete` and `render`, so a songbook you make (from a terminal, or on
 `caracole serve`) while the nightly run works is made in the run's next pause,
 in seconds, rather than after the whole run.
@@ -2700,6 +2700,17 @@ songbook's files stay as they are, and everything else goes on.
   song removed from the library goes by the name the songbook gives it.
 - **`caracole songbook move NAME "ARTIST - TITLE" POSITION`** moves a song,
   1 being the first; past the end is last.
+- **`caracole songbook set NAME "ARTIST - TITLE" [--key K] [--mode M] [--capo N]`**
+  gives a song its own setting in the songbook: the key it is played in
+  (`G`, `F#`, `Bb`), its mode (`ionian`, `dorian`, ... `locrian`) and its capo
+  (0 to 11). The parts you give change; the others stay. `--clear` takes the
+  whole setting off, and the song is the sheet's own again. In songbooks.toml a
+  song with a setting is a table in place of the string, and one without stays
+  a string: `songs = ["Oasis - Wonderwall", { song = "Soda Stereo - De Música
+  Ligera", key = "G", mode = "dorian", capo = 0 }]`. A key, mode or capo that
+  is none of those is an error naming the songbook and the song, and stops the
+  songbooks. The key is a key, not a move: replacing the song's sheet keeps it.
+  (The files don't follow the setting yet.)
 - **`caracole songbook rename NAME NEW`** renames it; its files move to the
   folder of the new name.
 - **`caracole songbook delete NAME`** deletes it, and the files caracole made
