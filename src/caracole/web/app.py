@@ -698,9 +698,8 @@ class WebApp:
         except QueueFull:  # the lookups run all the same: the nightly run makes the songbook
             return full
         response = self._queued(made, f"/jobs#job-{made.id}")  # its songbook's card says how it goes
-        assert response.data is not None
-        response.data["jobs"] = [self._job_view(job) for job in lookups]  # each on its song's card
-        response.data["left"] = len(songs) - len(lookups)
+        response.data = {**(response.data or {}), "jobs": [self._job_view(job) for job in lookups],  # each on its card
+                         "left": len(songs) - len(lookups)}
         return response
 
     def _wanted_line(self, form: dict[str, str]) -> tuple[Any, str] | tuple[int, str, str]:

@@ -19,9 +19,9 @@ never by a search: one gone from the library is missing. A change writes songboo
 makes the songbook's files again and rewrites the library pages, holding caracole's lock;
 ``list`` and ``show`` only read. A change (``render`` too) is asked for now, so it takes the lock
 as a lookup does (``exclusive(..., interactive=True)``): a nightly run holding it hands it over at
-its next pause, or between two songs, rather than making the songbook wait for the whole run. A songbooks.toml that can't be read exits 2, naming it and
-the line. Every command module is imported on every start, so the songbook code is
-imported inside the commands.
+its next pause, or between two songs, rather than making the songbook wait for the whole run. A
+songbooks.toml that can't be read exits 2, naming it and the line. Every command module is
+imported on every start, so the songbook code is imported inside the commands.
 """
 
 from __future__ import annotations
