@@ -81,7 +81,8 @@ def test_a_progression_typed_as_numerals_in_any_rotation_or_spelling():
 
 def test_a_progression_named_from_the_catalogue():
     andalusian = read_progression("andalusian")
-    assert andalusian.name == "the Andalusian cadence" and andalusian.keys == {ANDALUSIAN}
+    # In a minor key, and read in the relative major (vi–V–IV–V/vi)
+    assert andalusian.name == "the Andalusian cadence" and andalusian.keys == {ANDALUSIAN, "IV V/vi vi V"}
     assert andalusian.label == "the Andalusian cadence"
     assert read_progression("Andalusian Cadence").keys == andalusian.keys
     assert read_progression("the pop progression").keys == {POP, POP_MINOR}
