@@ -369,7 +369,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         + _song_html(sheet)
         + _footer(pdf_link)
         + "</div>\n"
-        + _CONTROLS
+        + _SHEET_CONTROLS
     )
 
 
@@ -516,6 +516,12 @@ def _words(text: str) -> list[str]:
 # above the bar's place, the bar out of the way while the song moves: its first button counts down (a
 # ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
 # modal: nothing dims the song or takes it out of reach while they are open (viewer.js).
+_EXPORT_ROW = """<div class="row" id="export-row"><a class="link" id="export" href="/export">Export PDF of this version</a>
+<p class="hint" id="export-hint"></p>
+<code class="cmd" id="export-cmd" hidden></code><button type="button" class="chip" id="export-copy" hidden>Copy</button></div>
+"""
+
+
 _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <div class="bar-in">
 <span class="keys" id="keys" role="group" aria-label="Transpose">
@@ -560,9 +566,6 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
-<div class="row" id="export-row"><a class="link" id="export" href="/export">Export PDF of this version</a>
-<p class="hint" id="export-hint"></p>
-<code class="cmd" id="export-cmd" hidden></code><button type="button" class="chip" id="export-copy" hidden>Copy</button></div>
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
@@ -577,3 +580,8 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 </section>
 <noscript><p class="noscript">Turn on JavaScript to transpose, change the mode and see chord shapes.</p></noscript>
 """
+
+# The sheet viewer's controls: the shared ones and the export row. The songbook has none: no song owns it.
+_SHEET_CONTROLS = _CONTROLS.replace(
+    '</section>\n<section class="sheet-ui card" id="card"',
+    _EXPORT_ROW + '</section>\n<section class="sheet-ui card" id="card"', 1)

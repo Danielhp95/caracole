@@ -641,3 +641,9 @@ def test_the_page_fits_a_phone(tmp_path):
     for fragment in ("", "#song-1", "#song-5"):
         width, screen = result_of(open_page(page(), tmp_path, fragment, harness=harness, size="360,740"))
         assert width <= screen, fragment
+
+
+def test_the_songbook_has_no_export_button_only_the_sheet_viewer_does():
+    assert 'id="export' not in page()
+    from caracole.viewer.page import _SHEET_CONTROLS
+    assert 'id="export-row"' in _SHEET_CONTROLS
