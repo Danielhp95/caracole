@@ -885,6 +885,13 @@
   byId("keys").hidden = keyGroups.size === 0;
   const save = () => {
     const params = new URLSearchParams();
+    let was = new URLSearchParams();
+    try {
+      was = new URLSearchParams(location.hash.slice(1));
+    } catch (err) {
+      // A malformed address: nothing of the Songbooks tab's to keep.
+    }
+    for (const name of ["tab", "book"]) if (was.get(name)) params.set(name, was.get(name));  // songbooks.js's
     if (state.q) params.set("q", state.q);
     if (state.show !== "all") params.set("show", state.show);
     if (state.sort !== "artist") params.set("sort", state.sort);
@@ -1786,7 +1793,7 @@
   document.addEventListener("keydown", (e) => {
     if (composing(e)) return;
     const typing = document.activeElement === input;
-    if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !input.closest("[hidden]")) {
       e.preventDefault();
       input.focus();
       input.select();
@@ -1803,10 +1810,10 @@
   const traySum = byId("tray-sum");
   const trayToggle = byId("tray-toggle");
   const trayItems = new Map();  // job id -> its line in the list of requests
-  const quiet = new Set();  // the lookups of a songbook's missing songs: its card says how they go
+  const quiet = new Set();  // the lookups the Songbooks tab asked for: its set list says how they go
   let trayClosed = false;
   // The list of requests, once there are two or more: one line each, not read out (the songs' lines are). A
-  // songbook's change, or a removal, is left out: its card or line, where it was asked for, says how it goes.
+  // songbook's change, or a removal, is left out: its songbook or line, where it was asked for, says how it goes.
   const trayShow = (view) => {
     if (!tray || view.kind === "songbook" || view.kind === "remove" || quiet.has(Number(view.id))) return;
     const id = Number(view.id);
@@ -1828,7 +1835,8 @@
     document.body.classList.toggle("with-tray", !tray.hidden);
   };
   // The lines drawn again from what the library has now: a request is over. Each keeps its request line. A
-  // removal done leaves its song's line saying so; a songbook's change, the Songbooks section drawn again.
+  // removal done leaves its song's line saying so; a songbook's change brings the songbooks as they are now, which
+  // the Songbooks tab (songbooks.js) and the Select bar's menu (select.js) draw again ("caracole:songbooks").
   const redraw = (view) => {
     if (view.kind === "remove" && songOf(view) !== null) {
       removing.delete(songOf(view));
@@ -1837,8 +1845,10 @@
         return;
       }
     }
-    if (view.kind === "songbook" && view.songbooks && typeof view.songbooks === "object") {
-      drawSongbooks(view);
+    if (view.kind === "songbook") {
+      if (view.songbooks && typeof view.songbooks === "object") {
+        document.dispatchEvent(new CustomEvent("caracole:songbooks", { detail: { songbooks: view.songbooks, view } }));
+      }
       return;
     }
     const data = view.card && typeof view.card === "object" ? view.card : null;
@@ -1859,7 +1869,7 @@
   };
   const songOf = (view) => (view.songId === null || view.songId === undefined ? null : Number(view.songId));
   // Whether a job that is over brings what the page draws again: its song's line (none for a song the library
-  // hasn't got), or the Songbooks section, for a songbook's change; a removal's song is gone, or as it was.
+  // hasn't got), or the songbooks, for a songbook's change; a removal's song is gone, or as it was.
   const drawable = (view) => (view.kind === "songbook" ? Boolean(view.songbooks)
     : view.kind === "remove" || Boolean(view.card) || songOf(view) === null);
   const apply = (view) => {
@@ -1904,20 +1914,9 @@
         }
       }
     }
-    if (i !== undefined && view.kind === "song") bookSongs(song, view);
     trayShow(view);
-  };
-  // A song's line in the songbooks that hold it too (each song of a songbook names its id, data-song), under its
-  // name: Get the missing songs now's lookups show there. Not read out: its songbook's own line says how it goes.
-  const bookSongLine = (li, view) => {
-    const names = li.querySelector(".sb-names");
-    if (!names) return;
-    const line = names.querySelector(".progress") || names.appendChild(el("span", "progress"));
-    const said = view.line && typeof view.line === "object" ? view.line : {};
-    showLine(line, { line: Object.assign({}, said, { details: null }) });
-  };
-  const bookSongs = (song, view) => {
-    for (const li of document.querySelectorAll('#songbooks li[data-song="' + Number(song) + '"]')) bookSongLine(li, view);
+    // The Songbooks tab shows a songbook's change on its songbook, and a lookup on its song's set list lines.
+    document.dispatchEvent(new CustomEvent("caracole:job", { detail: view }));
   };
   const requestsCount = (n) => {
     const nav = document.querySelector('.navlink[href="/jobs"]');
@@ -1967,198 +1966,6 @@
     summarize();
     tallyChips();
     tell();
-  };
-
-  // --- caracole serve: the songbooks' forms ---------------------------------------------------------
-  // ↑, ↓, × and Rename or delete in the Songbooks section, and the Select bar's Make songbook (or Add to),
-  // post with fetch() as Fetch now does: the songbook's card says how its change goes, on a line under its
-  // name, its buttons put away until the change is over (each moves a song by its place now); a songbook on
-  // its way gets a card at the end of the section. Once a change is over, /jobs.json gives the section as
-  // the server draws it now (the job's `songbooks`): the HTML the page was served with, read by DOMParser,
-  // which runs no script of it, and put in place card by card, a card with a line kept where it is around
-  // it, so that its line goes on being read out to the last. The section is in the served page even with
-  // no songbook, hidden, for the first one. Without JavaScript the forms post as forms, and the server
-  // answers with the requests page.
-  const SONGBOOK_FORM = /^\/songbook\/(make|add|move|remove|rename|delete|get)$/;
-  // job id -> {book: the songbook it changes, card: its card, focus: the button sent, reveal: from the Select bar}
-  const bookJobs = new Map();
-  const shelf = () => {
-    const section = byId("songbooks");
-    const details = section ? section.querySelector(":scope > details") : null;
-    const list = details ? details.querySelector(":scope > .sb-list") : null;
-    return list ? { section, details, list } : null;
-  };
-  const bookCard = (name) => {
-    const at = shelf();
-    return (at && Array.from(at.list.children).find((c) => c.dataset.songbook === name)) || null;
-  };
-  // A songbook card's line, under its name, made the first time, as a song card's is (progressIn).
-  const bookLine = (card) => {
-    let p = card.querySelector(".progress");
-    if (!p) {
-      p = el("p", "progress");
-      p.setAttribute("role", "status");
-      const head = card.querySelector(".sb-head");
-      if (head) head.after(p);
-      else card.prepend(p);
-    }
-    return p;
-  };
-  const lockBook = (card, on) => {
-    card.classList.toggle("sb-busy", on);
-    for (const control of card.querySelectorAll("form button, form input")) control.disabled = on;
-    const at = document.activeElement;
-    if (on && at && at.disabled && card.contains(at)) focusOn(bookLine(card));  // a disabled button drops it
-  };
-  // Deleted, or never made: a songbook's card says so where it was, as tall as it was, so that what is under it
-  // doesn't move, until the page is loaded again.
-  const goneBook = (card) => {
-    const line = bookLine(card);
-    const tall = card.isConnected ? card.getBoundingClientRect().height : 0;
-    if (tall) card.style.minHeight = tall + "px";
-    if (card.contains(document.activeElement) && !line.contains(document.activeElement)) focusOn(line);
-    for (const child of Array.from(card.children)) {
-      if (!child.classList.contains("sb-head") && child !== line) child.remove();
-    }
-    card.classList.remove("sb-busy");
-    card.classList.add("sb-gone");
-  };
-  // The card that shows a songbook's change (a new songbook's, made for it at the end of the section): its
-  // line says how the change goes, the newest change's alone, and its buttons wait until it is over.
-  const bookSpot = (view, hint, focus) => {
-    const book = view.songbook && typeof view.songbook === "object" ? view.songbook : null;
-    const at = shelf();
-    if (!book || !at) return null;
-    let card = bookCard(String(book.name));
-    if (!card) {
-      card = el("article", "sb-card");
-      card.dataset.songbook = String(book.name);
-      const head = el("div", "sb-head");
-      head.append(el("h2", null, String(book.name)), el("p", "hint", hint || ""));
-      card.appendChild(head);
-      at.list.appendChild(card);
-      at.section.hidden = false;
-    }
-    bookLine(card);
-    if (isActive(view)) lockBook(card, true);
-    for (const [id, other] of spots) if (other === card) spots.delete(id);
-    spots.set(Number(view.id), card);
-    bookJobs.set(Number(view.id), { book, card, focus: focus || "" });
-    return card;
-  };
-  // A card keeps the height ``tall`` while it is taller than what it holds, until your next click or key, when what
-  // moves under it moves for you; measured before a frame is drawn, so nothing moves meanwhile.
-  const holdHeight = (card, tall) => {
-    const was = card.style.minHeight;
-    card.style.minHeight = "";
-    if (!tall || card.getBoundingClientRect().height >= tall - 0.5) return;
-    card.style.minHeight = Math.max(tall, parseFloat(was) || 0) + "px";
-    const release = () => {
-      document.removeEventListener("click", release, true);
-      document.removeEventListener("keydown", release, true);
-      if (!card.classList.contains("sb-gone")) card.style.minHeight = "";
-    };
-    document.addEventListener("click", release, true);
-    document.addEventListener("keydown", release, true);
-  };
-  // ``then``, once the page has not scrolled for two frames in a row.
-  const whenStill = (then) => {
-    let last = window.scrollY;
-    let still = 0;
-    const frame = () => {
-      still = window.scrollY === last ? still + 1 : 0;
-      last = window.scrollY;
-      if (still >= 2) then();
-      else requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-  };
-  const drawSongbooks = (view) => {
-    const at = shelf();
-    if (!at) return;
-    const page = new DOMParser().parseFromString(String(view.songbooks.html || ""), "text/html");
-    const fresh = page.querySelector("#songbooks > details");
-    const count = at.details.querySelector(":scope > summary .n");
-    const counted = fresh ? fresh.querySelector(":scope > summary .n") : null;
-    if (count) count.textContent = counted ? counted.textContent : "0";
-    // What the section says besides its songbooks: a songbooks.toml that can't be read.
-    for (const part of Array.from(at.details.children)) {
-      if (part.tagName !== "SUMMARY" && part !== at.list) part.remove();
-    }
-    for (const part of fresh ? Array.from(fresh.children) : []) {
-      if (part.tagName !== "SUMMARY" && !part.classList.contains("sb-list")) {
-        at.details.insertBefore(document.importNode(part, true), at.list);
-      }
-    }
-    const job = bookJobs.get(Number(view.id));
-    if (job && job.book.action === "rename" && view.state === "done") job.card.dataset.songbook = String(job.book.after);
-    const old = Array.from(at.list.children);
-    const kept = old.filter((c) => c.querySelector(".progress"));  // a change's line: read out to the last
-    const tall = new Map(kept.map((c) => [c, c.isConnected ? c.getBoundingClientRect().height : 0]));
-    const order = (fresh ? Array.from(fresh.querySelectorAll(":scope > .sb-list > .sb-card")) : []).map((f) => {
-      const card = document.importNode(f, true);
-      const was = kept.find((c) => c.dataset.songbook === card.dataset.songbook);
-      if (!was) return card;
-      bookLine(card);  // where its line goes
-      return refill(was, card);
-    });
-    for (const card of kept) {
-      if (order.indexOf(card) >= 0) continue;
-      goneBook(card);
-      order.splice(Math.min(old.indexOf(card), order.length), 0, card);
-    }
-    for (const card of old) if (order.indexOf(card) < 0) card.remove();
-    let before = null;
-    for (const card of order) {  // in the server's order, a card kept moved only if its place changed
-      const next = before ? before.nextElementSibling : at.list.firstElementChild;
-      if (card !== next) at.list.insertBefore(card, next);
-      before = card;
-    }
-    at.section.hidden = !order.length && !at.details.querySelector(".sb-error");
-    // Drawn again, its songs' lines are back under their names, and a card that showed a change keeps the height it
-    // had while it is taller than what it holds now (its songs' "missing" notes gone, say), until your next click
-    // or key: nothing under it moves seconds after your tap (a songbook from the Select bar is stretched, below).
-    for (const [song, id] of songJob) {
-      const shown = views.get(id);
-      if (shown && shown.kind === "song") bookSongs(song, shown);
-    }
-    for (const card of kept) {
-      if (card.isConnected && !card.classList.contains("sb-gone") && !(job && job.reveal && card === job.card)) {
-        holdHeight(card, tall.get(card));
-      }
-    }
-    for (const [id, other] of bookJobs) {  // the songbooks of changes still on their way wait
-      if (id !== Number(view.id) && other.card.isConnected && views.has(id) && isActive(views.get(id))) {
-        lockBook(other.card, true);
-      }
-    }
-    // The focus waited on the line: back on the button it was sent with, where it is now (↓ again, say).
-    if (job && job.focus && document.activeElement === job.card.querySelector(".progress")) {
-      const again = Array.from(job.card.querySelectorAll("button"))
-        .find((b) => !b.disabled && (b.getAttribute("aria-label") || b.textContent) === job.focus);
-      if (again) again.focus();
-    }
-    // Made, or added to, from the Select bar: the songbook scrolls into view whole, if its line is still where
-    // you left it (scrolling moves nothing on the page, as a card growing over what is on the screen would): once
-    // the page stops scrolling, as its own scroll to the songbook may still be on its way (a short list's songs
-    // were picked far from it).
-    if (job && job.reveal && view.state === "done" && job.card.isConnected) {
-      whenStill(() => {
-        const at = bookLine(job.card).getBoundingClientRect();
-        if (job.card.isConnected && at.top >= 0 && at.bottom <= window.innerHeight) {
-          job.card.scrollIntoView({ block: "nearest", behavior: smooth() });
-        }
-      });
-    }
-    // A card stretched while its change ran keeps that height while it is taller than what it holds now, until
-    // your next click or key, when what moves under it moves for you.
-    if (job && job.reveal && !isActive(view) && job.card.style.minHeight) {
-      const stretched = parseFloat(job.card.style.minHeight);
-      job.card.style.minHeight = "";
-      holdHeight(job.card, stretched);  // no frame drawn in between: nothing moves
-    }
-    // The Select bar's menu of songbooks follows.
-    document.dispatchEvent(new CustomEvent("caracole:songbooks", { detail: { books: listOf(view.songbooks.books) } }));
   };
 
   let timer = 0;
@@ -2219,6 +2026,17 @@
     apply(view);
     schedule();
   };
+  // The Songbooks tab's seam (songbooks.js, which runs after this script): a job it asked for, followed as this
+  // page's own are (``quiet``: its set list says how a lookup goes, so the list of requests leaves it out), each of
+  // its views told back ("caracole:job"), and a request's line, written as this page writes them.
+  window.caracoleLibrary = Object.freeze({
+    track: (view, options) => {
+      if (options && options.quiet) quiet.add(Number(view.id));
+      track(view);
+    },
+    showLine,
+    focusOn,
+  });
 
   if (server) {
     const requested = byId("requested");
@@ -2310,7 +2128,7 @@
       watched.add(Number(view.id));
       const song = songOf(view);
       if (view.kind === "songbook") {
-        bookSpot(view);  // a songbook's change: on its songbook's card
+        // A songbook's change: on its songbook, in the Songbooks tab (songbooks.js reads the page's jobs itself).
       } else if (requestedList && isActive(view) && view.kind === "song" && (song === null || !byIndex.has(song))) {
         // A song new to the library, on its way since before this page loaded: its line under the bar.
         const [artist, ...title] = String(view.display || "").split(" - ");
@@ -2423,73 +2241,13 @@
         });
       });
     }
-    // The songbooks' forms, and the Select bar's, once its own script has checked it (an unchecked form is
-    // stopped there): posted as the page's script, they leave you where you are.
-    document.addEventListener("submit", (e) => {
-      const form = e.target;
-      if (e.defaultPrevented || !(form instanceof HTMLFormElement)) return;
-      if (!SONGBOOK_FORM.test(form.getAttribute("action") || "")) return;
-      e.preventDefault();
-      const bar = form.closest(".pickbar");
-      const card = bar ? null : form.closest(".sb-card");
-      const sent = e.submitter ? e.submitter.getAttribute("aria-label") || e.submitter.textContent : "";
-      const songs = form.elements.namedItem("songs");
-      const many = songs ? String(songs.value).split(",").filter(Boolean).length : 0;
-      const sending = send(form);  // the form read as it is, before its fields wait
-      if (card) {
-        showLine(bookLine(card), { line: { tone: "queued", text: "Sending…" } });
-        if (/\/get$/.test(form.getAttribute("action") || "")) {  // each song it looks up, at once, under its name
-          for (const li of card.querySelectorAll("li[data-get]")) {
-            bookSongLine(li, { line: { tone: "queued", text: "Sending…" } });
-          }
-        }
-        lockBook(card, true);
-      }
-      const answered = (view, refusal) => {
-        // The Select bar says why the server refused it; told it is on its way, it lets the picks go.
-        if (bar) form.dispatchEvent(new CustomEvent("caracole:sent", { detail: { ok: Boolean(view), error: refusal } }));
-        if (!view) {
-          if (card) {
-            lockBook(card, false);
-            showLine(bookLine(card), { line: { tone: "failed", text: refusal } });
-          }
-          return;
-        }
-        const spot = bookSpot(view, plural(many, "song"), sent);
-        if (spot && bar) {  // from the Select bar, the section opens on the songbook
-          shelf().details.open = true;
-          // Its foot at the screen's (its head at the top, if it is taller than the screen): what it gains once
-          // the change is over, its files and its songs, grows below the screen, and nothing on it moves then;
-          // the page scrolls it into view whole after that (drawSongbooks). Near the top of the page, which
-          // can't scroll that far, it is stretched to the screen's foot instead, now, as you tap.
-          const box = spot.getBoundingClientRect();
-          const taller = box.height > window.innerHeight * 0.75;
-          const reach = window.innerHeight - 16 - (box.top + window.scrollY);
-          if (!taller && reach > box.height) spot.style.minHeight = reach + "px";
-          spot.scrollIntoView({ block: taller ? "start" : "end", behavior: smooth() });
-          focusOn(bookLine(spot));
-          bookJobs.get(Number(view.id)).reveal = true;
-        }
-        track(view);
-      };
-      sending.then((answer) => {
-        const view = answer.ok && answer.body && answer.body.job;
-        answered(view && view.songbook ? view : null, failure(answer).line.text);
-        // Get the missing songs now: each song's lookup, on its card, its row and its line in the songbook.
-        for (const each of view && view.songbook ? listOf(answer.body.jobs) : []) {
-          if (!each || typeof each !== "object") continue;
-          quiet.add(Number(each.id));
-          track(each);
-        }
-      }, () => answered(null, UNREACHABLE.line.text));
-    });
     schedule();
   }
   summarize();
   render();
   // Back from a page of caracole serve's about a song (Remove's question): its line in view, and the focus
   // on it, as the A-Z strip leaves a group; the address keeps the rest. In the next frame, once every script
-  // has drawn what it draws above the list (the Songbooks section, opened as it was left).
+  // has drawn what it draws (the Songbooks tab, shown as it was left).
   let back = NaN;
   try {
     back = Number(new URLSearchParams(location.hash.slice(1)).get("song"));

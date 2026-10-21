@@ -119,6 +119,20 @@ def steps(queue):
     return [[s.args for s in job.steps] for job in queue.snapshot()[::-1]]
 
 
+def data_in(page: str) -> dict:
+    return json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', page, re.S).group(1))
+
+
+def page_data(app) -> dict:
+    """The served library page's data, as its script reads it."""
+    return data_in(get(app, "/").body.decode("utf-8"))
+
+
+def page_books(app) -> list[dict]:
+    """The songbooks of the served page's Songbooks tab, as data."""
+    return page_data(app)["songbooks"]["books"]
+
+
 # --- the forms -------------------------------------------------------------------------------------
 
 
@@ -210,8 +224,8 @@ def test_a_song_gone_from_the_library_goes_alone_never_with_the_song_whose_title
     make_songbook(cfg.library_dir / FILE_NAME, "Gig",
                   ["Radiohead - Karma Police", "Muse - Hysteria", "Radiohead - Karma Police Live"])
     conn.execute("DELETE FROM songs WHERE id = ?", (live.id,))
-    page = get(app, "/").body.decode("utf-8")
-    assert re.search(r'<li class="missing">.*?Karma Police Live.*?missing: not in the library', page)
+    gone = page_books(app)[0]["set"][2]
+    assert (gone["entry"], gone["missing"], gone["id"]) == ("Radiohead - Karma Police Live", "not in the library", None)
 
     assert post(app, "/songbook/move", {"name": "Gig", "song": "Radiohead - Karma Police Live",
                                         "position": "2"}).status == 303
@@ -234,10 +248,9 @@ def test_a_song_the_page_removes_from_the_library_stays_in_its_songbook_as_missi
     queue.run_pending()
     assert [job.state for job in queue.snapshot()] == ["done"]
     assert conn.execute("SELECT count(*) FROM songs WHERE id = ?", (creep.id,)).fetchone()[0] == 0
-    page = get(app, "/").body.decode("utf-8")
-    listed = re.search(r'<ol class="sb-songs">.*?</ol>', page, re.S).group(0)
-    assert re.search(r'<li class="missing"><span class="sb-n">1</span>.*?Creep.*?missing: not in the library', listed)
-    assert 'aria-label="Take Creep out of Campfire"' in listed and 'value="Radiohead - Creep"' in listed
+    first = page_books(app)[0]["set"][0]
+    assert (first["n"], first["title"], first["entry"], first["missing"]) == (1, "Creep", "Radiohead - Creep",
+                                                                            "not in the library")
     assert get(app, PAGE).status == 200  # the page caracole wrote, until the next render writes it again
 
     assert post(app, "/songbook/remove", {"name": "Campfire", "song": "Radiohead - Creep"}).status == 303
@@ -428,7 +441,7 @@ def test_a_songbook_made_says_made_with_its_page_to_open_and_never_that_the_nigh
     assert [view["line"]["link"] for view in jobs_json(app, "1,2,3")["jobs"]] == [None, None, None]
 
 
-def test_once_its_job_is_over_the_songbooks_section_comes_with_it_drawn_again(setup, campfire):
+def test_once_its_job_is_over_the_songbooks_come_with_it_as_the_tab_draws_them(setup, campfire):
     _, cfg, _, songs = setup
     queue = JobQueue(Edits(cfg.library_dir))
     app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
@@ -438,19 +451,16 @@ def test_once_its_job_is_over_the_songbooks_section_comes_with_it_drawn_again(se
     queue.run_pending()
     view = jobs_json(app, "1")["jobs"][0]
     assert view["state"] == "done" and view["line"]["text"] == "Moved"
-    assert view["songbooks"]["books"] == [{"name": "Campfire", "songs": 3}]  # for the Select bar's menu
-    html = view["songbooks"]["html"]
-    assert html.startswith('<section class="songbooks" id="songbooks"')
-    assert re.findall(r'<span class="t">([^<]*)</span>', html) == ["Hysteria", "Creep", "De Música Ligera"]
-    assert '<input type="hidden" name="csrf" value="tok">' in html  # its forms, as the page's are
-    assert html == re.search(r'<section class="songbooks".*?</section>\n', get(app, "/").body.decode(), re.S).group(0)
-    # Asked about in general (/jobs.json without ?jobs=), no section: the page asks for its own jobs.
+    [book] = view["songbooks"]["books"]  # the tab's data, and the Select bar's menu's
+    assert book["name"] == "Campfire" and [s["title"] for s in book["set"]] == ["Hysteria", "Creep", "De Música Ligera"]
+    assert view["songbooks"] == page_data(app)["songbooks"]  # as the page has them now
+    # Asked about in general (/jobs.json without ?jobs=), no songbooks: the page asks for its own jobs.
     assert "songbooks" not in jobs_json(app, "")["jobs"][0]
 
     post(app, "/songbook/delete", {"name": "Campfire"}, accept=JSON)
     queue.run_pending()
-    none = jobs_json(app, "2")["jobs"][0]["songbooks"]  # none left: the section waits, hidden, for the next one
-    assert none["books"] == [] and re.match(r'<section class="songbooks" id="songbooks"[^>]* hidden>', none["html"])
+    none = jobs_json(app, "2")["jobs"][0]["songbooks"]  # none left: the tab says so, and offers a new one
+    assert none["books"] == [] and none["error"] is None
 
 
 def test_a_songbook_change_on_its_way_is_on_the_page_as_a_songbooks_not_a_songs(app, setup, queue, campfire):
@@ -460,7 +470,114 @@ def test_a_songbook_change_on_its_way_is_on_the_page_as_a_songbooks_not_a_songs(
     [view] = data["server"]["jobs"]
     assert view["kind"] == "songbook" and view["songbook"] == {"action": "rename", "name": "Campfire",
                                                                  "after": "Beach"}
-    assert '<article class="sb-card" data-songbook="Campfire">' in page  # where the page shows it
+
+
+# --- a song's setting, and a song added from the tab's search ------------------------------------------
+
+
+def test_a_songs_setting_is_queued_as_caracole_songbook_set_with_its_capo(app, setup, queue, campfire):
+    # The tab's chip always sends the capo with the key and the mode, so a sheet that takes the song's place
+    # keeps the key the songbook sounds in.
+    response = post(app, "/songbook/set", {"name": "campfire", "song": "Radiohead - Creep", "key": "G",
+                                           "mode": "dorian", "capo": "0"}, accept=JSON)
+    view = json.loads(response.body)["job"]
+    assert view["kind"] == "songbook" and view["songbook"] == {"action": "set", "name": "Campfire", "after": "Campfire"}
+    assert view["display"] == 'Play Radiohead - Creep in G dorian, capo 0, in "Campfire"'
+    assert steps(queue) == [[("songbook", "set", "--key", "G", "--mode", "dorian", "--capo", "0", "--", "Campfire",
+                              "Radiohead - Creep")]]
+    post(app, "/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "clear": "1"})
+    assert steps(queue)[1] == [("songbook", "set", "--clear", "--", "Campfire", "Radiohead - Creep")]
+    assert queue.snapshot()[0].title == 'Play Radiohead - Creep in its own version in "Campfire"'
+
+
+@pytest.mark.slow
+def test_the_setting_queued_is_written_in_songbooks_toml(app, setup, queue, campfire):
+    post(app, "/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "key": "G", "mode": "dorian",
+                                "capo": "2"})
+    queue.run_pending()
+    assert queue.snapshot()[0].state == "done", queue.snapshot()[0].steps[0].output
+    from caracole.songbook import Setting
+
+    assert books(setup)[0].songs[0].setting == Setting("G", "dorian", 2)
+    assert 'song = "Radiohead - Creep", key = "G", mode = "dorian", capo = 2' in (
+        setup[1].library_dir / FILE_NAME).read_text(encoding="utf-8")
+    assert page_books(app)[0]["set"][0]["plays"] == "G Dorian, capo 2"
+
+
+def test_a_setting_change_says_what_runs_then_what_it_did(setup, campfire):
+    from caracole.web.status import job_line
+
+    app = WebApp(setup[1], JobQueue(lambda args, emit: 0), allowed=ALLOWED, csrf="tok")
+    post(app, "/songbook/set", {"name": "Campfire", "song": "Muse - Hysteria", "capo": "3"})
+    job = app.queue.snapshot()[0]
+    job.state, job.steps[0].state = "running", "running"
+    assert job_line(job, None).text == "Changing where it plays…"
+    job.state, job.steps[0].state = "done", "done"
+    assert (job_line(job, None).tone, job_line(job, None).text, job_line(job, None).link) == ("ready", "Changed", None)
+
+
+@pytest.mark.parametrize("fields,status,said", [
+    ({"song": "Radiohead - Creep"}, 400, "a key, a mode or a capo"),
+    ({"song": "Radiohead - Creep", "key": "H"}, 400, "key must be a tonic"),
+    ({"song": "Radiohead - Creep", "mode": "major"}, 400, "mode must be one of"),
+    ({"song": "Radiohead - Creep", "capo": "12"}, 400, "capo must be a fret"),
+    ({"song": "Radiohead - Creep", "capo": "two"}, 400, "capo must be a fret"),
+    ({"song": "Pixies - Debaser", "capo": "1"}, 404, "isn't in"),
+    ({"song": "", "capo": "1"}, 400, "Which song"),
+])
+def test_a_setting_that_cant_be_one_is_refused_before_anything_is_queued(app, setup, queue, campfire, fields, status,
+                                                                         said):
+    response = post(app, "/songbook/set", {"name": "Campfire", **fields}, accept=JSON)
+    assert response.status == status and said in json.loads(response.body)["error"]
+    assert queue.snapshot() == []
+
+
+def test_add_a_song_of_the_library_queues_songbook_add(app, setup, queue, campfire):
+    hysteria = setup[3]["hysteria"]
+    make_songbook(setup[1].library_dir / FILE_NAME, "Picnic", ["Radiohead - Creep"])
+    data = json.loads(post(app, "/songbook/add-song", {"name": "picnic", "song": str(hysteria.id)}, accept=JSON).body)
+    assert data["job"]["songbook"] == {"action": "add", "name": "Picnic", "after": "Picnic"} and data["jobs"] == []
+    assert steps(queue) == [[("songbook", "add", "--", "Picnic", "Muse - Hysteria")]]
+
+
+def test_add_a_song_from_an_index_looks_it_up_then_adds_it(app, setup, queue, campfire):
+    # A song you don't have: in wanted.txt at once (as Get it writes it), looked up now, then put in the songbook.
+    cfg = setup[1]
+    data = json.loads(post(app, "/songbook/add-song", {"name": "Campfire", "artist": "Oasis", "title": "Wonderwall",
+                                                       "ug": "oasis/wonderwall"}, accept=JSON).body)
+    assert steps(queue) == [[("get", "--progress", "--ug=oasis/wonderwall", "--", "Oasis", "Wonderwall")],
+                            [("songbook", "add", "--", "Campfire", "Oasis - Wonderwall")]]
+    assert "Oasis - Wonderwall" in cfg.wanted_file.read_text(encoding="utf-8")
+    assert [(v["kind"], v["display"]) for v in data["jobs"]] == [("song", "Oasis - Wonderwall")]
+    assert data["job"]["display"] == 'Add Oasis - Wonderwall to "Campfire"'
+
+
+def test_add_a_song_your_library_has_by_its_names_needs_no_lookup(app, setup, queue, campfire):
+    make_songbook(setup[1].library_dir / FILE_NAME, "Picnic", ["Muse - Hysteria"])
+    post(app, "/songbook/add-song", {"name": "Picnic", "artist": "Radiohead", "title": "Creep", "ug": "radiohead/creep"})
+    assert steps(queue) == [[("songbook", "add", "--", "Picnic", "Radiohead - Creep")]]
+    assert not setup[1].wanted_file.exists() or "Creep" not in setup[1].wanted_file.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("fields,status,said", [
+    ({"name": "Picnic", "song": "1"}, 404, 'No songbook named "Picnic"'),
+    ({"name": "Campfire", "song": "999"}, 404, "isn't in the library"),
+    ({"name": "Campfire"}, 400, "Which song"),
+])
+def test_add_a_song_that_cant_be_added_is_refused_before_anything_is_queued(app, setup, queue, campfire, fields,
+                                                                          status, said):
+    response = post(app, "/songbook/add-song", fields, accept=JSON)
+    assert response.status == status and said in json.loads(response.body)["error"], response.body
+    assert queue.snapshot() == []
+
+
+def test_a_full_queue_adds_no_song_it_couldnt_look_up(app, setup, queue, campfire):
+    for n in range(2):  # room for one job more: not for the lookup and the songbook's change
+        post(app, "/songbook/move", {"name": "Campfire", "song": "Muse - Hysteria", "position": str(n + 1)})
+    response = post(app, "/songbook/add-song", {"name": "Campfire", "artist": "Oasis", "title": "Wonderwall"},
+                    accept=JSON)
+    assert response.status == 503 and "queue is full" in json.loads(response.body)["error"]
+    assert len(queue.snapshot()) == 2
 
 
 # --- the songs a songbook lacks, got now ----------------------------------------------------------
@@ -481,25 +598,20 @@ def gig(setup):
     return songs
 
 
-def test_the_served_songbook_offers_to_get_its_missing_songs_now(app, setup, gig):
-    page = get(app, "/").body.decode("utf-8")
-    card = re.search(r'<article class="sb-card" data-songbook="Gig">.*?</article>', page, re.S).group(0)
-    form = re.search(r'<form method="post" action="/songbook/get">(.*?)</form>', card, re.S).group(1)
-    assert '<input type="hidden" name="csrf" value="tok">' in form and 'name="name" value="Gig"' in form
-    assert ">Get the 2 missing songs now</button>" in form  # Hysteria and Uprising: not Debaser, nor Wonderwall
-    # Each song the library has is named by its id, for the page to show its lookup's line there; those the
-    # button looks up are marked, for their lines to say so at once.
-    ids = re.findall(r'<li(?: class="missing")? data-song="(\d+)"( data-get)?>', card)
-    assert ids == [(str(gig["hysteria"].id), " data-get"), (str(gig["creep"].id), ""),
-                   (str(gig["uprising"].id), " data-get"), (str(gig["wonderwall"].id), "")]
-    # The file on disk can't look anything up: the commands, as for the rest.
+def test_the_songbooks_data_says_which_songs_a_lookup_could_get_now(app, setup, gig):
+    # Hysteria and Uprising: not Debaser, which isn't in the library, nor Wonderwall, ignored. Each song the library
+    # has is named by its id, for the page to show its lookup's line there.
+    [book] = page_books(app)
+    assert [(s["title"], s["id"], s["get"]) for s in book["set"]] == [
+        ("Hysteria", gig["hysteria"].id, True), ("Debaser", None, False), ("Creep", gig["creep"].id, False),
+        ("Uprising", gig["uprising"].id, True), ("Wonderwall", gig["wonderwall"].id, False)]
+    # The file on disk can't look anything up: it has no server to ask (the page's script offers the commands).
     from caracole.library_page import build_library_page
     from caracole.overrides import load_overrides
 
     _, cfg, conn, _ = setup
     on_disk = build_library_page(conn, cfg, load_overrides(cfg.overrides_file), datetime.now(UTC))
-    assert 'action="/songbook/get"' not in on_disk and ">Get the 2 missing songs now<" not in on_disk
-    assert "data-get" not in on_disk.split("<script>")[0]
+    assert "server" not in data_in(on_disk)
 
 
 def test_a_songbook_with_every_sheet_offers_nothing_to_get(app, setup, campfire):
@@ -544,6 +656,16 @@ def test_a_queue_with_less_room_gets_the_first_missing_songs_and_says_how_many_w
     assert steps(queue)[-1] == [("songbook", "render", "--", "Late")]
     full = post(app, "/songbook/get", {"name": "Gig"}, accept=JSON)
     assert full.status == 503 and "queue is full" in json.loads(full.body)["error"]
+
+
+def test_get_one_missing_song_now_looks_it_up_then_makes_the_songbook_again(app, setup, queue, gig):
+    # A set list's Get it: that song alone, as Get the missing songs now gets each.
+    queue._limit = 10
+    data = json.loads(post(app, "/songbook/get", {"name": "Gig", "song": str(gig["uprising"].id)}, accept=JSON).body)
+    assert steps(queue) == [[("get", "--progress", "--", "Muse", "Uprising")], [("songbook", "render", "--", "Gig")]]
+    assert [v["display"] for v in data["jobs"]] == ["Muse - Uprising"] and data["left"] == 0
+    refused = post(app, "/songbook/get", {"name": "Gig", "song": str(gig["creep"].id)}, accept=JSON)
+    assert refused.status == 409 and "has a sheet" in json.loads(refused.body)["error"]
 
 
 @pytest.mark.parametrize("fields,status,said", [
@@ -601,9 +723,8 @@ def test_once_the_lookups_are_done_the_songbook_holds_their_sheets(setup, gig):
     assert "Hysteria" in made and "Uprising" in made  # their sheets, in it now
     line = jobs_json(app, "3")["jobs"][0]["line"]
     assert (line["text"], line["link"]) == ("Made", {"label": "Open songbook", "href": "_songbooks/Gig/songbook.html"})
-    page = get(app, "/").body.decode("utf-8")
-    card = re.search(r'<article class="sb-card" data-songbook="Gig">.*?</article>', page, re.S).group(0)
-    assert 'action="/songbook/get"' not in card  # Debaser isn't in the library, Wonderwall is ignored: nothing to get
+    # Debaser isn't in the library, Wonderwall is ignored: nothing to get.
+    assert not any(s["get"] for s in page_books(app)[0]["set"])
 
 
 # --- the songbook's files ------------------------------------------------------------------------
@@ -750,7 +871,7 @@ def test_a_served_songbook_keeps_a_songs_transposition_in_its_address_across_a_r
 
 
 def test_the_served_library_page_links_the_songbook_page(app, campfire):
-    body = get(app, "/").body.decode("utf-8")
-    assert 'href="_songbooks/Campfire/songbook.html"' in body
-    assert 'action="/songbook/move"' in body and '<input type="hidden" name="csrf" value="tok">' in body
+    files = {f["label"]: f["href"] for f in page_books(app)[0]["files"]}
+    assert files["Phone page"] == "_songbooks/Campfire/songbook.html"
+    assert get(app, "/" + files["Phone page"]).status == 200
 

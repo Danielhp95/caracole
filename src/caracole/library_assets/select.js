@@ -14,7 +14,7 @@
   if (!list || !toolbar || !songs.size) return;
   const server = data.server && typeof data.server === "object" ? data.server : null;
   const names = (list) => (Array.isArray(list) ? list : []).map((b) => String(b && b.name || "")).filter(Boolean);
-  const books = names(data.songbooks);
+  const books = names(data.songbooks && data.songbooks.books);
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -25,20 +25,6 @@
   const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
   const picked = [];  // song ids, in the order they were picked: the songbook's order
   let sending = false;  // on caracole serve, until the server answers the bar's form
-
-  // Remember whether the Songbooks section was open, across reloads (the served page comes back to it).
-  const shelf = document.querySelector("#songbooks > details");
-  const OPEN = "caracole-library:songbooks-open";
-  if (shelf) {
-    try {
-      if (localStorage.getItem(OPEN) === "1") shelf.open = true;
-    } catch (err) { /* no storage */ }
-    shelf.addEventListener("toggle", () => {
-      try {
-        localStorage.setItem(OPEN, shelf.open ? "1" : "0");
-      } catch (err) { /* no storage */ }
-    });
-  }
 
   const toggle = el("button", "chip pick-toggle", "Select");
   toggle.type = "button";
@@ -232,14 +218,23 @@
     if (folds()) setOpen(true, true);
     else (intoLabel.hidden ? nameInput : into).focus();
   });
+  // The Songbooks tab's + New songbook (songbooks.js, which has shown the library): Select, the bar ready for a new
+  // songbook's name, its songs to pick.
+  document.addEventListener("caracole:new-songbook", () => {
+    if (!selecting()) setMode(true);
+    into.value = "";
+    paintAll();
+    if (folds()) setOpen(true, true);
+    else nameInput.focus();
+  });
   clear.addEventListener("click", () => {
     picked.length = 0;
     paintAll();
   });
   into.addEventListener("change", paintAll);
-  // The songbooks there are now, once the page has drawn the section again: the menu keeps its choice.
+  // The songbooks there are now, once a songbook's change is over (library.js): the menu keeps its choice.
   document.addEventListener("caracole:songbooks", (e) => {
-    const now = names(e.detail && e.detail.books);
+    const now = names(e.detail && e.detail.songbooks && e.detail.songbooks.books);
     const chosen = into.value;
     while (into.options.length > 1) into.remove(1);
     for (const name of now) into.appendChild(new Option(name, name));
@@ -248,7 +243,7 @@
     paintAll();
   });
   // The server's answer to the bar's form: on its way, the picks go and the mode ends (the page shows the
-  // songbook in its section); refused, the bar says why, and the picks stay.
+  // songbook in its tab, songbooks.js); refused, the bar says why, and the picks stay.
   form.addEventListener("caracole:sent", (e) => {
     sending = false;
     if (e.detail && e.detail.ok) {
@@ -298,7 +293,7 @@
       fields.songs.value = picked.join(",");
       sending = true;
       submit.disabled = true;
-      return;  // the page's script posts it, and its songbook's card says how it goes
+      return;  // the Songbooks tab's script posts it, and its songbook says how it goes
     }
     e.preventDefault();
     const words = ["caracole songbook", existing ? "add" : "make", shellQuote(name)];

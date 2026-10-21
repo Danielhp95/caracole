@@ -1,4 +1,4 @@
-"""index.html's songbooks: the Songbooks section, and the Select mode that makes one."""
+"""index.html's songbooks: the Songbooks tab's data, and the Select mode that makes one."""
 
 from __future__ import annotations
 
@@ -28,12 +28,6 @@ def page(conn, cfg, controls=None) -> str:
     return build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
 
 
-def section(html: str) -> str:
-    found = re.search(r'<section class="songbooks" id="songbooks"[^>]*>(.*?)</section>', html, re.S)
-    assert found, "no Songbooks section"
-    return found.group(1)
-
-
 def data_of(html: str) -> dict:
     return json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', html, re.S).group(1))
 
@@ -53,41 +47,73 @@ def library(conn, cfg):
     return conn, cfg
 
 
-# --- the Songbooks section ------------------------------------------------------------------------
+# --- the Songbooks tab's data ---------------------------------------------------------------------
 
 
-def test_each_songbook_is_listed_with_its_songs_and_its_files(library):
+def books_of(html: str) -> list[dict]:
+    return data_of(html)["songbooks"]["books"]
+
+
+def test_each_songbook_is_data_with_its_songs_and_its_files(library):
     conn, cfg = library
-    shown = section(page(conn, cfg))
-    assert "<h2>Campfire</h2>" in shown and "3 songs, 1 without a sheet" in shown
-    hrefs = re.findall(r'<a class="btn[^"]*" href="([^"]*)"', shown)
-    assert hrefs == ["_songbooks/Campfire/songbook.html", "_songbooks/Campfire/songbook.pdf",
-                     "_songbooks/Campfire/songbook.cho"]
-    titles = re.findall(r'<span class="t">([^<]*)</span>', shown)
-    assert titles == ["Creep", "Hysteria", "De Música Ligera"]
-    assert re.search(r'<li class="missing">.*?Hysteria.*?missing: no sheet yet', shown, re.S)
+    [book] = books_of(page(conn, cfg))
+    assert (book["name"], book["songs"], book["missing"]) == ("Campfire", 3, 1)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", book["changed"])  # the day caracole last made its files
+    assert [(f["label"], f["href"]) for f in book["files"]] == [
+        ("PDF", "_songbooks/Campfire/songbook.pdf"), ("Phone page", "_songbooks/Campfire/songbook.html"),
+        ("ChordPro", "_songbooks/Campfire/songbook.cho")]
+    songs = book["set"]
+    assert [(s["n"], s["title"], s["artist"], s["entry"]) for s in songs] == [
+        (1, "Creep", "Radiohead", "Radiohead - Creep"), (2, "Hysteria", "Muse", "Muse - Hysteria"),
+        (3, "De Música Ligera", "Soda Stereo", "Soda Stereo - De Música Ligera")]
+    creep, hysteria, _ = songs
+    assert creep["plays"] == "A Minor, capo 0" and creep["own"] and creep["missing"] is None
+    assert creep["at"] == {"tonic": 9, "mode": "aeolian", "capo": 0}  # where it plays: the theory's, as data
+    assert creep["href"] == "Radiohead/Creep/sheet.html" and creep["get"] is False
+    assert creep["key"] == "radiohead/creep"  # its identity key: a search's result is known in it by it
+    assert (hysteria["missing"], hysteria["plays"], hysteria["at"], hysteria["href"]) == ("no sheet yet", None, None,
+                                                                                         None)
+    assert hysteria["get"] is True and isinstance(hysteria["id"], int)  # a lookup could get its sheet now
 
 
-def test_the_page_lists_no_songbooks_section_without_songbooks(conn, cfg):
+def test_a_songs_setting_says_where_the_songbook_plays_it(library):
+    from caracole.songbook import Setting, set_song_setting
+
+    conn, cfg = library
+    set_song_setting(songbooks_file(cfg.library_dir), "Campfire", "Radiohead - Creep", Setting("G", "dorian", 0))
+    creep = books_of(page(conn, cfg))[0]["set"][0]
+    assert creep["plays"] == "G Dorian, capo 0" and not creep["own"]
+    assert creep["at"] == {"tonic": 7, "mode": "dorian", "capo": 0}
+
+
+def test_the_data_offers_the_keys_modes_and_capos_a_setting_takes(library):
+    conn, cfg = library
+    shown = data_of(page(conn, cfg))["songbooks"]
+    assert shown["keys"] == ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+    assert shown["modes"][:2] == [["ionian", "Major"], ["dorian", "Dorian"]] and len(shown["modes"]) == 7
+    assert shown["capoMax"] == 11 and shown["error"] is None
+
+
+def test_a_song_gone_from_the_library_is_missing_with_no_id(conn, cfg):
+    add_song(conn, "Radiohead", "Creep")
+    make_songbook(songbooks_file(cfg.library_dir), "Gig", ["Radiohead - Creep", "Pixies - Debaser"])
+    debaser = books_of(page(conn, cfg))[0]["set"][1]
+    assert (debaser["title"], debaser["artist"], debaser["id"], debaser["missing"], debaser["get"]) == (
+        "Debaser", "Pixies", None, "not in the library", False)
+    assert debaser["key"] == "pixies/debaser"  # its entry's
+
+
+def test_the_page_has_no_songbooks_without_songbooks(conn, cfg):
     add_song(conn, "Radiohead", "Creep")
     html = page(conn, cfg)
-    assert 'id="songbooks"' not in html and data_of(html)["songbooks"] == []
+    assert books_of(html) == [] and 'id="songbooks"' in html  # the tab is there, for the first one
 
 
-def test_the_served_page_without_songbooks_keeps_a_hidden_place_for_the_first(conn, cfg):
-    # caracole serve's page shows a songbook the Select bar makes where the section would be.
-    add_song(conn, "Radiohead", "Creep")
-    html = page(conn, cfg, WebControls(csrf="tok"))
-    assert '<section class="songbooks" id="songbooks" aria-labelledby="songbooks-title" hidden>' in html
-    assert '<div class="sb-list">' in section(html) and '<span class="n">0</span>' in section(html)
-    assert data_of(html)["songbooks"] == []
-
-
-def test_a_songbook_not_made_yet_says_so(conn, cfg):
+def test_a_songbook_not_made_yet_has_no_files(conn, cfg):
     add_song(conn, "Radiohead", "Creep")
     make_songbook(songbooks_file(cfg.library_dir), "Campfire", ["Radiohead - Creep"])
-    shown = section(page(conn, cfg))
-    assert "Not made yet" in shown and "songbook.html" not in shown
+    [book] = books_of(page(conn, cfg))
+    assert book["files"] == [] and book["changed"] is None
 
 
 def test_a_broken_songbooks_file_is_said_and_the_page_is_made_all_the_same(conn, cfg):
@@ -95,50 +121,29 @@ def test_a_broken_songbooks_file_is_said_and_the_page_is_made_all_the_same(conn,
     songbooks_file(cfg.library_dir).parent.mkdir(parents=True, exist_ok=True)
     songbooks_file(cfg.library_dir).write_text("[Campfire\n", encoding="utf-8")
     html = page(conn, cfg)
-    assert "songbooks.toml can't be read" in section(html) and "line 1" in section(html)
+    said = data_of(html)["songbooks"]
+    assert said["books"] == [] and "songbooks.toml can't be read" in said["error"] and "line 1" in said["error"]
     assert len(data_of(html)["songs"]) == 1
 
 
-def test_names_are_text_and_links_are_percent_encoded(conn, cfg):
+def test_names_are_data_and_links_are_percent_encoded(conn, cfg):
     add_song(conn, "Radiohead", "Creep")
     make_songbook(songbooks_file(cfg.library_dir), "<b>Camp</b> & fire?", ["Radiohead - Creep"])
     render_songbooks(conn, cfg, Overrides(), runner=FakeChordPro())
-    shown = section(page(conn, cfg))
-    assert "<b>Camp</b>" not in shown and "&lt;b&gt;Camp&lt;/b&gt; &amp; fire?" in shown
-    assert 'href="_songbooks/bCamp-b%20%26%20fire/songbook.html"' in shown  # its folder: library.safe_name
+    html = page(conn, cfg)
+    assert "<b>Camp</b>" not in html.split('<script type="application/json"')[1]  # each < escaped in the JSON
+    [book] = books_of(html)
+    assert book["name"] == "<b>Camp</b> & fire?"
+    hrefs = {f["label"]: f["href"] for f in book["files"]}  # (no sheet in it yet: its phone page alone)
+    assert hrefs["Phone page"] == "_songbooks/bCamp-b%20%26%20fire/songbook.html"  # its folder: safe_name
 
 
-def test_the_page_on_disk_has_no_songbook_forms(library):
+def test_the_page_writes_no_songbook_of_its_own(library):
+    # The tab is the script's, drawn from the data: no songbook's markup, and no form, in the page caracole wrote.
     conn, cfg = library
-    shown = section(page(conn, cfg))
-    assert "<form" not in shown
-    assert "caracole songbook" in shown  # what to run instead
-
-
-def test_the_served_page_reorders_takes_out_renames_and_deletes(library):
-    conn, cfg = library
-    shown = section(page(conn, cfg, WebControls(csrf="tok&en")))
-    forms = re.findall(r'<form method="post" action="(/songbook/[a-z]+)"[^>]*>(.*?)</form>', shown, re.S)
-    actions = [a for a, _ in forms]
-    assert actions.count("/songbook/move") == 4  # up for the 2nd and 3rd song, down for the 1st and 2nd
-    assert actions.count("/songbook/remove") == 3
-    assert actions.count("/songbook/rename") == 1 and actions.count("/songbook/delete") == 1
-    for _, body in forms:
-        assert '<input type="hidden" name="csrf" value="tok&amp;en">' in body
-        assert '<input type="hidden" name="name" value="Campfire">' in body
-    moves = [body for a, body in forms if a == "/songbook/move"]
-    assert 'name="song" value="Radiohead - Creep"' in moves[0] and 'name="position" value="2"' in moves[0]
-    assert "Move Creep down" in moves[0]
-    assert 'name="song" value="Muse - Hysteria"' in moves[1] and 'name="position" value="1"' in moves[1]
-    rename = next(body for a, body in forms if a == "/songbook/rename")
-    assert re.search(r'<input name="new" required maxlength="80"', rename)
-    delete = next(body for a, body in forms if a == "/songbook/delete")
-    assert '<input type="checkbox" required>' in delete  # a tap alone deletes nothing
-
-
-def test_the_data_names_the_songbooks_for_the_select_bar(library):
-    conn, cfg = library
-    assert data_of(page(conn, cfg))["songbooks"] == [{"name": "Campfire", "songs": 3}]
+    for controls in (None, WebControls(csrf="tok")):
+        html = page(conn, cfg, controls).split("<script")[0]
+        assert "sb-card" not in html and 'action="/songbook' not in html
 
 
 def test_each_line_carries_its_songs_id(library):

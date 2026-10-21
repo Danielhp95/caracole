@@ -16,27 +16,33 @@ file, and none of it loads anything from the network.
   rows.js before its own script.
 - library.css, library-screens.css and library.js: index.html's own. library-screens.css comes
   after rows.css, as its scroll margin and its thumb's targets are a line's too.
-- songbooks.css and select.js: the Songbooks section, and the Select mode that makes a songbook.
+- songbooks.css, select.js and songbooks.js: the Songbooks tab, and the Select mode that makes a songbook.
   select.js runs after library.js: it finds the songs' lines by their song's id (any element of
   ``#list`` with a ``data-id``), puts a box on each and a bar to name the songbook, and builds
   everything with createElement and textContent, as the page does. While it is on, a tap anywhere
   on a line picks it (the stylesheet puts its action and its "⋯" away, and lets the taps through to
   the line). A line's "Add to a songbook…" turns it on with that song picked ("caracole:pick"). The
   bar is one line: on a phone, "2 selected · Make songbook…", which unfolds the menu and the name
-  field. On caracole serve the bar posts the songbook (the server's token, the songs' ids in the
-  order picked) with library.js's forms (its "caracole:sent" says how the server answered: on its
-  way, the picks go and the mode ends; refused, the bar says why), and its menu follows the
-  Songbooks section as the page draws it again ("caracole:songbooks"); on the file on disk it shows
-  the caracole songbook command to run instead, folded beside Copy.
+  field. On caracole serve songbooks.js posts the bar's songbook (the server's token, the songs' ids in
+  the order picked; its "caracole:sent" says how the server answered: on its way, the picks go and the
+  mode ends; refused, the bar says why), and its menu follows the songbooks once a change is over
+  ("caracole:songbooks"); on the file on disk it shows the caracole songbook command to run instead,
+  folded beside Copy. The Songbooks tab's "+ New songbook" turns it on ("caracole:new-songbook").
+  songbooks.js runs after select.js: the tabs (body.html's Library and Songbooks, ``#tab=songbooks`` and
+  ``book=`` in the address), and the tab itself, drawn from the data's ``songbooks``
+  (songbook_section.py) with createElement and textContent: the songbooks as lines, the one opened as a
+  set list. library.js gives it its seam, ``window.caracoleLibrary``: ``track`` follows a job it posted as
+  the page's own are, and every job's view is told back ("caracole:job"); ``showLine`` writes a request's
+  line.
 
 - drawn.js: the last script, once every other has drawn what it draws: the page shows. Until then
   library.css keeps it unseen (its body is ``drawing``), so a slow machine that paints it before its
   scripts have run shows nothing that moves once they have (the list empty, the request form open,
-  the Songbooks section closed though you left it open); two seconds on, it shows all the same.
+  the library shown though you left the Songbooks tab open); two seconds on, it shows all the same.
 
 - head.html, body.html, request.html and requested.html: index.html's skeleton, whose
-  ``__BLANKS__`` library_page.py fills in: the policy, the style, the masthead's links, the
-  Songbooks section and, served, the request form and the songs just requested.
+  ``__BLANKS__`` library_page.py fills in: the policy, the style, the masthead's links and, served,
+  the request form and the songs just requested.
 
 index.html inlines the stylesheets and the scripts in the order of ``library_page.STYLESHEETS`` and
 ``library_page.SCRIPTS``, and fills in the templates of ``library_page.TEMPLATES``.

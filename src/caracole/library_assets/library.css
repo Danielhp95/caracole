@@ -1,7 +1,7 @@
 
 /* Until the page's scripts have drawn it (drawn.js), it waits unseen: painted before, as a slow machine may paint it,
-   its list would be empty, the request form open under the bar and the Songbooks section closed though you left it
-   open, and all of it would move once they have run. Should they never get that far, it shows after two seconds;
+   its list would be empty, the request form open under the bar and the library shown though you left the Songbooks
+   tab open, and all of it would move once they have run. Should they never get that far, it shows after two seconds;
    with no script at all, at once. */
 @media (scripting: enabled) {
   body.drawing .page { visibility: hidden; animation: drawn 0s 2s forwards; }

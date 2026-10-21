@@ -26,10 +26,10 @@ ran. So a job of other commands reads the same way:
   error, all of which exit 0): an error is never a miss. A removal
   (``jobs.REMOVING``), whose song is gone once it is done, says "Removed";
   a songbook's change (songbooks.py), which has no song, what it did:
-  "Made", "Moved", "Renamed"…, "Made" and "Added" with a link to the
-  songbook's page ("Open songbook") once caracole has written it (a move,
-  a song taken out or a new name shows on the songbook's card, beside its
-  buttons); never a song's "Added"; and a LaCuerda artist page's read
+  "Made", "Moved", "Changed", "Renamed"…, "Made" and "Added" with a link to
+  the songbook's page ("Open songbook") once caracole has written it (a move,
+  a song taken out, a setting or a new name shows in the songbook's set list,
+  beside its line); never a song's "Added"; and a LaCuerda artist page's read
   (``jobs.LACUERDA_ARTIST``), no song's, what LaCuerda answered, in the words
   ``caracole lacuerda --artist`` ends with ("Read: …", "Not found: …", or "Not
   read: …" for a cooldown, a block, a spent budget or an error). An add of a
@@ -143,7 +143,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         action = str(songbook["action"])
         if action == "delete":
             return Line("removed", DONE[action])
-        opens = songbook_page if action in OPENS else None  # moved or renamed: its card is right there
+        opens = songbook_page if action in OPENS else None  # moved, set or renamed: its set list is right there
         return Line("ready", DONE[action], ("Open songbook", opens) if opens else None)
     if job.song_key.startswith(LACUERDA_ARTIST):  # no song's: its command's last word says what LaCuerda answered
         return _artist_read(job.steps, details)

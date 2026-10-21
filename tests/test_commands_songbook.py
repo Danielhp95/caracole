@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 import re
 import struct
@@ -243,7 +244,9 @@ def test_a_song_caracole_remove_takes_out_of_the_library_is_missing_from_its_son
     shown = run(setup, "show", "Campfire").output.splitlines()
     assert shown[1:3] == ["  1. Soda Stereo - De Música Ligera (missing: not in the library)", "  2. 宋冬野 - 斑马，斑马"]
     index = (cfg.library_dir / "index.html").read_text(encoding="utf-8")  # caracole remove rewrote it
-    assert re.search(r'<li class="missing">.*?De Música Ligera.*?missing: not in the library', index)
+    data = json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', index, re.S).group(1))
+    first = data["songbooks"]["books"][0]["set"][0]  # what its Songbooks tab shows
+    assert (first["title"], first["missing"], first["id"]) == ("De Música Ligera", "not in the library", None)
 
     rendered = run(setup, "render", "Campfire")
     assert rendered.exit_code == 0, rendered.output

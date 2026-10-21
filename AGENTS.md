@@ -44,7 +44,7 @@ section says where things are, and the rules a change there keeps.
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
 | youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step) |
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed under Versions in its line's ⋯ on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml: a song is a string, or a table with its own `Setting`: key, mode, capo; `SongbookSong`, `Songbook.songs`, `.texts`; `set_song_setting`, and `with_capo`, the capo a key or a mode `caracole songbook set` gives plays at now, so a replaced sheet keeps the key it sounds in; its files play each song through `apply_version`, never chordpro's `{transpose}`, where `in_setting` puts it: the setting's key as the key of the shapes played, its mode and capo, the rest the song's `own_version`; `plays_in`, that in words, "key unknown, as written" for a sheet with no key) |
-| todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py |
+| todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py (its Songbooks tab's data) |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
 left, with the error; what needs the user), which report.py turns into the run's summary on
@@ -88,7 +88,16 @@ Rules a change there keeps (the Invariants below are the others):
   rows.js's `indexLine`; a removed song's line asks for it again as the request form does. Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
   do. select.js knows only the songs the page was loaded with: a line offers Add to a songbook…
-  for those alone.
+  for those alone. The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
+  data's `songbooks` (songbook_section.py: each songbook's set list, where it plays each song as
+  `songbook.plays_in` says it, and the setting's menus' names, the theory's), which `/jobs.json`
+  gives again once a songbook's change is over. library.js lends it `window.caracoleLibrary`
+  (`track`, `showLine`) and tells it every job's view (`caracole:job`) and the songbooks
+  (`caracole:songbooks`); it posts the Select bar's songbook too. A song's chip sends the capo with
+  the key and the mode (`/songbook/set`, as `caracole songbook set` keeps it), and Add a song looks
+  a song the library hasn't got up first (`/songbook/add-song`: `search_routes.queue_lookup`, then
+  `caracole songbook add`). A change that ends seconds after its tap moves nothing on the screen:
+  what it took away says so where it was until the next click or key (test_songbooks_tab.py).
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of
   library_assets/, inlined byte for byte in the order of `library_page.STYLESHEETS`, `SCRIPTS`
   and `TEMPLATES`, where a new file is listed (test_library_assets.py).
