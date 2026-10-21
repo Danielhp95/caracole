@@ -74,7 +74,8 @@ is made from a text of its own (caracole/pdf_text.py), the .cho staying as the
 viewer reads it: in a version, each chord named and shaped as the viewer shows
 it there (``apply_version``); without the tab's notes, the shapes its viewer shows
 (its chord legend's) as chord diagrams,
-the viewer's key line under the title, section names in capitals, in two columns. That
+the viewer's key line under the title, section names in capitals, in two columns that end
+level when the first page's two hold the song. That
 text runs the viewer's code: a bug there fails that song's PDF alone, logged with its traceback,
 as a chordpro failure does, and its viewer is still written. kv ``render:<song id>``
 keeps what the song's PDF was made from (the SHA-256 of the .cho, the
@@ -143,7 +144,7 @@ from caracole.library import (
 from caracole.keys import SongKey, sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
-from caracole.pdf_text import PDF_TEXT_VERSION, pdf_text
+from caracole.pdf_text import PDF_TEXT_VERSION, STYLE_FILE, pdf_text
 from caracole.songs import (
     AUTO_SHEET,
     HUMAN_SHEET,
@@ -195,8 +196,8 @@ FONT_ELEMENTS = ("text", "title")
 # and under the title the text's {subtitle} (pdf_text.py: the artist, the viewer's key
 # line, a capo or a tuning the notes name), as ChordPro prints neither the artist nor the
 # capo by default: a capo the guitarist can't see means playing in the wrong key. Its
-# SHA-256 is in each PDF's record, so a new look renders every PDF once more.
-STYLE_FILE = Path(__file__).with_name("chordpro-style.json")
+# SHA-256 is in each PDF's record, so a new look renders every PDF once more. It is
+# pdf_text.STYLE_FILE, whose page sizes and spacings say where the PDF's two columns end level.
 
 Runner = Callable[..., subprocess.CompletedProcess]
 

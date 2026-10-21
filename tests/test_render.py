@@ -663,3 +663,120 @@ def test_render_real_numerals_chart_draws_not_even_the_diagram_of_a_chord_the_sh
         "[G]here", "[Hm]here")
     texts = [text.strip() for _, text in numbered_pdf(tmp_path, "numerals", sheet)]
     assert texts.count("Hm") == 1, texts  # over its words alone
+
+
+# --- two columns that end level (pdf_text.py's estimate, against the real chordpro) ---------------
+
+def drawn_at(tmp_path: Path, text: str, *, font: str | None = None) -> list[list[tuple[float, float, str]]]:
+    """What chordpro draws of the ChordPro ``text``, page by page: (x, y, string)."""
+    from helpers.pdf_pages import pdf_pages
+
+    cho = tmp_path / "estimate.cho"
+    cho.write_text(text, encoding="utf-8")
+    pdf = tmp_path / "estimate.pdf"
+    render_pdf(cho, pdf, chordpro_bin=CHORDPRO, font_file=Path(font) if font else None)
+    return pdf_pages(pdf)
+
+
+_WORDS = " ".join(["placeholder"] * 12)
+# Each kind of line, by name: one PDF holds them all, each after a line of its own ("ZZZ 3").
+_KINDS = {
+    "chords-over-words": "[C]A chord [G]over words\n",
+    "words": "Words alone\n",
+    "chords": "[C] [G] [Am]\n",
+    "repeat-mark": "[*x2]\n",
+    "blank": "\n",
+    "blanks": "\n\n\n",
+    "heading": "{comment: VERSE 1}\n",
+    "highlight": "{highlight: CHORUS}\n",
+    "tab": "{start_of_tab}\ne|---0---|\n\nB|---1---|\n{end_of_tab}\n",
+    "silent": "# a ChordPro comment\n{define: C base-fret 1 frets x 3 2 0 1 0}\n",
+    "wrapped-words": _WORDS + "\n",
+    "wrapped-chords-and-words": "[C]" + _WORDS + " [G]more\n",
+    "words-pushed-to-a-line-of-their-own": "y en la cara dos so[C]les que [G]sin palabras [Am]hablan, [C]  [G]   [Am]\n",
+    "a-chord-too-wide-for-where-its-words-start": "[C]placeholder placeholder placeholder placehold[Am7]s\n",
+    "wrapped-heading": "{comment: " + _WORDS + " " + _WORDS + "}\n",
+}
+_KINDS_TEXT = "{title: Estimate}\n{subtitle: The Placeholders}\n{columns: 2}\n" + "".join(
+    f"ZZZ {n}\n{lines}" for n, lines in enumerate(_KINDS.values())) + f"ZZZ {len(_KINDS)}\n"
+
+
+@pytest.fixture(scope="module")
+def kinds_drawn(tmp_path_factory):
+    """Where chordpro draws each "ZZZ n" line of _KINDS_TEXT, by n: all in the first column."""
+    page = drawn_at(tmp_path_factory.mktemp("kinds"), _KINDS_TEXT)[0]
+    return {int(s.split()[1]): y for x, y, s in page if s.startswith("ZZZ")}
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@pytest.mark.parametrize("kind", list(_KINDS))
+def test_the_estimate_of_a_lines_height_is_chordpros(kinds_drawn, kind):
+    from caracole.pdf_text import layout, line_heights
+
+    shape, n = layout(), list(_KINDS).index(kind)
+    lines = _KINDS_TEXT.splitlines()
+    first = lines.index(f"ZZZ {n}") + 1
+    estimate = sum(line_heights(lines, shape)[first:lines.index(f"ZZZ {n + 1}")])
+    assert estimate == pytest.approx(kinds_drawn[n] - kinds_drawn[n + 1] - shape.lyrics, abs=0.01)
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@pytest.mark.parametrize("chords", [["C", "G"], ["C", "D", "E", "F", "G", "A", "B", "Am", "Dm", "Em"]],
+                         ids=["a row of diagrams", "two rows"])
+def test_the_estimate_of_the_first_pages_column_is_chordpros(tmp_path, chords):
+    from caracole.pdf_text import column_height, layout, line_heights
+
+    lines = [f"[{chords[i % len(chords)]}]Line {i:02d}" for i in range(60)]
+    text = "{title: Estimate}\n{columns: 2}\n" + "\n".join(lines) + "\n"
+    shape = layout()
+    room, held = column_height(text.splitlines(), shape), 0
+    for height in line_heights(lines, shape):
+        if room < height:
+            break
+        room, held = room - height, held + 1
+    first = drawn_at(tmp_path, text)[0]
+    assert sorted(s for x, y, s in first if s.startswith("Line") and x < shape.second_column) == [
+        f"Line {i:02d}" for i in range(held)]
+
+
+def level_song(lyric: str = "Made up words to sing") -> str:
+    """宋冬野's 斑马斑马 in shape (synthetic words): chordpro filled the first column and left one line
+    alone in the second."""
+    out = ["{title: Level}", "{artist: The Placeholders}"]
+    for n, count in enumerate([4, 4, 4, 8, 5], 1):
+        out += ["", f"{{comment: Part {n}}}"]
+        out += [f"[C]{lyric} [D]{n}.{i} [Bm]and [Em]more" for i in range(count)]
+    return "\n".join(out) + "\n"
+
+
+def columns_of(page, shape, mark: str) -> tuple[list[str], list[str]]:
+    lines = [(x, y, s) for x, y, s in page if mark in s]
+    return ([s for x, y, s in lines if x < shape.second_column], [s for x, y, s in lines if x >= shape.second_column])
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_a_mid_length_songs_two_columns_each_hold_a_fair_share(tmp_path):
+    from caracole.pdf_text import layout
+
+    pages = drawn_at(tmp_path, printed_text(level_song(), key=Key(0, "ionian"), capo=None))
+    left, right = columns_of(pages[0], layout(), "Made up words")
+    assert len(pages) == 1 and len(left) + len(right) == 25
+    assert min(len(left), len(right)) >= 10, (left, right)  # chordpro alone: 24 and 1
+    second = [s for x, y, s in sorted(pages[0], key=lambda r: -r[1]) if x >= layout().second_column]
+    assert second[0] == "PART 4"  # a section starts the second column
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@cjk_font
+def test_a_mid_length_chinese_songs_two_columns_each_hold_a_fair_share(tmp_path):
+    from caracole.pdf_text import layout
+
+    printed = printed_text(level_song("斑马斑马你不要睡着啦"), key=Key(4, "aeolian"), capo=None)
+    pages = drawn_at(tmp_path, printed, font=CJK_FONT)
+    left, right = columns_of(pages[0], layout(), "斑马")
+    assert len(pages) == 1 and len(left) + len(right) == 25
+    assert min(len(left), len(right)) >= 10, (left, right)

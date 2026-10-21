@@ -869,6 +869,30 @@ def test_the_real_files_play_a_song_in_its_setting(conn, cfg, two):
 
 
 @real_chordpro
+@pytest.mark.chordpro
+def test_a_songs_two_columns_end_level_in_the_songbook_too(conn, cfg):
+    # A song a little longer than a column (宋冬野's 斑马斑马 in shape, synthetic words): alone, chordpro
+    # would leave one line in the second column.
+    from caracole.pdf_text import layout
+    from helpers.pdf_pages import pdf_pages
+
+    cfg = replace(cfg, chordpro_bin=CHORDPRO, cjk_font=None)
+    sheet = "".join(
+        f"[Part {n}]\r\n" + "".join(f"[tab][ch]C[/ch]               [ch]D[/ch]\r\nMade up words to sing {n}.{i} and"
+                                     " more[/tab]\r\n" for i in range(count)) + "\r\n"
+        for n, count in enumerate([4, 4, 4, 8, 5], 1))
+    level = add_song(conn, "The Placeholders", "Level")
+    keep_sheet(conn, cfg, level, sheet, tonality="C")
+    render_sheets(conn, cfg)
+    make(cfg, "Campfire", "The Placeholders - Level")
+    assert render_songbooks(conn, cfg, overrides(cfg, "")).failed == []
+    pages = [[x for x, y, s in page if s.startswith("Made up words")] for page in pdf_pages(folder(cfg) / "songbook.pdf")]
+    lines = pages[-1]  # the song's one page
+    second = sum(1 for x in lines if x >= layout().second_column)
+    assert len(lines) == 25 and min(second, 25 - second) >= 10, lines
+
+
+@real_chordpro
 @pytest.mark.skipif(not (CJK_FONT and Path(CJK_FONT).is_file()), reason="set CARACOLE_CJK_FONT")
 @pytest.mark.chordpro
 def test_the_real_pdf_of_a_chinese_songbook_embeds_the_font(conn, cfg):

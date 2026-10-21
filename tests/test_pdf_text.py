@@ -291,3 +291,99 @@ def test_chord_names_alone_or_a_sheet_with_no_key_print_as_before():
     assert pdf_text(nokey, key=None, capo=None, names="numerals") == pdf_text(nokey, key=None, capo=None)
     with pytest.raises(ValueError):
         pdf_text(SONG, key=C_MAJOR, capo=None, names="roman")
+
+
+# --- two columns that end level ---------------------------------------------------------------
+
+def song(sections, *, line="[C]Made up [G]words to sing {n}.{i}", headings=True):
+    """A synthetic .cho of len(sections) sections, each that many lines of ``line``, a blank line
+    between two; with ``headings``, each under a {comment} heading."""
+    out = ["{title: Level}", "{artist: The Placeholders}"]
+    for n, count in enumerate(sections, 1):
+        out += [""] + ([f"{{comment: Part {n}}}"] if headings else [])
+        out += [line.format(n=n, i=i) for i in range(count)]
+    return "\n".join(out) + "\n"
+
+
+def printed(cho, **kw):
+    return pdf_text(cho, key=Key(0, "ionian"), capo=None, **kw).splitlines()
+
+
+def sections_after_the_break(lines):
+    """The headings in the second column (after {column_break}), or None for no break."""
+    if "{column_break}" not in lines:
+        return None
+    at = lines.index("{column_break}")
+    assert lines.count("{column_break}") == 1
+    return [line for line in lines[at + 1:] if line.startswith("{comment")]
+
+
+def test_a_song_a_little_longer_than_a_column_breaks_where_the_columns_end_level():
+    # 宋冬野's 斑马斑马 in shape: chordpro filled the first column and left the last line alone in the
+    # second. 3 sections of 4 lines, one of 8, one of 5: the 8 and the 5 make the second column.
+    lines = printed(song([4, 4, 4, 8, 5]))
+    assert sections_after_the_break(lines) == ["{comment: PART 4}", "{comment: PART 5}"]
+    assert lines[lines.index("{column_break}") + 1] == "{comment: PART 4}"  # never inside a section
+
+
+def test_the_break_goes_after_the_blank_lines_before_its_section():
+    lines = printed(song([4, 4, 4, 8, 5]))
+    at = lines.index("{column_break}")
+    assert lines[at - 1] == "" and lines[at - 2].startswith("[C]")
+
+
+@pytest.mark.parametrize("sections", [[4, 4], [4, 4, 4], [6, 6, 6], [4, 4, 4, 4, 4, 2]],
+                         ids=["8 lines", "12", "18", "a column nearly full"])
+def test_a_song_one_column_holds_stays_in_one(sections):
+    assert sections_after_the_break(printed(song(sections))) is None
+
+
+@pytest.mark.parametrize("sections", [[4] * 12, [4] * 30], ids=["two columns full", "two pages"])
+def test_a_song_two_columns_cant_hold_keeps_chordpros_flow(sections):
+    assert sections_after_the_break(printed(song(sections))) is None
+
+
+def test_a_section_is_never_split_even_when_it_would_level_the_columns():
+    # One section a little longer than a column: no section boundary to break at.
+    assert sections_after_the_break(printed(song([30]))) is None
+
+
+def test_a_break_is_only_where_both_columns_hold_their_part():
+    # 26 lines, then 4: the only boundary leaves the first column more than it holds.
+    assert sections_after_the_break(printed(song([26, 4]))) is None
+
+
+def test_a_song_without_headings_breaks_between_two_stanzas():
+    lines = printed(song([4, 4, 4, 8, 8], headings=False))
+    at = lines.index("{column_break}")
+    assert lines[at - 1] == "" and lines[at + 1] == "[C]Made up [G]words to sing 4.0"
+
+
+def test_stanzas_are_the_longest_gaps_when_every_line_has_a_blank_after_it():
+    # A sheet with a blank line after each line, and two between stanzas: a break between two stanzas.
+    cho = song([4, 4, 4, 8, 5], line="[C]Made up [G]words to sing {n}.{i}\n", headings=False)
+    lines = printed(cho)
+    at = lines.index("{column_break}")
+    assert lines[at - 2:at] == ["", ""] and lines[at + 1] == "[C]Made up [G]words to sing 4.0"
+
+
+def test_a_tab_block_is_never_broken():
+    # Without headings, a blank line inside a long tab would level the columns best: a stanza's start
+    # after it is the place.
+    riff = "\n".join("e|---0---|" for _ in range(25))
+    cho = ("{title: Riff}\n{artist: The Placeholders}\n{start_of_tab}\n" + riff + "\n\n" + riff
+           + "\n{end_of_tab}\n\n" + "\n".join(f"[C]Made up [G]words {i}" for i in range(8)) + "\n")
+    lines = printed(cho)
+    at = lines.index("{column_break}")
+    assert lines[at - 2] == "{end_of_tab}" and lines[at + 1] == "[C]Made up [G]words 0"
+
+
+def test_long_lines_that_wrap_count_for_the_lines_they_take():
+    # 5 sections of 3 lines, each wrapped onto four lines by chordpro: well over a column, so a break.
+    words = " ".join(["placeholder"] * 14)
+    assert sections_after_the_break(printed(song([3] * 5, line=words + " {n}.{i}"))) is not None
+    assert sections_after_the_break(printed(song([3] * 5, line="words {n}.{i}"))) is None
+
+
+def test_one_column_has_no_break():
+    assert "{column_break}" not in printed(song([4, 4, 4, 8, 5]), columns=1)

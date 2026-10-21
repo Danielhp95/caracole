@@ -1156,7 +1156,12 @@ and cache.
   PDF (a tab after them stays in), the chord diagrams are the shapes the
   viewer shows first for the chords the sheet gives shapes for (its chord
   legend, "Cadd9 (x32033)", wherever it is), the section names are in
-  capitals and the song is in two columns. A song in another key, capo or
+  capitals and the song is in two columns. When the two columns of its first
+  page hold the song, they end level: the second starts at the section (in a
+  song without headings, the stanza) that evens them out best, never inside
+  one, a tab or a wrapped line, so it never holds a single line on its own. A
+  song one column holds stays in one, and a longer one than two hold flows
+  from column to column and page to page as chordpro sets it. A song in another key, capo or
   mode, by its `[version]` or its `[transpose]`, has every chord written as
   its viewer shows it there (Bb, not chordpro's A#), each with the shape the
   viewer shows (or the one the version chose) as its diagram: chordpro moves
