@@ -56,6 +56,7 @@ from caracole.library import (
     write_atomic,
 )
 from caracole.normalize import clean_title, identity_key
+from caracole.overrides import TOO_DEEP
 
 # The render step's own pieces: a songbook is rendered the way a sheet is, and right after the sheets.
 from caracole.render import (
@@ -287,9 +288,6 @@ def _read(path: Path) -> str | None:
     except UnicodeDecodeError as e:
         line = data[: e.start].count(b"\n") + 1
         raise SongbookFileError(f"{path}: line {line} is not valid UTF-8 (save the file as UTF-8)") from e
-
-
-TOO_DEEP = "nested too deep for the TOML parser"  # tomllib and tomlkit raise RecursionError then
 
 
 def load_songbooks(path: Path) -> list[Songbook]:
