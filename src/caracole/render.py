@@ -2,8 +2,10 @@
 
 The command line was checked against ChordPro 6.050.7 (nixpkgs
 ``perl5Packages.AppMusicChordPro``): ``--output=FILE`` picks the PDF backend by
-its extension, ``--transpose=N`` shifts the chords and the key by N semitones,
-and ``--define=a.b.c=VALUE`` sets one config item.
+its extension, and ``--define=a.b.c=VALUE`` sets one config item. chordpro
+transposes nothing: its ``--transpose`` spells A# where the viewer shows Bb and
+leaves ``{define}`` shapes where they were, so the text it is given names each
+chord where the song is played (viewer/version.py ``apply_version``).
 
 ``--nodefaultconfigs`` is essential, not tidiness: for ``sheet.cho`` ChordPro
 reads ``sheet.json`` beside it as a song config, and the library keeps UG's raw
@@ -60,15 +62,19 @@ say caracole wrote goes: the three when the PDF's record below names it, else
 the .cho and the viewer while they are still as written. Files of yours by
 those names stay.
 
-The PDFs take caracole's look (``STYLE_FILE``, a ChordPro config) and are
-transposed by the song's ``[transpose]`` override. Each is made from a text of
-its own (caracole/pdf_text.py), the .cho staying as the viewer reads it: without
-the tab's notes, the shapes its viewer shows (its chord legend's) as chord diagrams,
+The PDFs take caracole's look (``STYLE_FILE``, a ChordPro config) and are in
+the song's own version (``own_version``): its ``[version]`` override ("Make
+this my version": a key, mode, capo, shapes and swaps), else its
+``[transpose]``, else the sheet as written; the viewer starts there too. Each
+is made from a text of its own (caracole/pdf_text.py), the .cho staying as the
+viewer reads it: in a version, each chord named and shaped as the viewer shows
+it there (``apply_version``); without the tab's notes, the shapes its viewer shows
+(its chord legend's) as chord diagrams,
 the viewer's key line under the title, section names in capitals, in two columns. That
 text runs the viewer's code: a bug there fails that song's PDF alone, logged with its traceback,
 as a chordpro failure does, and its viewer is still written. kv ``render:<song id>``
 keeps what the song's PDF was made from (the SHA-256 of the .cho, the
-transposition, the font, the SHA-256 of the style, the PDF's name,
+version's transposition, the font, the SHA-256 of the style, the PDF's name,
 ``pdf_text.PDF_TEXT_VERSION`` and the SHA-256 of the text chordpro prints, whose
 key line and chord diagrams come from more than the .cho) and what was
 written (the PDF's length and SHA-256): its human sheet's, else its auto
@@ -109,6 +115,7 @@ from functools import lru_cache
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import parse_qsl
 
 from caracole.autochords.merge import AUTO_MARKER
 from caracole.chordpro import to_chordpro
@@ -300,19 +307,16 @@ def render_pdf(
     cho: Path,
     pdf: Path,
     *,
-    transpose: int = 0,
     chordpro_bin: str = "chordpro",
     font_file: Path | None = None,
     runner: Runner = subprocess.run,
 ) -> None:
-    """Render ``cho`` to ``pdf``, transposed by ``transpose`` semitones.
+    """Render ``cho`` to ``pdf``, its chords where it names them (chordpro transposes nothing).
 
     Raises RenderError when the binary is missing, exits non-zero, times out
     or writes no PDF.
     """
     cmd = [chordpro_bin, "--nodefaultconfigs", f"--config={STYLE_FILE}"]
-    if transpose:
-        cmd.append(f"--transpose={transpose}")
     if font_file is not None:
         cmd += _font_options(Path(font_file))
     cmd += [f"--output={pdf}", str(cho)]
@@ -555,15 +559,17 @@ def _render_song(
     folder = song_dir(cfg.library_dir, song)
     done: list[_Done] = []
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
+    version = own_version(overrides, song)
 
-    def render(kept: KeptFile, sheet: _Sheet, state_key: str) -> None:
+    def render(kept: KeptFile, sheet: _Sheet, state_key: str, played: Version) -> None:
         found = auto_key if sheet.auto else human_key
         mine = (found.key, found.source) if found is not None else (None, None)
-        done.append(_render_sheet(conn, cfg, overrides, song, folder, kept, sheet, state_key,
+        done.append(_render_sheet(conn, cfg, song, folder, kept, sheet, state_key, played,
+                                  start=export_query(played) if song.key in overrides.version else None,
                                   cjk_font=cjk_font, runner=runner, force=force, key=mine))
 
     if human is not None:
-        render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id))
+        render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id), version)
         if auto is None and done[-1].outcome != "no font":  # its PDF is in place
             for name in AUTO_OUTPUTS:
                 (folder / name).unlink(missing_ok=True)
@@ -573,7 +579,9 @@ def _render_song(
         _drop_human_outputs(conn, cfg.library_dir, song, folder)
     if auto is not None:
         beside = human is not None
-        render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside))
+        # Beside the human sheet, the version's shapes and swaps are that sheet's chords', by their places
+        render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside),
+               replace(version, at={}, alt={}) if beside else version)
     if human is not None or auto is not None:
         _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, runner=runner, force=force)
     return done
@@ -582,13 +590,38 @@ def _render_song(
 # --- an export: the sheet's PDF in another version ------------------------------------
 
 
-def export_version(query: str, overrides: Overrides, song: Song) -> Version:
-    """The version an address ``query`` holds (``version_from_query``), for an export. The viewer starts at the
-    song's ``[transpose]`` and leaves ``t`` out of its address there, so without a ``t`` the version is that."""
+# What of a viewer's address names where the song is played (viewer/version.py), besides its text size and the rest
+_VERSION_NAMES = frozenset({"t", "mode", "capo", "alt", "at"})
+
+
+def own_version(overrides: Overrides, song: Song) -> Version:
+    """The song's own version, where its PDF, its viewer and its songbooks start: its ``[version]`` ("Make this
+    my version"), at its ``[transpose]`` if that names no ``t``; else its ``[transpose]`` alone; else the sheet
+    as written (``Version()``)."""
+    transpose = overrides.transpose.get(song.key, 0)
+    query = overrides.version.get(song.key)
+    if query is None:
+        return Version(t=transpose)
     version = version_from_query(query)
-    if any(part.split("=")[0] == "t" for part in query.lstrip("#?").split("&")):
-        return version
-    return replace(version, t=overrides.transpose.get(song.key, 0))
+    return version if "t" in _names(query) else replace(version, t=transpose)
+
+
+def _names(query: str) -> set[str]:
+    """The names an address's query or fragment holds, as the viewer's URLSearchParams reads them."""
+    return {name for name, _ in parse_qsl(query[1:] if query[:1] in ("#", "?") else query, keep_blank_values=True)}
+
+
+def export_version(query: str, overrides: Overrides, song: Song) -> Version:
+    """The version an address ``query`` holds (``version_from_query``), for an export, as the viewer reads its
+    own address: one that names none of the version (its ``t``, ``mode``, ``capo``, ``alt`` or ``at``) is the
+    song's own (``own_version``), where the viewer starts, and one that names no ``t`` is at the own version's,
+    which the viewer leaves out of its address."""
+    names = _names(query)
+    mine = own_version(overrides, song)
+    if not names & _VERSION_NAMES:
+        return mine
+    version = version_from_query(query)
+    return version if "t" in names else replace(version, t=mine.t)
 
 
 def export_query(v: Version) -> str:
@@ -650,10 +683,8 @@ def render_version(
     try:
         shapes = viewer_key(text, found.key if found is not None else None)
         capo = parse_sheet(text).capo
-        cho = apply_version(text, v, key=shapes, capo_sheet=capo)
         label = version_label(v, shapes, capo)
-        played, played_capo = played_key(v, shapes, capo)
-        printed = _as_latin(pdf_text(cho, key=played, capo=played_capo))
+        printed = _version_text(text, v, shapes, capo)
     except Exception as e:  # a sheet the viewer's code can't read
         log.warning("%s: cannot make the export %s", song.display, version_query(v), exc_info=True)
         raise RenderError(f"cannot make the export: {type(e).__name__}: {e}") from e
@@ -676,8 +707,8 @@ def render_version(
     record = {k: e for k, e in record.items() if isinstance(e, Mapping)} if isinstance(record, Mapping) else {}
     if not force and _up_to_date(pdf, record.get(label), state):
         return pdf
-    sha, size = _render_into(printed, pdf, work_dir=cfg.cache_dir, transpose=0,
-                             chordpro_bin=cfg.chordpro_bin, font_file=font, runner=runner)
+    sha, size = _render_into(printed, pdf, work_dir=cfg.cache_dir, chordpro_bin=cfg.chordpro_bin, font_file=font,
+                             runner=runner)
     # The label names the file, so another label never names the same one; a name that sorts the same
     # after safe_name is the same file, and its older record goes.
     record = {k: e for k, e in record.items() if e.get("pdf") != pdf.name}
@@ -706,21 +737,23 @@ def _remake_exports(conn: sqlite3.Connection, cfg: Config, overrides: Overrides,
 def _render_sheet(
     conn: sqlite3.Connection,
     cfg: Config,
-    overrides: Overrides,
     song: Song,
     folder: Path,
     kept: KeptFile,
     sheet: _Sheet,
     state_key: str,
+    version: Version,
     *,
+    start: str | None,
     cjk_font: Path | None,
     runner: Runner,
     force: bool,
     key: tuple[str | None, str | None] = (None, None),
 ) -> _Done:
-    """Write one sheet's .cho, render its PDF unless kv ``state_key`` says it is up to date,
+    """Write one sheet's .cho, render its PDF in ``version`` unless kv ``state_key`` says it is up to date,
     then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a sheet
-    waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``).
+    waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``); ``start``, the
+    song's own version as the viewer's address writes it, where the viewer starts, or None for none.
 
     The PDF, the viewer and the record of the .cho are made from the text written, never read
     back: a synced device may write there a moment later."""
@@ -732,18 +765,17 @@ def _render_sheet(
     _write_if_changed(cho, data)
     _note_written(conn, song.id, cho.name, data)
     pdf = folder / f"{stem}.pdf"
-    transpose = overrides.transpose.get(song.key, 0)
 
     def viewer() -> bool:
         page = folder / f"{stem}.html"
-        data = _write_viewer(song, text, page, pdf, key=key, transpose=transpose)
+        data = _write_viewer(song, text, page, pdf, key=key, transpose=version.t, start=start)
         if data is not None:
             _note_written(conn, song.id, page.name, data)
         return data is not None
 
     try:
-        done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, transpose, key=key[0],
-                                 capo=sheet.capo, cjk_font=cjk_font, runner=runner, force=force)
+        done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, version, key=key[0],
+                                 cjk_font=cjk_font, runner=runner, force=force)
     except RenderError:
         viewer()  # the PDF's error is the song's; the viewer's own, if any, is logged
         raise
@@ -757,20 +789,19 @@ def _render_sheet_pdf(
     text: str,
     pdf: Path,
     state_key: str,
-    transpose: int,
+    version: Version,
     *,
     key: str | None,
-    capo: int | None,
     cjk_font: Path | None,
     runner: Runner,
     force: bool,
 ) -> _Done:
-    """Render the ChordPro ``text`` to ``pdf`` unless kv ``state_key`` says it is up to date: chordpro
-    prints the PDF's own text (``_printed``), and the font is the one that text needs. A text that
+    """Render the ChordPro ``text`` to ``pdf`` in ``version`` unless kv ``state_key`` says it is up to date:
+    chordpro prints the PDF's own text (``_sheet_text``), and the font is the one that text needs. A text that
     can't be made (a bug in the viewer's code it runs) is a RenderError, logged with its traceback:
     this PDF fails, and the pass goes on."""
     try:
-        printed = _printed(text, key=key, capo=capo, transpose=transpose)
+        printed = _sheet_text(text, key=key, version=version)
     except Exception as e:  # a sheet the viewer's code can't read must never cost the other PDFs
         log.warning("%s: cannot make the text of %s", song.display, pdf.name, exc_info=True)
         raise RenderError(f"cannot make the text of {pdf.name}: {type(e).__name__}: {e}") from e
@@ -780,7 +811,7 @@ def _render_sheet_pdf(
         return _Done("no font", missing=_first_lost_letter(printed))
     state = {
         "source_sha": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        "transpose": transpose,
+        "transpose": version.t,  # info.json's; the rest of the version is in the text printed
         "font": str(font) if font else None,
         "style": _style(),
         "pdf": pdf.name,
@@ -791,17 +822,36 @@ def _render_sheet_pdf(
     }
     if not force and _up_to_date(pdf, kv_get_json(conn, state_key), state):
         return _Done("skipped")
-    sha, size = _render_into(printed, pdf, work_dir=cfg.cache_dir, transpose=transpose,
-                             chordpro_bin=cfg.chordpro_bin, font_file=font, runner=runner)
+    sha, size = _render_into(printed, pdf, work_dir=cfg.cache_dir, chordpro_bin=cfg.chordpro_bin, font_file=font,
+                             runner=runner)
     kv_set_json(conn, state_key, {**state, "pdf_sha256": sha, "pdf_size": size})
     write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
     return _Done("rendered")
 
 
+def _sheet_text(text: str, *, key: str | None, version: Version) -> str:
+    """The text chordpro prints of the sheet ``text`` in ``version``: the sheet as written (``Version()``) as it
+    is (``_printed``), else in that version as its viewer shows it (``_version_text``). ``key`` is the sheet's
+    (``keys.sheet_keys``)."""
+    if version == Version():
+        return _printed(text, key=key, capo=parse_sheet(text).capo, transpose=0)
+    return _version_text(text, version, viewer_key(text, key), parse_sheet(text).capo)
+
+
+def _version_text(text: str, v: Version, shapes: Key | None, capo: int | None) -> str:
+    """The text chordpro prints of the sheet ``text`` in the version ``v``: each chord named and shaped as the
+    viewer shows it there (``apply_version``), then the PDF's own text of that (``pdf_text``), with the key line
+    of the shapes the version plays and its capo. ``shapes`` and ``capo`` are the sheet's, as its viewer reads
+    them (``page.viewer_key``, its ``{capo}``)."""
+    played, played_capo = played_key(v, shapes, capo)
+    return _as_latin(pdf_text(apply_version(text, v, key=shapes, capo_sheet=capo), key=played, capo=played_capo))
+
+
 def _printed(text: str, *, key: str | None, capo: int | None, transpose: int) -> str:
     """The text chordpro prints of the sheet ``text`` (``pdf_text``), with the key of its shapes as its
-    viewer names it from ``key`` (the sheet's, ``keys.sheet_keys``), moved by ``transpose`` as chordpro
-    moves the chords, and the look-alike letters capitals can make written in Latin (``_as_latin``)."""
+    viewer names it from ``key`` (the sheet's, ``keys.sheet_keys``), moved by ``transpose`` as a
+    ``{transpose}`` before it moves the chords (a songbook's), and the look-alike letters capitals can make
+    written in Latin (``_as_latin``)."""
     shapes = viewer_key(text, key)
     if shapes is not None:
         shapes = Key((shapes.tonic + transpose) % 12, shapes.mode)
@@ -809,11 +859,11 @@ def _printed(text: str, *, key: str | None, capo: int | None, transpose: int) ->
 
 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *,
-                  key: tuple[str | None, str | None], transpose: int) -> bytes | None:
+                  key: tuple[str | None, str | None], transpose: int, start: str | None) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
-    there is one, and return the page's bytes. It starts in the song's ``[transpose]``, as the
-    PDF does, and takes the sheet's key (``keys.sheet_keys``) when it has one. A viewer that hasn't
-    changed isn't written again.
+    there is one, and return the page's bytes. It starts where the PDF is: at ``transpose``, in the song's
+    own version (``start``) when it has one, and takes the sheet's key (``keys.sheet_keys``) when it has
+    one. A viewer that hasn't changed isn't written again.
 
     The viewer is an extra: None, logged as "no viewer for", when it can't be built (a bug,
     with its traceback) or written (a link or a FIFO in its place), and the song's PDFs and
@@ -821,7 +871,7 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *,
     """
     linked = pdf.name if pdf.is_file() and not pdf.is_symlink() else None
     try:
-        html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, pdf=linked)
+        html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, start=start, pdf=linked)
     except Exception:  # a sheet the viewer can't read must never cost the PDFs
         log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
         return None
@@ -992,7 +1042,6 @@ def _render_into(
     pdf: Path,
     *,
     work_dir: Path,
-    transpose: int,
     chordpro_bin: str,
     font_file: Path | None,
     runner: Runner,
@@ -1014,8 +1063,7 @@ def _render_into(
     with tempfile.TemporaryDirectory(prefix="render-", dir=work_dir) as tmp:
         cho, out = Path(tmp) / f"{pdf.stem}.cho", Path(tmp) / pdf.name
         cho.write_bytes(text.encode("utf-8"))
-        render_pdf(cho, out, transpose=transpose, chordpro_bin=chordpro_bin, font_file=font_file,
-                   runner=runner)
+        render_pdf(cho, out, chordpro_bin=chordpro_bin, font_file=font_file, runner=runner)
         data = out.read_bytes()
         return write_atomic(pdf, data), len(data)
 

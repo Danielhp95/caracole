@@ -318,7 +318,8 @@ def test_a_partial_human_sheet_keeps_the_auto_pdf_beside_it(conn, cfg):
     assert render(conn, cfg, runner=run).skipped == 2 and run.calls == []
     down = overrides(cfg, '[transpose]\n"Placeholder Band - Synthetic Song" = -2\n')
     assert render(conn, cfg, down).rendered == 2  # both PDFs are in your key
-    assert b"--transpose=-2" in pdf_of(cfg, song, "sheet (auto).pdf").read_bytes()
+    auto = pdf_of(cfg, song, "sheet (auto).pdf").read_bytes()
+    assert b"[Bb]" in auto and b"[C]" not in auto and b"--transpose" not in auto  # its C, down 2
 
 
 def test_the_auto_pdf_goes_once_the_human_sheet_proves_complete(conn, cfg):
@@ -744,7 +745,8 @@ def test_transposition_from_overrides_rerenders(conn, cfg):
     assert b"--transpose" not in pdf_of(cfg, song).read_bytes()
     down = overrides(cfg, '[transpose]\n"Soda Stereo - De Musica Ligera" = -2\n')
     assert render(conn, cfg, down).rendered == 1
-    assert b"--transpose=-2" in pdf_of(cfg, song).read_bytes()
+    pdf = pdf_of(cfg, song).read_bytes()
+    assert b"[Am]Una canci" in pdf and b"[Bm]" not in pdf and b"--transpose" not in pdf  # its Bm, down 2
     run = FakeChordPro()
     assert render(conn, cfg, down, runner=run).skipped == 1 and run.calls == []
 
@@ -1894,3 +1896,66 @@ def test_a_query_without_a_t_key_starts_at_the_songs_transpose_even_with_at_or_a
         assert export_version(query, ovr, song).t == 3, query
     assert export_version("t=1&at=0.1.2", ovr, song).t == 1
     assert export_version("at=0.1.2&t=0", ovr, song).t == 0
+
+
+# --- a song's own version ([version], "Make this my version") ----------------------------------
+
+MINE = '[version]\n"Soda Stereo - De Música Ligera" = "t=2&mode=dorian&capo=0"\n'
+
+
+def test_a_songs_version_makes_its_main_pdf(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    down = overrides(cfg, '[transpose]\n"Soda Stereo - De Música Ligera" = -2\n')
+    run = FakeChordPro()
+    assert render(conn, cfg, down, runner=run).rendered == 1
+    printed = run.printed[-1].decode("utf-8")
+    # [transpose] alone: the chords named as the viewer names them, chordpro moving none
+    assert "[Fm]Una canción de [Db]prueba" in printed and "{transpose" not in printed
+    assert "--transpose" not in " ".join(run.calls[-1])
+
+    mine = overrides(cfg, '[transpose]\n"Soda Stereo - De Música Ligera" = -2\n\n' + MINE)
+    run = FakeChordPro()
+    assert render(conn, cfg, mine, runner=run).rendered == 1  # [version] wins over [transpose]
+    printed = pdf_of(cfg, song).read_bytes().decode("utf-8")
+    assert "[Am]Una canción de [F#dim]prueba" in printed and "[C]solo para el analiz[G]ador" in printed
+    assert "{subtitle: Soda Stereo · Key A dorian}" in printed.splitlines()
+    assert "--transpose" not in " ".join(run.calls[-1])
+    assert info_json(cfg, song)["render"] == {"transpose": 2, "pdf": "sheet.pdf"}
+    # the sheet stays as written beside it, the viewer's input, and the viewer starts in the version
+    assert "[Gm]Una canción de [Eb]prueba" in (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    data = viewer_data(viewer_of(cfg, song))
+    assert data["start"] == "t=2&mode=dorian&capo=0" and data["transpose"] == 2
+
+    run = FakeChordPro()
+    assert render(conn, cfg, mine, runner=run).skipped == 1 and run.calls == []  # up to date
+    assert render(conn, cfg, Overrides()).rendered == 1  # the version gone: as written again
+    assert "[Gm]Una canción de [Eb]prueba" in pdf_of(cfg, song).read_bytes().decode("utf-8")
+    assert viewer_data(viewer_of(cfg, song))["start"] is None
+
+
+def test_an_export_from_an_address_naming_no_version_is_the_songs_own(conn, cfg):
+    from caracole.render import export_version
+    from caracole.viewer.version import version_from_query
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    ovr = overrides(cfg, '[transpose]\n"Soda Stereo - De Música Ligera" = -2\n\n' + MINE)
+    mine = version_from_query("t=2&mode=dorian&capo=0")
+    for query in ("", "#", "fs=20&speed=8"):  # the viewer starts in it when its address names none
+        assert export_version(query, ovr, song) == mine, query
+    # An address naming some of it is the version it names, its t the version's where it names none
+    assert export_version("mode=lydian", ovr, song) == version_from_query("t=2&mode=lydian")
+    assert export_version("t=0", ovr, song) == version_from_query("t=0")
+
+
+def test_an_auto_sheet_beside_the_human_one_takes_the_songs_version_but_its_shapes_and_swaps(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)
+    ovr = overrides(cfg, '[version]\n"Placeholder Band - Synthetic Song" = "t=2&capo=0&at=0.1&alt=ionian.0.9.m."\n')
+    render(conn, cfg, ovr)
+    human = viewer_data(viewer_of(cfg, song))
+    auto = viewer_data(viewer_of(cfg, song, "sheet (auto).html"))
+    assert human["start"] == "t=2&capo=0&alt=ionian.0.9.m.&at=0.1"
+    assert auto["start"] == "t=2&capo=0"  # its chords are another sheet's: the positions and swaps are not its
+    assert "[D]" in pdf_of(cfg, song, "sheet (auto).pdf").read_bytes().decode("utf-8")  # its C, up 2

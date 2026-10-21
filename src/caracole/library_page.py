@@ -441,6 +441,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     ``origins`` is where each of its kept files came from (``icons.kept_sources``): each file gets
     its ``source``, and the song its primary file's.
     """
+    from caracole.render import own_version
+
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
     names = _file_names(song_dir(library_dir, song))
@@ -466,7 +468,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "added": song.added_at,
         "key": key.key if key else None,
         "key_source": key.source if key else None,
-        "transpose": overrides.transpose.get(song.key, 0),
+        "transpose": own_version(overrides, song).t,  # what its PDF is moved by: [version] wins over [transpose]
         "lyrics": song.lyrics_status,
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
         "files": files,

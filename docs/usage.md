@@ -1122,7 +1122,8 @@ and cache.
 - **`caracole render [--force] [--song "ARTIST - TITLE"]`** (and
   **`caracole render --song "ARTIST - TITLE" --version QUERY`**, below) writes
   `sheet.cho`, `sheet.pdf` and `sheet.html` next to every kept sheet, or the
-  one song's with `--song`, transposed as `[transpose]` says.
+  one song's with `--song`, in the song's own version: its `[version]` (Make
+  this my version, below), else transposed as `[transpose]` says, else as written.
   The PDF has one line under the title: the artist and the viewer's key line
   ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or "Soda Stereo · Key Bm"
   without a capo), then a capo or a tuning the tab's notes name
@@ -1136,13 +1137,15 @@ and cache.
   PDF (a tab after them stays in), the chord diagrams are the shapes the
   viewer shows first for the chords the sheet gives shapes for (its chord
   legend, "Cadd9 (x32033)", wherever it is), the section names are in
-  capitals and the song is in two columns. A song `[transpose]` moves is the
-  exception for now: chordpro moves its chords but not those shapes, so the
-  moved chords get chordpro's own diagrams, or none, in its PDF and in a
-  songbook's.
+  capitals and the song is in two columns. A song in another key, capo or
+  mode, by its `[version]` or its `[transpose]`, has every chord written as
+  its viewer shows it there (Bb, not chordpro's A#), each with the shape the
+  viewer shows (or the one the version chose) as its diagram: chordpro moves
+  nothing. A songbook's songs are still moved by chordpro for now, with its
+  own diagrams for the moved chords, or none.
   `sheet.html` is the sheet viewer, for the phone (see
   [The sheet viewer](#the-sheet-viewer)). A PDF is made again only when its
-  sheet, its transposition, the font, caracole's PDF style or the text the
+  sheet, its version, the font, caracole's PDF style or the text the
   PDF prints changes (the key it names, as when an auto sheet's key is heard
   again, or a newer caracole's way of writing it), or when
   it is no longer the PDF caracole wrote: deleted, cut short, edited, or a
@@ -1168,17 +1171,35 @@ and cache.
   `sheet (A Minor, capo 0).pdf`, or `sheet (Transposed +2, capo 0).pdf` for a
   sheet with no key. Every chord is written as the viewer shows it (moved,
   in the mode, swapped), with its chosen shape, and no `{transpose}` is left.
-  Without a `t`, the version starts at the song's `[transpose]`, as the viewer
-  does. An export with the same name replaces the last one. Exports are
+  The words are read as the viewer reads its own address: naming nothing of
+  the version (no `t`, `mode`, `capo`, `alt` or `at`), they are the song's
+  own version, where the viewer starts; without a `t`, the version is at the
+  song's own `t` (its `[version]`'s, else its `[transpose]`), which the viewer
+  leaves out of its address. An export with the same name replaces the last one. Exports are
   caracole's files: every render makes them again when the sheet, the style or
   the PDF's text changes (and says nothing when they are up to date), and
   `caracole remove` deletes them. Needs the song's sheet to be kept; exits 1
   with the reason when it can't be made.
+
+  **`--song "ARTIST - TITLE" --version QUERY --mine`** makes that version
+  the song's own instead: it writes it under `[version]` in overrides.toml
+  (once it holds caracole's lock, keeping your comments), says so
+  (`Your version of Soda Stereo - De Música Ligera: G Dorian, capo 0`), then
+  renders the song as `--song` does: its `sheet.pdf` is in that version, its
+  viewer starts there, its exports and its songbooks follow. A version that is
+  where the song plays without one (its `[transpose]`, else as written) takes
+  the song's `[version]` out instead. `--mine` needs `--version` (exit 2).
   In the sheet viewer, ⋯ has **Export PDF of this version**. On `caracole
   serve` it opens `/export` in the same tab: the version in words ("G Dorian,
   capo 0"), Make PDF (this command, queued like any request), the job's line,
   then Open the PDF and Back to the sheet, which keeps the viewer's address.
-  Opened from a file, the viewer shows the command to run instead, with Copy.
+  Below Make PDF, **Make this my version** queues the same command with
+  `--mine` (caracole serve writes no overrides.toml itself); once it is done
+  the page says so and links the song's own PDF. On the version the song
+  plays in already (its `[version]`, else its `[transpose]`, else as written),
+  the page says "It is your version" instead.
+  Opened from a file, the viewer shows the command to run instead, with Copy,
+  and says that `--mine` makes it your version.
   chordpro works on a copy, in a private folder in the cache, and the new PDF
   replaces the old one in one rename, so a failed render leaves the last good
   PDF in place. It exits 1 when a sheet couldn't be rendered, and the log
@@ -1856,7 +1877,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   phone, and sits by its chord beside them on a wider screen; Escape closes
   the card first, then the settings, and gives the focus back to what opened
   each. Among them: **Transpose**, as − and + do, with the semitones counted; Reset goes back to the song's
-  `[transpose]`, where the viewer starts, like the PDF. **Capo**, on every
+  `[transpose]`, where the viewer starts, like the PDF. A song with a version
+  of its own (`[version]`, Make this my version) starts in it, key, capo, mode,
+  shapes and swaps, whenever its address names no other (an address with a
+  `t=`, `mode=`, `capo=`, `alt=` or `at=` is that version instead); the address
+  then always names its `t=`, and **Reset everything** goes back to it. What
+  the browser kept for the page before the song had that version is left
+  out. **Capo**, on every
   song, moves the capo a fret at a time, from none to
   the 11th; Reset puts it back where the sheet has it. The song sounds the same
   wherever the capo is, and the chords show the shapes to play there: Em shapes
@@ -2581,14 +2608,14 @@ in `Library/_songbooks/<name>/`:
 
 - **`songbook.pdf`**: a title page (the name, how many songs), the contents,
   then every song's sheet in order, in caracole's look and each in its own key
-  (`[transpose]`), all from one chordpro run, with the Chinese font when a song
+  (its `[version]`'s transposition, else its `[transpose]`), all from one chordpro run, with the Chinese font when a song
   needs it. A song without a sheet keeps its place: the contents name it
   ("Hysteria · Muse · missing: no sheet yet"), and its page says so. Its
   document title, the name a PDF viewer or a phone shows, is the songbook's.
 - **`songbook.html`**: one page for the phone, which opens from the synced
   folder and loads nothing. It opens on the contents, each song with its
   artist, key and capo on a line under its title ("Oasis · Em · capo 2": the
-  key the song opens in, its `[transpose]` applied, and its sheet's capo); tap
+  key the song opens in, its `[transpose]` (or its `[version]`'s) applied, and its sheet's capo); tap
   a song to open it in the sheet viewer, with everything the viewer does
   (chord shapes, transposition, chords to play instead, modes, scrolling by
   itself), each song in its own key and keeping its own settings, its scroll
@@ -2712,9 +2739,10 @@ other files and the other songbooks are still made.
 `overrides.toml` sits in the library folder (or where `overrides_file` says),
 and can live in git. `caracole review` writes `[match]`, `[alias]`, `[pin]`,
 `[ignore]` and `[reject]` for you, `caracole youtube --song … --url` or
-`--none` writes `[youtube]`, and `caracole get --lacuerda` and `caracole add
+`--none` writes `[youtube]`, `caracole get --lacuerda` and `caracole add
 --lacuerda` (Get it and Add for tonight's run on a LaCuerda song) write
-`[lacuerda]`; you write the rest by hand. These are all the tables:
+`[lacuerda]`, and `caracole render --version … --mine` (Make this my version)
+writes `[version]`; you write the rest by hand. These are all the tables:
 
 ```toml
 [alias]        # source artist -> UG artist slug(s): fixes every song by that artist
@@ -2731,6 +2759,9 @@ and can live in git. `caracole review` writes `[match]`, `[alias]`, `[pin]`,
 
 [transpose]    # semitones, -11 to 11, applied when PDFs are rendered
 "Soda Stereo - De Música Ligera" = -2
+
+[version]      # where you play a song, as its viewer's address says it: its PDF, viewer and songbooks follow
+"Soda Stereo - De Música Ligera" = "t=2&mode=dorian&capo=0&at=3.1"
 
 [ignore]       # songs caracole leaves alone
 songs = ["Some Artist - Some Interlude"]
@@ -2792,6 +2823,18 @@ tab_ids = [1601668]
   song's other versions compete for that kind.
 - **`[transpose]`** shifts the chords and the key in the PDF. `sheet.txt`
   stays as the source wrote it.
+- **`[version]`** is the song's own version: where you play it, written as the
+  sheet viewer writes it in its address after `#` (`t=2` semitones,
+  `mode=dorian`, `capo=0`, `alt=` for chords played instead, `at=` for chosen
+  shapes; a `#` before it is dropped), as Make this my version saves it. The
+  song's `sheet.pdf` is made in it, its viewer starts in it, and its songbooks
+  take its transposition; it wins over the song's `[transpose]`, which stays in
+  the file, and a version without a `t` is at that `[transpose]`. Its shapes and
+  swaps are the chords' of the sheet it was made on, by their places: an auto
+  sheet rendered beside a human one takes the rest of it alone, and a new sheet
+  plays the chords it still offers. Take the entry out to go back to
+  `[transpose]`, or the sheet as written. A value that is not text, holds a
+  control character or is over 2000 characters is an error naming the entry.
 - **`[ignore]`** takes only `songs = [...]`. It stops all work on a song: no
   matching, fetching, rendering or to-do items. Take it out of the list, and
   the song comes back.
@@ -2934,8 +2977,8 @@ separator or a character file systems reserve: `AC/DC` becomes `AC-DC`.
 
 **The `.cho` files** are the sheet in ChordPro, a plain-text format that puts
 each chord in brackets before the syllable it falls on (`[Am]Yesterday`).
-caracole makes `sheet.cho` from `sheet.txt`, in your key (`[transpose]`), and
-renders the PDF from it. You don't need to open it: it is there for songbook
+caracole makes `sheet.cho` from `sheet.txt`, as the sheet is written, and
+renders the PDF from it in your key (`[version]`, else `[transpose]`). You don't need to open it: it is there for songbook
 apps that read ChordPro, such as SongbookPro (Android, iOS, Windows) or OnSong
 (iOS), which scroll, transpose and draw chord diagrams on a phone or tablet,
 and any text editor opens it. Don't edit it in place, as the next render

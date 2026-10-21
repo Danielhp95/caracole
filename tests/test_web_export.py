@@ -121,3 +121,30 @@ def test_the_export_page_is_served_in_a_sandbox_free_page_of_its_own(app, conn, 
     page = get(app, export_url())
     csp = header(page, "content-security-policy")
     assert "default-src 'none'" in csp and "script-src" not in csp and "sandbox" not in csp
+
+
+def test_make_this_my_version_saves_it_and_renders_the_song(app, queue, recorder, conn, cfg):
+    song = rendered_song(conn, cfg)
+    page = text(get(app, export_url()))
+    assert ">Make this my version<" in page  # a form of its own, the same version, the same token
+    assert "It is your version" in shown(get(app, export_url(query="t=0")))  # as written: where it plays now
+    made = post(app, "/export", {"sheet": SHEET, "v": QUERY, "mine": "1"})
+    assert made.status == 303
+    where = header(made, "location")
+    assert "Queued" in shown(get(app, where))
+    queue.run_pending()
+    # overrides.toml is written by the command, which holds caracole's lock: never by the server
+    assert recorder.calls == [["render", f"--song={song.display}", "--version=t=2&capo=0", "--mine"]]
+    assert not cfg.overrides_file.exists()
+    done = get(app, where)
+    assert "Done" in shown(done) and "your version" in shown(done)
+    assert f'href="/{quote("Soda Stereo/De Música Ligera/sheet.pdf")}"' in text(done)  # the song's own PDF
+
+    # Once it is the song's version, its page says so and offers no other; the sheet's address naming
+    # no version is that one too, as the viewer starts in it.
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[version]\n"{song.display}" = "t=2&capo=0"\n', encoding="utf-8")
+    page = get(app, export_url())
+    assert "It is your version" in shown(page) and ">Make this my version<" not in text(page)
+    assert "A Major, capo 0" in shown(get(app, export_url(query="fs=20")))
+    assert ">Make this my version<" in text(get(app, export_url(query="t=0")))

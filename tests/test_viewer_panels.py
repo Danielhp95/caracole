@@ -407,11 +407,13 @@ def test_the_file_viewer_shows_the_command_to_export(tmp_path):
           const q = (s) => document.querySelector(s);
           const box = (el) => { const r = el.getBoundingClientRect(); return [r.width, r.height]; };
           return {cmd: q('#export-cmd').textContent, link: q('#export').hidden, copy: box(q('#export-copy')),
+                  hint: q('#export-hint').textContent,
                   cmdSeen: !q('#export-cmd').closest('[hidden]'), sideways: document.documentElement.scrollWidth > innerWidth};
         })()""")
         b.js("document.querySelector('#t-up').click()")
         moved = b.js("document.querySelector('#export-cmd').textContent")
     assert shown["cmd"] == "caracole render --song 'Synthetic - Long Song' --version 't=2&capo=1'"
     assert shown["link"] is True and shown["cmdSeen"] and not shown["sideways"]
+    assert "--mine" in shown["hint"]  # and how to make it the song's own version
     assert min(shown["copy"]) >= 44
     assert moved.endswith("--version 't=3&capo=1'")  # it follows the song

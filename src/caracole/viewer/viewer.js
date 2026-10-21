@@ -75,29 +75,45 @@
   // The shapes kept chosen, each with the chord it was chosen for (atSigns): read back once the chords
   // can be named (below setAt), as only a chord still named so gets its shape back.
   let keptAt = null;
+  // Where an address (or the song's own version) plays the song: what it names of it.
+  const adopt = (params) => {
+    if (params.has("alt")) state.alt = swapsOf(params.get("alt"));
+    if (params.has("at")) {
+      state.at = positionsOf(params.get("at"));
+      keptAt = null;  // the address says which
+    }
+    if (params.has("t")) state.t = clampT(params.get("t"));
+    if (validMode(params.get("mode"))) state.mode = params.get("mode");
+    if (params.has("capo")) state.capo = fretOf(params.get("capo"));
+  };
+  // The song's own version (overrides.toml's [version], "Make this my version"), which its PDF is in: the page
+  // starts there when its address names no version of its own, and Reset everything goes back there.
+  const start = new URLSearchParams(data.start || "");
+  const hash = new URLSearchParams(location.hash.slice(1));
+  if (data.start && !["t", "mode", "capo", "alt", "at"].some((name) => hash.has(name))) adopt(start);
+  // What the browser kept was for this song as its PDF then was: a new [transpose] or version starts afresh.
+  const keptFor = data.start || data.transpose;
   try {
     const saved = JSON.parse(localStorage.getItem(store) || "null");
     if (saved && typeof saved === "object") {
-      if (saved.base === data.transpose) state.t = clampT(saved.t);  // a new [transpose] starts afresh
-      if (validMode(saved.mode)) state.mode = saved.mode;
-      if (saved.alt && typeof saved.alt === "object" && saved.chords === sheetChords) state.alt = saved.alt;
-      if (saved.at && typeof saved.at === "object" && saved.atSigns && typeof saved.atSigns === "object"
-        && saved.chords === sheetChords) keptAt = { at: saved.at, signs: saved.atSigns };
+      const same = saved.base === keptFor;
+      if (same) state.t = clampT(saved.t);
+      if (same || !data.start) {  // in place of the version's: the sheet's own mode and shapes too
+        state.mode = validMode(saved.mode) ? saved.mode : null;
+        if (saved.alt && typeof saved.alt === "object" && saved.chords === sheetChords) state.alt = saved.alt;
+        if (saved.at && typeof saved.at === "object" && saved.atSigns && typeof saved.atSigns === "object"
+          && saved.chords === sheetChords) {
+          state.at = {};
+          keptAt = { at: saved.at, signs: saved.atSigns };
+        }
+        state.capo = fretOf(saved.capo);
+      }
       if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
       if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
       state.strip = saved.strip === true;
-      state.capo = fretOf(saved.capo);
     }
   } catch (err) { /* no storage: the page still works */ }
-  const hash = new URLSearchParams(location.hash.slice(1));
-  if (hash.has("alt")) state.alt = swapsOf(hash.get("alt"));
-  if (hash.has("at")) {
-    state.at = positionsOf(hash.get("at"));
-    keptAt = null;  // the address says which
-  }
-  if (hash.has("t")) state.t = clampT(hash.get("t"));
-  if (validMode(hash.get("mode"))) state.mode = hash.get("mode");
-  if (hash.has("capo")) state.capo = fretOf(hash.get("capo"));
+  adopt(hash);
   if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
   if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
   const save = () => {
@@ -105,7 +121,7 @@
       // Each shape chosen with the chord it was chosen for, so that only that chord gets it back.
       const atSigns = {};
       for (const i of Object.keys(state.at)) if (own.call(atSeen, i)) atSigns[i] = atSeen[i];
-      localStorage.setItem(store, JSON.stringify(Object.assign({ base: data.transpose, chords: sheetChords }, state,
+      localStorage.setItem(store, JSON.stringify(Object.assign({ base: keptFor, chords: sheetChords }, state,
         { atSigns })));
     } catch (err) { /* private mode, or a server's sandbox */ }
     // The address keeps where the song is played too, and the text size and the scroll speed,
@@ -114,7 +130,8 @@
     try {
       const params = new URLSearchParams(location.hash.slice(1));
       const keep = (name, value, kept) => (kept ? params.set(name, String(value)) : params.delete(name));
-      keep("t", state.t, state.t !== (Number(data.transpose) || 0));
+      // With a version of its own, t always: an address naming none would start in that version again.
+      keep("t", state.t, Boolean(data.start) || state.t !== (Number(data.transpose) || 0));
       keep("mode", state.mode, state.mode !== null);
       keep("capo", state.capo, state.capo !== null);
       keep("alt", swapsText(state.alt), swapsText(state.alt) !== "");
@@ -146,7 +163,8 @@
       link.hidden = true;
       cmd.hidden = false;
       $("export-copy").hidden = false;
-      $("export-hint").textContent = "Run this where caracole is installed; the PDF is written beside the sheet.";
+      $("export-hint").textContent = "Run this where caracole is installed; the PDF is written beside the sheet. "
+        + "With --mine, it is your version instead: the song's own PDF, its viewer and its songbooks.";
       return;
     }
     const query = new URLSearchParams();
@@ -1021,6 +1039,8 @@
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null });
+    for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
+    adopt(start);  // the song's own version, if it has one
     render();
   });
 

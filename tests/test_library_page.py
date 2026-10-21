@@ -101,6 +101,13 @@ def test_key_comes_from_the_kept_sheets_version_and_transpose_from_overrides(con
     assert plain.key not in o.transpose
 
 
+def test_a_songs_own_version_is_the_transposition_its_card_shows(conn, cfg):
+    # [version] wins over [transpose]: its PDF is moved by the version's t
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    o = Overrides(transpose={s.key: -2}, version={s.key: "t=3&mode=dorian"})
+    assert songs_of(page(conn, cfg, o))["Soda Stereo - De Música Ligera"]["transpose"] == 3
+
+
 def keep_sheet_json(conn, cfg, song, content, *, raw=None, tab_id=1):
     v = version(conn, song, tab_id, raw=raw)
     doc = json.dumps({"content": content}).encode()

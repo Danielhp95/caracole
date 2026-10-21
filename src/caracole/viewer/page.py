@@ -19,7 +19,11 @@ written ``\\u003c``:
   read it: it then stays as written;
 - ``key``: ``{"tonic", "mode", "from"}`` (where the key came from, in words), or
   null for a sheet without chords; ``transpose``: where the viewer starts (the
-  song's ``[transpose]``, as the PDF); ``capoSheet``: the sheet's own capo;
+  song's ``[transpose]``, as the PDF, or its own version's); ``start``: the song's
+  own version (overrides.toml's ``[version]``, "Make this my version"), as the
+  viewer's address writes it (viewer/version.py), or null for none: the script starts
+  there when its address names no version (``t``, ``mode``, ``capo``, ``alt``, ``at``);
+  ``capoSheet``: the sheet's own capo;
 - for each mode of the key's tonic: ``mapped`` chords (``theory.map_chord``),
   their ``alts`` (``theory.alternatives``), ``names`` (each pitch class's name in
   that mode on each tonic, ``theory.spelling``), ``keyNames``, and ``capo`` hints
@@ -129,16 +133,19 @@ def build_viewer(
     key: str | None = None,
     key_source: str | None = None,
     transpose: int = 0,
+    start: str | None = None,
     pdf: str | None = None,
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
     The key comes from ``key`` (the song's, ``keys.sheet_keys``, with ``key_source``, one
     of ``keys.SOURCES``), else from the sheet's own ``{key}``, else it is estimated from
-    the chords. ``transpose`` is where the viewer starts; ``pdf`` names the PDF beside the
-    page, linked when given.
+    the chords. ``transpose`` is where the viewer starts, and ``start`` the song's own version
+    (``t=2&mode=dorian&capo=0``), in which it starts when its address names none; ``pdf`` names
+    the PDF beside the page, linked when given.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
+    data["start"] = start
     style, script = _assets()
     title = sheet.title or "Untitled"
     return _page(
