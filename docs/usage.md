@@ -2575,8 +2575,10 @@ songbooks.toml that can't be read exits 2.
 
 `caracole render` and the nightly run make the songbooks' files after the
 sheets, and a file only when what it is made from changed: its songs, their
-order, their sheets, their transpositions, caracole's PDF style or the font;
-or when it is no longer as caracole wrote it (deleted, edited, a link in its
+order, their sheets, their transpositions, caracole's PDF style or the font,
+and for `songbook.html` the sheet viewer too, so an upgrade that changes the
+viewer makes every songbook's page again, as it does every `sheet.html`; or
+when it is no longer as caracole wrote it (deleted, edited, a link in its
 place). A songbook gone from songbooks.toml (deleted or renamed by hand) loses
 the files caracole made of it at the next render, each only while it is still
 as caracole wrote it, and never through a symbolic link. Like the sheets' PDFs, a songbook with a Chinese song

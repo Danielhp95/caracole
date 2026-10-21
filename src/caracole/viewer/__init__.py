@@ -6,6 +6,6 @@
 - viewer.js and viewer.css are the page's script and stylesheet, inlined.
 """
 
-from caracole.viewer.page import build_viewer, info_key, key_heard, viewer_csp
+from caracole.viewer.page import build_viewer, viewer_csp
 
-__all__ = ["build_viewer", "info_key", "key_heard", "viewer_csp"]
+__all__ = ["build_viewer", "viewer_csp"]

@@ -25,40 +25,36 @@ is the page caracole wrote, with ``songbook_csp(page)``.
 from __future__ import annotations
 
 import hashlib
-import json
-import re
 from dataclasses import dataclass
 from functools import lru_cache
-from html import escape, unescape
-from pathlib import Path
+from html import escape
 from typing import Any
 from urllib.parse import quote
 
-from caracole.normalize import has_han
+from caracole.inline import json_block
+from caracole.viewer import page as viewer_page
 from caracole.viewer.page import (
     _CONTROLS,
-    CREDIT_URL,
+    HERE,
+    LIBRARY_PAGE,
     _assets,
-    _credit_notice,
-    _data,
     _facts,
-    _sha256,
-    _sheet_html,
-    _song_key,
-    _texts,
+    _footer,
+    _page,
+    _read_song,
+    _song_html,
+    viewer_csp,
 )
-from caracole.viewer.sheet import parse_sheet
-from caracole.viewer.theory import Key, key_name, parse_chord
+from caracole.viewer.theory import Key, key_name
 
-HERE = Path(__file__).parent
-LIBRARY_PAGE = "../../index.html"  # Library/_songbooks/<name>/songbook.html -> Library/index.html
-VERSION = 4  # of the page's markup: a new one makes every songbook.html again
+# What the page is made from besides the sheet viewer's own files (``page.BUILD_FILES``).
+BOOK_FILES = (HERE / "book.py", HERE / "book.js", HERE / "book.css")
 
 
 @dataclass(frozen=True)
 class BookSong:
     """One song of the songbook: its sheet's ChordPro (``cho``, as caracole wrote it) or why it has none
-    (``missing``), with the key info.json gives it and its ``[transpose]``. ``id`` names it the same
+    (``missing``), with its key (``keys.sheet_keys``) and its ``[transpose]``. ``id`` names it the same
     wherever the songbook puts it: the page remembers the song you had open by it."""
 
     title: str
@@ -77,51 +73,18 @@ def _book_assets() -> tuple[str, str]:
 
 
 def assets_version() -> str:
-    """What the page's scripts and stylesheets are, and its markup's version: a new one, and every
-    songbook's page is made again."""
-    digest = hashlib.sha256(str(VERSION).encode())
-    for text in (*_assets(), *_book_assets()):
-        digest.update(hashlib.sha256(text.encode("utf-8")).digest())
+    """What the page is made from besides its songs, as a SHA-256: the sheet viewer
+    (``page.build_version``), then this module, its script and its stylesheet. An upgrade that
+    changes any of them, and every songbook's page is made again, as every sheet.html is."""
+    digest = hashlib.sha256(viewer_page.build_version().encode("utf-8"))
+    for path in BOOK_FILES:
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
     return digest.hexdigest()
 
 
-def songbook_csp(page: bytes) -> str:
-    """The Content-Security-Policy header a server sends with ``page``, a songbook's page caracole wrote.
-
-    It is the page's own policy, as its ``<meta>`` tag holds it (its two scripts and two
-    stylesheets, by their hashes, and nothing else to load, no form to send, no base to change),
-    with a sandbox, which a ``<meta>`` policy can't set: the page then runs in an origin of its
-    own, with no cookie, no storage and no way to ask the server for anything. Its scripts still
-    run; the address (``#song-3``) says which song it shows.
-
-    The policy is the page's, not this caracole's: a page written before an upgrade carries the
-    hashes of the scripts it was written with, until the next render writes it again. A page whose
-    policy can't be read, or wouldn't fit in a header, gets a sandbox that runs and loads nothing.
-    Serve only a page still as caracole wrote it (``songbook.pages_written``): anyone with a synced
-    device can put a page of their own in the library, and its policy too.
-    """
-    found = _META_POLICY.search(page)
-    try:
-        policy = unescape(found.group(1).decode("utf-8")) if found else ""
-    except UnicodeDecodeError:
-        policy = ""
-    return "sandbox allow-scripts; " + policy if _HEADER_TEXT.fullmatch(policy) else _NOTHING
-
-
-# The page's own policy, as build_songbook writes it; what a header may hold (no line break); and the
-# header for a page whose policy can't be read: a sandbox that runs and loads nothing.
-_META_POLICY = re.compile(rb'<meta http-equiv="Content-Security-Policy" content="([^"<>]*)">')
-_HEADER_TEXT = re.compile(r"[ -~]+")
-_NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
-
-
-def _policy() -> str:
-    style, script = _assets()
-    book_style, book_script = _book_assets()
-    return (
-        f"default-src 'none'; script-src {_sha256(book_script)} {_sha256(script)}; "
-        f"style-src {_sha256(style)} {_sha256(book_style)}; base-uri 'none'; form-action 'none'"
-    )
+# The header a server sends with a songbook's page caracole wrote: its own policy (its two scripts and
+# two stylesheets, by their hashes) in a sandbox, as a sheet.html's (``page.viewer_csp``).
+songbook_csp = viewer_csp
 
 
 def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, cho: str | None = None) -> str:
@@ -140,38 +103,22 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         nxt = playable[i + 1] if i + 1 < len(playable) else None
         html, data, about[n] = _song(songs[n - 1], n, len(songs), prev, nxt)
         voicings.update(data.pop("voicings"))
-        sections.append(html + _json(f"data-{n}", data) + "</section>\n")
+        sections.append(html + json_block(f"data-{n}", data) + "</section>\n")
     count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
     files = "".join(f'<a class="pdf" href="{escape(quote(f))}">{label}</a>\n'
                     for f, label in ((pdf, "PDF"), (cho, "ChordPro, for a songbook app")) if f)
-    return (
-        "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
-        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
-        f'<meta http-equiv="Content-Security-Policy" content="{_policy()}">\n'
-        f"<title>{escape(name)} · songbook</title>\n<style>{style}</style>\n<style>{book_style}</style>\n"
-        "</head>\n<body>\n<div class=\"page\">\n"
-        '<header class="head book-head">\n'
+    body = (
+        '<div class="page">\n<header class="head book-head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
         f"<h1>{escape(name)}</h1>\n<p class=\"artist\">Songbook · {count}</p>\n</header>\n"
         + _contents(songs, about, files)
         + "".join(sections)
-        + _json("voicings", voicings)
-        + '<footer class="foot">\n'
-        + files
-        + f'<p>Chord shapes from <a href="{CREDIT_URL}">chords-db</a>, © 2016 David Rubert, MIT licence.</p>\n'
-        + f'<details class="licence"><summary>The chords-db licence</summary><pre>{escape(_credit_notice())}</pre></details>\n'
-        + "<p>Keep this page private: the lyrics and chords are other people's work.</p>\n"
-        + "</footer>\n</div>\n"
+        + json_block("voicings", voicings)
+        + _footer(files)
+        + "</div>\n"
         + _CONTROLS
-        + f"<script>{book_script}</script>\n<script>{script}</script>\n</body>\n</html>\n"
     )
-
-
-def _json(element_id: str, data: Any) -> str:
-    """A data block: every ``<`` written ``\\u003c``, so no text in it can end the block."""
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
-    return f'<script type="application/json" id="{element_id}">{payload}</script>\n'
+    return _page(f"{name} · songbook", body, styles=(style, book_style), scripts=(book_script, script))
 
 
 def _contents(songs: list[BookSong], about: dict[int, str], files: str) -> str:
@@ -200,15 +147,7 @@ def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
           nxt: tuple[int, str] | None) -> tuple[str, dict[str, Any], str]:
     """A song's section, without its closing tag, its data (with its fingerings), and its key and capo
     as the contents give them. ``prev`` and ``nxt`` are the songs with a sheet around it: number, title."""
-    sheet = parse_sheet(song.cho or "")
-    chords = [parse_chord(name, strict=False) for name in sheet.chords]
-    key, origin = _song_key(sheet, chords, song.key, song.key_source)
-    data = _data(sheet, chords, key, origin, song.transpose)
-    notice = (
-        '<p class="notice">Auto-generated, unverified: caracole heard these chords in the recording.</p>\n'
-        if sheet.auto else ""
-    )
-    lang = ' lang="zh"' if has_han(song.title + sheet.title + "".join(_texts(sheet))) else ""
+    sheet, key, origin, data = _read_song(song.cho or "", song.key, song.key_source, song.transpose)
     html = (
         f'<section class="song" id="song-{n}" data-n="{n}" data-id="{escape(song.id)}" '
         f'aria-labelledby="title-{n}">\n<header class="head">\n'
@@ -217,9 +156,7 @@ def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
         + f'<h2 class="title" id="title-{n}">{escape(song.title)}</h2>\n'
         + (f'<p class="artist">{escape(song.artist)}</p>\n' if song.artist else "")
         + f'<p class="facts" id="facts-{n}">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
-        + notice
-        + f'<div class="strip" id="strip-{n}" hidden></div>\n'
-        + f'<article class="sheet" id="sheet-{n}"{lang}>\n{_sheet_html(sheet)}</article>\n'
+        + _song_html(sheet, f"-{n}", song.title)
         + _pager("Songs, after the sheet", prev, nxt)  # at the end of a long sheet, no scrolling back up
     )
     return html, data, _key_and_capo(key, song.transpose, sheet.capo)

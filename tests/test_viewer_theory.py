@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import functools
+from pathlib import Path
+
 import pytest
 
+from caracole.chordpro import to_chordpro
+from caracole.viewer import book, page, theory, voicings
+from caracole.viewer.page import build_viewer
 from caracole.viewer.theory import (
     FLATS,
     QUALITIES,
@@ -466,3 +472,71 @@ def test_a_capo_raises_the_key_the_song_sounds_in(shapes, capo, sounds):
 def test_a_tabs_key_with_a_capo_may_name_the_sound_rather_than_the_shapes(named, capo, played, shapes):
     # Tabs name either: the chords fit the shapes' key.
     assert key_name(shapes_key(named, capo, chords(*played))) == shapes
+
+
+# --- the same questions for every song --------------------------------------------------------
+# The viewer asks theory.py and voicings.py the same questions for every song of a library (the
+# same chords in the same keys), so they keep their answers. What a caller gets stays its own.
+
+
+def test_a_list_the_viewer_gets_is_its_own():
+    g_major = Key(7, "ionian")
+    alts = [named(a, g_major) for a in alternatives(parse_chord("D/F#"), g_major)]
+    for got in (alternatives(parse_chord("D/F#"), g_major), spelling(g_major), spelling(None),
+                capo_hints(Key(10, "ionian")), capo_hints(Key(5, "ionian"), capo=2)):
+        got.clear()
+    assert [named(a, g_major) for a in alternatives(parse_chord("D/F#"), g_major)] == alts
+    assert spelling(g_major) == "C C# D Eb E F F# G Ab A Bb B".split()
+    assert spelling(None) == "C C# D Eb E F F# G Ab A Bb B".split()
+    assert [(fret, key_name(k)) for fret, k in capo_hints(Key(10, "ionian"))] == [(1, "A"), (3, "G")]
+    assert [(fret, key_name(k)) for fret, k in capo_hints(Key(5, "ionian"), capo=2)] == [(0, "G"), (3, "E")]
+
+
+FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
+# Chords the fixtures don't play: a lenient read, a quality outside the table, slash chords off
+# the triads, a symmetric chord, one chord spelled two ways, and a sheet with no capo.
+ODD_SHEET = """{title: Odd Chords}
+{artist: The Placeholders}
+{define: Cadd9 base-fret 1 frets x 3 2 0 3 3 fingers 0 2 1 0 3 4}
+[Cfoo]Words [Cmaj7#11]made [Bb/D]up for [F#m7b5]the [E7]test
+[G#dim7]Only [Dm9b5]for a [Cadd9]parser [C6/9]now [Am7/G]and [Am/G]then
+[CM7]Sung [Cmaj7]alike
+"""
+
+
+def _sheets() -> list[str]:
+    zh = to_chordpro((FIXTURES / "zh_sheet.txt").read_text(encoding="utf-8"), title="斑马斑马", artist="宋冬野")
+    return [p.read_text(encoding="utf-8") for p in sorted(FIXTURES.glob("*.cho"))] + [zh, ODD_SHEET]
+
+
+def _kept():
+    """Each function of theory.py and voicings.py that keeps its answers (but the loader of the
+    vendored fingerings), with the viewer's modules and names that hold it."""
+    holders = (theory, voicings, page, book)
+    for module in (theory, voicings):
+        for value in vars(module).values():
+            if (callable(getattr(value, "cache_clear", None)) and value.__module__ == module.__name__
+                    and value is not voicings.load_voicings):
+                yield value, [(m, name) for m in holders for name, v in vars(m).items() if v is value]
+
+
+@pytest.mark.parametrize("key", [None, "G", "Am", "F#m"])
+def test_the_kept_answers_change_no_page(monkeypatch, key):
+    texts = _sheets()
+
+    def pages(order) -> dict[int, str]:
+        return {i: build_viewer(texts[i], key=key, key_source="tab" if key else None, transpose=2,
+                                pdf="sheet.pdf") for i in order}
+
+    kept = list(_kept())
+    for function, _ in kept:
+        function.cache_clear()
+    first = pages(range(len(texts)))
+    again = pages(reversed(range(len(texts))))
+    for function, holders in kept:  # each asked anew, as written
+        for module, name in holders:
+            monkeypatch.setattr(module, name, function.__wrapped__)
+    for name, value in list(vars(Chord).items()):
+        if isinstance(value, functools.cached_property):
+            monkeypatch.setattr(Chord, name, property(value.func))
+    assert pages(range(len(texts))) == first == again

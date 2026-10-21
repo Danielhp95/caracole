@@ -664,7 +664,6 @@ def _render_book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, bo
         done.failed = True
         return done
     record = _record(conn, book.folder)
-    record["name"] = book.name
     try:
         _make_files(cfg, book, entries, folder, record, done, font=font, runner=runner, force=force)
     finally:  # what was written stays recorded, whatever stopped the rest
@@ -753,16 +752,14 @@ def _holds(path: Path, entry: Any) -> bool:
             and isinstance(entry.get("size"), int) and holds(path, entry["sha256"], entry["size"]))
 
 
-def _drop(path: Path, entry: Any) -> bool:
+def _drop(path: Path, entry: Any) -> None:
     """Remove the file caracole wrote at ``path`` while it is still as written; one of yours stays."""
     if _holds(path, entry):
         path.unlink(missing_ok=True)
-        return True
-    return False
 
 
 def _record(conn: sqlite3.Connection, folder: str) -> dict[str, Any]:
-    """kv ``songbook:<folder>``: {"name", "inputs": {file: digest}, "files": {file: {"sha256", "size"}}}."""
+    """kv ``songbook:<folder>``: {"inputs": {file: digest}, "files": {file: {"sha256", "size"}}}."""
     record = kv_get_json(conn, f"{RECORD_KEY}{folder}")
     if not isinstance(record, dict):
         record = {}

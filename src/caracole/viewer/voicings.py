@@ -36,7 +36,6 @@ from caracole.viewer.theory import QUALITIES, Chord, note_pc, parse_chord
 
 DATA_FILE = Path(__file__).with_name("voicings.json")
 LICENSE_FILE = Path(__file__).with_name("LICENSE-chords-db")
-SOURCE = "chords-db by David Rubert (MIT): https://github.com/tombatossals/chords-db"
 
 TUNING = (40, 45, 50, 55, 59, 64)  # E2 A2 D3 G3 B3 E4, as MIDI notes
 MAX_POSITIONS = 4
@@ -251,6 +250,7 @@ def load_voicings() -> dict[str, list[list[Position]]]:
     return json.loads(DATA_FILE.read_text(encoding="utf-8"))
 
 
+@lru_cache(maxsize=4096)
 def voicing_keys(chord: Chord) -> tuple[str, bool, str | None]:
     """Where a chord's fingerings are filed: (quality, whether it is only the nearest one, slash key).
 

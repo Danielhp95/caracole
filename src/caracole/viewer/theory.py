@@ -4,10 +4,15 @@ Pitch classes are integers, 0 for C up to 11 for B. A chord is a root, a
 quality and an optional bass note; the quality names a set of intervals above
 the root (``QUALITIES``). Chord names are read the way sheets write them:
 "Am7", "CM7", "C7M", "CΔ", "C°", "Cø", "C-7", "C(add9)", "Dsus2/F#", "C6/9".
+
+The viewer asks the same questions for every song of a library, the same chords in the same
+keys, so the answers are kept (``functools`` caches): chords and keys are frozen, and a list
+handed out is a copy of the one kept.
 """
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass
 
@@ -82,11 +87,11 @@ class Chord:
     shown: str | None = None
     tones: frozenset[int] | None = None
 
-    @property
+    @functools.cached_property
     def intervals(self) -> frozenset[int]:
         return self.tones if self.tones is not None else QUALITIES[self.quality]
 
-    @property
+    @functools.cached_property
     def pitch_classes(self) -> frozenset[int]:
         pcs = {(self.root + i) % 12 for i in self.intervals}
         if self.bass is not None:
@@ -277,8 +282,13 @@ def spelling(key: Key | None) -> list[str]:
 
     With no key, the names chord sheets use most (C#, Eb, F#, Ab, Bb).
     """
+    return list(_spelling(key))
+
+
+@functools.cache
+def _spelling(key: Key | None) -> tuple[str, ...]:
     if key is None:
-        return list(_DEFAULT_SPELLING)
+        return _DEFAULT_SPELLING
     tonic_letter = _tonic_letter(key)
     degrees = _DEGREES["major" if 4 in SCALES[key.mode] else "minor"]
     names = [""] * 12
@@ -286,7 +296,7 @@ def spelling(key: Key | None) -> list[str]:
         pc = (key.tonic + interval) % 12
         letter = _LETTERS[(tonic_letter + degrees[interval]) % 7]
         names[pc] = _spell(letter, (pc - _NATURAL[letter] + 6) % 12 - 6)
-    return names
+    return tuple(names)
 
 
 def _tonic_letter(key: Key) -> int:
@@ -305,9 +315,10 @@ def _spell(letter: str, accidental: int) -> str:
     return (SHARPS if accidental > 0 else FLATS)[pc]
 
 
+@functools.cache
 def key_name(key: Key) -> str:
     """"G", "Am", "D dorian": the key as a chord sheet writes it."""
-    tonic = spelling(key)[key.tonic]
+    tonic = _spelling(key)[key.tonic]
     if key.mode == "ionian":
         return tonic
     if key.mode == "aeolian":
@@ -391,6 +402,7 @@ def _key_score(chords: list[Chord], key: Key) -> float:
     return score
 
 
+@functools.lru_cache(maxsize=4096)
 def map_chord(chord: Chord, key: Key, mode: str) -> Chord:
     """The chord in ``mode`` on the same tonic: each note moves to the same scale degree there.
 
@@ -445,6 +457,11 @@ def alternatives(chord: Chord, key: Key, limit: int = 8) -> list[Chord]:
     seventh, add9, sus2, a sixth...), then an inversion (or, for a slash chord, its root
     position), then chords on other roots that share the most notes, a third below first.
     """
+    return list(_alternatives(chord, key, limit))
+
+
+@functools.lru_cache(maxsize=4096)
+def _alternatives(chord: Chord, key: Key, limit: int) -> tuple[Chord, ...]:
     allowed = scale(key) | chord.pitch_classes
     core = frozenset((chord.root + i) % 12 for i in chord.intervals)
 
@@ -475,7 +492,7 @@ def alternatives(chord: Chord, key: Key, limit: int = 8) -> list[Chord]:
             break
         if not any(_sounds_alike(candidate, c) for c in chosen):
             chosen.append(candidate)
-    return chosen
+    return tuple(chosen)
 
 
 _SYMMETRIC = ("dim7", "aug")  # any of their notes may be called the root
@@ -514,12 +531,17 @@ def capo_hints(key: Key, limit: int = 2, *, capo: int = 0) -> list[tuple[int, Ke
     shapes with capo 2, transposed down two, play with no capo). Nothing when the chords are
     open shapes already; otherwise up to ``limit`` frets, lowest first.
     """
+    return list(_capo_hints(key, limit, capo))
+
+
+@functools.cache
+def _capo_hints(key: Key, limit: int, capo: int) -> tuple[tuple[int, Key], ...]:
     if _open(key):
-        return []
+        return ()
     sounds = sounding(key, capo).tonic
     hints = [(fret, Key((sounds - fret) % 12, key.mode))
              for fret in range(capo + MAX_CAPO + 1) if fret != capo]
-    return [(fret, shapes) for fret, shapes in hints if _open(shapes)][:limit]
+    return tuple((fret, shapes) for fret, shapes in hints if _open(shapes))[:limit]
 
 
 def sounding(shapes: Key, capo: int) -> Key:

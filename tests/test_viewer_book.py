@@ -6,8 +6,13 @@ import base64
 import hashlib
 import json
 import re
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
+import pytest
+from conftest import subprocess_pythonpath
 from helpers import browser
 from helpers.browser import Browser, in_chromium
 
@@ -211,8 +216,55 @@ def test_a_songbook_without_a_sheet_is_its_contents():
     assert '<section class="song"' not in html and "Hysteria" in contents(html)
 
 
-def test_the_assets_version_changes_with_the_scripts():
-    assert re.fullmatch(r"[0-9a-f]{64}", assets_version())
+def test_the_assets_version_changes_with_the_scripts(monkeypatch, tmp_path):
+    from caracole.viewer import book, page
+
+    version = assets_version()
+    assert re.fullmatch(r"[0-9a-f]{64}", version)
+    copies = []
+    for path in book.BOOK_FILES:
+        copies.append(tmp_path / path.name)
+        copies[-1].write_bytes(path.read_bytes())
+    monkeypatch.setattr(book, "BOOK_FILES", tuple(copies))
+    assert assets_version() == version
+    seen = {version}
+    for copy in copies:  # book.py, its script, its stylesheet
+        copy.write_bytes(copy.read_bytes() + b"\n")
+        seen.add(assets_version())
+    monkeypatch.setattr(page, "build_version", lambda: "a newer viewer")  # the sheet viewer's own
+    seen.add(assets_version())
+    assert len(seen) == len(copies) + 2
+
+
+@pytest.mark.slow
+def test_the_assets_version_covers_every_module_and_file_the_pages_are_made_from():
+    # A module the pages come to import, or a file of the viewer's they come to read, that the
+    # versions leave out would leave every songbook.html as an older caracole made it.
+    code = textwrap.dedent("""\
+        import json, sys
+        from caracole.viewer import book, build_viewer, page
+
+        cho = "{title: 斑马}\\n{artist: A}\\n{key: Am}\\n[Am]la la [F]la\\n"
+        build_viewer(cho, key="Am", key_source="tab", pdf="sheet.pdf")
+        songs = [book.BookSong("斑马", "A", cho=cho, key="Am", key_source="tab"),
+                 book.BookSong("Gone", "A", missing="no sheet yet")]
+        book.build_songbook("B", songs, pdf="b.pdf", cho="b.cho")
+        loaded = [m.__file__ for name, m in list(sys.modules.items())
+                  if name.partition(".")[0] == "caracole" and getattr(m, "__file__", None)]
+        hashed = [str(p) for p in (*page.BUILD_FILES, *book.BOOK_FILES)]
+        print(json.dumps({"loaded": loaded, "hashed": hashed, "viewer": str(page.HERE)}))
+    """)
+    src = Path(__file__).resolve().parents[1] / "src"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
+                         env={"PYTHONPATH": subprocess_pythonpath(src)})
+    found = json.loads(out.stdout)
+    hashed = {Path(p).resolve() for p in found["hashed"]}
+    modules = {Path(f).resolve() for f in found["loaded"] if Path(f).name != "__init__.py"}
+    viewer = {p.resolve() for p in Path(found["viewer"]).iterdir()
+              if p.is_file() and p.name != "__init__.py" and p.suffix != ".pyc"}
+    assert modules - hashed == set()
+    assert viewer - hashed == set()
+    assert len(hashed) == len(found["hashed"])  # each once
 
 
 # --- in a real browser ---------------------------------------------------------------------------

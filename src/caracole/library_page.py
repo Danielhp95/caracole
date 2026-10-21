@@ -164,10 +164,8 @@ search per song would cost every page a moment each.
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import html as html_text
-import json
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -179,6 +177,7 @@ from urllib.parse import quote
 from caracole.config import Config
 from caracole.icons import kept_sources, page_icons, source_of
 from caracole.inbox import SCORE_EXTENSIONS
+from caracole.inline import json_block, sha256_source
 from caracole.keys import SongKey, key_name, song_key
 from caracole.library import song_dir, write_atomic
 from caracole.musescore import song_pages
@@ -278,7 +277,6 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
         for song in songs:
             song["fetchable"] = song["id"] not in controls.held
     books, data["songbooks"] = songbooks_section(conn, cfg, overrides, controls)
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     # The page caracole serve serves may also ask it how its requests go (connect-src); the file can't.
     csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'") if controls is not None
            else _CSP.replace("__FORMS__", "'none'"))
@@ -286,7 +284,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
         _HEAD.replace("__CSP__", csp).replace("__STYLE__", _PAGE_STYLE)
         + _BODY.replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
         .replace("__REQUESTED__", _requested(controls)).replace("__SONGBOOKS__", books)
-        + f'<script type="application/json" id="songs">{payload}</script>\n'
+        + json_block("songs", data)
         + f"<script>{_PAGE_SCRIPT}</script>\n</body>\n</html>\n"
     )
 
@@ -4339,11 +4337,6 @@ _SELECT_SCRIPT = r"""
 
 _PAGE_STYLE = _STYLE + _SONGBOOK_STYLE
 _PAGE_SCRIPT = ROWS_SCRIPT + _SCRIPT + _SELECT_SCRIPT
-
-
-def sha256_source(text: str) -> str:
-    """A CSP source allowing exactly this inline script or stylesheet."""
-    return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
 
 
 # default-src 'none' blocks every fetch the page could make; links still navigate. Forms may post

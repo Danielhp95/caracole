@@ -40,7 +40,7 @@ an earlier one failed:
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
 | youtube | youtube.py (picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_urls.py (a video's address, the standard library alone: overrides.py's `[youtube]`), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html), songbook.py (the songbooks of songbooks.toml, in `Library/_songbooks/`) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html, and songbook.html in book.py, both built from page.py's pieces: `_page`, the head and its policy, `_footer`, `_song_html`, `viewer_csp`, which is `book.songbook_csp` too; `page.build_version` hashes `page.BUILD_FILES`, what a page is made from: a module the viewer comes to import goes there, test_viewer_book.py checks; theory.py and `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field compared, and a list handed out is a copy: test_viewer_theory.py), songbook.py (the songbooks of songbooks.toml, in `Library/_songbooks/`) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
@@ -51,13 +51,14 @@ by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities, redacted s
 Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`,
 `savepoint`: atomic writes on the autocommit connection), http.py (`PoliteClient`, robots
 rules, `stale` and `read_once_more` for cached answers), health.py (cooldowns, `events`),
-normalize.py (keys, pinyin), overrides.py, library.py (song folders, safe file access),
-notify.py (ntfy),
-site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's and
-MuseScore's), keys.py (a song's musical key and its source, for info.json, `index.html`
-and `search --key`), removal.py (`caracole remove` and the web page's Remove: a song's
-wanted.txt lines, its record and the files caracole wrote; the tombstones it leaves are
-songs.py's, in the `removed` table).
+normalize.py (keys, pinyin), inline.py (a page's inline script or style by its hash,
+`sha256_source`, and its JSON data blocks, `json_block`, each `<` escaped; the standard
+library alone), overrides.py, library.py (song folders, safe file access), notify.py
+(ntfy), site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's
+and MuseScore's), keys.py (a song's musical key and its source, for info.json,
+`index.html` and `search --key`), removal.py (`caracole remove` and the web page's
+Remove: a song's wanted.txt lines, its record and the files caracole wrote; the
+tombstones it leaves are songs.py's, in the `removed` table).
 
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
