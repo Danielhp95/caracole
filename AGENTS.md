@@ -41,7 +41,7 @@ an earlier one failed:
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
 | youtube | youtube.py (picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_urls.py (a video's address, the standard library alone: overrides.py's `[youtube]`), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json), viewer/ (sheet.html, and songbook.html in book.py, both built from page.py's pieces: `_page`, the head and its policy, `_footer`, `_song_html`, `viewer_csp`, which is `book.songbook_csp` too; `page.build_version` hashes `page.BUILD_FILES`, what a page is made from: a module the viewer comes to import goes there, test_viewer_book.py checks; theory.py and `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field compared, and a list handed out is a copy: test_viewer_theory.py), songbook.py (the songbooks of songbooks.toml, in `Library/_songbooks/`) |
-| todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
+| todo | todo.py (`_todo.md`), library_page.py (`index.html`: its stylesheet and script are the .css and .js files of library_assets/, inlined byte for byte in the order of `STYLESHEETS` and `SCRIPTS`, each read once at import; test_library_assets.py) |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
 left, with the error; what needs the user), which report.py turns into the run's summary on
@@ -128,8 +128,8 @@ tombstones it leaves are songs.py's, in the `removed` table).
   the songbook it changes, and once it is over `/jobs.json` gives the Songbooks section drawn
   again, which the page puts in place of its own), lookup_page.py (the lookup page:
   its script, `createElement` and `textContent` only, allowed by hash, connects to the
-  server alone; its results are the library's rows, `library_page.ROWS_SCRIPT` and
-  `ROWS_STYLE` through its row builders, `ugHit` and `artistHit` too, and a song you have opens its viewer;
+  server alone; its results are the library's rows, library_assets/rows.js and rows.css
+  (`ROWS_SCRIPT`, `ROWS_STYLE`) through its row builders, `ugHit` and `artistHit` too, and a song you have opens its viewer;
   Enter acts on `/api/search`'s `best`, or opens the leading artist's songs (LaCuerda's when
   `lacuerda_leads`), and never spends a request without one),
   pages.py, server.py (`http.server`). The library page is

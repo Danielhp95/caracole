@@ -1,0 +1,216 @@
+
+:root {
+  --h0: #8a3313; --h0-bg: #f6ded3;
+  --h1: #7a4c00; --h1-bg: #f7e8c7;
+  --h2: #4c5a12; --h2-bg: #e6edcf;
+  --h3: #1d6b43; --h3-bg: #d7eedf;
+  --h4: #0e5c5a; --h4-bg: #d3eceb;
+  --h5: #23508f; --h5-bg: #dbe6f7;
+  --h6: #5b34a8; --h6-bg: #e8e0f7;
+  --h7: #8e2a52; --h7-bg: #f6dde6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --h0: #f4b298; --h0-bg: #3d2117;
+    --h1: #f2c46e; --h1-bg: #36290d;
+    --h2: #c9d98a; --h2-bg: #2a3110;
+    --h3: #83d6a6; --h3-bg: #133222;
+    --h4: #7fd3cf; --h4-bg: #0f302f;
+    --h5: #9dbff2; --h5-bg: #172843;
+    --h6: #c6adff; --h6-bg: #2b2047;
+    --h7: #f2a3c1; --h7-bg: #3b1828;
+  }
+}
+.summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+/* The library's header: caracole and the pages on one line, the title with its numbers beside it on the next. */
+.masthead.lib { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "app links" "title title";
+  align-items: center; gap: 2px 12px; padding: 10px 0 6px; }
+.masthead.lib .app { grid-area: app; margin: 0; }
+.masthead.lib .links { grid-area: links; flex-wrap: nowrap; }
+.masthead.lib .navlink { min-height: 40px; padding: 0 13px; font-size: .9rem; }
+.title-line { grid-area: title; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; min-width: 0; }
+.title-line .summary { gap: 0; margin: 0; }
+.title-line .stat { padding: 0; background: none; }
+.title-line .stat + .stat::before { content: "·"; margin: 0 6px; color: var(--muted); }
+.stat { padding: 3px 10px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: .82rem;
+  font-variant-numeric: tabular-nums; }
+.stat b { color: var(--text); font-weight: 650; }
+.request { margin: 8px 0 0; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.request > summary { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; cursor: pointer;
+  font-weight: 650; list-style: none; }
+.request > summary::-webkit-details-marker { display: none; }
+.plus { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  background: var(--accent); color: var(--on-accent); font-size: 1.15rem; line-height: 1; }
+.plus span { display: inline-block; }
+.request[open] > summary .plus span { transform: rotate(45deg); }  /* the + turns into a ×, the square stays */
+.request-form { display: grid; gap: 12px; padding: 0 16px 16px; }
+.fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+.request-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; cursor: pointer; }
+.check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.hint { margin: 0; color: var(--muted); font-size: .85rem; }
+/* Kept at the top, side to side across the page, with an edge once the page scrolls under it (.stuck). */
+.searchbar { position: sticky; top: 0; z-index: 2; margin: 0 -16px; padding: 10px 16px 8px; background: var(--bg); }
+.searchbar.stuck { box-shadow: 0 1px 0 var(--border-strong), 0 8px 16px -10px rgb(0 0 0 / 35%); }
+.bar-edge { height: 0; }
+.field { position: relative; }
+.field input {
+  width: 100%; height: 50px; padding: 0 48px 0 16px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 1rem; -webkit-appearance: none; appearance: none;
+}
+.field input::placeholder { color: var(--muted); opacity: 1; }
+.field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.field input:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
+.clear { position: absolute; top: 3px; right: 3px; width: 44px; height: 44px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; }
+.bar-row { display: flex; align-items: center; gap: 8px; }
+.bar-row .field { flex: 1; min-width: 0; }
+.btn.all { flex: none; min-height: 50px; padding: 0 16px; border-radius: 14px; white-space: nowrap; }
+/* One line, its height kept: what Enter does, or how the search of the sites goes. */
+.bar-status { min-height: 1.35em; margin: 6px 2px 0; overflow: hidden; color: var(--muted); font-size: .8rem;
+  line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
+.searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
+.waiting-sites .results .request, .waiting-sites .footer { display: none; }
+.results-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 4px 0 0; }
+.results .group { margin: 18px 0 0; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; }
+.results .rows { margin-top: 6px; }
+.all-mine, .more-songs { margin: 10px 0 0; }
+.artist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
+  margin: 14px 0 0; }
+.artist-head h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
+.artist-head h2:focus { outline: none; }
+.skipped { margin: 16px 0 0; color: var(--muted); font-size: .85rem; }
+.index-hint { max-width: 72ch; margin-top: 10px; white-space: pre-wrap; }
+.results .request { margin-top: 20px; }
+.file-answer { display: grid; gap: 8px; max-width: 72ch; margin: 6px 0 12px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); font-size: .92rem; }
+.file-answer p { margin: 0; }
+.command { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.command code { flex: 1 1 240px; padding: 8px 10px; user-select: all; }
+.empty + .btn.primary { margin-top: 4px; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+/* One row of buttons that scrolls sideways on a phone; Key, Sort and the view under View there. */
+.chips { display: flex; flex: 1 1 0; flex-wrap: nowrap; gap: 8px; min-width: 0; margin: -4px; padding: 4px;
+  overflow-x: auto; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+/* Buttons out of sight: the row fades where it goes on, so it says it scrolls (no fade, no more). */
+.chips.more-end { --fade-start: #000; --fade-end: transparent; }
+.chips.more-start { --fade-start: transparent; }
+.chips.more-start, .chips.more-end {
+  -webkit-mask-image: linear-gradient(to right, var(--fade-start, #000), #000 28px, #000 calc(100% - 28px), var(--fade-end, #000));
+  mask-image: linear-gradient(to right, var(--fade-start, #000), #000 28px, #000 calc(100% - 28px), var(--fade-end, #000)); }
+.chip { flex: none; }
+.view-panel { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 12px; }
+.toolbar .view-toggle { display: none; }
+.view-toggle::after { content: "▾"; color: var(--muted); }
+.view-toggle[aria-expanded="true"]::after { content: "▴"; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .9rem;
+  cursor: pointer; }
+.chip .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+.chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
+.chip.person { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: .9rem; }
+.controls { display: flex; flex: none; justify-content: flex-end; gap: 8px; }
+.sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--control-edge);
+  background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
+.jump { display: flex; gap: 2px; margin: 10px 0 0; padding: 2px 0; overflow-x: auto; scrollbar-width: none; }
+.jump::-webkit-scrollbar { display: none; }
+.jump button { flex: none; min-width: 36px; height: 36px; padding: 0 8px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--muted); font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
+.jump button:hover { background: var(--raised); color: var(--text); }
+.count { margin: 8px 0 0; color: var(--muted); font-size: .85rem; }
+.grid { display: grid; gap: 12px; margin-top: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
+  border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: 84px; }
+.card[data-status="ignored"] { opacity: .7; }
+/* A song caracole removed while the page was open: it says so, and nothing more, until the page is loaded again. */
+.card.gone { border-style: dashed; box-shadow: none; }
+.row.gone { align-content: start; }  /* kept as tall as it was: its lines stay where they were */
+.gone h2 { color: var(--muted); }
+.head { display: flex; align-items: flex-start; gap: 12px; }
+.mono { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
+  font-size: .95rem; font-weight: 700; letter-spacing: .02em; color: var(--h0); background: var(--h0-bg); }
+.hue-1 { color: var(--h1); background: var(--h1-bg); }
+.hue-2 { color: var(--h2); background: var(--h2-bg); }
+.hue-3 { color: var(--h3); background: var(--h3-bg); }
+.hue-4 { color: var(--h4); background: var(--h4-bg); }
+.hue-5 { color: var(--h5); background: var(--h5-bg); }
+.hue-6 { color: var(--h6); background: var(--h6-bg); }
+.hue-7 { color: var(--h7); background: var(--h7-bg); }
+.names { flex: 1; min-width: 0; }
+.card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
+/* Under the title, which keeps its line: the artist, then the badges, at the end of its line or under it. */
+.byline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px; }
+.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0;
+  margin-left: auto; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--muted); font-size: .85rem; }
+.facts .key, .facts .transpose { color: var(--text); font-weight: 600; }
+.note { margin: 0; color: var(--review); font-size: .85rem; }
+.progress { margin: 0; color: var(--muted); font-size: .9rem; font-weight: 600; overflow-wrap: anywhere; }
+.progress::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px;
+  border-radius: 50%; background: currentColor; vertical-align: .05em; }
+.progress[data-tone="queued"], .progress[data-tone="running"], .progress[data-tone="waiting"] { color: var(--wanted); }
+.progress[data-tone="ready"] { color: var(--found); }
+.progress[data-tone="review"] { color: var(--review); }
+.progress[data-tone="failed"] { color: var(--failed); }
+.progress a { padding: 6px 0; color: inherit; text-underline-offset: 2px; }
+.progress .dot { margin: 0 .4em; opacity: .6; }
+/* A removal counting down: its seconds, Undo, and what goes, under it. */
+.progress .left { font-variant-numeric: tabular-nums; }
+.progress .undo { min-height: 32px; margin: 0; padding: 0 6px; border: 0; border-radius: 8px; background: none;
+  color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px;
+  cursor: pointer; }
+.progress .undo:hover { background: var(--raised); }
+.progress .goes { display: block; margin-top: 2px; color: var(--muted); font-size: .85rem; font-weight: 500; }
+.requested { margin-top: 14px; }
+.requested .grid { margin-top: 6px; }
+.card .by { margin: 2px 0 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+/* The requests, folded to a pill in the corner over the page's margin, on every width; opened, a list above it. */
+.tray { position: fixed; z-index: 3; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); display: flex;
+  flex-direction: column-reverse; width: max-content; max-width: calc(100vw - 32px); border: 1px solid var(--border-strong);
+  border-radius: 999px; background: var(--surface); box-shadow: 0 8px 28px rgb(0 0 0 / 18%); }
+.tray.open { width: min(26rem, calc(100vw - 32px)); border-radius: 16px; }
+.tray-head { display: flex; align-items: center; gap: 2px; padding: 2px 4px; }
+.tray-toggle { flex: 1; min-width: 0; min-height: 44px; padding: 0 10px; border: 0; border-radius: 12px;
+  background: none; color: var(--text); font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
+.tray-toggle::after { content: "▾"; display: inline-block; margin-left: 6px; color: var(--muted); }
+.tray-toggle[aria-expanded="false"]::after { transform: rotate(180deg); }
+.tray-all { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; color: var(--muted);
+  font-size: .85rem; font-weight: 600; }
+.tray-close { flex: none; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
+  color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
+.tray-list { display: grid; gap: 8px; max-height: min(40vh, 18rem); margin: 0; padding: 12px 14px 4px;
+  overflow-y: auto; list-style: none; }
+.tray-list li { display: grid; gap: 1px; min-width: 0; }
+.tray-song { overflow: hidden; font-size: .9rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.tray .progress { font-size: .85rem; }
+body.with-tray .page { padding-bottom: 88px; }
+.youtube { margin: 0; color: var(--auto); font-size: .85rem; }
+.more { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border); }
+.more > summary { display: flex; align-items: center; gap: 4px; min-height: 32px; color: var(--muted);
+  font-size: .85rem; font-weight: 600; list-style: none; cursor: pointer; }
+.more > summary::-webkit-details-marker { display: none; }
+.more > summary::before { content: "›"; display: inline-block; width: 1em; font-size: 1.15rem; line-height: 1;
+  text-align: center; }
+.more[open] > summary::before { transform: rotate(90deg); }
+.more > .subhead { margin: 8px 0 6px; }
+.more > summary + .actions { margin-top: 6px; }
+.more + .more { margin-top: 0; }  /* Files, then Find it elsewhere: one fold under the other */
+.foot { display: flex; justify-content: flex-end; margin-top: auto; }
+.more + .foot { margin-top: 0; }
+.foot form { margin: 0; }
+.busy { margin: 0; color: var(--wanted); font-size: .88rem; font-weight: 600; }
+.btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.quiet:hover { border-color: var(--border); color: var(--failed); }
+.empty { margin: 32px 0 8px; font-size: 1.05rem; }
+.empty-hint { margin: 0; color: var(--muted); }
+.views { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); }
+.views button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent;
+  color: var(--muted); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
+.views button:hover { color: var(--text); }
+.views button[aria-pressed="true"] { background: var(--text); color: var(--bg); }

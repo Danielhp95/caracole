@@ -1,6 +1,6 @@
 """The pages caracole serve writes itself: the requests, the picker, the sign-in page, and errors.
 
-They share index.html's look (``library_page.BASE_STYLE``), carry no script,
+They share index.html's look (library_assets/base.css, ``BASE_STYLE``), carry no script,
 and every text in them is escaped. The requests page is one line per request,
 the line its song's card shows (status.py), with the commands it ran and what
 each printed folded away under it (a lookup's stages first, each with how it
@@ -11,7 +11,7 @@ the reader opened, so a request's output is open when the address asks for it
 (``refresh=0``) leaves the page still.
 
 The picker (``picker_form``) is a song in review's candidates as a radio
-group, the same markup and style (``library_page.PICKER_STYLE``) as the cards'
+group, the same markup and style (library_assets/picker.css) as the cards'
 picker: on a page of its own (``review_page``), and under a request that ended
 in a review. A reload would undo a choice half made, so a requests page that
 refreshes itself links to the picker's page instead.
@@ -26,7 +26,7 @@ from html import escape
 from typing import Any
 
 from caracole.inline import sha256_source
-from caracole.library_page import BASE_STYLE, PICKER_STYLE
+from caracole.library_assets import BASE_STYLE, PICKER_STYLE
 from caracole.web.jobs import Job, Stage, Step
 from caracole.web.status import Line
 

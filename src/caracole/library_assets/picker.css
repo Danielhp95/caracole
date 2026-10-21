@@ -1,0 +1,36 @@
+
+.picker { min-width: 0; }
+.picker > summary ~ * { margin-top: 8px; }
+.picker > summary { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; list-style: none;
+  cursor: pointer; }
+.picker > summary::-webkit-details-marker { display: none; }
+.picker > summary:not(.btn) { min-height: 32px; color: var(--review); font-size: .88rem; font-weight: 650; }
+.picker > summary:not(.btn)::before { content: "›"; display: inline-block; width: 1em; font-size: 1.15rem;
+  line-height: 1; text-align: center; }
+.picker[open] > summary:not(.btn)::before { transform: rotate(90deg); }
+.picker > summary.btn { border-color: var(--review); color: var(--review); background: var(--review-bg); }
+.picker-n { margin-left: .35em; font-weight: 500; }
+.pick-form { display: grid; gap: 10px; margin: 0; }
+.choices { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; list-style: none; }
+.choices legend { margin: 0 0 6px; padding: 0; font-size: .92rem; font-weight: 650; overflow-wrap: anywhere; }
+.choice { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px 4px 10px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--raised); }
+.choice:has(input:checked) { border-color: var(--accent); }
+.choice-pick { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; min-height: 44px; }
+label.choice-pick { cursor: pointer; }
+.choice-pick input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.choice-text { display: grid; gap: 1px; min-width: 0; padding: 4px 0; }
+.choice-name { font-size: .92rem; font-weight: 600; overflow-wrap: anywhere; }
+.choice-why { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+.choice-link { flex: none; display: inline-flex; align-items: center; min-height: 36px; padding: 0 10px;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-size: .82rem;
+  font-weight: 600; text-decoration: none; }
+.choice-link:hover { border-color: var(--border-strong); }
+.pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.pick-check { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600;
+  cursor: pointer; }
+.pick-check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.pick-hint { margin: 0; color: var(--muted); font-size: .82rem; }
+@media (pointer: coarse) {
+  .picker > summary:not(.btn), .choice-link { min-height: 44px; }
+}
