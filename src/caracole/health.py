@@ -11,7 +11,7 @@ fewer and not one more. State lives in the ``kv`` table under
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Callable
 
@@ -78,29 +78,20 @@ def record_block(conn: sqlite3.Connection, provider: str, now: datetime, message
     """Start (or extend) a cooldown: 24 h × 2^(strikes − 1), plus the margin."""
     s = get_state(conn, provider)
     strikes = s.strikes + 1
-    return _save(conn, ProviderState(
-        provider=provider, strikes=strikes,
-        cooldown_until=now + COOLDOWN_BASE * (2 ** (strikes - 1)) + COOLDOWN_MARGIN,
-        last_ok=s.last_ok, last_error=message, last_error_at=now,
+    return _save(conn, replace(
+        s, strikes=strikes, cooldown_until=now + COOLDOWN_BASE * (2 ** (strikes - 1)) + COOLDOWN_MARGIN,
+        last_error=message, last_error_at=now,
     ))
 
 
 def record_ok(conn: sqlite3.Connection, provider: str, now: datetime) -> ProviderState:
     """A run used the provider without a block: clear the cooldown and the strikes."""
-    s = get_state(conn, provider)
-    return _save(conn, ProviderState(
-        provider=provider, strikes=0, cooldown_until=None, last_ok=now,
-        last_error=s.last_error, last_error_at=s.last_error_at,
-    ))
+    return _save(conn, replace(get_state(conn, provider), strikes=0, cooldown_until=None, last_ok=now))
 
 
 def record_error(conn: sqlite3.Connection, provider: str, now: datetime, message: str) -> ProviderState:
     """Remember a non-block error for the to-do page; it doesn't start a cooldown."""
-    s = get_state(conn, provider)
-    return _save(conn, ProviderState(
-        provider=provider, strikes=s.strikes, cooldown_until=s.cooldown_until,
-        last_ok=s.last_ok, last_error=message, last_error_at=now,
-    ))
+    return _save(conn, replace(get_state(conn, provider), last_error=message, last_error_at=now))
 
 
 def is_cooling(conn: sqlite3.Connection, provider: str, now: datetime) -> bool:

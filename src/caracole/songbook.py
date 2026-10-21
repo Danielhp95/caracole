@@ -11,7 +11,7 @@ each "Artist - Title" as overrides.toml writes a song::
     ]
 
 The file is treated as overrides.toml is. It is read only when it is a regular file
-(``library.read_regular``): a symbolic link there could point at caracole's private
+(``library.read_text``): a symbolic link there could point at caracole's private
 files. It is written only through this module's writers (``make_songbook``,
 ``add_to_songbook``, ``remove_from_songbook``, ``move_in_songbook``, ``rename_songbook``,
 ``delete_songbook``): tomlkit, so your comments and layout survive, then
@@ -47,10 +47,10 @@ from caracole.chordpro import directive_text
 from caracole.db import kv_delete, kv_get_json, kv_set_json
 from caracole.keys import sheet_keys
 from caracole.library import (
-    NotRegularFile,
     holds,
     kept_files,
     read_regular,
+    read_text,
     safe_name,
     song_dir,
     write_atomic,
@@ -272,30 +272,13 @@ def _entry(value: Any, where: str) -> str:
 # --- reading -----------------------------------------------------------------------------------
 
 
-def _read(path: Path) -> str | None:
-    """The file's text, None when there is none; anything but a regular file is refused unread."""
-    try:
-        data = read_regular(path)
-    except FileNotFoundError:
-        return None
-    except NotRegularFile as e:
-        raise SongbookFileError(f"{path}: {e.strerror}; put the file itself there") from e
-    except OSError as e:
-        raise SongbookFileError(f"{path}: can't read it: {e.strerror or e}") from e
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError as e:
-        line = data[: e.start].count(b"\n") + 1
-        raise SongbookFileError(f"{path}: line {line} is not valid UTF-8 (save the file as UTF-8)") from e
-
-
 TOO_DEEP = "nested too deep for the TOML parser"  # tomllib and tomlkit raise RecursionError then
 
 
 def load_songbooks(path: Path) -> list[Songbook]:
     """The songbooks in songbooks.toml, in the file's order; none when there is no file. Every error
     names the file."""
-    text = _read(path)
+    text = read_text(path, SongbookFileError)
     if text is None:
         return []
     try:
@@ -350,7 +333,7 @@ def _edit[T](path: Path, change: Callable[[Any, list[Songbook]], T]) -> T:
 
     A file that can't be read is an error and is left alone: a change never builds on a broken file.
     """
-    old = _read(path)
+    old = read_text(path, SongbookFileError)
     try:
         books = [] if old is None else _parse(tomllib.loads(old))
         doc = tomlkit.parse(old) if old is not None and old.strip() else _new_document()
