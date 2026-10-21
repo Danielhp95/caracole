@@ -398,7 +398,10 @@ In order:
    version's page, one request (and the artist's page when LaCuerda's index
    doesn't name the song's best version). Else, or when LaCuerda can't give it
    now, one Ultimate Guitar page lists every version of the song's chords with
-   its rating, and the best rated is kept at once: one or two requests.
+   its rating, and the best rated is kept at once: one or two requests. The
+   stage then says first why your pick isn't the sheet (`LaCuerda failed (…)`,
+   a cooldown, `the Ultimate Guitar tab you pinned is kept over your LaCuerda
+   pick`), then what Ultimate Guitar gave.
    Without one there, LaCuerda's, for a song LaCuerda would be asked about
    tonight. From here on the sheet is readable.
 4. **The PDF**, as `caracole render` makes it.

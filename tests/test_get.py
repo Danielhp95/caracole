@@ -495,6 +495,34 @@ def test_a_lacuerda_pick_lacuerda_cant_answer_now_leaves_the_sheet_to_ultimate_g
     song = find_song(conn, "estopa/como-camaron")
     assert song.lacuerda_checked_at is None  # an error is never a miss: the nightly run asks for the pick
     assert "estopa/como-camaron" in load_overrides(cfg.overrides_file).lacuerda and result.ok
+    assert result.details["sheet"].startswith("LaCuerda is cooling down after a block")  # said where it's looked for
+
+
+def test_a_lacuerda_pick_that_fails_says_so_where_the_sheet_ultimate_guitar_gave_is_said(cfg, conn, sites):
+    serve_como_camaron(sites, conn)
+    sites.pages[CAMARON_2] = (500, "<html>down</html>")
+
+    result, progress = look_up(cfg, sites=sites, artist="Estopa", title="Como Camarón", lacuerda=CAMARON_2)
+
+    assert CAMARON_2 in sites.requests
+    sheet_said = result.details["sheet"]
+    assert sheet_said.startswith("LaCuerda failed (") and sheet_said.endswith("tab 201 from Ultimate Guitar")
+    assert progress.states()["lacuerda"] == "failed" and "LaCuerda failed (" in result.details["lacuerda"]
+    assert find_song(conn, "estopa/como-camaron").lacuerda_checked_at is None and result.ok  # no miss
+
+
+def test_a_tab_you_pinned_on_ultimate_guitar_is_said_to_be_kept_over_a_lacuerda_pick(cfg, conn, sites):
+    serve_como_camaron(sites, conn)
+    look_up(cfg, sites=sites, artist="Estopa", title="Como Camarón", tab=f"{TAB}estopa/como-camaron-chords-202")
+    sites.requests.clear()
+
+    result, progress = look_up(cfg, sites=sites, artist="Estopa", title="Como Camarón", lacuerda=CAMARON_2)
+
+    assert CAMARON_2 not in sites.requests  # the pin wins: LaCuerda is asked nothing
+    assert "sheet 202" in (folder(cfg, "Estopa", "Como Camarón") / "sheet.txt").read_text(encoding="utf-8")
+    said = "the Ultimate Guitar tab you pinned is kept over your LaCuerda pick"
+    assert result.details["sheet"].startswith(said) and said in result.details["lacuerda"]
+    assert "this month" not in result.details["lacuerda"]
 
 
 def test_a_new_pick_is_asked_for_at_once_however_lately_lacuerda_answered_for_the_song(cfg, conn, sites):
