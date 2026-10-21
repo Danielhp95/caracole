@@ -43,6 +43,8 @@ from caracole.commands._common import (
     write_pages,
 )
 from caracole.health import get_state, is_cooling, record_block, record_ok
+from caracole.logs import plural, provider_name
+from caracole.stamps import shown
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -54,7 +56,6 @@ if TYPE_CHECKING:
     from caracole.musescore_fetch import MuseScoreStats
     from caracole.overrides import Overrides
 
-_NAMES = {"lrclib": "LRCLIB", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com", "musescore": "MuseScore"}
 # Each provider's command, for the lock.
 _COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs", "musescore": "musescore"}
 
@@ -119,7 +120,7 @@ def _lyrics(cfg: Config) -> None:
         typer.echo("No song is waiting for lyrics.")
         return
     counts = f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental"
-    typer.echo(f"Lyrics: {counts}, {_count(s.errors, 'error')}")
+    typer.echo(f"Lyrics: {counts}, {plural(s.errors, 'error')}")
     if s.errors:
         typer.echo("Songs with an error stay pending; the next run asks LRCLIB again.")
     if s.budget_exhausted:
@@ -150,8 +151,8 @@ def _lacuerda(cfg: Config) -> None:
     if not (s.tried or s.budget_exhausted):
         typer.echo("No song to try on LaCuerda.")
         return
-    counts = f"{s.tried} tried, {_count(s.kept, 'sheet')} kept, {s.missing} missing"
-    typer.echo(f"LaCuerda: {counts}, {_count(s.errors, 'error')}")
+    counts = f"{s.tried} tried, {plural(s.kept, 'sheet')} kept, {s.missing} missing"
+    typer.echo(f"LaCuerda: {counts}, {plural(s.errors, 'error')}")
     if s.errors:
         typer.echo("Songs with an error are tried again next run.")
     if s.budget_exhausted:
@@ -175,16 +176,16 @@ def _lacuerda_index(cfg: Config) -> None:
     if result is None:
         return
     s, (artists, songs) = result
-    held = f"{_count(artists, 'artist')} and {_count(songs, 'song')}"
+    held = f"{plural(artists, 'artist')} and {plural(songs, 'song')}"
     if not ran(result):
         typer.echo(f"LaCuerda's artist index is up to date: {held}.")
         return
     if s.pages:
-        typer.echo(f"Index: {_count(s.pages, 'page')} of artists read.")
-    errors = f", {_count(s.errors, 'error')}; the next run asks again" if s.errors else ""
+        typer.echo(f"Index: {plural(s.pages, 'page')} of artists read.")
+    errors = f", {plural(s.errors, 'error')}; the next run asks again" if s.errors else ""
     typer.echo(f"LaCuerda: {held} in the index{errors}.")
     if s.budget_exhausted:
-        typer.echo(f"LaCuerda's budget of {_count(cfg.provider('lacuerda').budget, 'request')} per run is spent; "
+        typer.echo(f"LaCuerda's budget of {plural(cfg.provider('lacuerda').budget, 'request')} per run is spent; "
                    "the next run reads the rest of its listings.")
 
 
@@ -206,7 +207,7 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
         now = utcnow()
         if is_cooling(conn, "lacuerda", now):
             typer.echo(f"{NOT_READ}LaCuerda is cooling down after a block until "
-                       f"{_when(get_state(conn, 'lacuerda').cooldown_until)}; caracole won't ask it before then.")
+                       f"{shown(get_state(conn, 'lacuerda').cooldown_until)}; caracole won't ask it before then.")
             return
         client = make_client(cfg, conn, "lacuerda", _common.lookup_run_id(now), interactive=True)
         try:
@@ -214,7 +215,7 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
         except ProviderBlocked as e:
             state = record_block(conn, "lacuerda", now, str(e))
             typer.echo(f"{NOT_READ}LaCuerda blocked caracole ({e}); no more requests to it until "
-                       f"{_when(state.cooldown_until)}.")
+                       f"{shown(state.cooldown_until)}.")
             return
         except BudgetExhausted:
             p = cfg.provider("lacuerda")
@@ -236,7 +237,7 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
     if not found:
         typer.echo(f"Not found: LaCuerda has no artist page for {artist}.")
         return
-    typer.echo(f"Read: LaCuerda's page of {row[0] if row else artist} lists {_count(found[1], 'song')}, in the "
+    typer.echo(f"Read: LaCuerda's page of {row[0] if row else artist} lists {plural(found[1], 'song')}, in the "
                "index now.")
 
 
@@ -262,9 +263,9 @@ def _gtptabs(cfg: Config) -> None:
         typer.echo("No song to look up on gtptabs.com.")
         return
     if s.sitemaps:
-        typer.echo(f"Index: {_count(s.sitemaps, 'sitemap')} read.")
-    counts = f"{s.tried} tried, {_count(s.kept, 'Guitar Pro file')} kept, {s.missing} not on gtptabs.com"
-    typer.echo(f"gtptabs.com: {counts}, {_count(s.errors, 'error')}")
+        typer.echo(f"Index: {plural(s.sitemaps, 'sitemap')} read.")
+    counts = f"{s.tried} tried, {plural(s.kept, 'Guitar Pro file')} kept, {s.missing} not on gtptabs.com"
+    typer.echo(f"gtptabs.com: {counts}, {plural(s.errors, 'error')}")
     if s.errors:
         typer.echo("Songs with an error are tried again next run.")
     if s.budget_exhausted:
@@ -293,15 +294,15 @@ def _musescore(cfg: Config) -> None:
         return
     s, size, wanted = result
     if not ran(result):
-        typer.echo(f"MuseScore's index is up to date: {_count(size, 'song page')}." if wanted
+        typer.echo(f"MuseScore's index is up to date: {plural(size, 'song page')}." if wanted
                    else "No song to look up on MuseScore.")
         return
     if s.sitemaps:
-        typer.echo(f"Index: {_count(s.sitemaps, 'sitemap')} read.")
-    errors = f", {_count(s.errors, 'error')}; the next run asks again" if s.errors else ""
-    typer.echo(f"MuseScore: {_count(size, 'song page')} in the index{errors}.")
+        typer.echo(f"Index: {plural(s.sitemaps, 'sitemap')} read.")
+    errors = f", {plural(s.errors, 'error')}; the next run asks again" if s.errors else ""
+    typer.echo(f"MuseScore: {plural(size, 'song page')} in the index{errors}.")
     if s.budget_exhausted:
-        typer.echo(f"MuseScore's budget of {_count(cfg.provider('musescore').budget, 'request')} per run is "
+        typer.echo(f"MuseScore's budget of {plural(cfg.provider('musescore').budget, 'request')} per run is "
                    "spent; the next run reads the rest of its sitemaps.")
 
 
@@ -323,12 +324,12 @@ def _provider_pass[T](
     """
     from caracole.http import ProviderBlocked
 
-    name = _NAMES[provider]
+    name = provider_name(provider)
     with exclusive(cfg, _COMMANDS[provider]), closing(open_db(cfg)) as conn:
         now = utcnow()
         if is_cooling(conn, provider, now):
             until = get_state(conn, provider).cooldown_until
-            typer.echo(f"{name} is cooling down after a block until {_when(until)}; "
+            typer.echo(f"{name} is cooling down after a block until {shown(until)}; "
                        "caracole won't ask it before then.")
             return None
         client = make_client(cfg, conn, provider, run_id_for(now))
@@ -337,10 +338,10 @@ def _provider_pass[T](
         except ProviderBlocked as e:
             state = record_block(conn, provider, now, str(e))
             message = (
-                f"{e}\nNo more requests to {name} until {_when(state.cooldown_until)} "
+                f"{e}\nNo more requests to {name} until {shown(state.cooldown_until)} "
                 f"(block #{state.strikes}). Nothing was marked missing."
             )
-            _alert(cfg, f"caracole: {provider} blocked", message)
+            _common.alert_block(cfg, provider, message)
             typer.echo(f"{name} blocked caracole: {message}")
             write_pages(conn, cfg, overrides, utcnow())  # with the cooldown
             return None
@@ -353,25 +354,9 @@ def _provider_pass[T](
     return result
 
 
-def _alert(cfg: Config, title: str, message: str) -> None:
-    """One ntfy message, as the nightly run sends on a block; nothing without an ntfy URL."""
-    from caracole.notify import Notifier
-
-    notifier = Notifier(cfg.ntfy.url, cfg.ntfy.token, transport=_common.transport_for("ntfy"))
-    notifier.send(title, message, priority="high", tags=["warning"])
-
-
 def _budget_spent(cfg: Config, provider: str) -> None:
     budget = cfg.provider(provider).budget
     typer.echo(
-        f"{_NAMES[provider]}'s budget of {_count(budget, 'request')} per run is spent; "
+        f"{provider_name(provider)}'s budget of {plural(budget, 'request')} per run is spent; "
         "the songs left wait for the next run."
     )
-
-
-def _count(n: int, word: str) -> str:
-    return f"{n} {word}{'' if n == 1 else 's'}"
-
-
-def _when(dt: datetime | None) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"

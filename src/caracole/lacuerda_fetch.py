@@ -46,10 +46,10 @@ import re
 import sqlite3
 from collections.abc import Collection
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from caracole import coverage
+from caracole import coverage, stamps
 from caracole.config import RankPolicy
 from caracole.http import BudgetExhausted, Client, Response, read_once_more, stale
 from caracole.lacuerda import (
@@ -129,7 +129,7 @@ def lacuerda_sheets(
     song for the next run.
     """
     stats = LaCuerdaStats()
-    stamp = _stamp(now)
+    stamp = stamps.stamp(now)
     fetched: set[str] = set()  # URLs fetched from LaCuerda in this pass
     picks = overrides.lacuerda if overrides is not None else {}
 
@@ -172,7 +172,7 @@ def _songs_to_try(
     LaCuerda sheet the library lost (``_lost``) is asked about whatever its sheet and
     the date, so that the sheet is written again.
     """
-    cutoff = _utc(now) - RECHECK_AFTER
+    cutoff = stamps.utc(now) - RECHECK_AFTER
     ignored = overrides.ignore if overrides is not None else frozenset()
     picks = overrides.lacuerda if overrides is not None else {}
     songs = []
@@ -186,11 +186,11 @@ def _songs_to_try(
             if kept is not None and not lost and (
                     _pinned(overrides, song, kept) or (kept.provider == PROVIDER and pick.holds(kept.tab_id))):
                 continue
-            if lost or _before(song.lacuerda_checked_at, cutoff):
+            if lost or stamps.before(song.lacuerda_checked_at, cutoff):
                 songs.append(song)
             continue
         if not (kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id)):
-            if not _before(song.lacuerda_checked_at, cutoff):  # asked about in the last 30 days
+            if not stamps.before(song.lacuerda_checked_at, cutoff):  # asked about in the last 30 days
                 continue
             if kept is not None and (_complete(kept.coverage, rank) or _pinned(overrides, song, kept)):
                 continue
@@ -419,20 +419,3 @@ def _retire_auto_sheet(
 
 def _complete(value: float | None, rank: RankPolicy) -> bool:
     return complete(value, rank.coverage_threshold)
-
-
-def _utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
-
-
-def _stamp(now: datetime) -> str:
-    """``now`` as stored in ``songs.lacuerda_checked_at``; naive times are UTC."""
-    return _utc(now).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _before(stamp: str | None, cutoff: datetime) -> bool:
-    """Whether a stored time is older than ``cutoff``; a missing or unreadable one is."""
-    try:
-        return stamp is None or _utc(datetime.fromisoformat(stamp)) < cutoff
-    except ValueError:
-        return True

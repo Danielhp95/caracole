@@ -24,13 +24,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
 from html import escape
 from typing import TYPE_CHECKING, Any
 
 from caracole.inline import sha256_source
 from caracole.library_assets import BASE_STYLE, PICKER_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
+from caracole.stamps import shown
 
 if TYPE_CHECKING:  # songbooks.py imports Refused, and status.py imports songbooks.py
     from caracole.web.jobs import Job, Stage, Step
@@ -273,10 +273,6 @@ def _waits_for_pick(job: Job, pick: Pick | None) -> bool:
             and any(_NEEDS_REVIEW in line for line in failed[0].output))
 
 
-def _when(dt: datetime | None) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else ""
-
-
 def _badge(state: str, text: str | None = None) -> str:
     return f'<span class="badge {escape(state)}">{escape(text or _STATE_TEXT.get(state, state))}</span>'
 
@@ -296,7 +292,7 @@ def _job(job: Job, line: Line | None, *, opened: bool = False, waits: str = "", 
     """One line: the song and how its request goes; under it, folded, what each command printed, and, in
     ``waits``, its song's picker. ``picking``: it stopped only because the song needs a pick first
     (``_waits_for_pick``), so its fetch waits for one rather than failed."""
-    meta = f"{escape(job.title)} · requested {_when(job.queued_at)}"
+    meta = f"{escape(job.title)} · requested {shown(job.queued_at, "")}"
     if job.note:
         meta += f" · {escape(job.note)}"
     if job.seconds_to_sheet is not None:

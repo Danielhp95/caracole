@@ -26,11 +26,13 @@ from caracole.health import get_state
 from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS, SCORE_KIND
 from caracole.lacuerda_fetch import may_ask
 from caracole.library import safe_name, write_atomic
+from caracole.logs import plural
 from caracole.musescore import song_pages
 from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, VIDEO_SHAPE, Overrides
 from caracole.songs import Song, list_removed, list_songs
+from caracole.stamps import shown
 from caracole.ug.fetch import artist_is_known, fetch_due, needs_artist_page, pasted_page_problem
 from caracole.ug.index import index_state
 from caracole.ug.lookup import song_tabs
@@ -475,8 +477,8 @@ def _autochords_failures(conn: sqlite3.Connection, cfg: Config) -> tuple[list[st
             from_youtube = True
             items.append(f"- **{md(f['song'])}**: the audio of {video_link(videos[f['audio']])} · {md(f['error'])}")
             continue
-        shown = str(audio.relative_to(cfg.music_dir)) if audio.is_relative_to(cfg.music_dir) else f["audio"]
-        items.append(f"- **{md(f['song'])}**: {_code(shown)} · {md(f['error'])}")
+        where = str(audio.relative_to(cfg.music_dir)) if audio.is_relative_to(cfg.music_dir) else f["audio"]
+        items.append(f"- **{md(f['song'])}**: {_code(where)} · {md(f['error'])}")
     if not items:
         return [], ""
     try:
@@ -725,7 +727,7 @@ def _render_status(conn: sqlite3.Connection) -> list[str]:
 
 
 def _fmt(dt: datetime | None) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "never"
+    return shown(dt, "never")
 
 
 def _health(conn: sqlite3.Connection, cfg: Config, now: datetime) -> list[str]:
@@ -813,7 +815,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     out = [
         "# caracole to-do",
         "",
-        f"_Updated {_fmt(now)} · {n} song{'s' if n != 1 else ''}: {counts['found']} found, "
+        f"_Updated {_fmt(now)} · {plural(n, 'song')}: {counts['found']} found, "
         f"{counts['wanted']} wanted, {counts['ignored']} ignored_",
         "",
         "Browse or search every song: [index.html](index.html)",

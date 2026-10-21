@@ -3,7 +3,8 @@
 The local UG index is built once from Ultimate Guitar's sitemaps, or from
 sitemap files you already have, and the nightly run refreshes it. A block or
 a spent budget is not a failure: the sitemaps read so far are kept, and the
-command says what happens next. Every command module is imported on every
+command says what happens next; a block sends the one ntfy alert the run sends
+(``_common.alert_block``). Every command module is imported on every
 start, so the index module is imported inside the commands.
 
 What build and refresh print comes from ``ug.index``'s progress events, put
@@ -31,6 +32,7 @@ import typer
 from caracole.commands import _common
 from caracole.commands._common import exclusive, fail, load_cfg, open_db, run_id_for, utcnow
 from caracole.progress import Console, Pace, about, duration
+from caracole.stamps import shown
 
 if TYPE_CHECKING:
     from caracole.config import Config, ProviderPolicy
@@ -183,7 +185,7 @@ def _with_ug(conn: sqlite3.Connection, cfg: Config, now: datetime, policy: Provi
 
     if is_cooling(conn, "ug", now):
         until = get_state(conn, "ug").cooldown_until
-        report.stopped(f"Ultimate Guitar is cooling down after a block until {_when(until)}; no request was sent.",
+        report.stopped(f"Ultimate Guitar is cooling down after a block until {shown(until)}; no request was sent.",
                        until=until)
         return _Outcome()
     answered = 0
@@ -201,8 +203,10 @@ def _with_ug(conn: sqlite3.Connection, cfg: Config, now: datetime, policy: Provi
         outcome.stats = action(client)
     except ProviderBlocked as e:
         state = record_block(conn, "ug", now, str(e))
-        report.stopped(f"Ultimate Guitar blocked caracole ({e}). No more requests to it until "
-                       f"{_when(state.cooldown_until)} (block #{state.strikes}); {_KEPT}.", until=state.cooldown_until)
+        message = (f"Ultimate Guitar blocked caracole ({e}). No more requests to it until "
+                   f"{shown(state.cooldown_until)} (block #{state.strikes}); {_KEPT}.")
+        _common.alert_block(cfg, "ug", message)
+        report.stopped(message, until=state.cooldown_until)
         return outcome
     except BudgetExhausted:
         report.stopped(f"The Ultimate Guitar budget of {policy.budget} requests is spent; {_KEPT}.")
@@ -389,7 +393,7 @@ class _Report:
             self.console.say(f"Index refresh stopped: {_stats_of(self.reads).summary()}. {cost}.")
 
     def _state(self, state: str, cov: Coverage, *, finished: bool) -> None:
-        after = f" after {_when(self.until)}" if self.until is not None else ""
+        after = f" after {shown(self.until)}" if self.until is not None else ""
         if state == "complete":
             if self.refresh:
                 return  # the summary says it: "the index is now complete" when this refresh made it so
@@ -477,7 +481,3 @@ def _roughly(n: int) -> str:
 
 def _count(n: int, noun: str) -> str:
     return f"{n:,} {noun}" if n == 1 else f"{n:,} {noun}s"
-
-
-def _when(dt: datetime | None) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"

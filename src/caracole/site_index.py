@@ -23,10 +23,10 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
-from caracole import normalize
+from caracole import normalize, stamps
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 from caracole.http import Client, ProviderError, Response
 from caracole.ug.sitemap import iter_locs
@@ -77,7 +77,7 @@ def refresh(
     ``on_read`` is called for each sitemap stored (one found unchanged isn't), as it is
     stored, so a count survives a refresh the budget cuts short.
     """
-    now = _utc(now)
+    now = stamps.utc(now)
     complete = complete_at(conn, site)
     old_keys = any(not _current(entry) for entry in sitemaps(conn, site).values())
     if complete is not None and now - complete < site.max_age and not old_keys:
@@ -89,16 +89,16 @@ def refresh(
     for name, url in listed.items():
         entry = sitemaps(conn, site).get(name)
         current = entry is not None and _current(entry)
-        if current and not _before(entry.get("checked_at"), now - site.max_age):
+        if current and not stamps.before(entry.get("checked_at"), now - site.max_age):
             continue  # read or found unchanged in this round already
         r = client.get(url, cache=False, conditional=True)
         validators = _validators(r.headers)
         if r.status == 304 and current and _validators_of(entry) == validators:
-            _record(conn, site, name, {**entry, "checked_at": _iso(now)})
+            _record(conn, site, name, {**entry, "checked_at": stamps.stamp(now)})
             continue
         _store(conn, site, name, _rows(site, r.content, url, r.status), validators, now)
         on_read()
-    kv_set(conn, site.complete_key, _iso(now))
+    kv_set(conn, site.complete_key, stamps.stamp(now))
 
 
 def sitemaps(conn: sqlite3.Connection, site: Site) -> dict[str, dict[str, Any]]:
@@ -108,7 +108,7 @@ def sitemaps(conn: sqlite3.Connection, site: Site) -> dict[str, dict[str, Any]]:
 
 def complete_at(conn: sqlite3.Connection, site: Site) -> datetime | None:
     """When every sitemap the index listed was last read or found unchanged; None before that."""
-    return _parse(kv_get(conn, site.complete_key))
+    return stamps.parse(kv_get(conn, site.complete_key))
 
 
 def _children(site: Site, resp: Response) -> dict[str, str]:
@@ -152,7 +152,7 @@ def _store(conn: sqlite3.Connection, site: Site, name: str, rows: list[Sequence[
         conn.execute(f"DELETE FROM {site.table} WHERE sitemap = ?", (name,))
         conn.executemany(f"INSERT OR REPLACE INTO {site.table} ({columns}) VALUES ({marks})",
                          [(*row, name) for row in rows])
-        _record(conn, site, name, {**validators, "checked_at": _iso(now), "rows": len(rows),
+        _record(conn, site, name, {**validators, "checked_at": stamps.stamp(now), "rows": len(rows),
                                    "keys": normalize.KEY_VERSION})
 
 
@@ -177,24 +177,3 @@ def _validators(headers: Mapping[str, str]) -> dict[str, str | None]:
 
 def _validators_of(entry: Mapping[str, Any]) -> dict[str, str | None]:
     return {"etag": entry.get("etag"), "last_modified": entry.get("last_modified")}
-
-
-def _utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
-
-
-def _iso(dt: datetime) -> str:
-    return _utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _parse(value: str | None) -> datetime | None:
-    try:
-        return _utc(datetime.fromisoformat(value)) if value else None
-    except ValueError:
-        return None
-
-
-def _before(stamp: str | None, cutoff: datetime) -> bool:
-    """Whether a stored time is older than ``cutoff``; a missing or unreadable one is."""
-    when = _parse(stamp)
-    return when is None or when < cutoff

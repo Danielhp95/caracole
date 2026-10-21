@@ -66,6 +66,7 @@ Shared by the steps and the commands:
 | library.py | song folders, safe file access in the synced library |
 | notify.py | ntfy |
 | site_index.py | a site's sitemaps into a table, resumed across runs |
+| stamps.py | how caracole stores a time (ISO 8601 UTC to the second, a naive time is UTC) and shows one (`shown`); a stored time missing or unreadable is older than any (`before`); the standard library alone |
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
 | keys.py | a song's musical key and where it came from |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
@@ -332,7 +333,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     turned off (`enabled = false`): then it gets no client and its step is skipped.
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
     more that run, `health.record_block` cools the provider down for 24 h × 2^(k−1) + 2 h after
-    the k-th block in a row (so the next nightly run is always skipped), and nothing retries or works around it (no proxies).
+    the k-th block in a row (so the next nightly run is always skipped), one ntfy alert goes out
+    for the block, never one a song, titled with `logs.provider_name` (the run's step, or
+    `_common.alert_block` in a command, `caracole fetch --song` from serve's review page too; a lookup
+    sends none), and nothing retries or works around it (no proxies).
   - No URL robots.txt closes is asked for, or followed to (`http.ROBOTS_DISALLOW`,
     `robots_disallows`): not UG's `/search.php` (matching is local, against the sitemap
     index), `/tab/download`, `/tab/print?` or `/download/public/`, nor gtptabs.com's

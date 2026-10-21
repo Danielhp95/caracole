@@ -14,6 +14,7 @@ the commands: every command module is imported on every start.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import Collection
 from datetime import datetime
@@ -22,6 +23,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
+from caracole import logs
 from caracole.commands._common import (
     exclusive,
     fail,
@@ -56,8 +58,7 @@ def _overrides_for_pages(conn: sqlite3.Connection, cfg: Config, now: datetime) -
             path = write_todo(cfg.library_dir, build_todo(conn, cfg, Overrides(), now, overrides_error=str(e)))
             typer.echo(f"Wrote {path}, which leads with this error; index.html was left as it was")
         except OSError as w:
-            typer.secho(f"can't write {cfg.library_dir / '_todo.md'}: {w.strerror or w}", err=True,
-                        fg=typer.colors.RED)
+            logs.say(logging.ERROR, f"can't write {cfg.library_dir / '_todo.md'}: {w.strerror or w}")
         fail(f"overrides: {e}", 2)
 
 

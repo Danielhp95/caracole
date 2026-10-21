@@ -43,10 +43,10 @@ import logging
 import sqlite3
 from collections.abc import Collection
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from caracole import site_index
+from caracole import site_index, stamps
 from caracole.db import kv_get, kv_set
 from caracole.gtptabs import (
     PROVIDER,
@@ -148,7 +148,7 @@ def gtptabs_files(
     lookup the nightly run let go first) is passed over when its turn comes.
     """
     stats = GtpTabsStats()
-    now = _utc(now)
+    now = stamps.utc(now)
     wanting = [s for s in _songs_wanting_a_file(conn, now, overrides) if only is None or s.id in only]
     if not wanting:
         return stats
@@ -240,7 +240,7 @@ def _songs_wanting_a_file(conn: sqlite3.Connection, now: datetime, overrides: Ov
     return [
         song for song in list_songs(conn)
         if song.status != "ignored" and song.key not in ignored and song.id not in with_file
-        and _before(kv_get(conn, f"{CHECKED_PREFIX}{song.id}"), cutoff)
+        and stamps.before(kv_get(conn, f"{CHECKED_PREFIX}{song.id}"), cutoff)
     ]
 
 
@@ -273,7 +273,7 @@ class _Pass:
 
     @property
     def stamp(self) -> str:
-        return _iso(self.now)
+        return stamps.stamp(self.now)
 
 
 def _look_up(run: _Pass, song: Song, index: _Index) -> str:
@@ -288,7 +288,7 @@ def _look_up(run: _Pass, song: Song, index: _Index) -> str:
     if not candidates:
         kv_set(run.conn, f"{CHECKED_PREFIX}{song.id}", run.stamp)
         return MISSING
-    usable = [tab for tab in candidates if _before(kv_get(run.conn, f"{_UNUSABLE_PREFIX}{tab.tab_id}"),
+    usable = [tab for tab in candidates if stamps.before(kv_get(run.conn, f"{_UNUSABLE_PREFIX}{tab.tab_id}"),
                                                    run.now - UNUSABLE_FOR)]
     for tab in usable[:DOWNLOADS_PER_SONG]:
         found = _download(run, tab)
@@ -374,27 +374,3 @@ def _keep(run: _Pass, song: Song, tab: GtpTab, data: bytes, ext: str) -> str:
     keep_file(run.conn, run.library_dir, song=song, version_id=version_id, name=name, data=data, rank=number)
     write_info(run.conn, run.library_dir, get_song(run.conn, song.id))
     return name
-
-
-# --- small helpers --------------------------------------------------------------------------------------------
-
-
-def _utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
-
-
-def _iso(dt: datetime) -> str:
-    return _utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _parse(value: str | None) -> datetime | None:
-    try:
-        return _utc(datetime.fromisoformat(value)) if value else None
-    except ValueError:
-        return None
-
-
-def _before(stamp: str | None, cutoff: datetime) -> bool:
-    """Whether a stored time is older than ``cutoff``; a missing or unreadable one is."""
-    when = _parse(stamp)
-    return when is None or when < cutoff

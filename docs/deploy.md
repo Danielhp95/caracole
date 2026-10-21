@@ -696,7 +696,10 @@ No secret reaches the journal, at any priority (see
   which the message names when it is there. Until then the commands that use
   the database exit 2, and so does the nightly unit.
 - **A command waits with "Another caracole is running":** the message names the
-  process and what it is doing; the nightly run takes about half an hour.
+  process and what it is doing; the nightly run takes up to about an hour
+  when every site has work for it (its polite pauses alone are about 40 minutes),
+  and with auto-chords on, up to about another hour while yt-dlp's slow searches
+  and downloads run to their time limits (2 and 15 minutes each).
 - **Auto-chords can't read a purchase:** the to-do page lists it, with the
   error, and `journalctl -u caracole-autochords.service` names it too.
   Re-download the file, or convert it (to FLAC, say) and replace the original:

@@ -16,6 +16,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from helpers.ntfy import CONFIG as NTFY_CONFIG
+from helpers.ntfy import FakeNtfy
 from helpers.ug_pages import (
     BANMA_TRADITIONAL_LINES,
     SONG_DONGYE_URL,
@@ -62,12 +64,12 @@ def tab_page(tab_id, song, url):
                                    artist_url="https://www.ultimate-guitar.com/artist/soda_stereo_2946")
 
 
-def write_config(tmp_path, *, budget=60):
+def write_config(tmp_path, *, budget=60, ntfy=False):
     path = tmp_path / "caracole.toml"
     path.write_text(
         f'library_dir = "{tmp_path / "lib"}"\nmusic_dir = "{tmp_path / "music"}"\n'
         f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n'
-        f"[providers.ug]\nbudget = {budget}\ndelay = [0, 0]\n",
+        f"[providers.ug]\nbudget = {budget}\ndelay = [0, 0]\n" + (NTFY_CONFIG if ntfy else ""),
         encoding="utf-8",
     )
     return path
@@ -80,8 +82,8 @@ def ug(monkeypatch):
     return site
 
 
-def run(tmp_path, *args, budget=60, root=()):
-    config = str(write_config(tmp_path, budget=budget))
+def run(tmp_path, *args, budget=60, root=(), ntfy=False):
+    config = str(write_config(tmp_path, budget=budget, ntfy=ntfy))
     return CliRunner().invoke(build_app(), ["--config", config, *root, "fetch", *args])
 
 
@@ -152,6 +154,25 @@ def test_a_block_cools_ug_down_and_exits_0(tmp_path, ug):
     assert state.strikes == 1 and state.cooldown_until is not None
     assert ug.requests == [PERSIANA]
     assert get_song(conn, persiana).ug_dirty is True
+
+
+def test_a_block_sends_one_alert_as_the_nightly_run_does(tmp_path, ug, monkeypatch):
+    conn, persiana, _ = two_songs(tmp_path, ug)
+    ug.pages[PERSIANA] = (403, "<html><body>Forbidden</body></html>")
+    ntfy = FakeNtfy()
+    monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(
+        ntfy.handler if provider == "ntfy" else ug.handler))
+
+    result = run(tmp_path, ntfy=True)
+
+    assert result.exit_code == 0, result.output
+    assert ntfy.titles == ["caracole: Ultimate Guitar blocked"]  # one for the block, none per song
+    (alert,) = ntfy.posts
+    assert alert.headers["priority"] == "high" and alert.headers["tags"] == "warning"
+    assert "Ultimate Guitar blocked caracole" in alert.content.decode()
+    # During the cooldown nothing is asked, and nothing is sent again.
+    assert "cooling down" in run(tmp_path, ntfy=True).output
+    assert len(ntfy.posts) == 1
 
 
 def test_a_cooling_provider_is_left_alone(tmp_path, ug):

@@ -43,12 +43,12 @@ import logging
 import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from rapidfuzz import fuzz
 
-from caracole import normalize
+from caracole import normalize, stamps
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 from caracole.http import (
     BudgetExhausted,
@@ -318,7 +318,7 @@ def refresh(conn: sqlite3.Connection, client: Client, now: datetime,
     ``on_read`` is called for each listing page stored (one found unchanged isn't), as it is
     stored, so a count survives a refresh the budget cuts short.
     """
-    now = _utc(now)
+    now = stamps.utc(now)
     ensure_current_keys(conn)
     complete = complete_at(conn)
     if complete is not None and now - complete < INDEX_MAX_AGE:
@@ -333,7 +333,7 @@ def refresh(conn: sqlite3.Connection, client: Client, now: datetime,
         for name in listed:
             if name != first:
                 _read(conn, client, name, now, on_read)
-    kv_set(conn, COMPLETE_KEY, _iso(now))
+    kv_set(conn, COMPLETE_KEY, stamps.stamp(now))
 
 
 def pages(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
@@ -344,26 +344,26 @@ def pages(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
 
 def complete_at(conn: sqlite3.Connection) -> datetime | None:
     """When every listing page was last read or found unchanged; None before that."""
-    return _parse(kv_get(conn, COMPLETE_KEY))
+    return stamps.parse(kv_get(conn, COMPLETE_KEY))
 
 
 def _read(conn: sqlite3.Connection, client: Client, name: str, now: datetime,
           on_read: Callable[[], None]) -> tuple[str, ...]:
     """One listing page into the index, unless checked in this round: the letter's pages it lists."""
     entry = pages(conn).get(name)
-    if entry is not None and not _before(entry.get("checked_at"), now - INDEX_MAX_AGE):
+    if entry is not None and not stamps.before(entry.get("checked_at"), now - INDEX_MAX_AGE):
         return tuple(entry.get("pages", ()))
     url = listing_url(name)
     resp = client.get(url, cache=False, conditional=True, accept=_ACCEPT)
     validators = _validators(resp.headers)
     if resp.status == 304 and entry is not None and entry.get("rows") is not None and \
             _validators_of(entry) == validators:
-        _record(conn, name, {**entry, "checked_at": _iso(now)})
+        _record(conn, name, {**entry, "checked_at": stamps.stamp(now)})
         return tuple(entry.get("pages", ()))
     if resp.status == 404:  # no such page: its artists go, and it is checked for this round
         with savepoint(conn, "lacuerda_index_gone"):
             conn.execute("DELETE FROM lacuerda_index WHERE page = ?", (name,))
-            _record(conn, name, {"checked_at": _iso(now), "gone": True})
+            _record(conn, name, {"checked_at": stamps.stamp(now), "gone": True})
         return ()
     listing = parse_listing_page(resp.text, url=url)
     _store(conn, name, listing, validators, now)
@@ -377,7 +377,7 @@ def _store(conn: sqlite3.Connection, name: str, listing: Listing, validators: Ma
     """A listing page's artists and its record, in one transaction."""
     with savepoint(conn, "lacuerda_index_page"):
         store_artists(conn, name, listing.artists)
-        _record(conn, name, {**validators, "checked_at": _iso(now), "rows": len(listing.artists),
+        _record(conn, name, {**validators, "checked_at": stamps.stamp(now), "rows": len(listing.artists),
                              "pages": list(listing.pages), "total": listing.total})
 
 
@@ -699,27 +699,3 @@ def _reading(scores: Iterable[tuple[float, float, float]]) -> tuple[float, str]:
             if score > best:
                 best, via = score, name
     return best, via
-
-
-# --- small helpers --------------------------------------------------------------------------
-
-
-def _utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
-
-
-def _iso(dt: datetime) -> str:
-    return _utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _parse(value: str | None) -> datetime | None:
-    try:
-        return _utc(datetime.fromisoformat(value)) if value else None
-    except ValueError:
-        return None
-
-
-def _before(stamp: str | None, cutoff: datetime) -> bool:
-    """Whether a stored time is older than ``cutoff``; a missing or unreadable one is."""
-    when = _parse(stamp)
-    return when is None or when < cutoff

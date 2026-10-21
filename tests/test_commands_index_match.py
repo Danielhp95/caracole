@@ -16,6 +16,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from helpers.ntfy import CONFIG as NTFY_CONFIG
+from helpers.ntfy import FakeNtfy
 from typer.testing import CliRunner
 
 from caracole import db
@@ -87,12 +89,12 @@ def frozen_clock(monkeypatch):
     monkeypatch.setattr("caracole.commands.index.clock", lambda: 0.0)
 
 
-def run(tmp_path: Path, *args: str, budget: int = 60):
+def run(tmp_path: Path, *args: str, budget: int = 60, ntfy: bool = False):
     path = tmp_path / "caracole.toml"
     path.write_text(
         f'library_dir = "{tmp_path / "lib"}"\nmusic_dir = "{tmp_path / "music"}"\n'
         f'state_dir = "{tmp_path / "state"}"\ncache_dir = "{tmp_path / "cache"}"\n'
-        f"[providers.ug]\nbudget = {budget}\ndelay = [0, 0]\n",
+        f"[providers.ug]\nbudget = {budget}\ndelay = [0, 0]\n" + (NTFY_CONFIG if ntfy else ""),
         encoding="utf-8",
     )
     return CliRunner().invoke(build_app(), ["--config", str(path), *args])
@@ -258,6 +260,21 @@ def test_cli_index_block_cools_ug_down_and_exits_0(tmp_path, ug):
     again = run(tmp_path, "index", "refresh")
     assert again.exit_code == 0, again.output
     assert ug.requests == [] and "cooling down" in again.output
+
+
+def test_cli_index_block_sends_one_alert_as_the_nightly_run_does(tmp_path, ug, monkeypatch):
+    ug.status["sitemap2.xml"] = 403
+    ntfy = FakeNtfy()
+    monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(
+        ntfy.handler if provider == "ntfy" else ug.handler))
+    result = run(tmp_path, "index", "build", ntfy=True)
+    assert result.exit_code == 0, result.output
+    assert ntfy.titles == ["caracole: Ultimate Guitar blocked"]
+    (alert,) = ntfy.posts
+    assert alert.headers["priority"] == "high" and alert.headers["tags"] == "warning"
+    assert "Ultimate Guitar blocked caracole" in alert.content.decode()
+    assert run(tmp_path, "index", "refresh", ntfy=True).exit_code == 0  # cooling down: no request, no alert
+    assert len(ntfy.posts) == 1
 
 
 def test_cli_index_build_in_a_cooldown_sends_nothing_and_still_says_how_to_resume(tmp_path, ug):

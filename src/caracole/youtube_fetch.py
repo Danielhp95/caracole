@@ -41,10 +41,11 @@ import sqlite3
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from caracole import stamps
 from caracole.config import Config
 from caracole.db import kv_get_json, kv_set_json
 from caracole.health import get_state, is_cooling
@@ -216,7 +217,7 @@ def _declined(song: Song, overrides: Overrides) -> bool:
 
 
 def _recent(stamp: str | None, now: datetime) -> bool:
-    when = _parse(stamp)
+    when = stamps.parse(stamp)
     return when is not None and when > now - RECHECK_AFTER
 
 
@@ -229,7 +230,7 @@ def _to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
 def songs_for_youtube(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[Song]:
     """The songs due for their audio from YouTube, newest first, those whose last try failed
     after the others, so they never hold up the rest (see the module docstring)."""
-    now = _utc(now)
+    now = stamps.utc(now)
     songs = list_songs(conn)
     buy = {s.id for s in _to_buy(conn, songs, overrides, now)}
     due: list[Song] = []
@@ -286,13 +287,13 @@ def youtube_pass(
     the pass (``budget_exhausted``); any other ``ProviderError`` leaves its song for the
     next run. Before any of it, audio no song needs any more goes (``tidy``).
     """
-    now = _utc(now)
+    now = stamps.utc(now)
     stats = YouTubeStats()
     tidy(conn, cfg, overrides)
 
     def failed(song: Song, e: ProviderError) -> None:
         record = load_record(conn, song.id)
-        record.error, record.error_at = e.message or str(e), _iso(now)
+        record.error, record.error_at = e.message or str(e), stamps.stamp(now)
         _save(conn, song.id, record)
         if on_song is not None:
             on_song(song, GAVE_UP if isinstance(e, DownloadsFailed) else "error", record)
@@ -310,7 +311,7 @@ def youtube_pass(
 
 def _one(conn: sqlite3.Connection, runner: YtDlp, cfg: Config, song: Song, overrides: Overrides,
          now: datetime) -> str:
-    stamp = _iso(now)
+    stamp = stamps.stamp(now)
     record = load_record(conn, song.id)
     pasted = overrides.youtube.get(song.key)
     if pasted:
@@ -470,7 +471,7 @@ def song_state(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: 
 
     A pasted video that can't be had is ``UNUSABLE`` even when the song has audio from
     another video: that one stays, and the paste waits for another."""
-    now = _utc(now)
+    now = stamps.utc(now)
     record = load_record(conn, song.id)
     if _declined(song, overrides):
         return SongState(DECLINED)
@@ -482,7 +483,7 @@ def song_state(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: 
         made = _kept(conn, song.id, AUTO_SHEET) and song.autochords_mtime == song.audio_mtime
         return SongState(CHORDS if made else DOWNLOADED, record.video)
     if not pasted and _recent(record.missing_at, now):
-        again = _parse(record.missing_at) + RECHECK_AFTER
+        again = stamps.parse(record.missing_at) + RECHECK_AFTER
         return SongState(MISSING, None, f"asked again from {again.strftime('%Y-%m-%d')}")
     video = Video(pasted) if pasted and not (record.video and record.video.id == pasted) else record.video
     if is_cooling(conn, PROVIDER, now):
@@ -505,21 +506,3 @@ def song_states(conn: sqlite3.Connection, overrides: Overrides, now: datetime, *
         if song.id in listed or youtube_gave:
             out[song.id] = song_state(conn, song, overrides, now)
     return out
-
-
-# --- small helpers -------------------------------------------------------------------------------------------
-
-
-def _utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
-
-
-def _iso(dt: datetime) -> str:
-    return _utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _parse(value: str | None) -> datetime | None:
-    try:
-        return _utc(datetime.fromisoformat(value)) if value else None
-    except ValueError:
-        return None

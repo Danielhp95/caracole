@@ -34,6 +34,7 @@ from pathlib import Path, PurePosixPath
 
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, savepoint
+from caracole.logs import plural
 from caracole.library import song_dir, song_folder, songs_in_folder
 from caracole.songs import SHEET_OUTPUTS, SOURCE_FIELDS_KV, Song, delete_song_kv, is_export, mark_removed
 
@@ -174,11 +175,11 @@ def describe(plan: RemovalPlan, cfg: Config) -> tuple[list[str], list[str], list
         numbers = ", ".join(str(n) for n in plan.wanted_lines)
         goes.append(f"its line{'s' if n > 1 else ''} in wanted.txt (line{'s' if n > 1 else ''} {numbers})")
     if plan.delete:
-        goes.append(f"{_count(len(plan.delete), 'file')} caracole wrote in {folder}: {', '.join(plan.delete)}")
+        goes.append(f"{plural(len(plan.delete), 'file')} caracole wrote in {folder}: {', '.join(plan.delete)}")
     if not plan.keep and not plan.folder_problem:
         goes.append(f"the folder {folder}, and its artist's once empty")
     record = "its record in caracole's database: its match, its lyrics"
-    goes.append(record + (f" and {_count(plan.versions, 'version')} seen of it" if plan.versions else ""))
+    goes.append(record + (f" and {plural(plan.versions, 'version')} seen of it" if plan.versions else ""))
     if plan.youtube_audio:
         goes.append("the audio caracole took from YouTube for it, from caracole's cache")
     stays = [f"{folder}{name}: {why}" for name, why in plan.keep]
@@ -201,7 +202,7 @@ def brief(plan: RemovalPlan) -> str:
     took from YouTube; what stays in its folder; never Music/. ``describe`` says it whole."""
     goes = []
     if plan.delete:
-        goes.append(f"caracole's {_count(len(plan.delete), 'file')} for it")
+        goes.append(f"caracole's {plural(len(plan.delete), 'file')} for it")
     goes.append("its record")
     if plan.wanted_lines:
         n = len(plan.wanted_lines)
@@ -213,7 +214,7 @@ def brief(plan: RemovalPlan) -> str:
     if plan.folder_problem:
         said += f"; leaves its folder ({plan.folder_problem})"
     elif left:
-        said += f"; leaves {_count(left, 'other file')}"
+        said += f"; leaves {plural(left, 'other file')}"
     said += "; never touches Music/."
     if plan.wanted_problem:  # caracole remove stops before anything goes: a line left would bring it back
         return f"wanted.txt can't be read ({plan.wanted_problem}), so nothing goes until it can. {said}"
@@ -405,7 +406,3 @@ def _audio(path: str, cfg: Config) -> str:
         return f"Music/{Path(path).relative_to(cfg.music_dir).as_posix()}"
     except ValueError:
         return path
-
-
-def _count(n: int, noun: str) -> str:
-    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"

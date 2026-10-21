@@ -23,7 +23,6 @@ Every command module is imported on every start, so the pass is imported inside 
 from __future__ import annotations
 
 from contextlib import closing
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -42,6 +41,8 @@ from caracole.commands._common import (
     utcnow,
     write_pages,
 )
+from caracole.logs import plural
+from caracole.stamps import shown
 
 if TYPE_CHECKING:
     import sqlite3
@@ -117,7 +118,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
             typer.echo("No song is waiting for audio from YouTube.")
         elif is_cooling(conn, PROVIDER, now):
             until = get_state(conn, PROVIDER).cooldown_until
-            typer.echo(f"YouTube is cooling down after a block until {_when(until)}; caracole won't ask it before "
+            typer.echo(f"YouTube is cooling down after a block until {shown(until)}; caracole won't ask it before "
                        "then.")
             songs = []
         if not songs:
@@ -130,9 +131,9 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
                                  on_song=lambda s, outcome, record: typer.echo(_line(s, outcome, record)))
         except ProviderBlocked as e:
             state = record_block(conn, PROVIDER, now, str(e))
-            message = (f"{e}\nNo more yt-dlp runs until {_when(state.cooldown_until)} (block #{state.strikes}). "
+            message = (f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes}). "
                        "Nothing was marked missing.")
-            _alert(cfg, f"caracole: {PROVIDER} blocked", message)
+            _common.alert_block(cfg, PROVIDER, message)
             typer.echo(f"YouTube blocked caracole: {message}")
             write_pages(conn, cfg, overrides, utcnow())
             return
@@ -144,7 +145,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
     typer.echo(_totals(stats, runner.requests_made, cfg.provider(PROVIDER).budget))
     if stats.budget_exhausted:
         budget = cfg.provider(PROVIDER).budget
-        typer.echo(f"YouTube's budget of {_count(budget, 'yt-dlp run')} is spent; the songs left wait for the next run.")
+        typer.echo(f"YouTube's budget of {plural(budget, 'yt-dlp run')} is spent; the songs left wait for the next run.")
     if stats.downloaded:
         typer.echo("Next, `caracole autochords` works out the chords from the audio (the caracole-autochords unit "
                    "runs it after each nightly run).")
@@ -183,8 +184,8 @@ def _one_song(conn: sqlite3.Connection, cfg: Config, display: str, overrides: Ov
         fail(f'"{song.display}" has a human sheet: caracole takes no audio from YouTube for it.')
     if song.audio_path and youtube_audio(conn, song) is None:  # a purchase, linked from Music/
         audio = Path(song.audio_path)
-        shown = f"{audio.relative_to(cfg.music_dir)} in Music/" if audio.is_relative_to(cfg.music_dir) else audio
-        fail(f'"{song.display}" has its audio already ({shown}): caracole takes none from YouTube for it.')
+        where = f"{audio.relative_to(cfg.music_dir)} in Music/" if audio.is_relative_to(cfg.music_dir) else audio
+        fail(f'"{song.display}" has its audio already ({where}): caracole takes none from YouTube for it.')
     return song
 
 
@@ -223,20 +224,4 @@ def _line(song: Song, outcome: str, record: Record) -> str:
 
 def _totals(stats: YouTubeStats, runs: int, budget: int) -> str:
     return (f"YouTube: {stats.downloaded} downloaded, {stats.missing} not there, {stats.unavailable} unavailable, "
-            f"{_count(stats.errors, 'error')} ({_count(runs, 'yt-dlp run')} of {budget}).")
-
-
-def _alert(cfg: Config, title: str, message: str) -> None:
-    """One ntfy message, as the nightly run sends on a block; nothing without an ntfy URL."""
-    from caracole.notify import Notifier
-
-    notifier = Notifier(cfg.ntfy.url, cfg.ntfy.token, transport=_common.transport_for("ntfy"))
-    notifier.send(title, message, priority="high", tags=["warning"])
-
-
-def _count(n: int, word: str) -> str:
-    return f"{n} {word}{'' if n == 1 else 's'}"
-
-
-def _when(dt: datetime | None) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"
+            f"{plural(stats.errors, 'error')} ({plural(runs, 'yt-dlp run')} of {budget}).")

@@ -66,6 +66,7 @@ from caracole.library import (
     song_dir,
     write_atomic,
 )
+from caracole.logs import plural
 from caracole.normalize import clean_title, identity_key
 from caracole.overrides import TOO_DEEP
 
@@ -1104,7 +1105,7 @@ def _app_text(entry: Entry) -> str:
 def _contents_file(book: Songbook, entries: Sequence[Entry]) -> str:
     """chordpro's template for the contents: the title page, then the contents' heading."""
     missing = sum(1 for e in entries if e.cho is None)
-    count = f"{len(entries)} song{'' if len(entries) == 1 else 's'}"
+    count = plural(len(entries), "song")
     if missing:
         count += f", {missing} without a sheet yet"
     return (f"{{title: {directive_text(book.name)}}}\n{{artist: {directive_text(count)}}}\n{{subtitle: {directive_text(count)}}}\n\n"

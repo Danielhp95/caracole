@@ -61,6 +61,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
+from caracole.logs import plural
 from caracole.web.pages import Refused
 
 if TYPE_CHECKING:
@@ -105,13 +106,13 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
         except SongbookError as e:
             raise Refused(409, "Taken", str(e)) from e
         songs = _songs(form, connect)
-        count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
+        count = plural(len(songs), "song")
         return _job(f'Make the songbook "{name}" ({count})', "Making the songbook", "make", name, *songs)
     book = _book(books, name)
     name = book.name
     if action == "add":
         songs = _songs(form, connect)
-        count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
+        count = plural(len(songs), "song")
         return _job(f'Add {count} to "{name}"', "Adding to the songbook", "add", name, *songs)
     if action in ("move", "remove", "set"):
         song = " ".join(form.get("song", "").split())
