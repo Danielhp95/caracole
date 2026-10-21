@@ -98,6 +98,7 @@
 
   // --- the jobs it shows ---------------------------------------------------------------------------------
   const newest = new Map();  // a songbook's name -> the newest view of a change of it
+  const lookupViews = new Map();  // job id -> the newest view of a lookup that a song added here waits for
   const songViews = new Map();  // song id -> the newest view of its lookup
   const changes = new Map();  // job id -> the newest view of a songbook's change
   const placed = new Map();  // job id -> the line that shows it (a song added, before the songbook has it)
@@ -202,7 +203,10 @@
     }
     lines.replaceChildren(...kept);
     lines.hidden = !kept.length;
-    sideEmpty.textContent = books().length || shelf.error ? "" : server
+    newBook.hidden = !songs.length;  // its songs are picked in the library: with none, there is nothing to pick
+    sideEmpty.textContent = books().length || shelf.error ? "" : !songs.length
+      ? "No songbook yet. Your library has no songs to pick from: add one first."
+      : server
       ? "No songbook yet: + New songbook picks its songs in your library."
       : "No songbook yet. Select songs in your library to make one.";
     sideEmpty.hidden = !sideEmpty.textContent;
@@ -445,9 +449,9 @@
     box.type = "checkbox";
     box.required = true;
     sure.append(box, document.createTextNode(" Delete it, and the files caracole made of it"));
-    const gone = el("button", "btn small", "Delete " + name);
-    gone.type = "submit";
-    del.append(sure, gone);
+    const drop = el("button", "btn small", "Delete " + name);
+    drop.type = "submit";
+    del.append(sure, drop);
     more.append(rename, del);
     return more;
   };
@@ -567,15 +571,24 @@
       if (book && status && names.indexOf(bookName) >= 0) showLine(status, view);
       if (book && names.indexOf(bookName) >= 0) lockBook(busyFor(bookName));
       const spot = placed.get(Number(view.id));
-      if (spot && spot.isConnected) showLine(lineIn(spot), view);
-    } else if (view.kind === "song" && view.songId !== null && view.songId !== undefined) {
-      songViews.set(Number(view.songId), view);
-      if (book) {
-        for (const li of book.querySelectorAll('.set-line[data-song="' + Number(view.songId) + '"]')) {
-          showLine(lineIn(li), view);
+      // A song new to the library has its lookup's line there until that is over, then the songbook's change's.
+      const lookup = spot ? lookupViews.get(Number(spot.dataset.lookup)) : null;
+      const looking = lookup && (lookup.state === "queued" || lookup.state === "running");
+      if (spot && spot.isConnected && !looking) showLine(lineIn(spot), view);
+    } else if (view.kind === "song") {
+      const spot = placed.get(Number(view.id));
+      if (spot) {  // a song added here: its line, even before the lookup has found the song (no songId yet)
+        spot.dataset.lookup = String(Number(view.id));
+        lookupViews.set(Number(view.id), view);
+      }
+      if (view.songId !== null && view.songId !== undefined) {
+        songViews.set(Number(view.songId), view);
+        if (book) {
+          for (const li of book.querySelectorAll('.set-line[data-song="' + Number(view.songId) + '"]')) {
+            showLine(lineIn(li), view);
+          }
         }
       }
-      const spot = placed.get(Number(view.id));
       if (spot && spot.isConnected) showLine(lineIn(spot), view);
     }
   };
@@ -672,6 +685,7 @@
     if (!e.own) {
       actions.appendChild(button("Its own version", "btn small as-own", () => {
         close();
+        if (chip) chip.focus();
         change("/songbook/set", fields(bookName, { song: e.entry, clear: "1" }));
       }, "Play " + e.title + " in its own version here"));
     }
@@ -691,6 +705,7 @@
       const body = fields(bookName, { song: e.entry });
       for (const [k, v] of new FormData(form).entries()) body.set(k, String(v));
       close();
+      if (chip) chip.focus();
       change("/songbook/set", body);
     });
     li.classList.add("editing");
@@ -808,10 +823,12 @@
         x.classList.toggle("making-room", smooth);
       });
     };
-    const end = () => {
+    // pointerup drops the line where it is; pointercancel (the browser taking the gesture) puts it back and sends nothing.
+    const finish = (cancelled) => {
       grip.removeEventListener("pointermove", move);
       grip.removeEventListener("pointerup", end);
-      grip.removeEventListener("pointercancel", end);
+      grip.removeEventListener("pointercancel", cancel);
+      if (cancelled) to = from;
       for (const x of others) {
         x.style.transform = "";
         x.classList.remove("making-room");
@@ -825,11 +842,13 @@
         said.textContent = (li.querySelector("h3") || {}).textContent + ": " + (to + 1) + " of " + others.length;
       }
       moving -= 1;
-      sendMove(li, from);
+      if (!cancelled) sendMove(li, from);
     };
+    const end = () => finish(false);
+    const cancel = () => finish(true);
     grip.addEventListener("pointermove", move);
     grip.addEventListener("pointerup", end);
-    grip.addEventListener("pointercancel", end);
+    grip.addEventListener("pointercancel", cancel);
   });
   const keyMoves = new Map();  // a line moved with ↑ and ↓ -> {from, timer}
   panel.addEventListener("keydown", (e) => {

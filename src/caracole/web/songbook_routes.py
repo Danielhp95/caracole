@@ -16,6 +16,7 @@ has them now (``songbooks``, jobs_routes.py), which the page draws again.
 from __future__ import annotations
 
 import sqlite3
+from typing import Any
 
 from caracole.web import songbooks
 from caracole.web.app import QUEUE_FULL, Response, Route, WebApp, unreadable
@@ -79,10 +80,10 @@ def get_missing(app: WebApp, form: dict[str, str]) -> Response:
 def add_song(app: WebApp, form: dict[str, str]) -> Response:
     """A song put in a songbook from the Songbooks tab's search: one of your library (``song``, its id, or the
     one a result of the indexes is: its UG pick or its names), with ``caracole songbook add`` alone; one the
-    library hasn't got, written to wanted.txt and looked up now as Get it does (``search_routes.queue_lookup``,
+    library hasn't got, written to wanted.txt and looked up now as Get it does (``search_routes.lookup_request``,
     one ``caracole get``), then added once it is in the library: the queue runs them in turn. Nothing is queued
-    unless both fit. To the page's script, the songbook's job, with the lookup's (``jobs``)."""
-    from caracole.web.search_routes import library_song, queue_lookup
+    unless both fit (``JobQueue.submit_all``). To the page's script, the songbook's job, with the lookup's (``jobs``)."""
+    from caracole.web.search_routes import library_song, lookup_request
     from caracole.web.songbooks import add_job, book_named
 
     try:
@@ -90,18 +91,21 @@ def add_song(app: WebApp, form: dict[str, str]) -> Response:
     except (sqlite3.Error, OSError) as e:
         raise unreadable(e) from e
     song = library_song(app, form)
-    lookups: list[Job] = []
+    requests: list[dict[str, Any]] = []
+    full = QUEUE_FULL
     if song is not None:
         display = song.display
     else:
         if not (form.get("artist", "").strip() and form.get("title", "").strip()):
             raise Refused(400, "Not a song", "Which song? The form names none.")
-        if app.queue.room() < 2:  # the lookup and the songbook's change, or neither
-            raise Refused(503, "The queue is full", QUEUE_FULL)
-        lookup, display = queue_lookup(app, form)
-        lookups.append(lookup)
+        lookup, display, full = lookup_request(app, form)
+        requests.append(lookup)
     job = add_job(name, display)
-    queued, _ = app.submit(job.title, job.key, job.steps)
-    response = app.queued(queued, f"/jobs#job-{queued.id}")
-    response.data = {**(response.data or {}), "jobs": [app.job_view(j) for j in lookups]}
+    requests.append({"title": job.title, "song_key": job.key, "steps": job.steps})
+    try:  # the lookup and the songbook's change, or neither (a lookup that joins a queued job needs no room)
+        queued = app.queue.submit_all(requests)
+    except QueueFull:
+        raise Refused(503, "The queue is full", full) from None
+    response = app.queued(queued[-1][0], f"/jobs#job-{queued[-1][0].id}")
+    response.data = {**(response.data or {}), "jobs": [app.job_view(j) for j, _ in queued[:-1]]}
     return response

@@ -25,7 +25,7 @@ from caracole.overrides import Overrides
 from caracole.songbook import FILE_NAME, Songbook, load_songbooks, make_songbook, render_songbooks
 from caracole.viewer.book import songbook_csp
 from caracole.web.app import Request, WebApp
-from caracole.web.jobs import JobQueue
+from caracole.web.jobs import JobQueue, QueueFull
 
 HOST = "127.0.0.1:8737"
 ALLOWED = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -605,6 +605,48 @@ def test_a_full_queue_adds_no_song_it_couldnt_look_up(app, setup, queue, campfir
                     accept=JSON)
     assert response.status == 503 and "queue is full" in json.loads(response.body)["error"]
     assert len(queue.snapshot()) == 2
+
+
+def test_the_songbooks_data_reads_each_sheet_once(app, setup, campfire, monkeypatch):
+    from caracole import songbook
+    from caracole.viewer import sheet
+
+    reads = []
+    real = sheet.parse_sheet
+
+    def counting(cho):
+        reads.append(cho)
+        return real(cho)
+
+    monkeypatch.setattr(sheet, "parse_sheet", counting)
+    monkeypatch.setattr(songbook, "parse_sheet", counting)
+    [book] = page_books(app)
+    with_sheet = [s for s in book["set"] if s["plays"]]
+    assert with_sheet and all(s["at"] for s in with_sheet)
+    assert len(reads) == len(with_sheet), (len(reads), len(with_sheet))
+
+
+def test_a_lookup_that_joins_a_queued_one_needs_no_room_of_its_own(app, setup, queue, campfire):
+    make_songbook(setup[1].library_dir / FILE_NAME, "Picnic", ["Muse - Hysteria"])
+    fields = {"artist": "Oasis", "title": "Wonderwall", "ug": "oasis/wonderwall"}
+    assert post(app, "/songbook/add-song", {"name": "Campfire", **fields}, accept=JSON).status < 400
+    assert len(queue.snapshot()) == 2  # the lookup and the add: one place left
+    response = post(app, "/songbook/add-song", {"name": "Picnic", **fields}, accept=JSON)
+    assert response.status < 400, response.body
+    assert len(queue.snapshot()) == 3  # the same lookup, and the second songbook's add
+
+
+def test_two_requests_that_dont_both_fit_queue_neither():
+    queue = JobQueue(lambda args, emit: 0, limit=2)
+    queue.submit("Move", "book|a", [("Moving", ("songbook", "move"))])
+    waiting = queue.snapshot()
+    with pytest.raises(QueueFull):
+        queue.submit_all([
+            {"title": "Fetch A", "song_key": "a", "steps": [("Looking", ("get", "--", "A", "B"))], "fetching": True},
+            {"title": "Add A", "song_key": "book|b", "steps": [("Adding", ("songbook", "add"))]}])
+    assert queue.snapshot() == waiting and queue.room() == 1
+    both = queue.submit_all([{"title": "Fetch A", "song_key": "a", "steps": [("Looking", ("get", "--", "A", "B"))]}])
+    assert [new for _, new in both] == [True] and queue.room() == 0
 
 
 # --- the songs a songbook lacks, got now ----------------------------------------------------------

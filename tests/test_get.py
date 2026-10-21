@@ -836,7 +836,40 @@ def test_a_broken_songbooks_file_is_said_and_stops_nothing(cfg, conn, sites):
     assert state == "skipped" and "songbooks.toml can't be read" in detail
 
 
-def test_a_lookup_that_found_nothing_new_remakes_nothing(cfg, conn, sites):
+def test_a_songbook_that_cant_be_made_is_said_and_the_lookups_sheet_stands(cfg, conn, sites):
+    serve_creep(sites, conn)
+    _books(cfg, Campfire=["Radiohead - Creep"])
+
+    from helpers.songbooks import FakeChordPro
+
+    # chordpro fails in the songbook's folder alone (its input holds Creep's sheet); the song's own PDF is made
+    songbook_fails, other = FakeChordPro(fail=("Creep",)), FakeRunner()
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep",
+                               runner=lambda cmd, **kw: (songbook_fails if "/songbook-" in " ".join(cmd) else other)(
+                                   cmd, **kw))
+
+    state, detail = next((s, d) for n, s, d in progress.said if n == "songbooks" and s != "running")
+    assert state == "failed" and "Campfire" in detail
+    assert result.ok and progress.states()["pdf"] == "done"  # the song's own sheet and PDF are the lookup's
+    assert (folder(cfg, "Radiohead", "Creep") / "sheet.pdf").is_file()
+
+
+def test_a_songbook_waiting_for_a_font_is_skipped_and_the_lookup_goes_on(cfg, conn, sites):
+    from helpers.rendered import rendered_song
+
+    assert cfg.cjk_font is None
+    serve_creep(sites, conn)
+    rendered_song(conn, cfg, "宋冬野", "斑马斑马", content=ZH_SHEET)
+    _books(cfg, Campfire=["Radiohead - Creep", "宋冬野 - 斑马斑马"])
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    state, detail = next((s, d) for n, s, d in progress.said if n == "songbooks" and s != "running")
+    assert state == "skipped" and "songbook PDF of Campfire" in detail
+    assert result.ok
+
+
+def test_a_second_identical_lookup_finds_the_songbook_up_to_date(cfg, conn, sites):
     serve_creep(sites, conn)
     _books(cfg, Campfire=["Radiohead - Creep"])
     look_up(cfg, sites=sites, artist="Radiohead", title="Creep")

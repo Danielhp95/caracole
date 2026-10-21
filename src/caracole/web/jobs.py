@@ -275,38 +275,66 @@ class JobQueue:
         once it is done. Raises QueueFull when ``limit`` jobs are waiting or
         running.
         """
-        new = [Step(label, tuple(args)) for label, args in steps]
         with self._lock:
-            mine = [job for job in self._jobs if job.active and job.song_key == song_key]
-            enough = next((job for job in mine if job.fetching), None)  # a fetch does the most
-            if enough is None and (not fetching or not join) and mine:
-                enough = mine[0]
-            waiting = next((job for job in mine if job.state == "queued"), None)
-            picked = _pick(new)
-            if picked and join:  # your pick: only the song's last job, looking it up already, does as much
-                last = waiting or next((job for job in mine if job.state == "running"), None)
-                enough = last if last is not None and _pick(last.steps) == picked else None
-            if enough is not None:
-                return copy.deepcopy(enough), False
-            if waiting is not None:
-                if any(step.args[:1] == (LOOKUP,) for step in new):  # one `caracole get` does it all
-                    waiting.steps = [s for s in waiting.steps if s.args[:1] not in (("add",), (LOOKUP,))]
-                    waiting.stages = []
-                runs = {step.args[0] for step in waiting.steps}
-                waiting.steps += [step for step in new if step.args[0] not in runs]
-                waiting.stages = waiting.stages or _stages(waiting.steps)
-                waiting.title, waiting.fetching = title, True
-                waiting.note = waiting.note or note
-                return copy.deepcopy(waiting), False
-            if sum(job.active for job in self._jobs) >= self._limit:
-                raise QueueFull(f"{self._limit} requests are waiting already")
-            job = Job(self._next_id, title, song_key, new, fetching=fetching, note=note, display=display or title,
-                      stages=_stages(new), song_id=song_id,
-                      song_display=(display or title) if song_id is not None else None)
-            self._next_id += 1
-            self._jobs.append(job)
-            self._wake.notify_all()
-            return copy.deepcopy(job), True
+            return self._submit_locked(title, song_key, steps, fetching=fetching, note=note, display=display,
+                                       join=join, song_id=song_id)
+
+    def submit_all(self, requests: Sequence[dict[str, Any]]) -> list[tuple[Job, bool]]:
+        """``submit`` of each request (a dict of its arguments: ``title``, ``song_key``, ``steps`` and the options),
+        all or none, under the queue's one lock: when one finds the queue full, QueueFull is raised and the queue
+        is as it was, the jobs the earlier ones joined or queued as before. A request that joins a job already
+        queued needs no room."""
+        with self._lock:
+            waiting = {job.id: (list(job.steps), list(job.stages), job.title, job.fetching, job.note)
+                       for job in self._jobs if job.state == "queued"}
+            count, next_id = len(self._jobs), self._next_id
+            done: list[tuple[Job, bool]] = []
+            try:
+                for request in requests:
+                    done.append(self._submit_locked(**request))
+            except QueueFull:
+                del self._jobs[count:]
+                self._next_id = next_id
+                for job in self._jobs:
+                    if job.id in waiting:
+                        job.steps, job.stages, job.title, job.fetching, job.note = waiting[job.id]
+                raise
+            return done
+
+    def _submit_locked(self, title: str, song_key: str, steps: Sequence[tuple[str, Sequence[str]]], *,
+                       fetching: bool = False, note: str = "", display: str = "",
+                       join: bool = True, song_id: int | None = None) -> tuple[Job, bool]:
+        new = [Step(label, tuple(args)) for label, args in steps]
+        mine = [job for job in self._jobs if job.active and job.song_key == song_key]
+        enough = next((job for job in mine if job.fetching), None)  # a fetch does the most
+        if enough is None and (not fetching or not join) and mine:
+            enough = mine[0]
+        waiting = next((job for job in mine if job.state == "queued"), None)
+        picked = _pick(new)
+        if picked and join:  # your pick: only the song's last job, looking it up already, does as much
+            last = waiting or next((job for job in mine if job.state == "running"), None)
+            enough = last if last is not None and _pick(last.steps) == picked else None
+        if enough is not None:
+            return copy.deepcopy(enough), False
+        if waiting is not None:
+            if any(step.args[:1] == (LOOKUP,) for step in new):  # one `caracole get` does it all
+                waiting.steps = [s for s in waiting.steps if s.args[:1] not in (("add",), (LOOKUP,))]
+                waiting.stages = []
+            runs = {step.args[0] for step in waiting.steps}
+            waiting.steps += [step for step in new if step.args[0] not in runs]
+            waiting.stages = waiting.stages or _stages(waiting.steps)
+            waiting.title, waiting.fetching = title, True
+            waiting.note = waiting.note or note
+            return copy.deepcopy(waiting), False
+        if sum(job.active for job in self._jobs) >= self._limit:
+            raise QueueFull(f"{self._limit} requests are waiting already")
+        job = Job(self._next_id, title, song_key, new, fetching=fetching, note=note, display=display or title,
+                  stages=_stages(new), song_id=song_id,
+                  song_display=(display or title) if song_id is not None else None)
+        self._next_id += 1
+        self._jobs.append(job)
+        self._wake.notify_all()
+        return copy.deepcopy(job), True
 
     def snapshot(self) -> list[Job]:
         """Every job remembered, newest first, as copies."""

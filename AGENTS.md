@@ -93,11 +93,11 @@ Rules a change there keeps (the Invariants below are the others):
   `songbook.plays_in` says it, and the setting's menus' names, the theory's), which `/jobs.json`
   gives again once a job is over (`jobs_routes.views`: a songbook's change, a lookup, which makes the
   songbooks its song is in again, or a removal; a LaCuerda artist's read changes none). library.js lends it `window.caracoleLibrary`
-  (`track`, `showLine`) and tells it every job's view (`caracole:job`) and the songbooks
+  (`track`, `showLine`, `focusOn`) and tells it every job's view (`caracole:job`) and the songbooks
   (`caracole:songbooks`); it posts the Select bar's songbook too. A song's chip sends the capo with
   the key and the mode (`/songbook/set`, as `caracole songbook set` keeps it), and Add a song looks
-  a song the library hasn't got up first (`/songbook/add-song`: `search_routes.queue_lookup`, then
-  `caracole songbook add`). A change that ends seconds after its tap moves nothing on the screen:
+  a song the library hasn't got up first (`/songbook/add-song`: `search_routes.lookup_request`, then
+  `caracole songbook add`, both or neither: `JobQueue.submit_all`). A change that ends seconds after its tap moves nothing on the screen:
   what it took away says so where it was until the next click or key (test_songbooks_tab.py).
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of
   library_assets/, inlined byte for byte in the order of `library_page.STYLESHEETS`, `SCRIPTS`

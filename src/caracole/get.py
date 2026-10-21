@@ -698,7 +698,9 @@ class _Lookup:
         if not mine:
             return "skipped", "no songbook lists it"
         names = ", ".join(b.name for b in mine)
-        self.progress.stage("songbooks", "running", names)  # for caracole serve's "Remaking songbook X…"
+        # The stage began as "running" without detail (self.stage); this second event is deliberate: it carries the
+        # names for caracole serve's "Remaking songbook X…", and Job.stages updates the stage's detail in place.
+        self.progress.stage("songbooks", "running", names)
         stats = render_songbooks(self.conn, self.cfg, self.overrides, runner=self.runner,
                                  only=[b.name for b in mine])
         if stats.rendered or stats.failed:  # index.html shows each songbook's files: written again after them

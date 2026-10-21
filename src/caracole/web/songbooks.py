@@ -257,7 +257,7 @@ def render_job(name: str, after: int) -> SongbookJob:
 
 
 def songbook_of(key: str) -> dict[str, str | None] | None:
-    """The songbook a job's key changes: ``action`` (make, add, move, remove, rename, delete, render), its ``name``
+    """The songbook a job's key changes: ``action`` (make, add, move, remove, set, rename, delete, render), its ``name``
     as songbooks.toml has it, and ``after``, its name once the job is done (the new one for a rename, None
     for a deletion); None for a job of anything else. A songbook's name holds no control character
     (``songbook.check_name``), so the key's separators split it back."""
