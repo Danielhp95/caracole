@@ -79,7 +79,7 @@ from caracole.web.app import (
     redirect,
     wants_json,
 )
-from caracole.web.jobs import LACUERDA_ARTIST, lacuerda_artist_steps, lookup_steps
+from caracole.web.jobs import LACUERDA_ARTIST, Job, lacuerda_artist_steps, lookup_steps
 from caracole.web.library_routes import LIMITS, PICK_LIMITS, lacuerda_field, wanted_line
 from caracole.web.pages import Refused
 
@@ -127,8 +127,45 @@ def lookup_page(app: WebApp) -> Response:
 
 
 def lookup(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
-    """The song you picked on the lookup page, looked up now: a song of your library as it is (``song``,
-    its id; or the one your pick or its name is already), else a new one, in wanted.txt at once."""
+    """The song you picked on the lookup page, looked up now (``queue_lookup``)."""
+    job, _ = queue_lookup(app, form)
+    if wants_json:  # the lookup page follows its address; the library page, its line (view)
+        return json_response(202, {"job": job.id, "url": f"/api/jobs/{job.id}", "view": app.job_view(job)})
+    return redirect(f"/lookup?job={job.id}")
+
+
+def queue_lookup(app: WebApp, form: dict[str, str]) -> tuple[Job, str]:
+    """A song looked up now: a song of your library as it is (``song``, its id; or the one your pick or its name
+    is already), else a new one, in wanted.txt at once; its job, and the song as the library names it, or will
+    ("Artist - Title"). The library page's Add a song (songbook_routes.py) puts it in a songbook after it."""
+    pick, ug = _pick(form)
+    lacuerda = lacuerda_field(form)
+    found = _library_song(app, form, ug)
+    if found is not None:  # the song as your library has it: no second song, and no new source for it
+        artist, title, album, duration_ms, key = found.artist, found.title, None, None, found.key
+        note, display = f"In your library as {found.display}.", found.display
+    else:
+        line, note = wanted_line(app, form)
+        artist, title, album, duration_ms, key = line.artist, line.title, line.album, line.duration_ms, line.identity
+        display = f"{artist} - {title}"
+    steps = lookup_steps(artist, title, album=album, duration_ms=duration_ms,
+                         ug=pick["ug"] or None, tab=pick["tab"] or None, lacuerda=lacuerda)
+    job, _ = app.submit(f"Fetch {artist} - {title}", key, steps, fetching=True, note=note, display=display,
+                        full=f"{note} The queue is full, so it wasn't looked up now: the nightly run looks for "
+                             "it, or ask again once the queue empties.")
+    return job, display
+
+
+def library_song(app: WebApp, form: dict[str, str]) -> Song | None:
+    """The song of your library a form names as a lookup's does (by its id, its Ultimate Guitar pick or its
+    names); None for a song new to the library; Refused for a pick that isn't one, or an id no song has."""
+    _, ug = _pick(form)
+    return _library_song(app, form, ug)
+
+
+def _pick(form: dict[str, str]) -> tuple[dict[str, str], tuple[str, str] | None]:
+    """The Ultimate Guitar song and tab, and the LaCuerda song, a form picks (each "" for none), and the UG
+    song's keys; Refused for one that is too long, or isn't one."""
     from caracole.overrides import OverridesError, tab_id_from_url
 
     pick = {name: form.get(name, "").strip() for name in PICK_LIMITS}
@@ -143,23 +180,7 @@ def lookup(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
             tab_id_from_url(pick["tab"])
         except OverridesError as e:
             raise Refused(400, "Not a pick", f"That isn't an Ultimate Guitar tab: {e}") from e
-    lacuerda = lacuerda_field(form)
-    found = _library_song(app, form, (artist_key, song_key) if pick["ug"] else None)
-    if found is not None:  # the song as your library has it: no second song, and no new source for it
-        artist, title, album, duration_ms, key = found.artist, found.title, None, None, found.key
-        note, display = f"In your library as {found.display}.", found.display
-    else:
-        line, note = wanted_line(app, form)
-        artist, title, album, duration_ms, key = line.artist, line.title, line.album, line.duration_ms, line.identity
-        display = f"{artist} - {title}"
-    steps = lookup_steps(artist, title, album=album, duration_ms=duration_ms,
-                         ug=pick["ug"] or None, tab=pick["tab"] or None, lacuerda=lacuerda)
-    job, _ = app.submit(f"Fetch {artist} - {title}", key, steps, fetching=True, note=note, display=display,
-                        full=f"{note} The queue is full, so it wasn't looked up now: the nightly run looks for "
-                             "it, or ask again once the queue empties.")
-    if wants_json:  # the lookup page follows its address; the library page, its line (view)
-        return json_response(202, {"job": job.id, "url": f"/api/jobs/{job.id}", "view": app.job_view(job)})
-    return redirect(f"/lookup?job={job.id}")
+    return pick, (artist_key, song_key) if pick["ug"] else None
 
 
 def _library_song(app: WebApp, form: dict[str, str], ug: tuple[str, str] | None) -> Song | None:

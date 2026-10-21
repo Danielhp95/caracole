@@ -6,7 +6,7 @@ Content-Security-Policy with the hashes of its one script and one stylesheet
 makes the browser enforce that), and it links to each song's files by
 relative paths. That script and that stylesheet are the files of
 library_assets/, inlined as they are (``STYLESHEETS``, ``SCRIPTS``), and so
-is the markup around the songs (``TEMPLATES``); its Songbooks section is
+is the markup around the songs (``TEMPLATES``); its Songbooks tab's data is
 songbook_section.py's.
 
 Every song is in a ``<script type="application/json">`` block. Titles come
@@ -158,20 +158,30 @@ to this page as it was left (Remove… sends the address after # along, ``back``
 at the song's line: ``song=ID`` in the address, which the script scrolls to and
 focuses, then drops.
 
-The Songbooks section's forms, and the Select bar's Make songbook, post with
-fetch() too: the songbook's card says how its change goes on a line under its
-name, its buttons waiting (a song moves by its place now), a new songbook's
-card at the section's end, which opens on it; once the change is over the
-section is drawn again from the server's own HTML (``songbooks_section``,
-which ``/jobs.json`` gives with the job: the script's ``drawSongbooks`` reads
-it with DOMParser, which runs no script, and keeps each card that shows a line
-where it is, so that its line goes on being read out, and the height it had while
-it is taller than what it holds, until the next click or key). On the served page the
-section is there even before the first songbook, hidden. A songbook with songs
-of yours that have no sheet yet has Get the N missing songs now (each such
-song's ``<li>`` marked ``data-get``; every song's names its id, ``data-song``):
-one lookup per song, each one's line under its name there and on the song's own, then
-the songbook made again, on its own line.
+**Two tabs.** Library, all of the above, and Songbooks (``#tab=songbooks`` in
+the address, ``book=NAME`` the songbook open; library_assets/songbooks.js draws
+it from the data's ``songbooks``, songbook_section.py's): on the left the
+songbooks as lines, each with how many songs, how many still without a sheet and
+when caracole last made its files, and "+ New songbook" (Select, on the
+library); on the right, side by side from 900 px and one at a time on a phone,
+the songbook opened as a set list, each song with where the songbook plays it
+(``songbook.plays_in``) and its files: the PDF, the phone page, ChordPro. The
+file on disk shows it read-only, with the ``caracole songbook`` commands that
+change it. Served, a song's grip drags it to its place (or ↑ and ↓ move it, sent
+a moment after the last key), its chip changes where it plays (its key, mode and
+capo, ``POST /songbook/set``, the capo always sent with them, or its own
+version), × takes it out, Get it looks it up now (``POST /songbook/get`` with
+the song: its lookup, then the songbook made again), Get the N missing songs
+now looks each up; Add a song searches your songs and the indexes as you type
+(``/api/search``, which asks no site) and puts one in, looked up first when the
+library hasn't got it (``POST /songbook/add-song``); Rename and Delete, under
+Rename or delete. Each posts with fetch(): the songbook's status line says how
+its change goes, a lookup's line its song's, and once a change is over
+``/jobs.json`` brings the songbooks as they are now, which the tab draws again,
+each line where it was (a song taken out, or a songbook deleted, says so where
+it was until your next click or key, so that nothing moves meanwhile). Select's
+Make songbook (or Add to) lands in the tab, on the songbook, its songs there at
+once.
 
 A song in review carries its candidates (``review_choices``), numbered as
 ``caracole review`` numbers them, and its line a picker under its "⋯" (the script's
@@ -213,7 +223,7 @@ from caracole.library_assets import read as read_asset
 from caracole.musescore import song_pages
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
-from caracole.songbook_section import songbooks_section
+from caracole.songbook_section import songbooks_data
 from caracole.songs import Song, is_export, list_songs
 from caracole.todo import search_links, songs_to_buy
 from caracole.youtube_fetch import (
@@ -230,7 +240,7 @@ from caracole.youtube_fetch import (
 )
 
 # Importable from here too: the style and script caracole serve's own pages share with this one (BASE_STYLE,
-# PICKER_STYLE, ROWS_STYLE, ROWS_SCRIPT: library_assets/), and the Songbooks section (songbook_section.py).
+# PICKER_STYLE, ROWS_STYLE, ROWS_SCRIPT: library_assets/), and the Songbooks tab's data (songbook_section.py).
 
 PAGE_NAME = "index.html"
 
@@ -282,7 +292,7 @@ class WebControls:
     say so instead of offering Remove; ``jobs`` are the requests queued or
     running, as ``/jobs.json`` gives them, so they show their progress from the
     start: a song's, and a removal's, on its song's line, and a songbook's change
-    on its songbook's card (``kind``). ``timers``, which only the tests that
+    on its songbook in the Songbooks tab (``kind``). ``timers``, which only the tests that
     drive the page on real time set (``WebApp(timers=...)``), are the script's
     timers in milliseconds in place of its own: ``poll``, between two asks of
     ``/jobs.json`` (1500), and ``undo``, Remove's countdown (5000); the page
@@ -318,14 +328,14 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
             data["server"]["timers"] = dict(controls.timers)
         for song in songs:
             song["fetchable"] = song["id"] not in controls.held
-    books, data["songbooks"] = songbooks_section(conn, cfg, overrides, controls)
+    data["songbooks"] = songbooks_data(conn, cfg, overrides)  # the Songbooks tab's (songbooks.js draws it)
     # The page caracole serve serves may also ask it how its requests go (connect-src); the file can't.
     csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'") if controls is not None
            else _CSP.replace("__FORMS__", "'none'"))
     return (
         _HEAD.replace("__CSP__", csp).replace("__STYLE__", _PAGE_STYLE)
         + _BODY.replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
-        .replace("__REQUESTED__", _requested(controls)).replace("__SONGBOOKS__", books)
+        .replace("__REQUESTED__", _requested(controls))
         + json_block("songs", data)
         + f"<script>{_PAGE_SCRIPT}</script>\n</body>\n</html>\n"
     )
@@ -677,7 +687,7 @@ def _haystack(texts: list[str]) -> str:
 # is: its __init__.py). BASE_STYLE, PICKER_STYLE, ROWS_STYLE and ROWS_SCRIPT, the ones caracole serve's own
 # pages share, are importable from here too.
 STYLESHEETS = ("base.css", "picker.css", "library.css", "rows.css", "library-screens.css", "songbooks.css")
-SCRIPTS = ("rows.js", "library.js", "select.js", "drawn.js")
+SCRIPTS = ("rows.js", "library.js", "select.js", "songbooks.js", "drawn.js")
 _SCRIPT = read_asset("library.js")  # the page's own
 _PAGE_STYLE = "".join(read_asset(name) for name in STYLESHEETS)
 _PAGE_SCRIPT = "".join(read_asset(name) for name in SCRIPTS)

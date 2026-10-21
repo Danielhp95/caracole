@@ -419,6 +419,15 @@ In order:
    keeps.
 8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
    sheet changed, and MuseScore's pages matched from its local index.
+9. **The songbooks it is in**: each songbook of songbooks.toml that lists the
+   song is made again, as `caracole songbook render NAME` does (one whose
+   songs and settings did not change is left as it is: "up to date"), then
+   `_todo.md` and `index.html` once more, so the library page's Songbooks tab
+   has the songbook's files as they are now. A songbook that does not list the
+   song is left alone. On `caracole serve`, once the lookup is over (Fetch now,
+   Fetch it now, a set list's Get it), the Songbooks tab is drawn again: the
+   song shows there with its sheet, and no Get it. A songbooks.toml that cannot
+   be read is said on that line and stops nothing: the lookup still exits 0.
 
 It keeps the interactive pace ([Two paces](#configure)): about a second
 between two requests to a site, six requests to a site at most, and sixty an
@@ -1650,9 +1659,12 @@ as another spelling.
 overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
-loads nothing from the network. Its header is short, so that on a phone the
-first song starts well within the first screen: the library's numbers beside
-its title, the pages on the line above, the search box, then one row of
+loads nothing from the network. It has two tabs under its header: **Library**,
+your songs, and **Songbooks** (see [The Songbooks tab](#the-songbooks-tab));
+the address remembers which (`#tab=songbooks`). Its header is short, so that on
+a phone the first song starts well within the first screen: the library's
+numbers beside its title, the pages on the line above, the tabs, the search box,
+then one row of
 buttons and menus (the status buttons, then Select, Key and Sort), which
 scrolls sideways on a phone, fading at an end where more of it is out of
 sight. The search box stays at the top as the page scrolls under it, with an
@@ -1764,11 +1776,7 @@ their soft border, and so does the search box. The pages `caracole serve`
 writes itself (Requests, Look up and its search box, a song's pick) do the
 same.
 
-**Songbooks** (see [Songbooks](#songbooks)), above the search box once there is
-one, lists each songbook: its songs in order, those without a sheet marked
-missing, and its files, the phone page first, then the PDF and the ChordPro
-file. On the file on disk it names the `caracole songbook` commands that change
-it; `caracole serve` adds buttons. **Select**, beside the Key menu, puts a
+**Select**, beside the Key menu, puts a
 box at the start of each song's line: tick songs in the order they go in the
 songbook (each box shows its place, and a screen reader says it: "Pick Creep by
 Radiohead, 2nd"). A tap anywhere on a line ticks it, or unticks it: while you
@@ -1789,7 +1797,35 @@ runs, folded under "The command to run", with Copy beside it:
 `caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
 each word in single quotes, so that no shell changes a `!`, a `$` or a quote
 in a name.
-On `caracole serve`, the button makes the songbook (see below).
+On `caracole serve`, the button makes the songbook, and the page opens the
+Songbooks tab on it (see below).
+
+#### The Songbooks tab
+
+The page's second tab lists your songbooks (see [Songbooks](#songbooks)) as
+lines: each one's name, how many songs, how many still have no sheet in it,
+and the day caracole last made its files (`3 songs · 1 without a sheet ·
+changed 2026-10-20`). Open one and it shows as a set list, beside the list
+from 900 pixels wide, in its place on a phone (**‹ Songbooks** goes back):
+each song a line, as dense as the library's with a mouse, with its place, its
+title (which opens its sheet), its artist and where the songbook plays it, its
+chip: "G Dorian, capo 0" for a song with a setting of its own there, its own
+version's key ("A Minor, capo 0") for one without, or why it has no sheet ("No
+sheet yet", "Not in the library"). Its files come first: **PDF**, **Phone
+page** (`songbook.html`) and **ChordPro**, each opened in the same tab. The
+address remembers the songbook open (`#tab=songbooks&book=Campfire`).
+**+ New songbook** turns Select on, in the library, its bar ready for the name:
+tick its songs and make it.
+
+On the file on disk the tab changes nothing: under the set list it gives the
+commands that do, where caracole runs (`caracole songbook add`, `move`, `set
+… --key G --mode dorian --capo 0`, `remove`, `rename`, `delete`), or edit
+songbooks.toml. On `caracole serve` each song can be dragged to its place, set
+to play elsewhere, taken out or got now, and the songbook gets its missing
+songs, a song from your library or the indexes (**Add a song**), another name,
+or deleted (see [caracole serve](#caracole-serve) below). On a touch
+screen each grip, chip, button, ×, title and menu is a thumb's target, 44
+pixels at least.
 
 Each song's entry in the page's data (the `<script type="application/json"
 id="songs">` block) has the same `key` and `key_source` as its info.json, and
@@ -2501,8 +2537,8 @@ with it. A KEY that is no key exits with status 2.
   Two requests or more also show in a corner, folded to one line on every
   width ("2 requests · 1 to go"), so that it covers no song; it opens upwards
   to a line per song, and closes. Its one Details link opens the requests
-  page. A songbook's change and a removal stay out of it: the songbook's card,
-  or the song's line, where you asked says how each goes. A screen reader hears each song's request line as
+  page. A songbook's change and a removal stay out of it: the songbook, in
+  the Songbooks tab, or the song's line, where you asked says how each goes. A screen reader hears each song's request line as
   it changes, to the last one, and Fetch now hands the keyboard focus to that
   line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.
@@ -2529,46 +2565,56 @@ with it. A KEY that is no key exits with status 2.
 - **Without JavaScript**, the forms still work: a request sends you to its
   line on `/jobs`, its output open; a pick, to its line; a lookup, to the
   lookup page, which follows it.
-- **Songbooks.** Select's Make songbook (or Add to a songbook there is) runs
-  `caracole songbook make NAME "ARTIST - TITLE"...` (or `add`) with the songs
-  in the order you ticked them. In the Songbooks section, ↑ and ↓ move a song,
-  × takes it out, and Rename or delete renames the songbook or, once you tick
-  the box, deletes it and the files caracole made of it; each runs its
-  `caracole songbook` command (see [Songbooks](#songbooks)) and leaves you
-  where you are. The songbook's card says how it goes, on a line under its
-  name ("Queued…", "Moving the song…", then "Moved"; "Renamed", "Taken out",
-  "Deleted"; once done, Made and Added link the songbook's phone page, Open
-  songbook, as their lines on `/jobs` do: a move, a song taken out or a new
-  name shows on the card itself, beside its buttons), and its buttons wait
-  until it is over, when the section is drawn again as songbooks.toml has it, the
-  keyboard focus back on the button you pressed. Make songbook (or Add to)
-  ends Select once the server has it, and the Songbooks section opens on the
-  songbook, a new one at its end ("Making the songbook…", then "Made · Open
-  songbook"), its foot at the bottom of the
-  screen (near the top of the page, it stretches down to it while it is
-  made): it fills in below the screen, then scrolls into view whole, so that
-  what is on the screen doesn't jump as it grows; stretched taller than what
-  it holds, it takes its own size at your next click or key. A deleted
-  songbook's card says Deleted, keeping its size, until you load the page
-  again. A change that can't be made, such as a name another songbook
-  has, a song no longer in the library or a
-  songbook deleted since the page was made, is refused at once, and nothing
-  runs: the card, or the Select bar, says why, and the bar keeps your ticks.
-  Without JavaScript, each sends you to its line on `/jobs`.
+- **Songbooks**, the page's second tab (see [The Songbooks tab](#the-songbooks-tab)
+  for what it shows). Each change runs its `caracole songbook` command (see
+  [Songbooks](#songbooks)) and leaves you where you are:
+  - a song's **grip** (⠿) drags it to its place; on the keyboard, ↑ and ↓ on
+    the grip move it, and the move is sent a moment after the last key, so
+    ↑ ↑ ↑ is one `caracole songbook move`;
+  - its **chip** ("A Minor, capo 0") opens its key, mode and capo there:
+    **Play it here** runs `caracole songbook set NAME SONG --key K --mode M
+    --capo N`, the capo always sent with the key and the mode, so a sheet that
+    takes the song's place later still sounds in that key; **Its own version**
+    runs `--clear`;
+  - **×** takes it out; **Get it**, on a song with no sheet yet, looks it up
+    now (one `caracole get`), then makes the songbook again with its sheet;
+  - **Get the 2 missing songs now** looks up each song of yours there without
+    a sheet, one `caracole get` after the other in the songbook's order, then
+    runs `caracole songbook render NAME`: its line says "Queued behind 2
+    requests…" while they run, then "Making the songbook…" and "Made · Open
+    songbook". A song "not in the library", or one overrides.toml ignores,
+    isn't looked up. With less room in the queue than songs, it gets the first
+    ones, and the button offers the rest once they are done;
+  - **Add a song** searches your songs and the offline indexes as you type
+    (as the library's bar does: no site is asked), each result with **Add**
+    (**In it** for a song the songbook has): a song of yours is put at the
+    songbook's end at once (`caracole songbook add`); one you don't have goes
+    into wanted.txt, is looked up now as Get it does (`caracole get`), then
+    added. Nothing is queued unless both fit in the queue;
+  - **Rename or delete** renames the songbook or, once you tick the box,
+    deletes it and the files caracole made of it.
 
-  A songbook with songs of yours that have no sheet yet ("missing: no sheet
-  yet") has **Get the 2 missing songs now** beside its files: it looks each
-  of them up now, one `caracole get` after the other in the songbook's order,
-  as Fetch now does on its line, each song's request line under its name in the
-  songbook (and on the song's own line) saying how its lookup goes, then runs
-  `caracole songbook render NAME`, which makes the songbook again with the
-  sheets they got: its line says "Queued behind 2 requests…" while they
-  run, then "Making the songbook…" and "Made · Open songbook". A song "not
-  in the library", or one overrides.toml ignores, isn't looked up. With
-  less room in the queue than songs, it gets the first ones, and the button
-  offers the rest once they are done. The songbook keeps its height as its
-  songs' "missing" notes go, until your next click or key, so nothing on the
-  screen moves; the lookups stay out of the list of requests in the corner.
+  The songbook's status line, under its name, says how its change goes
+  ("Queued…", "Moving the song…", then "Moved"; "Changed", "Renamed", "Taken
+  out", "Deleted"; once done, Made and Added link the songbook's phone page,
+  Open songbook, as their lines on `/jobs` do), and a lookup's line goes under
+  its song in the set list (and on the song's own line in the library); the
+  lookups stay out of the list of requests in the corner. While a rename or a
+  deletion runs, the songbook's controls wait. Once a change is over the set
+  list is drawn again as songbooks.toml has it (and so it is once any song's
+  lookup or removal is over, wherever you asked for it: a song Fetch now got
+  shows there with its sheet), each line where it was: a song
+  taken out says "Taken out", and a deleted songbook "Deleted", where it was
+  until your next click or key, so that nothing on the screen moves seconds
+  after your tap. Select's Make songbook (or Add to a songbook there is) runs
+  `caracole songbook make NAME "ARTIST - TITLE"...` (or `add`) with the songs
+  in the order you ticked them, ends Select once the server has it, and opens
+  the Songbooks tab on the songbook, its songs there at once ("Making the
+  songbook…", then "Made · Open songbook"). A change that can't be made, such
+  as a name another songbook has, a song no longer in the library or a
+  songbook deleted since the page was made, is refused at once, and nothing
+  runs: the songbook's status line, or the Select bar, says why, and the bar
+  keeps your ticks.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
@@ -2715,6 +2761,10 @@ A name can't be empty, start with a dot, hold a line break or be longer than
 can't be read (not TOML, or a symbolic link, which caracole never reads
 through) makes no songbook: the error names the file and the line, every
 songbook's files stay as they are, and everything else goes on.
+
+The library page shows them in its [Songbooks tab](#the-songbooks-tab), where
+`caracole serve` changes them too: Select makes one of the songs you tick, and a
+song's chip sets where it plays.
 
 ### caracole songbook
 

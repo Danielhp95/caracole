@@ -8,7 +8,14 @@
   </div>
   <nav class="links" aria-label="Pages">__NAV__</nav>
 </header>
-__SONGBOOKS__<div class="bar-edge" id="bar-edge" aria-hidden="true"></div>
+<div class="tabs" role="tablist" aria-label="Your songs, or your songbooks">
+  <button type="button" class="tab" role="tab" id="tab-library" aria-controls="library-view"
+    aria-selected="true">Library</button>
+  <button type="button" class="tab" role="tab" id="tab-songbooks" aria-controls="songbooks" aria-selected="false"
+    tabindex="-1">Songbooks <span class="n"></span></button>
+</div>
+<div class="view" id="library-view" role="tabpanel" aria-labelledby="tab-library">
+<div class="bar-edge" id="bar-edge" aria-hidden="true"></div>
 <div class="searchbar" role="search">
   <label class="visually-hidden" for="q">Search your songs</label>
   <div class="bar-row">
@@ -49,6 +56,8 @@ __REQUEST__</section>
 <main class="list" id="list"></main>
 <noscript><p class="empty">This page needs JavaScript to list your songs. Each song's files are in its
   folder, next to this page.</p></noscript>
+</div>
+<section class="view books" id="songbooks" role="tabpanel" aria-labelledby="tab-songbooks" hidden></section>
 <footer class="footer"><span id="updated"></span>Keep this library private: the sheets and lyrics are other
   people's work.</footer>
 </div>

@@ -7,9 +7,10 @@
     GET  /api/jobs[/<id>] the requests as data: each step with its state (Job.as_json)
 
 Each job is shown as the page's script reads it (``views``): its song, its line (status.py) and, once
-it is over and the page asks (``?jobs=``), its song's card as the library page draws it now, or, for a
-songbook's change, the Songbooks section drawn again, which the page puts in place of its own. A job
-says what it is about (``kind``: a song's, a removal's, a songbook's), so the page shows each where it
+it is over and the page asks (``?jobs=``), its song's card as the library page draws it now, and the
+songbooks as its Songbooks tab has them now, which the page draws again: a songbook's change, a lookup
+(``caracole get`` makes the songbooks its song is in again) and a removal each change them. A job says
+what it is about (``kind``: a song's, a removal's, a songbook's), so the page shows each where it
 belongs. Every route that queues a job answers the page's script with its view (``WebApp.queued``).
 app.py checks that /jobs.json is asked for by the page's own script, as a write would be.
 """
@@ -94,8 +95,9 @@ def api_job(app: WebApp, number: str) -> Response:
 def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jobs: list[Job], *,
           only: list[Job] | None = None, cards: frozenset[int] = frozenset()) -> list[dict[str, Any]]:
     """Each job (of ``only``, else every one) as the page's script reads it: its song, its line and,
-    for a job in ``cards`` that is over, its song's card as the page draws it now, or, for a
-    songbook's change, the Songbooks section (``songbooks``).
+    for a job in ``cards`` that is over, its song's card as the page draws it now, and the songbooks
+    as the Songbooks tab has them (``songbooks``): a songbook's change, a song's lookup, which makes
+    the songbooks it is in again, and a removal all change them. A LaCuerda artist's read changes none.
 
     ``jobs`` is the whole queue, newest first, for the jobs ahead of a queued one;
     ``overrides`` None (overrides.toml unreadable) leaves the cards out.
@@ -104,11 +106,12 @@ def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jo
     from caracole.songs import get_song
 
     shown = []
-    section: dict[str, Any] | None = None  # drawn once, for every songbook job that asks
+    section: dict[str, Any] | None = None  # read once, for every job that asks
     for job in jobs if only is None else only:
         song_id, facts = song_of(app, conn, overrides, job)
         seen = view(job, jobs, song_id, facts, songbook_page=_songbook_page(conn, job))
-        if job.id in cards and not job.active and "songbook" in seen and overrides is not None:
+        if (job.id in cards and not job.active and overrides is not None
+                and not job.song_key.startswith(LACUERDA_ARTIST)):
             section = section or _songbooks(app, conn, overrides)
             seen["songbooks"] = section
         if job.id in cards and not job.active and song_id is not None and overrides is not None:
@@ -142,12 +145,11 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
 
 
 def _songbooks(app: WebApp, conn: sqlite3.Connection, overrides: Overrides) -> dict[str, Any]:
-    """The Songbooks section as the library page draws it now (``html``; hidden, with no songbook), and
-    the songbooks for its Select bar (``books``)."""
-    from caracole.library_page import WebControls, songbooks_section
+    """The songbooks as the library page's Songbooks tab has them now (songbook_section.py), which its Select
+    bar's menu follows too."""
+    from caracole.songbook_section import songbooks_data
 
-    html, books = songbooks_section(conn, app.cfg, overrides, WebControls(app.csrf))
-    return {"html": html, "books": books}
+    return songbooks_data(conn, app.cfg, overrides)
 
 
 def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,

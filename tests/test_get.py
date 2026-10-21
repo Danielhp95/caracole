@@ -188,7 +188,7 @@ def test_the_sheet_is_readable_after_one_ug_request_and_the_rest_fills_in_after(
     first = next(e for e in progress.events if e[0] == "readable")
     assert first[1]["sheet"] == "Radiohead/Creep/sheet.txt"
     order = [e[1] for e in progress.events if e[0] == "stage" and e[2] == "running"]
-    assert order == ["song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs", "pages"]
+    assert order == ["song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs", "pages", "songbooks"]
     assert progress.events.index(first) < progress.events.index(("stage", "lyrics", "running"))
     # Then the lyrics, and with them the sheets are scored: 102 charts the whole song.
     assert "sheet 102" in (folder(cfg, "Radiohead", "Creep") / "sheet.txt").read_text(encoding="utf-8")
@@ -768,3 +768,82 @@ def test_a_lookup_fills_the_artist_pages_tabs_from_the_cache_once_with_no_reques
 
     assert sites.ug()[before:] == []
     assert find_index(conn, "董小姐").songs[0].url == f"{TAB}3016223"
+
+
+# --- the songbooks the song is in -------------------------------------------------------------------
+
+
+def _books(cfg, **books):
+    from caracole.songbook import make_songbook, songbooks_file
+
+    for name, songs in books.items():
+        make_songbook(songbooks_file(cfg.library_dir), name, songs)
+
+
+def test_a_song_fetched_now_remakes_the_songbooks_it_is_in_and_no_other(cfg, conn, sites):
+    from conftest import add_song
+
+    serve_creep(sites, conn)
+    add_song(conn, "Soda Stereo", "De Música Ligera")
+    _books(cfg, Campfire=["Radiohead - Creep"], Other=["Soda Stereo - De Música Ligera"])
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert result.ok
+    assert (cfg.library_dir / "_songbooks" / "Campfire" / "songbook.html").is_file()
+    assert not (cfg.library_dir / "_songbooks" / "Other").exists()
+    assert ("songbooks", "running", "Campfire") in progress.said  # caracole serve's "Remaking songbook Campfire…"
+    assert ("songbooks", "done", "Campfire made again") in progress.said
+
+
+def test_the_library_page_is_written_after_the_songbooks_a_lookup_made_again(cfg, conn, sites):
+    import re
+
+    serve_creep(sites, conn)
+    _books(cfg, Campfire=["Radiohead - Creep"])
+
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    # index.html shows the songbook as it is now: made, with its files to open, not "not made yet".
+    page = (cfg.library_dir / "index.html").read_text(encoding="utf-8")
+    data = json.loads(re.search(r'<script type="application/json" id="songs">(.*?)</script>', page, re.S).group(1))
+    book = next(b for b in data["songbooks"]["books"] if b["name"] == "Campfire")
+    assert "songbook.html" in {f["name"] for f in book["files"]}, book
+    assert book["changed"] is not None and book["missing"] == 0, book
+
+
+def test_a_song_in_no_songbook_remakes_none(cfg, conn, sites):
+    serve_creep(sites, conn)
+    _books(cfg, Other=["Soda Stereo - De Música Ligera"])
+
+    _, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert ("songbooks", "skipped", "no songbook lists it") in progress.said
+    assert not (cfg.library_dir / "_songbooks").exists()
+
+
+def test_a_broken_songbooks_file_is_said_and_stops_nothing(cfg, conn, sites):
+    serve_creep(sites, conn)
+    path = cfg.library_dir / "songbooks.toml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("[[songbook\nbroken", encoding="utf-8")
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert result.ok and result.refused is None
+    assert (folder(cfg, "Radiohead", "Creep") / "sheet.pdf").is_file()
+    state, detail = next((s, d) for n, s, d in progress.said if n == "songbooks" and s != "running")
+    assert state == "skipped" and "songbooks.toml can't be read" in detail
+
+
+def test_a_lookup_that_found_nothing_new_remakes_nothing(cfg, conn, sites):
+    serve_creep(sites, conn)
+    _books(cfg, Campfire=["Radiohead - Creep"])
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    html = cfg.library_dir / "_songbooks" / "Campfire" / "songbook.html"
+    before = (html.read_bytes(), html.stat().st_mtime_ns)
+
+    _, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert ("songbooks", "done", "Campfire up to date") in progress.said
+    assert (html.read_bytes(), html.stat().st_mtime_ns) == before

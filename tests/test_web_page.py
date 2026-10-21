@@ -61,17 +61,15 @@ class FakeCaracole:
     once. A lookup's ``get`` (Fetch it now, Fetch now) does what add and fetch do, its stages reported as
     ``caracole get --progress`` reports them. A song in ``fail`` fails its fetch with that error, as the CLI
     says one. With ``slow_add``, ``add`` (and a lookup's song stage) too waits for the page to ask twice; the
-    next ``down`` times the page asks, the server answers 503. ``songbook`` changes songbooks.toml as the
-    command does (no files), and ``remove`` takes the song out of the database, each once the page has asked
-    once; a songbook named in ``fail`` fails its command with that error.
+    next ``down`` times the page asks, the server answers 503. ``remove`` takes the song out of the database
+    once the page has asked once. (The Songbooks tab's commands: tests/test_songbooks_tab.py's ``Fake``.)
     """
 
-    def __init__(self, cfg, *, fail=None, slow_add=False, down=0, sheets=False):
+    def __init__(self, cfg, *, fail=None, slow_add=False, down=0):
         self.cfg = cfg
         self.fail = fail or {}
         self.slow_add = slow_add
         self.down = down
-        self.sheets = sheets  # a lookup keeps a sheet and renders it, as caracole get does, for the songbooks
         self.polls = Polls()
         self.calls: list[list[str]] = []  # the commands run, in order
         self.posted: list[tuple[float, str, bytes]] = []  # each POST the page sent: when, where, its form
@@ -96,9 +94,6 @@ class FakeCaracole:
                 song = find_song(conn, override_key(said["song"]))
                 update_song(conn, song.id, match_decision="accept", review=False, match_artist_key=artist_key,
                             match_song_key=song_key)
-            elif args[0] == "songbook":
-                self.polls.wait(1)
-                return self._songbook(args, emit)
             elif args[0] == "remove":
                 self.polls.wait(1)
                 song = find_song(conn, override_key(args[-1]))
@@ -120,40 +115,6 @@ class FakeCaracole:
             conn.close()
 
 
-    def _songbook(self, args, emit):
-        from caracole import songbook
-
-        toml = songbook.songbooks_file(self.cfg.library_dir)
-        _, action, _, name, *rest = args
-        if name in self.fail:
-            emit(f"error: {self.fail[name]}")
-            return 1
-        if action == "make":
-            songbook.make_songbook(toml, name, rest)
-        elif action == "add":
-            songbook.add_to_songbook(toml, name, rest)
-        elif action == "move":
-            songbook.move_in_songbook(toml, name, rest[0], int(rest[1]))
-        elif action == "remove":
-            songbook.remove_from_songbook(toml, name, rest)
-        elif action == "rename":
-            songbook.rename_songbook(toml, name, rest[0])
-        elif action == "render":  # its files, made again from the sheets the songs have now
-            from helpers.songbooks import FakeChordPro
-
-            from caracole.overrides import load_overrides
-
-            conn = db.connect(self.cfg.db_path)
-            try:
-                songbook.render_songbooks(conn, self.cfg, load_overrides(self.cfg.overrides_file),
-                                          runner=FakeChordPro(), only=name)
-            finally:
-                conn.close()
-        else:
-            songbook.delete_songbook(toml, name)
-        emit(f"ran songbook {action}")
-        return 0
-
     def _get(self, conn, args, emit):
         from caracole.get import PROGRESS_PREFIX
         from caracole.wanted import sync_wanted
@@ -173,15 +134,9 @@ class FakeCaracole:
             emit(f"error: {self.fail[display]}")
             return 1
         song = find_song(conn, override_key(display))
-        if self.sheets:
-            from helpers.songbooks import keep_sheet, render_sheets
-
-            keep_sheet(conn, self.cfg, song, tab_id=700 + song.id)
-            render_sheets(conn, self.cfg)
-        else:
-            folder = song_dir(self.cfg.library_dir, song)
-            folder.mkdir(parents=True, exist_ok=True)
-            (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
+        folder = song_dir(self.cfg.library_dir, song)
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
         update_song(conn, song.id, status="found", ug_dirty=False)
         stage("sheet", "done", "tab 1 from Ultimate Guitar")
         emit("ran get")
@@ -753,330 +708,7 @@ r.querySelector("form.pick-form button[type=submit]").click();
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
 
 
-# --- the songbooks' forms -------------------------------------------------------------------------------
-
-# Notes, for each songbook's card, whether its line stayed the node it first showed one in (data-books:
-# same), whether its buttons were put away whenever its line said a change waits or runs (locked, with
-# running: it was seen), and where the focus is (data-at: its name, and its songbook card's heading).
-BOOKS = """
-const bookLines = new Map();
-const books = { same: true, locked: true, running: false };
-new MutationObserver(() => {
-  for (const p of document.querySelectorAll("#songbooks .sb-card .progress")) {
-    const c = p.closest(".sb-card");
-    if (!bookLines.has(c)) bookLines.set(c, p);
-    if (bookLines.get(c) !== p) books.same = false;
-    if (p.dataset.tone === "queued" || p.dataset.tone === "running") {
-      books.running = true;
-      if (Array.from(c.querySelectorAll("form button")).some((b) => !b.disabled)) books.locked = false;
-    }
-  }
-  document.body.setAttribute("data-books", JSON.stringify(books));
-}).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true,
-  attributeFilter: ["data-tone", "disabled"] });
-setInterval(() => {
-  const at = document.activeElement;
-  const book = at && at.closest ? at.closest(".sb-card") : null;
-  document.body.setAttribute("data-at", JSON.stringify([
-    at ? at.getAttribute("aria-label") || at.className || at.tagName.toLowerCase() : null,
-    book ? book.querySelector("h2").textContent : null]));
-}, 100);
-const buttonNamed = (name) => Array.from(document.querySelectorAll("#songbooks button"))
-  .find((b) => b.getAttribute("aria-label") === name || b.textContent === name);
-const once = (test, then) => {
-  const timer = setInterval(() => {
-    if (test()) {
-      clearInterval(timer);
-      then();
-    }
-  }, 50);
-};
-const lineOf = (name) => {
-  const c = Array.from(document.querySelectorAll("#songbooks .sb-card")).find((b) => b.dataset.songbook === name);
-  const p = c && c.querySelector(".progress");
-  return p ? p.textContent : "";
-};
-document.querySelector("#songbooks > details").open = true;
-"""
-
-
-def songbook_card(dom: str, name: str) -> str:
-    named = re.escape(html.escape(name))
-    found = re.search(r'<article class="sb-card[^"]*"[^>]* data-songbook="' + named + r'"[^>]*>.*?</article>', dom, re.S)
-    assert found, dom[-3000:]
-    return found.group(0)
-
-
-def songs_of(card_html: str) -> list[str]:
-    return re.findall(r'<span class="t">([^<]*)</span>', card_html)
-
-
-@pytest.fixture
-def campfire(cfg, conn):
-    """Creep, Hysteria and De Música Ligera, and the songbook Campfire of them (songbooks.toml alone)."""
-    from caracole.songbook import make_songbook, songbooks_file
-
-    songs = {title: add_song(conn, artist, title) for artist, title in
-             (("Radiohead", "Creep"), ("Muse", "Hysteria"), ("Soda Stereo", "De Música Ligera"))}
-    make_songbook(songbooks_file(cfg.library_dir), "Campfire",
-                  ["Radiohead - Creep", "Muse - Hysteria", "Soda Stereo - De Música Ligera"])
-    return songs
-
-
-@pytest.mark.parametrize("size", ["390,844", "1280,900"])
-def test_moving_a_song_stays_on_the_library_and_the_songbook_says_how_it_goes(serve, cfg, campfire, tmp_path,
-                                                                                size):
-    script = "(() => {\n" + WATCH + BOOKS + """
-const down = buttonNamed("Move Creep down");
-down.focus();
-down.click();
-})();
-"""
-    url = serve(FakeCaracole(cfg), script)
-
-    dom = dump_dom(url, tmp_path, size=size)
-
-    assert '<main class="list" id="list">' in dom  # still the library: no requests page
-    shown = songbook_card(dom, "Campfire")
-    assert songs_of(shown) == ["Hysteria", "Creep", "De Música Ligera"]  # drawn again, as songbooks.toml has it
-    line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
-    assert 'role="status"' in line and 'data-tone="ready"' in line and ">Moved<" in line
-    assert shown.count('class="progress"') == 1 and shown.index('class="sb-head"') < shown.index('class="progress"')
-    seen = attribute(dom, "data-seen")
-    assert "Moving the song…" in seen, seen
-    # Its buttons were put away while it ran, its line the same live region all along; they are back now.
-    assert attribute(dom, "data-books") == {"same": True, "locked": True, "running": True}
-    assert "disabled" not in shown
-    # The focus went to the line while the button was put away, and back to the button where it is now.
-    assert attribute(dom, "data-at") == ["Move Creep down", "Campfire"]
-    assert re.search(r'<section class="songbooks" id="songbooks"[^>]*>\s*<details open', dom)
-    assert re.search(r'<section[^>]*id="requested"[^>]*hidden', dom)  # no song just requested
-    assert attribute(dom, "data-wide") <= attribute(dom, "data-page")  # nothing wider than the screen
-
-
-def test_renaming_then_deleting_a_songbook_stay_on_the_library(serve, cfg, campfire, tmp_path):
-    script = "(() => {\n" + WATCH + BOOKS + """
-const card = document.querySelector("#songbooks .sb-card");
-card.querySelector("details.sb-more").open = true;
-card.querySelector('input[name="new"]').value = "Beach nights";
-buttonNamed("Rename").click();
-once(() => lineOf("Beach nights") === "Renamed", () => {
-  document.body.setAttribute("data-renamed", JSON.stringify({
-    title: card.querySelector("h2").textContent,
-    menu: Array.from(document.querySelectorAll(".pick-into option")).map((o) => o.value),
-    same: document.querySelector("#songbooks .sb-card") === card }));
-  card.querySelector("details.sb-more").open = true;
-  card.querySelector('form[action="/songbook/delete"] input[type="checkbox"]').checked = true;
-  buttonNamed("Delete Beach nights").click();
-  once(() => lineOf("Beach nights") === "Deleted", () => {
-    document.body.setAttribute("data-deleted", JSON.stringify({
-      menu: Array.from(document.querySelectorAll(".pick-into option")).map((o) => o.value),
-      count: document.querySelector("#songbooks summary .n").textContent }));
-  });
-});
-})();
-"""
-    url = serve(FakeCaracole(cfg), script)
-
-    dom = dump_dom(url, tmp_path)
-
-    assert attribute(dom, "data-renamed") == {"title": "Beach nights", "menu": ["", "Beach nights"], "same": True}
-    assert attribute(dom, "data-deleted") == {"menu": [""], "count": "0"}
-    # Deleted, its card says so where it was, with nothing left to change, until the page is loaded again.
-    shown = songbook_card(dom, "Beach nights")
-    assert "sb-gone" in shown and ">Deleted<" in shown and "<form" not in shown and "sb-songs" not in shown
-    assert attribute(dom, "data-books")["same"] is True
-    seen = attribute(dom, "data-seen")
-    assert "Renaming the songbook…" in seen and "Deleting the songbook…" in seen, seen
-
-
-def test_select_makes_a_songbook_and_the_section_opens_on_it(serve, cfg, conn, tmp_path):
-    for artist, title in (("Radiohead", "Creep"), ("Muse", "Hysteria")):
-        add_song(conn, artist, title)
-    script = "(() => {\n" + WATCH + """
-const pick = (title) => cardOf(title).querySelector(".pick input").click();
-document.querySelector(".pick-toggle").click();
-pick("Hysteria");
-pick("Creep");
-document.querySelector(".pick-name").value = "Beach nights";
-document.querySelector(".pickbar-form button[type=submit]").click();
-const timer = setInterval(() => {
-  const at = document.activeElement;
-  document.body.setAttribute("data-after", JSON.stringify({
-    selecting: document.body.classList.contains("selecting"), bar: document.querySelector(".pickbar").hidden,
-    count: document.querySelector(".pick-count").textContent, focus: at ? at.className : null,
-    menu: Array.from(document.querySelectorAll(".pick-into option")).map((o) => o.value),
-    open: document.querySelector("#songbooks > details").open, path: location.pathname }));
-}, 100);
-})();
-"""
-    url = serve(FakeCaracole(cfg), script)
-
-    dom = dump_dom(url, tmp_path)
-
-    # No songbook when the page loaded: the section shows once there is one, open on it.
-    assert attribute(dom, "data-after") == {"selecting": False, "bar": True, "count": "0 selected", "focus": "progress",
-                                            "menu": ["", "Beach nights"], "open": True, "path": "/"}
-    shown = songbook_card(dom, "Beach nights")
-    assert songs_of(shown) == ["Hysteria", "Creep"] and ">Made<" in shown and 'role="status"' in shown
-    assert re.search(r'<section class="songbooks" id="songbooks"[^>]*>\s*<details open', dom)
-    assert not re.search(r'<section class="songbooks"[^>]*hidden', dom)
-    assert re.search(r'<summary>.*?<span class="n">1</span></summary>', dom, re.S)
-    assert "Making the songbook…" in attribute(dom, "data-seen") or "Queued…" in attribute(dom, "data-seen")
-    assert re.search(r'<section[^>]*id="requested"[^>]*hidden', dom)
-
-
-def test_select_adds_to_a_songbook_there_is_and_its_card_says_how_it_goes(serve, cfg, conn, tmp_path):
-    from caracole.songbook import make_songbook, songbooks_file
-
-    for artist, title in (("Radiohead", "Creep"), ("Muse", "Hysteria")):
-        add_song(conn, artist, title)
-    make_songbook(songbooks_file(cfg.library_dir), "Campfire", ["Radiohead - Creep"])
-    script = "(() => {\n" + WATCH + BOOKS + """
-document.querySelector("#songbooks > details").open = false;
-document.querySelector(".pick-toggle").click();
-cardOf("Hysteria").querySelector(".pick input").click();
-const into = document.querySelector(".pick-into");
-into.value = "Campfire";
-into.dispatchEvent(new Event("change"));
-document.querySelector(".pickbar-form button[type=submit]").click();
-})();
-"""
-    url = serve(FakeCaracole(cfg), script)
-
-    dom = dump_dom(url, tmp_path)
-
-    shown = songbook_card(dom, "Campfire")
-    assert songs_of(shown) == ["Creep", "Hysteria"] and ">Added<" in shown
-    assert re.search(r'<section class="songbooks" id="songbooks"[^>]*>\s*<details open', dom)  # opened on it
-    assert attribute(dom, "data-books") == {"same": True, "locked": True, "running": True}
-    assert attribute(dom, "data-at")[1] == "Campfire"  # its line has the focus
-    assert dom.count('class="sb-card') == 1
-
-
-def test_a_refused_songbook_change_says_why_where_it_was_asked(serve, cfg, campfire, tmp_path):
-    # The Select bar keeps the picks and says why; a card's form says why on the card, its buttons back.
-    script = "(() => {\n" + WATCH + BOOKS + """
-document.querySelector(".pick-toggle").click();
-cardOf("Creep").querySelector(".pick input").click();
-document.querySelector(".pick-name").value = "CAMPFIRE";
-document.querySelector(".pickbar-form button[type=submit]").click();
-once(() => document.querySelector(".pick-error").textContent, () => {
-  document.body.setAttribute("data-bar", JSON.stringify({
-    error: document.querySelector(".pick-error").textContent,
-    selecting: document.body.classList.contains("selecting"),
-    count: document.querySelector(".pick-count").textContent,
-    sends: !document.querySelector(".pickbar-form button[type=submit]").disabled }));
-  const card = document.querySelector("#songbooks .sb-card");
-  card.querySelector("details.sb-more").open = true;
-  card.querySelector('input[name="new"]').value = ".hidden";
-  buttonNamed("Rename").click();
-});
-})();
-"""
-    url = serve(FakeCaracole(cfg), script)
-
-    dom = dump_dom(url, tmp_path)
-
-    bar = attribute(dom, "data-bar")
-    assert "is there already" in bar["error"] and bar["selecting"] and bar["count"] == "1 selected" and bar["sends"]
-    shown = songbook_card(dom, "Campfire")
-    line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
-    assert 'data-tone="failed"' in line and "dot" in line
-    assert "disabled" not in shown and dom.count('class="sb-card') == 1
-
-
-def test_a_failed_songbook_change_says_why_on_its_card_with_its_details(serve, cfg, campfire, tmp_path):
-    script = "(() => {\n" + WATCH + BOOKS + 'buttonNamed("Take Creep out of Campfire").click();\n})();\n'
-    url = serve(FakeCaracole(cfg, fail={"Campfire": "songbooks.toml can't be written: read-only file system."}),
-                script)
-
-    dom = dump_dom(url, tmp_path)
-
-    shown = songbook_card(dom, "Campfire")
-    line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
-    assert 'data-tone="failed"' in line and "songbooks.toml can't be written" in line and "Details" in line
-    assert songs_of(shown) == ["Creep", "Hysteria", "De Música Ligera"] and "disabled" not in shown
-
-
-def test_a_songbook_change_on_its_way_when_the_page_loads_shows_on_its_songbook(serve, cfg, campfire, tmp_path):
-    def move(app):
-        sent = {"host": "127.0.0.1", "content-type": "application/x-www-form-urlencoded",
-                "sec-fetch-site": "same-origin"}
-        body = "csrf=tok&name=Campfire&song=Muse+-+Hysteria&position=3".encode()
-        assert app.handle(Request("POST", "/songbook/move", sent, body)).status == 303
-
-    url = serve(FakeCaracole(cfg), "(() => {\n" + WATCH + BOOKS + "})();\n", before=move)
-
-    dom = dump_dom(url, tmp_path)
-
-    shown = songbook_card(dom, "Campfire")
-    assert songs_of(shown) == ["Creep", "De Música Ligera", "Hysteria"] and ">Moved<" in shown
-    assert re.search(r'<section[^>]*id="requested"[^>]*hidden', dom)  # not a song just requested
-    assert attribute(dom, "data-books") == {"same": True, "locked": True, "running": True}
-
-
-@pytest.mark.parametrize("size,media", [("390,844", "light"), ("1280,800", "dark")])
-def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve, cfg, conn, tmp_path, size, media):
-    # The songbook's songs without a sheet, looked up now, one after the other, in its order, each line under the
-    # song's name in the songbook (and on its card); then the songbook made again with their sheets: Made · Open
-    # songbook. A song not in the library is no one's to look up. The page stays where it is.
-    from helpers.songbooks import FakeChordPro, keep_sheet, render_sheets
-
-    from caracole.overrides import Overrides
-    from caracole.songbook import make_songbook, render_songbooks, songbooks_file
-
-    creep = add_song(conn, "Radiohead", "Creep")
-    keep_sheet(conn, cfg, creep, tab_id=2)
-    render_sheets(conn, cfg)
-    for title in ("Hysteria", "Uprising"):
-        add_song(conn, "Muse", title)
-    make_songbook(songbooks_file(cfg.library_dir), "Campfire",
-                  ["Muse - Hysteria", "Pixies - Debaser", "Radiohead - Creep", "Muse - Uprising"])
-    render_songbooks(conn, cfg, Overrides(), runner=FakeChordPro())
-    runner = FakeCaracole(cfg, sheets=True)
-    url = serve(runner, "(() => {})();\n", timers=QUICK)
-    book = '#songbooks .sb-card[data-songbook="Campfire"]'
-    line = f"(() => {{ const p = document.querySelector('{book} > .progress'); return p ? p.textContent : ''; }})()"
-    songs = f"""Array.from(document.querySelectorAll('{book} li')).map((li) => [li.querySelector('.t').textContent,
-        (li.querySelector('.progress') || {{}}).textContent || '', (li.querySelector('.why') || {{}}).textContent || ''])"""
-    seen = f"""(() => {{ window.seen = window.seen || []; const note = () => {{
-        for (const p of document.querySelectorAll('{book} .progress')) if (!window.seen.includes(p.textContent))
-          window.seen.push(p.textContent); }};
-      new MutationObserver(note).observe(document.body, {{ subtree: true, childList: true, characterData: true }});
-      return true; }})()"""
-    width, height = (int(n) for n in size.split(","))
-    with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
-        page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": media}])
-        page.open(url)
-        page.click("#songbooks > details > summary")
-        get_it = f"{book} form[action='/songbook/get'] button"
-        assert page.js(f"document.querySelector({json.dumps(get_it)}).textContent") == "Get the 2 missing songs now"
-        assert page.js(seen) and page.js(SHIFTS)
-        page.click(get_it)
-        assert page.wait(f"{line}.startsWith('Made')", timeout=30), (page.js(line), page.js(songs))
-        assert page.js(SETTLED)  # the last frames, and any shift in them
-        done = {"line": page.js(line), "songs": page.js(songs), "seen": page.js("window.seen"),
-                "get": page.js(f"document.querySelector({json.dumps(get_it)}) === null"),
-                "path": page.js("location.pathname"),
-                "wide": page.js("document.documentElement.scrollWidth <= innerWidth"),
-                "open": page.js(f"document.querySelector('{book} > .progress a').getAttribute('href')"),
-                "tray": page.js("document.getElementById('tray').hidden"),
-                "shifts": page.js("window.shifts")}
-    assert [c[1:] for c in runner.calls] == [["--progress", "--", "Muse", "Hysteria"],
-                                             ["--progress", "--", "Muse", "Uprising"], ["render", "--", "Campfire"]]
-    assert done["line"] == "Made·Open songbook" and done["open"] == "_songbooks/Campfire/songbook.html"
-    # Each lookup said how it went under its song's name, to the last; Debaser, not in the library, waits.
-    assert done["songs"] == [["Hysteria", "Ready·Open sheet", ""], ["Debaser", "", "missing: not in the library"],
-                             ["Creep", "", ""], ["Uprising", "Ready·Open sheet", ""]], done["songs"]
-    assert any(text.startswith("Queued behind") for text in done["seen"]), done["seen"]  # the songbook waited
-    assert any("Ultimate Guitar" in text for text in done["seen"]), done["seen"]  # each song's lookup, as it ran
-    assert done["get"] and done["path"] == "/" and done["wide"]  # nothing left to get: Debaser isn't in the library
-    # Nothing on the screen moves as they go, nor once the songbook is made (its songs' "missing" notes gone, it
-    # keeps its height until your next click). (The masthead's Requests counts what runs, as on every page.)
-    assert [s for s in done["shifts"] if s["value"] > 0 and s["moved"] != ["links"]] == [], done["shifts"]
-    assert done["tray"] is True  # the songbook's card says how they go: no list of requests in the corner
-
+# --- nothing moves ---------------------------------------------------------------------------------------
 
 # The page's last frames, and any shift in them: true once, for 600 ms, nothing on the page changed (no element,
 # attribute or text: what a timer of the page's could still move) and nothing shifted, and ten frames in a row (a
@@ -1127,10 +759,11 @@ SHIFTS = """(() => {
 
 
 @pytest.mark.parametrize("size", ["390,844", "1280,800"])
-def test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine(serve, cfg, conn, tmp_path, size):
+@pytest.mark.parametrize("left", ["", "#tab=songbooks&book=Campfire"], ids=["library", "songbooks"])
+def test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine(serve, cfg, conn, tmp_path, size, left):
     # On a slow machine (Chromium's processor slowed twentyfold), the page may be painted before its script has
-    # run: were it seen then, the list would be empty, the request form open under the bar and the Songbooks
-    # section closed though you left it open, and all of it would move once the script has drawn them.
+    # run: were it seen then, the list would be empty, the request form open under the bar and the library shown
+    # though you left the Songbooks tab open, and all of it would move once the script has drawn them.
     from caracole.songbook import make_songbook, songbooks_file
 
     for n in range(40):
@@ -1138,13 +771,13 @@ def test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine(serve, cfg, c
     make_songbook(songbooks_file(cfg.library_dir), "Campfire", [f"Band - Song {n:02}" for n in range(6)])
     url = serve(FakeCaracole(cfg), "(() => {})();\n", timers=QUICK)
     width, height = (int(n) for n in size.split(","))
+    shown = "#songbooks .set-line" if left else "#list article"
     with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
-        page.open(url)
-        page.js("localStorage.setItem('caracole-library:songbooks-open', '1')")  # as you left it open
+        page.open(url + left)  # as you left it
         page.send("Emulation.setCPUThrottlingRate", rate=20)
         page.js("window.before = true; location.reload()")
         assert page.wait("window.before === undefined && document.readyState === 'complete' && "
-                         "document.querySelector('#songbooks > details').open", timeout=30)
+                         f"document.querySelector('{shown}') !== null", timeout=30)
         assert page.js(SHIFTS)
         page.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
         shifts = page.js("window.shifts")
@@ -1152,57 +785,6 @@ def test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine(serve, cfg, c
         shown = page.js("getComputedStyle(document.querySelector('.page')).visibility")
     assert shifts == [], shifts
     assert shown == "visible"
-
-
-@pytest.mark.parametrize("size", ["390,844", "1280,800"])
-@pytest.mark.parametrize("books", [0, 3])
-def test_a_songbook_made_then_deleted_moves_nothing_on_the_screen_when_it_is_done(serve, cfg, conn, tmp_path, size,
-                                                                                  books):
-    # Made from the Select bar, a songbook's card comes in at the end of the Songbooks section, its foot at the
-    # bottom of the screen (the first songbook too, near the top of the page, stretched to it), grows below it once
-    # made, then scrolls into view whole; deleted, it keeps its size. Each says how it goes on its card alone: no
-    # list of requests comes up.
-    from caracole.songbook import make_songbook, songbooks_file
-
-    for n in range(12):
-        add_song(conn, "Band", f"Song {n:02}")
-    for name, first, last in (("Campfire", 0, 8), ("Road trip", 8, 10), ("Quiet", 10, 12))[:books]:
-        make_songbook(songbooks_file(cfg.library_dir), name, [f"Band - Song {n:02}" for n in range(first, last)])
-    url = serve(FakeCaracole(cfg), "(() => {})();\n", timers=QUICK)
-    width, height = (int(n) for n in size.split(","))
-    book = '#songbooks .sb-card[data-songbook="Beach nights"]'
-    line = f"(() => {{ const p = document.querySelector('{book} .progress'); return p ? p.textContent : ''; }})()"
-    with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
-        page.open(url)
-        assert page.js(SHIFTS)
-        page.click(".pick-toggle")
-        for n in (4, 7):
-            page.click(f'#list article:nth-child({n + 1}) .pick')
-        if width < 500:
-            page.click(".pick-open")
-        page.click(".pick-name")
-        page.type("Beach nights")
-        page.click(".pickbar-form button[type=submit]")
-        assert page.wait(f"{line} === 'Made'", timeout=20), page.js(line)
-        assert page.js(SETTLED)  # the last frames, and any shift in them
-        made = page.js("window.shifts")
-        whole = page.js(f"""(() => {{ const r = document.querySelector('{book}').getBoundingClientRect();
-            return r.top >= 0 && r.bottom <= innerHeight && document.querySelectorAll('{book} .t').length; }})()""")
-        page.js("window.shifts = []")
-        page.click(f"{book} details.sb-more > summary")
-        page.click(f'{book} form[action="/songbook/delete"] input[type="checkbox"]')
-        page.click(f'{book} form[action="/songbook/delete"] button')
-        assert page.wait(f"{line} === 'Deleted'", timeout=20), page.js(line)
-        assert page.js(SETTLED)
-        deleted = page.js("window.shifts")
-        tray = page.js("document.getElementById('tray').hidden")
-        songs = page.js(f"Array.from(document.querySelectorAll('{book} .t, {book} form')).length")
-    # (The masthead's Requests counts what runs, as on every page that asks for something.)
-    moved = [s for s in made + deleted if s["moved"] != ["links"]]
-    assert moved == [], (made, deleted)
-    assert whole == 2  # made, in view whole, its two songs
-    assert tray is True
-    assert songs == 0  # deleted: nothing left on it to change
 
 
 # --- Remove ---------------------------------------------------------------------------------------------
@@ -1240,16 +822,13 @@ COUNTDOWN = """(() => {
 def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, conn, tmp_path, left, size):
     # One tap: the song's own line says "Removing in 5 s · Undo" and what goes, the focus on Undo, and nothing is
     # sent for those five seconds (half a second here: QUICK) but the question of what goes; then the removal, and
-    # the line follows it to Removed. The page never leaves the library as you left it (its filter or order here,
-    # the Songbooks section open above the list), and nothing on the screen moves but the line.
-    from caracole.songbook import make_songbook, songbooks_file
-
+    # the line follows it to Removed. The page never leaves the library as you left it (its filter or order here),
+    # and nothing on the screen moves but the line.
     for n in range(8):
         add_song(conn, "Band", f"Song {n:02}")
     creep = add_song(conn, "Radiohead", "Creep")
     for n in range(4):  # under Creep, on the screen with it
         add_song(conn, "Wilco", f"Tune {n}")
-    make_songbook(songbooks_file(cfg.library_dir), "Campfire", [f"Band - Song {n:02}" for n in range(6)])
     runner = FakeCaracole(cfg)
     url = serve(runner, "(() => {})();\n", timers=QUICK)
     item = f'#list [data-id="{creep.id}"]'
@@ -1257,10 +836,6 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
     width, height = (int(n) for n in size.split(","))
     with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
         page.open(url + left)
-        page.js("localStorage.setItem('caracole-library:songbooks-open', '1')")  # as you left it open
-        page.js("window.before = true; location.reload()")
-        assert page.wait("window.before === undefined && document.readyState === 'complete' && "
-                         "document.querySelector('#songbooks > details').open")
         page.click(f"{item} .line-more")  # Remove… waits under "⋯"
         page.js(f"window.song = document.querySelector('{item}'); window.song.scrollIntoView({{ block: 'center' }})")
         assert page.js(SHIFTS) and page.js(COUNTDOWN)
@@ -1298,8 +873,9 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
     assert gone == ["Creep", 0, "status", "/", left]  # still the library, as you left it; nothing left to open
     assert find_song(conn, creep.key) is None
     # Its line keeps its place, its size and its request line where it was, Removed, until the page is loaded again:
-    # nothing on the screen moves (the line's dot, by a pixel, as its words change: no shift at all).
-    assert [s for s in shifts if s["value"] > 0] == [], shifts
+    # nothing on the screen moves (the line's dot, by a pixel, as its words change: no shift at all; the masthead's
+    # Requests counts what runs, as on every page that asks for something).
+    assert [s for s in shifts if s["value"] > 0 and s["moved"] != ["links"]] == [], shifts
     # It counts no more: the masthead, the buttons and the count agree on twelve songs left.
     searched = left == "#q=creep"
     assert counts == {"summary": ["12 songs", "0 found", "12 wanted"],

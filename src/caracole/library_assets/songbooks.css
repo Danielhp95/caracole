@@ -1,46 +1,164 @@
-
-.songbooks { margin: 8px 0 0; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
-.songbooks > details > summary { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px;
-  cursor: pointer; font-weight: 650; list-style: none; }
-.songbooks > details > summary::-webkit-details-marker { display: none; }
-.songbooks .sb-icon { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
-  background: var(--raised); color: var(--accent); font-size: 1rem; line-height: 1; }
-.songbooks summary .n { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--raised);
-  color: var(--muted); font-size: .78rem; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums; }
-.sb-list { display: grid; gap: 12px; padding: 0 16px 16px;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
-.sb-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
-  border-radius: 14px; background: var(--bg); scroll-margin: 84px 0 16px; }
-.sb-card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
-.sb-songs { margin: 0; padding: 0; list-style: none; }
-.sb-songs li { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 2px 0;
-  border-top: 1px solid var(--border); }
-.sb-n { flex: none; min-width: 2ch; color: var(--muted); font-size: .8rem; text-align: right;
+/* The page's two tabs, under the masthead: your songs, or your songbooks. */
+.tabs { display: flex; gap: 2px; margin: 2px 0 0; border-bottom: 1px solid var(--border); }
+.tab { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin-bottom: -1px; padding: 0 12px;
+  border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font: inherit;
+  font-size: .95rem; font-weight: 650; cursor: pointer; }
+.tab:hover { color: var(--text); }
+.tab[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--text); }
+.tab .n { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--raised); color: var(--muted);
+  font-size: .75rem; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.tab .n:empty { display: none; }
+/* The Songbooks tab: the songbooks as lines, then the one opened as a set list; side by side from 900px, and on a
+   phone one at a time, the set list with its way back to the list. */
+.books { padding-top: 10px; }
+.books-in { display: grid; gap: 12px; align-items: start; }
+@media (min-width: 900px) {
+  .books-in { grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr); }
+  .book-back { display: none; }
+}
+@media (max-width: 899px) {
+  .books-in.has-book > .book-list { display: none; }
+  .book-back { justify-self: start; margin: 0 0 6px -4px; }
+}
+.book-list { display: grid; gap: 8px; min-width: 0; }
+.book-lines { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.book-lines > li + li { border-top: 1px solid var(--border); }
+.book-line { display: grid; width: 100%; min-height: 40px; margin: 0; padding: 4px 12px; border: 0; background: none;
+  color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+button.book-line:hover { background: var(--raised); }
+.book-line[aria-current="true"] { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+.book-name { font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.book-meta { color: var(--muted); font-size: .8rem; line-height: 1.35; }
+.book-line.gone .book-name { color: var(--muted); }
+.new-book { justify-self: start; }
+.sb-error { margin: 0; color: var(--failed); font-weight: 600; overflow-wrap: anywhere; }
+.book { display: grid; min-width: 0; padding: 10px 12px 14px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.book-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.book-head h2 { margin: 0; font-size: 1.15rem; line-height: 1.3; overflow-wrap: anywhere; }
+.book-head h2:focus { outline: none; }
+.book-head .book-meta { font-size: .85rem; }
+.book.gone h2 { color: var(--muted); }
+/* How its changes go, on one line kept for it: nothing under it moves when it speaks. */
+.book-status { min-height: 1.45em; margin: 2px 0 4px; font-size: .85rem; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; }
+.book-status:empty::before { display: none; }
+.book-files { align-items: center; margin: 0 0 8px; }
+.book-files form { margin: 0; }
+.book-files .hint { margin: 0; }
+.get-missing.spent { visibility: hidden; }
+/* The set list: a song a line, as dense as the library's with a mouse; on a phone two lines a song, its grip and
+   its × a thumb's target each. Every column but the title's and the artist's keeps its width, so that a song's
+   chip or button saying something else moves nothing beside it. */
+.set { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 10px; }
+.set-line { --grip: 26px; --out: 26px; display: grid; grid-template-columns: var(--grip) minmax(0, 1fr) auto var(--out);
+  grid-template-areas: "grip name act out" "grip meta meta meta"; align-items: center; gap: 0 6px; min-width: 0;
+  padding: 2px 4px 3px 2px; border-top: 1px solid var(--border); background: var(--surface); }
+.set-line:first-child { border-top: 0; border-radius: 9px 9px 0 0; }
+.set-line:last-child { border-radius: 0 0 9px 9px; }
+.set-line:only-child { border-radius: 9px; }
+.book.read-only .set-line { grid-template-columns: minmax(0, 1fr); grid-template-areas: "name" "meta";
+  padding-left: 10px; }
+.grip { grid-area: grip; align-self: stretch; display: grid; place-items: center; width: var(--grip); min-height: 24px;
+  padding: 0; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 1rem;
+  line-height: 1; cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; }
+.grip:hover { background: var(--raised); color: var(--text); }
+.grip:disabled { cursor: default; opacity: .4; }
+.set-name { grid-area: name; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.set-n { flex: none; min-width: 2ch; color: var(--muted); font-size: .8rem; text-align: right;
   font-variant-numeric: tabular-nums; }
-.sb-names { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.sb-names .t { font-weight: 600; }
-.sb-names .a, .sb-names .why { color: var(--muted); font-size: .88rem; }
-.sb-songs .missing .t { color: var(--muted); font-weight: 500; }
-/* A lookup of the song: how it goes, on one line whatever it says, so that the songbook keeps its height. */
-.sb-names .progress { display: block; overflow: hidden; font-size: .8rem; white-space: nowrap; text-overflow: ellipsis; }
-.sb-names .why { display: block; font-size: .8rem; font-style: italic; }
-.sb-tools { flex: none; display: flex; gap: 4px; }
-.sb-tools form, .sb-more form { margin: 0; }
-.sb-btn { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border-radius: 10px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 1rem;
+.set-title { display: flex; align-items: center; min-width: 0; color: inherit; text-decoration: none; }
+a.set-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.set-line h3 { min-width: 0; margin: 0; overflow: hidden; font-size: .95rem; font-weight: 600; line-height: 1.3;
+  white-space: nowrap; text-overflow: ellipsis; }
+.set-meta { grid-area: meta; display: flex; align-items: center; gap: 2px 8px; min-width: 0; }
+.set-by { flex: 1 1 3rem; min-width: 0; overflow: hidden; color: var(--muted); font-size: .82rem; white-space: nowrap;
+  text-overflow: ellipsis; }
+.set-plays { flex: none; display: flex; align-items: center; width: 11rem; min-width: 0; min-height: 24px; }
+.plays { display: inline-flex; align-items: center; max-width: 100%; min-height: 24px; padding: 0 9px; overflow: hidden;
+  border: 1px solid var(--border-strong); border-radius: 999px; background: var(--bg); color: var(--text); font: inherit;
+  font-size: .8rem; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+span.plays { border-color: transparent; background: var(--raised); }
+button.plays { cursor: pointer; }
+button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--accent); }
+.plays.set { border-color: var(--accent); color: var(--accent); }  /* a setting of the songbook's own */
+.plays.pending { color: var(--muted); }
+.set-plays .badge { overflow: hidden; text-overflow: ellipsis; }
+.set-act { grid-area: act; display: flex; justify-content: flex-end; min-width: 0; }
+.set-act .btn { min-height: 24px; padding: 0 8px; border-color: transparent; border-radius: 8px; background: transparent;
+  color: var(--accent); font-size: .85rem; font-weight: 650; white-space: nowrap; }
+.set-act .btn:hover { border-color: var(--border); background: var(--raised); }
+.set-act .btn:disabled { color: var(--muted); }
+.set-out { grid-area: out; display: grid; place-items: center; width: var(--out); height: 24px; padding: 0; border: 0;
+  border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 1.15rem; line-height: 1;
   cursor: pointer; }
-.sb-btn:hover { border-color: var(--border-strong); }
-/* While a change of the songbook is on its way (its line under its name says how it goes), its buttons wait. */
-.sb-btn:disabled { color: var(--muted); border-style: dashed; cursor: default; }
-.sb-gone { align-self: start; border-style: dashed; }
-.sb-gone h2 { color: var(--muted); }
-.sb-more > summary { min-height: 40px; align-content: center; color: var(--muted); font-size: .85rem; font-weight: 600;
+.set-out:hover { background: var(--raised); color: var(--failed); }
+.set-line > .progress { grid-column: 2 / -1; overflow: hidden; font-size: .82rem; white-space: nowrap;
+  text-overflow: ellipsis; }
+.set-line.leaving, .set-line.pending { color: var(--muted); }
+.set-line.leaving h3, .set-line.pending h3 { color: var(--muted); }
+.set-line.gone { grid-template-columns: var(--grip) minmax(0, 1fr) auto; grid-template-areas: "grip name act";
+  color: var(--muted); }
+.set-line.gone h3 { color: var(--muted); font-weight: 500; text-decoration: line-through; }
+.set-gone { grid-area: act; padding-right: 6px; font-size: .82rem; font-weight: 600; }
+/* A song dragged: over the others, which make room for it as it passes. */
+.set-line.dragging { position: relative; z-index: 1; background: var(--raised); box-shadow: 0 6px 18px rgb(0 0 0 / 22%); }
+.set-line.dragging .grip { cursor: grabbing; }
+@media (prefers-reduced-motion: no-preference) {
+  .set-line.making-room { transition: transform .12s ease-out; }
+}
+/* A song's setting: its key, mode and capo, under its line. */
+.set-edit { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; margin: 4px 0 6px; }
+.set-edit .f { flex: 0 1 8rem; }
+.set-edit select, .book-more .f input { width: 100%; height: 36px; padding: 0 8px; border-radius: 10px;
+  border: 1px solid var(--control-edge); background: var(--bg); color: var(--text); font: inherit; font-size: .95rem;
+  font-weight: 400; }
+.set-edit select:disabled { opacity: .55; }
+.set-edit .actions { flex: 1 1 100%; }
+.set-edit .hint { flex: 1 1 100%; }
+@media (min-width: 720px) {
+  .set-line { grid-template-columns: var(--grip) minmax(0, 1fr) minmax(0, .6fr) 11rem 4.75rem var(--out);
+    grid-template-areas: "grip name by plays act out"; padding: 0 4px 0 2px; }
+  .book.read-only .set-line { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 11rem;
+    grid-template-areas: "name by plays"; }
+  .set-meta { display: contents; }
+  .set-by { grid-area: by; }
+  .set-plays { grid-area: plays; width: auto; }
+}
+/* Add a song: a field like the library's bar, its edge one an eye finds, and the results under it as lines. */
+.add-song { margin-top: 14px; }
+.add-label { display: block; margin: 0 0 4px; font-size: .9rem; font-weight: 650; }
+.add-song .field input { height: 44px; border-color: var(--control-edge); background: var(--bg); }
+.add-song .bar-status { margin-top: 4px; }
+.add-results { margin-top: 2px; }
+.book-more { margin-top: 12px; }
+.book-more > summary { min-height: 36px; align-content: center; color: var(--muted); font-size: .85rem; font-weight: 600;
   cursor: pointer; }
-.sb-more form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
-.sb-more .f { flex: 1 1 180px; }
-.sb-sure { display: flex; flex: 1 1 100%; align-items: center; gap: 10px; min-height: 44px; font-size: .9rem; }
+.book-more form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
+.book-more .f { flex: 1 1 180px; }
+.book-more .f input { height: 40px; }
+.sb-sure { display: flex; flex: 1 1 100%; align-items: center; gap: 10px; min-height: 40px; font-size: .9rem; }
 .sb-sure input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
-.sb-error { margin: 0 16px 16px; color: var(--failed); font-weight: 600; overflow-wrap: anywhere; }
+.book.sb-busy .set-line { opacity: .7; }
+/* The file on disk: the commands that change it. */
+.book-commands { margin-top: 12px; }
+.commands { display: grid; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+.commands li { display: grid; gap: 2px; }
+.command-what { color: var(--muted); font-size: .8rem; font-weight: 600; }
+.commands code { display: block; padding: 6px 8px; user-select: all; -webkit-user-select: all; }
+/* A thumb's targets: a tab, a songbook's line, a song's grip, chip, button and ×, its title, the menus and fields. */
+@media (pointer: coarse) {
+  .tab { min-height: 44px; }
+  .book-line { min-height: 48px; }
+  .set-line { --grip: 44px; --out: 44px; }
+  .grip, .set-out { min-height: 44px; height: 44px; }
+  .plays, .set-act .btn, .set-plays { min-height: 44px; }  /* a badge or a chip there: one height */
+  .set-title { min-height: 44px; }
+  .set-edit select, .book-more .f input { height: 44px; }
+  .book-more > summary, .sb-sure { min-height: 44px; }
+  .add-results .line-action .btn { min-width: 44px; }
+}
 .pick { display: none; }
 .selecting .pick { flex: none; position: relative; display: grid; place-items: center; width: 44px; height: 44px;
   border-radius: 12px; border: 2px solid var(--control-edge); background: var(--surface); cursor: pointer; }
@@ -119,5 +237,5 @@
     clip-path: polygon(0 0, 100% 0, 50% 100%); }
 }
 @media (pointer: coarse) {
-  .sb-more > summary, .pick-command summary { min-height: 44px; }
+  .pick-command summary { min-height: 44px; }
 }

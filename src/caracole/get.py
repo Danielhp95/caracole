@@ -37,6 +37,11 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   run keeps.
 - ``pages``: the PDF again if the sheet changed, then _todo.md and index.html,
   whose MuseScore links come from the local index.
+- ``songbooks``: the songbooks of songbooks.toml that list the song, made again
+  as ``caracole songbook render`` does (a songbook whose inputs did not change
+  is left as it is), then _todo.md and index.html again once one was, as they
+  show each songbook's files; the others are left alone, and a songbooks.toml
+  that can't be read is said and stops nothing.
 
 A block cools its site down and ends that site's stages; a spent budget (the
 lookup's or the hour's) and a provider's error leave the song to the nightly
@@ -75,6 +80,7 @@ STAGES = (
     ("lacuerda", "LaCuerda"),
     ("gtptabs", "A Guitar Pro file from gtptabs.com"),
     ("pages", "The library page"),
+    ("songbooks", "The songbooks it is in"),
 )
 STAGE_LABELS = dict(STAGES)
 NAMES = {"ug": "Ultimate Guitar", "lrclib": "LRCLIB", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com",
@@ -679,6 +685,30 @@ class _Lookup:
         write_pages(self.conn, self.cfg, self.overrides, self.now)
         return "_todo.md and index.html rewritten"
 
+    def songbooks(self) -> tuple[str, str] | str:
+        from caracole.songbook import SongbookError, load_songbooks, render_songbooks, songbooks_file
+        from caracole.songbook import songbooks_listing
+        from caracole.todo import write_pages
+
+        try:
+            books = load_songbooks(songbooks_file(self.cfg.library_dir))
+        except SongbookError as e:
+            return "skipped", f"songbooks.toml can't be read ({e}); no songbook was made again"
+        mine = songbooks_listing(self.conn, books, self.song)
+        if not mine:
+            return "skipped", "no songbook lists it"
+        names = ", ".join(b.name for b in mine)
+        self.progress.stage("songbooks", "running", names)  # for caracole serve's "Remaking songbook X…"
+        stats = render_songbooks(self.conn, self.cfg, self.overrides, runner=self.runner,
+                                 only=[b.name for b in mine])
+        if stats.rendered or stats.failed:  # index.html shows each songbook's files: written again after them
+            write_pages(self.conn, self.cfg, self.overrides, self.now)
+        if stats.failed:
+            return "failed", f"a file of {', '.join(stats.failed)} couldn't be made; the nightly run tries again"
+        if stats.font_error:
+            return "skipped", stats.font_error
+        return f"{names} made again" if stats.rendered else f"{names} up to date"
+
     # --- the whole lookup ---------------------------------------------------------------------------
 
     def run(self) -> LookupResult:
@@ -710,7 +740,8 @@ class _Lookup:
                         return self._refuse(str(e))
                     for name, work in (("match", self.match), ("sheet", self.sheet), ("pdf", self.pdf),
                                        ("lyrics", self.lyrics), ("ug", self.ug), ("lacuerda", self.lacuerda),
-                                       ("gtptabs", self.gtptabs), ("pages", self.pages)):
+                                       ("gtptabs", self.gtptabs), ("pages", self.pages),
+                                       ("songbooks", self.songbooks)):
                         self.stage(name, work)
                     note_looked_up(conn, self.song.id)
                     for provider, client in self.clients.items():

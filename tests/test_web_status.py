@@ -242,6 +242,13 @@ def test_a_lookups_sheet_stage_says_lacuerda_while_it_asks_lacuerda_for_the_shee
     assert job_line(back, None) == Line("running", "Fetching from Ultimate Guitar…")
 
 
+def test_a_lookup_remaking_a_songbook_names_it():
+    done = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs",
+                                              "pages")}
+    remaking = lookup_job(stages={**done, "songbooks": ("running", "Campfire")})
+    assert job_line(remaking, None).text == "Remaking songbook Campfire…"
+
+
 def test_a_lookup_waiting_for_the_lock_says_so():
     waiting = lookup_job(stages={"song": ("running", "waiting for another caracole (pid 42: run), which lets "
                                                      "a lookup go first at its next pause, or between two songs")})

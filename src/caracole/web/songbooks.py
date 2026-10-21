@@ -1,13 +1,19 @@
-"""caracole serve's songbooks: the forms of the library page's Songbooks section and Select bar.
+"""caracole serve's songbooks: the forms of the library page's Songbooks tab and Select bar.
 
     POST /songbook/make     name, songs (song ids, in order)   caracole songbook make NAME SONG...
     POST /songbook/add      name, songs                        caracole songbook add NAME SONG...
     POST /songbook/move     name, song, position               caracole songbook move NAME SONG POSITION
     POST /songbook/remove   name, song                         caracole songbook remove NAME SONG
+    POST /songbook/set      name, song, key, mode, capo        caracole songbook set --key K --mode M --capo N
+                            (or clear)                         NAME SONG (or --clear)
     POST /songbook/rename   name, new                          caracole songbook rename NAME NEW
     POST /songbook/delete   name                               caracole songbook delete NAME
-    POST /songbook/get      name                               caracole get "ARTIST - TITLE", for each song
-                                                               without a sheet; then caracole songbook render NAME
+    POST /songbook/get      name (and song, one song's id)     caracole get "ARTIST - TITLE", for each song
+                                                               without a sheet (or that one); then caracole
+                                                               songbook render NAME
+    POST /songbook/add-song name, and song (an id), or the     caracole get ARTIST TITLE, for a song the library
+                            artist, title, ug, tab and         hasn't got (in wanted.txt first, as Get it
+                            lacuerda of a search's result      writes it); then caracole songbook add NAME SONG
 
 A form is checked here against songbooks.toml and the database, both only read, so that one
 that can't be done is refused at once (a name a songbook can't have, a songbook there isn't,
@@ -18,7 +24,13 @@ the page's data, in the order picked; ``song`` is a song as songbooks.toml write
 ("Artist - Title"), so a song gone from the library can be moved or taken out too. ``--``
 ends the command's options, so a name may start with "-".
 
-A job's key is its command (``KEY``, then the command's words), so the same change sent twice
+A setting (``set``) comes from a song's chip in the tab, which always sends the capo with a key or a mode, as
+``caracole songbook set`` keeps it: the setting names where the song plays, so a sheet that takes its place
+plays there too. The page's Add a song (``add-song``, songbook_routes.py) adds a song of your library at
+once, and looks a song of the indexes up first, as Get it does (``search_routes.queue_lookup``).
+
+A job's key is its command (``KEY``, then the command's words; a setting's, its songbook and song before its
+setting, as ``songbook_of`` reads every key), so the same change sent twice
 is queued once; ``songbook_of`` reads back which songbook it changes, by its name before and
 after, for the page that follows it (jobs_routes.py) and for its line (status.py): "Moving the song…",
 its step's label, while it runs; "Moved" once it is done (``DONE``); "Made" and "Added" with its
@@ -30,7 +42,8 @@ songbook the library has without a sheet yet, in the songbook's order (``songboo
 songbook render NAME`` after them (``render_job``), so the songbook is made again with the sheets they got,
 "Made" once it is done; a queue without room for them all gets the first ones, and the next tap the rest.
 Its key names the last lookup it follows, so a tap again while they wait queues nothing new, and a tap
-after a new lookup makes the songbook again after that one.
+after a new lookup makes the songbook again after that one. A set list's Get it is the same for one song
+(``song``, its id).
 
 A songbook's page, ``_songbooks/<folder>/songbook.html``, is one of the pages caracole wrote
 (app.py's ``written_pages``): it is sent only while it is the page caracole wrote there
@@ -55,16 +68,17 @@ if TYPE_CHECKING:
     from caracole.songbook import Songbook
     from caracole.songs import Song
 
-ROUTES = ("/songbook/make", "/songbook/add", "/songbook/move", "/songbook/remove", "/songbook/rename",
-          "/songbook/delete")
+ROUTES = ("/songbook/make", "/songbook/add", "/songbook/move", "/songbook/remove", "/songbook/set",
+          "/songbook/rename", "/songbook/delete")
 GET_MISSING = "/songbook/get"  # its songs without a sheet, looked up now (songbook_routes.py's own handler)
+ADD_SONG = "/songbook/add-song"  # a song from the tab's search, looked up first when the library hasn't got it
 MAX_POSITION = 100_000
 KEY = "songbook\x1f"  # a songbook job's key: this, then its command's words, this character between them
 # What a songbook job's line says once it is done, by its action.
-DONE = {"make": "Made", "add": "Added", "move": "Moved", "remove": "Taken out", "rename": "Renamed",
-        "delete": "Deleted", "render": "Made"}
+DONE = {"make": "Made", "add": "Added", "move": "Moved", "remove": "Taken out", "set": "Changed",
+        "rename": "Renamed", "delete": "Deleted", "render": "Made"}
 # The changes whose line links the songbook's page once done ("Made · Open songbook"): its songs are new there.
-# Moved, taken out or renamed, its card's own buttons sit beside the line already.
+# Moved, taken out, set or renamed, its set list sits beside the line already.
 OPENS = frozenset({"make", "add", "render"})
 
 
@@ -99,7 +113,7 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
         songs = _songs(form, connect)
         count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
         return _job(f'Add {count} to "{name}"', "Adding to the songbook", "add", name, *songs)
-    if action in ("move", "remove"):
+    if action in ("move", "remove", "set"):
         song = " ".join(form.get("song", "").split())
         if not song:
             raise Refused(400, "Not a song", "Which song? The form names none.")
@@ -109,6 +123,8 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
                                                       "library to see what it holds.")
         if action == "remove":
             return _job(f'Take {entry} out of "{name}"', "Taking the song out", "remove", name, entry)
+        if action == "set":
+            return _setting_job(name, entry, form)
         try:
             position = int(form.get("position", ""))
         except ValueError:
@@ -164,21 +180,71 @@ def _job(title: str, label: str, action: str, *args: str) -> SongbookJob:
     return SongbookJob(title, KEY + "\x1f".join(command), [(label, command)])
 
 
+def add_job(name: str, song: str) -> SongbookJob:
+    """``caracole songbook add NAME SONG``: a song put at the end of the songbook (the page's Add a song)."""
+    return _job(f'Add {song} to "{name}"', "Adding to the songbook", "add", name, song)
+
+
+def _setting_job(name: str, entry: str, form: Mapping[str, str]) -> SongbookJob:
+    """``caracole songbook set``: the song's key, mode and capo in the songbook (``key``, ``mode``, ``capo``, each
+    left out where the form says nothing), or ``clear`` for its own version; Refused for a setting that can't be
+    one. Its options come before ``--``; its key names the songbook and the song first, as every songbook job's
+    does, then the setting."""
+    from caracole.songbook import SongbookError, check_setting
+
+    if form.get("clear", "") in ("1", "on", "yes"):
+        options: tuple[str, ...] = ("--clear",)
+        said, parts = "its own version", ("clear",)
+    else:
+        key, mode, capo = (form.get(name, "").strip() for name in ("key", "mode", "capo"))
+        if not (key or mode or capo):
+            raise Refused(400, "Not a setting", "Give it a key, a mode or a capo, or play it in its own version.")
+        try:
+            setting = check_setting(key[:1].upper() + key[1:] if key else None, mode.lower() or None,
+                                    (int(capo) if capo.isascii() and capo.isdigit() else capo) if capo else None,
+                                    where="The setting")
+        except SongbookError as e:
+            raise Refused(400, "Not a setting", str(e)) from e
+        named = [(flag, value) for flag, value in (("--key", setting.key), ("--mode", setting.mode),
+                                                   ("--capo", setting.capo)) if value is not None]
+        options = tuple(str(word) for pair in named for word in pair)
+        where = " ".join(str(v) for v in (setting.key, setting.mode) if v)
+        said = ", ".join(p for p in (where, f"capo {setting.capo}" if setting.capo is not None else "") if p)
+        parts = tuple("" if v is None else str(v) for v in (setting.key, setting.mode, setting.capo))
+    command = ("songbook", "set", *options, "--", name, entry)
+    title = f'Play {entry} in its own version in "{name}"' if parts == ("clear",) else \
+        f'Play {entry} in {said}, in "{name}"'
+    return SongbookJob(title, KEY + "\x1f".join(("songbook", "set", "--", name, entry, *parts)),
+                       [("Changing where it plays", command)])
+
+
 def missing_songs(form: Mapping[str, str], *, library_dir: Path, connect: Callable[[], sqlite3.Connection],
                   overrides: Overrides) -> tuple[str, list[Song]]:
     """The songbook a Get the missing songs form names, as songbooks.toml has it, and the songs of it a lookup
-    could get a sheet for now, in its order (``songbook.songs_to_get``); Refused when there is no such
-    songbook, or none of its songs to get."""
+    could get a sheet for now, in its order (``songbook.songs_to_get``; with ``song``, a set list's Get it, that
+    song alone); Refused when there is no such songbook, or none of its songs to get."""
     from caracole.songbook import songbook_entries, songs_to_get
 
     name, books = _named(form, library_dir)
     book = _book(books, name)
     with closing(connect()) as conn:
         songs = songs_to_get(songbook_entries(conn, library_dir, overrides, book), overrides)
+    one = form.get("song", "").strip()
+    if one:  # a set list's Get it: that song alone
+        songs = [s for s in songs if one.isascii() and one.isdigit() and s.id == int(one)]
+        if not songs:
+            raise Refused(409, "Nothing to get", f'That song of "{book.name}" has a sheet already, isn\'t in the '
+                                                 "library, or is ignored in overrides.toml: reload the library.")
     if not songs:
         raise Refused(409, "Nothing to get", f'Every song of "{book.name}" that the library has has a sheet '
                                              "already, or is ignored in overrides.toml: reload the library.")
     return book.name, songs
+
+
+def book_named(form: Mapping[str, str], library_dir: Path) -> str:
+    """The songbook a form names, as songbooks.toml has it; Refused when there is none, or the file can't be read."""
+    name, books = _named(form, library_dir)
+    return _book(books, name).name
 
 
 def render_job(name: str, after: int) -> SongbookJob:
