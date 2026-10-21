@@ -443,11 +443,8 @@ def test_lookup_reads_the_cache_forever_by_default():
 def test_cache_options_reach_every_request():
     # A re-check of a missing song must get past the cached miss on both endpoints.
     client = FakeClient(get=OVERLOADED, search=(200, []))
-    fetch(client, cache=False, max_age=timedelta(days=30))
-    assert [(c.cache, c.max_age) for c in client.calls] == [
-        (False, timedelta(days=30)),
-        (False, timedelta(days=30)),
-    ]
+    fetch(client, cache=False)
+    assert [(c.cache, c.max_age) for c in client.calls] == [(False, None), (False, None)]
 
 
 def test_banma_plain_only_found_with_duration_253(tmp_path):

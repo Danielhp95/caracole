@@ -20,9 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 import re
-import secrets
 import sqlite3
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -33,7 +31,7 @@ from typing import Any, Literal, Protocol
 from rapidfuzz import fuzz
 
 from caracole.http import Client, ProviderError, Response, read_once_more
-from caracole.library import song_dir
+from caracole.library import song_dir, write_atomic
 from caracole.normalize import clean_title, fold, slug_key
 from caracole.provider_pass import PassStats, each_song
 from caracole.songs import Song, list_songs, update_song
@@ -204,6 +202,18 @@ def song_lyrics(song: HasLyricsJson) -> Lyrics | None:
     return lyrics_from_json(song.lyrics_json)
 
 
+def expected_seconds(song: Song) -> float | None:
+    """How long the song is: its own duration, else LRCLIB's (a wanted.txt line rarely gives
+    one); None when neither is known, or the stored lyrics can't be read."""
+    if song.duration_s is not None:
+        return song.duration_s
+    try:
+        lyrics = song_lyrics(song)
+    except (TypeError, ValueError):  # stored lyrics that can't be read: no duration
+        return None
+    return lyrics.duration if lyrics is not None and lyrics.duration else None
+
+
 def _normalize_line(line: str) -> str:
     return " ".join(_NON_WORD.split(fold(_APOSTROPHES.sub("", line)))).strip()
 
@@ -351,7 +361,6 @@ def fetch_lyrics(
     album: str | None,
     duration_s: float | None,
     cache: bool = True,
-    max_age: timedelta | None = None,
 ) -> LyricsResult:
     """Look a song up on LRCLIB: ``/api/get`` first, then ``/api/search``.
 
@@ -364,11 +373,10 @@ def fetch_lyrics(
     never a miss. A cached answer that can't be read is asked for once more,
     past the cache, before it is an error (``http.read_once_more``).
 
-    ``cache`` and ``max_age`` go to the first ``client.get`` of each endpoint; the one
-    more ask (``read_once_more``) goes past the cache. By default a cached answer is
-    used forever; ``cache=False`` asks LRCLIB again.
+    ``cache`` goes to the first ``client.get`` of each endpoint; the one more ask
+    (``read_once_more``) goes past the cache. By default a cached answer is used
+    forever; ``cache=False`` asks LRCLIB again.
     """
-    options: dict[str, Any] = {"cache": cache, "max_age": max_age}
     track = clean_title(title)
     params: dict[str, str | int] = {"artist_name": artist, "track_name": track}
     if album:
@@ -376,7 +384,7 @@ def fetch_lyrics(
     if duration_s is not None:
         params["duration"] = round(duration_s)
     url = f"{LRCLIB_API}/get"
-    resp = client.get(url, params=params, accept=_GET_ACCEPT, **options)
+    resp = client.get(url, params=params, accept=_GET_ACCEPT, cache=cache)
     found = read_once_more(client, resp, url, _get_record, LrclibParseError, params=params, accept=_GET_ACCEPT)
     if found is not None:
         outcome = _outcome(Lyrics.from_record(found))
@@ -385,7 +393,7 @@ def fetch_lyrics(
 
     url = f"{LRCLIB_API}/search"
     query = {"track_name": _search_title(track), "artist_name": artist}
-    resp = client.get(url, params=query, accept=(200,), **options)
+    resp = client.get(url, params=query, accept=(200,), cache=cache)
     cands = read_once_more(client, resp, url, lambda r: _json(r, list), LrclibParseError, params=query,
                            accept=(200,))
     best = pick_candidate(cands, artist=artist, title=title, duration_s=duration_s)
@@ -393,27 +401,13 @@ def fetch_lyrics(
     return outcome or LyricsResult("missing", None)
 
 
-def _write_atomic(path: Path, text: str) -> None:
-    # open(..., "x") rather than mkstemp: mkstemp makes 0600 files, which would hide
-    # the library from Syncthing reading it through the group.
-    tmp = path.with_name(f".{path.name}.{secrets.token_hex(4)}.tmp")
-    try:
-        with open(tmp, "x", encoding="utf-8", newline="\n") as f:
-            f.write(text)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-
-
 def write_lyrics(song_dir: Path, lyrics: Lyrics) -> list[Path]:
     """Write ``lyrics.txt`` and, when there are synced lyrics, ``lyrics.lrc``.
 
-    Each file ends in a newline and is replaced atomically. A file these lyrics
-    have no text for is removed, so a stale ``lyrics.lrc`` never outlives a
-    re-fetch. Returns the paths written; an instrumental writes nothing.
+    Each file ends in a newline and is replaced atomically (``library.write_atomic``,
+    which makes the folder). A file these lyrics have no text for is removed, so a
+    stale ``lyrics.lrc`` never outlives a re-fetch. Returns the paths written; an
+    instrumental writes nothing.
     """
     contents = {
         "lyrics.txt": lyrics.plain if lyrics.has_lyrics else None,
@@ -423,8 +417,7 @@ def write_lyrics(song_dir: Path, lyrics: Lyrics) -> list[Path]:
     for name, text in contents.items():
         path = song_dir / name
         if text:
-            song_dir.mkdir(parents=True, exist_ok=True)
-            _write_atomic(path, text.rstrip("\n") + "\n")
+            write_atomic(path, (text.rstrip("\n") + "\n").encode("utf-8"))
             written.append(path)
         else:
             path.unlink(missing_ok=True)

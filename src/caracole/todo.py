@@ -24,9 +24,8 @@ from caracole.config import DEFAULT_PROVIDERS, Config
 from caracole.db import kv_get_json
 from caracole.health import get_state
 from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS, SCORE_KIND
-from caracole.lacuerda import artist_slug_candidates, looks_spanish
+from caracole.lacuerda_fetch import may_ask
 from caracole.library import safe_name, write_atomic
-from caracole.lyrics import song_lyrics
 from caracole.musescore import song_pages
 from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
@@ -317,13 +316,9 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
 
 
 def _lacuerda_due(song: Song) -> bool:
-    """Whether LaCuerda is still to be asked for a song with no sheet (``lacuerda_fetch``'s rule):
-    it looks Spanish, an artist slug can be built from its name, and LaCuerda never answered for it."""
-    if song.lacuerda_checked_at is not None:
-        return False
-    lyrics = song_lyrics(song)
-    return looks_spanish(clean_title(song.title), lyrics.plain if lyrics is not None else None) and bool(
-        artist_slug_candidates(song.artists[0]))
+    """Whether LaCuerda is still to be asked for a song with no sheet: one it may have
+    (``lacuerda_fetch.may_ask``, the step's rule), and LaCuerda never answered for it."""
+    return song.lacuerda_checked_at is None and may_ask(song)
 
 
 def songs_to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides,

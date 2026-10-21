@@ -166,11 +166,10 @@ def _songs_to_try(
 ) -> list[Song]:
     """Songs worth asking LaCuerda about, newest first.
 
-    Not ignored; no kept human sheet that is complete or that you pinned; probably
-    Spanish (the lyrics decide when there are any, else the title); an artist name
-    a slug can be built from; and not asked about in the last 30 days. A song whose
-    kept LaCuerda sheet the library lost (``_lost``) is asked about whatever its
-    sheet and the date, so that the sheet is written again.
+    Not ignored; no kept human sheet that is complete or that you pinned; one LaCuerda
+    may have (``may_ask``); and not asked about in the last 30 days. A song whose kept
+    LaCuerda sheet the library lost (``_lost``) is asked about whatever its sheet and
+    the date, so that the sheet is written again.
     """
     cutoff = _utc(now) - RECHECK_AFTER
     ignored = overrides.ignore if overrides is not None else frozenset()
@@ -194,12 +193,18 @@ def _songs_to_try(
                 continue
             if kept is not None and (_complete(kept.coverage, rank) or _pinned(overrides, song, kept)):
                 continue
-        lyrics = song_lyrics(song)
-        if not looks_spanish(clean_title(song.title), lyrics.plain if lyrics is not None else None):
-            continue
-        if artist_slug_candidates(song.artists[0]):
+        if may_ask(song):
             songs.append(song)
     return songs
+
+
+def may_ask(song: Song) -> bool:
+    """Whether LaCuerda may have the song, the rule the step and the to-do page go by: it looks
+    Spanish (by its lyrics when it has any, else its title), and a slug of LaCuerda's can be built
+    from its artist's name."""
+    lyrics = song_lyrics(song)
+    return looks_spanish(clean_title(song.title), lyrics.plain if lyrics is not None else None) and bool(
+        artist_slug_candidates(song.artists[0]))
 
 
 def _kept_sheet(conn: sqlite3.Connection, song_id: int) -> VersionRow | None:

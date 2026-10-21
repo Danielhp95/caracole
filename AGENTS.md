@@ -38,7 +38,7 @@ section says where things are, and the rules a change there keeps.
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py |
-| lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the sheets), lacuerda_index.py (its listings of every artist, for searches) |
+| lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page), lacuerda_index.py (its listings of every artist, for searches) |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
@@ -282,7 +282,7 @@ Traps:
   `test_commands_index_match.py::test_a_command_that_sends_no_request_imports_no_http_client`
   fails when importing `caracole.cli` and reading a `[youtube]` entry (youtube_urls.py) loads
   httpx, rich, `caracole.http` or `caracole.youtube`.
-  music.py imports mutagen in `read_audio` alone, and lyrics.py in `_expected_seconds`:
+  music.py imports mutagen in `read_audio` alone, and lyrics.py (`expected_seconds`) in `_matches`:
   inbox.py, which the pages import, scores names with its `Names`
   (`test_music.py::test_the_pages_load_no_tag_reader`, `::test_the_inbox_loads_no_http_client`).
 - Branch from `caracole-v1`, the default branch; `main` takes it by merge, when the owner asks.

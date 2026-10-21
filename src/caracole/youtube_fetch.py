@@ -49,7 +49,7 @@ from caracole.config import Config
 from caracole.db import kv_get_json, kv_set_json
 from caracole.health import get_state, is_cooling
 from caracole.http import ProviderBlocked, ProviderError
-from caracole.lyrics import song_lyrics
+from caracole.lyrics import expected_seconds
 from caracole.overrides import Overrides
 from caracole.provider_pass import PassStats, each_song
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, update_song
@@ -253,17 +253,6 @@ def songs_for_youtube(conn: sqlite3.Connection, cfg: Config, overrides: Override
         elif not _recent(record.missing_at, now):
             due.append(song)
     return sorted(due, key=lambda s: s.id in failed)  # stable: newest first within each
-
-
-def expected_seconds(song: Song) -> float | None:
-    """How long the song is: its own duration, else LRCLIB's."""
-    if song.duration_ms:
-        return song.duration_ms / 1000
-    try:
-        lyrics = song_lyrics(song)
-    except (TypeError, ValueError):  # stored lyrics that can't be read: no duration
-        return None
-    return lyrics.duration if lyrics is not None and lyrics.duration else None
 
 
 # --- a pass -------------------------------------------------------------------------------------------

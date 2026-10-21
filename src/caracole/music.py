@@ -119,23 +119,6 @@ def _duration_ok(af: AudioFile, seconds: float | None) -> bool:
     return abs(af.duration_s - seconds) <= DURATION_TOLERANCE_S
 
 
-def _expected_seconds(song: Song) -> float | None:
-    """How long a fuzzy match's file must be: the song's own duration, else LRCLIB's.
-
-    A wanted.txt line rarely gives a duration; LRCLIB's then keeps an album
-    sibling with a close title out.
-    """
-    if song.duration_s is not None:
-        return song.duration_s
-    from caracole.lyrics import song_lyrics  # here: inbox.py, which the pages import, needs no lyrics
-
-    try:
-        lyrics = song_lyrics(song)
-    except (TypeError, ValueError):  # stored lyrics that can't be read: no duration
-        return None
-    return lyrics.duration if lyrics is not None and lyrics.duration else None
-
-
 @dataclass(frozen=True)
 class Names:
     """An artist's and a title's forms, as a purchase or a download meets a song: slugs, plus pinyin
@@ -205,7 +188,10 @@ def _matches(audio: Sequence[AudioFile], songs: Sequence[Song]) -> list[_Match]:
             found.append(_Match(song.id, af, exact=True))
     exact = {m.song_id for m in found}
     names = {s.id: Names.of(s.artist, s.title) for s in songs}
-    seconds = {s.id: _expected_seconds(s) for s in songs}
+    # How long a fuzzy match's file must be: LRCLIB's duration keeps an album sibling with a close title out.
+    from caracole.lyrics import expected_seconds  # here: inbox.py, which the pages import, needs no lyrics
+
+    seconds = {s.id: expected_seconds(s) for s in songs}
     claims: dict[int, list[tuple[float, tuple[str, ...], AudioFile]]] = {}
     for af in rest:
         own = Names.of(af.artist or "", af.title or "")
