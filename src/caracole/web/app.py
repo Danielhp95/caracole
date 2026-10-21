@@ -21,7 +21,8 @@
     POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``) you picked
     POST /review          a song in review's answer, as ``caracole review --song`` writes it
     POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued, and
-                          back to the library, at the song's card
+                          back to the library, at the song's card (to the page's script: what it takes,
+                          as data, then the job)
     POST /songbook/…      make a songbook, add to it, move or take out a song, rename it, delete it
                           (songbooks.py); a songbook's page, _songbooks/<folder>/songbook.html, is
                           one of the ``written_pages``
@@ -73,11 +74,15 @@ gives it with the Songbooks section as the library page would draw it now
 page puts in place of its own. A job says what it is about (``kind``: a
 song's, a removal's, a songbook's), so the page shows each where it belongs.
 
-A removal, confirmed, goes back to the library page as it was left (``back``:
-its search, filters and view, the part of its address after #, which the
-card's Remove… sends along), at the song's card (``song=ID``), whose line
-says how the removal goes, as a fetch's does: the job names its song even
-once the song is gone.
+A removal is asked on the song's card by the page's script: Remove… there
+counts down five seconds, with Undo, while the card says what goes (the
+question, answered as data: ``removal``), and only then sends the
+confirmation, answered with the job, whose line the card shows, as a
+fetch's: the job names its song even once the song is gone. Without
+JavaScript, Remove… opens the question as a page, and the removal, confirmed,
+goes back to the library page as it was left (``back``: its search, filters
+and view, the part of its address after #, which the form sends along), at
+the song's card (``song=ID``).
 
 Searching reads, and sends no request: one search runs at a time, one asked
 for meanwhile wins over the older ones still waiting (``superseded``: the
@@ -746,9 +751,13 @@ class WebApp:
         and go back to the library, at the song's card, as ``back`` left it (``_library_at``).
 
         The confirmation carries the song's key: a song id the database gave
-        another song since the question was asked removes nothing.
+        another song since the question was asked removes nothing. To the library
+        page's script, the question is data (``removal``: the song's key, what goes
+        in one sentence, ``brief``, and whole), which its card says while it counts
+        down to Undo; the confirmation, the job, whose line its card shows: the
+        page stays where it is. The question page is for a browser without it.
         """
-        from caracole.removal import describe, plan_removal
+        from caracole.removal import brief, describe, plan_removal
         from caracole.songs import get_song
 
         try:
@@ -767,18 +776,21 @@ class WebApp:
             return _message(503, "The database can't be read", f"The database can't be read: {e}")
         if plan is not None:
             goes, stays, notes = describe(plan, self.cfg)
-            return _html(200, pages.remove_page(song.display, song.id, song.key, self.csrf, goes, stays, notes,
-                                                waiting=self.queue.active_count(), back=back,
-                                                library=_library_at(back, song.id)))
+            asked = _html(200, pages.remove_page(song.display, song.id, song.key, self.csrf, goes, stays, notes,
+                                                 waiting=self.queue.active_count(), back=back,
+                                                 library=_library_at(back, song.id)))
+            asked.data = {"removal": {"song": song.id, "key": song.key, "display": song.display,
+                                      "brief": brief(plan), "goes": goes, "stays": stays, "notes": notes}}
+            return asked
         if form.get("key") != song.key:
             return _message(409, "Not that song", "The library changed since this page was made, so nothing was "
                                                   "removed: reload the library and try again.")
         try:
-            self.queue.submit(f"Remove {song.display}", REMOVING + song.key, remove_steps(song.display),
-                              display=song.display, song_id=song.id)
+            job, _ = self.queue.submit(f"Remove {song.display}", REMOVING + song.key, remove_steps(song.display),
+                                       display=song.display, song_id=song.id)
         except QueueFull:
             return _message(503, "The queue is full", "The queue is full: try again once it empties.")
-        return _redirect(_library_at(back, song.id))  # its card says Removing…, then Removed
+        return self._queued(job, _library_at(back, song.id))  # its card says Removing…, then Removed
 
     def _review(self, form: dict[str, str]) -> Response:
         """A song in review's answer, from the picker: ``caracole review --song`` queued with it.

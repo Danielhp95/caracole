@@ -201,6 +201,31 @@ def describe(plan: RemovalPlan, cfg: Config) -> tuple[list[str], list[str], list
     return goes, stays, [*notes, AFTER]
 
 
+def brief(plan: RemovalPlan) -> str:
+    """What removing the song takes and leaves, in one sentence, as the web page's card says it while it counts
+    down to the removal: caracole's files of the song, its record, its wanted.txt lines and the audio caracole
+    took from YouTube; what stays in its folder; never Music/. ``describe`` says it whole."""
+    goes = []
+    if plan.delete:
+        goes.append(f"caracole's {_count(len(plan.delete), 'file')} for it")
+    goes.append("its record")
+    if plan.wanted_lines:
+        n = len(plan.wanted_lines)
+        goes.append("its wanted.txt line" if n == 1 else f"its {n} wanted.txt lines")
+    if plan.youtube_audio:
+        goes.append("its audio from YouTube")
+    said = "Deletes " + (", ".join(goes[:-1]) + " and " + goes[-1] if len(goes) > 1 else goes[0])
+    left = len(plan.keep) + len(plan.elsewhere)
+    if plan.folder_problem:
+        said += f"; leaves its folder ({plan.folder_problem})"
+    elif left:
+        said += f"; leaves {_count(left, 'other file')}"
+    said += "; never touches Music/."
+    if plan.wanted_problem:  # caracole remove stops before anything goes: a line left would bring it back
+        return f"wanted.txt can't be read ({plan.wanted_problem}), so nothing goes until it can. {said}"
+    return said
+
+
 AFTER = ("caracole won't bring it back, from wanted.txt, Spotify or the nightly run, until you ask for it "
          "again: caracole add, the web page's request form, or a line in wanted.txt.")
 

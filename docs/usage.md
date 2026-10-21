@@ -485,8 +485,9 @@ say), nothing is removed and it exits 1.
 `caracole remove` on a song removed already says when it was, and how to
 bring it back. Like `caracole review`, it asks before it takes caracole's lock,
 so the nightly run never waits for your answer; `--list` only reads. On the
-web page, each card's **Remove…** button does the same, after a page that
-says what goes and what stays ([caracole serve](#caracole-serve)).
+web page, each card's **Remove…** button does the same, right there on the
+card: it says in one line what goes, counts down five seconds with Undo, then
+removes the song ([caracole serve](#caracole-serve)).
 
 ### Names in other scripts
 
@@ -2090,18 +2091,26 @@ with it. A KEY that is no key exits with status 2.
   [Review](#review)). The page runs the search when you open it, so the
   library page carries no hits of its own.
 - **Remove a song.** Each card's Remove… button (a row's, under its "⋯")
-  opens a page that says what
-  goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
-  it queues `caracole remove --yes "ARTIST - TITLE"` and goes back to the
-  library as you left it (its search, filters and view), the song's card in
-  view, whose line says how it goes: "Queued…", "Removing from caracole…",
-  then "Removed", the card keeping only the song's name, and its size, so
-  that nothing under it moves, until you load the page again (a row, the
-  same). From then on the song counts nowhere: the numbers at the top, the
-  buttons' counts and the count over the list leave it out. Keep it goes
-  back there too, and nothing
-  changes. A page older than a change to the library (the song merged into
-  another since, say) removes nothing: reload the library.
+  removes the song where it is, and you stay on the library: one tap, and
+  the song's line says "Removing in 5 s · Undo", the keyboard focus on Undo,
+  and under it what goes, in one sentence, as
+  [`caracole remove`](#caracole-remove) works it out: "Deletes caracole's 6
+  files for it, its record and its wanted.txt line; leaves 1 other file;
+  never touches Music/." Nothing is sent for those five seconds but that
+  question, which changes nothing, and Undo stops it there: the line says
+  "Not removed", and Remove… is back. Then the page queues `caracole remove
+  --yes "ARTIST - TITLE"`, and the line says how it goes: "Removing…",
+  "Queued…", "Removing from caracole…", then "Removed", the card keeping only
+  the song's name, its size and its line where it was, so that nothing on
+  the screen moves, until you load the page again (a row, the same). From
+  then on the song counts nowhere: the numbers at the top, the buttons'
+  counts and the count over the list leave it out. A page older than a
+  change to the library (the song merged into another since, say) removes
+  nothing, and the line says to reload the library. Without JavaScript,
+  Remove… opens a page that says what goes and what stays; Remove it queues
+  the removal and goes back to the library as you left it (its search,
+  filters and view), the song's card in view, and Keep it goes back there
+  too.
 - **How it goes, on the page.** A request leaves you where you are. The
   song's card (or its row, on a line under it), or for a song new to the
   library a card of its own under the search box ("Just requested"), says on
