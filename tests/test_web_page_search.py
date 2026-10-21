@@ -708,7 +708,8 @@ def test_enter_moves_to_the_first_result_and_never_requests_a_song(cfg, live, br
 
 
 SKYNYRD = [("lynyrd-skynyrd", "free-bird", 4), ("lynyrd-skynyrd", "sweet-home-alabama", 3),
-           ("lynyrd-skynyrd", "simple-man", 2), ("lynyrd-skynyrd", "tuesdays-gone", 1), ("sam-grow", "skynyrd", 1)]
+           ("lynyrd-skynyrd", "simple-man", 2), ("lynyrd-skynyrd", "tuesdays-gone", 1),
+           ("lynyrd-skynyrd", "that-smell", 1), ("sam-grow", "skynyrd", 1)]
 DID_YOU_MEAN = "document.querySelector('#results .did-you-mean')"
 
 
@@ -718,9 +719,9 @@ def test_a_word_of_an_artists_name_puts_their_header_first_and_enter_asks_for_no
     browser.open(base)
     search(browser, "skynyrd")
     assert browser.wait("document.getElementById('found').dataset.query === 'skynyrd'")
-    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 4", "Sam Grow"]  # the artist first, the song titled so after
+    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 5", "Sam Grow"]  # the artist first, the song titled so after
     assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "Skynyrd"]
-    assert browser.js("document.querySelector('#results .more-by').textContent") == "+ 1 more by Lynyrd Skynyrd"
+    assert browser.js("document.querySelector('#results .more-by').textContent") == "+ 2 more by Lynyrd Skynyrd"
     assert browser.js(DID_YOU_MEAN) is None
     browser.press("Enter")
     assert browser.wait("document.activeElement.matches('#results article.hit')")
@@ -962,7 +963,7 @@ def test_a_typo_shows_did_you_mean_first_and_their_songs_opens_that_artist(cfg, 
     names = browser.js("[...document.querySelectorAll('#results .suggestion')].map((s) => "
                        "[s.querySelector('.suggest-name').textContent, s.querySelector('.suggest-facts').textContent, "
                        "s.querySelector('button').textContent])")
-    assert names == [["Lynyrd Skynyrd", "artist · 4 songs on UG", "Their songs"]]
+    assert names == [["Lynyrd Skynyrd", "artist · 5 songs on UG", "Their songs"]]
     # First: above the card, which is headed "Not it?" now; the name in the artist's accent, as a header's.
     order = browser.js("[...document.querySelectorAll('#results .did-you-mean, #results .nothing')].map((n) => n.className)")
     assert order == ["did-you-mean", "nothing"] and browser.js(CARD)["head"] == "Not it?"
@@ -972,9 +973,9 @@ def test_a_typo_shows_did_you_mean_first_and_their_songs_opens_that_artist(cfg, 
     assert browser.js(HITS) == 0
     searched = len(asked)
     browser.click("#results .suggestion .their-songs")  # their songs, in their group, first, as an artist's are
-    assert browser.wait(f"{HITS} === 4")
-    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 4"]
-    assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "Tuesdays Gone"]
+    assert browser.wait(f"{HITS} === 5")
+    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 5"]
+    assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "That Smell", "Tuesdays Gone"]
     assert browser.js("document.activeElement.matches('#results section.artist')")
     # Results now: the card gives way to the one muted line.
     assert browser.js("document.querySelector('#results .nothing')") is None

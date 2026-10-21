@@ -100,6 +100,7 @@ PARTIAL_SCALE = 0.9  # a query that is only part of a name tops out at 90
 NAMED = 80.0  # an artist's whole name among the query's other words: a possible match, below a strong hit
 READINGS = ("title", "both", "artist")  # how a query may name a song; a tie goes to the first
 ARTIST_ROWS, SONG_ROWS, TOP_SONGS = 3, 5, 3  # what ``find`` gives by default
+WORD_ARTISTS, WORD_SHARE = 10, 500  # a word in more names than this, and in more than 1 in 500 listed, is common
 ROWS_READ = 2000  # rows the prefilter reads, at most: those that hold more of the query's words first
 MAX_PATTERNS, MAX_EXTRA = 3, 2
 
@@ -484,7 +485,10 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
     """LaCuerda's artists and songs the index holds that match ``query``, best first.
 
     Ties go to the artist whose name holds the query's words as words of its own ("andres" of Andrés
-    Calamaro before Andresito's), then to the one with more songs; and to the song with a Letra y Acordes
+    Calamaro before Andresito's, ``LaCuerdaHit.part``), unless more than ``WORD_ARTISTS`` names, and more
+    than a ``WORD_SHARE``th of the artists listed, do (as Ultimate Guitar's index counts a word in more than
+    300 of its 148,705 names common): "band" is no word of Banda el Limón's, and their 184 songs still come
+    before the Quartet de Baño Band's 44. Then to the one with more songs; and to the song with a Letra y Acordes
     version, then with more versions. A query of fewer than three letters (two Chinese characters) finds
     nothing. Reads only the table: nothing is asked of LaCuerda.
     """
@@ -517,6 +521,8 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
             named[slug] = (score, "artist", _Row(*own) if own is not None else row)
     parts = {slug for slug, (_, _, row) in named.items()
              if any(q.part_of(row.artist_key.replace("-", " ")) for q in queries)}
+    if len(parts) > WORD_ARTISTS and len(parts) * WORD_SHARE > _listed_artists(conn):
+        parts = set()  # a common word ("band", "los"): no name holds it as its own more than another
     ranked = sorted(named.values(), key=lambda s: (-s[0], s[2].artist_slug not in parts, -_artist_songs(conn, s[2]),
                                                    s[2].artist.casefold(), s[2].artist_slug))
     found.sort(key=lambda s: (-s[0], s[2].acordes == 0, -len(s[2].versions), s[2].artist.casefold(),
@@ -561,6 +567,11 @@ class _Row:
     def __init__(self, *values: Any):
         for name, value in zip(_COLUMNS, values, strict=True):
             setattr(self, name, value)
+
+
+def _listed_artists(conn: sqlite3.Connection) -> int:
+    """How many artists LaCuerda's listings the index holds name."""
+    return conn.execute("SELECT COUNT(*) FROM lacuerda_index WHERE title = ''").fetchone()[0]
 
 
 def _artist_songs(conn: sqlite3.Connection, row: _Row) -> int:

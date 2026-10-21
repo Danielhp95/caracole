@@ -273,7 +273,8 @@ CREATE INDEX IF NOT EXISTS ug_artist_tabs_tab ON ug_artist_tabs(tab_id);
 # its hyphens), so that a word of an artist's name finds them ("skynyrd": lynyrd-skynyrd) without reading 1.6 million
 # rows, and ug_artist_words, the index's vocabulary (each word with how many artists' keys hold it, ``doc``), which
 # says how common a word is and holds the words a close spelling is looked for among. The keys follow every row
-# inserted or re-keyed, as ug_keys do; a key no row has any longer stays, and an artist without a row is no hit.
+# inserted, re-keyed or deleted: a key goes with the last row that has it (a tab closed, a sitemap parsed again under
+# new keys), so no artist gone counts toward how common a word is.
 _SCHEMA_V8 = """
 CREATE TABLE IF NOT EXISTS ug_artists (
   id INTEGER PRIMARY KEY,
@@ -286,6 +287,13 @@ CREATE VIRTUAL TABLE IF NOT EXISTS ug_artist_words USING fts5vocab(ug_artists_ft
 CREATE TRIGGER IF NOT EXISTS ug_artists_indexed AFTER INSERT ON ug_artists BEGIN
   INSERT INTO ug_artists_fts(rowid, artist_key) VALUES (new.id, new.artist_key);
 END;
+CREATE TRIGGER IF NOT EXISTS ug_artists_unindexed AFTER DELETE ON ug_artists BEGIN
+  INSERT INTO ug_artists_fts(ug_artists_fts, rowid, artist_key) VALUES ('delete', old.id, old.artist_key);
+END;
+CREATE TRIGGER IF NOT EXISTS ug_index_artist_gone AFTER DELETE ON ug_index
+WHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key) BEGIN
+  DELETE FROM ug_artists WHERE artist_key = old.artist_key;
+END;
 CREATE TRIGGER IF NOT EXISTS ug_index_artist_added AFTER INSERT ON ug_index BEGIN
   INSERT INTO ug_artists(artist_key) SELECT new.artist_key
   WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);
@@ -294,6 +302,8 @@ CREATE TRIGGER IF NOT EXISTS ug_index_artist_changed AFTER UPDATE OF artist_key 
 WHEN new.artist_key IS NOT old.artist_key BEGIN
   INSERT INTO ug_artists(artist_key) SELECT new.artist_key
   WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);
+  DELETE FROM ug_artists WHERE artist_key = old.artist_key
+  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key);
 END;
 INSERT OR IGNORE INTO ug_artists(artist_key) SELECT DISTINCT artist_key FROM ug_index ORDER BY artist_key;
 """

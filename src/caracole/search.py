@@ -52,14 +52,16 @@ site: an artist the index doesn't know is the user's to type.
 **By a word of the name.** An artist whose name holds every word of the query
 as words of its own, among others ("lynyrd" or "skynyrd": Lynyrd Skynyrd;
 "horse": Horse the Band), is an artist row too, after those the query is the
-whole name of (``ArtistHit.part``, scored ``PART``), their songs in their row,
-by their songs weighed by how much of the name the query is (``_parts``,
-bounded so that a word in hundreds of names, "the" or "band", names no one
-that way). Such an artist leads when their songs are most of the songs the
-query matched, or when they have ``WELL_KNOWN`` songs and one more tabbed than
-any song read by its title (``_part_leads``): "skynyrd" is Lynyrd Skynyrd,
-with Sam Grow's song "Skynyrd" still listed. The index of every artist key's
-words (``ug_artists_fts``, db.py) finds them without reading the rows.
+whole name of (``ArtistHit.part``, scored ``PART``), unless well known and with
+many more songs than one of those (``_with_parts``: "dylan" is Bob Dylan before
+Dylan), their songs in their row, by their songs weighed by how much of the
+name the query is (``_parts``, bounded so that a word in hundreds of names,
+"the" or "band", names no one that way). Such an artist leads when their songs
+are most of the songs the query matched (``MOST_SONGS`` of them at least), or
+when they have ``WELL_KNOWN`` songs and one more tabbed than any song read by
+its title (``_part_leads``): "skynyrd" is Lynyrd Skynyrd, with Sam Grow's song
+"Skynyrd" still listed. The index of every artist key's words
+(``ug_artists_fts``, db.py) finds them without reading the rows.
 
 **Close spellings.** For a query nothing matches well, ``suggestions`` gives up
 to ``SUGGESTED`` artists whose names are spelled close to it
@@ -155,12 +157,15 @@ PART = round(PARTIAL_SCALE * 100, 1)  # an artist whose name holds the query's w
 WORD_LETTERS = 3  # a query with no word this long (or Chinese word of four letters of pinyin) names no artist in part
 WORD_ARTISTS = 300  # more artists than this hold the query's words: a common word ("band", "john"), no row
 WELL_KNOWN = 50  # an artist with this many songs whose word the query is leads, unless a song titled so is more tabbed
+MOST_SONGS = 5  # an artist a word names with fewer songs than this never leads by having most of the songs matched
+OUTWEIGHS = 4  # a well-known artist a word names, with this many times the songs, goes before one the query names whole
 SUGGESTED = 3  # the close spellings ``suggest_artists`` gives, at most
 CLOSE = 80  # fuzz.ratio of a query's word and a name's word that makes them one spelled two ways
 CLOSE_LETTERS = 4  # a word shorter than this is spelled close to too much: it must be the name's word itself
 CLOSE_WORDS = 20  # the words of artists' names, spelled close to one of the query's, a suggestion looks among
 CLOSE_ARTISTS = 1000  # the artists with those words it reads, at most
 CLOSE_MARGIN = 8  # a suggestion this much less close than the closest is noise beside it ("lynrd": no Lynda Lemay)
+SUGGEST_SHARE = 10  # a suggestion weighing less than a tenth of the first one's is noise beside it ("metalika": no Malika)
 
 _SHELL_SPECIAL = re.compile(r'(["\\$`])')
 
@@ -258,7 +263,8 @@ class IndexFound:
     ``songs`` leaves out the songs of an artist in ``artists`` that only its
     name matched: they are in its row. ``lead`` is "artist" when the first
     artist outweighs the first song (a better score, or the same and a more
-    tabbed song of its own), "song" otherwise, None for no hit; ``best`` is
+    tabbed song of its own; one the query names in part, by ``_part_leads``),
+    "song" otherwise, None for no hit; ``best`` is
     the first song when it scores ``STRONG`` or more by its title (or both)
     and isn't a catch-all's (added under UG's names, its artist would be no
     one's), and None when an artist leads.
@@ -316,7 +322,7 @@ class SiteArtist:
     ``url`` the page; ``songs`` counts their songs as the site's listing does, and
     ``known`` how many of them the index holds, 0 until caracole has read their
     page; ``top`` holds the most popular with chords. ``score`` and ``via`` are as
-    ``IndexHit``'s.
+    ``IndexHit``'s, and ``part`` as ``ArtistHit``'s (``LaCuerdaHit.part``).
     """
 
     source: str
@@ -328,6 +334,7 @@ class SiteArtist:
     known: int = 0
     via: str = "artist"
     top: tuple[SiteHit, ...] = ()
+    part: bool = False
 
 
 @dataclass(frozen=True)
@@ -435,14 +442,17 @@ def find_index(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_RO
         yours = _Yours(conn)
         rows = [a for a in (_artist_hit(conn, k, named[k].score, yours) for k in order[:artists + 2]) if a is not None]
         rows = sorted(rows, key=lambda a: (-a.score, -a.top_tabs, -a.tabs, a.artist_key))[:artists]
-        rows += _part_rows(conn, {k: c for k, c in parts.items() if k not in named}, artists - len(rows), yours)
+        rows = _with_parts(rows, _part_rows(conn, {k: c for k, c in parts.items() if k not in named}, artists, yours),
+                           artists)
     shown = {a.artist_key for a in rows}
     hits = _hits(conn, [s for s in scored if not (s.via == "artist" and s.artist_key in shown)][:songs])
     if not rows and not hits:
         return IndexFound()
-    if rows and (not hits or (rows[0].score, rows[0].top_tabs) > (hits[0].score, hits[0].tabs)
-                 or _part_leads(rows[0], scored, hits)):
+    if rows and (_part_leads(rows[0], scored, hits) if rows[0].part else
+                 not hits or (rows[0].score, rows[0].top_tabs) > (hits[0].score, hits[0].tabs)):
         return IndexFound(tuple(rows), tuple(hits), "artist", None)
+    if not hits:  # only artists a word names, none of whom leads
+        return IndexFound(tuple(rows), (), "song", None)
     first = hits[0]
     # Never one only an artist's name matched, nor one of a catch-all's: its artist is no one's name.
     best = first if first.score >= STRONG and first.via != "artist" and not first.catch_all else None
@@ -462,17 +472,48 @@ def _part_rows(conn: sqlite3.Connection, parts: Mapping[str, float], n: int, you
     return sorted(rows, key=lambda a: (-a.songs * parts[a.artist_key], -a.tabs, a.artist_key))[:n]
 
 
+def _with_parts(rows: Sequence[ArtistHit], parts: Sequence[ArtistHit], n: int) -> list[ArtistHit]:
+    """Up to ``n`` of the artists the query names (``rows``: whole names, or names near it) and those it names in
+    part (``parts``), in one order: the second after the first, except that an artist named in part and well known
+    goes before each one named whole that they outweigh (``_outweighs``): "dylan" is Bob Dylan (638 songs) before
+    Dylan (27), "swift" Taylor Swift before Swift, "clapton" Eric Clapton before Claptone, a name near it; Prince
+    stays before Prince Royce. The order among those named in part is kept, and those named whole keep their place
+    in the ``n`` before any named in part but the first: "nelson" is Willie Nelson, Ricky Nelson, then Nelson (12
+    songs), and Hawk Nelson is left out."""
+    out = list(rows)
+    at = 0  # an artist named in part goes after the one before them
+    for p in parts:
+        i = next((i for i in range(at, len(out)) if not out[i].part and _outweighs(p.songs, out[i].songs)), len(out))
+        out.insert(i, p)
+        at = i + 1
+    while len(out) > max(n, 0):
+        out.pop(max((i for i, a in enumerate(out) if a.part and i > 0), default=len(out) - 1))
+    return out
+
+
+def _outweighs(part: int, whole: int) -> bool:
+    """Whether an artist named in part, with ``part`` songs, is the one meant before one named whole with ``whole``:
+    well known (``WELL_KNOWN`` songs or more) and with ``OUTWEIGHS`` times their songs. On the full index the
+    namesakes a famous artist's word finds have a tenth of their songs or less (Bob Dylan 638 and Dylan 27, Willie
+    Nelson 737 and Nelson 12, Neil Young 477 and Youngr 2, John Lennon 125 and Lennon 12), while a band whose name is
+    the word keeps its place beside a singer with it (Prince beside Prince Royce, Bush beside Kate Bush)."""
+    return part >= WELL_KNOWN and part > OUTWEIGHS * whole
+
+
 def _part_leads(artist: ArtistHit, scored: Sequence[_Row], hits: Sequence[IndexHit]) -> bool:
     """Whether an artist the query names in part comes before the songs: when their songs are most of the songs the
-    query matched ("skynyrd": Lynyrd Skynyrd's 139 of 142), or when they are well known (``WELL_KNOWN`` songs or more)
-    and have a song tabbed more than any song read by its title (or both) is: "zeppelin" is Led Zeppelin, "imagine"
-    John Lennon's song before Imagine Dragons, as an artist whose whole name is the query leads a song of that title
-    only with a more tabbed song of their own."""
+    query matched ("skynyrd": Lynyrd Skynyrd's 139 of 142) and they have ``MOST_SONGS`` or more (one song of La
+    Naranja Metalica's for "metalica" takes no Enter), or when they are well known (``WELL_KNOWN`` songs or more)
+    and have a song tabbed more than the first song read by its title (or both), the song that would lead: "zeppelin"
+    is Led Zeppelin, "young" Neil Young before Hollywood Undead's "Young", "jones" George Jones before Brian
+    McFadden's "Jones" (a soundtrack's "Davy Jones", more tabbed, holds the word among others), as an artist whose
+    whole name is the query leads a song of that title only with a more tabbed song of their own ("imagine": John
+    Lennon's song before Imagine Dragons)."""
     if not artist.part:
         return False
-    if 2 * sum(1 for s in scored if s.artist_key == artist.artist_key) > len(scored):
+    if artist.songs >= MOST_SONGS and 2 * sum(1 for s in scored if s.artist_key == artist.artist_key) > len(scored):
         return True
-    titled = max((h.tabs for h in hits if h.via != "artist"), default=0)
+    titled = next((h.tabs for h in hits if h.via != "artist"), 0)
     return artist.songs >= WELL_KNOWN and artist.top_tabs > titled
 
 
@@ -525,9 +566,11 @@ def suggest_artists(conn: sqlite3.Connection, query: str, limit: int = SUGGESTED
     Lynyrd Skynyrd, "metalica" Metallica, "beatels" the Beatles. Every word of the query must be close to a word of
     the name (``CLOSE`` by ``fuzz.ratio``; a word shorter than ``CLOSE_LETTERS`` the name's own word), and one of
     ``CLOSE_LETTERS`` letters or more must be in it; the most songs first, weighed by how much of the name the query
-    is, as the artists a word names are ranked, none ``CLOSE_MARGIN`` less close than the closest. Up to ``limit``
-    of them, from the Ultimate Guitar index and, with ``lacuerda``, LaCuerda's, an artist both have once, as
-    Ultimate Guitar's.
+    is, as the artists a word names are ranked, none ``CLOSE_MARGIN`` less close than the closest, nor one weighing
+    less than a ``SUGGEST_SHARE``th of the first ("metalika": Metallica, and no Malika Ayane). Up to ``limit`` of
+    them, from the Ultimate Guitar index and, with ``lacuerda``, LaCuerda's, ranked together ("beyonse": LaCuerda's
+    Beyonce before Ultimate Guitar's Burst of Bonse, a longer name), an artist both have once, as Ultimate
+    Guitar's.
 
     It reads the index of the artists' words alone (``ug_artist_words``, db.py): a long word's close spellings
     are looked for among the words that begin with its letter, a couple of letters longer or shorter (a typo in
@@ -536,46 +579,50 @@ def suggest_artists(conn: sqlite3.Connection, query: str, limit: int = SUGGESTED
     words = name_words(query)
     if not words or any(has_han(w) for w in words) or not any(len(w) >= CLOSE_LETTERS for w in words):
         return []
-    found: dict[str, Suggestion] = {}
     every = _ug_suggestions(conn, words) + (_lacuerda_suggestions(conn, words) if lacuerda else [])
-    closest = max((s.score for s in every), default=0.0)
-    for s in every:
+    closest = max((s.score for _, s in every), default=0.0)
+    close = [(w, s) for w, s in every if s.score >= closest - CLOSE_MARGIN]
+    ug = {compact(name_words_key(s.artist)) for _, s in close if s.source == "ug"}
+    found: dict[str, tuple[float, Suggestion]] = {}
+    for w, s in _ranked(close):
         key = compact(name_words_key(s.artist))
-        if key not in found and s.score >= closest - CLOSE_MARGIN:
-            found[key] = s
-    return list(found.values())[:max(limit, 0)]
+        if key not in found and (s.source == "ug" or key not in ug):
+            found[key] = (w, s)
+    ranked = list(found.values())
+    top = ranked[0][0] if ranked else 0.0
+    return [s for w, s in ranked if w * SUGGEST_SHARE >= top][:max(limit, 0)]
 
 
 def suggestions(conn: sqlite3.Connection, query: str, index: IndexFound, sites: Sequence[SiteHit | SiteArtist] = (),
                 *, lacuerda: bool = True) -> list[Suggestion]:
     """``suggest_artists`` for a query nothing matches well, as the pages offer them ("Did you mean"): none when the
     Ultimate Guitar index (``index``, ``find_index``'s answer) or another site's (``sites``: LaCuerda's artists and
-    songs, gtptabs.com's and MuseScore's pages) has an artist whose whole name the query is, or a song by its title
-    (or both) at ``STRONG`` or more. An artist the query names in part may be shown ("metalica": La Naranja
-    Metalica): a suggestion then is one with more songs than any artist shown, and none of them (Metallica)."""
+    songs, gtptabs.com's and MuseScore's pages) has an artist whose whole name the query is (or a name near it, at
+    ``STRONG`` or more on Ultimate Guitar's, above ``PART`` on LaCuerda's, where a name the query is only inside of,
+    "adelle" of La Banda del Lechuga, scores 90 and leaves room for Adele), or a song whose title (or title and
+    artist) the query is whole, scored 100. A title that
+    only begins with the query, or holds a word that does (scored 90), leaves room for one: "eminen" is the start
+    of The Who's "Eminence Front", and Eminem is suggested. Any page of MuseScore's is a title someone wrote out
+    as the query (its pages match by their exact title alone): no suggestion beside it. An artist the query
+    names in part may be shown ("metalica": La Naranja Metalica): a suggestion then is one with more songs than
+    any artist shown, and none of them (Metallica)."""
     for a in index.artists:
         if not a.part:
             return []
-    if any(h.score >= STRONG and h.via != "artist" for h in index.songs):
+    if any(h.score >= 100 and h.via != "artist" for h in index.songs):
         return []
     shown: list[tuple[str, int]] = [(compact(name_words_key(a.artist)), a.songs) for a in index.artists]
     for h in sites:
         if isinstance(h, SiteArtist):
-            if h.score >= STRONG and not _part_of(query, h.artist):
+            if h.score > PART and not h.part:  # LaCuerda's whole name, or a name near it: a part tops out at PART
                 return []
             shown.append((compact(name_words_key(h.artist)), h.songs))
-        elif h.source == "musescore" or (h.score >= STRONG and h.via != "artist"):
+        elif h.source == "musescore" or (h.score >= 100 and h.via != "artist"):
             return []
     most = max((n for _, n in shown), default=0)
     names = {name for name, _ in shown}
     return [s for s in suggest_artists(conn, query, lacuerda=lacuerda)
             if s.songs > most and compact(name_words_key(s.artist)) not in names]
-
-
-def _part_of(query: str, name: str) -> bool:
-    """Whether the query's words are words of a name among others, accents folded, as an artist named in part."""
-    words, of = name_words(query), name_words(name)
-    return len(words) < len(of) and all(w in of for w in words)
 
 
 def name_words_key(name: str) -> str:
@@ -609,12 +656,19 @@ def _close_words(conn: sqlite3.Connection, word: str) -> list[str]:
     return [t for t, _, _ in process.extract(word, terms, scorer=fuzz.ratio, score_cutoff=CLOSE, limit=CLOSE_WORDS)]
 
 
-def _ranked(close: Iterable[tuple[float, int, float, Suggestion]]) -> list[Suggestion]:
-    """Suggestions by their songs weighed by how much of the name the query is, then the closest."""
-    return [s for *_, s in sorted(close, key=lambda c: (-c[1] * c[2], -c[0], c[3].artist.casefold()))]
+def _weighed(songs: int, letters: int, name: str) -> float:
+    """A suggestion's weight: their songs, weighed by how much of the name (its letters) the query's letters are."""
+    return songs * min(1.0, letters / max(len(compact(name)), 1))
 
 
-def _ug_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> list[Suggestion]:
+def _ranked(close: Iterable[tuple[float, Suggestion]]) -> list[tuple[float, Suggestion]]:
+    """Weighed suggestions (``_weighed``), the heaviest first, then the closest; the two indexes' together."""
+    return sorted(close, key=lambda c: (-c[0], -c[1].score, c[1].artist.casefold(), c[1].source))
+
+
+def _ug_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> list[tuple[float, Suggestion]]:
+    """The Ultimate Guitar index's artists spelled close to the query, each weighed (``_weighed``): the heaviest few,
+    counted exactly."""
     longest = max((w for w in words if len(w) >= CLOSE_LETTERS), key=len)
     close = _close_words(conn, longest)
     if not close:
@@ -628,17 +682,17 @@ def _ug_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> list[Sugg
         return []
     counts = _song_counts(conn, list(scored))
     letters = sum(len(w) for w in words)
-    ranked = _ranked((c, counts.get(k, 0), min(1.0, letters / len(compact(k))), Suggestion("ug", "", k, 0, round(c, 1)))
+    ranked = _ranked((_weighed(counts[k], letters, k), Suggestion("ug", "", k, 0, round(c, 1)))
                      for k, c in scored.items() if counts.get(k, 0))
     out = []
-    for s in ranked[:SUGGESTED * 2]:
+    for _, s in ranked[:SUGGESTED * 2]:
         hit = _artist_hit(conn, s.key, s.score)
         if hit is not None:
-            out.append(Suggestion("ug", hit.artist, s.key, hit.songs, s.score))
+            out.append((_weighed(hit.songs, letters, s.key), Suggestion("ug", hit.artist, s.key, hit.songs, s.score)))
     return out
 
 
-def _lacuerda_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> list[Suggestion]:
+def _lacuerda_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> list[tuple[float, Suggestion]]:
     """LaCuerda's artists spelled close to the query, from its listings: the artists with a word of a long word's
     first letter (a ``LIKE`` on their keys), the query folded as those keys are (``lacuerda_index.name_key``)."""
     from caracole.lacuerda_index import name_key
@@ -655,9 +709,8 @@ def _lacuerda_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> lis
     for artist, slug, key, songs in rows:
         c = _closeness(words, key.split("-"))
         if c is not None:
-            close.append((c, songs, min(1.0, letters / max(len(compact(key)), 1)),
-                          Suggestion("lacuerda", artist, slug, songs, round(c, 1))))
-    return _ranked(close)[:SUGGESTED]
+            close.append((_weighed(songs, letters, key), Suggestion("lacuerda", artist, slug, songs, round(c, 1))))
+    return _ranked(close)[:SUGGESTED * 2]
 
 
 def search_gtptabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
@@ -902,11 +955,21 @@ def _named_at_an_end(query: str, songs: Sequence[IndexHit]) -> str | None:
 
 
 def lacuerda_leads(ug: IndexFound, lacuerda: Sequence[SiteArtist]) -> bool:
-    """Whether LaCuerda's group comes before Ultimate Guitar's: it has an artist whose whole name is the query
-    ("andres calamaro"), and the Ultimate Guitar index has no artist the query names and no strong song (only
-    Javier Calamaro's). The lookup page's Enter then opens that artist's songs, which asks nothing."""
-    return (any(a.score >= 100 for a in lacuerda) and not ug.artists
-            and not any(h.score >= STRONG for h in ug.songs))
+    """Whether LaCuerda's group comes before Ultimate Guitar's: the Ultimate Guitar index has no artist whose whole
+    name (or a name near it) the query is and no strong song, and LaCuerda has an artist whose whole name the query
+    is ("andres calamaro", where Ultimate Guitar has only Javier Calamaro's songs; "antonio josé", beside Ultimate
+    Guitar's José Antonio Méndez, one song, named in part), or one a word names who is well known (``WELL_KNOWN``
+    songs) and has more songs than any Ultimate Guitar artist the query names in part ("calamaro": Andrés Calamaro's
+    325 before Javier Calamaro's 25; "paez": Fito Páez). An Ultimate Guitar artist named in part who leads and
+    outweighs LaCuerda's whole name (``_outweighs``) keeps the lead ("dylan": Bob Dylan, not LaCuerda's Dylan). The
+    lookup page's Enter then opens that artist's songs, which asks nothing."""
+    if any(not a.part for a in ug.artists) or any(h.score >= STRONG for h in ug.songs):
+        return False
+    rival = max((a.songs for a in ug.artists), default=0)
+    whole = next((a for a in lacuerda if a.score >= 100), None)
+    if whole is not None:
+        return not (ug.lead == "artist" and _outweighs(ug.artists[0].songs, whole.songs))
+    return any(a.part and a.songs >= WELL_KNOWN and a.songs > rival for a in lacuerda[:1])
 
 
 def _lacuerda_song(h: LaCuerdaHit) -> SiteHit:
@@ -918,7 +981,7 @@ def _lacuerda_artist(conn: sqlite3.Connection, a: LaCuerdaHit) -> SiteArtist:
     known = conn.execute("SELECT COUNT(*) FROM lacuerda_index WHERE artist_slug = ? AND title != ''",
                          (a.artist_slug,)).fetchone()[0]
     return SiteArtist("lacuerda", a.artist, a.artist_slug, a.url, a.score, max(a.songs, known), known, a.via,
-                      tuple(_lacuerda_song(t) for t in a.top))
+                      tuple(_lacuerda_song(t) for t in a.top), a.part)
 
 
 def _known_song(conn: sqlite3.Connection, artist: str, title_key: str, mine: list[set[tuple[str, str]]]) -> bool:

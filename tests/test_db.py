@@ -343,6 +343,32 @@ def test_a_version_7_database_gains_its_artists_by_word_and_keeps_every_row(tmp_
     c.execute("UPDATE ug_index SET artist_key = 'sam-grow-band' WHERE tab_id = 3")
     assert by_word("skynyrd") == ["lynyrd-skynyrd", "skynyrd-tribute"] and by_word("band") == ["sam-grow-band"]
     words = dict(c.execute("SELECT term, doc FROM ug_artist_words WHERE term IN ('skynyrd', 'grow', 'lynyrd')"))
-    assert words == {"skynyrd": 2, "grow": 2, "lynyrd": 1}
+    assert words == {"skynyrd": 2, "grow": 1, "lynyrd": 1}  # sam-grow went with its one row, re-keyed
     c.close()
     assert columns(path.with_name("caracole.sqlite.v7.bak"), "ug_artists") == ([], 7)
+
+
+def test_an_artist_no_row_has_any_longer_leaves_the_index_of_their_words(conn):
+    def by_word(word):
+        return [r[0] for r in conn.execute("SELECT artist_key FROM ug_artists WHERE id IN "
+                                           "(SELECT rowid FROM ug_artists_fts WHERE ug_artists_fts MATCH ?) "
+                                           "ORDER BY artist_key", (f'"{word}"',))]
+
+    def doc(word):
+        row = conn.execute("SELECT doc FROM ug_artist_words WHERE term = ?", (word,)).fetchone()
+        return row[0] if row else 0
+
+    conn.executemany("INSERT INTO ug_index VALUES (?, ?, ?, 'chords', '1', 'x', '')",
+                     [(1, "lynyrd-skynyrd", "free-bird"), (2, "lynyrd-skynyrd", "simple-man"),
+                      (3, "skynyrd-tribute", "free-bird"), (4, "sam-grow", "skynyrd")])
+    assert by_word("skynyrd") == ["lynyrd-skynyrd", "skynyrd-tribute"] and doc("skynyrd") == 2
+    # A tab closed (ug/index.py deletes its row): the artist stays while another row has them.
+    conn.execute("DELETE FROM ug_index WHERE tab_id = 1")
+    assert by_word("skynyrd") == ["lynyrd-skynyrd", "skynyrd-tribute"]
+    conn.execute("DELETE FROM ug_index WHERE tab_id = 3")
+    assert by_word("skynyrd") == ["lynyrd-skynyrd"] and doc("skynyrd") == 1 and doc("tribute") == 0
+    # Re-keyed (a sitemap parsed again under new keys): the old key goes with its last row.
+    conn.execute("UPDATE ug_index SET artist_key = 'lynyrd-skynyrd-band' WHERE tab_id = 2")
+    assert by_word("skynyrd") == ["lynyrd-skynyrd-band"] and doc("lynyrd") == 1
+    assert conn.execute("SELECT COUNT(*) FROM ug_artists").fetchone()[0] == 2  # Sam Grow's and the band's
+    assert conn.execute("INSERT INTO ug_artists_fts(ug_artists_fts) VALUES ('integrity-check')") is not None

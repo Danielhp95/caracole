@@ -459,7 +459,7 @@ def test_enter_with_no_clear_best_asks_for_nothing_and_says_so(cfg, live, browse
 
 
 SKYNYRD = [("lynyrd-skynyrd", "free-bird", 4), ("lynyrd-skynyrd", "simple-man", 2), ("lynyrd-skynyrd", "tuesdays-gone", 1),
-           ("sam-grow", "skynyrd", 1)]
+           ("lynyrd-skynyrd", "that-smell", 1), ("lynyrd-skynyrd", "workin-for-mca", 1), ("sam-grow", "skynyrd", 1)]
 
 
 @in_chromium
@@ -492,7 +492,7 @@ def test_a_close_spelling_says_did_you_mean_and_the_name_lists_their_songs(cfg, 
     browser.type("lynrd")
     assert browser.wait("document.querySelector('#results .did-you-mean') !== null")
     assert browser.js("[...document.querySelectorAll('#results .suggestion')].map((s) => s.textContent)") == [
-        "Lynyrd Skynyrdartist · 3 songs on UGTheir songs"]
+        "Lynyrd Skynyrdartist · 5 songs on UGTheir songs"]
     assert browser.js(HITS) == 0
     browser.press("Enter")  # nothing stands out: Enter takes no suggestion, and asks for nothing
     time.sleep(0.5)
@@ -500,7 +500,7 @@ def test_a_close_spelling_says_did_you_mean_and_the_name_lists_their_songs(cfg, 
     browser.click("#results .did-you-mean .their-songs")
     assert browser.wait(f"{ARTIST_NAME} === 'Lynyrd Skynyrd'")
     assert browser.js("[...document.querySelectorAll('#results .hit .row-title')].map(t => t.textContent)") == [
-        "Free Bird", "Simple Man", "Tuesdays Gone"]
+        "Free Bird", "Simple Man", "That Smell", "Tuesdays Gone", "Workin For Mca"]
     assert queue.snapshot() == []
 
 

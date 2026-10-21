@@ -1554,11 +1554,12 @@ def test_api_search_gives_artists_readings_and_what_enter_takes(app, conn):
 
 
 def by_word_index(conn):
-    """Lynyrd Skynyrd, Sam Grow's song Skynyrd, Metallica and La Naranja Metalica."""
+    """Lynyrd Skynyrd (five songs), Sam Grow's song Skynyrd, Metallica and La Naranja Metalica."""
     from caracole.ug.index import mark_built, upsert_rows
 
     rows = [(11, "lynyrd-skynyrd", "free-bird", "chords"), (12, "lynyrd-skynyrd", "free-bird", "tabs"),
             (13, "lynyrd-skynyrd", "simple-man", "chords"), (14, "lynyrd-skynyrd", "sweet-home-alabama", "chords"),
+            (15, "lynyrd-skynyrd", "tuesdays-gone", "chords"), (16, "lynyrd-skynyrd", "that-smell", "chords"),
             (21, "sam-grow", "skynyrd", "chords"), (31, "metallica", "one", "tabs"), (32, "metallica", "fuel", "tabs"),
             (41, "la-naranja-metalica", "fuego", "chords")]
     upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1", datetime(2026, 10, 19, tzinfo=UTC))
@@ -1570,7 +1571,7 @@ def test_api_search_gives_an_artist_by_a_word_of_their_name_first_and_enter_take
     data = as_json(get(app, "/api/search?q=skynyrd"))
     [artist] = data["artists"]
     assert {k: artist[k] for k in ("artist_key", "artist", "songs", "part", "group_key")} == {
-        "artist_key": "lynyrd-skynyrd", "artist": "Lynyrd Skynyrd", "songs": 3, "part": True,
+        "artist_key": "lynyrd-skynyrd", "artist": "Lynyrd Skynyrd", "songs": 5, "part": True,
         "group_key": "lynyrd-skynyrd"}
     assert [h["ug"] for h in data["index"]] == ["sam-grow/skynyrd"]  # the song titled so, still shown
     assert (data["lead"], data["best"], data["suggest"]) == ("artist", None, [])  # Enter opens their songs
@@ -1582,7 +1583,7 @@ def test_api_search_suggests_artists_spelled_close_to_a_query_nothing_matches(ap
     before = as_json(get(app, "/api/search?q=lynrd"))
     assert (before["artists"], before["index"], before["best"]) == ([], [], None)
     assert before["suggest"] == [{"source": "ug", "artist": "Lynyrd Skynyrd", "artist_key": "lynyrd-skynyrd",
-                                  "songs": 3, "group_key": "lynyrd-skynyrd"}]
+                                  "songs": 5, "group_key": "lynyrd-skynyrd"}]
     assert before["hint"].startswith("Nothing in the offline Ultimate Guitar index matches well.")  # as it was
     metalica = as_json(get(app, "/api/search?q=metalica"))
     assert [a["artist"] for a in metalica["artists"]] == ["La Naranja Metalica"]
@@ -1999,6 +2000,38 @@ def test_lacuerda_leads_with_the_artist_the_query_names_when_ultimate_guitar_has
     assert data["lacuerda_leads"] is True and data["best"] is None  # Enter opens their Songs, which asks nothing
     estopa = as_json(get(app, "/api/search?q=estopa"))  # Ultimate Guitar names them too: its rows come first
     assert estopa["artists"] and estopa["lacuerda_artists"] and estopa["lacuerda_leads"] is False
+
+
+def test_when_lacuerda_leads_ultimate_guitars_artist_a_word_names_leads_nothing(app, conn):
+    # "calamaro": Javier Calamaro's songs on Ultimate Guitar, Andrés Calamaro's many more on LaCuerda.
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+    from caracole.search import MOST_SONGS
+    from caracole.ug.index import mark_built, upsert_rows
+
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(3300 + i, "javier-calamaro", f"song-{i}", "chords", f"javier-calamaro/song-{i}-chords-{3300 + i}")
+                       for i in range(MOST_SONGS)], "1", when)
+    mark_built(conn, when)
+    lacuerda_index(conn)
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist("andres_calamaro", "Andrés Calamaro", 325)])
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=calamaro"))
+    assert [a["artist"] for a in data["artists"]] == ["Javier Calamaro"]
+    assert [a["artist"] for a in data["lacuerda_artists"]] == ["Andrés Calamaro"]
+    # LaCuerda's group first, and Enter opens Andrés Calamaro's songs: Ultimate Guitar's artist leads nothing.
+    assert (data["lacuerda_leads"], data["lead"], data["best"]) == (True, "song", None)
+
+
+def test_api_search_looks_for_no_close_spelling_when_a_song_of_yours_is_the_query(app, conn, monkeypatch):
+    def no(*args, **kwargs):
+        raise AssertionError("no suggestion is looked for")
+
+    by_word_index(conn)
+    add_song(conn, "Someone", "Lynrd")
+    monkeypatch.setattr("caracole.search.suggest_artists", no)
+    data = as_json(get(app, "/api/search?q=lynrd"))
+    assert data["suggest"] == [] and data["library"]
 
 
 def test_a_page_read_by_name_is_searched_at_once_and_its_request_says_what_lacuerda_answered(cfg, conn):

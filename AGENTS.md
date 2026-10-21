@@ -152,10 +152,12 @@ Rules a change there keeps (the Invariants below are the others):
   gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
   (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
   and in `/api/search`'s `removed`, which the library page shows with Add again), the words of the UG index's
-  artists' names (`ug_artists_fts` and its vocabulary `ug_artist_words`, schema 8, kept by triggers on `ug_index`:
-  an artist by a word of their name, `ArtistHit.part`, bounded by `WORD_LETTERS` and `WORD_ARTISTS`, leading by
-  `_part_leads`; and `suggest_artists`, the artists spelled close to a query nothing matches well, UG's and
-  LaCuerda's, `/api/search`'s `suggest`, the pages' "Did you mean"), and
+  artists' names (`ug_artists_fts` and its vocabulary `ug_artist_words`, schema 8, kept by triggers on `ug_index`,
+  a key going with its last row: an artist by a word of their name, `ArtistHit.part`, bounded by `WORD_LETTERS` and
+  `WORD_ARTISTS` (LaCuerda's by `lacuerda_index.WORD_ARTISTS`), placed before a small namesake by `_with_parts`,
+  leading by `_part_leads` and, against LaCuerda's, `lacuerda_leads`; and `suggest_artists`, the artists spelled
+  close to a query nothing matches well, UG's and LaCuerda's ranked together, `/api/search`'s `suggest`, the pages'
+  "Did you mean"), and
   `gtptabs_songs` counts an artist's songs on gtptabs.com (an artist row's `gtptabs` in `/api/search`, the
   "Guitar Pro 12" of their header); `--progression` reads progressions.py's records alone, your songs
   only (`songs_with`). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
