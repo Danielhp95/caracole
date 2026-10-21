@@ -131,8 +131,7 @@ def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
     for ``clear``); raises Refused."""
     from caracole.library import songs_in_folder
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS, written_file
-    from caracole.sheet_versions import SHEET_PAGE, in_library
-    from caracole.versions_cmd import _chords_pins
+    from caracole.sheet_versions import SHEET_PAGE, in_library, sheet_pins
     from caracole.web.app import version_page_tab
 
     if do != "clear" and not (tab.isascii() and tab.isdigit() and len(tab) <= MAX_TAB):
@@ -158,13 +157,13 @@ def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
             raise _NO_SHEET
         versions = in_library(conn, song.id, app.cfg.rank)
         the_one = _the_one(conn, song.id, versions)
-        sheet_pins = tuple(_chords_pins(conn, song, overrides))
+        pins = tuple(sheet_pins(conn, song.id, overrides.pin.get(song.key, ())))
     version = None
     if do != "clear":
         version = next((v for v in versions if v.tab_id == tab), None)
         if version is None:
             raise Refused(404, "No such version", f"Ultimate Guitar lists no such chords version of {song.display}.")
-    return _Asked(song, sheet, "/".join(quote(p) for p in parts[:-1]), version, versions, the_one, sheet_pins,
+    return _Asked(song, sheet, "/".join(quote(p) for p in parts[:-1]), version, versions, the_one, pins,
                   tuple(overrides.pin.get(song.key, ())), overrides.block, back)
 
 

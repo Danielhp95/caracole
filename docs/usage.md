@@ -2081,7 +2081,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the song from 900 px wide, in their place). A kept version opens from it;
   one gone from UG is listed and opens nothing. Served by `caracole serve`,
   **Keep it** on a version not kept, **Make this the one** on a kept
-  version's page, and **Back to caracole's pick** once you chose another,
+  version's page, and **Back to caracole's pick** while a `[pin]` of yours
+  chooses the sheet (the one `caracole versions --clear` takes out),
   open caracole serve's page that does it. Opened from a file, each shows the
   `caracole versions` command that does it, with Copy, and a version not kept
   links to its page on UG.

@@ -19,6 +19,8 @@ from the files table which version is the one and which are kept beside it, ``sa
 which versions are a kept one's very text (kept under one name only), and ``in_library``
 lists the versions with both. ``kept_by_you`` are the versions you asked to keep
 (``caracole versions --keep``), which the fetch keeps beside the sheet whatever the ranking.
+``sheet_pins`` are the song's ``[pin]`` tabs that choose its sheet, those ``caracole versions
+--clear`` takes out.
 """
 
 from __future__ import annotations
@@ -222,6 +224,22 @@ def note_kept_by_you(conn: sqlite3.Connection, song_id: int, tab_id: str) -> Non
     tabs = kept_by_you(conn, song_id)
     if str(tab_id) not in tabs:
         kv_set_json(conn, yours_key(song_id), [*tabs, str(tab_id)])
+
+
+def sheet_pins(conn: sqlite3.Connection, song_id: int, pins: Sequence[int]) -> list[int]:
+    """Of the song's ``[pin]`` tabs ``pins``, those that choose its sheet: chords versions, by the song's versions
+    and the offline index, and a pin of a kind neither knows (not fetched yet). A Guitar Pro or tab pin stays."""
+    out = []
+    for tab in pins:
+        row = conn.execute("SELECT kind FROM versions WHERE song_id = ? AND provider = ? AND tab_id = ?",
+                           (song_id, PROVIDER, str(tab))).fetchone()
+        kind = row[0] if row is not None else None
+        if kind is None:
+            indexed = conn.execute("SELECT type FROM ug_index WHERE tab_id = ?", (tab,)).fetchone()
+            kind = indexed[0] if indexed is not None else None
+        if kind is None or kind in KINDS:
+            out.append(tab)
+    return out
 
 
 def in_library(conn: sqlite3.Connection, song_id: int, policy: RankPolicy) -> list[SheetVersion]:

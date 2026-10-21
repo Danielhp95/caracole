@@ -136,19 +136,10 @@ def _listed(conn: sqlite3.Connection, cfg: Config, song: Song, tab: int) -> Shee
 
 
 def _chords_pins(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> list[int]:
-    """The song's pins that choose its sheet: chords versions, by the song's versions and the offline index; a
-    pin of a kind neither knows (not fetched yet) too. A Guitar Pro or tab pin stays."""
-    out = []
-    for tab in overrides.pin.get(song.key, ()):
-        row = conn.execute("SELECT kind FROM versions WHERE song_id = ? AND provider = ? AND tab_id = ?",
-                           (song.id, PROVIDER, str(tab))).fetchone()
-        kind = row[0] if row is not None else None
-        if kind is None:
-            indexed = conn.execute("SELECT type FROM ug_index WHERE tab_id = ?", (tab,)).fetchone()
-            kind = indexed[0] if indexed is not None else None
-        if kind in (None, "chords"):
-            out.append(tab)
-    return out
+    """The song's pins that choose its sheet (``sheet_versions.sheet_pins``). A Guitar Pro or tab pin stays."""
+    from caracole.sheet_versions import sheet_pins
+
+    return sheet_pins(conn, song.id, overrides.pin.get(song.key, ()))
 
 
 class _Events:

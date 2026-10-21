@@ -42,8 +42,9 @@ written ``\\u003c``:
 - ``library``: the library's index.html, relative to the page;
 - ``versions``: UG's chords versions of the song, for the switcher under the key line and the list it
   opens (``_VERSIONS``, ``_VERSION_LIST``), or null for none: ``sheet_versions.as_data``'s ``{"total",
-  "list"}``, each entry's ``this`` saying whether it is this page's, and ``sheet``, the provider of the
-  sheet the title opens ("ug", "lacuerda", "auto"): render.py's ``_versions_data``.
+  "list"}``, each entry's ``this`` saying whether it is this page's, ``sheet``, the provider of the
+  sheet the title opens ("ug", "lacuerda", "auto"), and ``pinned``, whether a ``[pin]`` of yours chooses it:
+  render.py's ``_versions_data``.
 """
 
 from __future__ import annotations

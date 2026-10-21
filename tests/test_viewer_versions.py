@@ -304,6 +304,25 @@ def test_a_version_you_chose_offers_caracoles_pick_back(tmp_path):
 
 
 @in_chromium
+def test_the_way_back_to_caracoles_pick_is_offered_while_a_pin_chooses_the_sheet(tmp_path):
+    # The data says whether a [pin] of yours chooses the sheet (render.py: the pin caracole versions --clear takes
+    # out): offered then, wherever your version ranks, and never without one, wherever the one ranks.
+    pinned = deepcopy(WONDERWALL)  # your pin, which ranks first
+    pinned["pinned"] = True
+    loose = deepcopy(WONDERWALL)  # no pin, the one not first: the first's page failed to parse, say
+    loose["pinned"] = False
+    loose["list"][0].update(chosen=False, page=None, kept=False)
+    loose["list"][1].update(chosen=True, page="sheet.html")
+    seen_acts = {}
+    for name, versions in (("pinned", pinned), ("loose", loose)):
+        pages = folder(tmp_path / name, versions)
+        with viewer(tmp_path / name, pages["sheet.html"].as_uri()) as b:
+            open_list(b)
+            seen_acts[name] = seen(b)["acts"]
+    assert seen_acts == {"pinned": [["Back to caracole's pick", None]], "loose": []}
+
+
+@in_chromium
 def test_served_the_list_links_to_caracole_serves_versions_page(tmp_path):
     versions = deepcopy(WONDERWALL)
     versions["list"][0].update(chosen=False, page="version-1064463.html")

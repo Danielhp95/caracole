@@ -379,3 +379,18 @@ def test_a_version_whose_text_is_the_sheets_gets_no_page_and_opens_the_sheets(co
         assert listed["102"] == (True, "sheet.html")
     mine = [v["tab"] for v in page_data(folder / "sheet.html")["versions"]["list"] if v["this"]]
     assert mine == ["101"]
+
+
+def test_every_page_says_whether_a_pin_of_yours_chooses_the_sheet(conn, cfg):
+    # The viewer offers Back to caracole's pick while a [pin] chooses the sheet, the pin caracole versions --clear
+    # takes out (caracole serve's versions page offers nothing without one), whatever the version's rank.
+    song = song_with_versions(conn, cfg)
+    folder = folder_of(cfg, song)
+    pages = ("sheet.html", version_names(str(B))[2], version_names(str(C))[2])
+    render(conn, cfg)
+    assert [page_data(folder / name)["versions"]["pinned"] for name in pages] == [False, False, False]
+
+    stats = render_all(conn, cfg, Overrides(pin={song.key: (SHEET_TAB,)}), runner=fake_chordpro)
+
+    assert stats.failed == 0
+    assert [page_data(folder / name)["versions"]["pinned"] for name in pages] == [True, True, True]

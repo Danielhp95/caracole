@@ -97,7 +97,7 @@ def test_four_versions_on_ug_three_kept_each_with_its_viewer_page(config, sites,
         ("102", "sheet.html", True, False), ("103", "version-103.html", False, True),
         ("101", "version-101.html", False, False), ("104", None, False, False)]
     versions = data_of(folder / "version-101.html")["versions"]
-    assert (versions["total"], versions["sheet"]) == (4, "ug")
+    assert (versions["total"], versions["sheet"], versions["pinned"]) == (4, "ug", False)
     # A version's page is its own text, and offers no export: an export is the one's
     page = (folder / "version-103.html").read_text("utf-8")
     assert '<p class="l">sheet 103</p>' in page and 'id="export"' not in page
@@ -252,6 +252,7 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
         ("102", "version-102.html", False, False), ("103", "sheet.html", True, True),
         ("101", "version-101.html", False, False)]
     assert sorted(p.name for p in folder.glob("version-*.html")) == ["version-101.html", "version-102.html"]
+    assert data_of(folder / "sheet.html")["versions"]["pinned"] is True  # Back to caracole's pick, offered
 
     # Its page was the version's, and is gone now that it's the sheet; an export from a version's page is refused
     def get(path):

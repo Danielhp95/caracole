@@ -152,7 +152,7 @@ from caracole.keys import SongKey, sheet_key, sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
 from caracole.pdf_text import PDF_TEXT_VERSION, pdf_text
-from caracole.sheet_versions import SheetVersion, as_data, in_library, tab_of, version_names
+from caracole.sheet_versions import SheetVersion, as_data, in_library, sheet_pins, tab_of, version_names
 from caracole.songs import (
     AUTO_SHEET,
     HUMAN_SHEET,
@@ -584,7 +584,8 @@ def _render_song(
     human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
     folder = song_dir(cfg.library_dir, song)
     versions = in_library(conn, song.id, cfg.rank)
-    listed = _versions_data(conn, versions, human or auto)
+    listed = _versions_data(conn, versions, human or auto,
+                            pinned=bool(sheet_pins(conn, song.id, overrides.pin.get(song.key, ()))))
     done: list[_Done] = [_render_versions(conn, cfg, song, files, versions, listed)]
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
     chosen = next((v.tab_id for v in versions if v.chosen), None)
@@ -631,16 +632,18 @@ def _render_song(
 # --- the versions kept beside the sheet: a viewer each ----------------------------------
 
 
-def _versions_data(conn: sqlite3.Connection, versions: list[SheetVersion], one: KeptFile | None
-                   ) -> dict[str, Any] | None:
+def _versions_data(conn: sqlite3.Connection, versions: list[SheetVersion], one: KeptFile | None, *,
+                   pinned: bool = False) -> dict[str, Any] | None:
     """What every viewer of the song says of its UG chords versions: ``sheet_versions.as_data``, its
-    ``total`` every version listed (gone ones too), and ``sheet``, the provider of the sheet the title
-    opens ("ug", "lacuerda", "auto"; None when it keeps none). None when UG lists no chords version of
-    the song: then no viewer has a ``versions`` (and shows no switcher)."""
+    ``total`` every version listed (gone ones too), ``sheet``, the provider of the sheet the title
+    opens ("ug", "lacuerda", "auto"; None when it keeps none), and ``pinned``, whether a ``[pin]`` of yours
+    chooses it (``sheet_versions.sheet_pins``: what ``caracole versions --clear`` takes out, so the viewer
+    offers Back to caracole's pick). None when UG lists no chords version of the song: then no viewer has a
+    ``versions`` (and shows no switcher)."""
     if not versions:
         return None
     provider = get_version(conn, one.version_id).provider if one is not None else None
-    return {**as_data(versions, len(versions)), "sheet": provider}
+    return {**as_data(versions, len(versions)), "sheet": provider, "pinned": pinned}
 
 
 def _on_page(listed: dict[str, Any] | None, tab: str | None) -> dict[str, Any] | None:
