@@ -776,16 +776,25 @@ def plays_in(entry: Entry) -> str | None:
     Dorian, capo 0", "E Minor, capo 2"; "Transposed +2, capo 0" for a sheet with no key), or ``KEY_UNKNOWN`` for
     a setting with a key or a mode its sheet, which has no key, can't take; None for a song without a sheet, or
     one the viewer's code can't read (a bug, logged with its traceback)."""
+    return where_played(entry)[0]
+
+
+def where_played(entry: Entry) -> tuple[str | None, tuple[Key | None, int] | None]:
+    """``plays_in``'s words and, for the set list's menus, the key of the shapes played (a pitch class and a mode,
+    None for a sheet with no key) and the capo (``version.played_key``), from one reading of the sheet; both None
+    for a song without a sheet, or one the viewer's code can't read (a bug, logged with its traceback)."""
     if entry.cho is None:
-        return None
+        return None, None
     try:
         shapes = viewer_key(entry.cho, entry.key)
+        capo = parse_sheet(entry.cho).capo
+        played = played_key(entry.version, shapes, capo)
         if shapes is None and _places(entry.setting):
-            return KEY_UNKNOWN
-        return version_label(entry.version, shapes, parse_sheet(entry.cho).capo)
+            return KEY_UNKNOWN, played
+        return version_label(entry.version, shapes, capo), played
     except Exception:
         log.warning("%s: cannot say where its songbook plays it", entry.text, exc_info=True)
-        return None
+        return None, None
 
 
 def _sheet_of(conn: sqlite3.Connection, library_dir: Path, song: Song) -> tuple[str, str] | None:
@@ -810,7 +819,8 @@ def _sheet_of(conn: sqlite3.Connection, library_dir: Path, song: Song) -> tuple[
 
 
 def songbooks_listing(conn: sqlite3.Connection, books: Iterable[Songbook], song: Song) -> list[Songbook]:
-    """The songbooks whose entries name ``song``, found as ``songbook_entries`` finds each (never by a search)."""
+    """The songbooks whose entries name ``song``, found as ``songbook_entries`` finds each (never by a search):
+    keep it matching exactly what ``songbook_entries`` and ``songs_to_get`` match (``find_entry_song``)."""
     return [b for b in books if any((found := find_entry_song(conn, e.text)) is not None and found.id == song.id
                                     for e in b.songs)]
 

@@ -79,12 +79,13 @@ def _book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any
     base = f"{FOLDER}/{quote(book.folder, safe='')}"
     songs = []
     for n, e in enumerate(entries, start=1):
+        plays, at = _plays(e)
         songs.append({
             "n": n, "entry": e.text, "key": e.song.key if e.song is not None else min(entry_keys(e.text), default=""),
             "title": e.title, "artist": e.artist,
             "id": e.song.id if e.song is not None else None, "missing": e.missing,
-            "get": e.song is not None and e.song.id in getting, "plays": _plays(e), "own": not e.setting,
-            "at": _at(e), "href": sheet_href(cfg.library_dir, e.song) if e.song is not None and e.cho else None,
+            "get": e.song is not None and e.song.id in getting, "plays": plays, "own": not e.setting,
+            "at": at, "href": sheet_href(cfg.library_dir, e.song) if e.song is not None and e.cho else None,
         })
     newest = max(made.values(), default=None)
     return {
@@ -109,25 +110,14 @@ def _made(folder: Any) -> dict[str, float]:
     return found
 
 
-def _plays(entry: Entry) -> str | None:
-    from caracole.songbook import plays_in
+def _plays(entry: Entry) -> tuple[str | None, dict[str, Any] | None]:
+    """Where the songbook plays the song (``songbook.plays_in``, in words), and for the setting's menus the key of
+    the shapes played (a pitch class and a mode, None for a sheet with no key) and the capo; None for a song
+    without a sheet, or one the viewer's code can't read (a bug, logged with its traceback)."""
+    from caracole.songbook import where_played
 
-    return plays_in(entry)
-
-
-def _at(entry: Entry) -> dict[str, Any] | None:
-    """Where the songbook plays the song, for its setting's menus: the key of the shapes played (a pitch class and
-    a mode, None for a sheet with no key) and the capo; None for a song without a sheet, or one the viewer's code
-    can't read (a bug, logged with its traceback)."""
-    if entry.cho is None:
-        return None
-    from caracole.viewer.page import viewer_key
-    from caracole.viewer.sheet import parse_sheet
-    from caracole.viewer.version import played_key
-
-    try:
-        key, capo = played_key(entry.version, viewer_key(entry.cho, entry.key), parse_sheet(entry.cho).capo)
-    except Exception:
-        log.warning("%s: cannot say where its songbook plays it", entry.text, exc_info=True)
-        return None
-    return {"tonic": key.tonic if key else None, "mode": key.mode if key else None, "capo": capo}
+    label, played = where_played(entry)
+    if played is None:
+        return label, None
+    key, capo = played
+    return label, {"tonic": key.tonic if key else None, "mode": key.mode if key else None, "capo": capo}

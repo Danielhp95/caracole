@@ -137,7 +137,16 @@ def lookup(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
 def queue_lookup(app: WebApp, form: dict[str, str]) -> tuple[Job, str]:
     """A song looked up now: a song of your library as it is (``song``, its id; or the one your pick or its name
     is already), else a new one, in wanted.txt at once; its job, and the song as the library names it, or will
-    ("Artist - Title"). The library page's Add a song (songbook_routes.py) puts it in a songbook after it."""
+    ("Artist - Title")."""
+    request, display, full = lookup_request(app, form)
+    job, _ = app.submit(**request, full=full)
+    return job, display
+
+
+def lookup_request(app: WebApp, form: dict[str, str]) -> tuple[dict[str, Any], str, str]:
+    """``queue_lookup`` short of queueing: the arguments of its ``JobQueue.submit`` (wanted.txt written already, for
+    a song new to the library), the song's name, and what to say when the queue is full. The library page's Add a
+    song (songbook_routes.py) queues it with the songbook's change, both or neither."""
     pick, ug = _pick(form)
     lacuerda = lacuerda_field(form)
     found = _library_song(app, form, ug)
@@ -150,10 +159,11 @@ def queue_lookup(app: WebApp, form: dict[str, str]) -> tuple[Job, str]:
         display = f"{artist} - {title}"
     steps = lookup_steps(artist, title, album=album, duration_ms=duration_ms,
                          ug=pick["ug"] or None, tab=pick["tab"] or None, lacuerda=lacuerda)
-    job, _ = app.submit(f"Fetch {artist} - {title}", key, steps, fetching=True, note=note, display=display,
-                        full=f"{note} The queue is full, so it wasn't looked up now: the nightly run looks for "
-                             "it, or ask again once the queue empties.")
-    return job, display
+    request = {"title": f"Fetch {artist} - {title}", "song_key": key, "steps": steps, "fetching": True,
+               "note": note, "display": display}
+    full = (f"{note} The queue is full, so it wasn't looked up now: the nightly run looks for "
+            "it, or ask again once the queue empties.")
+    return request, display, full
 
 
 def library_song(app: WebApp, form: dict[str, str]) -> Song | None:

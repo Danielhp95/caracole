@@ -2590,7 +2590,8 @@ with it. A KEY that is no key exits with status 2.
     (**In it** for a song the songbook has): a song of yours is put at the
     songbook's end at once (`caracole songbook add`); one you don't have goes
     into wanted.txt, is looked up now as Get it does (`caracole get`), then
-    added. Nothing is queued unless both fit in the queue;
+    added. Nothing is queued unless both fit in the queue (a lookup that joins
+    one already queued needs no room of its own);
   - **Rename or delete** renames the songbook or, once you tick the box,
     deletes it and the files caracole made of it.
 
