@@ -34,8 +34,10 @@ ZH_SHEET = (
 )
 
 
-def keep_sheet(conn, cfg, song, content: str = SHEET, *, tab_id: int = 85053, tonality: str = "Am") -> None:
-    """Keep a UG sheet as the fetch step does: sheet.txt, and sheet.json beside it with the markup."""
+def keep_sheet(conn, cfg, song, content: str = SHEET, *, tab_id: int = 85053, tonality: str = "Am",
+               capo: int | None = None) -> None:
+    """Keep a UG sheet as the fetch step does: sheet.txt, and sheet.json beside it with the markup (and
+    the ``capo`` UG's meta gives it, if any)."""
     raw = version_dict(tab_id, song=song.title, artist=song.artist, tonality_name=tonality)
     vid = upsert_version(
         conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot="sheet", kind="chords",
@@ -43,7 +45,7 @@ def keep_sheet(conn, cfg, song, content: str = SHEET, *, tab_id: int = 85053, to
     )
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt",
               data=strip_markup(content).encode("utf-8"), rank=1)
-    doc = {"version": raw, "content": content, "url": raw["tab_url"], "meta": []}
+    doc = {"version": raw, "content": content, "url": raw["tab_url"], "meta": {"capo": capo} if capo else []}
     write_atomic(song_dir(cfg.library_dir, song) / "sheet.json", json.dumps(doc, ensure_ascii=False).encode("utf-8"))
 
 
@@ -54,7 +56,7 @@ def output_of(cmd) -> Path:
 class FakeChordPro:
     """Stands in for subprocess.run: records each command, and writes its output by name, as chordpro
     does: a PDF holding the options and every input file in order, or a ChordPro file of the inputs
-    joined by {new_song} (chordpro's own ChordPro backend), with each song's {transpose} kept.
+    joined by {new_song} (chordpro's own ChordPro backend), each as caracole wrote it.
 
     ``fail`` holds words that make a run fail when an input holds one.
     """
