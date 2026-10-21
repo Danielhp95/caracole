@@ -42,6 +42,7 @@ from caracole.youtube_fetch import (
     DOWNLOADED,
     MISSING,
     UNUSABLE,
+    SongState,
     route_problem,
     song_states,
     videos_by_audio,
@@ -396,15 +397,15 @@ NOTHING_INTRO = (
 )
 
 
-def _youtube_lists(conn: sqlite3.Connection, cfg: Config, songs_by_id: dict[int, Song], overrides: Overrides,
-                   now: datetime) -> tuple[list[str], list[str], int]:
-    """The songs with no human sheet, each with where it stands on the YouTube route: those
-    caracole is handling, and those YouTube had nothing for, with the lines to paste, and how
+def _youtube_lists(conn: sqlite3.Connection, songs_by_id: dict[int, Song],
+                   states: dict[int, SongState]) -> tuple[list[str], list[str], int]:
+    """The songs with no human sheet, each with where it stands on the YouTube route (``states``):
+    those caracole is handling, and those YouTube had nothing for, with the lines to paste, and how
     many of these there are."""
     handled: list[str] = []
     nothing: list[str] = []
     paste: list[str] = []
-    for song_id, st in song_states(conn, cfg, overrides, now).items():
+    for song_id, st in states.items():
         s = songs_by_id[song_id]
         head, links = f"- **{md(s.display)}**: ", f" · {_check_first(s)}"
         if st.state in (MISSING, UNUSABLE, DECLINED):
@@ -800,9 +801,10 @@ def _setup(index: str, overrides_error: str | None, unreadable_lines: int, unrea
 
 
 def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
-               overrides_error: str | None = None) -> str:
+               overrides_error: str | None = None, youtube: dict[int, SongState] | None = None) -> str:
     """The whole page. ``overrides_error`` is why overrides.toml couldn't be read; the page then
-    leads with it (``overrides`` are empty then)."""
+    leads with it (``overrides`` are empty then). ``youtube``: where each song stands on the YouTube
+    route (``youtube_fetch.song_states``), when the caller has it already."""
     songs = list_songs(conn)
     index = index_state(conn)
     by_id = {s.id: s for s in songs}
@@ -838,7 +840,8 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
     ms_pages, ms_intro, n_ms, ms_blocking = _musescore_pages(conn, cfg, songs, overrides, now)
     if route_problem(cfg) is None:  # caracole takes these songs' audio from YouTube
-        handled, nothing, n_nothing = _youtube_lists(conn, cfg, by_id, overrides, now)
+        states = youtube if youtube is not None else song_states(conn, overrides, now)
+        handled, nothing, n_nothing = _youtube_lists(conn, by_id, states)
         no_sheet = [(NO_SHEET_TITLE, handled, NO_SHEET_INTRO, None), (NOTHING_TITLE, nothing, NOTHING_INTRO, n_nothing)]
     else:
         no_sheet = [("Buy list", _buy_list(to_buy), _buy_intro(cfg), None)]
@@ -899,5 +902,6 @@ def write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now
     from caracole.library_page import build_library_page, write_library_page  # it imports this module
 
     refresh_info_keys(conn, cfg.library_dir)
-    todo = write_todo(cfg.library_dir, build_todo(conn, cfg, overrides, now))
-    return todo, write_library_page(cfg.library_dir, build_library_page(conn, cfg, overrides, now))
+    youtube = song_states(conn, overrides, now) if route_problem(cfg) is None else {}  # once, for both pages
+    todo = write_todo(cfg.library_dir, build_todo(conn, cfg, overrides, now, youtube=youtube))
+    return todo, write_library_page(cfg.library_dir, build_library_page(conn, cfg, overrides, now, youtube=youtube))

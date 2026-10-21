@@ -226,7 +226,7 @@ def _to_buy(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
     return songs_to_buy(conn, songs, overrides, now)[0]
 
 
-def songs_for_youtube(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> list[Song]:
+def songs_for_youtube(conn: sqlite3.Connection, overrides: Overrides, now: datetime) -> list[Song]:
     """The songs due for their audio from YouTube, newest first, those whose last try failed
     after the others, so they never hold up the rest (see the module docstring)."""
     now = _utc(now)
@@ -297,7 +297,7 @@ def youtube_pass(
         if on_song is not None:
             on_song(song, GAVE_UP if isinstance(e, DownloadsFailed) else "error", record)
 
-    due = songs if songs is not None else songs_for_youtube(conn, cfg, overrides, now)
+    due = songs if songs is not None else songs_for_youtube(conn, overrides, now)
     for song, outcome in each_song(due, stats, lambda song: _one(conn, runner, cfg, song, overrides, now),
                                    site="YouTube", level=logging.WARNING, on_error=failed):
         stats.downloaded += outcome == DOWNLOADED_NOW
@@ -465,7 +465,7 @@ class SongState:
     audio_from: Video | None = None
 
 
-def song_state(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, now: datetime) -> SongState:
+def song_state(conn: sqlite3.Connection, song: Song, overrides: Overrides, now: datetime) -> SongState:
     """Where a song with no human sheet stands on the YouTube route (``QUEUED`` and the rest).
 
     A pasted video that can't be had is ``UNUSABLE`` even when the song has audio from
@@ -491,18 +491,19 @@ def song_state(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Ove
     return SongState(QUEUED, video, record.error)
 
 
-def song_states(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime) -> dict[int, SongState]:
-    """Every song on the YouTube route's list, newest first: the songs with no human sheet the
-    to-do page lists (``todo.songs_to_buy``), and those whose audio YouTube gave, until a human
-    sheet turns up."""
-    songs = list_songs(conn)
+def song_states(conn: sqlite3.Connection, overrides: Overrides, now: datetime, *,
+                songs: list[Song] | None = None) -> dict[int, SongState]:
+    """Every song on the YouTube route's list (of ``songs``, when given: a one-song card's), newest
+    first: the songs with no human sheet the to-do page lists (``todo.songs_to_buy``), and those whose
+    audio YouTube gave, until a human sheet turns up."""
+    songs = list_songs(conn) if songs is None else songs
     listed = {s.id for s in _to_buy(conn, songs, overrides, now)}
     out = {}
     for song in songs:
         youtube_gave = (not _ignored(song, overrides) and _own_audio(song, load_record(conn, song.id))
                         and not _kept(conn, song.id, HUMAN_SHEET))
         if song.id in listed or youtube_gave:
-            out[song.id] = song_state(conn, cfg, song, overrides, now)
+            out[song.id] = song_state(conn, song, overrides, now)
     return out
 
 

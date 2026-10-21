@@ -484,6 +484,57 @@ def test_with_the_youtube_route_on_a_card_says_where_its_audio_comes_from_and_of
     assert str(on.cache_dir) not in page(conn, on)  # where caracole keeps the audio is its own
 
 
+def test_with_the_youtube_route_on_one_page_write_asks_where_each_song_stands_once(conn, cfg, tmp_path, monkeypatch):
+    # A pass over the library (81 ms at 3,000 songs): the to-do page and index.html share it.
+    from helpers.fake_ytdlp import route_on
+
+    import caracole.library_page as library_page
+    import caracole.todo as todo
+    import caracole.youtube_fetch as yf
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    song = add_song(conn, "Radiohead", "Airbag")
+    update_song(conn, song.id, match_decision="not_found")
+    calls = []
+
+    def counted(*args, **kwargs):
+        calls.append(args)
+        return yf.song_states(*args, **kwargs)
+
+    for module in (todo, library_page):
+        monkeypatch.setattr(module, "song_states", counted)
+    todo_md, index_html = todo.write_pages(conn, on, Overrides(), NOW)
+    assert len(calls) == 1
+    assert songs_of(index_html.read_text(encoding="utf-8"))[song.display]["youtube"]["text"] == (
+        "No human sheet yet: caracole takes the audio from YouTube next")
+    listed = todo_md.read_text(encoding="utf-8").split(f"## {todo.NO_SHEET_TITLE}", 1)[1]
+    assert song.display in listed
+
+
+def test_with_the_youtube_route_on_a_one_song_card_asks_about_its_own_song_alone(conn, cfg, tmp_path, monkeypatch):
+    # /jobs.json draws a request's card: where that song stands on the YouTube route, not the library.
+    from helpers.fake_ytdlp import route_on
+
+    import caracole.youtube_fetch as yf
+    from caracole.library_page import song_cards
+    from caracole.songs import Song, get_song
+
+    on, _ = route_on(cfg, tmp_path, monkeypatch)
+    songs = [add_song(conn, "Radiohead", title) for title in ("Airbag", "Let Down", "Lucky")]
+    for s in songs:
+        update_song(conn, s.id, match_decision="not_found")
+    asked, real = [], yf.song_state
+
+    def counted(*args, **kwargs):
+        asked.extend(a.id for a in args if isinstance(a, Song))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(yf, "song_state", counted)
+    [card] = song_cards(conn, on, Overrides(), NOW, [get_song(conn, songs[1].id)])
+    assert asked == [songs[1].id]
+    assert card["youtube"]["text"] == "No human sheet yet: caracole takes the audio from YouTube next"
+
+
 def test_without_the_youtube_route_no_card_mentions_youtube_audio(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马，斑马")
     update_song(conn, s.id, match_decision="not_found")
