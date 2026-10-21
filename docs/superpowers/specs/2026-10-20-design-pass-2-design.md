@@ -148,9 +148,9 @@ stray spaces; section names sit in grey boxes; a short song takes three pages.
   file beside the original, e.g. "sheet (G Dorian, capo 0).pdf" *(my call on the name)*.
   - *(my call, forced by the sandbox)* The served viewer runs in `sandbox allow-scripts` with no
     form posts and no connection to the server, a rule this design keeps. So the button opens a
-    caracole serve page in a new tab, with the version in its address: it shows what will be made
+    caracole serve page in the same tab (the sandbox can open no other tab), with the version in its address: it shows what will be made
     and a Make PDF button (a POST with the form token, as other served actions), the job's
-    progress, then the PDF to open. On the file page, the button shows the command to run.
+    progress, then the PDF to open and a link back to the sheet. On the file page, the button shows the command to run.
   - *(my call)* Exports are files caracole looks after: recorded like the sheet's own outputs, so
     `caracole remove` deletes them, a later sheet or style change remakes them, and an export with
     the same settings replaces the last one. They are listed under the song line's ⋯.
