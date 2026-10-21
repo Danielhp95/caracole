@@ -21,6 +21,13 @@ class Script:
         return self.answers.pop(0)
 
 
+def variant_first(conn):
+    """Creep with an older tab of a variant slug (type tabs) and a newer plain chords tab."""
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(5, 'radiohead', 'creep-acoustic', 'tabs', '1', 'x', 'radiohead/creep-acoustic-tabs-5'), "
+                 "(9, 'radiohead', 'creep', 'chords', '1', 'x', 'radiohead/creep-chords-9')")
+
+
 def review_song(conn, artist="Soda", title="Persiana Americana", cands=None):
     s = add_song(conn, artist, title)
     update_song(conn, s.id, review=True, match_decision="review", match_candidates=cands or [
@@ -300,3 +307,24 @@ def test_the_songs_you_rejected_for_a_song_never_come_back_as_its_search_hits(co
     update_song(conn, s.id, match_decision="not_found")
     found = search_candidates(conn, get_song(conn, s.id), rejected={("radiohead", "creep")})
     assert [c["song_key"] for c in found] == ["high-and-dry"]
+
+
+CHORDS_PAGE = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-9"
+
+
+def test_a_candidates_page_is_the_chords_page_not_the_oldest_tab(conn):
+    from caracole.review import candidate_page
+
+    variant_first(conn)
+    assert candidate_page(conn, "radiohead", "creep") == CHORDS_PAGE
+    assert candidate_page(conn, "radiohead", "nothing-here") is None
+
+
+def test_review_links_the_chords_page_of_a_candidate(conn, cfg):
+    variant_first(conn)
+    s = review_song(conn, "Radiohead", "Creep", cands=[
+        {"artist_key": "radiohead", "song_key": "creep", "score": 90.0, "step": "fuzzy_artist"}])
+    script = Script("s")
+    review_songs(conn, cfg, script.io())
+    assert any(CHORDS_PAGE in line for line in script.out), script.out
+    assert s.id

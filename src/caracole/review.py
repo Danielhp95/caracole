@@ -40,7 +40,6 @@ from caracole.overrides import (
     tab_id_from_url,
 )
 from caracole.songs import Song, list_songs, update_song
-from caracole.ug.lookup import song_tabs
 
 SHOWN = 9  # candidates a review lists, numbered 1 to 9
 SEARCH = "search"  # the step of a candidate caracole search found, for a song not found
@@ -66,6 +65,15 @@ def candidates_of(song: Song) -> list[dict[str, Any]]:
     """The candidates ``caracole review`` lists for a song, best first, numbered from 1 as it numbers
     them: its stored candidates (``songs.match_candidates``) that name a UG song, nine at most."""
     return [c for c in (song.match_candidates or []) if c.get("artist_key") and c.get("song_key")][:SHOWN]
+
+
+def candidate_page(conn: sqlite3.Connection, artist_key: str, song_key: str) -> str | None:
+    """The UG page to show for a candidate, the one the web picker links (``search.index_song``): its best
+    chords page, not its oldest tab, which may be a variant or a power tab. None when the index has none."""
+    from caracole.search import index_song
+
+    hit = index_song(conn, artist_key, song_key)
+    return hit.url if hit else None
 
 
 def search_candidates(conn: sqlite3.Connection, song: Song, *, rejected: Collection[tuple[str, str]] = (),
@@ -159,8 +167,8 @@ def review_songs(
         cands = candidates_of(s)
         io.write(f"\n[{i}/{len(songs)}] {s.display}")
         for n, c in enumerate(cands, start=1):
-            tabs = song_tabs(conn, c["artist_key"], c["song_key"])
-            url = f"  {tabs[0].url}" if tabs else ""
+            page = candidate_page(conn, c["artist_key"], c["song_key"])
+            url = f"  {page}" if page else ""
             io.write(f"  {n}) {float(c.get('score') or 0):.0f}  {c['artist_key']}/{c['song_key']} ({c.get('step', '')}){url}")
         choices = f"1-{len(cands)}, (n)one of these, " if cands else ""
         answer = io.read(f"Pick {choices}(p)in a URL, (i)gnore, (s)kip, (q)uit: ").strip().lower()

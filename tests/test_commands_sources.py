@@ -371,6 +371,15 @@ def test_add_says_at_once_which_ug_songs_a_name_not_quite_ugs_may_be(tmp_path):
     assert "### epic - I'm not sorry for loving you" in todo.split("## Review (1)", 1)[1]
 
 
+def test_add_links_the_chords_page_of_a_candidate_not_its_oldest_tab(tmp_path):
+    ug_index(tmp_path, (4742071, "misc-musicals", "epic-the-musical-not-sorry-for-loving-you-acoustic", "tabs"), EPIC)
+    result = run(tmp_path, "add", "epic", "I'm not sorry for loving you")
+    assert result.exit_code == 0, result.output
+    assert ("https://tabs.ultimate-guitar.com/tab/misc-musicals/"
+            "epic-the-musical-not-sorry-for-loving-you-chords-4742072") in result.output
+    assert "tabs-4742071" not in result.output
+
+
 def test_add_says_its_one_line_then_what_the_offline_index_says(tmp_path):
     ug_index(tmp_path, (4169, "radiohead", "creep", "chords"))
     result = run(tmp_path, "add", "Radiohead", "Creep")

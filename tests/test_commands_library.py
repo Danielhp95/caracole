@@ -530,6 +530,17 @@ def test_review_song_lists_a_song_not_founds_search_hits_numbered_as_pick_takes_
     assert get_song(conn, lost).match_song_key == "hallelujah-anthem"
 
 
+def test_review_song_links_the_chords_page_of_a_hit_not_its_oldest_tab(tmp_path):
+    conn, lost = not_found_with_a_rejected_hit(tmp_path)
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) VALUES "
+                 "(5, 'leonard-cohen', 'hallelujah-anthem-acoustic', 'tabs', '1', 'x', "
+                 "'leonard-cohen/hallelujah-anthem-acoustic-tabs-5')")
+    listed = run(tmp_path, "review", "--song", HALLELUJAH)
+    assert listed.exit_code == 0, listed.output
+    assert "https://tabs.ultimate-guitar.com/tab/leonard-cohen/hallelujah-anthem-chords-12" in listed.output
+    assert "tabs-5" not in listed.output
+
+
 def test_review_song_pick_of_a_song_not_found_names_the_list_its_numbers_come_from(tmp_path):
     not_found_with_a_rejected_hit(tmp_path)
     result = run(tmp_path, "review", "--song", HALLELUJAH, "--pick", "9")
