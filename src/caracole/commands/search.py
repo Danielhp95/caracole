@@ -444,12 +444,9 @@ def _hint(ask: _Ask, listing: _Listing, mine: LibraryHit | None, overrides: Over
 def _overrides(cfg: Config) -> Overrides | None:
     """overrides.toml, for the hint's line to paste into it; None when it can't be read, which
     leaves the search itself as it is: it needs no overrides."""
-    from caracole.overrides import OverridesError, load_overrides
+    from caracole.overrides import load_overrides_or_none
 
-    try:
-        return load_overrides(cfg.overrides_file)
-    except OverridesError:
-        return None
+    return load_overrides_or_none(cfg.overrides_file)
 
 
 def _in_key(
