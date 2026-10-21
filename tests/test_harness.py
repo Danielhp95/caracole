@@ -360,3 +360,18 @@ def test_a_page_gets_the_window_asked_for_and_its_timers_run(tmp_path):
     assert data(dom, "width") == "390"
     assert data(dom, "later") == "ran"  # within the three seconds --virtual-time-budget gave
     assert dom.startswith("<!DOCTYPE html>")
+
+
+@in_chromium
+def test_a_wait_rides_out_a_page_that_throws_while_it_loads_and_still_says_what_never_ran(tmp_path):
+    # Read while a page loads, document.documentElement can be null: a wait takes that as "not yet".
+    page = tmp_path / "late.html"
+    page.write_text("<!DOCTYPE html><p>x</p><script>setTimeout(() => { window.ready = { ok: true }; }, 200);"
+                    "</script>", encoding="utf-8")
+    with browser.Browser(tmp_path / "chrome") as b:
+        b.open(page.as_uri())
+        assert b.wait("window.ready.ok === true", 5)  # a TypeError until then
+        started = time.monotonic()
+        with pytest.raises(browser.PageError, match="ReferenceError"):
+            b.wait("nothing_is_called_this", 0.3)  # throws to the end: the error, once the time is up
+        assert time.monotonic() - started >= 0.3

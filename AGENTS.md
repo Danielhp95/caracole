@@ -219,7 +219,8 @@ process: mark a new one too. The whole suite stays the gate before a commit. tmp
 noexec or has less than 1 GB free (a container's).
 
 A test that drives a page on real time (`Browser`) waits for the state it needs
-(`Browser.wait`), never a fixed time: its workers share the machine with eleven others. The
+(`Browser.wait`, which takes an expression that throws, as on a page still loading, as not yet
+true), never a fixed time: its workers share the machine with eleven others. The
 library page caracole serve serves asks /jobs.json every 1.5 s and counts Remove's five
 seconds; `WebApp(timers=...)` shortens both for such a test (test_web_page.py's `QUICK`), and
 caracole serve never sets it, so the page users get carries no timers (`WebControls.timers`).

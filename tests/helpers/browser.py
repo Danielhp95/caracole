@@ -69,6 +69,10 @@ class BrowserError(RuntimeError):
     """Chromium couldn't start, answered a command with an error, died, or said nothing in time."""
 
 
+class PageError(BrowserError):
+    """The page's JavaScript threw, evaluating what a test asked (``Browser.js``)."""
+
+
 class SharedBrowser:
     """This process's headless Chromium (``browser()``), and the protocol messages to and from it."""
 
@@ -353,7 +357,7 @@ class Browser:
         """The value of a JavaScript expression in the page (a promise's, once settled)."""
         result = self.send("Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True)
         if "exceptionDetails" in result:
-            raise BrowserError(f"{expression[:80]}: {json.dumps(result['exceptionDetails'])[:400]}")
+            raise PageError(f"{expression[:80]}: {json.dumps(result['exceptionDetails'])[:400]}")
         return result.get("result", {}).get("value")
 
     def open(self, url: str) -> None:
@@ -362,12 +366,20 @@ class Browser:
             raise BrowserError(f"{url} didn't load")
 
     def wait(self, expression: str, timeout: float = 10.0) -> bool:
-        """Whether the expression became true within ``timeout`` seconds."""
+        """Whether the expression became true within ``timeout`` seconds. One that throws is not true yet
+        (a page loading has no document element for a moment); one that throws to the end raises that."""
         deadline = time.monotonic() + timeout
+        threw = None
         while time.monotonic() < deadline:
-            if self.js(expression):
-                return True
+            try:
+                if self.js(expression):
+                    return True
+                threw = None
+            except PageError as e:
+                threw = e
             time.sleep(0.03)
+        if threw is not None:
+            raise threw
         return False
 
     def type(self, text: str) -> None:
