@@ -103,8 +103,9 @@ _SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio
 # What a page is made from besides its song: this module, those it imports and the files they read.
 # A module the viewer comes to import goes here too (test_viewer_book.py checks).
 BUILD_FILES = (
-    *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "voicings.py", "voicings.json",
-                               "version.py", "viewer.js", "viewer.css", "LICENSE-chords-db")),
+    *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "harmony.py", "voicings.py",
+                               "voicings.json", "version.py", "viewer.js", "viewer.css",
+                               "LICENSE-chords-db")),
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "normalize.py",  # has_han
     HERE.parent / "page_icon.py",  # the icon in the page's head

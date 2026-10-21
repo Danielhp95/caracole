@@ -2,7 +2,8 @@
 
 - page.py builds the page (``build_viewer``) from the song's own ChordPro file;
 - sheet.py reads that file back; theory.py names chords and keys, changes modes
-  and finds alternatives; voicings.py holds the fingerings (chords-db, MIT);
+  and finds alternatives; harmony.py, on top of it, tells what each chord does in its key
+  (numerals, relations, progressions, scales); voicings.py holds the fingerings (chords-db, MIT);
 - version.py applies a version of the page (its key, capo, mode, shapes and swaps) to the
   sheet in Python, for a PDF of what the page shows;
 - viewer.js and viewer.css are the page's script and stylesheet, inlined;
