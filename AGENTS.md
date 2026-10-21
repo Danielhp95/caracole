@@ -112,7 +112,10 @@ Rules a change there keeps (the Invariants below are the others):
   `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field
   compared, and a list handed out is a copy (test_viewer_theory.py). version.py names and shapes
   every chord as viewer.js does, so a PDF made in a version is what the viewer shows
-  (test_viewer_version.py compares the two in Chromium).
+  (test_viewer_version.py compares the two in Chromium). A sheet viewer's data `versions`
+  (sheet_versions.as_data, with each entry's `this` and the one's provider, `sheet`) draws its switcher
+  under the key line and the list it opens, a rail like the settings and never beside them
+  (test_viewer_versions.py); the songbook has none.
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share (config,
   the database, the lock, clients at either pace, pages, `fail`, `warn`, `song_named`): use it

@@ -1921,6 +1921,24 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   it names the key of the shapes you play, the capo and the key the song
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
   "Key Em". Each says where the key came from.
+- **The versions** of a song Ultimate Guitar has several of: under the key
+  line, the sheet's viewer and each version kept beside it say which of UG's
+  chords versions they are, with its rating and votes: "Ver 3 of 13 ·
+  4.86★ (408) · the one", the one being the version the title opens. A song
+  whose sheet is LaCuerda's says "13 versions on UG · the one: LaCuerda's
+  sheet" there. ‹ and › open the version kept before or after this one, in
+  rank order, in the same tab, at the same text size and scroll speed (the
+  key, the capo and the rest are each sheet's own). Tap the line for the list
+  of every version UG has, in rank order: rating, votes, which is the one,
+  which are kept, which is this page, and the first lines of the tabber's
+  note. It sits where the settings do (at the foot on a phone, a rail beside
+  the song from 900 px wide, in their place). A kept version opens from it;
+  one gone from UG is listed and opens nothing. Served by `caracole serve`,
+  **Keep it** on a version not kept, **Make this the one** on a kept
+  version's page, and **Back to caracole's pick** once you chose another,
+  open caracole serve's page that does it. Opened from a file, each shows the
+  `caracole versions` command that does it, with Copy, and a version not kept
+  links to its page on UG.
 - **The bar** at the foot of the page holds what you reach for while
   playing: `− Em +`, a guitar, `Aa`, `▶` and `⋯`. − and + move every
   chord, its shapes and the key a semitone at a time, with the key you play
