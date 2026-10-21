@@ -99,7 +99,7 @@ _SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio
 # A module the viewer comes to import goes here too (test_viewer_book.py checks).
 BUILD_FILES = (
     *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "voicings.py", "voicings.json",
-                               "viewer.js", "viewer.css", "LICENSE-chords-db")),
+                               "version.py", "viewer.js", "viewer.css", "LICENSE-chords-db")),
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "normalize.py",  # has_han
     HERE.parent / "autochords" / "merge.py",  # AUTO_MARKER, which sheet.py reads
