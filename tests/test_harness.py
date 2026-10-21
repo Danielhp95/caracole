@@ -385,15 +385,45 @@ def test_a_page_gets_the_window_asked_for_and_its_timers_run(tmp_path):
 
 
 @in_chromium
-def test_a_wait_rides_out_a_page_that_throws_while_it_loads_and_still_says_what_never_ran(tmp_path):
-    # Read while a page loads, document.documentElement can be null: a wait takes that as "not yet".
-    page = tmp_path / "late.html"
-    page.write_text("<!DOCTYPE html><p>x</p><script>setTimeout(() => { window.ready = { ok: true }; }, 200);"
-                    "</script>", encoding="utf-8")
-    with browser.Browser(tmp_path / "chrome") as b:
-        b.open(page.as_uri())
-        assert b.wait("window.ready.ok === true", 5)  # a TypeError until then
-        started = time.monotonic()
-        with pytest.raises(browser.PageError, match="ReferenceError"):
-            b.wait("nothing_is_called_this", 0.3)  # throws to the end: the error, once the time is up
-        assert time.monotonic() - started >= 0.3
+def test_a_wait_rides_out_a_page_still_loading_and_raises_at_once_on_one_that_has_loaded(tmp_path):
+    # While a page loads, an element it hasn't parsed yet is null: a wait takes what that throws as "not yet".
+    # Once it has loaded, a wait that throws is the test's mistake, said at once rather than at the timeout.
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    rest = threading.Event()
+
+    class Slow(BaseHTTPRequestHandler):
+        def do_GET(self):  # the page's start, then its end once the test lets it go
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"<!DOCTYPE html><p>first</p>" + b"<!-- -->" * 512)
+            self.wfile.flush()
+            rest.wait(10)
+            self.wfile.write(b"<p id='late'>late</p>")
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Slow)
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
+    try:
+        with browser.Browser(tmp_path / "chrome") as b:
+            b.send("Page.navigate", url=f"http://127.0.0.1:{server.server_address[1]}/")
+            assert b.wait("document.readyState === 'loading' && !!document.querySelector('p')")
+            started = time.monotonic()
+            with pytest.raises(browser.PageError, match="TypeError"):  # throws while it loads, to the end
+                b.wait("document.getElementById('late').textContent === 'late'", 0.3)
+            assert time.monotonic() - started >= 0.3
+            threading.Timer(0.3, rest.set).start()
+            assert b.wait("document.getElementById('late').textContent === 'late'", 5)  # a TypeError until then
+            assert b.wait("document.readyState === 'complete'", 5)
+            started = time.monotonic()
+            with pytest.raises(browser.PageError, match="ReferenceError"):
+                b.wait("nothing_is_called_this", 5)  # loaded: at once, not in five seconds
+            assert time.monotonic() - started < 2
+            assert b.wait("Promise.resolve(document.getElementById('late') !== null)")  # a promise, awaited
+    finally:
+        rest.set()
+        server.shutdown()
+        server.server_close()

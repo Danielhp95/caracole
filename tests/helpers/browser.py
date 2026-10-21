@@ -43,6 +43,22 @@ TIMEOUT = 60.0  # seconds a page may take, as the tests gave chromium --dump-dom
 # starting at once kept it busy for seconds, and with it everything else that asks it for a user
 # or a host (chordpro does). No name resolves here, so no page reaches beyond this machine.
 NO_LOOKUPS = "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1"
+# Browser.wait's expression, evaluated as one step with the page's readiness: what it throws while the
+# document is still parsed is "not yet" (``loading``), what it throws once the page has loaded is thrown.
+WAIT_PROBE = """(async () => {
+  const loading = document.readyState !== "complete";
+  try {
+    return { value: await (
+EXPRESSION
+    ) };
+  } catch (e) {
+    if (loading) return { loading: String((e && e.stack) || e) };
+    throw e;
+  }
+})()"""
+# What the protocol answers an evaluation whose document a navigation took away.
+NAVIGATING = ("Inspected target navigated or closed", "Execution context was destroyed",
+              "Cannot find context with specified id")
 # Nor does a headless browser need the desktop's display or session bus.
 DESKTOP = ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS")
 
@@ -364,33 +380,49 @@ class Browser:
 
     # --- what a test does ------------------------------------------------------------------------------
 
-    def js(self, expression: str) -> Any:
-        """The value of a JavaScript expression in the page (a promise's, once settled)."""
+    def js(self, expression: str, *, said: str | None = None) -> Any:
+        """The value of a JavaScript expression in the page (a promise's, once settled); ``said``, how an
+        error names it, if not by itself."""
         result = self.send("Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True)
         if "exceptionDetails" in result:
-            raise PageError(f"{expression[:80]}: {json.dumps(result['exceptionDetails'])[:400]}")
+            raise PageError(f"{(said or expression)[:80]}: {json.dumps(result['exceptionDetails'])[:400]}")
         return result.get("result", {}).get("value")
 
     def open(self, url: str) -> None:
-        self.send("Page.navigate", url=url)
-        if not self.wait("document.readyState === 'complete' && location.href !== 'about:blank'"):
+        """The page at ``url``, once loaded: a document of its own, not the one before it (but for a change of
+        the address's fragment alone, which loads none)."""
+        self.js("window.caracoleLeft = true")
+        went = self.send("Page.navigate", url=url)
+        fresh = "window.caracoleLeft === undefined && " if went.get("loaderId") else ""
+        if not self.wait(fresh + "document.readyState === 'complete' && location.href !== 'about:blank'"):
             raise BrowserError(f"{url} didn't load")
 
     def wait(self, expression: str, timeout: float = 10.0) -> bool:
-        """Whether the expression became true within ``timeout`` seconds. One that throws is not true yet
-        (a page loading has no document element for a moment); one that throws to the end raises that."""
+        """Whether the expression became true within ``timeout`` seconds. While the page loads (its document
+        still parsed, or a navigation under way), one that throws is not true yet: a page loading has no
+        document element for a moment. On a page that has loaded, one that throws raises at once (a typo, a
+        node the page lacks), as does one that throws while the page loads to the end of the time."""
+        probe = WAIT_PROBE.replace("EXPRESSION", expression)
         deadline = time.monotonic() + timeout
-        threw = None
+        loading = None
         while time.monotonic() < deadline:
             try:
-                if self.js(expression):
+                answer = self.js(probe, said=expression)
+            except PageError:
+                raise
+            except BrowserError as e:  # the evaluation's document went away under it: a navigation
+                if not any(words in str(e) for words in NAVIGATING):
+                    raise
+                answer = {"loading": str(e)}
+            if isinstance(answer, dict) and "value" in answer:
+                if answer["value"]:
                     return True
-                threw = None
-            except PageError as e:
-                threw = e
+                loading = None
+            else:
+                loading = answer.get("loading") if isinstance(answer, dict) else repr(answer)
             time.sleep(0.03)
-        if threw is not None:
-            raise threw
+        if loading is not None:
+            raise PageError(f"{expression[:80]}: threw while the page loaded: {loading[:400]}")
         return False
 
     def type(self, text: str) -> None:

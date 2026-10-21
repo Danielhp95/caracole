@@ -169,8 +169,10 @@ for a page whose policy refuses a test's script. None of them resolves a host na
 (`helpers.browser.NO_LOOKUPS`), and the other browser helpers in tests/helpers/ build on them.
 
 A test that drives a page on real time (`Browser`) waits for the state it needs
-(`Browser.wait`, which takes an expression that throws, as on a page still loading, as not yet
-true), never a fixed time: its workers share the machine with eleven others. The
+(`Browser.wait`: an expression that throws while the page still loads is not true yet; once the
+page has loaded, it raises at once), never a fixed time: its workers share the machine with eleven
+others. After a step that loads the page again (a reload, a songbook's next song), it waits for the
+new document, not the one before it (`window.before`, as `Browser.open` does for an address). The
 library page caracole serve serves asks /jobs.json every 1.5 s and counts Remove's five
 seconds; `WebApp(timers=...)` shortens both for such a test (test_web_page.py's `QUICK`), and
 caracole serve never sets it, so the page users get carries no timers (`WebControls.timers`).
