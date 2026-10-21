@@ -20,8 +20,9 @@ For each song (plan §3, Task 15, amendment A6):
    before the budget goes to guitar parts:
    - the sheet: the top ``scored_sheets`` chords versions by rating are
      scored for lyric coverage, ranked complete-first, and the best is kept
-     as ``sheet.txt`` and ``sheet.json``; a complete one retires
-     ``sheet (auto).txt``;
+     as ``sheet.txt`` and ``sheet.json``, the others scored beside it as
+     ``version-<tab>.txt`` and ``.json`` (sheet_versions.py; no request more);
+     a complete one retires ``sheet (auto).txt``;
    - Guitar Pro and Power Tab: the best are picked, never downloaded
      (assisted mode: the to-do page lists them);
    - tabs: the best is kept as ``tab.txt`` and ``tab.json``.
@@ -45,6 +46,7 @@ also sends back a song whose kept sheet or tab the library lost.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import sqlite3
@@ -76,6 +78,8 @@ from caracole.match import ARTIST_PAGE, REVIEW_ONLY_STEPS
 from caracole.normalize import clean_title, compact, listing_forms, name_forms, slug_key, without_featuring
 from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
+from caracole.sheet_versions import PREFIX as VERSION_PREFIX
+from caracole.sheet_versions import SHEET_PAGE, same_key, tab_of, version_names
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug import artist_tabs as listed_tabs  # ug.lookup.artist_tabs is another thing
 from caracole.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
@@ -125,7 +129,8 @@ _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
 SHEET_FILES = (HUMAN_SHEET, "sheet.json")
 TAB_FILES = ("tab.txt", "tab.json")
 KEPT_TEXT = (*SHEET_FILES, *TAB_FILES)  # the files a kept UG sheet or tab is
-_KEPT_TEXT_MARKS = ",".join("?" for _ in KEPT_TEXT)
+# ``files f`` rows of a kept UG sheet or tab, or of a version kept beside the sheet (sheet_versions.py).
+_KEPT_TEXT_SQL = "(f.name IN ({}) OR f.name GLOB '{}[0-9]*')".format(",".join("?" for _ in KEPT_TEXT), VERSION_PREFIX)
 _TAB_HOST = urlsplit(TAB_BASE_URL).netloc
 
 # The artist-page route (A6): a song found on it has the match step ``ARTIST_PAGE``.
@@ -175,6 +180,7 @@ class SongFetchOutcome:
 
     ``requests`` counts the requests sent to UG for the song (cache hits are free).
     ``settled`` says the sheet slot was decided (the guitar slots may still wait).
+    ``kept_versions`` are the UG tab ids kept beside the sheet (``version-<tab>.txt``), in rank order.
     """
 
     song_id: int
@@ -183,6 +189,7 @@ class SongFetchOutcome:
     tab: int | None
     requests: int
     settled: bool = False
+    kept_versions: tuple[str, ...] = ()
 
 
 @dataclass
@@ -208,6 +215,7 @@ class _SongRun:
     pages: dict[int, UGTabPage | None] = field(default_factory=dict)
     fetched: Counter[str] = field(default_factory=Counter)
     unreadable: set[int] = field(default_factory=set)  # tabs whose pages couldn't be read this run
+    kept_versions: tuple[str, ...] = ()  # the tabs kept beside the sheet, once the sheet slot is settled
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -685,16 +693,18 @@ def _first_with_text(
     return None
 
 
-def _keep(run: _SongRun, version_id: int, name: str, data: bytes) -> None:
+def _keep(run: _SongRun, version_id: int, name: str, data: bytes, rank: int = 1) -> None:
     """Keep one file, unless this version's identical bytes are kept already, in the files table and
     in the library (``library.kept_already``): no churn for Syncthing, and a file the library lost is
-    written again."""
+    written again. A file kept already takes ``rank`` as its ``kept_rank``, unwritten."""
     if kept_already(run.conn, run.ctx.library_dir, song=run.song, version_id=version_id, name=name, data=data):
+        run.conn.execute("UPDATE files SET kept_rank = ? WHERE song_id = ? AND name = ? AND kept_rank != ?",
+                         (rank, run.song.id, name, rank))
         return
-    keep_file(run.conn, run.ctx.library_dir, song=run.song, version_id=version_id, name=name, data=data, rank=1)
+    keep_file(run.conn, run.ctx.library_dir, song=run.song, version_id=version_id, name=name, data=data, rank=rank)
 
 
-def _keep_text(run: _SongRun, version_id: int, page: UGTabPage, names: tuple[str, str]) -> None:
+def _keep_text(run: _SongRun, version_id: int, page: UGTabPage, names: tuple[str, str], rank: int = 1) -> None:
     """Keep a sheet or tab: the text without UG's markup, and the version's JSON with the raw content.
 
     The JSON also carries the page's ``meta``, where UG gives the capo.
@@ -702,9 +712,9 @@ def _keep_text(run: _SongRun, version_id: int, page: UGTabPage, names: tuple[str
     assert page.content is not None
     txt, doc = names
     url = get_version(run.conn, version_id).url
-    _keep(run, version_id, txt, strip_markup(page.content).encode("utf-8"))
+    _keep(run, version_id, txt, strip_markup(page.content).encode("utf-8"), rank)
     body = {"version": dict(page.tab.raw), "content": page.content, "url": url, "meta": dict(page.meta)}
-    _keep(run, version_id, doc, (json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+    _keep(run, version_id, doc, (json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"), rank)
 
 
 def _kept_version(conn: sqlite3.Connection, song_id: int, name: str) -> VersionRow | None:
@@ -734,6 +744,126 @@ def _drop_left_over(run: _SongRun, names: tuple[str, str]) -> None:
             drop_file(run.conn, run.ctx.library_dir, song=run.song, name=name)
 
 
+# --- the versions kept beside the sheet (sheet_versions.py) --------------------------------------
+
+
+def _same_text(run: _SongRun, name: str, data: bytes) -> str | None:
+    """The viewer page of a song's kept text that holds ``data`` already under another name than ``name``:
+    the sheet's or a kept version's (``library.keep_file`` keeps one text under one name). None for none,
+    and for any other file's (the tab's, say), whose page is no sheet."""
+    sha = hashlib.sha256(data).hexdigest()
+    for f in kept_files(run.conn, run.song.id):
+        if f.sha256 != sha or f.name == name:
+            continue
+        if f.name == SHEET_FILES[0]:
+            return SHEET_PAGE
+        tab = tab_of(f.name)
+        if tab is not None and f.name == version_names(tab)[0]:
+            return version_names(tab)[2]
+    return None
+
+
+def _keep_version(run: _SongRun, version_id: int, page: UGTabPage, rank: int = 2) -> bool:
+    """Keep a version beside the sheet, as ``version-<tab>.txt`` and ``.json`` (``sheet_versions.version_names``)
+    with ``kept_rank`` ``rank``; False when its text is a kept one's already (two UG tabs, one text), and
+    nothing is written."""
+    assert page.content is not None
+    tab = get_version(run.conn, version_id).tab_id
+    txt, doc, _ = version_names(tab)
+    if _same_text(run, txt, strip_markup(page.content).encode("utf-8")) is not None:
+        return False
+    _keep_text(run, version_id, page, (txt, doc), rank)
+    return True
+
+
+def _drop_version(run: _SongRun, tab: str) -> None:
+    for name in version_names(tab)[:2]:
+        drop_file(run.conn, run.ctx.library_dir, song=run.song, name=name)
+
+
+def _make_way(run: _SongRun, tab: str, page: UGTabPage) -> None:
+    """A version that becomes the sheet leaves its version files, and so does any version holding its
+    text: one text has one name in the library (``library.keep_file``), and it is the sheet's."""
+    assert page.content is not None
+    sha = hashlib.sha256(strip_markup(page.content).encode("utf-8")).hexdigest()
+    _drop_version(run, tab)
+    for f in kept_files(run.conn, run.song.id):
+        if f.sha256 == sha and (other := tab_of(f.name)) is not None:
+            _drop_version(run, other)
+
+
+def _kept_version_tabs(run: _SongRun) -> set[str]:
+    return {t for f in kept_files(run.conn, run.song.id) if (t := tab_of(f.name)) is not None}
+
+
+def _keep_beside(run: _SongRun, chosen: int | None, beside: Iterable[tuple[Candidate, UGTabPage]]) -> None:
+    """Keep ``beside`` (rank order) as the song's versions, but for the chosen version (``sheet.txt``), and
+    drop the version files of every other version: they left the kept set, were blocked, or were found
+    under an earlier match. A version whose page couldn't be read this run keeps its files (an error is
+    never a miss). A version whose text is a kept one's is listed with that one's page instead
+    (kv ``sheet_versions:same:<song id>``, ``sheet_versions.same_pages``)."""
+    kept: list[str] = []
+    same: dict[str, str] = {}
+    for c, page in beside:
+        assert c.version_id is not None
+        if c.version_id == chosen:
+            continue
+        if _keep_version(run, c.version_id, page, rank=len(kept) + 2):
+            kept.append(c.tab_id)
+        else:
+            _drop_version(run, c.tab_id)
+            text = strip_markup(page.content or "").encode("utf-8")
+            if (shown := _same_text(run, version_names(c.tab_id)[0], text)) is not None:
+                same[c.tab_id] = shown
+    waiting = {str(t) for t in run.unreadable}
+    for tab in _kept_version_tabs(run) - set(kept) - waiting:
+        _drop_version(run, tab)
+    if same:
+        kv_set_json(run.conn, same_key(run.song.id), same)
+    else:
+        kv_delete(run.conn, same_key(run.song.id))
+    run.kept_versions = tuple(kept)
+
+
+def _cached_text_page(run: _SongRun, row: VersionRow) -> UGTabPage | None:
+    """A version's page with its text, from this run's pages or the HTTP cache alone: nothing is sent.
+    None when neither has it, or it doesn't parse."""
+    tab_id = int(row.tab_id)
+    if tab_id in run.pages:
+        page = run.pages[tab_id]
+    else:
+        cached = getattr(run.ctx.client, "cached", None)
+        resp = cached(row.url) if cached is not None else None
+        if resp is None:
+            return None
+        try:
+            page = parse_tab_page(resp.content, url=row.url)
+        except PageParseError:
+            return None
+    return page if page is not None and page.content is not None else None
+
+
+def _beside_a_pin(run: _SongRun, rows: list[VersionRow], lines: list[str]) -> list[tuple[Candidate, UGTabPage]]:
+    """The versions a pinned sheet keeps beside it: the top ``scored_sheets`` by rating, as the fetch would
+    score them unpinned, read from the cache alone (a pinned song's ratings aren't read, and no request is
+    spent on them), scored, in rank order."""
+    policy = run.ctx.rank
+    found: dict[int, UGTabPage] = {}
+    top = rank_by_rating([_candidate(r) for r in rows], policy, variant=run.song.variant)[: policy.scored_sheets]
+    by_id = {r.id: r for r in rows}
+    for c in top:
+        assert c.version_id is not None
+        page = _cached_text_page(run, by_id[c.version_id])
+        if page is None:
+            continue
+        assert page.content is not None
+        c.coverage = coverage.coverage(page.content, lines, line_match=policy.line_match)
+        set_coverage(run.conn, c.version_id, c.coverage)
+        found[c.version_id] = page
+    ranked = rank_sheets([c for c in top if c.version_id in found], policy, variant=run.song.variant)
+    return [(c, found[c.version_id]) for c in ranked if c.version_id is not None]
+
+
 def _lyric_lines(song: Song) -> list[str]:
     lyrics = song_lyrics(song)
     return coverage.lyric_lines(lyrics.plain) if lyrics is not None else []
@@ -748,6 +878,9 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     always wins; so is the LaCuerda sheet you picked (``[lacuerda]``), which no
     sheet but a pin replaces. The sheet kept becomes the slot's only pick, and a
     complete one retires the auto-chords sheet.
+
+    The other versions scored are kept beside it (``_keep_beside``): no request more. A pinned
+    sheet keeps the top versions by rating beside it, from the cache alone (``_beside_a_pin``).
     """
     policy = run.ctx.rank
     rows = _rows(run, CHORDS_KINDS)
@@ -777,10 +910,17 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
                 continue  # gone or unreadable; the next one is scored instead
             alive.append(c)
         ranked = rank_sheets(alive, policy, variant=run.song.variant)
+
+    def beside() -> list[tuple[Candidate, UGTabPage]]:
+        if pinned is not None:
+            return _beside_a_pin(run, rows, lines)
+        return [(c, pages[c.version_id]) for c in ranked if c.version_id in pages]
+
     best = _first_with_text(run, ranked, rows, pages)
     if best is None:
         set_picks(run.conn, run.song.id, CHORDS_KINDS, [])
         _drop_left_over(run, SHEET_FILES)
+        _keep_beside(run, None, [])
         return None
     c, page = best
     assert c.version_id is not None
@@ -790,11 +930,14 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
             and ((chosen is not None and kept.provider == "lacuerda" and chosen.holds(kept.tab_id))
                  or not replaces_sheet(c.coverage, kept.coverage, policy.coverage_threshold))):
         set_picks(run.conn, run.song.id, CHORDS_KINDS, [])  # the other site's sheet stays the pick
+        _keep_beside(run, None, beside())
         return None
+    _make_way(run, c.tab_id, page)
     _keep_text(run, c.version_id, page, SHEET_FILES)
     set_picks(run.conn, run.song.id, SHEET_KINDS, [c.version_id])
     if is_complete(c, policy):
         _retire_auto_sheet(run.conn, run.ctx.library_dir, run.song)
+    _keep_beside(run, c.version_id, beside())
     return int(c.tab_id)
 
 
@@ -1217,20 +1360,22 @@ def _undone(conn: sqlite3.Connection, song_id: int) -> bool:
     """Whether the song keeps a sheet or a tab from a UG version an earlier match found (``STALE``)."""
     return conn.execute(
         "SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id "
-        f"WHERE f.song_id = ? AND v.provider = ? AND v.gone = {STALE} AND f.name IN ({_KEPT_TEXT_MARKS}) LIMIT 1",
+        f"WHERE f.song_id = ? AND v.provider = ? AND v.gone = {STALE} AND {_KEPT_TEXT_SQL} LIMIT 1",
         (song_id, PROVIDER, *KEPT_TEXT),
     ).fetchone() is not None
 
 
 def _drop_undone(run: _SongRun) -> None:
-    """A song that has no UG match now (you rejected it, say) loses the sheet and the tab an earlier match
-    kept, and their rows (``_drop_left_over``); its status then says what is left: a LaCuerda or an auto
+    """A song that has no UG match now (you rejected it, say) loses the sheet, the tab and the versions an
+    earlier match kept, and their rows (``_drop_left_over``); its status then says what is left: a LaCuerda or an auto
     sheet, or nothing. Guitar Pro files you filed, and files caracole doesn't track, stay; so does every
     file of an ignored song."""
     if _ignored(run.song, run.ctx.overrides) or not _undone(run.conn, run.song.id):
         return
     _drop_left_over(run, SHEET_FILES)
     _drop_left_over(run, TAB_FILES)
+    for tab in _kept_version_tabs(run):
+        _drop_left_over(run, version_names(tab)[:2])
     refresh_status(run.conn, run.song.id, ignored=False)
     write_info(run.conn, run.ctx.library_dir, get_song(run.conn, run.song.id))
 
@@ -1355,11 +1500,13 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
     sheet = _sheet_slot(run, sheet_pins)
     if not guitar:
         # The sheet pass of fetch_songs: the song stays dirty until its guitar slots are done.
-        return SongFetchOutcome(song.id, sheet, (), None, ctx.client.requests_made - start, settled=True)
+        return SongFetchOutcome(song.id, sheet, (), None, ctx.client.requests_made - start, settled=True,
+                                kept_versions=run.kept_versions)
     guitar_pro = _guitar_pro_slot(run, rated(GUITAR_PRO_KINDS))
     tab = _tab_slot(run, rated(TAB_KINDS))
     _finish(run)
-    return SongFetchOutcome(song.id, sheet, guitar_pro, tab, ctx.client.requests_made - start, settled=True)
+    return SongFetchOutcome(song.id, sheet, guitar_pro, tab, ctx.client.requests_made - start, settled=True,
+                            kept_versions=run.kept_versions)
 
 
 def _finish(run: _SongRun) -> None:
@@ -1416,7 +1563,7 @@ def _block_changed(conn: sqlite3.Connection, song: Song, block: frozenset[int]) 
         return False
     rows = conn.execute(
         "SELECT v.tab_id FROM versions v WHERE v.song_id = ? AND v.provider = ? AND (v.pick_rank IS NOT NULL "
-        f"OR EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id AND f.name IN ({_KEPT_TEXT_MARKS})))",
+        f"OR EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id AND {_KEPT_TEXT_SQL}))",
         (song.id, PROVIDER, *KEPT_TEXT),
     )
     return any(int(r[0]) in block for r in rows)
@@ -1695,9 +1842,12 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
     fetch ranks them again, from the cached pages.
 
     First, as the nightly run calls this before fetching, a song whose kept UG
-    sheet or tab the library lost is sent back to the fetch (``_send_back_lost``).
+    sheet, tab or version the library lost is sent back to the fetch (``_send_back_lost``),
+    and the versions kept beside a sheet are scored too (``_rescore_kept_versions``): one
+    that proves complete beside a partial sheet sends its song back as well.
     """
     _send_back_lost(conn, library_dir)
+    _rescore_kept_versions(conn, library_dir, rank)
     rows = conn.execute(
         "SELECT f.song_id, f.version_id FROM files f JOIN versions v ON v.id = f.version_id "
         "WHERE f.name = ? AND v.coverage IS NULL ORDER BY f.song_id",
@@ -1714,15 +1864,47 @@ def rescore_kept_sheets(conn: sqlite3.Connection, library_dir: Path, rank: RankP
         set_coverage(conn, row["version_id"], value)
         if complete(value, rank.coverage_threshold):
             _retire_auto_sheet(conn, library_dir, song)
-        elif _unranked_rivals(conn, song.id, row["version_id"]):
+        elif _unranked_rivals(conn, song.id, row["version_id"]) or _complete_beside(conn, song.id, rank):
             update_song(conn, song.id, ug_dirty=True)
         write_info(conn, library_dir, song)
         scored += 1
     return scored
 
 
+def _rescore_kept_versions(conn: sqlite3.Connection, library_dir: Path, rank: RankPolicy) -> None:
+    """Score the versions kept beside a sheet before their song had lyrics, from their ``version-<tab>.json``,
+    with no request. A song whose sheet is known partial and has a version that proves complete goes back
+    to the fetch, which ranks them again from the cached pages."""
+    rows = conn.execute(
+        "SELECT f.song_id, f.version_id, f.name FROM files f JOIN versions v ON v.id = f.version_id "
+        f"WHERE f.name GLOB '{VERSION_PREFIX}[0-9]*.txt' AND v.coverage IS NULL ORDER BY f.song_id, f.name"
+    ).fetchall()
+    for row in rows:
+        tab = tab_of(row["name"])
+        if tab is None or row["name"] != version_names(tab)[0]:
+            continue
+        song = get_song(conn, row["song_id"])
+        lines = _lyric_lines(song)
+        content = _kept_markup(conn, library_dir, song, row["version_id"], version_names(tab)[1]) if lines else None
+        if content is None:
+            continue
+        set_coverage(conn, row["version_id"], coverage.coverage(content, lines, line_match=rank.line_match))
+        sheet = _kept_version(conn, song.id, SHEET_FILES[0])
+        if (sheet is not None and sheet.coverage is not None and not complete(sheet.coverage, rank.coverage_threshold)
+                and _complete_beside(conn, song.id, rank)):
+            update_song(conn, song.id, ug_dirty=True)
+
+
+def _complete_beside(conn: sqlite3.Connection, song_id: int, rank: RankPolicy) -> bool:
+    """Whether a version kept beside the song's sheet covers its lyrics."""
+    return any(
+        tab_of(f.name) is not None and complete(get_version(conn, f.version_id).coverage, rank.coverage_threshold)
+        for f in kept_files(conn, song_id)
+    )
+
+
 def _send_back_lost(conn: sqlite3.Connection, library_dir: Path) -> None:
-    """Mark dirty each clean, accepted or pinned song whose kept UG sheet or tab the library lost.
+    """Mark dirty each clean, accepted or pinned song whose kept UG sheet, tab or version the library lost.
 
     That is a file no longer as kept (``library.holds``): deleted on a synced
     device, cut short by a power cut, or a link in its place. The database alone
@@ -1734,7 +1916,7 @@ def _send_back_lost(conn: sqlite3.Connection, library_dir: Path) -> None:
     """
     rows = conn.execute(
         "SELECT f.song_id, f.path, f.sha256 FROM files f JOIN versions v ON v.id = f.version_id "
-        f"JOIN songs s ON s.id = f.song_id WHERE v.provider = ? AND v.gone = {LIVE} AND f.name IN ({_KEPT_TEXT_MARKS}) "
+        f"JOIN songs s ON s.id = f.song_id WHERE v.provider = ? AND v.gone = {LIVE} AND {_KEPT_TEXT_SQL} "
         "AND s.match_decision IN ('accept', 'pinned') AND s.ug_dirty = 0 AND s.status != 'ignored'",
         (PROVIDER, *KEPT_TEXT),
     ).fetchall()
@@ -1750,13 +1932,15 @@ def _unranked_rivals(conn: sqlite3.Connection, song_id: int, kept_id: int) -> bo
     )
 
 
-def _kept_markup(conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int) -> str | None:
-    """The markup in the song's kept ``sheet.json``, if it is that version's and can be read.
+def _kept_markup(
+    conn: sqlite3.Connection, library_dir: Path, song: Song, version_id: int, name: str = SHEET_FILES[1]
+) -> str | None:
+    """The markup in the song's kept ``sheet.json`` (or ``name``), if it is that version's and can be read.
 
     It is read only as a regular file, never through a link (``library.read_json``):
     whatever another device planted there instead is no sheet, as a missing one is.
     """
-    doc_file = next((f for f in kept_files(conn, song.id) if f.name == SHEET_FILES[1]), None)
+    doc_file = next((f for f in kept_files(conn, song.id) if f.name == name), None)
     if doc_file is None or doc_file.version_id != version_id:
         return None
     path = library_dir / doc_file.path

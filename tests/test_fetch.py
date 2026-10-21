@@ -656,11 +656,12 @@ def test_a_guitar_pro_pick_blocked_after_the_fetch_sends_its_song_back(conn, tmp
 
 def test_blocking_a_tab_the_song_doesnt_use_sends_nothing_back(conn, tmp_path):
     song = accepted(conn)
-    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)])
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103, 104)])
     ug = FakeUG()
     three_chords(ug)
-    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)  # keeps 102
-    assert songs_to_fetch(conn, Overrides(block=frozenset({101})), NOW) == []
+    ug.tab(v(104, version=4, rating=3.0, votes=5), content=sheet("sheet 104", LINES))
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)  # keeps 102, and 101 and 103 beside
+    assert songs_to_fetch(conn, Overrides(block=frozenset({104})), NOW) == []
 
 
 # --- fetch_songs: budget, errors and blocks -----------------------------------------------
