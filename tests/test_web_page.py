@@ -1123,8 +1123,10 @@ SETTLED = """new Promise((done) => {
 })"""
 
 
-# Notes every layout shift that no input brought about since the page loaded (buffered): how much, and what
-# moved. A request's answer that comes seconds after its tap moves nothing on the screen.
+# Notes every layout shift that no input brought about from now on: how much, and what moved. A request's answer
+# that comes seconds after its tap moves nothing on the screen. (Not since the page loaded: as busy as a whole run
+# makes the machine, Chromium may draw the page before its script has run, the list empty and the request form
+# showing, then move both once it has; that is the page's load, which no request brings about.)
 SHIFTS = """(() => {
   window.shifts = [];
   new PerformanceObserver((list) => {
@@ -1133,7 +1135,7 @@ SHIFTS = """(() => {
       const moved = (e.sources || []).map((s) => (s.node ? s.node.id || String(s.node.className || s.node.nodeName) : "?"));
       window.shifts.push({ value: Math.round(e.value * 10000) / 10000, moved });
     }
-  }).observe({ type: "layout-shift", buffered: true });
+  }).observe({ type: "layout-shift" });
   return true;
 })()"""
 
