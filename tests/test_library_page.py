@@ -1762,7 +1762,9 @@ def every_control(conn, cfg, *, served: bool = True) -> str:
     put(cfg, auto, "sheet (auto).txt", "sheet (auto).html", "sheet (auto).pdf")
     for n in range(35):  # wanted, no file: last in the artists' order
         add_song(conn, "Zucchero", f"Song {n:02d}")
-    make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Radiohead - Creep", "Oasis - Wonderwall"])
+    # Songs of it without a sheet: served, its card offers to get them now.
+    make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Radiohead - Creep", "Oasis - Wonderwall",
+                                                             "Zucchero - Song 00"])
     controls = WebControls(csrf="tok") if served else None
     return build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
 
@@ -1778,6 +1780,7 @@ def test_on_a_touch_screen_every_control_is_a_thumbs_size(conn, cfg, tmp_path, s
     from helpers.targets import UNFOLD, noted, noting, small_targets
 
     html = with_script(every_control(conn, cfg), UNFOLD + noting("data-short", small_targets(TITLES)))
+    assert re.search(r">Get the (missing song|\d+ missing songs) now</button>", html)  # measured too
     dom = dump_dom(write_library_page(cfg.library_dir, html), tmp_path, view, size=size, touch=True)
     short = noted(dom, "data-short")
     assert short == [], short
