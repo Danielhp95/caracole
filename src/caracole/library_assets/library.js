@@ -2088,6 +2088,17 @@
       showLine(progressIn(card), { line: { tone: "queued", text: "Sending…" } });
       return card;
     };
+    // A result's row whose request the server has just answered, put where it would be had the answer come at
+    // once: the row left the results while it was on its way (Back to your songs, the ×, Escape, a newer answer
+    // drawn). A newer answer with a row for the same song takes this one in its place, its line in it; else the
+    // request's card comes under the bar (settleSpots), as for a row that leaves the results after the answer.
+    const placed = (row) => {
+      if (state.all && !row.isConnected) {
+        const fresh = Array.from(sitesBox.querySelectorAll(".hit")).find((hit) => hitKey(hit) === hitKey(row));
+        if (fresh) fresh.replaceWith(row);
+      }
+      if (!state.all || !row.isConnected) settleSpots(state.all);
+    };
     // A result's request, its line in the result's own row, from "Sending…" on: ``view`` finds the job in the
     // answer.
     const askFrom = (path, fields, names, row, go, view) => {
@@ -2114,6 +2125,7 @@
           if (go && go.closest(".row-action, .later")) go.remove();  // its line takes the button's place
           spots.set(Number(job.id), row);
           track(job);
+          placed(row);
         }, () => {
           if (go) go.disabled = false;
           showLine(progressIn(row), UNREACHABLE);
