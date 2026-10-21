@@ -1737,7 +1737,8 @@ renders it: each section's chords as Roman numerals in the key the viewer
 reads the sheet in, one cycle, with its name when it has one ("the pop
 progression", "the Andalusian cadence"). A progression's button under a song's
 "⋯", or `#prog=` in the address (`index.html#prog=I%20V%20vi%20IV`, as a
-sheet viewer's Harmony panel links to it), shows only your songs that play it,
+sheet viewer's Harmony panel links to it; written by hand, `#prog=vi–IV–I–V` is
+the same progression), shows only your songs that play it,
 in any key and starting on any of its chords, under a line that says which,
 with Show all: "Songs with I–V–vi–IV, the pop progression · Show all". A
 progression with a name finds every reading of it: the pop progression is
@@ -2318,13 +2319,15 @@ lower case for minor, written against the tonic's major scale (`"vi IV I V"`,
 `"vi–IV–I–V"`, `"i bVII bVI V"` with b or ♭ for a flat; a chord's quality and
 extensions are left aside, so `"Imaj7 vi7 ii7 V7"` is I–vi–ii–V), or the name
 of a progression or words of it (`andalusian`, `"the pop progression"`,
-`blues`, `"royal road"`). A progression with a name finds every reading of
+`blues`, `"royal road"`; words of fewer than five letters, `"the road"`, name
+none unless "progression" or "cadence" is among them, and `minor` alone names
+none). A progression with a name finds every reading of
 it, the pop progression in a major key and in the relative minor:
 
     $ caracole search --progression "vi IV I V"
     Your songs with I–V–vi–IV, the pop progression
-      [UG] Placeholder Band - Synthetic Song · found · Verse, Chorus · in C major · /home/you/Tabs/Placeholder Band/Synthetic Song
       [UG] Another Band - Minor Song · found · untitled section · in A minor · /home/you/Tabs/Another Band/Minor Song
+      [UG] Placeholder Band - Synthetic Song · found · Verse, Chorus · in C major · /home/you/Tabs/Placeholder Band/Synthetic Song
 
 The offline indexes have no chords, so they aren't searched; `--progression`
 goes with no QUERY, `--key`, `--artist`, `--title` or `--add`, and a text that
@@ -2346,7 +2349,8 @@ is no progression exits with status 2.
   lets every song of yours show, there and in the list; the sites' songs are
   what the sites have, whatever the buttons show. A progression typed as
   numerals ("vi IV I V", "i bVII bVI V") or named ("andalusian", "the pop
-  progression", "blues"; a short word alone, "pop", is a word) finds your songs
+  progression", "blues"; words of fewer than five letters, "pop" or "the road",
+  are words, as "minor" alone is) finds your songs
   that play it too, the first among the results, and the results' head says how
   many play it ("Your songs with I–V–vi–IV, the pop progression: 12"), with
   Show them, the list of those alone (`#prog=`, above). The results come under the

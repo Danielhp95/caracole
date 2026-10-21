@@ -69,7 +69,7 @@ Shared by the steps and the commands:
 | keys.py | a song's musical key and where it came from |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
-| progressions.py | each song's progressions, read by render.py as it renders the song's sheet (its human one, else its auto one) into kv `render:progressions:<song id>` (`record`; harmony.py's `progressions` and `progression_key`), so that index.html's data (each song's `progressions`, the page's `catalogue`), `#prog=`, `/api/search`'s `progression` and `caracole search --progression` read one row a song, never a sheet; `read_progression`, numerals or a catalogue name typed; a named progression stands for every reading of its name (the pop progression in a major key and in its relative minor) |
+| progressions.py | each song's progressions, read by render.py as it renders the song's sheet (its human one, else its auto one: `test_progressions.py::test_a_song_that_keeps_both_sheets_is_found_by_its_human_sheet_never_the_auto_one`) into kv `render:progressions:<song id>` (`record`; harmony.py's `progressions` and `progression_key`), so that index.html's data (each song's `progressions`, the page's `catalogue`), `#prog=` (any rotation of it, made the key by library.js's `progKeyOf` as `progression_key` makes one), `/api/search`'s `progression` and `caracole search --progression` read one row a song, never a sheet; `read_progression`, numerals or a catalogue name typed; a named progression stands for every reading of its name (the pop progression in a major key and in its relative minor) |
 
 Rules a change there keeps (the Invariants below are the others):
 

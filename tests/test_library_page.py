@@ -1218,8 +1218,16 @@ def test_the_address_shows_the_songs_with_a_progression_in_any_of_its_readings(c
     assert prog_line(dom) == "Songs with I–V–vi–IV, the pop progression · Show all"
     dom = dump_dom(path, tmp_path, "#prog=" + quote("I IV V"))  # a progression named by its numerals
     assert sorted(titles_in(listing(dom))) == ["Blues", "Synthetic Song"] and prog_line(dom) == "Songs with I–IV–V · Show all"
-    dom = dump_dom(path, tmp_path, "#prog=" + quote("ii V I"))
-    assert "No songs of yours play ii–V–I." in listing(dom) and prog_line(dom) == "Songs with ii–V–I · Show all"
+    for typed in ("ii V I", "I ii V"):  # said by its name, which is its numerals
+        dom = dump_dom(path, tmp_path, "#prog=" + quote(typed))
+        assert "No songs of yours play ii–V–I." in listing(dom) and prog_line(dom) == "Songs with ii–V–I · Show all"
+    # An address typed by hand, in any rotation, repeat or spelling, is the progression it plays.
+    for typed in ("vi IV I V", "vi–IV–I–V", "IV I V vi IV I V vi"):
+        dom = dump_dom(path, tmp_path, "#prog=" + quote(typed))
+        assert sorted(titles_in(listing(dom))) == ["In A Minor", "Synthetic Song"], typed
+        assert prog_line(dom) == "Songs with I–V–vi–IV, the pop progression · Show all", typed
+    dom = dump_dom(path, tmp_path, "#prog=" + quote("V I IV"))
+    assert sorted(titles_in(listing(dom))) == ["Blues", "Synthetic Song"] and prog_line(dom) == "Songs with I–IV–V · Show all"
     # The search and the other filters go with it.
     dom = dump_dom(path, tmp_path, "#q=minor&prog=" + quote("I V vi IV"))
     assert titles_in(listing(dom)) == ["In A Minor"]

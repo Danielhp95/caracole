@@ -133,9 +133,37 @@
     return progsOf(s).some((p) => p.key === key || (name !== "" && progName(p.key) === name));
   };
   const progLabel = (key) => String(key).trim().split(/\s+/).join("–");
-  // "I–V–vi–IV, the pop progression"; "I–IV–V", whose name is its numerals.
+  // An address's progression as its key, as harmony.progression_key makes one of numerals given by their roots: "vi IV
+  // I V", "vi–IV–I–V" and "IV I V vi IV I V vi" are all "I V vi IV", "bVII" is "♭VII".
+  const progKeyOf = (text) => {
+    const cycle = String(text).split(/[\s,–—-]+/).filter(Boolean).map((n) => n.replace(/^b/, "♭").replace(/^#/, "♯"))
+      .filter((n, i, all) => i === 0 || n !== all[i - 1]);
+    while (cycle.length > 1 && cycle[0] === cycle[cycle.length - 1]) cycle.pop();
+    const n = cycle.length;
+    let period = n;
+    for (let p = 1; p < n; p++) {
+      if (n % p === 0 && cycle.every((x, i) => x === cycle[i % p])) {
+        period = p;
+        break;
+      }
+    }
+    const once = cycle.slice(0, period);
+    let best = once;
+    for (let i = 1; i < once.length; i++) {
+      const turned = once.slice(i).concat(once.slice(0, i));
+      const at = turned.findIndex((x, j) => x !== best[j]);
+      if (at >= 0 && turned[at] < best[at]) best = turned;
+    }
+    return best.join(" ");
+  };
+  // A progression in numerals: its name when that is numerals ("ii–V–I", whose key is "I ii V"), else its key's.
+  const progNumerals = (key) => {
+    const name = progName(key);
+    return name && progKeyOf(name) === key ? name : progLabel(key);
+  };
+  // "I–V–vi–IV, the pop progression"; "ii–V–I", whose name is its numerals.
   const progSaid = (key) => {
-    const said = progLabel(key);
+    const said = progNumerals(key);
     const name = progName(key);
     return name && name !== said ? said + ", " + name : said;
   };
@@ -697,7 +725,7 @@
       render();
       save();
       input.focus();
-    }, "Show every song, not only those with " + progLabel(state.prog)));
+    }, "Show every song, not only those with " + progNumerals(state.prog)));
   };
   // Under a line's "⋯": the song's progressions, as it plays them; each shows the songs that play it too.
   const progressionsOf = (s) => {
@@ -926,7 +954,7 @@
     if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
     if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
-    state.prog = String(params.get("prog") || "").trim().split(/\s+/).join(" ").slice(0, 200);
+    state.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
     state.all = params.get("all") === "1" && sitesCan(state.q) && (!server || typedEnough(state.q));
   } catch (err) {
     // A malformed address: start from the defaults.
@@ -1150,8 +1178,8 @@
       list.appendChild(any);
     } else if (!shown.length && state.prog) {
       // The progression hides them: the line above says which, with Show all.
-      list.appendChild(el("p", "empty", state.q ? "No songs with " + progLabel(state.prog) + " match “" + state.q + "”."
-        : "No songs of yours play " + progLabel(state.prog) + "."));
+      list.appendChild(el("p", "empty", state.q ? "No songs with " + progNumerals(state.prog) + " match “" + state.q + "”."
+        : "No songs of yours play " + progNumerals(state.prog) + "."));
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
       if (!query.keys.length && server) {  // the offline indexes have no keys
@@ -1517,7 +1545,7 @@
   const keptSaid = () => {
     const parts = [label(SHOW_WORD, state.show), state.artist ? "by " + artistName(state.artist) : "",
       state.key && keyGroup(state.key) ? "in " + keyGroup(state.key).name : "",
-      state.prog ? "with " + progLabel(state.prog) : ""].filter(Boolean);
+      state.prog ? "with " + progNumerals(state.prog) : ""].filter(Boolean);
     return parts.length ? "Your songs here: " + parts.join(" · ") : "";
   };
   // Show all of yours: every status, key, artist and progression, here and in the list; the focus to the box, as the

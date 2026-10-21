@@ -14,8 +14,9 @@ has its records after the next render, which a new viewer (``page.BUILD_FILES``)
 **For searching**, a progression is a section's cycle of two chords or more (a section held on one
 chord is none). ``read_progression`` reads what you type: numerals ("vi IV I V", "vi–IV–I–V",
 "bVII" for ♭VII, the chord's quality and extensions ignored, as the key ignores them), or a
-catalogue name or a word of one ("andalusian", "the pop progression", "blues"; a short word alone,
-"pop", is too common a word to be a name). A progression the catalogue names stands for every
+catalogue name or a word of one ("andalusian", "the pop progression", "blues"; words of fewer than
+five letters, "pop" or "the road", are too common to be a name unless "progression" or "cadence" says
+one is meant, "pop progression", and so is "minor" alone). A progression the catalogue names stands for every
 progression of that name: the pop progression is I–V–vi–IV and, read in the relative minor,
 i–♭VI–♭III–♭VII, so a song whose key caracole read as A minor rather than C major is found either
 way. ``songs_with`` gives the songs that play it, with the sections that do.
@@ -45,16 +46,20 @@ _TYPED = re.compile(rf"[♭♯b#]?{_ROMAN}(?:maj|add|sus|dim|aug|[°ø+o0-9♭�
 _SEPARATORS = re.compile(r"[\s,–—-]+")
 _WORD = re.compile(r"[^\W_]+")
 _APOSTROPHES = re.compile(r"['’‘`´ʼ]")
-# Words every name has, which name none alone; and what a name's other words must come to, letters alone.
+# Words every name has, which name none alone; what a name's other words must come to, letters alone, so
+# that a title's words ("The Road", "the bar") name nothing, unless a word says a progression is meant ("pop
+# progression"); and words that name nothing alone, a key's.
 _GENERIC = frozenset({"the", "a", "of", "progression", "cadence", "chords"})
+_SAYS_PROGRESSION = frozenset({"progression", "cadence"})
 _NAME_LETTERS = 5
+_NOT_ALONE = frozenset({"minor", "major"})
 
 
 @dataclass(frozen=True)
 class Wanted:
     """A progression asked for: ``key``, its own (``harmony.progression_key``), the first of ``keys``,
     every key a song may play it as (each of its name's); ``name``, the catalogue's; ``label``, how
-    it is said: "I–V–vi–IV" typed, "the Andalusian cadence" named."""
+    it is said: "I–V–vi–IV" typed, "the Andalusian cadence" named, "ii–V–I" for a name that is numerals."""
 
     key: str
     keys: frozenset[str]
@@ -202,10 +207,13 @@ def read_progression(text: str) -> Wanted | None:
         if " " not in key:
             return None
         name = names.get(key)
-        return Wanted(key, frozenset({key, *_named(names, {name})}), name, label(key))
+        # A name that is numerals ("ii–V–I", whose key is "I ii V") says them as they are played.
+        said = name if name is not None and progression_key(name) == key else label(key)
+        return Wanted(key, frozenset({key, *_named(names, {name})}), name, said)
     words = _words(text)
     rest = [w for w in words if w not in _GENERIC]
-    if not rest or (len(rest) == len(words) and sum(map(len, rest)) < _NAME_LETTERS):
+    short = sum(map(len, rest)) < _NAME_LETTERS and not _SAYS_PROGRESSION & set(words)
+    if not rest or short or (len(rest) == 1 and rest[0] in _NOT_ALONE):
         return None
     found = [name for name in dict.fromkeys(names.values()) if set(words) <= set(_words(name))]
     if not found:

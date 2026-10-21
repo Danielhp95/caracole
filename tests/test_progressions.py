@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from caracole.autochords import ChordSegment, build_sheet
 from caracole.db import kv_get_json, kv_set_json
+from caracole.library import keep_file, song_dir
 from caracole.overrides import Overrides
 from caracole.progressions import (
     KV,
@@ -15,6 +17,7 @@ from caracole.progressions import (
 )
 from caracole.render import render_all
 from caracole.songs import _PER_SONG_KV, delete_song_kv
+from caracole.versions import upsert_version
 
 from conftest import add_song
 from helpers.rendered import fake_chordpro, rendered_song
@@ -77,6 +80,9 @@ def test_a_progression_typed_as_numerals_in_any_rotation_or_spelling():
     unnamed = read_progression("I iii IV")
     assert (unnamed.keys, unnamed.name, unnamed.label) == (frozenset({"I iii IV"}), None, "I–iii–IV")
     assert read_progression("Imaj7 vi7 ii7 V7").key == "I vi ii V"
+    # A progression whose name is its numerals is said by its name, not turned to start where its key does.
+    two_five = read_progression("ii V I")
+    assert (two_five.key, two_five.name, two_five.label) == ("I ii V", "ii–V–I", "ii–V–I")
 
 
 def test_a_progression_named_from_the_catalogue():
@@ -88,11 +94,18 @@ def test_a_progression_named_from_the_catalogue():
     assert read_progression("the pop progression").keys == {POP, POP_MINOR}
     assert len(read_progression("blues").keys) == 4  # the 12-bar blues, in each of its forms
     assert read_progression("royal road").name == "the royal road"
+    assert read_progression("the royal road").name == "the royal road"
+    assert read_progression("minor ii V i").name == "the minor ii–V–i"
+    assert read_progression("12 bar").name == "the 12-bar blues"
+    assert read_progression("pop progression").name == "the pop progression"
 
 
 def test_words_that_are_no_progression():
     for text in ("", "hello world", "I", "I I I", "V", "vi IV hello", "pop", "progression", "the cadence",
-                 "Wonderwall", "via"):
+                 "Wonderwall", "via",
+                 # A title's words: a name's other words must come to five letters, a generic word beside them or
+                 # not, and "minor" alone is a key's word
+                 "The Road", "the bar", "a road", "minor", "Minor", "the minor"):
         assert read_progression(text) is None, text
 
 
@@ -119,6 +132,23 @@ def test_an_auto_sheet_is_read_when_there_is_no_human_one_and_a_song_with_no_she
     kv_set_json(conn, f"{KV}{bare.id}", {"key": "C major", "sections": []})  # from a sheet it kept once
     render_all(conn, cfg, Overrides(), runner=fake_chordpro)
     assert kv_get_json(conn, f"{KV}{bare.id}") is None
+
+
+def test_a_song_that_keeps_both_sheets_is_found_by_its_human_sheet_never_the_auto_one(conn, cfg):
+    song = rendered_song(conn, cfg)  # the human sheet: G D Em C, in G
+    # The auto sheet stays until a complete human sheet arrives: C G, heard in F
+    text = build_sheet([ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G")], title=song.title,
+                       artist=song.artist, synced="[00:00.00]made up words\n[00:04.00]for the test\n")
+    vid = upsert_version(conn, provider="auto", tab_id=f"auto-{song.id}", song_id=song.id, slot="sheet",
+                         kind="auto", rating=0, votes=0, version=1, label=None, url="", raw={"key": "F"},
+                         now="2026-10-18T03:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet (auto).txt",
+              data=text.encode("utf-8"), rank=1)
+    assert render_all(conn, cfg, Overrides(), runner=fake_chordpro).failed == 0
+    assert (song_dir(cfg.library_dir, song) / "sheet (auto).html").exists()  # both sheets were rendered
+    record = kv_get_json(conn, f"{KV}{song.id}")
+    assert record["key"] == "G major"
+    assert [s["numerals"] for s in record["sections"]] == [["I", "V", "vi", "IV"]]
 
 
 def test_a_songs_progressions_go_with_it(conn, cfg):
