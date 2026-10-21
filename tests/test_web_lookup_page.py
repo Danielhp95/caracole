@@ -355,7 +355,7 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
     assert marks == ["ug", "ug"]  # your song's sheet came from UG, and so does the UG song
     main = browser.js("document.querySelector('#results .hit .row-action .primary').getAttribute('href')")
     assert main == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet.html"
-    # Its title opens the same, as in index.html; an Ultimate Guitar song's title opens nothing (Get it asks).
+    # Its title opens the same, as in index.html; an Ultimate Guitar song's title is no link: it gets it, as Get it does.
     titles = browser.js("[...document.querySelectorAll('#results .hit .title-link')].map(a => a.getAttribute('href'))")
     assert titles == [main]
     browser.press("Enter")  # the first result: your song, opened as its card opens it
@@ -363,6 +363,36 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
     assert browser.wait("document.querySelector('h1') && document.querySelector('h1').textContent === "
                         "'De Música Ligera'")
     assert queue.snapshot() == []  # opening it asked for nothing
+
+
+# The page's fetch, each POST noted (its path and form) and never sent.
+NOTE_POSTS = ("(() => { window.posts = []; const real = window.fetch; window.fetch = (url, init) => { "
+              "if (init && init.method === 'POST') { window.posts.push([String(url), String(init.body)]); "
+              "return new Promise(() => {}); } return real(url, init); }; })()")
+
+
+@in_chromium
+def test_a_songs_name_looks_it_up_as_its_get_it_does(cfg, live, browser):
+    base, queue = live
+    index_songs(cfg, [("radiohead", "creep", 3)])
+    pressed = {}
+    for what in ("get it", "name"):
+        browser.js("window.before = true")
+        browser.open(base + "/lookup")
+        assert browser.wait("!window.before")
+        browser.type("creep")
+        assert browser.wait("!!document.querySelector(\"#results .hit[data-ug='radiohead/creep']\")")
+        browser.js(NOTE_POSTS)
+        hit = "#results .hit[data-ug='radiohead/creep']"
+        browser.click(f"{hit} .row-title button.title-get" if what == "name" else f"{hit} .row-action button")
+        assert browser.wait("window.posts.length === 1 && document.getElementById('reader-title').textContent === "
+                            "'Radiohead - Creep'")
+        pressed[what] = browser.js("window.posts")
+    assert pressed["name"] == pressed["get it"] and pressed["name"][0][0] == "/lookup"
+    name = "document.querySelector(\"#results .hit[data-ug='radiohead/creep'] .row-title button\")"
+    assert browser.js(f"{name}.getAttribute('aria-label')") == "Get Radiohead - Creep"
+    assert browser.js(f"{name}.closest('h2').textContent") == "Creep"
+    assert queue.snapshot() == []  # noted, never sent
 
 
 ARTIST_NAME = "(document.querySelector('#results .artist-head h2') || {}).textContent"

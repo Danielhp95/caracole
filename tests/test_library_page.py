@@ -1551,6 +1551,19 @@ def test_a_songs_title_opens_its_sheet_and_its_lines_button_does_too(conn, cfg, 
     assert '<a class="line-title"' not in line_of(shown, "Yesterday")  # no file: a plain title
 
 
+@in_chromium
+@pytest.mark.parametrize("fragment", ["", "#q=yesterday&all=1"])
+def test_on_the_file_no_name_gets_a_song(conn, cfg, tmp_path, fragment):
+    # A result's name does what its Get it does, which needs caracole serve: on the file, with no Get it, every
+    # name is the title it was, plain or the link to the sheet, the sites' search (Enter) the line to run alone.
+    filed_library(conn, cfg)
+    dom = dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path, fragment)
+    assert re.search(r'<button[^>]*class="title-get', dom) is None
+    assert re.search(r"<h3[^>]*>Yesterday</h3>", dom)  # its name alone, no button in it
+    if fragment:
+        assert 'id="found"' in dom and "caracole serve" in dom  # the line that searches the sites, to run
+
+
 # Notes how each line is laid out: how tall its title's link is against its button, how many lines its title
 # takes, and its button's colour against the accent's.
 LINE_LAYOUT = """
