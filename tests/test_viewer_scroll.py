@@ -210,8 +210,10 @@ def test_served_in_a_sandbox_a_reload_keeps_the_speed(tmp_path):
 def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_path):
     with viewer(tmp_path) as b:
         b.js(RECORD)
+        # When each press reached the page, as the page counts time: read after it, the clock has gone on.
+        b.js("window.addEventListener('click', () => { window.pressed = performance.now(); }, true)")
         b.click("#scroll")
-        pressed = b.js("performance.now()")
+        pressed = b.js("window.pressed")
         counting = look(b)
         ring = b.js("getComputedStyle(document.querySelector('#go .ring .arc')).animationName")
         # The arc drawn in the button's own colour, as the number and the track are.
@@ -228,7 +230,7 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
         b.js("moves.length = 0")
         b.click("#scroll")
         b.click("#go")  # pressed again: no waiting
-        again = b.js("performance.now()")
+        again = b.js("window.pressed")
         assert b.wait("moves.length > 0", 1)
         soon = b.js("moves[0][0]") - again
 
