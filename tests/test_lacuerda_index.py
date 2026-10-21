@@ -369,6 +369,14 @@ def test_initials_find_their_artist(index):
     assert li.find(index, "E.G.O.").artists[0].artist == "E.G.O."
 
 
+def test_a_name_typed_as_one_word_finds_its_words_apart(conn):
+    # The prefilter reads the keys written together too, as "banma" must find ban-ma-ban-ma (a Chinese
+    # name's pinyin): a Latin name typed as one word reaches its words apart the same way.
+    li.store_artists(conn, "tabs/l/index0.html", [LCArtist("los_rock_star", "Los Rock Star", 6)])
+    (hit,) = li.find(conn, "rockstar").artists
+    assert (hit.artist, hit.score) == ("Los Rock Star", 100.0)
+
+
 def test_chinese_is_compared_as_pinyin(index):
     for query in ("宋冬野", "song dongye", "Song Dong Ye"):
         assert [h.artist_slug for h in li.find(index, query).artists] == ["song_dongye"], query

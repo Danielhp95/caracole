@@ -2069,7 +2069,10 @@ searches that artist's titles. Neither goes with `--key` (exit 2).
 **On LaCuerda** comes after Ultimate Guitar's hits, numbered on, from
 LaCuerda's local index (see [caracole lacuerda](#one-step-at-a-time)), which
 holds every artist of LaCuerda's listings the nightly run has read, and the
-songs of the artists whose page caracole has read. An artist the query names
+songs of the artists whose page caracole has read. Its names are compared as
+Ultimate Guitar's are, also with their words run together: "rockstar" finds
+Los Rock Star, and "banma" a song LaCuerda writes 斑马斑马, whose pinyin is
+`ban-ma-ban-ma`. An artist the query names
 is a line of their own, with the songs LaCuerda's listing counts, then their
 most popular songs with chords the index holds; or, when caracole has never
 read their page, the line that reads it, one request:
