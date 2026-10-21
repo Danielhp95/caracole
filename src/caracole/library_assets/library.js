@@ -767,6 +767,31 @@
     if (others.length) facts.appendChild(el("span", "with", "With " + others.join(", ")));
     return facts.childNodes.length ? facts : null;
   };
+  // A kept version's name in a line's "⋯": UG's version number, its rating and votes, and whether it is the one,
+  // "Ver 3 · 4.86★ (408) · the one".
+  const versionLabel = (v) => {
+    const parts = ["Ver " + (Number(v.number) || "?")];
+    if (typeof v.rating === "number") {
+      parts.push(v.rating.toFixed(2) + "★" + (typeof v.votes === "number" ? " (" + v.votes.toLocaleString("en") + ")" : ""));
+    }
+    if (v.chosen === true) parts.push("the one");
+    return parts.join(" · ");
+  };
+  // A song's Ultimate Guitar versions kept beside its sheet (the data's ``versions``: sheet_versions.py's, the kept
+  // ones in rank order), each a link to its viewer page; the one its title opens says so. When the one is another
+  // site's sheet (LaCuerda's) or the auto sheet, it leads the list by that name, opening what the title opens.
+  const keptVersions = (s, primary) => {
+    const data = s.versions && typeof s.versions === "object" ? s.versions : null;
+    const kept = listOf(data && data.list).filter((v) => v && typeof v === "object" && typeof v.href === "string" && v.href);
+    if (!kept.length) return [];
+    const links = kept.map((v) => elsewhere(s, { label: versionLabel(v), href: v.href, source: v.source }));
+    if (!kept.some((v) => v.chosen === true) && primary) {
+      const site = typeof s.source === "string" && own.call(ICONS, s.source) && ICONS[s.source] ? ICONS[s.source].name : "";
+      const name = s.auto === true ? "the auto sheet" : site ? String(site) + "'s sheet" : "its sheet";
+      links.unshift(elsewhere(s, { label: "The one: " + name, href: primary.href, source: s.source }));
+    }
+    return links;
+  };
   // Under a line's "⋯": Select, the song picked, and its bar to put it in a songbook there is or a new one
   // (select.js, which hears "caracole:pick"). Select knows the songs the page was loaded with: a song new to the
   // library since (Get it, a request) has none until the page is loaded again, as it would do nothing.
@@ -822,7 +847,8 @@
     // The sheet's PDFs in other versions (Export PDF of this version), by their versions, before the other files.
     const isVersion = (f) => f && typeof f.version === "string" && f.version;
     const versions = listed.filter(isVersion).map((f) => Object.assign({}, elsewhere(s, f), { label: f.version }));
-    more.push({ heading: "Versions", links: versions },
+    more.push({ heading: "Sheet versions", links: keptVersions(s, primary) },
+      { heading: "PDF exports", links: versions },
       { heading: "Files", links: listed.filter((f) => !isVersion(f)).map((f) => elsewhere(s, f)) },
       { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },

@@ -1196,7 +1196,7 @@ and cache.
   another key or capo took the old one's place, an auto sheet's key was heard
   again) is made under its new name, and the PDF under the old one goes, while
   it is still as caracole wrote it. The library page lists them under the
-  song's line's "⋯", as its Versions, each by its version (`G Dorian, capo
+  song's line's "⋯", as its PDF exports, each by its version (`G Dorian, capo
   0`), before its other files. An
   export is made from the song's human sheet, else its auto sheet; it needs one
   of them to be kept, and exits 1 with the reason when it can't be made.
@@ -1710,7 +1710,13 @@ YouTube route, when caracole takes the audio of songs with no human sheet from
 YouTube ("No human sheet yet: caracole takes the audio from YouTube next",
 "Audio from YouTube: auto-chords works out the chords next", "Auto sheet from
 YouTube audio"), with a link to the video once there is one, instead of
-offering to buy it; its versions, the sheet's PDFs in other versions, each
+offering to buy it; its **Sheet versions**, the Ultimate Guitar versions
+caracole keeps beside its sheet (the runners-up of the three it scores, and a
+version you kept), in rank order, each with UG's version number, its rating and
+votes (`Ver 3 · 4.86★ (408) · the one`), each opening its own viewer page, the
+one its title opens marked "the one" (when that is LaCuerda's sheet or the auto
+sheet, it leads the list by that name: `The one: LaCuerda's sheet`); its PDF
+exports, the sheet's PDFs in other versions, each
 by its version (`G Dorian, capo 0`: see `caracole render --version` and Export
 PDF of this version); its other files (the PDF, the text, the ChordPro file,
 the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files) and the

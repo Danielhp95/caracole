@@ -1834,7 +1834,7 @@ def test_a_line_opens_its_sheet_from_one_button_and_its_other_files_wait_under_i
 
 @in_chromium
 def test_a_lines_menu_lists_the_sheets_versions_apart_from_its_files(conn, cfg, tmp_path):
-    # The PDFs caracole made of the sheet in other versions (Export PDF of this version) are the song's versions:
+    # The PDFs caracole made of the sheet in other versions (Export PDF of this version) are the song's PDF exports:
     # under its "⋯", by their versions, before its other files, which no longer list them.
     from caracole.render import EXPORT_KV
 
@@ -1856,11 +1856,101 @@ def test_a_lines_menu_lists_the_sheets_versions_apart_from_its_files(conn, cfg, 
     assert link_texts(soda.split('class="line-panel"', 1)[0]) == ["Open"]
     groups = re.findall(r'<p class="subhead">([^<]*)</p><div class="actions">(.*?)</div>', panel_of(soda), re.S)
     assert [(heading, link_texts(links)) for heading, links in groups][:2] == [
-        ("Versions", ["B Minor, capo 2", "G Dorian, capo 0"]), ("Files", ["Sheet PDF", "Sheet text"])], groups
-    versions = dict(groups)["Versions"]
+        ("PDF exports", ["B Minor, capo 2", "G Dorian, capo 0"]), ("Files", ["Sheet PDF", "Sheet text"])], groups
+    versions = dict(groups)["PDF exports"]
     assert 'href="Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"' in versions
-    # A song with no export has no Versions.
-    assert '<p class="subhead">Versions</p>' not in line_of(shown, "Creep")
+    # A song with no export has no PDF exports.
+    assert '<p class="subhead">PDF exports</p>' not in line_of(shown, "Creep")
+
+
+def wonderwall(conn, cfg, *, pages=("sheet.html", "version-39144.html")):
+    """Wonderwall with four chords versions on UG, three kept (sheet_versions.py): 1064463 the one, as sheet.txt,
+    39144 and 27596 beside it (``version-<tab>.txt``, ``.json``), and ``pages``, their viewer pages written."""
+    from caracole.sheet_versions import version_names
+
+    s = add_song(conn, "Oasis", "Wonderwall")
+    update_song(conn, s.id, status="found")
+    made = {}
+    for tab, rating, votes, ver in (("1064463", 4.86, 408, 3), ("39144", 4.85, 12629, 1), ("27596", 4.7, 3000, 2),
+                                    ("999", 4.0, 10, 4)):
+        made[tab] = upsert_version(conn, provider="ug", tab_id=tab, song_id=s.id, slot="sheet", kind="chords",
+                                   rating=rating, votes=votes, version=ver, label=None,
+                                   url=f"https://tabs.ultimate-guitar.com/tab/oasis/wonderwall-chords-{tab}", raw={},
+                                   now="x")
+    keep_file(conn, cfg.library_dir, song=s, version_id=made["1064463"], name="sheet.txt", data=b"one", rank=1)
+    for rank, tab in enumerate(("39144", "27596"), start=2):
+        text, doc, _ = version_names(tab)
+        keep_file(conn, cfg.library_dir, song=s, version_id=made[tab], name=text, data=tab.encode(), rank=rank)
+        keep_file(conn, cfg.library_dir, song=s, version_id=made[tab], name=doc, data=b"{}", rank=rank)
+    put(cfg, s, "sheet.pdf", *pages)
+    return s
+
+
+def test_a_songs_kept_versions_are_its_datas_in_rank_order_each_with_its_page(conn, cfg):
+    from caracole.sheet_versions import version_names
+
+    s = wonderwall(conn, cfg)
+    plain = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, plain, "Words\n", tab_id=5)
+    cards = songs_of(page(conn, cfg))
+    versions = cards[s.display]["versions"]
+    assert versions["total"] == 4  # every chords version UG has: the list holds the kept ones alone
+    listed = versions["list"]
+    assert [v["tab"] for v in listed] == ["1064463", "39144", "27596"]
+    assert [(v["number"], v["rating"], v["votes"], v["chosen"]) for v in listed] == [
+        (3, 4.86, 408, True), (1, 4.85, 12629, False), (2, 4.7, 3000, False)]
+    folder = "Oasis/Wonderwall/"
+    # Each opens its viewer page, else its text while render hasn't written the page yet.
+    assert [v["href"] for v in listed] == [folder + "sheet.html", folder + "version-39144.html",
+                                           folder + quote(version_names("27596")[0])]
+    assert {v["source"] for v in listed} == {"ug"}
+    # The kept versions' files are no files of the line's own: they are under Sheet versions.
+    assert not any(f["name"].startswith("version-") for f in cards[s.display]["files"])
+    # A song with no version kept beside its sheet has none to list.
+    assert cards[plain.display]["versions"] is None
+
+
+@in_chromium
+def test_a_lines_menu_lists_its_kept_versions_each_opening_its_page_and_the_title_the_one(conn, cfg, tmp_path):
+    from caracole.render import EXPORT_KV
+
+    s = wonderwall(conn, cfg)
+    put(cfg, s, "sheet (G Dorian, capo 0).pdf")
+    db.kv_set_json(conn, f"{EXPORT_KV}{s.id}", {
+        "G Dorian, capo 0": {"pdf": "sheet (G Dorian, capo 0).pdf", "query": "t=0&mode=dorian"}})
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+    line = line_of(shown, "Wonderwall")
+    groups = re.findall(r'<p class="subhead">([^<]*)</p><div class="actions">(.*?)</div>', panel_of(line), re.S)
+    assert [heading for heading, _ in groups][:3] == ["Sheet versions", "PDF exports", "Files"], groups
+    kept = dict(groups)["Sheet versions"]
+    assert link_texts(kept) == ["Ver 3 · 4.86★ (408) · the one", "Ver 1 · 4.85★ (12,629)", "Ver 2 · 4.70★ (3,000)"]
+    hrefs = re.findall(r'<a class="btn[^"]*" href="([^"]*)"', kept)
+    assert hrefs == ["Oasis/Wonderwall/sheet.html", "Oasis/Wonderwall/version-39144.html",
+                     "Oasis/Wonderwall/version-27596.txt"]
+    # The title still opens the one, sheet.html.
+    assert re.search(r'<a class="line-title" href="Oasis/Wonderwall/sheet.html"', line), line
+
+
+@in_chromium
+def test_a_song_whose_sheet_is_lacuerdas_names_it_the_one_over_its_kept_ug_versions(conn, cfg, tmp_path):
+    from caracole.sheet_versions import version_names
+
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    update_song(conn, s.id, status="found")
+    lc = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/de_musica_ligera-1", song_id=s.id,
+                        slot="sheet", kind="acordes", rating=0, votes=0, version=1, label=None,
+                        url="https://acordes.lacuerda.net/soda_stereo/de_musica_ligera.shtml", raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=s, version_id=lc, name="sheet.txt", data=b"one", rank=1)
+    ug = upsert_version(conn, provider="ug", tab_id="85053", song_id=s.id, slot="sheet", kind="chords",
+                        rating=4.8, votes=90, version=2, label=None,
+                        url="https://tabs.ultimate-guitar.com/tab/soda-stereo/de-musica-ligera-chords-85053", raw={},
+                        now="x")
+    keep_file(conn, cfg.library_dir, song=s, version_id=ug, name=version_names("85053")[0], data=b"ug", rank=2)
+    put(cfg, s, "sheet.html", "version-85053.html")
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+    groups = dict(re.findall(r'<p class="subhead">([^<]*)</p><div class="actions">(.*?)</div>',
+                             panel_of(line_of(shown, "De Música Ligera")), re.S))
+    assert link_texts(groups["Sheet versions"]) == ["The one: LaCuerda's sheet", "Ver 2 · 4.80★ (90)"]
 
 
 @in_chromium
