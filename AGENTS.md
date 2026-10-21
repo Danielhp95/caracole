@@ -34,8 +34,8 @@ an earlier one failed:
 | index | ug/sitemap.py, ug/index.py |
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
-| fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), rank.py, coverage.py, versions.py |
-| lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` for searches, `artist_slugs` for the sheets, `index_state` for what a search says it lacks); a `[lacuerda]` pick (overrides.py `LaCuerdaPick`) is tried whatever its language and kept whatever its coverage, and makes no Ultimate Guitar review of other artists' songs alone (match.py `_settled_on_lacuerda`: not found), `read_artist_page` reads one artist's page (`caracole lacuerda --artist`, at the lookup pace) |
+| fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (every list of an artist page read, from UG or the cache, kept for searches in `ug_artist_tabs`, schema 7: bare ids with UG's names, type, rating and page; a list read to its end replaces its kind's tabs, one cut short only adds, a page that answers 404 loses them; `backfill`, once, from the HTTP cache alone, run by the match step and `caracole get`'s match stage, so with no request and while UG cools down), rank.py, coverage.py, versions.py |
+| lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` for searches, Chinese in pinyin only as whole words of a key as in search.py, both through normalize.py's `name_words`, `holds_run` and `PINYIN_PARTIAL_SCALE`; `artist_slugs` for the sheets, `index_state` for what a search says it lacks); a `[lacuerda]` pick (overrides.py `LaCuerdaPick`) is tried whatever its language and kept whatever its coverage, and makes no Ultimate Guitar review of other artists' songs alone (match.py `_settled_on_lacuerda`: not found), `read_artist_page` reads one artist's page (`caracole lacuerda --artist`, at the lookup pace) |
 | scan | music.py (Music/; `Names`, how alike a file's names and a song's are, for purchases and the inbox), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
 | gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
@@ -50,7 +50,8 @@ by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities, redacted s
 
 Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`,
 `savepoint`: atomic writes on the autocommit connection), http.py (`PoliteClient`, robots
-rules, `stale` and `read_once_more` for cached answers), health.py (cooldowns, `events`),
+rules, `stale` and `read_once_more` for cached answers, `cached` and `CachedAnswers` to read the
+cache alone, sending nothing), health.py (cooldowns, `events`),
 normalize.py (keys, pinyin), inline.py (a page's inline script or style by its hash,
 `sha256_source`, and its JSON data blocks, `json_block`, each `<` escaped; the standard
 library alone), overrides.py, library.py (song folders, safe file access), notify.py
@@ -76,7 +77,13 @@ tombstones it leaves are songs.py's, in the `removed` table).
   names (`ArtistHit`, never a catch-all), the index's songs, `lead` and `best` (what Enter
   may act on, None for no clear song), with
   `artist_songs` and `library_by_artist`; tab counts are its only popularity, and Chinese
-  pinyin counts only as whole words of a key, as in match.py. `search_gtptabs` and
+  pinyin counts only as whole words of a key, as in match.py. The UG artist pages caracole read
+  (ug/artist_tabs.py) are searched with the index (`_listed_rows`): their songs and artists scored
+  on every `name_forms` form of UG's names, a song both list one hit (`_merged`, its tabs counted
+  once, `IndexHit.page`, `rating`, `votes`: `_best_listed`, the page's best tab, its rating weighed
+  by its votes with rank.py's `bayes`, and None for a tab nobody rated), a song only a page lists
+  named as your songs name its artist (`_Yours`, else `normalize.original_part`), and
+  `bare_id_hint` silent for a query they answer well. `search_gtptabs` and
   `search_musescore` read gtptabs.com's and MuseScore's tables (`SiteHit`; MuseScore's by
   exact title keys alone, the query's or what it leaves beside the artist of a song of that
   title, `_known_song`: a possible match), never the sites; `search_lacuerda` reads
@@ -90,6 +97,9 @@ tombstones it leaves are songs.py's, in the `removed` table).
   artist at an end of it whom Ultimate Guitar's search read as a song's (`_named_at_an_end`:
   "Estopa" for "estopa como camaron", never "Fito" for "fito paez");
   `lacuerda_leads`, LaCuerda's group first when it alone has the artist the query names.
+  `search_removed` scores the `removed` table (`RemovedHit`) as `search_library` scores your songs; a
+  removed song is never `lead`, `best` or a library hit, and `caracole search` prints it after "In your
+  library" as "Removed from your library" with the `caracole add` line that brings it back.
   Its prefilter reads
   ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
   must find exactly what a `LIKE` scan of `ug_index` finds
@@ -376,7 +386,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   the index keeps each tab's sitemap path (`ug_index.path`), from which ug/page.py
   `page_url` and ug/lookup.py `IndexTab.url` and `tab_url_for` build it. **Bare-id tabs**
   (a tenth of UG's, and every tab of an artist with an accented or non-Latin name) are
-  found on the artist's UG page (ug/artist.py, the `artist_page` route in ug/fetch.py),
+  found on the artist's UG page (ug/artist.py, the `artist_page` route in ug/fetch.py; every
+  list read kept for searches, ug/artist_tabs.py),
   `/artist/<name>_<id>` or `/artist/<id>` (`overrides.artist_page_address`), its URL from
   `[artist_url]` or learned from a tab page into kv `ug:artist_url:<artist key>`. An
   `[artist_url]` tab page is read once, through the run's client, for the page it links to:
@@ -405,8 +416,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   song's one `inbox` version of kind `score`; a MusicXML header is read with
   `musicxml.header`, up to the part list only.
 - **Chinese is compared as pinyin** (`normalize.romanize`, with pypinyin) in match.py,
-  coverage.py, music.py, search.py, library_page.py, ug/fetch.py and lacuerda_index.py
-  (whose keys are pinyin); identity keys also fold
+  coverage.py, music.py, search.py, library_page.py, ug/fetch.py, ug/artist_tabs.py (its
+  forms) and lacuerda_index.py (whose keys are pinyin); identity keys also fold
   Traditional characters to Simplified. Where a name caracole didn't write meets yours (UG's
   artist pages and slugs, LaCuerda's listings, purchases' tags, downloads), it is compared by `normalize.name_forms`,
   which also gives the parts of a name in two scripts ("Song Dongye (宋冬野)"); forms are for
@@ -420,7 +431,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   again, an unchanged one from the cache
   (`test_gtptabs_fetch.py::test_new_keys_read_the_sitemaps_again_even_when_they_are_unchanged`);
   `lacuerda_index` keys are made again from the names it stores, with no request
-  (`lacuerda_index.ensure_current_keys`, at its next refresh or store).
+  (`lacuerda_index.ensure_current_keys`, at its next refresh or store), and so are
+  `ug_artist_tabs`' keys and forms (`artist_tabs.ensure_current_keys`, at its next store or
+  backfill, which the match step and every lookup call).
   Name new per-song kv keys `<prefix><song id>` (or `<prefix><song id>:<more>`) and add the
   prefix to `songs._PER_SONG_KV`, so a merge or a removal deletes them (`songs.delete_song_kv`).
 - **A removed song stays removed until you ask for it again.** `caracole remove` (removal.py)

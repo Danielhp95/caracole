@@ -68,6 +68,15 @@ its group comes first. LaCuerda has no search caracole uses: nothing here asks i
 
 UG's sitemaps list artists with accented or non-Latin names only by bare ids,
 so the index can't see their tabs; ``bare_id_hint`` says what to do then.
+**The artist pages caracole read** fill that gap (ug/artist_tabs.py: every tab
+each page listed, with UG's names, type, rating and page, kept as the fetch
+read it): ``find_index`` scores their songs and artists with the index's, on
+every form of UG's names (``normalize.name_forms``: "Song Dongye (宋冬野)" is
+宋冬野 and Song Dongye, "斑马 斑马 Banma Banma Zebra Zebra" 斑马斑马 and Banma
+Banma), Chinese as pinyin as whole words alone, and a song both list is one
+hit, its tabs counted once (``IndexHit.page``, ``rating``). Such a song is named
+as your songs name its artist, so its ``caracole add`` line is ``"宋冬野"
+"斑马斑马"``, and no bare-id hint comes with a query these tabs answer well.
 
 Where a name isn't quite UG's, a library song in review shows its first
 candidates (``did_you_mean``), and a hit under one of UG's catch-all artists,
@@ -77,37 +86,44 @@ the show's name, and its artist is no one's.
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, Mapping, NamedTuple, Sequence
+from typing import TYPE_CHECKING, Iterable, Iterator, Mapping, NamedTuple, Sequence
 
 from rapidfuzz import fuzz
 
+from caracole.config import RankPolicy
 from caracole.match import CATCH_ALL_PREFIX, SHOW_WORDS, is_catch_all
 from caracole.normalize import (
     clean_title,
     compact,
     fold,
+    PINYIN_PARTIAL_SCALE,
     has_han,
+    holds_run,
     name_forms,
+    name_words,
+    original_part,
     placeholder_artist,
     romanize,
     split_variant,
 )
 from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
-from caracole.songs import Song, list_songs
+from caracole.rank import bayes, prior_mean
+from caracole.songs import Song, list_removed, list_songs
 from caracole.ug.key_search import rows_like
 from caracole.ug.lookup import IndexTab, song_tabs
 
 if TYPE_CHECKING:
     from caracole.lacuerda_index import LaCuerdaHit
+    from caracole.ug.artist_tabs import ListedTab
 
 MIN_SCORE = 70  # below this a hit is noise
 STRONG = 90  # a hit this good is the song you meant
 PARTIAL_SCALE = 0.9  # a query that is only part of a name tops out at 90
-PINYIN_PARTIAL_SCALE = 0.85  # in pinyin, at 85: short syllables are no proof, so never a strong hit
 TYPE_ORDER = ("chords", "tabs", "guitar-pro", "power")
 MAX_PATTERNS = 2
 SHOWN_CANDIDATES = 3  # a review's candidates shown under its song: the rest are in `caracole review`
@@ -117,8 +133,6 @@ ARTIST_ROWS, SONG_ROWS = 3, 8  # what ``find_index`` gives by default
 SITE_ROWS = 5  # a site's pages search_gtptabs and search_musescore give by default
 SITE_ROWS_READ = 2000  # rows of gtptabs_index the prefilter reads, at most
 
-_WORD_SPLIT = re.compile(r"[\W_]+")
-_APOSTROPHES = re.compile(r"['’‘`´ʼ]")
 _SHELL_SPECIAL = re.compile(r'(["\\$`])')
 
 
@@ -143,6 +157,16 @@ class IndexHit:
     a leading "the" and an "and" that the keys drop, to show and to paste into
     ``caracole add``. ``via`` is the reading of the query that scored it, as
     ``LibraryHit``'s.
+
+    A song an artist page caracole read lists (ug/artist_tabs.py: bare ids
+    the sitemaps name nowhere, and the slugged tabs beside them) counts those
+    tabs too, and ``page`` is that artist page: ``url`` is then its best tab,
+    the best type first, then the best rated, its rating weighed by its votes
+    as a fetch weighs them (rank.py), with its ``rating`` (None when nobody
+    voted) and ``votes`` (unless the index has a tab of a better type: that
+    one, unrated).
+    Of a song only an artist page lists, ``artist`` is named as your songs
+    name them (``_Yours``) and ``title`` is UG's original name.
     """
 
     artist_key: str
@@ -154,6 +178,9 @@ class IndexHit:
     artist: str = ""
     title: str = ""
     via: str = "both"
+    rating: float | None = None
+    votes: int = 0
+    page: str = ""
 
     @property
     def catch_all(self) -> bool:
@@ -174,6 +201,8 @@ class ArtistHit:
     "The"); ``songs`` counts its songs (a song's variants with it) and ``tabs``
     its rows; ``top`` holds its ``TOP_SONGS`` most tabbed songs, most first.
     Never one of UG's catch-alls (``misc-…``), which are no one's name.
+    ``page`` is the artist page caracole read of theirs, if any: its tabs are
+    counted with the index's.
     """
 
     artist_key: str
@@ -182,6 +211,7 @@ class ArtistHit:
     songs: int
     tabs: int
     top: tuple[IndexHit, ...] = ()
+    page: str = ""
 
     @property
     def top_tabs(self) -> int:
@@ -301,6 +331,34 @@ def search_library(conn: sqlite3.Connection, query: str, limit: int = 10, *,
     return hits[:limit]
 
 
+@dataclass(frozen=True)
+class RemovedHit:
+    """A song ``caracole remove`` took out that matches the query. It is never a library hit, and
+    never ``lead`` or ``best``: it is shown as removed, with the line that asks for it again."""
+
+    artist: str
+    title: str
+    key: str
+    removed_at: str
+    score: float
+    via: str = "both"
+
+
+def search_removed(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[RemovedHit]:
+    """The removed songs (the ``removed`` table's names) that match ``query``, scored as
+    ``search_library`` scores your songs, best first, the latest removed first among equals."""
+    queries = _queries(query)
+    if not queries:
+        return []
+    hits = []
+    for gone in list_removed(conn):
+        score, via = _names_reading(queries, [gone.artist], gone.title)
+        if score >= MIN_SCORE:
+            hits.append(RemovedHit(gone.artist, gone.title, gone.key, gone.removed_at, round(score, 1), via))
+    hits.sort(key=lambda h: -h.score)  # stable: the latest removed first among equals
+    return hits[:limit]
+
+
 def search_index(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[IndexHit]:
     """Songs in the offline UG index that match ``query``, best first, by any reading.
 
@@ -328,7 +386,8 @@ def find_index(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_RO
         # Weighed first by what the rows hold of each (every row of an artist whose key a pattern
         # matched), then counted exactly for the few that may be shown.
         order = sorted(named, key=lambda k: (-named[k].score, -named[k].top, -named[k].tabs, k))
-        rows = [a for a in (_artist_hit(conn, k, named[k].score) for k in order[:artists + 2]) if a is not None]
+        yours = _Yours(conn)
+        rows = [a for a in (_artist_hit(conn, k, named[k].score, yours) for k in order[:artists + 2]) if a is not None]
         rows = sorted(rows, key=lambda a: (-a.score, -a.top_tabs, -a.tabs, a.artist_key))[:artists]
     shown = {a.artist_key for a in rows}
     hits = _hits(conn, [s for s in scored if not (s.via == "artist" and s.artist_key in shown)][:songs])
@@ -367,7 +426,8 @@ def artist_songs(conn: sqlite3.Connection, artist_key: str, *, limit: int = 50, 
         groups = sorted((g for g in scored if g[0] >= MIN_SCORE), key=lambda g: (-g[0], -g[2], g[1]))
         via = "title"
     page = groups[max(offset, 0):max(offset, 0) + max(limit, 0)]
-    hits = (_index_hit(conn, artist_key, base, score, via) for score, base, _ in page)
+    yours = _Yours(conn)
+    hits = (_index_hit(conn, artist_key, base, score, via, yours) for score, base, _ in page)
     return [h for h in hits if h is not None], len(groups)
 
 
@@ -378,7 +438,7 @@ def search_gtptabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS)
     (``_gtptabs_artist``), the title from its slug."""
     from caracole.gtptabs import page_url
 
-    patterns = _patterns(_tokens(query))
+    patterns = _patterns(name_words(query))
     if not patterns:
         return []
     queries = _queries(query)
@@ -431,7 +491,7 @@ def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROW
     never every row."""
     from caracole.musescore import SongPage, title_key
 
-    words = _tokens(query)
+    words = name_words(query)
     runs = [(words, [])] + [(words[:n], words[n:]) for n in range(len(words) - 1, 0, -1)] + \
         [(words[-n:], words[:-n]) for n in range(len(words) - 1, 0, -1)]
     runs.sort(key=lambda run: -len(run[0]))  # stable: the whole query, then each length's start before its end
@@ -579,7 +639,7 @@ def _named_at_an_end(query: str, songs: Sequence[IndexHit]) -> str | None:
     whole name is a run of the query's words at its start or its end, fewer than all of them: the longest run's,
     the better song's at a tie. None for none. An artist the search didn't read so is none: "Fito" is no
     answer for "fito paez", nor "Heroes" for "heroes del silencio entre dos tierras"."""
-    words = _tokens(query)
+    words = name_words(query)
     runs: dict[str, int] = {}
     for n in range(len(words) - 1, 0, -1):
         for run in (words[:n], words[-n:]):
@@ -670,7 +730,9 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: st
     Maná, 宋冬野) have no slugged rows in UG's sitemaps. The hint names the
     ``[artist_url]`` override, with a line to paste for ``artist`` (by default
     the query itself). It's given when nothing matches well, and, more briefly,
-    for a query with such letters even when something does. ``hits`` are the
+    for a query with such letters even when something does, but never when a
+    strong hit comes from an artist page caracole read (``page``): caracole
+    sees that artist's tabs. ``hits`` are the
     search's songs and artists. A query that is the line's key may be a title
     as well as an artist's name: the hint then says so, and that caracole
     needs the song's artist too, which no site is asked for. With ``artist``
@@ -686,6 +748,8 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: st
     """
     strong = any(h.score >= STRONG for h in hits)
     if strong and not any(c.isalpha() and not c.isascii() for c in query):
+        return None
+    if any(h.score >= STRONG and h.page for h in hits):  # an artist page caracole read answers it: it sees them
         return None
     lead = (
         "UG's sitemaps list artists with accented or non-Latin names only by bare ids." if strong else
@@ -728,23 +792,9 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: st
 # --- words, pinyin and scores -----------------------------------------------------------
 
 
-def _tokens(text: str) -> list[str]:
-    """The words of a name, as ``normalize.slug_key`` makes them, but with CJK runs kept apart.
-
-    Accents are folded, apostrophes dropped, "and" removed and a leading "the"
-    dropped, so the words meet UG's canonical keys one for one. Unlike
-    ``slug_key``, "宋冬野 斑马" stays two words, so each can be looked up alone.
-    """
-    words = [w for w in _WORD_SPLIT.split(_APOSTROPHES.sub("", fold(text))) if w]
-    kept = [w for w in words if w != "and"] or words
-    if len(kept) > 1 and kept[0] == "the":
-        kept = kept[1:]
-    return kept
-
-
 def _forms(text: str) -> list[str]:
     """The text as space-separated words; Chinese gets a second form, in pinyin."""
-    tokens = _tokens(text)
+    tokens = name_words(text)
     plain = " ".join(tokens)
     if not plain:
         return []
@@ -786,7 +836,7 @@ def _queries(text: str) -> list[_Query]:
     forms = _forms(text)
     if len(forms) < 2:
         return [_Query(f) for f in forms]
-    runs = tuple("".join(fold(s) for s in romanize(t).split()) for t in _tokens(text) if has_han(t))
+    runs = tuple("".join(fold(s) for s in romanize(t).split()) for t in name_words(text) if has_han(t))
     return [_Query(forms[0]), _Query(forms[1], runs)]
 
 
@@ -810,7 +860,7 @@ class _Query:
         separated words), hyphens aside: ``song dongye``, ``songdongye`` and ``song dong ye`` hold
         宋冬野, and ``suburban male`` holds no 斑马. True for a form with no Chinese."""
         words = [name.split() for name in names]
-        return all(any(_holds(w, run) for w in words) for run in self.runs)
+        return all(any(holds_run(w, run) for w in words) for run in self.runs)
 
     def score(self, artist: str, title: str) -> float:
         """How well this query matches a song, 0–100 (artist and title are space-separated words).
@@ -853,19 +903,6 @@ class _Query:
         return max(fuzz.ratio(self.text, artist), fuzz.ratio(self.compact, artist.replace(" ", "")))
 
 
-def _holds(words: list[str], run: str) -> bool:
-    """Whether ``run`` is some consecutive ``words`` written together."""
-    for i in range(len(words)):
-        joined = ""
-        for word in words[i:]:
-            joined += word
-            if joined == run:
-                return True
-            if not run.startswith(joined):
-                break
-    return False
-
-
 def _reading(scores: Iterable[tuple[float, float, float]], reading: str | None = None) -> tuple[float, str]:
     """The best of several (title, both, artist) readings, and which reading it is; a tie goes to the
     title, then both. With ``reading``, that reading's alone."""
@@ -880,9 +917,15 @@ def _reading(scores: Iterable[tuple[float, float, float]], reading: str | None =
 def _song_reading(queries: list[_Query], song: Song, reading: str | None = None) -> tuple[float, str]:
     """The best score over a song's artists, each paired with its title, plain and in pinyin, and the
     reading that gave it."""
-    titles = _forms(clean_title(song.title)) or [""]
+    return _names_reading(queries, song.artists or [song.artist], song.title, reading)
+
+
+def _names_reading(queries: list[_Query], artists_: Sequence[str], title: str,
+                   reading: str | None = None) -> tuple[float, str]:
+    """``_song_reading`` for bare names: each artist paired with the title."""
+    titles = _forms(clean_title(title)) or [""]
     scores = []
-    for artist in dict.fromkeys(song.artists or [song.artist]):
+    for artist in dict.fromkeys(artists_):
         artists = _forms(artist) or [""]
         # Plain words with plain words, pinyin with pinyin (a form missing on one side is its plain one).
         for a, t in {(artists[0], titles[0]), (artists[-1], titles[-1])}:
@@ -917,7 +960,7 @@ def _scored_rows(conn: sqlite3.Connection, query: str,
     """Every song of the rows the prefilter reads scored against the query, best first (ties to more
     tabs, then to the artist with more of the rows), and the artists the query names (none with
     ``reading``)."""
-    patterns = _patterns(_tokens(query))
+    patterns = _patterns(name_words(query))
     if not patterns:
         return [], {}
     queries = _queries(query)
@@ -943,7 +986,6 @@ def _scored_rows(conn: sqlite3.Connection, query: str,
                 score, via = alone, "title"
         if score >= MIN_SCORE:
             scored.append(_Row(score, n, tabs[artist_key], artist_key, base, via))
-    scored.sort(key=lambda s: (-s.score, -s.tabs, -s.artist_tabs, s.artist_key, s.base))
 
     named: dict[str, _Named] = {}
     if reading is None:
@@ -953,34 +995,118 @@ def _scored_rows(conn: sqlite3.Connection, query: str,
             score = max(q.name(artist_key.replace("-", " ")) for q in queries)
             if score >= STRONG:
                 named[artist_key] = _Named(score, top[artist_key], tabs[artist_key])
+    listed, listed_named = _listed_rows(conn, queries, patterns, reading)
+    scored = _merged(scored, listed)
+    for artist_key, n in listed_named.items():
+        old = named.get(artist_key)
+        named[artist_key] = n if old is None else _Named(max(old.score, n.score), max(old.top, n.top),
+                                                         max(old.tabs, n.tabs))
+    scored.sort(key=lambda s: (-s.score, -s.tabs, -s.artist_tabs, s.artist_key, s.base))
     return scored, named
 
 
+def _listed_rows(conn: sqlite3.Connection, queries: list[_Query], patterns: list[str],
+                 reading: str | None) -> tuple[list[_Row], dict[str, _Named]]:
+    """The songs of the artist pages caracole read (ug/artist_tabs.py) whose names hold a pattern, scored as
+    the index's are but on every form of UG's names (``normalize.name_forms``: "Song Dongye (宋冬野)" is
+    宋冬野 and Song Dongye), and their artists the query names (none with ``reading``)."""
+    from caracole.ug.artist_tabs import rows_like
+
+    songs: dict[tuple[str, str], dict[int, ListedTab]] = {}
+    for tab in rows_like(conn, patterns):
+        songs.setdefault((tab.artist_key, tab.song_key), {}).setdefault(tab.tab_id, tab)
+    tabs: Counter[str] = Counter()
+    top: Counter[str] = Counter()
+    for (artist_key, _), group in songs.items():
+        tabs[artist_key] += len(group)
+        top[artist_key] = max(top[artist_key], len(group))
+    scored = []
+    for (artist_key, base), group in songs.items():
+        names = {(t.artist_forms, t.title_forms) for t in group.values()}
+        score, via = _reading((r for a, t in names for r in _forms_readings(queries, a, t)), reading)
+        if score >= MIN_SCORE:
+            scored.append(_Row(score, len(group), tabs[artist_key], artist_key, base, via))
+    named: dict[str, _Named] = {}
+    if reading is None:
+        forms: dict[str, set[str]] = {}
+        for (artist_key, _), group in songs.items():
+            forms.setdefault(artist_key, set()).update(f for t in group.values() for f in t.artist_forms)
+        for artist_key, names_ in forms.items():
+            if no_ones(artist_key):
+                continue
+            score = max((q.name(f.replace("-", " ")) for q in queries for f in _same_script(q, names_)), default=0.0)
+            if score >= STRONG:
+                named[artist_key] = _Named(score, top[artist_key], tabs[artist_key])
+    return scored, named
+
+
+def _same_script(q: _Query, forms: Iterable[str]) -> list[str]:
+    """The forms worth scoring against a form of the query: in Latin letters alone for a query in Latin
+    letters alone (its pinyin, say), the others for one in another script."""
+    return [f for f in forms if f.isascii() == q.text.isascii()]
+
+
+def _forms_readings(queries: list[_Query], artist_forms: Sequence[str],
+                    title_forms: Sequence[str]) -> Iterator[tuple[float, float, float]]:
+    """Each query form's readings of each pair of an artist's form and a title's, of its script (a name with
+    none of that script is no name for it, and a song with neither is no song for that form)."""
+    for q in queries:
+        artists, titles = _same_script(q, artist_forms), _same_script(q, title_forms)
+        if not artists and not titles:
+            continue
+        for a in artists or [""]:
+            for t in titles or [""]:
+                yield q.readings(a.replace("-", " "), t.replace("-", " "))
+
+
+def _merged(rows: list[_Row], listed: list[_Row]) -> list[_Row]:
+    """The index's songs with the artist pages', one row a song: the better score, and the more tabs."""
+    merged = {(r.artist_key, r.base): r for r in rows}
+    for r in listed:
+        old = merged.get((r.artist_key, r.base))
+        if old is not None:
+            best = r if r.score > old.score else old
+            r = best._replace(tabs=max(r.tabs, old.tabs), artist_tabs=max(r.artist_tabs, old.artist_tabs))
+        merged[(r.artist_key, r.base)] = r
+    return list(merged.values())
+
+
 def _hits(conn: sqlite3.Connection, rows: Sequence[_Row]) -> list[IndexHit]:
-    hits = (_index_hit(conn, r.artist_key, r.base, r.score, r.via) for r in rows)
+    yours = _Yours(conn)
+    hits = (_index_hit(conn, r.artist_key, r.base, r.score, r.via, yours) for r in rows)
     return [h for h in hits if h is not None]
 
 
 def _artist_groups(conn: sqlite3.Connection, artist_key: str) -> list[tuple[str, int]]:
-    """Each song of an artist with its tabs (a song's variants counted with it), most tabbed first."""
+    """Each song of an artist with its tabs (a song's variants counted with it), most tabbed first: the
+    index's, with the tabs only an artist page caracole read lists (ug/artist_tabs.py)."""
+    from caracole.ug.artist_tabs import unindexed_songs
+
     groups: dict[str, int] = {}
     for song_key, n in conn.execute(
         "SELECT song_key, COUNT(*) FROM ug_index WHERE artist_key = ? GROUP BY song_key", (artist_key,)
     ):
         base = split_variant(song_key)[0]
         groups[base] = groups.get(base, 0) + n
+    for base, n in unindexed_songs(conn, artist_key).items():
+        groups[base] = groups.get(base, 0) + n
     return sorted(groups.items(), key=lambda g: (-g[1], g[0]))
 
 
-def _artist_hit(conn: sqlite3.Connection, artist_key: str, score: float) -> ArtistHit | None:
+def _artist_hit(conn: sqlite3.Connection, artist_key: str, score: float,
+                yours: _Yours | None = None) -> ArtistHit | None:
     """An artist with its songs and tabs counted and its most tabbed songs; None for no tab of theirs."""
+    from caracole.ug.artist_tabs import artist_page
+
     groups = _artist_groups(conn, artist_key)
     if not groups:
         return None
-    top = tuple(h for h in (_index_hit(conn, artist_key, base, score, "artist") for base, _ in groups[:TOP_SONGS])
+    yours = yours or _Yours(conn)
+    top = tuple(h for h in (_index_hit(conn, artist_key, base, score, "artist", yours) for base, _ in groups[:TOP_SONGS])
                 if h is not None)
     name = top[0].artist if top else _title_words(artist_key)
-    return ArtistHit(artist_key, name, round(score, 1), len(groups), sum(n for _, n in groups), top)
+    return ArtistHit(artist_key, name, round(score, 1), len(groups), sum(n for _, n in groups), top,
+                     artist_page(conn, artist_key) or "")
 
 
 # --- index hits ---------------------------------------------------------------------------
@@ -1003,17 +1129,86 @@ def index_artist(conn: sqlite3.Connection, artist_key: str) -> ArtistHit | None:
 
 
 def _index_hit(conn: sqlite3.Connection, artist_key: str, song_key: str, score: float,
-               via: str = "both") -> IndexHit | None:
-    """Every tab of the song, counted per type, with a sample page and names to show."""
+               via: str = "both", yours: _Yours | None = None) -> IndexHit | None:
+    """Every tab of the song, counted per type, with a sample page and names to show: the index's, and those
+    an artist page caracole read lists (ug/artist_tabs.py), each tab once."""
+    from caracole.ug.artist_tabs import song_tabs as listed_tabs
+
     tabs = song_tabs(conn, artist_key, song_key)
-    if not tabs:
+    listed = listed_tabs(conn, artist_key, song_key)
+    if not tabs and not listed:
         return None
-    counts = Counter(t.type for t in tabs)
+    ids = {t.tab_id for t in tabs}
+    others = [t for t in listed if t.tab_id not in ids]
+    counts = Counter(t.type for t in tabs) + Counter(t.type for t in others)
     ordered = {kind: counts[kind] for kind in sorted(counts, key=_type_rank)}
-    labels = tuple(sorted({t.label for t in tabs if t.label}))
-    sample = min(tabs, key=lambda t: (t.label is not None, _type_rank(t.type), t.tab_id))
-    artist, title = _names_from_path(sample) or display_from_keys(artist_key, song_key)
-    return IndexHit(artist_key, song_key, ordered, round(score, 1), sample.url, labels, artist, title, via)
+    labels = tuple(sorted({t.label for t in [*tabs, *others] if t.label}))
+    rating, votes, page = None, 0, ""
+    if tabs:
+        sample = min(tabs, key=lambda t: (t.label is not None, _type_rank(t.type), t.tab_id))
+        url = sample.url
+        artist, title = _names_from_path(sample) or display_from_keys(artist_key, song_key)
+    if listed:  # UG's ratings: the page's best tab, of the best type, unless the index has a better type
+        best = _best_listed(listed)
+        page = best.page
+        if not tabs or (best.label is not None, _type_rank(best.type)) <= (sample.label is not None,
+                                                                           _type_rank(sample.type)):
+            url, rating, votes = best.url, best.rating if best.votes else None, best.votes  # no vote: unrated
+        if not tabs:
+            artist, title = (yours or _Yours(conn)).artist(best.artist), _original_title(best.title)
+    return IndexHit(artist_key, song_key, ordered, round(score, 1), url, labels, artist, title, via, rating, votes,
+                    page)
+
+
+def _best_listed(listed: Sequence[ListedTab]) -> ListedTab:
+    """The tab a song's hit shows of those an artist page lists: of the best type (no part or "acoustic"
+    label first), the best rated as a fetch rates versions (rank.py ``bayes``): each rating is pulled toward
+    the vote-weighted mean of those tabs, the more the fewer votes it has."""
+
+    def kind(t: ListedTab) -> tuple[bool, tuple[int, str]]:
+        return (t.label is not None, _type_rank(t.type))
+
+    first = min(kind(t) for t in listed)
+    group = [t for t in listed if kind(t) == first]
+    prior, m = prior_mean(group), RankPolicy().prior_votes
+    return min(group, key=lambda t: (-bayes(t.rating, t.votes, prior, m), -t.votes, t.tab_id))
+
+
+class _Yours:
+    """Your songs' artists, those you removed too, read once: a song only an artist page lists is named as
+    your songs name its artist (UG's "Song Dongye (宋冬野)" is your 宋冬野, or your "Song Dong Ye"), else by
+    the original of UG's two names (``normalize.original_part``)."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+        self._names: list[tuple[str, set[str]]] | None = None
+
+    def artist(self, name: str) -> str:
+        if self._names is None:
+            names: list[str] = []
+            for artist, artists in self.conn.execute("SELECT artist, artists FROM songs ORDER BY id"):
+                names += [artist, *_json_names(artists)]
+            names += [r[0] for r in self.conn.execute("SELECT artist FROM removed ORDER BY removed_at DESC")]
+            self._names = [(n, {compact(f) for f in name_forms(n)}) for n in dict.fromkeys(names) if n]
+        wanted = {compact(f) for f in name_forms(name)}
+        return next((n for n, forms in self._names if forms & wanted), None) or original_part(name)
+
+
+def _json_names(value: str) -> list[str]:
+    try:
+        names = json.loads(value)
+    except ValueError:
+        return []
+    return [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
+
+
+_HAN_SPACE = re.compile(r"(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])")
+
+
+def _original_title(title: str) -> str:
+    """A title as UG lists it on an artist page, by its original name: "斑马斑马" for "斑马 斑马 Banma Banma
+    Zebra Zebra" (Chinese written together, as its key is), a title in one script as it is."""
+    return _HAN_SPACE.sub("", original_part(clean_title(title)))
 
 
 def _names_from_path(tab: IndexTab) -> tuple[str, str] | None:

@@ -131,14 +131,18 @@ goes when the PDF is done, so caracole must be able to write there. Its
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
 to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
-status 2: `database: … is at schema version 7, but this caracole knows up to 6:
+status 2: `database: … is at schema version 8, but this caracole knows up to 7:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
 when there is one. Schema 4 keeps the songs you removed. Schema 5 adds an index of the UG index's names, for
 searching as you type: the first command after the upgrade builds it from the
 index, in a few seconds, and it adds about a quarter to the database's size
 (about 75 MB to a full index's 315). Schema 6 adds LaCuerda's artist index, empty
 until the nightly run, or `caracole lacuerda --index`, reads LaCuerda's listings
-of every artist (see [`caracole lacuerda`](#one-step-at-a-time)). A state
+of every artist (see [`caracole lacuerda`](#one-step-at-a-time)). Schema 7 keeps
+the tabs of the Ultimate Guitar artist pages caracole reads, for searches (see
+[caracole search](#caracole-search)): the first nightly run or `caracole get`
+after the upgrade fills it, once, from what the HTTP cache holds of the artist
+pages caracole knows, with no request, even while Ultimate Guitar cools down. A state
 folder caracole can't use ends a command with status
 1 and `can't open the database …` (or `can't open …/caracole.lock: …`).
 `caracole add` is the exception to both: it keeps its line and warns (see
@@ -548,8 +552,9 @@ and "重来 Chong Lai Start Over" is "Chong Lai" and "Start Over".
 The same goes wherever caracole meets a name it didn't write: a song you
 wrote in two scripts against the index (UG's sitemaps write names in Latin
 letters only, so `DAOKO - 打上花火 (Uchiage Hanabi)` meets
-`daoko/uchiage-hanabi`), a purchase tagged that way, and a Guitar Pro download
-UG named so.
+`daoko/uchiage-hanabi`), a purchase tagged that way, a Guitar Pro download
+UG named so, and a search of the artist pages caracole has read (斑马, Banma
+and 宋冬野 all find "斑马 斑马 Banma Banma Zebra Zebra").
 
 UG also lists some of these titles in Latin letters alone, the romanization
 with its translation in brackets ("Hong Dou (Red Bean)" for 王菲's 红豆): on an
@@ -982,7 +987,11 @@ and cache.
   their title alone (only other artists' songs of it) or on names that
   aren't quite UG's (steps 4 and 5 of the matcher, above), songs found on that
   page before, and songs whose chords the index can't offer (bare ids, or
-  pages robots.txt closes). Per song it prints what it kept, as
+  pages robots.txt closes). Every list of an artist page it reads, from UG or
+  from the cache, is kept for searches, bare ids with their names: a list read
+  to its end replaces what that kind's list gave before (a tab UG took down
+  goes), a list the page cap cut short only adds, and an artist page UG answers
+  404 for loses its tabs. Per song it prints what it kept, as
   `Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)`,
   or `nothing kept`, then the totals. `--song` fetches that one song now, even
   when nothing about it changed; the song must be in the library and matched,
@@ -1401,6 +1410,8 @@ when it has something in it:
   under the table. The artist page lists all of the artist's tabs, bare ids
   included. The next run reads it, finds your songs on it by title, and
   fetches them like any matched song. That's once per artist, not per song.
+  From then on `caracole search` finds every tab the page lists, with UG's
+  ratings, and the `caracole add` line for each of their songs.
   A tab page you pasted is read first, once, for the artist page it links to.
   When it leads to none (UG answers 404 for it, robots.txt closes it, or it
   doesn't link to its artist's page), the artist stays on the list, with the
@@ -1962,9 +1973,47 @@ offline Ultimate Guitar index and LaCuerda's (see below):
            94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)
            82  bill-fox/im-not-over-loving-you (title_only)
 
+- **Removed from your library**: right after your library, the songs
+  `caracole remove` took out that the words match (Chinese as pinyin, whole
+  words only), each with the date it was removed and the line that asks for it
+  again, which is a wanted.txt line:
+
+      Removed from your library
+        宋冬野 - 斑马斑马 · removed 2026-10-20
+           bring it back: caracole add "宋冬野" "斑马斑马"
+
+  The group is absent when no removed song matches (and for `--artist` and
+  `--title`). A removed song is never what Enter or `--add` acts on; once
+  `caracole add` brings it back, it is in your library and not in this group.
+
 - **On Ultimate Guitar**: numbered hits from the offline index, each tagged
   `[UG]`, with its tabs per type, one of its pages, and the `caracole add`
-  line to paste. A song of one of UG's catch-all artists (`misc-musicals`, `misc-soundtrack`…,
+  line to paste. The UG artist pages caracole has read (see
+  [caracole fetch](#one-step-at-a-time)) are searched too: every tab each one
+  listed, bare ids included, which UG's sitemaps list without names. Their
+  names are compared in each script UG writes them in ("Song Dongye (宋冬野)"
+  is 宋冬野 and Song Dongye, "斑马 斑马 Banma Banma Zebra Zebra" is 斑马斑马 and
+  Banma Banma), Chinese as pinyin, whole words only. A song such a page lists
+  is one hit with the index's tabs of it, its tabs counted once; its page is
+  the page's best tab, of the best type, then the best rated, each rating
+  weighed by its votes as `caracole fetch` weighs them (pulled toward the
+  average of those tabs, the more the fewer votes it has, so a 5.0 from one
+  vote rarely beats a 4.8 from 300), with UG's rating (`rated 4.8 (120
+  votes)`, nothing for a tab nobody rated); and its artist is named as your
+  songs name them (your 宋冬野, or else the original of UG's two names), so
+  its line adds the song under that name:
+
+      $ caracole search 斑马
+      …
+      On Ultimate Guitar (offline index)
+        1. [UG] 宋冬野 - 斑马斑马 · chords×2 · rated 4.8 (120 votes)
+           https://tabs.ultimate-guitar.com/tab/4180894
+           caracole add "宋冬野" "斑马斑马"
+
+  Their artist is an artist line too (`caracole search 宋冬野`, `caracole search
+  --artist 宋冬野`). Looked up with `caracole get`, or added for the nightly run,
+  the song is looked for on that artist page, whose address caracole knows
+  already. A song of one of UG's catch-all artists (`misc-musicals`, `misc-soundtrack`…,
   see [caracole match](#caracole-match---dry-run)) is also scored on its title
   alone, with and without words such as "the musical", so
   `caracole search epic not sorry for loving you` finds
@@ -2006,7 +2055,8 @@ Cartel's Wonderwall, then `Also an artist: Wonderwall, 9 songs (13 tabs)`
 with its `caracole search --artist "Wonderwall"` line; the band's songs are
 left out of the list. Beside an artist whose name is the query, one whose name
 is only near it is left out, with its songs: `caracole search eagles` lists no
-Beagles. The offline index knows no ratings, so the number of
+Beagles. The offline index knows no ratings (only the artist pages caracole
+read do), so the number of
 tabs is what puts the song you probably mean first (Radiohead's Creep before
 Stone Temple Pilots'). A catch-all such as `misc-musicals` is never an
 artist.
@@ -2031,7 +2081,8 @@ its line in wanted.txt and the song's key). N can be at most `--limit`, so only 
 search shows can be added, and a hit your library already has under another
 name is left alone. A hit under a catch-all artist is refused (exit 2, nothing
 written), with the same advice as its hit. When nothing matches well, or the query has accented or
-non-Latin letters, the command also explains bare ids and prints the
+non-Latin letters, the command also explains bare ids, unless a strong hit comes from an artist page
+caracole has read (caracole sees that artist's tabs), and prints the
 `[artist_url]` line to paste, for the artist's page or one of their tab pages,
 with the table's header only while overrides.toml has no `[artist_url]`
 entries. The line is keyed by the artist of a song of yours the query finds,
@@ -2058,7 +2109,10 @@ searches that artist's titles. Neither goes with `--key` (exit 2).
 **On LaCuerda** comes after Ultimate Guitar's hits, numbered on, from
 LaCuerda's local index (see [caracole lacuerda](#one-step-at-a-time)), which
 holds every artist of LaCuerda's listings the nightly run has read, and the
-songs of the artists whose page caracole has read. An artist the query names
+songs of the artists whose page caracole has read. Its names are compared as
+Ultimate Guitar's are, also with their words run together: "rockstar" finds
+Los Rock Star, and "banma" a song LaCuerda writes 斑马斑马, whose pinyin is
+`ban-ma-ban-ma`. An artist the query names
 is a line of their own, with the songs LaCuerda's listing counts, then their
 most popular songs with chords the index holds; or, when caracole has never
 read their page, the line that reads it, one request:
@@ -2111,7 +2165,9 @@ the songs the index holds of the LaCuerda artist NAME names, LaCuerda's most
 popular first (`Estopa · LaCuerda · 12 of their 159 songs in the index, the
 most popular first:`), after Ultimate Guitar's, and `--title TITLE` its songs
 of that title. Names are compared as Ultimate Guitar's are: as words, accents
-folded, a leading "Los" and an artist's "y" aside, Chinese as pinyin. While the
+folded, a leading "Los" and an artist's "y" aside, Chinese as pinyin, as whole words only (斑马
+finds 宋冬野's 斑马斑马 and a title written `banma`, never the letters inside `Bohemia Suburbana` or
+`El Bananero`; pinyin matching only part of a name is never a strong hit). While the
 index is empty the group says so (`Nothing yet: LaCuerda's index is empty: the
 nightly run reads its listings of every artist`), and while the nightly run
 still reads its listings it ends with what it has: `LaCuerda's index is still

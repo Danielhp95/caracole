@@ -9,7 +9,7 @@ vote-weighted mean of the song's versions. A 5.0 from one vote does not beat a
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Protocol, Sequence
 
 from caracole.config import RankPolicy
 from caracole.normalize import canonical_variant
@@ -33,11 +33,18 @@ class Candidate:
     version_id: int | None = None
 
 
+class Rated(Protocol):
+    """Anything UG rates by votes: a ``Candidate``, or a tab an artist page lists (ug/artist_tabs.py)."""
+
+    rating: float
+    votes: int
+
+
 def bayes(rating: float, votes: int, prior: float, m: int) -> float:
     return (votes * rating + m * prior) / (votes + m) if votes + m else 0.0
 
 
-def prior_mean(cands: Sequence[Candidate]) -> float:
+def prior_mean(cands: Sequence[Rated]) -> float:
     """The vote-weighted mean rating of a song's versions (0 when nobody voted)."""
     total = sum(c.votes for c in cands)
     return sum(c.votes * c.rating for c in cands) / total if total else 0.0

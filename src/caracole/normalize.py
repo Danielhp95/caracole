@@ -94,6 +94,37 @@ def fold(s: str) -> str:
     return s.translate(_TRANSLIT).lower()
 
 
+PINYIN_PARTIAL_SCALE = 0.85  # a part of a name matched in pinyin: short syllables are no proof, so never a strong hit
+
+
+def name_words(text: str) -> list[str]:
+    """The words of a name, as ``slug_key`` makes them, but with CJK runs kept apart.
+
+    Accents are folded, apostrophes dropped, "and" removed and a leading "the" dropped, so the words
+    meet UG's canonical keys one for one. Unlike ``slug_key``, "宋冬野 斑马" stays two words, so each can
+    be looked up alone. Search (search.py, lacuerda_index.py) reads queries and names with it.
+    """
+    words = [w for w in _SPLIT.split(_APOSTROPHES.sub("", fold(text))) if w]
+    kept = [w for w in words if w != "and"] or words
+    if len(kept) > 1 and kept[0] == "the":
+        kept = kept[1:]
+    return kept
+
+
+def holds_run(words: list[str], run: str) -> bool:
+    """Whether ``run`` is some consecutive ``words`` written together: the rule that a Chinese word's
+    pinyin ("banma") counts only as whole words of a name ("ban ma"), never inside one ("bananero")."""
+    for i in range(len(words)):
+        joined = ""
+        for word in words[i:]:
+            joined += word
+            if joined == run:
+                return True
+            if not run.startswith(joined):
+                break
+    return False
+
+
 def clean_title(title: str) -> str:
     """Drop Spotify's version suffixes: remasters, live and acoustic versions (in English,
     Spanish or Portuguese), featurings, mixes, edits, demos and session recordings."""
@@ -337,6 +368,14 @@ def name_forms(name: str) -> tuple[str, ...]:
     for part in parts:
         forms += _part_forms(part, parts)
     return tuple(f for f in dict.fromkeys(forms) if f)
+
+
+def original_part(name: str) -> str:
+    """The part of a name UG writes in two scripts that is in the original one (``name_forms``' parts):
+    宋冬野 of "Song Dongye (宋冬野)", "斑马 斑马" of "斑马 斑马 Banma Banma Zebra Zebra"; a name in one script
+    as it is, without the artists it features ("Ma Di" of "Ma Di (feat. 宋冬野)")."""
+    core = without_featuring(name)
+    return next((p.strip() for p in _parts(core) if any(_foreign(c) for c in p)), core)
 
 
 # A bracketed group, in any width, as a listing in Latin letters alone holds a translation (listing_forms).

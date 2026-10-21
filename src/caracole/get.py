@@ -438,10 +438,16 @@ class _Lookup:
                 if group(pin) not in (None, mine)]
 
     def match(self) -> tuple[str, str] | str:
+        from caracole.http import CachedAnswers
         from caracole.match import match_all
         from caracole.songs import get_song
+        from caracole.ug.artist_tabs import backfill
         from caracole.ug.index import index_state
 
+        # Once, the artist pages caracole read before it kept their tabs for searches: from the HTTP cache
+        # alone, which sends nothing and needs no client (the lookup makes Ultimate Guitar's only to ask it,
+        # never while it cools down).
+        backfill(self.conn, CachedAnswers("ug", self.cfg.cache_dir), self.overrides)
         state = index_state(self.conn)
         [change] = match_all(self.conn, self.overrides, self.cfg.match, songs=[self.song])
         self.song = get_song(self.conn, self.song.id)

@@ -493,6 +493,12 @@ class PoliteClient:
         except (OSError, ValueError, KeyError, TypeError):
             return False
 
+    def cached(self, url: str, *, accept: Collection[int] = (200,)) -> Response | None:
+        """The cache's answer for ``url`` (``url`` as ``get`` would key it, no ``params``) when its
+        status is in ``accept``, however old; None for none, or a copy that can't be read. Nothing is
+        sent, nothing is counted, and it works whatever the budget, a block or a cooldown."""
+        return cached_answer(self.cache_root, url, accept=accept)
+
     def close(self) -> None:
         self._http.close()
 
@@ -570,20 +576,10 @@ class PoliteClient:
             self._on_event(Event(provider=self.provider, url=url, status=status, decision=decision, message=message))
 
     def _paths(self, key: str) -> tuple[Path, Path]:
-        d = self.cache_root / key[:2]
-        return d / f"{key}.body", d / f"{key}.json"
+        return _cache_paths(self.cache_root, key)
 
     def _read_cache(self, key: str) -> Response | None:
-        body_path, meta_path = self._paths(key)
-        try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            content = gzip.decompress(body_path.read_bytes())
-        except (OSError, ValueError, EOFError):
-            return None
-        return Response(
-            url=meta["url"], status=meta["status"], content=content,
-            headers=meta.get("headers", {}), from_cache=True, fetched_at=meta.get("fetched_at"),
-        )
+        return _read_cached(self.cache_root, key)
 
     def _stamp(self) -> str:
         """Now, as a ``fetched_at``."""
@@ -601,6 +597,43 @@ class PoliteClient:
         meta = {"url": url, "status": status, "headers": dict(headers), "fetched_at": stamp}
         _replace(self._paths(key)[1], json.dumps(meta, ensure_ascii=False).encode("utf-8"))
         return stamp
+
+
+class CachedAnswers:
+    """One provider's answers in caracole's HTTP cache (``cache_dir/http/<provider>/``), read alone:
+    ``cached`` as ``PoliteClient.cached`` reads them. It has no way to send a request, so it needs no
+    client, no budget and no lock of its own, and reads while the provider cools down too."""
+
+    def __init__(self, provider: str, cache_dir: Path):
+        self.provider = provider
+        self.cache_root = cache_dir / "http" / provider
+
+    def cached(self, url: str, *, accept: Collection[int] = (200,)) -> Response | None:
+        return cached_answer(self.cache_root, url, accept=accept)
+
+
+def cached_answer(cache_root: Path, url: str, *, accept: Collection[int] = (200,)) -> Response | None:
+    """The answer for ``url`` in the cache under ``cache_root`` when its status is in ``accept``, else None."""
+    answer = _read_cached(cache_root, hashlib.sha256(url.encode("utf-8")).hexdigest())
+    return answer if answer is not None and answer.status in accept else None
+
+
+def _cache_paths(cache_root: Path, key: str) -> tuple[Path, Path]:
+    d = cache_root / key[:2]
+    return d / f"{key}.body", d / f"{key}.json"
+
+
+def _read_cached(cache_root: Path, key: str) -> Response | None:
+    body_path, meta_path = _cache_paths(cache_root, key)
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        content = gzip.decompress(body_path.read_bytes())
+        return Response(
+            url=meta["url"], status=meta["status"], content=content,
+            headers=meta.get("headers", {}), from_cache=True, fetched_at=meta.get("fetched_at"),
+        )
+    except (OSError, ValueError, EOFError, KeyError, TypeError):  # gzip's BadGzipFile is an OSError
+        return None
 
 
 def _replace(path: Path, data: bytes) -> None:
