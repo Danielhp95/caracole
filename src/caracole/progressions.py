@@ -77,7 +77,7 @@ def catalogue() -> dict[str, str]:
     return names
 
 
-def _key_words(key: Any) -> str:
+def key_words(key: Any) -> str:
     """"C major", "A minor", "D Dorian"."""
     from caracole.viewer.theory import spelling
 
@@ -113,7 +113,7 @@ def sheet_progressions(cho: str, key: str | None) -> dict[str, Any] | None:
     found = progressions(sections, shapes)
     if not found:
         return None
-    return {"key": _key_words(shapes), "sections": [
+    return {"key": key_words(shapes), "sections": [
         {"section": name or None, "numerals": list(p.numerals), "repeats": p.repeats, "name": p.name,
          "ending": p.ending, "key": progression_key(p.numerals)}
         for name, p in found
