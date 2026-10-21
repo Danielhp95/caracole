@@ -392,7 +392,8 @@ def render_all(
     With ``song_ids``, only those songs (``caracole get`` and ``caracole render
     --song`` render their one song), and the stats are theirs alone. The record
     stays the last full pass's (``_status_after``): their names leave its
-    ``failed`` list and ``no_font``, and go back on as this pass found them.
+    ``failed`` list and ``no_font``, and go back on, at the end, as this pass
+    found them; the next full pass puts them back in the library's order.
 
     ``between`` is called between two songs, in no transaction: bulk work hands
     caracole's lock to a waiting lookup there (``_common.hand_over``), as a pass
@@ -467,7 +468,12 @@ def _status_after(stored: Any, status: dict[str, Any], names: set[str], font_pro
     if not isinstance(stored, dict):
         return status
     before = stored.get("failed")
-    others = [name for name in before if str(name) not in names] if isinstance(before, list) else []
+    if isinstance(before, list):
+        failed: list[Any] | int = [name for name in before if str(name) not in names] + status["failed"]
+    elif isinstance(before, int) and not isinstance(before, bool):
+        failed = before  # an older caracole's count, naming no song: the last full pass's until the next
+    else:
+        failed = status["failed"]
     waiting = stored.get("no_font")
     if isinstance(waiting, dict):
         no_font = {name: letter for name, letter in waiting.items()
@@ -475,7 +481,7 @@ def _status_after(stored: Any, status: dict[str, Any], names: set[str], font_pro
         font = {"no_font": no_font, "font_error": _font_error(no_font, font_problem) if no_font else None}
     else:  # recorded by a caracole that kept no "no_font": the font error this pass hit, if any
         font = {"font_error": status["font_error"] or stored.get("font_error")}
-    return {**stored, "failed": others + status["failed"], **font}
+    return {**stored, "failed": failed, **font}
 
 
 @dataclass(frozen=True)

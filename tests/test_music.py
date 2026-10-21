@@ -119,6 +119,18 @@ def test_the_pages_load_no_tag_reader():
     assert out.stdout.strip() == "[]"
 
 
+@pytest.mark.slow
+def test_the_inbox_loads_no_http_client():
+    # web/files.py imports inbox.py for its extensions: scoring a download's names with Names reads
+    # no lyrics, so neither brings in lyrics.py, http.py and the httpx they load.
+    code = ("import sys; import caracole.inbox, caracole.web.files; print(sorted(m for m in sys.modules "
+            "if m in ('caracole.lyrics', 'caracole.http') or m.startswith(('httpx', 'rich'))))")
+    src = Path(__file__).resolve().parents[1] / "src"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
+                         env={"PYTHONPATH": subprocess_pythonpath(src)})
+    assert out.stdout.strip() == "[]"
+
+
 # --- a disk that isn't there tonight --------------------------------------------------------
 
 
@@ -219,23 +231,31 @@ def test_a_file_as_close_to_two_songs_links_to_neither(conn, tmp_path):
     assert get_song(conn, one.id).audio_path is None and get_song(conn, two.id).audio_path is None
 
 
-def tagged_lamento(conn, tmp_path, other_artist: str):
-    # A tag cut short: "Lamento Bolivia" scores 94 on the song's title and 88 on the other's, a lead
-    # of 6, under MATCH_MARGIN. A title that close is a rival only when its artist is close too.
+# Tags cut short, each scoring on the song's title less than MATCH_MARGIN ahead of the other's: a
+# title that close is a rival only when its artist is close too. "Lamento Bolivia" scores 94 and 88;
+# "Lamento Bolivi" 90.3 and 82.4, just above where Names.score stops comparing artists.
+ALMOST_AS_CLOSE = pytest.mark.parametrize(
+    ("tag", "rival"), [("Lamento Bolivia", "Lamento Bolivariano"), ("Lamento Bolivi", "Mi Lamento Boliviano")]
+)
+
+
+def tagged_lamento(conn, tmp_path, other_artist: str, tag: str, rival: str):
     song = add_song(conn, "Enanitos Verdes", "Lamento Boliviano", duration_ms=None)
-    other = add_song(conn, other_artist, "Lamento Bolivariano", duration_ms=None)
-    make_wav(tmp_path / "music" / "x.wav", artist="Enanitos Verdes", title="Lamento Bolivia")
+    other = add_song(conn, other_artist, rival, duration_ms=None)
+    make_wav(tmp_path / "music" / "x.wav", artist="Enanitos Verdes", title=tag)
     scan_music(conn, tmp_path / "music")
     return get_song(conn, song.id), get_song(conn, other.id)
 
 
-def test_a_title_almost_as_close_by_the_same_artist_links_neither_song(conn, tmp_path):
-    song, other = tagged_lamento(conn, tmp_path, "Enanitos Verdes")
+@ALMOST_AS_CLOSE
+def test_a_title_almost_as_close_by_the_same_artist_links_neither_song(conn, tmp_path, tag, rival):
+    song, other = tagged_lamento(conn, tmp_path, "Enanitos Verdes", tag, rival)
     assert song.audio_path is None and other.audio_path is None
 
 
-def test_a_title_almost_as_close_by_another_artist_is_no_rival(conn, tmp_path):
-    song, other = tagged_lamento(conn, tmp_path, "Rafael Hernández")
+@ALMOST_AS_CLOSE
+def test_a_title_almost_as_close_by_another_artist_is_no_rival(conn, tmp_path, tag, rival):
+    song, other = tagged_lamento(conn, tmp_path, "Rafael Hernández", tag, rival)
     assert song.audio_path is not None and other.audio_path is None
 
 

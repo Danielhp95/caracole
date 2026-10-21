@@ -1316,6 +1316,15 @@ def test_a_record_kept_before_no_font_keeps_its_font_error_until_a_pass_hits_one
     assert kv_get_json(conn, "render:status") == {**old, "font_error": stats.font_error}
 
 
+def test_a_record_that_counts_its_failures_keeps_its_count_until_a_full_pass(conn, cfg):
+    old = {"at": "2026-10-18T03:30:00Z", "rendered": 3, "failed": 2, "font_error": None}
+    kv_set_json(conn, "render:status", old)  # by a caracole that counted the failures, naming none
+    song = add_song(conn, "Soda Stereo", "Persiana Americana")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg, runner=FakeChordPro(fail=("Persiana",)), now=LATER, song_ids={song.id})
+    assert kv_get_json(conn, "render:status") == old  # not 1 failed, nor 0 once it renders
+
+
 def test_a_pass_over_some_songs_before_any_full_pass_records_itself(conn, cfg):
     song = add_song(conn, "Soda Stereo", "Persiana Americana")
     human_sheet(conn, cfg, song)
