@@ -331,6 +331,24 @@ def test_a_sheet_whose_key_reads_as_the_relative_one_plays_my_versions_chords():
     assert played(applied(IN_A_MINOR, kept_on(entry, IN_A_MINOR))) == ["Ab", "Fm", "Cm", "Gm"]
 
 
+def test_a_sheet_tagged_in_the_parallel_key_plays_my_versions_chords():
+    # A tab of the A minor song that names its key A (as a key read from audio can): its chords are A minor's, so
+    # it is read from its own tonic, as a t= did, never as A major's notes (F# minor's, a fourth off)
+    tagged_a = IN_A_MINOR.replace("{key: Am}", "{key: A}")
+    assert viewer_key(tagged_a) == Key(9, "ionian")
+    for entry, chords in (("key=Bm&capo=0", ["Bm", "G", "D", "A"]), ("key=Gm&capo=0", ["Gm", "Eb", "Bb", "F"]),
+                          ("key=Am&capo=0", ["Am", "F", "C", "G"])):
+        assert played(applied(tagged_a, kept_on(entry, tagged_a))) == chords, entry
+    assert kept_on("key=Bm&capo=0", tagged_a) == Version(t=2, capo=0)
+    # a mode chosen moves it as the t= with that mode did
+    assert kept_on("key=Gm&mode=dorian&capo=0", tagged_a) == Version(t=-2, mode="dorian", capo=0)
+    # and a C major song's tab tagged C minor
+    tagged_cm = IN_C_MAJOR.replace("{key: C}", "{key: Cm}")
+    assert played(applied(tagged_cm, kept_on(entry_of(Version(t=2), IN_C_MAJOR), tagged_cm))) == ["Bm", "G", "D", "A"]
+    # A sheet whose chords are its key's is read in that key's notes, whatever mode the version's key is in
+    assert played(applied(IN_C_MAJOR, kept_on("key=Bm&capo=0", IN_C_MAJOR))) == ["Bm", "G", "D", "A"]
+
+
 def as_kept(v: Version) -> Version:
     """``v`` as its entry keeps it, with no capo of its own: the capo where the entry puts it (the sheet's, 0 here),
     and the swaps of the mode it plays in alone."""

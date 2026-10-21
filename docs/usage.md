@@ -1208,8 +1208,9 @@ and cache.
   viewer starts there, its exports and its songbooks follow. The key is a
   key, not a move: a sheet in another key or with another capo that takes
   the song's place later plays in G dorian with no capo too, and one that
-  reads the same chords in the relative key (C major for A minor's) plays
-  the chords the version played (`[version]` in
+  reads the same chords in the relative key (C major for A minor's), or
+  names the parallel key for them (A for A minor's chords), plays the
+  chords the version played (`[version]` in
   [overrides.toml](#overridestoml-your-decisions)). A sheet with no key has
   no key to keep: the version is written as the viewer's address writes it,
   a move from the sheet, its `t=` named even at 0 (`t=0&capo=1`). A version
@@ -2978,11 +2979,22 @@ tab_ids = [1601668]
   chords were read in (`Gm` for an A minor sheet played two down, `D` for a
   C major one played two up, `A dorian`); a sheet in its place whose chords
   read in another mode on the same notes (C major's are A minor's) is read in
-  those notes, so it plays the chords the version played. The mode, one of
+  those notes, so it plays the chords the version played. A sheet whose key
+  names the right tonic in the other mode (A for an A minor sheet's chords,
+  as a key read from audio can) is read from that tonic instead, when more
+  of its chords are in that tonic's key in the entry's mode than in the key
+  it names: it plays the chords the version played too, its label in the
+  mode it names (`B Major, capo 0` for B minor's chords). A sheet whose key
+  is off by another interval (a fifth) moves by the key it names. So when you
+  write an entry by hand, its key names a key's notes, not a tonic alone:
+  `key=G` on an A minor sheet is G major's notes from A, A dorian; write
+  `key=Gm` for G minor. The mode, one of
   `ionian`, `dorian`, ... `locrian`, is there only when you chose one, and is
   then the mode those shapes play in (G dorian, whatever mode a new sheet
   names; on a sheet read in the relative key the viewer names it from that
-  sheet's tonic, `Bb Lydian` for G dorian's notes on a C major sheet). The
+  sheet's tonic, `Bb Lydian` for G dorian's notes on a C major sheet, and a
+  chord outside the key there (a Bb among C major's chords) can come out
+  a semitone off; with no mode chosen, every chord plays as it did). The
   capo is 0 to 11, the sheet's when left out. Then come `alt=` for chords
   played instead and `at=` for chosen shapes, each by the chord's name in that
   key (`alt=F.Fmaj7`: Fmaj7 for every F; `at=Gm.x-x-5-7-8-6`: Gm in that

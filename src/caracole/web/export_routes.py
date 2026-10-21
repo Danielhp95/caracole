@@ -213,16 +213,19 @@ def _body(csrf: str, song: Song, sheet: str, shown: str, label: str, job: Job | 
     if pdf:
         links += f'<a class="btn primary" href="/{folder}/{quote(pdf)}">Open the PDF</a>\n'
     links += f'<a class="btn" href="{escape(back, quote=True)}">Back to the sheet</a>'
-    keep = (f'<form class="confirm" method="post" action="/export">\n{hidden}'
-            '  <input type="hidden" name="mine" value="1">\n'
-            '  <button class="btn" type="submit">{}</button>\n</form>\n')
+
+    def keep(button: str) -> str:  # never str.format: the sheet's path in ``hidden`` may hold a brace
+        return (f'<form class="confirm" method="post" action="/export">\n{hidden}'
+                '  <input type="hidden" name="mine" value="1">\n'
+                f'  <button class="btn" type="submit">{button}</button>\n</form>\n')
+
     if mine == YOURS:
         own = "<p>It is your version: the song's own PDF, its viewer and its songbooks are in it.</p>\n"
     elif mine == AS_A_MOVE:
         own = ("<p>It is your version, kept as a move from the sheet: a sheet in another key in its place would "
-               "move it.</p>\n" + keep.format("Keep it in this key"))
+               "move it.</p>\n" + keep("Keep it in this key"))
     else:
-        own = (keep.format("Make this my version") +
+        own = (keep("Make this my version") +
                "<p>Your version is where the song's own PDF, its viewer and its songbooks start, kept in "
                "overrides.toml (<code>[version]</code>).</p>\n")
     body = (f'<p class="lede">{escape(song.display)} in <strong>{escape(label)}</strong>. The PDF is written beside '

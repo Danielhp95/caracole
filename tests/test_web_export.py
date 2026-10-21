@@ -230,3 +230,19 @@ def test_a_version_kept_as_a_move_from_the_sheet_may_be_kept_by_its_key(app, que
     cfg.overrides_file.write_text(f'[version]\n"{song.display}" = "t=0"\n', encoding="utf-8")
     page = get(app, export_url(query="fs=20"))
     assert "It is your version" in shown(page) and ">Keep it in this key<" not in text(page)
+
+
+def test_a_song_with_braces_in_its_name_opens_its_export_page(app, queue, recorder, conn, cfg):
+    # The sheet's path is in the page's forms: a brace in it is text, never a placeholder
+    for artist, title in (("Soda {Stereo}", "{Untitled}"), ("Soda}", "De {Música")):
+        song = rendered_song(conn, cfg, artist, title)
+        sheet = f"{artist}/{title}/sheet.html"
+        page = get(app, export_url(sheet=sheet))
+        assert page.status == 200, (artist, title)
+        assert ">Make this my version<" in text(page)
+        assert f'name="sheet" value="{sheet}"' in text(page)
+        cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+        cfg.overrides_file.write_text(f'[version]\n"{song.display}" = "t=2&capo=0"\n', encoding="utf-8")
+        page = get(app, export_url(sheet=sheet, query="fs=20"))  # kept as a move: the other button
+        assert page.status == 200 and ">Keep it in this key<" in text(page), (artist, title)
+        cfg.overrides_file.unlink()

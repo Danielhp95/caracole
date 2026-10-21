@@ -606,6 +606,18 @@ def _relative(key: Key, mode: str) -> int:
                 if scale(Key((key.tonic - interval) % 12, mode)) == scale(key))
 
 
+def _fitting(key: Key, names: Iterable[str]) -> int:
+    """How many of the chords named (a sheet's, as written) have every note, their bass too, in ``key``."""
+    notes = scale(key)
+    count = 0
+    for name in names:
+        chord = parse_chord(name, strict=False)
+        if chord is not None and {(chord.root + i) % 12 for i in chord.intervals} <= notes \
+                and (chord.bass is None or chord.bass in notes):
+            count += 1
+    return count
+
+
 def _from_degree(mode: str, degree: int) -> str:
     """The mode ``mode``'s notes make from its ``degree``: lydian from dorian's third (G dorian's notes from Bb)."""
     steps = SCALES[mode]
@@ -625,15 +637,25 @@ def in_key(kept: KeyVersion, cho: str, *, key: Key | None, capo_sheet: int | Non
     is kept in B minor (from A minor, two up) is read in A minor, its notes, and plays two up too, its chords those
     the version played. A mode chosen moves the same degrees of that reading; the viewer names that mode by the
     sheet's own tonic (G dorian's chords, on that sheet, are its Bb lydian's: the same notes from another degree),
-    and a note outside the key moves with its tonic, a semitone off where the two readings' tonics part."""
+    and a note outside the key moves with its tonic, a semitone off where the two readings' tonics part.
+
+    A sheet whose chords are more of them in its tonic's key in the kept key's mode than in the key it names (an A
+    minor sheet that names A, as a key read from audio can) is read from its own tonic instead, the kept key's
+    tonic, and plays there as a move from it (``t``, with the mode chosen), as a ``t=`` entry did."""
     if key is None:
         return Version()
-    degree = _relative(key, kept.key.mode)  # where the sheet's tonic is in the kept key's reading of its notes
-    mode = kept.mode or kept.key.mode
-    played_mode = _from_degree(mode, degree)
-    tonic = (kept.key.tonic + SCALES[mode][degree]) % 12  # of the shapes, on the sheet's own tonic
-    placed = _placed(Version(), tonic, None if played_mode == key.mode else played_mode, kept.capo, key, capo_sheet)
     sheet = parse_sheet(cho)
+    parallel = Key(key.tonic, kept.key.mode)
+    if parallel != key and _fitting(parallel, sheet.chords) > _fitting(key, sheet.chords):
+        chosen = None if kept.mode == key.mode else kept.mode
+        placed = _placed(Version(), kept.key.tonic, chosen, kept.capo, key, capo_sheet)
+    else:
+        degree = _relative(key, kept.key.mode)  # where the sheet's tonic is in the kept key's reading of its notes
+        mode = kept.mode or kept.key.mode
+        played_mode = _from_degree(mode, degree)
+        tonic = (kept.key.tonic + SCALES[mode][degree]) % 12  # of the shapes, on the sheet's own tonic
+        placed = _placed(Version(), tonic, None if played_mode == key.mode else played_mode, kept.capo, key,
+                         capo_sheet)
     played = _played(placed, key, capo_sheet)
     instead = dict(zip(_sounds(a for a, _ in kept.alt), _sounds(b for _, b in kept.alt), strict=True))
     swaps: dict[int, Swap] = {}
