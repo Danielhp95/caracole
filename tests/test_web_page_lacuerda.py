@@ -178,6 +178,20 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     assert "2 songs on LaCuerda" in browser.js("document.getElementById('bar-status').textContent")
 
 
+def test_a_close_spelling_of_a_lacuerda_artist_opens_their_group_with_the_offer_to_read_their_page(cfg, live, browser):
+    base, queue, runner = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    lacuerda(cfg)
+    search(browser, base, "sabinna")
+    did = "[...document.querySelectorAll('#results .suggestion')].map((s) => s.textContent).join('|')"
+    assert browser.wait(f"{did} === 'Joaquín Sabinaartist · 241 songs on LaCuerdaTheir songs'")
+    browser.click("#results .did-you-mean .their-songs")
+    assert browser.wait("!!document.querySelector('#results section.artist .read-page button')")
+    assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
+    assert browser.js("document.activeElement.matches('#results section.artist')")
+    assert queue.snapshot() == [] and runner.ran == []  # their page is read only once asked to
+
+
 def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_listed(cfg, live, browser):
     # The owner's "estopa", with LaCuerda's listings read as far as E and J only: the index can't tell, the page can.
     base, queue, runner = live

@@ -1443,6 +1443,38 @@
     model.card = model.line = undefined;
     drawGroups();
   };
+  // An artist the answer suggests ("Did you mean Lynyrd Skynyrd?"), opened: their songs (/api/artist, fifty, or those
+  // LaCuerda's index holds, or the offer to read their page), in their group, first, as an artist the query names
+  // is; the focus to it. It reads the indexes alone: no site is asked anything.
+  const openSuggested = (model, s, go) => {
+    const was = answer;
+    const ug = s.source !== "lacuerda";
+    go.disabled = true;
+    say("Listing " + String(s.artist || "") + "'s songs…");
+    (ug ? artistPage(String(s.artist_key || ""), 0) : sitePage({ slug: String(s.slug || "") })).then((page) => {
+      go.disabled = false;
+      if (!page || answer !== was || !state.all) return;
+      const g = groupOf(model, model.alias.get(String(s.group_key)) || String(s.group_key || ""), page.artist);
+      g.tail = null;  // made again, with what this group has now
+      if (ug) {
+        const got = objects(page.songs);
+        g.ug = { artist_key: page.artist_key, artist: page.artist, songs: page.total, tabs: page.tabs,
+          group_key: s.group_key, top: [] };
+        for (const h of got) addSong(model, "ug", h, g);
+        g.ugOffset = got.length;
+        g.ugListed = got.length;
+        say(String(page.artist) + ": " + many(page.total, "song") + " on Ultimate Guitar");
+      } else {
+        g.lacuerda = { artist: page.artist, slug: page.slug, songs: page.listed, known: page.total, gtptabs: page.gtptabs };
+        if (page.read) listLaCuerda(g, page);
+      }
+      model.order.splice(model.order.indexOf(g.key), 1);
+      model.order.unshift(g.key);
+      drawGroups();
+      const section = Array.from(groupsBox.querySelectorAll("section.artist")).find((x) => x.dataset.artist === g.key);
+      if (section) section.focus();
+    });
+  };
 
   // Of your songs, those the status buttons, the Key menu and an artist's chip show, in the list as in the results
   // (the sites' songs are what the sites have, whatever they show); and that in words, for the results' head, which
@@ -1538,7 +1570,7 @@
     const said = keptSaid();
     if (keptNote.firstChild.textContent !== said) keptNote.firstChild.textContent = said;
     keptNote.hidden = !said;
-    if (model && model.meant === undefined) model.meant = didYouMean(answer.data.suggest, theirSongs);
+    if (model && model.meant === undefined) model.meant = didYouMean(answer.data.suggest, (s, go) => openSuggested(model, s, go));
     meantBox.replaceChildren(...(model && model.meant ? [model.meant] : []));
     notesBox.replaceChildren(...(model ? notesOf(model, !groupsBox.childNodes.length) : []));
   };
@@ -1570,12 +1602,6 @@
     const field = form && (["artist", "title"].map((n) => form.elements.namedItem(n)).find((f) => f && !f.value) ||
       form.elements.namedItem("artist"));
     if (field) field.focus({ preventScroll: true });
-  };
-  // A name Did you mean offers: Their songs searches it, as typing it would (no site asked), and the focus goes to
-  // its first result once it is drawn.
-  const theirSongs = (s) => {
-    focusFirst = true;
-    setQuery(String(s.artist || ""));
   };
   const drawResults = (query, answerInList) => {
     const q = normal(state.q);

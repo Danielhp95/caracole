@@ -458,6 +458,52 @@ def test_enter_with_no_clear_best_asks_for_nothing_and_says_so(cfg, live, browse
     assert queue.snapshot() == []
 
 
+SKYNYRD = [("lynyrd-skynyrd", "free-bird", 4), ("lynyrd-skynyrd", "simple-man", 2), ("lynyrd-skynyrd", "tuesdays-gone", 1),
+           ("sam-grow", "skynyrd", 1)]
+
+
+@in_chromium
+def test_a_word_of_an_artists_name_leads_with_them_and_enter_lists_their_songs(cfg, live, browser):
+    import time
+
+    base, queue = live
+    index_songs(cfg, SKYNYRD)
+    browser.open(base + "/lookup")
+    browser.type("skynyrd")
+    assert browser.wait("document.querySelector('#results .artist-hit') !== null")
+    groups = browser.js("[...document.querySelectorAll('#results h2.group')].map(h => h.textContent)")
+    # The artist first, Sam Grow's song after; LaCuerda's listings not read to L, Ask LaCuerda under them.
+    assert groups == ["Artists on Ultimate Guitar", "On Ultimate Guitar"]
+    assert browser.js("document.querySelector('#results .looked-line .ask-lacuerda').textContent") == \
+        "Ask LaCuerda for “Lynyrd Skynyrd” (1 request)"
+    browser.press("Enter")
+    assert browser.wait(f"{ARTIST_NAME} === 'Lynyrd Skynyrd'")
+    time.sleep(0.5)
+    assert queue.snapshot() == []
+
+
+@in_chromium
+def test_a_close_spelling_says_did_you_mean_and_the_name_lists_their_songs(cfg, live, browser):
+    import time
+
+    base, queue = live
+    index_songs(cfg, SKYNYRD)
+    browser.open(base + "/lookup")
+    browser.type("lynrd")
+    assert browser.wait("document.querySelector('#results .did-you-mean') !== null")
+    assert browser.js("[...document.querySelectorAll('#results .suggestion')].map((s) => s.textContent)") == [
+        "Lynyrd Skynyrdartist · 3 songs on UGTheir songs"]
+    assert browser.js(HITS) == 0
+    browser.press("Enter")  # nothing stands out: Enter takes no suggestion, and asks for nothing
+    time.sleep(0.5)
+    assert browser.js(f"{ARTIST_NAME} === undefined") and queue.snapshot() == []
+    browser.click("#results .did-you-mean .their-songs")
+    assert browser.wait(f"{ARTIST_NAME} === 'Lynyrd Skynyrd'")
+    assert browser.js("[...document.querySelectorAll('#results .hit .row-title')].map(t => t.textContent)") == [
+        "Free Bird", "Simple Man", "Tuesdays Gone"]
+    assert queue.snapshot() == []
+
+
 NO_SIDEWAYS = "document.documentElement.scrollWidth <= innerWidth"
 
 

@@ -91,7 +91,8 @@ Rules a change there keeps (the Invariants below are the others):
   There, library.js's `mergeSites` puts your songs and every index's rows under one header an
   artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
   `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line
-  rows.js's `indexLine`; a removed song's line asks for it again as the request form does. A hit's
+  rows.js's `indexLine`; a removed song's line asks for it again as the request form does, and a "Did you
+  mean" name (rows.js's `didYouMean`) opens that artist's group from `/api/artist`, as "+ N more" does. A hit's
   name there and on the lookup page presses its Get it (or Add again), disabled while that button is
   (rows.js `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it. Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
@@ -128,7 +129,11 @@ Rules a change there keeps (the Invariants below are the others):
   alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
   gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
   (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
-  and in `/api/search`'s `removed`, which the library page shows with Add again), and
+  and in `/api/search`'s `removed`, which the library page shows with Add again), the words of the UG index's
+  artists' names (`ug_artists_fts` and its vocabulary `ug_artist_words`, schema 8, kept by triggers on `ug_index`:
+  an artist by a word of their name, `ArtistHit.part`, bounded by `WORD_LETTERS` and `WORD_ARTISTS`, leading by
+  `_part_leads`; and `suggest_artists`, the artists spelled close to a query nothing matches well, UG's and
+  LaCuerda's, `/api/search`'s `suggest`, the pages' "Did you mean"), and
   `gtptabs_songs` counts an artist's songs on gtptabs.com (an artist row's `gtptabs` in `/api/search`, the
   "Guitar Pro 12" of their header). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
   index), which must find exactly what a `LIKE` scan of `ug_index` finds

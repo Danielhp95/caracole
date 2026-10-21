@@ -131,7 +131,7 @@ goes when the PDF is done, so caracole must be able to write there. Its
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
 to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
-status 2: `database: … is at schema version 8, but this caracole knows up to 7:
+status 2: `database: … is at schema version 9, but this caracole knows up to 8:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
 when there is one. Schema 4 keeps the songs you removed. Schema 5 adds an index of the UG index's names, for
 searching as you type: the first command after the upgrade builds it from the
@@ -142,7 +142,11 @@ of every artist (see [`caracole lacuerda`](#one-step-at-a-time)). Schema 7 keeps
 the tabs of the Ultimate Guitar artist pages caracole reads, for searches (see
 [caracole search](#caracole-search)): the first nightly run or `caracole get`
 after the upgrade fills it, once, from what the HTTP cache holds of the artist
-pages caracole knows, with no request, even while Ultimate Guitar cools down. A state
+pages caracole knows, with no request, even while Ultimate Guitar cools down. Schema 8
+adds an index of the words of the UG index's artists' names, for finding an artist by
+a word of their name and by a close spelling of it (see [caracole search](#caracole-search)):
+the first command after the upgrade builds it from the index, in about a second, and it
+adds about 10 MB to a full index. A state
 folder caracole can't use ends a command with status
 1 and `can't open the database …` (or `can't open …/caracole.lock: …`).
 `caracole add` is the exception to both: it keeps its line and warns (see
@@ -2169,7 +2173,43 @@ Cartel's Wonderwall, then `Also an artist: Wonderwall, 9 songs (13 tabs)`
 with its `caracole search --artist "Wonderwall"` line; the band's songs are
 left out of the list. Beside an artist whose name is the query, one whose name
 is only near it is left out, with its songs: `caracole search eagles` lists no
-Beagles. The offline index knows no ratings (only the artist pages caracole
+Beagles.
+
+A word of an artist's name finds them too: an artist whose name holds every
+word of the query as words of its own, among others, is an artist line, after
+an artist whose whole name the query is (`caracole search eagles` also lists
+Eagles of Death Metal), the most songs first, weighed by how much of the name
+the query is (`horse`: Horse the Band before Horse Jumper of Love, as many
+songs, a longer name). Accents are folded (`sabina` finds LaCuerda's Joaquín Sabina) and
+Chinese is read as pinyin, as whole words (伍佰 finds Wu Bai & China Blue);
+never letters inside a word (`horse` finds no Seahorses), a word half typed
+(`lynyr`), a word of fewer than three letters, or a word in more than 300
+artists' names ("the", "band", "john": on a full index, about seventy such
+words), which names only an artist whose whole name it is (`band`: The Band).
+Such an artist leads when their songs are most of the songs the query
+matches, or when they have 50 songs or more and one of them is tabbed more
+than any song titled like the query: `caracole search skynyrd` leads with
+Lynyrd Skynyrd, and still lists Sam Grow's song "Skynyrd" after their most
+tabbed songs; `zeppelin` leads with Led Zeppelin, while `imagine` leads with
+John Lennon's Imagine, Imagine Dragons an artist line after it. `--artist`
+still takes a whole name: `--artist lynyrd` names no one.
+
+A query nothing matches well (no artist whose whole name it is, no song by its
+title, here or on another site's index) whose words are spelled close to an
+artist's name ends with that artist, and the line that lists their songs:
+
+    $ caracole search lynrd
+    …
+    Did you mean Lynyrd Skynyrd?
+      Lynyrd Skynyrd · Ultimate Guitar · 139 songs: caracole search --artist "Lynyrd Skynyrd"
+
+Up to three, from Ultimate Guitar's index and LaCuerda's (`metalica` is
+Metallica, `beatels` The Beatles, `sabinna` LaCuerda's Joaquín Sabina), the
+most songs first: each word of the query is close to a word of the name (a
+word of fewer than four letters must be the name's own), of the same first
+letter, so a typo in a name's first letter suggests nothing, and Chinese never
+does. An artist a word of the query names may be shown already (`metalica`:
+La Naranja Metalica): an artist suggested then has more songs than any shown. The offline index knows no ratings (only the artist pages caracole
 read do), so the number of
 tabs is what puts the song you probably mean first (Radiohead's Creep before
 Stone Temple Pilots'). A catch-all such as `misc-musicals` is never an
@@ -2334,7 +2374,8 @@ with it. A KEY that is no key exits with status 2.
   caracole's offline indexes hold of theirs: **Ultimate Guitar** (eight songs,
   and the artists the query names, as in [caracole search](#caracole-search),
   each with their three most tabbed songs, then "+ 57 more by Estopa", which
-  lists the rest in their group, fifty at a time), **LaCuerda** (the artists
+  lists the rest in their group, fifty at a time; an artist a word of the query
+  names, "skynyrd", has their group too, first when they lead), **LaCuerda** (the artists
   the query names, each with their most popular songs with chords, and "+ N
   more by Estopa on LaCuerda" for the rest the index holds of theirs, then five
   songs: "estopa" finds Estopa; for an artist whose page caracole has never
@@ -2384,10 +2425,12 @@ with it. A KEY that is no key exits with status 2.
   artists so far, with #, A–C read whole; the nightly run reads the rest.").
 
   When a query finds nothing, the results are one card instead. First, when
-  the indexes have artists whose names are spelled close to it, "Did you
-  mean": a line each ("Lynyrd Skynyrd · artist · 212 songs on UG"), whose
-  Their songs searches that name, asking no site, and moves to its first
-  result. Then the card, headed "Not it?" under them, else "No song or artist
+  its words are spelled close to artists' names (as [caracole
+  search](#caracole-search) chooses them), "Did you mean": a line each
+  ("Lynyrd Skynyrd · artist · 212 songs on UG"), whose Their songs opens that
+  artist's songs in their group, first (fifty of Ultimate Guitar's, with "+ N
+  more", or those LaCuerda's index holds, or the offer to read their page),
+  with no request. Then the card, headed "Not it?" under them, else "No song or artist
   matches “lynrd”": Request “lynrd” by name, which opens the request form
   below, filled in from the query; Ask LaCuerda (1 request), only while
   LaCuerda's listings don't reach the name's letter; the chips of where

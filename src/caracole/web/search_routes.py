@@ -11,7 +11,10 @@
                           identity key (``artist_key``, ``title_key``), and an artist's the first
                           (``group_key``): the library page puts what shares them on one line, and
                           under one header, which counts an artist's songs on each site (an artist's
-                          ``songs`` on theirs, ``gtptabs`` gtptabs.com's)
+                          ``songs`` on theirs, ``gtptabs`` gtptabs.com's); an artist the query names only
+                          by a word of their name says so (``part``); and, for a query nothing matches
+                          well, the artists spelled close to it (``suggest``: each one's site, name, songs,
+                          group, and their ``artist_key`` or LaCuerda ``slug``, for /api/artist)
     GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
                           ``offset``, and yours by them; ``?lacuerda=SLUG`` (``?lacuerda_name=NAME``),
                           a LaCuerda artist's songs the index holds, and whether caracole read their page
@@ -263,6 +266,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     Ultimate Guitar song by its keys; None for none). A song of your library comes as its card
     has it (``_rows``)."""
     from caracole.search import (
+        STRONG,
         LibraryHit,
         found,
         lacuerda_leads,
@@ -271,6 +275,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
         search_library,
         search_musescore,
         search_removed,
+        suggestions,
     )
     from caracole.songs import list_songs
 
@@ -281,15 +286,17 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     _after_reads(app)
     cached = app._found.get(q)
     if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
-        index_found, index, artists, hint, unseen, gtptabs, musescore, lc_artists, lacuerda = cached[1:]
+        index_found, index, artists, hint, unseen, gtptabs, musescore, lc_artists, lacuerda, close = cached[1:]
     else:
         index_found, index, artists, hint, unseen = _index_hits(conn, q)
         gtptabs = search_gtptabs(conn, q, SITE_HITS) if "gtptabs" not in left_out else []
         musescore = search_musescore(conn, q, SITE_HITS) if "musescore" not in left_out else []
         lc_artists, lacuerda = (search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out
                                 else ([], []))
+        close = suggestions(conn, q, index_found, [*lc_artists, *lacuerda, *gtptabs, *musescore],
+                            lacuerda="lacuerda" not in left_out)
         app._found[q] = (time.monotonic(), index_found, index, artists, hint, unseen, gtptabs, musescore,
-                         lc_artists, lacuerda)
+                         lc_artists, lacuerda, close)
         while len(app._found) > CACHE_SIZE:
             app._found.popitem(last=False)
     answer = found(mine, index_found)
@@ -315,6 +322,10 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
                                   "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
             "lacuerda_leads": lacuerda_leads(index_found, lc_artists),
+            # A song of yours by its title matches well: nothing to suggest.
+            "suggest": [] if any(h.score >= STRONG and h.via != "artist" for h in mine) else [
+                {"source": s.source, "artist": s.artist, ("artist_key" if s.source == "ug" else "slug"): s.key,
+                 "songs": s.songs, "group_key": _group_key(s.artist)} for s in close],
             "skipped": skipped, "partial": partial, "looked": _looked(conn, skipped, partial)}
 
 
@@ -491,7 +502,7 @@ def _index_hits(conn: sqlite3.Connection, q: str) -> tuple[IndexFound, list[dict
     # An artist with their most tabbed songs, each as the index's songs are (``_hit_json``), and the group the
     # library page puts them in (``group_key``); ``artist_key`` is UG's, which /api/artist takes.
     artists = [{"artist_key": a.artist_key, "artist": a.artist, "score": a.score, "songs": a.songs, "tabs": a.tabs,
-                "group_key": _group_key(a.artist), "top": [_hit_json(conn, h) for h in a.top]}
+                "part": a.part, "group_key": _group_key(a.artist), "top": [_hit_json(conn, h) for h in a.top]}
                for a in answer.artists]
     index = [_hit_json(conn, h) for h in answer.songs]
     hits = [*answer.songs, *answer.artists]

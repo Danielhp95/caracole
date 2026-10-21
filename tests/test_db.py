@@ -250,7 +250,7 @@ def test_a_version_6_database_gains_the_artist_pages_tabs_and_keeps_every_row(tm
     old.close()
 
     c = db.connect(path)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW == 7
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW
     for table, rows in tables.items():
         assert [tuple(r) for r in c.execute(f"SELECT * FROM {table} ORDER BY 1")] == rows, table
     assert c.execute("SELECT COUNT(*) FROM ug_artist_tabs").fetchone()[0] == 0
@@ -309,3 +309,40 @@ def test_the_substring_index_follows_the_rows_a_sitemap_adds_or_renames(conn):
 
     assert like("%wonderwal%") == ["wonderwal", "wonderwall"]  # an old key stays: it matches no row
     assert like("%song-2%") == ["song-2"] and like("%blur%") == ["blur"]
+
+
+def test_a_version_7_database_gains_its_artists_by_word_and_keeps_every_row(tmp_path):
+    # As the artist-pages caracole left it: schema 7, with index rows and a song.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 8)) + "\nPRAGMA user_version = 7;")
+    old.executemany("INSERT INTO ug_index VALUES (?, ?, ?, 'chords', '1', 'x', '')",
+                    [(1, "lynyrd-skynyrd", "free-bird"), (2, "lynyrd-skynyrd", "simple-man"), (3, "sam-grow", "skynyrd")])
+    old.execute(
+        "INSERT INTO songs (key, artist, title, artists, added_at, created_at, updated_at) "
+        "VALUES ('oasis/wonderwall', 'Oasis', 'Wonderwall', '[\"Oasis\"]', 'x', 'x', 'x')"
+    )
+    old.commit()
+    tables = {t: old.execute(f"SELECT * FROM {t} ORDER BY 1").fetchall() for t in ("songs", "ug_index", "ug_keys")}
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW == 8
+    for table, rows in tables.items():
+        assert [tuple(r) for r in c.execute(f"SELECT * FROM {table} ORDER BY 1")] == rows, table
+
+    def by_word(word):
+        return [r[0] for r in c.execute("SELECT artist_key FROM ug_artists WHERE id IN "
+                                        "(SELECT rowid FROM ug_artists_fts WHERE ug_artists_fts MATCH ?) "
+                                        "ORDER BY artist_key", (f'"{word}"',))]
+
+    assert by_word("skynyrd") == ["lynyrd-skynyrd"] and by_word("grow") == ["sam-grow"]
+    # Every row added or re-keyed since files its artist too, and the words count the artists that hold them.
+    c.execute("INSERT INTO ug_index VALUES (4, 'skynyrd-tribute', 'free-bird', 'chords', '1', 'x', '')")
+    c.execute("UPDATE ug_index SET artist_key = 'sam-grow-band' WHERE tab_id = 3")
+    assert by_word("skynyrd") == ["lynyrd-skynyrd", "skynyrd-tribute"] and by_word("band") == ["sam-grow-band"]
+    words = dict(c.execute("SELECT term, doc FROM ug_artist_words WHERE term IN ('skynyrd', 'grow', 'lynyrd')"))
+    assert words == {"skynyrd": 2, "grow": 2, "lynyrd": 1}
+    c.close()
+    assert columns(path.with_name("caracole.sqlite.v7.bak"), "ug_artists") == ([], 7)

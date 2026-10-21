@@ -14,6 +14,9 @@ Tables (plan §5, plus ``kv``):
   pages caracole has read (schema 6, lacuerda_index.py).
 - ``ug_artist_tabs``: the tabs UG's artist pages listed when caracole read them, bare ids
   with their names, for searches (schema 7, ug/artist_tabs.py).
+- ``ug_artists``, ``ug_artists_fts`` and ``ug_artist_words``: every artist key of ``ug_index``,
+  indexed by its words, and those words with how many artists hold each, for searches by a
+  word of an artist's name and by a close spelling of one (schema 8, search.py).
 - ``versions``: every sheet, tab or Guitar Pro version seen for a song.
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
@@ -30,7 +33,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -266,10 +269,39 @@ CREATE INDEX IF NOT EXISTS ug_artist_tabs_song ON ug_artist_tabs(artist_key, son
 CREATE INDEX IF NOT EXISTS ug_artist_tabs_tab ON ug_artist_tabs(tab_id);
 """
 
+# Search by artist (search.py): every artist key of ug_index once, indexed word by word (unicode61 splits a key at
+# its hyphens), so that a word of an artist's name finds them ("skynyrd": lynyrd-skynyrd) without reading 1.6 million
+# rows, and ug_artist_words, the index's vocabulary (each word with how many artists' keys hold it, ``doc``), which
+# says how common a word is and holds the words a close spelling is looked for among. The keys follow every row
+# inserted or re-keyed, as ug_keys do; a key no row has any longer stays, and an artist without a row is no hit.
+_SCHEMA_V8 = """
+CREATE TABLE IF NOT EXISTS ug_artists (
+  id INTEGER PRIMARY KEY,
+  artist_key TEXT NOT NULL UNIQUE
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS ug_artists_fts USING fts5(
+  artist_key, content='ug_artists', content_rowid='id', tokenize='unicode61', detail='none'
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS ug_artist_words USING fts5vocab(ug_artists_fts, row);
+CREATE TRIGGER IF NOT EXISTS ug_artists_indexed AFTER INSERT ON ug_artists BEGIN
+  INSERT INTO ug_artists_fts(rowid, artist_key) VALUES (new.id, new.artist_key);
+END;
+CREATE TRIGGER IF NOT EXISTS ug_index_artist_added AFTER INSERT ON ug_index BEGIN
+  INSERT INTO ug_artists(artist_key) SELECT new.artist_key
+  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);
+END;
+CREATE TRIGGER IF NOT EXISTS ug_index_artist_changed AFTER UPDATE OF artist_key ON ug_index
+WHEN new.artist_key IS NOT old.artist_key BEGIN
+  INSERT INTO ug_artists(artist_key) SELECT new.artist_key
+  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);
+END;
+INSERT OR IGNORE INTO ug_artists(artist_key) SELECT DISTINCT artist_key FROM ug_index ORDER BY artist_key;
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
-               7: _SCHEMA_V7}
+               7: _SCHEMA_V7, 8: _SCHEMA_V8}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

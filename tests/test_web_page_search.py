@@ -9,7 +9,6 @@ request: it adds the song from wanted.txt and keeps a sheet.
 
 from __future__ import annotations
 
-import dataclasses
 import json
 import threading
 import time
@@ -76,7 +75,6 @@ class Asked(list):
         self.held: threading.Event | None = None
         self.only: str | None = None
         self.lookups_held: threading.Event | None = None
-        self.suggest: list[dict] | None = None
 
     def queries(self) -> list[str]:
         return [parse_qs(urlsplit(target).query).get("q", [""])[0] for target in self]
@@ -99,10 +97,6 @@ def live(cfg):
             if held is not None and (asked.only is None or q == asked.only):
                 held.wait(10)
         response = answer(request)
-        if asked.suggest is not None and request.target.startswith("/api/search") and response.status == 200:
-            data = json.loads(response.body)  # the artists a typo may mean, as the search would suggest them
-            if not data.get("short") and not data.get("superseded"):
-                response = dataclasses.replace(response, body=json.dumps({**data, "suggest": asked.suggest}).encode())
         if request.method == "POST" and request.target.startswith("/lookup"):
             held = asked.lookups_held
             if held is not None:
@@ -713,6 +707,27 @@ def test_enter_moves_to_the_first_result_and_never_requests_a_song(cfg, live, br
     assert queue.snapshot() == [] and len(asked) >= 1
 
 
+SKYNYRD = [("lynyrd-skynyrd", "free-bird", 4), ("lynyrd-skynyrd", "sweet-home-alabama", 3),
+           ("lynyrd-skynyrd", "simple-man", 2), ("lynyrd-skynyrd", "tuesdays-gone", 1), ("sam-grow", "skynyrd", 1)]
+DID_YOU_MEAN = "document.querySelector('#results .did-you-mean')"
+
+
+def test_a_word_of_an_artists_name_puts_their_header_first_and_enter_asks_for_nothing(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=SKYNYRD)
+    browser.open(base)
+    search(browser, "skynyrd")
+    assert browser.wait("document.getElementById('found').dataset.query === 'skynyrd'")
+    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 4", "Sam Grow"]  # the artist first, the song titled so after
+    assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "Skynyrd"]
+    assert browser.js("document.querySelector('#results .more-by').textContent") == "+ 1 more by Lynyrd Skynyrd"
+    assert browser.js(DID_YOU_MEAN) is None
+    browser.press("Enter")
+    assert browser.wait("document.activeElement.matches('#results article.hit')")
+    time.sleep(0.5)
+    assert queue.snapshot() == []
+
+
 def test_escape_returns_to_the_list_with_its_filter(cfg, live, browser):
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
@@ -895,47 +910,37 @@ def test_a_query_with_results_says_where_caracole_looked_in_one_muted_line(cfg, 
     assert len({browser.js(colour.replace("STATE", state)) for state in ("done", "partial", "blocked")}) == 3
 
 
-# The artists a typo may mean, as /api/search's ``suggest`` gives them (the artist-search lane's shape).
-LYNYRD = [{"source": "ug", "artist": "Lynyrd Skynyrd", "artist_key": "lynyrd-skynyrd", "songs": 2,
-           "group_key": "lynyrd-skynyrd"},
-          {"source": "ug", "artist": "Lynn Anderson", "artist_key": "lynn-anderson", "songs": 1,
-           "group_key": "lynn-anderson"}]
-
-
 def test_a_typo_shows_did_you_mean_first_and_their_songs_opens_that_artist(cfg, live, browser):
     base, queue, asked = live
-    sites(cfg, ug=[("lynyrd-skynyrd", "sweet-home-alabama", 9), ("lynyrd-skynyrd", "free-bird", 4),
-                   ("lynn-anderson", "rose-garden", 2)])
-    asked.suggest = LYNYRD
+    sites(cfg, ug=SKYNYRD)
     browser.open(base)
     search(browser, "lynrd")
     assert browser.wait("!!document.querySelector('#results .did-you-mean')")
     names = browser.js("[...document.querySelectorAll('#results .suggestion')].map((s) => "
                        "[s.querySelector('.suggest-name').textContent, s.querySelector('.suggest-facts').textContent, "
                        "s.querySelector('button').textContent])")
-    assert names == [["Lynyrd Skynyrd", "artist · 2 songs on UG", "Their songs"],
-                     ["Lynn Anderson", "artist · 1 song on UG", "Their songs"]]
+    assert names == [["Lynyrd Skynyrd", "artist · 4 songs on UG", "Their songs"]]
     # First: above the card, which is headed "Not it?" now; the name in the artist's accent, as a header's.
     order = browser.js("[...document.querySelectorAll('#results .did-you-mean, #results .nothing')].map((n) => n.className)")
     assert order == ["did-you-mean", "nothing"] and browser.js(CARD)["head"] == "Not it?"
     accent = browser.js("(() => { const p = document.createElement('p'); p.style.color = 'var(--artist)'; "
                         "document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; })()")
     assert browser.js("getComputedStyle(document.querySelector('#results .suggest-name')).color") == accent
-    asked.suggest = None
-    browser.click("#results .suggestion .their-songs")
-    assert browser.wait("document.getElementById('found').dataset.query === 'Lynyrd Skynyrd' && "
-                        f"{HITS} === 2")
-    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 2"]
-    assert browser.js(TITLES) == ["Sweet Home Alabama", "Free Bird"]
-    assert browser.wait("document.activeElement.matches('#results article.hit')")  # on to their first song
-    assert browser.js("document.querySelector('#results .did-you-mean')") is None
-    assert queue.snapshot() == []  # it asked no site
+    assert browser.js(HITS) == 0
+    searched = len(asked)
+    browser.click("#results .suggestion .their-songs")  # their songs, in their group, first, as an artist's are
+    assert browser.wait(f"{HITS} === 4")
+    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 4"]
+    assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "Tuesdays Gone"]
+    assert browser.js("document.activeElement.matches('#results section.artist')")
+    # Results now: the card gives way to the one muted line.
+    assert browser.js("document.querySelector('#results .nothing')") is None
+    assert len(asked) == searched and queue.snapshot() == []  # their songs came from /api/artist: no search, no site
 
 
 def test_the_lookup_page_shows_the_same_card_and_did_you_mean(cfg, live, browser):
     base, queue, asked = live
-    sites(cfg, ug=[("lynyrd-skynyrd", "sweet-home-alabama", 9), ("lynyrd-skynyrd", "free-bird", 4),
-                   ("lynn-anderson", "rose-garden", 2)])
+    sites(cfg, ug=[("radiohead", "creep", 4)])
     browser.open(base + "lookup?q=lynrd")
     assert browser.wait(f"!!document.querySelector('{NOTHING}')")
     card = browser.js(CARD)
@@ -947,15 +952,7 @@ def test_the_lookup_page_shows_the_same_card_and_did_you_mean(cfg, live, browser
     assert browser.js("[document.querySelector('#by-name [name=artist]').value, "
                       "document.querySelector('#by-name [name=title]').value]") == ["", "lynrd"]
     assert browser.js("document.activeElement.name") == "artist"
-    asked.suggest = LYNYRD
-    browser.open(base + "lookup?q=lynrd")
-    assert browser.wait("!!document.querySelector('#results .did-you-mean')")
-    assert browser.js(CARD)["head"] == "Not it?"
-    browser.click("#results .suggestion .their-songs")  # their songs, as their row's Songs lists them
-    assert browser.wait("!!document.querySelector('#results .artist-head')")
-    assert browser.js("document.querySelector('#results .artist-head h2').textContent") == "Lynyrd Skynyrd"
-    assert browser.js("[...document.querySelectorAll('#results .hit .row-title')].map((h) => h.textContent)") == [
-        "Sweet Home Alabama", "Free Bird"]
+    assert browser.js("document.querySelector('#results .did-you-mean')") is None  # no artist spelled close to it
     assert queue.snapshot() == []
 
 
@@ -989,12 +986,10 @@ def test_the_bar_and_its_results_fit_a_phone(cfg, live, phone):
 
 @pytest.mark.parametrize("dark", [False, True])
 def test_the_card_and_did_you_mean_fit_a_phone_in_light_and_dark(cfg, live, tmp_path, dark):
-    base, _, asked = live
-    sites(cfg, ug=[("lynyrd-skynyrd", "sweet-home-alabama", 9)])
+    base, _, _ = live
+    sites(cfg, ug=SKYNYRD)
     read_to(cfg, ("_num", "a", "b", "c"))
     blocking(cfg, "musescore")
-    asked.suggest = [*LYNYRD, {"artist": "Los Lobos Del Norte De Sinaloa Y Sus Amigos Del Rancho", "songs": 1234,
-                               "source": "lacuerda"}]
     phone = driven(tmp_path, width=390, height=844, mobile=True)
     try:
         if dark:

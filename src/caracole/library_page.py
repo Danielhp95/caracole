@@ -132,9 +132,10 @@ index has no artist by while the listing of its letter isn't read whole has Ask
 LaCuerda, under the groups. MuseScore's pages, titles alone, come last under a
 header of their own. Under them, where caracole looked: chips in one muted line
 (UG ✓, LaCuerda: up to C, MuseScore blocked…), each one's detail its tooltip, or,
-for a query that found nothing, "Did you mean" (Their songs searches that name)
-and one card, whose Request “…” by name opens the request form. A line's Get it (``POST /lookup``) shows its request's line
-in the line itself. Enter moves the focus to the first result and never spends a
+for a query that found nothing, "Did you mean" (Their songs opens that artist's
+group, first, from ``/api/artist``) and one card, whose Request “…” by name
+opens the request form. A line's Get it (``POST /lookup``) shows its request's
+line in the line itself. Enter moves the focus to the first result and never spends a
 request. A wanted song whose sheet you picked on LaCuerda says that tonight's
 run gets it (``lacuerda``), and isn't a song not found (``notFound``). The
 request form sits under the results, filled in from the query.

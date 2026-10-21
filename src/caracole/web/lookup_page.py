@@ -9,9 +9,11 @@ sheet (``lacuerda``), and an artist's Songs lists those the index holds, or,
 while caracole hasn't read their page, offers to (``POST /lacuerda/artist``,
 one request, a job the page follows on ``/api/jobs``), as it does for a name
 under a letter LaCuerda's listings aren't read to yet. A query may be an
-artist's name alone or a title alone: an artist it names is a row of its own,
-whose Songs lists all their songs (``GET /api/artist``), and comes first when
-it leads. Enter acts
+artist's name alone or a title alone, or a word of an artist's name
+("skynyrd"): an artist it names is a row of its own, whose Songs lists all
+their songs (``GET /api/artist``), and comes first when it leads. A query
+nothing matches well, spelled close to an artist's name ("lynrd"), says "Did
+you mean" that artist, whose name lists their songs the same way. Enter acts
 on the answer of the query typed, never of an older one still on the screen:
 its ``best`` row, the song you meant; when an artist leads, that artist's
 songs; when nothing stands out, nothing, so a guess never spends a request.
