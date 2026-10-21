@@ -4,7 +4,8 @@ of its answers, what every route shares and the checks every request passes.
 Each area's routes are a module of its own, a ``*_routes.py`` of caracole.web, whose ``ROUTES`` (each a
 ``Route``: a method, an address and what answers it) the router gathers from every such module, and whose
 docstring lists them and says how they answer: library_routes.py (the library page, a song requested,
-Fetch now), review_routes.py (the picker), jobs_routes.py (the requests page, /jobs.json, /api/jobs),
+Fetch now), review_routes.py (the picker), jobs_routes.py (the requests page, Cancel and Try again,
+/jobs.json, /api/jobs),
 search_routes.py (the lookup page, search as you type, a song looked up now, a LaCuerda artist's page
 read), remove_routes.py (Remove), songbook_routes.py (the songbook forms) and export_routes.py (a
 sheet's PDF in the version its viewer was left in, and Make this my version). A new route, or a new

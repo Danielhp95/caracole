@@ -21,7 +21,8 @@
                           a LaCuerda artist's songs the index holds, and whether caracole read their page
                           (and ``gtptabs``, as the search gives it)
     POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``), or the LaCuerda
-                          song (``lacuerda``), you picked
+                          song (``lacuerda``), you picked; ``then=jobs``, from the requests page's Get it
+                          from there: back there
     POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
                           ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
 
@@ -142,6 +143,8 @@ def lookup(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
     job, _ = queue_lookup(app, form)
     if wants_json:  # the lookup page follows its address; the library page, its line (view)
         return json_response(202, {"job": job.id, "url": f"/api/jobs/{job.id}", "view": app.job_view(job)})
+    if form.get("then") == "jobs":  # the requests page, where the lookup shows as it runs
+        return redirect("/jobs")
     return redirect(f"/lookup?job={job.id}")
 
 

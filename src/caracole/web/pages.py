@@ -1,20 +1,24 @@
 """The pages caracole serve writes itself: the requests, the picker, the sign-in page, and errors.
 
 They share index.html's look (library_assets/base.css, ``BASE_STYLE``), carry no script,
-and every text in them is escaped. The requests page is one line per request,
-the line its song's card shows (status.py), with the commands it ran and what
-each printed folded away under it (a lookup's stages first, each with how it
-went and why). It refreshes itself every 10 seconds while
-a request waits or runs, with a meta refresh: no script. A reload closes what
-the reader opened, so a request's output is open when the address asks for it
-(``/jobs?job=N``, the cards' Details link), and "Stop refreshing"
-(``refresh=0``) leaves the page still.
+and every text in them is escaped. The requests page (``jobs_page``) says, under
+Now, the request that runs, as a card with its steps (outcome.py's), and those
+queued under it in order, each with Cancel (a form, posted with the form token);
+then the finished ones, newest first under Today and Earlier (when each ended, in
+the server's local time zone), each with its outcome as a coloured word, its
+reason, when it ended and its next step, a link or a one-button form
+(outcome.py's ``Outcome``). Every request keeps the commands it ran and what each
+printed folded away under Output (a lookup's stages first, each with how it went
+and why). It refreshes itself every 10 seconds while a request waits or runs,
+with a meta refresh: no script. A reload closes what the reader opened, so a
+request's output is open when the address asks for it (``/jobs?job=N``, the
+cards' Details link), and "Stop refreshing" (``refresh=0``) leaves the page still.
 
 The picker (``picker_form``) is a song in review's candidates as a radio
 group, the same markup and style (library_assets/picker.css) as the cards'
 picker: on a page of its own (``review_page``), and under a request that ended
 in a review. A reload would undo a choice half made, so a requests page that
-refreshes itself links to the picker's page instead.
+refreshes itself leaves it out: the request's Pick the match opens the picker's page.
 
 A request the server turns down is ``Refused``, which a route raises and app.py
 answers with ``message_page``, or, to a page's script, as data.
@@ -24,16 +28,18 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from html import escape
 from typing import TYPE_CHECKING, Any
 
 from caracole.inline import sha256_source
 from caracole.library_assets import BASE_STYLE, PICKER_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
-from caracole.stamps import shown
+from caracole.stamps import shown, stamp
 
 if TYPE_CHECKING:  # songbooks.py imports Refused, and status.py imports songbooks.py
     from caracole.web.jobs import Job, Stage, Step
+    from caracole.web.outcome import Action, Outcome
     from caracole.web.status import Line
 
 PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
@@ -43,26 +49,59 @@ PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
 .step-note { margin: 6px 0 0; color: var(--review); font-size: .85rem; }
 .pick-page { max-width: 46rem; }
 .lede { max-width: 72ch; margin: 4px 0 20px; color: var(--muted); }
+.group { margin: 22px 0 8px; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; }
 .jobs { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.job { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 2px 12px;
+.job { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px;
   padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
   box-shadow: var(--shadow); scroll-margin-top: 16px; }
-.job .line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-height: 32px; margin: 0;
-  padding-top: 5px; overflow-wrap: anywhere; }
+.job .line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 32px; margin: 0;
+  overflow-wrap: anywhere; }
 .job .song { font-weight: 650; }
-.says { color: var(--muted); font-size: .92rem; }
-.says.ready { color: var(--found); }
-.says.queued, .says.running, .says.waiting { color: var(--wanted); }
-.says.review { color: var(--review); }
-.says.failed { color: var(--failed); }
-.says a { font-weight: 600; }
-.output > summary { display: flex; align-items: center; min-height: 32px; color: var(--muted); font-size: .85rem;
+.job .ago { color: var(--muted); font-size: .88rem; }
+.says { padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 650; white-space: nowrap;
+  color: var(--ignored); background: var(--ignored-bg); }
+.says.ready, .says.removed, .says.done { color: var(--found); background: var(--found-bg); }
+.says.running, .says.added { color: var(--auto); background: var(--auto-bg); }
+.says.waiting, .says.missing { color: var(--wanted); background: var(--wanted-bg); }
+.says.review { color: var(--review); background: var(--review-bg); }
+.says.failed { color: var(--failed); background: var(--failed-bg); }
+.reason { margin: 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.next { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.next form { margin: 0; }
+.btn.act { min-height: 44px; }
+.when { color: var(--muted); font-size: .85rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.card.running { padding: 14px 16px; border-color: color-mix(in srgb, var(--auto) 45%, var(--border)); }
+.card.running .song { font-size: 1.15rem; }
+.progress { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; padding: 0; list-style: none; }
+.chip { flex: 1 1 auto; min-width: 4.5rem; padding: 5px 8px; border-radius: 8px; background: var(--raised);
+  color: var(--muted); font-size: .8rem; font-weight: 600; text-align: center; }
+.chip.done { color: var(--found); background: var(--found-bg); }
+.chip.running { color: var(--auto); background: var(--auto-bg); font-weight: 750;
+  box-shadow: inset 0 0 0 1px var(--auto); }
+.chip.failed { color: var(--failed); background: var(--failed-bg); }
+/* On a phone, a request's parts stack: its line, the reason, the steps; its next step with Output beside it. */
+.job .line, .reason, .progress, .waits, .output, .output[open] { grid-column: 1 / -1; }
+.job .next { grid-column: 1; }
+.job.over .output:not([open]), .job.queued .output:not([open]) { grid-column: 2; }
+@media (min-width: 640px) {
+  /* The song's line and the reason; beside them the next step, when it ended, and Output, which unfolds under
+     the whole request. */
+  .job { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .job .line .says { margin-left: auto; }  /* the outcome at the end of the song's line */
+  .job.over .line, .job.queued .line { grid-column: 1; grid-row: 1; }
+  .job.over .reason { grid-column: 1; grid-row: 2; }
+  .job .next { grid-column: 2; grid-row: 1 / span 2; justify-content: flex-end; }
+  .job.over .output:not([open]), .job.queued .output:not([open]) { grid-column: 3; grid-row: 1 / span 2; }
+  .output[open] { grid-row: 3; }
+  .card.running .line, .progress { grid-column: 1 / -1; }
+}
+.output > summary { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); font-size: .85rem;
   font-weight: 600; list-style: none; cursor: pointer; }
 .output > summary::-webkit-details-marker { display: none; }
 .output > summary::before { content: "›"; display: inline-block; width: 1em; font-size: 1.15rem; line-height: 1;
   text-align: center; }
 .output[open] > summary::before { transform: rotate(90deg); }
-.output[open] { grid-column: 1 / -1; }
 .meta { margin: 2px 0 8px; color: var(--muted); font-size: .85rem; }
 .steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .steps.stages { margin-bottom: 8px; }  /* a lookup's stages, above the one command that ran them */
@@ -84,9 +123,6 @@ pre { max-height: 22rem; margin: 6px 0 0; padding: 10px; overflow: auto; border-
 .confirm { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .btn.danger { min-height: 44px; background: var(--failed); border-color: var(--failed); color: var(--bg);
   font-weight: 650; }
-@media (pointer: coarse) {
-  .output > summary { min-height: 44px; }  /* a thumb's target, as BASE_STYLE's buttons are */
-}
 """
 
 # No script; forms post only to the server; nothing else loads. The one image is the page's icon, inline
@@ -192,15 +228,24 @@ def review_page(pick: Pick, csrf: str) -> str:
     return page("Pick the match", f'<div class="pick-page">{lede}{picker_form(pick, csrf, focus=True)}</div>')
 
 
-def jobs_page(jobs: list[Job], lines: Mapping[int, Line], *, opened: int | None = None,
-              refresh: bool = True, picks: Mapping[str, Pick] | None = None, csrf: str = "") -> str:
-    """Every request remembered, newest first, a line each (``lines``, by job id), with its commands'
-    output folded away, open for ``opened``; ``refresh``: reload while one is active.
+def jobs_page(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[int, Outcome] | None = None,
+              opened: int | None = None, refresh: bool = True, picks: Mapping[str, Pick] | None = None,
+              csrf: str = "", now: datetime | None = None) -> str:
+    """Every request remembered (``jobs``, newest first): now, the one that runs, as a card with its steps,
+    and those queued under it in order, each with Cancel; then the feed, the finished ones newest first
+    under Today and Earlier (by when each finished, in the server's local time zone), each with its
+    outcome (``outcomes``, by job id: outcome.py's, else read from its line in ``lines``), its reason,
+    when it finished and its next step. Every request keeps its commands' output folded away, open for
+    ``opened``; ``refresh``: reload while one is active; ``now``: the page's time (the clock's).
 
     ``picks`` holds the songs of finished requests that now wait for a pick, by song key: the newest
-    request of each shows its picker (``picker_form``, posting ``csrf``) under its line, or, while the
-    page reloads itself, which would undo a choice half made, a link to the picker's page.
+    request of each shows its picker (``picker_form``, posting ``csrf``) under its line while the page
+    stays still; while it reloads itself, which would undo a choice half made, its Pick the match is
+    the way to the picker's page.
     """
+    from caracole.web.outcome import outcome
+
+    now = now or datetime.now(UTC)
     waiting = any(job.active for job in jobs)
     kept = f"job={opened}&" if opened is not None else ""
     if not waiting:
@@ -218,37 +263,175 @@ def jobs_page(jobs: list[Job], lines: Mapping[int, Line], *, opened: int | None 
     )
     if not jobs:
         items = '<p class="empty">No requests yet. Request a song from <a href="/">the library</a>.</p>'
-    else:
-        waits = _waits(jobs, picks or {}, csrf, still=not (waiting and refresh))
-        picking = {job.id for job in jobs if job.id in waits and _waits_for_pick(job, (picks or {}).get(job.song_key))}
-        items = ('<ol class="jobs">\n' + "".join(_job(job, lines.get(job.id), opened=job.id == opened,
-                                                      waits=waits.get(job.id, ""), picking=job.id in picking)
-                                                 for job in jobs) + "</ol>")
+        return page("Requests", lede + items)
+    pending = _waiting_picks(jobs, picks or {})
+    waits = _waits(pending, csrf, still=not (waiting and refresh))
+    picking = {job_id for job_id, pick in pending.items()
+               if _waits_for_pick(next(job for job in jobs if job.id == job_id), pick)}
+
+    def output(job: Job) -> str:
+        return _output(job, opened=job.id == opened, picking=job.id in picking)
+
+    active = sorted((job for job in jobs if job.active), key=lambda job: (job.state != "running", job.id))
+    queued = [job for job in active if job.state == "queued"]
+    now_items = [
+        _running(job, lines.get(job.id), now, output(job)) if job.state == "running"
+        else _queued(job, queued.index(job) + 1, csrf, output(job)) for job in active]
+    over = sorted((job for job in jobs if not job.active),
+                  key=lambda job: (job.finished_at or job.queued_at, job.id), reverse=True)
+    today = now.astimezone().date()
+    groups: dict[str, list[str]] = {"Today": [], "Earlier": []}
+    for job in over:
+        said = (outcomes or {}).get(job.id)
+        if said is None:
+            line = lines.get(job.id)
+            said = outcome(job, line) if line is not None else None
+        ended = (job.finished_at or job.queued_at).astimezone()
+        group = "Today" if ended.date() == today else "Earlier"
+        shown_below = waits.get(job.id, "")
+        if said is not None and pending.get(job.id) is not None and pending[job.id].search and _leads(
+                said, f"/review?song={pending[job.id].song_id}"):
+            shown_below = ""  # what caracole search finds is its next step already, in its row
+        groups[group].append(_finished(job, said, ended, csrf, output(job), shown_below, day=group != "Today"))
+    sections = []
+    if now_items:
+        sections.append(_section("now", "Now", now_items))
+    sections += [_section(name.lower(), name, shown) for name, shown in groups.items() if shown]
     head = f'<meta http-equiv="refresh" content="{REFRESH}">\n' if waiting and refresh else ""
-    return page("Requests", lede + items, head=head)
+    return page("Requests", lede + "\n".join(sections), head=head)
 
 
-def _waits(jobs: list[Job], picks: Mapping[str, Pick], csrf: str, *, still: bool) -> dict[int, str]:
-    """What the newest finished request of each song that waits for a pick shows under its steps."""
-    shown: dict[int, str] = {}
+def _section(slug: str, name: str, items: list[str]) -> str:
+    return (f'<section class="requests {slug}" aria-labelledby="h-{slug}"><h2 class="group" id="h-{slug}">'
+            f'{escape(name)}</h2>\n<ol class="jobs">\n{"".join(items)}</ol></section>')
+
+
+def _says(tone: str, text: str) -> str:
+    return f'<span class="says {escape(tone)}">{escape(text)}</span>'
+
+
+def _song(job: Job) -> str:
+    return f'<span class="song">{escape(job.display or job.title)}</span>'
+
+
+def _running(job: Job, line: Line | None, now: datetime, output: str) -> str:
+    """The request that runs: its song, how long ago it started, its line, and its steps (outcome.steps)."""
+    from caracole.web.outcome import steps
+
+    text = line.text if line is not None else _STATE_TEXT["running"]
+    ago = (f'<span class="ago">started {_ago(job.started_at, now)}</span>' if job.started_at is not None else "")
+    chips = []
+    for chip in steps(job):
+        mark = {"done": "✓ ", "failed": "✕ "}.get(chip.state, "")
+        current = ' aria-current="step"' if chip.state == "running" else ""
+        state = f'<span class="visually-hidden">: {escape(_STATE_TEXT.get(chip.state, chip.state).lower())}</span>'
+        chips.append(f'<li class="chip {escape(chip.state)}"{current}><span aria-hidden="true">{mark}</span>'
+                     f"{escape(chip.name)}{state}</li>")
+    progress = f'<ol class="progress" aria-label="Steps">{"".join(chips)}</ol>' if chips else ""
+    return (f'<li class="job card running" id="job-{job.id}"><p class="line">{_song(job)}{ago}'
+            f'{_says("running", text)}</p>{progress}{output}</li>\n')
+
+
+def _queued(job: Job, place: int, csrf: str, output: str) -> str:
+    """A request that waits: its song, its place ("next", "3rd") and Cancel, which takes it out of the queue."""
+    cancel = _form("/jobs/cancel", (("job", str(job.id)),), "Cancel", csrf,
+                   aria=f"Cancel the request for {job.display or job.title}")
+    return (f'<li class="job card queued" id="job-{job.id}"><p class="line">{_song(job)}'
+            f'{_says("queued", f"Queued, {_ordinal(place)}")}</p><div class="next">{cancel}</div>{output}</li>\n')
+
+
+# The next steps that are the request's way on; the others (Try again, Request by name…) are plain buttons.
+_PRIMARY = frozenset({"Open", "Pick the match", "Get it from there", "Open songbook", "See what caracole search finds"})
+
+
+def _leads(said: Outcome, href: str) -> bool:
+    """Whether an outcome's next step, or the one beside it, is a link to ``href``."""
+    return any(a is not None and a.href == href for a in (said.action, said.also))
+
+
+def _finished(job: Job, said: Outcome | None, ended: datetime, csrf: str, output: str, waits: str, *,
+              day: bool) -> str:
+    """A finished request: its song and outcome, the reason, its next step and when it finished (with its day
+    for one before today)."""
+    if said is None:
+        said_html, reason, action = _says(job.state, _STATE_TEXT.get(job.state, job.state)), "", ""
+    else:
+        said_html = _says(said.tone, said.word)
+        reason = f'<p class="reason">{escape(said.reason)}</p>' if said.reason else ""
+        action = _action(said.action, csrf) + _action(said.also, csrf, primary=False)
+    shown = f"{ended.day} {ended:%b}, {ended:%H:%M}" if day else f"{ended:%H:%M}"
+    when = f'<time class="when" datetime="{stamp(ended)}">{escape(shown)}</time>'
+    return (f'<li class="job over {escape(job.state)}" id="job-{job.id}"><p class="line">{_song(job)}{said_html}'
+            f'</p>{reason}<div class="next">{action}{when}</div>{output}{waits}</li>\n')
+
+
+def _action(a: Action | None, csrf: str, *, primary: bool = True) -> str:
+    """A next step: a link, or a one-button form posted with the form token; "" for none. ``primary``: drawn as
+    the request's way on when it is one (``_PRIMARY``); the one beside it is a plain button."""
+    if a is None:
+        return ""
+    cls = "btn act primary" if primary and a.label in _PRIMARY else "btn act"
+    if a.post is not None:
+        return _form(a.post, a.fields, a.label, csrf, cls=cls)
+    if a.href is not None:
+        return f'<a class="{cls}" href="{escape(a.href, quote=True)}">{escape(a.label)}</a>'
+    return ""
+
+
+def _form(action: str, fields: Sequence[tuple[str, str]], label: str, csrf: str, *, cls: str = "btn act",
+          aria: str = "") -> str:
+    """A one-button form posted with the form token; ``aria``: the button's name for a screen reader."""
+    hidden = "".join(f'<input type="hidden" name="{escape(name, quote=True)}" value="{escape(value, quote=True)}">'
+                     for name, value in (("csrf", csrf), *fields))
+    named = f' aria-label="{escape(aria, quote=True)}"' if aria else ""
+    return (f'<form class="act-form" method="post" action="{escape(action, quote=True)}">{hidden}'
+            f'<button class="{escape(cls, quote=True)}" type="submit"{named}>{escape(label)}</button></form>')
+
+
+def _ago(then: datetime, now: datetime) -> str:
+    seconds = max(0, int((now - then).total_seconds()))
+    if seconds < 60:
+        return f"{seconds} s ago"
+    if seconds < 3600:
+        return f"{seconds // 60} min ago"
+    return f"{seconds // 3600} h ago"
+
+
+def _ordinal(n: int) -> str:
+    """A queued request's place: "next", then "2nd", "3rd", "4th"…"""
+    if n <= 1:
+        return "next"
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def _waiting_picks(jobs: list[Job], picks: Mapping[str, Pick]) -> dict[int, Pick]:
+    """The newest finished request of each song that waits for a pick now, and its song's pick."""
+    pending: dict[int, Pick] = {}
     seen: set[str] = set()
     for job in jobs:  # newest first
         if job.song_key in seen:
             continue
         seen.add(job.song_key)
         pick = picks.get(job.song_key)
-        if job.active or pick is None:
-            continue
+        if not job.active and pick is not None:
+            pending[job.id] = pick
+    return pending
+
+
+def _waits(pending: Mapping[int, Pick], csrf: str, *, still: bool) -> dict[int, str]:
+    """What those requests show under their line: for a song the index didn't match, the way to what caracole
+    search finds for it; for a song in review, its picker while the page stays still (its Pick the match
+    leads to the picker's page otherwise, as a reload would undo a choice half made)."""
+    shown: dict[int, str] = {}
+    for job_id, pick in pending.items():
         if pick.search:  # a search costs a moment: the picker's page runs it
-            head = "<p>Not in the offline Ultimate Guitar index under this name.</p>"
-            body = (f'<p><a class="btn primary" href="/review?song={pick.song_id}">See what caracole search '
-                    "finds</a></p>")
-        else:
+            shown[job_id] = (f'<div class="waits"><p><a class="btn act" href="/review?song={pick.song_id}">See what '
+                             "caracole search finds</a></p></div>")
+        elif still:
             head = (f"<p>caracole isn't sure which Ultimate Guitar song it is: "
                     f"{len(pick.choices)} candidate{'s' if len(pick.choices) != 1 else ''}.</p>")
-            body = (picker_form(pick, csrf) if still else
-                    f'<p><a class="btn primary" href="/review?song={pick.song_id}">Pick the match</a></p>')
-        shown[job.id] = f'<div class="waits">{head}{body}</div>'
+            shown[job_id] = f'<div class="waits">{head}{picker_form(pick, csrf)}</div>'
     return shown
 
 
@@ -277,22 +460,11 @@ def _badge(state: str, text: str | None = None) -> str:
     return f'<span class="badge {escape(state)}">{escape(text or _STATE_TEXT.get(state, state))}</span>'
 
 
-def _says(line: Line | None, job: Job) -> str:
-    """The request's line, as its card says it."""
-    if line is None:
-        return f'<span class="says">{escape(_STATE_TEXT.get(job.state, job.state))}</span>'
-    link = ""
-    if line.link is not None:
-        label, href = line.link
-        link = f' · <a href="{escape(href, quote=True)}">{escape(label)}</a>'
-    return f'<span class="says {escape(line.tone)}">{escape(line.text)}{link}</span>'
-
-
-def _job(job: Job, line: Line | None, *, opened: bool = False, waits: str = "", picking: bool = False) -> str:
-    """One line: the song and how its request goes; under it, folded, what each command printed, and, in
-    ``waits``, its song's picker. ``picking``: it stopped only because the song needs a pick first
+def _output(job: Job, *, opened: bool = False, picking: bool = False) -> str:
+    """What the request ran, folded away under Output: when it was asked for, a lookup's stages, and each
+    command with what it printed. ``picking``: it stopped only because the song needs a pick first
     (``_waits_for_pick``), so its fetch waits for one rather than failed."""
-    meta = f"{escape(job.title)} · requested {shown(job.queued_at, "")}"
+    meta = f"{escape(job.title)} · requested {shown(job.queued_at, "", local=True)}"
     if job.note:
         meta += f" · {escape(job.note)}"
     if job.seconds_to_sheet is not None:
@@ -302,12 +474,8 @@ def _job(job: Job, line: Line | None, *, opened: bool = False, waits: str = "", 
         stages = '<ol class="steps stages">' + "".join(
             _stage(s, picking=picking and s.name == "sheet" and s.state == "skipped") for s in job.stages) + "</ol>"
     steps = "".join(_step(step, picking=picking and step.state == "failed") for step in job.steps)
-    return (
-        f'<li class="job" id="job-{job.id}">'
-        f'<p class="line"><span class="song">{escape(job.display or job.title)}</span>{_says(line, job)}</p>'
-        f'<details class="output"{" open" if opened else ""}><summary>Output</summary>'
-        f'<p class="meta">{meta}</p>{stages}<ol class="steps">{steps}</ol></details>{waits}</li>\n'
-    )
+    return (f'<details class="output"{" open" if opened else ""}><summary>Output</summary>'
+            f'<p class="meta">{meta}</p>{stages}<ol class="steps">{steps}</ol></details>')
 
 
 def _stage(stage: Stage, *, picking: bool = False) -> str:

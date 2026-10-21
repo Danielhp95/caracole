@@ -1,0 +1,310 @@
+"""caracole/web/outcome.py: what the requests page says of a request, the running one's steps and how a
+finished one ended, with the next step to take."""
+
+from datetime import UTC, datetime
+
+from caracole.get import NOT_IN_INDEX, STAGES
+from caracole.songs import get_song, update_song
+from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, Stage, Step, lookup_steps, remove_steps
+from caracole.web.outcome import Action, Chip, Outcome, elsewhere, outcome, steps
+from caracole.web.status import SongFacts, job_line
+
+from conftest import add_song
+
+
+def lookup(state="running", stages=None, *, args=None, job_id=4, display="Muse - Hysteria"):
+    """A lookup, its stages in ``stages`` (name -> (state, detail)), the others waiting."""
+    made = [Step(label, tuple(a)) for label, a in lookup_steps(*display.split(" - "))] if args is None else [
+        Step("Look it up now", tuple(args))]
+    said = stages or {}
+    job = Job(job_id, f"Fetch {display}", display.lower().replace(" - ", "/"), made, fetching=True,
+              display=display, state=state,
+              stages=[Stage(name, label, *said.get(name, ("waiting", ""))) for name, label in STAGES])
+    if state != "running":
+        made[0].state = "done" if state == "done" else "failed"
+    return job
+
+
+def ended(stages, state="done", **kw):
+    """A lookup that is over: every stage not named done, unless named."""
+    every = {name: ("done", "") for name, _ in STAGES} | stages
+    return lookup(state, every, **kw)
+
+
+# --- the running request's steps ---------------------------------------------------------------------
+
+
+def test_a_lookup_in_progress_shows_its_stages_as_steps_in_plain_words():
+    job = lookup(stages={"song": ("done", "in the library"), "match": ("done", "matched to muse/hysteria"),
+                         "sheet": ("done", "tab 1 from Ultimate Guitar"), "pdf": ("running", "")})
+    assert steps(job) == [Chip("Song", "done"), Chip("Match", "done"), Chip("Sheet", "done"), Chip("PDF", "running"),
+                          Chip("Lyrics", "waiting"), Chip("Guitar Pro", "waiting"), Chip("Songbooks", "waiting")]
+    # Ultimate Guitar's second pass, LaCuerda's and gtptabs.com's are one step, running from the first to the last.
+    later = lookup(stages={name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug")}
+                   | {"lacuerda": ("running", "")})
+    assert Chip("Guitar Pro", "running") in steps(later) and Chip("Lyrics", "done") in steps(later)
+
+
+def test_a_step_the_request_doesnt_use_is_not_drawn():
+    # Its songbooks left to a later job (Get the missing songs): no Songbooks step.
+    job = lookup(args=lookup_steps("Muse", "Hysteria", songbooks=False)[0][1])
+    assert [c.name for c in steps(job)] == ["Song", "Match", "Sheet", "PDF", "Lyrics", "Guitar Pro"]
+    # A stage that ended with nothing to do for this song: no sheet, so no PDF; no songbook lists it.
+    skipped = lookup(stages={"song": ("done", ""), "match": ("done", "not in the offline Ultimate Guitar index"),
+                             "sheet": ("skipped", "the offline index doesn't have it"), "pdf": ("skipped", "no sheet yet"),
+                             "lyrics": ("running", "")})
+    assert [c.name for c in steps(skipped)] == ["Song", "Match", "Lyrics", "Guitar Pro", "Songbooks"]
+    # A failed stage stays, as failed.
+    failed = lookup(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("done", ""),
+                            "pdf": ("failed", "chordpro couldn't make the PDF; the log says why"),
+                            "lyrics": ("running", "")})
+    assert Chip("PDF", "failed") in steps(failed)
+
+
+def test_a_request_of_other_commands_shows_its_job_steps_the_same_way():
+    job = Job(2, "Pick muse/hysteria for Muse - Hysteria, and fetch it", "muse/hysteria", [
+        Step("Writing the answer to overrides.toml", ("review", "--song=Muse - Hysteria", "--pick=muse/hysteria"),
+             state="done"),
+        Step("Fetching from Ultimate Guitar", ("fetch", "--song=Muse - Hysteria"), state="running"),
+        Step("Rendering the sheet", ("render", "--song=Muse - Hysteria"))], state="running")
+    assert steps(job) == [Chip("Your pick", "done"), Chip("Sheet", "running"), Chip("PDF", "waiting")]
+    # A command it doesn't name is shown by its label.
+    other = Job(3, "x", "x", [Step("Reading LaCuerda's page for Caifanes", ("lacuerda", "--artist=caifanes"),
+                                   state="running")], state="running")
+    assert steps(other) == [Chip("LaCuerda", "running")]
+    odd = Job(5, "x", "x", [Step("Doing something new", ("frobnicate",), state="running")], state="running")
+    assert steps(odd) == [Chip("Doing something new", "running")]
+
+
+# --- how a finished request ended, and what to do next -------------------------------------------------
+
+
+def said(job, facts=None, *, song_id=None, songbook_page=None):
+    return outcome(job, job_line(job, facts, songbook_page=songbook_page), facts, song_id=song_id)
+
+
+def test_ready_opens_its_sheet():
+    facts = SongFacts(sheet="Muse/Hysteria/sheet.html")
+    assert said(ended({}), facts, song_id=1) == Outcome(
+        "ready", "Ready", "", Action("Open", href="/Muse/Hysteria/sheet.html"))
+
+
+def test_ready_says_what_waits_for_tonights_run_in_the_stages_words():
+    lrclib = ended({"lyrics": ("failed", "LRCLIB failed (lrclib: 503: https://lrclib.net/api/get?x=1: HTTP 503); "
+                                         "the nightly run tries again")})
+    facts = SongFacts(sheet="Radiohead/Creep/sheet.html")
+    assert said(lrclib, facts).reason == "LRCLIB answered 503: the lyrics wait for tonight's run."
+    timeout = ended({"lyrics": ("failed", "LRCLIB failed (lrclib: https://lrclib.net/api/get: timed out); "
+                                          "the nightly run tries again")})
+    assert said(timeout, facts).reason == "LRCLIB failed: the lyrics wait for tonight's run."
+    spent = ended({"gtptabs": ("skipped", "the lookup's 6 requests to gtptabs.com are spent; the nightly run does "
+                                          "the rest")})
+    assert said(spent, facts).reason == ("The lookup's 6 requests to gtptabs.com are spent: the Guitar Pro file "
+                                         "waits for tonight's run.")
+    blocked = ended({"ug": ("skipped", "Ultimate Guitar blocked caracole (ug: 429: https://x: HTTP 429): no more "
+                                       "requests to it until 2026-10-22 18:00 UTC. Nothing was marked not found.")})
+    assert said(blocked, facts).reason == ("Ultimate Guitar blocked caracole: its other versions and guitar parts "
+                                           "wait until 2026-10-22 18:00 UTC.")
+    cooling = ended({"lyrics": ("skipped", "LRCLIB is cooling down after a block, until 2026-10-22 18:00 UTC")})
+    assert said(cooling, facts).reason == ("LRCLIB is cooling down after a block: the lyrics wait until "
+                                           "2026-10-22 18:00 UTC.")
+    # Nothing to say of a site turned off, or of a stage that had nothing to do.
+    quiet = ended({"gtptabs": ("skipped", "gtptabs.com is off in caracole.toml"),
+                   "songbooks": ("skipped", "no songbook lists it")})
+    assert said(quiet, facts).reason == ""
+
+
+def test_needs_review_picks_the_match():
+    facts = SongFacts(review=True, picker="review?song=7")
+    job = ended({"sheet": ("skipped", "caracole isn't sure which Ultimate Guitar song this is")})
+    assert said(job, facts, song_id=7) == Outcome(
+        "review", "Needs review", "caracole isn't sure which Ultimate Guitar song it is.",
+        Action("Pick the match", href="/review?song=7"))
+    # Without candidates to pick from, its line on the library page, where caracole review's answers are.
+    bare = said(job, SongFacts(review=True), song_id=7)
+    assert bare.action == Action("Open in the library", href="/#song=7")
+
+
+SEARCH = Action("See what caracole search finds", href="/review?song=3")
+
+
+def test_not_found_says_ultimate_guitar_has_no_chords_only_once_it_was_asked():
+    # The offline index didn't match the name, and UG couldn't be asked: whether UG has chords, nobody knows.
+    # What caracole search finds for it is the way on, the one next step.
+    job = ended({"sheet": ("skipped", NOT_IN_INDEX)}, display="Horse The Band - Crippled By Pizza")
+    unmatched = SongFacts(not_found=True, checked_now=True)
+    assert said(job, unmatched, song_id=3) == Outcome(
+        "missing", "Not found", "Not in the offline Ultimate Guitar index under this name.", SEARCH)
+    # Its artist's UG page was read for it, with no chords there: UG was asked, and the index still lacks it.
+    read = SongFacts(not_found=True, checked_now=True, asked_ug=True)
+    assert said(job, read, song_id=3) == Outcome("missing", "Not found", "Ultimate Guitar has no chords for it.",
+                                                 SEARCH)
+    # A song the index matched, whose UG page had no sheet to keep: requested by name.
+    matched = ended({"sheet": ("skipped", "Ultimate Guitar has no sheet to keep")},
+                    display="Horse The Band - Crippled By Pizza")
+    assert said(matched, SongFacts(checked_now=True, asked_ug=True), song_id=3) == Outcome(
+        "missing", "Not found", "Ultimate Guitar has no chords for it.",
+        Action("Request by name", href="/#q=Horse+The+Band+-+Crippled+By+Pizza"))
+    # A fetch of commands that refused the song as not in the index (it failed): not asked either.
+    fetch = Job(9, "Fetch Horse The Band - Crippled By Pizza", "horse-the-band/crippled-by-pizza",
+                [Step("Fetching from Ultimate Guitar", ("fetch", "--song=Horse The Band - Crippled By Pizza"),
+                      state="failed")], fetching=True, state="failed")
+    assert said(fetch, SongFacts(not_found=True), song_id=3).reason == (
+        "Not in the offline Ultimate Guitar index under this name.")
+
+
+def test_not_found_with_something_elsewhere_gets_it_from_there():
+    job = ended({"sheet": ("skipped", "Ultimate Guitar has no sheet to keep")})
+    gtp = SongFacts(checked_now=True, asked_ug=True, elsewhere=("gtptabs", "https://gtptabs.com/tabs/x.html"))
+    assert said(job, gtp, song_id=3) == Outcome(
+        "missing", "Not found", "Ultimate Guitar has no chords for it; gtptabs.com's index lists a page for it.",
+        Action("Get it from there", post="/lookup", fields=(("song", "3"), ("then", "jobs"))))
+    # A song the index didn't match: LaCuerda's sheet first, and what caracole search finds beside it.
+    unmatched = ended({"sheet": ("skipped", NOT_IN_INDEX)})
+    lc = SongFacts(not_found=True, checked_now=True,
+                   elsewhere=("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))
+    assert said(unmatched, lc, song_id=3) == Outcome(
+        "missing", "Not found", "Not in the offline Ultimate Guitar index under this name; LaCuerda has a sheet.",
+        Action("Get it from there", post="/lookup", fields=(
+            ("song", "3"), ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"), ("then", "jobs"))),
+        also=SEARCH)
+    # A Guitar Pro file the lookup itself downloaded is in the library already: the song's line has it.
+    got = ended({"sheet": ("skipped", ""), "gtptabs": ("done", "Guitar Pro file downloaded")})
+    assert said(got, SongFacts(checked_now=True, asked_ug=True), song_id=3) == Outcome(
+        "missing", "Not found", "Ultimate Guitar has no chords for it; caracole got a Guitar Pro file from "
+                                "gtptabs.com.", Action("Open in the library", href="/#song=3"))
+    assert said(got, SongFacts(not_found=True, checked_now=True), song_id=3) == Outcome(
+        "missing", "Not found", "Not in the offline Ultimate Guitar index under this name; caracole got a Guitar "
+                                "Pro file from gtptabs.com.", Action("Open in the library", href="/#song=3"),
+        also=SEARCH)
+
+
+def test_failed_and_not_fetched_yet_try_again():
+    failed = ended({"song": ("failed", "overrides.toml can't be read: line 3")}, state="failed")
+    assert said(failed) == Outcome("failed", "Failed", "overrides.toml can't be read: line 3.",
+                                   Action("Try again", post="/jobs/again", fields=(("job", "4"),)))
+    # Not fetched yet says why, from its stages: a wait is never a miss.
+    waits = ended({"sheet": ("skipped", "this hour's 60 lookup requests to Ultimate Guitar are spent; the nightly "
+                                        "run does the rest"), "pdf": ("skipped", "no sheet yet")})
+    assert said(waits, SongFacts()) == Outcome(
+        "waiting", "Not fetched yet", "This hour's 60 lookup requests to Ultimate Guitar are spent: the sheet waits "
+                                      "for tonight's run.",
+        Action("Try again", post="/jobs/again", fields=(("job", "4"),)))
+    # A fetch of commands, which has no stages: its output says which.
+    fetch = Job(9, "Fetch Radiohead - Creep", "radiohead/creep",
+                [Step("Fetching from Ultimate Guitar", ("fetch", "--song=Radiohead - Creep"), state="done")],
+                fetching=True, state="done")
+    assert said(fetch, SongFacts()).reason == ("caracole didn't ask Ultimate Guitar this time (a cooldown, a block, "
+                                               "a spent budget or an error: the output says which).")
+
+
+def test_a_failed_removal_tries_again_through_its_question_never_straight_to_remove():
+    removal = Job(7, "Remove Radiohead - Creep", REMOVING + "radiohead/creep",
+                  [Step(label, args, state="failed") for label, args in remove_steps("Radiohead - Creep")],
+                  state="failed", song_id=12)
+    # What goes is asked again (POST /remove without confirm: removal.plan_removal, as of now).
+    assert said(removal).action == Action("Try again", post="/remove", fields=(("song", "12"),))
+    unknown = Job(8, "Remove X - Y", REMOVING + "x/y", [Step("Removing", ("remove", "--yes"), state="failed")],
+                  state="failed")
+    assert said(unknown).action is None
+
+
+def test_a_songbook_made_opens_it_and_a_deletion_and_a_removal_say_so():
+    from caracole.web.songbooks import KEY
+
+    made = Job(5, "Make the songbook Campfire", f"{KEY}songbook\x1fmake\x1f--\x1fCampfire", [
+        Step("Making the songbook", ("songbook", "make", "--", "Campfire"), state="done")], state="done")
+    page = "_songbooks/Campfire/songbook.html"
+    assert said(made, songbook_page=page) == Outcome("ready", "Made", "",
+                                                     Action("Open songbook", href="/" + page))
+    gone = Job(6, 'Delete the songbook "test"', f"{KEY}songbook\x1fdelete\x1f--\x1ftest", [
+        Step("Deleting the songbook", ("songbook", "delete", "--", "test"), state="done")], state="done")
+    assert said(gone) == Outcome("removed", "Deleted")
+    removal = Job(7, "Remove Radiohead - Creep", REMOVING + "radiohead/creep",
+                  [Step(label, args, state="done") for label, args in remove_steps("Radiohead - Creep")], state="done")
+    assert said(removal) == Outcome("removed", "Removed")
+
+
+def test_an_add_and_a_lacuerda_read_say_their_line_as_a_word_and_a_sentence():
+    add = Job(8, "Add Radiohead - Creep", "radiohead/creep", [Step("Adding to the library", ("add",), state="done")],
+              state="done")
+    assert said(add, SongFacts()) == Outcome("added", "Added", "The nightly run looks for it.")
+    read = Job(9, "Read the page of Caifanes on LaCuerda", LACUERDA_ARTIST + "caifanes",
+               [Step("Reading", ("lacuerda", "--artist=caifanes"), state="done",
+                     output=["Not read: LaCuerda failed (lacuerda: 503: x); the nightly run tries again"])],
+               state="done")
+    assert said(read) == Outcome("waiting", "Not read", "LaCuerda failed.",
+                                 Action("Try again", post="/jobs/again", fields=(("job", "9"),)))
+
+
+# --- what the library's indexes have elsewhere, for a song not found ---------------------------------------
+
+
+NOW = datetime(2026, 10, 21, 12, tzinfo=UTC)
+
+
+def test_elsewhere_is_a_lacuerda_sheet_or_a_gtptabs_page_the_local_indexes_list(conn, cfg):
+    song = add_song(conn, "Estopa", "Como Camarón")
+    # A lookup that asked neither: LaCuerda didn't look like the song's, gtptabs.com failed.
+    job = ended({"sheet": ("skipped", ""), "lacuerda": ("skipped", "not a song for LaCuerda: not Spanish"),
+                 "gtptabs": ("failed", "gtptabs.com failed (gtptabs: 500: x); the nightly run tries again")},
+                display="Estopa - Como Camarón")
+    assert elsewhere(conn, cfg, song, job, NOW) is None
+    conn.execute("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) VALUES "
+                 "('tabs/e/estopa/como-camaron.html', 'tabs/e/estopa.html', 'estopa', 'como-camaron', 'como-camaron', "
+                 "'s1')")
+    page = elsewhere(conn, cfg, song, job, NOW)
+    assert page is not None and page[0] == "gtptabs" and page[1].endswith("/tabs/e/estopa/como-camaron.html")
+    # LaCuerda's sheet comes first: chords, where gtptabs.com has a Guitar Pro file.
+    conn.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, title, title_key, versions, "
+                 "acordes, page) VALUES ('estopa/como_camaron', 'estopa', 'Estopa', 'estopa', 'Como Camarón', "
+                 "'como-camaron', 'lcd', 2, 'e')")
+    assert elsewhere(conn, cfg, song, job, NOW) == (
+        "lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron-2.shtml")
+    # A site the lookup asked already answered: no.
+    asked = ended({"sheet": ("skipped", ""), "lacuerda": ("done", "not on LaCuerda"),
+                   "gtptabs": ("done", "no file there")}, display="Estopa - Como Camarón")
+    assert elsewhere(conn, cfg, song, asked, NOW) is None
+    # gtptabs.com looked up for the song this month: not again.
+    from caracole.db import kv_set
+    from caracole.gtptabs_fetch import CHECKED_PREFIX
+
+    conn.execute("DELETE FROM lacuerda_index")
+    kv_set(conn, f"{CHECKED_PREFIX}{song.id}", "2026-10-20T00:00:00Z")
+    assert elsewhere(conn, cfg, song, job, NOW) is None
+    update_song(conn, song.id, status="ignored")
+    assert elsewhere(conn, cfg, song, job, NOW) is None
+
+
+def test_elsewhere_offers_no_site_the_new_lookup_would_skip_again(conn, cfg):
+    from caracole.health import record_block
+
+    song = add_song(conn, "Estopa", "Como Camarón")
+    conn.execute("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) VALUES "
+                 "('tabs/e/estopa/como-camaron.html', 'tabs/e/estopa.html', 'estopa', 'como-camaron', 'como-camaron', "
+                 "'s1')")
+    conn.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, title, title_key, versions, "
+                 "acordes, page) VALUES ('estopa/como_camaron', 'estopa', 'Estopa', 'estopa', 'Como Camarón', "
+                 "'como-camaron', 'lcd', 1, 'e')")
+    job = ended({"sheet": ("skipped", ""), "lacuerda": ("skipped", ""), "gtptabs": ("skipped", "")},
+                display="Estopa - Como Camarón")
+    assert elsewhere(conn, cfg, song, job, NOW)[0] == "lacuerda"
+    # LaCuerda asked about the song this month: a lookup skips it until the month is over.
+    update_song(conn, song.id, lacuerda_checked_at="2026-10-01T00:00:00Z")
+    song = get_song(conn, song.id)
+    assert elsewhere(conn, cfg, song, job, NOW)[0] == "gtptabs"
+    update_song(conn, song.id, lacuerda_checked_at="2026-09-01T00:00:00Z")
+    song = get_song(conn, song.id)
+    assert elsewhere(conn, cfg, song, job, NOW)[0] == "lacuerda"
+    # A site that cools down after a block: the lookup would skip it again.
+    record_block(conn, "lacuerda", NOW, "lacuerda: 403")
+    assert elsewhere(conn, cfg, song, job, NOW)[0] == "gtptabs"
+    record_block(conn, "gtptabs", NOW, "gtptabs: 403")
+    assert elsewhere(conn, cfg, song, job, NOW) is None
+    # A stage skipped for a spent budget or a block: not offered either, whatever the cooldowns say now.
+    conn.execute("DELETE FROM kv WHERE key LIKE 'provider:%'")
+    spent = ended({"sheet": ("skipped", ""),
+                   "lacuerda": ("skipped", "the lookup's 6 requests to LaCuerda are spent; the nightly run does the rest"),
+                   "gtptabs": ("skipped", "gtptabs.com blocked caracole (gtptabs: 429: x): no more requests to it "
+                                          "until 2026-10-22 18:00 UTC.")}, display="Estopa - Como Camarón")
+    assert elsewhere(conn, cfg, song, spent, NOW) is None

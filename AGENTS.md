@@ -66,7 +66,7 @@ Shared by the steps and the commands:
 | library.py | song folders, safe file access in the synced library |
 | notify.py | ntfy |
 | site_index.py | a site's sitemaps into a table, resumed across runs |
-| stamps.py | how caracole stores a time (ISO 8601 UTC to the second, a naive time is UTC) and shows one (`shown`); a stored time missing or unreadable is older than any (`before`); the standard library alone |
+| stamps.py | how caracole stores a time (ISO 8601 UTC to the second, a naive time is UTC) and shows one (`shown`, in UTC; `local=True`, the requests page's, in the server's zone, named); a stored time missing or unreadable is older than any (`before`); the standard library alone |
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
 | keys.py | a song's musical key and where it came from |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
@@ -168,7 +168,13 @@ Rules a change there keeps (the Invariants below are the others):
   cross-origin check and carries the form token. Beyond a wanted.txt line, every change runs as a
   `caracole` command queued in jobs.py (One caracole at a time, below). The one line a request
   shows is status.py's, read from the job's steps and the song's state, never from which commands
-  ran: a step's label is that line while it runs ("Adding to the library…").
+  ran: a step's label is that line while it runs ("Adding to the library…"). The requests page
+  (/jobs) says that line its own way (outcome.py), and the library page's lines never read it: the
+  running request's steps, a finished one's outcome, a reason from its stages and its song's state
+  (never made up: Not found says Ultimate Guitar has no chords only once the fetch asked it,
+  `SongFacts.asked_ug`), and its next step; Cancel takes a request that hasn't started out of the
+  queue (`JobQueue.cancel`, never one that runs, with the jobs `submit_all` queued `together` with
+  it), and Try again queues a finished one's steps again (a removal's asks its question again).
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.

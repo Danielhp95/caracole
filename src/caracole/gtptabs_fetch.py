@@ -259,6 +259,28 @@ def songs_with_a_guitar_file(conn: sqlite3.Connection) -> set[int]:
     )}
 
 
+def title_page(conn: sqlite3.Connection, song: Song, now: datetime) -> str | None:
+    """The gtptabs.com page whose sitemaps list the song's title under one of its artists, for a song a pass
+    would look up there now: no Guitar Pro or Power Tab file, and not looked up on gtptabs.com in the last 30
+    days; None otherwise. It reads the index alone, for the requests page, which offers it for a song Ultimate
+    Guitar has no chords for (web/outcome.py)."""
+    marks = ",".join("?" for _ in GUITAR_FILE_KINDS)
+    if conn.execute(f"SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id WHERE f.song_id = ? "
+                    f"AND v.kind IN ({marks}) LIMIT 1", (song.id, *GUITAR_FILE_KINDS)).fetchone() is not None:
+        return None
+    if not stamps.before(kv_get(conn, f"{CHECKED_PREFIX}{song.id}"), now - RECHECK_AFTER):
+        return None
+    keys = list(dict.fromkeys(key for name in song.artists or [song.artist] for key in artist_keys(name)))
+    title = title_key(song.title)
+    if not keys or not title:
+        return None
+    row = conn.execute(
+        f"SELECT path FROM gtptabs_index WHERE artist_key IN ({','.join('?' for _ in keys)}) "
+        "AND (title_key = ? OR base_key = ?) ORDER BY title_key != base_key, path LIMIT 1", (*keys, title, title),
+    ).fetchone()
+    return page_url(row[0]) if row is not None else None
+
+
 # --- one song --------------------------------------------------------------------------------------------
 
 

@@ -528,6 +528,22 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
     )
 
 
+def sheet_page(conn: sqlite3.Connection, artists: Sequence[str], title: str) -> str | None:
+    """The page of the best Letra y Acordes version the index holds of a song, by its artists' names (each of
+    their forms, ``name_forms``) and its title, compared by their keys: the sheet a lookup would keep with
+    ``--lacuerda``; None when the index holds none. It reads the table alone, for the requests page, which
+    offers it for a song Ultimate Guitar has no chords for (web/outcome.py)."""
+    keys = [k for k in dict.fromkeys(name_key(form) for name in artists for form in (name, *name_forms(name))) if k]
+    song = title_key(title)
+    if not keys or not song:
+        return None
+    row = conn.execute(
+        f"SELECT artist_slug, path, acordes FROM lacuerda_index WHERE artist_key IN ({', '.join('?' for _ in keys)}) "
+        "AND title_key = ? AND acordes > 0 ORDER BY popular IS NULL, popular, path LIMIT 1", (*keys, song),
+    ).fetchone()
+    return version_url(row[0], row[1].partition("/")[2], row[2]) if row is not None else None
+
+
 def artist_songs(conn: sqlite3.Connection, slug: str, *, limit: int | None = None,
                  acordes: bool = False) -> list[LaCuerdaHit]:
     """The songs the index holds of an artist, most popular first (LaCuerda's own order), then by

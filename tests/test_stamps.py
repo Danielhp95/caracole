@@ -1,4 +1,7 @@
+import time
 from datetime import UTC, datetime, timedelta, timezone
+
+import pytest
 
 from caracole import stamps
 
@@ -47,6 +50,22 @@ def test_shown_is_the_to_do_pages_time_in_utc():
     assert stamps.shown(datetime(2026, 10, 18, 5, 30, tzinfo=PLUS_TWO)) == "2026-10-18 03:30 UTC"
     assert stamps.shown(None) == "?"
     assert stamps.shown(None, "never") == "never"
+
+
+@pytest.fixture
+def five_hours_west(monkeypatch):
+    """The server's local time zone, five hours behind UTC and named EST (a POSIX rule: no zone files)."""
+    monkeypatch.setenv("TZ", "EST+05")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+def test_shown_local_is_the_requests_pages_time_in_the_servers_zone_named(five_hours_west):
+    assert stamps.shown(NAIVE, local=True) == "2026-10-17 22:30 EST"
+    assert stamps.shown(datetime(2026, 10, 18, 5, 30, tzinfo=PLUS_TWO), local=True) == "2026-10-17 22:30 EST"
+    assert stamps.shown(None, "", local=True) == ""
 
 
 def test_sources_stamp_is_this_one():
