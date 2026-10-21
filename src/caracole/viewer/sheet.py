@@ -75,7 +75,7 @@ _TOKEN = re.compile(r"\[([^\]]*)\]")
 _FRET = re.compile(r"[0-9]+")  # ASCII digits: str.isdigit takes "²", which int() refuses
 _CHORUS = re.compile(r"(?i)chorus|coro|estribillo|refr[aeá]i?n|副歌")
 _ESCAPED_BACKSLASH = "\\" + "u005c"
-_COMMENTS = {"comment", "c", "comment_italic", "ci", "comment_box", "cb", "highlight"}
+COMMENTS = {"comment", "c", "comment_italic", "ci", "comment_box", "cb", "highlight"}  # a section's name
 
 
 def parse_sheet(text: str) -> Sheet:
@@ -116,7 +116,7 @@ def parse_sheet(text: str) -> Sheet:
                 sheet.key = value or None
             elif name == "capo":
                 sheet.capo = int(value) if _FRET.fullmatch(value) and int(value) > 0 else None
-            elif name in _COMMENTS:
+            elif name in COMMENTS:
                 if value == AUTO_MARKER:
                     sheet.auto = True
                 else:
@@ -142,6 +142,13 @@ def parse_sheet(text: str) -> Sheet:
             s.lines.pop()
     sheet.sections = [s for s in sheet.sections if s.lines or s.label]
     return sheet
+
+
+def directive(line: str) -> tuple[str, str] | None:
+    """A directive line as ``parse_sheet`` reads it: its name in lower case and its value, its
+    escapes undone (``("comment", "Verse 1")`` for "{comment: Verse 1}"); None for any other line."""
+    d = _DIRECTIVE.fullmatch(line.replace(_ESCAPED_BACKSLASH, "\\"))
+    return None if d is None else (d.group(1).lower(), (d.group(2) or "").strip())
 
 
 def _line(line: str, chord) -> Line:

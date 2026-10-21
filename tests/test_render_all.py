@@ -27,6 +27,7 @@ from caracole.db import kv_get_json, kv_set_json
 from caracole.lacuerda import parse_version_page
 from caracole.library import drop_file, keep_file, song_dir, write_atomic, write_info
 from caracole.overrides import Overrides, load_overrides
+from caracole.pdf_text import PDF_TEXT_VERSION
 from caracole.render import STYLE_FILE, RenderStats, render_all, written_file
 from caracole.songs import get_song, update_song
 from caracole.ug.page import strip_markup
@@ -1187,9 +1188,56 @@ def test_render_record_says_what_the_pdf_was_made_from(conn, cfg, tmp_path):
         "font": str(font),
         "style": hashlib.sha256(STYLE_FILE.read_bytes()).hexdigest(),  # the look of the PDF
         "pdf": "sheet.pdf",
+        "pdf_text": PDF_TEXT_VERSION,  # how the PDF's own text was made from sheet.cho
         "pdf_sha256": hashlib.sha256(pdf).hexdigest(),  # what was written, to tell it is still there
         "pdf_size": len(pdf),
     }
+
+
+def test_the_pdf_is_made_from_its_own_text_and_sheet_cho_keeps_the_notes(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, "Made-up notes on how this version goes\r\n\r\n" + UG_SHEET)
+    render(conn, cfg)
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    printed = pdf_of(cfg, song).read_bytes().decode("utf-8")  # the fake prints the text it was given
+    assert "Made-up notes on how this version goes" in cho and "{columns" not in cho  # the viewer's
+    assert "Made-up notes" not in printed
+    assert "{key: Bm}\n{subtitle: Soda Stereo · Key Bm}\n{columns: 2}\n{comment: INTRO}\n" in printed
+
+
+def test_a_transposed_pdfs_key_line_names_the_key_its_chords_are_in(conn, cfg):
+    # chordpro moves the chords by [transpose]; the key line moves with them, as the viewer's does.
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, meta={"capo": 2})
+    render(conn, cfg, overrides(cfg, '[transpose]\n"Soda Stereo - De Música Ligera" = -2\n'))
+    printed = pdf_of(cfg, song).read_bytes().decode("utf-8")
+    assert "{subtitle: Soda Stereo · Am shapes · capo 2 · sounds Bm}" in printed.splitlines()
+
+
+def test_letters_only_the_notes_have_need_no_font(conn, cfg):
+    # The notes stay out of the PDF, and so do the letters they alone have.
+    assert cfg.cjk_font is None
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, "Notas: 这是一个合成的例子\r\n\r\n" + UG_SHEET)
+    stats = render(conn, cfg)
+    assert stats.rendered == 1 and stats.font_error is None
+    assert "这是一个" in (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    assert "这是一个".encode() not in pdf_of(cfg, song).read_bytes()
+
+
+def test_a_new_pdf_text_rerenders_every_pdf_once(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    key = f"render:{song.id}"
+    record = kv_get_json(conn, key)
+    kv_set_json(conn, key, {**record, "pdf_text": PDF_TEXT_VERSION - 1})
+    assert render(conn, cfg).rendered == 1
+    record = kv_get_json(conn, key)
+    del record["pdf_text"]  # a caracole that printed sheet.cho itself
+    kv_set_json(conn, key, record)
+    assert render(conn, cfg).rendered == 1
+    assert render(conn, cfg).skipped == 1
 
 
 def test_a_new_pdf_style_rerenders_every_pdf_once(conn, cfg):

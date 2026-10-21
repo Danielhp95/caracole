@@ -221,6 +221,13 @@ def _read_song(cho: str, key: str | None, key_source: str | None,
     return sheet, song_key, origin, _data(sheet, chords, song_key, origin, transpose)
 
 
+def viewer_key(cho: str, key: str | None = None) -> Key | None:
+    """The key of a ChordPro sheet's shapes as its page names it (``build_viewer`` given ``key``), for
+    what says the same beside the page: the PDF's key line (``key_line_text``)."""
+    sheet = parse_sheet(cho)
+    return _song_key(sheet, [parse_chord(name, strict=False) for name in sheet.chords], key, None)[0]
+
+
 def _song_key(sheet: Sheet, chords: list[Chord | None], key: str | None,
               source: str | None) -> tuple[Key | None, str | None]:
     """The key of the shapes the sheet's chords are, and where it came from in words. A key named
@@ -332,6 +339,17 @@ def _facts(key: Key | None, origin: str | None, capo: int) -> str:
         f"<b>{escape(key_name(key))}</b> shapes · capo <b>{capo}</b> · sounds <b>{escape(key_name(sounding(key, capo)))}</b>"
         + (f' · <span class="from">key {source}</span>' if source else "")
     )
+
+
+def key_line_text(key: Key | None, capo: int | None) -> str:
+    """The key line in words, as ``_facts`` writes it without its markup and where the key came from:
+    "Em shapes · capo 2 · sounds F#m", "Key Em", "Capo 2" for a sheet with no key, else ""."""
+    capo = capo or 0
+    if key is None:
+        return f"Capo {capo}" if capo else ""
+    if not capo:
+        return f"Key {key_name(key)}"
+    return f"{key_name(key)} shapes · capo {capo} · sounds {key_name(sounding(key, capo))}"
 
 
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None) -> str:
