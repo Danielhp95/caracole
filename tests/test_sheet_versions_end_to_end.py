@@ -278,6 +278,9 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
 
     queue.run_pending()
     assert runner.ran == [("versions", "--choose=103", "--progress", "--", "Radiohead", "Creep")]
+    # Its progress lines are the job's stages, a lookup's
+    stages = {stage.name: stage.state for stage in queue.job(1).stages}
+    assert (stages["song"], stages["sheet"], stages["pdf"]) == ("done", "done", "done"), stages
     browser.js("window.before = true")
     browser.js("location.reload()")
     assert browser.wait("!window.before && document.readyState === 'complete'")
@@ -301,3 +304,30 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
     assert get("/" + quote(f"{FOLDER}/version-103.html")).status == 404
     assert get("/" + quote(f"{FOLDER}/version-102.html")).status == 200
     assert get(f"/export?sheet={quote(FOLDER + '/version-102.html')}&t=2").status == 409
+
+    # Keep it, from the sheet's served page: the 4th version, fetched now and kept beside the sheet
+    browser.open(base + quote(f"{FOLDER}/sheet.html"))
+    assert browser.wait("document.querySelector('#ver-line').textContent !== ''")
+    browser.click("#ver-now")
+    assert browser.wait("!document.querySelector('#version-list').hidden")
+    assert browser.js(SWITCHER)["acts"] == [["Back to caracole's pick", f"/versions?sheet={quote(FOLDER + '/sheet.html', safe='')}"
+                                                                        "&do=clear"]]
+    browser.js("window.before = true")
+    browser.click("#ver-items > li:nth-child(4) .ver-acts a")
+    assert browser.wait("!window.before && location.pathname === '/versions' && document.forms.length === 1")
+    browser.js("window.before = true")
+    browser.click("form.confirm button[type=submit]")
+    assert browser.wait("!window.before && location.search.includes('job=')")
+    queue.run_pending()
+    assert runner.ran[-1] == ("versions", "--keep=104", "--progress", "--", "Radiohead", "Creep")
+    stages = {stage.name: stage.state for stage in queue.job(2).stages}
+    assert (stages["version"], stages["pdf"]) == ("done", "done"), stages
+    browser.js("window.before = true")
+    browser.js("location.reload()")
+    assert browser.wait("!window.before && document.readyState === 'complete'")
+    assert "Done: it is kept beside the sheet." in browser.js("document.body.textContent")
+    browser.js("window.before = true")
+    browser.click("a.btn.primary")  # Open it
+    assert browser.wait("!window.before && location.pathname.endsWith('/version-104.html')"
+                        " && document.querySelector('#ver-line').textContent !== ''")
+    assert browser.js(SWITCHER)["line"] == "Ver 4 of 4 · 3.50★ (20)"
