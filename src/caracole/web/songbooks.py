@@ -19,8 +19,8 @@ ends the command's options, so a name may start with "-".
 A job's key is its command (``KEY``, then the command's words), so the same change sent twice
 is queued once; ``songbook_of`` reads back which songbook it changes, by its name before and
 after, for the page that follows it (app.py) and for its line (status.py): "Moving the song…",
-its step's label, while it runs; "Moved" once it is done (``DONE``), with its songbook's page to
-open (``songbook_page``), as a song's "Ready" has its sheet.
+its step's label, while it runs; "Moved" once it is done (``DONE``); "Made" and "Added" with its
+songbook's page to open (``songbook_page``, ``OPENS``), as a song's "Ready" has its sheet.
 
 A songbook's page, ``_songbooks/<folder>/songbook.html``, is one of the pages caracole wrote
 (app.py's ``written_pages``): it is sent only while it is the page caracole wrote there
@@ -44,6 +44,9 @@ KEY = "songbook\x1f"  # a songbook job's key: this, then its command's words, th
 # What a songbook job's line says once it is done, by its action.
 DONE = {"make": "Made", "add": "Added", "move": "Moved", "remove": "Taken out", "rename": "Renamed",
         "delete": "Deleted"}
+# The changes whose line links the songbook's page once done ("Made · Open songbook"): its songs are new there.
+# Moved, taken out or renamed, its card's own buttons sit beside the line already.
+OPENS = frozenset({"make", "add"})
 
 
 class FormRefused(Exception):
