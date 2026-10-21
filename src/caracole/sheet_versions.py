@@ -17,7 +17,8 @@ song's and isn't listed.
 ``as_data`` is the JSON the viewer pages and the library page read. ``library_state`` reads
 from the files table which version is the one and which are kept beside it, ``same_pages``
 which versions are a kept one's very text (kept under one name only), and ``in_library``
-lists the versions with both.
+lists the versions with both. ``kept_by_you`` are the versions you asked to keep
+(``caracole versions --keep``), which the fetch keeps beside the sheet whatever the ranking.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from caracole.config import RankPolicy
-from caracole.db import kv_get_json
+from caracole.db import kv_get_json, kv_set_json
 from caracole.library import kept_files
 from caracole.rank import Candidate, is_complete, rank_by_rating
 from caracole.songs import HUMAN_SHEET
@@ -41,6 +42,7 @@ KINDS = ("chords",)  # UG's kinds for the sheet slot
 SHEET_PAGE = "sheet.html"  # the chosen version's viewer page, render.py's
 NOTE_LENGTH = 200
 SAME_KV = "sheet_versions:same:"  # + song id: the versions whose text is a kept one's, and its page
+YOURS_KV = "sheet_versions:yours:"  # + song id: the versions you kept (caracole versions --keep)
 
 _NAME = re.compile(rf"{re.escape(PREFIX)}([0-9]+)\.(?:txt|json|html)")
 
@@ -203,6 +205,23 @@ def same_pages(conn: sqlite3.Connection, song_id: int) -> dict[str, str]:
     chosen, kept = library_state(conn, song_id)
     pages = {version_names(t)[2] for t in kept} | ({SHEET_PAGE} if chosen is not None else set())
     return {str(t): p for t, p in record.items() if isinstance(p, str) and p in pages}
+
+
+def yours_key(song_id: int) -> str:
+    return f"{YOURS_KV}{song_id}"
+
+
+def kept_by_you(conn: sqlite3.Connection, song_id: int) -> tuple[str, ...]:
+    """The tabs you asked to keep beside the song's sheet (``caracole versions --keep``), oldest first: the
+    fetch keeps them whatever the ranking, while UG has them and you don't ``[block]`` them."""
+    record = kv_get_json(conn, yours_key(song_id), default=[])
+    return tuple(str(t) for t in record) if isinstance(record, list) else ()
+
+
+def note_kept_by_you(conn: sqlite3.Connection, song_id: int, tab_id: str) -> None:
+    tabs = kept_by_you(conn, song_id)
+    if str(tab_id) not in tabs:
+        kv_set_json(conn, yours_key(song_id), [*tabs, str(tab_id)])
 
 
 def in_library(conn: sqlite3.Connection, song_id: int, policy: RankPolicy) -> list[SheetVersion]:

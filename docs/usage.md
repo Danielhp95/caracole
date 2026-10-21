@@ -386,7 +386,7 @@ at once, sheet first, and says where the sheet is the moment it is kept:
     PDF: made.
     PDF: /home/you/Tabs/Radiohead/Creep/sheet.pdf
     Lyrics: found.
-    Ultimate Guitar: sheet 4170 · Guitar Pro 4174 · tab 4172.
+    Ultimate Guitar: sheet 4170 · Guitar Pro 4174 · tab 4172 · kept beside it: tab 4169, tab 4171.
     Sheet: a better one replaced it, in /home/you/Tabs/Radiohead/Creep/sheet.txt.
     LaCuerda: skipped: not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month.
     gtptabs.com: Guitar Pro file downloaded.
@@ -414,7 +414,9 @@ In order:
 5. **The lyrics**, from LRCLIB.
 6. **Ultimate Guitar again**, as the nightly run would: the top sheets are
    scored against the lyrics, and a more complete one replaces the first;
-   then the guitar parts and the text tab.
+   the others scored are kept beside it, said as `kept beside it: tab 4169,
+   tab 4171` (see [caracole versions](#caracole-versions)); then the guitar
+   parts and the text tab.
 7. **LaCuerda**, for a Spanish song without a complete sheet, and
    **gtptabs.com**, for a Guitar Pro file, from the index the nightly run
    keeps.
@@ -471,6 +473,58 @@ A song ignored in overrides.toml, or one wanted.txt can't hold, is not looked
 up, and exits 1. A song the matcher isn't sure of gets everything but its
 Ultimate Guitar sheet: pick its UG song with `--ug`, with Get it on the page
 `caracole serve` serves, or with `caracole review`.
+
+### caracole versions
+
+Ultimate Guitar keeps several chords versions of a song (Wonderwall has 13),
+and caracole keeps the three it scores against the lyrics: the best as
+`sheet.txt`, the title's, and the other two beside it as `version-<tab>.txt`
+(see [the library folder](#the-library-folder)). `caracole versions "ARTIST -
+TITLE"` lists them all, in caracole's order: the versions that cover the
+lyrics first, then by the rating weighed by its votes; those never scored
+after, by that rating; those Ultimate Guitar took down last. It only reads:
+no request, and no wait for another caracole.
+
+    $ caracole versions "Oasis - Wonderwall"
+    Oasis - Wonderwall: 13 chords versions on Ultimate Guitar; the title opens tab 1064463, caracole's pick.
+      Ver 3 of 13 · 4.86★ (408) · tab 1064463 · kept · the one · the version that oasis play on Wembley 2008
+      Ver 1 of 13 · 4.85★ (12,629) · tab 39144 · kept
+      Ver 5 of 13 · 4.91★ (95) · tab 1213325 · 40% of the lyrics · kept
+      Ver 2 of 13 · 4.62★ (1,240) · tab 6624
+      …
+    Keep one beside the sheet: caracole versions "Oasis - Wonderwall" --keep TAB. Make one the sheet: caracole versions "Oasis - Wonderwall" --choose TAB.
+
+A line says `the one` for the version the title opens; `kept` for one kept
+in the song's folder; `kept: the sheet's very text` for a version whose text
+is the sheet's, which the sheet stands for; the share of the lyrics a
+version scored short of them covers; `gone from Ultimate Guitar` for one UG
+took down (its files go at the song's next fetch); and the first lines of the
+tabber's note. When the sheet is LaCuerda's or auto-chords', the first line
+says so, and no version is the one.
+
+- `--keep TAB` (the tab's id or its page's address) keeps one more version
+  beside the sheet, now: its page is read at the lookup pace (one request,
+  within a lookup's six and the hour's sixty, under caracole's lock as
+  `caracole get` takes it), it is written as `version-<tab>.txt` and `.json`,
+  and its viewer page is made. It stays kept whatever the ranking does, while
+  Ultimate Guitar has it and you don't `[block]` it. A block, a spent budget
+  or a site's error keeps nothing, says so and exits 0. A version kept
+  already sends nothing, and stays kept from then on.
+- `--choose TAB` makes a version the sheet: it is `caracole get --tab` for
+  that version's page, so it is recorded under `[pin]` in overrides.toml, and
+  the title, the PDF, the viewer and the songbooks use it. caracole's top
+  versions stay kept beside it.
+- `--clear` takes the song's chords pins out of `[pin]` (a Guitar Pro or a
+  text tab pin stays), comments and the rest of the file kept, then looks the
+  song up again: caracole's pick is the sheet once more, and a version you
+  had chosen outside the top three leaves the folder. Without a pin it says
+  so and changes nothing.
+- `--progress` adds a JSON line per stage, as `caracole get --progress` does,
+  for `caracole serve`.
+
+A tab that isn't one of the song's chords versions, or one Ultimate Guitar
+took down, exits 1; so does a song not in the library. Two of `--keep`,
+`--choose` and `--clear` at once exit 2.
 
 ### caracole remove
 
@@ -1006,7 +1060,9 @@ and cache.
   enters is written from the page that fetch scored. A version whose page
   can't be read keeps its files until it can. A pinned sheet keeps the top
   versions by rating beside it, read from the cache alone. A version whose
-  text is the sheet's very text gets no files: the sheet stands for it.
+  text is the sheet's very text gets no files: the sheet stands for it. A
+  version you keep with [`caracole versions --keep`](#caracole-versions)
+  stays kept whatever the ranking.
   Songs the index can't settle are looked up on their artist's UG page, when
   it is known, at most once in 30 days: songs not found, songs reviewed on
   their title alone (only other artists' songs of it) or on names that
@@ -2992,7 +3048,8 @@ tab_ids = [1601668]
   candidates of their kind (sheet, Guitar Pro, tab), in the order given. A pin
   whose page is gone, is Official, or is closed to bots by robots.txt (UG's
   `/tab/track/` pages), or redirects to such a page, pins nothing, and the
-  song's other versions compete for that kind.
+  song's other versions compete for that kind. `caracole versions --clear`
+  takes a song's chords pins out again.
 - **`[transpose]`** shifts the chords and the key in the PDF. `sheet.txt`
   stays as the source wrote it.
 - **`[version]`** is the song's own version: where you play it, written as the

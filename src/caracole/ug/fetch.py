@@ -79,7 +79,16 @@ from caracole.normalize import clean_title, compact, listing_forms, name_forms, 
 from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from caracole.sheet_versions import PREFIX as VERSION_PREFIX
-from caracole.sheet_versions import SHEET_PAGE, same_key, tab_of, version_names
+from caracole.sheet_versions import (
+    SHEET_PAGE,
+    kept_by_you,
+    library_state,
+    note_kept_by_you,
+    same_key,
+    same_pages,
+    tab_of,
+    version_names,
+)
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug import artist_tabs as listed_tabs  # ug.lookup.artist_tabs is another thing
 from caracole.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
@@ -172,6 +181,9 @@ class FetchContext:
     artist_pages_per_kind: int = 3
     # overrides.toml read again, for ``fetch_songs`` once its client handed caracole's lock to a lookup.
     reload_overrides: Callable[[], Overrides] | None = None
+    # Keep the versions scored beside the sheet; False for a lookup's first, quick pass, which scores one sheet
+    # alone and leaves the versions kept as they are to the pass after it (get.py).
+    versions: bool = True
 
 
 @dataclass(frozen=True)
@@ -796,11 +808,13 @@ def _kept_version_tabs(run: _SongRun) -> set[str]:
     return {t for f in kept_files(run.conn, run.song.id) if (t := tab_of(f.name)) is not None}
 
 
-def _keep_beside(run: _SongRun, chosen: int | None, beside: Iterable[tuple[Candidate, UGTabPage]]) -> None:
+def _keep_beside(
+    run: _SongRun, chosen: int | None, beside: Iterable[tuple[Candidate, UGTabPage]], hold: Iterable[str] = ()
+) -> None:
     """Keep ``beside`` (rank order) as the song's versions, but for the chosen version (``sheet.txt``), and
     drop the version files of every other version: they left the kept set, were blocked, or were found
     under an earlier match. A version whose page couldn't be read this run keeps its files (an error is
-    never a miss). A version whose text is a kept one's is listed with that one's page instead
+    never a miss), as do those in ``hold`` (yours, with no page in hand). A version whose text is a kept one's is listed with that one's page instead
     (kv ``sheet_versions:same:<song id>``, ``sheet_versions.same_pages``)."""
     kept: list[str] = []
     same: dict[str, str] = {}
@@ -815,7 +829,7 @@ def _keep_beside(run: _SongRun, chosen: int | None, beside: Iterable[tuple[Candi
             text = strip_markup(page.content or "").encode("utf-8")
             if (shown := _same_text(run, version_names(c.tab_id)[0], text)) is not None:
                 same[c.tab_id] = shown
-    waiting = {str(t) for t in run.unreadable}
+    waiting = {str(t) for t in run.unreadable} | set(hold)
     for tab in _kept_version_tabs(run) - set(kept) - waiting:
         _drop_version(run, tab)
     if same:
@@ -862,6 +876,69 @@ def _beside_a_pin(run: _SongRun, rows: list[VersionRow], lines: list[str]) -> li
         found[c.version_id] = page
     ranked = rank_sheets([c for c in top if c.version_id in found], policy, variant=run.song.variant)
     return [(c, found[c.version_id]) for c in ranked if c.version_id is not None]
+
+
+def _yours(
+    run: _SongRun, rows: list[VersionRow], lines: list[str], beside: Iterable[tuple[Candidate, UGTabPage]]
+) -> tuple[list[tuple[Candidate, UGTabPage]], set[str]]:
+    """The versions you kept (``sheet_versions.kept_by_you``) that ``beside`` hasn't, from the pages in hand or
+    the cache alone, scored; and those with no page there, whose files stay as they are. A version UG no
+    longer has, or that you block, isn't among ``rows``, and leaves."""
+    have = {c.version_id for c, _ in beside}
+    by_tab = {r.tab_id: r for r in rows}
+    found: list[tuple[Candidate, UGTabPage]] = []
+    hold: set[str] = set()
+    for tab in kept_by_you(run.conn, run.song.id):
+        row = by_tab.get(tab)
+        if row is None or row.id in have:
+            continue
+        page = _cached_text_page(run, row)
+        if page is None:
+            hold.add(tab)
+            continue
+        assert page.content is not None
+        c = _candidate(row)
+        c.coverage = coverage.coverage(page.content, lines, line_match=run.ctx.rank.line_match)
+        set_coverage(run.conn, row.id, c.coverage)
+        found.append((c, page))
+    return found, hold
+
+
+def keep_version(ctx: FetchContext, song: Song, tab_id: int) -> str:
+    """Keep one of the song's UG chords versions beside its sheet now, because you asked
+    (``caracole versions --keep``): its page is read (one request at most, none from the cache), the
+    version is kept as ``version-<tab>.txt`` and ``.json`` and noted as yours, so the fetch keeps it
+    whatever the ranking. What came of it: ``kept``, ``same`` (its text is a kept one's: that one's page
+    shows it), ``sheet`` (it is the sheet), ``gone`` (UG answered 404), ``unreadable`` (the page won't
+    parse: it waits), ``no text``, or ``unknown`` (not a chords version of the song caracole may use).
+    A block, a spent budget or an error raises, keeping nothing."""
+    run = _SongRun(ctx, song)
+    row = next((r for r in _rows(run, CHORDS_KINDS) if r.tab_id == str(tab_id)), None)
+    if row is None:
+        return "unknown"
+    page = _text_page(run, row)
+    if page is None:
+        if get_version(run.conn, row.id).gone:
+            return "gone"
+        return "unreadable" if tab_id in run.unreadable else "no text"
+    assert page.content is not None
+    lines = _lyric_lines(song)
+    set_coverage(run.conn, row.id, coverage.coverage(page.content, lines, line_match=ctx.rank.line_match))
+    note_kept_by_you(run.conn, song.id, row.tab_id)
+    chosen, kept = library_state(run.conn, song.id)
+    if chosen == row.tab_id:
+        return "sheet"
+    ranks = {f.name: f.kept_rank for f in kept_files(run.conn, song.id)}
+    txt = version_names(row.tab_id)[0]
+    rank = ranks.get(txt) or max((ranks[version_names(t)[0]] for t in kept), default=1) + 1
+    if _keep_version(run, row.id, page, rank=rank):
+        write_info(run.conn, ctx.library_dir, get_song(run.conn, song.id))
+        return "kept"
+    shown = _same_text(run, txt, strip_markup(page.content).encode("utf-8"))
+    if shown is None:
+        return "no text"
+    kv_set_json(run.conn, same_key(song.id), {**same_pages(run.conn, song.id), row.tab_id: shown})
+    return "same"
 
 
 def _lyric_lines(song: Song) -> list[str]:
@@ -911,16 +988,21 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
             alive.append(c)
         ranked = rank_sheets(alive, policy, variant=run.song.variant)
 
-    def beside() -> list[tuple[Candidate, UGTabPage]]:
+    def keep_beside(chosen: int | None) -> None:
+        if not run.ctx.versions:
+            return
         if pinned is not None:
-            return _beside_a_pin(run, rows, lines)
-        return [(c, pages[c.version_id]) for c in ranked if c.version_id in pages]
+            top = _beside_a_pin(run, rows, lines)
+        else:
+            top = [(c, pages[c.version_id]) for c in ranked if c.version_id in pages]
+        yours, hold = _yours(run, rows, lines, top)
+        _keep_beside(run, chosen, [*top, *yours], hold)
 
     best = _first_with_text(run, ranked, rows, pages)
     if best is None:
         set_picks(run.conn, run.song.id, CHORDS_KINDS, [])
         _drop_left_over(run, SHEET_FILES)
-        _keep_beside(run, None, [])
+        keep_beside(None)
         return None
     c, page = best
     assert c.version_id is not None
@@ -930,14 +1012,14 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
             and ((chosen is not None and kept.provider == "lacuerda" and chosen.holds(kept.tab_id))
                  or not replaces_sheet(c.coverage, kept.coverage, policy.coverage_threshold))):
         set_picks(run.conn, run.song.id, CHORDS_KINDS, [])  # the other site's sheet stays the pick
-        _keep_beside(run, None, beside())
+        keep_beside(None)
         return None
     _make_way(run, c.tab_id, page)
     _keep_text(run, c.version_id, page, SHEET_FILES)
     set_picks(run.conn, run.song.id, SHEET_KINDS, [c.version_id])
     if is_complete(c, policy):
         _retire_auto_sheet(run.conn, run.ctx.library_dir, run.song)
-    _keep_beside(run, c.version_id, beside())
+    keep_beside(c.version_id)
     return int(c.tab_id)
 
 

@@ -22,6 +22,7 @@ from caracole.overrides import (
     lacuerda_pick_from_url,
     load_overrides,
     override_key,
+    remove_pin,
     tab_id_from_url,
 )
 
@@ -377,6 +378,34 @@ def test_writers_preserve_comments_and_roundtrip(tmp_path):
     assert o.pin_urls["soda-stereo/de-musica-ligera"] == ("https://tabs.ultimate-guitar.com/tab/85053",)
     assert text.count("Some Artist - Some Interlude") == 1
     assert sorted(o.block) == [1601668]
+
+
+def test_remove_pin_takes_the_songs_pins_out_and_keeps_the_rest_of_the_file(tmp_path):
+    p = write(tmp_path, """# my decisions
+[pin]  # always these
+"Soda Stereo - Persiana Americana" = [
+  "https://tabs.ultimate-guitar.com/tab/soda-stereo/persiana-americana-chords-1081460",  # the live one
+  "https://tabs.ultimate-guitar.com/tab/301",
+]
+"soda stereo - persiana americana" = "https://tabs.ultimate-guitar.com/tab/85053"
+"Oasis - Wonderwall" = ["https://tabs.ultimate-guitar.com/tab/39144"]
+""")
+
+    assert remove_pin(p, "Soda Stereo - Persiana Americana", [1081460, 85053]) is True
+
+    text = p.read_text(encoding="utf-8")
+    assert "# my decisions" in text and "# always these" in text
+    o = load_overrides(p)
+    assert o.pin == {"soda-stereo/persiana-americana": (301,), "oasis/wonderwall": (39144,)}
+    assert remove_pin(p, "Soda Stereo - Persiana Americana", [1081460]) is False
+    assert p.read_text(encoding="utf-8") == text  # nothing to take out: the file is left alone
+    assert remove_pin(p, "Oasis - Wonderwall") is True
+    assert load_overrides(p).pin == {"soda-stereo/persiana-americana": (301,)}
+
+
+def test_remove_pin_without_a_file_or_a_pin_writes_nothing(tmp_path):
+    p = tmp_path / "overrides.toml"
+    assert remove_pin(p, "Oasis - Wonderwall") is False and not p.exists()
 
 
 def test_reject_lists_the_ug_songs_that_are_not_the_song(tmp_path):
