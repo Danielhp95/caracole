@@ -121,6 +121,7 @@ from caracole.library import (
     kept_files,
     read_json,
     read_regular,
+    safe_name,
     song_dir,
     write_atomic,
     write_info,
@@ -142,7 +143,16 @@ from caracole.ug.page import decode_twice, json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
 from caracole.viewer.page import viewer_key
+from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import Key
+from caracole.viewer.version import (
+    Version,
+    apply_version,
+    played_key,
+    version_from_query,
+    version_label,
+    version_query,
+)
 
 log = logging.getLogger(__name__)
 
@@ -151,6 +161,7 @@ HUMAN_OUTPUTS = SHEET_OUTPUTS[HUMAN_SHEET]
 AUTO_OUTPUTS = SHEET_OUTPUTS[AUTO_SHEET]
 STATUS_KEY = "render:status"  # kv: the last pass, for the to-do page
 FILES_KEY = "render:files:"  # kv, then the song's id: each .cho and viewer written (written_file)
+EXPORT_KV = "render:export:"  # kv, then the song's id: {label: the export's PDF and what it was made from}
 FONT_HINT = "set cjk_font or CARACOLE_CJK_FONT"
 
 TIMEOUT = 120  # seconds; a sheet renders in about one
@@ -563,7 +574,115 @@ def _render_song(
     if auto is not None:
         beside = human is not None
         render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside))
+    if human is not None or auto is not None:
+        _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, runner=runner, force=force)
     return done
+
+
+# --- an export: the sheet's PDF in another version ------------------------------------
+
+
+def export_version(query: str, overrides: Overrides, song: Song) -> Version:
+    """The version an address ``query`` holds (``version_from_query``), for an export. The viewer starts at the
+    song's ``[transpose]`` and leaves ``t`` out of its address there, so without a ``t`` the version is that."""
+    version = version_from_query(query)
+    if "t=" in "&" + query.lstrip("#?"):
+        return version
+    return replace(version, t=overrides.transpose.get(song.key, 0))
+
+
+def _export_query(v: Version) -> str:
+    """The version as an address that always says its ``t``, so reading it back needs no song."""
+    rest = [part for part in version_query(v).split("&") if part and not part.startswith("t=")]
+    return "&".join([f"t={v.t}", *rest])
+
+
+def render_version(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    overrides: Overrides,
+    song: Song,
+    v: Version,
+    *,
+    runner: Runner = subprocess.run,
+    force: bool = False,
+) -> Path:
+    """Render the song's sheet in the version ``v`` (its key, capo, mode, chosen shapes and swaps, as the
+    viewer shows it: ``apply_version``) to ``sheet (<label>).pdf`` in its folder, and return the path.
+
+    The sheet is the human one, else the auto one. The export is recorded in kv ``render:export:<song id>``
+    under its label (``version_label``): {"pdf", "query", "source_sha", "style", "printed_sha", "pdf_text",
+    "font", "pdf_sha256", "pdf_size"}; another export with the same label replaces the file and the record,
+    and one whose record says it was made from this very text and is still on disk is not rendered again
+    (unless ``force``). A render pass remakes the exports whose sheet or style changed (``_remake_exports``).
+    Raises RenderError: no sheet kept, a sheet that can't be read or made, a CJK font needed and missing, or
+    chordpro failing.
+    """
+    files = {f.name: f for f in kept_files(conn, song.id)}
+    if (kept := files.get(HUMAN_SHEET)) is not None:
+        sheet = _human_sheet(conn, cfg.library_dir, kept)
+    elif (kept := files.get(AUTO_SHEET)) is not None:
+        sheet = _auto_sheet(cfg.library_dir, kept)
+    else:
+        raise RenderError(f"{song.display} keeps no sheet to export")
+    found = sheet_keys(conn, cfg.library_dir, song)[1 if sheet.auto else 0]
+    text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
+                          key=sheet.key, capo=sheet.capo, auto=sheet.auto)
+    folder = song_dir(cfg.library_dir, song)
+    try:
+        shapes = viewer_key(text, found.key if found is not None else None)
+        capo = parse_sheet(text).capo
+        cho = apply_version(text, v, key=shapes, capo_sheet=capo)
+        label = version_label(v, shapes, capo)
+        played, played_capo = played_key(v, shapes, capo)
+        printed = _as_latin(pdf_text(cho, key=played, capo=played_capo))
+    except Exception as e:  # a sheet the viewer's code can't read
+        log.warning("%s: cannot make the export %s", song.display, version_query(v), exc_info=True)
+        raise RenderError(f"cannot make the export: {type(e).__name__}: {e}") from e
+    pdf = folder / f"sheet ({safe_name(label)}).pdf"
+    need = _font_need(printed)
+    font = _cjk_font(cfg.cjk_font)[0] if need else None
+    if need == "letters" and font is None:
+        raise RenderError(f"{pdf.name} needs a CJK font: {FONT_HINT}")
+    state = {
+        "pdf": pdf.name,
+        "query": _export_query(v),
+        "source_sha": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "style": _style(),
+        "pdf_text": PDF_TEXT_VERSION,
+        "printed_sha": hashlib.sha256(printed.encode("utf-8")).hexdigest(),
+        "font": str(font) if font else None,
+    }
+    key = f"{EXPORT_KV}{song.id}"
+    record = kv_get_json(conn, key)
+    record = {k: e for k, e in record.items() if isinstance(e, Mapping)} if isinstance(record, Mapping) else {}
+    if not force and _up_to_date(pdf, record.get(label), state):
+        return pdf
+    sha, size = _render_into(printed, pdf, work_dir=cfg.cache_dir, transpose=0,
+                             chordpro_bin=cfg.chordpro_bin, font_file=font, runner=runner)
+    # The label names the file, so another label never names the same one; a name that sorts the same
+    # after safe_name is the same file, and its older record goes.
+    record = {k: e for k, e in record.items() if e.get("pdf") != pdf.name}
+    record[label] = {**state, "pdf_sha256": sha, "pdf_size": size}
+    kv_set_json(conn, key, record)
+    return pdf
+
+
+def _remake_exports(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, song: Song, *,
+                    cjk_font: Path | None, runner: Runner, force: bool) -> None:
+    """Render the song's exports again that its sheet, the style or the viewer's theory changed; the others
+    are left (``render_version``). One that can't be made is logged, and the rest go on."""
+    record = kv_get_json(conn, f"{EXPORT_KV}{song.id}")
+    if not isinstance(record, Mapping):
+        return
+    for entry in list(record.values()):
+        query = entry.get("query") if isinstance(entry, Mapping) else None
+        if not isinstance(query, str):
+            continue
+        try:
+            render_version(conn, cfg, overrides, song, version_from_query(query), runner=runner, force=force)
+        except (RenderError, OSError) as e:
+            log.warning("no export for %s (%s): %s", song.display, query, e)
 
 
 def _render_sheet(

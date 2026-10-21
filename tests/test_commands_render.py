@@ -58,3 +58,31 @@ def test_render_rewrites_the_pages(conn, cfg, chordpro):
     todo = (cfg.library_dir / "_todo.md").read_text(encoding="utf-8")
     assert "## PDFs" in todo and "0 rendered, 0 failed" in todo
     assert (cfg.library_dir / "index.html").read_text(encoding="utf-8") != STALE
+
+
+def test_render_version_exports_one_song(conn, cfg, chordpro):
+    from helpers.ug_pages import version_dict
+    from caracole.library import keep_file, song_dir, write_atomic
+    from caracole.versions import upsert_version
+    import json
+
+    song = add_song(conn, "A", "T")
+    raw = version_dict(1, song="T", artist="A", tonality_name="Em")
+    vid = upsert_version(conn, provider="ug", tab_id="1", song_id=song.id, slot="sheet", kind="chords",
+                         rating=4.5, votes=10, version=1, label=None, url=raw["tab_url"], raw=raw,
+                         now="2026-10-18T03:00:00Z")
+    content = "[Verse]\n[tab][ch]Em[/ch]   [ch]G[/ch]\nuna prueba[/tab]\n"
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt", data=b"x", rank=1)
+    write_atomic(song_dir(cfg.library_dir, song) / "sheet.json",
+                 json.dumps({"version": raw, "content": content, "meta": []}).encode("utf-8"))
+    result = render(cfg, chordpro, "--song", "A - T", "--version", "t=2&mode=dorian")
+    assert result.exit_code == 0, result.output
+    folder = song_dir(cfg.library_dir, song)
+    exports = sorted(p.name for p in folder.glob("sheet (*).pdf"))
+    assert len(exports) == 1 and "Dorian" in exports[0]
+    assert exports[0] in result.output
+
+
+def test_render_version_needs_a_song(cfg, chordpro):
+    result = render(cfg, chordpro, "--version", "t=2")
+    assert result.exit_code == 2

@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from caracole.library import open_regular, write_atomic
-from caracole.songs import AUTO_SHEET, SHEET_FILE_NAMES, SHEET_OUTPUTS
+from caracole.songs import AUTO_SHEET, SHEET_FILE_NAMES, SHEET_OUTPUTS, is_export
 
 if TYPE_CHECKING:
     from caracole.http import Client
@@ -138,6 +138,8 @@ def source_of(name: str, kept: Mapping[str, str]) -> str | None:
         return kept[name]
     if name in _LYRICS_FILES:
         return LYRICS
+    if is_export(name):  # a PDF of the sheet in another version: from the sheet it was made from
+        return sheet_source(kept)
     base = _MADE_FROM.get(name, name)
     if base in kept:
         return kept[base]

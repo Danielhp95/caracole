@@ -190,6 +190,15 @@ def _played(v: Version, key: Key | None, capo_sheet: int | None) -> _Played:
     return _Played(mode, key is None or mode == key.mode, v.t - (capo - sheet_capo), capo)
 
 
+def played_key(v: Version, key: Key | None, capo_sheet: int | None) -> tuple[Key | None, int]:
+    """The key of the shapes the version plays (None for a sheet with no key) and its capo, for a PDF's
+    key line (``page.key_line_text``); ``key`` and ``capo_sheet`` as for ``apply_version``."""
+    played = _played(v, key, capo_sheet)
+    if key is None or played.mode is None:
+        return None, played.capo
+    return Key((key.tonic + played.shift) % 12, played.mode), played.capo
+
+
 def version_label(v: Version, key: Key | None, capo_sheet: int | None) -> str:
     """The version in words: the key of the shapes it plays, in the viewer's names of the modes, and its capo
     ("G Dorian, capo 0", "E Minor, capo 2"). A sheet with no key says how far it moved ("Transposed +2, capo 0",

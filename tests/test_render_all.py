@@ -1792,3 +1792,94 @@ def test_real_chinese_sheet_with_the_cjk_font(conn, real):
         for shown in ("斑马斑马", "宋冬野", "这是一个合成的例子", "测试歌词第二行"):
             assert shown in text
         assert set(CHORD.findall(text)) == {"C", "G", "Am", "F"}
+
+
+# --- an export: the sheet's PDF in another version -------------------------------------------
+
+GM_SHEET = (
+    "[Verse 1]\r\n"
+    "[tab][ch]Gm[/ch]             [ch]Eb[/ch]\r\n"
+    "Una canción de prueba[/tab]\r\n"
+    "[tab][ch]Bb[/ch]                 [ch]F[/ch]\r\n"
+    "solo para el analizador[/tab]\r\n"
+)
+
+
+def export(conn, cfg, song, query, ovr=None, runner=None):
+    from caracole.render import export_version, render_version
+
+    ovr = ovr or Overrides()
+    v = export_version(query, ovr, song)
+    run = runner or FakeChordPro()
+    return render_version(conn, cfg, ovr, song, v, runner=run), run
+
+
+def test_an_export_is_a_pdf_beside_the_sheet_in_that_version(conn, cfg):
+    from caracole.render import EXPORT_KV
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    render(conn, cfg)
+    sheet_pdf = pdf_of(cfg, song).read_bytes()
+    path, run = export(conn, cfg, song, "t=2")
+    assert path == pdf_of(cfg, song, "sheet (A Minor, capo 0).pdf")
+    printed = run.printed[-1].decode("utf-8")
+    assert "[Am]" in printed and "[Gm]" not in printed and "{transpose" not in printed
+    assert "--transpose" not in " ".join(run.calls[-1])
+    assert path.read_bytes().startswith(b"%PDF")
+    assert pdf_of(cfg, song).read_bytes() == sheet_pdf  # the sheet's own PDF is as it was
+    record = kv_get_json(conn, f"{EXPORT_KV}{song.id}")
+    entry = record["A Minor, capo 0"]
+    assert entry["pdf"] == path.name and entry["query"] == "t=2"
+    assert entry["pdf_size"] == path.stat().st_size
+    assert entry["pdf_sha256"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    assert {"source_sha", "style"} <= set(entry)
+
+
+def test_the_same_export_again_replaces_it(conn, cfg):
+    from caracole.render import EXPORT_KV
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    first, _ = export(conn, cfg, song, "t=2")
+    second, _ = export(conn, cfg, song, "t=2&at=0.1")  # the same key and capo: the same name
+    assert first == second
+    assert list(kv_get_json(conn, f"{EXPORT_KV}{song.id}")) == ["A Minor, capo 0"]
+    assert kv_get_json(conn, f"{EXPORT_KV}{song.id}")["A Minor, capo 0"]["query"] == "t=2&at=0.1"
+    names = [p.name for p in first.parent.iterdir() if p.name.startswith("sheet (")]
+    assert names == ["sheet (A Minor, capo 0).pdf"]
+
+
+@pytest.mark.parametrize("artist, title", [("Café Tacvba", "Eres"), ("宋冬野", "安和桥"), ("A/C: D", "x/y")])
+def test_an_export_of_a_song_with_an_accented_or_chinese_name_has_a_safe_name(conn, cfg, tmp_path, artist, title):
+    cfg = replace(cfg, cjk_font=fake_font(tmp_path / "cjk.otf"))
+    song = add_song(conn, artist, title)
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    path, _ = export(conn, cfg, song, "t=2&capo=2")
+    assert path.parent == song_dir(cfg.library_dir, song)
+    assert path.name == "sheet (G Minor, capo 2).pdf"
+    assert "/" not in path.name and path.is_file()
+    assert path.name == unicodedata.normalize("NFC", path.name)
+
+
+def test_a_render_pass_remakes_an_export_whose_sheet_changed_and_skips_the_rest(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    path, _ = export(conn, cfg, song, "t=2")
+    render(conn, cfg)
+    run = FakeChordPro()
+    render(conn, cfg, runner=run)
+    assert run.calls == []
+    human_sheet(conn, cfg, song, GM_SHEET.replace("[ch]F[/ch]", "[ch]C[/ch]"), tonality="Gm")
+    run = FakeChordPro()
+    render(conn, cfg, runner=run)
+    assert len(run.calls) == 2  # the sheet and its export
+    assert "[D]ador" in path.read_bytes().decode("utf-8")
+
+
+def test_an_export_without_a_sheet_is_a_render_error(conn, cfg):
+    from caracole.render import RenderError
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    with pytest.raises(RenderError):
+        export(conn, cfg, song, "t=2")

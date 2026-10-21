@@ -481,7 +481,8 @@ say), nothing is removed and it exits 1.
   the rest of the file kept byte for byte, comments included. The files
   caracole wrote in the song's folder: the sheets, tabs and Guitar Pro files
   it keeps (`sheet.txt`, `sheet.json`, `tab.txt`, `guitar-1.gp5`, the scores
-  it filed from `_inbox/`…), the `.cho` files and PDFs it made from them,
+  it filed from `_inbox/`…), the `.cho` files and PDFs it made from them (the
+  `sheet (G Dorian, capo 0).pdf` exports of `caracole render --version` too),
   `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
   Then the folder, and the artist's folder, once empty. Syncthing then
   deletes them on every device. And the song's record: its match, its
@@ -1109,7 +1110,8 @@ and cache.
   `_inbox` is a link itself, it is refused the same way, and nothing in the
   folder it points at is read, filed or deleted. The nightly run's scan line
   ends with the same count (`, 1 symbolic link refused`).
-- **`caracole render [--force] [--song "ARTIST - TITLE"]`** writes
+- **`caracole render [--force] [--song "ARTIST - TITLE"]`** (and
+  **`caracole render --song "ARTIST - TITLE" --version QUERY`**, below) writes
   `sheet.cho`, `sheet.pdf` and `sheet.html` next to every kept sheet, or the
   one song's with `--song`, transposed as `[transpose]` says.
   The PDF has one line under the title: the artist and the viewer's key line
@@ -1148,6 +1150,21 @@ and cache.
   rendered one stays. A sheet that never
   got a PDF (waiting for a font, or chordpro failed on it) loses its
   `sheet.cho` and `sheet.html` while they are still as caracole wrote them.
+
+  **`--song "ARTIST - TITLE" --version QUERY`** exports that song's PDF in
+  another version: the viewer's address for it (`t=2&mode=dorian&capo=0`, with
+  `at=` for chosen chord shapes and `alt=` for "play X for every Y"; the same
+  words the sheet viewer puts after its `#`). It writes the PDF beside the
+  sheet's own, named after the version: `sheet (G Dorian, capo 0).pdf`,
+  `sheet (A Minor, capo 0).pdf`, or `sheet (Transposed +2, capo 0).pdf` for a
+  sheet with no key. Every chord is written as the viewer shows it (moved,
+  in the mode, swapped), with its chosen shape, and no `{transpose}` is left.
+  Without a `t`, the version starts at the song's `[transpose]`, as the viewer
+  does. An export with the same name replaces the last one. Exports are
+  caracole's files: every render makes them again when the sheet, the style or
+  the PDF's text changes (and says nothing when they are up to date), and
+  `caracole remove` deletes them. Needs the song's sheet to be kept; exits 1
+  with the reason when it can't be made.
   chordpro works on a copy, in a private folder in the cache, and the new PDF
   replaces the old one in one rename, so a failed render leaves the last good
   PDF in place. It exits 1 when a sheet couldn't be rendered, and the log
