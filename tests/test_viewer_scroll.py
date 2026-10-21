@@ -100,8 +100,8 @@ def start_now(b: Browser) -> None:
 
 
 def moved_since(b: Browser, y: int, wait: float = 0.5) -> bool:
-    time.sleep(wait)
-    return look(b)["y"] > y
+    """Whether the page scrolls on past ``y`` within ``wait`` seconds."""
+    return b.wait(f"Math.round(scrollY) > {int(y)}", wait)
 
 
 # --- the page as written ---------------------------------------------------------------------------
@@ -210,8 +210,10 @@ def test_served_in_a_sandbox_a_reload_keeps_the_speed(tmp_path):
 def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_path):
     with viewer(tmp_path) as b:
         b.js(RECORD)
+        # When each press reached the page, as the page counts time: read after it, the clock has gone on.
+        b.js("window.addEventListener('click', () => { window.pressed = performance.now(); }, true)")
         b.click("#scroll")
-        pressed = b.js("performance.now()")
+        pressed = b.js("window.pressed")
         counting = look(b)
         ring = b.js("getComputedStyle(document.querySelector('#go .ring .arc')).animationName")
         # The arc drawn in the button's own colour, as the number and the track are.
@@ -228,7 +230,7 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
         b.js("moves.length = 0")
         b.click("#scroll")
         b.click("#go")  # pressed again: no waiting
-        again = b.js("performance.now()")
+        again = b.js("window.pressed")
         assert b.wait("moves.length > 0", 1)
         soon = b.js("moves[0][0]") - again
 
@@ -274,8 +276,8 @@ def test_the_pill_steers_the_scroll_without_stopping_it(tmp_path):
         ended = look(b)
         time.sleep(0.3)
         ended_still = look(b)["y"] == ended["y"]
-        b.js("location.reload()")
-        assert b.wait("document.documentElement.dataset.ready === '1'")
+        b.js("window.before = true; location.reload()")  # the page loaded again, not the one before it
+        assert b.wait("window.before === undefined && document.documentElement.dataset.ready === '1'")
         reloaded = look(b)
 
     assert faster["go"] == "Pause" and faster["speed"] == "8"

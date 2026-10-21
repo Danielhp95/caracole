@@ -27,8 +27,8 @@ listed, not hidden in tooltips. A song of your library with a sheet opens at
 once, with no request at all.
 
 Its results are the library's own rows, as index.html's Rows view and its
-search of the sites draw them: the page runs ``library_page.ROWS_SCRIPT``
-before its own script and builds each result with its row builders
+search of the sites draw them: the page runs library_assets/rows.js
+(``ROWS_SCRIPT``) before its own script and builds each result with its row builders
 (``resultRow``, ``ugHit``, ``artistHit``, ``siteHit``, ``siteArtist``), with
 the mark of where it came from (``icons.page_icons``, inlined as index.html
 inlines them) and its other actions under the row's "⋯" (an Ultimate Guitar
@@ -51,7 +51,7 @@ from html import escape
 from typing import Any
 
 from caracole.inline import json_block, sha256_source
-from caracole.library_page import BASE_STYLE, ROWS_SCRIPT, ROWS_STYLE
+from caracole.library_assets import BASE_STYLE, ROWS_SCRIPT, ROWS_STYLE
 
 STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }

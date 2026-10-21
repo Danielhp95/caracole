@@ -176,9 +176,12 @@ python3Packages.buildPythonApplication (finalAttrs: {
       ''
   );
 
+  # library_page reads index.html's stylesheets and scripts (library_assets/) at import:
+  # importing it from $out checks the package holds them.
   pythonImportsCheck = [
     "caracole"
     "caracole.cli"
+    "caracole.library_page"
   ];
 
   passthru = {

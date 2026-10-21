@@ -88,14 +88,26 @@ def pytest_collection_finish(session):
 
 
 @pytest.fixture(scope="session")
-def _chromium(tmp_path_factory):
-    """What a test marked @in_chromium gets (helpers/browser.py): this process's browser keeps its
-    profile in the run's basetemp, and quits when the session ends."""
+def _chromium_profiles(tmp_path_factory):
+    """This process's browser keeps its profile in the run's basetemp, and quits when the session
+    ends."""
     from helpers import browser
 
     browser.profiles = tmp_path_factory.mktemp("chromium")
     yield
     browser.close()
+
+
+@pytest.fixture
+def _chromium(_chromium_profiles):
+    """What a test marked @in_chromium gets (helpers/browser.py): the profiles' folder, and the
+    right to open pages, which a test without the mark is refused
+    (``browser.require_in_chromium``)."""
+    from helpers import browser
+
+    browser.marked = True
+    yield
+    browser.marked = False
 
 
 @pytest.fixture(autouse=True)

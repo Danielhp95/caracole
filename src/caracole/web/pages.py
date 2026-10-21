@@ -1,6 +1,6 @@
 """The pages caracole serve writes itself: the requests, the picker, the sign-in page, and errors.
 
-They share index.html's look (``library_page.BASE_STYLE``), carry no script,
+They share index.html's look (library_assets/base.css, ``BASE_STYLE``), carry no script,
 and every text in them is escaped. The requests page is one line per request,
 the line its song's card shows (status.py), with the commands it ran and what
 each printed folded away under it (a lookup's stages first, each with how it
@@ -11,10 +11,13 @@ the reader opened, so a request's output is open when the address asks for it
 (``refresh=0``) leaves the page still.
 
 The picker (``picker_form``) is a song in review's candidates as a radio
-group, the same markup and style (``library_page.PICKER_STYLE``) as the cards'
+group, the same markup and style (library_assets/picker.css) as the cards'
 picker: on a page of its own (``review_page``), and under a request that ended
 in a review. A reload would undo a choice half made, so a requests page that
 refreshes itself links to the picker's page instead.
+
+A request the server turns down is ``Refused``, which a route raises and app.py
+answers with ``message_page``, or, to a page's script, as data.
 """
 
 from __future__ import annotations
@@ -23,12 +26,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from html import escape
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from caracole.inline import sha256_source
-from caracole.library_page import BASE_STYLE, PICKER_STYLE
-from caracole.web.jobs import Job, Stage, Step
-from caracole.web.status import Line
+from caracole.library_assets import BASE_STYLE, PICKER_STYLE
+
+if TYPE_CHECKING:  # songbooks.py imports Refused, and status.py imports songbooks.py
+    from caracole.web.jobs import Job, Stage, Step
+    from caracole.web.status import Line
 
 PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
 .waits { display: grid; grid-column: 1 / -1; gap: 8px; margin-top: 12px; padding-top: 12px;
@@ -371,6 +376,14 @@ def remove_page(display: str, song_id: int, key: str, csrf: str, goes: list[str]
             f'  <a class="btn" href="{escape(library, quote=True)}">Keep it</a>\n</form>')
     said = "".join(f'<p class="message">{escape(note)}</p>\n' for note in notes)
     return page(f"Remove {display}?", lede + items("It takes", goes) + items("It leaves", stays) + said + form)
+
+
+class Refused(Exception):
+    """A request the server turns down: its status, a title and one sentence, said on ``message_page``."""
+
+    def __init__(self, status: int, title: str, message: str):
+        super().__init__(message)
+        self.status, self.title, self.message = status, title, message
 
 
 def message_page(title: str, message: str) -> str:

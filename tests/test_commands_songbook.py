@@ -386,7 +386,7 @@ with _common.exclusive(cfg, "run"):
     client = _common.make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
     client.get("https://tabs.ultimate-guitar.com/tab/1")
     out.write(f"first {time.time()}\n")
-    client.get("https://tabs.ultimate-guitar.com/tab/2")  # after a 4 s pause, handed over meanwhile
+    client.get("https://tabs.ultimate-guitar.com/tab/2")  # after a pause, handed over meanwhile
     out.write(f"second {time.time()} {client.handoffs}\n")
     client.close()
 """
@@ -397,8 +397,9 @@ def test_a_songbook_made_during_the_nightly_run_is_made_in_its_next_pause(setup,
     import time
 
     toml, cfg, _ = setup
+    pause = 2.0  # the run's, between two requests to UG
     with toml.open("a", encoding="utf-8") as f:
-        f.write("[providers.ug]\ndelay = [4, 4]\n")  # the run's pause between two requests to UG
+        f.write(f"[providers.ug]\ndelay = [{pause}, {pause}]\n")
     log = tmp_path / "holder.log"
     env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(Path(__file__).parents[1] / "src")}
     holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(toml), str(log)], env=env)
@@ -413,10 +414,10 @@ def test_a_songbook_made_during_the_nightly_run_is_made_in_its_next_pause(setup,
     finally:
         holder.kill()
     assert made.exit_code == 0, made.output
-    assert finished - asked < 3.5  # in the pause the run was in, not after it, let alone after the whole run
+    assert finished - asked < pause - 0.5  # in the pause the run was in, not after it, let alone after the whole run
     assert (folder(setup) / "songbook.html").is_file()
     _, sent, handoffs = log.read_text().splitlines()[1].split()
-    assert float(sent) >= finished + 3.5 and int(handoffs) == 1  # the run waited a whole pause again after it
+    assert float(sent) >= finished + pause - 0.1 and int(handoffs) == 1  # the run waited a whole pause again after it
 
 
 @pytest.mark.slow

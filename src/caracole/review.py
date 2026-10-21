@@ -15,7 +15,7 @@ can live in git:
 
 The first two are also functions of their own, ``accept`` and ``reject``, for
 one answer given without the questions: ``caracole review --song`` and the
-picker of ``caracole serve`` (web/app.py) answer through them. ``candidates_of``
+picker of ``caracole serve`` (web/review_routes.py) answer through them. ``candidates_of``
 gives the candidates a review lists, in its order and numbering, and
 ``step_words`` says in plain words why the matcher thought of each one.
 """

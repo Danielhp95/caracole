@@ -25,169 +25,110 @@ design lives in three files:
 ## Layout
 
 In `src/caracole/`, `caracole run` (pipeline.py) runs these steps in order, each one even when
-an earlier one failed:
+an earlier one failed. Each module's docstring says what it does and why, and each package's
+`__init__.py` how the package is laid out (commands/, web/, viewer/, library_assets/,
+autochords/): the details live there, beside the code they describe, and change with it. This
+section says where things are, and the rules a change there keeps.
 
 | Step | Modules |
 |---|---|
-| sync | sources.py (`sync_sources`), wanted.py, spotify.py, songs.py |
-| icons | icons.py (each source's mark: a site's favicon, fetched once, sanitized, in `cache_dir/icons/`) |
+| sync | sources.py, wanted.py, spotify.py, songs.py |
+| icons | icons.py (each source's mark) |
 | index | ug/sitemap.py, ug/index.py |
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
-| fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (every list of an artist page read, from UG or the cache, kept for searches in `ug_artist_tabs`, schema 7: bare ids with UG's names, type, rating and page; a list read to its end replaces its kind's tabs, one cut short only adds, a page that answers 404 loses them; `backfill`, once, from the HTTP cache alone, run by the match step and `caracole get`'s match stage, so with no request and while UG cools down), rank.py, coverage.py, versions.py |
-| lacuerda | lacuerda.py (URLs, parsing: artist, version and listing pages), lacuerda_fetch.py (the step's sheets), lacuerda_index.py (then its listings of every artist into `lacuerda_index`, schema 6, resumed across runs, with the songs of the artist pages read; `find` for searches, Chinese in pinyin only as whole words of a key as in search.py, both through normalize.py's `name_words`, `holds_run` and `PINYIN_PARTIAL_SCALE`; `artist_slugs` for the sheets, `index_state` for what a search says it lacks); a `[lacuerda]` pick (overrides.py `LaCuerdaPick`) is tried whatever its language and kept whatever its coverage, and makes no Ultimate Guitar review of other artists' songs alone (match.py `_settled_on_lacuerda`: not found), `read_artist_page` reads one artist's page (`caracole lacuerda --artist`, at the lookup pace) |
-| scan | music.py (Music/; `Names`, how alike a file's names and a song's are, for purchases and the inbox), inbox.py (Guitar Pro files and scores in `_inbox/`), musicxml.py (a MusicXML file's header) |
-| gtptabs | gtptabs.py (URLs, sitemap rows, artist pages, file headers), gtptabs_fetch.py (the step) |
-| musescore | musescore.py (song page URLs, a song's pages), musescore_fetch.py (the step: song sitemaps into `musescore_index`) |
-| youtube | youtube.py (picking a song's video from a search, `YtDlp`: running yt-dlp), youtube_urls.py (a video's address, the standard library alone: overrides.py's `[youtube]`), youtube_fetch.py (the step: which songs, the audio in `cache_dir/youtube/`, kv `youtube:<song id>`, each song's state for the pages) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs, styled by chordpro-style.json, each made from pdf_text.py's text of its own, `pdf_text`: no notes, the shapes the viewer shows first as `{define}`s (`page.shapes_of`, by `voicings.shape_key`), the viewer's key line as `{subtitle}` (`page.viewer_key` and `page.key_line_text`; the style, `%{subtitle}` under the title, prints it, songbook.py `_song_file(pdf=True)` gives a songbook's songs the same text, and a missing song's page its own `{subtitle}`; the songbook PDF's inputs hold those texts, and its font is the one they need), section names in capitals, two columns; sheet.cho stays the viewer's; each PDF's record keeps `PDF_TEXT_VERSION` and `printed_sha`, the SHA-256 of that text, so a key or a viewer change makes the PDF again; that text runs the viewer's code, and `_render_sheet_pdf` and songbook.py `_song_file` make a bug there a `RenderError`, logged with its traceback: that PDF fails and the pass goes on, as when the viewer itself fails), viewer/ (sheet.html, and songbook.html in book.py, both built from page.py's pieces: `_page`, the head and its policy, `_footer`, `_song_html`, `viewer_csp`, which is `book.songbook_csp` too; `page.build_version` hashes `page.BUILD_FILES`, what a page is made from: a module the viewer comes to import goes there, test_viewer_book.py checks; sheet.py holds the preamble rule, `preamble_section` for the viewer and `split_preamble` for the PDF; theory.py and `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field compared, and a list handed out is a copy: test_viewer_theory.py), songbook.py (the songbooks of songbooks.toml, in `Library/_songbooks/`) |
-| todo | todo.py (`_todo.md`), library_page.py (`index.html`) |
+| fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py |
+| lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the sheets), lacuerda_index.py (its listings of every artist, for searches) |
+| scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
+| gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
+| musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
+| youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html), songbook.py (songbooks.toml) |
+| todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
 left, with the error; what needs the user), which report.py turns into the run's summary on
 stdout and ntfy: a new step plugs in by returning one. The log goes to stderr, set up once
 by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities, redacted secrets).
 
-Shared: config.py (caracole.toml, directories, secrets), db.py (schema, migrations, `kv`,
-`savepoint`: atomic writes on the autocommit connection), http.py (`PoliteClient`, robots
-rules, `stale` and `read_once_more` for cached answers, `cached` and `CachedAnswers` to read the
-cache alone, sending nothing), health.py (cooldowns, `events`),
-normalize.py (keys, pinyin), inline.py (a page's inline script or style by its hash,
-`sha256_source`, and its JSON data blocks, `json_block`, each `<` escaped; the standard
-library alone), overrides.py, library.py (song folders, safe file access), notify.py
-(ntfy), site_index.py (a site's sitemaps into a table, resumed across runs: gtptabs.com's
-and MuseScore's), keys.py (a song's musical key and its source, for info.json,
-`index.html` and `search --key`), removal.py (`caracole remove` and the web page's
-Remove: a song's wanted.txt lines, its record and the files caracole wrote; the
-tombstones it leaves are songs.py's, in the `removed` table).
+Shared by the steps and the commands:
 
+| Module | What for |
+|---|---|
+| config.py | caracole.toml, directories, secrets |
+| db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
+| http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
+| health.py | cooldowns, `events` |
+| normalize.py | keys, pinyin, `name_forms`; `name_words`, `holds_run` and `PINYIN_PARTIAL_SCALE`, Chinese in pinyin only as whole words, for search.py and lacuerda_index.py |
+| inline.py | what a page holds inline: a script or a style by its hash, a JSON data block; the standard library alone |
+| overrides.py | overrides.toml |
+| library.py | song folders, safe file access in the synced library |
+| notify.py | ntfy |
+| site_index.py | a site's sitemaps into a table, resumed across runs |
+| keys.py | a song's musical key and where it came from |
+| removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
+| progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
+
+Rules a change there keeps (the Invariants below are the others):
+
+- **The pages caracole writes and serves** (index.html, sheet.html, songbook.html, caracole
+  serve's own) load nothing from the network: a Content-Security-Policy allows each inline
+  script and stylesheet by the hash of the very text inlined (inline.py `sha256_source`), and a
+  page's data is a JSON block with each `<` escaped (`inline.json_block`). Their scripts build
+  every element with `createElement` and `textContent`, never `innerHTML`, and connect to
+  nothing but caracole serve. A page caracole writes into the library is served only through
+  `app.written_pages` (a new kind goes there, with its record and its policy), and only while it
+  holds the bytes caracole recorded (`files.read_written_page`). Enter in a search box never
+  spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
+  opens the leading artist's songs), and on the library page it only searches, which asks no site.
+- index.html's stylesheets, scripts and markup are the .css, .js and .html files of
+  library_assets/, inlined byte for byte in the order of `library_page.STYLESHEETS`, `SCRIPTS`
+  and `TEMPLATES`, where a new file is listed (test_library_assets.py).
+- viewer/: what a page is made from is `page.BUILD_FILES`, hashed into `page.build_version`: a
+  module the viewer comes to import goes there (test_viewer_book.py checks). theory.py and
+  `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field
+  compared, and a list handed out is a copy (test_viewer_theory.py).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
-  by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share:
-  `load_cfg`, `open_db`, `load_ovr`, `exclusive`, `make_client`, `make_youtube`,
-  `write_pages`, `fail`, `warn`, `song_named` (the song a `--song` names).
-  `caracole get` (commands/get.py) is one song looked up now, in one process: get.py runs
-  the run's steps for that song alone (`only=` / `songs=` of lyrics.py, lacuerda_fetch.py,
-  gtptabs_fetch.py and `match.match_all`), sheet first (one versions page and the best-rated
-  sheet, then `Progress.readable`), with interactive clients; `--progress` prints a JSON line
-  per event (`get.progress_line`) for caracole serve.
-  The logic of `caracole review`, `caracole search`, `caracole remove` and `caracole songbook`
-  is in review.py, search.py, removal.py and songbook.py. search.py reads a query as a
-  title, an artist or both (each hit's `via`); `find_index` (with your songs, `found`)
-  answers `caracole search` and `/api/search`: the artists a query
-  names (`ArtistHit`, never a catch-all), the index's songs, `lead` and `best` (what Enter
-  may act on, None for no clear song), with
-  `artist_songs` and `library_by_artist`; tab counts are its only popularity, and Chinese
-  pinyin counts only as whole words of a key, as in match.py. The UG artist pages caracole read
-  (ug/artist_tabs.py) are searched with the index (`_listed_rows`): their songs and artists scored
-  on every `name_forms` form of UG's names, a song both list one hit (`_merged`, its tabs counted
-  once, `IndexHit.page`, `rating`, `votes`: `_best_listed`, the page's best tab, its rating weighed
-  by its votes with rank.py's `bayes`, and None for a tab nobody rated), a song only a page lists
-  named as your songs name its artist (`_Yours`, else `normalize.original_part`), and
-  `bare_id_hint` silent for a query they answer well. `search_gtptabs` and
-  `search_musescore` read gtptabs.com's and MuseScore's tables (`SiteHit`; MuseScore's by
-  exact title keys alone, the query's or what it leaves beside the artist of a song of that
-  title, `_known_song`: a possible match), never the sites; `search_lacuerda` reads
-  LaCuerda's index (lacuerda_index.py `find`): its songs as `SiteHit`s with the page of the
-  sheet a lookup keeps (`sheet`), its artists as `SiteArtist` rows (`known`: the songs it holds
-  of theirs, 0 until caracole read their page), `lacuerda_left_out` what it lacks (empty,
-  or the letters read whole so far), and `lacuerda_unlisted` a name it has no artist by under a
-  letter not read whole yet (`lacuerda_index.unread_letter`), whose page the user may have
-  read (`caracole lacuerda --artist NAME`): never one LaCuerda's own strong songs or artists
-  name, nor a title Ultimate Guitar's index reads as one, and before the whole query the
-  artist at an end of it whom Ultimate Guitar's search read as a song's (`_named_at_an_end`:
-  "Estopa" for "estopa como camaron", never "Fito" for "fito paez");
-  `lacuerda_leads`, LaCuerda's group first when it alone has the artist the query names.
-  `search_removed` scores the `removed` table (`RemovedHit`) as `search_library` scores your songs; a
-  removed song is never `lead`, `best` or a library hit, and `caracole search` prints it after "In your
-  library" as "Removed from your library" with the `caracole add` line that brings it back.
-  Its prefilter reads
-  ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
-  must find exactly what a `LIKE` scan of `ug_index` finds
+  by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share (config,
+  the database, the lock, clients at either pace, pages, `fail`, `warn`, `song_named`): use it
+  rather than another copy. A command's logic lives in a module outside commands/, imported
+  inside the command's function (Heavy imports, below): get.py is `caracole get`, one song looked
+  up now (the run's steps for that song alone, sheet first, at the lookup pace; `--progress`, a
+  JSON line per event, for caracole serve), and review.py, search.py, removal.py and songbook.py
+  are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local indexes
+  alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
+  gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
+  (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
+  index), which must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
   except that a pattern in more than `KEYS_PER_PATTERN` keys (a common word) brings in its
   shortest keys and those every pattern is in
   (`::test_a_common_word_brings_in_its_shortest_keys_and_those_every_word_is_in`).
-- `web/`: `caracole serve` (commands/serve.py): security.py (host names, cross-origin
-  writes, tokens), files.py (library files, no link followed; `read_written_page`, a page
-  caracole wrote, while it holds the bytes a lookup says it wrote), jobs.py (the queue: each
-  request runs the `caracole` CLI at `-v` in a child process, one command at a time; a
-  lookup is one `caracole get --progress`, whose JSON lines become `Job.stages`, and
-  `Job.as_json` is a job as data), status.py (the one line a request shows on its card and
-  on /jobs, read from the job's steps and, once it is over, from the song's state, never
-  from which commands ran: a step's label is that line while it runs, "Adding to the
-  library…", and a lookup's running stage has one of its own, `status.STAGE_LINES`), app.py (the routes; `/jobs.json` and the forms answer the page's script in
-  JSON, every refusal as data; `/api/search` for search as you type, through search.py's
-  public functions (`find_index`, `found`, `search_gtptabs`, `search_musescore`,
-  `search_lacuerda`; `skipped`, the sites it left out and why, and `partial`, LaCuerda's
-  index while its listings are still read), one at a time, the newest first, an older one's
-  SQL interrupted once a newer waits (`set_progress_handler`); `/api/artist?key=` an
-  artist's songs, 50 at a time, `?lacuerda=SLUG` (or `?lacuerda_name=NAME`, once a page
-  read by name) a LaCuerda artist's that the index holds, and `POST /lacuerda/artist` queues
-  `caracole lacuerda --artist` (`jobs.LACUERDA_ARTIST`) to read their page, by `slug` or by
-  `name`; once one is over, the search answers kept are dropped (`_after_reads`);
-  `/api/jobs[/<id>]`, a read's with its `line` (status.py reads what LaCuerda answered from
-  the command's last line: "Read: ", "Not found: ", "Not read: "); every `/api/` read refused to
-  another site's fetch, `security.own_page_read`; `POST /lookup`, which runs a song your
-  library has, by its id or found from the UG pick (`_Mine`: its match, or its names'
-  `name_forms`), under its own names and writes no wanted.txt line for it;
-  `written_pages`, each kind of page caracole writes into the library by file name, with
-  its record and its CSP: the sheet viewers and songbook.html), songbooks.py (the songbook
-  forms, each queued as its `caracole songbook` command; Get the missing songs now,
-  `missing_songs`, a `caracole get` per song `songbook.songs_to_get` names, then
-  `render_job`, `caracole songbook render NAME`, after them; `songbook_of` reads a job's key back,
-  the songbook it changes, and once it is over `/jobs.json` gives the Songbooks section drawn
-  again, which the page puts in place of its own), lookup_page.py (the lookup page:
-  its script, `createElement` and `textContent` only, allowed by hash, connects to the
-  server alone; its results are the library's rows, `library_page.ROWS_SCRIPT` and
-  `ROWS_STYLE` through its row builders, `ugHit` and `artistHit` too, and a song you have opens its viewer;
-  Enter acts on `/api/search`'s `best`, or opens the leading artist's songs (LaCuerda's when
-  `lacuerda_leads`), and never spends a request without one),
-  pages.py, server.py (`http.server`). The library page is
-  library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
-  /jobs.json how they go. Its one bar filters your songs as you type and, on Enter or Search
-  all, lists `/api/search`'s answer under them (served; the file shows the `caracole search`
-  line to run), each result's Get it a `POST /lookup` whose `view` the page tracks in the
-  result's row; Enter never spends a request.
+- `web/`: `caracole serve` (commands/serve.py). web/__init__.py names its parts, and web/app.py's
+  docstring the modules of routes and the checks every request passes. app.py is the router and
+  what every route shares (`Request`, `Response`, the answers' shapes, `WebApp.db()`,
+  `.overrides()`, `.submit()`, `.queued()`); a route lives in its area's `*_routes.py`, as a
+  `Route` in its `ROUTES`, which the router gathers from every such module, and a line of its
+  docstring (test_web_app.py checks both): neither a new route nor a new module of them changes
+  app.py. A route refuses with `pages.Refused`, which `WebApp.handle` answers as the message
+  page, or to the page's script as JSON: every refusal as data. Every `/api/` read is refused to
+  another site's fetch (`security.own_page_read`), and every write passes security.py's
+  cross-origin check and carries the form token. Beyond a wanted.txt line, every change runs as a
+  `caracole` command queued in jobs.py (One caracole at a time, below). The one line a request
+  shows is status.py's, read from the job's steps and the song's state, never from which commands
+  ran: a step's label is that line while it runs ("Adding to the library…").
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.
 - `tests/`: named after what they cover (test_fetch.py is ug/fetch.py's), and
   `test_commands_*.py` for the CLI. conftest.py has the `conn` and `cfg` fixtures (every
   directory under `tmp_path`, in /dev/shm if it will do; `conn` copies a database migrated once
-  per process), `add_song` and `subprocess_pythonpath`. helpers/browser.py's `dump_dom` opens
-  pages in one Chromium per process, each in a fresh context, for a test marked `@in_chromium`
-  (`touch=True`: a touch screen, where `pointer: coarse` matches; `media=`: dark mode);
-  helpers/targets.py measures a page's controls there: `small_targets`, any under 44 px, and
-  `weak_edges`, a field's edge under 3:1. helpers/locks.py `waiting_for` sees a command wait
-  for caracole's lock. test_harness.py tests what makes the suite fast. helpers/ug_pages.py
-  builds fake UG tab and artist pages, escaped the way UG escapes them
-  (`from helpers.ug_pages import ...`). helpers/gtptabs_site.py is `FakeGtpTabs`, a fake
-  gtptabs.com behind a real `PoliteClient`, with synthetic Guitar Pro, Guitar Pro 6 and 7
-  and Power Tab files (a format's magic header, then filler). helpers/musescore_site.py
-  is `FakeMuseScore`, its song sitemaps and the challenge Cloudflare answers caracole
-  with (`challenge()`). helpers/lacuerda_site.py is `LaCuerdaSite`, LaCuerda's listings
-  of every artist (`listing_page`, with `Last-Modified` and 304s) and artist pages
-  (`artist_page`). helpers/fake_ytdlp.py is `FakeYtDlp`, a yt-dlp the test writes as a
-  script that answers from a plan and logs its arguments, and `route_on`, a config with the
-  YouTube route on (auto-chords' packages taken to be there, model files, the fake).
-  helpers/rendered.py keeps a sheet and renders it with a stand-in
-  for chordpro (`rendered_song`), so its viewer is one caracole wrote; helpers/chromium.py
-  drives a headless Chromium of the test's own over the DevTools protocol (a pipe, the standard
-  library), for a page whose CSP refuses a test's script; helpers/browser.py's `Browser` is the
-  same with typing, Enter, clicks, touches and the layout read back, on real time, for the lookup
-  page's tests and the library page's bar (test_web_page_search.py: a real `caracole serve`, its
-  queue running a fake `caracole get`; test_web_page_lacuerda.py, LaCuerda's group, an artist page
-  read by slug or by name, and a picked song's card), the viewer's scrolling (test_viewer_scroll.py:
-  a page on `dump_dom`'s virtual time draws no frames), its bar (test_viewer_bar.py: a finger's drag
-  is touch events, as `Input.synthesizeScrollGesture` scrolls nothing headless), its settings and
-  chord card, docked or beside the song (test_viewer_panels.py), and its rail of necks from 1200 px
-  (test_viewer_necks.py), which share helpers/viewer_pages.py:
-  a viewer written and opened in it (`written`, `viewer`), a finger's `drag`, `tap` and `tap_at`,
-  `rest` until the page stops gliding, and keys. Both
-  resolve no host name (`helpers.browser.NO_LOOKUPS`), and their tests are `@in_chromium` too.
-  fixtures/ holds UG, LaCuerda, LRCLIB,
-  gtptabs.com, MuseScore and ChordPro samples: real response shapes, trimmed, and
-  synthetic lyrics, sheets and files.
+  per process), `add_song` and `subprocess_pythonpath`. tests/helpers/ holds what the tests
+  share, a module each, whose docstring says what it gives and how (`from helpers.<module>
+  import ...`): fake sites behind a real `PoliteClient`, a fake yt-dlp, synthetic files, a song
+  rendered, a wait for caracole's lock seen, Chromium (Browser tests, below); look there before
+  writing another. test_harness.py tests what makes the suite fast. fixtures/ holds samples of
+  what each site answers (real response shapes, trimmed) and synthetic lyrics, sheets and files.
 - `nix/`: package.nix (`buildPythonApplication`; the wrapper puts `chordpro` on PATH and
   defaults `CARACOLE_CJK_FONT`; `withAutochords` adds the extra, the model files and
   `yt-dlp` on PATH), autochords.nix (the model files, fixed-output), module.nix
@@ -200,6 +141,11 @@ tombstones it leaves are songs.py's, in the `removed` table).
   web-search.md designs a search-API fallback for matching, not built.
 
 ## Development
+
+**Fast loop**: `nix develop -c pytest -q -m "not slow"` (about 6 s) while you work, and the
+whole suite, `nix develop -c pytest -q` (about 35 s), before a commit. Always through `nix
+develop`: its pytest has pytest-xdist, which spreads the suite over the cores; a pytest
+without it runs the whole suite in one process, for minutes.
 
     nix develop        # Python 3.14 with the dependencies, pytest, pytest-xdist, chordpro, ruff, sqlite3
     pytest -q                         # the whole suite, from the repo root, on up to 12 cores
@@ -216,19 +162,37 @@ process: mark a new one too. The whole suite stays the gate before a commit. tmp
 /dev/shm, and stays on disk with `--basetemp` or `PYTEST_DEBUG_TEMPROOT`, or when /dev/shm is
 noexec or has less than 1 GB free (a container's).
 
+**Browser tests.** A test that opens a page in Chromium is marked `@in_chromium` (or has it as
+its module's `pytestmark`, `helpers.browser.CHROMIUM_MARKS`): slow, and skipped without
+Chromium; one that opens a page unmarked fails (`helpers.browser.require_in_chromium`). It opens
+pages through helpers/browser.py, `dump_dom` (the DOM once the page's script ran, its timers on
+virtual time, in one Chromium per process and a fresh context per page) or `Browser` (a Chromium
+of its own, on real time, to type, press keys, click and touch), or through helpers/chromium.py,
+for a page whose policy refuses a test's script. None of them resolves a host name
+(`helpers.browser.NO_LOOKUPS`), and the other browser helpers in tests/helpers/ build on them.
+
+A test that drives a page on real time (`Browser`) waits for the state it needs
+(`Browser.wait`: an expression that throws while the page still loads is not true yet; once the
+page has loaded, it raises at once), never a fixed time: its workers share the machine with eleven
+others. After a step that loads the page again (a reload, a songbook's next song), it waits for the
+new document, not the one before it (`window.before`, as `Browser.open` does for an address). The
+library page caracole serve serves asks /jobs.json every 1.5 s and counts Remove's five
+seconds; `WebApp(timers=...)` shortens both for such a test (test_web_page.py's `QUICK`), and
+caracole serve never sets it, so the page users get carries no timers (`WebControls.timers`).
+
 Both shells set `CARACOLE_CJK_FONT` to the packages' font. `.#autochords` adds torch,
 beat-this and librosa, and sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` to the
 files nix/autochords.nix fetches. Tests that need a real program or model skip without it:
 
 | Needs | Tests | Set by |
 |---|---|---|
-| `chordpro` on PATH, or `CARACOLE_CHORDPRO_BIN` | real PDFs: test_render.py, test_render_all.py, test_chordpro.py | both shells |
+| `chordpro` on PATH, or `CARACOLE_CHORDPRO_BIN` | the tests marked `chordpro`: real PDFs | both shells |
 | `CARACOLE_CJK_FONT`: one `.ttf` or `.otf` with CJK glyphs | Chinese PDFs | both shells |
 | `pdftotext` on PATH, or `CARACOLE_PDFTOTEXT` | the PDFs' text in test_render_all.py (fewer checks without it, no skip) | neither: `nix shell --inputs-from . nixpkgs#poppler-utils` |
 | torch, librosa, beat_this, and `CARACOLE_BTC_WEIGHTS` with `CARACOLE_BEAT_CHECKPOINT`, or `CARACOLE_MODELS_DIR` (searched for `btc_model_large_voca.pt` and `final0.ckpt`) | the tests marked `autochords` | `.#autochords` |
 | `CARACOLE_BTC_MAJMIN_WEIGHTS`, or `btc_model.pt` under `CARACOLE_MODELS_DIR` | `test_the_major_minor_model_loads_too` | neither |
 | `ffmpeg` on PATH | `test_btc_reads_aac_from_the_itunes_store` | neither |
-| `chromium` on PATH | `index.html`, `sheet.html`, `songbook.html`, the lookup page and caracole serve's own pages in a real browser (test_library_page.py, test_library_page_songbooks.py, test_viewer.py, test_viewer_book.py, test_viewer_layout.py, test_viewer_preamble.py, test_viewer_shapes.py, test_viewer_scroll.py, test_viewer_bar.py, test_viewer_panels.py, test_viewer_necks.py, test_web_lookup_page.py, test_web_pages.py), a viewer `caracole serve` sends (test_web_server.py), the page served by a real `caracole serve` (test_web_page.py, test_web_page_search.py, test_web_page_lacuerda.py), and the shared browser itself (test_harness.py) | neither |
+| `chromium` on PATH | the tests marked `@in_chromium` (Browser tests, above): the pages caracole writes and serves, in a real browser | neither |
 
 Before a change is done:
 

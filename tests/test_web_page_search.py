@@ -65,11 +65,14 @@ class FakeGet:
 
 
 class Asked(list):
-    """The searches the server got; ``slow`` holds how long each next one takes to answer, in seconds."""
+    """The searches the server got; while ``held`` is an event, each next one answers once the test sets it.
+    While ``lookups_held`` is one, each Get it's request is queued at once, and its answer to the page waits for
+    the test to set it."""
 
     def __init__(self):
         super().__init__()
-        self.slow: list[float] = []
+        self.held: threading.Event | None = None
+        self.lookups_held: threading.Event | None = None
 
 
 @pytest.fixture
@@ -84,9 +87,15 @@ def live(cfg):
     def handle(request):
         if request.target.startswith("/api/search"):
             asked.append(request.target)
-            if asked.slow:
-                time.sleep(asked.slow.pop(0))
-        return answer(request)
+            held = asked.held
+            if held is not None:
+                held.wait(10)
+        response = answer(request)
+        if request.method == "POST" and request.target.startswith("/lookup"):
+            held = asked.lookups_held
+            if held is not None:
+                held.wait(10)
+        return response
 
     app.handle = handle
     server = make_server(app, "127.0.0.1", 0)
@@ -148,7 +157,8 @@ def library(cfg, *songs):
 
 
 def posted(queue, timeout=10.0):
-    """The arguments of the first lookup the page posted."""
+    """The arguments of the first lookup the page posted (which the page may not have heard back about yet:
+    ``answered``)."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         jobs = queue.snapshot()
@@ -156,6 +166,12 @@ def posted(queue, timeout=10.0):
             return jobs[-1].steps[0].args
         time.sleep(0.05)
     raise AssertionError("the page posted no lookup")
+
+
+def answered(page, hit):
+    """Whether the page has heard back about the request it posted from the result ``hit``: once it has, the
+    request's line follows the job in the row, in place of its Get it, and the row is where its card comes from."""
+    return page.wait(f"!document.querySelector({json.dumps(hit + ' .row-action button')})")
 
 
 GRID = "[...document.querySelectorAll('#list article')].map((a) => a.querySelector('h2').textContent)"
@@ -237,13 +253,15 @@ def test_a_newer_answer_keeps_the_row_whose_request_runs_and_its_line(cfg, live,
     browser.open(base + "#q=wonderwall&all=1")
     assert browser.wait(f"{HITS} >= 2")
     browser.js(f"window.row = document.querySelector(\"{RYAN}\")")
-    asked.slow.append(1.0)  # the next answer takes a second
+    asked.held = threading.Event()  # the next answer waits until the page has the request
     browser.js("document.getElementById('q').focus()")
     browser.press("Enter")
     assert browser.wait(BUSY)  # the newer search on its way
     browser.click(f"{RYAN} .row-action button")  # on the older answer's row, as the newer is on its way
     posted(queue)
     assert browser.wait("!!window.row.querySelector('.progress')")
+    assert answered(browser, RYAN)
+    asked.held.set()
     assert browser.wait(f"!{BUSY}", timeout=10)  # the newer answer, drawn
     kept = browser.js(f"[document.querySelector(\"{RYAN}\") === window.row, window.row.isConnected, "
                       "!!window.row.querySelector('.progress')]")
@@ -260,13 +278,15 @@ def test_a_row_whose_request_runs_and_that_a_newer_answer_lacks_becomes_its_card
     sites(cfg, **WONDERWALL)
     browser.open(base + "#q=wonderwall&all=1")
     assert browser.wait(f"{HITS} >= 2")
-    asked.slow.append(1.0)
+    asked.held = threading.Event()  # the answers wait until the page has the request
     browser.js("document.getElementById('q').select()")
     browser.type("hotel california")
     browser.press("Enter")
     assert browser.wait(BUSY)
     browser.click(f"{RYAN} .row-action button")
     posted(queue)
+    assert answered(browser, RYAN)
+    asked.held.set()
     assert browser.wait("document.getElementById('found').dataset.query === 'hotel california'", timeout=10)
     assert browser.js(f"document.querySelector(\"{RYAN}\")") is None  # not in the newer answer
     assert browser.wait("!document.getElementById('requested').hidden && "
@@ -307,6 +327,7 @@ def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
     assert browser.wait(f"{HITS} >= 2")
     browser.click("#results .hit[data-ug='ryan-adams/wonderwall'] .row-action button")
     posted(queue)
+    assert answered(browser, "#results .hit[data-ug='ryan-adams/wonderwall']")
     browser.click("#clear")  # the ×: out of the results, the request on its way with a card of its own
     assert browser.wait("document.getElementById('results').hidden")
     assert browser.wait("!document.getElementById('requested').hidden && "
@@ -319,6 +340,64 @@ def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
     browser.press("Enter")
     assert browser.wait("document.getElementById('found').dataset.query === 'creep'")
     assert browser.js("window.waited") is True
+
+
+@pytest.mark.parametrize("leave", ["clear", "escape", "typed over"])
+def test_a_get_it_whose_row_leaves_the_results_before_the_page_hears_back_still_gets_its_card(cfg, live, browser,
+                                                                                              leave):
+    # Get it, then at once the ×, Escape or a newer search without the row, before the server's answer reaches the
+    # page: once it does, the request has its card under the bar, its line going on there, as it would have had
+    # if the answer had come first.
+    base, queue, asked = live
+    sites(cfg, **WONDERWALL)
+    browser.open(base + "#q=wonderwall&all=1")
+    assert browser.wait(f"{HITS} >= 2")
+    asked.lookups_held = threading.Event()
+    browser.click(f"{RYAN} .row-action button")
+    posted(queue)  # queued; the page hasn't heard back
+    if leave == "clear":
+        browser.click("#clear")
+        assert browser.wait("document.getElementById('results').hidden")
+    elif leave == "escape":
+        browser.js("document.getElementById('q').focus()")
+        browser.press("Escape")
+        assert browser.wait("document.getElementById('results').hidden")
+    else:
+        browser.js("document.getElementById('q').select()")
+        browser.type("hotel california")
+        browser.press("Enter")
+        assert browser.wait("document.getElementById('found').dataset.query === 'hotel california'")
+        assert browser.js(f"document.querySelector(\"{RYAN}\")") is None  # not in the newer answer
+    assert browser.js("document.getElementById('requested').hidden") is True  # nothing to show yet
+    asked.lookups_held.set()
+    assert browser.wait("!document.getElementById('requested').hidden && "
+                        "document.querySelector('#requested article h2').textContent === 'Wonderwall' && "
+                        "!!document.querySelector('#requested article .progress')")
+    assert browser.wait("document.querySelector('#requested article .progress').dataset.tone === 'ready'",
+                        timeout=20)
+    assert browser.js("document.querySelectorAll('#requested article').length") == 1
+
+
+def test_a_get_it_on_a_row_a_newer_answer_has_too_keeps_its_line_in_that_answers_row(cfg, live, browser):
+    # Enter again while a Get it is on its way, and the newer answer drawn before the page hears back: the newer
+    # answer's row for the song is the one that says how the request goes, and no card comes under the bar.
+    base, queue, asked = live
+    sites(cfg, **WONDERWALL)
+    browser.open(base + "#q=wonderwall&all=1")
+    assert browser.wait(f"{HITS} >= 2")
+    browser.js(f"window.row = document.querySelector(\"{RYAN}\")")
+    asked.lookups_held = threading.Event()
+    browser.click(f"{RYAN} .row-action button")
+    posted(queue)
+    browser.js("document.getElementById('q').focus()")
+    browser.press("Enter")
+    assert browser.wait(f"!{BUSY} && document.querySelector(\"{RYAN}\") !== window.row")  # drawn anew
+    asked.lookups_held.set()
+    assert browser.wait(f"document.querySelector(\"{RYAN}\") === window.row && "
+                        f"!!document.querySelector(\"{RYAN} .progress\")")
+    assert browser.js(f"document.querySelectorAll(\"{RYAN}\").length") == 1
+    assert browser.wait("window.row.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
+    assert browser.js("document.getElementById('requested').hidden") is True
 
 
 def test_enter_never_requests_a_song(cfg, live, browser):

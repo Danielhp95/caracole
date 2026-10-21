@@ -50,6 +50,13 @@ def test_by_default_it_listens_on_this_machine_alone(tmp_path, started):
     assert "listening" in result.output and "anyone" not in result.output
 
 
+def test_the_page_it_serves_keeps_its_own_timers(tmp_path, started):
+    # Only the tests that drive the page on real time shorten its timers (test_web_page.py's QUICK).
+    result = invoke(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert started["app"].timers is None
+
+
 def test_options_set_the_address_port_names_and_token(tmp_path, started):
     token = tmp_path / "token"
     token.write_text(TOKEN + "\n", encoding="utf-8")
