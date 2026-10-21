@@ -34,9 +34,7 @@ written ``\\u003c``:
 
 from __future__ import annotations
 
-import base64
 import hashlib
-import json
 import re
 import sys
 import unicodedata
@@ -46,6 +44,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from caracole.inline import json_block, sha256_source
 from caracole.normalize import has_han
 from caracole.viewer.sheet import Blank, ChordRow, Line, Lyrics, Section, Sheet, Tab, Text, parse_sheet
 from caracole.viewer.theory import (
@@ -74,7 +73,8 @@ from caracole.viewer.voicings import (
 )
 
 HERE = Path(__file__).parent
-LIBRARY_PAGE = "../../index.html"  # Library/<artist>/<title>/sheet.html -> Library/index.html
+# Library/<artist>/<title>/sheet.html and Library/_songbooks/<name>/songbook.html -> Library/index.html
+LIBRARY_PAGE = "../../index.html"
 CREDIT_URL = "https://github.com/tombatossals/chords-db"
 
 # What info.json's "key_source" says, in words for the page.
@@ -91,6 +91,7 @@ _SOURCES = {
 BUILD_FILES = (
     *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "voicings.py", "voicings.json",
                                "viewer.js", "viewer.css", "LICENSE-chords-db")),
+    HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "normalize.py",  # has_han
     HERE.parent / "autochords" / "merge.py",  # AUTO_MARKER, which sheet.py reads
 )
@@ -149,45 +150,37 @@ def build_viewer(
     sheet's own ``{key}``, else it is estimated from the chords. ``transpose`` is where
     the viewer starts; ``pdf`` names the PDF beside the page, linked when given.
     """
-    sheet = parse_sheet(cho)
-    chords = [parse_chord(name, strict=False) for name in sheet.chords]
-    song_key, origin = _song_key(sheet, chords, key, key_source)
-    data = _data(sheet, chords, song_key, origin, transpose)
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+    sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
     style, script = _assets()
-    csp = _policy()
     title = sheet.title or "Untitled"
-    head_title = f"{title} · {sheet.artist}" if sheet.artist else title
-    return (
-        "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
-        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
-        f'<meta http-equiv="Content-Security-Policy" content="{csp}">\n'
-        f"<title>{escape(head_title)}</title>\n<style>{style}</style>\n</head>\n<body>\n"
-        + _body(sheet, title, song_key, origin, pdf)
-        + f'<script type="application/json" id="song">{payload}</script>\n'
-        + f"<script>{script}</script>\n</body>\n</html>\n"
+    return _page(
+        f"{title} · {sheet.artist}" if sheet.artist else title,
+        _body(sheet, title, song_key, origin, pdf) + json_block("song", data),
+        styles=(style,),
+        scripts=(script,),
     )
 
 
 def viewer_csp(page: bytes) -> str:
-    """The Content-Security-Policy header a server sends with ``page``, a viewer caracole wrote.
+    """The Content-Security-Policy header a server sends with ``page``, a viewer caracole wrote:
+    a sheet.html, or a songbook.html (``book.songbook_csp`` is this function).
 
-    It is the page's own policy, as its ``<meta>`` tag holds it (its one script and one
-    stylesheet, by their hashes, and nothing else to load, no form to send, no base to
-    change), with a sandbox, which a ``<meta>`` policy can't set: the page then runs in an
-    origin of its own, with no cookie and no way to ask the server for anything. Its script
-    still runs; it has no storage there, and keeps the transposition, the mode, the capo, the
-    text size and the scroll speed in its address (``#t=2&mode=aeolian&fs=20&speed=8``) alone,
-    as it does everywhere besides its storage.
+    It is the page's own policy, as its ``<meta>`` tag holds it (its scripts and stylesheets,
+    by their hashes, and nothing else to load, no form to send, no base to change), with a
+    sandbox, which a ``<meta>`` policy can't set: the page then runs in an origin of its own,
+    with no cookie and no way to ask the server for anything. Its scripts still run; they have
+    no storage there, and keep the transposition, the mode, the capo, the text size and the
+    scroll speed in the address (``#t=2&mode=aeolian&fs=20&speed=8``; a songbook's song too,
+    ``#song-3``) alone, as they do everywhere besides their storage.
 
-    The policy is the page's, not this caracole's: a viewer written before an upgrade carries
-    the hashes of the script and style it was written with, and keeps them until the next
+    The policy is the page's, not this caracole's: a page written before an upgrade carries
+    the hashes of the scripts and styles it was written with, and keeps them until the next
     render writes it again. A page whose policy can't be read, or would not fit in a header,
     gets a sandbox that runs and loads nothing (``_NOTHING``).
 
-    Serve only a viewer still as caracole wrote it (``render.written_file``, ``library.holds``):
-    anyone with a synced device can put a page of their own in the library, and its policy too.
+    Serve only a page still as caracole wrote it (``render.written_file``, ``library.holds``;
+    ``songbook.pages_written``): anyone with a synced device can put a page of their own in the
+    library, and its policy too.
     """
     found = _META_POLICY.search(page)
     try:
@@ -197,26 +190,47 @@ def viewer_csp(page: bytes) -> str:
     return "sandbox allow-scripts; " + policy if _HEADER_TEXT.fullmatch(policy) else _NOTHING
 
 
-# The page's own policy, as build_viewer writes it; what a header may hold (no line break);
+# The page's own policy, as ``_page`` writes it; what a header may hold (no line break);
 # and the header for a page whose policy can't be read: a sandbox that runs and loads nothing.
 _META_POLICY = re.compile(rb'<meta http-equiv="Content-Security-Policy" content="([^"<>]*)">')
 _HEADER_TEXT = re.compile(r"[ -~]+")
 _NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
 
 
-def _policy() -> str:
-    style, script = _assets()
-    return (
-        f"default-src 'none'; script-src {_sha256(script)}; style-src {_sha256(style)}; "
-        "base-uri 'none'; form-action 'none'"
+def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str, ...]) -> str:
+    """A whole page, sheet.html or songbook.html: its head (``title``, the stylesheets, and the policy
+    that allows exactly them and the scripts, and nothing to load, no form to send, no base to
+    change), ``body``, then the scripts, which run once the page is read, in their order."""
+    policy = (
+        f"default-src 'none'; script-src {' '.join(map(sha256_source, scripts))}; "
+        f"style-src {' '.join(map(sha256_source, styles))}; base-uri 'none'; form-action 'none'"
     )
-
-
-def _sha256(text: str) -> str:
-    return "'sha256-" + base64.b64encode(hashlib.sha256(text.encode("utf-8")).digest()).decode() + "'"
+    # One join, so the page is copied once: its script and stylesheet alone are some 66 kB.
+    return "".join((
+        "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
+        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
+        f'<meta http-equiv="Content-Security-Policy" content="{policy}">\n'
+        f"<title>{escape(title)}</title>\n",
+        *(f"<style>{style}</style>\n" for style in styles),
+        "</head>\n<body>\n",
+        body,
+        *(f"<script>{script}</script>\n" for script in scripts),
+        "</body>\n</html>\n",
+    ))
 
 
 # --- the key and the data ------------------------------------------------------------------------
+
+
+def _read_song(cho: str, key: str | None, key_source: str | None,
+               transpose: int) -> tuple[Sheet, Key | None, str | None, dict[str, Any]]:
+    """A ChordPro sheet as its page shows it: the sheet read, the key of its shapes and where that came
+    from in words (``_song_key``), and the data its block gives the script (``_data``)."""
+    sheet = parse_sheet(cho)
+    chords = [parse_chord(name, strict=False) for name in sheet.chords]
+    song_key, origin = _song_key(sheet, chords, key, key_source)
+    return sheet, song_key, origin, _data(sheet, chords, song_key, origin, transpose)
 
 
 def _song_key(sheet: Sheet, chords: list[Chord | None], key: str | None,
@@ -333,11 +347,6 @@ def _facts(key: Key | None, origin: str | None, capo: int) -> str:
 
 
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None) -> str:
-    notice = (
-        '<p class="notice">Auto-generated, unverified: caracole heard these chords in the recording.</p>\n'
-        if sheet.auto else ""
-    )
-    lang = ' lang="zh"' if has_han(sheet.title + "".join(_texts(sheet))) else ""
     pdf_link = f'<a class="pdf" href="{escape(quote(pdf))}">PDF</a>\n' if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
@@ -345,16 +354,38 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         f"<h1>{escape(title)}</h1>\n"
         + (f'<p class="artist">{escape(sheet.artist)}</p>\n' if sheet.artist else "")
         + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
-        + notice
-        + '<div class="strip" id="strip" hidden></div>\n'
-        + f'<article class="sheet" id="sheet"{lang}>\n{_sheet_html(sheet)}</article>\n'
-        + '<footer class="foot">\n'
-        + pdf_link
+        + _song_html(sheet)
+        + _footer(pdf_link)
+        + "</div>\n"
+        + _CONTROLS
+    )
+
+
+def _song_html(sheet: Sheet, suffix: str = "", named: str = "") -> str:
+    """What follows a song's header, on sheet.html and in a songbook alike: an auto sheet's notice, the
+    strip of chord shapes the script fills in, and the sheet, marked Chinese when its words or names are
+    (``named``: what a songbook calls the song). ``suffix`` tells a songbook's songs apart ("-3")."""
+    lang = ' lang="zh"' if has_han(named + sheet.title + "".join(_texts(sheet))) else ""
+    return (
+        (_NOTICE if sheet.auto else "")
+        + f'<div class="strip" id="strip{suffix}" hidden></div>\n'
+        + f'<article class="sheet" id="sheet{suffix}"{lang}>\n{_sheet_html(sheet)}</article>\n'
+    )
+
+
+_NOTICE = '<p class="notice">Auto-generated, unverified: caracole heard these chords in the recording.</p>\n'
+
+
+def _footer(links: str) -> str:
+    """The foot of a page: ``links`` to the files beside it, chords-db's credit and licence (MIT: it
+    goes with every copy of its fingerings), and a word on keeping the page private."""
+    return (
+        '<footer class="foot">\n'
+        + links
         + f'<p>Chord shapes from <a href="{CREDIT_URL}">chords-db</a>, © 2016 David Rubert, MIT licence.</p>\n'
         + f'<details class="licence"><summary>The chords-db licence</summary><pre>{escape(_credit_notice())}</pre></details>\n'
         + "<p>Keep this page private: the lyrics and chords are other people's work.</p>\n"
-        + "</footer>\n</div>\n"
-        + _CONTROLS
+        + "</footer>\n"
     )
 
 
