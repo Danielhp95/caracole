@@ -13,7 +13,9 @@
       autochordsDeps = ps: with ps; [ torch torchaudio beat-this librosa numpy scipy soundfile pyyaml ];
       devPython = python.withPackages (ps: runtimeDeps ps ++ testDeps ps);
       devPythonAutochords = python.withPackages (ps: runtimeDeps ps ++ testDeps ps ++ autochordsDeps ps);
-      devTools = [ pkgs.perl5Packages.AppMusicChordPro pkgs.ruff pkgs.sqlite ];
+      # The chordpro the package's wrapper runs, without its GUI (about 130 MiB, not 1 GiB),
+      # so the PDF tests here run the program the package does.
+      devTools = [ caracole.chordpro pkgs.ruff pkgs.sqlite ];
       caracole = pkgs.callPackage ./nix/package.nix { };
       # The same program with the `autochords` extra (torch, beat-this, librosa),
       # its wrapper pointing at the model files from nix/autochords.nix.
