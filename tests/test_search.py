@@ -533,7 +533,8 @@ def test_beside_a_lacuerda_artist_whose_name_is_the_query_one_only_near_it_is_le
                                                   LCArtist("andres", "Andrés", 3),
                                                   LCArtist("andres_canalla", "Andrés Canalla", 9)])
     assert [a.artist for a in search_lacuerda(conn, "andres calamaro")[0]] == ["Andrés Calamaro"]
-    assert [a.artist for a in search_lacuerda(conn, "andres")[0]] == ["Andrés"]
+    # The names that hold "andres" as a word of their own are no names near it: they stay, the most songs first.
+    assert [a.artist for a in search_lacuerda(conn, "andres")[0]] == ["Andrés", "Andrés Calamaro", "Andrés Canalla"]
     assert [a.artist for a in search_lacuerda(conn, "andres calamar")[0]][:1] == ["Andrés Calamaro"]  # a typo
 
 
@@ -1700,3 +1701,208 @@ def test_after_caracole_add_the_song_is_in_the_library_group_and_not_the_removed
     out = run(tmp_path, "search", "banma").output
     assert "Removed from your library" not in out
     assert "宋冬野 - 斑马斑马" in out.split("On Ultimate Guitar")[0]
+
+
+# --- an artist by a word of their name, and by a close spelling --------------------------------------------------
+
+# Lynyrd Skynyrd, Sam Grow's song "Skynyrd", the artists with "horse" among their words and America's most tabbed
+# song with it in its title; and Wu Bai & China Blue, whose name 伍佰 is in pinyin.
+BY_WORD = [
+    *[(30000 + i, "lynyrd-skynyrd", "free-bird", "chords") for i in range(4)],
+    *[(30010 + i, "lynyrd-skynyrd", "sweet-home-alabama", "chords") for i in range(3)],
+    (30020, "lynyrd-skynyrd", "simple-man", "chords"), (30021, "lynyrd-skynyrd", "simple-man", "tabs"),
+    (30022, "lynyrd-skynyrd", "tuesdays-gone", "chords"), (30023, "lynyrd-skynyrd", "gimme-three-steps", "chords"),
+    (30030, "sam-grow", "skynyrd", "chords"), (30031, "sam-grow", "song-for-mama", "chords"),
+    (30040, "horse-the-band", "cutsman", "tabs"), (30041, "horse-the-band", "birdo", "tabs"),
+    (30042, "horse-the-band", "lord-gold", "tabs"),
+    (30050, "an-horse", "camp-out", "chords"), (30060, "horse-feathers", "belly-of-june", "chords"),
+    (30061, "seahorses", "love-is-the-law", "chords"),
+    *[(30070 + i, "america", "a-horse-with-no-name", "chords") for i in range(6)],
+    (30080, "wu-bai-china-blue", "last-dance", "chords"), (30081, "wu-bai-china-blue", "nothing-to-say", "chords"),
+    (30090, "joaquin-sabina", "y-nos-dieron-las-diez", "chords"),
+    (30100, "metallica", "one", "tabs"), (30101, "metallica", "fade-to-black", "tabs"),
+    (30110, "beatles", "yesterday", "chords"), (30111, "beatles", "let-it-be", "chords"),
+    (30120, "beatle-bob", "a-song", "chords"),
+]
+
+
+@pytest.mark.parametrize("query", ["lynyrd", "skynyrd", "Lynyrd", "skynyrd lynyrd"])
+def test_a_word_of_an_artists_name_gives_the_artist_first(conn, query):
+    from caracole.search import find_index
+
+    index(conn, BY_WORD)
+    found = find_index(conn, query)
+    first = found.artists[0]
+    assert (first.artist_key, first.artist, first.songs, first.tabs) == ("lynyrd-skynyrd", "Lynyrd Skynyrd", 5, 11)
+    assert [h.song_key for h in first.top] == ["free-bird", "sweet-home-alabama", "simple-man"]
+    assert found.lead == "artist" and found.best is None  # Enter opens their songs, and looks nothing up
+    # Their songs are in their row, never hits of their own.
+    assert "lynyrd-skynyrd" not in {h.artist_key for h in found.songs}
+
+
+def test_a_song_titled_like_the_word_still_shows_without_pushing_the_artist_out(conn):
+    from caracole.search import find_index
+
+    index(conn, BY_WORD)
+    found = find_index(conn, "skynyrd")
+    [skynyrd] = found.artists
+    assert (skynyrd.artist_key, skynyrd.part, skynyrd.score) == ("lynyrd-skynyrd", True, 90)
+    assert [(h.artist_key, h.song_key, h.score, h.via) for h in found.songs] == [
+        ("sam-grow", "skynyrd", 100, "title")]
+    assert found.lead == "artist"
+
+
+def test_an_artists_whole_name_is_no_part_of_it(conn):
+    from caracole.search import find_index
+
+    index(conn, BY_WORD)
+    [named] = find_index(conn, "lynyrd skynyrd").artists
+    assert (named.artist_key, named.part, named.score) == ("lynyrd-skynyrd", False, 100)
+
+
+def test_the_artists_a_word_names_come_by_their_songs_and_how_much_of_the_name_it_is(conn):
+    from caracole.search import find_index
+
+    index(conn, BY_WORD)
+    found = find_index(conn, "horse")
+    assert [a.artist_key for a in found.artists] == ["horse-the-band", "an-horse", "horse-feathers"]
+    assert all(a.part and a.score == 90 for a in found.artists)
+    # America's song is tabbed more than any of theirs, and none of them has most of the songs: the song leads.
+    assert found.lead == "song" and found.songs[0].song_key == "a-horse-with-no-name"
+    assert len(find_index(conn, "horse", artists=1).artists) == 1
+
+
+def test_a_word_names_no_artist_inside_another_word(conn):
+    from caracole.search import find_index
+
+    index(conn, BY_WORD)
+    # "horse" is inside a word of the Seahorses' name, a word of its own in Beatle Bob's: no row, a row.
+    assert "seahorses" not in {a.artist_key for a in find_index(conn, "horse", artists=10).artists}
+    assert [(a.artist_key, a.part) for a in find_index(conn, "beatle").artists] == [
+        ("beatles", False), ("beatle-bob", True)]  # the Beatles: a name near the query, as before
+    assert find_index(conn, "lynyr").artists == ()  # a word half typed is no word yet
+
+
+def test_a_common_word_or_a_short_one_never_makes_every_artist_with_it_a_row(conn):
+    from caracole import search
+    from caracole.search import find_index
+
+    many = [(40000 + i, f"number-{i}-the-band", "a-song", "chords") for i in range(search.WORD_ARTISTS + 1)]
+    index(conn, BY_WORD + many + [(41000, "band", "the-weight", "chords"), (41001, "the-the", "uncertain-smile",
+                                                                            "chords")])
+    # "band" is in more artists' names than WORD_ARTISTS: only the artist it is the whole name of.
+    assert [(a.artist_key, a.part) for a in find_index(conn, "band").artists] == [("band", False)]
+    assert all(not a.part for a in find_index(conn, "the").artists)
+    # A word of two letters names no one by itself.
+    index(conn, [(41010, "ub-forty", "red-wine", "chords")])
+    assert find_index(conn, "ub").artists == ()
+
+
+def test_a_word_in_few_names_still_names_them_beside_a_common_one(conn):
+    from caracole import search
+    from caracole.search import find_index
+
+    many = [(40000 + i, f"number-{i}-the-band", "a-song", "chords") for i in range(search.WORD_ARTISTS + 1)]
+    index(conn, BY_WORD + many)
+    # Every word of the query is in the name: the common one narrows the rare one.
+    assert [a.artist_key for a in find_index(conn, "horse band").artists][:1] == ["horse-the-band"]
+
+
+def test_a_chinese_artist_is_found_by_one_word_of_their_name_in_pinyin(conn):
+    from caracole.search import find_index
+
+    index(conn, BY_WORD)
+    found = find_index(conn, "伍佰")
+    [wubai] = found.artists
+    assert (wubai.artist_key, wubai.part, wubai.songs) == ("wu-bai-china-blue", True, 2)
+    assert found.lead == "artist"
+    # In pinyin, as whole words alone: 斑马 (ban ma) is no word of anyone here.
+    assert find_index(conn, "斑马").artists == ()
+
+
+def test_an_accent_typed_or_not_finds_the_artist_by_a_word_of_their_name(conn):
+    from caracole.search import find_index
+
+    index(conn, BY_WORD)
+    for query in ("sabina", "Joaquín", "SABINA"):
+        assert [a.artist_key for a in find_index(conn, query).artists] == ["joaquin-sabina"], query
+
+
+@pytest.mark.parametrize("query,expected", [
+    ("lynrd", ["Lynyrd Skynyrd"]),
+    ("lynrd skynrd", ["Lynyrd Skynyrd"]),
+    ("metalica", ["Metallica"]),
+    ("beatels", ["Beatles"]),
+])
+def test_a_close_spelling_of_an_artists_name_suggests_them(conn, query, expected):
+    from caracole.search import find_index, suggest_artists
+
+    index(conn, BY_WORD)
+    before = find_index(conn, query)
+    suggested = suggest_artists(conn, query)
+    assert [s.artist for s in suggested] == expected
+    assert suggested[0].source == "ug" and suggested[0].key == {
+        "Lynyrd Skynyrd": "lynyrd-skynyrd", "Metallica": "metallica", "Beatles": "beatles"}[expected[0]]
+    assert find_index(conn, query) == before  # a suggestion changes nothing else
+
+
+def test_no_suggestion_for_a_spelling_close_to_no_name_and_none_in_chinese(conn):
+    from caracole.search import suggest_artists
+
+    index(conn, BY_WORD)
+    assert suggest_artists(conn, "zzzzqqq") == []
+    assert suggest_artists(conn, "ly") == []  # too short to be near anything
+    assert suggest_artists(conn, "宋冬") == []
+
+
+def test_a_close_spelling_suggests_lacuerdas_artists_too(conn):
+    from caracole.search import suggest_artists
+
+    lacuerda(conn)
+    [sabina] = suggest_artists(conn, "sabinna")
+    assert (sabina.source, sabina.artist, sabina.key, sabina.songs) == ("lacuerda", "Joaquín Sabina",
+                                                                        "joaquin_sabina", 241)
+    assert suggest_artists(conn, "sabinna", lacuerda=False) == []
+
+
+def test_lacuerdas_artists_by_a_word_of_their_name_stay_beside_the_one_it_is_the_whole_name_of(conn):
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+    from caracole.search import search_lacuerda
+
+    lacuerda(conn)
+    assert [a.artist for a in search_lacuerda(conn, "sabina")[0]] == ["Joaquín Sabina"]
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist("andres_calamaro", "Andrés Calamaro", 325),
+                                                  LCArtist("andres", "Andrés", 3),
+                                                  LCArtist("andresito", "Andresito", 40)])
+    # Andrés first, the whole name; Calamaro holds it as a word, Andresito only inside one.
+    assert [a.artist for a in search_lacuerda(conn, "andres")[0]] == ["Andrés", "Andrés Calamaro"]
+
+
+def test_suggestions_come_for_a_query_nothing_matches_well_and_beat_every_artist_shown(conn):
+    from caracole.search import find_index, suggestions
+
+    index(conn, BY_WORD + [(30130, "la-naranja-metalica", "fuego", "chords")])
+    for query in ("lynrd", "lynrd skynrd"):
+        assert [s.artist for s in suggestions(conn, query, find_index(conn, query))] == ["Lynyrd Skynyrd"]
+    # "metalica" is a word of La Naranja Metalica's name: shown, and Metallica, with more songs, suggested.
+    metalica = find_index(conn, "metalica")
+    assert [(a.artist_key, a.part) for a in metalica.artists] == [("la-naranja-metalica", True)]
+    assert [s.artist for s in suggestions(conn, "metalica", metalica)] == ["Metallica"]
+    # The artist shown is the biggest one, or a song by the query's title is: no suggestion.
+    assert suggestions(conn, "lynyrd", find_index(conn, "lynyrd")) == []
+    assert suggestions(conn, "skynyrd", find_index(conn, "skynyrd")) == []
+    assert suggestions(conn, "metallica", find_index(conn, "metallica")) == []
+
+
+def test_cli_an_artist_by_a_word_of_their_name_leads_and_a_close_spelling_says_did_you_mean(tmp_path):
+    seed(tmp_path, rows=BY_WORD)
+    out = run(tmp_path, "search", "skynyrd").output
+    assert "Lynyrd Skynyrd, an artist: 5 songs (11 tabs). The most tabbed:" in out
+    assert "Sam Grow - Skynyrd" in out and "Did you mean" not in out
+    close = run(tmp_path, "search", "lynrd")
+    assert close.exit_code == 0, close.output
+    assert ('Did you mean Lynyrd Skynyrd?\n  Lynyrd Skynyrd · Ultimate Guitar · 5 songs: '
+            'caracole search --artist "Lynyrd Skynyrd"') in close.output
+    # --artist takes a whole name: a word of one names no one there.
+    assert "No artist named lynyrd in the offline index" in run(tmp_path, "search", "--artist", "lynyrd").output

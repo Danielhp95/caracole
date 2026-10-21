@@ -94,10 +94,16 @@ this page's search, a song of the sites as a dense line (``indexLine``: one
 line however many sites have it, each site's mark and counts on it, its
 identity its ``data-hit``) and MuseScore's pages (``titleLine``); for the
 lookup page, rows (``ugHit``, ``artistHit``, ``siteHit``, ``siteArtist`` and
-``siteArtistSongs``, LaCuerda's artists and their songs); and for both
-``siteUnlisted``, a name under a letter LaCuerda's listings aren't read to yet,
-with ``readArtistPage``, which asks the server to read an artist's page, by its
-slug or by a name, and ``readOutcome``, what LaCuerda answered a read that left
+``siteArtistSongs``, LaCuerda's artists and their songs); and for both what a
+search says beside its results: for a query that found nothing, the closest
+artists' names the indexes have (``didYouMean``, from ``suggest``: each one's
+Their songs), then one card (``nothingFound``: the request by name first, Ask
+LaCuerda (1 request) for a name under a letter LaCuerda's listings aren't read
+to yet, where caracole looked as chips, ``lookedChips`` from ``looked``, and
+"Why can't caracole find it?" folded, from ``unseen``); under results, the chips
+in one muted line when a site wasn't searched whole (``lookedLine``). With them
+``readArtistPage``, which asks the server to read an artist's page, by its slug
+or by a name, and ``readOutcome``, what LaCuerda answered a read that left
 nothing to list.
 
 **One bar.** The search box filters your songs as you type, here. The file can
@@ -113,7 +119,7 @@ songs Ultimate Guitar's and LaCuerda's indexes list ("Estopa · you have 2 · UG
 the songs you removed that match ("Removed 2026-10-20", Add again: a
 ``POST /request`` with Fetch it now, as the request form asks, whose wanted.txt
 line brings it back); then the indexes' songs (``GET /api/search``: the newest
-query alone, the sites left out, or searched in part, said with why), a song a
+query alone), a song a
 line, keyed by its identity key's two parts (the rows' ``artist_key`` and
 ``title_key``, an artist's ``group_key``; a song of yours by its ``identity``),
 so that Ultimate Guitar's, LaCuerda's and gtptabs.com's rows of one song are
@@ -121,11 +127,15 @@ one line, and a row of a song of yours is your song's line, its artist's rows
 under your artist's header. An artist the query names shows their most tabbed
 songs, then "+ 57 more by Estopa", the rest in the group fifty at a time
 (``/api/artist``); a LaCuerda artist the rest the index holds of theirs, or the
-offer to read their page (``POST /lacuerda/artist``), and so does a query
-LaCuerda's index has no artist by while the listing of its letter isn't read
-whole, under the groups. MuseScore's pages, titles alone, come last under a
-header of their own. A line's Get it (``POST /lookup``) shows its request's line
-in the line itself. Enter moves the focus to the first result and never spends a
+offer to read their page (``POST /lacuerda/artist``), and a query LaCuerda's
+index has no artist by while the listing of its letter isn't read whole has Ask
+LaCuerda, under the groups. MuseScore's pages, titles alone, come last under a
+header of their own. Under them, where caracole looked: chips in one muted line
+(UG ✓, LaCuerda: up to C, MuseScore blocked…), each one's detail its tooltip, or,
+for a query that found nothing, "Did you mean" (Their songs opens that artist's
+group, first, from ``/api/artist``) and one card, whose Request “…” by name
+opens the request form. A line's Get it (``POST /lookup``) shows its request's
+line in the line itself. Enter moves the focus to the first result and never spends a
 request. A wanted song whose sheet you picked on LaCuerda says that tonight's
 run gets it (``lacuerda``), and isn't a song not found (``notFound``). The
 request form sits under the results, filled in from the query.

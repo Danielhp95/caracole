@@ -72,7 +72,7 @@ from caracole.web.status import SongFacts, details_href
 
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
-    from caracole.search import IndexFound, SiteArtist, SiteHit
+    from caracole.search import IndexFound, SiteArtist, SiteHit, Suggestion
     from caracole.songs import Song
 
 MAX_BODY = 16 * 1024
@@ -240,10 +240,11 @@ class WebApp:
         self._tickets = itertools.count(1)
         self._newest = 0  # the newest search asked for
         # A query's answer from the offline indexes, kept a while: (when, the answer, its songs and artists as
-        # JSON, the hint, gtptabs.com's and MuseScore's pages, LaCuerda's artists and songs).
+        # JSON, the hint, gtptabs.com's and MuseScore's pages, LaCuerda's artists and songs, the artists spelled
+        # close to the query).
         self._found: OrderedDict[str, tuple[float, IndexFound, list[dict[str, Any]], list[dict[str, Any]],
                                             str | None, list[SiteHit], list[SiteHit], list[SiteArtist],
-                                            list[SiteHit]]] = OrderedDict()
+                                            list[SiteHit], list[Suggestion]]] = OrderedDict()
         # The search's _Mine keeps each song's name forms here, by the song's names.
         self._song_forms: dict[tuple, tuple[frozenset[str], frozenset[str]]] = {}
         self._reads: set[int] = set()  # LaCuerda artist pages being read (jobs): the answers kept go once one is

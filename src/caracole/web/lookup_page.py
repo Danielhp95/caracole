@@ -9,9 +9,11 @@ sheet (``lacuerda``), and an artist's Songs lists those the index holds, or,
 while caracole hasn't read their page, offers to (``POST /lacuerda/artist``,
 one request, a job the page follows on ``/api/jobs``), as it does for a name
 under a letter LaCuerda's listings aren't read to yet. A query may be an
-artist's name alone or a title alone: an artist it names is a row of its own,
-whose Songs lists all their songs (``GET /api/artist``), and comes first when
-it leads. Enter acts
+artist's name alone or a title alone, or a word of an artist's name
+("skynyrd"): an artist it names is a row of its own, whose Songs lists all
+their songs (``GET /api/artist``), and comes first when it leads. A query
+nothing matches well, spelled close to an artist's name ("lynrd"), says "Did
+you mean" that artist, whose name lists their songs the same way. Enter acts
 on the answer of the query typed, never of an older one still on the screen:
 its ``best`` row, the song you meant; when an artist leads, that artist's
 songs; when nothing stands out, nothing, so a guess never spends a request.
@@ -204,22 +206,48 @@ function show(data, text) {
   if (data.index.length) results.append(...group("On Ultimate Guitar", data.index.map(ugSong)));
   if (data.lead !== "artist") results.append(...named);
   if (data.lacuerda_leads !== true) results.append(...lcGroup);
-  // No artist of LaCuerda's by that name, under a letter its listings aren't read to yet: their page may say.
+  // What the search says beside its results, as the library page's bar says it (ROWS_SCRIPT's): nothing found, the
+  // artists it may have meant first, then one card (look it up by name; Ask LaCuerda for a name under a letter its
+  // listings aren't read to yet, whose page may say; where caracole looked; why it may not see an artist); else where
+  // it looked, in one muted line, when a site wasn't searched whole.
   const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
-  if (unlisted) {
-    const [heading, offer] = rowKit.siteUnlisted(unlisted, (go, at) => readThenShow({name: String(unlisted.name || "")}, go, at));
-    if (!lc.length) results.append(heading);
-    results.append(offer);
+  const does = {
+    request: () => byNameFrom(text), requestLabel: "Look “" + text + "” up by name",
+    ask: unlisted ? (go, at) => readThenShow({name: String(unlisted.name || "")}, go, at) : null,
+  };
+  if (!n) {
+    const meant = rowKit.didYouMean(data.suggest, (s) => openSuggested(s));
+    if (meant) results.append(meant);
+    results.append(rowKit.nothingFound(data, text, does));
+  } else {
+    const line = rowKit.lookedLine(data, text, does);
+    if (line) results.append(line);
   }
-  const partly = objects(data.partial);
-  if (partly.length) {
-    results.append(el("p", "hint", "Searched in part: " + partly.map(x => String(x.name || x.source) + " (" +
-      String(x.why || "") + ")").join("; ") + "."));
-  }
-  if (data.hint) results.append(rowKit.prose("hint", data.hint));
   shownFor = text;
   shownData = data;
   if (enterFor === text) { enterFor = null; pickBest(); }
+}
+
+// "Look “…” up by name": the form under the results, filled in from the query ("Artist - Title", else the title), open
+// and in view, the focus on its first field still empty.
+function byNameFrom(text) {
+  const f = document.getElementById("by-name");
+  const [first, ...rest] = text.split(" - ");
+  f.artist.value = rest.length ? first.trim() : "";
+  f.title.value = rest.length ? rest.join(" - ").trim() : text;
+  byName.open = true;
+  byName.scrollIntoView({block: "center"});
+  (f.artist.value ? f.title : f.artist).focus({preventScroll: true});
+}
+
+// A name Did you mean offers: their songs, as their row's Songs lists them, by Ultimate Guitar's ``artist_key`` or
+// the ``slug`` of their LaCuerda page; else the name searched, as typing it would.
+function openSuggested(s) {
+  if (s.source === "ug" && s.artist_key) { openArtist({artist: String(s.artist), artist_key: String(s.artist_key)}, true); return; }
+  if (s.source === "lacuerda" && s.slug) { openSiteArtist({artist: String(s.artist), slug: String(s.slug)}, true); return; }
+  q.value = String(s.artist || "");
+  search();
+  q.focus();
 }
 
 // Enter: the answer's best row, its main action (a song of yours opens, an Ultimate Guitar song is looked up);

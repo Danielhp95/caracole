@@ -1549,6 +1549,56 @@ def test_api_search_gives_artists_readings_and_what_enter_takes(app, conn):
 
 
 
+def by_word_index(conn):
+    """Lynyrd Skynyrd, Sam Grow's song Skynyrd, Metallica and La Naranja Metalica."""
+    from caracole.ug.index import mark_built, upsert_rows
+
+    rows = [(11, "lynyrd-skynyrd", "free-bird", "chords"), (12, "lynyrd-skynyrd", "free-bird", "tabs"),
+            (13, "lynyrd-skynyrd", "simple-man", "chords"), (14, "lynyrd-skynyrd", "sweet-home-alabama", "chords"),
+            (21, "sam-grow", "skynyrd", "chords"), (31, "metallica", "one", "tabs"), (32, "metallica", "fuel", "tabs"),
+            (41, "la-naranja-metalica", "fuego", "chords")]
+    upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1", datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+
+
+def test_api_search_gives_an_artist_by_a_word_of_their_name_first_and_enter_takes_no_song(app, conn):
+    by_word_index(conn)
+    data = as_json(get(app, "/api/search?q=skynyrd"))
+    [artist] = data["artists"]
+    assert {k: artist[k] for k in ("artist_key", "artist", "songs", "part", "group_key")} == {
+        "artist_key": "lynyrd-skynyrd", "artist": "Lynyrd Skynyrd", "songs": 3, "part": True,
+        "group_key": "lynyrd-skynyrd"}
+    assert [h["ug"] for h in data["index"]] == ["sam-grow/skynyrd"]  # the song titled so, still shown
+    assert (data["lead"], data["best"], data["suggest"]) == ("artist", None, [])  # Enter opens their songs
+    assert as_json(get(app, "/api/search?q=lynyrd%20skynyrd"))["artists"][0]["part"] is False
+
+
+def test_api_search_suggests_artists_spelled_close_to_a_query_nothing_matches(app, conn):
+    by_word_index(conn)
+    before = as_json(get(app, "/api/search?q=lynrd"))
+    assert (before["artists"], before["index"], before["best"]) == ([], [], None)
+    assert before["suggest"] == [{"source": "ug", "artist": "Lynyrd Skynyrd", "artist_key": "lynyrd-skynyrd",
+                                  "songs": 3, "group_key": "lynyrd-skynyrd"}]
+    assert before["hint"].startswith("Nothing in the offline Ultimate Guitar index matches well.")  # as it was
+    metalica = as_json(get(app, "/api/search?q=metalica"))
+    assert [a["artist"] for a in metalica["artists"]] == ["La Naranja Metalica"]
+    assert [s["artist"] for s in metalica["suggest"]] == ["Metallica"]
+    # A song of yours by that title matches well: nothing to suggest.
+    add_song(conn, "Someone", "Lynrd")
+    assert as_json(get(app, "/api/search?q=lynrd"))["suggest"] == []
+
+
+def test_api_search_suggests_lacuerdas_artists_by_the_slug_of_their_page(app, conn):
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+
+    either_index(conn)
+    li.store_artists(conn, "tabs/j/index0.html", [LCArtist("joaquin_sabina", "Joaquín Sabina", 241)])
+    assert as_json(get(app, "/api/search?q=sabinna"))["suggest"] == [
+        {"source": "lacuerda", "artist": "Joaquín Sabina", "slug": "joaquin_sabina", "songs": 241,
+         "group_key": "joaquin-sabina"}]
+
+
 def test_api_search_says_a_hit_under_a_misc_artist_is_no_ones(app, conn):
     from caracole.ug.index import mark_built, upsert_rows
 
@@ -1741,6 +1791,53 @@ def test_the_search_says_which_sites_it_left_out_and_why(app, cfg, conn):
     assert data["gtptabs"] == [] and data["musescore"] == []
     reasons = {s["source"]: s["why"] for s in data["skipped"]}
     assert reasons["gtptabs"] == reasons["musescore"] == "turned off in caracole.toml"
+    looked = {s["source"]: (s["state"], s["label"]) for s in data["looked"]}
+    assert looked["gtptabs"] == ("off", "gtptabs.com: off") and looked["musescore"] == ("off", "MuseScore: off")
+
+
+def test_the_search_says_where_it_looked_a_chip_a_site_with_its_detail(app, conn):
+    from caracole.health import record_block
+
+    creep_index(conn)
+    site_pages(conn, gtptabs=["https://gtptabs.com/tabs/18/radiohead/creep.html"])
+    lacuerda_index(conn, letters=("_num", "a", "b", "c"))
+    record_block(conn, "musescore", datetime(2026, 10, 19, tzinfo=UTC), "HTTP 403: a challenge")
+    looked = as_json(get(app, "/api/search?q=lynrd"))["looked"]
+    # UG, gtptabs.com, LaCuerda, MuseScore: done, done, partial (the letters read whole run up to C), blocked.
+    assert [(s["source"], s["state"], s["label"]) for s in looked] == [
+        ("ug", "done", "UG ✓"), ("gtptabs", "done", "gtptabs.com ✓"), ("lacuerda", "partial", "LaCuerda: up to C"),
+        ("musescore", "blocked", "MuseScore blocked")]
+    detail = {s["source"]: s["detail"] for s in looked}
+    assert detail["lacuerda"] == ("LaCuerda's index is still being read: 2 artists so far, with #, A–C read whole; "
+                                  "the nightly run reads the rest.")
+    assert detail["musescore"] == "MuseScore is blocking caracole, so its index is empty."
+    assert all("\n" not in d and d for d in detail.values())  # one line each, for a tooltip
+    # Letters read that don't run from the start, an empty index, and one read whole.
+    from caracole import lacuerda_index as li
+    from caracole.db import kv_set, kv_set_json
+
+    kv_set_json(conn, li.PAGES_KEY, {f"tabs/{x}/index0.html": {"pages": ["index0.html"]} for x in ("e", "j")})
+    conn.commit()
+    lc = {s["source"]: s for s in as_json(get(app, "/api/search?q=lynrdx"))["looked"]}["lacuerda"]
+    assert (lc["state"], lc["label"]) == ("partial", "LaCuerda: E, J only")
+    kv_set(conn, li.COMPLETE_KEY, "2026-10-19T00:00:00+00:00")
+    conn.commit()
+    lc = {s["source"]: s for s in as_json(get(app, "/api/search?q=lynrdy"))["looked"]}["lacuerda"]
+    assert (lc["state"], lc["label"]) == ("done", "LaCuerda ✓")
+
+
+def test_the_search_says_a_site_whose_index_is_empty_is_empty(app, conn):
+    looked = {s["source"]: (s["state"], s["label"]) for s in as_json(get(app, "/api/search?q=creep"))["looked"]}
+    assert looked == {"ug": ("empty", "UG: empty"), "gtptabs": ("empty", "gtptabs.com: empty"),
+                      "lacuerda": ("empty", "LaCuerda: empty"), "musescore": ("empty", "MuseScore: empty")}
+
+
+def test_a_search_the_ug_index_answers_badly_says_what_to_paste_for_an_artist_it_cant_see(app, conn):
+    creep_index(conn)
+    data = as_json(get(app, "/api/search?q=%E5%AE%8B%E5%86%AC%E9%87%8E"))  # 宋冬野
+    assert data["unseen"] == {"strong": False, "entry": '[artist_url]\n"宋冬野" = "https://www.ultimate-guitar.com/artist/…"',
+                              "add": 'caracole add ARTIST "宋冬野"'}
+    assert as_json(get(app, "/api/search?q=radiohead%20creep"))["unseen"] is None
 
 
 LC = "https://acordes.lacuerda.net/"

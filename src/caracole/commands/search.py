@@ -16,8 +16,11 @@ line, and ``--add``, record the song as your pick there (``--lacuerda``).
 A query may be an artist alone or a title alone (``search.find_index``): when
 an artist leads, its most tabbed songs come first, then the songs titled like
 it; when a song does, the artists of that name are a line each, for
-``--artist``. ``--artist NAME`` lists an artist's songs, ``--title TITLE`` a
-title's by any artist, and ``--add N`` numbers exactly what was printed
+``--artist``; a word of an artist's name ("skynyrd") names them too, and a
+query nothing matches well, spelled close to an artist's name ("lynrd"),
+ends with "Did you mean" that artist (``search.suggestions``) and the line
+that lists their songs. ``--artist NAME`` lists an artist's songs, ``--title
+TITLE`` a title's by any artist, and ``--add N`` numbers exactly what was printed
 (``_listing``). ``offer_songs`` is what ``caracole add`` and ``caracole get``
 say to one name, which names no song: the same listing, each hit with its line
 to run.
@@ -237,9 +240,31 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
         shown = len(listing.hits)
         hint = _hint(ask, listing, library[0][0] if library else None, _overrides(cfg))
     typer.echo(f"\n{LACUERDA}")
-    _print_listing(_lacuerda_listing(conn, ask, limit, ug), known, start=shown)
+    lacuerda = _lacuerda_listing(conn, ask, limit, ug)
+    _print_listing(lacuerda, known, start=shown)
+    if ug is not None and ask.artist is None and ask.title is None:
+        _print_suggestions(conn, ask, ug, lacuerda, [hit for hit, _ in library])
     if hint:  # Ultimate Guitar's bare ids: after every place's hits
         typer.echo("\n" + _wrap(hint))
+
+
+def _print_suggestions(conn: sqlite3.Connection, ask: _Ask, ug: _Listing, lacuerda: _Listing,
+                       mine: Sequence[LibraryHit]) -> None:
+    """The artists spelled close to a query nothing matches well (``search.suggestions``), each with the line that
+    lists their songs; nothing when a song of yours is the query's by its title."""
+    from caracole.search import STRONG, IndexFound, suggestions
+
+    if any(h.score >= STRONG and h.via != "artist" for h in mine):
+        return
+    close = suggestions(conn, ask.text, IndexFound(ug.artists, ug.songs, ug.lead), lacuerda.sites)
+    if not close:
+        return
+    names = [s.artist for s in close]
+    said = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
+    typer.echo(f"\nDid you mean {said}?")
+    for s in close:
+        where = "LaCuerda" if s.source == "lacuerda" else "Ultimate Guitar"
+        typer.echo(f"  {s.artist} · {where} · {_count(s.songs, 'song')}: caracole search --artist {_quote(s.artist)}")
 
 
 def _print_removed(conn: sqlite3.Connection, ask: _Ask, limit: int) -> None:
@@ -279,10 +304,11 @@ def _library_hits(conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[Libra
 
 
 def _named_artist(conn: sqlite3.Connection, name: str) -> ArtistHit | None:
-    """The offline index's artist ``name`` names: the first artist row a search for it gives."""
+    """The offline index's artist ``name`` names: the first artist row a search for it gives, never one it names only
+    in part ("lynyrd" is no name of Lynyrd Skynyrd's for ``--artist``)."""
     from caracole.search import find_index
 
-    artists = find_index(conn, name, songs=0).artists
+    artists = [a for a in find_index(conn, name, songs=0).artists if not a.part]
     return artists[0] if artists else None
 
 
@@ -297,6 +323,7 @@ class _Listing:
     artists: tuple[ArtistHit, ...] = ()
     missing: bool = False
     lead: str | None = None  # a search's: "artist" when an artist leads
+    sites: tuple[SiteArtist | SiteHit, ...] = ()  # LaCuerda's artists and songs, for the suggestions
 
     @property
     def hits(self) -> list[IndexHit | SiteHit]:
@@ -408,7 +435,7 @@ def _lacuerda_listing(conn: sqlite3.Connection, ask: _Ask, limit: int, ug: _List
         parts += ["", _fill(f"LaCuerda's {left[1]}.")]
     if not any(a.score >= STRONG for a in artists):  # none of theirs it found is the name ("Bomba Estereo")
         parts += _lacuerda_offer(conn, ask, ug, [*artists, *songs])
-    return _Listing(tuple(parts))
+    return _Listing(tuple(parts), sites=(*artists, *songs))
 
 
 def _lacuerda_offer(conn: sqlite3.Connection, ask: _Ask, ug: _Listing | None,

@@ -164,8 +164,9 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     search(browser, base, "joaquin sabina")
     assert browser.wait("!!document.querySelector('#results section.artist .read-page button')")
     assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
-    partly = browser.js("document.querySelector('#results .skipped.partial').textContent")
-    assert "LaCuerda" in partly and "still being read" in partly and "E, J" in partly
+    chip = browser.js("(() => { const c = document.querySelector('#results .looked-line li[data-state=partial]'); "
+                      "return [c.textContent, c.title]; })()")
+    assert chip[0] == "LaCuerda: E, J only" and "still being read" in chip[1] and "E, J read whole" in chip[1]
     assert "241 songs" in browser.js("document.querySelector('#results .read-page').textContent")
     assert queue.snapshot() == []  # the search asks nothing: reading their page is a button of its own
     browser.click("#results .read-page button")
@@ -177,31 +178,49 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     assert "2 songs on LaCuerda" in browser.js("document.getElementById('bar-status').textContent")
 
 
+def test_a_close_spelling_of_a_lacuerda_artist_opens_their_group_with_the_offer_to_read_their_page(cfg, live, browser):
+    base, queue, runner = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    lacuerda(cfg)
+    search(browser, base, "sabinna")
+    did = "[...document.querySelectorAll('#results .suggestion')].map((s) => s.textContent).join('|')"
+    assert browser.wait(f"{did} === 'Joaquín Sabinaartist · 241 songs on LaCuerdaTheir songs'")
+    browser.click("#results .did-you-mean .their-songs")
+    assert browser.wait("!!document.querySelector('#results section.artist .read-page button')")
+    assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
+    assert browser.js("document.activeElement.matches('#results section.artist')")
+    assert queue.snapshot() == [] and runner.ran == []  # their page is read only once asked to
+
+
 def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_listed(cfg, live, browser):
     # The owner's "estopa", with LaCuerda's listings read as far as E and J only: the index can't tell, the page can.
     base, queue, runner = live
     sites(cfg, ug=[("radiohead", "creep", 4)], gtptabs=["https://gtptabs.com/tabs/2/bunbury/el-extranjero.html"])
     lacuerda(cfg, complete=False)
     search(browser, base, "bunbury")
-    assert browser.wait("!!document.querySelector('#results .read-page.unlisted button')")
-    offer = browser.js("document.querySelector('#results .read-page.unlisted').textContent")
-    assert "LaCuerda hasn't listed B yet" in offer and "“bunbury”" in offer
+    ask = "#results .looked-line .ask-lacuerda"  # gtptabs.com has a song of theirs: under the results
+    assert browser.wait(f"!!document.querySelector('{ask}')")
+    offer = browser.js(f"document.querySelector('{ask}').title")
+    assert offer.startswith("LaCuerda's list doesn't reach B yet") and "“bunbury”" in offer
+    assert browser.js(f"document.querySelector('{ask}').textContent") == "Ask LaCuerda for “bunbury” (1 request)"
     assert queue.snapshot() == []  # the search asked nothing: reading the page is the button's
-    browser.click("#results .read-page.unlisted button")
+    browser.click(ask)
     assert browser.wait(f"{TITLES}.length === 2", timeout=20)
     assert ("lacuerda", "--artist=bunbury") in runner.ran
     assert sorted(browser.js(TITLES)) == ["Infinito", "Lady Blue"]
     header = browser.js(GROUPS)[0]  # a group of their own, first, which counts their songs on gtptabs.com too
     assert header.startswith("Bunbury · LaCuerda") and header.endswith(" · Guitar Pro 1"), header
-    assert browser.js("document.querySelector('#results .read-page.unlisted')") is None
-    # A name LaCuerda has no page for says so, with what it answered, and the button rests.
+    assert browser.js("document.querySelector('#results .ask-lacuerda')") is None
+    # A name LaCuerda has no page for, which nothing else has either: the card's Ask LaCuerda says what LaCuerda
+    # answered, in the card, and rests.
     search(browser, base, "caifanes")
-    assert browser.wait("!!document.querySelector('#results .read-page.unlisted button')")
-    browser.click("#results .read-page.unlisted button")
-    assert browser.wait("!!document.querySelector('#results .read-outcome')", timeout=20)
+    ask = "#results .nothing .ask-lacuerda"
+    assert browser.wait(f"!!document.querySelector('{ask}')")
+    browser.click(ask)
+    assert browser.wait("!!document.querySelector('#results .nothing .read-outcome')", timeout=20)
     said = browser.js("document.querySelector('#results .read-outcome').textContent")
     assert said.startswith("Not found: LaCuerda has no artist page for caifanes.") and "See what it answered" in said
-    assert browser.js("document.querySelector('#results .read-page.unlisted button').disabled")
+    assert browser.js(f"document.querySelector('{ask}').disabled")
 
 
 def test_the_lookup_page_offers_to_read_a_name_lacuerda_hasnt_listed_yet(cfg, live, browser):
@@ -209,8 +228,8 @@ def test_the_lookup_page_offers_to_read_a_name_lacuerda_hasnt_listed_yet(cfg, li
     sites(cfg, ug=[("radiohead", "creep", 4)])
     lacuerda(cfg, complete=False)
     browser.open(base + "lookup?q=bunbury")
-    assert browser.wait("!!document.querySelector('#results .read-page.unlisted button')")
-    browser.click("#results .read-page.unlisted button")
+    assert browser.wait("!!document.querySelector('#results .nothing .ask-lacuerda')")
+    browser.click("#results .nothing .ask-lacuerda")
     assert browser.wait(f"{LOOKUP_TITLES}.length === 2", timeout=20)
     assert ("lacuerda", "--artist=bunbury") in runner.ran
 
