@@ -526,8 +526,10 @@ def _words(text: str) -> list[str]:
 
 # The bar at the foot of the page, the settings and the chord card the script fills in; hidden
 # until it runs. The bar, in the order a keyboard reaches it: the song a semitone down or up, its key
-# in short between them (for the eye; whole for a screen reader); Aa, the text size in a box beside
-# it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
+# in short between them (for the eye; whole for a screen reader); a guitar, the strip of the song's chord
+# shapes shown or hidden (a toggle, pressed while it shows, as the settings' Show all chip is, the two
+# always in step; the body with its waist and sound hole, the neck and the headstock, drawn as paths);
+# Aa, the text size in a box beside it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
 # above the bar's place, the bar out of the way while the song moves: its first button counts down (a
 # ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
 # modal: nothing dims the song or takes it out of reach while they are open (viewer.js).
@@ -544,6 +546,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
 <button type="button" class="step" id="t-up" aria-label="Transpose up a semitone">+</button>
 </span>
+<button type="button" class="tool shapes" id="shapes" aria-label="Chord shapes" aria-pressed="false" aria-controls="strip"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.67 12.95A3.2 3.2 0 1 1 3.05 9.33A1.42 1.42 0 0 0 4.07 8.64A2.4 2.4 0 1 1 7.36 11.93A1.42 1.42 0 0 0 6.67 12.95ZM6.77 9.23A1.07 1.07 0 1 0 5.26 10.74A1.07 1.07 0 1 0 6.77 9.23Z"/><path d="M8.03 9.23L12.68 4.58L12.87 4.76L15.7 2.82L13.18 0.3L11.24 3.13L11.42 3.32L6.77 7.97Z"/></svg></button>
 <span class="size-box" id="size-box">
 <button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes">Aa</button>
 <span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>
