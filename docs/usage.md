@@ -1871,8 +1871,15 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Tap a chord** for its fingerings: up to four shapes from chords-db, after
   any the sheet gives, with the fingers, the barre and the fret they start on
   (swipe, or ‹ ›, for the next). Every place the chord is played lights up
-  while its card is open. The card leaves the song in view: on a phone it
-  sits at the foot, above the bar, about 200 px tall, and the song scrolls
+  while its card is open. Under the shapes, the card lists the chord's notes,
+  each with its interval (C7: C R, E 3, G 5, Bb ♭7), and the scale that fits
+  over it for a solo, with its notes: the key's own mode on the chord's root
+  for a chord in the key (Dm7 in C: D Dorian), the mode of the key a borrowed
+  chord comes from, Mixolydian for a secondary dominant, and by its quality
+  otherwise (Locrian for m7♭5); both follow the transposition, the capo and the
+  mode, and a chord you try instead in the card. The card leaves the song in
+  view: on a phone it sits at the foot, above the bar, about 270 px tall, and
+  the song scrolls
   under it (a chord tapped where the card comes up moves above it, with its
   words); from 900 px wide it opens next to the chord, and goes with it as
   the page scrolls. It keeps its size from one shape to the next. Tap another
@@ -1886,6 +1893,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sheet of yours. It counts only for the very chord it was given for, and only
   where it plays that chord: transposed, Cadd9 becomes a Dadd9, with
   chords-db's shapes, and so does a capo moved off the sheet's fret.
+- **The key on the neck**: the rail's first neck (below) shows the key's
+  scale across the frets, the tonic larger in rust, and Scale or the key's
+  pentatonic box (Major pentatonic for a major key, Minor pentatonic for a
+  minor one). It follows the key, the mode and the capo, in the key of the
+  shapes you play: with a capo, its frets count from the capo, as the chords'
+  necks do.
 - **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
   left lists each chord of the song once, in the order it first comes, with a
   guitar neck (frets 0 to 15, the high e on top) showing every shape of it in

@@ -136,8 +136,8 @@ def test_each_chord_and_each_alternative_has_its_notes_and_its_scale_for_a_solo(
     assert data["tones"]["D"] == "D F# A|R 3 5"  # C, two semitones up
     assert data["tones"]["Bb"] == "Bb D F|R 3 5"
     word = data["scaleWords"][data["solo"]["ionian"][2]]
-    assert word == "minor" and data["scales"]["A minor"] == "A B C D E F G"  # Am in C: A Aeolian
-    assert data["scales"]["B minor"] == "B C# D E F# G A"
+    assert word == "minor" and data["scales"]["A minor"] == "A minor|A B C D E F G"  # Am in C: A Aeolian
+    assert data["scales"]["B minor"] == "B minor|B C# D E F# G A"
     alt = data["alts"]["ionian"][0][0]  # C's first alternative, and its own
     names = spelling(Key(0, "ionian"))
     name = names[alt[0]] + alt[1] + ("" if alt[2] is None else "/" + names[alt[2]])

@@ -305,9 +305,18 @@ a.link[hidden] { display: none; }
 .center { text-align: center; }
 /* The card: the shape at the left, ‹ and › under it; at the right the chords to play instead, in a row
    that scrolls sideways on a phone, so the card keeps its height from chord to chord. */
-.card { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto auto auto 1fr;
-  grid-template-areas: "head head" "shape title" "shape alts" "shape use" "shape note"; column-gap: 14px;
-  height: 226px; }
+.card { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto auto auto 1fr auto;
+  grid-template-areas: "head head" "shape title" "shape alts" "shape use" "shape note" "info info"; column-gap: 14px;
+  height: 268px; }
+/* Under it, the chord's notes with their intervals, and the scale for a solo: a line each, cut rather than
+   wrapped, so the card keeps its height. */
+.card .info { grid-area: info; margin-top: 6px; font-size: .85rem; }
+.info p { height: 1.45em; margin: 2px 0 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.info .lab2 { display: inline-block; min-width: 3.4em; color: var(--muted); font-size: .78rem; font-weight: 600; }
+.info .tn { margin-right: .7em; font-weight: 650; }
+.info .tn small { margin-left: .2em; color: var(--muted); font-size: .78rem; font-weight: 500; }
+.info .sn { font-weight: 650; }
+.info .sx { margin-left: .5em; color: var(--muted); }
 .card:not([hidden]) { display: grid; }
 .card .ui-head { grid-area: head; }
 .shape { grid-area: shape; display: grid; grid-template: "d d" auto "p n" auto / 44px 44px; justify-content: center;
@@ -425,6 +434,15 @@ a.link[hidden] { display: none; }
 .nk-legend button[aria-checked="true"] { border-color: var(--text); font-weight: 650; }
 @media (hover: hover) { .nk-legend button:hover { background: var(--raised); } }
 .sw { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+/* The key's neck: its scale's notes, the tonic larger in the accent's colour, open strings as rings. */
+.kn { padding: 12px 0 10px; }
+.kn + .nk { border-top: 1px solid var(--border); }
+.kn-name { margin: 0 0 6px; font-weight: 700; }
+.kn-switch { margin: 0 0 8px; }
+.kn-dot { fill: var(--muted); stroke: var(--surface); stroke-width: 1; }
+.kn-dot.tonic { fill: var(--accent); }
+.kn-dot.open { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+.kn-dot.open.tonic { stroke: var(--accent); }
 .sw.p0 { background: var(--p1); }
 .sw.p1 { background: var(--p2); }
 .sw.p2 { background: var(--p3); }

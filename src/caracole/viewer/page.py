@@ -626,6 +626,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <h3 class="sub" id="alts-title">Instead, in the key</h3>
 <div class="chips" id="alts"></div>
 <div class="actions"><button type="button" class="btn primary" id="use" hidden></button></div>
+<div class="info"><p class="tones" id="card-tones"></p><p class="solo" id="card-scale"></p></div>
 </section>
 <div class="tip" id="tip" role="tooltip" hidden><p id="tip-line"></p><p class="tip-key" id="tip-key"></p>
 <button type="button" class="chip" id="tip-card"></button></div>

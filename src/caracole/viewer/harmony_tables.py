@@ -16,10 +16,12 @@ script's ``#sheet .c``):
 - ``altNumerals[mode][i]``: for each chord ``data.alts[mode][i]`` offers instead, its numeral's text after its
   ``role`` ("hImaj7": home; "b♭VII": borrowed);
 - ``solo[mode][i]`` and ``altSolo[mode][i]``: the scale for a solo over the chord (``harmony.solo_scale``),
-  by its index in ``scaleWords``: its name is the chord's root as the page names it, a space and that word
-  ("D" "Dorian"), and ``scales`` gives its notes by that name;
+  by its index in ``scaleWords``: ``scales`` gives it by the chord's root as the page names it, a space and
+  that word ("D Dorian"), as harmony.py names it and its notes ("D Dorian|D E F G A B C"; a root may be
+  spelled otherwise there: "C# Locrian" for the page's Db);
 - ``keyScale[mode]``, ``pentatonic[mode]``: the key's scale and its pentatonic box, as semitones above the
-  tonic (``harmony.key_scale``, ``harmony.pentatonic``), and ``pentatonicName[mode]``;
+  tonic (``harmony.key_scale``, ``harmony.pentatonic``), and ``pentatonicName[mode]``; ``tuning``, the
+  pitch class of each open string, low E first (``voicings.TUNING``), for the key's neck;
 - ``progressions[mode]``: each section's ``[section, numerals, repeats, name, ending, key, chords]``
   (``harmony.progressions``; ``section`` counts the sheet's ``section.sec`` elements, ``key`` is
   ``harmony.progression_key``, and ``chords`` the chord played for each numeral of one cycle, by index,
@@ -49,6 +51,7 @@ from typing import Any
 from caracole.viewer import harmony
 from caracole.viewer.harmony import _goes_to
 from caracole.viewer.theory import MODES, Chord, Key, note_pc, spelling
+from caracole.viewer.voicings import TUNING
 
 SHIFTS = range(12)
 _NOTE = re.compile(r"(?<![A-Za-z])([A-G])([#b♯♭]?)")
@@ -143,16 +146,15 @@ def tables(chords: Sequence[Chord | None], key: Key | None, places: Sequence[tup
     sections = sorted({n for _, n in places if n >= 0})
 
     def solo(chord: Chord, mode_key: Key) -> int:
-        name = harmony.solo_scale(chord, mode_key)[0]
-        root = spelling(mode_key)[chord.root]
-        word = name[len(root) + 1:]
+        word = harmony.solo_scale(chord, mode_key)[0].split(" ", 1)[1]
         if word not in words:
             words.append(word)
         for s in SHIFTS:
             shown = Key((mode_key.tonic + s) % 12, mode_key.mode)
             full = spelling(shown)[(chord.root + s) % 12] + " " + word
             if full not in scales:
-                scales[full] = " ".join(harmony.solo_scale(shifted(chord, s), shown)[1])
+                name, notes = harmony.solo_scale(shifted(chord, s), shown)
+                scales[full] = name + "|" + " ".join(notes)
         return words.index(word)
 
     for mode in MODES:
@@ -206,6 +208,7 @@ def tables(chords: Sequence[Chord | None], key: Key | None, places: Sequence[tup
         out["pentatonic"][mode] = box
         out["pentatonicName"][mode] = "major pentatonic" if 4 in box else "minor pentatonic"
         out["progressions"][mode] = _progressions(sections, played, here, after, mode_key)
+    out["tuning"] = [note % 12 for note in TUNING]
     out["scaleWords"] = words
     out["scales"] = scales
     return out

@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 from helpers import viewer_pages as pages
 from helpers.browser import Browser, in_chromium
+from helpers.targets import small_targets
 from helpers.viewer_pages import click_at, drag, rest, tab, tap_at
 
 from caracole.viewer import build_viewer
@@ -190,7 +191,7 @@ def test_on_a_phone_a_chords_card_docks_and_the_next_chord_tapped_fills_it(tmp_p
     card, bar = first["card"], first["bar"]
     assert first["name"] == "G" and not first["inert"] and not first["scrim"]
     assert card["bottom"] == bar["top"] and card["left"] == 0 and card["right"] == 390  # docked on the bar
-    assert 150 <= card["height"] <= 250  # about 200 px: most of the song stays in view
+    assert 150 <= card["height"] <= 290  # about a third of the screen: most of the song stays in view
     assert min(sizes) >= 44
     assert second["name"] == "D" and second["card"] == card  # filled in place, holding still
     assert scrolled["y"] >= second["y"] + 150 and scrolled["card"] == card  # the song scrolls under it
@@ -288,6 +289,46 @@ def test_while_the_song_scrolls_by_itself_a_card_docks_on_the_bar_under_the_pill
     assert again == "Start now"
     assert [resumed[k] for k in ("card", "pill", "bar")] == [docked[k] for k in ("card", "pill", "bar")]
     assert closed["card"] is None and closed["bar"] is None and closed["pill"] == alone["pill"]
+
+
+# The card's notes, each with its interval, and its scale for a solo: its name and its notes.
+NOTES = """({notes: [...document.querySelectorAll('#card-tones .tn')].map((t) => [t.firstChild.textContent,
+    t.querySelector('small').textContent]),
+  scale: document.querySelector('#card-scale .sn') ? [document.querySelector('#card-scale .sn').textContent,
+    document.querySelector('#card-scale .sx').textContent] : null,
+  name: document.getElementById('card-name').textContent,
+  box: (() => { const r = document.getElementById('card').getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height)]; })()})"""
+IN_C = "{title: Notes}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n[C]made [Dm7]up [G7]words [C]here\n"
+
+
+@in_chromium
+def test_a_chords_card_lists_its_notes_and_the_scale_for_a_solo_over_it(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_C)) as b:
+        tap_at(b, *chord(b, "Dm7")[:2])
+        assert b.wait("!document.getElementById('card').hidden")
+        dm7 = b.js(NOTES)
+        b.click("#t-up")
+        b.click("#t-up")
+        em7 = b.js(NOTES)
+        b.js("document.querySelectorAll('#alts .chip')[1].click()")  # an alternative, tried
+        tried = b.js(NOTES)
+        targets = b.js(small_targets(".foot *"))
+    assert dm7["notes"] == [["D", "R"], ["F", "♭3"], ["A", "5"], ["C", "♭7"]]
+    assert dm7["scale"] == ["D Dorian", "D E F G A B C"]
+    assert em7["name"] == "Em7" and em7["notes"] == [["E", "R"], ["G", "♭3"], ["B", "5"], ["D", "♭7"]]
+    assert em7["scale"] == ["E Dorian", "E F# G A B C# D"]
+    assert tried["name"] != "Em7" and tried["notes"] and tried["notes"] != em7["notes"] and tried["scale"]
+    assert dm7["box"] == em7["box"] == tried["box"]  # the card holds still from chord to chord
+    assert targets == []
+
+
+@in_chromium
+def test_a_card_for_a_chord_caracole_cant_read_lists_no_notes(tmp_path):
+    with viewer(tmp_path, written(tmp_path, "{title: T}\n{comment: V}\n[N.C.]made [Xq]up\n"), **DESKTOP) as b:
+        b.js("document.querySelector('#sheet .c').click()")
+        assert b.wait("!document.getElementById('card').hidden")
+        seen = b.js(NOTES)
+    assert seen["notes"] == [] and seen["scale"] is None and seen["name"] == "N.C."
 
 
 # --- both open: Escape, and the focus ---------------------------------------------------------------------

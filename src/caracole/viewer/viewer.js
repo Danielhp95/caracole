@@ -38,7 +38,7 @@
   // nm: the chord names as numerals beside them ("both") or in their place ("numerals"), null for the
   // chords alone; roles: the numerals in their families' colours.
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
-    speed: SPEED.start, nm: null, roles: true };
+    speed: SPEED.start, nm: null, roles: true, kn: "scale" };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -114,6 +114,7 @@
         state.nm = nmOf(saved.nm);
       }
       if (saved.roles === false) state.roles = false;
+      if (saved.kn === "penta") state.kn = "penta";
       if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
       if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
       state.strip = saved.strip === true;
@@ -711,6 +712,58 @@
     }
   };
 
+  // --- the key's neck: its scale, or its pentatonic box, across the frets, the tonic marked ------------
+  // In the key shown, of the shapes played: with a capo, the frets count from it, as the chords' necks do.
+  // The rail's first neck; on a phone, the Harmony panel's. Scale or Pentatonic switches it.
+  const keyNeck = () => {
+    const box = state.kn === "penta";
+    const steps = (box ? table("pentatonic") : table("keyScale")) || [];
+    const tonic = mod12(key.tonic + shift());
+    const group = document.createElement("section");
+    group.className = "kn";
+    const head = group.appendChild(document.createElement("p"));
+    head.className = "kn-name";
+    const penta = String(table("pentatonicName") || "pentatonic");
+    head.textContent = keyName(shift()) + " " + (box ? penta : "scale");
+    const chips = group.appendChild(document.createElement("div"));
+    chips.className = "chips kn-switch";
+    chips.appendChild(button("Scale", !box, () => setKeyNeck("scale")));
+    chips.appendChild(button(penta.charAt(0).toUpperCase() + penta.slice(1), box, () => setKeyNeck("penta")));
+    const frets = 15, left = 14, top = 9, cell = 19, gap = 9;
+    const root = svg("svg", { class: "neck key-neck", viewBox: "0 0 " + (left + cell * frets + 4) + " " + (top * 2 + gap * 5),
+      role: "img", "aria-label": head.textContent + ": the tonic, " + names(shift())[tonic] + ", marked" }, group);
+    for (let s = 0; s < 6; s++) {
+      svg("line", { class: "nk-string", x1: left, y1: top + s * gap, x2: left + cell * frets, y2: top + s * gap }, root);
+    }
+    for (let f = 1; f <= frets; f++) {
+      svg("line", { class: "nk-fret", x1: left + f * cell, y1: top, x2: left + f * cell, y2: top + gap * 5 }, root);
+    }
+    svg("rect", { class: "nk-nut", x: left - 1.5, y: top - 1, width: 3, height: gap * 5 + 2 }, root);
+    for (const f of [3, 5, 7, 9, 12, 15]) {
+      const x = left + (f - 0.5) * cell, mid = top + gap * 2.5;
+      for (const dy of f === 12 ? [-1.5, 1.5] : [0]) svg("circle", { class: "nk-inlay", cx: x, cy: mid + dy * gap, r: 1.8 }, root);
+    }
+    for (let s = 0; s < 6; s++) {
+      for (let f = 0; f <= frets; f++) {
+        const step = mod12(data.tuning[s] + f - tonic);
+        if (steps.indexOf(step) < 0) continue;
+        svg("circle", { class: "kn-dot" + (step === 0 ? " tonic" : "") + (f === 0 ? " open" : ""),
+          cx: f === 0 ? left - 7 : left + (f - 0.5) * cell, cy: top + (5 - s) * gap, r: step === 0 ? 4.2 : 3.2,
+          "data-string": s, "data-fret": f }, root);
+      }
+    }
+    return group;
+  };
+  const setKeyNeck = (which) => {
+    const active = document.activeElement;
+    const from = active && active.closest ? active.closest(".kn") : null;
+    const holder = from ? from.parentElement : null;
+    state.kn = which;
+    render();
+    const to = holder && holder.querySelector('.kn [aria-pressed="true"]');
+    if (to) to.focus({ preventScroll: true });
+  };
+
   // --- the rail of necks: a wide screen's, on the left -----------------------------------------------
   // From 1200 px wide (viewer.css), each chord the sheet shows, once, in the order it first comes (two
   // chords shown by one name are one), with every position of it along a neck and a legend naming them.
@@ -737,6 +790,7 @@
     const focused = active ? Array.prototype.indexOf.call(necksEl.children, active) : -1;
     necksEl.textContent = "";
     if (!on) return;
+    if (key && data.keyScale) necksEl.appendChild(keyNeck());
     const drawn = new Set();
     for (let i = 0; i < count; i++) {
       const c = String(i);
@@ -898,6 +952,7 @@
     };
     line(said(tabs));
     if (shapes.mine && shapes.mine < shapes.list.length) line(said(!tabs), true);
+    drawNotes(i, rep);
 
     const altBox = $("alts");
     $("alts-title").hidden = !list.length;
@@ -916,6 +971,41 @@
     place();
     dock();
   };
+  // The card's chord: its notes, each with its interval, and the scale for a solo over it, by page.py's tables
+  // (the chord's name, and the scale's, on the transposition shown).
+  const lead = (box, text) => {
+    const words = box.appendChild(document.createElement("span"));
+    words.className = "lab2";
+    words.textContent = text;
+  };
+  function drawNotes(i, rep) {
+    const tones = $("card-tones"), scale = $("card-scale");
+    tones.textContent = "";
+    scale.textContent = "";
+    const found = rep && data.tones ? data.tones[nameOf(rep, shift())] : null;
+    if (found) {
+      const [notes, steps] = found.split("|").map((text) => text.split(" "));
+      lead(tones, "Notes");
+      notes.forEach((note, n) => {
+        const pair = tones.appendChild(document.createElement("span"));
+        pair.className = "tn";
+        pair.appendChild(document.createTextNode(note));
+        pair.appendChild(document.createElement("small")).textContent = steps[n] || "";
+      });
+    }
+    const index = !rep || !key ? null
+      : shown.pick >= 0 ? ((table("altSolo") || [])[i] || [])[shown.pick] : (table("solo") || [])[i];
+    const named = index === null || index === undefined || !data.scales ? null
+      : data.scales[names(shift())[mod12(rep[0] + shift())] + " " + data.scaleWords[index]];
+    if (named) {
+      const [name, notes] = named.split("|");
+      lead(scale, "Solo");
+      scale.appendChild(document.createElement("span")).textContent = name;
+      scale.lastChild.className = "sn";
+      scale.appendChild(document.createElement("span")).textContent = notes;
+      scale.lastChild.className = "sx";
+    }
+  }
   const pick = (j) => {
     shown.pick = j;
     shown.at = 0;

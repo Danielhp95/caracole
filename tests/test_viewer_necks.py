@@ -436,6 +436,68 @@ def test_on_a_touch_screen_the_rails_legend_is_easy_to_tap(tmp_path):
     assert radios > len(LEGEND_CHORDS) and short == []
 
 
+# --- the key's neck ------------------------------------------------------------------------------------
+
+IN_C = ("{title: In C}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n"
+        "[C]Made up [G]words to [Am]sing a[F]long\n")
+OPEN_STRINGS = [4, 9, 2, 7, 11, 4]  # E A D G B E, low E first
+MAJOR, DORIAN, MAJOR_BOX = (0, 2, 4, 5, 7, 9, 11), (0, 2, 3, 5, 7, 9, 10), (0, 2, 4, 7, 9)
+# The rail's key neck: where it is, its name, its switch, and its dots as [string (0: low E), fret, tonic].
+KEY_NECK = """(() => { const g = document.querySelector('#necks .kn'); if (!g) return null;
+  return {first: document.getElementById('necks').firstElementChild === g, name: g.querySelector('.kn-name').textContent,
+    switch: [...g.querySelectorAll('.chip')].map((c) => [c.textContent, c.getAttribute('aria-pressed')]),
+    label: g.querySelector('svg').getAttribute('aria-label'),
+    dots: [...g.querySelectorAll('circle[data-fret]')].map((c) => [Number(c.dataset.string), Number(c.dataset.fret),
+      c.classList.contains('tonic')]).sort((a, b) => a[0] - b[0] || a[1] - b[1])}; })()"""
+
+
+def scale_dots(tonic: int, steps: tuple[int, ...], frets: int = 15) -> list[list]:
+    """Where a scale's notes are on the neck, as ``KEY_NECK`` reads them, frets 0 to ``frets``."""
+    return [[s, f, (OPEN_STRINGS[s] + f - tonic) % 12 == 0] for s in range(6) for f in range(frets + 1)
+            if (OPEN_STRINGS[s] + f - tonic) % 12 in steps]
+
+
+def test_the_rails_first_neck_is_the_keys_scale_with_its_tonic_marked(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, IN_C), **DESKTOP) as b:
+        scale = b.js(KEY_NECK)
+        b.click("#necks .kn .chip:nth-of-type(2)")
+        box = b.js(KEY_NECK)
+        focus = b.js("document.activeElement.textContent")
+        chords = b.js(RAIL)["chords"]
+    assert scale["first"] and scale["name"] == "C scale"
+    assert scale["switch"] == [["Scale", "true"], ["Major pentatonic", "false"]]
+    assert scale["dots"] == scale_dots(0, MAJOR) and scale["label"] == "C scale: the tonic, C, marked"
+    assert box["name"] == "C major pentatonic" and box["dots"] == scale_dots(0, MAJOR_BOX)
+    assert box["switch"] == [["Scale", "false"], ["Major pentatonic", "true"]] and focus == "Major pentatonic"
+    assert [c["name"] for c in chords] == ["C", "G", "Am", "F"]  # the chords' necks after it
+
+
+def test_the_keys_neck_follows_the_key_the_mode_and_the_capo(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, IN_C), **DESKTOP) as b:
+        b.click("#t-up")
+        b.click("#t-up")
+        up = b.js(KEY_NECK)
+        b.click("#more")
+        b.js("[...document.querySelectorAll('#modes .chip')].find((c) => c.textContent.startsWith('Dorian')).click()")
+        dorian = b.js(KEY_NECK)
+        b.click("#capo-up")
+        b.click("#capo-up")
+        capo = b.js(KEY_NECK)
+        b.js("document.querySelector('#necks .kn .chip:nth-of-type(2)').click()")
+        box = b.js(KEY_NECK)
+    assert up["name"] == "D scale" and up["dots"] == scale_dots(2, MAJOR)
+    assert dorian["name"] == "D dorian scale" and dorian["dots"] == scale_dots(2, DORIAN)
+    # Capo 2: the shapes are C's, and so are the frets, counted from the capo.
+    assert capo["name"] == "C dorian scale" and capo["dots"] == scale_dots(0, DORIAN)
+    assert box["name"] == "C dorian minor pentatonic" and box["dots"] == scale_dots(0, (0, 3, 5, 7, 10))
+
+
+def test_a_song_with_no_key_has_no_keys_neck(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, "{title: T}\n{comment: V}\n[N.C.]made [Xq]up\n"), **DESKTOP) as b:
+        seen = b.js(KEY_NECK)
+    assert seen is None
+
+
 # --- in a songbook --------------------------------------------------------------------------------------
 
 
