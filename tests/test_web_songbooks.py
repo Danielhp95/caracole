@@ -8,6 +8,7 @@ import re
 import shutil
 import struct
 import threading
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 import pytest
@@ -412,11 +413,12 @@ def test_a_songbook_made_says_made_with_its_page_to_open_and_never_that_the_nigh
     jobs = get(app, "/jobs").body.decode("utf-8")
     assert 'Made · <a href="_songbooks/Beach%20nights/songbook.html">Open songbook</a>' in jobs
     assert "nightly run" not in jobs  # a song's line, "Added: the nightly run looks for it", misleads here
-    # Added to, then renamed: its page, under its new name. Deleted: no page to open, nor the older lines.
+    # Added to: its page again. Renamed, its card is beside the line: no link. Deleted: no page to open, nor
+    # the older lines.
     for n, path, fields, done, page in [
         (2, "/songbook/add", {"name": "Beach nights", "songs": str(songs["creep"].id)}, "Added",
          "_songbooks/Beach%20nights/songbook.html"),
-        (3, "/songbook/rename", {"name": "Beach nights", "new": "Picnic"}, "Renamed", "_songbooks/Picnic/songbook.html"),
+        (3, "/songbook/rename", {"name": "Beach nights", "new": "Picnic"}, "Renamed", None),
         (4, "/songbook/delete", {"name": "Picnic"}, "Deleted", None),
     ]:
         post(app, path, fields, accept=JSON)
@@ -459,6 +461,149 @@ def test_a_songbook_change_on_its_way_is_on_the_page_as_a_songbooks_not_a_songs(
     assert view["kind"] == "songbook" and view["songbook"] == {"action": "rename", "name": "Campfire",
                                                                  "after": "Beach"}
     assert '<article class="sb-card" data-songbook="Campfire">' in page  # where the page shows it
+
+
+# --- the songs a songbook lacks, got now ----------------------------------------------------------
+
+
+@pytest.fixture
+def gig(setup):
+    """The songbook Gig: Hysteria (no sheet), Debaser (not in the library), Creep (a sheet), Uprising (no sheet)
+    and Wonderwall (no sheet, ignored in overrides.toml)."""
+    from caracole.overrides import add_ignore
+
+    _, cfg, conn, songs = setup
+    songs["uprising"] = add_song(conn, "Muse", "Uprising")
+    songs["wonderwall"] = add_song(conn, "Oasis", "Wonderwall")
+    add_ignore(cfg.overrides_file, "Oasis - Wonderwall")
+    make_songbook(cfg.library_dir / FILE_NAME, "Gig", ["Muse - Hysteria", "Pixies - Debaser", "Radiohead - Creep",
+                                                        "Muse - Uprising", "Oasis - Wonderwall"])
+    return songs
+
+
+def test_the_served_songbook_offers_to_get_its_missing_songs_now(app, setup, gig):
+    page = get(app, "/").body.decode("utf-8")
+    card = re.search(r'<article class="sb-card" data-songbook="Gig">.*?</article>', page, re.S).group(0)
+    form = re.search(r'<form method="post" action="/songbook/get">(.*?)</form>', card, re.S).group(1)
+    assert '<input type="hidden" name="csrf" value="tok">' in form and 'name="name" value="Gig"' in form
+    assert ">Get the 2 missing songs now</button>" in form  # Hysteria and Uprising: not Debaser, nor Wonderwall
+    # Each song the library has is named by its id, for the page to show its lookup's line there; those the
+    # button looks up are marked, for their lines to say so at once.
+    ids = re.findall(r'<li(?: class="missing")? data-song="(\d+)"( data-get)?>', card)
+    assert ids == [(str(gig["hysteria"].id), " data-get"), (str(gig["creep"].id), ""),
+                   (str(gig["uprising"].id), " data-get"), (str(gig["wonderwall"].id), "")]
+    # The file on disk can't look anything up: the commands, as for the rest.
+    from caracole.library_page import build_library_page
+    from caracole.overrides import load_overrides
+
+    _, cfg, conn, _ = setup
+    on_disk = build_library_page(conn, cfg, load_overrides(cfg.overrides_file), datetime.now(UTC))
+    assert 'action="/songbook/get"' not in on_disk and ">Get the 2 missing songs now<" not in on_disk
+    assert "data-get" not in on_disk.split("<script>")[0]
+
+
+def test_a_songbook_with_every_sheet_offers_nothing_to_get(app, setup, campfire):
+    keep_sheet(setup[2], setup[1], setup[3]["hysteria"], tab_id=3)
+    render_sheets(setup[2], setup[1])
+    assert 'action="/songbook/get"' not in get(app, "/").body.decode("utf-8")
+
+
+def test_get_the_missing_songs_queues_a_lookup_of_each_in_order_then_the_songbook_again(app, setup, queue, gig):
+    queue._limit = 10
+    response = post(app, "/songbook/get", {"name": "gig"})
+    assert response.status == 303 and header(response, "location") == "/jobs#job-3"
+    assert steps(queue) == [
+        [("get", "--progress", "--", "Muse", "Hysteria")],
+        [("get", "--progress", "--", "Muse", "Uprising")],
+        [("songbook", "render", "--", "Gig")],  # once they are done: the songbook made again with their sheets
+    ]
+    assert [job.title for job in queue.snapshot()[::-1]] == [
+        "Fetch Muse - Hysteria", "Fetch Muse - Uprising", 'Make "Gig" again, with the songs it got']
+    # Asked again while they wait, nothing new is queued.
+    post(app, "/songbook/get", {"name": "Gig"})
+    assert len(queue.snapshot()) == 3
+
+
+def test_the_pages_script_gets_the_songbooks_job_and_each_lookup(app, setup, queue, gig):
+    queue._limit = 10
+    data = json.loads(post(app, "/songbook/get", {"name": "Gig"}, accept=JSON).body)
+    assert data["job"]["kind"] == "songbook" and data["job"]["line"]["text"] == "Queued behind 2 requests…"
+    assert data["job"]["songbook"] == {"action": "render", "name": "Gig", "after": "Gig"}
+    assert [(v["kind"], v["songId"], v["display"], v["line"]["text"]) for v in data["jobs"]] == [
+        ("song", gig["hysteria"].id, "Muse - Hysteria", "Queued…"),
+        ("song", gig["uprising"].id, "Muse - Uprising", "Queued behind 1 request…")]
+    assert data["left"] == 0
+
+
+def test_a_queue_with_less_room_gets_the_first_missing_songs_and_says_how_many_wait(app, setup, queue, gig):
+    # The queue holds 3 here: the first two lookups, then the songbook; a tap once it empties gets the rest.
+    add_song(setup[2], "Muse", "Starlight")
+    make_songbook(setup[1].library_dir / FILE_NAME, "Late", ["Muse - Hysteria", "Muse - Uprising", "Muse - Starlight"])
+    data = json.loads(post(app, "/songbook/get", {"name": "Late"}, accept=JSON).body)
+    assert [v["display"] for v in data["jobs"]] == ["Muse - Hysteria", "Muse - Uprising"] and data["left"] == 1
+    assert steps(queue)[-1] == [("songbook", "render", "--", "Late")]
+    full = post(app, "/songbook/get", {"name": "Gig"}, accept=JSON)
+    assert full.status == 503 and "queue is full" in json.loads(full.body)["error"]
+
+
+@pytest.mark.parametrize("fields,status,said", [
+    ({"name": "Picnic"}, 404, 'No songbook named "Picnic"'),
+    ({"name": "Campfire"}, 409, "has a sheet"),
+    ({"name": ""}, 400, "needs a name"),
+])
+def test_get_the_missing_songs_is_refused_before_anything_is_queued(app, setup, queue, gig, fields, status, said):
+    _, cfg, conn, songs = setup
+    make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Radiohead - Creep", "Pixies - Debaser",
+                                                             "Oasis - Wonderwall"])  # nothing it can get
+    response = post(app, "/songbook/get", fields)
+    assert response.status == status
+    assert said in response.body.decode("utf-8").replace("&quot;", '"')
+    assert queue.snapshot() == []
+
+
+class GetsAndRenders(InProcess):
+    """``caracole get`` faked (a sheet kept and rendered, as its stages would, no request), and every other
+    command run here, as the server's child process would: ``caracole songbook render`` makes the files."""
+
+    def __init__(self, toml, cfg):
+        super().__init__(toml)
+        self.cfg = cfg
+
+    def __call__(self, args, emit):
+        if args[0] != "get":
+            return super().__call__(args, emit)
+        from caracole.songs import find_song
+
+        self.calls.append(list(args))
+        conn = db.connect(self.cfg.db_path)
+        try:
+            from caracole.normalize import identity_key
+
+            song = find_song(conn, identity_key(args[-2], args[-1]))
+            keep_sheet(conn, self.cfg, song, tab_id=500 + song.id)
+            render_sheets(conn, self.cfg)
+        finally:
+            conn.close()
+        return 0
+
+
+@pytest.mark.slow
+def test_once_the_lookups_are_done_the_songbook_holds_their_sheets(setup, gig):
+    toml, cfg, conn, songs = setup
+    queue = JobQueue(GetsAndRenders(toml, cfg), limit=10)
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    render_songbooks(conn, cfg, Overrides(), runner=FakeChordPro())
+    assert "Hysteria" not in (cfg.library_dir / "_songbooks" / "Gig" / "songbook.cho").read_text(encoding="utf-8")
+    post(app, "/songbook/get", {"name": "Gig"}, accept=JSON)
+    queue.run_pending()
+    assert [job.state for job in queue.snapshot()] == ["done"] * 3, [j.steps[0].output for j in queue.snapshot()]
+    made = (cfg.library_dir / "_songbooks" / "Gig" / "songbook.cho").read_text(encoding="utf-8")
+    assert "Hysteria" in made and "Uprising" in made  # their sheets, in it now
+    line = jobs_json(app, "3")["jobs"][0]["line"]
+    assert (line["text"], line["link"]) == ("Made", {"label": "Open songbook", "href": "_songbooks/Gig/songbook.html"})
+    page = get(app, "/").body.decode("utf-8")
+    card = re.search(r'<article class="sb-card" data-songbook="Gig">.*?</article>', page, re.S).group(0)
+    assert 'action="/songbook/get"' not in card  # Debaser isn't in the library, Wonderwall is ignored: nothing to get
 
 
 # --- the songbook's files ------------------------------------------------------------------------

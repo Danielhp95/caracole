@@ -54,6 +54,24 @@ def test_a_removal_says_removing_while_it_runs_then_removed():
     assert job_line(failed, None) == Line("failed", "wanted.txt can't be read.", details=details_href(3))
 
 
+def test_a_songbook_change_links_its_page_once_made_or_added_to_only():
+    # Made, or added to, the songbook's page is the next thing to open; moved, taken out of or renamed, the
+    # songbook's own card, where its buttons are, shows it already: no link to repeat it.
+    page = "_songbooks/Campfire/songbook.html"
+    said = {}
+    for action, args in [("make", ("Campfire", "Muse - Hysteria")), ("add", ("Campfire", "Muse - Hysteria")),
+                         ("move", ("Campfire", "Muse - Hysteria", "2")), ("remove", ("Campfire", "Muse - Hysteria")),
+                         ("rename", ("Picnic", "Campfire"))]:
+        command = ("songbook", action, "--", *args)
+        made = Job(4, action, "songbook\x1f" + "\x1f".join(command), [Step("Changing the songbook", command)],
+                   state="done")
+        made.steps[0].state = "done"
+        line = job_line(made, None, songbook_page=page)
+        said[action] = (line.text, line.link)
+    assert said == {"make": ("Made", ("Open songbook", page)), "add": ("Added", ("Open songbook", page)),
+                    "move": ("Moved", None), "remove": ("Taken out", None), "rename": ("Renamed", None)}
+
+
 def test_a_done_request_whose_song_has_a_sheet_is_ready_with_a_link_to_it():
     done = job("done", states=["done"] * 4)
     assert job_line(done, READY) == Line("ready", "Ready", ("Open sheet", "Radiohead/Creep/sheet.pdf"))

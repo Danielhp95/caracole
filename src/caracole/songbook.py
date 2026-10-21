@@ -557,6 +557,19 @@ def songbook_entries(conn: sqlite3.Connection, library_dir: Path, overrides: Ove
     return [_entry_of(conn, library_dir, overrides, text) for text in book.songs]
 
 
+def songs_to_get(entries: Iterable[Entry], overrides: Overrides) -> list[Song]:
+    """The songs of a songbook's entries a lookup could get a sheet for now (caracole serve's Get the missing
+    songs now): those the library has with no sheet yet, in the songbook's order, once each, but those
+    overrides.toml ignores. A song "not in the library" is no one's to look up."""
+    songs: dict[int, Song] = {}
+    for e in entries:
+        song = e.song
+        if (e.missing == MISSING_SHEET and song is not None and song.status != "ignored"
+                and song.key not in overrides.ignore):
+            songs.setdefault(song.id, song)
+    return list(songs.values())
+
+
 def _entry_of(conn: sqlite3.Connection, library_dir: Path, overrides: Overrides, text: str) -> Entry:
     song = find_entry_song(conn, text)
     if song is None:

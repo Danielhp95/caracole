@@ -16,6 +16,7 @@ import html
 import json
 import re
 import threading
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -65,15 +66,20 @@ class FakeCaracole:
     once; a songbook named in ``fail`` fails its command with that error.
     """
 
-    def __init__(self, cfg, *, fail=None, slow_add=False, down=0):
+    def __init__(self, cfg, *, fail=None, slow_add=False, down=0, sheets=False):
         self.cfg = cfg
         self.fail = fail or {}
         self.slow_add = slow_add
         self.down = down
+        self.sheets = sheets  # a lookup keeps a sheet and renders it, as caracole get does, for the songbooks
         self.polls = Polls()
+        self.calls: list[list[str]] = []  # the commands run, in order
+        self.posted: list[tuple[float, str, bytes]] = []  # each POST the page sent: when, where, its form
 
     def __call__(self, args, emit):
         from caracole.wanted import sync_wanted
+
+        self.calls.append(list(args))
 
         conn = db.connect(self.cfg.db_path)
         try:
@@ -132,6 +138,17 @@ class FakeCaracole:
             songbook.remove_from_songbook(toml, name, rest)
         elif action == "rename":
             songbook.rename_songbook(toml, name, rest[0])
+        elif action == "render":  # its files, made again from the sheets the songs have now
+            from helpers.songbooks import FakeChordPro
+
+            from caracole.overrides import load_overrides
+
+            conn = db.connect(self.cfg.db_path)
+            try:
+                songbook.render_songbooks(conn, self.cfg, load_overrides(self.cfg.overrides_file),
+                                          runner=FakeChordPro(), only=name)
+            finally:
+                conn.close()
         else:
             songbook.delete_songbook(toml, name)
         emit(f"ran songbook {action}")
@@ -156,9 +173,15 @@ class FakeCaracole:
             emit(f"error: {self.fail[display]}")
             return 1
         song = find_song(conn, override_key(display))
-        folder = song_dir(self.cfg.library_dir, song)
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
+        if self.sheets:
+            from helpers.songbooks import keep_sheet, render_sheets
+
+            keep_sheet(conn, self.cfg, song, tab_id=700 + song.id)
+            render_sheets(conn, self.cfg)
+        else:
+            folder = song_dir(self.cfg.library_dir, song)
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
         update_song(conn, song.id, status="found", ug_dirty=False)
         stage("sheet", "done", "tab 1 from Ultimate Guitar")
         emit("ran get")
@@ -191,6 +214,8 @@ def serve(cfg, monkeypatch):
         answer = app.handle
 
         def handle(request):
+            if request.method == "POST":
+                runner.posted.append((time.monotonic(), request.target, request.body))
             if request.target.startswith("/jobs.json") and runner.down > 0:
                 runner.down -= 1
                 response = app.finish(Response(503, json.dumps({"error": "The database can't be read: locked."})
@@ -1015,6 +1040,68 @@ def test_a_songbook_change_on_its_way_when_the_page_loads_shows_on_its_songbook(
     assert attribute(dom, "data-books") == {"same": True, "locked": True, "running": True}
 
 
+@pytest.mark.parametrize("size,media", [("390,844", "light"), ("1280,800", "dark")])
+def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve, cfg, conn, tmp_path, size, media):
+    # The songbook's songs without a sheet, looked up now, one after the other, in its order, each line under the
+    # song's name in the songbook (and on its card); then the songbook made again with their sheets: Made · Open
+    # songbook. A song not in the library is no one's to look up. The page stays where it is.
+    from helpers.songbooks import FakeChordPro, keep_sheet, render_sheets
+
+    from caracole.overrides import Overrides
+    from caracole.songbook import make_songbook, render_songbooks, songbooks_file
+
+    creep = add_song(conn, "Radiohead", "Creep")
+    keep_sheet(conn, cfg, creep, tab_id=2)
+    render_sheets(conn, cfg)
+    for title in ("Hysteria", "Uprising"):
+        add_song(conn, "Muse", title)
+    make_songbook(songbooks_file(cfg.library_dir), "Campfire",
+                  ["Muse - Hysteria", "Pixies - Debaser", "Radiohead - Creep", "Muse - Uprising"])
+    render_songbooks(conn, cfg, Overrides(), runner=FakeChordPro())
+    runner = FakeCaracole(cfg, sheets=True)
+    url = serve(runner, "(() => {})();\n")
+    book = '#songbooks .sb-card[data-songbook="Campfire"]'
+    line = f"(() => {{ const p = document.querySelector('{book} > .progress'); return p ? p.textContent : ''; }})()"
+    songs = f"""Array.from(document.querySelectorAll('{book} li')).map((li) => [li.querySelector('.t').textContent,
+        (li.querySelector('.progress') || {{}}).textContent || '', (li.querySelector('.why') || {{}}).textContent || ''])"""
+    seen = f"""(() => {{ window.seen = window.seen || []; const note = () => {{
+        for (const p of document.querySelectorAll('{book} .progress')) if (!window.seen.includes(p.textContent))
+          window.seen.push(p.textContent); }};
+      new MutationObserver(note).observe(document.body, {{ subtree: true, childList: true, characterData: true }});
+      return true; }})()"""
+    width, height = (int(n) for n in size.split(","))
+    with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
+        page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": media}])
+        page.open(url)
+        page.click("#songbooks > details > summary")
+        get_it = f"{book} form[action='/songbook/get'] button"
+        assert page.js(f"document.querySelector({json.dumps(get_it)}).textContent") == "Get the 2 missing songs now"
+        assert page.js(seen) and page.js(SHIFTS)
+        page.click(get_it)
+        assert page.wait(f"{line}.startsWith('Made')", timeout=30), (page.js(line), page.js(songs))
+        page.js("new Promise((done) => setTimeout(done, 600))")  # the last frames, and any shift in them
+        done = {"line": page.js(line), "songs": page.js(songs), "seen": page.js("window.seen"),
+                "get": page.js(f"document.querySelector({json.dumps(get_it)}) === null"),
+                "path": page.js("location.pathname"),
+                "wide": page.js("document.documentElement.scrollWidth <= innerWidth"),
+                "open": page.js(f"document.querySelector('{book} > .progress a').getAttribute('href')"),
+                "tray": page.js("document.getElementById('tray').hidden"),
+                "shifts": page.js("window.shifts")}
+    assert [c[1:] for c in runner.calls] == [["--progress", "--", "Muse", "Hysteria"],
+                                             ["--progress", "--", "Muse", "Uprising"], ["render", "--", "Campfire"]]
+    assert done["line"] == "Made·Open songbook" and done["open"] == "_songbooks/Campfire/songbook.html"
+    # Each lookup said how it went under its song's name, to the last; Debaser, not in the library, waits.
+    assert done["songs"] == [["Hysteria", "Ready·Open sheet", ""], ["Debaser", "", "missing: not in the library"],
+                             ["Creep", "", ""], ["Uprising", "Ready·Open sheet", ""]], done["songs"]
+    assert any(text.startswith("Queued behind") for text in done["seen"]), done["seen"]  # the songbook waited
+    assert any("Ultimate Guitar" in text for text in done["seen"]), done["seen"]  # each song's lookup, as it ran
+    assert done["get"] and done["path"] == "/" and done["wide"]  # nothing left to get: Debaser isn't in the library
+    # Nothing on the screen moves as they go, nor once the songbook is made (its songs' "missing" notes gone, it
+    # keeps its height until your next click). (The masthead's Requests counts what runs, as on every page.)
+    assert [s for s in done["shifts"] if s["value"] > 0 and s["moved"] != ["links"]] == [], done["shifts"]
+    assert done["tray"] is True  # the songbook's card says how they go: no list of requests in the corner
+
+
 # Notes every layout shift that no input brought about since the page loaded (buffered): how much, and what
 # moved. A request's answer that comes seconds after its tap moves nothing on the screen.
 SHIFTS = """(() => {
@@ -1092,11 +1179,11 @@ COUNTS = """(() => ({
 
 
 @pytest.mark.parametrize("left,size", [("#show=wanted", "390,844"), ("#view=rows", "390,844"), ("#q=creep", "1280,800")])
-def test_remove_it_goes_back_to_the_library_where_the_song_says_removing_then_removed(serve, cfg, conn, tmp_path,
-                                                                                      left, size):
-    # The question is a page of its own; its answer goes back to the library as you left it (its filter or
-    # view, here, and the Songbooks section open above the list), at the song's card, which says how the
-    # removal goes: no requests page.
+def test_remove_counts_down_on_the_card_then_removes_the_song_there(serve, cfg, conn, tmp_path, left, size):
+    # One tap: the song's own line says "Removing in 5 s · Undo" and what goes, the focus on Undo, and nothing is
+    # sent for those five seconds but the question of what goes; then the removal, and the line follows it to
+    # Removed. The page never leaves the library as you left it (its filter or view here, the Songbooks section
+    # open above the list), and nothing on the screen moves but the line.
     from caracole.songbook import make_songbook, songbooks_file
 
     for n in range(8):
@@ -1105,8 +1192,10 @@ def test_remove_it_goes_back_to_the_library_where_the_song_says_removing_then_re
     for n in range(4):  # under Creep, on the screen with it
         add_song(conn, "Wilco", f"Tune {n}")
     make_songbook(songbooks_file(cfg.library_dir), "Campfire", [f"Band - Song {n:02}" for n in range(6)])
-    url = serve(FakeCaracole(cfg), "(() => {})();\n")
+    runner = FakeCaracole(cfg)
+    url = serve(runner, "(() => {})();\n")
     item = f'#list [data-id="{creep.id}"]'
+    line = "window.song.querySelector('.progress')"  # its card, or its row, the same node once it is gone
     width, height = (int(n) for n in size.split(","))
     with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
         page.open(url + left)
@@ -1116,33 +1205,68 @@ def test_remove_it_goes_back_to_the_library_where_the_song_says_removing_then_re
                          "document.querySelector('#songbooks > details').open")
         if left == "#view=rows":
             page.click(f"{item} .row-more")
-        page.click(f"{item} form.remove button")
-        assert page.wait("location.pathname === '/remove' && document.querySelector('form.confirm') !== null")
-        page.click("form.confirm button.danger")
-        assert page.wait(f"location.pathname === '/' && document.querySelector('{item} .progress') !== null")
+        page.js(f"window.song = document.querySelector('{item}'); window.song.scrollIntoView({{ block: 'center' }})")
         assert page.js(SHIFTS)
-        assert page.wait(f"location.hash === {json.dumps(left)}"), page.js("location.hash")  # as you left it
-        at = page.js(f"""(() => {{ const r = document.querySelector('{item}').getBoundingClientRect();
-            return [document.activeElement === document.querySelector('{item}'), r.top >= 0 && r.bottom <= innerHeight];
-            }})()""")
-        assert at == [True, True]  # the song's card in view, the focus on it
-        first = page.js(f"document.querySelector('{item} .progress').textContent")
-        assert first in ("Queued…", "Removing from caracole…"), first
-        assert page.wait("(() => { const c = document.querySelector('#list .gone .progress'); "
-                         "return c !== null && c.textContent === 'Removed'; })()", timeout=20)
-        gone = page.js("""(() => { const c = document.querySelector('#list .gone');
+        tapped = time.monotonic()
+        page.click(f"{item} form.remove button")
+        assert page.wait(f"{line} !== null && {line}.textContent.startsWith('Removing in 5 s')"), page.js(
+            f"{line} && {line}.textContent")
+        assert page.wait(f"{line}.textContent.includes('never touches Music/.')"), page.js(f"{line}.textContent")
+        counting = page.js(f"""(() => {{ const p = {line}; const undo = p.querySelector('button.undo');
+            const r = undo.getBoundingClientRect();
+            return {{ text: p.textContent, role: p.getAttribute('role'), focus: document.activeElement === undo,
+                      undo: undo.getAttribute('aria-label'), big: r.width >= 44 && r.height >= 44,
+                      remove: window.song.querySelector('form.remove button').disabled }}; }})()""")
+        assert page.wait(f"{line}.textContent === 'Removed'", timeout=20), page.js(f"{line}.textContent")
+        gone = page.js("""(() => { const c = window.song;
             return [c.querySelector('h2').textContent, c.querySelectorAll('a, button, form').length,
-                    c.querySelector('.progress').getAttribute('role')]; })()""")
+                    c.querySelector('.progress').getAttribute('role'), location.pathname, location.hash]; })()""")
         page.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
         shifts, counts = page.js("window.shifts"), page.js(COUNTS)
-    assert gone == ["Creep", 0, "status"]  # nothing left to open or to ask for
+    assert counting["role"] == "status" and counting["focus"] and counting["remove"]  # Remove… waits, Undo has it
+    assert counting["undo"] == "Undo: keep Creep by Radiohead"
+    assert re.match(r"Removing in [1-5] s", counting["text"]) and "Undo" in counting["text"], counting["text"]
+    assert counting["text"].endswith("Deletes its record; never touches Music/."), counting["text"]  # no file yet
+    assert counting["big"] or width >= 500  # a thumb's target on a phone
+    # Nothing sent but the question for five seconds; then the removal, of that song, by its key.
+    removals = [(at - tapped, body) for at, target, body in runner.posted if target == "/remove"]
+    asked, confirmed = [r for r in removals if b"confirm=1" not in r[1]], [r for r in removals if b"confirm=1" in r[1]]
+    assert len(asked) == 1 and asked[0][0] < 1.5, removals
+    assert len(confirmed) == 1 and confirmed[0][0] >= 4.9, removals
+    assert f"key={creep.key.replace('/', '%2F')}".encode() in confirmed[0][1]
+    assert ["remove", "--yes", "--", "Radiohead - Creep"] in runner.calls
+    assert gone == ["Creep", 0, "status", "/", left]  # still the library, as you left it; nothing left to open
     assert find_song(conn, creep.key) is None
-    # Its card keeps its place and its size, Removed, until the page is loaded again: nothing under it moves,
-    # only its own line, a little, to where its facts were.
-    assert all(s["moved"] == ["progress"] for s in shifts) and sum(s["value"] for s in shifts) < 0.01, shifts
+    # Its card keeps its place, its size and its line where it was, Removed, until the page is loaded again:
+    # nothing on the screen moves (the line's dot, by a pixel, as its words change: no shift at all).
+    assert [s for s in shifts if s["value"] > 0] == [], shifts
     # It counts no more: the masthead, the buttons and the count agree on twelve songs left.
     searched = left == "#q=creep"
     assert counts == {"summary": ["12 songs", "0 found", "12 wanted"],
                       "chips": {"all": "0" if searched else "12", "found": "0", "wanted": "0" if searched else "12",
                                 "review": "0"},
                       "count": "0 of 12 songs" if searched else "12 songs"}, counts
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+def test_undo_keeps_the_song_and_nothing_is_sent(serve, cfg, conn, tmp_path, size):
+    creep = add_song(conn, "Radiohead", "Creep")
+    add_song(conn, "Oasis", "Wonderwall")
+    runner = FakeCaracole(cfg)
+    url = serve(runner, "(() => {})();\n")
+    item = f'#list [data-id="{creep.id}"]'
+    line = f"document.querySelector('{item} .progress')"
+    width, height = (int(n) for n in size.split(","))
+    with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
+        page.open(url)
+        page.click(f"{item} form.remove button")
+        assert page.wait(f"{line} !== null && !!{line}.querySelector('button.undo')")
+        page.press("Enter")  # the focus is on Undo
+        assert page.wait(f"{line}.textContent === 'Not removed'"), page.js(f"{line}.textContent")
+        time.sleep(5.5)  # past the five seconds
+        after = page.js(f"""(() => {{ const go = document.querySelector('{item} form.remove button');
+            return {{ line: {line}.textContent, enabled: !go.disabled, focus: document.activeElement === go,
+                      gone: document.querySelectorAll('.gone').length }}; }})()""")
+    assert after == {"line": "Not removed", "enabled": True, "focus": True, "gone": 0}, after
+    assert not any(b"confirm=1" in body for _, target, body in runner.posted), runner.posted
+    assert runner.calls == [] and find_song(conn, creep.key) is not None

@@ -580,7 +580,7 @@ its own fonts, so a Chinese sheet has one even while its PDF waits for a font.
 `services.caracole.web` runs `caracole serve` as `caracole-web.service`: the
 library page, a form to request songs, a Fetch now button on each wanted
 song, a picker on each song that needs review, a Remove… button on each
-card, which asks first, Search all, which lists what the offline indexes hold
+card, which says what goes and waits five seconds with Undo, Search all, which lists what the offline indexes hold
 of the sites under the search box, with Get it, and the lookup page
 (`/lookup`), which shows a sheet seconds after you pick a song
 ([usage.md](usage.md), "caracole serve"). A request runs caracole commands

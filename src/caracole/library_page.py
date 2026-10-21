@@ -94,7 +94,7 @@ the query.
 
 ``caracole serve`` serves the same page with ``controls`` (``WebControls``): the
 search of the sites, a form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
-button on each card (the server asks before it removes anything), and a CSP
+button on each card (it counts down five seconds, with Undo, before it sends anything), and a CSP
 that lets the forms post to the server (``form-action 'self'``) and the script
 ask it how its requests go (``connect-src 'self'``). The script posts the forms
 with fetch(), so the page stays where it is: each song's card shows its
@@ -107,12 +107,19 @@ bar, and two requests or more also show in a corner, folded to one line that ope
 JavaScript the forms post as forms. The file on disk has none of it, and lets
 no form be sent and nothing be asked.
 
+Remove… stays on the page: one tap and the song's own line says "Removing in 5 s
+· Undo", the focus on Undo, with what goes in one sentence under it (the
+server's answer to the question, ``removal.brief``: caracole's files of the
+song, its record, its wanted.txt line; never Music/). Nothing else is sent for
+those five seconds, and Undo stops it ("Not removed", the focus back on
+Remove…); then the page posts the removal with the song's key, and the line
+follows it ("Removing…", "Removing from caracole…", then "Removed"), as tall as
+it was. The card is then a ``gone`` one, its name alone, as tall as it was and
+its line where it was, until the page is loaded again. Without JavaScript,
 Remove…'s question is a page of the server's; Remove it, and Keep it, come back
 to this page as it was left (Remove… sends the address after # along, ``back``),
 at the song's card: ``song=ID`` in the address, which the script scrolls to and
-focuses, then drops. The card's line follows the removal ("Removing from
-caracole…", then "Removed"), and the card is then a ``gone`` one, its name
-alone, until the page is loaded again.
+focuses, then drops.
 
 The Songbooks section's forms, and the Select bar's Make songbook, post with
 fetch() too: the songbook's card says how its change goes on a line under its
@@ -121,8 +128,13 @@ card at the section's end, which opens on it; once the change is over the
 section is drawn again from the server's own HTML (``songbooks_section``,
 which ``/jobs.json`` gives with the job: the script's ``drawSongbooks`` reads
 it with DOMParser, which runs no script, and keeps each card that shows a line
-where it is, so that its line goes on being read out). On the served page the
-section is there even before the first songbook, hidden.
+where it is, so that its line goes on being read out, and the height it had while
+it is taller than what it holds, until the next click or key). On the served page the
+section is there even before the first songbook, hidden. A songbook with songs
+of yours that have no sheet yet has Get the N missing songs now (each such
+song's ``<li>`` marked ``data-get``; every song's names its id, ``data-song``):
+one lookup per song, each one's line under its name there and on its card, then
+the songbook made again, on its own line.
 
 A song in review carries its candidates (``review_choices``), numbered as
 ``caracole review`` numbers them, and its card a picker (the script's
@@ -957,6 +969,7 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .card[data-status="ignored"] { opacity: .7; }
 /* A song caracole removed while the page was open: it says so, and nothing more, until the page is loaded again. */
 .card.gone { border-style: dashed; box-shadow: none; }
+.row.gone { align-content: start; }  /* kept as tall as it was: its lines stay where they were */
 .gone h2 { color: var(--muted); }
 .head { display: flex; align-items: flex-start; gap: 12px; }
 .mono { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
@@ -986,6 +999,13 @@ _STYLE = BASE_STYLE + PICKER_STYLE + """
 .progress[data-tone="failed"] { color: var(--failed); }
 .progress a { padding: 6px 0; color: inherit; text-underline-offset: 2px; }
 .progress .dot { margin: 0 .4em; opacity: .6; }
+/* A removal counting down: its seconds, Undo, and what goes, under it. */
+.progress .left { font-variant-numeric: tabular-nums; }
+.progress .undo { min-height: 32px; margin: 0; padding: 0 6px; border: 0; border-radius: 8px; background: none;
+  color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px;
+  cursor: pointer; }
+.progress .undo:hover { background: var(--raised); }
+.progress .goes { display: block; margin-top: 2px; color: var(--muted); font-size: .85rem; font-weight: 500; }
 .requested { margin-top: 14px; }
 .requested .grid { margin-top: 6px; }
 .card .by { margin: 2px 0 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
@@ -1051,6 +1071,7 @@ body.with-tray .page { padding-bottom: 88px; }
    letters. Every .btn has its 44 px from BASE_STYLE, and a row's from ROWS_STYLE. */
 @media (pointer: coarse) {
   .masthead.lib .navlink, .more > summary, .chip, .sort select, .views button { min-height: 44px; }
+  .progress .undo { min-width: 44px; min-height: 44px; }
   .jump button { min-width: 44px; height: 44px; }
   /* A card's title and its artist share the thumb's height between them: the title's target reaches up into
      the card's padding and down to the artist's name, which stands at the top of its own 44 px, so that a tap
@@ -1600,8 +1621,13 @@ _SCRIPT = r"""
     });
     return form;
   };
-  // Every card's "Remove…": caracole serve answers with what goes and what stays, and asks. Its answers go
-  // back to the library as you leave it (`back`: the address after #, its search, filters and view).
+  // Every card's "Remove…" (a row's, under its "⋯"): one tap counts down REMOVE_WAIT seconds on the song's own
+  // line, "Removing in 5 s · Undo", with what goes (the server's answer to the question, ``removal.brief``), and
+  // sends nothing else meanwhile; then the removal, whose line the card follows to Removed, never leaving the
+  // page. Undo stops it. Without JavaScript the form posts, and caracole serve asks on a page of its own, whose
+  // answers go back to the library as you left it (`back`: the address after #, its search, filters and view).
+  const REMOVE_WAIT = 5;  // seconds
+  const removals = new Map();  // song id -> its removal counting down (startRemoval)
   const removeForm = (s) => {
     const form = el("form", "remove");
     form.setAttribute("method", "post");
@@ -1609,13 +1635,137 @@ _SCRIPT = r"""
     form.appendChild(hidden("csrf", String(server.csrf || "")));
     form.appendChild(hidden("song", Number(s.id)));
     const back = form.appendChild(hidden("back", ""));
-    form.addEventListener("submit", () => { back.value = location.hash.slice(1); });
+    form.addEventListener("submit", (e) => {
+      back.value = location.hash.slice(1);
+      e.preventDefault();
+      startRemoval(s, form.closest("article"));
+    });
     const go = el("button", "btn small quiet", "Remove…");
     go.type = "submit";
     go.setAttribute("aria-label", "Remove " + String(s.title) + " by " + String(s.artist) + " from caracole");
-    go.title = "Delete its files and keep caracole from bringing it back; the next page asks first";
+    go.title = "Delete the files caracole wrote for it, and keep caracole from bringing it back; Undo, for " +
+      REMOVE_WAIT + " seconds, keeps it";
     form.appendChild(go);
     return form;
+  };
+  // The song's card and row, and the card that showed it elsewhere (#requested's), if any: where its removal shows.
+  const removalItems = (id, r) => {
+    const i = byIndex.get(id);
+    const own = i === undefined ? [] : [cards.get(i), rows.get(i)];
+    return own.concat([r.spot]).filter((item, n, all) => item && all.indexOf(item) === n);
+  };
+  // A removal's line while it counts down: a screen reader hears it once ("Removing Creep in 5 seconds."), the
+  // seconds left are for the eye; then Undo, and what goes. The item's other buttons wait meanwhile.
+  const countdownIn = (item, r) => {
+    const s = r.song;
+    const p = progressIn(item);
+    p.dataset.key = "";  // drawn here: the next showLine draws its own
+    p.dataset.tone = "waiting";
+    p.textContent = "";
+    const shown = el("span");
+    shown.setAttribute("aria-hidden", "true");
+    shown.append("Removing in ", el("span", "left", r.left), " s");
+    const dot = el("span", "dot", "·");
+    dot.setAttribute("aria-hidden", "true");
+    const undo = el("button", "undo", "Undo");
+    undo.type = "button";
+    undo.setAttribute("aria-label", "Undo: keep " + String(s.title) + " by " + String(s.artist));
+    undo.addEventListener("click", () => undoRemoval(Number(s.id)));
+    p.append(shown, el("span", "visually-hidden", "Removing " + String(s.title) + " in " + REMOVE_WAIT +
+      " seconds."), dot, undo, el("span", "goes", r.brief));
+    for (const b of item.querySelectorAll("form button")) {
+      if (!b.disabled) {
+        b.disabled = true;
+        r.held.add(b);
+      }
+    }
+    return undo;
+  };
+  const eachLine = (id, r, part, text) => {
+    for (const item of removalItems(id, r)) {
+      const node = item.querySelector(".progress " + part);
+      if (node) node.textContent = text;
+    }
+  };
+  // The removal over before it was sent: undone, or refused (``view``'s line says why). Its buttons are back.
+  const stopRemoval = (id, view, focusBack) => {
+    const r = removals.get(id);
+    if (!r) return;
+    removals.delete(id);
+    clearTimeout(r.timer);
+    const items = removalItems(id, r);
+    const from = items.find((item) => item.contains(document.activeElement));
+    for (const item of items) {
+      const p = progressIn(item);
+      p.style.minHeight = "";
+      showLine(p, view);
+    }
+    for (const b of r.held) b.disabled = false;
+    const go = focusBack && from ? from.querySelector("form.remove button") : null;
+    if (go) go.focus();
+  };
+  const undoRemoval = (id) => stopRemoval(id, { line: { tone: "kept", text: "Not removed" } }, true);
+  const startRemoval = (s, item) => {
+    const id = Number(s.id);
+    if (removals.has(id)) return;
+    const r = { song: s, left: REMOVE_WAIT, timer: 0, brief: "Asking what goes…", key: null, ready: null,
+                spot: item && !isOwn(s, item) ? item : null, held: new Set() };
+    removals.set(id, r);
+    let undo = null;
+    for (const at of removalItems(id, r)) {
+      const made = countdownIn(at, r);
+      if (at === item) undo = made;
+    }
+    if (undo) undo.focus();
+    // The question alone: what goes. It changes nothing; the removal is sent once the seconds are over.
+    r.ready = postTo("/remove", new URLSearchParams({ csrf: String(server.csrf || ""), song: String(id) }))
+      .then((answer) => {
+        const plan = answer.ok && answer.body && answer.body.removal;
+        if (!plan || typeof plan !== "object") throw failure(answer);
+        r.key = String(plan.key || "");
+        r.brief = String(plan.brief || "");
+        eachLine(id, r, ".goes", r.brief);
+      }, () => { throw UNREACHABLE; });
+    r.ready.catch((said) => {
+      if (removals.get(id) === r) stopRemoval(id, said && said.line ? said : UNREACHABLE, false);
+    });
+    const tick = () => {
+      if (removals.get(id) !== r) return;
+      r.left -= 1;
+      if (r.left > 0) {
+        eachLine(id, r, ".left", String(r.left));
+        r.timer = setTimeout(tick, 1000);
+      } else {
+        sendRemoval(id, r);
+      }
+    };
+    r.timer = setTimeout(tick, 1000);
+  };
+  // The seconds are over: the removal, sent with the song's key (an id the library gave another song since
+  // removes nothing); its line follows the job from here, as tall as it was, so that nothing under it moves.
+  const sendRemoval = (id, r) => {
+    for (const item of removalItems(id, r)) {
+      const p = progressIn(item);
+      const tall = p.getBoundingClientRect().height;
+      if (tall) p.style.minHeight = tall + "px";
+      showLine(p, { line: { tone: "running", text: "Removing…" } });
+    }
+    r.ready.then(() => {
+      if (removals.get(id) !== r) return;
+      const body = new URLSearchParams({ csrf: String(server.csrf || ""), song: String(id), key: r.key || "",
+                                         confirm: "1" });
+      postTo("/remove", body).then((answer) => {
+        const view = answer.ok && answer.body && answer.body.job;
+        if (!view || typeof view !== "object") {
+          stopRemoval(id, failure(answer), false);
+          return;
+        }
+        removals.delete(id);
+        removing.add(id);
+        if (r.spot) spots.set(Number(view.id), r.spot);
+        track(view);
+      }, () => stopRemoval(id, UNREACHABLE, false));
+    }, () => {});  // refused already: its line says why
   };
 
   // --- caracole serve: requests answered on the page ------------------------------------------
@@ -1740,10 +1890,10 @@ _SCRIPT = r"""
   const failure = (answer) => ({ line: { tone: "failed", text: (answer.body && answer.body.error) ||
     "caracole serve answered " + answer.status + ": reload the page." } });
   // A form, posted as the page's script: the answer is the job, or {error}, never a page.
-  const send = (form) => fetch(form.getAttribute("action"), {
-    method: "POST", body: new URLSearchParams(new FormData(form)), credentials: "same-origin",
-    headers: { Accept: "application/json" },
-  }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })));
+  const postTo = (path, body) => fetch(path, {
+    method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" },
+  }).then((r) => r.json().catch(() => null).then((answer) => ({ ok: r.ok, status: r.status, body: answer })));
+  const send = (form) => postTo(form.getAttribute("action"), new URLSearchParams(new FormData(form)));
   let track = () => {};
 
   // A song not found: caracole serve's picker page shows what `caracole search` finds for it.
@@ -2021,6 +2171,7 @@ _SCRIPT = r"""
         foot.appendChild(note);
       }
       if (foot.childNodes.length) card.appendChild(foot);
+      if (removals.has(Number(s.id))) countdownIn(card, removals.get(Number(s.id)));  // drawn again meanwhile
     }
     return card;
   };
@@ -2149,6 +2300,7 @@ _SCRIPT = r"""
     } else if (server && s.status === "wanted" && !removing.has(id) && busy.has(id)) {
       showLine(progressIn(row), { line: { tone: "running", text: "Fetching…" } });
     }
+    if (removals.has(id)) countdownIn(row, removals.get(id));  // drawn again while its removal counts down
     return row;
   };
   const rows = new Map();
@@ -2624,6 +2776,9 @@ _SCRIPT = r"""
         say(UNREACHABLE.line.text);
       });
   };
+  // What a result's row stands for, the same in an older answer and a newer one: its site, its UG song, its names.
+  const hitKey = (row) => [row.dataset.source, row.dataset.ug, row.querySelector(".row-title"),
+    row.querySelector(".row-artist")].map((x) => (x && typeof x === "object" ? x.textContent : String(x || ""))).join("|");
   // The answer of the newest search, in one go: the old one stays until then, so nothing flashes.
   const showSites = (data, q) => {
     answer = { data, q };
@@ -2659,7 +2814,20 @@ _SCRIPT = r"""
         left.map((x) => String(x.name || x.source) + " (" + String(x.why || "") + ")").join("; ") + "."));
     }
     if (typeof data.hint === "string" && data.hint) box.appendChild(prose("hint index-hint", data.hint));
+    // A row whose request is on its way stays, its line in it, where the newer answer has it; one the newer
+    // answer lacks becomes its card under the bar (settleSpots), its line going on there.
+    const going = new Map();
+    for (const [id, node] of spots) {
+      if (sitesBox.contains(node) && views.has(id) && isActive(views.get(id))) going.set(hitKey(node), node);
+    }
+    for (const fresh of box.querySelectorAll(".hit")) {
+      const was = going.get(hitKey(fresh));
+      if (!was) continue;
+      fresh.replaceWith(was);
+      going.delete(hitKey(fresh));
+    }
     sitesBox.replaceChildren(box);
+    if (going.size) settleSpots(true);
     const parts = [];
     if (index.length || artists.length) parts.push((index.length + artists.length) + " on Ultimate Guitar");
     if (gtp.length) parts.push(gtp.length + " on gtptabs.com");
@@ -2804,11 +2972,12 @@ _SCRIPT = r"""
   const traySum = byId("tray-sum");
   const trayToggle = byId("tray-toggle");
   const trayItems = new Map();  // job id -> its line in the list of requests
+  const quiet = new Set();  // the lookups of a songbook's missing songs: its card says how they go
   let trayClosed = false;
   // The list of requests, once there are two or more: one line each, not read out (the cards' lines are). A
   // songbook's change, or a removal, is left out: its card, where it was asked for, says how it goes.
   const trayShow = (view) => {
-    if (!tray || view.kind === "songbook" || view.kind === "remove") return;
+    if (!tray || view.kind === "songbook" || view.kind === "remove" || quiet.has(Number(view.id))) return;
     const id = Number(view.id);
     let item = trayItems.get(id);
     if (!item) {
@@ -2883,9 +3052,10 @@ _SCRIPT = r"""
     const song = songOf(view);
     const i = song !== null && songJob.get(song) === id ? byIndex.get(song) : undefined;
     for (const card of [i === undefined ? null : cards.get(i), i === undefined ? null : rows.get(i), spots.get(id)]) {
-      if (!card) continue;
+      if (!card || (song !== null && removals.has(song))) continue;  // its line counts down to its removal
       const p = progressIn(card);
       showLine(p, view);
+      if (view.kind === "remove") continue;  // its buttons wait where they are: the card is gone once it is done
       const button = card.querySelector("form.fetch");
       if (button && isActive(view)) {
         if (button.contains(document.activeElement)) focusOn(p);  // the line takes the button's place
@@ -2903,7 +3073,20 @@ _SCRIPT = r"""
         }
       }
     }
+    if (i !== undefined && view.kind === "song") bookSongs(song, view);
     trayShow(view);
+  };
+  // A song's line in the songbooks that hold it too (each song of a songbook names its id, data-song), under its
+  // name: Get the missing songs now's lookups show there. Not read out: its songbook's own line says how it goes.
+  const bookSongLine = (li, view) => {
+    const names = li.querySelector(".sb-names");
+    if (!names) return;
+    const line = names.querySelector(".progress") || names.appendChild(el("span", "progress"));
+    const said = view.line && typeof view.line === "object" ? view.line : {};
+    showLine(line, { line: Object.assign({}, said, { details: null }) });
+  };
+  const bookSongs = (song, view) => {
+    for (const li of document.querySelectorAll('#songbooks li[data-song="' + Number(song) + '"]')) bookSongLine(li, view);
   };
   const requestsCount = (n) => {
     const nav = document.querySelector('.navlink[href="/jobs"]');
@@ -2938,13 +3121,21 @@ _SCRIPT = r"""
     const i = byIndex.get(id);
     if (i === undefined) return;
     songs[i] = Object.assign({}, songs[i], { status: "removed" });
-    // Drawn again where it is, as tall as it was: what is under it doesn't move, seconds after the tap.
+    // Drawn again where it is, as tall as it was, its line where it was: nothing on the screen moves, seconds
+    // after the tap.
     const gone = (old, asRow) => {
       const fresh = goneItem(songs[i], asRow);
       if (!old) return fresh;
       const tall = old.isConnected ? old.getBoundingClientRect().height : 0;
+      const line = old.querySelector(".progress");
+      const top = line && old.isConnected ? line.getBoundingClientRect().top : null;
       const kept = refill(old, fresh);
       if (tall) kept.style.minHeight = tall + "px";
+      if (line) line.style.minHeight = "";  // the last thing on the card, which keeps the height: as tall as it says
+      if (top !== null && line.isConnected) {  // measured before a frame is drawn: it never moves
+        const drop = top - line.getBoundingClientRect().top;
+        if (drop > 0) line.style.marginTop = drop + "px";
+      }
       return kept;
     };
     cards.set(i, gone(cards.get(i), false));
@@ -2964,7 +3155,7 @@ _SCRIPT = r"""
   // it, so that its line goes on being read out to the last. The section is in the served page even with
   // no songbook, hidden, for the first one. Without JavaScript the forms post as forms, and the server
   // answers with the requests page.
-  const SONGBOOK_FORM = /^\/songbook\/(make|add|move|remove|rename|delete)$/;
+  const SONGBOOK_FORM = /^\/songbook\/(make|add|move|remove|rename|delete|get)$/;
   // job id -> {book: the songbook it changes, card: its card, focus: the button sent, reveal: from the Select bar}
   const bookJobs = new Map();
   const shelf = () => {
@@ -3031,6 +3222,21 @@ _SCRIPT = r"""
     bookJobs.set(Number(view.id), { book, card, focus: focus || "" });
     return card;
   };
+  // A card keeps the height ``tall`` while it is taller than what it holds, until your next click or key, when what
+  // moves under it moves for you; measured before a frame is drawn, so nothing moves meanwhile.
+  const holdHeight = (card, tall) => {
+    const was = card.style.minHeight;
+    card.style.minHeight = "";
+    if (!tall || card.getBoundingClientRect().height >= tall - 0.5) return;
+    card.style.minHeight = Math.max(tall, parseFloat(was) || 0) + "px";
+    const release = () => {
+      document.removeEventListener("click", release, true);
+      document.removeEventListener("keydown", release, true);
+      if (!card.classList.contains("sb-gone")) card.style.minHeight = "";
+    };
+    document.addEventListener("click", release, true);
+    document.addEventListener("keydown", release, true);
+  };
   const drawSongbooks = (view) => {
     const at = shelf();
     if (!at) return;
@@ -3052,6 +3258,7 @@ _SCRIPT = r"""
     if (job && job.book.action === "rename" && view.state === "done") job.card.dataset.songbook = String(job.book.after);
     const old = Array.from(at.list.children);
     const kept = old.filter((c) => c.querySelector(".progress"));  // a change's line: read out to the last
+    const tall = new Map(kept.map((c) => [c, c.isConnected ? c.getBoundingClientRect().height : 0]));
     const order = (fresh ? Array.from(fresh.querySelectorAll(":scope > .sb-list > .sb-card")) : []).map((f) => {
       const card = document.importNode(f, true);
       const was = kept.find((c) => c.dataset.songbook === card.dataset.songbook);
@@ -3072,6 +3279,18 @@ _SCRIPT = r"""
       before = card;
     }
     at.section.hidden = !order.length && !at.details.querySelector(".sb-error");
+    // Drawn again, its songs' lines are back under their names, and a card that showed a change keeps the height it
+    // had while it is taller than what it holds now (its songs' "missing" notes gone, say), until your next click
+    // or key: nothing under it moves seconds after your tap (a songbook from the Select bar is stretched, below).
+    for (const [song, id] of songJob) {
+      const shown = views.get(id);
+      if (shown && shown.kind === "song") bookSongs(song, shown);
+    }
+    for (const card of kept) {
+      if (card.isConnected && !card.classList.contains("sb-gone") && !(job && job.reveal && card === job.card)) {
+        holdHeight(card, tall.get(card));
+      }
+    }
     for (const [id, other] of bookJobs) {  // the songbooks of changes still on their way wait
       if (id !== Number(view.id) && other.card.isConnected && views.has(id) && isActive(views.get(id))) {
         lockBook(other.card, true);
@@ -3094,22 +3313,9 @@ _SCRIPT = r"""
     // A card stretched while its change ran keeps that height while it is taller than what it holds now, until
     // your next click or key, when what moves under it moves for you.
     if (job && job.reveal && !isActive(view) && job.card.style.minHeight) {
-      const card = job.card;
-      const stretched = card.style.minHeight;
-      card.style.minHeight = "";
-      const holds = card.getBoundingClientRect().height;  // no frame drawn in between: nothing moves
-      card.style.minHeight = stretched;
-      if (holds >= parseFloat(stretched)) {
-        card.style.minHeight = "";
-      } else {
-        const release = () => {
-          document.removeEventListener("click", release, true);
-          document.removeEventListener("keydown", release, true);
-          if (!card.classList.contains("sb-gone")) card.style.minHeight = "";
-        };
-        document.addEventListener("click", release, true);
-        document.addEventListener("keydown", release, true);
-      }
+      const stretched = parseFloat(job.card.style.minHeight);
+      job.card.style.minHeight = "";
+      holdHeight(job.card, stretched);  // no frame drawn in between: nothing moves
     }
     // The Select bar's menu of songbooks follows.
     document.dispatchEvent(new CustomEvent("caracole:songbooks", { detail: { books: listOf(view.songbooks.books) } }));
@@ -3220,10 +3426,12 @@ _SCRIPT = r"""
     // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).
     later = (pick, display, row, go) => askFrom("request", pick, ["artist", "title"], row, go, (answer) => answer.job);
     // Back to your songs: a request's row in the results that is a song new to the library becomes its card
-    // under the bar, which goes on saying how it goes; a song the grid has says it on its own card.
-    settleSpots = () => {
+    // under the bar, which goes on saying how it goes; a song the grid has says it on its own card. With
+    // ``dropped``, only the rows a newer answer left out, at once.
+    settleSpots = (dropped) => {
       for (const [id, node] of Array.from(spots)) {
-        if (!results.contains(node)) continue;
+        const left = !node.isConnected && node.classList.contains("hit");  // a newer answer has no such row
+        if (dropped ? !left : !left && !results.contains(node)) continue;
         const view = views.get(id);
         const song = view ? songOf(view) : null;
         if (song !== null && byIndex.has(song)) {
@@ -3372,6 +3580,11 @@ _SCRIPT = r"""
       const sending = send(form);  // the form read as it is, before its fields wait
       if (card) {
         showLine(bookLine(card), { line: { tone: "queued", text: "Sending…" } });
+        if (/\/get$/.test(form.getAttribute("action") || "")) {  // each song it looks up, at once, under its name
+          for (const li of card.querySelectorAll("li[data-get]")) {
+            bookSongLine(li, { line: { tone: "queued", text: "Sending…" } });
+          }
+        }
         lockBook(card, true);
       }
       const answered = (view, refusal) => {
@@ -3404,6 +3617,12 @@ _SCRIPT = r"""
       sending.then((answer) => {
         const view = answer.ok && answer.body && answer.body.job;
         answered(view && view.songbook ? view : null, failure(answer).line.text);
+        // Get the missing songs now: each song's lookup, on its card, its row and its line in the songbook.
+        for (const each of view && view.songbook ? listOf(answer.body.jobs) : []) {
+          if (!each || typeof each !== "object") continue;
+          quiet.add(Number(each.id));
+          track(each);
+        }
       }, () => answered(null, UNREACHABLE.line.text));
     });
     schedule();
@@ -3458,6 +3677,8 @@ _SONGBOOK_STYLE = """
 .sb-names .t { font-weight: 600; }
 .sb-names .a, .sb-names .why { color: var(--muted); font-size: .88rem; }
 .sb-songs .missing .t { color: var(--muted); font-weight: 500; }
+/* A lookup of the song: how it goes, on one line whatever it says, so that the songbook keeps its height. */
+.sb-names .progress { display: block; overflow: hidden; font-size: .8rem; white-space: nowrap; text-overflow: ellipsis; }
 .sb-names .why { display: block; font-size: .8rem; font-style: italic; }
 .sb-tools { flex: none; display: flex; gap: 4px; }
 .sb-tools form, .sb-more form { margin: 0; }
@@ -4075,7 +4296,7 @@ _SONGBOOK_FILES = (("songbook.html", "Songbook for the phone"), ("songbook.pdf",
 
 def _songbook_card(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any,
                    controls: WebControls | None) -> str:
-    from caracole.songbook import FOLDER, songbook_entries
+    from caracole.songbook import FOLDER, songbook_entries, songs_to_get
 
     esc = html_text.escape
     entries = songbook_entries(conn, cfg.library_dir, overrides, book)
@@ -4087,14 +4308,28 @@ def _songbook_card(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, 
     base = f"{FOLDER}/{quote(book.folder, safe='')}"
     links = [f'<a class="btn{" primary" if n == 0 else ""}" href="{base}/{quote(name)}">{label}</a>'
              for n, (name, label) in enumerate(f for f in _SONGBOOK_FILES if f[0] in names)]
-    files = (f'<div class="actions">{"".join(links)}</div>\n' if links
-             else '<p class="hint">Not made yet: caracole render, or caracole songbook render, makes its files.</p>\n')
+    # On caracole serve, its songs without a sheet looked up now, one lookup each, then the songbook made again.
+    getting = {song.id for song in songs_to_get(entries, overrides)} if controls is not None else set()
+    to_get = len(getting)
+    get_form = _songbook_form(
+        "get", book.name, controls,
+        '<button class="btn" type="submit" title="Looks each one up now, as caracole get does, then makes the '
+        f'songbook again">{"Get the missing song now" if to_get == 1 else f"Get the {to_get} missing songs now"}'
+        "</button>") if to_get and controls is not None else ""
+    if links:
+        files = f'<div class="actions">{"".join(links)}{get_form}</div>\n'
+    else:
+        files = ('<p class="hint">Not made yet: caracole render, or caracole songbook render, makes its files.</p>\n'
+                 + (f'<div class="actions">{get_form}</div>\n' if get_form else ""))
     rows = []
     for n, entry in enumerate(entries, start=1):
         title, artist = esc(entry.title), esc(entry.artist)
         why = f'<span class="why">missing: {esc(entry.missing)}</span>' if entry.missing else ""
         tools = _songbook_tools(book.name, entry.text, entry.title, n, len(entries), controls) if controls else ""
-        rows.append(f'<li{" class=\"missing\"" if entry.missing else ""}><span class="sb-n">{n}</span>'
+        song = f' data-song="{entry.song.id}"' if controls is not None and entry.song is not None else ""
+        if entry.song is not None and entry.song.id in getting:  # Get the missing songs now looks it up
+            song += " data-get"
+        rows.append(f'<li{" class=\"missing\"" if entry.missing else ""}{song}><span class="sb-n">{n}</span>'
                     f'<span class="sb-names"><span class="t">{title}</span> <span class="a">{artist}</span>{why}</span>'
                     f"{tools}</li>")
     if controls is not None:

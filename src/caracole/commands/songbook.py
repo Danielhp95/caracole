@@ -17,9 +17,11 @@ may have meant; ``remove`` and ``move`` look among the songbook's own songs firs
 "Artist - Title" alone. A song of songbooks.toml is found by its "Artist - Title" alone,
 never by a search: one gone from the library is missing. A change writes songbooks.toml,
 makes the songbook's files again and rewrites the library pages, holding caracole's lock;
-``list`` and ``show`` only read. A songbooks.toml that can't be read exits 2, naming it and
-the line. Every command module is imported on every start, so the songbook code is
-imported inside the commands.
+``list`` and ``show`` only read. A change (``render`` too) is asked for now, so it takes the lock
+as a lookup does (``exclusive(..., interactive=True)``): a nightly run holding it hands it over at
+its next pause, or between two songs, rather than making the songbook wait for the whole run. A
+songbooks.toml that can't be read exits 2, naming it and the line. Every command module is
+imported on every start, so the songbook code is imported inside the commands.
 """
 
 from __future__ import annotations
@@ -59,7 +61,7 @@ def register(app: typer.Typer) -> None:
         from caracole.songbook import make_songbook
 
         cfg = load_cfg(ctx)
-        with exclusive(cfg, "songbook make"), closing(open_db(cfg)) as conn:
+        with exclusive(cfg, "songbook make", interactive=True), closing(open_db(cfg)) as conn:
             found = _songs(conn, songs)
             made = _do(lambda: make_songbook(_file(cfg), name, [f.song.display for f in found]))
             typer.echo(f'Made the songbook "{made.name}": {_count(len(made.songs))}.')
@@ -118,7 +120,7 @@ def register(app: typer.Typer) -> None:
         from caracole.songbook import add_to_songbook, same_entry
 
         cfg = load_cfg(ctx)
-        with exclusive(cfg, "songbook add"), closing(open_db(cfg)) as conn:
+        with exclusive(cfg, "songbook add", interactive=True), closing(open_db(cfg)) as conn:
             b = _book(_books(cfg), name)
             found = _songs(conn, songs)
             added = _do(lambda: add_to_songbook(_file(cfg), b.name, [f.song.display for f in found]))
@@ -137,7 +139,7 @@ def register(app: typer.Typer) -> None:
         from caracole.songbook import remove_from_songbook
 
         cfg = load_cfg(ctx)
-        with exclusive(cfg, "songbook remove"), closing(open_db(cfg)) as conn:
+        with exclusive(cfg, "songbook remove", interactive=True), closing(open_db(cfg)) as conn:
             b = _book(_books(cfg), name)
             removed = _do(lambda: remove_from_songbook(_file(cfg), b.name, _names(conn, b, songs)))
             for entry in removed:
@@ -155,7 +157,7 @@ def register(app: typer.Typer) -> None:
 
         cfg = load_cfg(ctx)
         overrides = load_ovr(cfg)
-        with exclusive(cfg, "songbook move"), closing(open_db(cfg)) as conn:
+        with exclusive(cfg, "songbook move", interactive=True), closing(open_db(cfg)) as conn:
             b = _book(_books(cfg), name)
             entry = _entry_for(conn, b, song)
             to = _do(lambda: move_in_songbook(_file(cfg), b.name, entry, position))
@@ -171,7 +173,7 @@ def register(app: typer.Typer) -> None:
         from caracole.songbook import rename_songbook
 
         cfg = load_cfg(ctx)
-        with exclusive(cfg, "songbook rename"), closing(open_db(cfg)) as conn:
+        with exclusive(cfg, "songbook rename", interactive=True), closing(open_db(cfg)) as conn:
             b = _book(_books(cfg), name)
             renamed = _do(lambda: rename_songbook(_file(cfg), b.name, new))
             typer.echo(f'Renamed the songbook "{b.name}" to "{renamed.name}".')
@@ -183,7 +185,7 @@ def register(app: typer.Typer) -> None:
         from caracole.songbook import delete_songbook
 
         cfg = load_cfg(ctx)
-        with exclusive(cfg, "songbook delete"), closing(open_db(cfg)) as conn:
+        with exclusive(cfg, "songbook delete", interactive=True), closing(open_db(cfg)) as conn:
             b = _book(_books(cfg), name)
             _do(lambda: delete_songbook(_file(cfg), b.name))
             typer.echo(f'Deleted the songbook "{b.name}".')
@@ -199,7 +201,7 @@ def register(app: typer.Typer) -> None:
         Exits 1 when a songbook's file couldn't be made; a warning says which and why.
         """
         cfg = load_cfg(ctx)
-        with exclusive(cfg, "songbook render"), closing(open_db(cfg)) as conn:
+        with exclusive(cfg, "songbook render", interactive=True), closing(open_db(cfg)) as conn:
             only = _book(_books(cfg), name).name if name is not None else None
             stats = _render(cfg, conn, only, force=force, quiet=True, exit_on_failure=False)
         typer.echo(songbooks_line(stats))

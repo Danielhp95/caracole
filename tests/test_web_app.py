@@ -395,6 +395,60 @@ def test_confirming_queues_caracole_remove_for_that_song(app, conn, cfg, queue):
     assert queue.snapshot()[0].state == "done"
 
 
+def test_the_pages_remove_asks_what_goes_as_data_and_queues_nothing(app, conn, cfg, queue):
+    # The library page's Remove says on the card, while it counts down to Undo, what goes: the page's script
+    # posts the question (no confirm) and reads the answer as data. Nothing is queued, nothing changes.
+    creep = a_kept_song(conn, cfg)
+    response = post(app, "/remove", {"song": str(creep.id)}, accept=JSON)
+    assert response.status == 200
+    removal = answer(response)["removal"]
+    assert removal["song"] == creep.id and removal["key"] == creep.key and removal["display"] == "Radiohead - Creep"
+    assert removal["brief"] == ("Deletes caracole's 1 file for it, its record and its wanted.txt line; "
+                                "leaves 1 other file; never touches Music/.")
+    assert "its line in wanted.txt (line 1)" in removal["goes"]
+    assert removal["stays"] == ["Radiohead/Creep/notes <b>.md: caracole didn't write it"]
+    assert queue.snapshot() == [] and cfg.wanted_file.read_text(encoding="utf-8") == "Radiohead - Creep\n"
+
+
+def test_a_removal_the_pages_script_confirms_is_answered_with_its_job(app, conn, cfg, queue):
+    # Its 5 seconds over, the page sends the removal and stays where it is: the answer is the job, whose line
+    # its card shows ("Queued…", "Removing from caracole…", "Removed"), never a page to go to.
+    creep = a_kept_song(conn, cfg)
+    response = post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"}, accept=JSON)
+    assert response.status == 200 and header(response, "location") is None
+    view = answer(response)["job"]
+    assert view["kind"] == "remove" and view["songId"] == creep.id and view["line"]["text"] == "Queued…"
+    assert [s.args for s in queue.snapshot()[0].steps] == [("remove", "--yes", "--", "Radiohead - Creep")]
+    # Sent twice, it is the same request.
+    again = answer(post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"}, accept=JSON))
+    assert again["job"]["id"] == view["id"] and len(queue.snapshot()) == 1
+    refused = post(app, "/remove", {"song": str(creep.id), "key": "oasis/wonderwall", "confirm": "1"}, accept=JSON)
+    assert refused.status == 409 and "reload the library" in answer(refused)["error"]
+
+
+@pytest.mark.parametrize("names,lines,youtube,said", [
+    ((), (), (), "Deletes its record; never touches Music/."),
+    (("info.json", "sheet.pdf", "sheet.txt"), (3, 7), (), "Deletes caracole's 3 files for it, its record and its "
+                                                            "2 wanted.txt lines; never touches Music/."),
+    (("sheet.txt",), (1,), ("Creep.m4a",), "Deletes caracole's 1 file for it, its record, its wanted.txt line and "
+                                           "its audio from YouTube; never touches Music/."),
+], ids=["nothing", "files-and-lines", "youtube"])
+def test_what_a_removal_takes_in_one_sentence(conn, cfg, names, lines, youtube, said):
+    from pathlib import PurePosixPath
+
+    from caracole.removal import RemovalPlan, brief
+
+    creep = add_song(conn, "Radiohead", "Creep")
+    plan = RemovalPlan(creep, PurePosixPath("Radiohead/Creep"), delete=names, wanted_lines=lines,
+                       youtube_audio=youtube)
+    assert brief(plan) == said
+    linked = RemovalPlan(creep, PurePosixPath("Radiohead/Creep"), folder_problem="Radiohead/Creep/ is a link")
+    assert brief(linked) == ("Deletes its record; leaves its folder (Radiohead/Creep/ is a link); never touches "
+                             "Music/.")
+    unread = RemovalPlan(creep, PurePosixPath("Radiohead/Creep"), wanted_problem="a symbolic link")
+    assert brief(unread).startswith("wanted.txt can't be read (a symbolic link), so nothing goes until it can")
+
+
 def test_a_removal_confirmed_for_another_song_than_the_id_now_names_is_refused(app, conn, cfg, queue):
     creep = a_kept_song(conn, cfg)
     response = post(app, "/remove", {"song": str(creep.id), "key": "oasis/wonderwall", "confirm": "1"})

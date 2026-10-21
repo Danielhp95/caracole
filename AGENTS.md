@@ -104,7 +104,9 @@ songs.py's, in the `removed` table).
   `name_forms`), under its own names and writes no wanted.txt line for it;
   `written_pages`, each kind of page caracole writes into the library by file name, with
   its record and its CSP: the sheet viewers and songbook.html), songbooks.py (the songbook
-  forms, each queued as its `caracole songbook` command; `songbook_of` reads a job's key back,
+  forms, each queued as its `caracole songbook` command; Get the missing songs now,
+  `missing_songs`, a `caracole get` per song `songbook.songs_to_get` names, then
+  `render_job`, `caracole songbook render NAME`, after them; `songbook_of` reads a job's key back,
   the songbook it changes, and once it is over `/jobs.json` gives the Songbooks section drawn
   again, which the page puts in place of its own), lookup_page.py (the lookup page:
   its script, `createElement` and `textContent` only, allowed by hash, connects to the
@@ -456,7 +458,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `exclusive(..., interactive=True)` announces it in `state_dir/caracole.lock.waiting/` (a
   file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and
   dropped once it holds it; one its process left, or untouched for `TICKET_STALE` s, a
-  lookup killed while it waited, no longer counts). Bulk work hands the lock over
+  lookup killed while it waited, no longer counts). Every changing `caracole songbook`
+  command (make, add, remove, move, rename, delete, render: commands/songbook.py) waits the
+  same way, as a songbook is asked for now
+  (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).
+  Bulk work hands the lock over
   (`_common.hand_over`, never inside a transaction): it lets go of the flock, takes it back
   once the lookup is done, and goes on. It does so in two places. Its clients, and the
   yt-dlp runner of `make_youtube` between two runs, spend each pause looking for a waiting
@@ -474,9 +480,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
   runs every other change as a `caracole` command in a child process, one at a time
   (web/jobs.py), since the lock is re-entrant within a process and its threads would share it:
-  a removal too, `caracole remove --yes`, once its page (`removal.plan_removal`, which only
-  reads) has asked; its job's song key is `remove:<key>` (`jobs.REMOVING`), so it never joins
-  the song's add or fetch.
+  a removal too, `caracole remove --yes`, once the card's five seconds with Undo are over
+  (the library page's script; without it, a page of its own), having asked what goes
+  (`removal.plan_removal`, which only reads, and `removal.brief`); its job's song key is
+  `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.
 - **Spotify is optional, and wanted.txt is always a source.** `sources.sync_sources` syncs
   wanted.txt first, then Spotify, importing spotipy, only when `cfg.spotify.enabled` (a
   `client_id` is set); any Spotify failure becomes a state on its report, never an error.

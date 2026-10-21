@@ -485,8 +485,9 @@ say), nothing is removed and it exits 1.
 `caracole remove` on a song removed already says when it was, and how to
 bring it back. Like `caracole review`, it asks before it takes caracole's lock,
 so the nightly run never waits for your answer; `--list` only reads. On the
-web page, each card's **Remove…** button does the same, after a page that
-says what goes and what stays ([caracole serve](#caracole-serve)).
+web page, each card's **Remove…** button does the same, right there on the
+card: it says in one line what goes, counts down five seconds with Undo, then
+removes the song ([caracole serve](#caracole-serve)).
 
 ### Names in other scripts
 
@@ -1185,6 +1186,11 @@ overrides.toml again after it. The waiting lookup announces itself with a file
 in `caracole.lock.waiting/` in the state folder, which it touches every second
 while it waits; one left by a lookup that was killed while it waited is no
 longer waited for after five seconds.
+A songbook change, asked for now as a lookup is, waits the same way and says
+the same: `caracole songbook make`, `add`, `remove`, `move`, `rename`,
+`delete` and `render`, so a songbook you make (from a terminal, or on
+`caracole serve`) while the nightly run works is made in the run's next pause,
+in seconds, rather than after the whole run.
 
 ## Audio from YouTube
 
@@ -2019,7 +2025,10 @@ with it. A KEY that is no key exits with status 2.
   none; a MuseScore page is a link to open, as caracole never fetches from
   MuseScore. The row then says how it goes, on a line of its own ("Sending…",
   "Fetching from Ultimate Guitar…", "Ready · Open sheet"), and once the sheet
-  is kept the row is the song's, with its sheet as its button. A song your
+  is kept the row is the song's, with its sheet as its button. A newer
+  answer drawn while it goes (Enter again, or a search typed over) keeps the
+  row where it has it, with its line; one it hasn't moves the request under
+  the box as its card ("Just requested"), its line going on there. A song your
   library has already, under its own names (UG's slugs write AC/DC as "Acdc"
   and 宋冬野 as "Song Dongye"), says In your library and Get it again, and is
   looked up as your song: no second song, and no line added to wanted.txt. A
@@ -2085,18 +2094,26 @@ with it. A KEY that is no key exits with status 2.
   [Review](#review)). The page runs the search when you open it, so the
   library page carries no hits of its own.
 - **Remove a song.** Each card's Remove… button (a row's, under its "⋯")
-  opens a page that says what
-  goes and what stays, as [`caracole remove`](#caracole-remove) does; Remove
-  it queues `caracole remove --yes "ARTIST - TITLE"` and goes back to the
-  library as you left it (its search, filters and view), the song's card in
-  view, whose line says how it goes: "Queued…", "Removing from caracole…",
-  then "Removed", the card keeping only the song's name, and its size, so
-  that nothing under it moves, until you load the page again (a row, the
-  same). From then on the song counts nowhere: the numbers at the top, the
-  buttons' counts and the count over the list leave it out. Keep it goes
-  back there too, and nothing
-  changes. A page older than a change to the library (the song merged into
-  another since, say) removes nothing: reload the library.
+  removes the song where it is, and you stay on the library: one tap, and
+  the song's line says "Removing in 5 s · Undo", the keyboard focus on Undo,
+  and under it what goes, in one sentence, as
+  [`caracole remove`](#caracole-remove) works it out: "Deletes caracole's 6
+  files for it, its record and its wanted.txt line; leaves 1 other file;
+  never touches Music/." Nothing is sent for those five seconds but that
+  question, which changes nothing, and Undo stops it there: the line says
+  "Not removed", and Remove… is back. Then the page queues `caracole remove
+  --yes "ARTIST - TITLE"`, and the line says how it goes: "Removing…",
+  "Queued…", "Removing from caracole…", then "Removed", the card keeping only
+  the song's name, its size and its line where it was, so that nothing on
+  the screen moves, until you load the page again (a row, the same). From
+  then on the song counts nowhere: the numbers at the top, the buttons'
+  counts and the count over the list leave it out. A page older than a
+  change to the library (the song merged into another since, say) removes
+  nothing, and the line says to reload the library. Without JavaScript,
+  Remove… opens a page that says what goes and what stays; Remove it queues
+  the removal and goes back to the library as you left it (its search,
+  filters and view), the song's card in view, and Keep it goes back there
+  too.
 - **How it goes, on the page.** A request leaves you where you are. The
   song's card (or its row, on a line under it), or for a song new to the
   library a card of its own under the search box ("Just requested"), says on
@@ -2171,9 +2188,10 @@ with it. A KEY that is no key exits with status 2.
   `caracole songbook` command (see [Songbooks](#songbooks)) and leaves you
   where you are. The songbook's card says how it goes, on a line under its
   name ("Queued…", "Moving the song…", then "Moved"; "Renamed", "Taken out",
-  "Deleted"; once done, all but Deleted link the songbook's phone page, Open
-  songbook, as its line on `/jobs` does), and its buttons wait until it is
-  over, when the section is drawn again as songbooks.toml has it, the
+  "Deleted"; once done, Made and Added link the songbook's phone page, Open
+  songbook, as their lines on `/jobs` do: a move, a song taken out or a new
+  name shows on the card itself, beside its buttons), and its buttons wait
+  until it is over, when the section is drawn again as songbooks.toml has it, the
   keyboard focus back on the button you pressed. Make songbook (or Add to)
   ends Select once the server has it, and the Songbooks section opens on the
   songbook, a new one at its end ("Making the songbook…", then "Made · Open
@@ -2188,6 +2206,20 @@ with it. A KEY that is no key exits with status 2.
   songbook deleted since the page was made, is refused at once, and nothing
   runs: the card, or the Select bar, says why, and the bar keeps your ticks.
   Without JavaScript, each sends you to its line on `/jobs`.
+
+  A songbook with songs of yours that have no sheet yet ("missing: no sheet
+  yet") has **Get the 2 missing songs now** beside its files: it looks each
+  of them up now, one `caracole get` after the other in the songbook's order,
+  as Fetch now does on its card, each song's line under its name in the
+  songbook (and on its card) saying how its lookup goes, then runs
+  `caracole songbook render NAME`, which makes the songbook again with the
+  sheets they got: its line says "Queued behind 2 requests…" while they
+  run, then "Making the songbook…" and "Made · Open songbook". A song "not
+  in the library", or one overrides.toml ignores, isn't looked up. With
+  less room in the queue than songs, it gets the first ones, and the button
+  offers the rest once they are done. The songbook keeps its height as its
+  songs' "missing" notes go, until your next click or key, so nothing on the
+  screen moves; the lookups stay out of the list of requests in the corner.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
@@ -2371,8 +2403,9 @@ A NAME is found in any case. `remove` and `move` take the songbook's own song
 of that artist and title first, and only when it has none, the song a search of
 your library finds ("oasis wonderwal"), as `make` does. Each change writes
 songbooks.toml, makes the songbook's files and rewrites `_todo.md` and
-`index.html`, holding caracole's lock; `list` and `show` only read, and never
-wait. A change whose files couldn't all be made exits 1, as `render` does,
+`index.html`, holding caracole's lock, which a nightly run lets it have at its
+next pause, as it does a lookup (see [One caracole at a time](#one-step-at-a-time));
+`list` and `show` only read, and never wait. A change whose files couldn't all be made exits 1, as `render` does,
 after saying `Some of its files couldn't be made`: the change to songbooks.toml
 stays made, and on `caracole serve` its request shows as failed. A
 songbooks.toml that can't be read exits 2.
