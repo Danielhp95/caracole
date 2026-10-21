@@ -1883,3 +1883,14 @@ def test_an_export_without_a_sheet_is_a_render_error(conn, cfg):
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     with pytest.raises(RenderError):
         export(conn, cfg, song, "t=2")
+
+
+def test_a_query_without_a_t_key_starts_at_the_songs_transpose_even_with_at_or_alt(conn, cfg):
+    from caracole.render import export_version
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    ovr = Overrides(transpose={song.key: 3})
+    for query in ("", "at=0.1.2", "alt=0.0.0.m.0"):
+        assert export_version(query, ovr, song).t == 3, query
+    assert export_version("t=1&at=0.1.2", ovr, song).t == 1
+    assert export_version("at=0.1.2&t=0", ovr, song).t == 0

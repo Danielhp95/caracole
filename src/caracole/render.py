@@ -586,7 +586,7 @@ def export_version(query: str, overrides: Overrides, song: Song) -> Version:
     """The version an address ``query`` holds (``version_from_query``), for an export. The viewer starts at the
     song's ``[transpose]`` and leaves ``t`` out of its address there, so without a ``t`` the version is that."""
     version = version_from_query(query)
-    if "t=" in "&" + query.lstrip("#?"):
+    if any(part.split("=")[0] == "t" for part in query.lstrip("#?").split("&")):
         return version
     return replace(version, t=overrides.transpose.get(song.key, 0))
 
