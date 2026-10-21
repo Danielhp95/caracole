@@ -197,18 +197,20 @@
     field.setAttribute("value", String(value));
     return field;
   };
-  // A wanted song's "Fetch now": caracole serve queues a fetch of this song alone.
-  const fetchForm = (s) => {
-    const form = el("form", "fetch");
+  // A song's form for caracole serve: it posts to ``action`` with the server's token and the song's id. Without
+  // JavaScript it posts as a form.
+  const songForm = (cls, action, s) => {
+    const form = el("form", cls);
     form.setAttribute("method", "post");
-    form.setAttribute("action", "/fetch");
+    form.setAttribute("action", action);
     form.appendChild(hidden("csrf", String(server.csrf || "")));
     form.appendChild(hidden("song", Number(s.id)));
-    const go = el("button", "btn primary", "Fetch now");
-    go.type = "submit";
-    go.setAttribute("aria-label", "Fetch " + String(s.title) + " by " + String(s.artist) + " now");
-    go.title = "Ask Ultimate Guitar for this song now, politely";
-    form.appendChild(go);
+    return form;
+  };
+  // Sent by the page's script, the form leaves the page where it is: "Sending…" on the song's own line (the
+  // focus on it, as ``go``, its button, waits), then the request's line, which takes the form's place (``track``);
+  // a refusal, or a server that doesn't answer, says so there, and ``go`` can be pressed again.
+  const postInPlace = (form, go, s) => {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const card = form.closest("article");
@@ -224,13 +226,31 @@
           return;
         }
         if (card && !isOwn(s, card)) spots.set(Number(view.id), card);
-        track(view);  // its line takes the button's place
+        track(view);  // its line takes the form's place
       }, () => {
         go.disabled = false;
         showLine(progressIn(card), UNREACHABLE);
       });
     });
+  };
+  // A wanted song's "Fetch now": caracole serve queues a fetch of this song alone.
+  const fetchForm = (s) => {
+    const form = songForm("fetch", "/fetch", s);
+    const go = el("button", "btn primary", "Fetch now");
+    go.type = "submit";
+    go.setAttribute("aria-label", "Fetch " + String(s.title) + " by " + String(s.artist) + " now");
+    go.title = "Ask Ultimate Guitar for this song now, politely";
+    form.appendChild(go);
+    postInPlace(form, go, s);
     return form;
+  };
+  // A wanted song caracole fetch would refuse until its match is settled: a button that says so, and does nothing.
+  const reviewFirst = (cls) => {
+    const held = el("button", cls, "Review first");
+    held.type = "button";
+    held.disabled = true;
+    held.title = "caracole review settles this match; then it can be fetched";
+    return held;
   };
   // Every card's "Remove…" (a row's, under its "⋯"): one tap counts down REMOVE_WAIT seconds on the song's own
   // line, "Removing in 5 s · Undo", with what goes (the server's answer to the question, ``removal.brief``), and
@@ -240,11 +260,7 @@
   const REMOVE_WAIT = 5;  // seconds
   const removals = new Map();  // song id -> its removal counting down (startRemoval)
   const removeForm = (s) => {
-    const form = el("form", "remove");
-    form.setAttribute("method", "post");
-    form.setAttribute("action", "/remove");
-    form.appendChild(hidden("csrf", String(server.csrf || "")));
-    form.appendChild(hidden("song", Number(s.id)));
+    const form = songForm("remove", "/remove", s);
     const back = form.appendChild(hidden("back", ""));
     form.addEventListener("submit", (e) => {
       back.value = location.hash.slice(1);
@@ -568,6 +584,20 @@
     row.appendChild(pick);
     return row;
   };
+  // What a card shows under its facts, and a row in its panel, of a song with no picker: why its match waits (a
+  // review with no candidates to pick from), or, on the file, the line that lists a song not found's search hits;
+  // else nothing (null).
+  const unpicked = (s) => {
+    if (SHOWS.review(s)) {
+      const note = el("p", "note", "caracole isn't sure about this match: see the ");
+      const todo = el("a", null, "to-do page");
+      todo.href = "_todo.md";
+      note.appendChild(todo);
+      note.appendChild(document.createTextNode(", or run caracole review."));
+      return note;
+    }
+    return !server && s.notFound && s.status === "wanted" ? notFoundHint(s) : null;
+  };
   const makePicker = (s) => {
     const cands = listOf(s.candidates).filter((c) => c && c.ref);
     const box = el("details", "picker");
@@ -595,11 +625,7 @@
       }
       return box;
     }
-    const form = el("form", "pick-form");
-    form.setAttribute("method", "post");
-    form.setAttribute("action", "/review");
-    form.appendChild(hidden("csrf", String(server.csrf || "")));
-    form.appendChild(hidden("song", Number(s.id)));
+    const form = songForm("pick-form", "/review", s);
     form.appendChild(hidden("shown", cands.map((c) => String(c.ref)).join(" ")));
     const group = el("fieldset", "choices");
     group.appendChild(el("legend", null, question));
@@ -623,27 +649,7 @@
     form.appendChild(el("p", "pick-hint", "Your answer goes into overrides.toml, as caracole review writes it. " +
       "Fetch it now then asks Ultimate Guitar for the song picked; None of these fetches nothing."));
     box.appendChild(form);
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const card = form.closest("article");
-      const line = progressIn(card);  // in the page before its first words, so they are read out
-      showLine(line, { line: { tone: "queued", text: "Sending…" } });
-      if (form.contains(document.activeElement)) focusOn(line);  // a disabled button would drop it
-      go.disabled = true;
-      send(form).then((answer) => {
-        const view = answer.ok && answer.body && answer.body.job;
-        if (!view) {
-          go.disabled = false;
-          showLine(progressIn(card), failure(answer));
-          return;
-        }
-        if (card && !isOwn(s, card)) spots.set(Number(view.id), card);
-        track(view);  // its line takes the picker's place
-      }, () => {
-        go.disabled = false;
-        showLine(progressIn(card), UNREACHABLE);
-      });
-    });
+    postInPlace(form, go, s);
     // Opened, the picker takes the focus to its candidates: the arrow keys then move between them.
     box.addEventListener("toggle", () => {
       if (!box.open) return;
@@ -711,18 +717,8 @@
     if (s.added) facts.appendChild(el("span", "added", "Added " + String(s.added).slice(0, 10)));
     if (facts.childNodes.length) card.appendChild(facts);
     const picks = SHOWS.review(s) && listOf(s.candidates).length > 0;
-    if (picks) {
-      card.appendChild(makePicker(s));
-    } else if (SHOWS.review(s)) {
-      const note = el("p", "note", "caracole isn't sure about this match: see the ");
-      const todo = el("a", null, "to-do page");
-      todo.href = "_todo.md";
-      note.appendChild(todo);
-      note.appendChild(document.createTextNode(", or run caracole review."));
-      card.appendChild(note);
-    } else if (!server && s.notFound && s.status === "wanted") {
-      card.appendChild(notFoundHint(s));
-    }
+    const why = picks ? makePicker(s) : unpicked(s);
+    if (why) card.appendChild(why);
     const fromYouTube = youtubeNote(s);
     if (fromYouTube) card.appendChild(fromYouTube);
     const picked = lacuerdaNote(s);
@@ -739,11 +735,7 @@
         // caracole fetch would refuse it until the match is picked: the picker above does that.
       } else if (s.fetchable === false) {
         // caracole fetch would refuse it: the match needs review first (the note above says how).
-        const held = el("button", "btn", "Review first");
-        held.type = "button";
-        held.disabled = true;
-        held.title = "caracole review settles this match; then it can be fetched";
-        actions.appendChild(held);
+        actions.appendChild(reviewFirst("btn"));
       } else {
         actions.appendChild(fetchForm(s));
       }
@@ -822,13 +814,7 @@
         pick.addEventListener("click", () => showPicker(picker));
         return held(pick);
       }
-      if (s.fetchable === false) {
-        const later = el("button", "btn small", "Review first");
-        later.type = "button";
-        later.disabled = true;
-        later.title = "caracole review settles this match; then it can be fetched";
-        return held(later);
-      }
+      if (s.fetchable === false) return held(reviewFirst("btn small"));
       return held(fetchForm(s));
     }
     return { held: false, action: null };
@@ -852,15 +838,9 @@
       summary.className = "picker-open";
       summary.textContent = plural(listOf(s.candidates).filter((c) => c && c.ref).length, "candidate");
       more.push(picker);
-    } else if (SHOWS.review(s)) {
-      const note = el("p", "note", "caracole isn't sure about this match: see the ");
-      const todo = el("a", null, "to-do page");
-      todo.href = "_todo.md";
-      note.appendChild(todo);
-      note.appendChild(document.createTextNode(", or run caracole review."));
-      more.push(note);
-    } else if (!server && s.notFound && s.status === "wanted") {
-      more.push(notFoundHint(s));
+    } else {
+      const why = unpicked(s);
+      if (why) more.push(why);
     }
     const fromYouTube = youtubeNote(s);  // as on its card, first in the row's panel
     if (fromYouTube) more.push(fromYouTube);
