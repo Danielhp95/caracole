@@ -5,27 +5,29 @@ Content-Security-Policy holds the hash of the very text it inlines. Nothing here
 file, and none of it loads anything from the network.
 
 - base.css (``BASE_STYLE``): colours, type and buttons, every page's. ``--border`` is the soft
-  line of cards and dividers; ``--control-edge`` the edge that tells a field, a menu or a box from
+  line of boxes and dividers; ``--control-edge`` the edge that tells a field, a menu or a box from
   what is around it, at 3:1 or more against every background (WCAG 1.4.11). On a touch screen
   (``pointer: coarse``) every button is a thumb's target, 44 px; a mouse keeps the compact ones.
-- picker.css (``PICKER_STYLE``): the picker of a song in review's candidates, on the cards and on
+- picker.css (``PICKER_STYLE``): the picker of a song in review's candidates, under a song's "⋯" and on
   the pages caracole serve writes itself (web/pages.py), which build the same markup.
-- rows.css and rows.js (``ROWS_STYLE``, ``ROWS_SCRIPT``): a list's rows and the marks of where each
-  thing came from, ``caracoleRows``: index.html's Rows view, and the results of caracole serve's
-  lookup page (web/lookup_page.py), which runs rows.js before its own script.
+- rows.css and rows.js (``ROWS_STYLE``, ``ROWS_SCRIPT``): a list's rows and dense lines and the marks
+  of where each thing came from, ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
+  and its search's results, and those of caracole serve's lookup page (web/lookup_page.py), which runs
+  rows.js before its own script.
 - library.css, library-screens.css and library.js: index.html's own. library-screens.css comes
-  after rows.css, as its scroll margin and its thumb's targets are a row's too.
+  after rows.css, as its scroll margin and its thumb's targets are a line's too.
 - songbooks.css and select.js: the Songbooks section, and the Select mode that makes a songbook.
-  select.js runs after library.js: it finds the cards by their song's id (any element of ``#list``
-  with a ``data-id``: a row too), puts a box on each and a bar to name the songbook, and builds
+  select.js runs after library.js: it finds the songs' lines by their song's id (any element of
+  ``#list`` with a ``data-id``), puts a box on each and a bar to name the songbook, and builds
   everything with createElement and textContent, as the page does. While it is on, a tap anywhere
-  on a card picks it (the stylesheet puts its files and actions away, and lets the taps through to
-  the card). The bar is one line: on a phone, "2 selected · Make songbook…", which unfolds the menu
-  and the name field. On caracole serve the bar posts the songbook (the server's token, the songs'
-  ids in the order picked) with library.js's forms (its "caracole:sent" says how the server
-  answered: on its way, the picks go and the mode ends; refused, the bar says why), and its menu
-  follows the Songbooks section as the page draws it again ("caracole:songbooks"); on the file on
-  disk it shows the caracole songbook command to run instead, folded beside Copy.
+  on a line picks it (the stylesheet puts its action and its "⋯" away, and lets the taps through to
+  the line). A line's "Add to a songbook…" turns it on with that song picked ("caracole:pick"). The
+  bar is one line: on a phone, "2 selected · Make songbook…", which unfolds the menu and the name
+  field. On caracole serve the bar posts the songbook (the server's token, the songs' ids in the
+  order picked) with library.js's forms (its "caracole:sent" says how the server answered: on its
+  way, the picks go and the mode ends; refused, the bar says why), and its menu follows the
+  Songbooks section as the page draws it again ("caracole:songbooks"); on the file on disk it shows
+  the caracole songbook command to run instead, folded beside Copy.
 
 - drawn.js: the last script, once every other has drawn what it draws: the page shows. Until then
   library.css keeps it unseen (its body is ``drawing``), so a slow machine that paints it before its

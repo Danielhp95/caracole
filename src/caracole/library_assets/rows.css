@@ -16,14 +16,13 @@
 .source.glyph { font-size: 12px; font-weight: 600; }
 .btn.sourced { gap: 7px; }
 .btn.sourced .source { order: -1; }
-.badges .source { align-self: center; }
 /* An artist's name that shows that artist's songs alone: a button, the name and a filter's mark (a funnel),
    so that it shows it is one without a pointer to hover it. */
-.artist { display: inline-flex; align-items: center; gap: 5px; min-width: 0; margin: 0; padding: 0; border: 0;
+button.artist { display: inline-flex; align-items: center; gap: 5px; min-width: 0; margin: 0; padding: 0; border: 0;
   background: none; color: var(--muted); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; }
 .artist-name { min-width: 0; overflow-wrap: anywhere; }
-.artist:hover { color: var(--text); }
-.artist:hover .artist-name { text-decoration: underline; text-underline-offset: 2px; }
+button.artist:hover { color: var(--text); }
+button.artist:hover .artist-name { text-decoration: underline; text-underline-offset: 2px; }
 .filter-mark { flex: none; width: .7em; height: .75em; background: currentColor; opacity: .8;
   clip-path: polygon(0 0, 100% 0, 60% 48%, 60% 90%, 40% 100%, 40% 48%); }
 /* A title that opens the sheet: the heading as it was, underlined under the pointer. */
@@ -54,12 +53,8 @@
 .row-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
 .row-action form { margin: 0; }
 .row .btn { min-height: 34px; padding: 0 11px; font-size: .85rem; }
-.row-busy { display: inline-flex; align-items: center; min-height: 34px; color: var(--wanted); font-size: .85rem;
-  font-weight: 650; text-underline-offset: 2px; }
-.row .btn.row-pick { border-color: var(--review); color: var(--review); background: var(--review-bg); }
 /* A request's line: a line of the row's own, under the title, the artist and the button. */
 .row > .progress { grid-column: 2 / -1; font-size: .85rem; }
-.row-panel .foot { margin-top: 2px; }
 .row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: var(--row-more); height: 30px;
   padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted);
   font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
@@ -81,12 +76,70 @@
   .row .btn { min-height: 30px; }
   .row-more { height: 28px; }
 }
-/* A thumb's targets: a row's button, its "⋯" and its artist (on a phone the title's line and the artist's,
-   two thumbs high), and a version's page on UG beside its button; a mouse keeps the compact rows. */
+/* A dense list's line (resultRow's ``dense``): on a phone the title, its action and "⋯", then its status, key and
+   marks (and its artist, where no group names it) under the title; from 720px all of it on one line, 25 px tall
+   with a mouse, every column but the title's as wide on every line, so that the lines of a list line up. Its action
+   is a word in the accent's colour, as a link of the list's own, so that a column of them reads quietly. */
+.line { --line-more: 30px; display: grid; grid-template-columns: minmax(0, 1fr) auto var(--line-more);
+  grid-template-areas: "title act more" "meta meta meta"; align-items: center; gap: 0 8px; min-width: 0;
+  padding: 3px 4px 4px 12px; border-top: 1px solid var(--border); }
+.line:first-child { border-top: 0; }
+.line[data-status="ignored"] { opacity: .7; }
+.line-title { grid-area: title; display: flex; align-items: center; align-self: stretch; min-width: 0; color: inherit;
+  text-decoration: none; }
+.line-title h3 { min-width: 0; margin: 0; overflow: hidden; font-size: .95rem; font-weight: 600; line-height: 1.3;
+  white-space: nowrap; text-overflow: ellipsis; }
+a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.line-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0;
+  color: var(--muted); font-size: .8rem; line-height: 1.3; }
+.line-by { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
+  font-size: .82rem; white-space: nowrap; text-overflow: ellipsis; }
+.line-by .artist-name { overflow: hidden; text-overflow: ellipsis; }
+.line-status { display: flex; align-items: center; gap: 4px 6px; min-width: 0; }
+.line-status .badge { padding: 1px 8px; }
+.line-facts { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.line-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.line-sources { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
+.line-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
+.line-action form { margin: 0; }
+.line-action .btn { min-height: 28px; padding: 0 8px; border-color: transparent; border-radius: 8px;
+  background: transparent; color: var(--text); font-size: .85rem; font-weight: 650; white-space: nowrap; }
+.line-action .btn.primary { color: var(--accent); }
+.line-action .btn.line-pick { color: var(--review); }
+.line-action .btn:hover { border-color: var(--border); background: var(--raised); }
+.line-action .btn:disabled { border-color: var(--border); background: transparent; color: var(--muted); }
+.line-busy { display: inline-flex; align-items: center; min-height: 28px; padding: 0 8px; color: var(--wanted);
+  font-size: .85rem; font-weight: 650; text-underline-offset: 2px; }
+.line-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: var(--line-more);
+  height: 28px; padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent;
+  color: var(--muted); font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.line-more:hover, .line-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
+  color: var(--text); }
+/* A request's line, and what "⋯" holds: each across the whole line, under the rest. */
+.line > .progress { grid-column: 1 / -1; font-size: .85rem; }
+.line-panel { grid-column: 1 / -1; display: grid; gap: 6px; padding: 4px 0 8px; }
+.line-panel .note, .line-panel .facts { margin: 0; }
+.line-panel .foot { flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin-top: 2px; }
+@media (min-width: 720px) {
+  .line { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 6.5rem 3rem 4.75rem 7.5rem var(--line-more);
+    grid-template-areas: "title by status key src act more"; padding: 0 4px 0 12px; }
+  .line-meta { display: contents; }
+  .line-by { grid-area: by; justify-self: start; max-width: 100%; }
+  .line-status { grid-area: status; }
+  .line-key { grid-area: key; }
+  .line-sources { grid-area: src; }
+  .line-action .btn, .line-busy { min-height: 24px; }
+  .line-more { height: 24px; }
+}
+/* A thumb's targets: a row's or a line's button and "⋯", a row's artist (on a phone the title's line and the
+   artist's, two thumbs high), and a version's page on UG beside its button; a mouse keeps the compact sizes. */
 @media (pointer: coarse) {
   .row { --row-more: 44px; padding-top: 4px; padding-bottom: 4px; }
-  .row .btn, .row-busy { min-height: 44px; }
+  .row .btn { min-height: 44px; }
   .row-more { height: 44px; }
-  .artist { min-width: 44px; min-height: 44px; }
+  .line { --line-more: 44px; padding-top: 2px; padding-bottom: 2px; }
+  .line-action .btn, .line-busy { min-height: 44px; }
+  .line-more { height: 44px; }
+  button.artist { min-width: 44px; min-height: 44px; }
   .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }

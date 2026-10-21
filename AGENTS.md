@@ -43,7 +43,7 @@ section says where things are, and the rules a change there keeps.
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
 | youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed among the song's files on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml: a song is a string, or a table with its own `Setting`: key, mode, capo; `SongbookSong`, `Songbook.songs`, `.texts`; `set_song_setting`, and `with_capo`, the capo a key or a mode `caracole songbook set` gives plays at now, so a replaced sheet keeps the key it sounds in; its files play each song through `apply_version`, never chordpro's `{transpose}`, where `in_setting` puts it: the setting's key as the key of the shapes played, its mode and capo, the rest the song's `own_version`; `plays_in`, that in words, "key unknown, as written" for a sheet with no key) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed under Versions in its line's ⋯ on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml: a song is a string, or a table with its own `Setting`: key, mode, capo; `SongbookSong`, `Songbook.songs`, `.texts`; `set_song_setting`, and `with_capo`, the capo a key or a mode `caracole songbook set` gives plays at now, so a replaced sheet keeps the key it sounds in; its files play each song through `apply_version`, never chordpro's `{transpose}`, where `in_setting` puts it: the setting's key as the key of the shapes played, its mode and capo, the rest the song's `own_version`; `plays_in`, that in words, "key unknown, as written" for a sheet with no key) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
@@ -80,7 +80,15 @@ Rules a change there keeps (the Invariants below are the others):
   `app.written_pages` (a new kind goes there, with its record and its policy), and only while it
   holds the bytes caracole recorded (`files.read_written_page`). Enter in a search box never
   spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
-  opens the leading artist's songs), and on the library page it only searches, which asks no site.
+  opens the leading artist's songs), and on the library page, whose served bar searches
+  `/api/search` as you type (which asks no site), it only moves the focus to the first result.
+  There, library.js's `mergeSites` puts your songs and every index's rows under one header an
+  artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
+  `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line
+  rows.js's `indexLine`; a removed song's line asks for it again as the request form does. Your
+  songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
+  do. select.js knows only the songs the page was loaded with: a line offers Add to a songbook…
+  for those alone.
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of
   library_assets/, inlined byte for byte in the order of `library_page.STYLESHEETS`, `SCRIPTS`
   and `TEMPLATES`, where a new file is listed (test_library_assets.py).
@@ -100,7 +108,10 @@ Rules a change there keeps (the Invariants below are the others):
   are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local indexes
   alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
   gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
-  (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
+  (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
+  and in `/api/search`'s `removed`, which the library page shows with Add again), and
+  `gtptabs_songs` counts an artist's songs on gtptabs.com (an artist row's `gtptabs` in `/api/search`, the
+  "Guitar Pro 12" of their header). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
   index), which must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
   except that a pattern in more than `KEYS_PER_PATTERN` keys (a common word) brings in its
@@ -486,7 +497,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
   runs every other change as a `caracole` command in a child process, one at a time
   (web/jobs.py), since the lock is re-entrant within a process and its threads would share it:
-  a removal too, `caracole remove --yes`, once the card's five seconds with Undo are over
+  a removal too, `caracole remove --yes`, once the line's five seconds with Undo are over
   (the library page's script; without it, a page of its own), having asked what goes
   (`removal.plan_removal`, which only reads, and `removal.brief`); its job's song key is
   `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.

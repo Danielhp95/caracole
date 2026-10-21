@@ -55,7 +55,8 @@ site: an artist the index doesn't know is the user's to type.
 alone: a page there is one whose whole title is the query, or the query less
 an artist's name on either side, where that artist has a song of that title in
 the Ultimate Guitar index, gtptabs.com's or your library; a possible match,
-never more. Both only read the local tables: nothing here asks gtptabs.com or MuseScore
+never more. ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
+artist, for an artist the query names. They only read the local tables: nothing here asks gtptabs.com or MuseScore
 anything, and MuseScore's pages are for the user to open. ``search_lacuerda`` reads
 LaCuerda's (``lacuerda_index``, from its listings of every artist and the artist pages
 caracole has read): its songs as ``SiteHit``s, each with the page of the sheet a lookup
@@ -479,6 +480,23 @@ def _gtptabs_artist(conn: sqlite3.Connection, artist_key: str) -> str:
             if slug:
                 return _title_words(slug)
     return _title_words(artist_key)
+
+
+def gtptabs_songs(conn: sqlite3.Connection, artist: str) -> int:
+    """How many songs gtptabs.com's index lists by ``artist``: the song pages under the keys of the name's forms
+    (``normalize.name_forms``), each also with its last word first, as the site files people ("Elton John" is
+    ``john-elton``, as ``gtptabs.artist_keys`` has it); a title's uploads ("-2", "-3") one song, an artist's page
+    none. By the table's artist index alone: no scan, so ``ac-dc`` there never meets an ``acdc`` here."""
+    keys: list[str] = []
+    for form in name_forms(artist):
+        if form and not no_ones(form) and not placeholder_artist(form):
+            words = form.split("-")
+            keys += [form, "-".join([words[-1], *words[:-1]])]
+    keys = list(dict.fromkeys(keys))
+    if not keys:
+        return 0
+    return conn.execute(f"SELECT COUNT(DISTINCT base_key) FROM gtptabs_index WHERE artist_key IN "
+                        f"({', '.join('?' * len(keys))}) AND title_key != ''", keys).fetchone()[0]
 
 
 def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:

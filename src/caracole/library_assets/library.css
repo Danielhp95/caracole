@@ -1,26 +1,4 @@
 
-:root {
-  --h0: #8a3313; --h0-bg: #f6ded3;
-  --h1: #7a4c00; --h1-bg: #f7e8c7;
-  --h2: #4c5a12; --h2-bg: #e6edcf;
-  --h3: #1d6b43; --h3-bg: #d7eedf;
-  --h4: #0e5c5a; --h4-bg: #d3eceb;
-  --h5: #23508f; --h5-bg: #dbe6f7;
-  --h6: #5b34a8; --h6-bg: #e8e0f7;
-  --h7: #8e2a52; --h7-bg: #f6dde6;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --h0: #f4b298; --h0-bg: #3d2117;
-    --h1: #f2c46e; --h1-bg: #36290d;
-    --h2: #c9d98a; --h2-bg: #2a3110;
-    --h3: #83d6a6; --h3-bg: #133222;
-    --h4: #7fd3cf; --h4-bg: #0f302f;
-    --h5: #9dbff2; --h5-bg: #172843;
-    --h6: #c6adff; --h6-bg: #2b2047;
-    --h7: #f2a3c1; --h7-bg: #3b1828;
-  }
-}
 /* Until the page's scripts have drawn it (drawn.js), it waits unseen: painted before, as a slow machine may paint it,
    its list would be empty, the request form open under the bar and the Songbooks section closed though you left it
    open, and all of it would move once they have run. Should they never get that far, it shows after two seconds;
@@ -73,21 +51,27 @@
   background: transparent; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; }
 .bar-row { display: flex; align-items: center; gap: 8px; }
 .bar-row .field { flex: 1; min-width: 0; }
-.btn.all { flex: none; min-height: 50px; padding: 0 16px; border-radius: 14px; white-space: nowrap; }
-/* One line, its height kept: what Enter does, or how the search of the sites goes. */
+/* One line, its height kept: what typing and Enter do, or how the search of the sites goes. */
 .bar-status { min-height: 1.35em; margin: 6px 2px 0; overflow: hidden; color: var(--muted); font-size: .8rem;
   line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
 .results-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 4px 0 0; }
-.results .group { margin: 18px 0 0; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
-  text-transform: uppercase; }
-.results .rows { margin-top: 6px; }
-.all-mine, .more-songs { margin: 10px 0 0; }
-.artist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
-  margin: 14px 0 0; }
-.artist-head h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
-.artist-head h2:focus { outline: none; }
+/* What the status buttons, the Key menu and an artist's chip leave of your songs, hidden with them while the sites'
+   results show: "Your songs here: wanted", and Show all of yours. */
+.filtered { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; color: var(--muted);
+  font-size: .85rem; }
+.all-mine { margin: 10px 0 0; }
+/* The sites' results: one box of groups, as the list's, your songs and the indexes' under each artist's header, then
+   the artist's foot: "+ 57 more by Estopa", or the offer to read their page on LaCuerda. */
+#found > .groups { margin-top: 10px; }
+.group-tail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 2px 4px 4px 12px;
+  border-top: 1px solid var(--border); }
+.group-tail .read-page { margin: 2px 0; }
+.btn.more-by { min-height: 28px; padding: 0 8px; border-color: transparent; background: transparent;
+  color: var(--accent); font-size: .85rem; font-weight: 650; }
+.btn.more-by:hover { border-color: var(--border); background: var(--raised); }
+.badge.removed { color: var(--ignored); background: var(--ignored-bg); }
 .skipped { margin: 16px 0 0; color: var(--muted); font-size: .85rem; }
 .index-hint { max-width: 72ch; margin-top: 10px; white-space: pre-wrap; }
 .results .request { margin-top: 20px; }
@@ -98,21 +82,16 @@
 .command code { flex: 1 1 240px; padding: 8px 10px; user-select: all; }
 .empty + .btn.primary { margin-top: 4px; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
-/* One row of buttons that scrolls sideways on a phone; Key, Sort and the view under View there. */
-.chips { display: flex; flex: 1 1 0; flex-wrap: nowrap; gap: 8px; min-width: 0; margin: -4px; padding: 4px;
-  overflow-x: auto; scrollbar-width: none; }
-.chips::-webkit-scrollbar { display: none; }
-/* Buttons out of sight: the row fades where it goes on, so it says it scrolls (no fade, no more). */
-.chips.more-end { --fade-start: #000; --fade-end: transparent; }
-.chips.more-start { --fade-start: transparent; }
-.chips.more-start, .chips.more-end {
+/* The buttons, then Select, Key and Sort: on a phone one row that scrolls sideways (library-screens.css); from 720px
+   they wrap, the menus at the right. Buttons out of sight: the row fades where it goes on, so it says it scrolls
+   (no fade, no more). */
+.chips { display: flex; flex: 1 1 0; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.toolbar.more-end { --fade-start: #000; --fade-end: transparent; }
+.toolbar.more-start { --fade-start: transparent; }
+.toolbar.more-start, .toolbar.more-end {
   -webkit-mask-image: linear-gradient(to right, var(--fade-start, #000), #000 28px, #000 calc(100% - 28px), var(--fade-end, #000));
   mask-image: linear-gradient(to right, var(--fade-start, #000), #000 28px, #000 calc(100% - 28px), var(--fade-end, #000)); }
 .chip { flex: none; }
-.view-panel { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 12px; }
-.toolbar .view-toggle { display: none; }
-.view-toggle::after { content: "▾"; color: var(--muted); }
-.view-toggle[aria-expanded="true"]::after { content: "▴"; }
 .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .9rem;
   cursor: pointer; }
@@ -120,8 +99,8 @@
 .chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
 .chip.person { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.sort { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; color: var(--muted); font-size: .9rem; }
-.controls { display: flex; flex: none; justify-content: flex-end; gap: 8px; }
+.sort { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; }
+.controls { display: flex; flex: none; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 12px; }
 .sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--control-edge);
   background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
 .jump { display: flex; gap: 2px; margin: 10px 0 0; padding: 2px 0; overflow-x: auto; scrollbar-width: none; }
@@ -130,31 +109,33 @@
   background: transparent; color: var(--muted); font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
 .jump button:hover { background: var(--raised); color: var(--text); }
 .count { margin: 8px 0 0; color: var(--muted); font-size: .85rem; }
-.grid { display: grid; gap: 12px; margin-top: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
-.card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
-  border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); scroll-margin-top: 84px; }
-.card[data-status="ignored"] { opacity: .7; }
+/* The songs: by artist, one box of groups, each artist's name and how many of their songs are yours on a band over
+   their lines; by title or by when they came, one box of lines. */
+.lines, .groups { border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  box-shadow: var(--shadow); }
+.list > .groups, .list > section.flat { margin-top: 10px; }
+section.artist .lines { border: 0; border-radius: 0; background: none; box-shadow: none; }
+section.artist + section.artist { border-top: 1px solid var(--border); }
+section.artist:focus { outline: none; }
+section.artist:focus-visible > .artist-title { outline: 3px solid var(--focus); outline-offset: -3px; }
+.artist-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0 2px; min-height: 24px; margin: 0;
+  padding: 2px 12px; border-bottom: 1px solid var(--border); background: var(--raised); font-size: .9rem;
+  font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+section.artist:first-child > .artist-title { border-radius: 11px 11px 0 0; }
+.artist-title button.artist { color: var(--text); font-size: inherit; font-weight: inherit; }
+.artist-counts { color: var(--muted); font-size: .82rem; font-weight: 500; }
+/* In an artist's group its header names the artist: its lines leave the name out, and the column with it. */
+section.artist .line-by { display: none; }
+@media (min-width: 720px) {
+  section.artist .line { grid-template-columns: minmax(0, 1fr) 6.5rem 3rem 4.75rem 7.5rem var(--line-more);
+    grid-template-areas: "title status key src act more"; }
+  /* A site's line has no key: its counts ("chords ×9 · tabs ×2") take the key's column too, the rest where yours are. */
+  section.artist .line.hit { grid-template-areas: "title status status src act more"; }
+}
+.badge.missing { color: var(--failed); background: var(--failed-bg); }
 /* A song caracole removed while the page was open: it says so, and nothing more, until the page is loaded again. */
-.card.gone { border-style: dashed; box-shadow: none; }
-.row.gone { align-content: start; }  /* kept as tall as it was: its lines stay where they were */
-.gone h2 { color: var(--muted); }
-.head { display: flex; align-items: flex-start; gap: 12px; }
-.mono { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px;
-  font-size: .95rem; font-weight: 700; letter-spacing: .02em; color: var(--h0); background: var(--h0-bg); }
-.hue-1 { color: var(--h1); background: var(--h1-bg); }
-.hue-2 { color: var(--h2); background: var(--h2-bg); }
-.hue-3 { color: var(--h3); background: var(--h3-bg); }
-.hue-4 { color: var(--h4); background: var(--h4-bg); }
-.hue-5 { color: var(--h5); background: var(--h5-bg); }
-.hue-6 { color: var(--h6); background: var(--h6-bg); }
-.hue-7 { color: var(--h7); background: var(--h7-bg); }
-.names { flex: 1; min-width: 0; }
-.card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
-/* Under the title, which keeps its line: the artist, then the badges, at the end of its line or under it. */
-.byline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px; }
-.badges { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0;
-  margin-left: auto; }
+.line.gone { align-content: start; }  /* kept as tall as it was: its lines stay where they were */
+.gone h3 { color: var(--muted); }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; color: var(--muted); font-size: .85rem; }
 .facts .key, .facts .transpose { color: var(--text); font-weight: 600; }
 .note { margin: 0; color: var(--review); font-size: .85rem; }
@@ -175,8 +156,7 @@
 .progress .undo:hover { background: var(--raised); }
 .progress .goes { display: block; margin-top: 2px; color: var(--muted); font-size: .85rem; font-weight: 500; }
 .requested { margin-top: 14px; }
-.requested .grid { margin-top: 6px; }
-.card .by { margin: 2px 0 0; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.requested .lines { margin-top: 6px; }
 /* The requests, folded to a pill in the corner over the page's margin, on every width; opened, a list above it. */
 .tray { position: fixed; z-index: 3; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); display: flex;
   flex-direction: column-reverse; width: max-content; max-width: calc(100vw - 32px); border: 1px solid var(--border-strong);
@@ -198,27 +178,9 @@
 .tray .progress { font-size: .85rem; }
 body.with-tray .page { padding-bottom: 88px; }
 .youtube { margin: 0; color: var(--auto); font-size: .85rem; }
-.more { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border); }
-.more > summary { display: flex; align-items: center; gap: 4px; min-height: 32px; color: var(--muted);
-  font-size: .85rem; font-weight: 600; list-style: none; cursor: pointer; }
-.more > summary::-webkit-details-marker { display: none; }
-.more > summary::before { content: "›"; display: inline-block; width: 1em; font-size: 1.15rem; line-height: 1;
-  text-align: center; }
-.more[open] > summary::before { transform: rotate(90deg); }
-.more > .subhead { margin: 8px 0 6px; }
-.more > summary + .actions { margin-top: 6px; }
-.more + .more { margin-top: 0; }  /* Files, then Find it elsewhere: one fold under the other */
-.foot { display: flex; justify-content: flex-end; margin-top: auto; }
-.more + .foot { margin-top: 0; }
+.foot { display: flex; }
 .foot form { margin: 0; }
-.busy { margin: 0; color: var(--wanted); font-size: .88rem; font-weight: 600; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.quiet:hover { border-color: var(--border); color: var(--failed); }
 .empty { margin: 32px 0 8px; font-size: 1.05rem; }
 .empty-hint { margin: 0; color: var(--muted); }
-.views { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 12px;
-  background: var(--surface); }
-.views button { min-height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent;
-  color: var(--muted); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
-.views button:hover { color: var(--text); }
-.views button[aria-pressed="true"] { background: var(--text); color: var(--bg); }

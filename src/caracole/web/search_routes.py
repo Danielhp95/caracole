@@ -2,12 +2,18 @@
 
     GET  /lookup          look a song up as you type (lookup_page.py), and read its sheet
     GET  /api/search?q=   your library and the offline indexes, as JSON (search.py): your songs, the
-                          artists the query names, the UG index's songs, which comes first and the
-                          row Enter may act on; LaCuerda's artists and songs, gtptabs.com's and
-                          MuseScore's pages, and the sites not searched, or not whole, with why
+                          songs you removed (``removed``), the artists the query names, the UG
+                          index's songs, which comes first and the row Enter may act on; LaCuerda's
+                          artists and songs, gtptabs.com's and MuseScore's pages, and the sites not
+                          searched, or not whole, with why. Each song's row has the two parts of its
+                          identity key (``artist_key``, ``title_key``), and an artist's the first
+                          (``group_key``): the library page puts what shares them on one line, and
+                          under one header, which counts an artist's songs on each site (an artist's
+                          ``songs`` on theirs, ``gtptabs`` gtptabs.com's)
     GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
                           ``offset``, and yours by them; ``?lacuerda=SLUG`` (``?lacuerda_name=NAME``),
                           a LaCuerda artist's songs the index holds, and whether caracole read their page
+                          (and ``gtptabs``, as the search gives it)
     POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``), or the LaCuerda
                           song (``lacuerda``), you picked
     POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
@@ -26,6 +32,10 @@ it, and no new source for a song from Spotify. A lookup and a removal of the
 same song never join (``jobs.REMOVING``): they run in the order they were
 asked for, and a lookup after a removal asks for the song again, as a
 wanted.txt line does.
+
+A removed song (``search.search_removed``) is never ``best``: the library page
+shows it with Add again, which asks for it again as a request does, with a line
+in wanted.txt.
 
 Searching reads, and sends no request: one search runs at a time, one asked
 for meanwhile wins over the older ones still waiting (``superseded``: the
@@ -222,10 +232,12 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
         search_lacuerda,
         search_library,
         search_musescore,
+        search_removed,
     )
     from caracole.songs import list_songs
 
     mine = search_library(conn, q, LIBRARY_HITS)
+    removed = search_removed(conn, q, LIBRARY_HITS)
     skipped, partial = _skipped(app, conn)
     left_out = {s["source"] for s in skipped}
     _after_reads(app)
@@ -244,20 +256,37 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             app._found.popitem(last=False)
     answer = found(mine, index_found)
     songs = list_songs(conn)
-    library, hits = _rows(app, conn, mine, index, songs)
+    # The artists' most tabbed songs are the index's songs too, drawn as they are: each with its song of yours.
+    tops = [t for a in artists for t in a["top"]]
+    library, hits = _rows(app, conn, mine, [*index, *tops], songs)
+    hits, owned = hits[:len(index)], iter(hits[len(index):])
+    artists = [{**a, "top": [next(owned) for _ in a["top"]], "gtptabs": _gtptabs_songs(app, conn, a["artist"])}
+               for a in artists]
     best = answer.best
     pick = None if best is None else (
         {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
     return {"query": q, "library": library, "index": hits, "artists": artists, "lead": answer.lead,
             "best": pick, "hint": hint,
+            "removed": [{"artist": h.artist, "title": h.title, "key": h.key, "removed_at": h.removed_at,
+                         **_key_parts(h.key)} for h in removed],
             "gtptabs": _gtptabs_rows(app, conn, gtptabs if "gtptabs" not in left_out else [], songs),
             "musescore": [{"source": h.source, "title": h.title, "url": h.url, "score": h.score}
                           for h in (musescore if "musescore" not in left_out else [])],
             "lacuerda": _lacuerda_rows(app, conn, lacuerda, songs),
-            "lacuerda_artists": [_lacuerda_artist_json(a) for a in lc_artists],
+            "lacuerda_artists": [{**_lacuerda_artist_json(app, conn, a, songs),
+                                  "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
             "lacuerda_leads": lacuerda_leads(index_found, lc_artists),
             "skipped": skipped, "partial": partial}
+
+
+def _gtptabs_songs(app: WebApp, conn: sqlite3.Connection, artist: str) -> int:
+    """How many songs gtptabs.com's index lists by an artist the query names (``search.gtptabs_songs``), which their
+    group's header on the library page says ("Estopa · UG 60 · LaCuerda 159 · Guitar Pro 12"); none while gtptabs.com
+    is turned off, as the search then lists none of its pages."""
+    from caracole.search import gtptabs_songs
+
+    return gtptabs_songs(conn, artist) if app.cfg.provider("gtptabs").enabled else 0
 
 
 def _after_reads(app: WebApp) -> None:
@@ -274,7 +303,8 @@ def _gtptabs_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit]
     """gtptabs.com's pages as the page draws them; one your library has (``_Mine``, by its names) names it,
     so that Get it looks it up as that song."""
     return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "uploads": h.uploads,
-             "score": h.score, "via": h.via, **mine} for h, mine in zip(hits, _owners(app, conn, hits, songs))]
+             "score": h.score, "via": h.via, **_keys(h.artist, h.title), **mine}
+            for h, mine in zip(hits, _owners(app, conn, hits, songs))]
 
 
 def _lacuerda_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit],
@@ -282,21 +312,41 @@ def _lacuerda_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit
     """LaCuerda's songs as the page draws them: its page, the page of the sheet Get it keeps (``sheet``, None
     for a song without chords there) and its versions; one your library has names it, as gtptabs.com's do."""
     return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "sheet": h.sheet,
-             "versions": h.uploads, "score": h.score, "via": h.via, **mine}
+             "versions": h.uploads, "score": h.score, "via": h.via, **_keys(h.artist, h.title), **mine}
             for h, mine in zip(hits, _owners(app, conn, hits, songs))]
+
+
+def _keys(artist: str, title: str) -> dict[str, str]:
+    """The keys a row merges on across sites (``normalize.identity_key``, split): the same song from
+    Ultimate Guitar, LaCuerda and gtptabs.com shares both, and a song of yours (its key) or one you removed."""
+    from caracole.normalize import identity_key
+
+    return _key_parts(identity_key(artist, title))
+
+
+def _key_parts(key: str) -> dict[str, str]:
+    artist_key, _, title_key = key.partition("/")
+    return {"artist_key": artist_key, "title_key": title_key}
+
+
+def _group_key(artist: str) -> str:
+    """An artist's group on the library page: the artist key of their songs' rows (``_keys``)."""
+    return _keys(artist, "")["artist_key"]
 
 
 def _owners(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit], songs: list[Song]) -> list[dict[str, Any]]:
     """Each site hit's song of your library (``_Mine``, by its names), as ``song`` and ``library`` (its names
-    and its card's links); None for one your library hasn't."""
+    and its card's links), and whether its artist is your song's (``same_artist``); None for one your library
+    hasn't."""
     from caracole.library_page import result_cards
 
     owners_of = _Mine(songs, app._song_forms)
     owners = [owners_of.song_for(h.artist_key, h.title_key, h.artist, h.title) for h in hits]
     cards = result_cards(conn, app.cfg, list({s.id: s for s in owners if s}.values()))
     return [{"song": song.id if song else None,
+             "same_artist": song is not None and owners_of.same_artist(song, h.artist_key, h.artist),
              "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
-                         "links": cards[song.id]["links"]} if song else None} for song in owners]
+                         "links": cards[song.id]["links"]} if song else None} for h, song in zip(hits, owners)]
 
 
 def _skipped(app: WebApp, conn: sqlite3.Connection) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
@@ -331,7 +381,8 @@ def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], ind
     """Your songs and the index's, as the page draws them. A song of your library comes as its card
     has it (``result_cards``): its files (``links``, its viewer the primary one), where its sheet
     came from, its key; and the files its sheet can be read in on the page (``files``). An index
-    song your library has (``_Mine``) names it, with its links."""
+    song your library has (``_Mine``) names it, with its links, and says whether its artist is your
+    song's (``same_artist``: not for your cover matched to the original's tab)."""
     from caracole.get import readable_files
     from caracole.library_page import result_cards
     from caracole.songs import list_songs
@@ -343,7 +394,8 @@ def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], ind
                 "status": h.song.status, "review": bool(h.song.review), "score": h.score, "via": h.via,
                 "files": readable_files(conn, app.cfg.library_dir, h.song), **cards[h.song.id]}
                for h in mine]
-    hits = [{**hit, "song": song.id if song else None,
+    hits = [{**hit, **_keys(hit["artist"], hit["title"]), "song": song.id if song else None,
+             "same_artist": song is not None and owners_of.same_artist(song, hit["ug"].split("/", 1)[0], hit["artist"]),
              "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
                          "links": cards[song.id]["links"]} if song else None}
             for hit, song in zip(index, owners)]
@@ -359,9 +411,10 @@ def _index_hits(conn: sqlite3.Connection, q: str) -> tuple[IndexFound, list[dict
         return (IndexFound(), [], [],
                 "The offline Ultimate Guitar index is empty: run caracole index build once (about 10 minutes).")
     answer = find_index(conn, q, songs=INDEX_HITS)
+    # An artist with their most tabbed songs, each as the index's songs are (``_hit_json``), and the group the
+    # library page puts them in (``group_key``); ``artist_key`` is UG's, which /api/artist takes.
     artists = [{"artist_key": a.artist_key, "artist": a.artist, "score": a.score, "songs": a.songs, "tabs": a.tabs,
-                "top": [{"artist": h.artist, "title": h.title, "ug": f"{h.artist_key}/{h.song_key}",
-                         "counts": dict(h.counts)} for h in a.top]}
+                "group_key": _group_key(a.artist), "top": [_hit_json(conn, h) for h in a.top]}
                for a in answer.artists]
     index = [_hit_json(conn, h) for h in answer.songs]
     return answer, index, artists, bare_id_hint(q, [*answer.songs, *answer.artists])
@@ -422,11 +475,12 @@ def api_lacuerda_artist(app: WebApp, slug: str, *, name: str = "") -> Response:
                 theirs = [LibraryHit(s, 100.0, "artist") for s in library_by_artist(songs, named.artist)]
                 library, _ = _rows(app, conn, theirs, [], songs)
                 hits = _lacuerda_rows(app, conn, lacuerda_songs(conn, named.slug)[:LACUERDA_SONGS], songs)
+                gtptabs = _gtptabs_songs(app, conn, named.artist)
         except (sqlite3.Error, OSError) as e:
             return json_response(503, {"error": f"The database can't be read: {e}"})
     return json_response(200, {"source": "lacuerda", "slug": named.slug, "artist": named.artist, "url": named.url,
-                               "listed": named.songs, "total": named.known, "read": named.known > 0, "songs": hits,
-                               "library": library})
+                               "group_key": _group_key(named.artist), "listed": named.songs, "total": named.known,
+                               "read": named.known > 0, "gtptabs": gtptabs, "songs": hits, "library": library})
 
 
 def lacuerda_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
@@ -475,11 +529,13 @@ def _artist_songs(app: WebApp, conn: sqlite3.Connection, key: str, offset: int) 
                                "offset": offset, "tabs": named.tabs, "library": library})
 
 
-def _lacuerda_artist_json(a: SiteArtist) -> dict[str, Any]:
+def _lacuerda_artist_json(app: WebApp, conn: sqlite3.Connection, a: SiteArtist, songs: list[Song]) -> dict[str, Any]:
     """A LaCuerda artist as the page draws them: their songs as the listing counts them, those the index holds
-    (``known``: 0 until caracole has read their page), and the most popular with chords."""
+    (``known``: 0 until caracole has read their page), the most popular with chords, as LaCuerda's songs are
+    (``_lacuerda_rows``), and the group the library page puts them in (``group_key``)."""
     return {"source": a.source, "artist": a.artist, "slug": a.slug, "url": a.url, "songs": a.songs, "known": a.known,
-            "score": a.score, "via": a.via, "top": [{"title": t.title, "url": t.url, "sheet": t.sheet} for t in a.top]}
+            "score": a.score, "via": a.via, "group_key": _group_key(a.artist),
+            "top": _lacuerda_rows(app, conn, a.top, songs)}
 
 
 def _lacuerda_unlisted(conn: sqlite3.Connection, q: str, ug: IndexFound, lc_artists: Sequence[SiteArtist],
@@ -532,6 +588,15 @@ class _Mine:
             if wanted_artist in artists and wanted_title in titles:
                 return song
         return None
+
+    def same_artist(self, song: Song, artist_key: str, artist: str) -> bool:
+        """Whether a site's artist (its key and its name) is one of your song's artists, by their names'
+        forms: UG's "Acdc" is your AC/DC, "Song Dongye" your 宋冬野; the artist of the original you matched
+        your cover to is not."""
+        from caracole.normalize import compact, name_forms
+
+        artists, _ = self._forms_of(song)
+        return compact(artist_key) in artists or any(compact(f) in artists for f in name_forms(artist))
 
     def _forms_of(self, song: Song) -> tuple[frozenset[str], frozenset[str]]:
         from caracole.normalize import clean_title, compact, name_forms

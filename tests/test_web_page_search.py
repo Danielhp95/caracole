@@ -1,10 +1,10 @@
 """The library page's one bar, served by a real ``caracole serve`` and driven in a real browser.
 
-Typing filters your songs on the page, asking the server nothing; Enter, or Search all, lists your
-songs, then what the offline indexes hold of Ultimate Guitar, gtptabs.com and MuseScore
-(``/api/search``), following what you type; Get it looks a song up in its own row. The queue
-runs ``FakeGet``, which does what ``caracole get`` does with no request: it adds the song from
-wanted.txt and keeps a sheet.
+Typing searches as you type, no Enter needed: your songs that match, then what the offline indexes hold of
+Ultimate Guitar, gtptabs.com and MuseScore (``/api/search``), all under the same artist headers, a song the
+sites have twice one line with each site's mark; Get it looks a song up in its own line, and Enter only
+moves to the first result. The queue runs ``FakeGet``, which does what ``caracole get`` does with no
+request: it adds the song from wanted.txt and keeps a sheet.
 """
 
 from __future__ import annotations
@@ -13,16 +13,17 @@ import json
 import threading
 import time
 from datetime import UTC, datetime
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlsplit
 
 import pytest
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
+from helpers.targets import small_targets
 
 from caracole import db
 from caracole.get import PROGRESS_PREFIX
 from caracole.library import song_dir
 from caracole.overrides import override_key
-from caracole.songs import find_song, update_song
+from caracole.songs import find_song, mark_removed, update_song
 from caracole.ug.index import mark_built, upsert_rows
 from caracole.web.app import WebApp
 from caracole.web.jobs import JobQueue
@@ -65,14 +66,18 @@ class FakeGet:
 
 
 class Asked(list):
-    """The searches the server got; while ``held`` is an event, each next one answers once the test sets it.
-    While ``lookups_held`` is one, each Get it's request is queued at once, and its answer to the page waits for
-    the test to set it."""
+    """The searches the server got; while ``held`` is an event, each next one (only those for the query ``only``,
+    when it is set) answers once the test sets it. While ``lookups_held`` is one, each Get it's request is queued at
+    once, and its answer to the page waits for the test to set it."""
 
     def __init__(self):
         super().__init__()
         self.held: threading.Event | None = None
+        self.only: str | None = None
         self.lookups_held: threading.Event | None = None
+
+    def queries(self) -> list[str]:
+        return [parse_qs(urlsplit(target).query).get("q", [""])[0] for target in self]
 
 
 @pytest.fixture
@@ -88,7 +93,8 @@ def live(cfg):
         if request.target.startswith("/api/search"):
             asked.append(request.target)
             held = asked.held
-            if held is not None:
+            q = parse_qs(urlsplit(request.target).query).get("q", [""])[0]
+            if held is not None and (asked.only is None or q == asked.only):
                 held.wait(10)
         response = answer(request)
         if request.method == "POST" and request.target.startswith("/lookup"):
@@ -156,6 +162,17 @@ def library(cfg, *songs):
     return made
 
 
+def removed(cfg, artist, title, when="2026-10-20T09:00:00+00:00"):
+    """A song caracole removed: its tombstone, and no record."""
+    conn = db.connect(cfg.db_path)
+    song = add_song(conn, artist, title)
+    mark_removed(conn, song, when)
+    conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))
+    conn.commit()
+    conn.close()
+    return song
+
+
 def posted(queue, timeout=10.0):
     """The arguments of the first lookup the page posted (which the page may not have heard back about yet:
     ``answered``)."""
@@ -170,127 +187,286 @@ def posted(queue, timeout=10.0):
 
 def answered(page, hit):
     """Whether the page has heard back about the request it posted from the result ``hit``: once it has, the
-    request's line follows the job in the row, in place of its Get it, and the row is where its card comes from."""
-    return page.wait(f"!document.querySelector({json.dumps(hit + ' .row-action button')})")
+    request's line follows the job in the line, in place of its Get it, and the line is where its card comes from."""
+    return page.wait(f"!document.querySelector({json.dumps(hit + ' .line-action button')})")
 
 
-GRID = "[...document.querySelectorAll('#list article')].map((a) => a.querySelector('h2').textContent)"
+def search(page, query):
+    """``query`` typed into the bar, a key at a time, and no Enter."""
+    page.js("document.getElementById('q').focus()")
+    page.js("document.getElementById('q').select()")
+    page.type(query)
+
+
+GRID = "[...document.querySelectorAll('#list article')].map((a) => a.querySelector('h3').textContent)"
 STATUS = "document.getElementById('bar-status').textContent"
 HITS = "document.querySelectorAll('#results .hit').length"
-GROUPS = "[...document.querySelectorAll('#results .group')].map((g) => g.textContent)"
+# Each group of the results: its header, and its lines (a title, and whose: "yours", or the sites' marks).
+GROUPS = "[...document.querySelectorAll('#results section.artist')].map((g) => g.querySelector('.artist-title').textContent)"
+LINES = ("[...document.querySelectorAll('#results section.artist')].map((g) => [g.querySelector('.artist-name')"
+         ".textContent, [...g.querySelectorAll('article.line')].map((a) => [a.querySelector('h3').textContent, "
+         "a.dataset.id ? 'yours' : [...a.querySelectorAll('.line-sources .source')].map((m) => m.dataset.source)"
+         ".join('+')])])")
+TITLES = "[...document.querySelectorAll('#results .hit h3')].map((t) => t.textContent)"
 WONDERWALL = dict(ug=[("oasis", "wonderwall", 9), ("ryan-adams", "wonderwall", 3), ("eagles", "hotel-california", 5)],
                   gtptabs=["https://gtptabs.com/tabs/15/oasis/wonderwall.html"],
                   musescore=["https://musescore.com/song/wonderwall-1524"])
-
-
-def test_typing_filters_your_songs_and_enter_lists_the_sites_under_them(cfg, live, browser):
-    base, queue, asked = live
-    sites(cfg, **WONDERWALL)
-    library(cfg, ("Eagles", "Hotel California"), ("Radiohead", "Creep"))
-    browser.open(base)
-    browser.js("document.getElementById('q').focus()")
-    browser.type("wonderwall")
-    assert browser.wait(f"{GRID}.length === 0")
-    assert "Search all" in browser.js(STATUS) or "Enter" in browser.js(STATUS)
-    time.sleep(0.4)
-    assert asked == []  # typing filters the page's own songs: the server hears nothing
-    browser.press("Enter")
-    assert browser.wait(f"{HITS} >= 4")
-    groups = browser.js(GROUPS)
-    assert [g.split(" · ")[0] for g in groups] == ["Ultimate Guitar", "Guitar Pro on gtptabs.com", "MuseScore"], groups
-    assert browser.js("[...document.querySelectorAll('#results .hit > .source')].map((m) => m.dataset.source)") == [
-        "ug", "ug", "gtptabs", "musescore"]
-    link = browser.js("(() => { const a = document.querySelector('#results .hit[data-source=\"musescore\"] .row-action a');"
-                      " return [a.href, a.target, a.rel]; })()")
-    assert link == ["https://musescore.com/song/wonderwall-1524", "_blank", "noopener noreferrer"]  # a link alone
-    assert browser.js("document.querySelector('.toolbar').offsetParent") is None  # the grid's tools step aside
-    assert browser.js("document.activeElement.id") == "q"
-    assert "LaCuerda" in browser.js("document.querySelector('#results .skipped').textContent")
-    # Typing on follows: your songs first, then the sites, the newest query's alone.
-    browser.js("document.getElementById('q').select()")
-    browser.type("hotel")
-    assert browser.wait("(document.querySelector('#results .group') || {}).textContent === 'In your library · 1'")
-    assert browser.wait("[...document.querySelectorAll('#results .hit .row-title')].some((t) => "
-                        "t.textContent === 'Hotel California' && t.closest('.hit').dataset.ug)")
-    mine = browser.js("[...document.querySelectorAll('#results .hit')].find((h) => h.dataset.ug === "
-                      "'eagles/hotel-california').textContent")
-    assert "In your library" in mine and "Wonderwall" not in browser.js("document.getElementById('results').textContent")
-    assert queue.snapshot() == []  # Enter asked for nothing
-
-
-def test_get_it_looks_the_song_up_and_its_row_says_how_it_goes(cfg, live, browser):
-    base, queue, _ = live
-    sites(cfg, **WONDERWALL)
-    browser.open(base + "#q=wonderwall&all=1")  # the address keeps the search, as it keeps the rest
-    assert browser.wait(f"{HITS} >= 2")
-    browser.click("#results .hit[data-ug='ryan-adams/wonderwall'] .row-action button")
-    args = posted(queue)
-    assert args[:3] == ("get", "--progress", "--ug=ryan-adams/wonderwall") and args[-2:] == ("Ryan Adams", "Wonderwall")
-    row = "document.querySelector('#results .progress').closest('article')"
-    assert browser.wait("!!document.querySelector('#results .progress')")
-    assert browser.wait(f"{row}.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
-    assert browser.js(f"{row}.querySelector('.row-title').textContent") == "Wonderwall"
-    assert browser.wait(f"{row}.querySelector('.row-action a') && "
-                        f"{row}.querySelector('.row-action a').textContent.startsWith('Sheet PDF')")
-    # Back to your songs: the new song has a card of its own above the grid.
-    browser.press("Escape")
-    assert browser.wait("document.getElementById('results').hidden")
-    assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
-
-
-
-
 RYAN = "#results .hit[data-ug='ryan-adams/wonderwall']"
 BUSY = "(document.getElementById('found').getAttribute('aria-busy') === 'true')"
 
 
-def test_a_newer_answer_keeps_the_row_whose_request_runs_and_its_line(cfg, live, browser):
-    # Enter again searches again: the list on the screen meanwhile is the older answer's. A Get it tapped there
-    # keeps its row, and the row its line, when the newer answer is drawn; back to your songs, its card.
+def test_typing_lists_your_songs_and_the_indexes_without_enter(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=[*WONDERWALL["ug"], ("eagles", "take-it-easy", 2)], gtptabs=WONDERWALL["gtptabs"],
+          musescore=WONDERWALL["musescore"])
+    library(cfg, ("Eagles", "Hotel California"), ("Radiohead", "Creep"))
+    browser.open(base)
+    assert "Search all" not in browser.js("document.body.textContent") and browser.js("document.getElementById('all')") is None
+    search(browser, "eagles")  # an artist: your song of theirs, then the index's, under one header
+    assert browser.wait(f"{HITS} >= 1")
+    assert asked.queries()[-1] == "eagles" and queue.snapshot() == []  # searched, nothing looked up
+    assert browser.js(GROUPS) == ["Eagles · you have 1 · UG 2"]
+    assert browser.js(LINES) == [["Eagles", [["Hotel California", "yours"], ["Take It Easy", "ug"]]]]
+    assert browser.js("document.querySelector('.toolbar').offsetParent") is None  # the list's tools step aside
+    assert browser.js("document.activeElement.id") == "q"  # the focus stays in the box
+    # Typing on follows: the newest query's answer alone, a song your library hasn't under its artist's own header.
+    search(browser, "wonderwall")
+    assert browser.wait("document.getElementById('found').dataset.query === 'wonderwall'")
+    assert browser.js(LINES) == [["Oasis", [["Wonderwall", "ug+gtptabs"]]], ["Ryan Adams", [["Wonderwall", "ug"]]],
+                                 ["MuseScore", [["Wonderwall", "musescore"]]]]
+    assert "LaCuerda" in browser.js("document.querySelector('#results .skipped').textContent")
+    link = browser.js("(() => { const a = document.querySelector('#results .hit[data-source=\"musescore\"] .line-action a');"
+                      " return [a.href, a.target, a.rel]; })()")
+    assert link == ["https://musescore.com/song/wonderwall-1524", "_blank", "noopener noreferrer"]  # a link alone
+    assert "Hotel California" not in browser.js("document.getElementById('results').textContent")
+    assert queue.snapshot() == []
+
+
+def test_one_song_from_two_sites_is_one_line_with_two_icons(cfg, live, browser):
+    base, queue, _ = live
+    sites(cfg, ug=[("oasis", "wonderwall", 9), ("oasis", "live-forever", 2)],
+          gtptabs=["https://gtptabs.com/tabs/15/oasis/wonderwall.html"])
+    browser.open(base)
+    search(browser, "oasis wonderwall")
+    assert browser.wait(f"{HITS} >= 1")
+    line = "#results .hit[data-ug='oasis/wonderwall']"
+    assert browser.js(f"document.querySelectorAll(\"{line}\").length") == 1
+    assert browser.js(f"[...document.querySelectorAll(\"{line} .line-sources .source\")].map((m) => m.getAttribute('alt')"
+                      " || m.getAttribute('aria-label'))") == ["from Ultimate Guitar", "from gtptabs.com"]
+    assert browser.js(f"document.querySelector(\"{line} .line-facts\").textContent") == "chords ×9 · Guitar Pro file"
+    # Under its "⋯", each site's: UG's versions, gtptabs.com's page.
+    browser.click(f"{line} .line-more")
+    panel = browser.js(f"document.querySelector(\"{line} .line-panel\").textContent")
+    assert "Chords 1 of 9" in panel and "On gtptabs.com" in panel
+    assert browser.js(f"document.querySelector(\"{line} .line-panel a[href*='gtptabs.com']\").href") == \
+        "https://gtptabs.com/tabs/15/oasis/wonderwall.html"
+    # Its Get it is Ultimate Guitar's song, whose lookup gets the Guitar Pro file from gtptabs.com too.
+    browser.click(f"{line} .line-action button")
+    args = posted(queue)
+    assert args[:3] == ("get", "--progress", "--ug=oasis/wonderwall") and args[-2:] == ("Oasis", "Wonderwall")
+
+
+def test_the_sites_rows_of_an_artist_of_yours_go_under_your_artists_header_and_a_covers_never_do(cfg, live, browser):
+    # UG's slugs write AC/DC as "Acdc": their rows are under your AC/DC's header. Your Ryan Adams cover matched to
+    # Oasis's tab is your song, in your Ryan Adams group, and Oasis's other songs stay under Oasis.
+    base, _, _ = live
+    sites(cfg, ug=[("acdc", "thunderstruck", 3), ("acdc", "highway-to-hell", 2), ("oasis", "wonderwall", 9),
+                   ("oasis", "live-forever", 2)])
+    acdc, cover = library(cfg, ("AC/DC", "Thunderstruck"), ("Ryan Adams", "Wonderwall"))
+    conn = db.connect(cfg.db_path)
+    update_song(conn, cover.id, match_decision="accept", match_artist_key="oasis", match_song_key="wonderwall")
+    conn.close()
+    browser.open(base)
+    search(browser, "acdc")
+    assert browser.wait(f"{HITS} >= 1")
+    assert browser.js(LINES) == [["AC/DC", [["Thunderstruck", "yours"], ["Highway To Hell", "ug"]]]]
+    assert browser.js(GROUPS) == ["AC/DC · you have 1 · UG 2"]
+    search(browser, "oasis")
+    assert browser.wait("document.getElementById('found').dataset.query === 'oasis'")
+    # The artist the query names first, as the answer ranks it; your cover in your Ryan Adams group.
+    assert browser.js(LINES) == [["Oasis", [["Live Forever", "ug"]]], ["Ryan Adams", [["Wonderwall", "yours"]]]]
+
+
+def test_an_artist_group_shows_a_few_index_songs_then_more(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=[("estopa", f"cancion-{n:02}", 3 if n < 3 else 1) for n in range(60)])
+    browser.open(base)
+    search(browser, "estopa")
+    assert browser.wait(f"{HITS} === 3")
+    assert browser.js(GROUPS) == ["Estopa · UG 60"]
+    assert browser.js(TITLES) == ["Cancion 00", "Cancion 01", "Cancion 02"]  # the most tabbed first
+    more = "#results section.artist .more-by"
+    assert browser.js(f"document.querySelector('{more}').textContent") == "+ 57 more by Estopa"
+    browser.click(more)  # all of them, fifty at a time (/api/artist), in the group itself
+    assert browser.wait(f"{HITS} === 50")
+    assert browser.js(f"document.querySelector('{more}').textContent") == "+ 10 more by Estopa"
+    browser.click(more)
+    assert browser.wait(f"{HITS} === 60")
+    assert browser.js(f"document.querySelector('{more}')") is None
+    titles = browser.js(TITLES)
+    assert titles[:3] == ["Cancion 00", "Cancion 01", "Cancion 02"] and len(set(titles)) == 60
+    assert browser.js(GROUPS) == ["Estopa · UG 60"] and queue.snapshot() == []  # listing them asked no site
+
+
+def test_index_lines_show_tab_counts_not_stars(cfg, live, browser):
+    base, _, _ = live
+    sites(cfg, **WONDERWALL)
+    browser.open(base)
+    search(browser, "wonderwall")
+    assert browser.wait(f"!!document.querySelector(\"{RYAN}\")")
+    assert browser.js(f"document.querySelector(\"{RYAN} .line-facts\").textContent") == "chords ×3"
+    text = browser.js("document.getElementById('results').textContent")
+    assert "★" not in text and "rating" not in text.lower() and "votes" not in text.lower()
+
+
+def sent(asked, query, timeout=10.0):
+    """Waits until the server got a search for ``query``."""
+    deadline = time.monotonic() + timeout
+    while query not in asked.queries():
+        if time.monotonic() > deadline:
+            raise AssertionError(f"the page never searched {query!r}: {asked.queries()}")
+        time.sleep(0.02)
+
+
+def test_typing_fast_shows_only_the_newest_answer(cfg, live, browser):
+    # Review Focus 3: the newest query's answer alone, whatever comes late; and your songs that match show at once
+    # and stay throughout, the sites' answer on its way, drawn, or an older one arriving late.
+    base, _, asked = live
+    sites(cfg, ug=[("radiohead", "creep", 4), ("radiohead", "karma-police", 2), ("muse", "hysteria", 3)])
+    library(cfg, ("Radiohead", "Creep"), ("Easy Star All-Stars", "Karma Police"))
+    yours = ("[...document.querySelectorAll('#results article.line[data-id]')].filter((a) => a.offsetParent !== null)"
+             ".map((a) => a.querySelector('h3').textContent)")
+    browser.open(base)
+    first = asked.held = threading.Event()  # the first query's answer comes late
+    asked.only = "creep"
+    search(browser, "creep")
+    sent(asked, "creep")
+    assert browser.js(yours) == ["Creep"] and browser.js(TITLES) == []  # yours, while the sites' answer is on its way
+    asked.held, asked.only = threading.Event(), None  # every later answer waits too, until the test lets it go
+    search(browser, "karma police")  # typed over while the first answer is on its way
+    sent(asked, "karma police")
+    assert browser.js(yours) == ["Karma Police"] and browser.js(TITLES) == []  # at once, no answer yet
+    assert browser.js(BUSY)
+    asked.held.set()
+    assert browser.wait(f"{TITLES}.join() === 'Karma Police'")
+    assert browser.js(yours) == ["Karma Police"]
+    first.set()  # the older answer, late: never drawn
+    time.sleep(0.6)
+    assert browser.js(f"{TITLES}.join()") == "Karma Police" and browser.js(yours) == ["Karma Police"]
+    assert browser.js("document.getElementById('found').dataset.query") == "karma police"
+    assert browser.js(LINES) == [["Easy Star All-Stars", [["Karma Police", "yours"]]],
+                                 ["Radiohead", [["Karma Police", "ug"]]]]
+
+
+def test_typing_never_asks_a_music_site(cfg, live, browser):
+    # The page asks its own server alone, and the server reads its indexes: typing looks nothing up.
+    base, queue, asked = live
+    sites(cfg, **WONDERWALL)
+    browser.open(base)
+    search(browser, "wonderwall")
+    assert browser.wait(f"{HITS} === 3")  # Oasis's (on UG and gtptabs.com: one line), Ryan Adams's, MuseScore's
+    search(browser, "hotel california")
+    assert browser.wait("document.getElementById('found').dataset.query === 'hotel california'")
+    origins = browser.js("[...new Set(performance.getEntriesByType('resource').map((r) => new URL(r.name).origin))]")
+    assert origins == [base.rstrip("/")], origins
+    assert queue.snapshot() == [] and len(asked) >= 2
+
+
+def test_get_it_looks_the_song_up_and_its_line_says_how_it_goes(cfg, live, browser):
+    base, queue, _ = live
+    sites(cfg, **WONDERWALL)
+    browser.open(base + "#q=wonderwall&all=1")  # the address keeps the search, as it keeps the rest
+    assert browser.wait(f"{HITS} >= 2")
+    browser.click(f"{RYAN} .line-action button")
+    args = posted(queue)
+    assert args[:3] == ("get", "--progress", "--ug=ryan-adams/wonderwall") and args[-2:] == ("Ryan Adams", "Wonderwall")
+    line = "document.querySelector('#results .progress').closest('article')"
+    assert browser.wait("!!document.querySelector('#results .progress')")
+    assert browser.wait(f"{line}.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
+    # Once done, the result's line is the song's own line, around its request line: its sheet its button.
+    assert browser.js(f"{line}.querySelector('h3').textContent") == "Wonderwall"
+    assert browser.wait(f"{line}.querySelector('.line-action a') && "
+                        f"{line}.querySelector('.line-action a').textContent === 'Open PDF'")
+    # Back to your songs: the new song has a line of its own above the list.
+    browser.press("Escape")
+    assert browser.wait("document.getElementById('results').hidden")
+    assert browser.wait("!document.getElementById('requested').hidden && "
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
+
+
+# A line's "⋯" opened, and the names of the buttons it holds.
+OFFERS = ("((a) => { a.querySelector('.line-more').click(); "
+          "return [...a.querySelectorAll('.line-panel button')].map((b) => b.textContent); })")
+
+
+def test_a_song_get_it_brought_offers_no_songbook_until_the_page_is_loaded_again(cfg, live, browser):
+    # Select knows the songs the page was loaded with: on a song Get it brought, Add to a songbook… would do nothing,
+    # so its lines leave it out until the page is loaded again; a song of yours among the results has it.
+    base, queue, _ = live
+    sites(cfg, **WONDERWALL)
+    library(cfg, ("Oasis", "Wonderwall"))
+    browser.open(base + "#q=wonderwall&all=1")
+    assert browser.wait(f"!!document.querySelector(\"{RYAN}\")")
+    browser.click(f"{RYAN} .line-action button")
+    posted(queue)
+    line = "document.querySelector('#results .progress').closest('article')"
+    assert browser.wait("!!document.querySelector('#results .progress')")
+    assert browser.wait(f"{line}.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
+    assert browser.wait(f"{line}.querySelector('.line-action a') && "
+                        f"{line}.querySelector('.line-action a').textContent === 'Open PDF'")  # the song's line now
+    assert "Add to a songbook…" not in browser.js(f"{OFFERS}({line})")
+    oasis = ("[...document.querySelectorAll('#results section.artist')].find((g) => "
+             "g.querySelector('.artist-name').textContent === 'Oasis').querySelector('article.line')")
+    assert "Add to a songbook…" in browser.js(f"{OFFERS}({oasis})")
+    browser.press("Escape")  # its line under the bar, as the new song's
+    assert browser.wait("!document.getElementById('requested').hidden && "
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
+    assert "Add to a songbook…" not in browser.js(f"{OFFERS}(document.querySelector('#requested article'))")
+
+
+def test_a_newer_answer_keeps_the_line_whose_request_runs_and_its_request_line(cfg, live, browser):
+    # Typed on, the list on the screen is the older answer's until the newer comes. A Get it tapped there keeps its
+    # line, and the line its request line, when the newer answer is drawn; back to your songs, its card.
     base, queue, asked = live
     sites(cfg, **WONDERWALL)
     browser.open(base + "#q=wonderwall&all=1")
     assert browser.wait(f"{HITS} >= 2")
     browser.js(f"window.row = document.querySelector(\"{RYAN}\")")
     asked.held = threading.Event()  # the next answer waits until the page has the request
-    browser.js("document.getElementById('q').focus()")
-    browser.press("Enter")
+    search(browser, "ryan adams wonderwall")
     assert browser.wait(BUSY)  # the newer search on its way
-    browser.click(f"{RYAN} .row-action button")  # on the older answer's row, as the newer is on its way
+    browser.click(f"{RYAN} .line-action button")  # on the older answer's line, as the newer is on its way
     posted(queue)
     assert browser.wait("!!window.row.querySelector('.progress')")
     assert answered(browser, RYAN)
     asked.held.set()
-    assert browser.wait(f"!{BUSY}", timeout=10)  # the newer answer, drawn
+    assert browser.wait(f"!{BUSY} && document.getElementById('found').dataset.query === 'ryan adams wonderwall'")
     kept = browser.js(f"[document.querySelector(\"{RYAN}\") === window.row, window.row.isConnected, "
                       "!!window.row.querySelector('.progress')]")
-    assert kept == [True, True, True]  # the same row, in the newer list, with its line
+    assert kept == [True, True, True]  # the same line, in the newer list, with its request line
     assert browser.wait("window.row.querySelector('.progress').dataset.tone === 'ready'", timeout=20)
     browser.press("Escape")
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
 
 
-def test_a_row_whose_request_runs_and_that_a_newer_answer_lacks_becomes_its_card(cfg, live, browser):
-    # Typed over, the newer answer has no such row: the request's card comes under the bar, its line still going.
+def test_a_line_whose_request_runs_and_that_a_newer_answer_lacks_becomes_its_card(cfg, live, browser):
+    # Typed over, the newer answer has no such song: the request's card comes under the bar, its line still going.
     base, queue, asked = live
     sites(cfg, **WONDERWALL)
     browser.open(base + "#q=wonderwall&all=1")
     assert browser.wait(f"{HITS} >= 2")
     asked.held = threading.Event()  # the answers wait until the page has the request
-    browser.js("document.getElementById('q').select()")
-    browser.type("hotel california")
-    browser.press("Enter")
+    search(browser, "hotel california")
     assert browser.wait(BUSY)
-    browser.click(f"{RYAN} .row-action button")
+    browser.click(f"{RYAN} .line-action button")
     posted(queue)
     assert answered(browser, RYAN)
     asked.held.set()
     assert browser.wait("document.getElementById('found').dataset.query === 'hotel california'", timeout=10)
     assert browser.js(f"document.querySelector(\"{RYAN}\")") is None  # not in the newer answer
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall' && "
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall' && "
                         "!!document.querySelector('#requested article .progress')")
     assert browser.wait("document.querySelector('#requested article .progress').dataset.tone === 'ready'",
                         timeout=20)
@@ -302,22 +478,51 @@ def test_a_hit_can_be_added_for_tonights_run_instead_of_got_now(cfg, live, brows
           gtptabs=[*WONDERWALL["gtptabs"], "https://gtptabs.com/tabs/18/ryan-adams/wonderwall.html"])
     library(cfg, ("Oasis", "Wonderwall"))
     browser.open(base + "#q=wonderwall&all=1")
-    assert browser.wait(f"{HITS} >= 6")
-    later = "#results .hit[data-ug='{}'] .row-panel .later button"
-    assert browser.js(f"document.querySelector(\"{later.format('oasis/wonderwall')}\")") is None  # yours already
+    assert browser.wait(f"{HITS} >= 3")
+    # Yours already: the sites' rows of it are your own line, whose "⋯" has all it offers.
+    assert browser.js(LINES)[0] == ["Oasis", [["Wonderwall", "yours"]]]
+    later = "#results .hit[data-ug='{}'] .line-panel .later button"
     # Under UG's misc-… names the song would be no one's: add it as you know it.
     assert browser.js(f"document.querySelector(\"{later.format('misc-mashups/oasis-wonderwall')}\")") is None
     assert browser.js("!!document.querySelector(\"#results .hit[data-ug='misc-mashups/oasis-wonderwall']\")")
-    browser.click("#results .hit[data-ug='ryan-adams/wonderwall'] .row-more")
+    assert browser.js(f"[...document.querySelectorAll(\"{RYAN} .line-sources .source\")].map((m) => m.dataset.source)"
+                      ) == ["ug", "gtptabs"]  # Ultimate Guitar's and gtptabs.com's, one line
+    browser.click(f"{RYAN} .line-more")
     browser.click(later.format("ryan-adams/wonderwall"))
     args = posted(queue)
     assert args == ("add", "--", "Ryan Adams", "Wonderwall")  # into wanted.txt, as caracole add writes it
     assert "Ryan Adams - Wonderwall" in cfg.wanted_file.read_text(encoding="utf-8")
-    assert browser.wait("!!document.querySelector(\"#results .hit[data-ug='ryan-adams/wonderwall'] .progress\")")
-    # gtptabs.com's songs too; MuseScore's pages are links alone.
-    assert browser.js("[...document.querySelectorAll('#results .hit[data-source=\"gtptabs\"]')]"
-                      ".map((h) => !!h.querySelector('.row-panel .later button'))") == [False, True]  # Oasis's is yours
-    assert browser.js("document.querySelector('#results .hit[data-source=\"musescore\"] .later')") is None
+    assert browser.wait(f"!!document.querySelector(\"{RYAN} .progress\")")
+    assert browser.js("document.querySelector('#results .hit[data-source=\"musescore\"] .later')") is None  # links
+
+
+def test_a_removed_song_shows_among_the_results_and_add_again_brings_it_back(cfg, live, browser):
+    base, queue, _ = live
+    sites(cfg, ug=[("radiohead", "karma-police", 2)])
+    gone = removed(cfg, "Radiohead", "Creep")
+    browser.open(base)
+    search(browser, "radiohead")
+    assert browser.wait("!!document.querySelector('#results .removed-hit')")
+    assert browser.js(LINES) == [["Radiohead", [["Creep", ""], ["Karma Police", "ug"]]]]  # its artist's group
+    line = "#results .removed-hit"
+    assert browser.js(f"document.querySelector('{line} .line-status').textContent") == "Removed 2026-10-20"
+    assert browser.js(f"document.querySelector('{line} .line-action button').textContent") == "Add again"
+    browser.press("Enter")  # never what Enter acts on: it moves to the first result, and asks for nothing
+    assert browser.js("document.activeElement.closest('article') && document.activeElement.closest('article')"
+                      ".querySelector('h3').textContent") == "Creep"
+    time.sleep(0.3)
+    assert queue.snapshot() == []
+    browser.click(f"{line} .line-action button")  # asked for again as the request form asks: a wanted.txt line
+    args = posted(queue)
+    assert args[0] == "get" and args[-2:] == ("Radiohead", "Creep")
+    assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")
+    assert browser.wait("document.querySelector('#results .progress') && "
+                        "document.querySelector('#results .progress').dataset.tone === 'ready'", timeout=20)
+    conn = db.connect(cfg.db_path)
+    try:
+        assert find_song(conn, gone.key) is not None  # back in the library
+    finally:
+        conn.close()
 
 
 def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
@@ -325,27 +530,26 @@ def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
     sites(cfg, **WONDERWALL)
     browser.open(base + "#q=wonderwall&all=1")
     assert browser.wait(f"{HITS} >= 2")
-    browser.click("#results .hit[data-ug='ryan-adams/wonderwall'] .row-action button")
+    browser.click(f"{RYAN} .line-action button")
     posted(queue)
-    assert answered(browser, "#results .hit[data-ug='ryan-adams/wonderwall']")
+    assert answered(browser, RYAN)
     browser.click("#clear")  # the ×: out of the results, the request on its way with a card of its own
     assert browser.wait("document.getElementById('results').hidden")
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall'")
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall'")
     assert browser.js("location.hash.includes('all=1')") is False
     # A search after it waits for its answer before what follows it shows, as after Escape.
     browser.js("window.waited = false; new MutationObserver(() => { window.waited = window.waited || "
                "document.body.classList.contains('waiting-sites'); }).observe(document.body, { attributes: true })")
     browser.type("creep")
-    browser.press("Enter")
     assert browser.wait("document.getElementById('found').dataset.query === 'creep'")
     assert browser.js("window.waited") is True
 
 
 @pytest.mark.parametrize("leave", ["clear", "escape", "typed over"])
-def test_a_get_it_whose_row_leaves_the_results_before_the_page_hears_back_still_gets_its_card(cfg, live, browser,
-                                                                                              leave):
-    # Get it, then at once the ×, Escape or a newer search without the row, before the server's answer reaches the
+def test_a_get_it_whose_line_leaves_the_results_before_the_page_hears_back_still_gets_its_card(cfg, live, browser,
+                                                                                               leave):
+    # Get it, then at once the ×, Escape or a newer search without the song, before the server's answer reaches the
     # page: once it does, the request has its card under the bar, its line going on there, as it would have had
     # if the answer had come first.
     base, queue, asked = live
@@ -353,7 +557,7 @@ def test_a_get_it_whose_row_leaves_the_results_before_the_page_hears_back_still_
     browser.open(base + "#q=wonderwall&all=1")
     assert browser.wait(f"{HITS} >= 2")
     asked.lookups_held = threading.Event()
-    browser.click(f"{RYAN} .row-action button")
+    browser.click(f"{RYAN} .line-action button")
     posted(queue)  # queued; the page hasn't heard back
     if leave == "clear":
         browser.click("#clear")
@@ -363,35 +567,33 @@ def test_a_get_it_whose_row_leaves_the_results_before_the_page_hears_back_still_
         browser.press("Escape")
         assert browser.wait("document.getElementById('results').hidden")
     else:
-        browser.js("document.getElementById('q').select()")
-        browser.type("hotel california")
-        browser.press("Enter")
+        search(browser, "hotel california")
         assert browser.wait("document.getElementById('found').dataset.query === 'hotel california'")
         assert browser.js(f"document.querySelector(\"{RYAN}\")") is None  # not in the newer answer
     assert browser.js("document.getElementById('requested').hidden") is True  # nothing to show yet
     asked.lookups_held.set()
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Wonderwall' && "
+                        "document.querySelector('#requested article h3').textContent === 'Wonderwall' && "
                         "!!document.querySelector('#requested article .progress')")
     assert browser.wait("document.querySelector('#requested article .progress').dataset.tone === 'ready'",
                         timeout=20)
     assert browser.js("document.querySelectorAll('#requested article').length") == 1
 
 
-def test_a_get_it_on_a_row_a_newer_answer_has_too_keeps_its_line_in_that_answers_row(cfg, live, browser):
-    # Enter again while a Get it is on its way, and the newer answer drawn before the page hears back: the newer
-    # answer's row for the song is the one that says how the request goes, and no card comes under the bar.
+def test_a_get_it_on_a_line_a_newer_answer_has_too_keeps_its_request_line_in_that_answers_line(cfg, live, browser):
+    # Typed on while a Get it is on its way, and the newer answer drawn before the page hears back: the newer
+    # answer's line for the song is the one that says how the request goes, and no card comes under the bar.
     base, queue, asked = live
     sites(cfg, **WONDERWALL)
     browser.open(base + "#q=wonderwall&all=1")
     assert browser.wait(f"{HITS} >= 2")
     browser.js(f"window.row = document.querySelector(\"{RYAN}\")")
     asked.lookups_held = threading.Event()
-    browser.click(f"{RYAN} .row-action button")
+    browser.click(f"{RYAN} .line-action button")
     posted(queue)
-    browser.js("document.getElementById('q').focus()")
-    browser.press("Enter")
-    assert browser.wait(f"!{BUSY} && document.querySelector(\"{RYAN}\") !== window.row")  # drawn anew
+    search(browser, "ryan adams wonderwall")
+    assert browser.wait(f"!{BUSY} && document.getElementById('found').dataset.query === 'ryan adams wonderwall' && "
+                        f"document.querySelector(\"{RYAN}\") !== window.row")  # drawn anew
     asked.lookups_held.set()
     assert browser.wait(f"document.querySelector(\"{RYAN}\") === window.row && "
                         f"!!document.querySelector(\"{RYAN} .progress\")")
@@ -400,46 +602,27 @@ def test_a_get_it_on_a_row_a_newer_answer_has_too_keeps_its_line_in_that_answers
     assert browser.js("document.getElementById('requested').hidden") is True
 
 
-def test_enter_never_requests_a_song(cfg, live, browser):
+def test_enter_moves_to_the_first_result_and_never_requests_a_song(cfg, live, browser):
     base, queue, asked = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
     browser.open(base)
-    browser.js("document.getElementById('q').focus()")
-    browser.type("radiohead creep")
-    browser.press("Enter")
+    search(browser, "radiohead creep")
     assert browser.wait(f"{HITS} >= 1")
-    browser.press("Enter")  # again, on a clear best: still a search, never a request
+    browser.press("Enter")  # on a clear best: the focus on its line, never a request
+    assert browser.js("document.activeElement.matches('#results article.hit')")
+    browser.press("Enter")  # again: still nothing asked for
     time.sleep(0.6)
     assert queue.snapshot() == [] and len(asked) >= 1
 
 
-def test_results_typed_over_show_only_the_newest_query(cfg, live, browser):
-    base, _, _ = live
-    sites(cfg, ug=[("radiohead", "creep", 4), ("radiohead", "karma-police", 2), ("muse", "hysteria", 3)])
-    browser.open(base)
-    browser.js("document.getElementById('q').focus()")
-    browser.type("creep")
-    browser.press("Enter")
-    browser.js("document.getElementById('q').select()")
-    browser.type("karma police")  # typed over while the first answers may still be on their way
-    assert browser.wait("[...document.querySelectorAll('#results .hit .row-title')].map((t) => t.textContent)"
-                        ".join() === 'Karma Police'")
-    time.sleep(0.5)
-    assert browser.js("[...document.querySelectorAll('#results .hit .row-title')].map((t) => t.textContent)"
-                      ".join()") == "Karma Police"
-    assert browser.js("document.getElementById('found').dataset.query") == "karma police"
-
-
-def test_escape_returns_to_the_grid_with_its_filter(cfg, live, browser):
+def test_escape_returns_to_the_list_with_its_filter(cfg, live, browser):
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
     library(cfg, ("Radiohead", "Creep"), ("Oasis", "Wonderwall"))
     browser.open(base + "#show=wanted")
-    browser.js("document.getElementById('q').focus()")
-    browser.type("creep")
-    browser.press("Enter")
-    # Your song is the page's own row, with what its card offers (Fetch now, served).
-    assert browser.wait(f"{HITS} >= 1 && document.querySelector('#results .rows .row form.fetch') !== null")
+    search(browser, "creep")
+    # Your song is the page's own line, with all it offers (Fetch now, served), in its artist's group.
+    assert browser.wait("document.querySelector('#results section.artist .line[data-id] form.fetch') !== null")
     browser.press("Escape")
     assert browser.wait("document.getElementById('results').hidden")
     assert browser.js("document.getElementById('q').value") == "creep"
@@ -450,13 +633,45 @@ def test_escape_returns_to_the_grid_with_its_filter(cfg, live, browser):
     assert browser.wait(f"{GRID}.length === 2")
 
 
+def same(expression, value):
+    """A JavaScript condition: the expression's value, as JSON, is ``value``'s."""
+    return f"JSON.stringify({expression}) === {json.dumps(json.dumps(value, separators=(',', ':'), ensure_ascii=False))}"
+
+
+def test_your_songs_among_the_results_keep_to_the_status_buttons_and_the_artist_and_the_results_say_so(cfg, live,
+                                                                                                       browser):
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4), ("stone-temple-pilots", "creep", 2)])
+    creep, _, _ = library(cfg, ("Radiohead", "Creep"), ("Radiohead", "Karma Police"), ("Stone Temple Pilots", "Creep"))
+    conn = db.connect(cfg.db_path)
+    update_song(conn, creep.id, status="found")
+    conn.commit()
+    conn.close()
+    note = "document.querySelector('#results .filtered')"
+    browser.open(base + "#show=wanted")
+    search(browser, "creep")
+    assert browser.wait(f"!{BUSY} && document.getElementById('found').dataset.query === 'creep'")
+    # Wanted pressed: of your songs, the wanted Creep alone; Radiohead's, found, nowhere, though UG has it.
+    assert browser.wait(same(LINES, [["Stone Temple Pilots", [["Creep", "yours"]]]])), browser.js(LINES)
+    assert browser.js(f"{note}.firstChild.textContent") == "Your songs here: wanted"
+    browser.click("#results .filtered button")  # Show all of yours
+    every = [["Radiohead", [["Creep", "yours"]]], ["Stone Temple Pilots", [["Creep", "yours"]]]]
+    assert browser.wait(same(LINES, every)), browser.js(LINES)
+    assert browser.js(f"{note}.hidden") is True and "show=" not in browser.js("location.hash")
+    # An artist's name pressed in the list, then typed: their songs alone of yours, whatever the sites have.
+    browser.press("Escape")
+    assert browser.wait("document.getElementById('results').hidden")
+    browser.click("#list section.artist button.artist")  # Radiohead
+    search(browser, "creep")
+    assert browser.wait(same(LINES, [["Radiohead", [["Creep", "yours"]]]])), browser.js(LINES)
+    assert browser.js(f"{note}.firstChild.textContent") == "Your songs here: by Radiohead"
+
+
 def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
     browser.open(base)
-    browser.js("document.getElementById('q').focus()")
-    browser.type("Muse - Hysteria")
-    browser.press("Enter")
+    search(browser, "Muse - Hysteria")
     # Under the sites' answer, once it is in: shown before it, the answer would push it down.
     assert browser.wait("document.getElementById('request-box').getClientRects().length > 0")
     browser.click("#request-box > summary")
@@ -466,8 +681,7 @@ def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, l
     args = posted(queue)
     assert args[-2:] == ("Muse", "Hysteria")
     assert browser.wait("!document.getElementById('requested').hidden && "
-                        "document.querySelector('#requested article h2').textContent === 'Hysteria'")
-
+                        "document.querySelector('#requested article h3').textContent === 'Hysteria'")
 
 
 def test_the_line_for_an_artist_the_index_cant_see_shows_its_commands_as_code(cfg, live, browser):
@@ -486,23 +700,27 @@ NO_SIDEWAYS = "document.documentElement.scrollWidth <= innerWidth"
 
 def test_the_bar_and_its_results_fit_a_phone(cfg, live, phone):
     base, _, _ = live
-    sites(cfg, ug=[("the-red-hot-chili-peppers-and-friends", f"a-rather-long-song-title-{n}", 2) for n in range(6)],
+    sites(cfg, ug=[*[("the-red-hot-chili-peppers-and-friends", f"a-rather-long-song-title-{n}", 2) for n in range(6)],
+                   *[("estopa", f"cancion-{n}", 1) for n in range(6)]],
           gtptabs=["https://gtptabs.com/tabs/18/the-red-hot-chili-peppers-and-friends/a-rather-long-song-title-1.html"],
           musescore=["https://musescore.com/song/a_rather_long_song_title_1-5"])
-    phone.open(base)
-    bar = ("(() => { const q = document.getElementById('q').getBoundingClientRect(), "
-           "b = document.getElementById('all').getBoundingClientRect(); return [q.top, b.top, b.height, q.right <= b.left]; })()")
-    q_top, button_top, button_height, side_by_side = phone.js(bar)
-    assert side_by_side and abs(q_top - button_top) < 8 and button_height >= 44
-    phone.js("document.getElementById('q').focus()")
-    phone.type("a rather long song title 1")
-    phone.press("Enter")
-    assert phone.wait(f"{HITS} >= 3")
+    removed(cfg, "The Red Hot Chili Peppers and Friends", "A Rather Long Song Title 9")
+    phone.open(base + "#show=found")  # Found pressed: the results' head says so, with Show all of yours
+    # The box alone across the bar, a thumb's height: typing searches, so no button beside it.
+    field = phone.js("(() => { const q = document.getElementById('q').getBoundingClientRect(); "
+                     "return [q.left, innerWidth - q.right, q.height]; })()")
+    assert field[0] <= 17 and field[1] <= 17 and field[2] >= 44, field
+    search(phone, "a rather long song title")
+    assert phone.wait(f"{HITS} >= 4 && !!document.querySelector('#results .removed-hit')")
+    assert phone.js("document.querySelector('#results .filtered').getClientRects().length") == 1
     assert phone.js(NO_SIDEWAYS)
-    small = phone.js("[...document.querySelectorAll('#results button, #results a, #results summary')]"
-                     ".filter((e) => e.offsetParent).map((e) => [e.textContent.trim(), e.getBoundingClientRect().height])"
-                     ".filter(([, h]) => h < 44)")
+    small = phone.js(small_targets())
     assert small == [], small
+    for line in phone.js("[...document.querySelectorAll('#results .hit')].map((a) => a.getBoundingClientRect().height)"):
+        assert line <= 2 * 44 + 12, line  # two lines a song, as yours are
+    search(phone, "estopa")  # an artist: their group, and its "+ 3 more by Estopa"
+    assert phone.wait("!!document.querySelector('#results .more-by')")
+    assert phone.js(NO_SIDEWAYS) and phone.js(small_targets()) == []
 
 
 FOOTER = "(() => { const f = document.querySelector('.footer'); return f.getClientRects().length ? " \
@@ -515,7 +733,37 @@ def test_a_search_opened_from_the_address_moves_nothing_when_its_answer_comes(cf
     library(cfg, ("Oasis", "Wonderwall"))
     phone.open(base + "#q=wonderwall&all=1")
     before = phone.js(FOOTER)  # the page as first drawn, before the sites' answer
-    assert phone.wait(f"{HITS} >= 4 && document.querySelector('.footer').getClientRects().length > 0")
+    assert phone.wait(f"{HITS} >= 2 && document.querySelector('.footer').getClientRects().length > 0")
     after = phone.js(FOOTER)
     # What follows the answer waits for it: shown at once, it would jump down when the answer came.
     assert before is None or before == after, (before, after)
+
+
+@pytest.mark.parametrize("size,dark", [((1280, 800), False), ((1280, 800), True), ((390, 844), True)])
+def test_the_results_read_in_light_and_dark_and_line_up_with_your_songs(cfg, live, tmp_path, size, dark):
+    # In dark mode as in light, the results' groups have the list's look; on a laptop a site's line has its
+    # columns where your songs' lines have theirs.
+    base, _, _ = live
+    sites(cfg, ug=[("eagles", "hotel-california", 5), ("eagles", "take-it-easy", 2)])
+    library(cfg, ("Eagles", "Hotel California"))
+    page = driven(tmp_path, width=size[0], height=size[1], mobile=size[0] < 500)
+    try:
+        if dark:
+            page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": "dark"}])
+        page.open(base)
+        search(page, "eagles")
+        assert page.wait(f"{HITS} >= 1")
+        colours = page.js("(() => { const s = (q) => getComputedStyle(document.querySelector(q)); return ["
+                          "s('body').backgroundColor, s('#results .groups').backgroundColor, "
+                          "s('#results .hit h3').color]; })()")
+        assert colours[0] != colours[1] and colours[1] != colours[2], colours
+        assert (sum(int(n) for n in colours[1][4:-1].split(",")[:3]) > 384) is not dark, colours  # its own mode
+        if size[0] > 1000:  # your song's line and the site's: the same columns
+            cols = page.js("(() => { const at = (q) => document.querySelector(q).getBoundingClientRect(); return "
+                           "[at('#results .line[data-id] .line-action').right, at('#results .hit .line-action').right,"
+                           " at('#results .line[data-id] .line-more').left, at('#results .hit .line-more').left];"
+                           " })()")
+            assert abs(cols[0] - cols[1]) < 1 and abs(cols[2] - cols[3]) < 1, cols
+        assert page.js(NO_SIDEWAYS)
+    finally:
+        page.close()
