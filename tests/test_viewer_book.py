@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import textwrap
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -171,6 +172,26 @@ def test_the_contents_give_each_songs_key_and_capo_under_its_title():
     assert heard(first) == "The Placeholders · key G · capo 2"  # what "G" is, for a screen reader
     alone = build_songbook("Campfire", [BookSong("Untitled", "", cho=MINOR, key="Am", key_source="tab", id="a")])
     assert toc_rows(alone) == ["1 | Untitled | Am"]  # no artist: the key alone
+
+
+# Each song where its songbook plays it (songbook.py: its setting, else its own version), as the viewer's address
+# writes a version (viewer/version.py)
+IN_SETTINGS = [
+    replace(SONGS[0], start="t=0&capo=0"),  # where it sounds, without the capo: A shapes
+    SONGS[1],
+    replace(SONGS[2], transpose=-2, start="t=-2&mode=dorian&capo=0"),  # Am in G dorian
+    *SONGS[3:],
+]
+
+
+def test_each_song_starts_in_its_setting_and_the_contents_say_where():
+    html = page(IN_SETTINGS)
+    assert data(html, 1)["start"] == "t=0&capo=0" and data(html, 3)["start"] == "t=-2&mode=dorian&capo=0"
+    assert data(html, 5)["start"] is None  # no version of its own: its [transpose] alone, as sheet.html
+    rows = toc_rows(html)
+    assert rows[0] == "1 | Synthetic Test Song | The Placeholders · A"  # G shapes up 2, capo 2 off: no capo
+    assert rows[2] == "3 | Minor Song | Others · G dorian"
+    assert data(page(), 3)["start"] is None
 
 
 def test_the_page_links_the_pdf_and_the_chordpro_file_when_there_are_some():
@@ -337,6 +358,16 @@ def test_a_song_opens_alone_in_the_viewer_in_its_own_key(tmp_path):
     assert chords_of(dom)[:4] == ["Bm", "G", "D", "A"]  # Am, F, C, G up 2: its [transpose]
     assert '<span class="vh" id="key-full">Key Bm · +2</span>' in dom
     assert "<title>Minor Song · Campfire</title>" in dom
+
+
+@in_chromium
+def test_the_phone_page_opens_each_song_in_its_setting(tmp_path):
+    first = open_page(page(IN_SETTINGS), tmp_path, "#song-1")
+    assert chords_of(first)[:4] == ["A", "E", "F#m", "D"]  # G, D, Em, C up 2, without the capo
+    minor = open_page(page(IN_SETTINGS), tmp_path, "#song-3")
+    assert chords_of(minor)[:4] == ["Gm", "Edim", "Bb", "F"]  # Am, F, C, G in A dorian, down to G
+    last = open_page(page(IN_SETTINGS), tmp_path, "#song-5")
+    assert chords_of(last)[:2] == ["C", "G"]  # as written
 
 
 @in_chromium

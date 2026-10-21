@@ -18,7 +18,7 @@ from typer.testing import CliRunner
 from caracole import db
 from caracole.cli import build_app
 from caracole.config import load_config
-from caracole.songbook import FILE_NAME, Songbook, load_songbooks, make_songbook
+from caracole.songbook import FILE_NAME, Setting, Songbook, load_songbooks, make_songbook
 
 
 @pytest.fixture
@@ -164,13 +164,13 @@ def test_add_remove_move_rename_and_delete(setup):
 
     moved = run(setup, "move", "Campfire", "De Musica Ligera", "1")
     assert moved.exit_code == 0, moved.output
-    assert books(setup)[0].songs == ("Soda Stereo - De Música Ligera", "Muse - Hysteria")
+    assert books(setup)[0].texts == ("Soda Stereo - De Música Ligera", "Muse - Hysteria")
     assert "Moved Soda Stereo - De Música Ligera to 1" in moved.output
     assert run(setup, "move", "Campfire", "Muse - Hysteria", "0").exit_code == 2
 
     removed = run(setup, "remove", "Campfire", "Muse - Hysteria")
     assert removed.exit_code == 0 and "Removed Muse - Hysteria" in removed.output
-    assert books(setup)[0].songs == ("Soda Stereo - De Música Ligera",)
+    assert books(setup)[0].texts == ("Soda Stereo - De Música Ligera",)
     assert run(setup, "remove", "Campfire", "Muse - Hysteria").exit_code == 1  # not in it any more
 
     renamed = run(setup, "rename", "Campfire", "Beach nights")
@@ -189,7 +189,7 @@ def test_a_song_removed_from_the_library_can_be_taken_out_by_its_name(setup):
     make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Gone Band - Removed Song", "Muse - Hysteria"])
     result = run(setup, "remove", "Campfire", "gone band - removed song")
     assert result.exit_code == 0, result.output
-    assert books(setup)[0].songs == ("Muse - Hysteria",)
+    assert books(setup)[0].texts == ("Muse - Hysteria",)
 
 
 @pytest.fixture
@@ -217,14 +217,14 @@ def test_a_song_gone_from_the_library_is_shown_missing_and_moved_or_taken_out_al
     moved = run(setup, "move", "--", "Gig", "Radiohead - Karma Police Live", "1")  # as the page's ↑ queues it
     assert moved.exit_code == 0, moved.output
     assert "Moved Radiohead - Karma Police Live to 1" in moved.output
-    assert books(setup)[0].songs == ("Radiohead - Karma Police Live", "Radiohead - Karma Police",
+    assert books(setup)[0].texts == ("Radiohead - Karma Police Live", "Radiohead - Karma Police",
                                      "Oasis - Wonderwall")
 
     removed = run(setup, "remove", "--", "Gig", "Radiohead - Karma Police Live")  # as the page's × queues it
     assert removed.exit_code == 0, removed.output
     assert removed.output.splitlines()[0] == "Removed Radiohead - Karma Police Live"
     assert "Removed Radiohead - Karma Police\n" not in removed.output
-    assert books(setup)[0].songs == ("Radiohead - Karma Police", "Oasis - Wonderwall")
+    assert books(setup)[0].texts == ("Radiohead - Karma Police", "Oasis - Wonderwall")
 
 
 @pytest.mark.slow
@@ -257,17 +257,17 @@ def test_a_song_caracole_remove_takes_out_of_the_library_is_missing_from_its_son
 
     out = run(setup, "remove", "Campfire", "Soda Stereo - De Música Ligera")  # taken out by its name
     assert out.exit_code == 0, out.output
-    assert books(setup)[0].songs == ("宋冬野 - 斑马，斑马",)
+    assert books(setup)[0].texts == ("宋冬野 - 斑马，斑马",)
 
 
 @pytest.mark.slow
 def test_a_song_the_songbook_lacks_is_still_found_by_a_search_of_the_library(setup, gig):
     moved = run(setup, "move", "Gig", "oasis wonderwal", "1")  # no entry of Gig is it: the library's search
     assert moved.exit_code == 0, moved.output
-    assert books(setup)[0].songs[0] == "Oasis - Wonderwall"
+    assert books(setup)[0].texts[0] == "Oasis - Wonderwall"
     removed = run(setup, "remove", "Gig", "oasis wonderwal")
     assert removed.exit_code == 0 and "Removed Oasis - Wonderwall" in removed.output
-    assert books(setup)[0].songs == ("Radiohead - Karma Police", "Radiohead - Karma Police Live")
+    assert books(setup)[0].texts == ("Radiohead - Karma Police", "Radiohead - Karma Police Live")
 
 
 @pytest.mark.slow
@@ -281,7 +281,7 @@ def test_a_change_whose_files_cant_be_made_exits_1_and_stays_made(setup):
     for args in (("add", "Trip", "Muse - Hysteria"), ("move", "Trip", "Muse - Hysteria", "1"),
                  ("remove", "Trip", "Muse - Hysteria")):
         assert run(setup, *args).exit_code == 1, args
-    assert books(setup)[0].songs == ("Soda Stereo - De Música Ligera",)
+    assert books(setup)[0].texts == ("Soda Stereo - De Música Ligera",)
     (folder(setup, "Trip") / "songbook.pdf").rmdir()
     assert run(setup, "add", "Trip", "Muse - Hysteria").exit_code == 0
 
@@ -323,15 +323,17 @@ def test_every_change_holds_caracoles_lock(setup, monkeypatch):
 
     monkeypatch.setattr(songbook, "render_songbooks", spy)
     for args in (("make", "Campfire", "Muse - Hysteria"), ("add", "Campfire", "Soda Stereo - De Música Ligera"),
-                 ("move", "Campfire", "Muse - Hysteria", "2"), ("remove", "Campfire", "Muse - Hysteria"),
-                 ("rename", "Campfire", "Picnic"), ("render",), ("delete", "Picnic")):
+                 ("move", "Campfire", "Muse - Hysteria", "2"), ("set", "Campfire", "Muse - Hysteria", "--capo", "2"),
+                 ("remove", "Campfire", "Muse - Hysteria"), ("rename", "Campfire", "Picnic"), ("render",),
+                 ("delete", "Picnic")):
         assert run(setup, *args).exit_code == 0, args
-    assert held == [True] * 7
+    assert held == [True] * 8
 
 
 CHANGES = [("make", "Picnic", "Muse - Hysteria"), ("add", "Campfire", "Soda Stereo - De Música Ligera"),
-           ("move", "Campfire", "Muse - Hysteria", "1"), ("remove", "Campfire", "Muse - Hysteria"),
-           ("rename", "Campfire", "Picnic"), ("delete", "Campfire"), ("render", "Campfire"), ("render",)]
+           ("move", "Campfire", "Muse - Hysteria", "1"), ("set", "Campfire", "Muse - Hysteria", "--capo", "2"),
+           ("remove", "Campfire", "Muse - Hysteria"), ("rename", "Campfire", "Picnic"), ("delete", "Campfire"),
+           ("render", "Campfire"), ("render",)]
 
 
 @pytest.mark.slow
@@ -521,3 +523,59 @@ def test_the_nightly_render_step_reports_a_broken_songbooks_file(setup):
     assert report.ok, report.errors  # the PDFs were made all the same
     problems = " ".join(p.text for p in report.results["render"].problems)
     assert "songbooks.toml" in problems and "line 1" in problems
+
+
+@pytest.mark.slow
+def test_cli_songbook_set_and_clear(setup):
+    assert run(setup, "make", "Gig", "Soda Stereo - De Música Ligera", "Muse - Hysteria").exit_code == 0
+    out = run(setup, "set", "Gig", "soda stereo musica ligera", "--key", "g", "--mode", "Dorian")
+    assert out.exit_code == 0, out.output
+    lines = out.output.splitlines()
+    assert "Soda Stereo - De Música Ligera: key G, dorian, capo 0" in lines  # the capo it plays at now, kept
+    assert "In the songbook: G Dorian, capo 0" in lines  # where it plays, as its set list says
+    assert books(setup)[0].songs[0].setting == Setting("G", "dorian", 0)
+    out = run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--capo", "2")  # the other parts stay
+    assert out.exit_code == 0, out.output
+    assert "In the songbook: G Dorian, capo 2" in out.output.splitlines()  # the same shapes, up two frets
+    assert books(setup)[0].songs[0].setting == Setting("G", "dorian", 2)
+    assert books(setup)[0].songs[1].setting is None
+    text = (setup[1].library_dir / FILE_NAME).read_text(encoding="utf-8")
+    assert '"Muse - Hysteria"' in text  # still a plain string
+    assert run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--key", "H").exit_code == 1
+    assert books(setup)[0].songs[0].setting == Setting("G", "dorian", 2)  # a bad key changed nothing
+    for args in (("set", "Gig", "Muse - Hysteria"), ("set", "Gig", "Muse - Hysteria", "--clear", "--capo", "1")):
+        assert run(setup, *args).exit_code == 2, args
+    out = run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--clear")
+    assert out.exit_code == 0, out.output
+    assert "In the songbook: A Minor, capo 0" in out.output.splitlines()  # its own version: as written
+    assert books(setup)[0].songs[0].setting is None
+    out = run(setup, "set", "Gig", "Muse - Hysteria", "--key", "E")
+    assert out.exit_code == 0, out.output
+    assert books(setup)[0].songs[1].setting == Setting("E")  # no sheet, no capo it plays at yet
+    assert "In the songbook" not in out.output  # nowhere yet: it has no sheet
+    assert run(setup, "set", "Gig", "Oasis - Wonderwall", "--key", "G").exit_code == 1  # not in it
+
+
+@pytest.mark.slow
+def test_show_says_where_the_songbook_plays_a_song_with_a_setting_or_a_version_of_its_own(setup):
+    _, cfg, conn = setup
+    keyless = add_song(conn, "Placeholder Band", "Keyless Song")  # no chord caracole can read: no key
+    keep_sheet(conn, cfg, keyless, "[Verse]\n[tab][ch]N.C.[/ch]       [ch]Hm[/ch]\nPalabras sin acordes[/tab]\n",
+               tab_id=7, tonality="")
+    render_sheets(conn, cfg)
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text('[transpose]\n"宋冬野 - 斑马，斑马" = 2\n', encoding="utf-8")
+    assert run(setup, "make", "Gig", "Soda Stereo - De Música Ligera", "宋冬野 - 斑马，斑马",
+               "Placeholder Band - Keyless Song", "Muse - Hysteria").exit_code == 0
+    assert run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--mode", "dorian").exit_code == 0
+    out = run(setup, "set", "Gig", "Placeholder Band - Keyless Song", "--key", "G")
+    assert out.exit_code == 0, out.output
+    assert "In the songbook: key unknown, as written" in out.output.splitlines()  # a key its sheet can't take
+    shown = run(setup, "show", "Gig")
+    assert shown.exit_code == 0, shown.output
+    assert shown.output.splitlines()[1:5] == [
+        "  1. Soda Stereo - De Música Ligera (A Dorian, capo 0)",  # a mode alone, its key and capo the sheet's
+        "  2. 宋冬野 - 斑马，斑马 (B Minor, capo 0)",  # its own version: [transpose] 2
+        "  3. Placeholder Band - Keyless Song (key unknown, as written)",
+        "  4. Muse - Hysteria (missing: no sheet yet)",
+    ]

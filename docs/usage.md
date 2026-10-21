@@ -1141,8 +1141,8 @@ and cache.
   mode, by its `[version]` or its `[transpose]`, has every chord written as
   its viewer shows it there (Bb, not chordpro's A#), each with the shape the
   viewer shows (or the one the version chose) as its diagram: chordpro moves
-  nothing. A songbook's songs are still moved by chordpro for now, with its
-  own diagrams for the moved chords, or none.
+  nothing. A songbook's songs are written the same way, each where the
+  songbook plays it (see [Songbooks](#songbooks)).
   `sheet.html` is the sheet viewer, for the phone (see
   [The sheet viewer](#the-sheet-viewer)). A PDF is made again only when its
   sheet, its version, the font, caracole's PDF style or the text the
@@ -1314,7 +1314,7 @@ in `caracole.lock.waiting/` in the state folder, which it touches every second
 while it waits; one left by a lookup that was killed while it waited is no
 longer waited for after five seconds.
 A songbook change, asked for now as a lookup is, waits the same way and says
-the same: `caracole songbook make`, `add`, `remove`, `move`, `rename`,
+the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `delete` and `render`, so a songbook you make (from a terminal, or on
 `caracole serve`) while the nightly run works is made in the run's next pause,
 in seconds, rather than after the whole run.
@@ -2642,18 +2642,22 @@ the songs for a trip, a book to print. caracole makes each one into three files
 in `Library/_songbooks/<name>/`:
 
 - **`songbook.pdf`**: a title page (the name, how many songs), the contents,
-  then every song's sheet in order, in caracole's look and each in its own key
-  (its `[version]`'s transposition, else its `[transpose]`), all from one chordpro run, with the Chinese font when a song
+  then every song's sheet in order, in caracole's look and each where the
+  songbook plays it: in its setting there (`caracole songbook set`, below),
+  else in the song's own version (its `[version]`, else its `[transpose]`, else
+  as written), every chord written as its viewer shows it there (Bb, not
+  chordpro's A#) with the viewer's shape as its diagram, all from one chordpro run, with the Chinese font when a song
   needs it. A song without a sheet keeps its place: the contents name it
   ("Hysteria · Muse · missing: no sheet yet"), and its page says so. Its
   document title, the name a PDF viewer or a phone shows, is the songbook's.
 - **`songbook.html`**: one page for the phone, which opens from the synced
   folder and loads nothing. It opens on the contents, each song with its
-  artist, key and capo on a line under its title ("Oasis · Em · capo 2": the
-  key the song opens in, its `[transpose]` (or its `[version]`'s) applied, and its sheet's capo); tap
+  artist, key and capo on a line under its title ("Oasis · Em · capo 2", "Soda
+  Stereo · G dorian": the key of the shapes the song opens in, and its capo,
+  where the songbook plays it); tap
   a song to open it in the sheet viewer, with everything the viewer does
   (chord shapes, transposition, chords to play instead, modes, scrolling by
-  itself), each song in its own key and keeping its own settings, its scroll
+  itself), each song opening where the songbook plays it and keeping its own settings, its scroll
   speed, text size and chosen shapes among them. Previous and Next name the
   songs they go to ("‹ Hotel California", "Next: little wolf ›", a title too long for the phone
   cut short with "…"), above each song and again at its end, where on a phone
@@ -2667,11 +2671,12 @@ in `Library/_songbooks/<name>/`:
   browser's storage: each song keeps its address (`#song-3`), and the
   viewer keeps the song's transposition, mode, capo, text size and scroll
   speed there (`#song-3=&t=2&fs=20&speed=8`), so a reload or Back keeps them, but not your place
-  or its other settings; the next song opens in its own key.
+  or its other settings; the next song opens where the songbook plays it.
 - **`songbook.cho`**: every song's ChordPro, in its key, split by
   `{new_song}`, to import into a songbook app such as SongbookPro or OnSong.
-  chordpro writes it, so the chords are already transposed; songs without a
-  sheet aren't in it.
+  Each song is where the songbook plays it, every chord already written there
+  as the viewer names it, with its `{key}` and `{capo}` and no chord
+  definitions an app may not read; songs without a sheet aren't in it.
 
 The songbooks are in `songbooks.toml`, in the library, so the file syncs and
 you can edit it by hand. Each table is a songbook, its header the name and
@@ -2717,15 +2722,42 @@ songbook's files stay as they are, and everything else goes on.
   A name another songbook has is refused too.
 - **`caracole songbook list`** shows every songbook, how many songs it has and
   how many have no sheet, and its files.
-- **`caracole songbook show NAME`** lists its songs in order, each one's
-  transposition, the missing ones marked (`(missing: no sheet yet)`,
-  `(missing: not in the library)`), and where its files are.
+- **`caracole songbook show NAME`** lists its songs in order, the missing ones
+  marked (`(missing: no sheet yet)`, `(missing: not in the library)`), and
+  where its files are. A song with a setting in the songbook, or a version of
+  its own, says where the songbook plays it, as its set list does:
+  `3. Soda Stereo - De Música Ligera (G Dorian, capo 0)`, or
+  `(key unknown, as written)` for a key or a mode its sheet can't take.
 - **`caracole songbook add NAME "ARTIST - TITLE"...`** adds songs at the end;
   one it has already stays where it is.
 - **`caracole songbook remove NAME "ARTIST - TITLE"...`** takes songs out. A
   song removed from the library goes by the name the songbook gives it.
 - **`caracole songbook move NAME "ARTIST - TITLE" POSITION`** moves a song,
   1 being the first; past the end is last.
+- **`caracole songbook set NAME "ARTIST - TITLE" [--key K] [--mode M] [--capo N]`**
+  gives a song its own setting in the songbook: the key it is played in
+  (`G`, `F#`, `Bb`), its mode (`ionian`, `dorian`, ... `locrian`) and its capo
+  (0 to 11). The parts you give change; the others stay. A key or a mode
+  given with no capo keeps the capo the song plays at now, and the setting
+  names it. It says where the songbook plays the song now:
+  `In the songbook: G Dorian, capo 0`. `--clear` takes the
+  whole setting off, and the song is in its own version again. In songbooks.toml a
+  song with a setting is a table in place of the string, and one without stays
+  a string: `songs = ["Oasis - Wonderwall", { song = "Soda Stereo - De Música
+  Ligera", key = "G", mode = "dorian", capo = 0 }]`. A key, mode or capo that
+  is none of those is an error naming the songbook and the song, and stops the
+  songbooks. The songbook's files play the song there: the key is the key of
+  the shapes you play, as an export's name gives it (`G Dorian, capo 0`: G
+  dorian shapes, no capo; with `--capo 2` they sound in A dorian), and what the
+  setting leaves out is the song's own version's (`--capo 2` alone keeps its
+  sound and plays it from other shapes). The key is a key, not a move:
+  replacing the song's sheet with one in another key keeps it, and with the
+  setting's capo, the key it sounds in too. A setting with no capo (a song
+  that had no sheet yet when you set it, or one written by hand) takes the
+  capo of the song's own version, else its sheet's: a sheet in its place with
+  another capo then sounds in another key, so give `--capo` too. A song whose
+  sheet has no key (no chord caracole can read, none to estimate one from)
+  can't take a key or a mode, so it stays as written.
 - **`caracole songbook rename NAME NEW`** renames it; its files move to the
   folder of the new name.
 - **`caracole songbook delete NAME`** deletes it, and the files caracole made

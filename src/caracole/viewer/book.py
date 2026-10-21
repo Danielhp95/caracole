@@ -4,8 +4,8 @@ The page opens on the contents, every song in the songbook's order, each with it
 key and capo on a line under its title; a song without a sheet is named there as missing,
 and has no page. Each song with a sheet is a section
 built the way ``page.build_viewer`` builds a sheet.html, with its own data block (its
-key, its ``[transpose]``, its chords in every mode); the fingerings, which most songs
-share, are one block for the page (``voicings``).
+key, its ``[transpose]``, the version it starts in, its chords in every mode); the fingerings,
+which most songs share, are one block for the page (``voicings``).
 
 Without a script, the page is every song one after the other, with links between them,
 and prints. With it (book.js), it shows the contents or one song, chosen by the address
@@ -25,11 +25,11 @@ is the page caracole wrote, with ``songbook_csp(page)``.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from html import escape
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote
 
 from caracole.inline import json_block
 from caracole.viewer import page as viewer_page
@@ -46,6 +46,7 @@ from caracole.viewer.page import (
     viewer_csp,
 )
 from caracole.viewer.theory import Key, key_name
+from caracole.viewer.version import Version, played_key, version_from_query
 
 # What the page is made from besides the sheet viewer's own files (``page.BUILD_FILES``).
 BOOK_FILES = (HERE / "book.py", HERE / "book.js", HERE / "book.css")
@@ -54,8 +55,11 @@ BOOK_FILES = (HERE / "book.py", HERE / "book.js", HERE / "book.css")
 @dataclass(frozen=True)
 class BookSong:
     """One song of the songbook: its sheet's ChordPro (``cho``, as caracole wrote it) or why it has none
-    (``missing``), with its key (``keys.sheet_keys``) and its ``[transpose]``. ``id`` names it the same
-    wherever the songbook puts it: the page remembers the song you had open by it."""
+    (``missing``), with its key (``keys.sheet_keys``) and its ``[transpose]``. ``start`` is the version the
+    viewer starts it in (its songbook setting, else its own version: songbook.py ``Entry.version``), as the
+    viewer's address writes one ("t=-2&mode=dorian&capo=0", viewer/version.py), None for its ``transpose``
+    alone. ``id`` names it the same wherever the songbook puts it: the page remembers the song you had open by
+    it."""
 
     title: str
     artist: str
@@ -65,6 +69,7 @@ class BookSong:
     transpose: int = 0
     missing: str | None = None
     id: str = ""
+    start: str | None = None
 
 
 @lru_cache(maxsize=1)
@@ -148,6 +153,7 @@ def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
     """A song's section, without its closing tag, its data (with its fingerings), and its key and capo
     as the contents give them. ``prev`` and ``nxt`` are the songs with a sheet around it: number, title."""
     sheet, key, origin, data = _read_song(song.cho or "", song.key, song.key_source, song.transpose)
+    data["start"] = song.start  # where the viewer starts when the address names no version (as sheet.html)
     html = (
         f'<section class="song" id="song-{n}" data-n="{n}" data-id="{escape(song.id)}" '
         f'aria-labelledby="title-{n}">\n<header class="head">\n'
@@ -159,15 +165,26 @@ def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
         + _song_html(sheet, f"-{n}", song.title)
         + _pager("Songs, after the sheet", prev, nxt)  # at the end of a long sheet, no scrolling back up
     )
-    return html, data, _key_and_capo(key, song.transpose, sheet.capo)
+    return html, data, _key_and_capo(key, _opens_in(song), sheet.capo)
 
 
-def _key_and_capo(key: Key | None, transpose: int, capo: int | None) -> str:
-    """"Em · capo 2", as the contents give a song: the key the viewer opens it in (its ``[transpose]``
-    applied, as the songbook's PDF) and its sheet's capo. A screen reader hears "key Em"."""
+def _opens_in(song: BookSong) -> Version:
+    """The version the viewer opens the song in, as viewer.js reads its data: its ``start``, at its
+    ``transpose`` where that names no ``t``; else its ``transpose``."""
+    if not song.start:
+        return Version(t=song.transpose)
+    version = version_from_query(song.start)
+    query = song.start[1:] if song.start[:1] in ("#", "?") else song.start
+    named = {name for name, _ in parse_qsl(query, keep_blank_values=True)}
+    return version if "t" in named else replace(version, t=song.transpose)
+
+
+def _key_and_capo(key: Key | None, version: Version, capo_sheet: int | None) -> str:
+    """"Em · capo 2", as the contents give a song: the key of the shapes the viewer opens it in (``version``,
+    as the songbook's PDF plays it: ``version.played_key``) and its capo. A screen reader hears "key Em"."""
+    shown, capo = played_key(version, key, capo_sheet)
     parts = []
-    if key is not None:
-        shown = Key((key.tonic + transpose) % 12, key.mode)
+    if shown is not None:
         parts.append(f'<span class="vh">key </span>{escape(key_name(shown))}')
     if capo:
         parts.append(f"capo {capo}")

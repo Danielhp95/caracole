@@ -897,7 +897,7 @@ def _sheet_text(text: str, *, key: str | None, version: Version) -> str:
     is (``_printed``), else in that version as its viewer shows it (``_version_text``). ``key`` is the sheet's
     (``keys.sheet_keys``)."""
     if version == Version():
-        return _printed(text, key=key, capo=parse_sheet(text).capo, transpose=0)
+        return _printed(text, key=key, capo=parse_sheet(text).capo)
     return _version_text(text, version, viewer_key(text, key), parse_sheet(text).capo)
 
 
@@ -910,15 +910,11 @@ def _version_text(text: str, v: Version, shapes: Key | None, capo: int | None) -
     return _as_latin(pdf_text(apply_version(text, v, key=shapes, capo_sheet=capo), key=played, capo=played_capo))
 
 
-def _printed(text: str, *, key: str | None, capo: int | None, transpose: int) -> str:
-    """The text chordpro prints of the sheet ``text`` (``pdf_text``), with the key of its shapes as its
-    viewer names it from ``key`` (the sheet's, ``keys.sheet_keys``), moved by ``transpose`` as a
-    ``{transpose}`` before it moves the chords (a songbook's), and the look-alike letters capitals can make
-    written in Latin (``_as_latin``)."""
-    shapes = viewer_key(text, key)
-    if shapes is not None:
-        shapes = Key((shapes.tonic + transpose) % 12, shapes.mode)
-    return _as_latin(pdf_text(text, key=shapes, capo=capo))
+def _printed(text: str, *, key: str | None, capo: int | None) -> str:
+    """The text chordpro prints of the sheet ``text`` as written (``pdf_text``), with the key of its shapes as
+    its viewer names it from ``key`` (the sheet's, ``keys.sheet_keys``), and the look-alike letters capitals
+    can make written in Latin (``_as_latin``)."""
+    return _as_latin(pdf_text(text, key=viewer_key(text, key), capo=capo))
 
 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *, key: tuple[str | None, str | None],

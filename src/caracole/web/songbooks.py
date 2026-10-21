@@ -103,7 +103,7 @@ def songbook_job(route: str, form: Mapping[str, str], *, library_dir: Path,
         song = " ".join(form.get("song", "").split())
         if not song:
             raise Refused(400, "Not a song", "Which song? The form names none.")
-        entry = next((s for s in book.songs if same_entry(s, song)), None)
+        entry = next((s for s in book.texts if same_entry(s, song)), None)
         if entry is None:
             raise Refused(404, "Not in the songbook", f'"{song}" isn\'t in the songbook "{name}": reload the '
                                                       "library to see what it holds.")

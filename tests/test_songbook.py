@@ -11,7 +11,9 @@ from conftest import add_song
 from caracole.songbook import (
     FILE_NAME,
     Songbook,
+    Setting,
     SongbookError,
+    SongbookSong,
     SongbookFileError,
     add_to_songbook,
     check_name,
@@ -22,6 +24,7 @@ from caracole.songbook import (
     move_in_songbook,
     remove_from_songbook,
     rename_songbook,
+    set_song_setting,
     same_entry,
 )
 
@@ -142,7 +145,7 @@ def test_make_writes_a_new_songbook(tmp_path):
 def test_make_keeps_a_song_named_twice_once_where_it_first_is(tmp_path):
     path = tmp_path / FILE_NAME
     made = make_songbook(path, "Gig", ["Oasis - Wonderwall", "Radiohead - Creep", "oasis - wonderwall"])
-    assert made.songs == ("Oasis - Wonderwall", "Radiohead - Creep")
+    assert made.texts == ("Oasis - Wonderwall", "Radiohead - Creep")
     assert load_songbooks(path) == [made]
 
 
@@ -163,7 +166,7 @@ def test_writers_keep_comments_and_layout(tmp_path):
     text = path.read_text(encoding="utf-8")
     for comment in ("# My songbooks", "# for the beach", "# the opener", "# For the wedding in June"):
         assert comment in text
-    assert [(b.name, b.songs) for b in load_songbooks(path)] == [
+    assert [(b.name, b.texts) for b in load_songbooks(path)] == [
         ("Campfire", ("Radiohead - Creep", "Soda Stereo - De Música Ligera", "宋冬野 - 斑马，斑马")),
         ("Weddings", ()),
         ("Picnic", ("Radiohead - Creep",)),
@@ -174,13 +177,13 @@ def test_add_appends_only_songs_not_there(tmp_path):
     path = write(tmp_path, HAND_WRITTEN)
     added = add_to_songbook(path, "Campfire", ["soda stereo - de musica ligera", "Radiohead - Creep"])
     assert added == ["Radiohead - Creep"]
-    assert find_songbook(load_songbooks(path), "Campfire").songs[-1] == "Radiohead - Creep"
+    assert find_songbook(load_songbooks(path), "Campfire").texts[-1] == "Radiohead - Creep"
 
 
 def test_remove_says_what_it_removed(tmp_path):
     path = write(tmp_path, HAND_WRITTEN)
     assert remove_from_songbook(path, "Campfire", ["宋冬野 - 斑馬，斑馬", "Muse - Hysteria"]) == ["宋冬野 - 斑马，斑马"]
-    assert find_songbook(load_songbooks(path), "Campfire").songs == ("Soda Stereo - De Música Ligera",)
+    assert find_songbook(load_songbooks(path), "Campfire").texts == ("Soda Stereo - De Música Ligera",)
 
 
 @pytest.mark.parametrize("position,order", [
@@ -193,7 +196,7 @@ def test_move_puts_a_song_at_a_position_counted_from_one(tmp_path, position, ord
     path = tmp_path / FILE_NAME
     make_songbook(path, "Book", ["X - A", "X - B", "X - C"])
     move_in_songbook(path, "Book", "x - c", position)
-    assert [s.removeprefix("X - ") for s in find_songbook(load_songbooks(path), "Book").songs] == order
+    assert [s.removeprefix("X - ") for s in find_songbook(load_songbooks(path), "Book").texts] == order
 
 
 def test_move_refuses_a_song_the_songbook_lacks_and_a_position_below_one(tmp_path):
@@ -345,3 +348,77 @@ def test_an_entry_of_the_file_is_its_song_by_artist_and_title_alone_never_by_a_s
     assert find_library_song(conn, "Radiohead - Karma Police Live").song.id == police.id
     assert find_entry_song(conn, "Radiohead - Karma Police Live") is None
     assert find_entry_song(conn, "ban ma ban ma") is None
+
+
+# --- a song's own setting --------------------------------------------------------------------
+
+WITH_SETTINGS = '''# kept by hand
+["Gig"]
+songs = [
+  "Oasis - Wonderwall",   # the opener
+  { song = "Soda Stereo - De Música Ligera", key = "G", mode = "dorian", capo = 0 },
+  { song = "Radiohead - Creep", capo = 2 },
+]
+'''
+
+
+def test_a_song_can_carry_its_key_mode_and_capo(tmp_path):
+    path = write(tmp_path, WITH_SETTINGS)
+    (book,) = load_songbooks(path)
+    assert book.songs == (
+        SongbookSong("Oasis - Wonderwall"),
+        SongbookSong("Soda Stereo - De Música Ligera", Setting("G", "dorian", 0)),
+        SongbookSong("Radiohead - Creep", Setting(capo=2)),
+    )
+    assert book.texts == ("Oasis - Wonderwall", "Soda Stereo - De Música Ligera", "Radiohead - Creep")
+    # a setting stays with its song through the other changes
+    move_in_songbook(path, "Gig", "soda stereo - de musica ligera", 1)
+    add_to_songbook(path, "Gig", ["Muse - Hysteria"])
+    remove_from_songbook(path, "Gig", ["Oasis - Wonderwall"])
+    assert load_songbooks(path)[0].songs == (
+        SongbookSong("Soda Stereo - De Música Ligera", Setting("G", "dorian", 0)),
+        SongbookSong("Radiohead - Creep", Setting(capo=2)),
+        SongbookSong("Muse - Hysteria"),
+    )
+    assert rename_songbook(path, "Gig", "Show").songs[0].setting == Setting("G", "dorian", 0)
+
+
+def test_set_and_clear_keep_comments_and_plain_entries_plain(tmp_path):
+    path = write(tmp_path, HAND_WRITTEN)
+    set_song_setting(path, "campfire", "soda stereo - de musica ligera", Setting("Bb", "mixolydian", 3))
+    text = path.read_text(encoding="utf-8")
+    assert 'song = "Soda Stereo - De Música Ligera"' in text
+    for comment in ("# My songbooks", "# for the beach", "# For the wedding in June"):
+        assert comment in text
+    assert '  "宋冬野 - 斑马，斑马",' in text  # the other entries are still plain strings
+    assert load_songbooks(path)[0].songs[0].setting == Setting("Bb", "mixolydian", 3)
+    set_song_setting(path, "Campfire", "Soda Stereo - De Música Ligera", None)
+    assert path.read_text(encoding="utf-8") == HAND_WRITTEN  # plain again, its comment kept
+    set_song_setting(path, "Campfire", "宋冬野 - 斑马，斑马", Setting())  # an empty setting is none
+    assert '"宋冬野 - 斑马，斑马",' in path.read_text(encoding="utf-8")
+    with pytest.raises(SongbookError, match="isn't in the songbook"):
+        set_song_setting(path, "Campfire", "Muse - Hysteria", Setting("G"))
+
+
+@pytest.mark.parametrize("fields,message", [
+    ('key = "H"', "key must be a tonic"),
+    ('key = "g"', "key must be a tonic"),
+    ('mode = "dorien"', "mode must be one of"),
+    ("capo = 12", "capo must be a fret"),
+    ("capo = -1", "capo must be a fret"),
+    ('capo = "2"', "capo must be a fret"),
+    ("tempo = 3", "unknown key"),
+])
+def test_a_bad_setting_is_an_error_naming_the_line(tmp_path, fields, message):
+    path = write(tmp_path, f'["Gig"]\nsongs = [{{ song = "Radiohead - Creep", {fields} }}]\n')
+    with pytest.raises(SongbookFileError, match=message) as e:
+        load_songbooks(path)
+    assert str(path) in str(e.value) and "[\"Gig\"]" in str(e.value)
+    if "unknown" not in message:
+        assert "Radiohead - Creep" in str(e.value)
+
+
+def test_a_table_with_no_song_is_an_error(tmp_path):
+    path = write(tmp_path, '["Gig"]\nsongs = [{ key = "G" }]\n')
+    with pytest.raises(SongbookFileError, match="Artist - Title"):
+        load_songbooks(path)

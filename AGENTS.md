@@ -43,7 +43,7 @@ section says where things are, and the rules a change there keeps.
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
 | youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed under Versions in its line's ⋯ on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed under Versions in its line's ⋯ on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml: a song is a string, or a table with its own `Setting`: key, mode, capo; `SongbookSong`, `Songbook.songs`, `.texts`; `set_song_setting`, and `with_capo`, the capo a key or a mode `caracole songbook set` gives plays at now, so a replaced sheet keeps the key it sounds in; its files play each song through `apply_version`, never chordpro's `{transpose}`, where `in_setting` puts it: the setting's key as the key of the shapes played, its mode and capo, the rest the song's `own_version`; `plays_in`, that in words, "key unknown, as written" for a sheet with no key) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
@@ -473,7 +473,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and
   dropped once it holds it; one its process left, or untouched for `TICKET_STALE` s, a
   lookup killed while it waited, no longer counts). Every changing `caracole songbook`
-  command (make, add, remove, move, rename, delete, render: commands/songbook.py) waits the
+  command (make, add, remove, move, set, rename, delete, render: commands/songbook.py) waits the
   same way, as a songbook is asked for now
   (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).
   Bulk work hands the lock over
