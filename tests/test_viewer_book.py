@@ -384,74 +384,75 @@ def test_next_and_swipes_go_from_song_to_song_skipping_the_missing(tmp_path):
     assert result_of(dom) == ["song-1", "song-3", "song-5", "song-3", "song-1"]
 
 
+# Each step from song to song, or to the contents, loads songbook.html again (book.js). A test of what it keeps
+# across them takes each step on real time and waits for the page it loads (``again``): on Chromium's virtual
+# clock, the next step came within a millisecond of the page's writes to its storage, and once in a while, as
+# busy as a whole run makes the machine, the page loaded next read storage without them.
+SHOWN = "Array.from(document.querySelectorAll('section.song')).filter((s) => !s.hidden).map((s) => s.id)"
+KEY_SAID = "(document.getElementById('key-full') || {}).textContent || ''"
+
+
+def book_page(tmp_path: Path, fragment: str) -> Browser:
+    """songbook.html in a Chromium of its own, on a phone's screen, open on ``fragment`` once its scripts ran."""
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(page(), encoding="utf-8")
+    b = Browser(tmp_path / "profile", width=390, height=844, mobile=True)
+    try:
+        b.open(path.as_uri() + fragment)
+        assert b.wait(READY)
+    except BaseException:
+        b.close()
+        raise
+    return b
+
+
+# The page's scripts have run: on a song, the viewer's too; on the contents, the songbook's alone.
+READY = ("document.readyState === 'complete' && (document.documentElement.dataset.view === 'contents' || "
+         "document.documentElement.dataset.ready === '1')")
+
+
+def again(b: Browser, step: str) -> None:
+    """``step``, JavaScript that loads the page again (an address of another song, the contents, a reload), and
+    the page it loads, once its scripts ran."""
+    b.js("window.before = true; " + step)
+    assert b.wait(f"window.before === undefined && {READY}")
+
+
 @in_chromium
 def test_the_page_remembers_the_song_and_each_songs_own_settings(tmp_path):
-    harness = """
-      const step = Number(sessionStorage.getItem("step") || "0");
-      sessionStorage.setItem("step", String(step + 1));
-      const said = () => q("#key-full") ? q("#key-full").textContent : "";
-      const log = (value) => {
-        const seen = JSON.parse(sessionStorage.getItem("seen") || "[]");
-        seen.push(value);
-        sessionStorage.setItem("seen", JSON.stringify(seen));
-      };
-      if (step === 0) {  // song 3: up a semitone more, then song 1
-        q("#t-up").click();
-        log(said());
-        location.hash = "song-1";
-      } else if (step === 1) {  // song 1 keeps its own settings; back to song 3
-        log(said());
-        location.hash = "song-3";
-      } else if (step === 2) {  // song 3 as you left it; then the contents
-        log(said());
-        location.hash = "contents";
-      } else if (step === 3) {  // the contents show where you were; then the page with no address
-        log(q(".toc .here") ? q(".toc .here").textContent : "");
-        location.hash = "";
-      } else {
-        log(Array.from(document.querySelectorAll("section.song")).filter((s) => !s.hidden).map((s) => s.id));
-        out = JSON.parse(sessionStorage.getItem("seen"));
-      }
-    """
-    dom = open_page(page(), tmp_path, "#song-3", harness=harness, budget=15000)
-    three, one, again, here, shown = result_of(dom)
-    assert three == "Key Cm · +3" and one == "G shapes · capo 2 · sounds A" and again == "Key Cm · +3"
+    with book_page(tmp_path, "#song-3") as b:
+        b.js("document.getElementById('t-up').click()")  # song 3: up a semitone more, then song 1
+        three = b.js(KEY_SAID)
+        again(b, "location.hash = 'song-1'")
+        one = b.js(KEY_SAID)  # song 1 keeps its own settings; back to song 3
+        again(b, "location.hash = 'song-3'")
+        back = b.js(KEY_SAID)  # song 3 as you left it; then the contents
+        again(b, "location.hash = 'contents'")
+        here = b.js("(document.querySelector('.toc .here') || {}).textContent || ''")  # where you were
+        again(b, "location.hash = ''")  # then the page with no address
+        shown = b.js(SHOWN)
+    assert three == "Key Cm · +3" and one == "G shapes · capo 2 · sounds A" and back == "Key Cm · +3"
     assert "Minor Song" in here
     assert shown == ["song-3"]
 
 
 @in_chromium
 def test_each_song_keeps_its_own_text_size_and_scroll_speed(tmp_path):
-    harness = """
-      const step = Number(sessionStorage.getItem("step") || "0");
-      sessionStorage.setItem("step", String(step + 1));
-      const log = (value) => {
-        const seen = JSON.parse(sessionStorage.getItem("seen") || "[]");
-        seen.push(value);
-        sessionStorage.setItem("seen", JSON.stringify(seen));
-      };
-      const now = () => [q("#pill-speed").textContent, getComputedStyle(q("#sheet")).fontSize, location.hash];
-      if (step === 0) {  // song 3: bigger, and faster; then song 1
-        q("#size").click();
-        q("#bigger").click();
-        q("#scroll").click();
-        q("#pill-faster").click();
-        q("#pill-end").click();
-        log(now());
-        location.hash = "song-1";
-      } else if (step === 1) {  // song 1 as it was; back to song 3
-        log(now());
-        location.hash = "song-3";
-      } else {
-        log(now());
-        out = JSON.parse(sessionStorage.getItem("seen"));
-      }
-    """
-    dom = open_page(page(), tmp_path, "#song-3", harness=harness, budget=12000)
-    three, one, again = result_of(dom)
+    now = """[document.getElementById('pill-speed').textContent,
+              getComputedStyle(document.getElementById('sheet')).fontSize, location.hash]"""
+    with book_page(tmp_path, "#song-3") as b:
+        # song 3: bigger, and faster; then song 1
+        b.js("for (const id of ['size', 'bigger', 'scroll', 'pill-faster', 'pill-end']) "
+             "document.getElementById(id).click()")
+        three = b.js(now)
+        again(b, "location.hash = 'song-1'")
+        one = b.js(now)  # song 1 as it was; back to song 3
+        again(b, "location.hash = 'song-3'")
+        back = b.js(now)
     assert three == ["7", "20px", "#song-3=&fs=20&speed=7"]
     assert one[:2] == ["6", "18px"] and "fs=" not in one[2] and "speed=" not in one[2]
-    assert again == three
+    assert back == three
 
 
 @in_chromium
@@ -475,30 +476,13 @@ def test_the_song_the_page_reopens_is_in_its_address_so_a_reload_keeps_it(tmp_pa
     # Opened with no address, the page reopens the song you had open; the viewer then keeps that song's
     # settings in the address as well as in storage, so the address must name the song, or a reload
     # after a change finds only the settings ("#t=3") and opens the contents.
-    harness = """
-      const step = Number(sessionStorage.getItem("step") || "0");
-      sessionStorage.setItem("step", String(step + 1));
-      const log = (value) => {
-        const seen = JSON.parse(sessionStorage.getItem("seen") || "[]");
-        seen.push(value);
-        sessionStorage.setItem("seen", JSON.stringify(seen));
-      };
-      const shown = () => Array.from(document.querySelectorAll("section.song")).filter((s) => !s.hidden)
-        .map((s) => s.id).join(",");
-      if (step === 0) {  // song 3; then the page with no address
-        location.hash = "";
-      } else if (step === 1) {  // song 3 again, named in the address; up a semitone, and reload
-        log([shown(), location.hash]);
-        q("#up").click();
-        log(location.hash);
-        location.reload();
-      } else {
-        log([shown(), q("#key-full") ? q("#key-full").textContent : ""]);
-        out = JSON.parse(sessionStorage.getItem("seen"));
-      }
-    """
-    dom = open_page(page(), tmp_path, "#song-3", harness=harness, budget=12000)
-    reopened, changed, reloaded = result_of(dom)
+    with book_page(tmp_path, "#song-3") as b:
+        again(b, "location.hash = ''")  # song 3; then the page with no address
+        reopened = b.js(f"[{SHOWN}.join(','), location.hash]")  # song 3 again, named in the address
+        b.js("document.getElementById('up').click()")  # up a semitone, and reload
+        changed = b.js("location.hash")
+        again(b, "location.reload()")
+        reloaded = b.js(f"[{SHOWN}.join(','), {KEY_SAID}]")
     assert reopened[0] == "song-3" and reopened[1].startswith("#song-3")
     assert changed == "#song-3=&t=3"
     assert reloaded == ["song-3", "Key Cm · +3"]

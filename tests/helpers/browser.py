@@ -43,6 +43,22 @@ TIMEOUT = 60.0  # seconds a page may take, as the tests gave chromium --dump-dom
 # starting at once kept it busy for seconds, and with it everything else that asks it for a user
 # or a host (chordpro does). No name resolves here, so no page reaches beyond this machine.
 NO_LOOKUPS = "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1"
+# Browser.wait's expression, evaluated as one step with the page's readiness: what it throws while the
+# document is still parsed is "not yet" (``loading``), what it throws once the page has loaded is thrown.
+WAIT_PROBE = """(async () => {
+  const loading = document.readyState !== "complete";
+  try {
+    return { value: await (
+EXPRESSION
+    ) };
+  } catch (e) {
+    if (loading) return { loading: String((e && e.stack) || e) };
+    throw e;
+  }
+})()"""
+# What the protocol answers an evaluation whose document a navigation took away.
+NAVIGATING = ("Inspected target navigated or closed", "Execution context was destroyed",
+              "Cannot find context with specified id")
 # Nor does a headless browser need the desktop's display or session bus.
 DESKTOP = ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS")
 
@@ -59,7 +75,8 @@ CHROMIUM_MARKS = [pytest.mark.skipif(CHROMIUM is None, reason="chromium not foun
 
 def in_chromium(test):
     """For a test that opens pages in Chromium: marked slow, skipped without Chromium, and given
-    conftest.py's ``_chromium``, which keeps the browser's profile in the run's basetemp."""
+    conftest.py's ``_chromium``, which keeps the browser's profile in the run's basetemp and lets
+    the test open pages at all (``require_in_chromium``)."""
     for mark in CHROMIUM_MARKS:
         test = mark(test)
     return test
@@ -67,6 +84,10 @@ def in_chromium(test):
 
 class BrowserError(RuntimeError):
     """Chromium couldn't start, answered a command with an error, died, or said nothing in time."""
+
+
+class PageError(BrowserError):
+    """The page's JavaScript threw, evaluating what a test asked (``Browser.js``)."""
 
 
 class SharedBrowser:
@@ -213,25 +234,34 @@ class SharedBrowser:
             self.process.wait()
 
 
-# Where the profiles go: a folder in the run's basetemp, from conftest.py's _chromium, so that
-# pytest clears a profile with the run's other folders, even one a killed test process left.
+# Where the profiles go: a folder in the run's basetemp, from conftest.py's _chromium_profiles, so
+# that pytest clears a profile with the run's other folders, even one a killed test process left.
 profiles: Path | None = None
 _browser: SharedBrowser | None = None
 _profile: Path | None = None
+# Whether the running test is marked @in_chromium: conftest.py's _chromium says so while it runs.
+marked = False
+
+
+def require_in_chromium() -> None:
+    """Fail a test that opens pages in Chromium without @in_chromium, whichever browser it starts
+    (``dump_dom``, ``Browser``, helpers/chromium.py's ``Chromium``) and whatever ran before it:
+    unmarked, it would run in the quick loop, and fail rather than skip where no Chromium runs."""
+    if not marked:
+        pytest.fail("a test that opens pages in Chromium is marked @in_chromium", pytrace=False)
 
 
 def browser() -> SharedBrowser:
     """This process's browser, started on first use; skips the test when Chromium can't run here.
 
-    conftest.py's _chromium closes it when the session ends; a browser whose pipes close (its test
-    process killed, say) quits by itself."""
+    conftest.py's _chromium_profiles closes it when the session ends; a browser whose pipes close
+    (its test process killed, say) quits by itself."""
     global _browser, _profile
+    require_in_chromium()
     if _browser is not None and _browser.process.poll() is None:
         return _browser
     if CHROMIUM is None:
         pytest.skip("chromium not found on PATH")
-    if profiles is None:
-        pytest.fail("a test that opens pages in Chromium is marked @in_chromium", pytrace=False)
     close()
     _profile = Path(tempfile.mkdtemp(prefix="profile-", dir=profiles))
     try:
@@ -275,6 +305,7 @@ class Browser:
 
     def __init__(self, profile: Path, *, width: int = 1280, height: int = 900, mobile: bool = False,
                  timeout: float = 30.0):
+        require_in_chromium()
         if CHROMIUM is None:
             raise BrowserError("chromium not found on PATH")
         self.timeout = timeout
@@ -349,25 +380,49 @@ class Browser:
 
     # --- what a test does ------------------------------------------------------------------------------
 
-    def js(self, expression: str) -> Any:
-        """The value of a JavaScript expression in the page (a promise's, once settled)."""
+    def js(self, expression: str, *, said: str | None = None) -> Any:
+        """The value of a JavaScript expression in the page (a promise's, once settled); ``said``, how an
+        error names it, if not by itself."""
         result = self.send("Runtime.evaluate", expression=expression, returnByValue=True, awaitPromise=True)
         if "exceptionDetails" in result:
-            raise BrowserError(f"{expression[:80]}: {json.dumps(result['exceptionDetails'])[:400]}")
+            raise PageError(f"{(said or expression)[:80]}: {json.dumps(result['exceptionDetails'])[:400]}")
         return result.get("result", {}).get("value")
 
     def open(self, url: str) -> None:
-        self.send("Page.navigate", url=url)
-        if not self.wait("document.readyState === 'complete' && location.href !== 'about:blank'"):
+        """The page at ``url``, once loaded: a document of its own, not the one before it (but for a change of
+        the address's fragment alone, which loads none)."""
+        self.js("window.caracoleLeft = true")
+        went = self.send("Page.navigate", url=url)
+        fresh = "window.caracoleLeft === undefined && " if went.get("loaderId") else ""
+        if not self.wait(fresh + "document.readyState === 'complete' && location.href !== 'about:blank'"):
             raise BrowserError(f"{url} didn't load")
 
     def wait(self, expression: str, timeout: float = 10.0) -> bool:
-        """Whether the expression became true within ``timeout`` seconds."""
+        """Whether the expression became true within ``timeout`` seconds. While the page loads (its document
+        still parsed, or a navigation under way), one that throws is not true yet: a page loading has no
+        document element for a moment. On a page that has loaded, one that throws raises at once (a typo, a
+        node the page lacks), as does one that throws while the page loads to the end of the time."""
+        probe = WAIT_PROBE.replace("EXPRESSION", expression)
         deadline = time.monotonic() + timeout
+        loading = None
         while time.monotonic() < deadline:
-            if self.js(expression):
-                return True
+            try:
+                answer = self.js(probe, said=expression)
+            except PageError:
+                raise
+            except BrowserError as e:  # the evaluation's document went away under it: a navigation
+                if not any(words in str(e) for words in NAVIGATING):
+                    raise
+                answer = {"loading": str(e)}
+            if isinstance(answer, dict) and "value" in answer:
+                if answer["value"]:
+                    return True
+                loading = None
+            else:
+                loading = answer.get("loading") if isinstance(answer, dict) else repr(answer)
             time.sleep(0.03)
+        if loading is not None:
+            raise PageError(f"{expression[:80]}: threw while the page loaded: {loading[:400]}")
         return False
 
     def type(self, text: str) -> None:

@@ -198,19 +198,25 @@ def with_script(page: str, script: str) -> str:
     return page.replace("</body>", f"<script>{script}</script>\n</body>")
 
 
+# The page's timers for a test that drives it on real time (``serve(..., timers=QUICK)``): it asks /jobs.json how
+# its requests go every 100 ms, not every 1.5 s, and Remove's five seconds last half of one. The page users get
+# keeps its own (test_the_page_users_get_counts_five_seconds_then_asks_every_second_and_a_half).
+QUICK = {"poll": 100, "undo": 500}
+
+
 @pytest.fixture
 def serve(cfg, monkeypatch):
     """``serve(runner, script)``: the server on a free port, its page with ``script``; returns its address.
-    ``before(app)`` runs before the queue starts."""
+    ``before(app)`` runs before the queue starts; ``timers`` are the page's, in place of its own (QUICK)."""
     started = []
 
-    def start(runner, script, *, before=None):
+    def start(runner, script, *, before=None, timers=None):
         import caracole.library_page as library_page
 
         real = library_page.build_library_page
         monkeypatch.setattr(library_page, "build_library_page", lambda *a, **k: with_script(real(*a, **k), script))
         queue = JobQueue(runner)
-        app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+        app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", timers=timers)
         answer = app.handle
 
         def handle(request):
@@ -1059,7 +1065,7 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
                   ["Muse - Hysteria", "Pixies - Debaser", "Radiohead - Creep", "Muse - Uprising"])
     render_songbooks(conn, cfg, Overrides(), runner=FakeChordPro())
     runner = FakeCaracole(cfg, sheets=True)
-    url = serve(runner, "(() => {})();\n")
+    url = serve(runner, "(() => {})();\n", timers=QUICK)
     book = '#songbooks .sb-card[data-songbook="Campfire"]'
     line = f"(() => {{ const p = document.querySelector('{book} > .progress'); return p ? p.textContent : ''; }})()"
     songs = f"""Array.from(document.querySelectorAll('{book} li')).map((li) => [li.querySelector('.t').textContent,
@@ -1079,7 +1085,7 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
         assert page.js(seen) and page.js(SHIFTS)
         page.click(get_it)
         assert page.wait(f"{line}.startsWith('Made')", timeout=30), (page.js(line), page.js(songs))
-        page.js("new Promise((done) => setTimeout(done, 600))")  # the last frames, and any shift in them
+        assert page.js(SETTLED)  # the last frames, and any shift in them
         done = {"line": page.js(line), "songs": page.js(songs), "seen": page.js("window.seen"),
                 "get": page.js(f"document.querySelector({json.dumps(get_it)}) === null"),
                 "path": page.js("location.pathname"),
@@ -1102,8 +1108,41 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
     assert done["tray"] is True  # the songbook's card says how they go: no list of requests in the corner
 
 
+# The page's last frames, and any shift in them: true once, for 600 ms, nothing on the page changed (no element,
+# attribute or text: what a timer of the page's could still move) and nothing shifted, and ten frames in a row (a
+# sixth of a second) scrolled nothing and ran no animation that ends (a smooth scroll into view, a transition);
+# false if the page never settles in ten seconds.
+SETTLED = """new Promise((done) => {
+  const QUIET = 600;
+  const began = performance.now();
+  let changed = began, last = null, still = 0;
+  const seen = () => { changed = performance.now(); };
+  const changes = new MutationObserver(seen);
+  changes.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+  const shifts = new PerformanceObserver(seen);
+  shifts.observe({ type: "layout-shift" });
+  const frame = () => {
+    const now = performance.now();
+    const moving = document.getAnimations().some((a) => a.playState === "running" &&
+      a.effect && a.effect.getComputedTiming().endTime !== Infinity);
+    still = !moving && scrollY === last ? still + 1 : 0;
+    last = scrollY;
+    const settled = still >= 10 && now - changed >= QUIET;
+    if (settled || now - began > 10000) {
+      changes.disconnect();
+      shifts.disconnect();
+      done(settled);
+    } else {
+      requestAnimationFrame(frame);
+    }
+  };
+  requestAnimationFrame(frame);
+})"""
+
+
 # Notes every layout shift that no input brought about since the page loaded (buffered): how much, and what
-# moved. A request's answer that comes seconds after its tap moves nothing on the screen.
+# moved. A request's answer that comes seconds after its tap moves nothing on the screen, and nor does the page's
+# load (test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine).
 SHIFTS = """(() => {
   window.shifts = [];
   new PerformanceObserver((list) => {
@@ -1115,6 +1154,34 @@ SHIFTS = """(() => {
   }).observe({ type: "layout-shift", buffered: true });
   return true;
 })()"""
+
+
+@pytest.mark.parametrize("size", ["390,844", "1280,800"])
+def test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine(serve, cfg, conn, tmp_path, size):
+    # On a slow machine (Chromium's processor slowed twentyfold), the page may be painted before its script has
+    # run: were it seen then, the list would be empty, the request form open under the bar and the Songbooks
+    # section closed though you left it open, and all of it would move once the script has drawn them.
+    from caracole.songbook import make_songbook, songbooks_file
+
+    for n in range(40):
+        add_song(conn, "Band", f"Song {n:02}")
+    make_songbook(songbooks_file(cfg.library_dir), "Campfire", [f"Band - Song {n:02}" for n in range(6)])
+    url = serve(FakeCaracole(cfg), "(() => {})();\n", timers=QUICK)
+    width, height = (int(n) for n in size.split(","))
+    with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
+        page.open(url)
+        page.js("localStorage.setItem('caracole-library:songbooks-open', '1')")  # as you left it open
+        page.send("Emulation.setCPUThrottlingRate", rate=20)
+        page.js("window.before = true; location.reload()")
+        assert page.wait("window.before === undefined && document.readyState === 'complete' && "
+                         "document.querySelector('#songbooks > details').open", timeout=30)
+        assert page.js(SHIFTS)
+        page.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
+        shifts = page.js("window.shifts")
+        page.send("Emulation.setCPUThrottlingRate", rate=1)
+        shown = page.js("getComputedStyle(document.querySelector('.page')).visibility")
+    assert shifts == [], shifts
+    assert shown == "visible"
 
 
 @pytest.mark.parametrize("size", ["390,844", "1280,800"])
@@ -1131,7 +1198,7 @@ def test_a_songbook_made_then_deleted_moves_nothing_on_the_screen_when_it_is_don
         add_song(conn, "Band", f"Song {n:02}")
     for name, first, last in (("Campfire", 0, 8), ("Road trip", 8, 10), ("Quiet", 10, 12))[:books]:
         make_songbook(songbooks_file(cfg.library_dir), name, [f"Band - Song {n:02}" for n in range(first, last)])
-    url = serve(FakeCaracole(cfg), "(() => {})();\n")
+    url = serve(FakeCaracole(cfg), "(() => {})();\n", timers=QUICK)
     width, height = (int(n) for n in size.split(","))
     book = '#songbooks .sb-card[data-songbook="Beach nights"]'
     line = f"(() => {{ const p = document.querySelector('{book} .progress'); return p ? p.textContent : ''; }})()"
@@ -1147,7 +1214,7 @@ def test_a_songbook_made_then_deleted_moves_nothing_on_the_screen_when_it_is_don
         page.type("Beach nights")
         page.click(".pickbar-form button[type=submit]")
         assert page.wait(f"{line} === 'Made'", timeout=20), page.js(line)
-        page.js("new Promise((done) => setTimeout(done, 600))")  # the last frames, and any shift in them
+        assert page.js(SETTLED)  # the last frames, and any shift in them
         made = page.js("window.shifts")
         whole = page.js(f"""(() => {{ const r = document.querySelector('{book}').getBoundingClientRect();
             return r.top >= 0 && r.bottom <= innerHeight && document.querySelectorAll('{book} .t').length; }})()""")
@@ -1156,7 +1223,7 @@ def test_a_songbook_made_then_deleted_moves_nothing_on_the_screen_when_it_is_don
         page.click(f'{book} form[action="/songbook/delete"] input[type="checkbox"]')
         page.click(f'{book} form[action="/songbook/delete"] button')
         assert page.wait(f"{line} === 'Deleted'", timeout=20), page.js(line)
-        page.js("new Promise((done) => setTimeout(done, 600))")
+        assert page.js(SETTLED)
         deleted = page.js("window.shifts")
         tray = page.js("document.getElementById('tray').hidden")
         songs = page.js(f"Array.from(document.querySelectorAll('{book} .t, {book} form')).length")
@@ -1178,12 +1245,33 @@ COUNTS = """(() => ({
   count: document.getElementById("count").textContent }))()"""
 
 
+# Every line the song's own line shows, in order (window.lines), and, once it says what goes while it counts down,
+# what its countdown is like (window.counting): its words, its role, where the focus is, Undo's name and size,
+# and whether Remove… waits.
+COUNTDOWN = """(() => {
+  window.lines = [];
+  window.counting = null;
+  new MutationObserver(() => {
+    const p = window.song.querySelector('.progress');
+    if (!p) return;
+    if (window.lines[window.lines.length - 1] !== p.textContent) window.lines.push(p.textContent);
+    const undo = p.querySelector('button.undo');
+    if (window.counting || !undo || !p.textContent.includes('never touches Music/.')) return;
+    const r = undo.getBoundingClientRect();
+    window.counting = { text: p.textContent, role: p.getAttribute('role'), focus: document.activeElement === undo,
+                        undo: undo.getAttribute('aria-label'), big: r.width >= 44 && r.height >= 44,
+                        remove: window.song.querySelector('form.remove button').disabled };
+  }).observe(window.song, { subtree: true, childList: true, characterData: true });
+  return true;
+})()"""
+
+
 @pytest.mark.parametrize("left,size", [("#show=wanted", "390,844"), ("#view=rows", "390,844"), ("#q=creep", "1280,800")])
 def test_remove_counts_down_on_the_card_then_removes_the_song_there(serve, cfg, conn, tmp_path, left, size):
     # One tap: the song's own line says "Removing in 5 s · Undo" and what goes, the focus on Undo, and nothing is
-    # sent for those five seconds but the question of what goes; then the removal, and the line follows it to
-    # Removed. The page never leaves the library as you left it (its filter or view here, the Songbooks section
-    # open above the list), and nothing on the screen moves but the line.
+    # sent for those five seconds (half a second here: QUICK) but the question of what goes; then the removal, and
+    # the line follows it to Removed. The page never leaves the library as you left it (its filter or view here,
+    # the Songbooks section open above the list), and nothing on the screen moves but the line.
     from caracole.songbook import make_songbook, songbooks_file
 
     for n in range(8):
@@ -1193,7 +1281,7 @@ def test_remove_counts_down_on_the_card_then_removes_the_song_there(serve, cfg, 
         add_song(conn, "Wilco", f"Tune {n}")
     make_songbook(songbooks_file(cfg.library_dir), "Campfire", [f"Band - Song {n:02}" for n in range(6)])
     runner = FakeCaracole(cfg)
-    url = serve(runner, "(() => {})();\n")
+    url = serve(runner, "(() => {})();\n", timers=QUICK)
     item = f'#list [data-id="{creep.id}"]'
     line = "window.song.querySelector('.progress')"  # its card, or its row, the same node once it is gone
     width, height = (int(n) for n in size.split(","))
@@ -1206,33 +1294,36 @@ def test_remove_counts_down_on_the_card_then_removes_the_song_there(serve, cfg, 
         if left == "#view=rows":
             page.click(f"{item} .row-more")
         page.js(f"window.song = document.querySelector('{item}'); window.song.scrollIntoView({{ block: 'center' }})")
-        assert page.js(SHIFTS)
+        assert page.js(SHIFTS) and page.js(COUNTDOWN)
         tapped = time.monotonic()
         page.click(f"{item} form.remove button")
-        assert page.wait(f"{line} !== null && {line}.textContent.startsWith('Removing in 5 s')"), page.js(
-            f"{line} && {line}.textContent")
-        assert page.wait(f"{line}.textContent.includes('never touches Music/.')"), page.js(f"{line}.textContent")
-        counting = page.js(f"""(() => {{ const p = {line}; const undo = p.querySelector('button.undo');
-            const r = undo.getBoundingClientRect();
-            return {{ text: p.textContent, role: p.getAttribute('role'), focus: document.activeElement === undo,
-                      undo: undo.getAttribute('aria-label'), big: r.width >= 44 && r.height >= 44,
-                      remove: window.song.querySelector('form.remove button').disabled }}; }})()""")
-        assert page.wait(f"{line}.textContent === 'Removed'", timeout=20), page.js(f"{line}.textContent")
+        assert page.wait(f"{line} !== null && {line}.textContent === 'Removed'", timeout=20), page.js("window.lines")
         gone = page.js("""(() => { const c = window.song;
             return [c.querySelector('h2').textContent, c.querySelectorAll('a, button, form').length,
                     c.querySelector('.progress').getAttribute('role'), location.pathname, location.hash]; })()""")
         page.js("new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))")
         shifts, counts = page.js("window.shifts"), page.js(COUNTS)
+        lines, counting = page.js("window.lines"), page.js("window.counting")
+    # Its seconds, counted down one by one, then the removal's own line to its end.
+    said = [text for text in lines if text]
+    counted = [int(m.group(1)) for m in map(re.compile(r"Removing in (\d) s").match, said) if m]
+    assert said[0].startswith("Removing in 5 s") and counted == sorted(counted, reverse=True), said
+    assert set(counted) == {5, 4, 3, 2, 1}, said
+    then = said[len(counted):]
+    assert then[0].startswith("Removing…") and then[-1] == "Removed", said
+    assert not any(text.startswith("Removing in") for text in then), said
+    assert counting, said  # what goes came while it counted down
     assert counting["role"] == "status" and counting["focus"] and counting["remove"]  # Remove… waits, Undo has it
     assert counting["undo"] == "Undo: keep Creep by Radiohead"
     assert re.match(r"Removing in [1-5] s", counting["text"]) and "Undo" in counting["text"], counting["text"]
     assert counting["text"].endswith("Deletes its record; never touches Music/."), counting["text"]  # no file yet
     assert counting["big"] or width >= 500  # a thumb's target on a phone
-    # Nothing sent but the question for five seconds; then the removal, of that song, by its key.
+    # Nothing sent but the question for its seconds; then the removal, of that song, by its key.
     removals = [(at - tapped, body) for at, target, body in runner.posted if target == "/remove"]
     asked, confirmed = [r for r in removals if b"confirm=1" not in r[1]], [r for r in removals if b"confirm=1" in r[1]]
-    assert len(asked) == 1 and asked[0][0] < 1.5, removals
-    assert len(confirmed) == 1 and confirmed[0][0] >= 4.9, removals
+    window = QUICK["undo"] / 1000  # (five seconds would be the page's own: under four, it took QUICK's)
+    assert len(asked) == 1 and len(confirmed) == 1 and asked[0][0] < confirmed[0][0] - window / 2, removals
+    assert window - 0.02 <= confirmed[0][0] < 4, removals
     assert f"key={creep.key.replace('/', '%2F')}".encode() in confirmed[0][1]
     assert ["remove", "--yes", "--", "Radiohead - Creep"] in runner.calls
     assert gone == ["Creep", 0, "status", "/", left]  # still the library, as you left it; nothing left to open
@@ -1253,20 +1344,63 @@ def test_undo_keeps_the_song_and_nothing_is_sent(serve, cfg, conn, tmp_path, siz
     creep = add_song(conn, "Radiohead", "Creep")
     add_song(conn, "Oasis", "Wonderwall")
     runner = FakeCaracole(cfg)
-    url = serve(runner, "(() => {})();\n")
+    url = serve(runner, "(() => {})();\n", timers=QUICK)
     item = f'#list [data-id="{creep.id}"]'
     line = f"document.querySelector('{item} .progress')"
     width, height = (int(n) for n in size.split(","))
     with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
         page.open(url)
+        tapped = time.monotonic()
         page.click(f"{item} form.remove button")
         assert page.wait(f"{line} !== null && !!{line}.querySelector('button.undo')")
         page.press("Enter")  # the focus is on Undo
         assert page.wait(f"{line}.textContent === 'Not removed'"), page.js(f"{line}.textContent")
-        time.sleep(5.5)  # past the five seconds
+        time.sleep(max(0.0, tapped + QUICK["undo"] / 1000 + 0.3 - time.monotonic()))  # past its seconds
         after = page.js(f"""(() => {{ const go = document.querySelector('{item} form.remove button');
             return {{ line: {line}.textContent, enabled: !go.disabled, focus: document.activeElement === go,
                       gone: document.querySelectorAll('.gone').length }}; }})()""")
     assert after == {"line": "Not removed", "enabled": True, "focus": True, "gone": 0}, after
     assert not any(b"confirm=1" in body for _, target, body in runner.posted), runner.posted
     assert runner.calls == [] and find_song(conn, creep.key) is not None
+
+
+def test_the_page_users_get_counts_five_seconds_then_asks_every_second_and_a_half(serve, cfg, conn, tmp_path):
+    # Its own timers, which the tests on real time shorten (QUICK), on Chromium's virtual clock: Remove counts its
+    # five seconds a second at a time, sends the removal once they are over, then asks how it goes every 1.5 s.
+    add_song(conn, "Radiohead", "Creep")
+    add_song(conn, "Oasis", "Wonderwall")
+    script = "(() => {\n" + WATCH + """
+const sent = [];
+const ticks = [];
+const real = window.fetch;
+window.fetch = (url, init) => {
+  sent.push([performance.now() - tapped, String(url), String((init && init.body) || "")]);
+  document.body.setAttribute("data-sent", JSON.stringify(sent));
+  return real(url, init);
+};
+new MutationObserver(() => {
+  const left = cardOf("Creep") ? cardOf("Creep").querySelector(".progress .left") : null;
+  if (!left || (ticks.length && ticks[ticks.length - 1][1] === left.textContent)) return;
+  ticks.push([performance.now() - tapped, left.textContent]);
+  document.body.setAttribute("data-ticks", JSON.stringify(ticks));
+}).observe(document.body, { subtree: true, childList: true, characterData: true });
+const tapped = performance.now();
+cardOf("Creep").querySelector("form.remove button").click();
+})();
+"""
+    url = serve(FakeCaracole(cfg), script)
+
+    dom = dump_dom(url, tmp_path)
+
+    assert '"timers"' not in dom  # the page's own
+    ticks = attribute(dom, "data-ticks")
+    assert [left for _, left in ticks] == ["5", "4", "3", "2", "1"], ticks
+    assert all(abs(at - 1000 * n) < 50 for n, (at, _) in enumerate(ticks)), ticks
+    sent = attribute(dom, "data-sent")
+    removals = [(at, body) for at, where, body in sent if where == "/remove"]
+    assert [round(at / 1000) for at, _ in removals] == [0, 5] and "confirm=1" in removals[1][1], removals
+    assert abs(removals[1][0] - 5000) < 50, removals
+    polls = [at for at, where, _ in sent if where.startswith("jobs.json")]
+    assert len(polls) >= 2 and all(abs(b - a - 1500) < 50 for a, b in zip(polls, polls[1:])), polls
+    assert polls[0] - removals[1][0] < 1600, (removals, polls)
+    assert "Removed" in attribute(dom, "data-seen")

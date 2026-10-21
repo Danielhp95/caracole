@@ -139,6 +139,17 @@ def test_the_busy_songs_and_the_queue_show_on_the_page(app, conn, queue):
     assert [(j["id"], j["songId"], j["line"]["text"]) for j in server["jobs"]] == [(1, creep.id, "Queued…")]
 
 
+def test_the_page_keeps_its_own_timers_unless_a_test_sets_them(app, cfg, conn, queue):
+    # The page's script asks /jobs.json every 1.5 s and counts Remove's five seconds (library.js); the tests that
+    # drive it on real time shorten both (``WebApp(timers=...)``), which caracole serve never sets
+    # (test_commands_serve.py), so the page users get carries none.
+    add_song(conn, "Radiohead", "Creep")
+    assert "timers" not in json.loads(JSON_BLOCK.search(text(get(app, "/"))).group(1))["server"]
+    quick = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok", timers={"poll": 100, "undo": 1000})
+    server = json.loads(JSON_BLOCK.search(text(get(quick, "/"))).group(1))["server"]
+    assert server["timers"] == {"poll": 100, "undo": 1000}
+
+
 def test_a_name_the_server_doesnt_answer_to_is_refused(app, conn):
     # DNS rebinding: another site's name pointed at 127.0.0.1.
     for host in ("evil.example", "evil.example:8737", "", "localhost:8737/x"):
@@ -2282,3 +2293,35 @@ def test_a_viewer_waits_for_signing_in_like_any_file(locked, conn, cfg):
     assert response.status == 401 and b"Palabras" not in response.body
     signed_in = get(locked, viewer, cookie=f"caracole_session={session_value('a-long-random-access-token')}")
     assert signed_in.status == 200 and b"Palabras" in signed_in.body
+
+
+def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_own():
+    # A route is a Route in its module's ROUTES and a line of its docstring: app.py gathers them, so a new
+    # route, or a new module of them, changes nothing there. No address is answered twice.
+    import importlib
+    import pkgutil
+
+    from caracole import web
+    from caracole.web.app import route_for, routes
+
+    names = sorted(m.name for m in pkgutil.iter_modules(web.__path__) if m.name.endswith("_routes"))
+    assert names == ["export_routes", "jobs_routes", "library_routes", "remove_routes", "review_routes",
+                     "search_routes", "songbook_routes"]
+    gathered = []
+    for name in names:
+        module = importlib.import_module(f"caracole.web.{name}")
+        # "GET  /, /index.html   what it is": each address the line starts with, to its "?" or "[".
+        listed = [(method, address.split("?")[0].split("[")[0])
+                  for method, addresses in re.findall(r"^\s*(GET|POST)\s+(/[^\s,]*(?:,\s*/[^\s,]*)*)", module.__doc__, re.M)
+                  for address in re.split(r",\s*", addresses)]
+        for route in module.ROUTES:
+            gathered.append((route.method, route.path))
+            path = route.path.rstrip("/") or "/"
+            assert any(method == route.method and (address == path or (address.endswith("…")
+                       and path.startswith(address[:-1]))) for method, address in listed), (name, route.path)
+    assert sorted(gathered) == sorted(routes()) and len(set(gathered)) == len(gathered)
+    assert route_for("GET", "/api/jobs/7").path == "/api/jobs/"  # under its address
+    assert route_for("GET", "/api/jobsx") is None and route_for("POST", "/songbook/nothing") is None
+    assert route_for("POST", "/songbook/make").page == "the library"
+    assert route_for("POST", "/lookup").page == "the page" and route_for("GET", "/jobs.json").script_only
+    assert route_for("POST", "/export").page == "the export page"

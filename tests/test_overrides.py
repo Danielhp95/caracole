@@ -95,6 +95,14 @@ def test_missing_file_is_empty(tmp_path):
     assert not o.pin_urls
 
 
+def test_a_reader_that_can_go_without_gets_none_for_a_file_that_cant_be_read(tmp_path):
+    from caracole.overrides import load_overrides_or_none
+
+    assert load_overrides_or_none(tmp_path / "nope.toml") == Overrides()  # no file: no overrides
+    assert load_overrides_or_none(write(tmp_path, '[ignore]\nsongs = ["Nickelback - Photograph"]\n')).ignore
+    assert load_overrides_or_none(write(tmp_path, "[[[ not toml\n")) is None
+
+
 def test_alias_accepts_list_and_canonicalizes(tmp_path):
     o = load_overrides(write(tmp_path, '[alias]\n"The Wailers" = ["the-wailers", "bob-marley-and-the-wailers"]\n'))
     assert o.alias["wailers"] == ("wailers", "bob-marley-the-wailers")

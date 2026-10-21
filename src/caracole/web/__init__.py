@@ -15,11 +15,18 @@ A small server from the standard library (``http.server``), in these parts:
   from a terminal, so the server is never more aggressive than the CLI.
 - status.py: the one line a request shows on its song's card and on /jobs,
   read from its job's steps and, once it is over, from the song's state.
-- app.py: the routes, as a function from a request to a response, and
-  server.py, which puts it on a socket; pages.py, the pages it writes itself.
+- app.py: the router, as a function from a request to a response, what
+  every route shares (the answers' shapes, ``Refused``, the database, the
+  queue) and the checks every request passes; server.py puts it on a socket.
+  Each area's routes are a module: library_routes.py (the library page,
+  requests, Fetch now), review_routes.py (the picker), jobs_routes.py (the
+  requests page, /jobs.json, /api/jobs), search_routes.py (the lookup page,
+  search as you type, lookups), remove_routes.py, songbook_routes.py and
+  export_routes.py (a sheet's PDF in the version its viewer was left in).
+  pages.py: the pages it writes itself.
 - songbooks.py: the songbook forms, each queued as its ``caracole songbook``
-  command. Each songbook's page is one of the pages caracole wrote that
-  app.py's ``written_pages`` serves.
+  command (songbook_routes.py). Each songbook's page is one of the pages
+  caracole wrote that app.py's ``written_pages`` serves.
 
 The server itself never takes caracole's lock. It reads the database, as
 ``caracole search`` does, and writes only wanted.txt, as ``caracole add`` does

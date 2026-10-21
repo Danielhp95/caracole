@@ -111,7 +111,7 @@ def _answer(cfg: Config, display: str, pick: str | None, seen: list[dict[str, st
     A song not found has no review, but ``pick`` may be one of what ``caracole search`` finds for
     it (``review.search_candidates``): that writes ``[match]`` alone. It holds caracole's lock from
     reading the song to rewriting the pages, as nothing waits for you here: what caracole serve's
-    picker runs (web/app.py). It matches again only the songs the answer can change: the song, whose
+    picker runs (web/review_routes.py). It matches again only the songs the answer can change: the song, whose
     ``[match]`` or ``[reject]`` it is, and, when it writes an ``[alias]``, every song with that artist
     among its artists (aliases apply by each artist's ``slug_key``, as ``overrides.add_alias`` keys them).
     """

@@ -1,4 +1,10 @@
-"""``/export``: a sheet's PDF in the version its viewer was left in (key, capo, mode, shapes, swaps).
+"""caracole serve's export page: a sheet's PDF in the version its viewer was left in (key, capo, mode, shapes,
+swaps), and Make this my version.
+
+    GET  /export?sheet=   the version a sheet viewer's address holds (``sheet``: the viewer's library path,
+                          then its address after #), with Make PDF and Make this my version
+    POST /export          ``caracole render --song --version`` queued (with ``mine``, ``--mine`` too), and
+                          back to the export page, which says how it goes and then links the PDF
 
 ``GET /export?sheet=<the viewer's library path>&<its address after #>`` names the version and offers Make
 PDF, a form that ``POST``s to ``/export`` with the form token like the others. That queues
@@ -22,72 +28,61 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from caracole.web import pages
-from caracole.web.jobs import Job, QueueFull
+from caracole.web.app import Response, Route, WebApp, html_response, redirect
+from caracole.web.jobs import Job
+from caracole.web.pages import Refused
 
 if TYPE_CHECKING:
     from caracole.songs import Song
-    from caracole.web.app import Response, WebApp
 
 MAX_QUERY = 2000  # characters: a version with every chord's shape and swap is a few hundred
 EXPORTING = "export:"  # a job's song_key, then the song's key and the version: never the song's own jobs'
 MINE = ":mine"  # after an export's song_key: making that version the song's own
 
+ROUTES = (
+    Route("GET", "/export", lambda app, asked: export_page(app, asked.target)),
+    Route("POST", "/export", lambda app, asked, form: export_post(app, form), page="the export page"),
+)
 
-class _Refused(Exception):
-    def __init__(self, status: int, title: str, message: str):
-        super().__init__(message)
-        self.status, self.title, self.message = status, title, message
+_NOT_AN_ADDRESS = Refused(400, "Not an address", "That address can't be read.")
 
 
 def export_page(app: WebApp, target: str) -> Response:
     """The page of ``GET /export?…`` (``target`` is the request's)."""
-    from caracole.web.app import _html, _message
-
     try:
         params = parse_qsl(urlsplit(target).query, keep_blank_values=True, errors="strict", max_num_fields=60)
     except (UnicodeDecodeError, ValueError):
-        return _message(400, "Not an address", "That address can't be read.")
+        raise _NOT_AN_ADDRESS from None
     sheet = next((v for k, v in params if k == "sheet"), "")
     job_id = next((v for k, v in params if k == "job"), None)
     shown = urlencode([(k, v) for k, v in params if k not in ("sheet", "job")])
     if any(_unreadable(v) for _, v in params):
-        return _message(400, "Not a version", "That version can't be read.")
-    try:
-        if job_id is not None and not (job_id.isascii() and job_id.isdigit() and len(job_id) < 12):
-            raise _Refused(400, "Not an address", "That address can't be read.")
-        song, version, label, folder, mine = _version(app, sheet, shown)
-    except _Refused as e:
-        return _message(e.status, e.title, e.message)
+        raise Refused(400, "Not a version", "That version can't be read.")
+    if job_id is not None and not (job_id.isascii() and job_id.isdigit() and len(job_id) < 12):
+        raise _NOT_AN_ADDRESS
+    song, version, label, folder, mine = _version(app, sheet, shown)
     job = app.queue.job(int(job_id)) if job_id is not None else None
     if job is not None and job.song_key not in (_job_key(song, version), _job_key(song, version) + MINE):
         job = None  # another export's: not this page's to show
     pdf = None
     if job is not None and job.state == "done":
         pdf = _own_pdf(app, song, sheet) if job.song_key.endswith(MINE) else _pdf(app, song, label)
-    return _html(200, _body(app.csrf, song, sheet, shown, label, job, pdf, folder, mine))
+    return html_response(200, _body(app.csrf, song, sheet, shown, label, job, pdf, folder, mine))
 
 
 def export_post(app: WebApp, form: dict[str, str]) -> Response:
     """``POST /export``: queue the export, and go to the page that shows it."""
-    from caracole.web.app import _message, _redirect
-
     sheet, asked = form.get("sheet", ""), form.get("v", "")
-    try:
-        song, version, _label, _folder, _mine = _version(app, sheet, asked)
-    except _Refused as e:
-        return _message(e.status, e.title, e.message)
+    song, version, _label, _folder, _mine = _version(app, sheet, asked)
     if form.get("mine") == "1":
         title, key = f"Make {song.display} your version", _job_key(song, version) + MINE
         steps = [("Making it your version", ("render", f"--song={song.display}", f"--version={version}", "--mine"))]
     else:
         title, key = f"Export {song.display}", _job_key(song, version)
         steps = [("Making the PDF", ("render", f"--song={song.display}", f"--version={version}"))]
-    try:
-        job, _ = app.queue.submit(title, key, steps, display=song.display, song_id=song.id)
-    except QueueFull:
-        return _message(503, "The queue is full", "The queue is full: try again once it empties.")
+    job, _ = app.submit(title, key, steps, display=song.display, song_id=song.id)
     query = urlencode([("sheet", sheet), *parse_qsl(asked, keep_blank_values=True), ("job", str(job.id))])
-    return _redirect(f"/export?{query}")
+    return redirect(f"/export?{query}")
 
 
 def _unreadable(text: str) -> bool:
@@ -102,9 +97,8 @@ def _job_key(song: Song, version: str) -> str:
 def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, bool]:
     """The song a viewer's path names, the version ``query`` holds as render.py writes it, its label, the
     song's folder in the library (as a path) and whether the version is the song's own (render.py
-    ``own_version``: its ``[version]``, else its ``[transpose]``, else as written); raises _Refused."""
+    ``own_version``: its ``[version]``, else its ``[transpose]``, else as written); raises Refused."""
     from caracole.library import song_dir
-    from caracole.overrides import OverridesError, load_overrides
     from caracole.render import RenderError, export_label, export_query, export_version, own_version, written_file
     from caracole.songs import list_songs
     from caracole.web.app import written_pages
@@ -115,41 +109,35 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
     except (UnicodeDecodeError, ValueError):
         readable = False
     if not readable or _unreadable(query):
-        raise _Refused(400, "Not a version", "That version can't be read.")
+        raise Refused(400, "Not a version", "That version can't be read.")
     parts = tuple(sheet.split("/"))
     if len(parts) < 2 or not sheet or any(p in ("", ".", "..") for p in parts) or parts[-1] not in written_pages():
-        raise _Refused(404, "Not found", "There's no such sheet in the library.")
-    try:
-        overrides = load_overrides(app.cfg.overrides_file)
-    except OverridesError as e:
-        raise _Refused(503, "overrides.toml can't be read", f"overrides.toml can't be read: {e}.") from e
+        raise Refused(404, "Not found", "There's no such sheet in the library.")
+    overrides = app.overrides()
     library = app.cfg.library_dir
-    try:
-        with closing(app._connect()) as conn:
-            song = next((s for s in list_songs(conn)
-                         if song_dir(library, s).relative_to(library).parts == parts[:-1]
-                         and written_file(conn, s.id, parts[-1]) is not None), None)
-            if song is None:
-                raise _Refused(404, "Not found", "There's no such sheet in the library.")
-            try:
-                v = export_version(query, overrides, song)
-                label = export_label(conn, app.cfg, song, v)
-            except RenderError as e:
-                raise _Refused(404, "No sheet to export", str(e)) from e
-    except (sqlite3.Error, OSError) as e:
-        raise _Refused(503, "The database can't be read", f"The database can't be read: {e}") from e
+    with app.db() as conn:
+        song = next((s for s in list_songs(conn)
+                     if song_dir(library, s).relative_to(library).parts == parts[:-1]
+                     and written_file(conn, s.id, parts[-1]) is not None), None)
+        if song is None:
+            raise Refused(404, "Not found", "There's no such sheet in the library.")
+        try:
+            v = export_version(query, overrides, song)
+            label = export_label(conn, app.cfg, song, v)
+        except RenderError as e:
+            raise Refused(404, "No sheet to export", str(e)) from e
     mine = export_query(own_version(overrides, song)) == export_query(v)  # where the song plays now
     return song, export_query(v), label, "/".join(quote(p) for p in parts[:-1]), mine
 
 
 def _pdf(app: WebApp, song: Song, label: str) -> str | None:
     """The export's PDF file name once it exists (render.py records it under its label)."""
+    from caracole.db import kv_get_json
     from caracole.library import song_dir
     from caracole.render import EXPORT_KV
-    from caracole.db import kv_get_json
 
     try:
-        with closing(app._connect()) as conn:
+        with closing(app.connect()) as conn:
             record = kv_get_json(conn, f"{EXPORT_KV}{song.id}")
     except (sqlite3.Error, OSError):
         return None

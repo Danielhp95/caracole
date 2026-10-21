@@ -545,7 +545,7 @@ with _common.exclusive(cfg, "run"):
     client = _common.make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
     client.get("https://tabs.ultimate-guitar.com/tab/1")
     out.write(f"first {time.time()}\n")
-    client.get("https://tabs.ultimate-guitar.com/tab/2")  # after a 4 s pause, handed over meanwhile
+    client.get("https://tabs.ultimate-guitar.com/tab/2")  # after a pause, handed over meanwhile
     out.write(f"second {time.time()} {client.handoffs}\n")
     client.close()
 """
@@ -559,9 +559,11 @@ def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, c
 
     from conftest import subprocess_pythonpath
 
+    pause = 1.5  # the run's, between two requests to UG: six HANDOFF_SLICEs
     config = tmp_path / "caracole.toml"
     config.write_text(f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
-                      f'library_dir = "{cfg.library_dir}"\n[providers.ug]\ndelay = [4, 4]\n', encoding="utf-8")
+                      f'library_dir = "{cfg.library_dir}"\n[providers.ug]\ndelay = [{pause}, {pause}]\n',
+                      encoding="utf-8")
     log = tmp_path / "holder.log"
     env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(Path(__file__).parents[1] / "src")}
     holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(config), str(log)], env=env)
@@ -572,15 +574,15 @@ def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, c
         asked = time.time()
         with exclusive(cfg, "get Oasis - Wonderwall", interactive=True):
             took = time.time()
-            time.sleep(0.5)
+            time.sleep(0.2)
         released = time.time()
         assert holder.wait(30) == 0
     finally:
         holder.kill()
     first, second = log.read_text().splitlines()
-    assert took - asked < 1.5  # not the 4 s the run had left to pause, let alone its whole run
+    assert took - asked < pause - 0.5  # not the rest of the run's pause, let alone its whole run
     _, sent, handoffs = second.split()
-    assert float(sent) >= released + 3.5  # the run waited a whole pause again after the lookup
+    assert float(sent) >= released + pause - 0.1  # the run waited a whole pause again after the lookup
     assert int(handoffs) == 1
 
 

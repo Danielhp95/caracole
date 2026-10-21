@@ -1,0 +1,126 @@
+
+.songbooks { margin: 8px 0 0; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.songbooks > details > summary { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px;
+  cursor: pointer; font-weight: 650; list-style: none; }
+.songbooks > details > summary::-webkit-details-marker { display: none; }
+.songbooks .sb-icon { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  background: var(--raised); color: var(--accent); font-size: 1rem; line-height: 1; }
+.songbooks summary .n { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--raised);
+  color: var(--muted); font-size: .78rem; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+.sb-list { display: grid; gap: 12px; padding: 0 16px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.sb-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--border);
+  border-radius: 14px; background: var(--bg); scroll-margin: 84px 0 16px; }
+.sb-card h2 { margin: 0; font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
+.sb-songs { margin: 0; padding: 0; list-style: none; }
+.sb-songs li { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 2px 0;
+  border-top: 1px solid var(--border); }
+.sb-n { flex: none; min-width: 2ch; color: var(--muted); font-size: .8rem; text-align: right;
+  font-variant-numeric: tabular-nums; }
+.sb-names { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sb-names .t { font-weight: 600; }
+.sb-names .a, .sb-names .why { color: var(--muted); font-size: .88rem; }
+.sb-songs .missing .t { color: var(--muted); font-weight: 500; }
+/* A lookup of the song: how it goes, on one line whatever it says, so that the songbook keeps its height. */
+.sb-names .progress { display: block; overflow: hidden; font-size: .8rem; white-space: nowrap; text-overflow: ellipsis; }
+.sb-names .why { display: block; font-size: .8rem; font-style: italic; }
+.sb-tools { flex: none; display: flex; gap: 4px; }
+.sb-tools form, .sb-more form { margin: 0; }
+.sb-btn { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 1rem;
+  cursor: pointer; }
+.sb-btn:hover { border-color: var(--border-strong); }
+/* While a change of the songbook is on its way (its line under its name says how it goes), its buttons wait. */
+.sb-btn:disabled { color: var(--muted); border-style: dashed; cursor: default; }
+.sb-gone { align-self: start; border-style: dashed; }
+.sb-gone h2 { color: var(--muted); }
+.sb-more > summary { min-height: 40px; align-content: center; color: var(--muted); font-size: .85rem; font-weight: 600;
+  cursor: pointer; }
+.sb-more form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 8px; }
+.sb-more .f { flex: 1 1 180px; }
+.sb-sure { display: flex; flex: 1 1 100%; align-items: center; gap: 10px; min-height: 44px; font-size: .9rem; }
+.sb-sure input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.sb-error { margin: 0 16px 16px; color: var(--failed); font-weight: 600; overflow-wrap: anywhere; }
+.pick { display: none; }
+.selecting .card .mono { display: none; }
+.selecting .pick { flex: none; position: relative; display: grid; place-items: center; width: 44px; height: 44px;
+  border-radius: 12px; border: 2px solid var(--control-edge); background: var(--surface); cursor: pointer; }
+.pick input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.pick:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.pick-n { font-weight: 750; font-variant-numeric: tabular-nums; }
+/* Picked, while selecting: out of the mode the picks wait, unseen, for when it is on again. */
+.selecting .card.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+/* While selecting, a card or a row is one target: a tap anywhere on it lands on it, and the Select script
+   picks it or lets it go; only its box takes a tap of its own. What opens a file or acts on the song is put
+   away, and so are the lines that say what to do about its match and the links of its request's line (which
+   still says how the request goes), so that a pick never opens or fetches anything; a key pressed on what
+   stays (its artist's filter) still does what it says. */
+.selecting [data-picker] { cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none;
+  user-select: none; }
+.selecting [data-picker] * { pointer-events: none; }
+.selecting [data-picker] .pick, .selecting [data-picker] .pick * { pointer-events: auto; }
+.selecting [data-picker] > .actions, .selecting [data-picker] > .more, .selecting [data-picker] > .foot,
+.selecting [data-picker] > .picker, .selecting [data-picker] > .row-action, .selecting [data-picker] > .row-more,
+.selecting [data-picker] > .row-panel, .selecting [data-picker] > .note, .selecting [data-picker] > .pick-hint,
+.selecting [data-picker] .filter-mark, .selecting [data-picker] .progress a,
+.selecting [data-picker] .progress .dot { display: none; }
+.selecting [data-picker] .artist { min-height: 0; }  /* no target of its own: the card is */
+/* A row's box stands where its source's mark was, beside the title and the artist (both lines on a phone). */
+.selecting .row { grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "src title" "src sub"; }
+.selecting .row > .source { display: none; }
+.selecting .row > .pick { grid-area: src; align-self: center; }
+.selecting .row.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
+@media (min-width: 900px) {
+  .selecting .row { grid-template-columns: 44px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 14rem);
+    grid-template-areas: "src title artist meta"; }
+}
+.pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.selecting .page { padding-bottom: 104px; }
+.selecting:has(.pickbar.open, .pick-command:not([hidden])) .page { padding-bottom: 300px; }
+.pickbar { position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--border);
+  background: var(--surface); box-shadow: 0 -6px 24px rgb(0 0 0 / 14%);
+  padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left)); }
+/* One line: the way out, the count, then the songbook's menu, its name and the buttons; on a phone a
+   "Make songbook…" button in their place, which unfolds them under the line (.open), the bar growing upwards. */
+.pickbar-in { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-width: 1320px; margin: 0 auto; }
+.pick-done { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-left: -8px; padding: 0;
+  border: 0; border-radius: 12px; background: none; color: var(--muted); font: inherit; font-size: 1.5rem;
+  line-height: 1; cursor: pointer; }
+.pick-done:hover { background: var(--raised); color: var(--text); }
+.pick-count { margin: 0 auto 0 0; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pick-open { display: none; }
+.pickbar-form { display: flex; flex: 1 1 340px; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+.pickbar-form label { display: flex; flex: 1 1 150px; min-width: 0; }
+.pickbar-form input, .pickbar-form select { width: 100%; min-width: 0; height: 44px; padding: 0 10px; border-radius: 10px;
+  border: 1px solid var(--control-edge); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
+.pick-error { flex-basis: 100%; margin: 0; color: var(--failed); font-size: .85rem; }
+.pick-error:empty { display: none; }
+/* The file's command to run: folded, on one line beside Copy; unfolded, it scrolls within the bar. */
+.pick-command { flex-basis: 100%; display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.pick-command details { flex: 1 1 0; min-width: 0; }
+.pick-command summary { display: flex; align-items: center; min-height: 36px; color: var(--muted); font-size: .88rem;
+  font-weight: 600; list-style: none; cursor: pointer; }
+.pick-command summary::-webkit-details-marker { display: none; }
+.pick-command summary::before { content: "›"; flex: none; display: inline-block; width: 1em; font-size: 1.15rem;
+  line-height: 1; text-align: center; }
+.pick-command details[open] > summary::before { transform: rotate(90deg); }
+.pick-command .hint { margin-top: 2px; }
+.pick-command code { display: block; max-height: 30vh; margin-top: 4px; padding: 8px 10px; overflow-y: auto;
+  user-select: all; -webkit-user-select: all; }
+.pick-command .btn { flex: none; }
+@media (max-width: 719px) {
+  .pick-open { display: inline-flex; }
+  .pickbar:not(.open) .pickbar-form, .pickbar:not(.open) .pick-command { display: none; }
+  .pickbar-form { flex-basis: 100%; }
+  /* Unfolded, the button is a caret that folds the fields away: the bar's one primary button makes the songbook. */
+  .pickbar.open .pick-open { position: relative; width: 44px; min-height: 44px; padding: 0; }
+  .pickbar.open .pick-open .pick-open-text { position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; }
+  .pickbar.open .pick-open::after { content: ""; width: 12px; height: 7px; background: currentColor;
+    clip-path: polygon(0 0, 100% 0, 50% 100%); }
+}
+@media (pointer: coarse) {
+  .sb-more > summary, .pick-command summary { min-height: 44px; }
+}

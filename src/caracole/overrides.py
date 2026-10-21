@@ -329,6 +329,14 @@ def load_overrides(path: Path) -> Overrides:
         raise OverridesError(f"{path}: {e}") from e
 
 
+def load_overrides_or_none(path: Path) -> Overrides | None:
+    """overrides.toml for a reader that does without it: None when it can't be read (``load_overrides``)."""
+    try:
+        return load_overrides(path)
+    except OverridesError:
+        return None
+
+
 def _parse(data: Mapping[str, Any]) -> Overrides:
     unknown = sorted(set(data) - _TABLES)
     if unknown:
