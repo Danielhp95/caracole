@@ -551,6 +551,10 @@ def test_an_answer_just_revalidated_is_as_old_as_its_304(tmp_path):
     assert revalidated.status == 304 and revalidated.fetched_at == "2026-11-27T00:00:00Z"
     assert not stale(revalidated, clock[0], timedelta(days=30))
     assert len(rec.requests) == 2
+    # The cached copy is as old as the 304 too: a get with a max_age serves it without asking.
+    kept = client.get(url, max_age=timedelta(days=30))
+    assert kept.from_cache and kept.fetched_at == "2026-11-27T00:00:00Z" and kept.content == b"<urlset/>"
+    assert kept.headers == {"etag": '"v1"'} and len(rec.requests) == 2
 
 
 def test_uncached_conditional_get_is_plain(tmp_path):
