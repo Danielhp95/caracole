@@ -11,7 +11,6 @@
   const list = byId("list");
   const input = byId("q");
   const clear = byId("clear");
-  const allButton = byId("all");
   const barStatus = byId("bar-status");
   const results = byId("results");
   const found = byId("found");
@@ -107,6 +106,14 @@
   };
   // Whether a key is typed ("a minor", not "am"): it filters your songs alone, as the sites' indexes know no keys.
   const keyed = (text) => parseQuery(text).keys.length > 0;
+  const normal = (text) => String(text).trim().replace(/\s+/g, " ");
+  // Whether the sites can be searched for what is typed: words, and no key. Served, they are searched as you type
+  // once there is enough to search: three letters or digits, two with a Chinese character, as /api/search looks
+  // nowhere for fewer.
+  const sitesCan = (text) => Boolean(normal(text)) && !keyed(text);
+  const HAN = /\p{Script=Han}/u;
+  const typedEnough = (text) => (normal(text).match(/[\p{L}\p{N}]/gu) || []).length >= (HAN.test(text) ? 2 : 3);
+  const searchesAsYouType = (text) => Boolean(server) && sitesCan(text) && typedEnough(text);
   const songKeys = songs.map((s) => keyId(s.key));
   // Whether song i matches what is typed: each word in its search text, or its title's initials whole, and
   // each key typed.
@@ -148,8 +155,8 @@
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
   // ROWS_SCRIPT's, which the lookup page shares
-  const { sourceMark, link, resultRow, titleLink, artistFilter, button, many, ugHit, artistHit, siteHit, siteArtist,
-    siteArtistSongs, siteUnlisted, readArtistPage, readOutcome, prose } = caracoleRows(ICONS);
+  const { sourceMark, link, resultRow, artistFilter, button, many, indexLine, titleLine, siteUnlisted, readArtistPage,
+    readOutcome, prose } = caracoleRows(ICONS);
   // A song's file from where its sheet came from has no mark of its own: its line's says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -810,13 +817,17 @@
     return lines.get(i);
   };
   // An artist's group: a header that names them and counts the songs of theirs you have, "Soda Stereo · you have
-  // 2" (``counts.mine``: all of them, whatever the search or a filter leaves out), then their lines. The name,
-  // once you have songs of theirs, shows those alone.
+  // 2" (``counts.mine``: all of them, whatever the search or a filter leaves out), and, while the served page searches
+  // the sites, the songs each site's index lists of theirs, "· UG 96 · LaCuerda 140" (``counts.ug``,
+  // ``counts.lacuerda``; ``counts.note``, any other words); then their lines. The name, once you have songs of theirs,
+  // shows those alone (``artist.filter``, their sortArtist, else ``artist.key``).
   let groupSerial = 0;
   const artistGroup = (artist, items, counts) => {
     const a = artist && typeof artist === "object" ? artist : { name: artist };
     const name = String(a.name || "");
-    const mine = Number(counts && counts.mine) || 0;
+    const filter = String(own.call(a, "filter") ? a.filter : a.key || "");
+    const c = counts && typeof counts === "object" ? counts : {};
+    const mine = Number(c.mine) || 0;
     const section = el("section", "artist");
     section.dataset.artist = String(a.key || "");
     section.tabIndex = -1;  // the A-Z strip moves the focus to it
@@ -824,11 +835,14 @@
     groupSerial += 1;
     heading.id = "artist-" + groupSerial;
     section.setAttribute("aria-labelledby", heading.id);
-    heading.appendChild(a.key && mine ? artistFilter(name, name, () => {
-      setArtist(String(a.key));
+    heading.appendChild(filter && mine ? artistFilter(name, name, () => {
+      setArtist(filter);
       window.scrollTo(0, 0);
     }) : el("span", "artist-name", name));
-    if (mine) heading.appendChild(el("span", "artist-counts", " · you have " + mine));
+    const said = [mine ? "you have " + mine : "", Number(c.ug) ? "UG " + Number(c.ug).toLocaleString("en") : "",
+      Number(c.lacuerda) ? "LaCuerda " + Number(c.lacuerda).toLocaleString("en") : "", c.note ? String(c.note) : ""]
+      .filter(Boolean);
+    if (said.length) heading.appendChild(el("span", "artist-counts", " · " + said.join(" · ")));
     section.appendChild(heading);
     const box = el("div", "lines");
     for (const item of listOf(items)) box.appendChild(item);
@@ -840,7 +854,8 @@
 
   // artist: one artist's songs alone, by sortArtist, which a search for the name wouldn't give
   // ("Queen" also finds "Dancing Queen").
-  // all: the search of the sites (served; on the file, the line that searches them), under the bar.
+  // all: the search of the sites under the bar: served, as you type (searchesAsYouType); on the file, the line that
+  // searches them, on Enter.
   const state = { q: "", show: "all", sort: "artist", artist: "", key: "", all: false };
   const artistName = (key) => {
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
@@ -853,7 +868,7 @@
     if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
     if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
-    state.all = params.get("all") === "1" && Boolean(state.q.trim()) && !keyed(state.q);
+    state.all = params.get("all") === "1" && sitesCan(state.q) && (!server || typedEnough(state.q));
   } catch (err) {
     // A malformed address: start from the defaults.
   }
@@ -1068,8 +1083,8 @@
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
       if (!query.keys.length && server) {  // the offline indexes have no keys
-        const go = button("Search the sites for “" + state.q.trim() + "”", "primary", () => enterAll());
-        list.appendChild(go);
+        // Back from the sites' results with Escape: the way to them again.
+        if (typedEnough(state.q)) list.appendChild(button("Search the sites for “" + state.q.trim() + "”", "primary", () => enterAll()));
       } else if (!query.keys.length) {
         list.appendChild(fileAnswer(state.q.trim()));
         answerInList = true;
@@ -1121,10 +1136,14 @@
   input.value = state.q;
   input.addEventListener("input", () => {
     state.q = input.value;
-    if (state.all && (!state.q.trim() || keyed(state.q))) {  // nothing the sites can search: your songs again
+    focusFirst = false;  // an Enter before: what it waited for is typed over
+    // Served, typing searches the sites too, once there is enough to search; the file's Enter shows its line.
+    const sites = server ? searchesAsYouType(state.q) : state.all && sitesCan(state.q);
+    if (state.all && !sites) {  // nothing the sites can search: your songs again
       leaveAll(false);
       return;
     }
+    state.all = sites;
     update();
   });
   clear.addEventListener("click", () => {
@@ -1149,13 +1168,13 @@
     save();
   });
 
-  // --- the bar: your songs as you type, the sites on Enter ---------------------------------------
-  // Typing filters your songs, here, asking nothing. Enter, or Search all, searches the sites too: served, one
-  // list under the bar, your songs first (as their own rows), then what caracole's offline indexes hold of
-  // Ultimate Guitar, LaCuerda, gtptabs.com and MuseScore (/api/search), following what you type a moment after you
-  // stop, the newest query alone; on the file, which can ask nothing, the line that searches them. Enter
-  // never spends a request: only a result's Get it does. Escape goes back to your songs.
-  const normal = (text) => String(text).trim().replace(/\s+/g, " ");
+  // --- the bar: your songs and every index as you type ------------------------------------------
+  // Typing filters your songs, here, asking nothing. Served, it searches the sites too (searchesAsYouType), a moment
+  // after the last key: one list under the bar, in the list's place, its tools with it, until Escape: your songs that
+  // match, then what caracole's offline indexes hold of Ultimate Guitar, LaCuerda, gtptabs.com and MuseScore
+  // (/api/search), under the same artist headers (mergeSites), the newest query's answer alone, the older one staying
+  // until it comes. Enter moves the focus to the first result: it never spends a request, only a result's Get it
+  // does. On the file, which can ask nothing, Enter shows the line that searches the sites.
   const say = (text) => {
     if (barStatus.textContent === text) return;
     barStatus.textContent = text;
@@ -1163,16 +1182,15 @@
   };
   const drawBar = (none, key) => {
     const q = normal(state.q);
-    allButton.classList.toggle("primary", Boolean(q) && none && !key);
-    allButton.disabled = key;
-    if (key) allButton.title = "The sites' indexes know no keys";
-    else allButton.removeAttribute("title");
     if (server && state.all) return;  // the search of the sites says how it goes
-    if (!q) say(server ? "Filter your songs; Enter searches the sites too" : "Filter your songs as you type");
+    if (!q) say(server ? "Type to search your songs and the sites" : "Filter your songs as you type");
     else if (key) say(none ? "None of yours match: the sites know no keys" : "A key filters your songs alone: the sites know no keys");
-    else if (none) say(server ? "None of yours match: Enter searches the sites" : "None of yours match: see the line below");
-    else if (!server && state.all) say("The sites need caracole serve: run the line below");
-    else say(server ? "Enter or Search all looks on the sites too" : "Enter or Search all: the line that searches the sites");
+    else if (server && !typedEnough(q)) say(none ? "None of yours match: three letters search the sites too"
+      : "Three letters or more search the sites too");
+    else if (server) say(none ? "None of yours match: Enter searches the sites" : "Your songs alone: Enter searches the sites too");
+    else if (none) say("None of yours match: see the line below");
+    else if (state.all) say("The sites need caracole serve: run the line below");
+    else say("Enter: the line that searches the sites");
   };
   // Each word in single quotes, as the Select bar copies its command: on the file, Copy selects it too.
   const copyText = (code, copy) => {
@@ -1203,22 +1221,18 @@
     return box;
   };
 
-  const MINE_SHOWN = 5;  // your songs at the top of the results; the grid has them all
+  const MINE_SHOWN = 5;  // your songs in the results; the list has them all
   const SEARCH_PAUSE = 150;  // ms after the last key before the sites are searched
-  const mineBox = el("div", "mine");
-  const sitesBox = el("div", "sites");
-  const group = (title, rows) => {
-    const box = el("div", "rows");
-    for (const row of rows) box.appendChild(row);
-    return [el("h2", "group", title), box];
-  };
+  const allMine = el("p", "all-mine");
+  const groupsBox = el("div", "groups");
+  const notesBox = el("div", "notes");
   let asking = null;  // the search of the sites on its way, to abort
   let asked = 0;  // the newest search sent: an older one's answer is dropped
   let askTimer = 0;
   let askedFor = null;  // the query the newest search was sent for
-  let answer = null;  // the answer on the screen, and its query
-  let close = { q: null, ids: [] };  // your songs the server found (typos and all) for a query
-  // Until the first answer since Enter, what goes under the results (the request form, the footer) waits too:
+  let answer = null;  // the answer on the screen: { data, q, model } (mergeSites)
+  let focusFirst = false;  // Enter before the query's answer: the focus goes to its first result once it is drawn
+  // Until the first answer since the results opened, what goes under them (the request form, the footer) waits too:
   // shown at once, the answer would only push it down.
   let waiting = true;
   const heard = () => {
@@ -1229,27 +1243,284 @@
   let prefill = () => {};
   let getIt = () => {};
   let later = () => {};
+  let addAgain = () => {};
+  const objects = (value) => listOf(value).filter((x) => x && typeof x === "object");
+  // The artist part of a song's identity key: the header its line shares with the sites' rows of its artist.
+  const artistKeyOf = (s) => String((s && s.identity) || "").split("/")[0] || "~" + String((s && s.sortArtist) || "");
+  const titleKeyOf = (s) => String((s && s.identity) || "").split("/").slice(1).join("/");
 
-  // Your songs that match what is typed, whatever the buttons show: the page's own lines, with all they offer;
-  // then the server's close matches the filter missed.
-  const drawMine = (query) => {
-    const mine = ORDERS[state.sort].filter(typedMatch(query));
-    const q = normal(state.q);
-    const extra = close.q === q ? close.ids.map((id) => byIndex.get(id))
-      .filter((i) => i !== undefined && mine.indexOf(i) < 0).slice(0, Math.max(0, MINE_SHOWN - mine.length)) : [];
-    mineBox.textContent = "";
-    if (mine.length) {
-      mineBox.append(...group("In your library · " + mine.length, mine.slice(0, MINE_SHOWN).map(lineOf)));
-      if (mine.length > MINE_SHOWN) {
-        const every = el("p", "all-mine");
-        every.appendChild(button("All " + mine.length + " of your songs", "small", () => leaveAll(true)));
-        mineBox.appendChild(every);
+  // The answer's artists and songs, put together by artist and by song, in the order the answer ranks them: the
+  // removed songs it matches first (songs you had), then LaCuerda's artists and songs when it alone has the artist the
+  // query names (``lacuerda_leads``), the artists the query names when one leads, Ultimate Guitar's songs, its
+  // artists otherwise, LaCuerda's, gtptabs.com's songs; MuseScore's pages, titles alone, apart. An artist's group is
+  // keyed by the artist part of its rows' identity keys (``artist_key``; an artist's ``group_key``), a row of a song of
+  // yours by your song's artist (``song``, ``same_artist``) putting its artist's rows under your artist (UG's "Song
+  // Dongye (宋冬野)" is your 宋冬野); within it, a song (``title_key``) is one item, which each site's row of it is on.
+  const mergeSites = (data) => {
+    const model = { groups: new Map(), order: [], items: new Map(), lines: new Map(), alias: new Map(),
+      titles: objects(data.musescore), notes: null };
+    const ugArtists = objects(data.artists);
+    const lcArtists = objects(data.lacuerda_artists);
+    for (const row of [...objects(data.index), ...objects(data.gtptabs), ...objects(data.lacuerda),
+      ...ugArtists.flatMap((a) => objects(a.top)), ...lcArtists.flatMap((a) => objects(a.top))]) {
+      const i = yourSong(row);
+      if (i !== undefined && row.same_artist === true && row.artist_key && !model.alias.has(String(row.artist_key))) {
+        model.alias.set(String(row.artist_key), artistKeyOf(songs[i]));
       }
     }
-    if (extra.length) {
-      mineBox.append(...group(mine.length ? "Close to it, in your library" : "In your library, close to it",
-        extra.map(lineOf)));
+    const leads = data.lacuerda_leads === true;
+    const lacuerda = [...lcArtists.map((a) => ["artist", "lacuerda", a]),
+      ...objects(data.lacuerda).map((h) => ["song", "lacuerda", h])];
+    const named = ugArtists.map((a) => ["artist", "ug", a]);
+    for (const [kind, source, row] of [
+      ...objects(data.removed).map((r) => ["song", "removed", r]),
+      ...(leads ? lacuerda : []),
+      ...(data.lead === "artist" ? named : []),
+      ...objects(data.index).map((h) => ["song", "ug", h]),
+      ...(data.lead === "artist" ? [] : named),
+      ...(leads ? [] : lacuerda),
+      ...objects(data.gtptabs).map((h) => ["song", "gtptabs", h]),
+    ]) {
+      if (kind === "artist") addArtist(model, source, row);
+      else addSong(model, source, row);
     }
+    return model;
+  };
+  const yourSong = (row) => (row.song === null || row.song === undefined ? undefined : byIndex.get(Number(row.song)));
+  const groupOf = (model, key, name) => {
+    let g = model.groups.get(key);
+    if (!g) {
+      g = { key, name: String(name || ""), ug: null, lacuerda: null, items: [], ugListed: 0, ugOffset: 0,
+        lcListed: false, tail: null };
+      model.groups.set(key, g);
+      model.order.push(key);
+    }
+    return g;
+  };
+  // An artist the query names (``source``'s): their group's header counts their songs there, and their most tabbed (or
+  // most popular) songs are its first lines.
+  const addArtist = (model, source, a) => {
+    const g = groupOf(model, model.alias.get(String(a.group_key)) || String(a.group_key || ""), a.artist);
+    if (!g[source]) g[source] = a;
+    for (const t of objects(a.top)) addSong(model, source, t, g);
+    if (source === "ug") g.ugListed = Math.max(g.ugListed, objects(a.top).length);
+  };
+  // A site's row of a song, on the song's item in its artist's group (``into``, for an artist's songs), made the first
+  // time; an item drawn already is drawn again with it, unless its line shows a request.
+  const addSong = (model, source, row, into) => {
+    const i = yourSong(row);
+    const g = i !== undefined ? groupOf(model, artistKeyOf(songs[i]), songs[i].artist)
+      : into || groupOf(model, model.alias.get(String(row.artist_key)) || String(row.artist_key || ""), row.artist);
+    const key = g.key + "/" + (i !== undefined ? titleKeyOf(songs[i]) : String(row.title_key || ""));
+    let item = model.items.get(key);
+    if (!item) {
+      item = { key, mine: undefined, ug: null, lacuerda: null, gtptabs: null, removed: null };
+      model.items.set(key, item);
+      g.items.push(item);
+    }
+    if (i !== undefined) item.mine = i;
+    if (!item[source]) {
+      item[source] = row;
+      const drawn = model.lines.get(key);
+      if (drawn && !drawn.querySelector(".progress")) model.lines.delete(key);
+    }
+    return item;
+  };
+  const lineOfItem = (model, item) => {
+    if (!model.lines.has(item.key)) model.lines.set(item.key, indexLine(item, { get: getIt, later, again: addAgain }));
+    return model.lines.get(item.key);
+  };
+
+  // An artist's group's foot, made once: "+ 57 more by Estopa" (the rest of their songs on Ultimate Guitar, fifty at a
+  // time, from /api/artist), "+ 3 more by Estopa on LaCuerda" (the rest the index holds of theirs), or, for an artist
+  // whose page caracole has never read, the offer to read it. None when there is nothing more: null.
+  const tailOf = (m) => {
+    if (!m.tail) {
+      m.tail = { box: el("div", "group-tail"), ug: null, lc: null, offer: null };
+      if (m.ug) {
+        m.tail.ug = button("", "small more-by", () => moreOf(m, "ug"));
+        m.tail.box.appendChild(m.tail.ug);
+      }
+      if (m.lacuerda && Number(m.lacuerda.known) > 0) {
+        m.tail.lc = button("", "small more-by", () => moreOf(m, "lacuerda"));
+        m.tail.box.appendChild(m.tail.lc);
+      } else if (m.lacuerda) {
+        m.tail.offer = readOffer(m);
+        m.tail.box.appendChild(m.tail.offer);
+      }
+    }
+    const listed = (source) => m.items.filter((item) => item[source]).length;
+    const more = (go, left, text, aria) => {
+      if (!go) return;
+      if (left <= 0) {
+        go.remove();
+        return;
+      }
+      go.textContent = "+ " + left.toLocaleString("en") + " more by " + text;
+      go.setAttribute("aria-label", aria(left));
+    };
+    more(m.tail.ug, Number(m.ug && m.ug.songs) - m.ugListed, m.name, (n) => "List " + n + " more songs by " + m.name +
+      " on Ultimate Guitar");
+    more(m.tail.lc, m.lcListed ? 0 : Number(m.lacuerda && m.lacuerda.known) - listed("lacuerda"), m.name + " on LaCuerda",
+      (n) => "List " + n + " more songs by " + m.name + " on LaCuerda");
+    return m.tail.box.childNodes.length ? m.tail.box : null;
+  };
+  // "+ N more": the artist's next songs, in their group, each a line as the others are; the focus stays on the button,
+  // or, once it is gone, goes to the first song it listed.
+  const moreOf = (m, source) => {
+    const was = answer;
+    const go = source === "ug" ? m.tail.ug : m.tail.lc;
+    const before = new Set(m.items);
+    go.disabled = true;
+    say("Listing " + m.name + "'s songs…");
+    const listing = source === "ug" ? artistPage(String(m.ug.artist_key || ""), m.ugOffset)
+      : sitePage({ slug: String(m.lacuerda.slug || "") });
+    listing.then((page) => {
+      go.disabled = false;
+      if (!page || answer !== was || !state.all) return;
+      const got = objects(page.songs);
+      if (source === "ug") {
+        for (const h of got) addSong(was.model, "ug", h, m);
+        m.ugOffset += got.length;
+        m.ugListed = got.length ? Math.max(m.ugListed, m.ugOffset) : Number(m.ug.songs);
+        say(m.name + ": " + many(page.total, "song") + " on Ultimate Guitar");
+      } else {
+        listLaCuerda(m, page);
+      }
+      drawGroups();
+      const first = m.items.find((item) => !before.has(item));
+      const line = first ? (first.mine !== undefined ? lines.get(first.mine) : was.model.lines.get(first.key)) : null;
+      if (go.isConnected) go.focus();
+      else if (line && line.isConnected) line.focus();
+    });
+  };
+  // A LaCuerda artist's songs the index holds (/api/artist?lacuerda=), all of them, in their group.
+  const listLaCuerda = (m, page) => {
+    for (const h of objects(page.songs)) addSong(answer.model, "lacuerda", h, m);
+    m.lcListed = true;
+    if (m.tail && m.tail.offer) {
+      m.tail.offer.remove();
+      m.tail.offer = null;
+    }
+    say(String(page.artist) + ": " + many(page.total, "song") + " on LaCuerda");
+  };
+  // An artist whose page caracole has never read: how many songs LaCuerda lists, and the button that reads it (a
+  // request, a job of its own), then lists them in their group.
+  const readOffer = (m) => {
+    const name = String(m.lacuerda.artist || m.name);
+    const box = el("div", "read-page");
+    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on LaCuerda yet, which lists " +
+      many(m.lacuerda.songs, "song") + ". Reading it is one request to LaCuerda, at a lookup's pace."));
+    box.appendChild(button("Read their page", "small primary", (e) => readThenShow({ slug: String(m.lacuerda.slug || "") },
+      e.currentTarget, box, (page) => {
+        listLaCuerda(m, page);
+        drawGroups();
+      }), "Read the page of " + name + " on LaCuerda"));
+    return box;
+  };
+  // A name LaCuerda's index has no artist by, read by that name (the offer under the groups): their group, first.
+  const readByName = (model, offer) => (page) => {
+    const g = groupOf(model, String(page.group_key || ""), page.artist);
+    g.lacuerda = { artist: page.artist, slug: page.slug, songs: page.listed, known: page.total };
+    model.order.splice(model.order.indexOf(g.key), 1);
+    model.order.unshift(g.key);
+    listLaCuerda(g, page);
+    offer.remove();
+    model.notes = model.notes.filter((node) => node !== offer);
+    drawGroups();
+  };
+
+  // What the results show now: your songs that match what is typed, whatever the buttons show (not one removed since
+  // the page loaded: the answer has it as removed, with Add again), then the server's close matches the filter missed
+  // (MINE_SHOWN in all, then All N of your songs), and the answer's groups, under one header
+  // an artist: yours first, A to Z, then the answer's, in its order. A song of yours is its own line, with all it
+  // offers, wherever the answer has it; a song of the sites, an index line (indexLine), the same node from one draw
+  // to the next while the answer stands, so that what it shows stays.
+  const drawGroups = () => {
+    const model = answer && answer.model;
+    const q = normal(state.q);
+    const fits = typedMatch(parseQuery(state.q));
+    const local = ORDERS.artist.filter((i) => counted(songs[i]) && fits(i));
+    const close = answer && answer.q === q ? listOf(answer.data.library).map((h) => byIndex.get(Number(h && h.id)))
+      .filter((i) => i !== undefined && local.indexOf(i) < 0) : [];
+    const mine = local.concat(close);
+    const shown = mine.slice(0, MINE_SHOWN);
+    const groups = new Map();
+    const at = (key) => {
+      if (!groups.has(key)) groups.set(key, { mine: [], model: null });
+      return groups.get(key);
+    };
+    for (const i of shown) at(artistKeyOf(songs[i])).mine.push(i);
+    if (model) for (const key of model.order) at(key).model = model.groups.get(key);
+    const yours = new Map();  // how many songs of each artist you have, the songs the search leaves out too
+    const named = new Map();  // a song of each artist you have, which names them and filters by them
+    for (const s of songs.concat(Array.from(arrived.values())).filter(counted)) {
+      yours.set(artistKeyOf(s), (yours.get(artistKeyOf(s)) || 0) + 1);
+      if (!named.has(artistKeyOf(s))) named.set(artistKeyOf(s), s);
+    }
+    const drawn = new Set(shown);
+    const keys = new Set(shown.map((i) => String(songs[i].identity || "")));
+    const box = document.createDocumentFragment();
+    for (const [key, g] of groups) {
+      const items = [];
+      const theirs = g.mine.slice();
+      for (const item of g.model ? g.model.items : []) {
+        if (item.mine !== undefined) {
+          if (!drawn.has(item.mine)) {
+            drawn.add(item.mine);
+            theirs.push(item.mine);
+          }
+        } else if (!keys.has(item.key)) {
+          items.push(lineOfItem(model, item));
+        }
+      }
+      const tail = g.model ? tailOf(g.model) : null;
+      if (!theirs.length && !items.length && !tail) continue;
+      const you = theirs.length ? songs[theirs[0]] : named.get(key) || null;
+      const section = artistGroup({ key, name: you ? you.artist : g.model.name, filter: you ? you.sortArtist : "" },
+        [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: g.model && g.model.ug ? g.model.ug.songs : 0,
+          lacuerda: g.model && g.model.lacuerda ? g.model.lacuerda.songs : 0 });
+      if (tail) section.appendChild(tail);
+      box.appendChild(section);
+    }
+    if (model && model.titles.length) {  // MuseScore's pages: a title alone, no artist to put them under
+      if (!model.titleLines) model.titleLines = model.titles.map(titleLine);
+      box.appendChild(artistGroup({ name: "MuseScore" }, model.titleLines,
+        { note: many(model.titles.length, "page") + " by that title" }));
+    }
+    groupsBox.replaceChildren(box);
+    groupsBox.hidden = !groupsBox.childNodes.length;  // no empty box: nothing matches yet
+    allMine.replaceChildren();
+    if (mine.length > MINE_SHOWN) {
+      allMine.appendChild(button("All " + mine.length + " of your songs", "small", () => leaveAll(true)));
+    }
+    allMine.hidden = !allMine.childNodes.length;
+    notesBox.replaceChildren(...(model ? notesOf(model) : []));
+  };
+  // Under the groups: a name LaCuerda's index has no artist by, under a letter its listings aren't read to yet (their
+  // page may say: the offer to read it); the sites left out, and those searched in part, with why; the server's hint.
+  const notesOf = (model) => {
+    if (model.notes) return model.notes;
+    const data = answer.data;
+    model.notes = [];
+    const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
+    if (unlisted) {
+      const offer = siteUnlisted(unlisted, (go, box) => readThenShow({ name: String(unlisted.name || "") }, go, box,
+        readByName(model, box)))[1];
+      model.notes.push(offer);
+    }
+    const left = objects(data.skipped);
+    if (left.length) {
+      model.notes.push(el("p", "skipped", "Not searched: " +
+        left.map((x) => String(x.name || x.source) + " (" + String(x.why || "") + ")").join("; ") + "."));
+    }
+    const partly = objects(data.partial);
+    if (partly.length) {
+      model.notes.push(el("p", "skipped partial", "Searched in part: " +
+        partly.map((x) => String(x.name || x.source) + " (" + String(x.why || "") + ")").join("; ") + "."));
+    }
+    if (typeof data.hint === "string" && data.hint) model.notes.push(prose("hint index-hint", data.hint));
+    return model.notes;
   };
   const drawResults = (query, answerInList) => {
     const q = normal(state.q);
@@ -1267,7 +1538,7 @@
     found.hidden = !open;
     document.body.classList.toggle("waiting-sites", open && waiting);
     if (!open) return;
-    drawMine(query);
+    drawGroups();
     askSources(false);
   };
 
@@ -1310,79 +1581,37 @@
         say(UNREACHABLE.line.text);
       });
   };
-  // What a result's row stands for, the same in an older answer and a newer one: its site, its UG song, its names.
-  const hitKey = (row) => [row.dataset.source, row.dataset.ug, row.querySelector(".row-title"),
-    row.querySelector(".row-artist")].map((x) => (x && typeof x === "object" ? x.textContent : String(x || ""))).join("|");
-  // The answer of the newest search, in one go: the old one stays until then, so nothing flashes.
+  // What a result's line stands for, the same in an older answer and a newer one: its song's identity.
+  const hitKey = (row) => String(row.dataset.hit || "");
+  // The answer of the newest search, in one go: the old one stays until then, so nothing flashes. A line whose
+  // request is on its way stays, its request line in it, where the newer answer has its song; one the newer answer
+  // lacks becomes its line under the bar (settleSpots), its request line going on there.
   const showSites = (data, q) => {
-    answer = { data, q };
+    const going = new Map();
+    for (const [id, node] of spots) {
+      if (found.contains(node) && node.classList.contains("hit") && views.has(id) && isActive(views.get(id))) {
+        going.set(hitKey(node), node);
+      }
+    }
+    answer = { data, q, model: data.short ? null : mergeSites(data) };
     found.dataset.query = q;
-    close = { q, ids: listOf(data.library).map((h) => Number(h && h.id)) };
-    mineBox.hidden = false;
-    drawMine(parseQuery(state.q));
+    for (const [key, node] of answer.model ? going : []) {
+      if (!answer.model.items.has(key)) continue;
+      answer.model.lines.set(key, node);
+      going.delete(key);
+    }
+    drawGroups();
+    if (going.size) settleSpots(true);
     if (data.short) {
-      sitesBox.replaceChildren();
       say("Type three letters or more to search the sites");
       return;
     }
-    const objects = (value) => listOf(value).filter((x) => x && typeof x === "object");
-    const artists = objects(data.artists);
     const index = objects(data.index);
+    const artists = objects(data.artists);
     const gtp = objects(data.gtptabs);
     const ms = objects(data.musescore);
     const lcArtists = objects(data.lacuerda_artists);
     const lc = objects(data.lacuerda);
-    const box = document.createDocumentFragment();
-    // LaCuerda's artists, then its songs: the index holds every artist, songs of a few. First when it alone has the
-    // artist the query names ("andres calamaro", where Ultimate Guitar has only weak rows: lacuerda_leads).
-    const counted = [lcArtists.length ? many(lcArtists.length, "artist") : "", lc.length ? many(lc.length, "song") : ""];
-    const lcGroup = lcArtists.length || lc.length ? group("LaCuerda · " + counted.filter(Boolean).join(" · "),
-      [...lcArtists.map((a) => siteArtist(a, openSiteArtist)), ...lc.map((h) => siteHit(h, getIt, later))]) : [];
-    if (data.lacuerda_leads === true) box.append(...lcGroup);
-    // The artists the query names: first when one leads ("oasis"), after the songs when a song does.
-    const named = artists.length ? group("Artists on Ultimate Guitar", artists.map((a) => artistHit(a, openArtist))) : [];
-    if (data.lead === "artist") box.append(...named);
-    if (index.length) box.append(...group("Ultimate Guitar · " + many(index.length, "song"), index.map((h) => ugHit(h, getIt, later))));
-    if (data.lead !== "artist") box.append(...named);
-    if (data.lacuerda_leads !== true) box.append(...lcGroup);
-    // No artist of LaCuerda's by that name, under a letter its listings aren't read to yet: their page may say.
-    const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
-    if (unlisted) {
-      const [heading, offer] = siteUnlisted(unlisted, (go, at) => readThenShow({ name: String(unlisted.name || "") }, go, at));
-      if (!lc.length) box.appendChild(heading);
-      box.appendChild(offer);
-    }
-    if (gtp.length) {
-      box.append(...group("Guitar Pro on gtptabs.com · " + many(gtp.length, "song"), gtp.map((h) => siteHit(h, getIt, later))));
-    }
-    if (ms.length) {
-      box.append(...group("MuseScore · " + many(ms.length, "page") + " by that title", ms.map((h) => siteHit(h, getIt))));
-    }
-    const left = objects(data.skipped);
-    if (left.length) {
-      box.appendChild(el("p", "skipped", "Not searched: " +
-        left.map((x) => String(x.name || x.source) + " (" + String(x.why || "") + ")").join("; ") + "."));
-    }
-    const partly = objects(data.partial);
-    if (partly.length) {
-      box.appendChild(el("p", "skipped partial", "Searched in part: " +
-        partly.map((x) => String(x.name || x.source) + " (" + String(x.why || "") + ")").join("; ") + "."));
-    }
-    if (typeof data.hint === "string" && data.hint) box.appendChild(prose("hint index-hint", data.hint));
-    // A row whose request is on its way stays, its line in it, where the newer answer has it; one the newer
-    // answer lacks becomes its line under the bar (settleSpots), its request line going on there.
-    const going = new Map();
-    for (const [id, node] of spots) {
-      if (sitesBox.contains(node) && views.has(id) && isActive(views.get(id))) going.set(hitKey(node), node);
-    }
-    for (const fresh of box.querySelectorAll(".hit")) {
-      const was = going.get(hitKey(fresh));
-      if (!was) continue;
-      fresh.replaceWith(was);
-      going.delete(hitKey(fresh));
-    }
-    sitesBox.replaceChildren(box);
-    if (going.size) settleSpots(true);
     const parts = [];
     if (index.length || artists.length) parts.push((index.length + artists.length) + " on Ultimate Guitar");
     if (lc.length || lcArtists.length) {
@@ -1392,12 +1621,20 @@
     if (ms.length) parts.push(ms.length + " on MuseScore");
     say(parts.length ? parts.join(" · ") : "Nothing on the sites: request it by name below");
     prefill(data.lead || (lcArtists.length && !lc.length ? "artist" : null));  // an artist LaCuerda alone knows
+    if (focusFirst && q === normal(state.q)) {
+      focusFirst = false;
+      toFirstResult();
+    }
+  };
+  // Enter: on to the first result's line, from which Tab goes on to its button.
+  const toFirstResult = () => {
+    const first = groupsBox.querySelector("article");
+    if (first) first.focus();
   };
 
-  // An artist's songs in place of the sites' results, yours by them first; All results, or typing, brings
-  // those back.
-  const artistPage = (key, offset, signal) => fetch("api/artist?key=" + encodeURIComponent(key) + "&offset=" + offset,
-    { signal, credentials: "same-origin", headers: { Accept: "application/json" } })
+  // An artist's songs on Ultimate Guitar, fifty from ``offset`` (/api/artist), for their group's "+ N more".
+  const artistPage = (key, offset) => fetch("api/artist?key=" + encodeURIComponent(key) + "&offset=" + offset,
+    { credentials: "same-origin", headers: { Accept: "application/json" } })
     .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
     .then((reply) => {
       if (!reply.ok || !reply.body || reply.body.error) {
@@ -1405,68 +1642,15 @@
         return null;
       }
       return reply.body;
-    }, (e) => {
-      if (!(e && e.name === "AbortError")) say(UNREACHABLE.line.text);
+    }, () => {
+      say(UNREACHABLE.line.text);
       return null;
     });
-  const openArtist = (a) => {
-    clearTimeout(askTimer);
-    asked += 1;
-    const mine = asked;
-    if (asking) asking.abort();
-    asking = new AbortController();
-    say("Listing " + String(a.artist) + "'s songs…");
-    artistPage(String(a.artist_key || ""), 0, asking.signal).then((page) => {
-      if (page && mine === asked && state.all) showArtist(page);
-    });
-  };
-  const backToResults = () => {
-    if (answer) showSites(answer.data, answer.q);
-    input.focus();
-  };
-  const showArtist = (page) => {
-    const box = document.createDocumentFragment();
-    const head = el("div", "artist-head");
-    const name = el("h2", null, page.artist);
-    name.tabIndex = -1;
-    head.appendChild(name);
-    head.appendChild(button("All results", "small", backToResults, "Back to all the results"));
-    box.appendChild(head);
-    const theirs = listOf(page.library).map((x) => byIndex.get(Number(x && x.id))).filter((i) => i !== undefined);
-    if (theirs.length) box.append(...group("Yours by " + page.artist, theirs.map(lineOf)));
-    const [heading, rows] = group("Ultimate Guitar, the most tabbed first", listOf(page.songs).map((h) => ugHit(h, getIt, later)));
-    box.appendChild(heading);
-    box.appendChild(rows);
-    let listed = listOf(page.songs).length;
-    if (listed < Number(page.total)) {
-      const more = el("p", "more-songs");
-      const go = button("Show more (" + (page.total - listed) + " left)", "small", () => {
-        go.disabled = true;
-        artistPage(String(page.artist_key), listed).then((next) => {
-          go.disabled = false;
-          if (!next || !rows.isConnected) return;
-          for (const h of listOf(next.songs)) rows.appendChild(ugHit(h, getIt, later));
-          listed += listOf(next.songs).length;
-          if (listed >= next.total || !listOf(next.songs).length) more.remove();
-          else go.textContent = "Show more (" + (next.total - listed) + " left)";
-        });
-      }, "Show more of " + page.artist + "'s songs");
-      more.appendChild(go);
-      box.appendChild(more);
-    }
-    mineBox.hidden = true;  // the query's songs of yours: back with All results
-    sitesBox.replaceChildren(box);
-    say(page.artist + ": " + many(page.total, "song"));
-    name.focus();
-  };
-
-  // A LaCuerda artist's songs in place of the sites' results, as an Ultimate Guitar artist's are: those the index
-  // holds, or, while caracole hasn't read their page, a button that reads it (a job) and then lists them. ``who``
-  // names them by the slug of their page ({ slug }) or by a name ({ name }: a page read by name); ``quiet``, a 404
-  // isn't said.
-  const sitePage = (who, signal) => fetch("api/artist?" + (who.slug ? "lacuerda=" + encodeURIComponent(String(who.slug))
+  // A LaCuerda artist's songs the index holds (/api/artist?lacuerda=): ``who`` names them by the slug of their page
+  // ({ slug }) or by a name ({ name }: a page read by name); ``quiet``, a 404 isn't said.
+  const sitePage = (who) => fetch("api/artist?" + (who.slug ? "lacuerda=" + encodeURIComponent(String(who.slug))
     : "lacuerda_name=" + encodeURIComponent(String(who.name || ""))),
-    { signal, credentials: "same-origin", headers: { Accept: "application/json" } })
+    { credentials: "same-origin", headers: { Accept: "application/json" } })
     .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
     .then((reply) => {
       if (!reply.ok || !reply.body || reply.body.error) {
@@ -1474,37 +1658,26 @@
         return null;
       }
       return reply.body;
-    }, (e) => {
-      if (!(e && e.name === "AbortError")) say(UNREACHABLE.line.text);
+    }, () => {
+      say(UNREACHABLE.line.text);
       return null;
     });
-  const openSiteArtist = (a) => {
-    clearTimeout(askTimer);
-    asked += 1;
-    const mine = asked;
-    if (asking) asking.abort();
-    asking = new AbortController();
-    say("Listing the songs of " + String(a.artist) + " on LaCuerda…");
-    sitePage({ slug: String(a.slug || "") }, asking.signal).then((page) => {
-      if (page && mine === asked && state.all) showSiteArtist(page);
-    });
-  };
-  // Read a LaCuerda page (``who``: { slug } or { name }) from the button ``go`` in ``offer``, then list the artist's
-  // songs; a read that leaves none to list says what LaCuerda answered, under the offer.
-  const readThenShow = (who, go, offer) => {
-    const mine = asked;
+  // Read a LaCuerda page (``who``: { slug } or { name }) from the button ``go`` in ``offer``, then ``done(page)`` with
+  // the artist's songs; a read that leaves none to list says what LaCuerda answered, under the offer.
+  const readThenShow = (who, go, offer, done) => {
+    const was = answer;
     go.disabled = true;
     readArtistPage(server.csrf, who, say).then((read) => {
-      if (mine !== asked || !state.all || !offer.isConnected) return;
+      if (answer !== was || !state.all) return;
       if (read.error) {
         go.disabled = false;
         say(read.error);
         return;
       }
       sitePage(Object.assign({ quiet: true }, who)).then((page) => {
-        if (mine !== asked || !state.all || !offer.isConnected) return;
+        if (answer !== was || !state.all) return;
         if (page && page.read) {
-          showSiteArtist(page);
+          done(page);
           return;
         }
         const line = read.job && read.job.line && typeof read.job.line === "object" ? read.job.line : {};
@@ -1516,27 +1689,11 @@
       });
     });
   };
-  const showSiteArtist = (page) => {
-    const box = document.createDocumentFragment();
-    const head = el("div", "artist-head");
-    const name = el("h2", null, page.artist);
-    name.tabIndex = -1;
-    head.appendChild(name);
-    head.appendChild(button("All results", "small", backToResults, "Back to all the results"));
-    box.appendChild(head);
-    const theirs = listOf(page.library).map((x) => byIndex.get(Number(x && x.id))).filter((i) => i !== undefined);
-    if (theirs.length) box.append(...group("Yours by " + page.artist, theirs.map(lineOf)));
-    box.append(...siteArtistSongs(page, group, getIt, later,
-      (go, offer) => readThenShow({ slug: String(page.slug || "") }, go, offer)));
-    mineBox.hidden = true;
-    sitesBox.replaceChildren(box);
-    say(page.artist + ": " + (page.read ? many(page.total, "song") + " on LaCuerda" : "caracole hasn't read their page yet"));
-    name.focus();
-  };
 
-  // Searching the sites: on Enter, Search all or the address (#all=1); on Enter again, at once.
+  // Into the sites' results: as you type, served (the input's listener), the address (#all=1), or Enter once you left
+  // them; on the file, Enter shows the line that searches them.
   const enterAll = () => {
-    if (!normal(state.q) || keyed(state.q)) {  // the line under the box says why a key searches no site
+    if (!sitesCan(state.q) || (server && !typedEnough(state.q))) {  // the line under the box says why not
       input.focus();
       return;
     }
@@ -1551,6 +1708,7 @@
   const leaveAll = (focus) => {
     if (!state.all) return;
     state.all = false;
+    focusFirst = false;
     clearTimeout(askTimer);
     if (asking) asking.abort();
     asked += 1;
@@ -1566,18 +1724,25 @@
   if (server) {
     const head = el("div", "results-head");
     head.appendChild(button("Back to your songs", "small", () => leaveAll(true), "Back to your songs (Escape)"));
-    found.append(head, mineBox, sitesBox);
+    allMine.hidden = true;
+    found.append(head, allMine, groupsBox, notesBox);
   }
-  allButton.addEventListener("click", enterAll);
   // A key that ends an input method's word (pinyin, kana) is still typing, never a command.
   const composing = (e) => e.isComposing || e.keyCode === 229;
   input.addEventListener("keydown", (e) => {
     if (composing(e)) return;
     if (e.key === "Enter") {
       e.preventDefault();
-      enterAll();
+      if (!server || !state.all) {
+        enterAll();
+      } else if (answer && answer.q === normal(state.q)) {  // the query's answer is in: its first result
+        toFirstResult();
+      } else {  // on its way: its first result once it is drawn, the search sent now
+        focusFirst = true;
+        askSources(true);
+      }
     } else if (e.key === "ArrowDown" && state.all && server) {  // on to the first result's button
-      const first = found.querySelector(".line-action button, .line-action a, .row-action button, .row-action a");
+      const first = found.querySelector(".line-action button, .line-action a");
       if (first) {
         e.preventDefault();
         first.focus();
@@ -2031,19 +2196,19 @@
       showLine(progressIn(line), { line: { tone: "queued", text: "Sending…" } });
       return line;
     };
-    // A result's row whose request the server has just answered, put where it would be had the answer come at
-    // once: the row left the results while it was on its way (Back to your songs, the ×, Escape, a newer answer
-    // drawn). A newer answer with a row for the same song takes this one in its place, its line in it; else the
-    // request's card comes under the bar (settleSpots), as for a row that leaves the results after the answer.
+    // A result's line whose request the server has just answered, put where it would be had the answer come at
+    // once: the line left the results while it was on its way (Back to your songs, the ×, Escape, a newer answer
+    // drawn). A newer answer with the same song takes this line in place of its own, its request line in it; else
+    // the request's card comes under the bar (settleSpots), as for a line that leaves the results after the answer.
     const placed = (row) => {
-      if (state.all && !row.isConnected) {
-        const fresh = Array.from(sitesBox.querySelectorAll(".hit")).find((hit) => hitKey(hit) === hitKey(row));
-        if (fresh) fresh.replaceWith(row);
+      if (state.all && !row.isConnected && answer && answer.model && answer.model.items.has(hitKey(row))) {
+        answer.model.lines.set(hitKey(row), row);
+        drawGroups();
       }
       if (!state.all || !row.isConnected) settleSpots(state.all);
     };
-    // A result's request, its line in the result's own row, from "Sending…" on: ``view`` finds the job in the
-    // answer.
+    // A result's request, its request line in the result's own line, from "Sending…" on: ``view`` finds the job in
+    // the answer.
     const askFrom = (path, fields, names, row, go, view) => {
       if (!row) return;
       const line = progressIn(row);  // in the page before its first words, so they are read out
@@ -2065,7 +2230,7 @@
             showLine(progressIn(row), failure(reply));
             return;
           }
-          if (go && go.closest(".row-action, .later")) go.remove();  // its line takes the button's place
+          if (go && go.closest(".line-action, .later")) go.remove();  // its request line takes the button's place
           spots.set(Number(job.id), row);
           track(job);
           placed(row);
@@ -2080,9 +2245,13 @@
     // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).
     later = (pick, display, row, go) => askFrom("request", pick, ["artist", "title", "lacuerda"], row, go,
       (answer) => answer.job);
-    // Back to your songs: a request's row in the results that is a song new to the library becomes its line
+    // Add again, a song caracole removed: asked for as the request form asks, Fetch it now ticked (POST /request): a
+    // wanted.txt line brings it back, and its lookup gets its sheet.
+    addAgain = (pick, display, row, go) => askFrom("request", Object.assign({ fetch: "1" }, pick),
+      ["artist", "title", "fetch"], row, go, (answer) => answer.job);
+    // Back to your songs: a request's line in the results that is a song new to the library becomes its line
     // under the bar, which goes on saying how it goes; a song the list has says it on its own line. With
-    // ``dropped``, only the rows a newer answer left out, at once.
+    // ``dropped``, only the lines a newer answer left out, at once.
     settleSpots = (dropped) => {
       for (const [id, node] of Array.from(spots)) {
         const left = !node.isConnected && node.classList.contains("hit");  // a newer answer has no such row

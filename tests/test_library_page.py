@@ -160,6 +160,18 @@ def test_each_song_has_its_jump_letters_by_artist_and_by_title(conn, cfg):
     assert not {"monogram", "hue"} & set(songs[soda.display])  # the cards' badges went with them
 
 
+def test_each_song_names_its_identity_which_the_served_search_groups_and_merges_by(conn, cfg):
+    # Typed into the served page's bar, a song of yours and the sites' rows of its artist share a header: the
+    # artist part of its identity key is their rows' artist key (/api/search).
+    from caracole.normalize import identity_key
+
+    soda = add_song(conn, "Soda Stereo", "De Música Ligera")
+    han = add_song(conn, "宋冬野", "斑马，斑马")
+    songs = songs_of(page(conn, cfg))
+    assert songs[soda.display]["identity"] == soda.key == identity_key("Soda Stereo", "De Música Ligera")
+    assert songs[han.display]["identity"] == han.key
+
+
 def test_the_page_on_disk_has_no_forms_and_lets_none_be_sent(conn, cfg):
     add_song(conn, "Radiohead", "Creep")
     html = page(conn, cfg)
@@ -213,13 +225,14 @@ def bar_of(html):
     return found.group(0)
 
 
-def test_the_bar_has_a_search_all_button_and_a_status_line_in_both_pages(conn, cfg):
+def test_the_bar_has_a_status_line_and_no_search_all_button_in_both_pages(conn, cfg):
+    # Served, typing searches the sites too; on the file, Enter shows the line that does: no button for either.
     from caracole.library_page import WebControls
 
     add_song(conn, "Radiohead", "Creep")
     for html in (page(conn, cfg), build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))):
         bar = bar_of(JSON_BLOCK.sub("", html))
-        assert re.search(r'<button type="button" id="all" class="btn all"[^>]*>Search all</button>', bar)
+        assert 'id="all"' not in bar and "Search all" not in html
         status = re.search(r'<p class="bar-status" id="bar-status"[^>]*>', bar)
         assert status and 'aria-live="polite"' in status.group(0)
         assert re.search(r'<input id="q"[^>]*aria-describedby="bar-status"', bar, re.S)
@@ -2044,7 +2057,7 @@ def test_the_line_renderer_takes_any_result_in_a_real_browser(conn, cfg, tmp_pat
     assert re.search(r'<article class="line" tabindex="-1" data-status="found"><div class="line-title"><h3', creep)
     assert '<span class="line-by">Radiohead</span>' in creep  # no filter given: its name alone
     assert re.search(r'<span class="line-status"><span class="badge found">Found</span>'
-                     r'<span class="line-facts">chords ×6</span></span>', creep), creep
+                     r'<span class="line-facts" title="chords ×6">chords ×6</span></span>', creep), creep  # all of it
     assert re.search(r'<span class="line-key" title="Key G major"><span aria-hidden="true">G</span>', creep)
     marks = re.search(r'<span class="line-sources">(.*?)</span></div>', creep, re.S).group(1)
     assert re.findall(r'data-source="([^"]+)"', marks) == ["ug", "lrclib"]  # each once, in order
@@ -2181,15 +2194,17 @@ COMPOSING_ENTER = ("document.getElementById('q').dispatchEvent(new KeyboardEvent
 
 
 @in_chromium
-def test_enter_on_the_file_page_shows_the_line_to_run_and_asks_nothing(conn, cfg, driven):
+def test_the_file_page_filters_your_songs_and_enter_shows_the_command(conn, cfg, driven):
     add_song(conn, "Radiohead", "Creep")
     add_song(conn, "Pink Floyd", "Wish You Were Here")
     add_song(conn, "Oasis", "Wonderwall")
     path = write_library_page(cfg.library_dir, page(conn, cfg))
     driven.open(path.as_uri())
     driven.js("document.getElementById('q').focus()")
-    driven.type("wywh")  # a title's initials find it
+    driven.type("wywh")  # a title's initials find it, as you type: the same lines, filtered
     assert driven.wait(f"{SHOWN_TITLES}.join() === 'Wish You Were Here'")
+    assert driven.js("document.querySelector('#list section.artist .artist-name').textContent") == "Pink Floyd"
+    assert driven.js("document.getElementById('results').hidden") is True  # typing alone asks for nothing more
     assert "Enter" in driven.js("document.getElementById('bar-status').textContent")
     driven.js(COMPOSING_ENTER)  # the Enter that ends a pinyin word: still typing
     assert driven.js("document.getElementById('results').hidden") is True
@@ -2214,7 +2229,6 @@ def test_with_none_of_your_songs_matching_the_file_page_says_what_to_run_at_once
     shown = listing(dom)
     assert "No songs match “karma police”." in shown
     assert "<code>caracole search 'karma police'</code>" in shown and "Copy</button>" in shown
-    assert re.search(r'<button type="button" id="all" class="btn all primary"', dom)  # the way on, prominent
 
 
 @in_chromium
@@ -2232,7 +2246,6 @@ def test_a_key_filters_your_songs_alone_as_the_sites_know_no_keys(conn, cfg, dri
         assert driven.wait(f"{SHOWN_TITLES}.join() === 'De Música Ligera'")
         assert driven.js(status) == "A key filters your songs alone: the sites know no keys"
         assert driven.js("document.getElementById('results').hidden") is True
-        assert driven.js("document.getElementById('all').disabled") is True
         driven.js("document.getElementById('q').focus()")
         driven.press("Enter")
         assert driven.js("document.getElementById('results').hidden") is True  # still your songs alone
@@ -2246,8 +2259,7 @@ def test_a_key_filters_your_songs_alone_as_the_sites_know_no_keys(conn, cfg, dri
         assert driven.js("location.hash.includes('all=1')") is False
         driven.js("document.getElementById('q').select()")
         driven.type("creep")  # no key: the sites again
-        assert driven.wait("!document.getElementById('all').disabled")
-        assert "know no keys" not in driven.js(status)
+        assert driven.wait(f"!{status}.includes('know no keys')")
 
 
 # --- the header on a phone, and the bar that stays at the top ----------------------------------------

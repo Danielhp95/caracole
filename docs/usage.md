@@ -1040,8 +1040,8 @@ and cache.
   nothing was due. A page that won't parse, or any other error, leaves the
   index as it was and counts as an error: an error never empties an initial.
   A cooldown, a block or a spent budget exits 0. The lacuerda step reads the
-  artists' slugs from it, and `caracole search`, Search all and the Look up
-  page suggest its artists and songs (see [caracole search](#caracole-search)).
+  artists' slugs from it, and `caracole search`, the served library page's
+  search and the Look up page suggest its artists and songs (see [caracole search](#caracole-search)).
 
   **`caracole lacuerda --artist NAME`** reads one artist's page into the index
   now, so that their songs are there to search: NAME is their name, or the
@@ -1735,19 +1735,19 @@ menu, there once a song has a key, shows only the songs in one key, with how
 many each key has, and puts the spellings of one key together ("F# / Gb
 minor"); and you can sort by artist, by title or by when songs were added.
 Sorted by artist or title, with more than 40 songs shown, a row of letters
-jumps to the first artist under each (by title, the first song). A line under the box says what Enter does. **Enter**, or **Search all**
-beside the box, searches the sites too (the Enter that ends a word typed with
-an input method, pinyin say, only ends the word): the file on disk, which can ask
-nothing of anyone, shows under the box the `caracole search` line to run where
-caracole runs, with Copy, and leaves your songs as they are; Escape takes it
-away. When nothing in the library matches, the page shows that line at once
-(Search all turns orange). A key typed as a key ("a minor", "F# major")
-filters your songs alone: the sites' indexes know no keys, so the line under
-the box says so, and Enter and Search all wait for a search without one. The page puts each word of a line to run in single quotes
+jumps to the first artist under each (by title, the first song). A line under the box says what typing and Enter do.
+On the file on disk, which can ask nothing of anyone, **Enter** searches the
+sites the only way it can (the Enter that ends a word typed with an input
+method, pinyin say, only ends the word): it shows under the box the `caracole
+search` line to run where caracole runs, with Copy, and leaves your songs as
+they are; Escape takes it away. When nothing in the library matches, the page
+shows that line at once. A key typed as a key ("a minor", "F# major") filters
+your songs alone: the sites' indexes know no keys, so the line under the box
+says so, and Enter waits for a search without one. The page puts each word of a line to run in single quotes
 (`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote in
-it. `caracole serve` serves the same page, where Enter lists what the sites
-have under the box, with Get it, and a form to request a song by name (see
-below).
+it. `caracole serve` serves the same page, where typing searches what the
+sites have too, under the same artist headers, with Get it, and a form to
+request a song by name (see below).
 
 On a touch screen every button, fold, chip, menu, letter and artist's name is
 at least 44 pixels each way, for a thumb, and so are each line's button and
@@ -2253,89 +2253,117 @@ with it. A KEY that is no key exits with status 2.
 [--token-file FILE]` serves the library page over HTTP, at
 `http://127.0.0.1:8737/` by default, with what the file on disk can't do:
 
-- **Search all.** The library page's search box filters your songs as you
-  type, here as on the file, asking the server nothing. Enter (a phone's
-  search key), or Search all, lists under the box, in place of the list and
-  its buttons: your songs that match first (up to five, as their lines, with
-  all they offer, a title opening its sheet, then All N of your songs; and a
-  close match the filter missed, a typo say), then
-  what caracole's offline indexes hold:
-  **Ultimate Guitar** (eight songs, and the artists the query names, as in
-  [caracole search](#caracole-search): an artist's Songs lists all of theirs,
-  fifty at a time, and All results goes back), **LaCuerda** (the artists the
-  query names, each with the songs its listing counts and their most popular
-  songs with chords, then five songs: "estopa" finds Estopa; an artist's Songs
-  lists the songs the index holds of theirs, LaCuerda's most popular first, or,
-  for an artist whose page caracole has never read, says how many it lists and
-  offers Read their page, which queues `caracole lacuerda --artist` (one
-  request, at the lookup pace) and lists them once it has run; and for a query
-  it has no artist by, while the nightly run hasn't read the listing of its
-  letter whole, says so and offers Read LaCuerda's page for “estopa”, which
-  queues `caracole lacuerda --artist estopa` (a request for each spelling of
-  the name tried, usually one), then lists their songs, or says what LaCuerda
-  answered: `Not found: LaCuerda has no artist page for estopa.`, or, for a
-  cooldown, a block, a spent hour's budget or an error, `Not read: …`, with a
-  link to the request's output. The name is chosen as `caracole search` chooses
-  it: the artist the query names on Ultimate Guitar, else the one of theirs
-  whose name starts or ends it, else the query; a title there, "creep", or a song LaCuerda's
-  index has, "como camaron", gets no offer. Once a page is read, a search finds
-  their songs at once. When LaCuerda alone has the artist the query names, and
+- **Search as you type.** The library page's search box filters your songs as
+  you type, here as on the file, and from the third letter (the second with a
+  Chinese character in it) it searches the sites too, a moment after you stop:
+  no Enter, and no button. The list and its buttons make way for the results,
+  under the same artist headers as the list's, each header counting the songs
+  of theirs you have and, for an artist the query names, the songs Ultimate
+  Guitar's and LaCuerda's indexes list of theirs ("Estopa · you have 2 · UG 60
+  · LaCuerda 159"). Under an artist come your songs that match (up to five in
+  all, as their lines, with all they offer, a title opening its sheet, and All
+  N of your songs above the groups when more match; a close match the filter
+  missed, a typo say, too), the songs you removed that match (below), then what
+  caracole's offline indexes hold of theirs: **Ultimate Guitar** (eight songs,
+  and the artists the query names, as in [caracole search](#caracole-search),
+  each with their three most tabbed songs, then "+ 57 more by Estopa", which
+  lists the rest in their group, fifty at a time), **LaCuerda** (the artists
+  the query names, each with their most popular songs with chords, and "+ N
+  more by Estopa on LaCuerda" for the rest the index holds of theirs, then five
+  songs: "estopa" finds Estopa; for an artist whose page caracole has never
+  read, the group says how many songs LaCuerda lists and offers Read their
+  page, which queues `caracole lacuerda --artist` (one request, at the lookup
+  pace) and lists them in the group once it has run; and for a query it has no
+  artist by, while the nightly run hasn't read the listing of its letter whole,
+  the results say so under the groups and offer Read LaCuerda's page for
+  “estopa”, which queues `caracole lacuerda --artist estopa` (a request for
+  each spelling of the name tried, usually one), then lists their songs in a
+  group of their own, first, or says what LaCuerda answered: `Not found:
+  LaCuerda has no artist page for estopa.`, or, for a cooldown, a block, a
+  spent hour's budget or an error, `Not read: …`, with a link to the request's
+  output. The name is chosen as `caracole search` chooses it: the artist the
+  query names on Ultimate Guitar, else the one of theirs whose name starts or
+  ends it, else the query; a title there, "creep", or a song LaCuerda's index
+  has, "como camaron", gets no offer. Once a page is read, a search finds their
+  songs at once. When LaCuerda alone has the artist the query names, and
   Ultimate Guitar's index nothing that matches well ("andres calamaro": only
-  Javier Calamaro's songs), LaCuerda's group comes first), **Guitar Pro on gtptabs.com**
-  (five songs with a file there), and **MuseScore** (five pages whose title is
-  what you typed, or what you typed less an artist's name before or after it,
-  when that artist has a song of that title in the Ultimate Guitar index,
-  gtptabs.com's or your library: "oasis wonderwall" finds the Wonderwall pages,
-  and "oasis live forever" never a page titled Oasis or Forever. Its sitemaps
-  name no artist, so each is a possible match). Every row has the mark of its
-  site. The list follows what you type a moment after you stop; a search typed
-  over stops at once, and only the newest query's answer is shown, the older
-  one staying until then. The line under the box says "Searching the sites…",
-  then how many each site has, and the list ends with the sites left out and
-  why: one turned off in caracole.toml, or one whose index the nightly run
-  hasn't read yet (MuseScore's while it blocks caracole, LaCuerda's before its
-  first listings); and those searched in part: LaCuerda's, while the nightly
-  run still reads its listings ("Searched in part: LaCuerda (its index is still
-  being read: 2,957 artists so far, with #, A–C read whole; the nightly run reads
-  the rest)."). Searching asks no site anything: it reads
-  the indexes alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s
-  for very common words), takes no lock and spends no budget. **Enter never
-  spends a request**, however clear the best result: Get it does. Escape, or
-  Back to your songs, goes back to the list with your search and buttons as
-  they were (Escape again clears the search), and the box's × back to all your
-  songs; either way a song asked for there has its line (see below); ↓ goes from the box to the first
-  result. The address keeps it (`#q=wonderwall&all=1`).
+  Javier Calamaro's songs), LaCuerda's artist comes first) and **gtptabs.com**
+  (five songs with a Guitar Pro file there). A song the sites have under the
+  same artist and title is one line, with each site's mark and what each has
+  of it ("chords ×9 · LaCuerda ×3 · Guitar Pro file": Ultimate Guitar's tabs
+  per type, LaCuerda's versions, gtptabs.com's file): they share the song's
+  identity key, made from its artist and title as caracole makes your songs'.
+  The indexes hold no ratings (only the sheets caracole fetched have them), so
+  a line shows counts, never stars. A site's row of a song of yours is your
+  song's own line, and puts that artist's other rows under your artist's
+  header (Ultimate Guitar's "Song Dongye (宋冬野)" under your 宋冬野).
+  **MuseScore**'s pages come last, under a header of their own, as its
+  sitemaps name no artist: five pages whose title is what you typed, or what
+  you typed less an artist's name before or after it, when that artist has a
+  song of that title in the Ultimate Guitar index, gtptabs.com's or your
+  library ("oasis wonderwall" finds the Wonderwall pages, and "oasis live
+  forever" never a page titled Oasis or Forever), each a possible match. The
+  results follow what you type; a search typed over stops at once, and only
+  the newest query's answer is shown, the older one staying until then. The
+  line under the box says "Searching the sites…", then how many each site has,
+  and the results end with the sites left out and why: one turned off in
+  caracole.toml, or one whose index the nightly run hasn't read yet
+  (MuseScore's while it blocks caracole, LaCuerda's before its first
+  listings); and those searched in part: LaCuerda's, while the nightly run
+  still reads its listings ("Searched in part: LaCuerda (its index is still
+  being read: 2,957 artists so far, with #, A–C read whole; the nightly run
+  reads the rest)."). Searching asks no site anything: it reads the indexes
+  alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very
+  common words), takes no lock and spends no budget, and so does "+ N more".
+  **Enter never spends a request**, however clear the best result: it moves to
+  the first result's line (once the query's answer is in), from which Tab goes
+  on to its button; Get it does. Escape, or Back to your songs, goes back to
+  the list with your search and buttons as they were (Escape again clears the
+  search; Enter, or typing on, brings the results back), and the box's × back
+  to all your songs; either way a song asked for there has its line (see
+  below); ↓ goes from the box to the first result's button. The address keeps
+  it (`#q=wonderwall&all=1`).
 
-  **Get it** on an Ultimate Guitar song looks it up at once, as `caracole get
-  --ug …` does, and records the pick in overrides.toml (`[match]`), so nothing
-  waits for a review; one of its versions, under "⋯" ("Chords 2 of 13", each
-  with an "on UG" link to look at it there first), as `--tab …` (`[pin]`). Get
-  it on a gtptabs.com song looks it up by its names, as `caracole get` does,
-  whose gtptabs.com stage downloads its Guitar Pro file for a song that has
-  none; Get it on a LaCuerda song looks it up as `caracole get --lacuerda …`
-  does, and keeps that LaCuerda sheet (`[lacuerda]`), whatever Ultimate Guitar
-  has (one with no chords there, "· no chords", is looked up by its names); a
-  MuseScore page is a link to open, as caracole never fetches from
-  MuseScore. The row then says how it goes, on a line of its own ("Sending…",
-  "Fetching from Ultimate Guitar…", "Ready · Open sheet"), and once the sheet
-  is kept the row is the song's line, its sheet its button. A newer
-  answer drawn while it goes (Enter again, or a search typed over) keeps the
-  row where it has it, with its line; one it hasn't moves the request under
-  the box as its line ("Just requested"), its request line going on there. A song your
-  library has already, under its own names (UG's slugs write AC/DC as "Acdc"
-  and 宋冬野 as "Song Dongye"), says In your library and Get it again, and is
-  looked up as your song: no second song, and no line added to wanted.txt. A
-  song your library hasn't, from Ultimate Guitar, LaCuerda or gtptabs.com, also has **Add
-  for tonight's run** under "⋯": it goes into wanted.txt under the site's names,
-  as Request does with Fetch it now unticked (a LaCuerda song as
-  `caracole add --lacuerda …`, the pick recorded: its request says Added:
-  tonight's run gets the sheet you picked on LaCuerda, as its line's "⋯" does, with a
-  link to that sheet's page, and it waits for no Ultimate Guitar review of
-  other artists' songs of its title), and the nightly run looks it up
-  (not a song under one of UG's `misc-…` names, which are no one's: request it
-  by name as you know it).
-  Back to your songs, a song new to the library gets a line of its own under the box
-  ("Just requested").
+  **Get it** on a line looks the song up at once: as Ultimate Guitar's song
+  when the line has one, as `caracole get --ug …` does, recording the pick in
+  overrides.toml (`[match]`), so nothing waits for a review, and its
+  gtptabs.com stage downloads the Guitar Pro file for a song that has none;
+  else as LaCuerda's, as `caracole get --lacuerda …` does, keeping that
+  LaCuerda sheet (`[lacuerda]`), whatever Ultimate Guitar has (one with no
+  chords there, "LaCuerda ×1, no chords", is looked up by its names); else by
+  its names, as `caracole get` does. Its "⋯" has what each site has: Ultimate
+  Guitar's versions ("Chords 2 of 13", each with an "on UG" link to look at it
+  there first), each looked up as `--tab …` (`[pin]`); LaCuerda's page and,
+  beside Ultimate Guitar's song, Get it with this sheet, which keeps
+  LaCuerda's; gtptabs.com's page. A MuseScore page is a link to open, as
+  caracole never fetches from MuseScore. The line then says how it goes, on a
+  line of its own ("Sending…", "Fetching from Ultimate Guitar…", "Ready · Open
+  sheet"), and once the sheet is kept the line is the song's own line, its
+  sheet its button. A newer answer drawn while it goes (a search typed on)
+  keeps the line where it has the song, with its request line; one it hasn't
+  moves the request under the box as its line ("Just requested"), its request
+  line going on there. A song your library has already, under its own names
+  (UG's slugs write AC/DC as "Acdc" and 宋冬野 as "Song Dongye"), is your own
+  line; one new to the library since the page loaded says In your library and
+  Get it again, and is looked up as your song: no second song, and no line
+  added to wanted.txt. A song your library hasn't, from Ultimate Guitar,
+  LaCuerda or gtptabs.com, also has **Add for tonight's run** under "⋯": it
+  goes into wanted.txt under the site's names, as Request does with Fetch it
+  now unticked (a song only LaCuerda has as `caracole add --lacuerda …`, the
+  pick recorded: its request says Added: tonight's run gets the sheet you
+  picked on LaCuerda, as its line's "⋯" does, with a link to that sheet's
+  page, and it waits for no Ultimate Guitar review of other artists' songs of
+  its title), and the nightly run looks it up (not a song under one of UG's
+  `misc-…` names, which are no one's: request it by name as you know it).
+  Back to your songs, a song new to the library gets a line of its own under
+  the box ("Just requested").
+
+  **A song you removed** (`caracole remove`, or Remove… on the page) that the
+  query matches shows in its artist's group as "Removed 2026-10-20", with
+  **Add again**, which asks for it again as the request form does with Fetch
+  it now ticked: a line in wanted.txt, which brings a removed song back (see
+  [caracole remove](#caracole-remove)), then its lookup. It is never what
+  Enter acts on.
 
   `/lookup`, the lookup page, still answers: the same search of your library
   and the Ultimate Guitar and LaCuerda indexes, whose Get it reads the sheet on
@@ -2357,7 +2385,7 @@ with it. A KEY that is no key exits with status 2.
   to fetch until you say which it is (`caracole review`, or a `[match]`, `[pin]`
   or `[reject]` entry in overrides.toml): its line has Pick the match instead
   (below), and Get it on an
-  Ultimate Guitar song of Search all picks one too.
+  Ultimate Guitar song of the page's search picks one too.
 - **Pick the match.** On a song that needs review, Pick the match opens its
   candidates, as on the file (see above), as a list to choose from: pick one,
   or None of these, and Pick. It runs `caracole review --song "ARTIST - TITLE"

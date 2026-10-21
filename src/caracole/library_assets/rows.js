@@ -164,7 +164,10 @@ const caracoleRows = (icons) => {
     for (const badge of listOf(r.badges)) {
       if (badge && badge.text) status.appendChild(el("span", "badge " + String(badge.kind || ""), badge.text));
     }
-    if (r.facts) status.appendChild(el("span", "line-facts", r.facts));
+    if (r.facts) {
+      const facts = status.appendChild(el("span", "line-facts", r.facts));
+      facts.title = String(r.facts);  // the whole of it, where its column cuts it short
+    }
     if (status.childNodes.length) meta.appendChild(status);
     if (typeof r.key === "string" && r.key) meta.appendChild(keyMark("line-key", r));
     const marks = el("span", "line-sources");
@@ -220,9 +223,9 @@ const caracoleRows = (icons) => {
   };
 
   // --- the offline indexes' hits, as /api/search and /api/artist give them --------------------------
-  // index.html's search of the sites and caracole serve's lookup page draw them alike: each is a row with
-  // its site's mark. ``get(pick, display, row, button)`` is what a Get it does: ``pick`` is the form
-  // POST /lookup takes (a song of yours by its id, else its artist and title; the UG song, the tab).
+  // caracole serve's lookup page draws each as a row with its site's mark; index.html's search, a song as a line
+  // (indexLine, below), its sites' rows on it. ``get(pick, display, row, button)`` is what a Get it does: ``pick``
+  // is the form POST /lookup takes (a song of yours by its id, else its artist and title; the UG song, the tab).
   const many = (n, word) => Number(n || 0).toLocaleString("en") + " " + word + (Number(n) === 1 ? "" : "s");
   const button = (label, cls, onclick, aria) => {
     const b = el("button", "btn " + (cls || "small"), label);
@@ -250,8 +253,33 @@ const caracoleRows = (icons) => {
     box.appendChild(go);
     return box;
   };
+  // An Ultimate Guitar song's versions (``tabs``), under a "⋯": each a button, numbered within its kind ("Chords 2 of
+  // 13", of ``totals``), with a link to look at it on UG; ``choose(tab, button)`` is what its button does.
+  const versionsOf = (tabs, totals, display, choose) => {
+    const versions = el("ul", "versions");
+    const nth = {};
+    const of = totals && typeof totals === "object" ? totals : {};
+    for (const t of tabs) {
+      nth[t.type] = (nth[t.type] || 0) + 1;
+      const kind = own.call(KINDS, t.type) ? KINDS[t.type] : String(t.type);
+      const name = kind + " " + nth[t.type] + " of " + (of[t.type] || nth[t.type]) + (t.label ? " · " + t.label : "");
+      const item = el("li", "version");
+      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Get " + name + ", " + display));
+      const ug = el("a", "on-ug", "on UG");
+      ug.href = /^https:[/][/]/i.test(String(t.url || "")) ? String(t.url) : "#";
+      ug.target = "_blank";
+      ug.rel = "noopener noreferrer";
+      ug.setAttribute("aria-label", name + ", " + display + ", on Ultimate Guitar");
+      item.appendChild(ug);
+      versions.appendChild(item);
+    }
+    const box = el("div", "row-group");
+    box.appendChild(el("p", "subhead", "Versions"));
+    box.appendChild(versions);
+    return box;
+  };
   // An Ultimate Guitar song: Get it (Get it again for a song of yours, looked up as that song), and its
-  // versions under "⋯", each numbered within its kind ("Chords 2 of 13"), with a link to look at it on UG.
+  // versions under "⋯" (versionsOf).
   const ugHit = (h, get, later) => {
     const hit = h && typeof h === "object" ? h : {};
     const mine = yours(hit);
@@ -264,30 +292,7 @@ const caracoleRows = (icons) => {
       (mine ? "Get " + display + " again" : "Get " + display) + " from Ultimate Guitar");
     const more = [];
     const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object");
-    if (tabs.length) {
-      const versions = el("ul", "versions");
-      const nth = {};
-      const totals = hit.counts && typeof hit.counts === "object" ? hit.counts : {};
-      for (const t of tabs) {
-        nth[t.type] = (nth[t.type] || 0) + 1;
-        const kind = own.call(KINDS, t.type) ? KINDS[t.type] : String(t.type);
-        const name = kind + " " + nth[t.type] + " of " + (totals[t.type] || nth[t.type]) + (t.label ? " · " + t.label : "");
-        const item = el("li", "version");
-        item.appendChild(button(name, "small", (e) => get(pick({ tab: t.url }), display, row, e.currentTarget),
-          "Get " + name + ", " + display));
-        const ug = el("a", "on-ug", "on UG");
-        ug.href = /^https:[/][/]/i.test(String(t.url || "")) ? String(t.url) : "#";
-        ug.target = "_blank";
-        ug.rel = "noopener noreferrer";
-        ug.setAttribute("aria-label", name + ", " + display + ", on Ultimate Guitar");
-        item.appendChild(ug);
-        versions.appendChild(item);
-      }
-      const box = el("div", "row-group");
-      box.appendChild(el("p", "subhead", "Versions"));
-      box.appendChild(versions);
-      more.push(box);
-    }
+    if (tabs.length) more.push(versionsOf(tabs, hit.counts, display, (t, go) => get(pick({ tab: t.url }), display, row, go)));
     const opens = mine ? opener(mine.links) : null;
     if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
     // Not under one of UG's misc-… names ("Misc Mashups"): no one's, the song would never be found by it.
@@ -364,6 +369,105 @@ const caracoleRows = (icons) => {
     row.classList.add("hit");
     row.dataset.source = String(hit.source || "");
     return row;
+  };
+
+  // --- index.html's search: a song of the sites a dense line, under its artist's header --------------------
+  // "chords ×9 · tabs ×2": an Ultimate Guitar song's tabs per type, as a line counts them. The index holds no
+  // ratings (only the sheets caracole fetched have them), so a line never shows stars.
+  const TIMES = { chords: "chords", tabs: "tabs", "guitar-pro": "Guitar Pro", power: "Power Tab" };
+  const tabCounts = (c) => Object.entries(c && typeof c === "object" ? c : {})
+    .map(([kind, n]) => (own.call(TIMES, kind) ? TIMES[kind] : kind) + " ×" + Number(n || 0)).join(" · ");
+  const https = (url) => /^https:[/][/]/i.test(String(url || ""));
+  // One song of the offline indexes (``item``): each site's row of it, as /api/search gives them (``ug``, an Ultimate
+  // Guitar song; ``lacuerda`` and ``gtptabs``, a song of theirs; ``removed``, a song caracole removed), on one line
+  // with each site's mark and its counts, and its identity (``key``) as the line's ``data-hit``. Get it looks the
+  // song up as Ultimate Guitar's song (whose lookup gets gtptabs.com's Guitar Pro file too), else keeping
+  // LaCuerda's sheet, else by its names; a removed song's is Add again, which asks for it again as the request form
+  // does. Under "⋯": UG's versions, LaCuerda's sheet and page, gtptabs.com's page, Add for tonight's run.
+  // ``acts``: { get, later, again }, each called (pick, display, line, button), as ugHit's ``get`` is.
+  const indexLine = (item, acts) => {
+    const it = item && typeof item === "object" ? item : {};
+    const rowOf = (x) => (x && typeof x === "object" ? x : null);
+    const ug = rowOf(it.ug);
+    const lc = rowOf(it.lacuerda);
+    const gtp = rowOf(it.gtptabs);
+    const mine = [ug, lc, gtp].map(yours).find(Boolean) || null;  // a song of yours the page has no line of yet
+    const gone = mine ? null : rowOf(it.removed);
+    const first = ug || lc || gtp || gone || {};
+    const title = String(first.title || "");
+    const artist = String(first.artist || "");
+    const display = mine ? String(mine.display || "") : artist + " - " + title;
+    const pick = (extra) => Object.assign(mine ? { song: mine.id } : { artist, title }, extra);
+    const chords = Boolean(lc) && https(lc.sheet) && https(lc.url);
+    const sheet = chords ? { lacuerda: String(lc.url) } : {};
+    const a = acts && typeof acts === "object" ? acts : {};
+    let line = null;
+    const here = () => line;
+    let main;
+    if (gone) {
+      const back = { artist, title };
+      main = button("Add again", "small primary", (e) => a.again(back, display, here(), e.currentTarget),
+        "Add " + display + " again");
+      main.title = "Into wanted.txt again, as Request does, and looked up now: a wanted.txt line brings it back";
+    } else {
+      const chosen = ug ? pick({ ug: ug.ug }) : pick(sheet);
+      main = button(mine ? "Get it again" : "Get it", "small primary", (e) => a.get(chosen, display, here(), e.currentTarget),
+        (mine ? "Get " + display + " again" : "Get " + display) + (ug ? " from Ultimate Guitar" : chords ? " from LaCuerda"
+          : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""));
+      main.title = ug ? "Looks the song up now, as caracole get does, on Ultimate Guitar first"
+        : chords ? "Looks the song up now, and keeps this LaCuerda sheet"
+        : gtp ? "Looks the song up now, as caracole get does: its sheet, then a Guitar Pro file from gtptabs.com"
+        : "Looks the song up now: LaCuerda has no chords for it";
+    }
+    const more = [];
+    const tabs = ug ? listOf(ug.tabs).filter((t) => t && typeof t === "object") : [];
+    if (tabs.length) {
+      more.push(versionsOf(tabs, ug.counts, display, (t, go) => a.get(pick({ ug: ug.ug, tab: t.url }), display, here(), go)));
+    }
+    if (lc) {
+      const box = el("div", "row-group");
+      box.appendChild(el("p", "subhead", "On LaCuerda"));
+      const actions = el("div", "actions");
+      if (chords && (ug || gone)) {  // the line's own button is another's: this one keeps LaCuerda's sheet
+        actions.appendChild(button("Get it with this sheet", "small", (e) => a.get(pick(sheet), display, here(), e.currentTarget),
+          "Get " + display + ", keeping LaCuerda's sheet"));
+      }
+      actions.appendChild(link({ label: "Its page", href: lc.url, source: "lacuerda" }, "btn small", true));
+      box.appendChild(actions);
+      more.push(box);
+    }
+    if (gtp) more.push({ heading: "On gtptabs.com", links: [{ label: "Its page", href: gtp.url, source: "gtptabs" }] });
+    const opens = mine ? opener(mine.links) : null;
+    if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+    // Not under one of UG's misc-… names ("Misc Mashups"): no one's, the song would never be found by it.
+    if (a.later && !mine && !(ug && ug.no_ones)) more.push(laterGroup(a.later, pick(ug ? {} : sheet), display, here));
+    const facts = [ug ? tabCounts(ug.counts) : "",
+      lc ? "LaCuerda ×" + (Number(lc.versions) || 1) + (chords ? "" : ", no chords") : "",
+      gtp ? "Guitar Pro file" + ((Number(gtp.uploads) || 1) > 1 ? " ×" + Number(gtp.uploads) : "") : ""];
+    const badges = gone ? [{ kind: "removed", text: "Removed " + String(gone.removed_at || "").slice(0, 10) }]
+      : mine ? [{ kind: "found", text: "In your library" }] : [];
+    line = resultRow({ dense: true, title, artist, sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs"].filter(Boolean),
+      facts: facts.filter(Boolean).join(" · "), badges, action: main, more, status: gone ? "removed" : "" });
+    line.classList.add("hit");
+    if (gone) line.classList.add("removed-hit");
+    line.dataset.hit = String(it.key || "");
+    line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : "removed";
+    if (ug) line.dataset.ug = String(ug.ug || "");
+    return line;
+  };
+  // A MuseScore page, its title alone (its sitemaps name no artist), so a possible match: a link to open, as caracole
+  // never fetches from MuseScore.
+  const titleLine = (h) => {
+    const hit = h && typeof h === "object" ? h : {};
+    const title = String(hit.title || "");
+    const line = resultRow({ dense: true, title, sources: ["musescore"], facts: "same title, maybe another song",
+      action: { label: "Open", href: hit.url } });
+    const open = line.querySelector(".line-action a");
+    if (open) open.setAttribute("aria-label", "Open " + title + " on MuseScore, in a new tab");
+    line.classList.add("hit");
+    line.dataset.source = "musescore";
+    line.dataset.hit = "musescore:" + String(hit.url || "");
+    return line;
   };
   // An artist of LaCuerda's index, with their most popular songs said: ``open(a)`` lists the songs the index
   // holds of theirs, or offers to read their page when caracole never has.
@@ -461,5 +565,5 @@ const caracoleRows = (icons) => {
     return p;
   };
   return { resultRow, sourceMark, link, titleLink, artistFilter, button, many, counts, opener, ugHit, artistHit,
-    siteHit, siteArtist, siteArtistSongs, siteUnlisted, readArtistPage, readOutcome, prose };
+    siteHit, siteArtist, siteArtistSongs, siteUnlisted, readArtistPage, readOutcome, prose, indexLine, titleLine };
 };

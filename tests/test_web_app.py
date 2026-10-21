@@ -1426,9 +1426,9 @@ def test_the_lookup_page_is_served_with_its_script(app):
     csp = header(response, "content-security-policy")
     assert "connect-src 'self'" in csp and "script-src 'sha256-" in csp and "frame-ancestors 'none'" in csp
     assert "unsafe-inline" not in csp and "innerHTML" not in body
-    # The library page's own bar searches the sites now: it links no other page for it.
+    # The library page's own bar searches the sites as you type: it links no other page for it, and has no button.
     library = text(get(app, "/"))
-    assert 'href="/lookup"' not in library and 'id="all"' in library
+    assert 'href="/lookup"' not in library and 'id="q"' in library and 'id="all"' not in library
 
 
 def test_the_search_answers_json_from_your_library_and_the_offline_index(app, conn):
@@ -1586,6 +1586,70 @@ def test_every_search_row_carries_its_artist_and_title_keys(app, conn):
     assert [lc["artist_key"], lc["title_key"]] == [ug["artist_key"], ug["title_key"]]
 
 
+def test_an_artist_the_search_names_and_their_songs_carry_the_keys_of_their_group(app, conn):
+    # The library page puts an artist and their songs from every site under one header: the artist's ``group_key``
+    # is the artist key of their songs' rows, and their most tabbed songs come as the index's songs do, with their
+    # versions, their keys and the song of yours each is.
+    from caracole.normalize import identity_key
+    from caracole.ug.index import mark_built, upsert_rows
+
+    upsert_rows(conn, [(77, "estopa", "como-camaron", "chords", "estopa/como-camaron-chords-77"),
+                       (78, "estopa", "tu-calorro", "chords", "estopa/tu-calorro-chords-78")], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+    lacuerda_index(conn)
+    mine = add_song(conn, "Estopa", "Como Camarón")
+    data = as_json(get(app, "/api/search?q=estopa"))
+    group, title = identity_key("Estopa", "Como Camarón").split("/")
+    [ug], [lc] = data["artists"], data["lacuerda_artists"]
+    assert ug["group_key"] == lc["group_key"] == group
+    tops = {t["ug"]: t for t in ug["top"]}
+    camaron = tops["estopa/como-camaron"]
+    assert [camaron["artist_key"], camaron["title_key"], camaron["song"]] == [group, title, mine.id]
+    assert camaron["tabs"][0]["id"] == 77 and camaron["counts"] == {"chords": 1}
+    assert camaron["library"]["id"] == mine.id and tops["estopa/tu-calorro"]["song"] is None
+    [lc_top] = lc["top"]
+    assert [lc_top["artist_key"], lc_top["title_key"], lc_top["song"]] == [group, title, mine.id]
+    assert lc_top["sheet"] == LC + "estopa/como_camaron-2.shtml" and lc_top["versions"] == 3
+    assert as_json(get(app, "/api/artist?lacuerda=estopa"))["group_key"] == group
+
+
+def test_a_row_of_a_song_of_yours_says_whether_its_artist_is_yours_by_name(app, conn):
+    # The library page puts the rows of an artist under your artist's header only when they name the same artist (UG's
+    # "Acdc" is your AC/DC): your cover matched to the original's tab is your song, not its artist yours.
+    from caracole.ug.index import mark_built, upsert_rows
+
+    rows = [(11, "oasis", "wonderwall", "chords"), (12, "oasis", "live-forever", "chords"), (21, "acdc", "thunderstruck", "chords")]
+    upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1", datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+    cover = add_song(conn, "Ryan Adams", "Wonderwall")
+    update_song(conn, cover.id, match_decision="accept", match_artist_key="oasis", match_song_key="wonderwall")
+    acdc = add_song(conn, "AC/DC", "Thunderstruck")
+    [wonderwall] = [h for h in as_json(get(app, "/api/search?q=wonderwall"))["index"] if h["ug"] == "oasis/wonderwall"]
+    assert (wonderwall["song"], wonderwall["same_artist"]) == (cover.id, False)
+    [thunder] = [h for h in as_json(get(app, "/api/search?q=thunderstruck"))["index"] if h["ug"] == "acdc/thunderstruck"]
+    assert (thunder["song"], thunder["same_artist"]) == (acdc.id, True)
+    [live] = [h for h in as_json(get(app, "/api/search?q=live%20forever"))["index"] if h["ug"] == "oasis/live-forever"]
+    assert (live["song"], live["same_artist"]) == (None, False)
+
+
+def test_the_search_carries_the_removed_songs_that_match_never_as_yours_nor_best(app, conn):
+    from caracole.songs import mark_removed
+
+    creep_index(conn)
+    gone = add_song(conn, "宋冬野", "斑马斑马")
+    mark_removed(conn, gone, "2026-10-20T09:00:00+00:00")
+    conn.execute("DELETE FROM songs WHERE id = ?", (gone.id,))
+    artist_key, title_key = gone.key.split("/")
+    for q in ("斑马", "斑马斑马", "banma"):
+        data = as_json(get(app, "/api/search?q=" + quote(q)))
+        assert data["removed"] == [{"artist": "宋冬野", "title": "斑马斑马", "key": gone.key,
+                                    "removed_at": "2026-10-20T09:00:00+00:00", "artist_key": artist_key,
+                                    "title_key": title_key}], q
+        assert data["library"] == [] and data["best"] is None, q
+    assert as_json(get(app, "/api/search?q=creep"))["removed"] == []
+
+
 def test_the_search_says_which_sites_it_left_out_and_why(app, cfg, conn):
     import dataclasses
 
@@ -1633,10 +1697,12 @@ def test_the_search_lists_lacuerdas_artists_and_songs_from_its_index(app, conn):
     mine = add_song(conn, "Estopa", "Como Camarón")
     data = as_json(get(app, "/api/search?q=estopa"))
     [estopa] = data["lacuerda_artists"]
-    assert estopa == {"source": "lacuerda", "artist": "Estopa", "slug": "estopa", "url": LC + "estopa/",
-                      "songs": 159, "known": 2, "score": 100.0, "via": "artist",
-                      "top": [{"title": "Como Camarón", "url": LC + "estopa/como_camaron",
-                               "sheet": LC + "estopa/como_camaron-2.shtml"}]}
+    assert {k: v for k, v in estopa.items() if k != "top"} == {
+        "source": "lacuerda", "artist": "Estopa", "slug": "estopa", "url": LC + "estopa/", "songs": 159, "known": 2,
+        "score": 100.0, "via": "artist", "group_key": "estopa"}
+    assert [{k: t[k] for k in ("title", "url", "sheet", "song")} for t in estopa["top"]] == [
+        {"title": "Como Camarón", "url": LC + "estopa/como_camaron", "sheet": LC + "estopa/como_camaron-2.shtml",
+         "song": mine.id}]
     assert data["lacuerda"] == []  # its songs are in its row
     songs = as_json(get(app, "/api/search?q=como%20camaron"))["lacuerda"]
     assert [{k: h[k] for k in ("source", "artist", "title", "url", "sheet", "versions", "via", "song")}

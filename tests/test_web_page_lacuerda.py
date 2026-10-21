@@ -1,6 +1,7 @@
 """LaCuerda's offline index in the library page's bar and on the lookup page, in a real browser.
 
-A real ``caracole serve`` (as test_web_page_search.py's ``live``) serves the page; its queue runs
+A real ``caracole serve`` (as test_web_page_search.py's ``live``) serves the page, whose bar searches as you
+type and puts LaCuerda's artists and songs in the artist groups with the other sites'; its queue runs
 ``FakeCaracole``: ``caracole get`` as ``FakeGet`` does it, and ``caracole lacuerda --artist`` as
 the index would take the artist's page in, with no request. LaCuerda's index holds Estopa, whose
 page caracole has read, and Joaquín Sabina, whose page it hasn't; a name under a letter its
@@ -107,34 +108,34 @@ def lacuerda(cfg, *, complete=True):
 
 
 LC_ROWS = "[...document.querySelectorAll('#results .hit[data-source=\"lacuerda\"]')]"
-TITLES = f"{LC_ROWS}.map((h) => h.querySelector('.row-title').textContent)"
+TITLES = f"{LC_ROWS}.map((h) => h.querySelector('h3').textContent)"
+# The lookup page's rows, which stay rows.
+LOOKUP_TITLES = f"{LC_ROWS}.map((h) => h.querySelector('.row-title').textContent)"
 
 
 def search(browser, base, query):
+    """The library page, ``query`` typed into its bar: it searches as you type, no Enter needed."""
     browser.open(base)
     browser.js("document.getElementById('q').focus()")
     browser.type(query)
-    browser.press("Enter")
 
 
-def test_estopa_lists_lacuerdas_artist_whose_songs_get_it_keeps(cfg, live, browser):
+def test_estopa_is_lacuerdas_artist_with_their_songs_whose_get_it_keeps_that_sheet(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
     lacuerda(cfg)
     search(browser, base, "estopa")
-    assert browser.wait(f"{LC_ROWS}.length === 1")
-    assert [g.split(" · ")[0] for g in browser.js(GROUPS)] == ["LaCuerda"]
-    assert browser.js(f"{LC_ROWS}[0].querySelector('.source').dataset.source") == "lacuerda"  # LaCuerda's mark
-    assert browser.js(f"{LC_ROWS}[0].querySelector('.row-sub').textContent").startswith("Artist · Como Camarón")
-    assert "on LaCuerda" in browser.js("document.getElementById('bar-status').textContent")
-    # Songs: those the index holds of theirs, LaCuerda's most popular first; no request.
-    browser.click("#results .hit[data-slug='estopa'] .row-action button")
-    assert browser.wait(f"{TITLES}.length === 2")
+    assert browser.wait(f"{LC_ROWS}.length === 2")
+    # Their group: how many songs LaCuerda lists, and the songs the index holds of theirs, the most popular first.
+    assert browser.js(GROUPS) == ["Estopa · LaCuerda 159"]
     assert sorted(browser.js(TITLES)) == ["Como Camarón", "Tu Calorro"]
-    assert browser.js("document.querySelector('#results .artist-head h2').textContent") == "Estopa"
+    assert browser.js(f"{LC_ROWS}[0].querySelector('.line-sources .source').dataset.source") == "lacuerda"
+    assert "on LaCuerda" in browser.js("document.getElementById('bar-status').textContent")
+    assert browser.js("document.querySelector('#results .more-by, #results .read-page')") is None  # all it holds
+    assert queue.snapshot() == []
     # Get it: the song looked up now, keeping that LaCuerda sheet.
-    browser.js(f"{LC_ROWS}.find((h) => h.querySelector('.row-title').textContent === 'Como Camarón')"
-               ".querySelector('.row-action button').click()")
+    browser.js(f"{LC_ROWS}.find((h) => h.querySelector('h3').textContent === 'Como Camarón')"
+               ".querySelector('.line-action button').click()")
     args = posted(queue)
     assert args[:3] == ("get", "--progress", f"--lacuerda={LC}estopa/como_camaron")
     assert args[-2:] == ("Estopa", "Como Camarón")
@@ -142,22 +143,23 @@ def test_estopa_lists_lacuerdas_artist_whose_songs_get_it_keeps(cfg, live, brows
     assert browser.wait("document.querySelector('#results .progress').dataset.tone === 'ready'", timeout=20)
 
 
-def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed(cfg, live, browser):
+def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_in_their_group(cfg, live, browser):
     base, queue, runner = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
     lacuerda(cfg, complete=False)
     search(browser, base, "joaquin sabina")
-    assert browser.wait(f"{LC_ROWS}.length === 1")
+    assert browser.wait("!!document.querySelector('#results section.artist .read-page button')")
+    assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
     partly = browser.js("document.querySelector('#results .skipped.partial').textContent")
     assert "LaCuerda" in partly and "still being read" in partly and "E, J" in partly
-    browser.click("#results .hit[data-slug='joaquin_sabina'] .row-action button")
-    assert browser.wait("!!document.querySelector('#results .read-page button')")
     assert "241 songs" in browser.js("document.querySelector('#results .read-page').textContent")
-    assert queue.snapshot() == []  # Songs asks nothing: reading their page is a button of its own
+    assert queue.snapshot() == []  # the search asks nothing: reading their page is a button of its own
     browser.click("#results .read-page button")
     assert browser.wait(f"{TITLES}.length === 2", timeout=20)
     assert ("lacuerda", "--artist=joaquin_sabina") in runner.ran
     assert sorted(browser.js(TITLES)) == ["19 Días y 500 Noches", "Y Nos Dieron Las Diez"]
+    assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]  # in their group, the offer gone
+    assert browser.js("document.querySelector('#results .read-page')") is None
     assert "2 songs on LaCuerda" in browser.js("document.getElementById('bar-status').textContent")
 
 
@@ -175,7 +177,8 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     assert browser.wait(f"{TITLES}.length === 2", timeout=20)
     assert ("lacuerda", "--artist=bunbury") in runner.ran
     assert sorted(browser.js(TITLES)) == ["Infinito", "Lady Blue"]
-    assert browser.js("document.querySelector('#results .artist-head h2').textContent") == "Bunbury"
+    assert browser.js(GROUPS)[0].startswith("Bunbury · LaCuerda")  # a group of their own, first
+    assert browser.js("document.querySelector('#results .read-page.unlisted')") is None
     # A name LaCuerda has no page for says so, with what it answered, and the button rests.
     search(browser, base, "caifanes")
     assert browser.wait("!!document.querySelector('#results .read-page.unlisted button')")
@@ -193,7 +196,7 @@ def test_the_lookup_page_offers_to_read_a_name_lacuerda_hasnt_listed_yet(cfg, li
     browser.open(base + "lookup?q=bunbury")
     assert browser.wait("!!document.querySelector('#results .read-page.unlisted button')")
     browser.click("#results .read-page.unlisted button")
-    assert browser.wait(f"{TITLES}.length === 2", timeout=20)
+    assert browser.wait(f"{LOOKUP_TITLES}.length === 2", timeout=20)
     assert ("lacuerda", "--artist=bunbury") in runner.ran
 
 
@@ -204,10 +207,13 @@ def test_a_lacuerda_song_can_be_added_for_tonights_run_with_its_pick(cfg, live, 
     library(cfg, ("Estopa", "Tu Calorro"))
     search(browser, base, "estopa como camaron")
     assert browser.wait(f"{TITLES}.includes('Como Camarón')")
-    row = "#results .hit[data-source='lacuerda']:not(.artist-hit)"
-    assert browser.js(f"document.querySelector(\"{row} .row-facts\").textContent") == "3 versions"
-    browser.click(f"{row} .row-more")
-    browser.click(f"{row} .row-panel .later button")
+    row = "#results .hit[data-source='lacuerda'][data-hit$='/como-camaron']"
+    assert browser.js(f"document.querySelector(\"{row} .line-facts\").textContent") == "LaCuerda ×3"
+    # Your Tu Calorro, which LaCuerda's Estopa lists too, is your own line in their group.
+    assert browser.js("[...document.querySelectorAll('#results section.artist .line[data-id] h3')]"
+                      ".map((h) => h.textContent)") == ["Tu Calorro"]
+    browser.click(f"{row} .line-more")
+    browser.click(f"{row} .line-panel .later button")
     assert posted(queue) == ("add", f"--lacuerda={LC}estopa/como_camaron", "--", "Estopa", "Como Camarón")
     assert "Estopa - Como Camarón" in cfg.wanted_file.read_text(encoding="utf-8")
 
@@ -221,7 +227,7 @@ def test_the_lookup_page_lists_lacuerda_after_ultimate_guitar(cfg, live, browser
     groups = browser.js("[...document.querySelectorAll('#results .group')].map((g) => g.textContent)")
     assert groups.index("On LaCuerda") > groups.index("Artists on Ultimate Guitar"), groups
     browser.click("#results .hit[data-slug='estopa'] .row-action button")
-    assert browser.wait(f"{TITLES}.length === 2")
+    assert browser.wait(f"{LOOKUP_TITLES}.length === 2")
     browser.js(f"{LC_ROWS}.find((h) => h.querySelector('.row-title').textContent === 'Tu Calorro')"
                ".querySelector('.row-action button').click()")
     args = posted(queue)
@@ -243,15 +249,15 @@ def test_lacuerda_comes_first_with_the_artist_it_alone_has_by_that_name(cfg, liv
     base, _, _ = live
     calamaro(cfg)
     search(browser, base, "andres calamaro")
-    assert browser.wait(f"{LC_ROWS}.length === 1")
-    assert [g.split(" · ")[0] for g in browser.js(GROUPS)] == ["LaCuerda", "Ultimate Guitar"]
+    assert browser.wait("!!document.querySelector('#results section.artist .read-page')")
+    assert [g.split(" · ")[0] for g in browser.js(GROUPS)] == ["Andrés Calamaro", "Javier Calamaro"]
 
 
 def test_enter_on_the_lookup_page_opens_the_artist_lacuerda_alone_has_by_that_name(cfg, live, browser):
     base, queue, _ = live
     calamaro(cfg)
     browser.open(base + "lookup?q=andres%20calamaro")
-    assert browser.wait(f"{LC_ROWS}.length === 1")
+    assert browser.wait(f"{LC_ROWS}.length === 1")  # the lookup page's artist row
     groups = browser.js("[...document.querySelectorAll('#results .group')].map((g) => g.textContent)")
     assert groups == ["On LaCuerda", "On Ultimate Guitar"], groups
     browser.js("document.getElementById('q').focus()")
@@ -272,14 +278,10 @@ def test_lacuerdas_rows_and_the_offer_to_read_a_page_fit_a_phone(cfg, live, tmp_
         pytest.skip(f"chromium couldn't run: {e}")
     try:
         search(phone, base, "joaquin sabina")
-        assert phone.wait(f"{LC_ROWS}.length === 1")
-        phone.click("#results .hit[data-slug='joaquin_sabina'] .row-action button")
-        assert phone.wait("!!document.querySelector('#results .read-page button')")
+        assert phone.wait("!!document.querySelector('#results section.artist .read-page button')")
         assert phone.js("document.documentElement.scrollWidth <= innerWidth")
         assert phone.js("document.querySelector('#results .read-page button').getBoundingClientRect().height") >= 44
         # The request form is filled in with the artist LaCuerda alone knows.
-        search(phone, base, "joaquin sabina")
-        assert phone.wait(f"{LC_ROWS}.length === 1")
         assert phone.wait("document.querySelector('form.request-form [name=artist]').value === 'joaquin sabina'")
     finally:
         phone.close()
@@ -297,7 +299,7 @@ def test_the_file_page_names_the_line_that_searches_lacuerda_too(cfg, tmp_path, 
     browser.open(path.as_uri())
     browser.js("document.getElementById('q').focus()")
     browser.type("estopa")
-    browser.press("Enter")
+    browser.press("Enter")  # the file can't search: Enter shows the line that does
     assert browser.wait("!!document.querySelector('#results .file-answer, #list .file-answer, .file-answer')")
     said = browser.js("document.querySelector('.file-answer').textContent")
     assert "LaCuerda" in said and "caracole search 'estopa'" in said

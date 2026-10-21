@@ -89,34 +89,49 @@ class="lines">``. ``result`` is a plain object, every field optional:
 
 ``window.caracole.sourceMark(key)`` gives a source's mark alone, and
 ``window.caracole.icons`` the icons' data. ``ROWS_SCRIPT`` also draws the
-offline indexes' hits, as ``/api/search`` and ``/api/artist`` give them
-(``ugHit``, ``artistHit``, ``siteHit``, ``siteArtist`` and ``siteArtistSongs``,
-LaCuerda's artists and their songs, ``siteUnlisted``, a name under a letter its
-listings aren't read to yet, with ``readArtistPage``, which asks the server to
-read an artist's page, by its slug or by a name, and ``readOutcome``, what
-LaCuerda answered a read that left nothing to list), for this page's search of
-the sites and the lookup page alike.
+offline indexes' hits, as ``/api/search`` and ``/api/artist`` give them: for
+this page's search, a song of the sites as a dense line (``indexLine``: one
+line however many sites have it, each site's mark and counts on it, its
+identity its ``data-hit``) and MuseScore's pages (``titleLine``); for the
+lookup page, rows (``ugHit``, ``artistHit``, ``siteHit``, ``siteArtist`` and
+``siteArtistSongs``, LaCuerda's artists and their songs); and for both
+``siteUnlisted``, a name under a letter LaCuerda's listings aren't read to yet,
+with ``readArtistPage``, which asks the server to read an artist's page, by its
+slug or by a name, and ``readOutcome``, what LaCuerda answered a read that left
+nothing to list.
 
-**One bar.** The search box filters your songs as you type, here, asking
-nothing. Enter, or Search all, searches the sites too. The file can ask
-nothing of anyone: it shows the ``caracole search`` line to run, with Copy,
-above your songs (in their empty list when none match). Served, the results
-take the list's place until Escape: your songs that match, as their own lines,
-then the Ultimate Guitar index's songs and artists, LaCuerda's artists and
-songs, gtptabs.com's pages and MuseScore's (``GET /api/search``, a moment after
-the last key, the newest query alone, the sites left out, or searched in part,
-said with why), each with Get it (``POST /lookup``), whose request's line shows
-in the result's own row. A LaCuerda artist's Songs lists the songs the index
-holds of theirs, or offers to read their page (``POST /lacuerda/artist``), and
-so does a query LaCuerda's index has no artist by while the listing of its
-letter isn't read whole. A wanted song whose sheet you picked on LaCuerda says
-that tonight's run gets it (``lacuerda``), and isn't a song not found
-(``notFound``). Enter never
-spends a request. The request form sits under the results, filled in from
-the query.
+**One bar.** The search box filters your songs as you type, here. The file can
+ask nothing of anyone: Enter shows the ``caracole search`` line to run, with
+Copy, above your songs (in their empty list when none match). Served, typing
+searches the sites too, from the third letter (two with a Chinese character,
+as ``/api/search`` looks nowhere for fewer), a moment after the last key, no
+Enter and no button: the results take the list's place until Escape, under the
+same artist headers as the list's (the script's ``mergeSites``), each artist's
+header counting your songs of theirs and, for an artist the query names, the
+songs Ultimate Guitar's and LaCuerda's indexes list ("Estopa · you have 2 · UG
+60 · LaCuerda 159"). Under an artist: your songs that match, as their own lines;
+the songs you removed that match ("Removed 2026-10-20", Add again: a
+``POST /request`` with Fetch it now, as the request form asks, whose wanted.txt
+line brings it back); then the indexes' songs (``GET /api/search``: the newest
+query alone, the sites left out, or searched in part, said with why), a song a
+line, keyed by its identity key's two parts (the rows' ``artist_key`` and
+``title_key``, an artist's ``group_key``; a song of yours by its ``identity``),
+so that Ultimate Guitar's, LaCuerda's and gtptabs.com's rows of one song are
+one line, and a row of a song of yours is your song's line, its artist's rows
+under your artist's header. An artist the query names shows their most tabbed
+songs, then "+ 57 more by Estopa", the rest in the group fifty at a time
+(``/api/artist``); a LaCuerda artist the rest the index holds of theirs, or the
+offer to read their page (``POST /lacuerda/artist``), and so does a query
+LaCuerda's index has no artist by while the listing of its letter isn't read
+whole, under the groups. MuseScore's pages, titles alone, come last under a
+header of their own. A line's Get it (``POST /lookup``) shows its request's line
+in the line itself. Enter moves the focus to the first result and never spends a
+request. A wanted song whose sheet you picked on LaCuerda says that tonight's
+run gets it (``lacuerda``), and isn't a song not found (``notFound``). The
+request form sits under the results, filled in from the query.
 
 ``caracole serve`` serves the same page with ``controls`` (``WebControls``): the
-search of the sites, a form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
+search of the sites as you type, a form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
 button under each song's "⋯" (it counts down five seconds, with Undo, before it sends anything), and a
 CSP that lets the forms post to the server (``form-action 'self'``) and the script
 ask it how its requests go (``connect-src 'self'``). The script posts the forms
@@ -511,6 +526,9 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "buy": buy,
         "youtube": youtube if status != "ignored" else None,
         "lacuerda": _lacuerda_pick(song, overrides, status),
+        # Its identity key (normalize.identity_key): the served search puts it, and the sites' rows of its artist and
+        # of it, under one header by the artist's part, as /api/search keys its rows.
+        "identity": song.key,
         "sortArtist": _sort_key(song.artist),
         "sortTitle": _sort_key(title),
         "artistLetter": _letter(_sort_key(song.artist)),

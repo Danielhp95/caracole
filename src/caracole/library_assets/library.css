@@ -51,21 +51,23 @@
   background: transparent; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; }
 .bar-row { display: flex; align-items: center; gap: 8px; }
 .bar-row .field { flex: 1; min-width: 0; }
-.btn.all { flex: none; min-height: 50px; padding: 0 16px; border-radius: 14px; white-space: nowrap; }
-/* One line, its height kept: what Enter does, or how the search of the sites goes. */
+/* One line, its height kept: what typing and Enter do, or how the search of the sites goes. */
 .bar-status { min-height: 1.35em; margin: 6px 2px 0; overflow: hidden; color: var(--muted); font-size: .8rem;
   line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
 .results-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 4px 0 0; }
-.results .group { margin: 18px 0 0; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
-  text-transform: uppercase; }
-.results .rows { margin-top: 6px; }
-.all-mine, .more-songs { margin: 10px 0 0; }
-.artist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px;
-  margin: 14px 0 0; }
-.artist-head h2 { margin: 0; font-size: 1.2rem; overflow-wrap: anywhere; }
-.artist-head h2:focus { outline: none; }
+.all-mine { margin: 10px 0 0; }
+/* The sites' results: one box of groups, as the list's, your songs and the indexes' under each artist's header, then
+   the artist's foot: "+ 57 more by Estopa", or the offer to read their page on LaCuerda. */
+#found > .groups { margin-top: 10px; }
+.group-tail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 2px 4px 4px 12px;
+  border-top: 1px solid var(--border); }
+.group-tail .read-page { margin: 2px 0; }
+.btn.more-by { min-height: 28px; padding: 0 8px; border-color: transparent; background: transparent;
+  color: var(--accent); font-size: .85rem; font-weight: 650; }
+.btn.more-by:hover { border-color: var(--border); background: var(--raised); }
+.badge.removed { color: var(--ignored); background: var(--ignored-bg); }
 .skipped { margin: 16px 0 0; color: var(--muted); font-size: .85rem; }
 .index-hint { max-width: 72ch; margin-top: 10px; white-space: pre-wrap; }
 .results .request { margin-top: 20px; }
@@ -123,6 +125,8 @@ section.artist .line-by { display: none; }
 @media (min-width: 720px) {
   section.artist .line { grid-template-columns: minmax(0, 1fr) 6.5rem 3rem 4.75rem 7.5rem var(--line-more);
     grid-template-areas: "title status key src act more"; }
+  /* A site's line has no key: its counts ("chords ×9 · tabs ×2") take the key's column too, the rest where yours are. */
+  section.artist .line.hit { grid-template-areas: "title status status src act more"; }
 }
 .badge.missing { color: var(--failed); background: var(--failed-bg); }
 /* A song caracole removed while the page was open: it says so, and nothing more, until the page is loaded again. */

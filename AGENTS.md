@@ -80,7 +80,12 @@ Rules a change there keeps (the Invariants below are the others):
   `app.written_pages` (a new kind goes there, with its record and its policy), and only while it
   holds the bytes caracole recorded (`files.read_written_page`). Enter in a search box never
   spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
-  opens the leading artist's songs), and on the library page it only searches, which asks no site.
+  opens the leading artist's songs), and on the library page, whose served bar searches
+  `/api/search` as you type (which asks no site), it only moves the focus to the first result.
+  There, library.js's `mergeSites` puts your songs and every index's rows under one header an
+  artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
+  `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line
+  rows.js's `indexLine`; a removed song's line asks for it again as the request form does.
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of
   library_assets/, inlined byte for byte in the order of `library_page.STYLESHEETS`, `SCRIPTS`
   and `TEMPLATES`, where a new file is listed (test_library_assets.py).
@@ -100,7 +105,8 @@ Rules a change there keeps (the Invariants below are the others):
   are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local indexes
   alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
   gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
-  (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
+  (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
+  and in `/api/search`'s `removed`, which the library page shows with Add again). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
   index), which must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
   except that a pattern in more than `KEYS_PER_PATTERN` keys (a common word) brings in its
