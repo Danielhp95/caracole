@@ -270,9 +270,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **Politeness** (http.py, health.py, commands/_common.py), at two paces
   (`config.ProviderPolicy`; `_common.make_client` picks one).
   - **Bulk work**: the nightly run (its index refresh included), `caracole index build`
-    and every command but `caracole get`. Budgets per run: `ug` 60, `lrclib` 200,
-    `lacuerda` 30 (its sheets first, then its listings of every artist), `gtptabs` 20,
-    `musescore` 10 requests, `youtube` 6 yt-dlp runs
+    and every command but `caracole get` and `caracole lacuerda --artist`. Budgets per run:
+    `ug` 60, `lrclib` 200, `lacuerda` 30 (its sheets first, then its listings of every
+    artist), `gtptabs` 20, `musescore` 10 requests, `youtube` 6 yt-dlp runs
     (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100 (`BUILD_BUDGET`,
     commands/index.py). Then `BudgetExhausted`. Between any two requests to a provider, a
     random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com and MuseScore,
