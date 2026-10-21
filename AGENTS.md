@@ -284,7 +284,7 @@ Traps:
   music.py imports mutagen in `read_audio` alone, and lyrics.py in `_expected_seconds`:
   inbox.py, which the pages import, scores names with its `Names`
   (`test_music.py::test_the_pages_load_no_tag_reader`, `::test_the_inbox_loads_no_http_client`).
-- Branch from `caracole-v1`, the default branch (`main` holds only the first design commit).
+- Branch from `caracole-v1`, the default branch; `main` takes it by merge, when the owner asks.
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:
   no Co-Authored-By trailer or "Generated with" line, in commits, code or docs.
