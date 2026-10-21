@@ -375,11 +375,13 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
 
 def _song_html(sheet: Sheet, suffix: str = "", named: str = "") -> str:
     """What follows a song's header, on sheet.html and in a songbook alike: an auto sheet's notice, the
-    strip of chord shapes the script fills in, and the sheet, marked Chinese when its words or names are
-    (``named``: what a songbook calls the song). ``suffix`` tells a songbook's songs apart ("-3")."""
+    rail of necks (a wide screen's: a neck per chord) and the strip of chord shapes the script fills in,
+    and the sheet, marked Chinese when its words or names are (``named``: what a songbook calls the
+    song). ``suffix`` tells a songbook's songs apart ("-3")."""
     lang = ' lang="zh"' if has_han(named + sheet.title + "".join(_texts(sheet))) else ""
     return (
         (_NOTICE if sheet.auto else "")
+        + f'<aside class="necks" id="necks{suffix}" hidden aria-label="Chord positions"></aside>\n'
         + f'<div class="strip" id="strip{suffix}" hidden></div>\n'
         + f'<article class="sheet" id="sheet{suffix}"{lang}>\n{_sheet_html(sheet)}</article>\n'
     )

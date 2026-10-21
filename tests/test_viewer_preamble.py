@@ -130,7 +130,7 @@ FOLD = """(() => {
 
 
 @in_chromium
-@pytest.mark.parametrize("size", ["390,844", "1280,800"], ids=["phone", "desktop"])
+@pytest.mark.parametrize("size", ["390,844", "1600,800"], ids=["phone", "desktop"])  # beside the rail of necks
 def test_the_preamble_takes_two_small_muted_lines_until_more_opens_it(tmp_path, size):
     with Chromium(tmp_path / "profile", size=size) as browser:
         tab = opened(browser, build_viewer(LEGEND), tmp_path)
@@ -167,7 +167,7 @@ def test_opening_the_preamble_measures_the_columns_again(tmp_path):
     # On a wide screen a short song reads in two columns; with forty lines of notes open, it no longer fits.
     notes = "".join(f"Note number {n} about this made-up version\n" for n in range(1, 41))
     cho = HEAD + notes + "\n{comment: Verse}\n[G]Tiny [D]words\n\n{comment: Chorus}\n[C]Sing it [G]out\n"
-    with Chromium(tmp_path / "profile", size="1280,800") as browser:
+    with Chromium(tmp_path / "profile", size="1600,800") as browser:  # two columns fit beside the rail of necks
         tab = opened(browser, build_viewer(cho), tmp_path)
         before = tab.eval("document.documentElement.dataset.columns")
         tab.click("#sheet .pre summary")
@@ -184,13 +184,15 @@ def test_the_keyboard_reaches_more_after_the_title_and_opens_it(tmp_path):
         browser.open(page.as_uri())
         assert browser.wait("document.documentElement.dataset.ready === '1'")
         focused = []
-        for _ in range(2):
+        for _ in range(2 + 6):
             browser.press("Tab")
             focused.append(browser.js("document.activeElement.matches('.back') ? 'back'"
-                                      " : document.activeElement.matches('.pre summary') ? 'more' : 'else'"))
+                                      " : document.activeElement.matches('.pre summary') ? 'more'"
+                                      " : document.activeElement.closest('#necks') ? 'rail' : 'else'"))
         browser.press("Enter")
         opened_now = browser.js("document.querySelector('#sheet .pre').open")
-    assert focused == ["back", "more"] and opened_now
+    # From 1200 px the rail of necks comes between, on the left: one stop for each of the song's six chords.
+    assert focused == ["back", *["rail"] * 6, "more"] and opened_now
 
 
 # Printed: which of the notes' lines a reader sees, and whether the fold's own parts show.

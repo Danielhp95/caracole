@@ -782,3 +782,71 @@ def test_tapping_through_the_controls(tmp_path):
 def test_a_chord_caracole_cant_read_is_left_as_written(tmp_path):
     dom = dump_dom(build_viewer("{title: T}\n{artist: A}\n[G]la [(G)]lo\n"), tmp_path, "#t=2")
     assert chord_texts(dom) == {"0": "A", "1": "(G)"}
+
+
+@in_chromium
+def test_the_address_keeps_a_chords_chosen_position(tmp_path):
+    # at=<chord>.<position>, read back on a reload; the strip draws that chord's shape.
+    body = """
+      q("#next").click();
+      q("#next").click();
+      out = [location.hash, q("#card-name").textContent];
+    """
+    hash_, name = run_in_page(build_viewer(UG_CHO), tmp_path, body, "#chord=3")
+    assert hash_ == "#chord=3&at=3.2" and name == "C"
+    strip = """
+      q("#strip-toggle").click();
+      out = [location.hash, q("#card-name").textContent, q("#strip").children[3].querySelector("svg").outerHTML,
+             q("#diagram .count").textContent];
+    """
+    again = run_in_page(build_viewer(UG_CHO), tmp_path, strip, "#chord=3&at=3.2")
+    usual = run_in_page(build_viewer(UG_CHO), tmp_path, strip, "#chord=3")
+    assert again[:2] == ["#chord=3&at=3.2", "C"] and again[3].startswith("3 of ")
+    assert usual[3].startswith("1 of ") and again[2] != usual[2]  # the strip draws the chosen shape
+    first = run_in_page(build_viewer(UG_CHO), tmp_path, """
+      q("#next").click();
+      q("#prev").click();
+      out = location.hash;
+    """, "#chord=3")
+    assert first == "#chord=3"  # position 0 is the usual one: left out
+    moved = run_in_page(build_viewer(UG_CHO), tmp_path, """
+      q("#more").click();
+      q("#up").click();
+      out = location.hash;
+    """, "#at=3.2")
+    assert moved == "#t=1"  # a chord with another name starts at its first shape again
+
+
+@in_chromium
+def test_the_address_keeps_a_swap(tmp_path):
+    body = """
+      q('#sheet .c[data-c="0"]').click();
+      [...document.querySelectorAll("#alts .chip")].find((b) => b.textContent.startsWith("Gmaj7")).click();
+      q("#use").click();
+      out = [location.hash, q('#sheet .c[data-c="0"]').textContent];
+    """
+    hash_, name = run_in_page(build_viewer(UG_CHO), tmp_path, body)
+    assert hash_.startswith("#alt=ionian.0.7.maj7.") and name == "Gmaj7"
+    page = build_viewer(UG_CHO).encode("utf-8")
+
+    class Server(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", viewer_csp(page))
+            self.end_headers()
+            self.wfile.write(page)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Server)
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
+    try:
+        dom = dump_url(f"http://127.0.0.1:{server.server_port}/Artist/Title/sheet.html#alt=ionian.0.7.maj7.&chord=0&at=0.1",
+                       tmp_path)
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert 'data-ready="1"' in dom
+    assert chord_texts(dom)["0"] == "Gmaj7"  # a swap read from the address, without storage

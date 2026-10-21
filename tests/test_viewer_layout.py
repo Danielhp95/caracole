@@ -22,21 +22,26 @@ LONG = "{title: Long Song}\n{artist: The Placeholders}\n" + "".join(
     for n in range(1, 21)
 )
 TINY = "{title: Tiny Song}\n{artist: The Placeholders}\n{comment: Verse}\n[G]Tiny [D]words\n\n{comment: Chorus}\n[C]Sing it [G]out\n"
-DESKTOP = "1280,800"
+# A wide laptop's: beside the rail of necks (300 px, from 1200 px wide), as much room as 1280 px without it.
+DESKTOP = "1600,800"
 
 pytestmark = CHROMIUM_MARKS  # every test here opens the page in Chromium
 
-# What the page shows: how many of the sheet's lines sit in its right half (a second column), and so on.
+# What the page shows: how many of the sheet's lines sit in its right half (a second column), and so on; its
+# margins are those of the room beside the rail of necks, when there is one.
 LAYOUT = """(() => {
   const sheet = document.getElementById("sheet");
   const box = sheet.getBoundingClientRect();
   const middle = box.left + box.width / 2;
   const page = document.querySelector(".page").getBoundingClientRect();
+  const rail = document.getElementById("necks");
+  const from = rail && !rail.hidden ? rail.getBoundingClientRect().right : 0;
   return {
     right: [...sheet.querySelectorAll(".l, .tab")].filter((l) => l.getBoundingClientRect().left > middle).length,
     height: box.height, window: innerHeight,
     font: parseFloat(getComputedStyle(sheet).fontSize),
-    margins: [Math.round(page.left), Math.round(document.documentElement.clientWidth - page.right)],
+    margins: [Math.round(page.left - from), Math.round(document.documentElement.clientWidth - page.right)],
+    rail: Math.round(from),
     width: page.width, sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
   };
 })()"""
@@ -82,9 +87,9 @@ def test_the_columns_follow_the_window_and_the_text_size(tmp_path):
         tab = opened(browser, build_viewer(SHORT), tmp_path)
         columns = lambda: tab.eval(LAYOUT)["right"] > 0  # noqa: E731
         seen = [columns()]
-        resize(browser, 1280, 400)  # too low for the song, even in two columns
+        resize(browser, 1600, 400)  # too low for the song, even in two columns
         tab.wait_for(f"({LAYOUT}).right === 0")
-        resize(browser, 1280, 800)
+        resize(browser, 1600, 800)
         tab.wait_for(f"({LAYOUT}).right > 0")
         tab.eval("document.getElementById('bigger').click()")  # two no longer fit side by side
         seen.append(columns())
@@ -143,3 +148,17 @@ def test_the_settings_rail_beside_the_song_measures_its_columns_again(tmp_path):
     assert seen[1]["right"] == 0 and seen[1]["columns"] == "1" and seen[1]["font"] > 18, seen[1]
     assert not seen[1]["sideways"], seen[1]
     assert seen[2]["right"] > 0 and seen[2]["font"] == seen[0]["font"], seen
+
+
+def test_the_rail_of_necks_takes_its_width_off_the_room_for_two_columns(tmp_path):
+    # From 1200 px wide the rail is on the left, and the song moves over for it: at 1280 px two columns of
+    # this short song no longer fit beside it, at 1600 px they do; the song is measured beside the rail.
+    seen = {}
+    for width in (1199, 1280, 1600):
+        with Chromium(tmp_path / f"profile-{width}", size=f"{width},800") as browser:
+            seen[width] = opened(browser, build_viewer(SHORT), tmp_path).eval(LAYOUT)
+    assert seen[1199]["rail"] == 0 and seen[1199]["right"] > 0, seen[1199]  # no rail: two columns
+    assert seen[1280]["rail"] == 300 and seen[1280]["right"] == 0 and seen[1280]["font"] > 18, seen[1280]
+    assert abs(seen[1280]["margins"][0] - seen[1280]["margins"][1]) <= 1, seen[1280]  # centred beside it
+    assert seen[1600]["rail"] == 300 and seen[1600]["right"] > 0, seen[1600]
+    assert not any(s["sideways"] for s in seen.values()), seen

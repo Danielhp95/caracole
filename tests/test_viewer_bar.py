@@ -313,7 +313,8 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
         .map((e) => { const r = e.getBoundingClientRect(); return Math.min(r.width, r.height); });
       const fits = (s) => { const e = document.querySelector(s); return e.scrollWidth <= e.clientWidth; };
       return {height: Math.round(bar.height), bottom: Math.round(bar.bottom), left: bar.left, right: bar.right,
-              width: innerWidth, page: document.documentElement.scrollWidth, smallest: Math.min(...buttons),
+              width: innerWidth, client: document.documentElement.clientWidth,
+              page: document.documentElement.scrollWidth, smallest: Math.min(...buttons),
               main: fits('#key-now .k'), sub: fits('#key-now .d'), said: document.querySelector('#key-now .d').textContent};
     })()"""
     end = """(() => { scrollTo(0, document.documentElement.scrollHeight);
@@ -325,7 +326,8 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
             m = b.js(measure)
             clear = b.js(end)
         assert 50 <= m["height"] <= 54 and m["bottom"] == height, (width, m)
-        assert m["left"] == 0 and m["right"] == width and m["page"] <= width, (width, m)
+        rail = 300 if width >= 1200 else 0  # from 1200 px the rail of necks is on its left
+        assert m["left"] == rail and m["right"] == m["client"] and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44, (width, m)
         if width >= 390:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1")
             assert m["main"] and m["sub"] and m["said"] == "shapes · capo 2 · +1", (width, m)
