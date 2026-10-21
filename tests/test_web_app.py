@@ -1567,6 +1567,25 @@ def test_the_search_lists_gtptabs_and_musescore_pages_each_capped(app, conn):
                                 "why": "its index is empty: the nightly run reads its listings of every artist"}]
 
 
+def test_every_search_row_carries_its_artist_and_title_keys(app, conn):
+    from caracole.normalize import identity_key
+    from caracole.ug.index import mark_built, upsert_rows
+
+    upsert_rows(conn, [(77, "estopa", "como-camaron", "chords", "estopa/como-camaron-chords-77")], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+    lacuerda_index(conn)
+    site_pages(conn, gtptabs=["https://gtptabs.com/tabs/31/estopa/como-camaron.html"])
+    data = as_json(get(app, "/api/search?q=estopa%20como%20camaron"))
+    want = identity_key("Estopa", "Como Camarón").split("/")
+    [ug] = [h for h in data["index"] if h["ug"] == "estopa/como-camaron"]
+    [lc] = [h for h in data["lacuerda"] if h["title"] == "Como Camarón"]
+    [gtp] = data["gtptabs"]
+    for row in (ug, lc, gtp):
+        assert [row["artist_key"], row["title_key"]] == want
+    assert [lc["artist_key"], lc["title_key"]] == [ug["artist_key"], ug["title_key"]]
+
+
 def test_the_search_says_which_sites_it_left_out_and_why(app, cfg, conn):
     import dataclasses
 

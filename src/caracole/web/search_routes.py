@@ -274,7 +274,8 @@ def _gtptabs_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit]
     """gtptabs.com's pages as the page draws them; one your library has (``_Mine``, by its names) names it,
     so that Get it looks it up as that song."""
     return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "uploads": h.uploads,
-             "score": h.score, "via": h.via, **mine} for h, mine in zip(hits, _owners(app, conn, hits, songs))]
+             "score": h.score, "via": h.via, **_keys(h.artist, h.title), **mine}
+            for h, mine in zip(hits, _owners(app, conn, hits, songs))]
 
 
 def _lacuerda_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit],
@@ -282,8 +283,17 @@ def _lacuerda_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit
     """LaCuerda's songs as the page draws them: its page, the page of the sheet Get it keeps (``sheet``, None
     for a song without chords there) and its versions; one your library has names it, as gtptabs.com's do."""
     return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "sheet": h.sheet,
-             "versions": h.uploads, "score": h.score, "via": h.via, **mine}
+             "versions": h.uploads, "score": h.score, "via": h.via, **_keys(h.artist, h.title), **mine}
             for h, mine in zip(hits, _owners(app, conn, hits, songs))]
+
+
+def _keys(artist: str, title: str) -> dict[str, str]:
+    """The keys a row merges on across sites (``normalize.identity_key``, split): the same song from
+    Ultimate Guitar, LaCuerda and gtptabs.com shares both."""
+    from caracole.normalize import identity_key
+
+    artist_key, title_key = identity_key(artist, title).split("/", 1)
+    return {"artist_key": artist_key, "title_key": title_key}
 
 
 def _owners(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit], songs: list[Song]) -> list[dict[str, Any]]:
@@ -343,7 +353,7 @@ def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], ind
                 "status": h.song.status, "review": bool(h.song.review), "score": h.score, "via": h.via,
                 "files": readable_files(conn, app.cfg.library_dir, h.song), **cards[h.song.id]}
                for h in mine]
-    hits = [{**hit, "song": song.id if song else None,
+    hits = [{**hit, **_keys(hit["artist"], hit["title"]), "song": song.id if song else None,
              "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
                          "links": cards[song.id]["links"]} if song else None}
             for hit, song in zip(index, owners)]
