@@ -44,7 +44,7 @@
       "text": { "name": "Helvetica", "size": 11 },
       "chord": { "name": "Helvetica-Bold", "size": 10.5, "color": "#b4441e" },
       "annotation": { "name": "Helvetica-Oblique", "size": 9.5, "color": "#8a847a" },
-      "comment": { "name": "Helvetica-Bold", "size": 9, "color": "#b4441e" },
+      "comment": { "name": "Helvetica-Bold", "size": 9, "color": "#b4441e", "background": "#ffffff" },
       "tab": { "name": "Courier", "size": 10 },
       "footer": { "name": "Helvetica", "size": 8, "color": "#8a847a" },
       "diagram": { "name": "Helvetica-Bold", "size": 9 },
