@@ -90,7 +90,11 @@ SHARED = ("{title: Shared Notes}\n{artist: Synthetic}\n{comment: Verse}\n{define
           "[G]made [F]up [Am/E]words [Em7]here\n")
 # Every dot of every neck, as drawn: its position, string (0 the low E), fret, centre, radius, outline's
 # width and classes; each neck's frets' x (0 the nut's right edge), the nut's left edge and the viewBox's left.
-NECK_DOTS = """[...document.querySelectorAll('#necks .nk')].map((g) => {
+# Each neck scrolled into the rail's view first (below the key's neck, the last ones are past its foot), and
+# the rail scrolled back after.
+NECK_DOTS = """(() => { const rail = document.getElementById('necks'), was = rail.scrollTop;
+const seen = [...rail.querySelectorAll('.nk')].map((g) => {
+  g.scrollIntoView({block: 'center', behavior: 'instant'});
   const svg = g.querySelector('svg.neck'), n = (el, a) => Number(el.getAttribute(a));
   const nut = svg.querySelector('.nk-nut');
   return {name: g.querySelector('.nk-name').textContent,
@@ -106,7 +110,9 @@ NECK_DOTS = """[...document.querySelectorAll('#necks .nk')].map((g) => {
         // the element at the dot's middle on the screen: none other covers it
         top: c.classList.contains('nk-dot') && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === c};
     })};
-})"""
+});
+rail.scrollTop = was;
+return seen; })()"""
 
 
 def notes(position) -> list[tuple[int, int]]:
@@ -344,7 +350,7 @@ def test_a_note_several_positions_share_is_a_dot_for_each_side_by_side_inside_it
 
 
 def test_a_neck_widened_for_shared_open_strings_keeps_its_frets_under_the_others(tmp_path):
-    lines = """[...document.querySelectorAll('#necks svg.neck')].map((svg) => {
+    lines = """[...document.querySelectorAll('#necks .nk svg.neck')].map((svg) => {  // the key's neck aside
       const x = (el) => el.getBoundingClientRect();
       return [svg.getAttribute('viewBox').startsWith('-'), x(svg.querySelector('.nk-nut')).left,
               x([...svg.querySelectorAll('.nk-fret')].pop()).right, x(svg).left - x(svg.closest('#necks')).left];
