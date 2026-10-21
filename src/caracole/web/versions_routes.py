@@ -4,8 +4,8 @@ title opens, kept beside the sheet, or the song taken back to caracole's pick.
     GET  /versions?sheet=&tab=&do=   the version (``sheet``: the library path of the viewer it was asked from;
                           ``tab``: its UG tab; ``do``: choose, keep or clear) with the one form that does it,
                           then, with ``&job=``, how it goes and a link to what it made
-    POST /versions/choose  Make this the one: ``caracole get --tab`` queued, the tab's own page, as
-                          ``caracole versions --choose`` runs it (``[pin]``), and back to the versions page
+    POST /versions/choose  Make this the one: ``caracole versions --choose --progress`` queued (``caracole get
+                          --tab`` with the tab's own page, recorded under ``[pin]``), and back to the versions page
     POST /versions/keep    Keep it: ``caracole versions --keep --progress`` queued (one tab page, at the lookup
                           pace)
     POST /versions/clear   Go back to caracole's pick: ``caracole versions --clear --progress`` queued, for a
@@ -14,8 +14,8 @@ title opens, kept beside the sheet, or the song taken back to caracole's pick.
 A sheet viewer served from the library runs in a sandbox, with no way to post a form to the server, so its
 switcher links ``GET /versions?…``, a page of the server's own with no script, whose form ``POST``s with the
 form token like the others. Each post is one command queued under the song's key, as a lookup's is, so the
-song's card shows it and its jobs join (jobs.py: a version kept, or the pin taken out, is a pick of the song's
-as a lookup's ``--tab`` is): the same version asked twice is one job, Make this the one takes the place of the
+song's card shows it and its jobs join (jobs.py: a version made the one or kept, or the pin taken out, is a pick
+of the song's as a lookup's ``--tab`` is): the same version asked twice is one job, Make this the one takes the place of the
 song's lookup that still waits. The server writes no overrides.toml and keeps no file itself: the command does,
 under caracole's lock, at the lookup pace and within its budgets. Its progress lines are the job's stages, as a
 lookup's are. Once the job is done, the page says what it came to from the song's state, read again, never from
@@ -23,7 +23,9 @@ the command's exit (a block, a spent budget or the hour's cap exits 0, the sheet
 one, else its ``[pin]`` recorded for the nightly run, else nothing changed; a version kept or not; the ``[pin]``
 gone or still there.
 
-Each refusal is a ``Refused``: a sheet that is no viewer caracole wrote for a song of the library (404), a tab
+Each refusal is a ``Refused``: a sheet that is no viewer caracole wrote for a song of the library (404; a
+version's page that went once that version became the one still names its song, and Back to the sheet opens
+sheet.html), a tab
 that isn't a number (400) or isn't one of the song's chords versions on Ultimate Guitar (404), and, posted, what
 can't be done (409): Make this the one on the one, Keep it on a version kept already, either on a version UG no
 longer has or one under ``[block]`` (as ``caracole versions`` refuses it), Go back to caracole's pick on a song
@@ -41,7 +43,7 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from caracole.web import pages
 from caracole.web.app import Response, Route, WebApp, html_response, not_ignored
-from caracole.web.jobs import Job, lookup_steps, version_steps
+from caracole.web.jobs import Job, version_steps
 from caracole.web.pages import Refused
 from caracole.web.status import details_href
 
@@ -68,7 +70,8 @@ class _Asked:
     """What a versions page or post names: the song, the viewer it came from (its library path) and its folder (as
     a quoted address), the version (None for Go back to caracole's pick), every version, what the song's sheet is
     now, in words, the song's ``[pin]`` tabs that choose its sheet (``caracole versions --clear`` takes out those
-    alone, never a Guitar Pro or tab pin) and every one it has, and the tabs under ``[block]``."""
+    alone, never a Guitar Pro or tab pin) and every one it has, the tabs under ``[block]``, and the viewer Back to
+    the sheet opens."""
 
     song: Song
     sheet: str
@@ -79,6 +82,7 @@ class _Asked:
     sheet_pins: tuple[int, ...]
     pins: tuple[int, ...]
     blocked: frozenset[int]
+    back: str  # the viewer to go back to: ``sheet``, or sheet.html once the version whose page that was is the one
 
     @property
     def pinned(self) -> bool:
@@ -127,7 +131,7 @@ def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
     for ``clear``); raises Refused."""
     from caracole.library import songs_in_folder
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS, written_file
-    from caracole.sheet_versions import in_library
+    from caracole.sheet_versions import SHEET_PAGE, in_library
     from caracole.versions_cmd import _chords_pins
     from caracole.web.app import version_page_tab
 
@@ -138,8 +142,18 @@ def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
             parts[-1] in (HUMAN_OUTPUTS[2], AUTO_OUTPUTS[2]) or version_page_tab(parts[-1]) is not None):
         raise _NO_SHEET
     overrides = app.overrides()
+    page_tab = version_page_tab(parts[-1])
     with app.db() as conn:
-        song = next((s for s in songs_in_folder(conn, parts[:-1]) if written_file(conn, s.id, parts[-1])), None)
+        songs = songs_in_folder(conn, parts[:-1])
+        song = next((s for s in songs if written_file(conn, s.id, parts[-1])), None)
+        if song is None and page_tab is not None:
+            # A version's page goes once the version is the one (its viewer is sheet.html then): the page asked from
+            # it, Make this the one's, still says how that went
+            song = next((s for s in songs if any(v.tab_id == page_tab and v.chosen
+                                                 for v in in_library(conn, s.id, app.cfg.rank))), None)
+            back = f"{'/'.join(parts[:-1])}/{SHEET_PAGE}"
+        else:
+            back = sheet
         if song is None:
             raise _NO_SHEET
         versions = in_library(conn, song.id, app.cfg.rank)
@@ -151,7 +165,7 @@ def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
         if version is None:
             raise Refused(404, "No such version", f"Ultimate Guitar lists no such chords version of {song.display}.")
     return _Asked(song, sheet, "/".join(quote(p) for p in parts[:-1]), version, versions, the_one, sheet_pins,
-                  tuple(overrides.pin.get(song.key, ())), overrides.block)
+                  tuple(overrides.pin.get(song.key, ())), overrides.block, back)
 
 
 def _the_one(conn, song_id: int, versions: list[SheetVersion]) -> str | None:
@@ -192,23 +206,13 @@ def _cant(do: str, asked: _Asked) -> str | None:
 
 
 def _steps(do: str, asked: _Asked) -> list[tuple[str, tuple[str, ...]]]:
-    """The command ``do`` queues: Make this the one is ``caracole get --tab`` with the tab's own page (UG answers a
-    slugged tab at its slugged address alone), as ``caracole versions --choose`` runs it."""
+    """The command ``do`` queues, ``caracole versions``: Make this the one runs ``caracole get --tab`` with the
+    tab's own page (UG answers a slugged tab at its slugged address alone), and checks again, when it runs, that
+    the tab is still one of the song's versions, UG still has it and it isn't under ``[block]``."""
     song, v = asked.song, asked.version
-    if do == "choose":
-        assert v is not None
-        return lookup_steps(song.artist, song.title, tab=_tab_address(v))
-    return version_steps(song.artist, song.title, keep=v.tab_id if do == "keep" and v is not None else None)
-
-
-def _tab_address(v: SheetVersion) -> str:
-    """The version's page on Ultimate Guitar, when the versions table has one for its tab; else its tab id."""
-    from caracole.overrides import OverridesError, tab_id_from_url
-
-    try:
-        return v.url if v.url and str(tab_id_from_url(v.url)) == v.tab_id else v.tab_id
-    except OverridesError:
-        return v.tab_id
+    tab = v.tab_id if v is not None else None
+    return version_steps(song.artist, song.title, keep=tab if do == "keep" else None,
+                         choose=tab if do == "choose" else None)
 
 
 def _runs(job: Job, steps: list[tuple[str, tuple[str, ...]]]) -> bool:
@@ -236,7 +240,8 @@ def _line(v: SheetVersion, total: int | None = None) -> str:
 _LABELS = {"choose": "Make this the one", "keep": "Keep it", "clear": "Go back to caracole's pick"}
 _TELLS = {
     "choose": ("It becomes the song's sheet: the title opens it, and its PDF and its songbooks use it. caracole looks "
-               "the song up with this tab (<code>caracole get --tab</code>) and keeps your choice in overrides.toml "
+               "the song up with this tab (<code>caracole versions --choose</code>, as <code>caracole get --tab</code> "
+               "does) and keeps your choice in overrides.toml "
                "(<code>[pin]</code>)."),
     "keep": ("caracole fetches its page from Ultimate Guitar now (one request, at the lookup pace) and keeps it "
              "beside the song's sheet, with a viewer of its own; the song's sheet stays as it is."),
@@ -271,7 +276,7 @@ def _body(app: WebApp, do: str, asked: _Asked, job: Job | None) -> str:
     links = opens
     if v is not None and v.page is not None and v.kept and not v.chosen and not opens:
         links += f'<a class="btn" href="/{asked.folder}/{quote(v.page)}">Open it</a>\n'
-    links += f'<a class="btn" href="/{escape(quote(asked.sheet), quote=True)}">Back to the sheet</a>'
+    links += f'<a class="btn" href="/{escape(quote(asked.back), quote=True)}">Back to the sheet</a>'
     head = f'<meta http-equiv="refresh" content="{pages.REFRESH}">\n' if job is not None and job.active else ""
     title = {"choose": "Make this the one", "keep": "Keep a version", "clear": "Back to caracole's pick"}[do]
     return pages.page(f"{title} · {song.display}", f'{lede}{form}{says}<div class="confirm">\n{links}\n</div>',

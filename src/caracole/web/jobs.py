@@ -15,10 +15,10 @@ fetch adds ``caracole fetch --song`` and ``caracole render --song`` (offline) af
 ``caracole review`` (``fetch_steps``). A LaCuerda song you pick goes to ``caracole
 get`` or ``caracole add`` with ``--lacuerda``, and a LaCuerda artist's page is read
 by ``caracole lacuerda --artist`` (``lacuerda_artist_steps``), a job of its own
-(``LACUERDA_ARTIST`` and the page's slug), one request at the lookup pace. A version of a song's sheet kept, or
-its pin taken out, is ``caracole versions --progress`` (``version_steps``), a pick of the song's as a lookup's
-``--tab`` is, so the song's jobs join it as they would that; its JSON lines are the job's stages too (Keep it's
-``KEEP_STAGES``, and a lookup's for ``--clear``). Each command takes caracole's lock (a
+(``LACUERDA_ARTIST`` and the page's slug), one request at the lookup pace. A version of a song's sheet made the
+one, kept, or its pin taken out, is ``caracole versions --progress`` (``version_steps``), a pick of the song's as a
+lookup's ``--tab`` is, so the song's jobs join it as they would that; its JSON lines are the job's stages too (Keep
+it's ``KEEP_STAGES``, and a lookup's for ``--choose`` and ``--clear``, which run one). Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -204,7 +204,7 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
     return [("Look it up now", (*args, "--", artist, title))]
 
 
-VERSIONS = "versions"  # the command that keeps a song's version, or takes its pin out
+VERSIONS = "versions"  # the command that makes a song's version the one, keeps one, or takes its pin out
 
 
 # Keep it's stages, as ``caracole versions --keep --progress`` reports them (versions_cmd.py)
@@ -216,21 +216,36 @@ KEEP_STAGES = (
 )
 
 
-def version_steps(artist: str, title: str, *, keep: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
-    """``caracole versions --progress``: keep the Ultimate Guitar tab ``keep`` beside the song's sheet (one tab
-    page, at the lookup pace), or, without it, take the song's ``[pin]`` out and look it up again (``--clear``, a
-    lookup's stages). The song is its artist and title as two words, so a " - " in either stays where it is."""
+def version_steps(artist: str, title: str, *, keep: str | None = None,
+                  choose: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
+    """``caracole versions --progress``: make the Ultimate Guitar tab ``choose`` the song's sheet (``--choose``:
+    ``caracole get --tab`` with its own page, recorded under ``[pin]``, a lookup's stages), keep the tab ``keep``
+    beside it (one tab page, at the lookup pace), or, with neither, take the song's ``[pin]`` out and look it up
+    again (``--clear``, a lookup's stages). The song is its artist and title as two words, so a " - " in either
+    stays where it is."""
+    if choose is not None:
+        return [("Making it the one", (VERSIONS, f"--choose={choose}", "--progress", "--", artist, title))]
     if keep is not None:
         return [("Fetching the version from Ultimate Guitar",
                  (VERSIONS, f"--keep={keep}", "--progress", "--", artist, title))]
     return [("Going back to caracole's pick", (VERSIONS, "--clear", "--progress", "--", artist, title))]
 
 
+def _options(args: Sequence[str]) -> Sequence[str]:
+    return args[:list(args).index("--")] if "--" in args else args
+
+
+def _looks_up(args: Sequence[str]) -> bool:
+    """Whether a step's command is a lookup of its song: ``caracole get``, or ``caracole versions --choose`` or
+    ``--clear``, which run one."""
+    return args[:1] == (LOOKUP,) or (args[:1] == (VERSIONS,) and any(
+        arg == "--clear" or arg.startswith("--choose=") for arg in _options(args)))
+
+
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, or ``caracole versions
     --progress``."""
-    options = args[:list(args).index("--")] if "--" in args else args
-    return args[:1] == (LOOKUP,) or (args[:1] == (VERSIONS,) and "--progress" in options)
+    return args[:1] == (LOOKUP,) or (args[:1] == (VERSIONS,) and "--progress" in _options(args))
 
 
 LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it
@@ -243,26 +258,27 @@ def lacuerda_artist_steps(slug: str, name: str) -> list[tuple[str, tuple[str, ..
 
 def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
     """The Ultimate Guitar song and tab, and the LaCuerda song, a lookup's ``caracole get`` was given (``--ug``,
-    ``--tab``, ``--lacuerda``), and what a ``caracole versions`` does (``--keep``, ``--clear``), if any."""
+    ``--tab``, ``--lacuerda``), and what a ``caracole versions`` does (``--choose``, ``--keep``, ``--clear``), if
+    any."""
     picked: list[str] = []
     for step in steps:
-        options = step.args[:step.args.index("--")] if "--" in step.args else step.args
+        options = _options(step.args)
         if step.args[:1] == (LOOKUP,):
             picked += [arg for arg in options if arg.startswith(("--ug=", "--tab=", "--lacuerda="))]
         elif step.args[:1] == (VERSIONS,):
-            picked += [arg for arg in options if arg.startswith("--keep=") or arg == "--clear"]
+            picked += [arg for arg in options if arg.startswith(("--choose=", "--keep=")) or arg == "--clear"]
     return tuple(picked)
 
 
 def _stages(steps: Sequence[Step]) -> list[Stage]:
-    """A job's stages, all waiting: a lookup's (``caracole versions --clear`` is one), then Keep it's it hasn't;
-    none for other commands."""
+    """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
+    it's it hasn't; none for other commands."""
     from caracole.get import STAGES
 
     names: dict[str, str] = {}
-    if any(step.args[:1] == (LOOKUP,) or step.args[:2] == (VERSIONS, "--clear") for step in steps):
+    if any(_looks_up(step.args) for step in steps):
         names.update(STAGES)
-    if any(step.args[:1] == (VERSIONS,) and step.args[1:2] != ("--clear",) for step in steps):
+    if any(step.args[:1] == (VERSIONS,) and not _looks_up(step.args) for step in steps):
         names.update((name, label) for name, label in KEEP_STAGES if name not in names)
     return [Stage(name, label) for name, label in names.items()]
 
@@ -373,7 +389,8 @@ class JobQueue:
         if enough is not None:
             return copy.deepcopy(enough), False
         if waiting is not None:
-            if any(step.args[:1] == (LOOKUP,) for step in new):  # one `caracole get` does it all
+            # One `caracole get` does it all, as `caracole versions --choose` runs one
+            if any(step.args[:1] == (LOOKUP,) or (_looks_up(step.args) and "--clear" not in step.args) for step in new):
                 waiting.steps = [s for s in waiting.steps if s.args[:1] not in (("add",), (LOOKUP,))]
                 waiting.stages = []
             runs = {step.args[0] for step in waiting.steps}

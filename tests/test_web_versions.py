@@ -173,9 +173,12 @@ def test_make_this_the_one_looks_the_song_up_with_that_tab(app, queue, recorder,
     assert where.startswith("/versions?") and "job=" in where and "do=choose" in where
     assert "Queued" in shown(get(app, where))
     assert 'http-equiv="refresh"' in text(get(app, where))
+    from caracole.get import STAGES
+
+    assert [stage.name for stage in queue.job(1).stages] == [name for name, _ in STAGES]  # it runs a lookup
     queue.run_pending()
-    # caracole get --tab, as caracole versions --choose is: the tab's own page, recorded under [pin]
-    assert recorder.calls == [["get", "--progress", f"--tab={SLUGGED.format(KEPT)}", "--", "Soda Stereo",
+    # caracole versions --choose: caracole get --tab with the tab's own page, recorded under [pin]
+    assert recorder.calls == [["versions", f"--choose={KEPT}", "--progress", "--", "Soda Stereo",
                                "De Música Ligera"]]
     done = get(app, where)
     assert 'http-equiv="refresh"' not in text(done)
@@ -359,8 +362,8 @@ def test_two_versions_kept_are_two_commands_and_the_same_one_twice_is_one(app, q
 
 
 def test_a_version_asked_for_while_the_songs_lookup_waits_joins_it(app, queue, recorder, conn, cfg):
-    # The song's own job, as a lookup's: Keep it goes after the lookup waiting, and Make this the one, a lookup
-    # with that tab, takes the lookup's place, as a tab picked on the lookup page does.
+    # The song's own job, as a lookup's: Keep it goes after the lookup waiting, and Make this the one, which runs a
+    # lookup with that tab, takes the lookup's place, as a tab picked on the lookup page does.
     song = versioned_song(conn, cfg)
     assert post(app, "/fetch", {"song": str(song.id)}).status == 303  # the card's Fetch now: a lookup waits
     keep = header(post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}), "location")
@@ -369,7 +372,7 @@ def test_a_version_asked_for_while_the_songs_lookup_waits_joins_it(app, queue, r
     assert queue.active_count() == 1
     queue.run_pending()
     assert [call[:3] for call in recorder.calls] == [["versions", f"--keep={OTHER}", "--progress"],
-                                                     ["get", "--progress", f"--tab={SLUGGED.format(KEPT)}"]]
+                                                     ["versions", f"--choose={KEPT}", "--progress"]]
 
 
 def test_a_versions_progress_is_its_jobs_stages_as_a_lookups_is(conn, cfg):

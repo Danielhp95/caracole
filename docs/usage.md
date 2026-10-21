@@ -2980,10 +2980,12 @@ is no progression exits with status 2.
   a page of the server's own naming the song and the version ("Ver 2 of 13 ·
   4.85★ (12,629)", with the tabber's note) and what the song's sheet is now
   ("The one now: Ver 3 · 4.86★ (408)", or LaCuerda's sheet, or the auto-chords
-  sheet), with the one button that does it. **Make this the one** looks the
-  song up with that tab, as `caracole get --tab` does with the tab's own page
-  (`caracole versions --choose` runs the same): it becomes `sheet.txt`, the
-  page the title opens, its PDF and its songbooks', kept under `[pin]`.
+  sheet), with the one button that does it. **Make this the one** queues
+  `caracole versions SONG --choose TAB`, which looks the song up with that tab,
+  as `caracole get --tab` does with the tab's own page: it becomes `sheet.txt`,
+  the page the title opens, its PDF and its songbooks', kept under `[pin]`.
+  Asked from that version's own page, which goes once it is the one, the page
+  still says how it went, and Back to the sheet opens `sheet.html`.
   **Keep it** queues `caracole versions SONG --keep TAB`: one tab page, at the
   lookup pace, kept beside the sheet with a viewer of its own. A runner-up
   caracole keeps by itself is kept already there (sent anyway: 409), and

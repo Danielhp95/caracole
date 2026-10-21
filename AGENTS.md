@@ -184,10 +184,10 @@ Rules a change there keeps (the Invariants below are the others):
   queue (`JobQueue.cancel`, never one that runs, with the jobs `submit_all` queued `together` with
   it), and Try again queues a finished one's steps again (a removal's asks its question again). A sandboxed
   viewer reaches a form only through a GET page of the server's own, whose form posts with the token:
-  `/export` (export_routes.py) and `/versions` (versions_routes.py: Make this the one, `caracole get
-  --tab` with the tab's own page; Keep it and back to caracole's pick, `caracole versions --keep` and
-  `--clear`, with `--progress`: the job's stages), each a job under the song's key, which jobs.py's
-  `_pick` joins as a lookup's `--tab`. What a done job came to is read from the song's state and
+  `/export` (export_routes.py) and `/versions` (versions_routes.py: Make this the one, Keep it and back
+  to caracole's pick, `caracole versions --choose`, `--keep` and `--clear`, with `--progress`: the job's
+  stages, a lookup's for `--choose` and `--clear`, which run `caracole get`), each a job under the song's
+  key, which jobs.py's `_pick` joins as a lookup's `--tab`. What a done job came to is read from the song's state and
   overrides.toml again (`caracole get` exits 0 on a block or a spent budget, the sheet unchanged).
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
