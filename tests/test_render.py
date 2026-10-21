@@ -132,6 +132,9 @@ def test_the_style_puts_key_and_capo_under_the_title_and_colours_the_chords():
     assert pdf["fonts"]["chord"]["name"] == "Helvetica-Bold" and pdf["fonts"]["chord"]["color"] == "#b4441e"
     assert pdf["fonts"]["comment"] == {"name": "Helvetica-Bold", "size": 9, "color": "#b4441e"}  # no background
     assert pdf["diagrams"]["show"] == "top"  # the shapes before the song, not after it
+    # The chord boxes of style C as the sketches page rendered it (B's 9 pt boxes, smaller in two columns)
+    assert {k: pdf["diagrams"][k] for k in ("width", "height", "hspace", "dotsize")} == {
+        "width": 7, "height": 7, "hspace": 3.6, "dotsize": 0.85}
 
 
 def test_the_style_leaves_every_text_element_to_the_cjk_font():

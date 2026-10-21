@@ -1115,7 +1115,9 @@ and cache.
   The PDF has one line under the title: the artist and the viewer's key line
   ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or "Soda Stereo · Key Bm"
   without a capo), then a capo or a tuning the tab's notes name
-  ("Soda Stereo · Key Bm · half step down"). Then the chord diagrams above
+  ("Soda Stereo · Key Bm · half step down"): a tuning they name ("half step
+  down", "Drop D", "Eb standard") or give after a "Tuning:" label ("Tuning:
+  DADGAD"), never one they only talk about, and never standard tuning. Then the chord diagrams above
   the song, bold rust chords over the lyrics, and section names in small rust
   capitals (no band). The title is large, the page a clean two columns, and a
   songbook's songs are set the same way. chordpro prints a text of the PDF's own, and `sheet.cho` stays as it
@@ -1123,7 +1125,10 @@ and cache.
   PDF (a tab after them stays in), the chord diagrams are the shapes the
   viewer shows first for the chords the sheet gives shapes for (its chord
   legend, "Cadd9 (x32033)", wherever it is), the section names are in
-  capitals and the song is in two columns.
+  capitals and the song is in two columns. A song `[transpose]` moves is the
+  exception for now: chordpro moves its chords but not those shapes, so the
+  moved chords get chordpro's own diagrams, or none, in its PDF and in a
+  songbook's.
   `sheet.html` is the sheet viewer, for the phone (see
   [The sheet viewer](#the-sheet-viewer)). A PDF is made again only when its
   sheet, its transposition, the font, caracole's PDF style or the text the
@@ -1147,7 +1152,9 @@ and cache.
   replaces the old one in one rename, so a failed render leaves the last good
   PDF in place. It exits 1 when a sheet couldn't be rendered, and the log
   says why, as `no PDF for Artist - Title: …` (chordpro's own messages name
-  the copy in the cache). A viewer that couldn't be made or written is logged
+  the copy in the cache); a PDF text caracole couldn't make (a bug) fails
+  that sheet's PDF alone the same way, with its traceback in the log, and its
+  viewer is still written. A viewer that couldn't be made or written is logged
   as `no viewer for Artist - Title: …` and counts the song as failed too, but
   never costs it its PDFs. A symbolic link, a FIFO or a folder in the place of
   `sheet.json`, `sheet (auto).txt`, a `.cho` file or a viewer fails that song
@@ -2587,13 +2594,18 @@ songbooks.toml that can't be read exits 2.
 `caracole render` and the nightly run make the songbooks' files after the
 sheets, and a file only when what it is made from changed: its songs, their
 order, their sheets, their transpositions, caracole's PDF style or the font,
-and for `songbook.html` the sheet viewer too, so an upgrade that changes the
+for `songbook.pdf` the text each song's PDF prints too (the key it names, as
+when an auto sheet's key is heard again, or a newer caracole's way of writing
+it), and for `songbook.html` the sheet viewer too, so an upgrade that changes the
 viewer makes every songbook's page again, as it does every `sheet.html`; or
 when it is no longer as caracole wrote it (deleted, edited, a link in its
 place). A songbook gone from songbooks.toml (deleted or renamed by hand) loses
 the files caracole made of it at the next render, each only while it is still
 as caracole wrote it, and never through a symbolic link. Like the sheets' PDFs, a songbook with a Chinese song
-gets its PDF once a CJK font is set; its page and its ChordPro file need none.
+gets its PDF once a CJK font is set, by what the PDF prints: Chinese only in a tab's notes before its first
+section needs none. Its page and its ChordPro file need none. A song whose PDF text can't be made (a bug in
+caracole) fails the songbooks it is in, as a chordpro failure does: their PDF stays as it was, and their
+other files and the other songbooks are still made.
 
 ## overrides.toml: your decisions
 

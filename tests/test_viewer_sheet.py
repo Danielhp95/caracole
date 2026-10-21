@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from caracole.chordpro import to_chordpro
 from caracole.viewer.sheet import Blank, ChordRow, Lyrics, Tab, Text, parse_sheet, split_preamble
 
@@ -134,6 +136,36 @@ def test_a_tuning_note_is_read():
     assert pre.tuning == "half step down"
     assert pre.capo_note is None
     assert lines[pre.end] == "{comment: Verse}"
+
+
+@pytest.mark.parametrize(("note", "tuning"), [
+    ("Eb standard tuning", "Eb standard"),
+    ("Tuning: Eb standard", "Eb standard"),
+    ("Drop D tuning", "Drop D"),
+    ("Capo 2, drop d", "drop d"),
+    ("Drop C# (C# G# C# F# A# D#)", "Drop C#"),
+    ("Drop A, capo 1", "Drop A"),
+    ("Tuning: DADGAD", "DADGAD"),
+    ("Tuning = Open G", "Open G"),
+    # Everyday English, and notes that only talk about the tuning: none of it names one
+    ("Please drop a comment and rate!", None),
+    ("Drop A Comment And Rate", None),
+    ("drop by my channel", None),
+    ("Let the chorus drop down soft", None),
+    ("Grab standard picks for this one", None),
+    ("I'm not sure about the tuning here, tell me in the comments", None),
+    ("Standard tuning", None),
+    ("Tuning: Standard (EADGBE)", None),
+    ("Tuning: E A D G B E", None),
+])
+def test_only_a_tuning_a_note_names_is_read(note, tuning):
+    # The PDF prints it under the title: a made-up one would make a song in standard tuning read as
+    # if in another. A tuning is named ("half step down", "Drop D", "Eb standard") or given after a
+    # "Tuning:" label; standard tuning goes unsaid.
+    lines = [note, "", "{comment: Verse}", "[Em]words", "{comment: Chorus}", "[G]more"]
+    pre = split_preamble(lines)
+    assert pre.notes == (note,)
+    assert pre.tuning == tuning
 
 
 def test_a_lacuerda_sheet_without_sections_has_no_preamble():

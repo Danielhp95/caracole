@@ -585,6 +585,31 @@ def test_a_viewer_that_cant_be_built_never_costs_the_pdfs(conn, cfg, caplog, mon
     assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Persiana Americana"]
 
 
+@pytest.mark.parametrize("part", ["viewer_key", "pdf_text"])
+def test_a_pdf_text_that_cant_be_made_costs_that_pdf_alone(conn, cfg, caplog, monkeypatch, part):
+    # The PDF's text runs the viewer's code (its key, its preamble, its shapes): a bug there costs
+    # that sheet its PDF and nothing else, as a bug in its viewer costs the viewer alone.
+    good = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, good, tab_id=2)
+    bad = add_song(conn, "Soda Stereo", "Persiana Americana")  # newer: rendered first
+    human_sheet(conn, cfg, bad, tab_id=1)
+    real = getattr(render_module, part)
+
+    def broken(cho, *args, **kwargs):
+        if "Persiana" in cho:
+            raise ValueError("a bug in the viewer's theory")
+        return real(cho, *args, **kwargs)
+
+    monkeypatch.setattr(render_module, part, broken)
+    stats = render(conn, cfg)
+    assert (stats.rendered, stats.failed) == (1, 1)
+    assert pdf_of(cfg, good).is_file() and not pdf_of(cfg, bad).exists()
+    assert "<h1>Persiana Americana</h1>" in viewer_of(cfg, bad)  # its viewer is made all the same
+    assert "no PDF for Soda Stereo - Persiana Americana" in caplog.text
+    assert "Traceback" in caplog.text and "a bug in the viewer's theory" in caplog.text
+    assert kv_get_json(conn, "render:status")["failed"] == ["Soda Stereo - Persiana Americana"]
+
+
 def test_a_sheet_chordpro_fails_on_still_gets_its_viewer(conn, cfg, caplog):
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     human_sheet(conn, cfg, song)

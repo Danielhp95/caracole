@@ -207,8 +207,15 @@ def preamble_section(sheet: Sheet) -> Section | None:
     return Section(None, lines=lines) if lines else None
 
 
-_TUNING = re.compile(r"(?i)\btuning\b|half[- ]step down|drop [a-g]|[a-g]b standard")
-_TUNING_NAME = re.compile(r"(?i)half[- ]step down|drop [a-g]\w*|[a-g]b standard")
+# A tuning a note names: "half step down", "Eb standard", or "drop" and a note ("Drop D", "drop C#"),
+# never a word ("drop by", "drop down"); "drop a" only before "tuning", a sign or the note's end, as
+# a tabber also asks to "drop a comment".
+_TUNING_NAME = re.compile(
+    r"(?i:\bhalf[- ]step down\b)|(?i:\b[a-g]b standard\b)"
+    r"|(?i:\bdrop)[ -](?:[B-Gb-g][#b♯♭]?(?![\w'’-])|[Aa][#b♯♭]?(?=\s+(?i:tuning)\b|\s*(?:[^\w\s'’-]|$)))"
+)
+# Else the tuning a "Tuning:" label gives, up to a comma or a semicolon ("Tuning: DADGAD")
+_TUNING_LABEL = re.compile(r"(?i)\btuning\s*[:=]\s*(?P<value>[^,;|]+)")
 _CAPO = re.compile(r"(?i)\bcapo\b\D{0,6}(\d+)")
 
 
@@ -240,12 +247,29 @@ def split_preamble(lines: list[str]) -> Preamble:
             notes.append(text.strip())
     tuning = capo = None
     for note in notes:
-        if tuning is None and _TUNING.search(note):
-            named = _TUNING_NAME.search(note)
-            tuning = named.group(0) if named else note.split(":", 1)[-1].strip()
+        if tuning is None:
+            tuning = _tuning(note)
         if capo is None and (m := _CAPO.search(note)):
             capo = f"Capo {int(m.group(1))}"
     return Preamble(tuple(notes), tuple(legend), (), tuning, capo, _end_of(lines, len(section.lines)))
+
+
+def _tuning(note: str) -> str | None:
+    """The tuning a note names (``_TUNING_NAME``), else the one after its "Tuning:" label, or None:
+    a note that only talks about the tuning names none, and standard tuning goes unsaid."""
+    if named := _TUNING_NAME.search(note):
+        return named.group(0)
+    label = _TUNING_LABEL.search(note)
+    if label is None:
+        return None
+    value = label.group("value").strip().rstrip(".").strip()
+    if value.endswith(")") and value.count(")") > value.count("("):  # "(Tuning: DADGAD)"
+        value = value[:-1].strip()
+    letters = re.sub(r"[^a-z]", "", value.lower()).replace("tuning", "")
+    return value if value and letters not in _STANDARD else None
+
+
+_STANDARD = frozenset({"standard", "estandard", "eadgbe", "standardeadgbe", "estandardeadgbe"})
 
 
 def _end_of(lines: list[str], count: int) -> int:

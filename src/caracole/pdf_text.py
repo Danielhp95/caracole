@@ -12,7 +12,8 @@ private copy it renders (``render._render_into``). It is the .cho with:
   chordpro draws a chord's last one;
 - ``{subtitle}`` under the title: the artist, the viewer's key line (``page.key_line_text``), a
   capo the notes name for a sheet with no capo of its own, and a tuning they name ("half step
-  down"), so a song in another tuning never prints as if in standard tuning;
+  down", "Drop D") or give after a "Tuning:" label (``sheet.split_preamble``), so a song in another
+  tuning never prints as if in standard tuning, and one in standard tuning never as if in another;
 - its section names in capitals;
 - ``{columns: N}`` after its header.
 

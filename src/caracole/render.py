@@ -64,7 +64,9 @@ The PDFs take caracole's look (``STYLE_FILE``, a ChordPro config) and are
 transposed by the song's ``[transpose]`` override. Each is made from a text of
 its own (caracole/pdf_text.py), the .cho staying as the viewer reads it: without
 the tab's notes, the shapes its viewer shows (its chord legend's) as chord diagrams,
-the viewer's key line under the title, section names in capitals, in two columns. kv ``render:<song id>``
+the viewer's key line under the title, section names in capitals, in two columns. That
+text runs the viewer's code: a bug there fails that song's PDF alone, logged with its traceback,
+as a chordpro failure does, and its viewer is still written. kv ``render:<song id>``
 keeps what the song's PDF was made from (the SHA-256 of the .cho, the
 transposition, the font, the SHA-256 of the style, the PDF's name,
 ``pdf_text.PDF_TEXT_VERSION`` and the SHA-256 of the text chordpro prints, whose
@@ -159,12 +161,11 @@ TIMEOUT = 120  # seconds; a sheet renders in about one
 FONT_ELEMENTS = ("text", "title")
 
 # How the PDFs look (a ChordPro config): Helvetica, bold chords in caracole's rust,
-# the chord diagrams above the song, section names on a light band, and under the
-# title the text's {subtitle} (a sheet's: pdf_text.py, the artist, the viewer's key
-# line, a tuning), else the artist, the key (transposed along with the chords) and the
-# capo (a songbook's song), which ChordPro doesn't print by default: a capo the guitarist
-# can't see means playing in the wrong key. Its SHA-256 is in each PDF's record, so a new look renders
-# every PDF once more.
+# the chord diagrams above the song, section names in small rust capitals with no band,
+# and under the title the text's {subtitle} (pdf_text.py: the artist, the viewer's key
+# line, a capo or a tuning the notes name), as ChordPro prints neither the artist nor the
+# capo by default: a capo the guitarist can't see means playing in the wrong key. Its
+# SHA-256 is in each PDF's record, so a new look renders every PDF once more.
 STYLE_FILE = Path(__file__).with_name("chordpro-style.json")
 
 Runner = Callable[..., subprocess.CompletedProcess]
@@ -628,8 +629,14 @@ def _render_sheet_pdf(
     force: bool,
 ) -> _Done:
     """Render the ChordPro ``text`` to ``pdf`` unless kv ``state_key`` says it is up to date: chordpro
-    prints the PDF's own text (``_printed``), and the font is the one that text needs."""
-    printed = _printed(text, key=key, capo=capo, transpose=transpose)
+    prints the PDF's own text (``_printed``), and the font is the one that text needs. A text that
+    can't be made (a bug in the viewer's code it runs) is a RenderError, logged with its traceback:
+    this PDF fails, and the pass goes on."""
+    try:
+        printed = _printed(text, key=key, capo=capo, transpose=transpose)
+    except Exception as e:  # a sheet the viewer's code can't read must never cost the other PDFs
+        log.warning("%s: cannot make the text of %s", song.display, pdf.name, exc_info=True)
+        raise RenderError(f"cannot make the text of {pdf.name}: {type(e).__name__}: {e}") from e
     need = _font_need(printed)
     font = cjk_font if need else None
     if need == "letters" and font is None:

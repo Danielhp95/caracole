@@ -137,6 +137,22 @@ def test_a_tuning_note_goes_into_the_header():
     assert "Tuning:" not in text
 
 
+@pytest.mark.parametrize(("note", "subtitle"), [
+    ("Tuning: Eb standard", "{subtitle: The Placeholders · Key Em · Eb standard}"),
+    ("Please drop a comment and rate!", "{subtitle: The Placeholders · Key Em}"),
+    ("drop by my channel", "{subtitle: The Placeholders · Key Em}"),
+    ("Let the chorus drop down soft", "{subtitle: The Placeholders · Key Em}"),
+    ("I'm not sure about the tuning here, tell me in the comments", "{subtitle: The Placeholders · Key Em}"),
+], ids=["eb-standard", "drop-a-comment", "drop-by", "drop-down", "talks-about-tuning"])
+def test_only_a_tuning_the_notes_name_goes_into_the_header(note, subtitle):
+    # A song in standard tuning must not read as if in another: a tabber's chat stays out with the notes.
+    cho = ("{title: Tuned}\n{artist: The Placeholders}\n{key: Em}\n" + note + "\n\n"
+           "{comment: Verse}\n[Em]Words to sing\n{comment: Chorus}\n[G]More words\n")
+    lines = pdf_text(cho, key=EM, capo=None).splitlines()
+    assert [line for line in lines if line.startswith("{subtitle")] == [subtitle]
+    assert note not in lines
+
+
 def test_a_capo_note_goes_into_the_header_of_a_sheet_without_a_capo():
     # The notes go, and a capo they name must not go with them: a capo the guitarist can't see
     # means playing in the wrong key. A sheet with a capo of its own says it in the key line.

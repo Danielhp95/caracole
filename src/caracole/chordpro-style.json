@@ -23,9 +23,9 @@
       "height": 7,
       "vcells": 4,
       "linewidth": 0.1,
-      "hspace": 3.2,
+      "hspace": 3.6,
       "vspace": 2.2,
-      "dotsize": 0.8,
+      "dotsize": 0.85,
       "fingers": true
     },
     "formats": {
