@@ -509,7 +509,9 @@ says so, and no version is the one.
   and its viewer page is made. It stays kept whatever the ranking does, while
   Ultimate Guitar has it and you don't `[block]` it. A block, a spent budget
   or a site's error keeps nothing, says so and exits 0. A version kept
-  already sends nothing, and stays kept from then on.
+  already sends nothing, and stays kept from then on. A version whose text
+  is the very text of the song's text tab (`tab.txt`) isn't kept: one text
+  has one file in the folder.
 - `--choose TAB` makes a version the sheet: it is `caracole get --tab` for
   that version's page, so it is recorded under `[pin]` in overrides.toml, and
   the title, the PDF, the viewer and the songbooks use it. caracole's top

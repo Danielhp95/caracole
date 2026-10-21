@@ -17,9 +17,9 @@ from test_fetch import BROKEN, LINES, LYRICS, NOW, FakeUG, accepted, context, in
 from caracole.config import RankPolicy
 from caracole.library import kept_files, song_dir
 from caracole.overrides import Overrides
-from caracole.sheet_versions import in_library
+from caracole.sheet_versions import in_library, kept_by_you
 from caracole.songs import get_song, update_song
-from caracole.ug.fetch import fetch_songs, process_song, rescore_kept_sheets, songs_to_fetch
+from caracole.ug.fetch import fetch_songs, keep_version, process_song, rescore_kept_sheets, songs_to_fetch
 from caracole.ug.page import PageParseError, strip_markup
 from caracole.versions import get_version, mark_gone, song_versions
 
@@ -169,6 +169,34 @@ def test_a_version_whose_text_is_the_sheets_is_listed_as_the_sheet(conn, tmp_pat
     assert listed["101"] == (True, True, "sheet.html")
 
 
+def test_a_version_listed_as_the_same_as_one_leaving_the_set_is_kept_in_its_place(conn, tmp_path):
+    # Two UG tabs with one text: 102 holds it, 103 is listed as 102's. When 102 leaves the top
+    # three and 103 stays, 103 takes the text: 102's files go before 103 is kept, not after.
+    song = accepted(conn)
+    ug = FakeUG()
+    four_chords(conn, ug, same=(102, 103))
+    out = fetch(conn, ug, tmp_path, song)
+    assert out.kept_versions == ("102",)
+
+    # The index finds 105, whose page carries fresh ratings: 102 falls out of the top three.
+    index(conn, (105, *PERSIANA, "chords"))
+    ug.tab(v(105, version=5, rating=4.95, votes=100), [v(102, version=2, rating=3.0, votes=100)],
+           content=sheet("sheet 105", LINES))
+    update_song(conn, song.id, ug_dirty=True)
+
+    out = fetch(conn, ug, tmp_path, song)
+
+    assert ug.requests == [slugged(105)]
+    assert out.sheet == 105 and out.kept_versions == ("101", "103")
+    assert set(version_files(conn, song)) == {
+        "version-101.txt", "version-101.json", "version-103.txt", "version-103.json"}
+    assert "sheet 102" in read(tmp_path, song, "version-103.txt")
+    assert not list(song_dir(tmp_path / "lib", song).glob("version-102*"))
+    listed = {x.tab_id: (x.kept, x.page) for x in in_library(conn, song.id, RankPolicy())}
+    assert listed["103"] == (True, "version-103.html")
+    assert listed["102"] == (False, None)
+
+
 def test_a_gone_version_keeps_its_files_until_the_next_fetch_drops_it(conn, tmp_path):
     # Review Focus 5.
     song = accepted(conn)
@@ -308,3 +336,39 @@ def test_versions_kept_before_the_song_had_lyrics_are_scored_without_a_request(c
     coverage = {r.tab_id: r.coverage for r in song_versions(conn, song.id)}
     assert coverage["101"] == 1.0 and coverage["102"] == 1.0 and coverage["103"] == 1.0
     assert coverage["104"] is None
+
+
+def keep(conn, ug, tmp_path, song, tab):
+    """``caracole versions --keep``'s fetch: one version kept now."""
+    ug.requests.clear()
+    return keep_version(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id), tab)
+
+
+def test_keeping_the_sheets_own_tab_notes_nothing_as_yours(conn, tmp_path):
+    song = accepted(conn)
+    ug = FakeUG()
+    four_chords(conn, ug)
+    fetch(conn, ug, tmp_path, song)
+
+    assert keep(conn, ug, tmp_path, song, 101) == "sheet"
+    assert kept_by_you(conn, song.id) == ()  # a later pick of another sheet doesn't keep it beside that one
+
+
+def test_a_version_whose_text_is_the_tabs_is_not_kept_and_leaves_no_file(conn, tmp_path):
+    # The library keeps one text under one name: tab.txt holds it, and no viewer page shows a tab.
+    song = accepted(conn)
+    ug = FakeUG()
+    four_chords(conn, ug)
+    index(conn, (401, *PERSIANA, "tabs"))
+    ug.tab(v(401, "tabs", rating=4.8, votes=40), content=sheet("sheet 104", LINES))
+    out = fetch(conn, ug, tmp_path, song)
+    assert out.tab == 401 and "sheet 104" in read(tmp_path, song, "tab.txt")
+
+    assert keep(conn, ug, tmp_path, song, 104) == "held"
+
+    assert ug.requests == [slugged(104)]
+    assert not list(song_dir(tmp_path / "lib", song).glob("version-104*"))
+    assert "version-104.json" not in version_files(conn, song)
+    assert kept_by_you(conn, song.id) == ()
+    listed = {x.tab_id: (x.kept, x.page) for x in in_library(conn, song.id, RankPolicy())}
+    assert listed["104"] == (False, None)

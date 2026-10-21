@@ -759,30 +759,34 @@ def _drop_left_over(run: _SongRun, names: tuple[str, str]) -> None:
 # --- the versions kept beside the sheet (sheet_versions.py) --------------------------------------
 
 
+def _holder(run: _SongRun, name: str, data: bytes) -> str | None:
+    """The name of the song's kept file that holds ``data`` already under another name than ``name``
+    (``library.keep_file`` keeps one text under one name), or None."""
+    sha = hashlib.sha256(data).hexdigest()
+    return next((f.name for f in kept_files(run.conn, run.song.id) if f.sha256 == sha and f.name != name), None)
+
+
 def _same_text(run: _SongRun, name: str, data: bytes) -> str | None:
     """The viewer page of a song's kept text that holds ``data`` already under another name than ``name``:
-    the sheet's or a kept version's (``library.keep_file`` keeps one text under one name). None for none,
-    and for any other file's (the tab's, say), whose page is no sheet."""
-    sha = hashlib.sha256(data).hexdigest()
-    for f in kept_files(run.conn, run.song.id):
-        if f.sha256 != sha or f.name == name:
-            continue
-        if f.name == SHEET_FILES[0]:
-            return SHEET_PAGE
-        tab = tab_of(f.name)
-        if tab is not None and f.name == version_names(tab)[0]:
-            return version_names(tab)[2]
+    the sheet's or a kept version's. None for none, and for any other file's (the tab's, say), whose page
+    is no sheet."""
+    held = _holder(run, name, data)
+    if held == SHEET_FILES[0]:
+        return SHEET_PAGE
+    tab = tab_of(held) if held is not None else None
+    if tab is not None and held == version_names(tab)[0]:
+        return version_names(tab)[2]
     return None
 
 
 def _keep_version(run: _SongRun, version_id: int, page: UGTabPage, rank: int = 2) -> bool:
     """Keep a version beside the sheet, as ``version-<tab>.txt`` and ``.json`` (``sheet_versions.version_names``)
-    with ``kept_rank`` ``rank``; False when its text is a kept one's already (two UG tabs, one text), and
-    nothing is written."""
+    with ``kept_rank`` ``rank``; False when its text is a kept file's already (two UG tabs, one text; or
+    the tab's), and nothing is written."""
     assert page.content is not None
     tab = get_version(run.conn, version_id).tab_id
     txt, doc, _ = version_names(tab)
-    if _same_text(run, txt, strip_markup(page.content).encode("utf-8")) is not None:
+    if _holder(run, txt, strip_markup(page.content).encode("utf-8")) is not None:
         return False
     _keep_text(run, version_id, page, (txt, doc), rank)
     return True
@@ -815,7 +819,13 @@ def _keep_beside(
     drop the version files of every other version: they left the kept set, were blocked, or were found
     under an earlier match. A version whose page couldn't be read this run keeps its files (an error is
     never a miss), as do those in ``hold`` (yours, with no page in hand). A version whose text is a kept one's is listed with that one's page instead
-    (kv ``sheet_versions:same:<song id>``, ``sheet_versions.same_pages``)."""
+    (kv ``sheet_versions:same:<song id>``, ``sheet_versions.same_pages``). Those leaving go first, so a
+    version that shared its text with one of them keeps the text itself."""
+    beside = list(beside)
+    staying = {c.tab_id for c, _ in beside if c.version_id != chosen}
+    waiting = {str(t) for t in run.unreadable} | set(hold)
+    for tab in _kept_version_tabs(run) - staying - waiting:
+        _drop_version(run, tab)
     kept: list[str] = []
     same: dict[str, str] = {}
     for c, page in beside:
@@ -829,9 +839,6 @@ def _keep_beside(
             text = strip_markup(page.content or "").encode("utf-8")
             if (shown := _same_text(run, version_names(c.tab_id)[0], text)) is not None:
                 same[c.tab_id] = shown
-    waiting = {str(t) for t in run.unreadable} | set(hold)
-    for tab in _kept_version_tabs(run) - set(kept) - waiting:
-        _drop_version(run, tab)
     if same:
         kv_set_json(run.conn, same_key(run.song.id), same)
     else:
@@ -909,9 +916,10 @@ def keep_version(ctx: FetchContext, song: Song, tab_id: int) -> str:
     (``caracole versions --keep``): its page is read (one request at most, none from the cache), the
     version is kept as ``version-<tab>.txt`` and ``.json`` and noted as yours, so the fetch keeps it
     whatever the ranking. What came of it: ``kept``, ``same`` (its text is a kept one's: that one's page
-    shows it), ``sheet`` (it is the sheet), ``gone`` (UG answered 404), ``unreadable`` (the page won't
-    parse: it waits), ``no text``, or ``unknown`` (not a chords version of the song caracole may use).
-    A block, a spent budget or an error raises, keeping nothing."""
+    shows it), ``held`` (its text is another kept file's, the tab's: nothing shows it), ``sheet`` (it is
+    the sheet), ``gone`` (UG answered 404), ``unreadable`` (the page won't parse: it waits), ``no text``,
+    or ``unknown`` (not a chords version of the song caracole may use). Only ``kept`` and ``same`` note it
+    as yours. A block, a spent budget or an error raises, keeping nothing."""
     run = _SongRun(ctx, song)
     row = next((r for r in _rows(run, CHORDS_KINDS) if r.tab_id == str(tab_id)), None)
     if row is None:
@@ -924,7 +932,6 @@ def keep_version(ctx: FetchContext, song: Song, tab_id: int) -> str:
     assert page.content is not None
     lines = _lyric_lines(song)
     set_coverage(run.conn, row.id, coverage.coverage(page.content, lines, line_match=ctx.rank.line_match))
-    note_kept_by_you(run.conn, song.id, row.tab_id)
     chosen, kept = library_state(run.conn, song.id)
     if chosen == row.tab_id:
         return "sheet"
@@ -932,11 +939,13 @@ def keep_version(ctx: FetchContext, song: Song, tab_id: int) -> str:
     txt = version_names(row.tab_id)[0]
     rank = ranks.get(txt) or max((ranks[version_names(t)[0]] for t in kept), default=1) + 1
     if _keep_version(run, row.id, page, rank=rank):
+        note_kept_by_you(run.conn, song.id, row.tab_id)
         write_info(run.conn, ctx.library_dir, get_song(run.conn, song.id))
         return "kept"
     shown = _same_text(run, txt, strip_markup(page.content).encode("utf-8"))
     if shown is None:
-        return "no text"
+        return "held"
+    note_kept_by_you(run.conn, song.id, row.tab_id)
     kv_set_json(run.conn, same_key(song.id), {**same_pages(run.conn, song.id), row.tab_id: shown})
     return "same"
 

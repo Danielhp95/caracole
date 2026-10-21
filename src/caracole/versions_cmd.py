@@ -49,6 +49,7 @@ PROVIDER = "ug"
 # What ``ug.fetch.keep_version`` came to, in words.
 KEPT_WORDS = {
     "same": "its text is the very text of {page}, which shows it",
+    "held": "its text is the very text of another file kept in the song's folder, so it isn't kept again",
     "sheet": "it is the sheet already",
     "gone": "Ultimate Guitar no longer has it",
     "unreadable": "its page can't be read now; it waits",
@@ -217,31 +218,28 @@ def keep(cfg: Config, display: str, tab: int, *, progress: bool = False) -> None
         client = make_client(cfg, conn, PROVIDER, lookup_run_id(now), interactive=True)
         ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank, library_dir=cfg.library_dir,
                            now=now, reload_overrides=lambda: load_overrides(cfg.overrides_file))
+        refused: tuple[str, str] | None = None  # the version stage's state and line, when nothing was kept
         try:
             outcome = keep_version(ctx, song, tab)
         except ProviderBlocked as e:
             state = record_block(conn, e.provider, now, str(e))
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
-            said = f"Ultimate Guitar blocked caracole ({e}): no more requests to it until {until}; nothing kept."
-            events.stage("version", "skipped", said)
-            typer.echo(said)
-            return done()
+            refused = ("skipped",
+                       f"Ultimate Guitar blocked caracole ({e}): no more requests to it until {until}; nothing kept.")
         except BudgetExhausted:
             p = cfg.provider(PROVIDER)
-            said = (f"The lookup requests to Ultimate Guitar are spent ({p.lookup_requests} a lookup, "
-                    f"{p.lookup_per_hour} an hour); nothing kept. Ask again later.")
-            events.stage("version", "skipped", said)
-            typer.echo(said)
-            return done()
+            refused = ("skipped", f"The lookup requests to Ultimate Guitar are spent ({p.lookup_requests} a lookup, "
+                                  f"{p.lookup_per_hour} an hour); nothing kept. Ask again later.")
         except ProviderError as e:
             record_error(conn, e.provider, now, str(e))
-            said = f"Ultimate Guitar failed ({e}); nothing kept. Ask again later."
-            events.stage("version", "failed", said)
-            typer.echo(said)
-            return done()
+            refused = ("failed", f"Ultimate Guitar failed ({e}); nothing kept. Ask again later.")
         finally:
             requests = client.requests_made
             client.close()
+        if refused is not None:
+            events.stage("version", *refused)
+            typer.echo(refused[1])
+            return done()  # the requests sent before it count
         if requests:
             record_ok(conn, PROVIDER, now)
         txt = song_dir(cfg.library_dir, song) / version_names(str(tab))[0]

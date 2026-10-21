@@ -264,6 +264,24 @@ def test_keep_progress_writes_lookup_lines(config, sites, conn, tmp_path):
     assert events[-1]["done"]["ok"] is True and events[-1]["done"]["requests"] == {"ug": 1}
 
 
+
+@pytest.mark.slow
+def test_keep_blocked_counts_the_request_it_sent_in_its_progress(config, sites, conn, tmp_path):
+    from caracole.get import read_progress_line
+
+    looked_up(config, sites, conn, tmp_path)
+    sites.pages[url(104)] = (403, "Forbidden")
+
+    result = versions(config, CREEP, "--keep", "104", "--progress")
+
+    assert result.exit_code == 0, result.output
+    assert sites.ug() == [url(104)]
+    events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
+    assert any(e.get("stage") == "version" and e["state"] == "skipped" and "nothing kept" in e["detail"]
+               for e in events)
+    assert events[-1]["done"]["requests"] == {"ug": 1}
+    assert version_files(tmp_path) == ["version-101.txt", "version-103.txt"]
+
 # --- --choose and --clear --------------------------------------------------------------------------------
 
 
