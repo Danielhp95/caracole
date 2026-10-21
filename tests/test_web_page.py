@@ -1108,16 +1108,33 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
     assert done["tray"] is True  # the songbook's card says how they go: no list of requests in the corner
 
 
-# The page's last frames, and any shift in them: until ten frames in a row (a sixth of a second) scrolled nothing
-# and ran no animation that ends (a smooth scroll into view, a transition); then true.
+# The page's last frames, and any shift in them: true once, for 600 ms, nothing on the page changed (no element,
+# attribute or text: what a timer of the page's could still move) and nothing shifted, and ten frames in a row (a
+# sixth of a second) scrolled nothing and ran no animation that ends (a smooth scroll into view, a transition);
+# false if the page never settles in ten seconds.
 SETTLED = """new Promise((done) => {
-  let last = null, still = 0;
+  const QUIET = 600;
+  const began = performance.now();
+  let changed = began, last = null, still = 0;
+  const seen = () => { changed = performance.now(); };
+  const changes = new MutationObserver(seen);
+  changes.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+  const shifts = new PerformanceObserver(seen);
+  shifts.observe({ type: "layout-shift" });
   const frame = () => {
+    const now = performance.now();
     const moving = document.getAnimations().some((a) => a.playState === "running" &&
       a.effect && a.effect.getComputedTiming().endTime !== Infinity);
     still = !moving && scrollY === last ? still + 1 : 0;
     last = scrollY;
-    if (still >= 10) done(true); else requestAnimationFrame(frame);
+    const settled = still >= 10 && now - changed >= QUIET;
+    if (settled || now - began > 10000) {
+      changes.disconnect();
+      shifts.disconnect();
+      done(settled);
+    } else {
+      requestAnimationFrame(frame);
+    }
   };
   requestAnimationFrame(frame);
 })"""
