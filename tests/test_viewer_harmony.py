@@ -25,7 +25,7 @@ from caracole.viewer.harmony import (
     relation,
     solo_scale,
 )
-from caracole.viewer.theory import QUALITIES, SCALES, Chord, Key, note_pc, parse_chord, scale
+from caracole.viewer.theory import _NATURAL, QUALITIES, SCALES, Chord, Key, parse_chord, scale
 
 C = Key(0, "ionian")
 A_MINOR = Key(9, "aeolian")
@@ -46,6 +46,11 @@ def texts(names: str, key: Key) -> list[str]:
 
 def section(names: str) -> list[Chord | None]:
     return [None if n == "N.C." else ch(n) for n in names.split()]
+
+
+def pc(name: str) -> int:
+    """The pitch class of a note's name, double sharps and flats too: "B#" is 0, "Ebb" is 2."""
+    return (_NATURAL[name[0]] + name.count("#") - name.count("b")) % 12
 
 
 # --- numerals -----------------------------------------------------------------------------------
@@ -81,7 +86,7 @@ def test_c_mixolydians_b_flat_is_its_own_flat_seven():
 
 @pytest.mark.parametrize(("name", "text"), [
     ("C5", "I5"), ("Csus4", "Isus4"), ("Csus2", "Isus2"), ("C6", "I6"), ("Cadd9", "Iadd9"),
-    ("Am6", "vi6"), ("G9", "V9"), ("G7sus4", "V7sus4"), ("Dm9", "ii9"), ("C6/9", "I6/9"),
+    ("Am6", "vi6"), ("G9", "V9"), ("G7sus4", "V7sus4"), ("Dm9", "ii9"), ("C6/9", "I69"),
     ("Cmaj9", "Imaj9"), ("Am(maj7)", "vimaj7"), ("G13", "V13"), ("G7b9", "V7♭9"),
     ("Cmaj7#11", "Imaj7♯11"),
 ])
@@ -132,10 +137,29 @@ def test_a_dominant_a_mode_on_the_tonic_holds_is_secondary_only_when_it_resolves
     assert numeral(ch("D"), C).text == "II"
 
 
-def test_a_chord_on_the_tonic_is_never_a_secondary_dominant():
-    # C7 F7 in a blues is I7 IV7, not V7/IV.
+def test_a_tonic_dominant_seventh_going_to_iv_is_its_v7_but_a_blues_i7_iv7_stays():
+    # C7 F7 in a blues is I7 IV7: both dominant sevenths, neither resolves.
     assert numeral(ch("C7"), C, ch("F7")).text == "I7"
     assert relation(ch("C7"), C, ch("F7")) == Relation("borrowed", "C Mixolydian", None)
+    # "Something": C Cmaj7 C7 F, the textbook V7/IV; the same in a minor key, V7/iv.
+    assert texts("C Cmaj7 C7 F", C) == ["I", "Imaj7", "V7/IV", "IV"]
+    assert relation(ch("C7"), C, ch("F")) == Relation("secondary", None, "F")
+    assert texts("Am A7 Dm", A_MINOR) == ["i", "V7/iv", "iv"]
+    # A tonic triad, or a seventh going elsewhere, stays on the tonic.
+    assert numeral(ch("C7"), C, ch("G")).text == "I7"
+    assert numeral(ch("C7"), C).text == "I7"
+
+
+def test_a_dominant_seventh_of_the_key_that_resolves_a_fifth_down_is_secondary():
+    # G7 to C in A minor is V7/♭III, as D to G there is V/♭VII; G7 going elsewhere is ♭VII7.
+    assert texts("G7 C", A_MINOR)[0] == "V7/♭III"
+    assert relation(ch("G7"), A_MINOR, ch("C")) == Relation("secondary", None, "C")
+    assert texts("D G", A_MINOR)[0] == "V/♭VII"
+    assert texts("G7 Am", A_MINOR)[0] == "♭VII7"
+    assert numeral(ch("G7"), A_MINOR).text == "♭VII7"
+    assert texts("E7 Am", A_MINOR)[0] == "V7"
+    # The triad stays a chord of the key.
+    assert texts("G C", A_MINOR)[0] == "♭VII"
 
 
 def test_a_secondary_leading_tone_chord():
@@ -165,6 +189,26 @@ def test_a_minor_key_borrows_from_the_modes_nearest_it_first_then_the_parallel_m
     assert (numeral(ch("A"), A_MINOR).text, relation(ch("A"), A_MINOR).source) == ("I", "A major")
 
 
+def test_a_borrowed_chord_names_its_key_as_the_home_key_spells_its_tonic():
+    e_flat, a_flat, d_flat = Key(3, "ionian"), Key(8, "ionian"), Key(1, "ionian")
+    assert relation(ch("Db"), e_flat).source == "Eb minor"
+    assert explain(ch("Db"), e_flat).endswith("; borrowed from Eb minor")
+    assert relation(ch("Fm"), a_flat).kind == "in"
+    assert relation(ch("Dbm"), a_flat).source == "Ab minor"
+    assert relation(ch("Gbm"), d_flat).source == "Db minor"
+    assert relation(ch("Ab"), e_flat).kind == "in"
+
+
+def test_the_minor_keys_tonic_with_a_major_seventh_is_its_own():
+    # i(maj7), of harmonic and melodic minor: in A minor, and borrowed from C minor in C.
+    assert relation(ch("Am(maj7)"), A_MINOR) == Relation("in", None, None)
+    assert family(ch("Am(maj7)"), A_MINOR) == "home"
+    assert numeral(ch("Cm(maj7)"), C).text == "imaj7"
+    assert relation(ch("Cm(maj7)"), C) == Relation("borrowed", "C minor", None)
+    assert solo_scale(ch("Cm(maj7)"), C) == ("C melodic minor", ("C", "D", "Eb", "F", "G", "A", "B"))
+    assert [s for s, _, _ in glossary([ch("Cm(maj7)")], C)] == ["I–VII", "i", "maj7"]
+
+
 def test_a_chord_in_no_mode_and_no_secondary_is_outside_the_key():
     assert relation(ch("F#"), C) == Relation("outside", None, None)
     assert numeral(ch("F#"), C).text == "♯IV"
@@ -184,8 +228,8 @@ def test_every_quality_gets_a_numeral_an_explanation_and_a_scale_that_holds_it()
             assert numeral(chord, C).text
             assert explain(chord, C).startswith(numeral(chord, C).text + ": ")
             name, notes = solo_scale(chord, C)
-            assert chord.pitch_classes <= {note_pc(n[0], n[1:]) for n in notes}, (root, quality, name)
-            assert {note_pc(n[0], n[1:]) for n, _ in chord_tones(chord, C)} == chord.pitch_classes
+            assert chord.pitch_classes <= {pc(n) for n in notes}, (root, quality, name)
+            assert {pc(n) for n, _ in chord_tones(chord, C)} == chord.pitch_classes
 
 
 # --- relations and families ---------------------------------------------------------------------
@@ -268,11 +312,51 @@ def test_the_scale_for_a_solo_over_each_chord():
     # A secondary dominant: Mixolydian. E7 in C is the V of vi wherever it goes.
     assert solo_scale(ch("E7"), C) == ("E Mixolydian", ("E", "F#", "G#", "A", "B", "C#", "D"))
     # By quality otherwise.
-    # (Named as the viewer names the chord in C: Db.)
-    assert solo_scale(ch("C#m7b5"), C)[0] == "Db Locrian"
-    assert solo_scale(ch("C#dim7"), C)[0] == "Db diminished (whole-half)"
+    # C#m7b5 is not spelled Db in C: from Db its notes would need Fb, Abb and Cb.
+    assert chord_tones(ch("C#m7b5"), C) == [("C#", "R"), ("E", "♭3"), ("G", "♭5"), ("B", "♭7")]
+    assert solo_scale(ch("C#m7b5"), C) == ("C# Locrian", ("C#", "D", "E", "F#", "G", "A", "B"))
+    # C#dim7 to Dm is its leading-tone chord: C#, a half step below D.
+    assert solo_scale(ch("C#dim7"), C)[0] == "C# diminished (whole-half)"
     # The raised seventh of a minor key's dominant: Phrygian dominant.
     assert solo_scale(ch("E7"), A_MINOR) == ("E Phrygian dominant", ("E", "F", "G#", "A", "B", "C", "D"))
+
+
+def test_notes_keep_one_letter_per_degree():
+    # G#7, the V7 of C# minor and the V7/vi of E major: its 3rd is B#, not C.
+    c_sharp_minor, e_major = Key(1, "aeolian"), Key(4, "ionian")
+    g_sharp_7 = [("G#", "R"), ("B#", "3"), ("D#", "5"), ("F#", "♭7")]
+    assert chord_tones(ch("G#7"), c_sharp_minor) == g_sharp_7
+    assert chord_tones(ch("G#7"), e_major) == g_sharp_7
+    assert solo_scale(ch("G#7"), c_sharp_minor) == (
+        "G# Phrygian dominant", ("G#", "A", "B#", "C#", "D#", "E", "F#"))
+    assert chord_tones(ch("C#"), Key(9, "ionian")) == [("C#", "R"), ("E#", "3"), ("G#", "5")]
+    assert solo_scale(ch("F#"), C) == ("F# major", ("F#", "G#", "A#", "B", "C#", "D#", "E#"))
+    assert solo_scale(ch("Db"), Key(3, "ionian")) == (
+        "Db Mixolydian", ("Db", "Eb", "F", "Gb", "Ab", "Bb", "Cb"))
+
+
+def test_every_seven_note_scale_and_chord_has_a_letter_per_degree_in_every_key():
+    for tonic in range(12):
+        for mode in ("ionian", "aeolian"):
+            key = Key(tonic, mode)
+            for root in range(12):
+                for quality in ("", "m", "7", "maj7", "m7", "m7b5", "dim7", "aug", "mmaj7", "7b9"):
+                    chord = Chord(root, quality)
+                    name, notes = solo_scale(chord, key)
+                    if len(notes) == 7:
+                        assert len({n[0] for n in notes}) == 7, (key, chord, name, notes)
+                    assert chord.pitch_classes <= {pc(n) for n in notes}, (key, chord, name, notes)
+                    tones = chord_tones(chord, key)
+                    letters = [n[0] for n, _ in tones]
+                    assert len(set(letters)) == len(letters), (key, chord, tones)
+                    assert {pc(n) for n, _ in tones} == chord.pitch_classes
+
+
+def test_a_secondary_chords_root_is_spelled_from_the_chord_it_leads_to():
+    # G#dim7 to Am in C: the leading tone of A is G#, not Ab.
+    assert dict((s, e) for s, _, e in glossary([ch("G#dim7"), ch("Am")], C))["vii°/x"] == "G#dim7 = vii°7/vi"
+    assert solo_scale(ch("G#dim7"), C)[0] == "G# diminished (whole-half)"
+    assert chord_tones(ch("G#dim7"), C) == [("G#", "R"), ("B", "♭3"), ("D", "♭5"), ("F", "♭♭7")]
 
 
 def test_d7_in_c_takes_d_mixolydian_as_the_v_of_v_or_as_c_lydians_ii():
@@ -331,6 +415,7 @@ def test_the_andalusian_cadence_in_a_minor():
     "C7 F7 C7 G7 F7 C7 G7",
     "C7 F7 C7 F7 C7 G7 F7 C7",
     "C F C G F C",
+    "C7 F C7 G7 F C7",
 ])
 def test_the_twelve_bar_blues(names):
     [(_, found)] = progressions([("Verse", section(names))], C)
@@ -348,6 +433,12 @@ def test_the_twelve_bar_blues(names):
     ("E7 A7 D7 G7", C, "the ragtime progression"),
     ("F G Em Am", C, "the royal road"),
     ("C Dm Em F", C, None),
+    ("C E7 A7 D7 G7 C", C, "the ragtime progression"),
+    ("Am G F E", C, "the Andalusian cadence"),
+    ("Am Dm G C", A_MINOR, "the circle of fifths"),
+    ("F G Em Am", A_MINOR, "the royal road"),
+    ("C G Am F C", C, "the pop progression"),
+    ("C G F C F", C, None),
 ])
 def test_the_catalogue(names, key, name):
     [(_, found)] = progressions([("Verse", section(names))], key)
@@ -409,6 +500,12 @@ def test_a_progressions_key_is_the_same_for_every_rotation_and_repeat():
     assert progression_key(("I", "vi", "IV", "V")) != pop
     assert progression_key(("V7/V", "V", "I")) != progression_key(("V", "V", "I"))
     assert progression_key(("I/3", "IV", "V")) == progression_key(("I", "IV", "V"))
+    # A cycle that comes back to its first chord at the end plays that chord once.
+    assert progression_key("I V vi IV I") == pop
+    assert progression_key("I I") == "I"
+    # A V/IV is built on the tonic: its root is the I's.
+    assert progression_key(("I", "V7/IV", "IV", "V")) == progression_key(("I", "IV", "V"))
+    assert progression_key(("i", "V7/iv", "iv")) == progression_key(("i", "I", "iv"))
 
 
 # --- kept answers -------------------------------------------------------------------------------

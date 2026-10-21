@@ -87,7 +87,9 @@ key), so a table per mode is enough.
 - **A chord's card** lists the chord's notes with their intervals (C E G B♭ = R 3 5 ♭7), and the scale that
   fits over it for a solo: the key's own mode on that chord's root for a chord in the key (Dm7 in C: D
   Dorian), the borrowed-from mode for a borrowed chord, Mixolydian for a secondary dominant, and by quality
-  otherwise (Locrian for m7♭5, the half-whole diminished scale for °7); each with its notes.
+  otherwise (Locrian for m7♭5, the whole-half diminished scale for °7, as jazz teaching reads it, its notes the
+  chord's and a whole step above each; the half-whole one is the dominant's, for 7♭9 and 7♯9); each with its
+  notes, one letter a degree.
 
 ## 5. Hear it
 

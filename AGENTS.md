@@ -108,7 +108,8 @@ Rules a change there keeps (the Invariants below are the others):
   and `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field
   compared, and a list handed out is a copy (test_viewer_theory.py, test_viewer_harmony.py).
   harmony.py's docstring holds the rules where music theory reads a chord two ways (B♭ in C is
-  borrowed from C minor; D in C is V/V only going to G): change a rule there and in its test. version.py names and shapes
+  borrowed from C minor; D in C is V/V only going to G; C7 in C is V7/IV only going to an F that is
+  no dominant seventh): change a rule there and in its test. version.py names and shapes
   every chord as viewer.js does, so a PDF made in a version is what the viewer shows
   (test_viewer_version.py compares the two in Chromium).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
