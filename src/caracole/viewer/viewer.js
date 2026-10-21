@@ -35,7 +35,7 @@
   // --- the state: where the song is played, kept per page ------------------------------------
   // capo: the fret the capo is on (0 for none), or null for the sheet's own. It stays there
   // through a transposition, as on a guitar: the shapes move instead.
-  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null, fs: FS.start, strip: false,
+  const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
     speed: SPEED.start };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
@@ -47,6 +47,31 @@
     : Math.min(CAPO_MAX, Math.round(Number(v))));
   const sizeOf = (v) => (Number(v) >= FS.min && Number(v) <= FS.max ? Math.round(Number(v)) : null);
   const speedOf = (v) => (Number(v) >= SPEED.min && Number(v) <= SPEED.max ? Math.round(Number(v)) : null);
+  // The address spells the chords swapped as alt=<mode>.<i>.<root>.<suffix>.<bass>,… (suffix
+  // URL-encoded, bass empty for none) and the shapes chosen as at=<i>.<n>,….
+  const swapsOf = (text) => {
+    const out = {};
+    for (const part of String(text || "").split(",")) {
+      const [mode, i, root, suffix, bass] = part.split(".");
+      if (!validMode(mode) || !/^\d+$/.test(i || "") || !/^\d+$/.test(root || "") || !/^(\d+)?$/.test(bass || "")) continue;
+      let text;
+      try { text = decodeURIComponent(suffix || ""); } catch (err) { continue; }
+      out[mode] = out[mode] || {};
+      out[mode][i] = [Number(root), text, bass === "" || bass === undefined ? null : Number(bass)];
+    }
+    return out;
+  };
+  const swapsText = (alt) => Object.keys(alt).map((mode) => Object.keys(alt[mode]).filter((i) => Array.isArray(alt[mode][i]))
+    .map((i) => [mode, i, alt[mode][i][0], encodeURIComponent(alt[mode][i][1]).replace(/\./g, "%2E"),
+      alt[mode][i][2] === null ? "" : alt[mode][i][2]].join("."))).reduce((all, one) => all.concat(one), []).join(",");
+  const positionsOf = (text) => {
+    const out = {};
+    for (const part of String(text || "").split(",")) {
+      const [i, n] = part.split(".");
+      if (/^\d+$/.test(i || "") && /^\d+$/.test(n || "") && Number(n) > 0) out[i] = Number(n);
+    }
+    return out;
+  };
   try {
     const saved = JSON.parse(localStorage.getItem(store) || "null");
     if (saved && typeof saved === "object") {
@@ -60,6 +85,8 @@
     }
   } catch (err) { /* no storage: the page still works */ }
   const hash = new URLSearchParams(location.hash.slice(1));
+  if (hash.has("alt")) state.alt = swapsOf(hash.get("alt"));
+  if (hash.has("at")) state.at = positionsOf(hash.get("at"));
   if (hash.has("t")) state.t = clampT(hash.get("t"));
   if (validMode(hash.get("mode"))) state.mode = hash.get("mode");
   if (hash.has("capo")) state.capo = fretOf(hash.get("capo"));
@@ -78,6 +105,8 @@
       keep("t", state.t, state.t !== (Number(data.transpose) || 0));
       keep("mode", state.mode, state.mode !== null);
       keep("capo", state.capo, state.capo !== null);
+      keep("alt", swapsText(state.alt), swapsText(state.alt) !== "");
+      keep("at", Object.keys(state.at).map((i) => i + "." + state.at[i]).join(","), Object.keys(state.at).length > 0);
       keep("fs", state.fs, state.fs !== FS.start);
       keep("speed", state.speed, state.speed !== SPEED.start);
       const fragment = params.toString();
@@ -264,8 +293,22 @@
     if (to) to.focus({ preventScroll: true });
   };
 
+  // A chord's chosen position holds while the chord is the same: once its name or its number of
+  // shapes changes (a transposition, a mode, a capo, a swap), it starts at its first shape again.
+  const atSeen = {};
+  const keepPositions = () => {
+    for (const i of Object.keys(state.at)) {
+      const rep = own.call(written, i) ? current(i) : null;
+      const sign = rep ? label(i, rep) + "|" + shapesOf(rep, shift()).list.length : "";
+      if (!rep || state.at[i] >= Number(sign.split("|")[1]) || (i in atSeen && atSeen[i] !== sign)) {
+        delete state.at[i];
+        delete atSeen[i];
+      } else atSeen[i] = sign;
+    }
+  };
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
+    keepPositions();
     for (const el of chordEls) {
       const i = el.dataset.c;
       el.textContent = label(i, current(i));
@@ -428,10 +471,11 @@
     for (let i = 0; i < count; i++) {
       const rep = current(String(i));
       const shapes = shapesOf(rep, shift());
+      const shape = shapes.list[Math.min(state.at[String(i)] || 0, shapes.list.length - 1)];
       const b = document.createElement("button");
       b.type = "button";
       const name = label(String(i), rep);
-      if (shapes.list.length) b.appendChild(diagram(shapes.list[0], name, true));
+      if (shape) b.appendChild(diagram(shape, name, true));
       b.appendChild(document.createTextNode(name));
       b.addEventListener("click", () => openCard(String(i), b));
       strip.appendChild(b);
@@ -446,7 +490,7 @@
     if (!own.call(written, i)) return;
     shown.i = i;
     shown.pick = choice(i);
-    shown.at = 0;
+    shown.at = state.at[i] || 0;
     shown.el = el || chordEls.find((c) => c.dataset.c === i) || null;
     for (const c of chordEls) c.classList.toggle("on", c.dataset.c === i);
     drawCard();  // filled before it takes the focus, so a screen reader hears the chord
@@ -532,8 +576,16 @@
     state.alt[mode] = mine;
     render();
   });
-  $("prev").addEventListener("click", () => { shown.at = Math.max(0, shown.at - 1); drawCard(); });
-  $("next").addEventListener("click", () => { shown.at += 1; drawCard(); });
+  // The position shown is kept for the chord played now (not one tried among the alternatives).
+  const keepAt = () => {
+    if (shown.pick !== choice(shown.i)) return;
+    if (shown.at > 0) state.at[shown.i] = shown.at;
+    else delete state.at[shown.i];
+    drawStrip();
+    save();
+  };
+  $("prev").addEventListener("click", () => { shown.at = Math.max(0, shown.at - 1); drawCard(); keepAt(); });
+  $("next").addEventListener("click", () => { shown.at += 1; drawCard(); keepAt(); });
   let touchX = null;
   $("diagram").addEventListener("touchstart", (e) => { touchX = e.touches[0].clientX; }, { passive: true });
   $("diagram").addEventListener("touchend", (e) => {
@@ -715,7 +767,7 @@
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
   $("reset-all").addEventListener("click", () => {
-    Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, capo: null });
+    Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null });
     render();
   });
 

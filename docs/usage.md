@@ -1834,8 +1834,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 The viewer remembers its settings for each song in the browser, the scroll
 speed and the text size among them. It keeps the transposition, the mode, the
 capo, the text size and the scroll speed in its address too
-(`sheet.html#t=2&mode=aeolian&fs=20&speed=8`), so a reload or Back keeps them
-where the browser keeps nothing, as when `caracole serve` sends it (see
+(`sheet.html#t=2&mode=aeolian&fs=20&speed=8`), and so the shape chosen for a
+chord (`at=3.2`: chord 3, its third shape) and the chords played instead of
+others (`alt=ionian.0.7.maj7.`: mode, chord, root, suffix, bass), so a reload or
+Back keeps them where the browser keeps nothing, as when `caracole serve` sends it (see
 [caracole serve](#caracole-serve)). Its key is its sheet's, found as for
 info.json (see [The song's key](#the-songs-key)): the human sheet's from the
 tab, or estimated from its chords, and the auto sheet's heard in the audio;
