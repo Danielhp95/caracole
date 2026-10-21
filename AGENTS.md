@@ -90,6 +90,9 @@ tombstones it leaves are songs.py's, in the `removed` table).
   artist at an end of it whom Ultimate Guitar's search read as a song's (`_named_at_an_end`:
   "Estopa" for "estopa como camaron", never "Fito" for "fito paez");
   `lacuerda_leads`, LaCuerda's group first when it alone has the artist the query names.
+  `search_removed` scores the `removed` table (`RemovedHit`) as `search_library` scores your songs; a
+  removed song is never `lead`, `best` or a library hit, and `caracole search` prints it after "In your
+  library" as "Removed from your library" with the `caracole add` line that brings it back.
   Its prefilter reads
   ug/key_search.py (`rows_like`: the keys' trigram index, `ug_keys_fts`, schema 5), which
   must find exactly what a `LIKE` scan of `ug_index` finds

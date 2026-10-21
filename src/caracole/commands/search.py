@@ -174,6 +174,7 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
         typer.echo("\nThe offline Ultimate Guitar and LaCuerda indexes have no keys: search them without --key.")
         return
 
+    _print_removed(conn, ask, limit)
     typer.echo("\nOn Ultimate Guitar (offline index)")
     known = _library_keys(conn)
     shown, hint, ug = 0, None, None
@@ -188,6 +189,23 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
     _print_listing(_lacuerda_listing(conn, ask, limit, ug), known, start=shown)
     if hint:  # Ultimate Guitar's bare ids: after every place's hits
         typer.echo("\n" + _wrap(hint))
+
+
+def _print_removed(conn: sqlite3.Connection, ask: _Ask, limit: int) -> None:
+    """The group of removed songs the words match, after your library's: each with the date it was
+    removed and the line that asks for it again (a wanted.txt line is such a request). Nothing is
+    printed when none matches, or for an artist's or a title's listing."""
+    from caracole.search import search_removed
+
+    if ask.artist is not None or ask.title is not None:
+        return
+    hits = search_removed(conn, ask.text, limit)
+    if not hits:
+        return
+    typer.echo("\nRemoved from your library")
+    for hit in hits:
+        typer.echo(f"  {hit.artist} - {hit.title} · removed {hit.removed_at[:10]}")
+        typer.echo(f"     bring it back: caracole add {_quote(hit.artist)} {_quote(hit.title)}")
 
 
 def _library_hits(conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[LibraryHit]:

@@ -100,7 +100,7 @@ from caracole.normalize import (
     split_variant,
 )
 from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
-from caracole.songs import Song, list_songs
+from caracole.songs import Song, list_removed, list_songs
 from caracole.ug.key_search import rows_like
 from caracole.ug.lookup import IndexTab, song_tabs
 
@@ -298,6 +298,34 @@ def search_library(conn: sqlite3.Connection, query: str, limit: int = 10, *,
         if score >= MIN_SCORE:
             hits.append(LibraryHit(song, round(score, 1), via))
     hits.sort(key=lambda h: (-h.score, h.song.display.casefold(), h.song.id))
+    return hits[:limit]
+
+
+@dataclass(frozen=True)
+class RemovedHit:
+    """A song ``caracole remove`` took out that matches the query. It is never a library hit, and
+    never ``lead`` or ``best``: it is shown as removed, with the line that asks for it again."""
+
+    artist: str
+    title: str
+    key: str
+    removed_at: str
+    score: float
+    via: str = "both"
+
+
+def search_removed(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[RemovedHit]:
+    """The removed songs (the ``removed`` table's names) that match ``query``, scored as
+    ``search_library`` scores your songs, best first, the latest removed first among equals."""
+    queries = _queries(query)
+    if not queries:
+        return []
+    hits = []
+    for gone in list_removed(conn):
+        score, via = _names_reading(queries, [gone.artist], gone.title)
+        if score >= MIN_SCORE:
+            hits.append(RemovedHit(gone.artist, gone.title, gone.key, gone.removed_at, round(score, 1), via))
+    hits.sort(key=lambda h: -h.score)  # stable: the latest removed first among equals
     return hits[:limit]
 
 
@@ -853,9 +881,15 @@ def _reading(scores: Iterable[tuple[float, float, float]], reading: str | None =
 def _song_reading(queries: list[_Query], song: Song, reading: str | None = None) -> tuple[float, str]:
     """The best score over a song's artists, each paired with its title, plain and in pinyin, and the
     reading that gave it."""
-    titles = _forms(clean_title(song.title)) or [""]
+    return _names_reading(queries, song.artists or [song.artist], song.title, reading)
+
+
+def _names_reading(queries: list[_Query], artists_: Sequence[str], title: str,
+                   reading: str | None = None) -> tuple[float, str]:
+    """``_song_reading`` for bare names: each artist paired with the title."""
+    titles = _forms(clean_title(title)) or [""]
     scores = []
-    for artist in dict.fromkeys(song.artists or [song.artist]):
+    for artist in dict.fromkeys(artists_):
         artists = _forms(artist) or [""]
         # Plain words with plain words, pinyin with pinyin (a form missing on one side is its plain one).
         for a, t in {(artists[0], titles[0]), (artists[-1], titles[-1])}:

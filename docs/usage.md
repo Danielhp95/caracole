@@ -1922,6 +1922,19 @@ offline Ultimate Guitar index and LaCuerda's (see below):
            94  misc-musicals/epic-the-musical-not-sorry-for-loving-you (catch_all)
            82  bill-fox/im-not-over-loving-you (title_only)
 
+- **Removed from your library**: right after your library, the songs
+  `caracole remove` took out that the words match (Chinese as pinyin, whole
+  words only), each with the date it was removed and the line that asks for it
+  again, which is a wanted.txt line:
+
+      Removed from your library
+        宋冬野 - 斑马斑马 · removed 2026-10-20
+           bring it back: caracole add "宋冬野" "斑马斑马"
+
+  The group is absent when no removed song matches (and for `--artist` and
+  `--title`). A removed song is never what Enter or `--add` acts on; once
+  `caracole add` brings it back, it is in your library and not in this group.
+
 - **On Ultimate Guitar**: numbered hits from the offline index, each tagged
   `[UG]`, with its tabs per type, one of its pages, and the `caracole add`
   line to paste. A song of one of UG's catch-all artists (`misc-musicals`, `misc-soundtrack`…,
