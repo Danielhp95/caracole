@@ -252,13 +252,17 @@
   };
   // The line under the key, whole where there is room ("shapes · capo 2 · +1"); on a narrow screen
   // the capo and the transposition alone ("capo 2 · +1"), so that neither is cut off. Fitted again
-  // when the bar comes back into view or the window changes.
+  // when the bar comes back into view or the window changes. Measured to the fraction of a pixel, which
+  // scrollWidth rounds away: a line 0.4 px too wide would end in an ellipsis.
   let keyUnder = ["", []];
   const fitKey = () => {
     const line = $("key-now").querySelector(".d");
     const [what, rest] = keyUnder;
     line.textContent = (what ? [what] : []).concat(rest).join(" · ");
-    if (what && rest.length && line.scrollWidth > line.clientWidth) line.textContent = rest.join(" · ");
+    if (!what || !rest.length) return;
+    const text = document.createRange();
+    text.selectNodeContents(line);
+    if (text.getBoundingClientRect().width > line.getBoundingClientRect().width) line.textContent = rest.join(" · ");
   };
 
   // --- chord diagrams --------------------------------------------------------------------------
@@ -392,7 +396,7 @@
 
   // --- drawing the page --------------------------------------------------------------------------
   const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
-  const more = $("more"), sizes = $("sizes"), sizeButton = $("size");
+  const more = $("more"), sizes = $("sizes"), sizeButton = $("size"), shapesButton = $("shapes");
   const button = (text, pressed, onClick, small) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -517,6 +521,7 @@
 
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
+    shapesButton.setAttribute("aria-pressed", state.strip ? "true" : "false");  // the guitar says the same
     drawSpeed();
     drawStrip();
     drawNecks();  // before layout(), which measures the song beside the rail
@@ -1037,6 +1042,18 @@
   $("smaller").addEventListener("click", () => { state.fs = Math.max(FS.min, state.fs - FS.step); render(); });
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
+  // The guitar in the bar shows the strip, or hides it, as the settings' chip does. The strip is above
+  // the song: shown from further down, the page goes up to it, so the shapes are in view above the bar
+  // (from there, a shape's card; back down by hand). Hidden, the page stays where it is.
+  shapesButton.addEventListener("click", () => {
+    state.strip = !state.strip;
+    render();
+    if (!state.strip) return;
+    const strip = $("strip"), r = strip.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > bar.getBoundingClientRect().top) {
+      strip.scrollIntoView({ block: "nearest", behavior: calm.matches ? "auto" : "smooth" });
+    }
+  });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null });
     for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
@@ -1249,8 +1266,9 @@
   });
   bar.addEventListener("focusin", () => slide(false));
 
-  // Nothing to transpose and no other setting for a sheet without chords: Aa and ▶ alone.
+  // Nothing to transpose, no shapes and no other setting for a sheet without chords: Aa and ▶ alone.
   $("keys").hidden = count === 0;
+  shapesButton.hidden = count === 0;
   more.hidden = count === 0;
   showScroll();
   render();

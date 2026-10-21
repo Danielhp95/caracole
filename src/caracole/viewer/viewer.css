@@ -126,7 +126,7 @@ a { color: inherit; }
 
 /* Every chord's shape at a glance: large enough to read, without the fingers (the card has them). */
 .strip { display: flex; gap: 6px; margin: 14px -16px 0; padding: 4px 16px 6px; overflow-x: auto;
-  scrollbar-width: thin; }
+  scrollbar-width: thin; scroll-margin: 8px 0 calc(var(--foot) + 8px); }  /* brought into view clear of the bar */
 .strip button { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 4px 2px;
   border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: .82rem;
   font-weight: 700; cursor: pointer; }
@@ -141,7 +141,7 @@ a { color: inherit; }
   border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 600;
   text-decoration: none; }
 
-/* The bar at the foot: the key between − and +, Aa, ▶ and ⋯, on a background of its own, so it
+/* The bar at the foot: the key between − and +, the guitar, Aa, ▶ and ⋯, on a background of its own, so it
    never sits over the words. It slides away as you scroll down (.away) and back as you scroll up;
    while the song scrolls by itself it is out of the way, back when it pauses, under the pill. */
 .bar { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0;
@@ -169,6 +169,22 @@ a { color: inherit; }
 .bar .play { border-radius: 50%; background: var(--accent); color: var(--on-accent); }
 /* Aa: the text size in a small box over the bar, beside the song (nothing behind it is dimmed). */
 .size-box { position: relative; flex: none; margin-left: auto; }  /* Aa, ▶ and ⋯ at the end, keys or none */
+/* The guitar: the strip of chord shapes, shown while it is pressed: tinted and ringed in the accent (the
+   ring 3:1 at least against the bar, light and dark). The first of the tools at the end; its icon a little
+   larger than the others', since on the slant it fills less of its box. */
+.bar .shapes { margin-left: auto; }
+.bar .shapes:not([hidden]) + .size-box { margin-left: 0; }
+.bar .shapes svg { width: 20px; height: 20px; }
+.bar .shapes[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* A phone: the tools side by side with no gap (each 44 px, its icon in the middle) and the bar closer to
+   the screen's edges, so the key between − and + keeps its room: "Ab mixolydian" whole at 390 px. */
+@media (max-width: 419px) {
+  .bar { padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
+  .bar-in { gap: 0; }
+  .keys { margin-right: 2px; }
+  .now { padding: 0; }
+}
 .bar #size[aria-expanded="true"] { background: var(--raised); }
 .sizes { position: absolute; z-index: 1; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 14px; border: 1px solid var(--border);
