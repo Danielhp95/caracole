@@ -32,17 +32,10 @@ from typing import Any, Literal, Protocol
 
 from rapidfuzz import fuzz
 
-from caracole.http import (
-    BudgetExhausted,
-    Client,
-    ProviderBlocked,
-    ProviderError,
-    ProviderUnavailable,
-    Response,
-    read_once_more,
-)
+from caracole.http import Client, ProviderError, Response, read_once_more
 from caracole.library import song_dir
 from caracole.normalize import clean_title, fold, slug_key
+from caracole.provider_pass import PassStats, each_song
 from caracole.songs import Song, list_songs, update_song
 
 log = logging.getLogger(__name__)
@@ -442,20 +435,13 @@ def write_lyrics(song_dir: Path, lyrics: Lyrics) -> list[Path]:
 
 
 @dataclass
-class LyricsStats:
-    """What one ``fetch_pending_lyrics`` pass did.
-
-    ``failures`` names the songs a provider error left pending, each with its
-    error: the ``errors`` counted, then the songs not asked about once the client
-    gave up on LRCLIB for the run (``ProviderUnavailable``).
-    """
+class LyricsStats(PassStats):
+    """What one ``fetch_pending_lyrics`` pass did: ``tried``, ``errors`` and ``failures`` as
+    every pass counts them (provider_pass.py), and what LRCLIB answered."""
 
     found: int = 0
     missing: int = 0
     instrumental: int = 0
-    errors: int = 0
-    budget_exhausted: bool = False
-    failures: list[tuple[Song, ProviderError]] = field(default_factory=list, compare=False, repr=False)
 
 
 RECHECK_MISSING_AFTER = timedelta(days=30)
@@ -478,23 +464,19 @@ def _before(stamp: str | None, cutoff: datetime) -> bool:
         return True
 
 
-def _songs_to_look_up(
-    conn: sqlite3.Connection, now: datetime, recheck_after: timedelta
-) -> list[tuple[Song, bool]]:
-    """Songs never looked up, newest first, then misses older than ``recheck_after``.
-
-    The flag marks a re-check, whose cached answer is the old miss itself.
-    """
+def _songs_to_look_up(conn: sqlite3.Connection, now: datetime, recheck_after: timedelta) -> list[Song]:
+    """Songs never looked up, newest first, then misses older than ``recheck_after``: re-checks,
+    whose cached answer is the old miss itself."""
     cutoff = _utc(now) - recheck_after
-    pending: list[tuple[Song, bool]] = []
-    due: list[tuple[Song, bool]] = []
+    pending: list[Song] = []
+    due: list[Song] = []
     for song in list_songs(conn):
         if song.status == "ignored":
             continue
         if song.lyrics_status == "pending":
-            pending.append((song, False))
+            pending.append(song)
         elif song.lyrics_status == "missing" and _before(song.lyrics_at, cutoff):
-            due.append((song, True))
+            due.append(song)
     return pending + due
 
 
@@ -519,34 +501,21 @@ def fetch_pending_lyrics(
     Found lyrics are written to the song's folder (``write_lyrics``) and stored
     in ``songs.lyrics_json``; every outcome stores ``lyrics_at``.
 
-    Errors are never misses. ``ProviderBlocked`` propagates; ``BudgetExhausted``
-    ends the pass (``budget_exhausted``); any other ``ProviderError`` counts in
-    ``errors`` and leaves the song as it was, for the next run. Once the client
-    gives up on the provider for this run (``ProviderUnavailable``), the pass ends.
+    Errors are never misses (provider_pass.py): ``ProviderBlocked`` propagates;
+    ``BudgetExhausted`` ends the pass (``budget_exhausted``); any other
+    ``ProviderError`` counts in ``errors`` and leaves the song as it was, for the
+    next run. Once the client gives up on the provider for this run
+    (``ProviderUnavailable``), the pass ends.
     """
     stats = LyricsStats()
     stamp = _stamp(now)
-    songs = [(s, r) for s, r in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only]
-    for i, (song, recheck) in enumerate(songs):
-        try:
-            result = fetch_lyrics(
-                client, artist=song.artists[0], title=song.title, album=song.album,
-                duration_s=song.duration_s, cache=not recheck,
-            )
-        except ProviderBlocked:
-            raise
-        except BudgetExhausted:
-            stats.budget_exhausted = True
-            break
-        except ProviderUnavailable as e:
-            log.info("LRCLIB is unavailable for the rest of this run: %s", e)
-            stats.failures += [(left, e) for left, _ in songs[i:]]
-            break
-        except ProviderError as e:
-            stats.errors += 1
-            stats.failures.append((song, e))
-            log.debug("lyrics for %s: %s", song.display, e)
-            continue
+
+    def turn(song: Song) -> LyricsResult:  # a re-check of a miss goes past the cache
+        return fetch_lyrics(client, artist=song.artists[0], title=song.title, album=song.album,
+                            duration_s=song.duration_s, cache=song.lyrics_status != "missing")
+
+    songs = (s for s in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only)
+    for song, result in each_song(songs, stats, turn, site="LRCLIB"):
         _record(conn, library_dir, song, result, stamp)
         if result.status == "found":
             stats.found += 1

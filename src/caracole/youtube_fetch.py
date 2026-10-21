@@ -48,9 +48,10 @@ from typing import Any
 from caracole.config import Config
 from caracole.db import kv_get_json, kv_set_json
 from caracole.health import get_state, is_cooling
-from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
+from caracole.http import ProviderBlocked, ProviderError
 from caracole.lyrics import song_lyrics
 from caracole.overrides import Overrides
+from caracole.provider_pass import PassStats, each_song
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, update_song
 from caracole.youtube import PROVIDER, Video, VideoUnavailable, YtDlp, choose, search_query
 
@@ -269,17 +270,14 @@ def expected_seconds(song: Song) -> float | None:
 
 
 @dataclass
-class YouTubeStats:
-    """What one pass did: songs ``tried`` (errors included), audio ``downloaded``, searches that
-    found nothing (``missing``), videos ``unavailable``, and the songs an error left, with it."""
+class YouTubeStats(PassStats):
+    """What one pass did: songs ``tried`` (errors included), ``errors`` and the songs an error left,
+    with it (``failures``), as every pass counts them (provider_pass.py); audio ``downloaded``,
+    searches that found nothing (``missing``) and videos ``unavailable``."""
 
-    tried: int = 0
     downloaded: int = 0
     missing: int = 0
     unavailable: int = 0
-    errors: int = 0
-    budget_exhausted: bool = False
-    failures: list[tuple[Song, ProviderError]] = field(default_factory=list)
 
 
 def youtube_pass(
@@ -302,26 +300,17 @@ def youtube_pass(
     now = _utc(now)
     stats = YouTubeStats()
     tidy(conn, cfg, overrides)
-    for song in songs if songs is not None else songs_for_youtube(conn, cfg, overrides, now):
-        try:
-            outcome = _one(conn, runner, cfg, song, overrides, now)
-        except ProviderBlocked:
-            raise
-        except BudgetExhausted:
-            stats.budget_exhausted = True
-            break
-        except ProviderError as e:
-            stats.tried += 1
-            stats.errors += 1
-            stats.failures.append((song, e))
-            record = load_record(conn, song.id)
-            record.error, record.error_at = e.message or str(e), _iso(now)
-            _save(conn, song.id, record)
-            log.warning("YouTube for %s: %s", song.display, e)
-            if on_song is not None:
-                on_song(song, GAVE_UP if isinstance(e, DownloadsFailed) else "error", record)
-            continue
-        stats.tried += 1
+
+    def failed(song: Song, e: ProviderError) -> None:
+        record = load_record(conn, song.id)
+        record.error, record.error_at = e.message or str(e), _iso(now)
+        _save(conn, song.id, record)
+        if on_song is not None:
+            on_song(song, GAVE_UP if isinstance(e, DownloadsFailed) else "error", record)
+
+    due = songs if songs is not None else songs_for_youtube(conn, cfg, overrides, now)
+    for song, outcome in each_song(due, stats, lambda song: _one(conn, runner, cfg, song, overrides, now),
+                                   site="YouTube", level=logging.WARNING, on_error=failed):
         stats.downloaded += outcome == DOWNLOADED_NOW
         stats.missing += outcome == MISSED
         stats.unavailable += outcome == PASSED_OVER

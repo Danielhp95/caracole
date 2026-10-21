@@ -65,6 +65,7 @@ Shared by the steps and the commands:
 | library.py | song folders, safe file access in the synced library |
 | notify.py | ntfy |
 | site_index.py | a site's sitemaps into a table, resumed across runs |
+| provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
 | keys.py | a song's musical key and where it came from |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
@@ -360,8 +361,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
   that won't parse (`PageParseError`, `GtpTabsParseError`, `LaCuerdaParseError`,
   `LrclibParseError`) never makes a song not found, its lyrics missing or its Guitar Pro
-  file a miss: the song waits for the next run (http.py, pipeline.py, ug/fetch.py, lyrics.py,
-  lacuerda_fetch.py, gtptabs_fetch.py;
+  file a miss: the song waits for the next run (http.py, pipeline.py, provider_pass.py, ug/fetch.py,
+  lyrics.py, lacuerda_fetch.py, gtptabs_fetch.py;
   `test_pipeline.py::test_ug_block_cools_down_and_never_marks_not_found`,
   `test_fetch.py::test_parse_error_is_not_a_miss`,
   `test_gtptabs_fetch.py::test_a_spent_budget_is_no_miss`). A cached answer that won't

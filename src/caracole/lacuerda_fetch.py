@@ -45,22 +45,13 @@ import logging
 import re
 import sqlite3
 from collections.abc import Collection
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from caracole import coverage
 from caracole.config import RankPolicy
-from caracole.http import (
-    BudgetExhausted,
-    Client,
-    ProviderBlocked,
-    ProviderError,
-    ProviderUnavailable,
-    Response,
-    read_once_more,
-    stale,
-)
+from caracole.http import BudgetExhausted, Client, Response, read_once_more, stale
 from caracole.lacuerda import (
     PROVIDER,
     LaCuerdaParseError,
@@ -82,6 +73,7 @@ from caracole.library import drop_file, holds, keep_file, kept_already, kept_fil
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title
 from caracole.overrides import LaCuerdaPick, Overrides
+from caracole.provider_pass import PassStats, each_song
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug.page import strip_markup
 from caracole.versions import (
@@ -104,20 +96,12 @@ _SLUG = re.compile(r"[a-z0-9_]+")  # an artist's name written as LaCuerda's slug
 
 
 @dataclass
-class LaCuerdaStats:
-    """What one ``lacuerda_sheets`` pass did. ``tried`` counts misses and errors too.
+class LaCuerdaStats(PassStats):
+    """What one ``lacuerda_sheets`` pass did: ``tried`` (misses and errors too), ``errors`` and
+    ``failures`` as every pass counts them (provider_pass.py), the sheets kept and the misses."""
 
-    ``failures`` names the songs a provider error left for the next run, each with
-    its error: the ``errors`` counted, then the songs not asked about once the
-    client gave up on LaCuerda for the run (``ProviderUnavailable``).
-    """
-
-    tried: int = 0
     kept: int = 0
     missing: int = 0
-    errors: int = 0
-    budget_exhausted: bool = False
-    failures: list[tuple[Song, ProviderError]] = field(default_factory=list, compare=False, repr=False)
 
 
 def lacuerda_sheets(
@@ -137,43 +121,29 @@ def lacuerda_sheets(
     and a sheet you pinned is never replaced. ``only``: the ids of the songs that
     may be tried (a lookup's one song), when the rules above would try them.
 
-    ``ProviderBlocked`` propagates. ``BudgetExhausted`` ends the pass
-    (``budget_exhausted``), and so does a client that gives up on LaCuerda for
-    this run (``ProviderUnavailable``). Any other ``ProviderError``, parse errors
-    included, counts in ``errors`` and leaves the song for the next run.
+    Errors are never misses (provider_pass.py): ``ProviderBlocked`` propagates.
+    ``BudgetExhausted`` ends the pass (``budget_exhausted``), and so does a client
+    that gives up on LaCuerda for this run (``ProviderUnavailable``). Any other
+    ``ProviderError``, parse errors included, counts in ``errors`` and leaves the
+    song for the next run.
     """
     stats = LaCuerdaStats()
     stamp = _stamp(now)
     fetched: set[str] = set()  # URLs fetched from LaCuerda in this pass
     picks = overrides.lacuerda if overrides is not None else {}
-    songs = [s for s in _songs_to_try(conn, library_dir, rank, now, overrides) if only is None or s.id in only]
-    for i, song in enumerate(songs):
+
+    def turn(song: Song) -> _Sheet | None:
         pick = picks.get(song.key)
-        try:
-            if pick is not None:
-                sheet = _picked_sheet(conn, client, pick, song, now, fetched)
-            else:
-                sheet = _find_sheet(conn, client, song.artists[0], song.title, now, fetched)
-        except ProviderBlocked:
-            raise
-        except BudgetExhausted:
-            stats.budget_exhausted = True
-            break
-        except ProviderUnavailable as e:
-            log.info("LaCuerda is unavailable for the rest of this run: %s", e)
-            stats.failures += [(left, e) for left in songs[i:]]
-            break
-        except ProviderError as e:
-            stats.tried += 1
-            stats.errors += 1
-            stats.failures.append((song, e))
-            log.debug("LaCuerda for %s: %s", song.display, e)
-            continue
-        stats.tried += 1
+        if pick is not None:
+            return _picked_sheet(conn, client, pick, song, now, fetched)
+        return _find_sheet(conn, client, song.artists[0], song.title, now, fetched)
+
+    songs = (s for s in _songs_to_try(conn, library_dir, rank, now, overrides) if only is None or s.id in only)
+    for song, sheet in each_song(songs, stats, turn, site="LaCuerda"):
         if sheet is None:
             stats.missing += 1
             update_song(conn, song.id, lacuerda_checked_at=stamp)
-        elif _record(conn, library_dir, rank, song, sheet, stamp, picked=pick is not None):
+        elif _record(conn, library_dir, rank, song, sheet, stamp, picked=song.key in picks):
             stats.kept += 1
     return stats
 

@@ -353,13 +353,15 @@ def _gtptabs(ctx: StepContext) -> StepResult:
         title="gtptabs.com",
         done=_counted((s.kept, "Guitar Pro file downloaded" if s.kept == 1 else "Guitar Pro files downloaded"),
                       _songs(s.missing, "not there")),
+        failures=[Failure.of(song, e) for song, e in s.failures],
+        retry="{songs} will be looked for on gtptabs.com again on the next run",
         spent=["gtptabs"] if s.budget_exhausted else [],
         status=(f"{index}{s.tried} tried, {plural(s.kept, 'Guitar Pro file')} kept, {s.missing} not on gtptabs.com, "
                 f"{plural(s.errors, 'error')}{tail}"),
     )
-    if s.errors:
-        result.problems.append(Problem(f"gtptabs.com failed {plural(s.errors, 'time')} this run; those songs are "
-                                       "tried again on the next run, and the log says why."))
+    if s.sitemap_errors:  # a song's error is on its failure's line
+        result.problems.append(Problem("gtptabs.com's sitemaps couldn't be read this run; they are asked for again "
+                                       "on the next run, and the log says why."))
     return result
 
 

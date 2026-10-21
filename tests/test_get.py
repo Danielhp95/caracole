@@ -576,6 +576,22 @@ def test_a_lacuerda_pick_that_fails_says_so_where_the_sheet_ultimate_guitar_gave
     assert find_song(conn, "estopa/como-camaron").lacuerda_checked_at is None and result.ok  # no miss
 
 
+def test_a_gtptabs_error_says_what_the_site_did_as_the_lyrics_stage_does(cfg, conn, sites):
+    serve_creep(sites, conn)
+    radiohead = "tabs/18/radiohead.html"
+    conn.execute("INSERT INTO gtptabs_index VALUES (?, ?, 'radiohead', '', '', 'sitemapGoogle1.xml')",
+                 (radiohead, radiohead))
+    sites.pages[f"https://gtptabs.com/{radiohead}"] = (502, "<html>Bad gateway</html>")
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert f"https://gtptabs.com/{radiohead}" in sites.requests
+    assert progress.states()["gtptabs"] == "failed"
+    assert result.details["gtptabs"].startswith("gtptabs.com failed (gtptabs: 502")
+    assert "502" in get_state(conn, "gtptabs").last_error and result.ok  # an error, as at night: never a miss
+    assert get_song(conn, find_song(conn, "radiohead/creep").id).status == "found"
+
+
 def test_the_sheet_stage_says_which_site_it_asks_once_lacuerda_is_one(cfg, conn, sites):
     # caracole serve's line follows it (status.py): LaCuerda, for the pick, then Ultimate Guitar, which LaCuerda's
     # failure leaves the sheet to. A sheet Ultimate Guitar alone is asked for says nothing more.

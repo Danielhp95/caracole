@@ -113,7 +113,7 @@ def test_found_lyrics_are_written_and_stored(conn, tmp_path):
     hit = load("get_hit.json")
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     stats = run(FakeLrclib([hit]), conn, tmp_path)
-    assert stats == LyricsStats(found=1)
+    assert stats == LyricsStats(tried=1, found=1)
     here = folder(tmp_path, "Soda Stereo", "De Música Ligera")
     assert (here / "lyrics.txt").read_text(encoding="utf-8") == hit["plainLyrics"] + "\n"
     assert (here / "lyrics.lrc").read_text(encoding="utf-8").startswith("[00:23.62] Línea uno")
@@ -140,7 +140,7 @@ def test_a_miss_is_recorded_with_its_time_and_writes_nothing(conn, tmp_path):
     lrclib = FakeLrclib([load("get_hit.json")])
     song = add_song(conn, "Soda Stereo", "Canción Inexistente")
     stats = run(lrclib, conn, tmp_path)
-    assert stats == LyricsStats(missing=1)
+    assert stats == LyricsStats(tried=1, missing=1)
     assert lrclib.endpoints() == ["get", "search"]
     stored = get_song(conn, song.id)
     assert (stored.lyrics_status, stored.lyrics_at, stored.lyrics_json) == ("missing", STAMP, None)
@@ -150,7 +150,7 @@ def test_a_miss_is_recorded_with_its_time_and_writes_nothing(conn, tmp_path):
 def test_an_instrumental_is_stored_without_lyric_files(conn, tmp_path):
     song = add_song(conn, "Conjunto de Prueba", "Interludio de Prueba", duration_ms=184000)
     stats = run(FakeLrclib([load("get_instrumental.json")]), conn, tmp_path)
-    assert stats == LyricsStats(instrumental=1)
+    assert stats == LyricsStats(tried=1, instrumental=1)
     stored = get_song(conn, song.id)
     assert (stored.lyrics_status, stored.lyrics_at) == ("instrumental", STAMP)
     assert lyrics_from_json(stored.lyrics_json).lrclib_id == 4242424
@@ -162,7 +162,7 @@ def test_banma_banma_plain_lyrics_are_saved_without_an_lrc(conn, tmp_path):
     # /api/get doesn't know; /api/search finds it as 斑马斑马, and the album's cut wins.
     song = add_song(conn, "宋冬野", "斑马，斑马", album="安和桥北", duration_ms=253000)
     stats = run(FakeLrclib(load("search_banma.json")), conn, tmp_path)
-    assert stats == LyricsStats(found=1)
+    assert stats == LyricsStats(tried=1, found=1)
     here = folder(tmp_path, "宋冬野", "斑马，斑马")
     assert (here / "lyrics.txt").read_text(encoding="utf-8").startswith("範例歌詞 第一行")
     assert not (here / "lyrics.lrc").exists()
@@ -198,7 +198,7 @@ def test_an_error_leaves_the_song_pending_and_the_pass_goes_on(conn, tmp_path):
     broken = add_song(conn, "Artista Roto", "Canción Rota", added_at="2026-10-02T00:00:00Z")
     fine = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-01T00:00:00Z")
     stats = run(lrclib, conn, tmp_path)
-    assert stats == LyricsStats(found=1, errors=1)
+    assert stats == LyricsStats(tried=2, found=1, errors=1)
     stored = get_song(conn, broken.id)
     assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
     assert get_song(conn, fine.id).lyrics_status == "found"
@@ -208,7 +208,7 @@ def test_an_error_on_the_search_fallback_is_not_a_miss(conn, tmp_path):
     lrclib = FakeLrclib(failing={"search": 502})
     song = add_song(conn, "Soda Stereo", "Canción Inexistente")
     stats = run(lrclib, conn, tmp_path)
-    assert stats == LyricsStats(errors=1)
+    assert stats == LyricsStats(tried=1, errors=1)
     assert lrclib.endpoints() == ["get", "search"]
     stored = get_song(conn, song.id)
     assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
@@ -239,8 +239,8 @@ def test_a_cached_answer_that_isnt_json_is_asked_for_once_more(conn, tmp_path, g
     # Answers are cached forever: the notice would fail the song, from the cache, every night.
     lrclib = Glitchy([record()], first={"get": [glitch]})
     song = add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=213000)
-    assert run(lrclib, conn, tmp_path) == LyricsStats(errors=1)
-    assert run(lrclib, conn, tmp_path) == LyricsStats(found=1)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, errors=1)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, found=1)
     assert lrclib.endpoints() == ["get", "get"]
     assert get_song(conn, song.id).lyrics_status == "found"
 
@@ -249,7 +249,7 @@ def test_an_answer_still_not_json_when_asked_again_is_an_error_for_one_more_requ
     lrclib = Glitchy([record()], first={"get": [NOTICE, NOTICE]})
     song = add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=213000)
     run(lrclib, conn, tmp_path)
-    assert run(lrclib, conn, tmp_path) == LyricsStats(errors=1)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, errors=1)
     assert lrclib.endpoints() == ["get", "get"]
     stored = get_song(conn, song.id)
     assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
@@ -260,7 +260,7 @@ def test_a_503_that_isnt_json_when_asked_again_still_falls_back_to_the_search(co
     lrclib = Glitchy([record()], first={"get": [NOTICE, (503, "Service Unavailable")]})
     song = add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=213000)
     run(lrclib, conn, tmp_path)
-    assert run(lrclib, conn, tmp_path) == LyricsStats(found=1)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, found=1)
     assert lrclib.endpoints() == ["get", "get", "search"]
     assert get_song(conn, song.id).lyrics_status == "found"
 
@@ -268,8 +268,8 @@ def test_a_503_that_isnt_json_when_asked_again_still_falls_back_to_the_search(co
 def test_a_cached_search_that_isnt_json_is_asked_for_once_more(conn, tmp_path):
     lrclib = Glitchy([record()], first={"search": [NOTICE]})
     song = add_song(conn, "Soda Stereo", "De Música Ligera", album="Otro Disco", duration_ms=213000)
-    assert run(lrclib, conn, tmp_path) == LyricsStats(errors=1)  # /api/get misses: another album
-    assert run(lrclib, conn, tmp_path) == LyricsStats(found=1)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, errors=1)  # /api/get misses: another album
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, found=1)
     assert lrclib.endpoints() == ["get", "search", "get", "search"]  # the second search: once more
     assert get_song(conn, song.id).lyrics_status == "found"
 
@@ -287,7 +287,7 @@ def test_an_exhausted_budget_ends_the_pass_newest_song_first(conn, tmp_path):
     older = add_song(conn, "Soda Stereo", "Persiana Americana", added_at="2026-10-01T00:00:00Z")
     newer = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-02T00:00:00Z")
     stats = run(lrclib, conn, tmp_path, budget=1)
-    assert stats == LyricsStats(found=1, budget_exhausted=True)
+    assert stats == LyricsStats(tried=1, found=1, budget_exhausted=True)
     assert get_song(conn, newer.id).lyrics_status == "found"
     stored = get_song(conn, older.id)
     assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
@@ -303,7 +303,7 @@ def test_three_errors_in_a_row_end_the_pass(conn, tmp_path):
         for i, name in enumerate(names)
     ]
     stats = run(lrclib, conn, tmp_path)
-    assert stats == LyricsStats(errors=3)
+    assert stats == LyricsStats(tried=3, errors=3)
     assert len(lrclib.requests) == 3
     assert {get_song(conn, s.id).lyrics_status for s in songs} == {"pending"}
 
@@ -323,7 +323,7 @@ def test_the_songs_left_once_lrclib_is_given_up_on_are_named_too(conn, tmp_path)
     for i, name in enumerate(names):
         add_song(conn, name, "Canción", added_at=f"2026-10-0{i + 1}T00:00:00Z")
     stats = run(lrclib, conn, tmp_path)
-    assert stats == LyricsStats(errors=3)  # the songs never asked about are no errors
+    assert stats == LyricsStats(tried=3, errors=3)  # the songs never asked about are no errors
     assert [(song.artist, type(error).__name__) for song, error in stats.failures] == [
         ("Cinco", "ProviderError"), ("Cuatro", "ProviderError"), ("Tres", "ProviderError"),
         ("Dos", "ProviderUnavailable"), ("Uno", "ProviderUnavailable"),
@@ -358,14 +358,14 @@ def test_a_miss_is_asked_again_past_the_cache_after_30_days(conn, tmp_path):
     # lookup that gets past the cache can see what LRCLIB has since added.
     lrclib = FakeLrclib(get_miss=404)
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
-    assert run(lrclib, conn, tmp_path) == LyricsStats(missing=1)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, missing=1)
     lrclib.records.append(load("get_hit.json"))
 
     assert run(lrclib, conn, tmp_path, NOW + timedelta(days=29)) == LyricsStats()
     assert lrclib.endpoints() == ["get", "search"]
 
     later = NOW + timedelta(days=31)
-    assert run(lrclib, conn, tmp_path, later) == LyricsStats(found=1)
+    assert run(lrclib, conn, tmp_path, later) == LyricsStats(tried=1, found=1)
     assert lrclib.endpoints() == ["get", "search", "get"]
     stored = get_song(conn, song.id)
     assert (stored.lyrics_status, stored.lyrics_at) == ("found", "2026-11-18T03:30:00Z")
@@ -377,7 +377,7 @@ def test_a_miss_still_missing_after_30_days_gets_a_new_time(conn, tmp_path):
     song = add_song(conn, "Soda Stereo", "Canción Inexistente")
     run(lrclib, conn, tmp_path)
     later = NOW + timedelta(days=31)
-    assert run(lrclib, conn, tmp_path, later) == LyricsStats(missing=1)
+    assert run(lrclib, conn, tmp_path, later) == LyricsStats(tried=1, missing=1)
     assert lrclib.endpoints() == ["get", "search", "get", "search"]
     assert get_song(conn, song.id).lyrics_at == "2026-11-18T03:30:00Z"
 
@@ -385,7 +385,7 @@ def test_a_miss_still_missing_after_30_days_gets_a_new_time(conn, tmp_path):
 def test_a_miss_without_a_time_is_asked_again(conn, tmp_path):
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     update_song(conn, song.id, lyrics_status="missing")
-    assert run(FakeLrclib([load("get_hit.json")]), conn, tmp_path) == LyricsStats(found=1)
+    assert run(FakeLrclib([load("get_hit.json")]), conn, tmp_path) == LyricsStats(tried=1, found=1)
 
 
 def test_the_recheck_window_can_be_shortened(conn, tmp_path):
@@ -402,7 +402,7 @@ def test_songs_never_looked_up_come_before_old_misses(conn, tmp_path):
     miss = add_song(conn, "Soda Stereo", "Canción Inexistente", added_at="2026-10-05T00:00:00Z")
     update_song(conn, miss.id, lyrics_status="missing", lyrics_at="2026-01-01T00:00:00Z")
     pending = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-01T00:00:00Z")
-    assert run(lrclib, conn, tmp_path, budget=1) == LyricsStats(found=1, budget_exhausted=True)
+    assert run(lrclib, conn, tmp_path, budget=1) == LyricsStats(tried=1, found=1, budget_exhausted=True)
     assert get_song(conn, pending.id).lyrics_status == "found"
     assert get_song(conn, miss.id).lyrics_at == "2026-01-01T00:00:00Z"
 
@@ -417,7 +417,7 @@ def test_a_recheck_the_budget_cannot_pay_for_changes_nothing(conn, tmp_path):
     lrclib.records.append(load("get_hit.json"))
     later = NOW + timedelta(days=31)
     stats = run(lrclib, conn, tmp_path, later, budget=1)
-    assert stats == LyricsStats(found=1, budget_exhausted=True)
+    assert stats == LyricsStats(tried=1, found=1, budget_exhausted=True)
     stored = get_song(conn, miss.id)
     assert (stored.lyrics_status, stored.lyrics_at) == ("missing", STAMP)
 
@@ -446,6 +446,6 @@ def test_a_lookup_asks_for_its_own_songs_lyrics_alone(conn, tmp_path):
     newer = add_song(conn, "Soda Stereo", "Canción Inexistente", added_at="2026-10-05T00:00:00Z")
     lrclib = FakeLrclib([load("get_hit.json")])
     stats = run(lrclib, conn, tmp_path, only={wanted.id})
-    assert stats == LyricsStats(found=1)
+    assert stats == LyricsStats(tried=1, found=1)
     assert get_song(conn, newer.id).lyrics_status == "pending"
     assert all(params["track_name"] == "De Música Ligera" for _, params in lrclib.requests)

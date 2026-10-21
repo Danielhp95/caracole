@@ -110,7 +110,7 @@ def _lyrics(cfg: Config) -> None:
         return fetch_pending_lyrics(conn, client, cfg.library_dir, now)
 
     def ran(s: LyricsStats) -> bool:
-        return bool(s.found or s.missing or s.instrumental or s.errors or s.budget_exhausted)
+        return bool(s.tried or s.budget_exhausted)
 
     s = _provider_pass(cfg, "lrclib", run, overrides, ran)
     if s is None:

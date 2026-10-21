@@ -79,6 +79,7 @@ from caracole.inbox import GUITAR_FILE_KINDS, guitar_number
 from caracole.library import keep_file, write_info
 from caracole.normalize import compact, slug_key
 from caracole.overrides import Overrides
+from caracole.provider_pass import PassStats, each_song
 from caracole.site_index import Site
 from caracole.songs import Song, get_song, list_songs
 from caracole.versions import upsert_version
@@ -102,16 +103,21 @@ KEPT, MISSING, WAITING = "kept", "missing", "waiting"
 
 
 @dataclass
-class GtpTabsStats:
+class GtpTabsStats(PassStats):
     """What one ``gtptabs_files`` pass did. ``sitemaps`` counts the sitemaps read into the index
-    (one found unchanged isn't); ``tried`` the songs looked up, errors included."""
+    (one found unchanged isn't); ``tried`` the songs looked up, errors included; ``errors`` the
+    songs' and the sitemaps'; ``failures`` the songs an error left, as every pass names them
+    (provider_pass.py)."""
 
     sitemaps: int = 0
-    tried: int = 0
     kept: int = 0
     missing: int = 0
-    errors: int = 0
-    budget_exhausted: bool = False
+
+    @property
+    def sitemap_errors(self) -> int:
+        """The errors no song's failure stands for: the sitemaps'. (A song left once the client
+        gave up on the site was never asked about, and is no error.)"""
+        return self.errors - sum(not isinstance(e, ProviderUnavailable) for _, e in self.failures)
 
 
 class PagesNotFiles(ProviderError):
@@ -133,8 +139,9 @@ def gtptabs_files(
     See the module docstring. With no song that wants a file, nothing is sent, not even
     for the sitemaps. ``ProviderBlocked`` propagates. ``BudgetExhausted`` ends the
     pass (``budget_exhausted``), and so does a client that gives up on the site for this run
-    (``ProviderUnavailable``). Any other ``ProviderError`` counts in ``errors``: one from the
-    sitemaps leaves the index as it was, and one for a song leaves the song for the next run.
+    (``ProviderUnavailable``): the songs left are ``failures``. Any other ``ProviderError``
+    counts in ``errors``: one from the sitemaps leaves the index as it was, and one for a song
+    leaves the song for the next run, in ``failures`` with its error (provider_pass.py).
 
     A lookup (``caracole get``) passes ``only`` its song's id, and ``refresh_index=False``:
     the sitemaps are the nightly run's to read. A song that got a file meanwhile (from a
@@ -156,38 +163,19 @@ def gtptabs_files(
     except BudgetExhausted:
         stats.budget_exhausted = True
         return stats
-    except ProviderUnavailable as e:
-        log.warning("gtptabs.com is unavailable for the rest of this run: %s", e)
+    except ProviderUnavailable as e:  # every song left waits, named, as when the client gives up on a song's turn
+        log.info("gtptabs.com is unavailable for the rest of this run: %s", e)
+        stats.failures += [(song, e) for song in _songs_to_try(_Index(conn), wanting)]
         return stats
     except ProviderError as e:
         stats.errors += 1
         log.warning("gtptabs.com's sitemaps: %s", e)
     index = _Index(conn)
     run = _Pass(conn, client, Path(library_dir), now)
-    for song in _songs_to_try(index, wanting):
-        if song.id in songs_with_a_guitar_file(conn):
-            continue
-        try:
-            outcome = _look_up(run, song, index)
-        except ProviderBlocked:
-            raise
-        except BudgetExhausted:
-            stats.budget_exhausted = True
-            break
-        except ProviderUnavailable as e:
-            log.warning("gtptabs.com is unavailable for the rest of this run: %s", e)
-            break
-        except PagesNotFiles as e:
-            stats.tried += 1
-            stats.errors += 1
-            log.warning("gtptabs.com: %s", e)
-            break
-        except ProviderError as e:
-            stats.tried += 1
-            stats.errors += 1
-            log.warning("gtptabs.com for %s: %s", song.display, e)
-            continue
-        stats.tried += 1
+    # Each song is checked just before its turn: a lookup let in during a pause may have given it a file.
+    songs = (s for s in _songs_to_try(index, wanting) if s.id not in songs_with_a_guitar_file(conn))
+    for _, outcome in each_song(songs, stats, lambda song: _look_up(run, song, index), site="gtptabs.com",
+                                level=logging.WARNING, stop_on=(PagesNotFiles,)):
         stats.kept += outcome == KEPT
         stats.missing += outcome == MISSING
     return stats

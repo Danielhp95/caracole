@@ -667,10 +667,11 @@ class _Lookup:
                               only={self.song.id}, refresh_index=False)
             if s.budget_exhausted:
                 raise BudgetExhausted("gtptabs")
+            if s.failures:
+                _, e = s.failures[0]
+                raise e
             if not s.tried:
                 return "skipped", "no file wanted, or gtptabs.com's index doesn't know the artist"
-            if s.errors:
-                return "failed", "gtptabs.com failed; the nightly run tries again, and the log says why"
             return "Guitar Pro file downloaded" if s.kept else "no file there"
 
         return self.asking("gtptabs", ask)
