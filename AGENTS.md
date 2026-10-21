@@ -88,7 +88,9 @@ Rules a change there keeps (the Invariants below are the others):
   There, library.js's `mergeSites` puts your songs and every index's rows under one header an
   artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
   `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line
-  rows.js's `indexLine`; a removed song's line asks for it again as the request form does. Your
+  rows.js's `indexLine`; a removed song's line asks for it again as the request form does. A hit's
+  name there and on the lookup page presses its Get it (or Add again), disabled while that button is
+  (rows.js `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it. Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
   do. select.js knows only the songs the page was loaded with: a line offers Add to a songbook…
   for those alone. The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the

@@ -1666,7 +1666,8 @@
       toFirstResult();
     }
   };
-  // Enter: on to the first result's line, from which Tab goes on to its button.
+  // Enter: on to the first result's line, from which Tab goes on to its name (which gets it, as its button does),
+  // then its button. Enter itself never asks for a song.
   const toFirstResult = () => {
     const first = groupsBox.querySelector("article");
     if (first) first.focus();

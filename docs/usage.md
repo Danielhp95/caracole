@@ -2377,7 +2377,8 @@ with it. A KEY that is no key exits with status 2.
   common words), takes no lock and spends no budget, and so does "+ N more".
   **Enter never spends a request**, however clear the best result: it moves to
   the first result's line (once the query's answer is in), from which Tab goes
-  on to its button; Get it does. Escape, or Back to your songs, goes back to
+  on to its name and its button; Get it, or a click or a key on the name,
+  does. Escape, or Back to your songs, goes back to
   the list with your search and buttons as they were (Escape again clears the
   search; Enter, or typing on, brings the results back), and the box's × back
   to all your songs; either way a song asked for there has its line (see
@@ -2399,7 +2400,13 @@ with it. A KEY that is no key exits with status 2.
   caracole never fetches from MuseScore. The line then says how it goes, on a
   line of its own ("Sending…", "Fetching from Ultimate Guitar…", "Ready · Open
   sheet"), and once the sheet is kept the line is the song's own line, its
-  sheet its button. A newer answer drawn while it goes (a search typed on)
+  sheet its button. **A result's name does what its Get it does**: a click on
+  "Wonderwall", or Enter or Space on it, looks the song up just as Get it would,
+  and while that request is on its way the name, like the button, can't be
+  pressed again. A removed song's name does what its Add again does (below). A
+  song of yours whose title opens its sheet keeps opening it; an artist's name
+  still shows that artist's songs; and on the file, with no caracole serve, no
+  name gets anything. A newer answer drawn while it goes (a search typed on)
   keeps the line where it has the song, with its request line; one it hasn't
   moves the request under the box as its line ("Just requested"), its request
   line going on there. A song your library has already, under its own names
@@ -2426,8 +2433,9 @@ with it. A KEY that is no key exits with status 2.
   Enter acts on.
 
   `/lookup`, the lookup page, still answers: the same search of your library
-  and the Ultimate Guitar and LaCuerda indexes, whose Get it reads the sheet on
-  the page as it arrives, stage by stage. Its Enter acts on the song you clearly meant (one of
+  and the Ultimate Guitar and LaCuerda indexes, whose Get it (or a song's name,
+  which does the same) reads the sheet on the page as it arrives, stage by
+  stage. Its Enter acts on the song you clearly meant (one of
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
   songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
   nothing), or nothing when nothing stands out. `/lookup?q=WORDS` opens it with

@@ -234,6 +234,32 @@ const caracoleRows = (icons) => {
     b.addEventListener("click", onclick);
     return b;
   };
+  // A hit's song name that does what its Get it does (``main``, the button of the row or line ``item``): a button in
+  // its heading that looks like the name, underlined under the pointer and at the keyboard's focus, named for what
+  // it does (``said``: "Get Oasis - Wonderwall"). Pressed, it presses ``main``, so the same call takes the same pick,
+  // display, row and button; it is disabled whenever ``main`` is (its request on its way) or has left the item (its
+  // request line in its place), so one song is never two lookups. None where ``main`` is no button or is disabled,
+  // or the title opens something already (titleLink): a link is never traded for a fetch.
+  const nameDoes = (item, main, said) => {
+    if (!(main instanceof HTMLButtonElement) || main.disabled) return;
+    const heading = item.querySelector("h2, h3");
+    if (!heading || heading.closest("a")) return;
+    const name = el("button", "title-get", heading.textContent);
+    name.type = "button";
+    name.setAttribute("aria-label", said);
+    name.title = main.title ? said + ": " + main.title.charAt(0).toLowerCase() + main.title.slice(1) : said;
+    name.addEventListener("click", () => {
+      if (!main.disabled && item.contains(main)) main.click();
+    });
+    heading.classList.add("gets");
+    heading.replaceChildren(name);
+    const mirror = () => {
+      const off = main.disabled || !item.contains(main);
+      if (name.disabled !== off) name.disabled = off;  // set alike, it would be a change heard again
+    };
+    new MutationObserver(mirror).observe(item, { subtree: true, childList: true, attributes: true,
+      attributeFilter: ["disabled"] });
+  };
   const KINDS = { chords: "Chords", tabs: "Tab", "guitar-pro": "Guitar Pro", power: "Power Tab" };
   const COUNTED = { chords: "chords", tabs: "tabs", "guitar-pro": "Guitar Pro", power: "Power Tab" };
   const counts = (c) => Object.entries(c && typeof c === "object" ? c : {})
@@ -278,8 +304,8 @@ const caracoleRows = (icons) => {
     box.appendChild(versions);
     return box;
   };
-  // An Ultimate Guitar song: Get it (Get it again for a song of yours, looked up as that song), and its
-  // versions under "⋯" (versionsOf).
+  // An Ultimate Guitar song: Get it (Get it again for a song of yours, looked up as that song), which its name does
+  // too (nameDoes), and its versions under "⋯" (versionsOf).
   const ugHit = (h, get, later) => {
     const hit = h && typeof h === "object" ? h : {};
     const mine = yours(hit);
@@ -302,6 +328,7 @@ const caracoleRows = (icons) => {
     row.classList.add("hit");
     row.dataset.ug = String(hit.ug || "");
     row.dataset.source = "ug";
+    nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
     const dots = row.querySelector(".row-more");
     if (dots && tabs.length) {  // what "⋯" holds, said: its versions
       dots.title = "Versions of " + display;
@@ -324,7 +351,8 @@ const caracoleRows = (icons) => {
   // caracole get does, whose gtptabs.com stage downloads one file for a song that has none; or MuseScore's,
   // a title alone, which caracole never fetches: a link to open; or a song of LaCuerda's index, whose Get it
   // looks the song up and keeps that LaCuerda sheet (``lacuerda``: the song's page, for one with chords
-  // there), as Add for tonight's run records it for the nightly run.
+  // there), as Add for tonight's run records it for the nightly run. A song's name does what its Get it does
+  // (nameDoes).
   const siteHit = (h, get, later) => {
     const hit = h && typeof h === "object" ? h : {};
     const title = String(hit.title || "");
@@ -347,6 +375,7 @@ const caracoleRows = (icons) => {
       row = resultRow({ title, artist, source: "lacuerda",
         facts: many(Number(hit.versions) || 1, "version") + (chords ? "" : " · no chords"),
         badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
+      nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
     } else if (hit.source === "musescore") {
       row = resultRow({ title, artist: "Same title: maybe another song", source: "musescore",
         action: { label: "Open", href: hit.url } });
@@ -365,6 +394,7 @@ const caracoleRows = (icons) => {
       if (later && !mine) more.push(laterGroup(later, { artist, title }, display, () => row));
       row = resultRow({ title, artist, source: "gtptabs", facts: uploads > 1 ? many(uploads, "upload") : "Guitar Pro",
         badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
+      nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
     }
     row.classList.add("hit");
     row.dataset.source = String(hit.source || "");
@@ -383,7 +413,8 @@ const caracoleRows = (icons) => {
   // with each site's mark and its counts, and its identity (``key``) as the line's ``data-hit``. Get it looks the
   // song up as Ultimate Guitar's song (whose lookup gets gtptabs.com's Guitar Pro file too), else keeping
   // LaCuerda's sheet, else by its names; a removed song's is Add again, which asks for it again as the request form
-  // does. Under "⋯": UG's versions, LaCuerda's sheet and page, gtptabs.com's page, Add for tonight's run.
+  // does. Its name does what that button does (nameDoes). Under "⋯": UG's versions, LaCuerda's sheet and page,
+  // gtptabs.com's page, Add for tonight's run.
   // ``acts``: { get, later, again }, each called (pick, display, line, button), as ugHit's ``get`` is.
   const indexLine = (item, acts) => {
     const it = item && typeof item === "object" ? item : {};
@@ -453,6 +484,7 @@ const caracoleRows = (icons) => {
     line.dataset.hit = String(it.key || "");
     line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : "removed";
     if (ug) line.dataset.ug = String(ug.ug || "");
+    nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Get " + display + " again" : "Get " + display);
     return line;
   };
   // A MuseScore page, its title alone (its sitemaps name no artist), so a possible match: a link to open, as caracole

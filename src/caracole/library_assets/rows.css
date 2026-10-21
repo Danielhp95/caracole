@@ -28,6 +28,16 @@ button.artist:hover .artist-name { text-decoration: underline; text-underline-of
 /* A title that opens the sheet: the heading as it was, underlined under the pointer. */
 .title-link { display: block; width: fit-content; max-width: 100%; color: inherit; text-decoration: none; }
 .title-link:hover > h2 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+/* A hit's name that gets the song, as its Get it does (rows.js nameDoes): the name as it was, filling its heading,
+   which fills the title's cell; underlined under the pointer and at the keyboard's focus. */
+.row-title.gets, .line-title h3.gets { display: flex; align-self: stretch; overflow: visible; }
+.title-get { flex: 1 1 auto; display: block; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 4px;
+  background: none; color: inherit; font: inherit; line-height: inherit; text-align: left; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.title-get:hover:enabled, .title-get:focus-visible { text-decoration: underline; text-decoration-thickness: 1px;
+  text-underline-offset: 3px; }
+.title-get:focus-visible { outline-offset: -1px; }
+.title-get:disabled { cursor: default; }
 .rows { margin-top: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
   box-shadow: var(--shadow); }
 /* Below 900px a row is two lines: the title and the main action, then the artist with the key and

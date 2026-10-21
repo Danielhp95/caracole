@@ -15,10 +15,11 @@ it leads. Enter acts
 on the answer of the query typed, never of an older one still on the screen:
 its ``best`` row, the song you meant; when an artist leads, that artist's
 songs; when nothing stands out, nothing, so a guess never spends a request.
-Picking a song, or
-one of its versions, looks it up now (``POST /lookup``: one ``caracole get``,
-which records the pick in overrides.toml; a song your library has, under any
-name, is posted as that song, by its id), and the page follows the request
+Picking a song (its Get
+it, or its name, which does the same), or one of its versions, looks it up
+now (``POST /lookup``: one ``caracole get``, which records the pick in
+overrides.toml; a song your library has, under any name, is posted as that
+song, by its id), and the page follows the request
 (``GET /api/jobs/<id>``) stage by stage, the results set aside so that it sits
 under the search box: the sheet shows the moment it is kept, scrolled into
 view once, then the PDF, the lyrics and the rest arrive. The progress line
