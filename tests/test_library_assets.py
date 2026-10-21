@@ -68,3 +68,13 @@ def test_caracole_serves_own_pages_inline_the_shared_files_too():
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     assert scripts[0] == text_of("rows.js")
     assert all(sha256_source(s) in lookup_page.LOOKUP_CSP for s in scripts)
+
+
+def test_the_caracole_mark_that_leads_home_reads_at_body_size_at_least():
+    # The masthead's "caracole", a link to the library on caracole serve's pages: once a small label, now
+    # big enough to find and to tap.
+    from caracole.library_assets import BASE_STYLE
+
+    rule = re.search(r"\.app \{([^}]*)\}", BASE_STYLE).group(1)
+    size = re.search(r"font-size: ([\d.]+)rem", rule)
+    assert size and float(size.group(1)) >= 1.05
