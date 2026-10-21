@@ -135,6 +135,7 @@ def build_viewer(
     transpose: int = 0,
     start: str | None = None,
     pdf: str | None = None,
+    export: bool = True,
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -142,7 +143,9 @@ def build_viewer(
     of ``keys.SOURCES``), else from the sheet's own ``{key}``, else it is estimated from
     the chords. ``transpose`` is where the viewer starts, and ``start`` the song's own version
     (``t=2&mode=dorian&capo=0``), in which it starts when its address names none; ``pdf`` names
-    the PDF beside the page, linked when given.
+    the PDF beside the page, linked when given. Without ``export``, its settings offer no Export PDF of
+    this version (an auto sheet kept beside a human one, whose exports are that sheet's: render.py
+    ``export_viewer``).
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
     data["start"] = start
@@ -150,7 +153,7 @@ def build_viewer(
     title = sheet.title or "Untitled"
     return _page(
         f"{title} · {sheet.artist}" if sheet.artist else title,
-        _body(sheet, title, song_key, origin, pdf) + json_block("song", data),
+        _body(sheet, title, song_key, origin, pdf, export=export) + json_block("song", data),
         styles=(style,),
         scripts=(script,),
     )
@@ -365,7 +368,8 @@ def key_line_text(key: Key | None, capo: int | None) -> str:
     return f"{key_name(key)} shapes · capo {capo} · sounds {key_name(sounding(key, capo))}"
 
 
-def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None) -> str:
+def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None, *,
+          export: bool = True) -> str:
     pdf_link = f'<a class="pdf" href="{escape(quote(pdf))}">PDF</a>\n' if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
@@ -376,7 +380,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         + _song_html(sheet)
         + _footer(pdf_link)
         + "</div>\n"
-        + _SHEET_CONTROLS
+        + (_SHEET_CONTROLS if export else _CONTROLS)
     )
 
 

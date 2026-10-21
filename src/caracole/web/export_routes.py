@@ -17,6 +17,11 @@ Make this my version, unless the version is the song's own already, is the same 
 under caracole's lock (the server writes no overrides.toml itself) and renders the song in it: its PDF, its
 viewer and its songbooks then start there. An address naming no version is the song's own, as the viewer
 reads its own (render.py ``export_version``).
+
+An export is made from the song's human sheet, else its auto sheet (render.py ``export_viewer``). The auto
+sheet's viewer kept beside a human sheet shows other chords: it offers no export, and one asked from it is
+refused (409), as it would be the human sheet's PDF with the auto sheet's shapes and swaps, and Make this my
+version would save them.
 """
 
 from __future__ import annotations
@@ -45,6 +50,8 @@ ROUTES = (
 )
 
 _NOT_AN_ADDRESS = Refused(400, "Not an address", "That address can't be read.")
+_BESIDE = ("This is the auto-chords sheet kept beside the song's own sheet, with chords of its own: a PDF in "
+           "another version is made from the song's own sheet, so open that one from the library and export it.")
 
 
 def export_page(app: WebApp, target: str) -> Response:
@@ -99,7 +106,16 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
     song's folder in the library (as a path) and whether the version is the song's own (render.py
     ``own_version``: its ``[version]``, else its ``[transpose]``, else as written); raises Refused."""
     from caracole.library import song_dir
-    from caracole.render import RenderError, export_label, export_query, export_version, own_version, written_file
+    from caracole.render import (
+        AUTO_OUTPUTS,
+        RenderError,
+        export_label,
+        export_query,
+        export_version,
+        export_viewer,
+        own_version,
+        written_file,
+    )
     from caracole.songs import list_songs
     from caracole.web.app import written_pages
 
@@ -120,6 +136,10 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
                      if song_dir(library, s).relative_to(library).parts == parts[:-1]
                      and written_file(conn, s.id, parts[-1]) is not None), None)
         if song is None:
+            raise Refused(404, "Not found", "There's no such sheet in the library.")
+        if parts[-1] != export_viewer(conn, song):
+            if parts[-1] == AUTO_OUTPUTS[2]:  # beside the human sheet, whose PDF an export would be
+                raise Refused(409, "Not this sheet", _BESIDE)
             raise Refused(404, "Not found", "There's no such sheet in the library.")
         try:
             v = export_version(query, overrides, song)

@@ -169,6 +169,7 @@ from __future__ import annotations
 
 import hashlib
 import html as html_text
+import json
 import re
 import sqlite3
 from collections.abc import Mapping
@@ -190,7 +191,7 @@ from caracole.musescore import song_pages
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
 from caracole.songbook_section import songbooks_section
-from caracole.songs import Song, list_songs
+from caracole.songs import Song, is_export, list_songs
 from caracole.todo import search_links, songs_to_buy
 from caracole.youtube_fetch import (
     BLOCKED,
@@ -210,9 +211,10 @@ from caracole.youtube_fetch import (
 
 PAGE_NAME = "index.html"
 
-# Kept files, in the order a card shows them; guitar-N.* goes between the two groups.
-_FIRST = ("sheet.html", "sheet.pdf", "sheet (auto).html", "sheet (auto).pdf", "sheet.txt", "sheet.cho",
-          "lyrics.txt", "lyrics.lrc")
+# Kept files, in the order a card shows them: the sheets' viewers and PDFs, then the song's exports (the sheet's
+# PDF in other versions, by their versions), the rest of the first group; guitar-N.* goes between the two groups.
+_SHEET_PAGES = ("sheet.html", "sheet.pdf", "sheet (auto).html", "sheet (auto).pdf")
+_FIRST = (*_SHEET_PAGES, "sheet.txt", "sheet.cho", "lyrics.txt", "lyrics.lrc")
 _LAST = ("tab.txt", "sheet (auto).txt", "sheet (auto).cho", "info.json")
 _GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
 # Scores filed from _inbox/ (inbox.py), after the guitar files, in SCORE_EXTENSIONS' order.
@@ -313,6 +315,7 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     pages = _guitar_pro_pages(conn)
     sources = _downloaded(conn)
     origins = kept_sources(conn)
+    exports = _exports(conn)
     library = list_songs(conn) if songs is None else songs
     keys = {s.id: song_key(conn, cfg.library_dir, s) for s in library}
     to_buy = {s.id for s in songs_to_buy(conn, library, overrides, now)[0]}  # the to-do page's buy list
@@ -324,7 +327,7 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     musescore = cfg.provider("musescore").enabled
     cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
-                   _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}))
+                   _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}))
              for s in library]
     _add_picks(conn, library, cards)
     return cards
@@ -336,9 +339,11 @@ def result_cards(conn: sqlite3.Connection, cfg: Config, songs: list[Song]) -> di
     percent-encoded, the primary one marked (its viewer, else its PDF, else its text), each with where
     it came from; where its sheet came from; its key. By song id."""
     origins = kept_sources(conn)
+    exports = _exports(conn)
     cards = {}
     for s in songs:
-        files = _files(cfg.library_dir, s, _file_names(song_dir(cfg.library_dir, s)), {}, origins.get(s.id, {}))
+        files = _files(cfg.library_dir, s, _file_names(song_dir(cfg.library_dir, s)), {}, origins.get(s.id, {}),
+                       exports.get(s.id, {}))
         key = song_key(conn, cfg.library_dir, s)
         cards[s.id] = {"links": files, "source": next((f["source"] for f in files if f["primary"]), None),
                        "key": key.key if key else None}
@@ -449,14 +454,15 @@ def _youtube_note(state: SongState | None) -> dict[str, Any] | None:
 def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | None,
           guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
           musescore: list[dict[str, str]], youtube: dict[str, Any] | None = None, *,
-          origins: dict[str, str] | None = None) -> dict[str, Any]:
+          origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None) -> dict[str, Any]:
     """One song's card; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, ``musescore``
     the song's MuseScore pages, and ``youtube`` where the song stands on the YouTube route.
 
     ``key`` and ``key_source`` are the song's key and where it came from, as in its info.json.
     ``origins`` is where each of its kept files came from (``icons.kept_sources``): each file gets
-    its ``source``, and the song its primary file's.
+    its ``source``, and the song its primary file's. ``exports``: the PDFs caracole made of its sheet in
+    other versions, by file name, each with its version's label (``_exports``).
     """
     from caracole.render import own_version
 
@@ -473,7 +479,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         if for_buying:  # not while caracole may still find a sheet, nor once you have the audio
             buy = [{"label": label, "href": found[name]}
                    for label, name in (("Bandcamp", "bandcamp"), ("Qobuz", "qobuz"), ("iTunes", "itunes"))]
-    files = _files(library_dir, song, names, sources, origins or {})
+    files = _files(library_dir, song, names, sources, origins or {}, exports or {})
     return {
         "id": song.id,
         "artist": song.artist,
@@ -518,25 +524,51 @@ def _file_names(folder: Path) -> set[str]:
 
 
 def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, str],
-           origins: dict[str, str] | None = None) -> list[dict[str, Any]]:
+           origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
     """Links to the kept files that exist, as paths relative to index.html, percent-encoded. The
     primary one is the sheet's PDF, else its text: never a score, whatever its format. Each says
-    where it came from (``icons.source_of``)."""
+    where it came from (``icons.source_of``). ``exports`` (``_exports``) are listed after the sheets' viewers
+    and PDFs, by their labels, those still in the folder alone."""
     guitar = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
     scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
                     for n in names if (m := _SCORE.fullmatch(n)) and m.group(2) in SCORE_EXTENSIONS)
-    ordered = ([n for n in _FIRST if n in names] + [n for _, n in guitar] + [n for _, _, n in scores]
-               + [n for n in _LAST if n in names])
+    made = sorted((label, n) for n, label in (exports or {}).items() if n in names)
+    labels = {n: f"Sheet PDF, {label}" for label, n in made}
+    ordered = ([n for n in _SHEET_PAGES if n in names] + [n for _, n in made]
+               + [n for n in _FIRST if n in names and n not in _SHEET_PAGES]
+               + [n for _, n in guitar] + [n for _, _, n in scores] + [n for n in _LAST if n in names])
     folder = song_dir(library_dir, song).relative_to(library_dir)
     base = "/".join(quote(part, safe="") for part in folder.parts)
     primary = next((n for n in ordered if n in ("sheet.html", "sheet (auto).html", "sheet.pdf", "sheet (auto).pdf")),
                    None) or next(
         (n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None)
     return [
-        {"name": n, "label": _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}", "primary": n == primary,
-         "source": source_of(n, origins or {})}
+        {"name": n, "label": labels.get(n) or _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}",
+         "primary": n == primary, "source": source_of(n, origins or {})}
         for n in ordered
     ]
+
+
+def _exports(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
+    """The PDFs caracole made of each song's sheet in other versions (render.py ``render_version``, recorded in kv
+    ``render:export:<song id>``), as {song id: {file name: its version's label, "G Dorian, capo 0"}}."""
+    from caracole.render import EXPORT_KV
+
+    found: dict[int, dict[str, str]] = {}
+    rows = conn.execute("SELECT key, value FROM kv WHERE substr(key, 1, ?) = ?", (len(EXPORT_KV), EXPORT_KV))
+    for key, value in rows:
+        number = key[len(EXPORT_KV):]
+        try:
+            record = json.loads(value)
+        except ValueError:
+            continue
+        if not (number.isascii() and number.isdigit()) or not isinstance(record, dict):
+            continue
+        for label, entry in record.items():
+            name = entry.get("pdf") if isinstance(entry, dict) else None
+            if isinstance(name, str) and is_export(name):
+                found.setdefault(int(number), {})[name] = label
+    return found
 
 
 def _label(name: str, source: str | None = None) -> str:

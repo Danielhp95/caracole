@@ -103,6 +103,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import sqlite3
 import struct
 import subprocess
@@ -126,6 +127,7 @@ from caracole.library import (
     NotRegularFile,
     holds,
     kept_files,
+    open_regular,
     read_json,
     read_regular,
     safe_name,
@@ -144,6 +146,7 @@ from caracole.songs import (
     Song,
     ensure_current_keys,
     get_song,
+    is_export,
     list_songs,
 )
 from caracole.ug.page import decode_twice, json_int
@@ -561,12 +564,12 @@ def _render_song(
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
     version = own_version(overrides, song)
 
-    def render(kept: KeptFile, sheet: _Sheet, state_key: str, played: Version) -> None:
+    def render(kept: KeptFile, sheet: _Sheet, state_key: str, played: Version, *, export: bool = True) -> None:
         found = auto_key if sheet.auto else human_key
         mine = (found.key, found.source) if found is not None else (None, None)
         done.append(_render_sheet(conn, cfg, song, folder, kept, sheet, state_key, played,
                                   start=export_query(played) if song.key in overrides.version else None,
-                                  cjk_font=cjk_font, runner=runner, force=force, key=mine))
+                                  cjk_font=cjk_font, runner=runner, force=force, key=mine, export=export))
 
     if human is not None:
         render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id), version)
@@ -579,9 +582,10 @@ def _render_song(
         _drop_human_outputs(conn, cfg.library_dir, song, folder)
     if auto is not None:
         beside = human is not None
-        # Beside the human sheet, the version's shapes and swaps are that sheet's chords', by their places
+        # Beside the human sheet, the version's shapes and swaps are that sheet's chords', by their places, and
+        # an export is that sheet's (export_viewer): its viewer offers none
         render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside),
-               replace(version, at={}, alt={}) if beside else version)
+               replace(version, at={}, alt={}) if beside else version, export=not beside)
     if human is not None or auto is not None:
         _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, runner=runner, force=force)
     return done
@@ -630,9 +634,19 @@ def export_query(v: Version) -> str:
     return "&".join([f"t={v.t}", *rest])
 
 
+def export_viewer(conn: sqlite3.Connection, song: Song) -> str | None:
+    """The viewer of the sheet the song's exports are made from: the human sheet's ("sheet.html"), else the auto
+    sheet's ("sheet (auto).html"); None when it keeps no sheet. An auto sheet kept beside a human one shows
+    other chords, so its viewer offers no export (``_render_song``), and caracole serve refuses one from it."""
+    names = {f.name for f in kept_files(conn, song.id)}
+    if HUMAN_SHEET in names:
+        return HUMAN_OUTPUTS[2]
+    return AUTO_OUTPUTS[2] if AUTO_SHEET in names else None
+
+
 def _export_source(conn: sqlite3.Connection, cfg: Config, song: Song):
-    """The sheet an export is made from (the human one, else the auto one), its ChordPro text and its key.
-    Raises RenderError when the song keeps no sheet."""
+    """The sheet an export is made from (the human one, else the auto one: ``export_viewer``), its ChordPro text
+    and its key. Raises RenderError when the song keeps no sheet."""
     files = {f.name: f for f in kept_files(conn, song.id)}
     if (kept := files.get(HUMAN_SHEET)) is not None:
         sheet = _human_sheet(conn, cfg.library_dir, kept)
@@ -720,18 +734,65 @@ def render_version(
 def _remake_exports(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, song: Song, *,
                     cjk_font: Path | None, runner: Runner, force: bool) -> None:
     """Render the song's exports again that its sheet, the style or the viewer's theory changed; the others
-    are left (``render_version``). One that can't be made is logged, and the rest go on."""
+    are left (``render_version``). One that can't be made is logged, and the rest go on.
+
+    An export whose version is named otherwise now (a sheet in another key or capo took the old one's place, an
+    auto sheet's key was heard again) is made under its new name, and the PDF under the old one goes with its
+    record (``_drop_export``)."""
     record = kv_get_json(conn, f"{EXPORT_KV}{song.id}")
     if not isinstance(record, Mapping):
         return
-    for entry in list(record.values()):
+    for label, entry in list(record.items()):
         query = entry.get("query") if isinstance(entry, Mapping) else None
         if not isinstance(query, str):
             continue
         try:
-            render_version(conn, cfg, overrides, song, version_from_query(query), runner=runner, force=force)
+            pdf = render_version(conn, cfg, overrides, song, version_from_query(query), runner=runner, force=force)
         except (RenderError, OSError) as e:
             log.warning("no export for %s (%s): %s", song.display, query, e)
+            continue
+        if pdf.name != entry.get("pdf"):
+            _drop_export(conn, cfg.library_dir, song, label, entry)
+
+
+def _drop_export(conn: sqlite3.Connection, library_dir: Path, song: Song, label: str, entry: Mapping[str, Any]) -> None:
+    """Forget the export recorded under ``label`` as ``entry``, made again under another name, and delete its PDF
+    while it holds what caracole wrote (``_delete_as_written``). Neither when another export has taken that
+    label or that file since: two exports can swap names."""
+    key = f"{EXPORT_KV}{song.id}"
+    record = kv_get_json(conn, key)
+    record = {k: e for k, e in record.items() if isinstance(e, Mapping)} if isinstance(record, Mapping) else {}
+    if record.get(label) == entry:
+        del record[label]
+        if record:
+            kv_set_json(conn, key, record)
+        else:
+            kv_delete(conn, key)
+    name = entry.get("pdf")
+    if isinstance(name, str) and is_export(name) and all(e.get("pdf") != name for e in record.values()):
+        _delete_as_written(library_dir, song, name, entry.get("pdf_sha256"), entry.get("pdf_size"))
+
+
+def _delete_as_written(library_dir: Path, song: Song, name: str, sha256: Any, size: Any) -> None:
+    """Delete the file ``name`` in the song's folder while it holds what caracole wrote there (``sha256``,
+    ``size``), as removal.py deletes: each folder opened from the library down and the file by name, none
+    through a link. A file changed since (on a synced device, say) is yours and stays, and so does a link."""
+    if not isinstance(sha256, str) or not isinstance(size, int) or "/" in name:
+        return
+    fds: list[int] = []
+    try:
+        fds.append(os.open(library_dir, os.O_RDONLY | os.O_DIRECTORY))
+        for part in song_dir(library_dir, song).relative_to(library_dir).parts:
+            fds.append(os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fds[-1]))
+        with open(open_regular(Path(name), dir_fd=fds[-1]), "rb") as f:
+            if os.fstat(f.fileno()).st_size != size or hashlib.file_digest(f, "sha256").hexdigest() != sha256:
+                return
+        os.unlink(name, dir_fd=fds[-1])
+    except OSError as e:  # gone already, a link or no regular file in its place, a folder that is a link
+        log.info("%s: the export %s stays (%s)", song.display, name, e)
+    finally:
+        for fd in fds:
+            os.close(fd)
 
 
 def _render_sheet(
@@ -749,11 +810,13 @@ def _render_sheet(
     runner: Runner,
     force: bool,
     key: tuple[str | None, str | None] = (None, None),
+    export: bool = True,
 ) -> _Done:
     """Write one sheet's .cho, render its PDF in ``version`` unless kv ``state_key`` says it is up to date,
     then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a sheet
     waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``); ``start``, the
-    song's own version as the viewer's address writes it, where the viewer starts, or None for none.
+    song's own version as the viewer's address writes it, where the viewer starts, or None for none;
+    ``export``, whether the viewer offers an export (``export_viewer``).
 
     The PDF, the viewer and the record of the .cho are made from the text written, never read
     back: a synced device may write there a moment later."""
@@ -768,7 +831,7 @@ def _render_sheet(
 
     def viewer() -> bool:
         page = folder / f"{stem}.html"
-        data = _write_viewer(song, text, page, pdf, key=key, transpose=version.t, start=start)
+        data = _write_viewer(song, text, page, pdf, key=key, transpose=version.t, start=start, export=export)
         if data is not None:
             _note_written(conn, song.id, page.name, data)
         return data is not None
@@ -858,12 +921,13 @@ def _printed(text: str, *, key: str | None, capo: int | None, transpose: int) ->
     return _as_latin(pdf_text(text, key=shapes, capo=capo))
 
 
-def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *,
-                  key: tuple[str | None, str | None], transpose: int, start: str | None) -> bytes | None:
+def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *, key: tuple[str | None, str | None],
+                  transpose: int, start: str | None, export: bool = True) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
     there is one, and return the page's bytes. It starts where the PDF is: at ``transpose``, in the song's
     own version (``start``) when it has one, and takes the sheet's key (``keys.sheet_keys``) when it has
-    one. A viewer that hasn't changed isn't written again.
+    one; with ``export``, it offers Export PDF of this version. A viewer that hasn't changed isn't written
+    again.
 
     The viewer is an extra: None, logged as "no viewer for", when it can't be built (a bug,
     with its traceback) or written (a link or a FIFO in its place), and the song's PDFs and
@@ -871,7 +935,8 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path, *,
     """
     linked = pdf.name if pdf.is_file() and not pdf.is_symlink() else None
     try:
-        html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, start=start, pdf=linked)
+        html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, start=start, pdf=linked,
+                            export=export)
     except Exception:  # a sheet the viewer can't read must never cost the PDFs
         log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
         return None

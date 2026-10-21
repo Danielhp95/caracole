@@ -1879,6 +1879,84 @@ def test_a_render_pass_remakes_an_export_whose_sheet_changed_and_skips_the_rest(
     assert "[D]ador" in path.read_bytes().decode("utf-8")
 
 
+def test_the_auto_viewer_beside_a_human_sheet_offers_no_export(conn, cfg):
+    # An export is made from the human sheet: the auto sheet's viewer kept beside it shows other chords, so it
+    # offers no export, served or from a file, which would be the human sheet's PDF with its own positions and
+    # swaps on those chords. An auto sheet alone exports itself.
+    from caracole.render import export_viewer
+
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song)
+    render(conn, cfg)
+    assert 'id="export"' in viewer_of(cfg, song, "sheet (auto).html")
+    assert export_viewer(conn, song) == "sheet (auto).html"
+    path, run = export(conn, cfg, song, "t=2")
+    assert path.name == "sheet (A Major, capo 0).pdf" and "[D]" in run.printed[-1].decode("utf-8")
+
+    set_coverage(conn, human_sheet(conn, cfg, song), 0.3)
+    render(conn, cfg)
+    assert 'id="export"' in viewer_of(cfg, song)
+    assert 'id="export' not in viewer_of(cfg, song, "sheet (auto).html")
+    assert export_viewer(conn, song) == "sheet.html"
+    assert export_viewer(conn, add_song(conn, "Nobody", "Nothing")) is None
+
+
+AM_SHEET = GM_SHEET.replace("[ch]Gm[/ch]", "[ch]Am[/ch]").replace("[ch]Eb[/ch]", "[ch]F[/ch]").replace(
+    "[ch]Bb[/ch]", "[ch]C[/ch]").replace("[ch]F[/ch]                 ", "[ch]G[/ch]                 ")
+
+
+def test_an_export_named_otherwise_once_remade_replaces_its_old_pdf(conn, cfg):
+    # Exports of t=2 and t=4 on a sheet in G minor are "A Minor" and "B Minor". A sheet in A minor takes its place:
+    # the next pass makes them "B Minor" and "C# Minor". Each old PDF, made from the old sheet, goes with its
+    # record, unless another export has its name now; nothing else in the folder does.
+    from caracole.render import EXPORT_KV
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    render(conn, cfg)
+    a_minor, _ = export(conn, cfg, song, "t=2")
+    b_minor, _ = export(conn, cfg, song, "t=4")
+    assert (a_minor.name, b_minor.name) == ("sheet (A Minor, capo 0).pdf", "sheet (B Minor, capo 0).pdf")
+    folder = a_minor.parent
+    (folder / "sheet (E Minor, capo 0).pdf").write_bytes(b"%PDF yours")  # one of yours, never recorded
+
+    human_sheet(conn, cfg, song, AM_SHEET, tonality="Am")
+    render(conn, cfg)
+    record = kv_get_json(conn, f"{EXPORT_KV}{song.id}")
+    assert {label: entry["query"] for label, entry in record.items()} == {"B Minor, capo 0": "t=2",
+                                                                       "C# Minor, capo 0": "t=4"}
+    exports = sorted(p.name for p in folder.iterdir() if p.name.startswith("sheet ("))
+    assert exports == ["sheet (B Minor, capo 0).pdf", "sheet (C# Minor, capo 0).pdf", "sheet (E Minor, capo 0).pdf"]
+    assert "[Bm]Una canción" in (folder / "sheet (B Minor, capo 0).pdf").read_bytes().decode("utf-8")
+    assert (folder / "sheet (E Minor, capo 0).pdf").read_bytes() == b"%PDF yours"
+    run = FakeChordPro()
+    render(conn, cfg, runner=run)
+    assert run.calls == []  # all up to date
+
+
+@pytest.mark.parametrize("swap", ["changed", "link"])
+def test_an_old_export_changed_or_a_link_in_its_place_stays_once_it_is_named_otherwise(conn, cfg, tmp_path, swap):
+    # Only a PDF still as caracole wrote it goes: one changed on a synced device is yours now, and a link put in
+    # its place is never followed (its target least of all).
+    from caracole.render import EXPORT_KV
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    old, _ = export(conn, cfg, song, "t=2")
+    target = tmp_path / "private.pdf"
+    target.write_bytes(b"%PDF private")
+    if swap == "changed":
+        old.write_bytes(b"%PDF annotated on a tablet")
+    else:
+        old.unlink()
+        old.symlink_to(target)
+    human_sheet(conn, cfg, song, AM_SHEET, tonality="Am")
+    render(conn, cfg)
+    assert set(kv_get_json(conn, f"{EXPORT_KV}{song.id}")) == {"B Minor, capo 0"}
+    assert (old.is_symlink() if swap == "link" else old.read_bytes() == b"%PDF annotated on a tablet")
+    assert target.read_bytes() == b"%PDF private"
+
+
 def test_an_export_without_a_sheet_is_a_render_error(conn, cfg):
     from caracole.render import RenderError
 

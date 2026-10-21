@@ -108,6 +108,50 @@ def test_an_unknown_sheet_or_a_bad_version_is_refused(app, queue, conn, cfg):
     assert queue.active_count() == 0
 
 
+def test_the_auto_sheet_beside_a_human_one_is_not_exported(app, queue, recorder, conn, cfg):
+    # An export is made from the song's human sheet: asked from the auto sheet's viewer kept beside it, whose
+    # chords are another sheet's, it would be the human sheet's PDF with the auto sheet's positions and swaps on
+    # its chords, and Make this my version would save them. Refused; an auto sheet alone exports itself.
+    song = rendered_song(conn, cfg, "Placeholder Band", "Synthetic Song", auto=True)
+    auto = "Placeholder Band/Synthetic Song/sheet (auto).html"
+    page = get(app, export_url(auto))
+    assert page.status == 200 and "A Major, capo 0" in shown(page)
+    keep_human_sheet(conn, cfg, song)
+    for form in ({"sheet": auto, "v": QUERY}, {"sheet": auto, "v": QUERY, "mine": "1"}):
+        refused = post(app, "/export", form)
+        assert refused.status == 409 and "sheet.html" not in shown(refused), form
+        assert "auto-chords sheet" in shown(refused)
+    assert get(app, export_url(auto)).status == 409
+    assert get(app, export_url("Placeholder Band/Synthetic Song/sheet.html")).status == 200
+    queue.run_pending()
+    assert recorder.calls == []
+
+
+def keep_human_sheet(conn, cfg, song):
+    """Keep a UG sheet beside the song's auto sheet, as the fetch step keeps one that doesn't cover the song
+    yet, and render both."""
+    import json
+
+    from caracole.library import keep_file, song_dir, write_atomic
+    from caracole.render import render_all
+    from caracole.ug.page import strip_markup
+    from caracole.versions import upsert_version
+
+    from helpers.rendered import FETCHED, SHEET
+    from helpers.ug_pages import version_dict
+
+    raw = version_dict(95053, song=song.title, artist=song.artist, tonality_name="G")
+    vid = upsert_version(conn, provider="ug", tab_id=str(raw["id"]), song_id=song.id, slot="sheet",
+                         kind="chords", rating=4.5, votes=10, version=1, label=None, url=raw["tab_url"],
+                         raw=raw, now=FETCHED)
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt",
+              data=strip_markup(SHEET).encode("utf-8"), rank=1)
+    doc = {"version": raw, "content": SHEET, "url": raw["tab_url"], "meta": []}
+    write_atomic(song_dir(cfg.library_dir, song) / "sheet.json", json.dumps(doc, ensure_ascii=False).encode())
+    assert render_all(conn, cfg, Overrides(), runner=fake_chordpro).failed == 0
+    assert (song_dir(cfg.library_dir, song) / "sheet (auto).html").is_file()
+
+
 def test_a_job_of_another_export_is_not_shown_here(app, conn, cfg):
     rendered_song(conn, cfg)
     where = header(post(app, "/export", {"sheet": SHEET, "v": QUERY}), "location")

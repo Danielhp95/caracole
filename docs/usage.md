@@ -1178,8 +1178,13 @@ and cache.
   leaves out of its address. An export with the same name replaces the last one. Exports are
   caracole's files: every render makes them again when the sheet, the style or
   the PDF's text changes (and says nothing when they are up to date), and
-  `caracole remove` deletes them. Needs the song's sheet to be kept; exits 1
-  with the reason when it can't be made.
+  `caracole remove` deletes them. One a new sheet names otherwise (a sheet in
+  another key or capo took the old one's place, an auto sheet's key was heard
+  again) is made under its new name, and the PDF under the old one goes, while
+  it is still as caracole wrote it. The library page lists them among the
+  song's files, after its sheet's PDF (`Sheet PDF, G Dorian, capo 0`). An
+  export is made from the song's human sheet, else its auto sheet; it needs one
+  of them to be kept, and exits 1 with the reason when it can't be made.
 
   **`--song "ARTIST - TITLE" --version QUERY --mine`** makes that version
   the song's own instead: it writes it under `[version]` in overrides.toml
@@ -1189,8 +1194,10 @@ and cache.
   viewer starts there, its exports and its songbooks follow. A version that is
   where the song plays without one (its `[transpose]`, else as written) takes
   the song's `[version]` out instead. `--mine` needs `--version` (exit 2).
-  In the sheet viewer, ⋯ has **Export PDF of this version**. On `caracole
-  serve` it opens `/export` in the same tab: the version in words ("G Dorian,
+  In the sheet viewer, ⋯ has **Export PDF of this version**, but for the auto
+  sheet's viewer kept beside a human sheet: its chords are other ones, and an
+  export would be the human sheet's (caracole serve refuses one from it, 409).
+  On `caracole serve` it opens `/export` in the same tab: the version in words ("G Dorian,
   capo 0"), Make PDF (this command, queued like any request), the job's line,
   then Open the PDF and Back to the sheet, which keeps the viewer's address.
   Below Make PDF, **Make this my version** queues the same command with
@@ -1655,9 +1662,11 @@ tab)", "Key C major (estimated from the chords)", "(from the audio)": see
 [The song's key](#the-songs-key)), its transposition, and its sheet: its
 title and its one Open button open the sheet viewer (see
 [The sheet viewer](#the-sheet-viewer)), else the PDF (Open PDF), else the
-text. The rest is under Files: the PDF, the text, the ChordPro file, the
-lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files and the
-Guitar Pro versions to download from Ultimate Guitar. A Guitar Pro file
+text. The rest is under Files: the PDF, its exports in other versions
+(`Sheet PDF, G Dorian, capo 0`: see `caracole render --version`), the text,
+the ChordPro file, the lyrics, the timed lyrics, the tab, info.json, the
+Guitar Pro files and the Guitar Pro versions to download from Ultimate
+Guitar. A Guitar Pro file
 caracole downloaded names its site, as `Guitar Pro 1 · gtptabs.com`, and a
 score its format, as `Score 1 (MuseScore)`; a score's PDF is never what a
 card opens, which is the sheet. A card's title has its line to itself: the
