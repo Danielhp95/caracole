@@ -39,12 +39,12 @@ def register(app: typer.Typer) -> None:
         ),
         mine: bool = typer.Option(
             False, "--mine",
-            help="With --version: make it the song's own version (overrides.toml [version]) instead of "
+            help="With --version: make it the song's own version (overrides.toml \\[version]) instead of "
                  "exporting it; its PDF, its viewer and its songbooks then start there.",
         ),
     ) -> None:
-        """Write sheet.cho and sheet.pdf, in the song's own version as overrides.toml says ([version], else
-        [transpose]), for every sheet (or one song's, with --song); then the files of every songbook that
+        """Write sheet.cho and sheet.pdf, in the song's own version as overrides.toml says (\\[version], else
+        \\[transpose]), for every sheet (or one song's, with --song); then the files of every songbook that
         needs them (caracole songbook).
 
         With --song and --version, only that song's export in that version: another key, capo, mode, chosen

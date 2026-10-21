@@ -183,3 +183,22 @@ def test_a_bug_exits_1_with_one_line_that_says_so_then_its_traceback(monkeypatch
     assert first == ("error: caracole stopped on an unexpected error: KeyError: 'boom'. That's a bug in caracole; "
                      "its traceback follows.")
     assert second == "Traceback (most recent call last):" and rest[-1] == "KeyError: 'boom'"
+
+
+def test_every_help_keeps_its_square_brackets():
+    # Rich reads "[version]" as markup and drops it: `caracole render --help` said "as overrides.toml
+    # says (, else )". A table name in a help is written "\\[version]", as Rich escapes it.
+    import click
+    import typer.main
+    from rich.markup import render
+
+    def helps(command: click.Command, name: str):
+        yield name, command.help or ""
+        for param in command.params:
+            yield f"{name} {param.opts[0] if param.opts else param.name}", getattr(param, "help", None) or ""
+        for sub, child in getattr(command, "commands", {}).items():
+            yield from helps(child, f"{name} {sub}")
+
+    lost = [where for where, text in helps(typer.main.get_command(cli.build_app()), "caracole")
+            if render(text).plain != text.replace("\\[", "[")]
+    assert lost == []
