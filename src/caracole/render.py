@@ -234,9 +234,16 @@ def write_chordpro(
     old file is read only to compare, but never through a link (``read_regular``).
     """
     path = Path(cho_path)
-    text = _as_latin(to_chordpro(markup, title=title, artist=artist, key=key, capo=capo, auto=auto))
+    text = _chordpro_text(markup, title=title, artist=artist, key=key, capo=capo, auto=auto)
     _write_if_changed(path, text.encode("utf-8"))
     return path
+
+
+def _chordpro_text(markup: str, *, title: str, artist: str, key: str | None = None,
+                   capo: int | str | None = None, auto: bool = False) -> str:
+    """The ChordPro text of UG sheet markup (``to_chordpro``), its stray look-alike letters
+    written in Latin (``_as_latin``): what ``write_chordpro`` writes."""
+    return _as_latin(to_chordpro(markup, title=title, artist=artist, key=key, capo=capo, auto=auto))
 
 
 def _write_if_changed(path: Path, data: bytes) -> None:
@@ -553,19 +560,17 @@ def _render_sheet(
 ) -> _Done:
     """Write one sheet's .cho, render its PDF unless kv ``state_key`` says it is up to date,
     then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a sheet
-    waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``)."""
+    waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``).
+
+    The PDF, the viewer and the record of the .cho are made from the text written, never read
+    back: a synced device may write there a moment later."""
     stem = Path(kept.name).stem
-    cho = write_chordpro(
-        sheet.markup,
-        folder / f"{stem}.cho",
-        title=clean_title(song.title),
-        artist=song.artist,
-        key=sheet.key,
-        capo=sheet.capo,
-        auto=sheet.auto,
-    )
-    text = _read_text(cho)
-    _note_written(conn, song.id, cho.name, text.encode("utf-8"))
+    cho = folder / f"{stem}.cho"
+    text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
+                          key=sheet.key, capo=sheet.capo, auto=sheet.auto)
+    data = text.encode("utf-8")
+    _write_if_changed(cho, data)
+    _note_written(conn, song.id, cho.name, data)
     pdf = folder / f"{stem}.pdf"
     transpose = overrides.transpose.get(song.key, 0)
 

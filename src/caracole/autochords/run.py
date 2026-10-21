@@ -468,7 +468,7 @@ def _make_sheet(
         plain=plain,
         beats=beats,
         downbeats=downbeats,
-        **({"source": source} if source else {}),
+        source=source,
     )
     return text, "synced" if synced else "plain" if plain else "none", key
 

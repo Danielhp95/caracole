@@ -293,7 +293,7 @@ def _chord_line(placed: Sequence[tuple[int, str]]) -> str:
 def _merge(segs: list[ChordSegment]) -> list[ChordSegment]:
     out: list[ChordSegment] = []
     for s in segs:
-        if out and out[-1].label == s.label and s.start <= out[-1].end + 1e-6:
+        if out and out[-1].label == s.label and s.start <= out[-1].end + _EPS:
             out[-1] = replace(out[-1], end=max(out[-1].end, s.end))
         else:
             out.append(s)

@@ -105,13 +105,13 @@ def to_chordpro(
     The header carries the title, the artist, the key and capo when given, and an
     "auto-generated, unverified" comment for auto-chords sheets.
     """
-    head = [f"{{title: {_directive_text(title)}}}", f"{{artist: {_directive_text(artist)}}}"]
+    head = [f"{{title: {directive_text(title)}}}", f"{{artist: {directive_text(artist)}}}"]
     key_text = (key or "").strip()
     capo_text = "" if capo is None else str(capo).strip()
     if key_text:
-        head.append(f"{{key: {_directive_text(normalize_chord(key_text))}}}")
+        head.append(f"{{key: {directive_text(normalize_chord(key_text))}}}")
     if capo_text not in ("", "0"):
-        head.append(f"{{capo: {_directive_text(capo_text)}}}")
+        head.append(f"{{capo: {directive_text(capo_text)}}}")
     if auto:
         head.append("{comment: auto-generated, unverified}")
     return "\n".join(head + _body(content)) + "\n"
@@ -136,9 +136,9 @@ def _body(content: str) -> list[str]:
         elif section := _section(entry):
             label, rest = section
             if is_chord_line(rest):
-                out += [f"{{comment: {_directive_text(label)}}}", _chord_only(rest)]
+                out += [f"{{comment: {directive_text(label)}}}", _chord_only(rest)]
             else:
-                out.append(f"{{comment: {_directive_text(f'{label} {rest}'.rstrip())}}}")
+                out.append(f"{{comment: {directive_text(f'{label} {rest}'.rstrip())}}}")
         else:
             out.append(_text_line(entry))
     return _trim_blank(out)
@@ -280,14 +280,10 @@ def _escape_backslashes(line: str) -> str:
     return _DECODED_BACKSLASH.sub(lambda _: _ESCAPED_BACKSLASH, line)
 
 
-def _directive_text(text: str) -> str:
-    return _escape_backslashes(_escape_inline(" ".join(text.split())))
-
-
 def directive_text(text: str) -> str:
     """Text for a directive's value (``{title: …}``), on one line, as ``to_chordpro`` writes it: nothing
     in it reads as a chord, a directive, a substitution or markup."""
-    return _directive_text(text)
+    return _escape_backslashes(_escape_inline(" ".join(text.split())))
 
 
 def _finish(line: str) -> str:
