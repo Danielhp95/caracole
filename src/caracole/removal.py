@@ -36,6 +36,7 @@ from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, savepoint
 from caracole.logs import plural
 from caracole.library import song_dir, song_folder, songs_in_folder
+from caracole.sheet_versions import tab_of, version_names
 from caracole.songs import SHEET_OUTPUTS, SOURCE_FIELDS_KV, Song, delete_song_kv, is_export, mark_removed
 
 _LYRICS = ("lyrics.txt", "lyrics.lrc")
@@ -334,22 +335,28 @@ def _caracoles(conn: sqlite3.Connection, song: Song, kept_here: set[str]) -> set
 
     Its kept files; the ChordPro, PDF and page it makes from a kept sheet, or
     that a render record names (``render.py``: the record goes with the outputs);
-    the PDFs it exported in other versions (kv ``render:export:``); the lyrics, when
-    LRCLIB's were written; info.json. A ``sheet.pdf`` or a
-    ``lyrics.txt`` of yours, in a folder caracole made none in, isn't one.
+    the page of a version kept beside the sheet, ``version-<tab>.html``, that render.py
+    recorded writing (kv ``render:files:``; a version the fetch let go keeps its page
+    until the next render, and one no render wrote is yours); the PDFs it exported in
+    other versions (kv ``render:export:``); the lyrics, when LRCLIB's were written;
+    info.json. A ``sheet.pdf`` or a ``lyrics.txt`` of yours, in a folder caracole
+    made none in, isn't one.
     """
+    from caracole.render import EXPORT_KV, FILES_KEY
+
     ours = set(kept_here) | {_INFO}
     for sheet, outputs in SHEET_OUTPUTS.items():  # its ChordPro, its PDF and its viewer
         if sheet in kept_here:
             ours.update(outputs)
+    written = kv_get_json(conn, f"{FILES_KEY}{song.id}")  # a version's page: only one a render wrote
+    ours.update(name for name in (written if isinstance(written, dict) else ())
+                if (tab := tab_of(name)) is not None and name == version_names(tab)[2])
     for key in (f"render:{song.id}", f"render:{song.id}:auto"):
         record = kv_get_json(conn, key)
         pdf = record.get("pdf") if isinstance(record, dict) else None
         if isinstance(pdf, str):
             stem = pdf.removesuffix(".pdf")
             ours.update((pdf, f"{stem}.cho", f"{stem}.html"))
-    from caracole.render import EXPORT_KV
-
     exports = kv_get_json(conn, f"{EXPORT_KV}{song.id}")  # render_version's PDFs in other versions
     for entry in exports.values() if isinstance(exports, dict) else ():
         pdf = entry.get("pdf") if isinstance(entry, dict) else None
