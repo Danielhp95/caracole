@@ -1285,7 +1285,7 @@ and cache.
   another key or capo took the old one's place, an auto sheet's key was heard
   again) is made under its new name, and the PDF under the old one goes, while
   it is still as caracole wrote it. The library page lists them under the
-  song's line's "⋯", as its Versions, each by its version (`G Dorian, capo
+  song's line's "⋯", as its PDF exports, each by its version (`G Dorian, capo
   0`), before its other files. An
   export is made from the song's human sheet, else its auto sheet; it needs one
   of them to be kept, and exits 1 with the reason when it can't be made.
@@ -1815,7 +1815,16 @@ YouTube route, when caracole takes the audio of songs with no human sheet from
 YouTube ("No human sheet yet: caracole takes the audio from YouTube next",
 "Audio from YouTube: auto-chords works out the chords next", "Auto sheet from
 YouTube audio"), with a link to the video once there is one, instead of
-offering to buy it; its versions, the sheet's PDFs in other versions, each
+offering to buy it; its **Sheet versions**, the Ultimate Guitar versions
+caracole keeps beside its sheet (the runners-up of the three it scores, and a
+version you kept), in rank order, each with UG's version number, its rating and
+votes (`Ver 3 · 4.86★ (408) · the one`), each opening its own viewer page,
+`version-<tab>.html`, or its text, `version-<tab>.txt`, until render has
+written the page (caracole serve doesn't serve version pages yet: on its page
+such a link answers Not found, and the file on disk opens it), the
+one its title opens marked "the one" (when that is LaCuerda's sheet or the auto
+sheet, it leads the list by that name: `The one: LaCuerda's sheet`); its PDF
+exports, the sheet's PDFs in other versions, each
 by its version (`G Dorian, capo 0`: see `caracole render --version` and Export
 PDF of this version); its other files (the PDF, the text, the ChordPro file,
 the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files) and the
@@ -1824,8 +1833,8 @@ each a possible match, as on the to-do page; for a song without a sheet, its
 search and buy links; its progressions, as it plays them ("vi–IV–I–V"), each a
 button that shows your songs with that progression (below); **Add to a songbook…** (see Songbooks, below), for a
 song the page had when it was loaded (one that Get it or a request brought
-since has it once the page is loaded again); and, served, Look in the index
-and Remove…. When Fetch now has the line's button,
+since has it once the page is loaded again); and, served, **Fetch again**
+(below), **Use LaCuerda's sheet**, Look in the index and Remove…. When Fetch now has the line's button,
 the sheet is the first of its files there, and its title opens it all the same.
 A Guitar Pro file caracole downloaded names its site, as `Guitar Pro 1 ·
 gtptabs.com`, and a score its format, as `Score 1 (MuseScore)`; a score's PDF
@@ -2746,13 +2755,21 @@ is no progression exits with status 2.
   shows the same "Did you mean" and card, whose first button is Look “…” up by
   name (the form under the results, filled in), and whose Their songs lists
   that artist's songs, as their row's Songs does. `/lookup?q=WORDS` opens it with
-  that search, and a lookup posted without JavaScript lands there. It alone
-  looks a song you already have up again: on the library page the index's
-  rows of a song of yours are folded into your song's own line, which has
-  neither Get it again nor a version to pick, while here your song keeps its
-  own row, with Fetch again, and each site's row of it its own: Ultimate
-  Guitar's Get it again, with a version of theirs to pick under "⋯", and
-  LaCuerda's, which keeps that LaCuerda sheet.
+  that search, and a lookup posted without JavaScript lands there. Here your
+  song keeps its own row, with Fetch again, and each site's row of it its own:
+  Ultimate Guitar's Get it again, with a version of theirs to pick under "⋯",
+  and LaCuerda's, which keeps that LaCuerda sheet.
+- **Fetch again, and Use LaCuerda's sheet.** On the library page the index's
+  rows of a song of yours are folded into your song's own line, so its "⋯" looks
+  it up again, sending what the lookup page sends: **Fetch again**, on a song
+  with its sheet (a wanted song has Fetch now), looks it up anew, one `caracole
+  get` (`POST /lookup` with the song); **Use LaCuerda's sheet**, when LaCuerda has
+  one of it, looks it up keeping that sheet, as `caracole get --lacuerda` does:
+  the sheet you picked on LaCuerda (`[lacuerda]`), else the best LaCuerda sheet
+  caracole met for the song and didn't keep, else the one the bar's search finds
+  on LaCuerda (its LaCuerda row, with chords), and none once the sheet kept is
+  LaCuerda's. The song's line then says how it goes, as for Get it. An ignored
+  song has neither, and the file, which can ask nothing, never has them.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" takes an artist, a title and, optionally, the album and the length,
   filled in from what you searched ("Muse - Hysteria"; an artist's name alone

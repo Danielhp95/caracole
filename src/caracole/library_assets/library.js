@@ -260,8 +260,9 @@
   };
   // Sent by the page's script, the form leaves the page where it is: "Sending…" on the song's own line (the
   // focus on it, as ``go``, its button, waits), then the request's line, which takes the form's place (``track``);
-  // a refusal, or a server that doesn't answer, says so there, and ``go`` can be pressed again.
-  const postInPlace = (form, go, s) => {
+  // a refusal, or a server that doesn't answer, says so there, and ``go`` can be pressed again. ``viewOf``: the
+  // job in the server's answer (its ``job``; a lookup's is its ``view``).
+  const postInPlace = (form, go, s, viewOf) => {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const item = form.closest("article");
@@ -270,8 +271,8 @@
       if (form.contains(document.activeElement)) focusOn(line);  // a disabled button would drop it
       go.disabled = true;
       send(form).then((answer) => {
-        const view = answer.ok && answer.body && answer.body.job;
-        if (!view) {
+        const view = answer.ok && answer.body && (viewOf ? viewOf(answer.body) : answer.body.job);
+        if (!view || typeof view !== "object") {
           go.disabled = false;
           showLine(progressIn(item), failure(answer));
           return;
@@ -294,6 +295,48 @@
     form.appendChild(go);
     postInPlace(form, go, s);
     return form;
+  };
+  // A song you have, looked up again now (POST /lookup with its id: one caracole get, its sheet first), as the lookup
+  // page's Fetch again and its LaCuerda row's Get it again post it: with ``lacuerda``, that LaCuerda sheet kept, as
+  // caracole get --lacuerda keeps it. Under its line's "⋯", served alone; a refusal says why on the line.
+  const lookupForm = (s, label, aria, title, lacuerda) => {
+    const form = songForm("again", "/lookup", s);
+    if (lacuerda) form.appendChild(hidden("lacuerda", lacuerda));
+    const go = el("button", "btn small", label);
+    go.type = "submit";
+    go.setAttribute("aria-label", aria);
+    go.title = title;
+    form.appendChild(go);
+    postInPlace(form, go, s, (body) => body.view);
+    return form;
+  };
+  // The LaCuerda sheet of each song of yours that the bar's search found (a LaCuerda row of it with chords, which
+  // mergeSites folds into its line), by song id: its line offers it until the page is loaded again.
+  const lacuerdaFound = new Map();
+  // The LaCuerda sheet a song could be looked up with: your pick on LaCuerda, else the best one caracole met for it
+  // (the data's ``lacuerdaSheet``), else the one the search found; none when its sheet is LaCuerda's already.
+  const lacuerdaOf = (s) => {
+    if (listOf(s.files).some((f) => f && f.name === "sheet.txt" && f.source === "lacuerda")) return "";
+    const url = String(s.lacuerdaSheet || lacuerdaFound.get(Number(s.id)) || "");
+    return /^https:[/][/]/i.test(url) ? url : "";
+  };
+  // Under a song's "⋯", served: Fetch again, for a song with its sheet (a wanted one has Fetch now), and Use
+  // LaCuerda's sheet, when LaCuerda has one of it; neither for an ignored song, nor while a request of it waits or
+  // runs (its line says how that goes, and the line is drawn again once it is over).
+  const againActions = (s) => {
+    if (s.status === "ignored") return null;
+    const names = String(s.title) + " by " + String(s.artist);
+    const box = el("div", "actions again");
+    if (s.status === "found") {
+      box.appendChild(lookupForm(s, "Fetch again", "Fetch " + names + " again",
+        "Looks the song up anew now, as caracole get does: Ultimate Guitar's best sheet of it, then the rest", ""));
+    }
+    const lacuerda = lacuerdaOf(s);
+    if (lacuerda) {
+      box.appendChild(lookupForm(s, "Use LaCuerda's sheet", "Get " + names + " again, keeping LaCuerda's sheet",
+        "Looks the song up now and keeps this LaCuerda sheet, as caracole get --lacuerda does", lacuerda));
+    }
+    return box.childNodes.length ? box : null;
   };
   // A wanted song caracole fetch would refuse until its match is settled: a button that says so, and does nothing.
   const reviewFirst = (cls) => {
@@ -802,6 +845,31 @@
     if (others.length) facts.appendChild(el("span", "with", "With " + others.join(", ")));
     return facts.childNodes.length ? facts : null;
   };
+  // A kept version's name in a line's "⋯": UG's version number, its rating and votes, and whether it is the one,
+  // "Ver 3 · 4.86★ (408) · the one".
+  const versionLabel = (v) => {
+    const parts = ["Ver " + (Number(v.number) || "?")];
+    if (typeof v.rating === "number") {
+      parts.push(v.rating.toFixed(2) + "★" + (typeof v.votes === "number" ? " (" + v.votes.toLocaleString("en") + ")" : ""));
+    }
+    if (v.chosen === true) parts.push("the one");
+    return parts.join(" · ");
+  };
+  // A song's Ultimate Guitar versions kept beside its sheet (the data's ``versions``: sheet_versions.py's, the kept
+  // ones in rank order), each a link to its viewer page; the one its title opens says so. When the one is another
+  // site's sheet (LaCuerda's) or the auto sheet, it leads the list by that name, opening what the title opens.
+  const keptVersions = (s, primary) => {
+    const data = s.versions && typeof s.versions === "object" ? s.versions : null;
+    const kept = listOf(data && data.list).filter((v) => v && typeof v === "object" && typeof v.href === "string" && v.href);
+    if (!kept.length) return [];
+    const links = kept.map((v) => elsewhere(s, { label: versionLabel(v), href: v.href, source: v.source }));
+    if (!kept.some((v) => v.chosen === true) && primary) {
+      const site = typeof s.source === "string" && own.call(ICONS, s.source) && ICONS[s.source] ? ICONS[s.source].name : "";
+      const name = s.auto === true ? "the auto sheet" : site ? String(site) + "'s sheet" : "its sheet";
+      links.unshift(elsewhere(s, { label: "The one: " + name, href: primary.href, source: s.source }));
+    }
+    return links;
+  };
   // Under a line's "⋯": Select, the song picked, and its bar to put it in a songbook there is or a new one
   // (select.js, which hears "caracole:pick"). Select knows the songs the page was loaded with: a song new to the
   // library since (Get it, a request) has none until the page is loaded again, as it would do nothing.
@@ -846,6 +914,11 @@
       look.appendChild(lookLink(s, "btn small"));
       more.push(look);
     }
+    const asked = server ? jobOfSong(id) : null;
+    if (server && !removing.has(id) && !busy.has(id) && !(asked && isActive(asked))) {
+      const again = againActions(s);
+      if (again) more.push(again);
+    }
     // The sheet is the line's button unless the server's control has its place (Fetch now beside an auto
     // sheet): then it leads the files, and the title opens it all the same.
     const control = serverAction(s, picker);
@@ -854,7 +927,8 @@
     // The sheet's PDFs in other versions (Export PDF of this version), by their versions, before the other files.
     const isVersion = (f) => f && typeof f.version === "string" && f.version;
     const versions = listed.filter(isVersion).map((f) => Object.assign({}, elsewhere(s, f), { label: f.version }));
-    more.push({ heading: "Versions", links: versions },
+    more.push({ heading: "Sheet versions", links: keptVersions(s, primary) },
+      { heading: "PDF exports", links: versions },
       { heading: "Files", links: listed.filter((f) => !isVersion(f)).map((f) => elsewhere(s, f)) },
       { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },
@@ -1426,12 +1500,36 @@
       g.items.push(item);
     }
     if (i !== undefined) item.mine = i;
+    if (i !== undefined && source === "lacuerda") offerLaCuerda(i, row);
     if (!item[source]) {
       item[source] = row;
       const drawn = model.lines.get(key);
       if (drawn && !drawn.querySelector(".progress")) model.lines.delete(key);
     }
     return item;
+  };
+  // A LaCuerda row of a song of yours, with chords: its line offers that sheet (Use LaCuerda's sheet), drawn again
+  // now if it is drawn already and had none. Its "⋯" open, it stays open, and the focus on its button stays there.
+  const offerLaCuerda = (i, row) => {
+    const id = Number(songs[i].id);
+    const https = (url) => /^https:[/][/]/i.test(String(url || ""));
+    if (lacuerdaFound.has(id) || !https(row.sheet) || !https(row.url)) return;
+    const before = lacuerdaOf(songs[i]);
+    lacuerdaFound.set(id, String(row.url));
+    if (!lines.has(i) || lacuerdaOf(songs[i]) === before) return;
+    const old = lines.get(i);
+    const more = old.querySelector(":scope > .line-more");
+    const open = Boolean(more && more.getAttribute("aria-expanded") === "true");
+    const focused = Boolean(more && more === document.activeElement);
+    const drawn = refill(old, lineFor(songs[i]));
+    lines.set(i, drawn);
+    const fresh = drawn.querySelector(":scope > .line-more");
+    const panel = drawn.querySelector(":scope > .line-panel");
+    if (open && fresh && panel) {
+      fresh.setAttribute("aria-expanded", "true");
+      panel.hidden = false;
+    }
+    if (focused && fresh && fresh.isConnected) fresh.focus();
   };
   const lineOfItem = (model, item) => {
     if (!model.lines.has(item.key)) model.lines.set(item.key, indexLine(item, { get: getIt, later, again: addAgain }));
@@ -2064,6 +2162,11 @@
       if (button && isActive(view)) {
         if (button.contains(document.activeElement)) focusOn(p);  // the line takes the button's place
         button.remove();
+      }
+      const again = item.querySelector(".actions.again");
+      if (again && isActive(view)) {  // asked for already: the line is drawn again once it is over
+        if (again.contains(document.activeElement)) focusOn(p);
+        again.remove();
       }
       const picker = item.querySelector("form.pick-form");
       if (picker && isActive(view)) {  // POST /review would refuse a pick now: the line is drawn again after

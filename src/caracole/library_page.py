@@ -36,10 +36,14 @@ Wanted, Needs review, Not found), its key, the marks of where its sheet and its
 files came from and its main action: Open, or, served, Fetch now or Pick the
 match. Everything else a song has is under its "⋯": its facts (the key in words
 and where it came from, the transposition, the lyrics, when it came), its
-review's picker, where its audio comes from, its versions (the sheet's PDFs
-in other versions, each file's ``version``), its other files, the Guitar Pro
+review's picker, where its audio comes from, its Sheet versions (the Ultimate
+Guitar versions kept beside its sheet, sheet_versions.py's, each opening its
+viewer page, the one its title opens said so: ``versions``), its PDF exports (the
+sheet's PDFs in other versions, each file's ``version``), its other files, the Guitar Pro
 versions to download from UG, its MuseScore pages, its search and buy links, Add
-to a songbook… (the Select mode, the song picked) and, served, Remove…. An
+to a songbook… (the Select mode, the song picked) and, served, Fetch again and Use
+LaCuerda's sheet (``lacuerdaSheet``, or the search's LaCuerda row of it: each the
+``POST /lookup`` the lookup page sends for the song) and Remove…. An
 artist's name, marked with a funnel (``artistFilter``, ROWS_SCRIPT's), shows that
 artist's songs alone. An A-Z strip jumps to the first group (or line) of a letter
 once more than 40 songs show. On a phone the header is short (the numbers beside
@@ -228,7 +232,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from caracole.config import Config
@@ -259,6 +263,9 @@ from caracole.youtube_fetch import (
     route_problem,
     song_states,
 )
+
+if TYPE_CHECKING:
+    from caracole.sheet_versions import SheetVersion
 
 # Importable from here too: the style and script caracole serve's own pages share with this one (BASE_STYLE,
 # PICKER_STYLE, ROWS_STYLE, ROWS_SCRIPT: library_assets/), and the Songbooks tab's data (songbook_section.py).
@@ -387,10 +394,14 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     if youtube:
         to_buy = {i for i in to_buy if i not in youtube or youtube[i].state == DECLINED}
     musescore = cfg.provider("musescore").enabled
+    asked = None if songs is None else {s.id for s in songs}  # a card or a few: their rows alone
+    met = _lacuerda_met(conn, asked)
+    kept = _kept_versions(conn, cfg, {s.id for s in library})
     cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
                    _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}),
-                   transpose=pdf_transpose(conn, overrides, s))
+                   transpose=pdf_transpose(conn, overrides, s), lacuerda_met=met.get(s.id),
+                   versions=kept.get(s.id))
              for s in library]
     _add_picks(conn, library, cards)
     played = library_progressions(conn)  # each song's, as its last render read its sheet
@@ -507,6 +518,71 @@ def _lacuerda_pick(song: Song, overrides: Overrides, status: str) -> dict[str, s
     return {"label": "the sheet you picked on LaCuerda", "href": pick.url}
 
 
+def _kept_versions(conn: sqlite3.Connection, cfg: Config, ids: set[int]) -> dict[int, list[SheetVersion]]:
+    """The UG chords versions of each song that has some kept beside its sheet (``version-<tab>.txt``, recorded in
+    ``files``), in rank order (``sheet_versions.in_library``), by song id: a song without, which is most, asks
+    nothing more."""
+    from caracole.sheet_versions import PREFIX, in_library, tab_of
+
+    with_kept = {song_id for song_id, name in conn.execute(
+        "SELECT song_id, name FROM files WHERE substr(name, 1, ?) = ?", (len(PREFIX), PREFIX))
+        if song_id in ids and tab_of(name) is not None}
+    return {song_id: in_library(conn, song_id, cfg.rank) for song_id in sorted(with_kept)}
+
+
+def _versions_data(versions: list[SheetVersion] | None, names: set[str], base: str) -> dict[str, Any] | None:
+    """A song's kept versions as its line's "⋯" lists them, under Sheet versions: ``as_data``'s, the kept ones alone,
+    in rank order, each with the link that opens it (its viewer page, else its text while render hasn't written
+    the page; the one, else its PDF, as its title opens it) and where it came from (Ultimate Guitar); ``total``,
+    every chords version UG has. None for a song with none kept beside its sheet.
+
+    Not ``as_data``'s shape, which the viewer pages' ``versions`` is (every version, gone ones too): the library
+    page's lists what its folder holds, for library.js alone."""
+    from caracole.sheet_versions import as_data, version_names
+
+    if not versions:
+        return None
+    data = as_data(versions, len(versions))
+    listed = []
+    for entry in data["list"]:
+        if not entry["kept"]:
+            continue
+        opens = ((entry["page"], "sheet.txt", "sheet.pdf") if entry["chosen"]
+                 else (entry["page"], version_names(entry["tab"])[0]))
+        name = next((n for n in opens if n in names), None)
+        if name is not None:
+            listed.append({**entry, "href": f"{base}/{quote(name, safe='')}", "source": "ug"})
+    return {"total": data["total"], "list": listed}
+
+
+def _lacuerda_met(conn: sqlite3.Connection, ids: set[int] | None = None) -> dict[int, str]:
+    """The best LaCuerda sheet caracole met for each song (lacuerda_fetch.py records each, kept or not): the one
+    that covers the most of its lyrics, of those LaCuerda still has; its page, by song id. ``ids``: of these songs
+    alone, else of every song."""
+    only = "" if ids is None else " AND song_id IN (SELECT value FROM json_each(?))"
+    rows = conn.execute(
+        "SELECT song_id, url FROM versions WHERE provider = 'lacuerda' AND slot = 'sheet' AND gone = 0"
+        + only + " ORDER BY song_id, coverage IS NULL, coverage DESC, id",
+        () if ids is None else (json.dumps(sorted(ids)),),
+    )
+    met: dict[int, str] = {}
+    for song_id, url in rows:
+        met.setdefault(song_id, url)
+    return met
+
+
+def _lacuerda_sheet(song: Song, overrides: Overrides, status: str, origins: Mapping[str, str],
+                    met: str | None) -> str | None:
+    """The LaCuerda sheet a song of yours could be looked up with now (its served line's "Use LaCuerda's sheet",
+    ``POST /lookup`` with it, as ``caracole get --lacuerda`` takes it): your pick on LaCuerda, else the best one
+    caracole met for it (``_lacuerda_met``); None when its kept sheet is LaCuerda's already, or the song is ignored."""
+    if status == "ignored" or origins.get("sheet.txt") == "lacuerda":
+        return None
+    pick = overrides.lacuerda.get(song.key)
+    url = pick.url if pick is not None else met
+    return url if url and url.startswith("https://") else None
+
+
 def _youtube_note(state: SongState | None) -> dict[str, Any] | None:
     """What a song's line says of it on the YouTube route, and the video its audio came from."""
     if state is None or state.state not in _YOUTUBE_NOTES:
@@ -521,7 +597,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
           guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
           musescore: list[dict[str, str]], youtube: dict[str, Any] | None = None, *,
           origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None,
-          transpose: int = 0) -> dict[str, Any]:
+          transpose: int = 0, lacuerda_met: str | None = None,
+          versions: list[SheetVersion] | None = None) -> dict[str, Any]:
     """One song's data; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, ``musescore``
     the song's MuseScore pages, and ``youtube`` where the song stands on the YouTube route.
@@ -530,7 +607,9 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     ``origins`` is where each of its kept files came from (``icons.kept_sources``): each file gets
     its ``source``, and the song its primary file's. ``exports``: the PDFs caracole made of its sheet in
     other versions, by file name, each with its version's label (``_exports``); ``transpose``, how many semitones
-    its PDF is moved by (``render.pdf_transpose``).
+    its PDF is moved by (``render.pdf_transpose``). ``lacuerda_met``: the best LaCuerda sheet caracole met for it
+    (``_lacuerda_met``), for ``lacuerdaSheet`` (``_lacuerda_sheet``). ``versions``: its UG chords versions in rank
+    order, when some are kept beside its sheet (``_kept_versions``), for ``versions`` (``_versions_data``).
     """
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
@@ -561,6 +640,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "lyrics": song.lyrics_status,
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
         "files": files,
+        "versions": _versions_data(versions, names, _folder_href(library_dir, song)),  # its kept versions
         "source": next((f["source"] for f in files if f["primary"]), None),  # where its sheet came from
         "guitarPro": guitar_pro,
         "museScore": musescore,
@@ -568,6 +648,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "buy": buy,
         "youtube": youtube if status != "ignored" else None,
         "lacuerda": _lacuerda_pick(song, overrides, status),
+        "lacuerdaSheet": _lacuerda_sheet(song, overrides, status, origins or {}, lacuerda_met),
         # Its identity key (normalize.identity_key): the served search puts it, and the sites' rows of its artist and
         # of it, under one header by the artist's part, as /api/search keys its rows.
         "identity": song.key,
@@ -596,7 +677,8 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     primary one is the sheet's PDF, else its text: never a score, whatever its format. Each says
     where it came from (``icons.source_of``). ``exports`` (``_exports``) are listed after the sheets' viewers
     and PDFs, by their labels, those still in the folder alone, each with its ``version`` ("G Dorian, capo 0"),
-    which its line's "⋯" lists it by, under Versions."""
+    which its line's "⋯" lists it by, under PDF exports. A version kept beside the sheet (``version-<tab>.*``) is
+    none of them: the line lists it under Sheet versions (``_versions_data``)."""
     guitar = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
     scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
                     for n in names if (m := _SCORE.fullmatch(n)) and m.group(2) in SCORE_EXTENSIONS)
@@ -605,8 +687,7 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     ordered = ([n for n in _SHEET_PAGES if n in names] + [n for _, n in made]
                + [n for n in _FIRST if n in names and n not in _SHEET_PAGES]
                + [n for _, n in guitar] + [n for _, _, n in scores] + [n for n in _LAST if n in names])
-    folder = song_dir(library_dir, song).relative_to(library_dir)
-    base = "/".join(quote(part, safe="") for part in folder.parts)
+    base = _folder_href(library_dir, song)
     primary = next((n for n in ordered if n in ("sheet.html", "sheet (auto).html", "sheet.pdf", "sheet (auto).pdf")),
                    None) or next(
         (n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None)
@@ -617,6 +698,12 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
          **({"version": versions[n]} if n in versions else {})}
         for n in ordered
     ]
+
+
+def _folder_href(library_dir: Path, song: Song) -> str:
+    """The song's folder, relative to index.html and percent-encoded: its files' links start with it."""
+    folder = song_dir(library_dir, song).relative_to(library_dir)
+    return "/".join(quote(part, safe="") for part in folder.parts)
 
 
 def _exports(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
