@@ -14,10 +14,11 @@ import json
 import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from caracole.config import Config
+from caracole.stamps import stamp as utc_stamp  # under its old name: spotify.py and wanted.py import it
 
 if TYPE_CHECKING:
     from caracole.spotify import SpotifyAPI
@@ -94,13 +95,6 @@ def default_kv_set() -> KvSet:
     from caracole.db import kv_set
 
     return kv_set
-
-
-def utc_stamp(now: datetime) -> str:
-    """``now`` as ISO 8601 UTC to the second ("2026-10-18T03:30:00Z"). Naive times are UTC."""
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=UTC)
-    return now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass

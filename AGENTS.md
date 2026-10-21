@@ -65,6 +65,7 @@ Shared by the steps and the commands:
 | library.py | song folders, safe file access in the synced library |
 | notify.py | ntfy |
 | site_index.py | a site's sitemaps into a table, resumed across runs |
+| stamps.py | how caracole stores a time (ISO 8601 UTC to the second, a naive time is UTC) and shows one (`shown`); a stored time missing or unreadable is older than any (`before`); the standard library alone |
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
 | keys.py | a song's musical key and where it came from |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |

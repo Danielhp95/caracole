@@ -24,12 +24,13 @@ import re
 import sqlite3
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from rapidfuzz import fuzz
 
+from caracole import stamps
 from caracole.http import Client, ProviderError, Response, read_once_more
 from caracole.library import song_dir, write_atomic
 from caracole.normalize import clean_title, fold, slug_key
@@ -440,27 +441,10 @@ class LyricsStats(PassStats):
 RECHECK_MISSING_AFTER = timedelta(days=30)
 
 
-def _utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
-
-
-def _stamp(now: datetime) -> str:
-    """``now`` as stored in ``songs.lyrics_at``; naive times are UTC."""
-    return _utc(now).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _before(stamp: str | None, cutoff: datetime) -> bool:
-    """Whether a stored time is older than ``cutoff``; a missing or unreadable one is."""
-    try:
-        return stamp is None or _utc(datetime.fromisoformat(stamp)) < cutoff
-    except ValueError:
-        return True
-
-
 def _songs_to_look_up(conn: sqlite3.Connection, now: datetime, recheck_after: timedelta) -> list[Song]:
     """Songs never looked up, newest first, then misses older than ``recheck_after``: re-checks,
     whose cached answer is the old miss itself."""
-    cutoff = _utc(now) - recheck_after
+    cutoff = stamps.utc(now) - recheck_after
     pending: list[Song] = []
     due: list[Song] = []
     for song in list_songs(conn):
@@ -468,7 +452,7 @@ def _songs_to_look_up(conn: sqlite3.Connection, now: datetime, recheck_after: ti
             continue
         if song.lyrics_status == "pending":
             pending.append(song)
-        elif song.lyrics_status == "missing" and _before(song.lyrics_at, cutoff):
+        elif song.lyrics_status == "missing" and stamps.before(song.lyrics_at, cutoff):
             due.append(song)
     return pending + due
 
@@ -501,7 +485,7 @@ def fetch_pending_lyrics(
     (``ProviderUnavailable``), the pass ends.
     """
     stats = LyricsStats()
-    stamp = _stamp(now)
+    stamp = stamps.stamp(now)
 
     def turn(song: Song) -> LyricsResult:  # a re-check of a miss goes past the cache
         return fetch_lyrics(client, artist=song.artists[0], title=song.title, album=song.album,

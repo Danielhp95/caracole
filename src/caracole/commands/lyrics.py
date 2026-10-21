@@ -43,6 +43,7 @@ from caracole.commands._common import (
     write_pages,
 )
 from caracole.health import get_state, is_cooling, record_block, record_ok
+from caracole.stamps import shown
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -206,7 +207,7 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
         now = utcnow()
         if is_cooling(conn, "lacuerda", now):
             typer.echo(f"{NOT_READ}LaCuerda is cooling down after a block until "
-                       f"{_when(get_state(conn, 'lacuerda').cooldown_until)}; caracole won't ask it before then.")
+                       f"{shown(get_state(conn, 'lacuerda').cooldown_until)}; caracole won't ask it before then.")
             return
         client = make_client(cfg, conn, "lacuerda", _common.lookup_run_id(now), interactive=True)
         try:
@@ -214,7 +215,7 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
         except ProviderBlocked as e:
             state = record_block(conn, "lacuerda", now, str(e))
             typer.echo(f"{NOT_READ}LaCuerda blocked caracole ({e}); no more requests to it until "
-                       f"{_when(state.cooldown_until)}.")
+                       f"{shown(state.cooldown_until)}.")
             return
         except BudgetExhausted:
             p = cfg.provider("lacuerda")
@@ -328,7 +329,7 @@ def _provider_pass[T](
         now = utcnow()
         if is_cooling(conn, provider, now):
             until = get_state(conn, provider).cooldown_until
-            typer.echo(f"{name} is cooling down after a block until {_when(until)}; "
+            typer.echo(f"{name} is cooling down after a block until {shown(until)}; "
                        "caracole won't ask it before then.")
             return None
         client = make_client(cfg, conn, provider, run_id_for(now))
@@ -337,7 +338,7 @@ def _provider_pass[T](
         except ProviderBlocked as e:
             state = record_block(conn, provider, now, str(e))
             message = (
-                f"{e}\nNo more requests to {name} until {_when(state.cooldown_until)} "
+                f"{e}\nNo more requests to {name} until {shown(state.cooldown_until)} "
                 f"(block #{state.strikes}). Nothing was marked missing."
             )
             _alert(cfg, f"caracole: {provider} blocked", message)
@@ -371,7 +372,3 @@ def _budget_spent(cfg: Config, provider: str) -> None:
 
 def _count(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
-
-
-def _when(dt: datetime | None) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"

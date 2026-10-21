@@ -36,6 +36,7 @@ from caracole.commands._common import (
     utcnow,
     write_pages,
 )
+from caracole.stamps import shown
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -72,7 +73,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
         now = utcnow()
         asked = _one_song(conn, display, overrides) if display else None  # what's missing comes first
         if is_cooling(conn, PROVIDER, now):
-            until = _when(get_state(conn, PROVIDER).cooldown_until)
+            until = shown(get_state(conn, PROVIDER).cooldown_until)
             if asked is not None and _send_back(conn, asked, overrides, now):
                 typer.echo(f"Ultimate Guitar is cooling down after a block until {until}; "
                            f"{asked.display} waits for the first run after that.")
@@ -111,7 +112,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
                 _send_back(conn, asked, overrides, now)
             typer.echo(
                 f"Ultimate Guitar blocked caracole ({e}). No more UG requests until "
-                f"{_when(state.cooldown_until)} (block #{state.strikes}). Nothing was marked not found."
+                f"{shown(state.cooldown_until)} (block #{state.strikes}). Nothing was marked not found."
             )
             write_pages(conn, cfg, overrides, utcnow())  # with what it kept, and the cooldown
             return
@@ -220,7 +221,3 @@ def _not_done(song: Song, stats: FetchStats, budget: int, *, due: bool = True) -
 def _totals(stats: FetchStats, requests: int) -> str:
     done = _count(stats.songs_done, "song")
     return f"{done} done, {stats.songs_failed} failed, {_count(requests, 'UG request')}."
-
-
-def _when(dt: datetime | None) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"
