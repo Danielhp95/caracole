@@ -416,14 +416,20 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
       const boxes = shown.map((e) => e.getBoundingClientRect());
       const row = boxes.every((r, i) => r.left >= bar.left && r.right <= bar.right && r.top >= bar.top
         && r.bottom <= bar.bottom && (i === 0 || r.left >= boxes[i - 1].right - 0.5));
-      const fits = (s) => { const e = document.querySelector(s), text = document.createRange();
+      const fits = (e) => { const text = document.createRange();
         text.selectNodeContents(e);  // to the fraction of a pixel, which scrollWidth rounds away
         return text.getBoundingClientRect().width <= e.getBoundingClientRect().width; };
+      // The line under the key, or its lines, one above the other, where one line has no room for them.
+      const k = document.querySelector('#key-now .k'), d = document.querySelector('#key-now .d');
+      const lines = d.children.length ? [...d.children] : [d];
+      const keys = document.querySelector('#keys').getBoundingClientRect();
+      const now = document.querySelector('#key-now').getBoundingClientRect();
       return {height: Math.round(bar.height), bottom: Math.round(bar.bottom), left: bar.left, right: bar.right,
               width: innerWidth, client: document.documentElement.clientWidth,
               page: document.documentElement.scrollWidth, smallest: Math.min(...buttons), row,
-              ids: shown.map((e) => e.id),
-              main: fits('#key-now .k'), sub: fits('#key-now .d'), said: document.querySelector('#key-now .d').textContent};
+              ids: shown.map((e) => e.id), main: fits(k), size: parseFloat(getComputedStyle(k).fontSize),
+              sub: lines.every(fits), said: lines.map((e) => e.textContent),
+              inside: Math.round(keys.height) === 44 && now.top >= keys.top && now.bottom <= keys.bottom};
     })()"""
     end = """(() => { scrollTo(0, document.documentElement.scrollHeight);
       const last = [...document.querySelectorAll('.foot > *')].pop().getBoundingClientRect();
@@ -438,10 +444,15 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
         assert m["left"] == rail and m["right"] == m["client"] and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44 and m["row"], (width, m)  # one row, each a thumb's target, none over another
         assert m["ids"] == ["t-down", "t-up", "shapes", "size", "scroll", "more"], (width, m)
+        assert m["inside"], (width, m)  # the key's lines in its box, which is no taller than the buttons
         if width >= 390:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1")
-            assert m["main"] and m["sub"] and m["said"] == "shapes · capo 2 · +1", (width, m)
-        elif width >= 360:  # with no room for "shapes", the capo and the transposition, whole
-            assert m["sub"] and m["said"] == "capo 2 · +1", (width, m)
+            assert m["main"] and m["sub"] and m["said"] == ["shapes · capo 2 · +1"], (width, m)
+            assert m["size"] == 16, (width, m)
+        elif width >= 360:  # with no room for "shapes", the capo and the transposition, whole; the key a little smaller
+            assert m["main"] and 12 <= m["size"] < 16, (width, m)
+            assert m["sub"] and m["said"] == ["capo 2 · +1"], (width, m)
+        else:  # with no room for both on one line, the capo over the transposition, each whole
+            assert m["sub"] and m["said"] == ["capo 2", "+1"], (width, m)
         assert clear, width
 
 

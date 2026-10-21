@@ -250,19 +250,39 @@
     if (capo) return [keyName(shift()), "shapes", rest];
     return [keyName(state.t + sheetCapo), "key", rest];
   };
-  // The line under the key, whole where there is room ("shapes · capo 2 · +1"); on a narrow screen
-  // the capo and the transposition alone ("capo 2 · +1"), so that neither is cut off. Fitted again
-  // when the bar comes back into view or the window changes. Measured to the fraction of a pixel, which
-  // scrollWidth rounds away: a line 0.4 px too wide would end in an ellipsis.
+  // The key in short and the line under it, fitted to the room between − and +. The key a little
+  // smaller where it is too long ("Ab mixolydian" at 360 px), down to three quarters of its size, then
+  // cut short. The line whole where there is room ("shapes · capo 2 · +1"); on a narrow screen the capo
+  // and the transposition alone ("capo 2 · +1"); on the narrowest, each on a line of its own, "capo 2"
+  // over "+1", so that neither is cut off. Fitted again when the bar comes back into view or the window
+  // changes. Measured to the fraction of a pixel, which scrollWidth rounds away: a line 0.4 px too wide
+  // would end in an ellipsis.
   let keyUnder = ["", []];
-  const fitKey = () => {
-    const line = $("key-now").querySelector(".d");
-    const [what, rest] = keyUnder;
-    line.textContent = (what ? [what] : []).concat(rest).join(" · ");
-    if (!what || !rest.length) return;
+  const tooWide = (el) => {
     const text = document.createRange();
-    text.selectNodeContents(line);
-    if (text.getBoundingClientRect().width > line.getBoundingClientRect().width) line.textContent = rest.join(" · ");
+    text.selectNodeContents(el);
+    return text.getBoundingClientRect().width > el.getBoundingClientRect().width;
+  };
+  const fitKey = () => {
+    const now = $("key-now"), main = now.querySelector(".k"), line = now.querySelector(".d");
+    main.style.fontSize = "";
+    if (tooWide(main)) {
+      const full = parseFloat(getComputedStyle(main).fontSize);
+      for (let size = full - 0.5; size >= full * 0.75 && tooWide(main); size -= 0.5) main.style.fontSize = size + "px";
+    }
+    const [what, rest] = keyUnder;
+    line.classList.remove("stack");
+    line.textContent = (what ? [what] : []).concat(rest).join(" · ");
+    if (what && rest.length && tooWide(line)) line.textContent = rest.join(" · ");
+    if (rest.length > 1 && tooWide(line)) {
+      line.textContent = "";
+      for (const part of rest) {
+        const one = document.createElement("span");
+        one.textContent = part;
+        line.append(one);
+      }
+      line.classList.add("stack");
+    }
   };
 
   // --- chord diagrams --------------------------------------------------------------------------

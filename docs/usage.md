@@ -1905,16 +1905,18 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
   "Key Em". Each says where the key came from.
 - **The bar** at the foot of the page holds what you reach for while
-  playing: `− Em +`, a guitar, `Aa`, `▶` and `⋯`. − and + move every chord, its shapes
-  and the key a semitone at a time, with the key you play between them in
-  short: "Em" over "shapes · capo 2" (or "key" with no capo), and "· +1"
-  once transposed, or "capo 2 · +1" on a screen too narrow for all of it;
-  a screen reader hears the whole line ("Em shapes · capo 2
-  · sounds F#m · +1"). **The guitar** shows the strip of every chord's
-  shape (below), or hides it again, as Show all in the settings does: it
-  stays pressed while the strip shows, and the two always agree. Pressed
-  further down the song, it takes the page up to the strip, so the shapes
-  are in view; a sheet without chords has none. **Aa** opens a small box over the bar with the text
+  playing: `− Em +`, a guitar, `Aa`, `▶` and `⋯`. − and + move every
+  chord, its shapes and the key a semitone at a time, with the key you play
+  between them in short: "Em" over "shapes · capo 2" (or "key" with no
+  capo), and "· +1" once transposed, or "capo 2 · +1" on a screen too
+  narrow for all of it, and "capo 2" over "+1" on the narrowest; a key too
+  long for its room ("Ab mixolydian") is a little smaller. A screen reader
+  hears the whole line ("Em shapes · capo 2 · sounds F#m · +1"). **The
+  guitar** shows the strip of every chord's shape (below), or hides it
+  again, as Show all in the settings does: it stays pressed while the strip
+  shows, and the two always agree. Pressed further down the song, it takes
+  the page up to the strip, so the shapes are in view; a sheet without
+  chords has none. **Aa** opens a small box over the bar with the text
   size and A− and A+, nothing dimmed behind it; a tap anywhere else, or
   Escape, closes it. **▶** scrolls the song by itself (below). **⋯** opens the
   settings. The bar slides away as you scroll down the song, and comes back
@@ -1959,10 +1961,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
   the key, such as the G major chord's B in C minor, stays where it is.
 - Every chord's shape in a strip above the song (the guitar in the bar, or
-  Show all in the settings; kept for the page, as the text size is): the shapes alone, large enough to read at a glance; tap one for
-  its card, with the fingers. Reset everything, at the foot of the settings,
-  puts the transposition, the mode, the capo and the chords played instead
-  back as the viewer starts them.
+  Show all in the settings; kept for the page, as the text size is): the
+  shapes alone, large enough to read at a glance; tap one for its card,
+  with the fingers. Reset everything, at the foot of the settings, puts the
+  transposition, the mode, the capo and the chords played instead back as
+  the viewer starts them.
 - **Scrolling by itself**: ▶ in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the

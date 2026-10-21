@@ -542,7 +542,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
 <button type="button" class="step" id="t-up" aria-label="Transpose up a semitone">+</button>
 </span>
-<button type="button" class="tool shapes" id="shapes" aria-label="Chord shapes" aria-pressed="false" aria-controls="strip"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.78 12.51A3.76 3.76 0 1 1 3.49 8.22A1.5 1.5 0 0 0 4.57 7.46A2.92 2.92 0 1 1 8.54 11.43A1.5 1.5 0 0 0 7.78 12.51ZM7.75 8.25A1.08 1.08 0 1 0 6.22 9.78A1.08 1.08 0 1 0 7.75 8.25Z"/><path d="M9.02 8.11L13.27 3.86L13.47 4.06L15.7 2.3L13.7 0.3L11.94 2.53L12.14 2.73L7.89 6.98Z"/></svg></button>
+<button type="button" class="tool shapes" id="shapes" aria-label="Chord shapes" aria-pressed="false" aria-controls="strip"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.67 12.95A3.2 3.2 0 1 1 3.05 9.33A1.42 1.42 0 0 0 4.07 8.64A2.4 2.4 0 1 1 7.36 11.93A1.42 1.42 0 0 0 6.67 12.95ZM6.77 9.23A1.07 1.07 0 1 0 5.26 10.74A1.07 1.07 0 1 0 6.77 9.23Z"/><path d="M8.03 9.23L12.68 4.58L12.87 4.76L15.7 2.82L13.18 0.3L11.24 3.13L11.42 3.32L6.77 7.97Z"/></svg></button>
 <span class="size-box" id="size-box">
 <button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes">Aa</button>
 <span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>

@@ -165,6 +165,10 @@ a { color: inherit; }
 .now .k { font-weight: 700; }
 .now .d { color: var(--muted); font-size: .72rem; }
 .now .d:empty { display: none; }
+/* Too narrow for the capo and the transposition on one line: one over the other, closer together, so the
+   three lines keep within the buttons' height. */
+.now .d.stack { line-height: 1.05; }
+.now .d.stack > span { display: block; overflow: hidden; text-overflow: ellipsis; }
 .tool { font-weight: 650; }
 .bar .play { border-radius: 50%; background: var(--accent); color: var(--on-accent); }
 /* Aa: the text size in a small box over the bar, beside the song (nothing behind it is dimmed). */
